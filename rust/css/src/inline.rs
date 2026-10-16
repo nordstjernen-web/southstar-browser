@@ -90,6 +90,34 @@ const BACKGROUND_GET: [&[u8]; 8] = [
     b"background-color",
 ];
 
+const MASK_GET: [&[u8]; 8] = [
+    b"mask-image",
+    b"mask-position",
+    b"mask-size",
+    b"mask-repeat",
+    b"mask-origin",
+    b"mask-clip",
+    b"mask-composite",
+    b"mask-mode",
+];
+
+const MASK_MEMBERS: [&[u8]; 14] = [
+    b"mask-image",
+    b"mask-position-x",
+    b"mask-position-y",
+    b"mask-size",
+    b"mask-repeat",
+    b"mask-origin",
+    b"mask-clip",
+    b"mask-composite",
+    b"mask-mode",
+    b"mask-border-source",
+    b"mask-border-slice",
+    b"mask-border-width",
+    b"mask-border-outset",
+    b"mask-border-repeat",
+];
+
 const BACKGROUND_MEMBERS: [&[u8]; 9] = [
     b"background-image",
     b"background-position-x",
@@ -671,6 +699,28 @@ fn background_value(style: &[u8]) -> Option<(Vec<u8>, bool)> {
     Some((with_important(text, important), important))
 }
 
+fn mask_value(style: &[u8]) -> Option<(Vec<u8>, bool)> {
+    let mut values: Vec<Vec<u8>> = Vec::with_capacity(MASK_GET.len());
+    let mut important = false;
+    for (i, name) in MASK_GET.iter().enumerate() {
+        let value = get(style, name).filter(|v| !v.is_empty())?;
+        let (value, imp) = strip_important(&value);
+        if i == 0 {
+            important = imp;
+        } else if imp != important {
+            return None;
+        }
+        values.push(value.to_vec());
+    }
+    let text = if css_wide(&values[0]) && values.iter().all(|v| *v == values[0]) {
+        values[0].clone()
+    } else {
+        let parts: [&[u8]; 8] = core::array::from_fn(|i| values[i].as_slice());
+        mask_shorthand_serialize(parts)?
+    };
+    Some((with_important(text, important), important))
+}
+
 fn grid_value(style: &[u8], full: bool) -> Option<Vec<u8>> {
     let n = if full { 6 } else { 3 };
     let mut values: Vec<Vec<u8>> = Vec::with_capacity(n);
@@ -803,6 +853,20 @@ pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
         && let Some((text, _)) = background_value(style)
     {
         return keep(Some(text));
+    }
+    if eq(prop, b"mask")
+        && let Some((text, _)) = mask_value(style)
+    {
+        return keep(Some(text));
+    }
+    if eq(prop, b"mask-position") {
+        let xs = get(style, b"mask-position-x");
+        let ys = get(style, b"mask-position-y");
+        if let (Some(xs), Some(ys)) = (xs, ys)
+            && let Some(text) = background_position_zip(&xs, &ys)
+        {
+            return keep(Some(text));
+        }
     }
     if eq(prop, b"background-position") {
         let xs = get(style, b"background-position-x");
@@ -1036,9 +1100,21 @@ pub fn serialize(style: &[u8]) -> Vec<u8> {
         background_value(style).map(|(text, _)| (strip_important(&text).0.to_vec(), important))
     });
     let mut background_emitted = false;
+    let mask_parts = MASK_MEMBERS.map(|name| find(&decls, name));
+    let mask = same_importance(&mask_parts).and_then(|important| {
+        mask_value(style).map(|(text, _)| (strip_important(&text).0.to_vec(), important))
+    });
+    let mut mask_emitted = false;
     let mut out = Vec::new();
     for decl in &decls {
         let name = decl.name.as_slice();
+        if let Some((text, important)) = mask.as_ref().filter(|_| MASK_MEMBERS.contains(&name)) {
+            if !mask_emitted {
+                emit(&mut out, b"mask", text, *important);
+                mask_emitted = true;
+            }
+            continue;
+        }
         if let Some((text, important)) = background
             .as_ref()
             .filter(|_| BACKGROUND_MEMBERS.contains(&name))
@@ -1256,6 +1332,55 @@ pub fn background_position_zip(xs: &[u8], ys: &[u8]) -> Option<Vec<u8>> {
         push_separated(&mut out, b", ", &[x.as_slice(), b" ", y].concat());
     }
     Some(with_important(out, x_important))
+}
+
+#[allow(clippy::needless_range_loop)]
+pub fn mask_shorthand_serialize(texts: [&[u8]; 8]) -> Option<Vec<u8>> {
+    let lists = texts.map(split_top_level_commas);
+    let n = lists[0].len();
+    if n == 0 || lists.iter().any(|list| list.len() != n) {
+        return None;
+    }
+    let mut out = Vec::new();
+    for i in 0..n {
+        let [image, position, size, repeat, origin, clip, composite, mode] =
+            core::array::from_fn(|k| lists[k][i].as_slice());
+        let mut layer = Vec::new();
+        if !eq(image, b"none") {
+            layer.extend_from_slice(image);
+        }
+        let size_set = !eq(size, b"auto") && !eq(size, b"auto auto");
+        if size_set || position != b"0% 0%" {
+            push_separated(&mut layer, b" ", position);
+            if size_set {
+                layer.extend_from_slice(b" / ");
+                layer.extend_from_slice(size);
+            }
+        }
+        if !eq(repeat, b"repeat") {
+            push_separated(&mut layer, b" ", repeat);
+        }
+        if eq(origin, clip) {
+            if !eq(origin, b"border-box") {
+                push_separated(&mut layer, b" ", origin);
+            }
+        } else if eq(origin, b"border-box") && eq(clip, b"no-clip") {
+            push_separated(&mut layer, b" ", clip);
+        } else {
+            push_separated(&mut layer, b" ", &[origin, b" ", clip].concat());
+        }
+        if !eq(composite, b"add") {
+            push_separated(&mut layer, b" ", composite);
+        }
+        if !eq(mode, b"match-source") {
+            push_separated(&mut layer, b" ", mode);
+        }
+        if layer.is_empty() {
+            layer.extend_from_slice(b"none");
+        }
+        push_separated(&mut out, b", ", &layer);
+    }
+    Some(out)
 }
 
 #[allow(clippy::needless_range_loop)]

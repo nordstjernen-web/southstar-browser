@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 264] = [
+const INITIALS: [(&[u8], &CStr); 276] = [
     (b"padding-top", c"0px"),
     (b"scroll-margin-top", c"0px"),
     (b"scroll-margin-right", c"0px"),
@@ -82,6 +82,18 @@ const INITIALS: [(&[u8], &CStr); 264] = [
     (b"overscroll-behavior-y", c"auto"),
     (b"interactivity", c"auto"),
     (b"background-blend-mode", c"normal"),
+    (b"mask-mode", c"match-source"),
+    (b"mask-repeat", c"repeat"),
+    (b"mask-position-x", c"0%"),
+    (b"mask-position-y", c"0%"),
+    (b"mask-size", c"auto"),
+    (b"mask-origin", c"border-box"),
+    (b"mask-type", c"luminance"),
+    (b"mask-border-source", c"none"),
+    (b"mask-border-slice", c"0"),
+    (b"mask-border-width", c"auto"),
+    (b"mask-border-outset", c"0"),
+    (b"mask-border-repeat", c"stretch"),
     (b"font-variant-ligatures", c"normal"),
     (b"font-feature-settings", c"normal"),
     (b"font-variation-settings", c"normal"),

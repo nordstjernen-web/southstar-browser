@@ -167,7 +167,7 @@ pub(crate) fn keyword_choice(text: &[u8], choices: &str) -> Option<Value> {
         .then(|| Value::keyword(kw))
 }
 
-fn word_is_one_of(w: &[u8], choices: &str) -> bool {
+pub(crate) fn word_is_one_of(w: &[u8], choices: &str) -> bool {
     choices
         .split(' ')
         .filter(|c| !c.is_empty())
@@ -191,7 +191,7 @@ fn legacy_em_normalize(val: &mut f64, unit: &mut Unit) {
 
 fn bg_size_component(tok: &[u8]) -> Option<(f64, Unit)> {
     if let Some(found) = length(tok) {
-        return Some(found);
+        return (found.0 >= 0.0).then_some(found);
     }
     match calc_value(tok)? {
         Parsed::Length(v, unit) => Some((v, unit)),
@@ -293,6 +293,12 @@ fn bg_layered(prop: Prop) -> bool {
             | Prop::MaskImage
             | Prop::MaskClip
             | Prop::MaskComposite
+            | Prop::MaskMode
+            | Prop::MaskRepeat
+            | Prop::MaskPositionX
+            | Prop::MaskPositionY
+            | Prop::MaskSize
+            | Prop::MaskOrigin
     )
 }
 
@@ -911,7 +917,10 @@ fn position_axis(prop: Prop, t: &[u8]) -> Option<Value> {
         return Some(Value::from_parsed(parsed));
     }
     let kw = lower(t);
-    let horizontal = matches!(prop, Prop::BackgroundPositionX | Prop::ObjectPositionX);
+    let horizontal = matches!(
+        prop,
+        Prop::BackgroundPositionX | Prop::ObjectPositionX | Prop::MaskPositionX
+    );
     let pct = match (horizontal, kw.as_slice()) {
         (true, b"left") | (false, b"top") => Some(0.0),
         (_, b"center") => Some(50.0),
@@ -947,7 +956,7 @@ fn background_size(t: &[u8]) -> Option<Value> {
                 (size.w, size.w_unit) = bg_size_component(only)?;
             }
         }
-        [first, second, ..] => {
+        [first, second] => {
             if eq(first, b"auto") {
                 size.w_auto = true;
             } else {
@@ -960,7 +969,7 @@ fn background_size(t: &[u8]) -> Option<Value> {
                 size.h_auto = false;
             }
         }
-        [] => return None,
+        _ => return None,
     }
     legacy_em_normalize(&mut size.w, &mut size.w_unit);
     legacy_em_normalize(&mut size.h, &mut size.h_unit);
@@ -1791,10 +1800,18 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             .or_else(|| keyword_choice(t, "none")),
         P::BackgroundPositionX
         | P::BackgroundPositionY
+        | P::MaskPositionX
+        | P::MaskPositionY
         | P::ObjectPositionX
         | P::ObjectPositionY => position_axis(prop, t),
-        P::BackgroundSize => background_size(t),
-        P::BackgroundRepeat => background_repeat(t),
+        P::BackgroundSize | P::MaskSize => background_size(t),
+        P::BackgroundRepeat | P::MaskRepeat => background_repeat(t),
+        P::MaskMode => keyword_choice(t, "alpha luminance match-source"),
+        P::MaskOrigin => keyword_choice(
+            t,
+            "border-box padding-box content-box fill-box stroke-box view-box",
+        ),
+        P::MaskType => keyword_choice(t, "luminance alpha"),
         P::Content => keyword_text(if contains(t, b"var(") {
             Some(t.to_vec())
         } else {
@@ -1811,11 +1828,19 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::ListStyleType => keyword_text(counter::list_style_type_canonical(t)),
         P::OverflowClipMargin => keyword_text(display::overflow_clip_margin_canonical(t)),
         P::Quotes => Some(Value::keyword(strip(t).to_vec())),
-        P::BorderImageSource => image_reference(t).or_else(|| keyword_in(t, &[b"none"])),
-        P::BorderImageSlice => keyword_text(border_image::slice_canonical(t)),
-        P::BorderImageWidth => keyword_text(border_image::quad_canonical(t, true, true)),
-        P::BorderImageOutset => keyword_text(border_image::quad_canonical(t, false, false)),
-        P::BorderImageRepeat => keyword_text(border_image::repeat_canonical(t)),
+        P::BorderImageSource | P::MaskBorderSource => {
+            image_reference(t).or_else(|| keyword_in(t, &[b"none"]))
+        }
+        P::BorderImageSlice | P::MaskBorderSlice => keyword_text(border_image::slice_canonical(t)),
+        P::BorderImageWidth | P::MaskBorderWidth => {
+            keyword_text(border_image::quad_canonical(t, true, true))
+        }
+        P::BorderImageOutset | P::MaskBorderOutset => {
+            keyword_text(border_image::quad_canonical(t, false, false))
+        }
+        P::BorderImageRepeat | P::MaskBorderRepeat => {
+            keyword_text(border_image::repeat_canonical(t))
+        }
         P::MaskImage | P::ListStyleImage | P::BackgroundImage => image_prop(t),
         P::Transform => transform_prop(t),
         P::TransformBox => keyword_choice(t, "content-box border-box fill-box stroke-box view-box"),

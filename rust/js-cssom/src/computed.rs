@@ -1146,26 +1146,23 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
             ))
         }
         "border-radius" => Some(radius_shorthand(js, n)),
-        "object-position" | "background-position" => {
-            let is_bg = name.starts_with('b');
-            let x = lookup(
-                js,
-                n,
-                if is_bg {
-                    "background-position-x"
-                } else {
-                    "object-position-x"
-                },
-            );
-            let y = lookup(
-                js,
-                n,
-                if is_bg {
-                    "background-position-y"
-                } else {
-                    "object-position-y"
-                },
-            );
+        "mask" => {
+            let parts = [
+                "mask-image",
+                "mask-position",
+                "mask-size",
+                "mask-repeat",
+                "mask-origin",
+                "mask-clip",
+                "mask-composite",
+                "mask-mode",
+            ];
+            let values: Vec<Option<String>> = parts.iter().map(|p| lookup(js, n, p)).collect();
+            ffi::mask_shorthand(&values)
+        }
+        "object-position" | "background-position" | "mask-position" => {
+            let x = lookup(js, n, &format!("{name}-x"));
+            let y = lookup(js, n, &format!("{name}-y"));
             let (x, y) = (
                 non_empty(&x).unwrap_or("50%"),
                 non_empty(&y).unwrap_or("50%"),

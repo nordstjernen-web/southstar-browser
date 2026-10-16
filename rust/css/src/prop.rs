@@ -265,10 +265,22 @@ pub enum Prop {
     OverscrollBehaviorY,
     Interactivity,
     BackgroundBlendMode,
+    MaskMode,
+    MaskRepeat,
+    MaskPositionX,
+    MaskPositionY,
+    MaskSize,
+    MaskOrigin,
+    MaskType,
+    MaskBorderSource,
+    MaskBorderSlice,
+    MaskBorderWidth,
+    MaskBorderOutset,
+    MaskBorderRepeat,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 257] = [
+    pub(crate) const ALL: [Prop; 269] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -526,6 +538,18 @@ impl Prop {
         Prop::OverscrollBehaviorY,
         Prop::Interactivity,
         Prop::BackgroundBlendMode,
+        Prop::MaskMode,
+        Prop::MaskRepeat,
+        Prop::MaskPositionX,
+        Prop::MaskPositionY,
+        Prop::MaskSize,
+        Prop::MaskOrigin,
+        Prop::MaskType,
+        Prop::MaskBorderSource,
+        Prop::MaskBorderSlice,
+        Prop::MaskBorderWidth,
+        Prop::MaskBorderOutset,
+        Prop::MaskBorderRepeat,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -880,11 +904,23 @@ impl Prop {
             Prop::OverscrollBehaviorY => c"overscroll-behavior-y",
             Prop::Interactivity => c"interactivity",
             Prop::BackgroundBlendMode => c"background-blend-mode",
+            Prop::MaskMode => c"mask-mode",
+            Prop::MaskRepeat => c"mask-repeat",
+            Prop::MaskPositionX => c"mask-position-x",
+            Prop::MaskPositionY => c"mask-position-y",
+            Prop::MaskSize => c"mask-size",
+            Prop::MaskOrigin => c"mask-origin",
+            Prop::MaskType => c"mask-type",
+            Prop::MaskBorderSource => c"mask-border-source",
+            Prop::MaskBorderSlice => c"mask-border-slice",
+            Prop::MaskBorderWidth => c"mask-border-width",
+            Prop::MaskBorderOutset => c"mask-border-outset",
+            Prop::MaskBorderRepeat => c"mask-border-repeat",
         }
     }
 }
 
-const ALIASES: [(&[u8], Prop); 17] = [
+const ALIASES: [(&[u8], Prop); 22] = [
     (b"word-wrap", Prop::OverflowWrap),
     (b"font-width", Prop::FontStretch),
     (b"text-decoration-line", Prop::TextDecoration),
@@ -894,6 +930,11 @@ const ALIASES: [(&[u8], Prop); 17] = [
     (b"-webkit-mask-image", Prop::MaskImage),
     (b"-webkit-mask-clip", Prop::MaskClip),
     (b"-webkit-mask-composite", Prop::MaskComposite),
+    (b"-webkit-mask-size", Prop::MaskSize),
+    (b"-webkit-mask-repeat", Prop::MaskRepeat),
+    (b"-webkit-mask-origin", Prop::MaskOrigin),
+    (b"-webkit-mask-position-x", Prop::MaskPositionX),
+    (b"-webkit-mask-position-y", Prop::MaskPositionY),
     (b"-webkit-background-clip", Prop::BackgroundClip),
     (b"-webkit-border-radius", Prop::BorderRadius),
     (b"-webkit-border-top-left-radius", Prop::BorderTopLeftRadius),

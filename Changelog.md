@@ -114,6 +114,18 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* CSS masks gain their missing longhands: mask-mode, mask-repeat,
+  mask-position, mask-size, mask-origin, mask-type and the mask-border-*
+  properties (with the -webkit- prefixed aliases sites use). The mask
+  shorthand takes every layer component, resets mask-border, and
+  serializes canonically, and getComputedStyle reports mask and
+  mask-position. Masks drawn from images now follow mask-size,
+  mask-position and mask-repeat instead of always fitting the image
+  inside the box, so icon masks such as
+  "mask: url(icon.svg) center / 16px no-repeat" draw at their size and
+  place. background-size rejects negative lengths and three values.
+  WPT css-masking: 7,164 to 8,676 passing subtests with css-backgrounds
+  and cssom.
 * Selectors serialize the way CSSOM specifies: combinators get spaces,
   attribute values are double-quoted strings with a lower-case flag,
   selector lists inside :is(), :where(), :not(), :has(), :host() and

@@ -9,7 +9,7 @@ use southstar_layout::{BoxRef, Edges, InlineAttr};
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
-use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface};
+use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface, SurfaceRef};
 use crate::ffi::engine::{self, Texture};
 use crate::media::texture_surface_cached;
 use crate::radii::{
@@ -370,32 +370,19 @@ fn bg_offset(v: Option<ValueRef<'_>>, span: f64) -> f64 {
     }
 }
 
-pub fn paint_bg_image_core(
-    cr: Cr,
-    img: Option<ImageRef<'_>>,
-    p: &BgImage<'_>,
-    area: (f64, f64, f64, f64),
-    clip: (f64, f64, f64, f64),
-    radii: CornerRadii,
-) {
-    let Some(img) = img else {
-        return;
-    };
-    let Some(tex) = (unsafe { Texture::from_raw(img.texture()) }) else {
-        return;
-    };
-    if !img.loaded() {
-        return;
-    }
-    let iw = tex.width();
-    let ih = tex.height();
-    if iw <= 0 || ih <= 0 {
-        return;
-    }
-    let (iwf, ihf) = (f64::from(iw), f64::from(ih));
-    let (x, y, w, h) = area;
-    let mut tile_x = true;
-    let mut tile_y = true;
+struct Tile {
+    draw_w: f64,
+    draw_h: f64,
+    off_x: f64,
+    off_y: f64,
+    repeat_x: bool,
+    repeat_y: bool,
+}
+
+fn bg_tile(image: (f64, f64), p: &BgImage<'_>, area: (f64, f64, f64, f64)) -> Tile {
+    let (iwf, ihf) = image;
+    let (_, _, w, h) = area;
+    let (mut repeat_x, mut repeat_y) = (true, true);
     match p
         .repeat
         .filter(|v| v.kind() == Kind::Keyword)
@@ -403,33 +390,26 @@ pub fn paint_bg_image_core(
         .map(|k| k.to_bytes())
     {
         Some(b"no-repeat") => {
-            tile_x = false;
-            tile_y = false;
+            repeat_x = false;
+            repeat_y = false;
         }
-        Some(b"repeat-x") => tile_y = false,
-        Some(b"repeat-y") => tile_x = false,
+        Some(b"repeat-x") => repeat_y = false,
+        Some(b"repeat-y") => repeat_x = false,
         _ => {}
     }
     let mut draw_w = iwf;
     let mut draw_h = ihf;
     if let Some(sz) = p.size {
         if let Some(kw) = sz.keyword_text().filter(|_| sz.kind() == Kind::Keyword) {
-            match kw.to_bytes() {
-                b"cover" => {
-                    let sx = w / iwf;
-                    let sy = h / ihf;
-                    let sc = if sx > sy { sx } else { sy };
-                    draw_w = iwf * sc;
-                    draw_h = ihf * sc;
-                }
-                b"contain" => {
-                    let sx = w / iwf;
-                    let sy = h / ihf;
-                    let sc = if sx < sy { sx } else { sy };
-                    draw_w = iwf * sc;
-                    draw_h = ihf * sc;
-                }
-                _ => {}
+            let (sx, sy) = (w / iwf, h / ihf);
+            let scale = match kw.to_bytes() {
+                b"cover" => Some(if sx > sy { sx } else { sy }),
+                b"contain" => Some(if sx < sy { sx } else { sy }),
+                _ => None,
+            };
+            if let Some(sc) = scale {
+                draw_w = iwf * sc;
+                draw_h = ihf * sc;
             }
         } else if let Some((v, unit)) = sz.length() {
             draw_w = bg_size_px(v, unit, w);
@@ -451,14 +431,82 @@ pub fn paint_bg_image_core(
             }
         }
     }
-    if draw_w < 1.0 {
-        draw_w = 1.0;
+    draw_w = cmax(draw_w, 1.0);
+    draw_h = cmax(draw_h, 1.0);
+    Tile {
+        draw_w,
+        draw_h,
+        off_x: bg_offset(p.pos_x, w - draw_w),
+        off_y: bg_offset(p.pos_y, h - draw_h),
+        repeat_x,
+        repeat_y,
     }
-    if draw_h < 1.0 {
-        draw_h = 1.0;
+}
+
+fn fill_tiles(
+    cr: Cr,
+    surf: SurfaceRef,
+    image: (f64, f64),
+    tile: &Tile,
+    area: (f64, f64, f64, f64),
+    pixelated: bool,
+) {
+    let (iwf, ihf) = image;
+    let (x, y, w, h) = area;
+    let pat = Pattern::for_surface(surf);
+    pat.set_extend(if tile.repeat_x || tile.repeat_y {
+        cairo::EXTEND_REPEAT
+    } else {
+        cairo::EXTEND_NONE
+    });
+    if pixelated {
+        pat.set_filter(cairo::FILTER_NEAREST);
     }
-    let off_x = bg_offset(p.pos_x, w - draw_w);
-    let off_y = bg_offset(p.pos_y, h - draw_h);
+    let mut m = Matrix::identity();
+    m.scale(iwf / tile.draw_w, ihf / tile.draw_h);
+    m.translate(-(x + tile.off_x), -(y + tile.off_y));
+    pat.set_matrix(&m);
+    cr.set_source(&pat);
+    match (tile.repeat_x, tile.repeat_y) {
+        (true, true) => cr.paint(),
+        (false, false) => {
+            cr.rectangle(x + tile.off_x, y + tile.off_y, tile.draw_w, tile.draw_h);
+            cr.fill();
+        }
+        (true, false) => {
+            cr.rectangle(x, y + tile.off_y, w, tile.draw_h);
+            cr.fill();
+        }
+        (false, true) => {
+            cr.rectangle(x + tile.off_x, y, tile.draw_w, h);
+            cr.fill();
+        }
+    }
+    drop(pat);
+}
+
+fn loaded_texture(img: Option<ImageRef<'_>>) -> Option<(Texture, f64, f64)> {
+    let img = img?;
+    let tex = unsafe { Texture::from_raw(img.texture()) }?;
+    if !img.loaded() || tex.width() <= 0 || tex.height() <= 0 {
+        return None;
+    }
+    let (iw, ih) = (f64::from(tex.width()), f64::from(tex.height()));
+    Some((tex, iw, ih))
+}
+
+pub fn paint_bg_image_core(
+    cr: Cr,
+    img: Option<ImageRef<'_>>,
+    p: &BgImage<'_>,
+    area: (f64, f64, f64, f64),
+    clip: (f64, f64, f64, f64),
+    radii: CornerRadii,
+) {
+    let Some((tex, iwf, ihf)) = loaded_texture(img) else {
+        return;
+    };
+    let tile = bg_tile((iwf, ihf), p, area);
     let Some(surf) = texture_surface_cached(tex, None) else {
         return;
     };
@@ -466,34 +514,40 @@ pub fn paint_bg_image_core(
     cr.save();
     rounded_rect_path(cr, cx, cy, cw, ch, radii);
     cr.clip();
-    let pat = Pattern::for_surface(surf);
-    pat.set_extend(if tile_x || tile_y {
-        cairo::EXTEND_REPEAT
-    } else {
-        cairo::EXTEND_NONE
-    });
-    if p.pixelated {
-        pat.set_filter(cairo::FILTER_NEAREST);
-    }
-    let mut m = Matrix::identity();
-    m.scale(iwf / draw_w, ihf / draw_h);
-    m.translate(-(x + off_x), -(y + off_y));
-    pat.set_matrix(&m);
-    cr.set_source(&pat);
-    if tile_x && tile_y {
-        cr.paint();
-    } else if !tile_x && !tile_y {
-        cr.rectangle(x + off_x, y + off_y, draw_w, draw_h);
-        cr.fill();
-    } else if tile_x {
-        cr.rectangle(x, y + off_y, w, draw_h);
-        cr.fill();
-    } else {
-        cr.rectangle(x + off_x, y, draw_w, h);
-        cr.fill();
-    }
-    drop(pat);
+    fill_tiles(cr, surf, (iwf, ihf), &tile, area, p.pixelated);
     cr.restore();
+}
+
+fn paint_masked_background(
+    cr: Cr,
+    img: Option<ImageRef<'_>>,
+    p: &BgImage<'_>,
+    color: Rgba,
+    area: (f64, f64, f64, f64),
+    radii: CornerRadii,
+) -> bool {
+    let (x, y, w, h) = area;
+    if w <= 0.0 || h <= 0.0 {
+        return false;
+    }
+    let Some((tex, iwf, ihf)) = loaded_texture(img) else {
+        return false;
+    };
+    let Some(surf) = texture_surface_cached(tex, None) else {
+        return false;
+    };
+    let tile = bg_tile((iwf, ihf), p, area);
+    cr.save();
+    rounded_rect_path(cr, x, y, w, h, radii);
+    cr.clip();
+    cr.push_group_alpha();
+    fill_tiles(cr, surf, (iwf, ihf), &tile, area, false);
+    let mask = cr.pop_group();
+    color.set_source(cr);
+    cr.mask(&mask);
+    drop(mask);
+    cr.restore();
+    true
 }
 
 fn conic_color_at(gr: &Gradient, frac: f64) -> (f64, f64, f64, f64) {
@@ -1366,41 +1420,19 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
         cr.fill();
     }
 
-    let mut masked_fill = false;
     let media_bg = b
         .media()
         .and_then(|m| unsafe { ImageRef::from_ptr(m.bg_image()) });
-    if bg.a > 0.0
+    let mask_params = BgImage {
+        repeat: get(s, P::MaskRepeat),
+        size: get(s, P::MaskSize),
+        pos_x: get(s, P::MaskPositionX),
+        pos_y: get(s, P::MaskPositionY),
+        pixelated: false,
+    };
+    let masked_fill = bg.a > 0.0
         && has_mask
-        && let Some(mimg) = media_bg
-    {
-        let tex = unsafe { Texture::from_raw(mimg.texture()) }.filter(|_| mimg.loaded());
-        let iw = tex.map_or(0, Texture::width);
-        let ih = tex.map_or(0, Texture::height);
-        if iw > 0 && ih > 0 && clip_w > 0.0 && clip_h > 0.0 {
-            let (iwf, ihf) = (f64::from(iw), f64::from(ih));
-            let sc = cmin(clip_w / iwf, clip_h / ihf);
-            let draw_w = iwf * sc;
-            let draw_h = ihf * sc;
-            let off_x = (clip_w - draw_w) / 2.0;
-            let off_y = (clip_h - draw_h) / 2.0;
-            if let Some(surf) = tex.and_then(|t| texture_surface_cached(t, None)) {
-                cr.save();
-                rounded_rect_path(cr, clip_x, clip_y, clip_w, clip_h, radii);
-                cr.clip();
-                bg.set_source(cr);
-                let mp = Pattern::for_surface(surf);
-                let mut mm = Matrix::identity();
-                mm.scale(iwf / draw_w, ihf / draw_h);
-                mm.translate(-(clip_x + off_x), -(clip_y + off_y));
-                mp.set_matrix(&mm);
-                cr.mask(&mp);
-                drop(mp);
-                cr.restore();
-                masked_fill = true;
-            }
-        }
-    }
+        && paint_masked_background(cr, media_bg, &mask_params, bg, clip, radii);
 
     let bg_has_url = bg_head.is_some_and(|h| h.layers().any(|l| l.kind() == Kind::Url));
     if let Some(img) = media_bg.filter(|_| !bg_has_url && !masked_fill) {

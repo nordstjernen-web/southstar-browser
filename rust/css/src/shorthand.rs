@@ -16,8 +16,8 @@ use crate::position;
 use crate::prop::Prop;
 use crate::property::{
     self, Body, Value, bg_clip_canonical, bg_repeat_canonical, bg_repeat_token, bg_token_is_box,
-    c_text, calc_value, contains, eq, length, lower, mask_box_keyword, mask_composite_keyword,
-    wide_keyword,
+    c_text, calc_value, contains, eq, length, lower, mask_box_keyword, wide_keyword,
+    word_is_one_of,
 };
 use crate::scan::{scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range};
 use crate::text::{add_leading_zeros, split_top_level_commas};
@@ -336,7 +336,15 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
             );
         }
         b"background" => background(&mut out, text),
-        b"background-position" => background_position(&mut out, text),
+        b"background-position" => layer_position(
+            &mut out,
+            text,
+            Prop::BackgroundPositionX,
+            Prop::BackgroundPositionY,
+        ),
+        b"mask-position" | b"-webkit-mask-position" => {
+            layer_position(&mut out, text, Prop::MaskPositionX, Prop::MaskPositionY);
+        }
         b"object-position" => object_position(&mut out, text),
         b"grid-template" | b"grid" => grid_template(&mut out, text, name == b"grid"),
         b"gap" | b"grid-gap" => gap(&mut out, text),
@@ -752,8 +760,42 @@ fn overflow(out: &mut Out, text: &[u8]) -> bool {
     true
 }
 
+fn mask_layer_keyword<'a>(
+    tok: &[u8],
+    layer: &'a mut BgLayer,
+) -> Option<Option<&'a mut Option<Vec<u8>>>> {
+    let slot = if word_is_one_of(tok, "alpha luminance match-source") {
+        &mut layer.mode
+    } else if word_is_one_of(tok, "add subtract intersect exclude") {
+        &mut layer.composite
+    } else {
+        return None;
+    };
+    Some(slot.is_none().then_some(slot))
+}
+
+const MASK_FIELDS: [(Prop, usize, &[u8]); 7] = [
+    (Prop::MaskImage, 0, b"none"),
+    (Prop::MaskPositionX, 1, b"0%"),
+    (Prop::MaskPositionY, 2, b"0%"),
+    (Prop::MaskSize, 3, b"auto"),
+    (Prop::MaskRepeat, 4, b"repeat"),
+    (Prop::MaskOrigin, 6, b"border-box"),
+    (Prop::MaskClip, 7, b"border-box"),
+];
+
+const MASK_BORDER_RESET: [(Prop, &[u8]); 5] = [
+    (Prop::MaskBorderSource, b"none"),
+    (Prop::MaskBorderSlice, b"0"),
+    (Prop::MaskBorderWidth, b"auto"),
+    (Prop::MaskBorderOutset, b"0"),
+    (Prop::MaskBorderRepeat, b"stretch"),
+];
+
 fn mask(out: &mut Out, text: &[u8]) {
-    let props = [Prop::MaskImage, Prop::MaskClip, Prop::MaskComposite];
+    let mut props: Vec<Prop> = MASK_FIELDS.iter().map(|f| f.0).collect();
+    props.extend([Prop::MaskComposite, Prop::MaskMode]);
+    props.extend(MASK_BORDER_RESET.iter().map(|f| f.0));
     if let Some(wide) = wide_keyword(text) {
         out.shared(&props, wide);
         return;
@@ -762,47 +804,65 @@ fn mask(out: &mut Out, text: &[u8]) {
     if layers.is_empty() {
         return;
     }
-    let mut chains: [Vec<Value>; 3] = Default::default();
-    for layer in &layers {
-        if !mask_layer(layer, &mut chains) {
+    let mut parsed: Vec<BgLayer> = layers
+        .iter()
+        .map(|_| BgLayer {
+            mask: true,
+            ..BgLayer::default()
+        })
+        .collect();
+    let mut color = None;
+    for (layer, out_layer) in layers.iter().zip(parsed.iter_mut()) {
+        if !bg_layer_parse(layer, false, out_layer, &mut color) {
             return;
         }
+        if out_layer.no_clip {
+            out_layer.clip = Some(b"no-clip".to_vec());
+        }
     }
-    for (prop, values) in props.into_iter().zip(chains) {
+    for &(prop, field, initial) in &MASK_FIELDS {
+        let mut values = Vec::new();
+        for layer in &parsed {
+            let text = layer.field(field).unwrap_or(initial);
+            let Some(mut value) = parse(prop, text) else {
+                return;
+            };
+            value.specified = Some(text.to_vec());
+            values.push(value);
+        }
         if let Some(head) = chain(values) {
             out.push(prop, head);
         }
     }
-}
-
-fn mask_layer(layer: &[u8], chains: &mut [Vec<Value>; 3]) -> bool {
-    let toks = split_ws_limit(layer, 24);
-    let mut image: Option<&[u8]> = None;
-    let mut boxes: Vec<&'static [u8]> = Vec::new();
-    let mut op: Option<&'static [u8]> = None;
-    for &tok in &toks {
-        let found_box = mask_box_keyword(tok);
-        let comp = mask_composite_keyword(tok);
-        if let (Some(b), true) = (found_box, boxes.len() < 2) {
-            boxes.push(b);
-        } else if let (Some(c), None) = (comp, op) {
-            op = Some(c);
-        } else if image.is_none() && (tok.contains(&b'(') || eq(tok, b"none")) {
-            image = Some(tok);
-        }
+    for (prop, pick, initial) in [
+        (Prop::MaskComposite, 0, &b"add"[..]),
+        (Prop::MaskMode, 1, &b"match-source"[..]),
+    ] {
+        let values: Option<Vec<Value>> = parsed
+            .iter()
+            .map(|layer| {
+                let text = [&layer.composite, &layer.mode][pick]
+                    .as_deref()
+                    .unwrap_or(initial);
+                parse(prop, text)
+            })
+            .collect();
+        let Some(head) = values.and_then(chain) else {
+            return;
+        };
+        out.push(prop, head);
     }
-    let Some(iv) = parse(Prop::MaskImage, image.unwrap_or(b"none")) else {
-        return false;
-    };
-    let clip = boxes.last().copied().unwrap_or(b"border-box");
-    chains[0].push(iv);
-    chains[1].push(Value::keyword(clip));
-    chains[2].push(Value::keyword(op.unwrap_or(b"add")));
-    true
+    for (prop, initial) in MASK_BORDER_RESET {
+        out.emit(prop, initial);
+    }
 }
 
 #[derive(Default)]
 struct BgLayer {
+    mask: bool,
+    mode: Option<Vec<u8>>,
+    composite: Option<Vec<u8>>,
+    no_clip: bool,
     image: Option<Vec<u8>>,
     pos_x: Option<Vec<u8>>,
     pos_y: Option<Vec<u8>>,
@@ -934,7 +994,35 @@ fn bg_layer_parse(
         if pos.is_some() {
             pos_closed = true;
         }
-        if bg_token_is_image(tok) {
+        if out.mask
+            && let Some(kw) = mask_layer_keyword(tok, out)
+        {
+            match kw {
+                Some(slot) => *slot = Some(lower(tok)),
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        } else if out.mask && eq(tok, b"no-clip") {
+            if out.no_clip || n_box >= 2 {
+                ok = false;
+                break;
+            }
+            out.no_clip = true;
+            n_box += 1;
+        } else if out.mask && mask_box_keyword(tok).is_some() && !eq(tok, b"no-clip") {
+            if n_box >= 2 {
+                ok = false;
+                break;
+            }
+            let kw = lower(tok);
+            if out.origin.is_none() {
+                out.origin = Some(kw.clone());
+            }
+            out.clip = Some(kw);
+            n_box += 1;
+        } else if bg_token_is_image(tok) {
             if out.image.is_some() {
                 ok = false;
                 break;
@@ -952,7 +1040,7 @@ fn bg_layer_parse(
                 repeat_b = Some(tok);
             }
             n_repeat += 1;
-        } else if eq(tok, b"scroll") || eq(tok, b"fixed") || eq(tok, b"local") {
+        } else if !out.mask && (eq(tok, b"scroll") || eq(tok, b"fixed") || eq(tok, b"local")) {
             if out.attachment.is_some() {
                 ok = false;
                 break;
@@ -968,7 +1056,7 @@ fn bg_layer_parse(
             }
             out.clip = Some(lower(tok));
             n_box += 1;
-        } else if eq(tok, b"text") || eq(tok, b"border-area") {
+        } else if !out.mask && (eq(tok, b"text") || eq(tok, b"border-area")) {
             if n_box >= 2 || clip_only.as_deref().is_some_and(|c| c.contains(&b' ')) {
                 ok = false;
                 break;
@@ -980,7 +1068,7 @@ fn bg_layer_parse(
                 ok = false;
                 break;
             }
-        } else if is_color(tok) || eq(tok, b"currentcolor") {
+        } else if !out.mask && (is_color(tok) || eq(tok, b"currentcolor")) {
             if !final_layer || color.is_some() {
                 ok = false;
                 break;
@@ -1099,13 +1187,8 @@ fn position_wide(out: &mut Out, text: &[u8], x: Prop, y: Prop) -> bool {
     true
 }
 
-fn background_position(out: &mut Out, text: &[u8]) {
-    if position_wide(
-        out,
-        text,
-        Prop::BackgroundPositionX,
-        Prop::BackgroundPositionY,
-    ) {
+fn layer_position(out: &mut Out, text: &[u8], x: Prop, y: Prop) {
+    if position_wide(out, text, x, y) {
         return;
     }
     let (mut xs_chain, mut ys_chain) = (Vec::new(), Vec::new());
@@ -1115,27 +1198,28 @@ fn background_position(out: &mut Out, text: &[u8]) {
         let (seg, term) = scan_until(text, p, end, b",");
         let layer = trim_range(text, p, seg);
         p = if term == b',' { seg + 1 } else { seg };
-        let Some(canon) = position::canonical_ex(layer, true, true) else {
+        let three_values = x != Prop::MaskPositionX;
+        let Some(canon) = position::canonical_ex(layer, true, three_values) else {
             xs_chain.clear();
             ys_chain.clear();
             break;
         };
         let (xs, ys) = position::split(layer);
         let (sx, sy) = position_split_specified(&canon);
-        if let Some(mut v) = parse(Prop::BackgroundPositionX, &xs) {
+        if let Some(mut v) = parse(x, &xs) {
             v.specified = Some(sx);
             xs_chain.push(v);
         }
-        if let Some(mut v) = parse(Prop::BackgroundPositionY, &ys) {
+        if let Some(mut v) = parse(y, &ys) {
             v.specified = Some(sy);
             ys_chain.push(v);
         }
     }
     if let Some(head) = chain(xs_chain) {
-        out.push(Prop::BackgroundPositionX, head);
+        out.push(x, head);
     }
     if let Some(head) = chain(ys_chain) {
-        out.push(Prop::BackgroundPositionY, head);
+        out.push(y, head);
     }
 }
 

@@ -544,6 +544,11 @@ pub(crate) fn with_sheet_declarations<R>(text: &str, f: impl FnOnce(&[Vec<Decl>]
     result
 }
 
+pub(crate) fn mask_shorthand(values: &[Option<String>]) -> Option<String> {
+    let parts: [&[u8]; 8] = all_present(values)?;
+    css_engine::mask_shorthand_serialize(parts).map(|text| lossy(&text))
+}
+
 pub(crate) fn background_position_join(x: &str, y: &str) -> Option<String> {
     css_engine::background_position_join(until_nul(x), until_nul(y)).map(|text| lossy(&text))
 }
