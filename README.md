@@ -31,7 +31,7 @@ Supported platforms:
 * macOS
 * FreeBSD and NetBSD
 
-**Version:** 0.9.10, the first all-Rust release.
+**Version:** 0.9.11.
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 

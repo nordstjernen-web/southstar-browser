@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 0.9.11-dev:
+Southstar Browser 0.9.11:
 ======
 * A page that deletes a property from a prototype, such as
   Object.prototype, no longer crashes the tab or reads the wrong value.
