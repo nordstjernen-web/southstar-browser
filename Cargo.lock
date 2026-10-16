@@ -1801,6 +1801,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
@@ -2373,6 +2374,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-runtime",
  "southstar-url",
 ]
@@ -2563,6 +2565,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-loader",
  "southstar-js-perf",
  "southstar-js-runtime",
@@ -2606,6 +2609,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-loader",
  "southstar-js-runtime",
 ]
@@ -2630,6 +2634,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-runtime",
 ]
 
@@ -2657,6 +2662,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",
@@ -2686,6 +2692,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-images",
  "southstar-js-runtime",
  "southstar-url",
 ]

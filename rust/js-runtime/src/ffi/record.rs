@@ -232,7 +232,6 @@ unsafe extern "C" {
         value: *const c_char,
         len: isize,
     );
-    fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
@@ -763,7 +762,8 @@ pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
     let name = el.name().map(CStr::to_bytes);
     if changed && name == Some(b"img") {
         el.remove_flags(FLAG_IMG_LOAD_FIRED);
-        unsafe { ns_js_start_image_load(js, n, s) };
+        let src = CStr::from_bytes_until_nul(&terminated).ok();
+        (crate::api::images_hooks().start_image_load)(js, el, src);
     }
     if name == Some(b"iframe") {
         unsafe { ns_js_schedule_iframe_load_full(js, n, glib::TRUE) };

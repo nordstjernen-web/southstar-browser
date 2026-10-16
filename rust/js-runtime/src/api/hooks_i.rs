@@ -5,6 +5,7 @@
 use core::ffi::CStr;
 use std::sync::OnceLock;
 
+use southstar_dom::Node;
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use super::{NavigationTiming, NsJs, ResourceInfo, Response};
@@ -43,4 +44,22 @@ pub fn set_perf_hooks(hooks: PerfHooks) {
 pub(crate) fn perf_hooks() -> &'static PerfHooks {
     PERF.get()
         .expect("the performance hooks are installed before the first page")
+}
+
+pub struct ImagesHooks {
+    pub start_image_load: fn(*const NsJs, Node<'_>, Option<&CStr>),
+    pub forget_node: fn(*const NsJs, Node<'_>),
+    pub teardown: fn(*const NsJs),
+}
+
+static IMAGES: OnceLock<ImagesHooks> = OnceLock::new();
+
+pub fn set_images_hooks(hooks: ImagesHooks) {
+    let _ = IMAGES.set(hooks);
+}
+
+pub(crate) fn images_hooks() -> &'static ImagesHooks {
+    IMAGES
+        .get()
+        .expect("the image hooks are installed before the first page")
 }

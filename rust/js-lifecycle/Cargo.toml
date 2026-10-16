@@ -12,6 +12,7 @@ southstar-anim = { path = "../anim" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-images = { path = "../js-images" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }

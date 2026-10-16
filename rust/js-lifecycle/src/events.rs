@@ -4,7 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_void};
 
-use southstar_dom::NsNode;
+use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -137,7 +137,7 @@ pub(crate) fn dispatch_anim_events(js: Js, anim: *mut c_void) {
 
 #[derive(Default)]
 struct MediaEvents {
-    images: Vec<(*mut NsNode, bool)>,
+    images: Vec<(Node<'static>, bool)>,
     videos: Vec<*mut NsNode>,
 }
 
@@ -153,9 +153,9 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
         if name == c"img" && !image.is_null() {
             if let Some(failed) = ffi::image_settled(image)
                 && node.flags() & IMG_LOAD_FIRED == 0
-                && !out.images.iter().any(|&(img, _)| img == dom)
+                && !out.images.iter().any(|&(img, _)| img == node)
             {
-                out.images.push((dom, failed));
+                out.images.push((node, failed));
             }
         } else if name == c"video" && !video.is_null() && ffi::video_take_load_events(video) {
             out.videos.push(dom);

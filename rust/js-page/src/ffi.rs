@@ -217,8 +217,6 @@ unsafe extern "C" {
         origin: *const c_char,
         start_us: i64,
     );
-    fn ns_js_image_load_tracked(js: *mut NsJs, el: *const NsNode) -> GBoolean;
-    fn ns_js_start_image_load(js: *mut NsJs, el: *mut NsNode, src: *const c_char);
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
 
     fn ns_services_timer_count(js: *const NsJs) -> c_uint;
@@ -487,11 +485,11 @@ impl Js {
     }
 
     pub fn image_load_tracked(self, el: Element) -> bool {
-        unsafe { ns_js_image_load_tracked(self.0, el.as_ptr()) != 0 }
+        southstar_js_images::image_load_tracked(self.0, el)
     }
 
     pub fn start_image_load(self, el: Element, src: &CStr) {
-        unsafe { ns_js_start_image_load(self.0, el.as_mut_ptr(), src.as_ptr()) };
+        southstar_js_images::start_image_load(self.0, el, Some(src));
     }
 
     pub fn frame_context_count(self) -> u32 {

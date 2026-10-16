@@ -48,7 +48,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_js_images_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
     fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode);
@@ -297,7 +296,7 @@ pub(crate) fn purge_subtree_rafs(js: Js, root: Element) {
 }
 
 pub(crate) fn images_forget_node(js: Js, node: Element) {
-    unsafe { ns_js_images_forget_node(js.0, node.as_ptr()) };
+    southstar_js_images::forget_node(js.0, node);
 }
 
 pub(crate) fn dispatch_forget_node(js: Js, node: Element) {

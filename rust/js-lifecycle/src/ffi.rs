@@ -112,7 +112,7 @@ impl Js {
     }
 
     pub fn flush_ready_images(self) {
-        unsafe { ns_js_flush_ready_images(self.0) };
+        southstar_js_images::flush_ready_images(self.0);
     }
 
     pub fn flush_autofocus(self) {
@@ -151,8 +151,8 @@ impl Js {
         unsafe { ns_js_dispatch_event(self.0, target, kind.as_ptr(), ptr::null_mut()) };
     }
 
-    pub fn fire_img_load_once(self, node: *mut NsNode, failed: bool) {
-        unsafe { ns_js_fire_img_load_once(self.0, node, glib::boolean(failed)) };
+    pub fn fire_img_load_once(self, node: Node<'_>, failed: bool) {
+        southstar_js_images::fire_img_load_once(self.0, node, failed);
     }
 
     pub fn time_origin_ms(self, realm: ContextHandle, now_us: i64) -> f64 {
@@ -217,12 +217,12 @@ impl Js {
     }
 
     pub fn load_blocked(self) -> bool {
-        unsafe {
-            ns_js_image_loads_pending(self.0) != 0
-                || ns_js_pending_iframe_count(self.0) > 0
-                || ns_js_has_pending_script_roots(self.0) != 0
-                || api::load_delayed(self.0)
-        }
+        southstar_js_images::image_loads_pending(self.0)
+            || unsafe {
+                ns_js_pending_iframe_count(self.0) > 0
+                    || ns_js_has_pending_script_roots(self.0) != 0
+                    || api::load_delayed(self.0)
+            }
     }
 
     pub fn has_pending_work(self) -> bool {
@@ -247,8 +247,8 @@ impl Js {
             || unsafe {
                 ns_services_timers_pending(self.0, glib::TRUE) != 0
                     || api::message_tasks_pending(self.0)
-                    || ns_js_image_loads_pending(self.0) != 0
             }
+            || southstar_js_images::image_loads_pending(self.0)
     }
 }
 
@@ -258,7 +258,6 @@ pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
 pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
-    fn ns_js_flush_ready_images(js: *mut NsJs);
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_promote_deferred_iframes(js: *mut NsJs);
     fn ns_js_dispatch_event(
@@ -267,7 +266,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_fire_img_load_once(js: *mut NsJs, node: *mut NsNode, failed: GBoolean);
     fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
@@ -289,7 +287,6 @@ unsafe extern "C" {
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_js_profile_enabled() -> GBoolean;
-    fn ns_js_image_loads_pending(js: *const NsJs) -> GBoolean;
     fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;

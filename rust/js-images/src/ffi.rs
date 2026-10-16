@@ -248,94 +248,80 @@ unsafe extern "C" fn ready_idle(data: *mut c_void) -> GBoolean {
     0
 }
 
-fn js_arg(js: *mut NsJs) -> Js {
-    Js(js)
+fn js_arg(js: *const NsJs) -> Js {
+    Js(js.cast_mut())
 }
 
-fn node_arg(node: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(node) }
+fn element(node: Node<'_>) -> Option<Element> {
+    node.downgrade().get()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_start_image_load(
-    js: *mut NsJs,
-    el: *mut NsNode,
-    src: *const c_char,
-) {
-    if let Some(el) = node_arg(el) {
-        crate::start_image_load(js_arg(js), el, c_str(src));
+pub fn start_image_load(js: *const NsJs, el: Node<'_>, src: Option<&CStr>) {
+    if let Some(el) = element(el) {
+        crate::start_load(js_arg(js), el, src);
+    }
+}
+
+pub fn image_for_node(js: *const NsJs, el: Node<'_>) -> Option<ImageRef<'static>> {
+    element(el).and_then(|el| crate::image_of(js_arg(js), el))
+}
+
+pub fn image_natural_size(js: *const NsJs, el: Node<'_>) -> Option<(c_int, c_int)> {
+    image_for_node(js, el).map(|image| image.natural_size())
+}
+
+pub fn fire_img_load_once(js: *const NsJs, node: Node<'_>, failed: bool) {
+    if let Some(node) = element(node) {
+        crate::fire_load_once(js_arg(js), node, failed);
+    }
+}
+
+pub fn image_loads_pending(js: *const NsJs) -> bool {
+    !js.is_null() && crate::loads_pending(js_arg(js))
+}
+
+pub fn flush_ready_images(js: *const NsJs) {
+    crate::flush_ready(js_arg(js));
+}
+
+pub fn rescan_pending_images(js: *const NsJs, root: Option<Node<'_>>) {
+    crate::rescan_pending(js_arg(js), root.and_then(element));
+}
+
+pub fn image_load_tracked(js: *const NsJs, el: Node<'_>) -> bool {
+    !js.is_null() && element(el).is_some_and(|el| crate::is_tracked(js_arg(js), el))
+}
+
+pub fn forget_node(js: *const NsJs, node: Node<'_>) {
+    if !js.is_null()
+        && let Some(node) = element(node)
+    {
+        crate::forget(js_arg(js), node);
+    }
+}
+
+fn teardown(js: *const NsJs) {
+    if !js.is_null() {
+        crate::teardown(js_arg(js));
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void {
-    node_arg(el)
-        .and_then(|el| crate::image_for_node(js_arg(js), el))
+    unsafe { Node::from_ptr(el) }
+        .and_then(|el| image_for_node(js, el))
         .map_or(ptr::null(), ImageRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_natural_size(
-    js: *mut NsJs,
-    el: *const NsNode,
-    width: *mut c_int,
-    height: *mut c_int,
-) -> GBoolean {
-    let Some(image) = node_arg(el).and_then(|el| crate::image_for_node(js_arg(js), el)) else {
-        return 0;
-    };
-    let (w, h) = image.natural_size();
-    unsafe {
-        *width = w;
-        *height = h;
-    }
-    1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_fire_img_load_once(
-    js: *mut NsJs,
-    node: *mut NsNode,
-    failed: GBoolean,
-) {
-    if let Some(node) = node_arg(node) {
-        crate::fire_img_load_once(js_arg(js), node, failed != 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_loads_pending(js: *const NsJs) -> GBoolean {
-    GBoolean::from(!js.is_null() && crate::loads_pending(js_arg(js.cast_mut())))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_flush_ready_images(js: *mut NsJs) {
-    crate::flush_ready_images(js_arg(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode) {
-    crate::rescan_pending_images(js_arg(js), node_arg(root));
+    rescan_pending_images(js, unsafe { Node::from_ptr(root) });
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_load_tracked(js: *mut NsJs, el: *const NsNode) -> GBoolean {
-    let tracked = !js.is_null() && node_arg(el).is_some_and(|el| crate::is_tracked(js_arg(js), el));
-    GBoolean::from(tracked)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_images_forget_node(js: *mut NsJs, node: *const NsNode) {
-    if !js.is_null()
-        && let Some(node) = node_arg(node)
-    {
-        crate::forget_node(js_arg(js), node);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_images_teardown(js: *mut NsJs) {
-    if !js.is_null() {
-        crate::teardown(js_arg(js));
-    }
+pub fn install_runtime_hooks() {
+    api::set_images_hooks(api::ImagesHooks {
+        start_image_load,
+        forget_node,
+        teardown,
+    });
 }

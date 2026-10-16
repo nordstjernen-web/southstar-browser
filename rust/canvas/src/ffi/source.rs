@@ -17,7 +17,6 @@ use crate::bitmap::{ImageBitmap, Source};
 
 unsafe extern "C" {
     fn ns_js_box_for_node(js: *mut NsJs, node: *const NsNode) -> *const NsBox;
-    fn ns_js_image_for_node(js: *mut NsJs, node: *const NsNode) -> *const c_void;
     fn ns_js_resource_origin_clean(
         js: *mut NsJs,
         ctx: ContextHandle,
@@ -125,10 +124,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
             if name != b"img" {
                 return None;
             }
-            from_image(
-                unsafe { ImageRef::from_ptr(ns_js_image_for_node(js, node)) }?,
-                true,
-            )
+            from_image(southstar_js_images::image_for_node(js, element)?, true)
         })?;
     let allow = if cors_requested {
         found.cors_allow_origin

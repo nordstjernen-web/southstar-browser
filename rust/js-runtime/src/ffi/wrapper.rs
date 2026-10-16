@@ -24,7 +24,6 @@ unsafe extern "C" {
     fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode);
     fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode);
     fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode);
-    fn ns_js_images_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_focus_forget_node(js: *const NsJs, n: *const NsNode);
     fn ns_js_forget_pending_change_for(js: *mut NsJs, el: *const NsNode);
     fn ns_parser_hold_forget(js: *mut NsJs, n: *const NsNode);
@@ -306,7 +305,7 @@ fn invalidate_wrapper(target: Node<'static>) {
     if !js.is_null() {
         unsafe {
             ns_js_unorphan_node(js, n);
-            ns_js_images_forget_node(js, n);
+            (crate::api::images_hooks().forget_node)(js, target);
             ns_focus_forget_node(js, n);
             ns_js_forget_pending_change_for(js, n);
             ns_parser_hold_forget(js, n);

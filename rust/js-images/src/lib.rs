@@ -15,6 +15,12 @@ use southstar_image::ImageRef;
 
 use ffi::{Js, Realm};
 
+pub use ffi::{
+    fire_img_load_once, flush_ready_images, forget_node, image_for_node, image_load_tracked,
+    image_loads_pending, image_natural_size, install_runtime_hooks, rescan_pending_images,
+    start_image_load,
+};
+
 type Element = Node<'static>;
 
 const IMG_LOAD_FIRED: u32 = 1 << 3;
@@ -125,7 +131,7 @@ fn schedule_ready(load: &Rc<Load>) {
     }
 }
 
-pub(crate) fn start_image_load(js: Js, el: Element, src: Option<&CStr>) {
+pub(crate) fn start_load(js: Js, el: Element, src: Option<&CStr>) {
     if js.is_null() || !ffi::has_image_cache(js) || !is_img(el) {
         return;
     }
@@ -203,14 +209,14 @@ pub(crate) fn ready_idle(load: Rc<Load>) {
     };
     if abs_url.as_deref() != Some(load.requested_url.as_c_str()) {
         if let Some(src) = nonempty(cur_src) {
-            start_image_load(js, el, Some(src));
+            start_load(js, el, Some(src));
         }
         return;
     }
     if let Some(img) = load.img.get() {
         log_failure(js, img);
         if settled(img) {
-            ffi::in_realm_scope(js, load.realm, || fire_img_load_once(js, el, img.failed()));
+            ffi::in_realm_scope(js, load.realm, || fire_load_once(js, el, img.failed()));
             if img.loaded() {
                 ffi::mark_mutated(js);
             }
@@ -219,7 +225,7 @@ pub(crate) fn ready_idle(load: Rc<Load>) {
     ffi::request_repaint(js);
 }
 
-pub(crate) fn fire_img_load_once(js: Js, node: Element, failed: bool) {
+pub(crate) fn fire_load_once(js: Js, node: Element, failed: bool) {
     if js.is_null() || node.flags() & IMG_LOAD_FIRED != 0 {
         return;
     }
@@ -228,7 +234,7 @@ pub(crate) fn fire_img_load_once(js: Js, node: Element, failed: bool) {
     }
     node.add_flags(IMG_LOAD_FIRED);
     if node.element_name() == Some(b"img")
-        && let Some(img) = image_for_node(js, node)
+        && let Some(img) = image_of(js, node)
     {
         ffi::record_image_timing(js, node, img);
     }
@@ -236,7 +242,7 @@ pub(crate) fn fire_img_load_once(js: Js, node: Element, failed: bool) {
     ffi::dispatch_resource_event(js, node, kind);
 }
 
-pub(crate) fn image_for_node(js: Js, el: Element) -> Option<ImageRef<'static>> {
+pub(crate) fn image_of(js: Js, el: Element) -> Option<ImageRef<'static>> {
     if js.is_null() {
         return None;
     }
@@ -263,7 +269,7 @@ pub(crate) fn loads_pending(js: Js) -> bool {
     .unwrap_or(false)
 }
 
-pub(crate) fn flush_ready_images(js: Js) {
+pub(crate) fn flush_ready(js: Js) {
     if js.is_null() || ffi::halted(js) || ffi::in_pump(js) {
         return;
     }
@@ -285,7 +291,7 @@ pub(crate) fn flush_ready_images(js: Js) {
         let Some(img) = load.img.get() else {
             continue;
         };
-        ffi::in_realm_scope(js, load.realm, || fire_img_load_once(js, el, img.failed()));
+        ffi::in_realm_scope(js, load.realm, || fire_load_once(js, el, img.failed()));
     }
 }
 
@@ -300,7 +306,7 @@ fn rescan_subtree(js: Js, root: Element, depth: usize) {
         && abs_url != load.requested_url
     {
         root.remove_flags(IMG_LOAD_FIRED);
-        start_image_load(js, root, Some(src));
+        start_load(js, root, Some(src));
     }
     let mut child = root.first_child();
     while let Some(c) = child {
@@ -309,7 +315,7 @@ fn rescan_subtree(js: Js, root: Element, depth: usize) {
     }
 }
 
-pub(crate) fn rescan_pending_images(js: Js, root: Option<Element>) {
+pub(crate) fn rescan_pending(js: Js, root: Option<Element>) {
     if js.is_null() || !has_loads(js) {
         return;
     }
@@ -322,7 +328,7 @@ pub(crate) fn is_tracked(js: Js, el: Element) -> bool {
     lookup(js, el).is_some()
 }
 
-pub(crate) fn forget_node(js: Js, el: Element) {
+pub(crate) fn forget(js: Js, el: Element) {
     remove(js, el);
 }
 

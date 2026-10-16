@@ -141,7 +141,6 @@ unsafe extern "C" {
     fn ns_services_teardown(js: *mut NsJs);
     fn ns_js_blob_urls_free(js: *mut NsJs);
     fn ns_canvas_states_teardown(js: *mut NsJs);
-    fn ns_js_images_teardown(js: *mut NsJs);
     fn ns_dispatch_teardown_listeners(js: *mut NsJs);
     fn ns_js_net_teardown(js: *mut NsJs);
     fn ns_js_loader_teardown(js: *mut NsJs);
@@ -477,7 +476,7 @@ impl Js {
             ns_services_teardown(self.0);
             ns_js_blob_urls_free(self.0);
             ns_canvas_states_teardown(self.0);
-            ns_js_images_teardown(self.0);
+            (crate::api::images_hooks().teardown)(self.0);
             ns_dispatch_teardown_listeners(self.0);
             ns_js_net_teardown(self.0);
         }

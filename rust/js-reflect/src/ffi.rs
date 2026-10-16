@@ -32,12 +32,6 @@ unsafe extern "C" {
         len: isize,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
-    fn ns_js_image_natural_size(
-        js: *mut NsJs,
-        node: *const NsNode,
-        width: *mut c_int,
-        height: *mut c_int,
-    ) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
@@ -106,9 +100,7 @@ pub(crate) fn set_src(js: Js, node: Element, value: &JsText) {
 }
 
 pub(crate) fn image_natural_size(js: Js, node: Element) -> Option<(i32, i32)> {
-    let (mut w, mut h) = (0, 0);
-    let found = unsafe { ns_js_image_natural_size(js.0, node.as_ptr(), &mut w, &mut h) };
-    (found != glib::FALSE).then_some((w, h))
+    southstar_js_images::image_natural_size(js.0, node)
 }
 
 pub(crate) fn current_url(js: Js) -> Vec<u8> {

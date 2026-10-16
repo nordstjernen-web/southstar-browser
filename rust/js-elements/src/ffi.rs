@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
@@ -45,7 +45,6 @@ unsafe extern "C" {
         len: isize,
     );
     fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
-    fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void;
     fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char;
     fn ns_img_chosen_density(n: *const NsNode) -> f64;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
@@ -227,7 +226,7 @@ pub(crate) fn current_document(js: Js) -> Option<Element> {
 }
 
 pub(crate) fn image_for_node(js: Option<Js>, node: Element) -> Option<ImageRef<'static>> {
-    unsafe { ImageRef::from_ptr(ns_js_image_for_node(raw_js(js), node.as_ptr())) }
+    southstar_js_images::image_for_node(raw_js(js), node)
 }
 
 pub(crate) fn chosen_url(node: Element) -> Option<Vec<u8>> {
