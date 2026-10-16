@@ -1776,6 +1776,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-cairo"
+version = "0.9.11-dev"
+
+[[package]]
 name = "southstar-camera"
 version = "0.9.11-dev"
 dependencies = [

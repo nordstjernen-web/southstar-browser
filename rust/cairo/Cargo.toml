@@ -1,0 +1,11 @@
+[package]
+name = "southstar-cairo"
+description = "Safe Cairo bindings the drawing crates share: owned and borrowed contexts, image, recording and PDF surfaces, patterns, paths, matrices and font options, with Cairo's C API declared once"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
