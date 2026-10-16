@@ -312,8 +312,17 @@ impl Walk<'_> {
             }
             _ => author,
         };
-        let mut child_parent = parent;
-        let mut child_layout_parent = layout_parent;
+        let nested_document = is_document && node.parent().is_some();
+        let (mut child_parent, mut child_layout_parent) = if nested_document {
+            (ptr::null(), ptr::null())
+        } else {
+            (parent, layout_parent)
+        };
+        let outer_root_px = if nested_document {
+            core::mem::replace(&mut self.root_px, 0.0)
+        } else {
+            self.root_px
+        };
         let mut recurse_dirty = under_dirty;
         if node.is_element() {
             let mut dirty =
@@ -375,6 +384,9 @@ impl Walk<'_> {
         }
         if let Some((w, h)) = saved_viewport {
             viewport::replace(w, h);
+        }
+        if nested_document {
+            self.root_px = outer_root_px;
         }
         self.depth -= 1;
     }

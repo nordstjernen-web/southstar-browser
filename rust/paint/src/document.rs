@@ -69,6 +69,17 @@ fn canvas_background_of(root: BoxRef<'_>) -> Option<Rgba> {
         .or_else(|| box_solid_background(find_element_box_named(root, b"body")))
 }
 
+pub(crate) fn frame_canvas_background(frame: BoxRef<'_>) -> Option<Rgba> {
+    let mut c = frame.first_child();
+    while let Some(child) = c {
+        if let Some(bg) = canvas_background_of(child) {
+            return Some(bg);
+        }
+        c = child.next_sibling();
+    }
+    None
+}
+
 fn find_box_for_node<'a>(b: BoxRef<'a>, node: Node<'_>) -> Option<BoxRef<'a>> {
     if b.dom_ptr() == node.as_ptr().cast() {
         return Some(b);

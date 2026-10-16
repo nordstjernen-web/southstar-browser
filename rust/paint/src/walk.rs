@@ -965,6 +965,29 @@ fn paint_canvas_element(cr: Cr, b: BoxRef<'_>) {
     cr.restore();
 }
 
+fn hosts_document(n: Node<'_>) -> bool {
+    matches!(n.element_name(), Some(b"iframe" | b"frame" | b"object"))
+        && core::iter::successors(n.first_child(), |c| c.next_sibling())
+            .any(|c| c.kind() == NodeKind::Document)
+}
+
+fn paint_frame_canvas(cr: Cr, b: BoxRef<'_>) {
+    let Some(bg) = crate::document::frame_canvas_background(b) else {
+        return;
+    };
+    let (m, bd, p) = (b.margin(), b.border(), b.padding());
+    cr.save();
+    bg.set_source(cr);
+    cr.rectangle(
+        b.x() + m.left + bd.left + p.left,
+        b.y() + m.top + bd.top + p.top,
+        b.content_width(),
+        b.content_height(),
+    );
+    cr.fill();
+    cr.restore();
+}
+
 pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if box_is_hidden(b) {
         return;
@@ -1199,6 +1222,9 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     }
     if !skip_contents && node_of(b).and_then(Node::element_name) == Some(b"canvas") {
         paint_canvas_element(cr, b);
+    }
+    if !skip_contents && !box_offscreen && node_of(b).is_some_and(hosts_document) {
+        paint_frame_canvas(cr, b);
     }
 
     let mut entries: Vec<(i32, u8, u32, BoxRef<'_>)> = Vec::new();
