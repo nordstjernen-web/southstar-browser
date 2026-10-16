@@ -258,7 +258,7 @@ fn append_to_buffer(js: Js, text: &[u8]) {
 pub(crate) fn append_args(scope: &mut Scope<'_>, out: &mut Vec<u8>, args: &[Value]) {
     for arg in args {
         if let Ok(text) = scope.to_bytes(arg) {
-            out.extend_from_slice(until_nul(&text));
+            out.extend_from_slice(&text);
         }
     }
 }
@@ -291,7 +291,7 @@ fn write_common(scope: &mut Scope<'_>, args: &[Value], newline: bool) -> JsResul
     });
     for arg in args {
         if let Ok(text) = scope.to_bytes(arg) {
-            append_to_buffer(js, until_nul(&text));
+            append_to_buffer(js, &text);
         }
     }
     if newline {

@@ -236,6 +236,13 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* NUL characters in HTML no longer cut a document short. Page and frame
+  loads, document.write and DOMParser passed the decoded text around as
+  C strings, so everything after a NUL byte was lost; the text now stays
+  a byte buffer from decoding to the parser, which handles NUL as the
+  HTML standard says. Fragments parsed for a prefixed SVG or MathML
+  context element ("svg:title") use its local name, so integration
+  points work. WPT html/syntax: +113 subtests.
 * clip-path basic shapes serialize canonically (lengths with units,
   default radii, fill rules, rounds and geometry boxes omitted,
   positions in x-then-y order, path data normalized), shape() is parsed

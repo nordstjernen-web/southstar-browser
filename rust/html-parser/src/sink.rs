@@ -244,10 +244,14 @@ pub(crate) fn parse_fragment_in_namespace(
     bytes: &[u8],
     scripting: bool,
 ) -> Tree {
-    let name = context_tag
+    let qualified = context_tag
         .map(CStr::to_bytes)
         .filter(|n| !n.is_empty())
         .unwrap_or(b"body");
+    let name = match (ns, qualified.iter().rposition(|&c| c == b':')) {
+        (Ns::Svg | Ns::MathMl, Some(colon)) => &qualified[colon + 1..],
+        _ => qualified,
+    };
     let tree = Tree::new(Kind::Document);
     if !scripting {
         tree.root().add_flags(NODE_SCRIPTING_DISABLED);

@@ -31,7 +31,7 @@ headless	267	161	2	0	216	25	0
 helper-ffi	0	0	0	0	0	0	0
 history	31	18	5	0	22	6	0
 html-parser	25	0	6	0	4	0	0
-html-util	40	9	6	0	25	2	0
+html-util	40	8	6	0	25	2	0
 html5	0	0	0	0	0	0	0
 http	36	23	0	0	8	1	0
 http-cache	31	22	3	0	17	6	0
@@ -60,7 +60,7 @@ js-events	21	6	13	0	5	0	0
 js-focus	110	47	24	0	56	0	0
 js-fonts	13	7	2	0	7	0	0
 js-forms	101	43	28	0	50	1	0
-js-frames	198	88	33	0	121	9	0
+js-frames	197	87	33	0	121	9	0
 js-geometry	54	25	12	0	34	6	0
 js-html	36	27	3	0	31	3	0
 js-images	61	26	10	0	35	5	0

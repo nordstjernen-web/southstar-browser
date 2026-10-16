@@ -452,7 +452,7 @@ fn append_write(scope: &mut Scope<'_>, this: &Value, args: &[Value], newline: bo
     match current {
         Some(current) => {
             if let Ok(text) = scope.to_bytes(&current) {
-                buffer.extend_from_slice(until_nul(&text));
+                buffer.extend_from_slice(&text);
             }
         }
         None => ffi::orphan_children(js, doc),
@@ -501,7 +501,7 @@ pub(crate) fn close(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResul
         return Ok(Value::undefined());
     };
     if let Ok(markup) = scope.to_bytes(&current) {
-        replace_children(js, doc, until_nul(&markup));
+        replace_children(js, doc, &markup);
     }
     let _ = scope.set(this, WRITE_BUFFER, Value::undefined());
     if let Some(host) = frame_host(doc) {

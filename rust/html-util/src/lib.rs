@@ -513,14 +513,9 @@ fn charset_is_dangerous(charset: &[u8]) -> bool {
         || has(b"SCSU")
 }
 
-pub enum Decoded {
-    Glib(ffi::GlibString),
-    Bytes(Vec<u8>),
-}
-
-pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option<Vec<u8>>) {
+pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Vec<u8>, Option<Vec<u8>>) {
     if body.is_empty() {
-        return (Decoded::Bytes(Vec::new()), None);
+        return (Vec::new(), None);
     }
     let utf8 = || Some(b"UTF-8".to_vec());
     if body.starts_with(b"\xef\xbb\xbf") {
@@ -530,7 +525,7 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
         if body.starts_with(bom)
             && let Some(out) = ffi::convert(&body[2..], from.as_bytes())
         {
-            return (Decoded::Glib(out), Some(from.as_bytes().to_vec()));
+            return (out, Some(from.as_bytes().to_vec()));
         }
     }
     let mut declared = content_type.and_then(|ct| charset_value_in(until_nul(ct)));
@@ -545,11 +540,11 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
         } else if !charset_is_dangerous(&charset)
             && let Some(out) = ffi::convert(body, &charset)
         {
-            return (Decoded::Glib(out), Some(charset));
+            return (out, Some(charset));
         }
     }
     if ffi::utf8_validate(body) {
-        return (Decoded::Bytes(body.to_vec()), utf8());
+        return (body.to_vec(), utf8());
     }
     if declared_utf8 {
         return ((ffi::utf8_make_valid(body)), utf8());
@@ -558,10 +553,10 @@ pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Decoded, Option
         && !charset_is_dangerous(&charset)
         && let Some(out) = ffi::convert(body, &charset)
     {
-        return (Decoded::Glib(out), Some(charset));
+        return (out, Some(charset));
     }
     if let Some(out) = ffi::convert(body, b"WINDOWS-1252") {
-        return (Decoded::Glib(out), Some(b"WINDOWS-1252".to_vec()));
+        return (out, Some(b"WINDOWS-1252".to_vec()));
     }
     ((ffi::utf8_make_valid(body)), utf8())
 }

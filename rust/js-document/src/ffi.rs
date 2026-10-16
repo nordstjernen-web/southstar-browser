@@ -530,12 +530,12 @@ pub(crate) fn set_attr(node: Element, name: &CStr, value: &CStr) {
 }
 
 pub(crate) fn parse_html(markup: &[u8]) -> Tree {
-    southstar_html_parser::parse_document(crate::until_nul(markup), true)
+    southstar_html_parser::parse_document(markup, true)
 }
 
 pub(crate) fn parse_fragment(context: Option<&CStr>, markup: &[u8], scripting: bool) -> Tree {
     let context = context.unwrap_or(c"");
-    southstar_html_parser::parse_fragment_for_tag(context, crate::until_nul(markup), scripting)
+    southstar_html_parser::parse_fragment_for_tag(context, markup, scripting)
 }
 
 pub(crate) fn url_host(url: &[u8]) -> Option<Vec<u8>> {

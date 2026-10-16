@@ -287,9 +287,11 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
     let doc_language = resp.content_language().and_then(ffi::dup_text);
     let csp_header = resp.csp_header().and_then(ffi::dup_text);
     prepare_document_response(&mut resp);
-    let (decoded, doc_charset) = resp.decode_body(true);
+    let content_type = resp.content_type().map(CStr::to_bytes);
+    let (decoded, doc_charset) = southstar_html_util::decode_body(resp.body(), content_type);
+    let doc_charset = doc_charset.and_then(|c| ffi::gstr_from(&c));
     let scripting = southstar_config::get().is_none_or(|c| c.javascript_enabled != 0);
-    let doc = ffi::html_parse(Some(decoded.as_deref().unwrap_or(c"")), scripting);
+    let doc = ffi::html_parse_bytes(&decoded, scripting);
     drop(decoded);
     let security = security_of(&resp, fetch_url);
     let remote_ip = resp.remote_ip().and_then(ffi::dup_text);

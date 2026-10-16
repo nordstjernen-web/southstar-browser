@@ -1743,6 +1743,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
+ "southstar-html-util",
  "southstar-layout",
  "southstar-url",
 ]
@@ -2356,6 +2357,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
+ "southstar-html-util",
  "southstar-js-bind",
  "southstar-js-engine",
  "southstar-layout",

@@ -8,11 +8,8 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use crate::Decoded;
-
 unsafe extern "C" {
     fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
-    fn g_utf8_make_valid(str_: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_validate(str_: *const c_char, max_len: isize, end: *mut *const c_char) -> GBoolean;
     fn g_convert(
         str_: *const c_char,
@@ -28,22 +25,6 @@ unsafe extern "C" {
     fn uchardet_handle_data(ud: *mut c_void, data: *const c_char, len: usize) -> c_int;
     fn uchardet_data_end(ud: *mut c_void);
     fn uchardet_get_charset(ud: *const c_void) -> *const c_char;
-}
-
-pub struct GlibString(NonNull<c_char>);
-
-impl GlibString {
-    fn into_raw(self) -> *mut c_char {
-        let p = self.0.as_ptr();
-        core::mem::forget(self);
-        p
-    }
-}
-
-impl Drop for GlibString {
-    fn drop(&mut self) {
-        unsafe { glib::g_free(self.0.as_ptr().cast()) };
-    }
 }
 
 fn cstring(bytes: &[u8]) -> CString {
@@ -65,19 +46,17 @@ pub(crate) fn path_basename(path: &[u8]) -> Vec<u8> {
     unsafe { take(g_path_get_basename(path.as_ptr())) }
 }
 
-pub(crate) fn utf8_make_valid(text: &[u8]) -> Decoded {
-    let out = unsafe { g_utf8_make_valid(text.as_ptr().cast(), text.len() as isize) };
-    NonNull::new(out).map_or(Decoded::Bytes(Vec::new()), |out| {
-        Decoded::Glib(GlibString(out))
-    })
+pub(crate) fn utf8_make_valid(text: &[u8]) -> Vec<u8> {
+    String::from_utf8_lossy(text).into_owned().into_bytes()
 }
 
 pub(crate) fn utf8_validate(text: &[u8]) -> bool {
     unsafe { g_utf8_validate(text.as_ptr().cast(), text.len() as isize, ptr::null_mut()) != 0 }
 }
 
-pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<GlibString> {
+pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<Vec<u8>> {
     let from = cstring(from);
+    let mut written = 0usize;
     let out = unsafe {
         g_convert(
             text.as_ptr().cast(),
@@ -85,11 +64,14 @@ pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<GlibString> {
             c"UTF-8".as_ptr(),
             from.as_ptr(),
             ptr::null_mut(),
-            ptr::null_mut(),
+            &mut written,
             ptr::null_mut(),
         )
     };
-    NonNull::new(out).map(GlibString)
+    let out = NonNull::new(out)?;
+    let bytes = unsafe { glib::slice(out.as_ptr().cast::<u8>(), written) }.to_vec();
+    unsafe { glib::g_free(out.as_ptr().cast()) };
+    Some(bytes)
 }
 
 pub(crate) fn detect_charset(sample: &[u8]) -> Option<Vec<u8>> {
@@ -185,8 +167,5 @@ pub unsafe extern "C" fn ns_html_decode_body_full(
     if let (Some(charset), false) = (charset, charset_out.is_null()) {
         unsafe { *charset_out = glib::strdup(&charset) };
     }
-    match decoded {
-        Decoded::Glib(out) => out.into_raw(),
-        Decoded::Bytes(bytes) => glib::strdup(&bytes),
-    }
+    glib::strdup(&decoded)
 }

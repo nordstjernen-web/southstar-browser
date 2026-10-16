@@ -157,11 +157,11 @@ fn fetch_dest(iframe: Node<'_>, kind: FrameKind) -> &'static CStr {
 
 struct Fetched {
     abs_url: Option<CString>,
-    decoded: Option<CString>,
+    decoded: Option<Vec<u8>>,
     resp: Option<Response>,
 }
 
-fn decode_response(iframe: Node<'_>, abs_url: &CStr, resp: &Response) -> Option<CString> {
+fn decode_response(iframe: Node<'_>, abs_url: &CStr, resp: &Response) -> Option<Vec<u8>> {
     let body = resp.body()?;
     let content_type = resp.content_type();
     if !body.is_empty()
@@ -174,7 +174,7 @@ fn decode_response(iframe: Node<'_>, abs_url: &CStr, resp: &Response) -> Option<
         let shown = resp.final_url().unwrap_or(abs_url);
         let decoded = load::image_document(shown);
         ffi::set_attr(iframe, c"data-nd-frame-charset", Some(c"UTF-8"));
-        return decoded;
+        return decoded.map(CString::into_bytes);
     }
     if !body.is_empty() {
         let decoded = load::decode_body(body, content_type);
@@ -184,11 +184,11 @@ fn decode_response(iframe: Node<'_>, abs_url: &CStr, resp: &Response) -> Option<
             c"data-nd-frame-charset",
             Some(declared.as_deref().unwrap_or(c"UTF-8")),
         );
-        return decoded;
+        return Some(decoded);
     }
     if content_type.is_some_and(|ct| contains(ct, b"xml")) {
         ffi::set_attr(iframe, c"data-nd-frame-charset", Some(c"UTF-8"));
-        return Some(CString::default());
+        return Some(Vec::new());
     }
     None
 }
@@ -307,7 +307,7 @@ struct XmlState {
     empty: bool,
 }
 
-fn xml_state(resp: Option<&Response>, decoded: Option<&CStr>, is_xml_content: bool) -> XmlState {
+fn xml_state(resp: Option<&Response>, decoded: Option<&[u8]>, is_xml_content: bool) -> XmlState {
     let mut state = XmlState {
         suppress_scripts: false,
         malformed: false,
@@ -335,7 +335,7 @@ fn xml_state(resp: Option<&Response>, decoded: Option<&CStr>, is_xml_content: bo
     if state.malformed {
         return state;
     }
-    if decoded.to_bytes().iter().all(|&byte| glib_space(byte)) {
+    if decoded.iter().all(|&byte| glib_space(byte)) {
         state.empty = true;
         state.suppress_scripts = true;
         return state;
@@ -360,7 +360,7 @@ fn attach(iframe: Node<'_>, doc: Node<'_>) {
     ffi::append_child(iframe, doc);
 }
 
-fn plaintext_document(iframe: Node<'_>, text: &CStr) -> Built<'static> {
+fn plaintext_document(iframe: Node<'_>, text: &[u8]) -> Built<'static> {
     let doc = ffi::new_document();
     let html = ffi::new_element(c"html");
     let head = ffi::new_element(c"head");
@@ -379,7 +379,7 @@ fn plaintext_document(iframe: Node<'_>, text: &CStr) -> Built<'static> {
     }
 }
 
-fn xml_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
+fn xml_document(iframe: Node<'_>, decoded: &[u8]) -> Option<Built<'static>> {
     let parsed = load::xml_parse(decoded)?;
     let root =
         southstar_dom::children(parsed.root()).find(|child| child.kind() == Kind::Element)?;
@@ -392,7 +392,7 @@ fn xml_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
     })
 }
 
-fn html_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
+fn html_document(iframe: Node<'_>, decoded: &[u8]) -> Option<Built<'static>> {
     let parsed = load::html_parse(decoded);
     let root = southstar_dom::index::find_first_element(parsed.root(), c"html")?;
     let doc = parsed.into_root();
@@ -407,7 +407,7 @@ fn html_document(iframe: Node<'_>, decoded: &CStr) -> Option<Built<'static>> {
 fn build_document(
     iframe: Node<'_>,
     resp: Option<&Response>,
-    decoded: Option<&CStr>,
+    decoded: Option<&[u8]>,
     xml: &XmlState,
     is_xml_content: bool,
 ) -> Option<Built<'static>> {
@@ -434,7 +434,7 @@ fn build_document(
         return Some(plaintext_document(iframe, decoded));
     }
     let source = if xml.malformed {
-        PARSE_ERROR_DOCUMENT
+        PARSE_ERROR_DOCUMENT.to_bytes()
     } else {
         decoded
     };
@@ -600,7 +600,7 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     let fetched = match (non_empty(srcdoc.as_deref()), non_empty(src.as_deref())) {
         (Some(srcdoc), _) => Fetched {
             abs_url: Some(origin.clone()),
-            decoded: Some(srcdoc.to_owned()),
+            decoded: Some(srcdoc.to_bytes().to_vec()),
             resp: None,
         },
         (None, Some(src)) if !src.to_bytes().starts_with(b"about:") => {

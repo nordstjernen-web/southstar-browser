@@ -362,6 +362,12 @@ pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<GStr> {
 
 pub struct ParsedDoc(pub(super) Option<Tree>);
 
+pub fn html_parse_bytes(input: &[u8], scripting: bool) -> ParsedDoc {
+    ParsedDoc(Some(southstar_html_parser::parse_document(
+        input, scripting,
+    )))
+}
+
 pub fn html_parse(input: Option<&CStr>, scripting: bool) -> ParsedDoc {
     ParsedDoc(input.map(|html| southstar_html_parser::parse_document(html.to_bytes(), scripting)))
 }

@@ -110,12 +110,6 @@ unsafe extern "C" {
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_content_type_is_javascript(content_type: *const c_char) -> GBoolean;
     fn ns_html_image_document(url: *const c_char) -> *mut c_char;
-    fn ns_html_decode_body_full(
-        body: *const c_char,
-        len: usize,
-        content_type: *const c_char,
-        charset_out: *mut *mut c_char,
-    ) -> *mut c_char;
     fn ns_html_declared_charset(
         body: *const c_char,
         len: usize,
@@ -426,15 +420,8 @@ pub(crate) fn image_document(url: &CStr) -> Option<CString> {
     owned_text(unsafe { ns_html_image_document(url.as_ptr()) })
 }
 
-pub(crate) fn decode_body(body: &[u8], content_type: Option<&CStr>) -> Option<CString> {
-    owned_text(unsafe {
-        ns_html_decode_body_full(
-            body.as_ptr().cast(),
-            body.len(),
-            opt_ptr(content_type),
-            core::ptr::null_mut(),
-        )
-    })
+pub(crate) fn decode_body(body: &[u8], content_type: Option<&CStr>) -> Vec<u8> {
+    southstar_html_util::decode_body(body, content_type.map(CStr::to_bytes)).0
 }
 
 pub(crate) fn declared_charset(body: &[u8], content_type: Option<&CStr>) -> Option<CString> {
@@ -443,22 +430,23 @@ pub(crate) fn declared_charset(body: &[u8], content_type: Option<&CStr>) -> Opti
     })
 }
 
-pub(crate) fn html_parse(input: &CStr) -> Tree {
-    southstar_html_parser::parse_document(input.to_bytes(), true)
+pub(crate) fn html_parse(input: &[u8]) -> Tree {
+    southstar_html_parser::parse_document(input, true)
 }
 
-pub(crate) fn xml_parse(input: &CStr) -> Option<Tree> {
-    southstar_xml::parse_document(input.to_bytes()).ok()
+pub(crate) fn xml_parse(input: &[u8]) -> Option<Tree> {
+    southstar_xml::parse_document(input).ok()
 }
 
-pub(crate) fn xml_well_formed(input: &CStr) -> (bool, Option<CString>) {
+pub(crate) fn xml_well_formed(input: &[u8]) -> (bool, Option<CString>) {
     let mut root_ns: *mut c_char = core::ptr::null_mut();
-    let well_formed = unsafe { ns_xml_well_formed(input.as_ptr(), -1, &mut root_ns) != 0 };
+    let len = isize::try_from(input.len()).unwrap_or(isize::MAX);
+    let well_formed = unsafe { ns_xml_well_formed(input.as_ptr().cast(), len, &mut root_ns) != 0 };
     (well_formed, owned_text(root_ns))
 }
 
-pub(crate) fn new_text(text: &CStr) -> Node<'static> {
-    southstar_dom::node::new_text(southstar_dom::Kind::Text, text.to_bytes())
+pub(crate) fn new_text(text: &[u8]) -> Node<'static> {
+    southstar_dom::node::new_text(southstar_dom::Kind::Text, text)
 }
 
 pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr) {
