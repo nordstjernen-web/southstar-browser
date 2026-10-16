@@ -146,7 +146,10 @@ where
                 ImportClause::Namespace(None, alias)
             }
             TokenKind::IdentifierName(_)
-            | TokenKind::Keyword((Keyword::Await | Keyword::Yield | Keyword::Using, _)) => {
+            | TokenKind::Keyword((
+                Keyword::Await | Keyword::Yield | Keyword::Using | Keyword::Async | Keyword::Of,
+                _,
+            )) => {
                 let imported_binding = ImportedBinding.parse(cursor, interner)?;
 
                 let tok = cursor.peek(0, interner).or_abrupt()?;
@@ -238,7 +241,10 @@ fn is_source_phase_import<R: ReadChar>(
             }))
         }
         TokenKind::IdentifierName(_)
-        | TokenKind::Keyword((Keyword::Await | Keyword::Yield | Keyword::Using, _)) => Ok(true),
+        | TokenKind::Keyword((
+            Keyword::Await | Keyword::Yield | Keyword::Using | Keyword::Async | Keyword::Of,
+            _,
+        )) => Ok(true),
         _ => Ok(false),
     }
 }
