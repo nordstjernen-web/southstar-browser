@@ -24,6 +24,23 @@ Southstar Browser 0.9.11-dev:
   freed: pango_attribute_destroy(NULL) ran for every such run (dozens of
   warnings per page on sites like Ars Technica), and a failed camera open
   closed fd -1.
+* Iframes are inline-level boxes, 300 by 150 pixels unless sized, as in
+  other browsers. They were hidden until loaded and then laid out as
+  blocks, so a centred embed sat at the left, frames placed side by side
+  stacked, and a loading="lazy" frame, having no box, counted as off
+  screen and never loaded: dev.to's YouTube embeds stayed empty.
+* Absolutely and fixed positioned content inside an iframe is placed and
+  clipped within the frame. It used the top-level page as its containing
+  block, so YouTube's player, which fills its frame with an absolutely
+  positioned element, was drawn over the whole page.
+* A framed document's html or body background fills the whole frame, and
+  a framed document no longer inherits color, fonts or text-align from
+  the element around its iframe.
+* Promise reactions queued by a script inside an iframe run before the
+  frame's next script, as they do in the top-level document. YouTube's
+  embed bundle defines writeEmbed in a promise callback and the next
+  inline script calls it, so every embedded player failed with
+  "writeEmbed is not defined".
 * Image requests advertise image/avif only in builds that can decode it.
   A build without libavif (and every Windows build, which refuses AVIF)
   still asked for it first, so CDNs that negotiate on the Accept header
