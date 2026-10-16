@@ -3,6 +3,24 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/css no longer exports any C symbol. The animation crate reads
+  computed values, declaration blocks, animation lists and keyframes
+  through owned Rust types (OwnedValue with a Cell reference count,
+  Declarations, Keyframes, RetainedStyle) instead of seventeen C exports
+  and its own copies of rust/css's structs. The engine and the renderer
+  parse, cache and free style sheets through an OwnedSheet handle that
+  releases itself on drop, compute styles through compute_styles() and
+  track container sizes in a ContainerMap instead of thirteen more; the
+  CSSOM, layout, paint and selection call typed functions for value
+  serialization, dimensions, overflow, column counts, text orientation
+  and srcset sizes instead of eight more. rust/css drops from 735 unsafe
+  keywords to 538 and from 49 C exports to none.
+* The GTK shell and the headless driver drive the sandboxed renderer
+  through a Renderer type whose methods return owned Rust values,
+  instead of 46 ns_rproc_* C exports that filled #[repr(C)] structs of
+  g_malloc'd strings each caller had to mirror and free. The renderer
+  client exports nothing now and its unsafe count drops from 291 to 98;
+  the shell's drops from 976 to 914.
 * rust/style, the computed-style view layout, paint, SVG and printing
   read, no longer keeps its own #[repr(C)] copies of rust/css's value
   union, style struct and variable map, which had to match rust/css's
