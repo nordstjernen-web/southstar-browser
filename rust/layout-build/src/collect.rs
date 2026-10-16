@@ -402,7 +402,7 @@ impl<'a> Collector<'a> {
         {
             emit_font_size(attrs, start, end, px);
         }
-        let mut color = ps.get(PropId::Color).and_then(ValueRef::color);
+        let mut color = ps.text_fill_color().and_then(ValueRef::color);
         if ps
             .keyword_of(PropId::Visibility)
             .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
@@ -589,7 +589,9 @@ impl<'a> Collector<'a> {
         let fs_active = font_size_self > 0.0;
 
         let color_start = self.out.len();
-        let mut color = get(PropId::Color).and_then(ValueRef::color);
+        let mut color = s
+            .and_then(StyleRef::text_fill_color)
+            .and_then(ValueRef::color);
         if let Some(vis) = s.and_then(|s| s.keyword_of(PropId::Visibility))
             && matches!(vis.to_bytes(), b"hidden" | b"collapse")
         {

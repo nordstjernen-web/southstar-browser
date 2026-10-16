@@ -113,6 +113,24 @@ struct GlyphItem {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+struct GlyphInfo {
+    glyph: u32,
+    width: c_int,
+    x_offset: c_int,
+    y_offset: c_int,
+    attr: c_uint,
+}
+
+#[repr(C)]
+struct GlyphString {
+    num_glyphs: c_int,
+    glyphs: *mut GlyphInfo,
+    log_clusters: *mut c_int,
+    space: c_int,
+}
+
+#[repr(C)]
 pub struct RawLine {
     layout: *mut c_void,
     start_index: c_int,
@@ -148,6 +166,7 @@ macro_rules! pango {
 
 pango! {
     fn pango_cairo_font_map_get_default() -> *mut c_void;
+    fn pango_cairo_glyph_string_path(cr: *mut c_void, font: *mut c_void, glyphs: *mut GlyphString);
     fn pango_font_map_create_context(map: *mut c_void) -> *mut c_void;
     fn pango_font_map_get_serial(map: *mut c_void) -> c_uint;
     fn pango_font_map_list_families(map: *mut c_void, families: *mut *mut *mut c_void, n: *mut c_int);
@@ -839,6 +858,58 @@ impl Line<'_> {
     pub fn show(self, cr: Cr) {
         unsafe { pango_cairo_show_layout_line(cr.raw(), self.raw()) };
     }
+
+    pub fn range_path(self, cr: Cr, x: f64, baseline: f64, range: core::ops::Range<c_int>) {
+        let mut run_x = x;
+        let mut node = self.0.runs;
+        // SAFETY: a line's runs are a GSList its layout owns for the line's lifetime.
+        while let Some(link) = unsafe { node.as_ref() } {
+            // SAFETY: every run of a layout line is a PangoGlyphItem.
+            let run = unsafe { &*link.data.cast::<GlyphItem>() };
+            // SAFETY: a glyph item owns its item.
+            let item = unsafe { &*run.item };
+            // SAFETY: a glyph item owns its glyph string.
+            let glyphs = unsafe { &*run.glyphs.cast::<GlyphString>() };
+            let n = usize::try_from(glyphs.num_glyphs).unwrap_or(0);
+            // SAFETY: a glyph string holds num_glyphs glyph infos.
+            let infos = unsafe { core::slice::from_raw_parts(glyphs.glyphs, n) };
+            // SAFETY: a glyph string holds num_glyphs log clusters.
+            let clusters = unsafe { core::slice::from_raw_parts(glyphs.log_clusters, n) };
+            let start_x = run_x + f64::from(run.start_x_offset) / SCALE_F;
+            let item_range = item.offset..item.offset + item.length;
+            let font = item.analysis.font;
+            if item_range.start >= range.start && item_range.end <= range.end {
+                cr.move_to(start_x, baseline);
+                // SAFETY: cr is live and the font and glyph string belong to this run.
+                unsafe { pango_cairo_glyph_string_path(cr.raw(), font, run.glyphs.cast()) };
+            } else if item_range.start < range.end && item_range.end > range.start {
+                let mut glyph_x = start_x;
+                for (info, cluster) in infos.iter().zip(clusters) {
+                    if range.contains(&(item.offset + cluster)) {
+                        glyph_path(cr, font, *info, glyph_x, baseline);
+                    }
+                    glyph_x += f64::from(info.width) / SCALE_F;
+                }
+            }
+            let width: c_int = infos.iter().map(|g| g.width).sum();
+            run_x += f64::from(run.start_x_offset + width + run.end_x_offset) / SCALE_F;
+            node = link.next;
+        }
+    }
+}
+
+fn glyph_path(cr: Cr, font: *mut c_void, info: GlyphInfo, x: f64, baseline: f64) {
+    let mut glyph = info;
+    let mut cluster: c_int = 0;
+    let mut one = GlyphString {
+        num_glyphs: 1,
+        glyphs: &mut glyph,
+        log_clusters: &mut cluster,
+        space: 1,
+    };
+    cr.move_to(x, baseline);
+    // SAFETY: one points at a glyph and a cluster that outlive the call, and Pango only reads them.
+    unsafe { pango_cairo_glyph_string_path(cr.raw(), font, &mut one) };
 }
 
 pub struct LayoutIter<'a>(*mut c_void, core::marker::PhantomData<&'a Layout>);

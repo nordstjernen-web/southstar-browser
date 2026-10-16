@@ -1808,6 +1808,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         | P::ColumnRuleColor
         | P::CaretColor
         | P::StopColor
+        | P::WebkitTextFillColor
         | P::AccentColor => color_prop(prop, t),
         P::Fill | P::Stroke => paint_prop(t),
         P::FillRule | P::ClipRule => keyword_choice(t, "nonzero evenodd"),

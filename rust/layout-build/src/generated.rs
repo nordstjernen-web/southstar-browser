@@ -139,7 +139,7 @@ pub fn build_pseudo_inline_for(
     let invisible = ps
         .keyword_of(PropId::Visibility)
         .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"));
-    let color = ps.get(PropId::Color).and_then(ValueRef::color);
+    let color = ps.text_fill_color().and_then(ValueRef::color);
     if invisible || color.is_some() {
         let c = color.unwrap_or([0, 0, 0, 0]);
         let mut a = InlineAttr::new(inline_kind::COLOR, 0, tlen);

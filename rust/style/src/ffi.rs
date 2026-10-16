@@ -103,7 +103,7 @@ const _: () = assert!(
         && core::mem::offset_of!(Rect, is_auto) == 48
 );
 
-pub const PROP_COUNT: usize = 274;
+pub const PROP_COUNT: usize = 275;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -152,11 +152,11 @@ struct NsStyle {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    core::mem::size_of::<NsStyle>() == 2312
-        && core::mem::offset_of!(NsStyle, display) == 2192
-        && core::mem::offset_of!(NsStyle, before) == 2200
-        && core::mem::offset_of!(NsStyle, file_selector_button) == 2264
-        && core::mem::offset_of!(NsStyle, vars) == 2304
+    core::mem::size_of::<NsStyle>() == 2320
+        && core::mem::offset_of!(NsStyle, display) == 2200
+        && core::mem::offset_of!(NsStyle, before) == 2208
+        && core::mem::offset_of!(NsStyle, file_selector_button) == 2272
+        && core::mem::offset_of!(NsStyle, vars) == 2312
 );
 
 #[repr(C)]
@@ -554,6 +554,12 @@ impl<'a> StyleRef<'a> {
 
     pub fn specified_inline(self) -> bool {
         self.fields().specified_inline != 0
+    }
+
+    pub fn text_fill_color(self) -> Option<ValueRef<'a>> {
+        self.get(PropId::WebkitTextFillColor)
+            .filter(|v| v.color().is_some())
+            .or_else(|| self.get(PropId::Color))
     }
 
     pub fn from_currentcolor(self, prop: PropId) -> bool {

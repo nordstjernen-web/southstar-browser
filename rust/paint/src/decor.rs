@@ -5,7 +5,7 @@
 use core::f64::consts::PI;
 
 use southstar_image::ImageRef;
-use southstar_layout::{BoxRef, Edges, InlineAttr};
+use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr};
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
@@ -1263,6 +1263,32 @@ fn bg_layer_keyword(s: Option<StyleRef<'_>>, prop: P, li: i32) -> Option<&[u8]> 
         .map(|k| k.to_bytes())
 }
 
+pub fn background_clips_to_text(s: Option<StyleRef<'_>>) -> bool {
+    let layers = layer_count(get(s, P::BackgroundImage));
+    bg_layer_keyword(s, P::BackgroundClip, (layers - 1).max(0)) == Some(b"text")
+}
+
+fn subtree_text_path(cr: Cr, b: BoxRef<'_>) {
+    if b.kind() == BoxKind::Inline {
+        crate::inline::text_path(cr, b);
+    }
+    let mut child = b.first_child();
+    while let Some(c) = child {
+        subtree_text_path(cr, c);
+        child = c.next_sibling();
+    }
+}
+
+fn paint_clipped_to_text(cr: Cr, b: BoxRef<'_>, background: &Pattern) {
+    cr.save();
+    cr.new_path();
+    subtree_text_path(cr, b);
+    cr.clip();
+    cr.set_source(background);
+    cr.paint();
+    cr.restore();
+}
+
 fn bg_layer_clip_area(b: BoxRef<'_>, li: i32, area: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
     let (mut x, mut y, mut w, mut h) = area;
     let (bd, p) = (b.border(), b.padding());
@@ -1407,6 +1433,10 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
     }
 
     let has_mask = get(s, P::MaskImage).is_some_and(|v| v.kind() == Kind::Url);
+    let clip_to_text = background_clips_to_text(s);
+    if clip_to_text {
+        cr.push_group();
+    }
     let bg = rgba_anim(
         Some(b),
         ANIM_TARGET_BG_COLOR,
@@ -1477,6 +1507,9 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
             pixelated: style_pixelated(s),
         };
         paint_bg_image_core(cr, Some(img), &params, lpos, lclip, radii);
+    }
+    if clip_to_text {
+        paint_clipped_to_text(cr, b, &cr.pop_group());
     }
 
     if let Some(sl) = get(s, P::BoxShadow).and_then(ValueRef::shadows) {
