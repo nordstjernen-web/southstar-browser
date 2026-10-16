@@ -271,17 +271,24 @@ pub fn apply_i18n(layout: Option<&Layout>, attrs: Option<&AttrList>, b: Option<B
             bd = pango::DIRECTION_RTL;
         } else if dir.to_bytes().eq_ignore_ascii_case(b"ltr") {
             bd = pango::DIRECTION_LTR;
+        } else if dir.to_bytes().eq_ignore_ascii_case(b"auto") {
+            bd = pango::DIRECTION_WEAK_LTR;
         }
     }
     if bd == pango::DIRECTION_NEUTRAL && keyword_is(get(st, P::Direction), c"rtl") {
         bd = pango::DIRECTION_RTL;
     }
-    if bd != pango::DIRECTION_NEUTRAL
-        && let Some(layout) = layout
-    {
-        layout.set_auto_dir(false);
-        layout.context().set_base_dir(bd);
-    }
+    let Some(layout) = layout else {
+        return;
+    };
+    layout.set_auto_dir(bd == pango::DIRECTION_WEAK_LTR);
+    layout
+        .context()
+        .set_base_dir(if bd == pango::DIRECTION_NEUTRAL {
+            pango::DIRECTION_LTR
+        } else {
+            bd
+        });
 }
 
 fn append_feature(out: &mut Vec<u8>, feature: &[u8]) {

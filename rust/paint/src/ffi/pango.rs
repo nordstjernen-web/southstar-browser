@@ -38,6 +38,7 @@ pub const ELLIPSIZE_END: c_int = 3;
 
 pub const DIRECTION_LTR: c_int = 0;
 pub const DIRECTION_RTL: c_int = 1;
+pub const DIRECTION_WEAK_LTR: c_int = 4;
 pub const DIRECTION_NEUTRAL: c_int = 6;
 
 pub const UNDERLINE_SINGLE: c_int = 1;
@@ -615,6 +616,15 @@ impl Layout {
     pub fn index_to_pos(&self, index: c_int) -> Rectangle {
         let mut pos = Rectangle::default();
         unsafe { pango_layout_index_to_pos(self.0, index, &mut pos) };
+        pos
+    }
+
+    pub fn index_to_box(&self, index: c_int) -> Rectangle {
+        let mut pos = self.index_to_pos(index);
+        if pos.width < 0 {
+            pos.x += pos.width;
+            pos.width = -pos.width;
+        }
         pos
     }
 

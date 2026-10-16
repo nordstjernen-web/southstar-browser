@@ -146,7 +146,7 @@ pub(crate) fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
         if a.box_ref().is_none() {
             continue;
         }
-        let pos = layout.index_to_pos(a.byte_off() as i32);
+        let pos = layout.index_to_box(a.byte_off() as i32);
         let end = f64::from(pos.x + pos.width) / SCALE;
         if pw < end {
             pw = end.ceil();

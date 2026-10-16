@@ -1667,7 +1667,7 @@ fn paint_inline_atomics(
         let Some(ab) = a.box_ref() else {
             continue;
         };
-        let pos = layout.index_to_pos(a.byte_off() as i32);
+        let pos = layout.index_to_box(a.byte_off() as i32);
         let sx = text_x + f64::from(pos.x) / S;
         let sy = if by_lines {
             ab.y() - ab.rel_dy()
@@ -1856,7 +1856,7 @@ pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
             }
             let by_lines = root.atomic_line_heights().is_some();
             for (i, atomic) in atomics.iter().enumerate() {
-                let pos = layout.index_to_pos(atomic.byte_off() as i32);
+                let pos = layout.index_to_box(atomic.byte_off() as i32);
                 let x = text_x + f64::from(pos.x) / S;
                 let y = match atomic.box_ref() {
                     Some(ab) if by_lines => ab.y() - ab.rel_dy() - root.y(),

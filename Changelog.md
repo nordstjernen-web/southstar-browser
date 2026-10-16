@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Text direction comes from the CSS direction property and the dir
+  attribute only. One right-to-left element anywhere on a page (a single
+  direction: rtl inside an ad) used to switch every later paragraph's
+  layout to right-to-left, so on Yahoo the header search box, an
+  inline-flex form, was pushed its own width to the right and covered the
+  navigation links. Arabic or Hebrew text in a left-to-right paragraph now
+  stays left-aligned as in other browsers, and dir="auto" still follows
+  the text.
+* Inline blocks, images and other atomic inlines on right-to-left lines
+  sit where their glyph box is. They were drawn starting at its right
+  edge, one box-width too far right; Arabic Wikipedia's infobox images
+  spilled over the article text.
 * Outlines follow the border-radius of their box, as in current
   browsers: the curve grows by outline-offset and shrinks for a negative
   offset. They were always drawn as rectangles, so pill-shaped search
