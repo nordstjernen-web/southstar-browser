@@ -165,13 +165,20 @@ pub fn collect_absolute(
     placeholder: bool,
 ) -> Option<BoxRef<'static>> {
     queue_absolute(dom, fixed);
-    if !placeholder || with(|st| st.abs_placeholders.is_none()) {
+    if !placeholder {
+        return None;
+    }
+    abs_placeholder(dom)
+}
+
+pub fn abs_placeholder(key: *const NsNode) -> Option<BoxRef<'static>> {
+    if with(|st| st.abs_placeholders.is_none()) {
         return None;
     }
     let ph = BoxPool::new_box(0);
     with(|st| {
         if let Some(set) = st.abs_placeholders.as_mut() {
-            set.insert(ph.as_ptr() as usize, dom);
+            set.insert(ph.as_ptr() as usize, key);
         }
     });
     Some(ph)

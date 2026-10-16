@@ -166,21 +166,13 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
     }
 }
 
-fn line_top(layout: &Layout, line_index: i32) -> f64 {
-    let mut iter = layout.iter();
-    let mut top;
-    let mut j = 0;
-    loop {
-        top = f64::from(iter.line_logical_extents().y) / SCALE;
-        if j >= line_index || !iter.next_line() {
-            break;
-        }
-        j += 1;
-    }
-    top
-}
-
-fn record_abs_statics(layout: &Layout, b: BoxRef<'_>, ps: *const Style, content_width: f64) {
+fn record_abs_statics(
+    layout: &Layout,
+    b: BoxRef<'_>,
+    ps: *const Style,
+    content_width: f64,
+    line_heights: &[f64],
+) {
     let Some(atomics) = b.inline_atomics() else {
         return;
     };
@@ -195,13 +187,9 @@ fn record_abs_statics(layout: &Layout, b: BoxRef<'_>, ps: *const Style, content_
         }
         let off = a.byte_off() as i32;
         let pos = layout.index_to_box(off);
-        let line_index = layout.index_to_line(off);
-        ffi::record_abs_static(
-            dom,
-            b,
-            indent + f64::from(pos.x) / SCALE,
-            line_top(layout, line_index),
-        );
+        let line_index = usize::try_from(layout.index_to_line(off)).unwrap_or(0);
+        let line_top = line_heights.iter().take(line_index).sum();
+        ffi::record_abs_static(dom, b, indent + f64::from(pos.x) / SCALE, line_top);
     }
 }
 
@@ -359,9 +347,6 @@ pub(crate) fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style)
     ffi::start_align_overflow(&layout);
     let measured = measure::measure(&layout);
     let measured_h = measured.pixel_logical().height;
-    if b.inline_atomics().is_some() {
-        record_abs_statics(&layout, b, ps, content_width);
-    }
     let line_count = measured.lines.max(1) as usize;
     let mut lh_default = line_height(ps);
     if let Some(parent) = b.parent()
@@ -399,6 +384,9 @@ pub(crate) fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style)
                 line_heights[line] = outer;
             }
         }
+    }
+    if b.inline_atomics().is_some() {
+        record_abs_statics(&layout, b, ps, content_width, &line_heights);
     }
     let expected = line_heights.iter().fold(0.0, |acc, h| acc + h);
     if atomics {
