@@ -13,7 +13,8 @@ use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str, string_prop};
 const BODY_BYTES_MAX: usize = 32 * 1024 * 1024;
 
 const DRAIN_SOURCE: &str = "(function(stream){\
- var rd = stream.getReader(), chunks = [], total = 0;\
+ var rd, chunks = [], total = 0;\
+ try { rd = stream.getReader(); } catch (e) { return Promise.reject(e); }\
  function pump(){ return rd.read().then(function(x){\
   if (x.done) { var out = new Uint8Array(total), o = 0;\
    for (var i = 0; i < chunks.length; i++) {\

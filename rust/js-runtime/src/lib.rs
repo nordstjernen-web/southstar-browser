@@ -17,8 +17,10 @@ use southstar_js_engine::Scope;
 
 pub(crate) type Element = Node<'static>;
 
-const ENGINE_PRIVATE_NAMES: [&str; 24] = [
+const ENGINE_PRIVATE_NAMES: [&str; 26] = [
     "_listeners",
+    "__ndDisturbed",
+    "__ndCloneTee",
     "__ndAdoptWindowEventOps",
     "__ndEventTargetMethods",
     "__ndIsEngineFunction",
