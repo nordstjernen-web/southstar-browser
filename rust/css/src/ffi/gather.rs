@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use core::hash::BuildHasherDefault;
 use core::ptr;
 use core::slice;
@@ -11,12 +11,11 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 
 use southstar_dom::{Node, attrs};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 
 use super::cascade::RawMatch;
-use super::container::container_rule_matches;
 use super::custom_props::RawVarMatch;
-use super::declarations::{DECL_SLOT_SPAN, RawPending, RawRule};
+use super::declarations::{DECL_SLOT_SPAN, Rule};
 use super::layers::LayerRanks;
 use super::matcher::match_scope;
 use super::pending::RawPendingMatch;
@@ -24,7 +23,6 @@ use super::rule_index::{Candidate, RawIndex, rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
 use super::sheet::{OwnedSheet, RawSheet};
-use super::shorthand::RawDecl;
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
 use crate::hints;
 use crate::matcher::{self, AddrHasher};
@@ -77,15 +75,6 @@ thread_local! {
             key: Vec::new(),
         })
     };
-}
-
-unsafe fn pointers<'a, T>(array: *const GPtrArray) -> &'a [*mut T] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.pdata.is_null() && a.len > 0 => unsafe {
-            slice::from_raw_parts(a.pdata.cast::<*mut T>(), a.len as usize)
-        },
-        _ => &[],
-    }
 }
 
 unsafe fn elements<'a, T>(array: *const GArray) -> &'a [T] {
@@ -182,7 +171,7 @@ pub fn selector_cache_end() {
 
 fn cached_match(
     cache: &mut Option<SelectorCache>,
-    rule: &RawRule,
+    rule: &Rule,
     sel: *const RawSelector,
     el: Option<Node<'_>>,
     pe: c_uint,
@@ -198,7 +187,7 @@ fn cached_match(
     }
     let order = el.and_then(|el| {
         matcher::rule_matches(
-            unsafe { RuleRef::from_ptr(ptr::from_ref(rule).cast()) },
+            Some(RuleRef::new(rule)),
             unsafe { SelectorRef::from_ptr(sel.cast()) },
             el,
             pe,
@@ -267,9 +256,8 @@ fn collect_candidates(idx: &RawIndex, el: Option<Node<'_>>, scratch: &mut Scratc
     candidates.extend_from_slice(unsafe { elements(idx.universal) });
 }
 
-fn layer_rank(layer_ranks: &LayerRanks, name: *const c_char) -> c_int {
-    unsafe { glib::bytes(name) }
-        .and_then(|name| layer_ranks.get(name).copied())
+fn layer_rank(layer_ranks: &LayerRanks, name: Option<&[u8]>) -> c_int {
+    name.and_then(|name| layer_ranks.get(name).copied())
         .unwrap_or(LAYER_NONE)
 }
 
@@ -281,7 +269,7 @@ struct Output {
 }
 
 impl Output {
-    fn emit(&self, outs: &mut [Matches], rule: &RawRule, acc: &Accum, layer_order: c_int) {
+    fn emit(&self, outs: &mut [Matches], rule: &Rule, acc: &Accum, layer_order: c_int) {
         let rule_ptr = ptr::from_ref(rule).cast::<c_void>();
         for (dd, dst) in outs.iter_mut().enumerate() {
             if !acc.any[dd] {
@@ -289,10 +277,7 @@ impl Output {
             }
             let (spec_a, spec_b, spec_c) = acc.specificity[dd];
             let scope_order = acc.scope_order[dd];
-            for (di, d) in unsafe { elements::<RawDecl>(rule.decls) }
-                .iter()
-                .enumerate()
-            {
+            for (di, d) in rule.decls.iter().enumerate() {
                 let entry = RawMatch {
                     origin: self.origin,
                     spec_a,
@@ -303,20 +288,16 @@ impl Output {
                     scope_order,
                     source_order: self.source_order.unwrap_or(rule.source_order),
                     decl_order: di as c_int * DECL_SLOT_SPAN,
-                    important: d.important,
+                    important: glib::boolean(d.important()),
                     inline_style: self.inline_style,
                     rule: rule_ptr,
-                    value: d.value,
-                    prop: d.prop,
+                    value: d.value_ptr(),
+                    prop: d.prop(),
                 };
                 dst.decls.push(entry);
             }
-            if !rule.vars.is_null() {
-                for (decl_order, (k, v)) in
-                    unsafe { glib::hash_table_entries(rule.vars) }.enumerate()
-                {
-                    let important = !rule.var_important.is_null()
-                        && unsafe { glib::g_hash_table_contains(rule.var_important, k) } != 0;
+            if let Some(vars) = &rule.vars {
+                for (decl_order, (k, v, important)) in vars.entries().enumerate() {
                     let entry = RawVarMatch {
                         origin: self.origin,
                         spec_a,
@@ -330,13 +311,13 @@ impl Output {
                         important: glib::boolean(important),
                         inline_style: self.inline_style,
                         rule: rule_ptr,
-                        name: k.cast(),
-                        text: v.cast(),
+                        name: k,
+                        text: v,
                     };
                     dst.vars.push(entry);
                 }
             }
-            for pd in unsafe { elements::<RawPending>(rule.pending) } {
+            for pd in &rule.pending {
                 let entry = RawPendingMatch {
                     origin: self.origin,
                     spec_a,
@@ -358,7 +339,7 @@ impl Output {
 }
 
 struct Gather<'a> {
-    rules: &'a [*mut RawRule],
+    rules: &'a [Rule],
     pes: &'a [c_uint],
     dest_of_pe: &'a [Option<usize>; DESTS],
     node: Option<Node<'a>>,
@@ -366,11 +347,11 @@ struct Gather<'a> {
 }
 
 impl Gather<'_> {
-    fn rejected(&self, rule: &RawRule, sel: &RawSelector) -> bool {
+    fn rejected(&self, rule: &Rule, sel: &RawSelector) -> bool {
         let Some(filter) = self.filter else {
             return false;
         };
-        if !unsafe { pointers::<c_void>(rule.scopes) }.is_empty() {
+        if !rule.scopes.is_empty() {
             return false;
         }
         let n = (sel.n_ancestor_hashes as usize).min(sel.ancestor_hashes.len());
@@ -403,18 +384,13 @@ impl Gather<'_> {
         let candidates = core::mem::take(&mut scratch.candidates);
         for cand in &candidates {
             let ri = cand.rule_idx as usize;
-            let Some(rule) = self.rules.get(ri).and_then(|&r| unsafe { r.as_mut() }) else {
+            let Some(rule) = self.rules.get(ri) else {
                 continue;
             };
-            let selectors = unsafe { pointers::<RawSelector>(rule.selectors) };
-            let Some(&sel_ptr) = selectors.get(cand.selector_idx as usize) else {
+            let Some(&sel_ptr) = rule.selectors.selectors().get(cand.selector_idx as usize) else {
                 continue;
             };
-            if !rule.container_condition.is_null()
-                && unsafe {
-                    container_rule_matches(rule.container_condition, &raw mut rule.container_query)
-                } == 0
-            {
+            if rule.container_condition.is_some() && !rule.container_matches() {
                 continue;
             }
             let sel = unsafe { sel_ptr.as_ref() };
@@ -430,7 +406,7 @@ impl Gather<'_> {
             };
             for dd in range {
                 let pe = self.pes[dd];
-                if pe != 0 && rule.pe_mask & 1u32.checked_shl(pe).unwrap_or(0) == 0 {
+                if pe != 0 && rule.pe_mask.get() & 1u32.checked_shl(pe).unwrap_or(0) == 0 {
                     continue;
                 }
                 if sel.is_some_and(|s| s.pseudo_element != pe) {
@@ -440,7 +416,7 @@ impl Gather<'_> {
                 if !matched {
                     continue;
                 }
-                if !rule.container_condition.is_null() {
+                if rule.container_condition.is_some() {
                     crate::container::note_features();
                 }
                 let acc = &mut scratch.accums[ri];
@@ -463,13 +439,13 @@ impl Gather<'_> {
             inline_style: glib::FALSE,
         };
         for &ri in &scratch.matched {
-            let Some(rule) = self.rules.get(ri).and_then(|&r| unsafe { r.as_ref() }) else {
+            let Some(rule) = self.rules.get(ri) else {
                 continue;
             };
             let acc = &mut scratch.accums[ri];
             let layer_order = *acc
                 .layer_order
-                .get_or_insert_with(|| layer_rank(layer_ranks, rule.layer_name));
+                .get_or_insert_with(|| layer_rank(layer_ranks, rule.layer_name.as_deref()));
             output.emit(outs, rule, acc, layer_order);
         }
     }
@@ -492,7 +468,7 @@ pub(super) fn gather_matches(
     let Some(idx) = (unsafe { sheet.index.get().cast::<RawIndex>().as_ref() }) else {
         return;
     };
-    let rules = unsafe { pointers::<RawRule>(sheet.rules) };
+    let rules = &sheet.rules[..];
     let mut dest_of_pe = [None; DESTS];
     for (dd, &pe) in pes.iter().enumerate() {
         if let Some(slot) = dest_of_pe.get_mut(pe as usize) {
@@ -531,36 +507,29 @@ fn decl_sheets() -> std::sync::MutexGuard<'static, HashMap<Vec<u8>, DeclSheet>> 
     DECL_SHEETS.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn decl_sheet(decls: &[u8]) -> *const RawSheet {
-    let decls = &decls[..decls.iter().position(|&c| c == 0).unwrap_or(decls.len())];
-    if decls.is_empty() {
-        return ptr::null();
-    }
-    if let Some(sheet) = decl_sheets().get(decls) {
-        return sheet.0.as_raw();
-    }
-    let wrapped = [&b"* { "[..], decls, b" }"].concat();
-    let sheet = OwnedSheet::parse(&wrapped);
-    let raw = sheet.as_raw();
-    decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
-    raw
-}
-
 fn emit_decl_sheet(
-    sheet: *const RawSheet,
+    decls: &[u8],
     output: &Output,
     out: &mut Matches,
     specificity: (c_int, c_int, c_int),
 ) {
-    let Some(sheet) = (unsafe { sheet.as_ref() }) else {
+    let decls = &decls[..decls.iter().position(|&c| c == 0).unwrap_or(decls.len())];
+    if decls.is_empty() {
+        return;
+    }
+    if !decl_sheets().contains_key(decls) {
+        let wrapped = [&b"* { "[..], decls, b" }"].concat();
+        let sheet = OwnedSheet::parse(&wrapped);
+        decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
+    }
+    let sheets = decl_sheets();
+    let Some(sheet) = sheets.get(decls) else {
         return;
     };
     let mut acc = Accum::default();
     acc.note(0, specificity, 0);
-    for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
-        if let Some(rule) = unsafe { rule.as_ref() } {
-            output.emit(slice::from_mut(out), rule, &acc, LAYER_NONE);
-        }
+    for rule in sheet.0.rules() {
+        output.emit(slice::from_mut(out), rule, &acc, LAYER_NONE);
     }
 }
 
@@ -572,7 +541,7 @@ pub(super) fn gather_element_declarations(node: Node<'_>, out: &mut Matches) {
             source_order: Some(c_int::MIN),
             inline_style: glib::FALSE,
         };
-        emit_decl_sheet(decl_sheet(&hints), &output, out, (0, 0, 0));
+        emit_decl_sheet(&hints, &output, out, (0, 0, 0));
     }
     if let Some(style) = node.attr(c"style") {
         let output = Output {
@@ -581,12 +550,7 @@ pub(super) fn gather_element_declarations(node: Node<'_>, out: &mut Matches) {
             source_order: Some(c_int::MAX),
             inline_style: glib::TRUE,
         };
-        emit_decl_sheet(
-            decl_sheet(style.to_bytes()),
-            &output,
-            out,
-            INLINE_SPECIFICITY,
-        );
+        emit_decl_sheet(style.to_bytes(), &output, out, INLINE_SPECIFICITY);
     }
 }
 

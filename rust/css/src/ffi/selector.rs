@@ -1,13 +1,15 @@
-//! Southstar — the C ABI of the selector parser: parsed selectors built as css.c's ns_css_selector, ns_css_simple and predicate structs with the GLib arrays the matcher reads, freeing them, and the parser state and hashes css.c still asks for.
+//! Southstar — the C ABI of the selector parser: parsed selectors built as css.c's ns_css_selector, ns_css_simple and predicate structs with the GLib arrays the matcher reads, the owning group a rule, scope or query holds, and the parser state and hashes css.c still asks for.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::{offset_of, size_of};
-use core::ptr;
+use core::ptr::{self, NonNull};
+use core::slice;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GPtrArray};
 
+use super::selector_view::{GroupRef, SelectorRef};
 use crate::selector::{self, AttrPred, Compound, FLAGS, PseudoPred, Selector};
 
 #[repr(C)]
@@ -113,12 +115,50 @@ unsafe extern "C" fn selector_free_notify(data: *mut c_void) {
     unsafe { selector_free(data.cast()) };
 }
 
-pub(super) fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
+fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
     let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(selector_free_notify)) };
     for sel in group {
         unsafe { glib::g_ptr_array_add(array, selector_to_c(sel).cast()) };
     }
     array
+}
+
+pub(super) struct SelectorGroup(NonNull<GPtrArray>);
+
+impl SelectorGroup {
+    pub(super) fn new(group: &[Selector]) -> SelectorGroup {
+        SelectorGroup(NonNull::new(group_to_c(group)).expect("g_ptr_array_new_with_free_func"))
+    }
+
+    pub(super) fn push(&mut self, sel: &Selector) {
+        // SAFETY: the group owns its array, which frees the selector it is handed.
+        unsafe { glib::g_ptr_array_add(self.0.as_ptr(), selector_to_c(sel).cast()) };
+    }
+
+    pub(super) fn array(&self) -> &GPtrArray {
+        // SAFETY: the group owns its array for as long as it lives.
+        unsafe { self.0.as_ref() }
+    }
+
+    pub(super) fn selectors(&self) -> &[*mut RawSelector] {
+        let array = self.array();
+        if array.pdata.is_null() || array.len == 0 {
+            return &[];
+        }
+        // SAFETY: a non-empty array's pdata holds len selector pointers it owns.
+        unsafe { slice::from_raw_parts(array.pdata.cast::<*mut RawSelector>(), array.len as usize) }
+    }
+
+    pub(super) fn refs(&self) -> impl Iterator<Item = Option<SelectorRef<'_>>> {
+        GroupRef::new(self.array()).selectors()
+    }
+}
+
+impl Drop for SelectorGroup {
+    fn drop(&mut self) {
+        // SAFETY: the group owns its array, whose free function frees each selector.
+        unsafe { glib::g_ptr_array_free(self.0.as_ptr(), glib::TRUE) };
+    }
 }
 
 fn groups_to_c(groups: Option<&Vec<Vec<Selector>>>) -> *mut GPtrArray {
@@ -190,7 +230,7 @@ fn simple_to_c(c: &Compound) -> *mut RawSimple {
     }
 }
 
-pub(super) fn selector_to_c(sel: &Selector) -> *mut RawSelector {
+fn selector_to_c(sel: &Selector) -> *mut RawSelector {
     unsafe {
         let compounds = glib::g_ptr_array_new();
         for c in &sel.compounds {
@@ -242,7 +282,7 @@ unsafe fn simple_free(s: *mut RawSimple) {
     }
 }
 
-pub(super) unsafe fn selector_free(sel: *mut c_void) {
+unsafe fn selector_free(sel: *mut c_void) {
     let raw = sel.cast::<RawSelector>();
     let Some(selector) = (unsafe { raw.as_mut() }) else {
         return;

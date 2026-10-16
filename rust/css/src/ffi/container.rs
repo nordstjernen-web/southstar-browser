@@ -1,9 +1,9 @@
-//! Southstar — the storage behind container queries: the container map layout fills, the container stack the cascade pushes and pops, container units, and @container conditions.
+//! Southstar — the storage behind container queries: the container map layout fills, the container stack the cascade pushes and pops, and container units.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 
-use crate::container::{self, Query, TYPE_INLINE, TYPE_SIZE};
+use crate::container::{self, TYPE_INLINE, TYPE_SIZE};
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct Container {
@@ -122,11 +122,6 @@ pub(crate) fn container_map_installed() -> bool {
     !MAP.with(Cell::get).is_null()
 }
 
-unsafe fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: the caller passes null or a NUL-terminated string that outlives 'a.
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
-}
-
 fn str_hash(text: &CStr) -> u32 {
     text.to_bytes().iter().fold(5381u32, |h, &c| {
         (h << 5).wrapping_add(h).wrapping_add(c as i8 as u32)
@@ -179,26 +174,5 @@ pub(super) fn container_stack_push(node: Node<'_>) -> bool {
             true
         }
         None => false,
-    }
-}
-
-pub(super) unsafe fn container_rule_matches(
-    condition: *const c_char,
-    cache: *mut *mut c_void,
-) -> GBoolean {
-    if cache.is_null() {
-        return glib::FALSE;
-    }
-    if unsafe { (*cache).is_null() } {
-        let condition = unsafe { text(condition) }.map_or(&[][..], CStr::to_bytes);
-        unsafe { *cache = Box::into_raw(Box::new(Query::compile(condition))).cast() };
-    }
-    let query = unsafe { &*(*cache).cast::<Query>() };
-    glib::boolean(query.matches())
-}
-
-pub(super) unsafe fn container_query_free(query: *mut c_void) {
-    if !query.is_null() {
-        drop(unsafe { Box::from_raw(query.cast::<Query>()) });
     }
 }

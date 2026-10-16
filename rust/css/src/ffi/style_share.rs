@@ -12,6 +12,7 @@ use super::cascade::RawMatch;
 use super::computed_units::RawStyle;
 use super::container::Container;
 use super::custom_props::RawVarMatch;
+use super::declarations::PendingDecl;
 use super::gather::Matches;
 use super::pending::RawPendingMatch;
 use super::value::{KIND_LENGTH, NsCssValue};
@@ -70,7 +71,7 @@ impl<'a> Arrays<'a> {
         self.pending
             .iter()
             .filter_map(|e| unsafe { e.pd.as_ref() })
-            .filter_map(|pd| text(pd.raw_vtext))
+            .filter_map(PendingDecl::raw_text)
     }
 
     fn uses_attr(&self) -> bool {

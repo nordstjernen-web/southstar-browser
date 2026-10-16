@@ -1,4 +1,4 @@
-//! Southstar — the style sheet parser's GLib-backed storage: css.c's ns_css_stylesheet, ns_css_rule and at-rule structs built as the Rust parser reads a sheet, the owning handle that frees them, resolving a sheet's URLs and moving it into a layer.
+//! Southstar — a parsed style sheet's storage: the rules and at-rules the Rust parser builds as it reads a sheet, the owning handle that frees them unless a cache holds the sheet, resolving a sheet's URLs and moving it into a layer.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -11,22 +11,20 @@ use std::ffi::CString;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
 
-use super::container::container_query_free;
-use super::declarations::{RawPending, RawRule, RuleSink};
+use super::declarations::{Rule, RuleSink, until_nul};
 use super::keyframes::{KeyframeStop, Keyframes};
 use super::rule_index::index_free;
-use super::selector::{group_to_c, selector_to_c};
-use super::shorthand::RawDecl;
-use super::value::{KIND_URL, NsCssValue, value_free};
+use super::selector::SelectorGroup;
+use super::value::{KIND_URL, NsCssValue};
 use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
 
 pub(super) struct RawSheet {
-    pub(super) rules: *mut GPtrArray,
+    pub(super) rules: Vec<Rule>,
     imports: Vec<Import>,
     pub(super) layer_names: *mut GPtrArray,
     layers: *mut GHashTable,
@@ -48,8 +46,7 @@ pub(super) struct RawSheet {
 impl RawSheet {
     fn new(serial: u64, has_container_units: bool) -> RawSheet {
         RawSheet {
-            // SAFETY: rule_free_notify frees the RawRule pointers this array is given.
-            rules: unsafe { glib::g_ptr_array_new_with_free_func(Some(rule_free_notify)) },
+            rules: Vec::new(),
             imports: Vec::new(),
             layer_names: ptr::null_mut(),
             layers: ptr::null_mut(),
@@ -103,10 +100,6 @@ impl RawSheet {
 
 impl Drop for RawSheet {
     fn drop(&mut self) {
-        if !self.rules.is_null() {
-            // SAFETY: rules is the sheet's own array, and its free function frees each rule.
-            unsafe { glib::g_ptr_array_free(self.rules, glib::TRUE) };
-        }
         if !self.layers.is_null() {
             // SAFETY: layers is the sheet's own table; its keys belong to layer_names, freed next.
             unsafe { glib::g_hash_table_destroy(self.layers) };
@@ -197,19 +190,13 @@ pub struct PageRule {
     pub has_margin: [GBoolean; 4],
 }
 
-#[repr(C)]
-pub(super) struct RawScope {
-    pub(super) roots: *mut GPtrArray,
-    pub(super) limits: *mut GPtrArray,
+pub(super) struct Scope {
+    pub(super) roots: SelectorGroup,
+    pub(super) limits: Option<SelectorGroup>,
 }
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<PageRule>() == 72);
-
-unsafe extern "C" {
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
-}
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
 
@@ -217,35 +204,12 @@ fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
 }
 
-fn until_nul(text: &[u8]) -> &[u8] {
-    text.iter()
-        .position(|&c| c == 0)
-        .map_or(text, |nul| &text[..nul])
-}
-
 fn c_text(text: &[u8]) -> CString {
     CString::new(until_nul(text)).unwrap_or_default()
 }
 
-fn opt_strdup(text: Option<&[u8]>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), glib::strdup)
-}
-
 unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-unsafe fn new_array(element: usize) -> *mut GArray {
-    unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, element as c_uint) }
-}
-
-unsafe fn elements<'a, T>(array: *mut GArray) -> &'a mut [T] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            core::slice::from_raw_parts_mut(a.data.cast::<T>(), a.len as usize)
-        },
-        _ => &mut [],
-    }
 }
 
 unsafe fn pointers<'a, T>(array: *mut GPtrArray) -> &'a [*mut T] {
@@ -254,22 +218,6 @@ unsafe fn pointers<'a, T>(array: *mut GPtrArray) -> &'a [*mut T] {
             core::slice::from_raw_parts(a.pdata.cast::<*mut T>(), a.len as usize)
         },
         _ => &[],
-    }
-}
-
-unsafe extern "C" fn scope_free(data: *mut c_void) {
-    let scope = data.cast::<RawScope>();
-    let Some(raw) = (unsafe { scope.as_ref() }) else {
-        return;
-    };
-    unsafe {
-        if !raw.roots.is_null() {
-            glib::g_ptr_array_free(raw.roots, glib::TRUE);
-        }
-        if !raw.limits.is_null() {
-            glib::g_ptr_array_free(raw.limits, glib::TRUE);
-        }
-        glib::g_free(data);
     }
 }
 
@@ -309,39 +257,6 @@ fn merge_sort(
     order[..merged.len()].copy_from_slice(merged);
 }
 
-pub(super) unsafe fn rule_free(data: *mut c_void) {
-    let rule = data.cast::<RawRule>();
-    let Some(raw) = (unsafe { rule.as_ref() }) else {
-        return;
-    };
-    unsafe {
-        for &sel in pointers::<c_void>(raw.selectors) {
-            super::selector::selector_free(sel);
-        }
-        glib::g_ptr_array_free(raw.selectors, glib::TRUE);
-        for decl in elements::<RawDecl>(raw.decls) {
-            value_free(decl.value);
-        }
-        g_array_free(raw.decls, glib::TRUE);
-        if !raw.vars.is_null() {
-            glib::g_hash_table_destroy(raw.vars);
-        }
-        if !raw.var_important.is_null() {
-            glib::g_hash_table_destroy(raw.var_important);
-        }
-        if !raw.pending.is_null() {
-            g_array_free(raw.pending, glib::TRUE);
-        }
-        glib::g_free(raw.layer_name.cast());
-        glib::g_free(raw.container_condition.cast());
-        container_query_free(raw.container_query);
-        if !raw.scopes.is_null() {
-            glib::g_ptr_array_free(raw.scopes, glib::TRUE);
-        }
-        glib::g_free(data);
-    }
-}
-
 pub(crate) struct SyntaxDef(prop_syntax::SyntaxDef);
 
 impl SyntaxDef {
@@ -367,26 +282,11 @@ pub(crate) struct SheetBuilder {
 }
 
 pub(crate) struct RuleBuilder {
-    raw: *mut RawRule,
-}
-
-impl Drop for RuleBuilder {
-    fn drop(&mut self) {
-        unsafe { rule_free(self.raw.cast()) };
-    }
+    rule: Rule,
 }
 
 impl RuleBuilder {
-    fn rule(&mut self) -> &mut RawRule {
-        unsafe { &mut *self.raw }
-    }
-
     pub(crate) fn apply_scopes(&mut self, scopes: &[ScopeText]) -> bool {
-        if scopes.is_empty() {
-            return true;
-        }
-        let array = unsafe { glib::g_ptr_array_new_with_free_func(Some(scope_free)) };
-        self.rule().scopes = array;
         for text in scopes {
             let Some(roots) = sheet::scope_group_valid(text.start.as_deref().unwrap_or(b":root"))
             else {
@@ -399,27 +299,22 @@ impl RuleBuilder {
                 },
                 None => None,
             };
-            unsafe {
-                let scope = glib::g_malloc0(size_of::<RawScope>()).cast::<RawScope>();
-                scope.write(RawScope {
-                    roots: group_to_c(&roots),
-                    limits: limits.as_deref().map_or(ptr::null_mut(), group_to_c),
-                });
-                glib::g_ptr_array_add(array, scope.cast());
-            }
+            self.rule.scopes.push(Scope {
+                roots: SelectorGroup::new(&roots),
+                limits: limits.as_deref().map(SelectorGroup::new),
+            });
         }
         true
     }
 
     pub(crate) fn has_scopes(&self) -> bool {
-        unsafe { !(*self.raw).scopes.is_null() }
+        !self.rule.scopes.is_empty()
     }
 
     pub(crate) fn parse_selectors(&mut self, text: &[u8]) -> RuleSelectors {
         let parsed = selector::parse_rule_selectors(text);
-        let array = self.rule().selectors;
         for sel in &parsed.selectors {
-            unsafe { glib::g_ptr_array_add(array, selector_to_c(sel).cast()) };
+            self.rule.selectors.push(sel);
         }
         parsed
     }
@@ -428,8 +323,7 @@ impl RuleBuilder {
         if p >= s.len() {
             return p;
         }
-        let raw = self.raw;
-        let mut sink = RuleSink::new(unsafe { (*raw).decls }, raw);
+        let mut sink = RuleSink::new(&mut self.rule);
         p + declarations::parse_block(&s[p..], 0, &mut sink)
     }
 }
@@ -523,42 +417,28 @@ impl SheetBuilder {
     }
 
     pub(crate) fn rules_len(&self) -> usize {
-        unsafe { (*self.sheet.rules).len as usize }
+        self.sheet.rules.len()
     }
 
     pub(crate) fn join_container_condition(&mut self, from: usize, canon: &[u8]) {
-        let rules = unsafe { pointers::<RawRule>(self.sheet.rules) };
-        for &rule in rules.iter().skip(from) {
-            let rule = unsafe { &mut *rule };
-            let joined = match unsafe { bytes(rule.container_condition) } {
+        for rule in self.sheet.rules.iter_mut().skip(from) {
+            let joined = match &rule.container_condition {
                 Some(existing) => [canon, b"\x1f", existing].concat(),
                 None => canon.to_vec(),
             };
-            unsafe { glib::g_free(rule.container_condition.cast()) };
-            rule.container_condition = glib::strdup(&joined);
+            rule.container_condition = Some(until_nul(&joined).to_vec());
         }
     }
 
     pub(crate) fn new_rule(&self, layer: Option<&[u8]>, source_order: i32) -> RuleBuilder {
-        unsafe {
-            let raw = glib::g_malloc0(size_of::<RawRule>()).cast::<RawRule>();
-            (*raw).selectors = glib::g_ptr_array_new();
-            (*raw).decls = new_array(size_of::<RawDecl>());
-            (*raw).layer_name = opt_strdup(layer);
-            (*raw).source_order = source_order;
-            RuleBuilder { raw }
+        RuleBuilder {
+            rule: Rule::new(layer, source_order),
         }
     }
 
     pub(crate) fn push_rule(&mut self, rule: RuleBuilder) {
-        let raw = rule.raw;
-        core::mem::forget(rule);
-        unsafe { glib::g_ptr_array_add(self.sheet.rules, raw.cast()) };
+        self.sheet.rules.push(rule.rule);
     }
-}
-
-unsafe extern "C" fn rule_free_notify(data: *mut c_void) {
-    unsafe { rule_free(data) };
 }
 
 pub struct OwnedSheet(NonNull<RawSheet>);
@@ -583,10 +463,6 @@ impl OwnedSheet {
         unsafe { self.0.as_mut() }
     }
 
-    pub(super) fn as_raw(&self) -> *mut RawSheet {
-        self.0.as_ptr()
-    }
-
     pub(super) fn into_raw(self) -> *mut RawSheet {
         ManuallyDrop::new(self).0.as_ptr()
     }
@@ -605,12 +481,8 @@ impl OwnedSheet {
             return;
         }
         sheet.resolved_base = Some(base.to_bytes().to_vec());
-        // SAFETY: rules is the sheet's array of RawRule pointers.
-        for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
-            // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
-            if let Some(rule) = unsafe { rule.as_mut() } {
-                rule_resolve_urls(rule, base);
-            }
+        for rule in &mut sheet.rules {
+            rule_resolve_urls(rule, base);
         }
         for face in &mut sheet.font_faces {
             let url = face.src_url.to_bytes();
@@ -640,20 +512,12 @@ impl OwnedSheet {
             let full = layer_join(Some(layer), unsafe { bytes(old) }.unwrap_or_default());
             sheet.layer_register(&full);
         }
-        // SAFETY: rules is the sheet's array of RawRule pointers.
-        for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
-            // SAFETY: a sheet's rules are null or live RawRules it owns, borrowed by nothing else here.
-            let Some(rule) = (unsafe { rule.as_mut() }) else {
-                continue;
-            };
-            // SAFETY: layer_name is null or a string the rule owns.
-            let full = match unsafe { bytes(rule.layer_name) } {
+        for rule in &mut sheet.rules {
+            let full = match &rule.layer_name {
                 Some(existing) => layer_join(Some(layer), existing),
                 None => layer.to_vec(),
             };
-            // SAFETY: layer_name is null or a GLib string the rule owns, replaced right after.
-            unsafe { glib::g_free(rule.layer_name.cast()) };
-            rule.layer_name = glib::strdup(&full);
+            rule.layer_name = Some(until_nul(&full).to_vec());
         }
         let mut imports = core::mem::take(&mut sheet.imports);
         for import in &mut imports {
@@ -676,35 +540,17 @@ impl OwnedSheet {
     }
 }
 
-fn rule_resolve_urls(rule: &mut RawRule, base: &CStr) {
-    // SAFETY: decls is the rule's array of RawDecl.
-    for decl in unsafe { elements::<RawDecl>(rule.decls) } {
-        // SAFETY: a declaration's value is null or a live value chain the rule owns.
-        unsafe { value_resolve_url(decl.value, base) };
+fn rule_resolve_urls(rule: &mut Rule, base: &CStr) {
+    for decl in &mut rule.decls {
+        // SAFETY: a declaration's value is a live value chain it holds a reference on, and the sheet is borrowed mutably.
+        unsafe { value_resolve_url(decl.value_ptr(), base) };
     }
-    if !rule.vars.is_null() {
-        let mut iter = glib::GHashTableIter::new();
-        // SAFETY: vars is the rule's live table of custom property texts.
-        unsafe { glib::g_hash_table_iter_init(&mut iter, rule.vars) };
-        let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
-        // SAFETY: iter was initialized over vars, which is not changed but through the iterator.
-        while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-            // SAFETY: the table's values are NUL-terminated strings it owns.
-            let text = unsafe { bytes(value.cast()) }.unwrap_or_default();
-            if let Some(resolved) = raw_text_resolve_urls(text, base) {
-                // SAFETY: iter points at a live entry, and the table frees the value it replaces.
-                unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&resolved).cast()) };
-            }
-        }
+    if let Some(vars) = &mut rule.vars {
+        vars.replace_texts(|text| raw_text_resolve_urls(text, base));
     }
-    // SAFETY: pending is null or the rule's array of RawPending.
-    for pending in unsafe { elements::<RawPending>(rule.pending) } {
-        // SAFETY: raw_vtext is null or a string the pending declaration owns.
-        let text = unsafe { bytes(pending.raw_vtext) }.unwrap_or_default();
-        if let Some(resolved) = raw_text_resolve_urls(text, base) {
-            // SAFETY: raw_vtext is a GLib string the pending declaration owns, replaced right after.
-            unsafe { glib::g_free(pending.raw_vtext.cast()) };
-            pending.raw_vtext = glib::strdup(&resolved);
+    for pending in &mut rule.pending {
+        if let Some(resolved) = raw_text_resolve_urls(&pending.raw_text, base) {
+            pending.raw_text = until_nul(&resolved).to_vec();
         }
     }
 }
@@ -846,9 +692,8 @@ impl Sheet {
         &self.0
     }
 
-    pub(super) fn rules(&self) -> &[*mut RawRule] {
-        // SAFETY: rules is null or the sheet's array of RawRule pointers, freed with the sheet.
-        unsafe { pointers(self.0.rules) }
+    pub(super) fn rules(&self) -> &[Rule] {
+        &self.0.rules
     }
 
     pub fn as_ptr(&self) -> *const c_void {
@@ -886,21 +731,11 @@ impl Sheet {
     }
 
     pub fn declared_values(&self) -> impl Iterator<Item = (usize, &NsCssValue)> {
-        self.rules()
-            .iter()
-            .filter_map(|&rule| {
-                // SAFETY: a sheet's rules are null or live RawRules freed with the sheet.
-                unsafe { rule.as_ref() }
-            })
-            .flat_map(|rule| {
-                // SAFETY: decls is null or the rule's array of RawDecl.
-                let decls: &[RawDecl] = unsafe { shared_elements(rule.decls) };
-                decls.iter().filter_map(|decl| {
-                    // SAFETY: a declaration's value is null or a live value the rule owns.
-                    let value = unsafe { decl.value.as_ref() }?;
-                    Some((decl.prop as usize, value))
-                })
-            })
+        self.rules().iter().flat_map(|rule| {
+            rule.decls
+                .iter()
+                .map(|decl| (decl.prop() as usize, decl.value()))
+        })
     }
 
     pub fn imports(&self) -> impl Iterator<Item = ImportRule<'_>> {
@@ -913,14 +748,5 @@ impl Sheet {
 
     pub fn keyframes(&self) -> impl Iterator<Item = Keyframes> + '_ {
         self.0.keyframes.iter().cloned()
-    }
-}
-
-unsafe fn shared_elements<'a, T>(array: *const GArray) -> &'a [T] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            core::slice::from_raw_parts(a.data.cast::<T>(), a.len as usize)
-        },
-        _ => &[],
     }
 }

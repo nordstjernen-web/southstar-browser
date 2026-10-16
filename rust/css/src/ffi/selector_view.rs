@@ -1,4 +1,4 @@
-//! Southstar — read-only views of css.c's ns_css_selector, ns_css_simple, predicate, group, rule and scope structs, so the matcher reads them without touching pointers.
+//! Southstar — read-only views of css.c's ns_css_selector, ns_css_simple, predicate and group structs and of a sheet's rules and scopes, so the matcher reads them without touching pointers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,9 +7,9 @@ use core::slice;
 
 use southstar_glib::{GArray, GPtrArray};
 
-use super::declarations::RawRule;
+use super::declarations::Rule;
 use super::selector::{RawAttrPred, RawPseudoPred, RawSelector, RawSimple};
-use super::sheet::{RawScope, RawSheet};
+use super::sheet::{RawSheet, Scope};
 
 unsafe fn pointers<'a, T>(array: *const GPtrArray) -> &'a [*mut T] {
     match unsafe { array.as_ref() } {
@@ -43,10 +43,10 @@ pub(crate) struct CompoundRef<'a>(&'a RawSimple);
 pub(crate) struct GroupRef<'a>(&'a GPtrArray);
 
 #[derive(Clone, Copy)]
-pub(crate) struct RuleRef<'a>(&'a RawRule);
+pub(crate) struct RuleRef<'a>(&'a Rule);
 
 #[derive(Clone, Copy)]
-pub(crate) struct ScopeRef<'a>(&'a RawScope);
+pub(crate) struct ScopeRef<'a>(&'a Scope);
 
 #[derive(Clone, Copy)]
 pub(crate) struct SheetRef<'a>(&'a RawSheet);
@@ -167,6 +167,10 @@ impl<'a> CompoundRef<'a> {
 }
 
 impl<'a> GroupRef<'a> {
+    pub(super) fn new(array: &'a GPtrArray) -> Self {
+        GroupRef(array)
+    }
+
     pub(crate) fn addr(self) -> usize {
         core::ptr::from_ref(self.0) as usize
     }
@@ -231,12 +235,12 @@ impl PseudoRef {
 }
 
 impl<'a> RuleRef<'a> {
-    pub(super) unsafe fn from_ptr(rule: *const c_void) -> Option<Self> {
-        unsafe { rule.cast::<RawRule>().as_ref() }.map(RuleRef)
+    pub(super) fn new(rule: &'a Rule) -> Self {
+        RuleRef(rule)
     }
 
     pub(crate) fn selector_group(self) -> Option<GroupRef<'a>> {
-        unsafe { self.0.selectors.as_ref() }.map(GroupRef)
+        Some(GroupRef(self.0.selectors.array()))
     }
 
     pub(crate) fn selectors(self) -> impl Iterator<Item = Option<SelectorRef<'a>>> {
@@ -246,19 +250,20 @@ impl<'a> RuleRef<'a> {
     }
 
     pub(crate) fn scopes(self) -> impl Iterator<Item = ScopeRef<'a>> {
-        unsafe { pointers::<RawScope>(self.0.scopes) }
-            .iter()
-            .filter_map(|&s| unsafe { s.as_ref() }.map(ScopeRef))
+        self.0.scopes.iter().map(ScopeRef)
     }
 }
 
 impl<'a> ScopeRef<'a> {
     pub(crate) fn roots(self) -> Option<GroupRef<'a>> {
-        unsafe { self.0.roots.as_ref() }.map(GroupRef)
+        Some(GroupRef(self.0.roots.array()))
     }
 
     pub(crate) fn limits(self) -> Option<GroupRef<'a>> {
-        unsafe { self.0.limits.as_ref() }.map(GroupRef)
+        self.0
+            .limits
+            .as_ref()
+            .map(|limits| GroupRef(limits.array()))
     }
 }
 
@@ -278,8 +283,6 @@ impl<'a> SheetRef<'a> {
     }
 
     pub(crate) fn rules(self) -> impl Iterator<Item = RuleRef<'a>> {
-        unsafe { pointers::<RawRule>(self.0.rules) }
-            .iter()
-            .filter_map(|&r| unsafe { r.as_ref() }.map(RuleRef))
+        self.0.rules.iter().map(RuleRef)
     }
 }

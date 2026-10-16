@@ -2,21 +2,18 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
-use core::ptr::NonNull;
-use core::slice;
+use core::ffi::CStr;
 
 use southstar_dom::{Node, WeakNode};
-use southstar_glib::{self as glib, GPtrArray};
 
 use super::matcher::{
     replace_focus_node, replace_match_scope, restore_focus_node, restore_match_scope,
 };
-use super::selector::group_to_c;
+use super::selector::SelectorGroup;
 use super::selector_view::SelectorRef;
 use crate::{element_state, matcher, selector};
 
-pub struct SelectorList(NonNull<GPtrArray>);
+pub struct SelectorList(SelectorGroup);
 
 #[derive(Clone, Copy)]
 pub struct Selector<'a>(SelectorRef<'a>);
@@ -34,40 +31,27 @@ impl SelectorList {
         if !valid {
             return None;
         }
-        NonNull::new(group_to_c(&list)).map(SelectorList)
+        Some(SelectorList(SelectorGroup::new(&list)))
     }
 
     pub fn parse_lenient(text: &[u8]) -> Option<SelectorList> {
         let list = selector::parse_list(text);
-        let parsed = NonNull::new(group_to_c(&list)).map(SelectorList)?;
-        (!parsed.pointers().is_empty()).then_some(parsed)
-    }
-
-    fn pointers(&self) -> &[*mut c_void] {
-        let array = unsafe { self.0.as_ref() };
-        if array.pdata.is_null() || array.len == 0 {
-            return &[];
-        }
-        unsafe { slice::from_raw_parts(array.pdata.cast::<*mut c_void>(), array.len as usize) }
+        let parsed = SelectorList(SelectorGroup::new(&list));
+        (!parsed.0.selectors().is_empty()).then_some(parsed)
     }
 
     pub fn matches_any(&self, el: Node<'_>) -> bool {
-        self.pointers().iter().any(|&sel| {
-            unsafe { SelectorRef::from_ptr(sel) }.is_some_and(|sel| matcher::matches(sel, el))
-        })
+        self.0
+            .refs()
+            .any(|sel| sel.is_some_and(|sel| matcher::matches(sel, el)))
     }
 
     pub fn single(&self) -> Option<Selector<'_>> {
-        match self.pointers() {
-            [only] => unsafe { SelectorRef::from_ptr(*only) }.map(Selector),
+        let mut refs = self.0.refs();
+        match (refs.next(), refs.next()) {
+            (Some(only), None) => only.map(Selector),
             _ => None,
         }
-    }
-}
-
-impl Drop for SelectorList {
-    fn drop(&mut self) {
-        unsafe { glib::g_ptr_array_free(self.0.as_ptr(), glib::TRUE) };
     }
 }
 

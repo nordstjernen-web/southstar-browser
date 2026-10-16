@@ -9,7 +9,6 @@ use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 
-use super::declarations::RawRule;
 use super::selector_view::SelectorRef;
 use super::sheet::RawSheet;
 use crate::rule_index::{self, Key, Table};
@@ -79,24 +78,6 @@ unsafe fn bucket_for(table: *mut GHashTable, key: &[u8]) -> *mut GArray {
     }
 }
 
-unsafe fn rule_slice<'a>(sheet: &RawSheet) -> &'a [*mut RawRule] {
-    match unsafe { sheet.rules.as_ref() } {
-        Some(a) if !a.pdata.is_null() && a.len > 0 => unsafe {
-            core::slice::from_raw_parts(a.pdata.cast::<*mut RawRule>(), a.len as usize)
-        },
-        _ => &[],
-    }
-}
-
-unsafe fn selector_slice<'a>(rule: &RawRule) -> &'a [*mut c_void] {
-    match unsafe { rule.selectors.as_ref() } {
-        Some(a) if !a.pdata.is_null() && a.len > 0 => unsafe {
-            core::slice::from_raw_parts(a.pdata.cast::<*mut c_void>(), a.len as usize)
-        },
-        _ => &[],
-    }
-}
-
 pub(super) unsafe fn index_free(idx: *mut RawIndex) {
     let Some(index) = (unsafe { idx.as_ref() }) else {
         return;
@@ -116,17 +97,12 @@ pub(super) unsafe fn index_free(idx: *mut RawIndex) {
 
 pub(super) fn rule_index_build(sheet: &RawSheet) -> *mut RawIndex {
     let mut rules = Vec::new();
-    for &rule in unsafe { rule_slice(sheet) } {
-        let Some(rule) = (unsafe { rule.as_mut() }) else {
-            rules.push(Vec::new());
-            continue;
-        };
+    for rule in &sheet.rules {
         let mut selectors = Vec::new();
-        for &sel in unsafe { selector_slice(rule) } {
-            let view = unsafe { SelectorRef::from_ptr(sel) };
+        for view in rule.selectors.refs() {
             if let Some(pe) = view.map(SelectorRef::pseudo_element).filter(|&pe| pe != 0) {
                 sheet.pseudo_mask.set(sheet.pseudo_mask.get() | 1 << pe);
-                rule.pe_mask |= 1 << pe;
+                rule.pe_mask.set(rule.pe_mask.get() | 1 << pe);
             }
             selectors.push(view);
         }
