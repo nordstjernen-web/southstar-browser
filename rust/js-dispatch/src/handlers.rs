@@ -45,6 +45,7 @@ pub(crate) const HANDLER_NAMES: &[&str] = &[
     "ondurationchange",
     "onemptied",
     "onended",
+    "onerror",
     "onfocus",
     "onformdata",
     "ongamepadconnected",
@@ -472,11 +473,23 @@ pub fn install_props(scope: &mut Scope<'_>, target: &Value) {
     }
 }
 
+fn is_window_object(scope: &mut Scope<'_>, proto: &Value) -> bool {
+    let global = scope.global();
+    proto.same_object(&global)
+        || scope
+            .get_prototype_of(&global)
+            .is_ok_and(|window_proto| proto.same_object(&window_proto))
+}
+
 pub(crate) fn install_accessors(scope: &mut Scope<'_>, proto: &Value) {
     if !proto.is_object() {
         return;
     }
+    let window = is_window_object(scope, proto);
     for (index, name) in HANDLER_NAMES.iter().enumerate() {
+        if window && *name == "onerror" {
+            continue;
+        }
         let (getter, setter) = ffi::handler_accessors(scope, name, index);
         let _ = scope.define_accessor(
             proto,
