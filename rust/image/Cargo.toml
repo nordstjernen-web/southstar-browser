@@ -10,9 +10,10 @@ publish.workspace = true
 [dependencies]
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
+southstar-image-decoders = { path = "../image-decoders" }
 
 [features]
-avif = []
+avif = ["southstar-image-decoders/avif"]
 
 [lints]
 workspace = true

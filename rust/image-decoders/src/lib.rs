@@ -7,7 +7,7 @@ mod ffi;
 pub use southstar_raster as raster;
 
 use ffi::libwebp::{self, AnimDecoder};
-use ffi::{Buffer, Texture};
+pub use ffi::{Buffer, Texture};
 
 pub struct Decoded {
     pub texture: Texture,

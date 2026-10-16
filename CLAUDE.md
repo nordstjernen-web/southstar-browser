@@ -299,8 +299,8 @@ same premultiplication, compositing, disposal and delay rules the former
 Wuffs chain used, so PNG, GIF and BMP pixels are unchanged; JPEG differs
 from Wuffs by a few levels of IDCT rounding. No orientation is applied
 from EXIF. `ns_image_decode_bytes` (`rust/image`) is the whole chain:
-ICO (`rust/image-decoders`), then `ns_image_decode_raster`, then WebP
-(`rust/image-decoders`, libwebp), then AVIF when built, then SVG in-engine
+ICO, then PNG/GIF/BMP/JPEG, then WebP
+(all `rust/image-decoders`, WebP over libwebp), then AVIF when built, then SVG in-engine
 (`rust/svg`). Nothing follows — gdk-pixbuf no longer decodes page
 images, so an unsupported format simply fails to decode rather than
 reaching a loader plugin installed on the user's machine.

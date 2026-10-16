@@ -2204,6 +2204,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
+ "southstar-image-decoders",
 ]
 
 [[package]]
