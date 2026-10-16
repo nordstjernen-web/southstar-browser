@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr::{self, NonNull, addr_of_mut};
 use std::ffi::CString;
 
@@ -60,8 +60,14 @@ static STYLE_ACCEPT: AcceptLines = AcceptLines([
     c"X-ND-Fetch-Dest: style".as_ptr(),
     ptr::null(),
 ]);
+#[cfg(all(feature = "avif", not(windows)))]
+const IMAGE_ACCEPT_TYPES: &CStr =
+    c"Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+#[cfg(not(all(feature = "avif", not(windows))))]
+const IMAGE_ACCEPT_TYPES: &CStr = c"Accept: image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+
 static IMAGE_ACCEPT: AcceptLines = AcceptLines([
-    c"Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8".as_ptr(),
+    IMAGE_ACCEPT_TYPES.as_ptr(),
     c"X-ND-Fetch-Dest: image".as_ptr(),
     ptr::null(),
 ]);
