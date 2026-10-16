@@ -161,10 +161,6 @@ fn c_string(bytes: &[u8]) -> CString {
     .unwrap_or_default()
 }
 
-fn opt_ptr(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(p) }
 }
