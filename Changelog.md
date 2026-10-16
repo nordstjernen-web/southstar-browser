@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* An arrow function nested in another arrow function sees the this of
+  the method around them: when the outer arrow did not mention this
+  itself, the inner one got the global object, so code such as
+  [1].map(() => [2].map(() => this.x)) read undefined. TipTap's
+  editor commands threw because of it.
 * innerWidth and innerHeight inside an iframe report the frame's size
   again: a relayout started from frame script overwrote them with the
   size of the top-level window.

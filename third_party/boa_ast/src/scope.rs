@@ -114,6 +114,8 @@ pub(crate) struct Inner {
     catch_clause: bool,
     // Has the `this` been accessed/escaped outside the function environment boundary.
     this_escaped: Cell<bool>,
+    // Is this the function scope of an arrow function, which has no `this` of its own.
+    lexical_this: Cell<bool>,
     // Has a direct `eval` added a deletable binding to this scope.
     has_deletable_bindings: Cell<bool>,
 
@@ -133,6 +135,7 @@ impl Scope {
                 function: true,
                 catch_clause: false,
                 this_escaped: Cell::new(false),
+                lexical_this: Cell::new(false),
                 has_deletable_bindings: Cell::new(false),
                 context: Rc::default(),
             }),
@@ -160,11 +163,18 @@ impl Scope {
                 function,
                 catch_clause,
                 this_escaped: Cell::new(false),
+                lexical_this: Cell::new(false),
                 has_deletable_bindings: Cell::new(false),
                 context: parent.inner.context.clone(),
                 outer: Some(parent),
             }),
         }
+    }
+
+    /// Marks this function scope as the scope of an arrow function, whose `this` is the one of
+    /// its enclosing function.
+    pub fn set_lexical_this(&self) {
+        self.inner.lexical_this.set(true);
     }
 
     /// Returns `true` if this is the scope of the parameter of a `catch` clause.
@@ -417,7 +427,8 @@ impl Scope {
         let mut crossed_function_border = false;
 
         loop {
-            if crossed_function_border && current.is_function() {
+            if crossed_function_border && current.is_function() && !current.inner.lexical_this.get()
+            {
                 current.inner.this_escaped.set(true);
                 return;
             }

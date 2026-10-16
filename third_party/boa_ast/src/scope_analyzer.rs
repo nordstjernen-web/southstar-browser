@@ -1272,6 +1272,9 @@ impl BindingCollectorVisitor<'_> {
         } else {
             Scope::new(self.scope.clone(), true)
         };
+        if arrow {
+            function_scope.set_lexical_this();
+        }
 
         let function_scopes = function_declaration_instantiation(
             body,
