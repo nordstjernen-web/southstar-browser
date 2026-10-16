@@ -102,7 +102,7 @@ fn substitute(token: &[u8]) -> Option<&'static [u8]> {
 }
 
 #[cfg(target_os = "macos")]
-fn platform_family(generic: &[u8]) -> Option<&'static [u8]> {
+fn platform_family(generic: &[u8]) -> Option<Vec<u8>> {
     const FAMILIES: [(&[u8], &[u8]); 6] = [
         (b"system-ui", b"System Font"),
         (b"sans-serif", b"Helvetica"),
@@ -114,17 +114,25 @@ fn platform_family(generic: &[u8]) -> Option<&'static [u8]> {
     FAMILIES
         .iter()
         .find(|(name, family)| *name == generic && ffi::font_available(family) == Some(true))
-        .map(|(_, family)| *family)
+        .map(|(_, family)| family.to_vec())
 }
 
 #[cfg(not(target_os = "macos"))]
-fn platform_family(_generic: &[u8]) -> Option<&'static [u8]> {
-    None
+fn platform_family(generic: &[u8]) -> Option<Vec<u8>> {
+    let browser_default: &[u8] = match generic {
+        b"serif" => b"Times New Roman",
+        b"sans-serif" => b"Arial",
+        _ => return None,
+    };
+    match ffi::font_available(browser_default)? {
+        true => Some(browser_default.to_vec()),
+        false => ffi::font_alias(browser_default),
+    }
 }
 
 fn platform_family_for_generic(generic: &[u8]) -> Vec<u8> {
     if let Some(family) = platform_family(generic) {
-        return family.to_vec();
+        return family;
     }
     if generic == b"system-ui" {
         return platform_family_for_generic(b"sans-serif");
@@ -181,6 +189,9 @@ fn family_resolve(css_family: &[u8]) -> Vec<u8> {
                 }
                 if ffi::font_available(&token) != Some(false) {
                     return token;
+                }
+                if let Some(alias) = ffi::font_alias(&token) {
+                    return alias;
                 }
                 if let Some(substitute) = substitute(&token) {
                     return substitute.to_vec();

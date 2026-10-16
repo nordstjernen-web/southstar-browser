@@ -130,6 +130,7 @@ unsafe extern "C" fn font_generation_cb() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_paint_register_font_oracle() {
     engine::set_font_oracle(font_available_cb, font_generation_cb, font_metrics_cb);
+    southstar_css::set_font_alias(text::font_alias);
 }
 
 #[unsafe(no_mangle)]

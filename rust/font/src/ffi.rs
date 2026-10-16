@@ -337,6 +337,20 @@ mod fontconfig {
     pub const SLANT_ROMAN: c_int = 0;
     pub const SLANT_ITALIC: c_int = 100;
     pub const SLANT_OBLIQUE: c_int = 110;
+    pub const MATCH_PATTERN: c_int = 0;
+    pub const BINDING_WEAK: c_int = 0;
+
+    #[repr(C)]
+    pub struct Value {
+        _kind: c_int,
+        _u: c_double,
+    }
+
+    impl Value {
+        pub const fn empty() -> Value {
+            Value { _kind: 0, _u: 0.0 }
+        }
+    }
 
     #[repr(C)]
     pub struct FontSet {
@@ -388,6 +402,21 @@ mod fontconfig {
         ) -> c_int;
         pub fn FcPatternDestroy(pattern: *mut c_void);
         pub fn FcWeightFromOpenTypeDouble(ot_weight: c_double) -> c_double;
+        pub fn FcPatternCreate() -> *mut c_void;
+        pub fn FcConfigSubstitute(config: *mut c_void, pattern: *mut c_void, kind: c_int) -> c_int;
+        pub fn FcDefaultSubstitute(pattern: *mut c_void);
+        pub fn FcFontMatch(
+            config: *mut c_void,
+            pattern: *mut c_void,
+            result: *mut c_int,
+        ) -> *mut c_void;
+        pub fn FcPatternGetWithBinding(
+            pattern: *const c_void,
+            object: *const c_char,
+            n: c_int,
+            value: *mut Value,
+            binding: *mut c_int,
+        ) -> c_int;
     }
 }
 
@@ -412,6 +441,101 @@ mod pango {
         pub fn pango_fc_font_map_config_changed(fontmap: *mut c_void);
         pub fn g_type_check_instance_is_a(instance: *mut c_void, iface_type: usize) -> GBoolean;
     }
+}
+
+#[cfg(feature = "fontconfig")]
+struct Pattern(NonNull<c_void>);
+
+#[cfg(feature = "fontconfig")]
+impl Pattern {
+    fn new(raw: *mut c_void) -> Option<Pattern> {
+        NonNull::new(raw).map(Pattern)
+    }
+
+    fn raw(&self) -> *mut c_void {
+        self.0.as_ptr()
+    }
+
+    fn family(&self, n: c_int) -> Option<Vec<u8>> {
+        let mut family = ptr::null();
+        // SAFETY: the pattern is live and family receives a pointer into it.
+        let found = unsafe {
+            fontconfig::FcPatternGetString(self.raw(), c"family".as_ptr(), n, &mut family)
+        };
+        if found != fontconfig::RESULT_MATCH || family.is_null() {
+            return None;
+        }
+        // SAFETY: fontconfig returned a NUL-terminated string owned by the live pattern.
+        Some(unsafe { CStr::from_ptr(family) }.to_bytes().to_vec())
+    }
+
+    fn families(&self) -> Vec<Vec<u8>> {
+        (0..).map_while(|n| self.family(n)).collect()
+    }
+
+    fn family_bound(&self, n: c_int) -> Option<bool> {
+        let mut value = fontconfig::Value::empty();
+        let mut binding = fontconfig::BINDING_WEAK;
+        // SAFETY: the pattern is live and value and binding are writable locals of the C types.
+        let found = unsafe {
+            fontconfig::FcPatternGetWithBinding(
+                self.raw(),
+                c"family".as_ptr(),
+                n,
+                &mut value,
+                &mut binding,
+            )
+        };
+        (found == fontconfig::RESULT_MATCH).then_some(binding != fontconfig::BINDING_WEAK)
+    }
+
+    fn bound_families(&self) -> Vec<Vec<u8>> {
+        let bound = (0..)
+            .map_while(|n| self.family_bound(n))
+            .enumerate()
+            .filter_map(|(i, strong)| strong.then_some(i + 1))
+            .last()
+            .unwrap_or(0);
+        self.families().into_iter().take(bound).collect()
+    }
+}
+
+#[cfg(feature = "fontconfig")]
+impl Drop for Pattern {
+    fn drop(&mut self) {
+        // SAFETY: the wrapper owns the pattern and destroys it exactly once.
+        unsafe { fontconfig::FcPatternDestroy(self.raw()) };
+    }
+}
+
+#[cfg(feature = "fontconfig")]
+pub fn metric_alias(family: &[u8]) -> Option<Vec<u8>> {
+    let family = CString::new(family).ok().filter(|f| !f.is_empty())?;
+    // SAFETY: FcPatternCreate takes no arguments and returns a new pattern or null.
+    let pattern = Pattern::new(unsafe { fontconfig::FcPatternCreate() })?;
+    // SAFETY: the pattern is live and fontconfig copies the NUL-terminated family.
+    unsafe { fontconfig::FcPatternAddString(pattern.raw(), c"family".as_ptr(), family.as_ptr()) };
+    // SAFETY: a null config selects the current configuration and the pattern is live.
+    unsafe {
+        fontconfig::FcConfigSubstitute(ptr::null_mut(), pattern.raw(), fontconfig::MATCH_PATTERN)
+    };
+    // SAFETY: the pattern is live.
+    unsafe { fontconfig::FcDefaultSubstitute(pattern.raw()) };
+    let wanted = pattern.bound_families();
+    let mut result = 0;
+    // SAFETY: a null config selects the current configuration, the pattern is live and result is a writable local.
+    let matched = Pattern::new(unsafe {
+        fontconfig::FcFontMatch(ptr::null_mut(), pattern.raw(), &mut result)
+    })?;
+    matched
+        .families()
+        .into_iter()
+        .find(|got| wanted.iter().any(|want| want.eq_ignore_ascii_case(got)))
+}
+
+#[cfg(not(feature = "fontconfig"))]
+pub fn metric_alias(_family: &[u8]) -> Option<Vec<u8>> {
+    None
 }
 
 #[cfg(feature = "fontconfig")]

@@ -540,6 +540,12 @@ pub fn font_available(family: Option<&CStr>) -> bool {
     has || engine::font_family_loaded(family)
 }
 
+pub fn font_alias(family: &[u8]) -> Option<Vec<u8>> {
+    let alias = southstar_font::metric_alias(family)?;
+    let name = CString::new(alias.as_slice()).ok()?;
+    font_available(Some(&name)).then_some(alias)
+}
+
 fn font_has_legacy_mac_ascent(family: Option<&CStr>) -> bool {
     if cfg!(target_os = "macos") {
         family.is_some_and(|f| {
