@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A module may name its default import `of` or `async`
+  (import of from "./react.js"). Both are ordinary identifiers there, but
+  the parser rejected them with a SyntaxError, so a minified bundle that
+  happened to pick one of those names - finn.no's advertising module -
+  did not run at all.
 * A custom property declared with an empty value (--x: ;) substitutes
   nothing into var(--x) instead of falling back. CSS minifiers such as
   lightningcss lower light-dark() to a pair of these toggles
