@@ -6938,13 +6938,19 @@
 
     if (typeof global.TaskSignal !== 'function') {
         try {
+            var ownField = function (target, key, value) {
+                Object.defineProperty(target, key, {
+                    value: value, writable: true, configurable: true,
+                    enumerable: key.charAt(0) !== '_'
+                });
+            };
             var TaskSignal = function (priority) {
-                this.aborted = false;
-                this.reason = undefined;
-                this.onabort = null;
-                this.onprioritychange = null;
-                this.priority = priority || 'user-visible';
-                this._cbs = [];
+                ownField(this, 'aborted', false);
+                ownField(this, 'reason', undefined);
+                ownField(this, 'onabort', null);
+                ownField(this, 'onprioritychange', null);
+                ownField(this, 'priority', priority || 'user-visible');
+                ownField(this, '_cbs', []);
             };
             if (typeof global.AbortSignal === 'function' && global.AbortSignal.prototype) {
                 TaskSignal.prototype = Object.create(global.AbortSignal.prototype);
