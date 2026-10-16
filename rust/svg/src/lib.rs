@@ -9,6 +9,7 @@ mod state;
 
 use core::f64::consts::PI;
 use std::collections::HashMap;
+use std::ffi::CString;
 
 use core::ffi::CStr;
 
@@ -55,6 +56,7 @@ pub struct Ctx<'a> {
     styles: StyleTable,
     ids: Option<HashMap<&'a [u8], Node<'a>>>,
     depth: i32,
+    use_depth: i32,
     nesting: i32,
     nodes: i32,
     vw: f64,
@@ -326,6 +328,7 @@ impl<'a> Ctx<'a> {
             styles,
             ids: None,
             depth: 0,
+            use_depth: 0,
             nesting: 0,
             nodes: 0,
             vw,
@@ -358,7 +361,15 @@ impl<'a> Ctx<'a> {
             }
             ids
         });
-        ids.get(id).copied()
+        if let Some(hit) = ids.get(id).copied() {
+            return Some(hit);
+        }
+        let doc = southstar_dom::ancestors(root).last()?;
+        if doc.kind() != Kind::Document || doc == root {
+            return None;
+        }
+        let id = CString::new(id).ok()?;
+        southstar_dom::index::find_by_id(doc, &id)
     }
 
     fn href_target(&mut self, n: Node<'a>) -> Option<Node<'a>> {
@@ -1112,6 +1123,7 @@ impl<'a> Ctx<'a> {
         let y = attr_length(n, c"y", self.vh, fs, 0.0);
         cr.translate(x, y);
         self.depth += 1;
+        self.use_depth += 1;
         if name_is(t, b"symbol") {
             let w = attr_length(n, c"width", self.vw, fs, self.vw);
             let h = attr_length(n, c"height", self.vh, fs, self.vh);
@@ -1123,6 +1135,7 @@ impl<'a> Ctx<'a> {
         } else {
             self.render_node(t, st);
         }
+        self.use_depth -= 1;
         self.depth -= 1;
     }
 

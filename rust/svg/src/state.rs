@@ -8,7 +8,7 @@ use std::ffi::CString;
 use core::ffi::CStr;
 
 use southstar_dom::Node;
-use southstar_style::{Prop, StyleRef, UNIT_PERCENT, Value, parse_color};
+use southstar_style::{Prop, PropId, StyleRef, UNIT_PERCENT, Value, parse_color};
 
 use crate::Ctx;
 use crate::ffi::{
@@ -367,6 +367,18 @@ impl<'a> Ctx<'a> {
         Some(Cow::Owned(resolved.to_owned()))
     }
 
+    fn color_inherited_outside_instance(&self, n: Node<'a>, color: [u8; 4]) -> bool {
+        if self.use_depth == 0 {
+            return false;
+        }
+        let parent_color = n
+            .parent()
+            .and_then(|p| self.style(p))
+            .and_then(|ps| ps.value(&COLOR))
+            .map(|v| v.get());
+        matches!(parent_color, Some(Value::Color(pc)) if pc == color)
+    }
+
     pub fn apply_node(&self, st: &mut State, n: Node<'a>) {
         let s = self.style(n);
         let basis = diag_basis(self.vw, self.vh);
@@ -374,7 +386,11 @@ impl<'a> Ctx<'a> {
         let mut font_size_from_attr = false;
 
         match s.and_then(|s| s.value(&COLOR)).map(|v| v.get()) {
-            Some(Value::Color(c)) => st.color = unit_rgba(c),
+            Some(Value::Color(c)) => {
+                if !self.color_inherited_outside_instance(n, c) {
+                    st.color = unit_rgba(c);
+                }
+            }
             _ => {
                 if let Some(c) = self.prop(n, c"color").and_then(|c| parse_color(&c)) {
                     st.color = unit_rgba(c);
@@ -531,8 +547,11 @@ fn apply_css_paint(st: &mut State, s: StyleRef<'_>, prop: &Prop, fill: bool) {
         return;
     };
     let color = st.color;
+    let id = if fill { PropId::Fill } else { PropId::Stroke };
+    let from_currentcolor = s.from_currentcolor(id);
     let out = if fill { &mut st.fill } else { &mut st.stroke };
     match v.get() {
+        Value::Color(_) if from_currentcolor => out.set_color(color),
         Value::Color(c) => out.set_color(unit_rgba(c)),
         Value::Keyword(Some(kw)) => {
             parse_paint(kw, color, out);

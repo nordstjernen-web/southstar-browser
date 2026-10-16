@@ -146,7 +146,7 @@ struct NsStyle {
     hidden_after: *const Style,
     _share_id: u64,
     _ref: c_int,
-    _currentcolor_bits: u32,
+    currentcolor_bits: u32,
     vars: *const VarMap,
 }
 
@@ -547,6 +547,11 @@ impl<'a> StyleRef<'a> {
 
     pub fn specified_inline(self) -> bool {
         self.fields().specified_inline != 0
+    }
+
+    pub fn from_currentcolor(self, prop: PropId) -> bool {
+        southstar_css::currentcolor_bit(prop)
+            .is_some_and(|bit| (self.fields().currentcolor_bits >> bit) & 1 != 0)
     }
 
     pub fn vars_ptr(self) -> *const c_void {

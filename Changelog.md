@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* SVG icon sprites referenced with <use> render, in the colour of the
+  text around them. A <use> pointing at a <symbol> in another <svg> of
+  the page found nothing, because ids were looked up only inside the
+  <svg> being painted. A sprite's fill="currentColor" was also already
+  resolved by the cascade to the colour of the hidden sprite sheet, so
+  every icon painted black. The referenced content now inherits its
+  colour from the <use> element, as a shadow tree would.
 * Images and SVGs sized with calc() contribute that size to grid and
   table tracks. The min-content contribution of a replaced element read
   only its laid-out width and fell back to 200px, so Tailwind's
