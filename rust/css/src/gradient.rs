@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::{PI, SQRT_2};
+use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 
 use crate::calc;
@@ -770,9 +771,112 @@ fn finish_stops(gr: &mut Gradient) {
     }
 }
 
+fn skip_vendor_prefix(text: &[u8], p: usize) -> (usize, bool) {
+    if starts_with_ci(&text[p..], b"-webkit-") {
+        (p + 8, true)
+    } else {
+        (p, false)
+    }
+}
+
+fn legacy_side_opposite(t: &[u8]) -> Option<&'static [u8]> {
+    [
+        (&b"left"[..], &b"right"[..]),
+        (b"right", b"left"),
+        (b"top", b"bottom"),
+        (b"bottom", b"top"),
+    ]
+    .into_iter()
+    .find(|(side, _)| token_eq(t, side))
+    .map(|(_, opposite)| opposite)
+}
+
+fn legacy_position_token(t: &[u8]) -> bool {
+    legacy_side_opposite(t).is_some()
+        || token_eq(t, b"center")
+        || t.first()
+            .is_some_and(|c| c.is_ascii_digit() || matches!(c, b'.' | b'-' | b'+'))
+}
+
+fn legacy_radial_shape_token(t: &[u8]) -> Option<&'static [u8]> {
+    if token_eq(t, b"cover") {
+        return Some(b"farthest-corner");
+    }
+    if token_eq(t, b"contain") {
+        return Some(b"closest-side");
+    }
+    [
+        &b"circle"[..],
+        b"ellipse",
+        b"closest-side",
+        b"closest-corner",
+        b"farthest-side",
+        b"farthest-corner",
+    ]
+    .into_iter()
+    .find(|kw| token_eq(t, kw))
+}
+
+fn legacy_linear_prelude(tok: &[&[u8]]) -> Option<Vec<u8>> {
+    if let [angle] = tok
+        && token_is_angle(angle)
+    {
+        let mut out = Vec::new();
+        append_number(&mut out, 90.0 - parse_angle_deg(angle), b"deg");
+        return Some(out);
+    }
+    if tok.is_empty() || tok.len() > 2 {
+        return None;
+    }
+    let mut out = b"to".to_vec();
+    for t in tok {
+        out.push(b' ');
+        out.extend_from_slice(legacy_side_opposite(t)?);
+    }
+    Some(out)
+}
+
+fn legacy_radial_shape(part: &[u8]) -> Option<Vec<u8>> {
+    let tok = split_ws_paren(part, 4);
+    if tok.is_empty() {
+        return None;
+    }
+    let words = tok
+        .iter()
+        .map(|t| legacy_radial_shape_token(t))
+        .collect::<Option<Vec<_>>>()?;
+    Some(words.join(&b' '))
+}
+
+fn legacy_prelude(parts: &mut Vec<Cow<'_, [u8]>>, radial: bool) {
+    let Some(first) = parts.first().map(|p| p.to_vec()) else {
+        return;
+    };
+    let tok = split_ws_paren(&first, 4);
+    let prelude = if !radial {
+        legacy_linear_prelude(&tok)
+    } else if (1..=2).contains(&tok.len()) && tok.iter().all(|t| legacy_position_token(t)) {
+        let shape = parts.get(1).and_then(|p| legacy_radial_shape(p));
+        let mut out = Vec::new();
+        if let Some(shape) = &shape {
+            out.extend_from_slice(shape);
+            out.push(b' ');
+            parts.remove(1);
+        }
+        out.extend_from_slice(b"at ");
+        out.extend_from_slice(&first);
+        Some(out)
+    } else {
+        legacy_radial_shape(&first)
+    };
+    if let Some(prelude) = prelude {
+        parts[0] = Cow::Owned(prelude);
+    }
+}
+
 pub(crate) fn parse(text: &[u8], keep_texts: bool) -> Option<(GradientParse, usize)> {
     let mut gp = GradientParse::default();
-    let mut p = skip_ws(text, 0, text.len());
+    let (mut p, legacy) = skip_vendor_prefix(text, skip_ws(text, 0, text.len()));
     if starts_with_ci(&text[p..], b"repeating-") {
         gp.gr.repeating = 1;
         p += 10;
@@ -813,7 +917,7 @@ pub(crate) fn parse(text: &[u8], keep_texts: bool) -> Option<(GradientParse, usi
     if keep_texts {
         gp.stop_texts = Some(Vec::new());
     }
-    let mut parts: Vec<&[u8]> = Vec::new();
+    let mut parts: Vec<Cow<'_, [u8]>> = Vec::new();
     let mut seg = body_start;
     depth = 0;
     let mut q = body_start;
@@ -825,7 +929,7 @@ pub(crate) fn parse(text: &[u8], keep_texts: bool) -> Option<(GradientParse, usi
             depth -= 1;
         }
         if (c == b',' && depth == 0) || q == end {
-            parts.push(strip(&text[seg..q]));
+            parts.push(Cow::Borrowed(strip(&text[seg..q])));
             if q == end {
                 break;
             }
@@ -834,9 +938,12 @@ pub(crate) fn parse(text: &[u8], keep_texts: bool) -> Option<(GradientParse, usi
         q += 1;
     }
     let mut ok = parts.iter().all(|part| !part.is_empty());
+    if ok && legacy && gp.gr.conic == 0 {
+        legacy_prelude(&mut parts, gp.gr.radial != 0);
+    }
     let mut start = 0;
     if ok && !parts.is_empty() {
-        let tok = split_ws_paren(parts[0], 24);
+        let tok = split_ws_paren(&parts[0], 24);
         let saved = gp.gr;
         let saved_explicit = gp.interp_explicit;
         if !tok.is_empty() && parse_prelude(&mut gp, &tok) {
@@ -1093,7 +1200,7 @@ pub(crate) fn serialize_specified(gp: &GradientParse) -> Vec<u8> {
 }
 
 pub(crate) fn text_starts_gradient(text: &[u8]) -> bool {
-    let mut p = skip_ws(text, 0, text.len());
+    let (mut p, _) = skip_vendor_prefix(text, skip_ws(text, 0, text.len()));
     if starts_with_ci(&text[p..], b"repeating-") {
         p += 10;
     }
