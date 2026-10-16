@@ -87,22 +87,23 @@ Each iframe's classic `<script>`s run concatenated inside one
 `(function(document){...})` wrapper, with `document` bound to a facade scoped
 to the iframe's subtree (a per-call current-document swap); module scripts
 keep their own scope. This also dropped Next.js's head-manager errors to
-zero. `window` is still the shared global, so the remaining gaps are:
+zero.
 
-Still imperfect:
+As of 2026-10-16 all 32 Speedometer 3.1 suites (the 20 default ones and
+the 12 disabled by default) run to completion one at a time in the official
+harness, and the default run at <https://browserbench.org/Speedometer3.1/>
+completes to a valid score. NewsSite-Next, Lit, Lit-Complex-DOM, Angular and
+Angular-Complex-DOM were the last to start working; see "Windows profiling
+pass (2026-10-16)" below.
 
-- **NewsSite-Next** now runs to completion (it failed when a navigation
-  remounted the navbar: a stale Boa inline cache made reading the frame's
-  `innerHeight` call an interface constructor). **React-Stockcharts-SVG** currently renders its
-  Stockcharts fit wrapper placeholder but never creates the SVG crosshair
-  cursor, and **Perf-Dashboard** still reaches the harness UI but returns no
-  score. Multi-suite aggregate runs are also polluted by stale window
-  `load`/`hashchange` listeners and framework globals left by previous suites.
+To run the hosted benchmark headless and print its score (the run takes the
+whole `--settle-ms`, since the results page never goes idle):
 
-Current fresh-process official-suite snapshot on Windows (2026-06-03):
-17 of 20 suites score, geomean **2.4340**. This is not the official
-single-page aggregate score; it is the comparable per-suite score while the
-shared global limitation remains.
+```sh
+./builddir/src/gtk/southstar --headless --dump=none --settle-ms=600000 \
+    --eval='document.getElementById("result-number").textContent' \
+    'https://browserbench.org/Speedometer3.1/?startAutomatically=true&iterationCount=1'
+```
 
 ## Snapshot (release build, Windows 11, GTK 4.22, 2026-06-05)
 
@@ -436,3 +437,86 @@ Output remains byte-identical to the full cascade (verified across vanilla
 ES5/ES6, React, and Vue complex and light suites). The reuse path shares style
 structs across passes, which is safe only because the cascade output is
 immutable at zoom ~= 1; the zoom gate preserves that invariant.
+
+## Windows profiling pass (2026-10-16)
+
+Measured with the official Speedometer 3.1 harness (`index.html?suite=<name>
+&startAutomatically=true&iterationCount=1`), one fresh headless process per
+suite and run, the two builds interleaved, median of three runs; release
+build without LTO, Windows 11. Profiles came from a small out-of-process
+sampler (suspend the main thread, `StackWalk64` over the PE unwind tables,
+symbols from `nm` on an unstripped relink of `southstar.exe`), since ETW
+profilers need administrator rights.
+
+What the profiles found, in the order it was fixed:
+
+- **Thread-locals on windows-gnu.** The target has no native TLS, so every
+  `thread_local!` access runs std's `guard::enable` (a fenced atomic round
+  trip and `FlsSetValue`). `boa_gc` read one on every `Gc` drop: half of the
+  main thread. boa_gc joined the Boa fork and checks a process-wide counter
+  first (`docs/boa-fork.md`); the selector matcher's per-step TLS counters
+  became a budget passed down the recursion.
+- **GC policy.** boa_gc re-armed at 1.43x the live heap; it now collects at
+  2x (at least 4 MiB).
+- **for-in** stepped through the generic iterator protocol, allocating a
+  result object per key and a `next` function per loop; the VM now steps
+  the internal iterator directly.
+- **getComputedStyle** flushed layout and copied every custom property name
+  to compute an eager `length`; `length` is now a lazy accessor.
+- **Absolute positioning.** Boxes queued while placing other absolute boxes
+  skipped the batched static-position pass and each walked its containing
+  block (about 600 walks per relayout on the complex pages).
+- **length_resolve** locked the media-state mutex twice for every length.
+
+Correctness fixes found on the way: the headless settle loop could declare a
+page quiet from inside a blocking fetch (runs ended before the first suite
+about a third of the time); calls may nest 10,000 deep behind a native stack
+guard (Angular); comma-continued `const` lists parse and `trustedTypes` keeps
+its brand in frames (Lit); a getter that reshapes an object no longer leaves
+a stale inline cache (NewsSite-Next); window metrics are written to the top
+window, not the frame being run; and an arrow nested in an arrow sees its
+method's `this` (TipTap's Highlight step threw, so it had been timed doing
+almost nothing; its slower time is the real one).
+
+A faster global allocator was tried: mimalloc cut 5% off the geomean, but
+only without its secure mode, and in secure mode the gain was gone, so the
+Windows heap stays.
+
+| Suite | before (ms) | after (ms) | delta |
+|---|---:|---:|---:|
+| TodoMVC-JavaScript-ES5 | 1179 | 877 | -26% |
+| TodoMVC-JavaScript-ES5-Complex-DOM | 1574 | 1091 | -31% |
+| TodoMVC-JavaScript-ES6-Webpack | 1093 | 854 | -22% |
+| TodoMVC-JavaScript-ES6-Webpack-Complex-DOM | 1502 | 1087 | -28% |
+| TodoMVC-WebComponents | 835 | 551 | -34% |
+| TodoMVC-WebComponents-Complex-DOM | 2737 | 1776 | -35% |
+| TodoMVC-React | 3736 | 1561 | -58% |
+| TodoMVC-React-Complex-DOM | 3901 | 1687 | -57% |
+| TodoMVC-React-Redux | 4703 | 1874 | -60% |
+| TodoMVC-React-Redux-Complex-DOM | 4874 | 2012 | -59% |
+| TodoMVC-Backbone | 998 | 629 | -37% |
+| TodoMVC-Backbone-Complex-DOM | 1947 | 1266 | -35% |
+| TodoMVC-Angular | fails | 574 | now runs |
+| TodoMVC-Angular-Complex-DOM | fails | 737 | now runs |
+| TodoMVC-Vue | 935 | 484 | -48% |
+| TodoMVC-Vue-Complex-DOM | 1120 | 673 | -40% |
+| TodoMVC-jQuery | 4277 | 2205 | -48% |
+| TodoMVC-jQuery-Complex-DOM | 6023 | 3434 | -43% |
+| TodoMVC-Preact | 424 | 242 | -43% |
+| TodoMVC-Preact-Complex-DOM | 664 | 429 | -35% |
+| TodoMVC-Svelte | 295 | 190 | -36% |
+| TodoMVC-Svelte-Complex-DOM | 582 | 382 | -34% |
+| TodoMVC-Lit | fails | 439 | now runs |
+| TodoMVC-Lit-Complex-DOM | fails | 833 | now runs |
+| NewsSite-Next | fails | 2816 | now runs |
+| NewsSite-Nuxt | 3605 | 2658 | -26% |
+| Editor-CodeMirror | 2989 | 1616 | -46% |
+| Editor-TipTap | 958 | 1343 | +40% |
+| Charts-observable-plot | 2305 | 1128 | -51% |
+| Charts-chartjs | 3496 | 1674 | -52% |
+| React-Stockcharts-SVG | 6114 | 2458 | -60% |
+| Perf-Dashboard | 5480 | 2193 | -60% |
+
+Over the 27 suites both builds complete: geomean 1850.1 -> 1077.3 ms
+(score 0.540 -> 0.928, 1.72x). The default run on browserbench.org scored
+0.9859 (one iteration) after these changes.
