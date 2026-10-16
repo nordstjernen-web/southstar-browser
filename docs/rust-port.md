@@ -364,7 +364,7 @@ The workflows that build today all gain a Rust toolchain:
 |---|---|---|
 | `linux.yml` | Ubuntu 26.04, GCC | rustup, pinned |
 | `macos.yml` | macOS 26 arm64 | rustup, pinned |
-| `windows.yml` | MSYS2 MINGW64 | rustup, pinned, `x86_64-pc-windows-gnu` (the ABI the C side uses; MSYS2's own `rust` package lags behind the pin) |
+| `windows.yml` | MSYS2 UCRT64 | MSYS2's `rust` package, `x86_64-pc-windows-gnu` (it carries the pinned 1.99) |
 | `musl.yml` | Alpine 3.24 | rustup, pinned (Alpine's `rust` lags behind; built without `crt-static`, like Alpine's own toolchain) |
 | `freebsd.yml`, `netbsd.yml` | VMs, nightly | rustup, pinned (the `pkg`/pkgsrc `rust` lags behind) |
 | `release.yml` | `ubuntu:24.04`, `ubuntu:26.04`, `debian:trixie` containers | distro packages when they reach 1.99 (a versioned `rustc-1.99` is tried); rustup otherwise, pinned to 1.99.0 |

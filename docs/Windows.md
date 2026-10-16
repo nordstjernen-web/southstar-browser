@@ -7,8 +7,10 @@ Southstar on Windows. The Windows CI workflow
 (`.github/workflows/windows.yml`) is the authoritative spec; what
 follows is the same recipe verified on a local Windows 11 box.
 
-The Windows build uses **MSYS2 / MINGW64** with the same toolchain
+The Windows build uses **MSYS2 / UCRT64** with the same toolchain
 the CI workflow installs. No Visual Studio, no MSVC, no vcpkg.
+(MSYS2 no longer ships GTK 4 for the older MINGW64 environment, so
+`pacman` fails there with `target not found: mingw-w64-x86_64-gtk4`.)
 The rationale is identical to the macOS Homebrew path: one
 package source, audited DLLs, and the resulting binary is a
 single PE32+ executable that links the same GTK 4 / libcurl /
@@ -22,32 +24,32 @@ Install MSYS2 (use `winget` if you have it):
 winget install -e --id MSYS2.MSYS2
 ```
 
-Open the **MSYS2 MINGW64** shell (not the plain MSYS shell — the
-window title and prompt must say `MINGW64`) and install the build
+Open the **MSYS2 UCRT64** shell (not the plain MSYS shell — the
+window title and prompt must say `UCRT64`) and install the build
 and runtime dependencies:
 
 ```sh
 pacman -Sy --noconfirm --needed \
     base-devel \
-    mingw-w64-x86_64-clang \
-    mingw-w64-x86_64-pkgconf \
-    mingw-w64-x86_64-meson \
-    mingw-w64-x86_64-ninja \
-    mingw-w64-x86_64-ccache \
-    mingw-w64-x86_64-gtk4 \
-    mingw-w64-x86_64-libepoxy \
-    mingw-w64-x86_64-curl \
-    mingw-w64-x86_64-ca-certificates \
-    mingw-w64-x86_64-uchardet \
-    mingw-w64-x86_64-libpsl \
-    mingw-w64-x86_64-sqlite3 \
-    mingw-w64-x86_64-libwebp \
-    mingw-w64-x86_64-SDL2 \
-    mingw-w64-x86_64-rust \
-    mingw-w64-x86_64-ffmpeg
+    mingw-w64-ucrt-x86_64-clang \
+    mingw-w64-ucrt-x86_64-pkgconf \
+    mingw-w64-ucrt-x86_64-meson \
+    mingw-w64-ucrt-x86_64-ninja \
+    mingw-w64-ucrt-x86_64-ccache \
+    mingw-w64-ucrt-x86_64-gtk4 \
+    mingw-w64-ucrt-x86_64-libepoxy \
+    mingw-w64-ucrt-x86_64-curl \
+    mingw-w64-ucrt-x86_64-ca-certificates \
+    mingw-w64-ucrt-x86_64-uchardet \
+    mingw-w64-ucrt-x86_64-libpsl \
+    mingw-w64-ucrt-x86_64-sqlite3 \
+    mingw-w64-ucrt-x86_64-libwebp \
+    mingw-w64-ucrt-x86_64-SDL2 \
+    mingw-w64-ucrt-x86_64-rust \
+    mingw-w64-ucrt-x86_64-ffmpeg
 ```
 
-`mingw-w64-x86_64-ffmpeg` is **required**, not optional: meson fails on
+`mingw-w64-ucrt-x86_64-ffmpeg` is **required**, not optional: meson fails on
 Windows without the `libav*` libraries (version 6.0 or newer), which carry
 inline WebM — VP9/VP8 video plus Opus/Vorbis audio. MSYS2's build is
 GPL-configured, which is fine for a local developer build; the
@@ -61,16 +63,16 @@ rolling latest.
 A few of these pull in transitively but are listed explicitly so a
 fresh box gets them in one command:
 
-- `mingw-w64-x86_64-ca-certificates` is a hard dependency of
-  `mingw-w64-x86_64-curl`, so it always arrives with curl. It's
+- `mingw-w64-ucrt-x86_64-ca-certificates` is a hard dependency of
+  `mingw-w64-ucrt-x86_64-curl`, so it always arrives with curl. It's
   what makes HTTPS work — `src/net.c::ns_net_resolve_ca_bundle`
-  hardcodes `C:/msys64/mingw64/etc/ssl/certs/ca-bundle.crt` in
+  hardcodes `C:/msys64/ucrt64/etc/ssl/certs/ca-bundle.crt` in
   the Windows fallback list. With the package installed, dev
   builds reach `https://` without any env-var fiddling.
-- `mingw-w64-x86_64-uchardet` is the charset detector used by
+- `mingw-w64-ucrt-x86_64-uchardet` is the charset detector used by
   `ns_html_decode_body`. Per `CLAUDE.md` it's a hard dependency;
   without it `meson setup` fails the `uchardet` pkg-config check.
-- `mingw-w64-x86_64-libwebp` is a hard build dependency for
+- `mingw-w64-ucrt-x86_64-libwebp` is a hard build dependency for
   WebP. Both lossy VP8 — used by the BBC, Wikipedia thumbnails,
   and most modern CDNs — and lossless VP8L decode in-tree via
   `src/image_webp.c`; no gdk-pixbuf loader or `loaders.cache`
@@ -78,7 +80,7 @@ fresh box gets them in one command:
 
 ## Build
 
-From the MINGW64 shell, in the checkout:
+From the UCRT64 shell, in the checkout:
 
 ```sh
 cd /c/dev/southstar
@@ -103,8 +105,8 @@ Build artifacts:
   `southstar.exe` (the packaging scripts do).
 
 Running the exe directly out of `builddir` works as long as the
-MSYS2 mingw64 `bin` directory is on `PATH` (it is inside the
-MINGW64 shell; from PowerShell, prepend `C:\msys64\mingw64\bin`).
+MSYS2 ucrt64 `bin` directory is on `PATH` (it is inside the
+UCRT64 shell; from PowerShell, prepend `C:\msys64\ucrt64\bin`).
 PowerShell smoke launches should use `scripts\smoke-windows.ps1`,
 which sets that DLL search path before creating the process and
 suppresses Windows loader dialog boxes if a dependency is still
@@ -127,7 +129,7 @@ folder that runs on a Windows machine with no MSYS2 install. It:
 1. Copies a tiny Win32 launcher as `southstar.exe`, copies the
    real GTK shell as `app/southstar-ui.exe`, copies
    `app/southstar-renderer.exe`, and transitively resolves every
-   imported DLL via `objdump -p`, pulling each one from `/mingw64/bin/`
+   imported DLL via `objdump -p`, pulling each one from `/ucrt64/bin/`
    into `app/` (system DLLs like `KERNEL32.dll` are skipped because
    they aren't found there).
 2. Copies the GTK runtime data the binary needs at startup:
@@ -147,7 +149,7 @@ folder that runs on a Windows machine with no MSYS2 install. It:
    the public executable name and to show a clear error if a user runs
    it from inside the ZIP before extracting the whole folder.
 
-Run it from the MINGW64 shell:
+Run it from the UCRT64 shell:
 
 ```sh
 ./scripts/pack-windows.sh
@@ -181,10 +183,10 @@ LZMA-compressed). It runs `scripts/pack-windows.sh` first to populate
 One-time tooling install — NSIS only, the bundle deps cover the rest:
 
 ```sh
-pacman -S --noconfirm --needed mingw-w64-x86_64-nsis
+pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-nsis
 ```
 
-Build the installer from the MINGW64 shell:
+Build the installer from the UCRT64 shell:
 
 ```sh
 ./scripts/pack-windows-installer.sh
@@ -292,7 +294,7 @@ fetch fails with `error adding trust anchors from file:
 ca-bundle.crt` (or the equivalent OpenSSL error).
 
 The file `ca-bundle.crt` we ship is the one packaged by MSYS2 as
-`mingw-w64-x86_64-ca-certificates`, which itself is sourced from
+`mingw-w64-ucrt-x86_64-ca-certificates`, which itself is sourced from
 the Mozilla NSS / `certdata.txt` curated root list — the same
 source Firefox uses. We bundle it because:
 
@@ -302,7 +304,7 @@ source Firefox uses. We bundle it because:
   store. Without the bundled file, libcurl has nowhere to find
   trusted anchors and refuses every HTTPS fetch.
 - The mingw libcurl is compiled with a default CA path of
-  `C:/msys64/mingw64/etc/ssl/certs/ca-bundle.crt`. That path
+  `C:/msys64/ucrt64/etc/ssl/certs/ca-bundle.crt`. That path
   only exists on a machine with MSYS2 installed; on a fresh
   user box it is missing.
 
