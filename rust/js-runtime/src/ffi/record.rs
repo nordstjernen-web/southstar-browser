@@ -953,8 +953,12 @@ pub unsafe extern "C" fn ns_js_set_layout_root(js: *mut NsJs, root: *const c_voi
         ns_js_sync_window_metrics(js);
         if !root.is_null() {
             ns_js_promote_deferred_iframes(js);
-            ns_intersection_observers_tick(js);
-            ns_resize_observers_tick(js);
+            if super::glue::is_running_script(super::Js(js).ctx()) {
+                super::exports::ns_observer_schedule_tick(js);
+            } else {
+                ns_intersection_observers_tick(js);
+                ns_resize_observers_tick(js);
+            }
         }
     }
 }
