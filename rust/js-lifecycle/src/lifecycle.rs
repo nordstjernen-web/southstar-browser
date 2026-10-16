@@ -179,6 +179,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
             js.dispatch(doc, c"DOMContentLoaded");
             js.mark_navigation(c"domContentLoadedEventEnd");
             js.upgrade_custom_elements(doc);
+            js.fire_parsed_stylesheet_loads(doc);
             advance(js, &page, Phase::Async);
         }
         Phase::Async => {

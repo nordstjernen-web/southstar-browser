@@ -296,6 +296,10 @@ pub(crate) struct Fetched {
 }
 
 impl Js {
+    pub(crate) fn of(js: *mut NsJs) -> Js {
+        Js(js)
+    }
+
     pub(crate) fn key(self) -> usize {
         self.0 as usize
     }

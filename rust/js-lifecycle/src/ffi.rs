@@ -200,6 +200,12 @@ impl Js {
         unsafe { ns_ce_upgrade_subtree_all(self.0, root) };
     }
 
+    pub fn fire_parsed_stylesheet_loads(self, doc: *mut NsNode) {
+        if let Some(doc) = node(doc) {
+            southstar_js_loader::fire_parsed_stylesheet_loads(self.0, doc);
+        }
+    }
+
     pub fn fire_page_transition(self, kind: &CStr) {
         unsafe { ns_js_fire_page_transition(self.0, kind.as_ptr(), glib::FALSE) };
     }

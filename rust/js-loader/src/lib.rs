@@ -17,6 +17,8 @@ use core::ffi::CStr;
 
 use southstar_dom::Node;
 
+use crate::ffi::{Js, NsJs};
+
 pub(crate) const ALREADY_STARTED: &CStr = c"data-nd-script-already-started";
 pub(crate) const EMPTY_SOURCE: &CStr = c"data-nd-script-empty-source";
 pub(crate) const MAX_SCRIPT_BYTES: usize = 32 * 1024 * 1024;
@@ -143,6 +145,13 @@ pub(crate) fn link_is_loadable_stylesheet(n: Node) -> bool {
         }
     }
     is_sheet && !is_alt
+}
+
+pub fn fire_parsed_stylesheet_loads(js: *mut NsJs, doc: Node) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        fetch::fire_parsed_stylesheet_loads(js, doc);
+    }
 }
 
 pub(crate) fn mark(n: Node, name: &CStr) {

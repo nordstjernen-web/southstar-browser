@@ -60,6 +60,14 @@ pub fn remember_linked_css(url: &[u8], css: &[u8]) {
     map.insert(url.to_vec(), css.to_vec());
 }
 
+pub fn linked_css_known(url: &[u8]) -> bool {
+    !url.is_empty()
+        && LINKED_CSS
+            .lock()
+            .ok()
+            .is_some_and(|guard| guard.as_ref().is_some_and(|map| map.contains_key(url)))
+}
+
 pub fn linked_css_text(url: &[u8]) -> Option<Vec<u8>> {
     if url.is_empty() {
         return None;

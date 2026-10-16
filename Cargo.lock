@@ -2547,6 +2547,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-loader",
  "southstar-js-runtime",
  "southstar-layout",
 ]
@@ -2557,6 +2558,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-bytecode-cache",
  "southstar-dom",
+ "southstar-engine",
  "southstar-extensions",
  "southstar-glib",
  "southstar-js-engine",

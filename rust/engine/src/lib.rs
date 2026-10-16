@@ -6,6 +6,8 @@ mod fetch;
 mod ffi;
 mod styles;
 
+pub use fetch::linked_css_known;
+
 use southstar_layout::{BoxKind, BoxRef};
 
 use crate::ffi::{Capture, Out};

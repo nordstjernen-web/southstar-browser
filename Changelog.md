@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* DOM: <link rel="stylesheet"> elements from the document's own markup
+  fire load (or error) after DOMContentLoaded; only links inserted by
+  script did before. The loadCSS pattern, a media=print link whose onload
+  switches it to media=all, never ran its handler and its sheet stayed
+  print-only.
 * Layout: a table caption's ::before and ::after are built like a table
   cell's, so a floated or block pseudo-element inside a caption is a float
   or a block, and an absolutely positioned one is laid out. Captions turned
