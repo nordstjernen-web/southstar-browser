@@ -1703,6 +1703,7 @@ version = "0.9.11-dev"
 name = "southstar-anim"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
@@ -1739,6 +1740,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-bytecode-cache",
  "southstar-config",
+ "southstar-css",
  "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
@@ -1875,6 +1877,7 @@ dependencies = [
 name = "southstar-engine"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-css-media",
  "southstar-css-syntax",
  "southstar-dom",
@@ -2066,6 +2069,7 @@ name = "southstar-headless"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-css",
  "southstar-css-media",
  "southstar-digest",
  "southstar-dom",
@@ -2266,6 +2270,7 @@ dependencies = [
 name = "southstar-js-custom-elements"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2340,6 +2345,7 @@ dependencies = [
 name = "southstar-js-focus"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2522,6 +2528,7 @@ dependencies = [
 name = "southstar-js-mutation"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2543,6 +2550,7 @@ dependencies = [
 name = "southstar-js-node"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2553,6 +2561,7 @@ dependencies = [
 name = "southstar-js-observers"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2565,6 +2574,7 @@ dependencies = [
 name = "southstar-js-page"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-bind",
@@ -2602,6 +2612,7 @@ name = "southstar-js-runtime"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-config",
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-bind",
@@ -2659,6 +2670,7 @@ dependencies = [
 name = "southstar-js-text"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2669,6 +2681,7 @@ dependencies = [
 name = "southstar-js-top-layer"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2987,6 +3000,7 @@ version = "0.9.11-dev"
 name = "southstar-print"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-glib",
  "southstar-layout",
 ]
@@ -3004,6 +3018,8 @@ dependencies = [
 name = "southstar-render"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
+ "southstar-css-media",
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
@@ -3050,6 +3066,7 @@ dependencies = [
 name = "southstar-selection"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-css",
  "southstar-glib",
  "southstar-layout",
 ]

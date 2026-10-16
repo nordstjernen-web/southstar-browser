@@ -47,7 +47,6 @@ const KIND_CALC: c_uint = 4;
 const KIND_URL: c_uint = 8;
 
 unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_css_parse_selector_list(text: *const c_char) -> *mut GPtrArray;
     fn ns_css_selector_matches(sel: *const c_void, el: *const NsNode) -> GBoolean;
     fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox;
@@ -75,7 +74,7 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn value(self, name: &CStr) -> Option<Value<'a>> {
-        let prop = usize::try_from(unsafe { ns_css_prop_id(name.as_ptr()) }).ok()?;
+        let prop = southstar_css::Prop::from_name(name.to_bytes())?.id();
         let slot = unsafe { *self.0.as_ptr().cast::<*const NsCssValue>().add(prop) };
         let v = unsafe { slot.as_ref() }?;
         Some(unsafe {

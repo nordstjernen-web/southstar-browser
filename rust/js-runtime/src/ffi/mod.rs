@@ -159,7 +159,6 @@ unsafe extern "C" {
     fn ns_collections_teardown(js: *mut NsJs);
     fn ns_cssom_teardown(js: *mut NsJs);
     fn ns_url_teardown(js: *mut NsJs);
-    fn ns_css_set_fullscreen_node(node: *const NsNode);
     fn ns_js_frames_teardown(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_clear_frame_clocks(js: *mut NsJs, destroy: GBoolean);
@@ -545,8 +544,8 @@ impl Js {
     }
 
     pub fn teardown_windows(self) {
+        southstar_css::set_fullscreen_node(None);
         unsafe {
-            ns_css_set_fullscreen_node(ptr::null());
             ns_js_frames_teardown(self.0);
             ns_window_links_clear(self.0, glib::TRUE);
         }

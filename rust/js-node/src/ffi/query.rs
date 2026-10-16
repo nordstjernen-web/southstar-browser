@@ -52,7 +52,6 @@ unsafe extern "C" {
         name: *const c_char,
         code: *const c_char,
     );
-    fn ns_css_attr_may_affect_style(target: *const NsNode, name: *const c_char) -> GBoolean;
     fn ns_js_request_repaint(js: *mut NsJs);
     fn ns_js_record_attr_change(
         js: *mut NsJs,
@@ -206,8 +205,8 @@ pub(crate) fn body_forward_content_handler(
     };
 }
 
-pub(crate) fn attr_may_affect_style(node: Element, name: &CStr) -> bool {
-    unsafe { ns_css_attr_may_affect_style(node.as_ptr(), name.as_ptr()) != 0 }
+pub(crate) fn attr_may_affect_style(_node: Element, name: &CStr) -> bool {
+    southstar_css::attr_may_affect_style(Some(name.to_bytes()))
 }
 
 pub(crate) fn request_repaint(js: Js) {

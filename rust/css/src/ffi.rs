@@ -24,7 +24,6 @@ mod pending;
 mod property;
 mod query;
 mod registry;
-mod restyle;
 mod rule_index;
 mod selector;
 mod selector_view;
@@ -63,7 +62,11 @@ pub(crate) use matcher::{
     active_node, focus_node, focus_visible_node, fullscreen_node, hover_node, match_scope,
     set_match_scope,
 };
+pub use matcher::{
+    set_active_node, set_focus_node, set_focus_visible_node, set_fullscreen_node, set_hover_node,
+};
 pub use query::{MatchContext, QueryKey, Selector, SelectorList};
+pub use registry::{RegisterError, Registration, clear_registered_properties, register_property};
 pub(crate) use selector_view::{
     AttrRef, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef, SheetRef,
 };

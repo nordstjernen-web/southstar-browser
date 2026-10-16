@@ -62,8 +62,6 @@ unsafe extern "C" {
     fn ns_js_set_doc_ready_state(js: *mut NsJs, doc: *const NsNode, state: c_int);
     fn ns_js_platform_globals(js: *mut NsJs) -> *mut glib::GHashTable;
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
-    fn ns_css_mark_visited(abs_url: *const c_char);
-    fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_js_current_url(js: *const NsJs) -> *const c_char;
     fn ns_js_layout_root(js: *const NsJs) -> *const NsBox;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
@@ -353,11 +351,11 @@ pub(crate) fn remove_attr(node: Node<'_>, name: &CStr) {
 }
 
 pub(crate) fn mark_visited(url: &CStr) {
-    unsafe { ns_css_mark_visited(url.as_ptr()) };
+    southstar_css::mark_visited(url.to_bytes());
 }
 
 pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr, old_value: &CStr) {
-    unsafe { ns_css_mark_attr_dirty(node.as_mut_ptr(), name.as_ptr(), old_value.as_ptr()) };
+    southstar_css::mark_attr_dirty(node, Some(name.to_bytes()), Some(old_value.to_bytes()));
 }
 
 pub(crate) fn current_url(js: Js) -> Option<CString> {

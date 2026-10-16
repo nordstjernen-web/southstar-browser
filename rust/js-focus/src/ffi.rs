@@ -63,8 +63,6 @@ unsafe extern "C" {
     fn ns_js_has_window_action(js: *const NsJs) -> GBoolean;
     fn ns_js_window_action(js: *mut NsJs, action: *const c_char);
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
-    fn ns_css_set_focus_visible_node(node: *const NsNode);
-    fn ns_css_set_fullscreen_node(node: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
@@ -417,11 +415,11 @@ pub(crate) fn note(el: Element) {
 }
 
 pub(crate) fn set_focus_visible(el: Option<Element>) {
-    unsafe { ns_css_set_focus_visible_node(Node::ptr_or_null(el)) };
+    southstar_css::set_focus_visible_node(el);
 }
 
 pub(crate) fn set_fullscreen_node(el: Option<Element>) {
-    unsafe { ns_css_set_fullscreen_node(Node::ptr_or_null(el)) };
+    southstar_css::set_fullscreen_node(el);
 }
 
 pub(crate) fn click_activation_target(el: Element) -> Option<Element> {

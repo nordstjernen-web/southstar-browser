@@ -41,7 +41,6 @@ pub enum BreakProp {
 }
 
 unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_paint(cr: *mut c_void, root: *const NsBox, highlight_query: *const c_char);
@@ -56,8 +55,9 @@ unsafe extern "C" {
 fn break_props() -> &'static [c_int; 3] {
     static PROPS: OnceLock<[c_int; 3]> = OnceLock::new();
     PROPS.get_or_init(|| {
-        [c"break-before", c"break-after", c"break-inside"]
-            .map(|name| unsafe { ns_css_prop_id(name.as_ptr()) })
+        [c"break-before", c"break-after", c"break-inside"].map(|name| {
+            southstar_css::Prop::from_name(name.to_bytes()).map_or(-1, |p| p.id() as c_int)
+        })
     })
 }
 

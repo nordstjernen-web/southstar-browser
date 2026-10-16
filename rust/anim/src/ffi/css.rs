@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
+use southstar_css::Prop as CssProp;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean};
 use southstar_layout::Style;
@@ -29,10 +30,6 @@ unsafe extern "C" {
         b: *const NsCssValue,
         t: f64,
     ) -> *mut NsCssValue;
-    fn ns_css_prop_name(prop: c_int) -> *const c_char;
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
-    fn ns_css_prop_inherits(prop: c_int) -> GBoolean;
-    fn ns_css_initial_value_text(name: *const c_char) -> *const c_char;
     fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
     fn ns_css_declarations_free(decls: *mut GArray);
     fn ns_css_anim_effective(style: *const Style, is_animation: GBoolean, out: *mut NsAnimList);
@@ -249,16 +246,20 @@ struct ValueHead {
     u: HeadUnion,
 }
 
+fn prop_at(prop: i32) -> Option<CssProp> {
+    usize::try_from(prop).ok().and_then(CssProp::from_id)
+}
+
 pub fn prop_name(prop: i32) -> Option<&'static CStr> {
-    text(unsafe { ns_css_prop_name(prop) })
+    prop_at(prop).map(CssProp::c_name)
 }
 
 pub fn prop_id(name: &CStr) -> i32 {
-    unsafe { ns_css_prop_id(name.as_ptr()) }
+    CssProp::from_name(name.to_bytes()).map_or(-1, |prop| prop.id() as i32)
 }
 
 pub fn prop_inherits(prop: i32) -> bool {
-    unsafe { ns_css_prop_inherits(prop) != 0 }
+    prop_at(prop).is_some_and(CssProp::inherits)
 }
 
 pub fn reduced_motion() -> bool {
@@ -271,7 +272,7 @@ pub fn intern(name: &CStr) -> *const c_char {
 
 pub fn initial_value(prop: i32) -> Option<Val> {
     let name = prop_name(prop)?;
-    let text = text(unsafe { ns_css_initial_value_text(name.as_ptr()) })?;
+    let text = southstar_css::initial_value(name.to_bytes())?;
     let mut decl = name.to_bytes().to_vec();
     decl.extend_from_slice(b": ");
     decl.extend_from_slice(text.to_bytes());

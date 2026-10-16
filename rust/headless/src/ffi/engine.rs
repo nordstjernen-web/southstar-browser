@@ -193,10 +193,6 @@ unsafe extern "C" {
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
-    fn ns_css_set_viewport(vw: f64, vh: f64);
-    fn ns_css_set_target_fragment(fragment: *const c_char);
-    fn ns_css_set_doc_language(lang: *const c_char);
-    fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode;
     fn ns_engine_compute_cascade(
         doc: *mut NsNode,
         base_url: *const c_char,
@@ -538,19 +534,19 @@ pub fn css_set_print_media(printing: bool) {
 }
 
 pub fn css_set_viewport(vw: f64, vh: f64) {
-    unsafe { ns_css_set_viewport(vw, vh) };
+    southstar_css_media::set_base_viewport(vw, vh);
 }
 
 pub fn css_set_target_fragment(fragment: Option<&CStr>) {
-    unsafe { ns_css_set_target_fragment(ptr_or_null(fragment)) };
+    southstar_css::set_target_fragment(fragment.map(CStr::to_bytes));
 }
 
 pub fn css_set_doc_language(lang: Option<&CStr>) {
-    unsafe { ns_css_set_doc_language(ptr_or_null(lang)) };
+    southstar_css::set_doc_language(lang.map(CStr::to_bytes));
 }
 
 pub fn css_set_active_node(node: Option<Node>) {
-    unsafe { ns_css_set_active_node(Node::ptr_or_null(node)) };
+    southstar_css::set_active_node(node);
 }
 
 unsafe extern "C" fn bytes_unref(p: *mut c_void) {

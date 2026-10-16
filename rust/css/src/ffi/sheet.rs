@@ -101,32 +101,23 @@ pub(super) struct RawPropertyRule {
 }
 
 impl RawPropertyRule {
-    pub(super) unsafe fn registered(
-        name: *const c_char,
-        syntax_text: *const c_char,
+    pub(super) fn registered(
+        name: &[u8],
+        syntax_text: &[u8],
         syntax: prop_syntax::SyntaxDef,
-        inherits: GBoolean,
-        initial_value: *const c_char,
-        has_initial: GBoolean,
+        inherits: bool,
+        initial_value: Option<&[u8]>,
+        has_initial: bool,
     ) -> Self {
-        let syntax_text = if syntax_text.is_null() {
-            c"*".as_ptr()
-        } else {
-            syntax_text
-        };
-        unsafe {
-            RawPropertyRule {
-                name: glib::g_strdup(name),
-                initial_value: if has_initial != 0 {
-                    glib::g_strdup(initial_value)
-                } else {
-                    ptr::null_mut()
-                },
-                syntax_text: glib::g_strdup(syntax_text),
-                syntax: Some(Box::new(syntax)),
-                inherits,
-                has_initial,
-            }
+        RawPropertyRule {
+            name: glib::strdup(name),
+            initial_value: initial_value
+                .filter(|_| has_initial)
+                .map_or(ptr::null_mut(), glib::strdup),
+            syntax_text: glib::strdup(syntax_text),
+            syntax: Some(Box::new(syntax)),
+            inherits: glib::boolean(inherits),
+            has_initial: glib::boolean(has_initial),
         }
     }
 

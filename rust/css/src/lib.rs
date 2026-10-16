@@ -69,10 +69,13 @@ pub use content::append_unescaped;
 pub use counter::list_style_serialize;
 pub use declarations::{named_declaration_valid, named_property_supported};
 pub use element_state::node_dir;
+pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target_fragment};
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
     MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
-    Selector, SelectorList, set_font_alias,
+    RegisterError, Registration, Selector, SelectorList, clear_registered_properties,
+    register_property, set_active_node, set_focus_node, set_focus_visible_node, set_font_alias,
+    set_fullscreen_node, set_hover_node,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
@@ -96,7 +99,11 @@ pub use inline::{
     get as inline_style_get, longhand_names as inline_style_longhands, mask_shorthand_serialize,
     serialize as inline_style_serialize, set as inline_style_set,
 };
+pub use matcher::{clear_defined_elements, register_defined_element};
 pub use prop::Prop;
+pub use restyle::{
+    attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_restyle_dirty,
+};
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};

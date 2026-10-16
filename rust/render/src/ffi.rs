@@ -115,9 +115,6 @@ const _: () = assert!(
 );
 
 unsafe extern "C" {
-    fn ns_css_set_viewport(vw_px: f64, vh_px: f64);
-    fn ns_css_set_focus_node(node: *const NsNode) -> *const NsNode;
-    fn ns_css_set_hover_node(node: *const NsNode) -> *const NsNode;
     fn ns_css_set_render_zoom(zoom: f64);
     fn ns_css_selector_cache_begin();
     fn ns_css_selector_cache_end();
@@ -553,10 +550,10 @@ fn relayout(
     let clock = || if timed { now_us() } else { 0 };
 
     let viewport_width = c.viewport_width;
+    southstar_css_media::set_base_viewport(viewport_width, c.viewport_height);
     unsafe {
-        ns_css_set_viewport(viewport_width, c.viewport_height);
-        ns_css_set_focus_node(c.focused_input);
-        ns_css_set_hover_node(c.hover_node);
+        southstar_css::set_focus_node(Node::from_ptr(c.focused_input));
+        southstar_css::set_hover_node(Node::from_ptr(c.hover_node));
     }
     record_page_state(c);
 
@@ -672,8 +669,8 @@ fn relayout(
         if cache_selectors {
             ns_css_selector_cache_end();
         }
-        ns_css_set_focus_node(ptr::null());
-        ns_css_set_hover_node(ptr::null());
+        southstar_css::set_focus_node(None);
+        southstar_css::set_hover_node(None);
         if !c.js.is_null() {
             ns_js_set_style_table(c.js, styles);
             ns_js_set_layout_root(c.js, layout);

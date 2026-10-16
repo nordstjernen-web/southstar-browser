@@ -67,7 +67,6 @@ unsafe extern "C" {
         w: *mut f64,
         h: *mut f64,
     );
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
 }
 
@@ -200,7 +199,7 @@ pub(crate) fn visual_padding_box(b: BoxRef<'_>) -> Rect {
 }
 
 pub(crate) fn style_keyword(b: BoxRef<'_>, property: &CStr) -> Option<&'static CStr> {
-    let prop = unsafe { ns_css_prop_id(property.as_ptr()) };
+    let prop = southstar_css::Prop::from_name(property.to_bytes()).map_or(-1, |p| p.id() as c_int);
     let keyword = unsafe { ns_style_keyword(b.style(), prop) };
     (!keyword.is_null()).then(|| unsafe { CStr::from_ptr(keyword) })
 }

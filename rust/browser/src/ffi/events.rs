@@ -180,7 +180,6 @@ unsafe extern "C" {
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
     fn ns_render_page_uses_hover() -> GBoolean;
     fn ns_render_page_uses_active() -> GBoolean;
-    fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode;
     fn ns_video_url_is_inline(url: *const c_char) -> GBoolean;
     fn ns_video_cache_toggle(cache: *mut c_void, v: *mut c_void, now_us: i64) -> GBoolean;
     fn g_utf8_prev_char(p: *const c_char) -> *const c_char;
@@ -567,7 +566,7 @@ pub fn page_uses_active() -> bool {
 }
 
 pub fn set_active_node(node: Option<Node<'_>>) -> bool {
-    !unsafe { ns_css_set_active_node(Node::ptr_or_null(node)) }.is_null()
+    southstar_css::set_active_node(node).is_some()
 }
 
 pub fn video_url_is_inline(url: &CStr) -> bool {

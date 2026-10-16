@@ -168,7 +168,6 @@ unsafe extern "C" {
     fn ns_js_unpin_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_sweep_orphans(js: *mut NsJs);
-    fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
 }
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
@@ -468,7 +467,7 @@ pub(crate) fn new_text(text: &[u8]) -> Node<'static> {
 }
 
 pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr) {
-    unsafe { ns_css_mark_attr_dirty(node.as_mut_ptr(), name.as_ptr(), core::ptr::null()) };
+    southstar_css::mark_attr_dirty(node, Some(name.to_bytes()), None);
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, target: Node<'_>, kind: &CStr) {

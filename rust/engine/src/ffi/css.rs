@@ -55,7 +55,6 @@ unsafe extern "C" {
     fn ns_css_set_frame_viewport_cb(cb: FrameViewportCb);
     fn ns_css_relayout_enter();
     fn ns_css_relayout_leave();
-    fn ns_css_set_doc_base(base: *const c_char);
     fn ns_css_compute(
         doc: *mut NsNode,
         sheets: *const *const c_void,
@@ -274,7 +273,7 @@ impl CssScope {
         unsafe {
             ns_css_set_frame_viewport_cb(on_frame_viewport);
             ns_css_relayout_enter();
-            ns_css_set_doc_base(ptr_or_null(base));
+            southstar_css::set_doc_base(base.map(CStr::to_bytes));
             ns_css_style_element_cache_begin();
         }
         CssScope

@@ -43,7 +43,6 @@ unsafe extern "C" {
     fn ns_js_popover_removing(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_log_enabled(js: *const NsJs) -> GBoolean;
     fn ns_js_log_line(js: *mut NsJs, line: *const c_char);
-    fn ns_css_register_defined_element(tag: *const c_char);
 }
 
 fn c_string(text: &str) -> CString {
@@ -129,8 +128,7 @@ pub(crate) fn log_line(js: Js, line: &str) {
 }
 
 pub(crate) fn register_defined_element(name: &str) {
-    let name = c_string(name);
-    unsafe { ns_css_register_defined_element(name.as_ptr()) }
+    southstar_css::register_defined_element(c_string(name).to_bytes());
 }
 
 #[unsafe(no_mangle)]

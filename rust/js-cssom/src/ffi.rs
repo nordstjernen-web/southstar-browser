@@ -212,13 +212,6 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn ns_style_overflow_keyword(s: *const Style, axis: c_int) -> *const c_char;
 
-    fn ns_css_register_property(
-        name: *const c_char,
-        syntax_text: *const c_char,
-        inherits: GBoolean,
-        initial_value: *const c_char,
-        has_initial: GBoolean,
-    ) -> c_int;
     fn ns_css_anim_lists(
         style: *const Style,
         is_animation: GBoolean,
@@ -725,24 +718,19 @@ pub(crate) fn register_property(
     initial: Option<&str>,
     has_initial: bool,
 ) -> RegisterStatus {
-    let name = name.map(|n| c_string(n.as_bytes()));
-    let syntax = c_string(syntax.as_bytes());
-    let initial = initial.map(|i| c_string(i.as_bytes()));
-    let status = unsafe {
-        ns_css_register_property(
-            opt_ptr(&name),
-            syntax.as_ptr(),
-            glib::boolean(inherits),
-            opt_ptr(&initial),
-            glib::boolean(has_initial),
-        )
+    let registration = css_engine::Registration {
+        name: name.map(until_nul),
+        syntax: until_nul(syntax),
+        inherits,
+        initial: initial.map(until_nul),
+        has_initial,
     };
-    match status {
-        0 => RegisterStatus::Ok,
-        1 => RegisterStatus::BadName,
-        2 => RegisterStatus::BadSyntax,
-        4 => RegisterStatus::Exists,
-        _ => RegisterStatus::BadInitial,
+    match css_engine::register_property(&registration) {
+        Ok(()) => RegisterStatus::Ok,
+        Err(css_engine::RegisterError::BadName) => RegisterStatus::BadName,
+        Err(css_engine::RegisterError::BadSyntax) => RegisterStatus::BadSyntax,
+        Err(css_engine::RegisterError::Exists) => RegisterStatus::Exists,
+        Err(css_engine::RegisterError::BadInitial) => RegisterStatus::BadInitial,
     }
 }
 

@@ -8,8 +8,6 @@ use std::ffi::CString;
 
 use southstar_glib::GBoolean;
 
-use crate::element_state;
-
 const RTL_SCRIPTS: [c_int; 7] = [19, 2, 34, 37, 66, 90, 95];
 
 unsafe extern "C" {
@@ -37,10 +35,6 @@ fn c_string(text: &[u8]) -> CString {
 
 fn nul_free_or_empty(text: &[u8]) -> &[u8] {
     if text.contains(&0) { b"" } else { text }
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
 pub(crate) fn unichar_is_rtl_script(c: u32) -> bool {
@@ -74,26 +68,4 @@ pub(crate) fn regex_matches_whole(pattern: Option<&[u8]>, value: &[u8]) -> bool 
     let matched = unsafe { g_regex_match(regex, value.as_ptr(), 0, ptr::null_mut()) != 0 };
     unsafe { g_regex_unref(regex) };
     matched
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_set_target_fragment(fragment: *const c_char) {
-    element_state::set_target_fragment(unsafe { bytes(fragment) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_mark_visited(abs_url: *const c_char) {
-    if let Some(url) = unsafe { bytes(abs_url) } {
-        element_state::mark_visited(url);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_set_doc_base(base_url: *const c_char) {
-    element_state::set_doc_base(unsafe { bytes(base_url) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_set_doc_language(lang: *const c_char) {
-    element_state::set_doc_language(unsafe { bytes(lang) });
 }

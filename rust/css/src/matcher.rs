@@ -118,7 +118,7 @@ fn defined() -> MutexGuard<'static, Option<HashSet<Vec<u8>>>> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-pub(crate) fn register_defined_element(tag: &[u8]) {
+pub fn register_defined_element(tag: &[u8]) {
     if !tag.is_empty() {
         defined()
             .get_or_insert_with(HashSet::new)
@@ -126,7 +126,7 @@ pub(crate) fn register_defined_element(tag: &[u8]) {
     }
 }
 
-pub(crate) fn clear_defined_elements() {
+pub fn clear_defined_elements() {
     *defined() = None;
 }
 

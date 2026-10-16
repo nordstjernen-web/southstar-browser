@@ -26,10 +26,6 @@ unsafe extern "C" {
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_js_main_context(js: *const NsJs) -> ContextHandle;
     fn ns_js_main_realm(js: *const NsJs) -> ContextHandle;
-    fn ns_css_mark_childlist_dirty(parent: *mut NsNode, added: *mut NsNode);
-    fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
-    fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
-    fn ns_css_attr_may_affect_style(target: *const NsNode, name: *const c_char) -> GBoolean;
     fn ns_mut_record_emit(
         js: *mut NsJs,
         kind: *const c_char,
@@ -178,19 +174,23 @@ pub(crate) fn element_value(scope: &mut Scope<'_>, node: Element) -> Option<Valu
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
-    unsafe { ns_css_mark_childlist_dirty(parent.as_mut_ptr(), raw(added)) };
+    southstar_css::mark_childlist_dirty(parent, added);
 }
 
 pub(crate) fn mark_attr_dirty(target: Option<Element>, name: Option<&CStr>, old: Option<&CStr>) {
-    unsafe { ns_css_mark_attr_dirty(raw(target), c_ptr(name), c_ptr(old)) };
+    if let Some(target) = target {
+        southstar_css::mark_attr_dirty(target, name.map(CStr::to_bytes), old.map(CStr::to_bytes));
+    }
 }
 
 pub(crate) fn mark_restyle_dirty(node: Option<Element>) {
-    unsafe { ns_css_mark_restyle_dirty(raw(node)) };
+    if let Some(node) = node {
+        southstar_css::mark_restyle_dirty(node);
+    }
 }
 
-pub(crate) fn attr_may_affect_style(target: Element, name: &CStr) -> bool {
-    unsafe { ns_css_attr_may_affect_style(target.as_ptr(), name.as_ptr()) != 0 }
+pub(crate) fn attr_may_affect_style(_target: Element, name: &CStr) -> bool {
+    southstar_css::attr_may_affect_style(Some(name.to_bytes()))
 }
 
 pub(crate) fn emit_attributes(
@@ -409,7 +409,9 @@ pub unsafe extern "C" fn ns_js_record_child_change(
 ) {
     unsafe {
         ns_js_index_child_change(js, parent, added, removed);
-        ns_css_mark_childlist_dirty(parent, added);
+        if let Some(parent) = node(parent) {
+            mark_childlist_dirty(parent, node(added));
+        }
         ns_mut_record_emit(
             js,
             c"childList".as_ptr(),
@@ -441,7 +443,9 @@ pub unsafe extern "C" fn ns_js_record_child_change_arrays(
         None => qcache_invalidate(Js::of(js)),
     }
     unsafe {
-        ns_css_mark_childlist_dirty(parent, raw(added_nodes.first().copied()));
+        if let Some(parent) = node(parent) {
+            mark_childlist_dirty(parent, added_nodes.first().copied());
+        }
         ns_mut_record_emit_child_list_arrays(
             js,
             parent,

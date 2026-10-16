@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-css-syntax = { path = "../css-syntax" }
 southstar-dom = { path = "../dom" }

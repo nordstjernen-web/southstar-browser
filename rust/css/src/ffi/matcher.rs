@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::c_void;
 use std::thread::LocalKey;
 
 use southstar_dom::{Node, NsNode, WeakNode};
@@ -27,15 +27,30 @@ fn load<'a>(slot: &'static Slot) -> Option<Node<'a>> {
     slot.get().and_then(WeakNode::get)
 }
 
-fn store(slot: &'static Slot, node: Option<Node<'_>>) -> *const NsNode {
+fn store<'a>(slot: &'static Slot, node: Option<Node<'_>>) -> Option<Node<'a>> {
     let previous = load(slot);
     slot.set(node.map(Node::downgrade));
-    Node::ptr_or_null(previous)
+    previous
 }
 
-fn node_at<'a>(node: *const NsNode) -> Option<Node<'a>> {
-    // SAFETY: the C callers pass null or a node of this thread's store.
-    unsafe { Node::from_ptr(node) }
+pub fn set_focus_node<'a>(node: Option<Node<'_>>) -> Option<Node<'a>> {
+    store(&FOCUS, node)
+}
+
+pub fn set_focus_visible_node(node: Option<Node<'_>>) {
+    store(&FOCUS_VISIBLE, node);
+}
+
+pub fn set_hover_node<'a>(node: Option<Node<'_>>) -> Option<Node<'a>> {
+    store(&HOVER, node)
+}
+
+pub fn set_active_node<'a>(node: Option<Node<'_>>) -> Option<Node<'a>> {
+    store(&ACTIVE, node)
+}
+
+pub fn set_fullscreen_node<'a>(node: Option<Node<'_>>) -> Option<Node<'a>> {
+    store(&FULLSCREEN, node)
 }
 
 pub(crate) fn match_scope<'a>() -> Option<Node<'a>> {
@@ -80,43 +95,6 @@ pub(crate) fn active_node<'a>() -> Option<Node<'a>> {
 
 pub(crate) fn fullscreen_node<'a>() -> Option<Node<'a>> {
     load(&FULLSCREEN)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_focus_node(node: *const NsNode) -> *const NsNode {
-    store(&FOCUS, node_at(node))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_focus_visible_node(node: *const NsNode) {
-    store(&FOCUS_VISIBLE, node_at(node));
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_hover_node(node: *const NsNode) -> *const NsNode {
-    store(&HOVER, node_at(node))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode {
-    store(&ACTIVE, node_at(node))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_fullscreen_node(node: *const NsNode) -> *const NsNode {
-    store(&FULLSCREEN, node_at(node))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_register_defined_element(tag: *const c_char) {
-    if !tag.is_null() {
-        matcher::register_defined_element(unsafe { CStr::from_ptr(tag) }.to_bytes());
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_clear_defined_elements() {
-    matcher::clear_defined_elements();
 }
 
 #[unsafe(no_mangle)]

@@ -564,7 +564,7 @@ impl Prop {
         Prop::WebkitTextFillColor,
     ];
 
-    pub(crate) fn name(self) -> &'static [u8] {
+    pub fn name(self) -> &'static [u8] {
         self.c_name().to_bytes()
     }
 
@@ -580,7 +580,7 @@ impl Prop {
         names().get(name.to_ascii_lowercase().as_slice()).copied()
     }
 
-    pub(crate) fn inherits(self) -> bool {
+    pub fn inherits(self) -> bool {
         matches!(
             self,
             Prop::Color

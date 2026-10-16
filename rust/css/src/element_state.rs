@@ -84,11 +84,11 @@ fn non_empty(value: Option<&[u8]>) -> Option<Vec<u8>> {
     value.filter(|v| !v.is_empty()).map(<[u8]>::to_vec)
 }
 
-pub(crate) fn set_target_fragment(fragment: Option<&[u8]>) {
+pub fn set_target_fragment(fragment: Option<&[u8]>) {
     *lock(&TARGET_FRAGMENT) = non_empty(fragment);
 }
 
-pub(crate) fn mark_visited(url: &[u8]) {
+pub fn mark_visited(url: &[u8]) {
     if url.is_empty() {
         return;
     }
@@ -97,11 +97,11 @@ pub(crate) fn mark_visited(url: &[u8]) {
         .insert(url.to_vec());
 }
 
-pub(crate) fn set_doc_base(base: Option<&[u8]>) {
+pub fn set_doc_base(base: Option<&[u8]>) {
     *lock(&DOC_BASE) = non_empty(base);
 }
 
-pub(crate) fn set_doc_language(lang: Option<&[u8]>) {
+pub fn set_doc_language(lang: Option<&[u8]>) {
     *lock(&DOC_LANGUAGE) = non_empty(lang);
 }
 

@@ -3,22 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{c_char, c_int};
 use core::ptr;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GHashTable};
 
 use super::selector_view::SheetRef;
 use super::sheet::{RawPropertyRule, RawSheet, property_rule_clear};
-
-const REGISTER_OK: c_int = 0;
-const REGISTER_BAD_NAME: c_int = 1;
-const REGISTER_BAD_SYNTAX: c_int = 2;
-const REGISTER_BAD_INITIAL: c_int = 3;
-const REGISTER_EXISTS: c_int = 4;
 
 struct Registered(Box<RawPropertyRule>);
 
@@ -64,40 +57,43 @@ fn syntax_rejects_initial(
             && !initial_value.is_some_and(|value| prop_syntax::initial_valid(syntax, value)))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_register_property(
-    name: *const c_char,
-    syntax_text: *const c_char,
-    inherits: GBoolean,
-    initial_value: *const c_char,
-    has_initial: GBoolean,
-) -> c_int {
-    let Some(key) = (unsafe { glib::bytes(name) }).filter(|name| valid_name(name)) else {
-        return REGISTER_BAD_NAME;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegisterError {
+    BadName,
+    BadSyntax,
+    BadInitial,
+    Exists,
+}
+
+pub struct Registration<'a> {
+    pub name: Option<&'a [u8]>,
+    pub syntax: &'a [u8],
+    pub inherits: bool,
+    pub initial: Option<&'a [u8]>,
+    pub has_initial: bool,
+}
+
+pub fn register_property(registration: &Registration<'_>) -> Result<(), RegisterError> {
+    let Some(key) = registration.name.filter(|name| valid_name(name)) else {
+        return Err(RegisterError::BadName);
     };
     if registry().rules.contains_key(key) {
-        return REGISTER_EXISTS;
+        return Err(RegisterError::Exists);
     }
-    let Some(syntax) = unsafe { glib::bytes(syntax_text) }.and_then(prop_syntax::parse) else {
-        return REGISTER_BAD_SYNTAX;
+    let Some(syntax) = prop_syntax::parse(registration.syntax) else {
+        return Err(RegisterError::BadSyntax);
     };
-    if syntax_rejects_initial(
-        &syntax,
-        unsafe { glib::bytes(initial_value) },
-        has_initial != 0,
-    ) {
-        return REGISTER_BAD_INITIAL;
+    if syntax_rejects_initial(&syntax, registration.initial, registration.has_initial) {
+        return Err(RegisterError::BadInitial);
     }
-    let rule = unsafe {
-        RawPropertyRule::registered(
-            name,
-            syntax_text,
-            syntax,
-            inherits,
-            initial_value,
-            has_initial,
-        )
-    };
+    let rule = RawPropertyRule::registered(
+        key,
+        registration.syntax,
+        syntax,
+        registration.inherits,
+        registration.initial,
+        registration.has_initial,
+    );
     let mut registry = registry();
     let replaced = registry
         .rules
@@ -105,11 +101,10 @@ pub unsafe extern "C" fn ns_css_register_property(
     registry.serial += 1;
     drop(registry);
     drop(replaced);
-    REGISTER_OK
+    Ok(())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_clear_registered_properties() {
+pub fn clear_registered_properties() {
     let mut registry = registry();
     if registry.rules.is_empty() {
         return;

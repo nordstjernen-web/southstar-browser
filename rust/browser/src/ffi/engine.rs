@@ -93,10 +93,6 @@ unsafe extern "C" {
     fn ns_render_page_rule() -> *const c_void;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const c_void);
-    fn ns_css_set_viewport(vw: f64, vh: f64);
-    fn ns_css_set_doc_language(lang: *const c_char);
-    fn ns_css_set_target_fragment(fragment: *const c_char);
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
@@ -471,15 +467,15 @@ pub fn apply_page_rule(setup: &mut PrintSetup) -> bool {
 }
 
 pub fn css_set_viewport(vw: f64, vh: f64) {
-    unsafe { ns_css_set_viewport(vw, vh) };
+    southstar_css_media::set_base_viewport(vw, vh);
 }
 
 pub fn css_set_doc_language(lang: Option<&CStr>) {
-    unsafe { ns_css_set_doc_language(opt(lang)) };
+    southstar_css::set_doc_language(lang.map(CStr::to_bytes));
 }
 
 pub fn css_set_target_fragment(fragment: Option<&CStr>) {
-    unsafe { ns_css_set_target_fragment(opt(fragment)) };
+    southstar_css::set_target_fragment(fragment.map(CStr::to_bytes));
 }
 
 pub fn css_device_pixel_ratio() -> f64 {
@@ -499,7 +495,7 @@ pub fn css_set_active_node(node: Option<Node<'_>>) {
 }
 
 pub fn css_prop_id(name: &CStr) -> c_int {
-    unsafe { ns_css_prop_id(name.as_ptr()) }
+    southstar_css::Prop::from_name(name.to_bytes()).map_or(-1, |prop| prop.id() as c_int)
 }
 
 pub fn style_keyword(b: BoxRef<'_>, prop: c_int) -> Option<&CStr> {

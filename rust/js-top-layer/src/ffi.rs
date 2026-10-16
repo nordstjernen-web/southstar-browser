@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -58,7 +57,6 @@ unsafe extern "C" {
     fn ns_node_is_focusable(el: *const NsNode) -> GBoolean;
     fn ns_node_tabindex(el: *const NsNode, out: *mut c_int) -> GBoolean;
     fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
-    fn ns_css_mark_attr_dirty(target: *mut NsNode, name: *const c_char, old_value: *const c_char);
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_node_arm_js_invalidate(n: *mut NsNode);
 }
@@ -327,13 +325,7 @@ pub(crate) fn assigned_slot(n: Element) -> Option<Element> {
 }
 
 pub(crate) fn mark_attr_dirty(el: Element, name: &CStr, old_value: Option<&CStr>) {
-    unsafe {
-        ns_css_mark_attr_dirty(
-            el.as_mut_ptr(),
-            name.as_ptr(),
-            old_value.map_or(ptr::null(), CStr::as_ptr),
-        )
-    };
+    southstar_css::mark_attr_dirty(el, Some(name.to_bytes()), old_value.map(CStr::to_bytes));
 }
 
 pub(crate) fn is_submit_trigger(el: Element) -> bool {

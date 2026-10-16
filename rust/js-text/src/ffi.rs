@@ -44,7 +44,6 @@ unsafe extern "C" {
     );
     fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
     fn ns_qcache_invalidate(js: *const NsJs);
-    fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
     fn g_utf8_strup(text: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_strdown(text: *const c_char, len: isize) -> *mut c_char;
     fn g_unichar_totitle(c: u32) -> u32;
@@ -108,7 +107,7 @@ pub(crate) fn qcache_invalidate(js: Js) {
 }
 
 pub(crate) fn mark_restyle_dirty(node: Element) {
-    unsafe { ns_css_mark_restyle_dirty(node.as_mut_ptr()) };
+    southstar_css::mark_restyle_dirty(node);
 }
 
 pub(crate) fn orphan_node(js: Js, node: Element) {

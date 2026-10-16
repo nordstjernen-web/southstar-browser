@@ -47,7 +47,6 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_css_mark_childlist_dirty(parent: *mut NsNode, added: *mut NsNode);
     fn ns_ce_disconnect_subtree(js: *mut NsJs, root: *mut NsNode);
     fn ns_ce_upgrade_subtree_all(js: *mut NsJs, root: *mut NsNode);
     fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
@@ -175,7 +174,7 @@ pub(crate) fn emit_child_list(
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
-    unsafe { ns_css_mark_childlist_dirty(parent.as_mut_ptr(), raw(added)) };
+    southstar_css::mark_childlist_dirty(parent, added);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {

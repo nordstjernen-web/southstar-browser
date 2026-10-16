@@ -68,7 +68,6 @@ unsafe extern "C" {
     fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
     fn ns_js_halted(js: *const NsJs) -> GBoolean;
     fn ns_js_in_pump(js: *const NsJs) -> GBoolean;
-    fn ns_css_mark_restyle_dirty(parent: *mut NsNode);
 
     fn ns_element_insert_before_single(
         js: *mut NsJs,
@@ -138,7 +137,7 @@ pub(crate) fn dom_exception(
 }
 
 pub(crate) fn mark_restyle_dirty(node: Element) {
-    unsafe { ns_css_mark_restyle_dirty(mut_ptr(node)) };
+    southstar_css::mark_restyle_dirty(node);
 }
 
 pub(crate) fn parse_color(text: &[u8]) -> Option<(u8, u8, u8, u8)> {

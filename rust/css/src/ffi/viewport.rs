@@ -25,11 +25,6 @@ pub(super) fn frame_viewport() -> Option<FrameViewport> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_viewport(vw_px: f64, vh_px: f64) {
-    southstar_css_media::set_base_viewport(vw_px, vh_px);
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_frame_viewport_cb(cb: Option<FrameViewport>) {
     *FRAME_VIEWPORT
         .lock()

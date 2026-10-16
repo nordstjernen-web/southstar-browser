@@ -10,11 +10,8 @@ use southstar_glib::{self as glib, GBoolean};
 
 use super::value::{self, NsCssValue};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
+use crate::prop::Prop;
 use crate::timing::Timing;
-
-unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
-}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -142,7 +139,10 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
 
 fn prop_ids() -> &'static [c_int; 17] {
     static IDS: OnceLock<[c_int; 17]> = OnceLock::new();
-    IDS.get_or_init(|| Longhand::ALL.map(|lh| unsafe { ns_css_prop_id(lh.name().as_ptr()) }))
+    IDS.get_or_init(|| {
+        Longhand::ALL
+            .map(|lh| Prop::from_name(lh.name().to_bytes()).map_or(-1, |p| p.id() as c_int))
+    })
 }
 
 fn prop_of(lh: Longhand) -> c_int {

@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/css has a typed Rust API for the state other crates set and the
+  marks they leave: the focus, hover, active, focus-visible and
+  fullscreen nodes, the document base, language and :target fragment,
+  :visited URLs, restyle marks for attribute, child-list and inline-style
+  changes, :defined custom elements, CSS.registerProperty() and property
+  ids, names and inheritance. Twenty crates -- the DOM and form bindings,
+  focus, frames, mutation observers, the browser and headless engines,
+  render, print, selection, style and the animation engine -- call it
+  directly with Node and byte-slice arguments instead of 22 ns_css_*
+  exports taking raw node and C-string pointers.
 * The style pass in rust/css no longer runs on GLib arrays and its own C
   ABI. Each element's matched declarations, custom properties and
   var()-dependent values are collected into Rust Vecs instead of GArrays

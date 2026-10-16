@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{c_char, c_int};
 use core::ptr;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{self as glib};
 
 use super::animation::RawList;
 use super::value::{
@@ -21,27 +21,6 @@ pub(crate) fn id_of(prop: Prop) -> c_int {
 
 pub(crate) fn prop_of(id: c_int) -> Option<Prop> {
     usize::try_from(id).ok().and_then(Prop::from_id)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_prop_id(name: *const c_char) -> c_int {
-    unsafe { bytes(name) }
-        .and_then(Prop::from_name)
-        .map_or(-1, id_of)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_prop_name(prop: c_int) -> *const c_char {
-    prop_of(prop).map_or(ptr::null(), |p| p.c_name().as_ptr())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_prop_inherits(prop: c_int) -> GBoolean {
-    glib::boolean(prop_of(prop).is_some_and(Prop::inherits))
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
 fn strdup_opt(text: Option<Vec<u8>>) -> *mut c_char {
@@ -101,11 +80,4 @@ pub(crate) fn to_c(v: Value) -> *mut NsCssValue {
         (*raw).next_layer = v.next_layer.map_or(ptr::null_mut(), |next| to_c(*next));
     }
     raw
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_initial_value_text(name: *const c_char) -> *const c_char {
-    unsafe { bytes(name) }
-        .and_then(crate::initial::initial_value)
-        .map_or(ptr::null(), CStr::as_ptr)
 }

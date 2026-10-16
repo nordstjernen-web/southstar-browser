@@ -901,18 +901,18 @@ pub(crate) fn clear_dirty() {
     });
 }
 
-pub(crate) fn mark_restyle_dirty(node: Node<'_>) {
+pub fn mark_restyle_dirty(node: Node<'_>) {
     with_state(|s| s.mark(node));
 }
 
-pub(crate) fn mark_childlist_dirty(parent: Node<'_>, added: Option<Node<'_>>) {
+pub fn mark_childlist_dirty(parent: Node<'_>, added: Option<Node<'_>>) {
     with_state(|s| s.mark_childlist(parent, added));
 }
 
-pub(crate) fn mark_attr_dirty(target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>) {
+pub fn mark_attr_dirty(target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>) {
     with_state(|s| s.mark_attr(target, name, old));
 }
 
-pub(crate) fn attr_may_affect_style(name: Option<&[u8]>) -> bool {
+pub fn attr_may_affect_style(name: Option<&[u8]>) -> bool {
     with_state(|s| s.attr_may_affect_style(name))
 }

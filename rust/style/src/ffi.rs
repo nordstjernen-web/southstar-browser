@@ -209,7 +209,6 @@ pub struct RectValue {
 }
 
 unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
     fn ns_css_resolve_style_vars(text: *const c_char, style: *const Style) -> *mut c_char;
@@ -234,7 +233,7 @@ impl Prop {
     fn id(&self) -> Option<usize> {
         *self
             .id
-            .get_or_init(|| usize::try_from(unsafe { ns_css_prop_id(self.name.as_ptr()) }).ok())
+            .get_or_init(|| PropId::from_name(self.name.to_bytes()).map(PropId::id))
     }
 }
 

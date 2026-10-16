@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use core::ptr;
 use std::sync::OnceLock;
 
@@ -30,7 +30,6 @@ struct NsSelectionRun {
 }
 
 unsafe extern "C" {
-    fn ns_css_prop_id(name: *const c_char) -> c_int;
     fn ns_css_keyword_is(v: *const c_void, kw: *const c_char) -> GBoolean;
     fn ns_paint_inline_xy_to_byte(
         b: *const NsBox,
@@ -58,7 +57,9 @@ unsafe extern "C" {
 
 fn user_select_prop() -> usize {
     static PROP: OnceLock<usize> = OnceLock::new();
-    *PROP.get_or_init(|| unsafe { ns_css_prop_id(c"user-select".as_ptr()) } as usize)
+    *PROP.get_or_init(|| {
+        southstar_css::Prop::from_name(b"user-select").map_or(usize::MAX, |p| p.id())
+    })
 }
 
 pub fn user_select_is_none(b: BoxRef<'_>) -> Option<bool> {
