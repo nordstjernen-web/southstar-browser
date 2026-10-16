@@ -586,7 +586,7 @@ pub(crate) fn interpolate(a: &Value, b: &Value, t: f64) -> Option<Value> {
     Some(Value::of(body))
 }
 
-const COLOR_PROPS: [&[u8]; 22] = [
+const COLOR_PROPS: [&[u8]; 23] = [
     b"color",
     b"background-color",
     b"border-top-color",
@@ -605,6 +605,7 @@ const COLOR_PROPS: [&[u8]; 22] = [
     b"flood-color",
     b"lighting-color",
     b"text-emphasis-color",
+    b"-webkit-text-fill-color",
     b"border-block-start-color",
     b"border-block-end-color",
     b"border-inline-start-color",

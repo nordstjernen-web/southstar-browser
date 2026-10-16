@@ -282,10 +282,11 @@ pub enum Prop {
     Contain,
     WillChange,
     ShapeOutside,
+    WebkitTextFillColor,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 274] = [
+    pub(crate) const ALL: [Prop; 275] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -560,6 +561,7 @@ impl Prop {
         Prop::Contain,
         Prop::WillChange,
         Prop::ShapeOutside,
+        Prop::WebkitTextFillColor,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -633,6 +635,7 @@ impl Prop {
                 | Prop::WordBreak
                 | Prop::OverflowWrap
                 | Prop::CaretColor
+                | Prop::WebkitTextFillColor
                 | Prop::AccentColor
                 | Prop::Fill
                 | Prop::FillOpacity
@@ -932,6 +935,7 @@ impl Prop {
             Prop::Contain => c"contain",
             Prop::WillChange => c"will-change",
             Prop::ShapeOutside => c"shape-outside",
+            Prop::WebkitTextFillColor => c"-webkit-text-fill-color",
         }
     }
 }

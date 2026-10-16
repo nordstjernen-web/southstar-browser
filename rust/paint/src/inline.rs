@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::{FRAC_PI_2, PI};
-use core::ffi::CStr;
+use core::ffi::{CStr, c_int};
+use core::ops::Range;
 
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind as k};
@@ -16,7 +17,7 @@ use crate::decor::{
 };
 use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface};
 use crate::ffi::engine::{self, FontMetrics};
-use crate::ffi::pango::{self, AttrList, Attribute, Layout, Line, Rectangle};
+use crate::ffi::pango::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
 use crate::radii::{CornerRadii, rounded_rect_path};
 use crate::state;
 use crate::text::{
@@ -126,7 +127,7 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
             len,
         );
     }
-    if let Some(c) = fl.get(P::Color).and_then(ValueRef::color) {
+    if let Some(c) = fl.text_fill_color().and_then(ValueRef::color) {
         attrs.insert_range(
             Some(Attribute::foreground(c16(c[0]), c16(c[1]), c16(c[2]))),
             start_u,
@@ -1142,6 +1143,10 @@ fn paint_inline_element_boxes(cr: Cr, b: BoxRef<'_>, layout: &Layout, text_x: f6
             box_style: st,
             raised: inline_element_is_raised(b, r),
         };
+        let clip_to_text = crate::decor::background_clips_to_text(st);
+        if clip_to_text {
+            cr.push_group();
+        }
         inline_range_fragments(b, layout, y_origin, &range, |f| {
             let snapped = Fragment {
                 x0: snap_device_x(cr, text_x + f.x0),
@@ -1153,6 +1158,18 @@ fn paint_inline_element_boxes(cr: Cr, b: BoxRef<'_>, layout: &Layout, text_x: f6
             };
             paint_inline_element_fragment(cr, r, &snapped);
         });
+        if clip_to_text {
+            let background = cr.pop_group();
+            let start = c_int::try_from(r.start).unwrap_or(c_int::MAX);
+            let end = c_int::try_from(r.start + r.len).unwrap_or(c_int::MAX);
+            cr.save();
+            cr.new_path();
+            layout_range_path(cr, layout, text_x, y_origin, start..end);
+            cr.clip();
+            cr.set_source(&background);
+            cr.paint();
+            cr.restore();
+        }
     }
 }
 
@@ -1768,27 +1785,16 @@ fn paint_vertical(
     }
 }
 
-pub fn paint_inline(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
-    let Some(text) = b.text().filter(|t| !t.is_empty()) else {
-        return;
-    };
-    let _ = text;
-    let s = inherited_style(b);
-    let color = rgba_anim(
-        Some(b),
-        ANIM_TARGET_COLOR,
-        get(s, P::Color),
-        Rgba::new(0.07, 0.07, 0.07, 1.0),
-    );
-    if b.vertical_wm() != 0 {
-        paint_vertical(cr, b, s, color, highlight);
-        return;
-    }
-    let mut text_x = b.x();
+fn inline_text_x(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> f64 {
     let ti = engine::inline_text_indent_px(b, s, b.content_width());
-    if ti < 0.0 {
-        text_x += ti;
-    }
+    b.x() + ti.min(0.0)
+}
+
+fn inline_layout(
+    b: BoxRef<'_>,
+    s: Option<StyleRef<'_>>,
+    highlight: Option<&CStr>,
+) -> Option<Layout> {
     let cacheable = highlight.is_none_or(CStr::is_empty);
     let cached = if cacheable {
         unsafe { Layout::from_borrowed(b.paint_layout()) }
@@ -1797,16 +1803,60 @@ pub fn paint_inline(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     };
     let layout = match cached {
         Some(l) => l,
-        None => {
-            let Some(l) = paint_inline_make_layout(b, s, highlight) else {
-                return;
-            };
-            l
-        }
+        None => paint_inline_make_layout(b, s, highlight)?,
     };
     if cacheable && b.paint_layout().is_null() {
         b.set_paint_layout(layout.new_ref());
     }
+    Some(layout)
+}
+
+fn layout_range_path(cr: Cr, layout: &Layout, text_x: f64, y_origin: f64, range: Range<c_int>) {
+    let mut it = layout.iter();
+    loop {
+        let logical = it.line_logical_extents();
+        if let Some(line) = it.line() {
+            let x = text_x + f64::from(logical.x) / SCALE_F;
+            let baseline = y_origin + f64::from(it.baseline()) / SCALE_F;
+            line.range_path(cr, x, baseline, range.clone());
+        }
+        if !it.next_line() {
+            break;
+        }
+    }
+}
+
+pub fn text_path(cr: Cr, b: BoxRef<'_>) {
+    if b.text().is_none_or(|t| t.is_empty()) || b.vertical_wm() != 0 {
+        return;
+    }
+    let s = inherited_style(b);
+    let Some(layout) = inline_layout(b, s, None) else {
+        return;
+    };
+    let y_origin = b.y() + inline_y_offset_for_layout(b, &layout);
+    layout_range_path(cr, &layout, inline_text_x(b, s), y_origin, 0..c_int::MAX);
+}
+
+pub fn paint_inline(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
+    let Some(text) = b.text().filter(|t| !t.is_empty()) else {
+        return;
+    };
+    let _ = text;
+    let s = inherited_style(b);
+    let fallback = Rgba::new(0.07, 0.07, 0.07, 1.0);
+    let color = match get(s, P::WebkitTextFillColor).filter(|v| v.color().is_some()) {
+        Some(fill) => rgba_of(Some(fill), fallback),
+        None => rgba_anim(Some(b), ANIM_TARGET_COLOR, get(s, P::Color), fallback),
+    };
+    if b.vertical_wm() != 0 {
+        paint_vertical(cr, b, s, color, highlight);
+        return;
+    }
+    let text_x = inline_text_x(b, s);
+    let Some(layout) = inline_layout(b, s, highlight) else {
+        return;
+    };
     let y_offset = inline_y_offset_for_layout(b, &layout);
     let y_origin = b.y() + y_offset;
 

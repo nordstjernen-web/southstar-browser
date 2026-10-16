@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* background-clip: text (and -webkit-background-clip: text) paints the
+  background only inside the glyphs of the element's text, for blocks and
+  for inline elements, and -webkit-text-fill-color sets the colour text
+  is filled with. Gradient headlines (nodejs.org's "Run JavaScript
+  Everywhere", Tailwind's bg-clip-text text-transparent, vuejs.org's
+  tagline) showed a solid gradient rectangle or no text at all.
 * The legacy -webkit-linear-gradient(), -webkit-radial-gradient() and
   their repeating forms are understood, with their old conventions
   (angles measured from east, counter-clockwise; a bare side naming where
