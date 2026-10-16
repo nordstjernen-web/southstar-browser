@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Array.prototype.sort and TypedArray sort no longer abort the browser
+  when the compare function is inconsistent (returns random or
+  contradictory results). JavaScript leaves the order unspecified in
+  that case; the Rust sort the engine used detected the inconsistency
+  and panicked, which killed the tab on Zillow's homepage.
 * Changing an element's inline style, or animating it, restyles that
   element alone; its descendants are recomputed only when a value they
   inherit changes. Every style="" write (element.style.foo = ...) and
