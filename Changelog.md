@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Elements have an onerror property on HTMLElement.prototype (and on SVG
+  and MathML elements and the document), like every other event handler.
+  It was missing from the prototypes, so scripts that wrap the built-in
+  handler accessors failed: Yahoo's script-loading guard read
+  Object.getOwnPropertyDescriptor(HTMLElement.prototype, "onerror") and
+  threw on every script it inserted. window.onerror keeps its own
+  five-argument form.
 * Arial, Helvetica, Times New Roman and the generic serif and sans-serif
   families render in the metric-compatible fonts other browsers pick
   (Liberation Sans and Liberation Serif on most Linux systems). A family
