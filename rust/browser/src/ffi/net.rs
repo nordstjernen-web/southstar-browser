@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_char, c_int, c_long};
+use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Tree;
@@ -11,74 +11,13 @@ use southstar_dom::Tree;
 use super::glib::gstr_from;
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    _content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    _xframe_options: *mut c_char,
-    _x_content_type_options: *mut c_char,
-    _cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    _tls_warning: *mut c_char,
-    remote_ip: *mut c_char,
-    _next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-    security: c_int,
-    _redirect_count: c_int,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<NsResponse>() == 200 && core::mem::offset_of!(NsResponse, security) == 192
-);
-
 pub use southstar_js_runtime::api::NavigationTiming;
 
 unsafe extern "C" {
-    fn ns_engine_navigate_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        user_activated: GBoolean,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
-    fn ns_engine_navigate_post_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        user_activated: GBoolean,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
     fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
     fn ns_safebrowsing_allow_host(host: *const c_char);
     fn ns_safebrowsing_interstitial(url: *const c_char, host: *const c_char) -> *mut c_char;
     fn ns_pdf_document_html(data: *const u8, len: usize, url: *const c_char) -> *mut c_char;
-    fn g_byte_array_new() -> *mut GByteArray;
-    fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
-    fn g_clear_error(err: *mut *mut GError);
     fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_filename_to_uri(
         filename: *const c_char,
@@ -87,25 +26,13 @@ unsafe extern "C" {
     ) -> *mut c_char;
 }
 
-fn opt(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 fn take(p: *mut c_char) -> Option<GStr> {
     unsafe { GStr::take(p) }
 }
 
-fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
+pub use southstar_engine::Post;
 
-pub struct Post<'a> {
-    pub body: *const c_void,
-    pub len: usize,
-    pub content_type: Option<&'a CStr>,
-}
-
-pub struct Response(NonNull<NsResponse>);
+pub struct Response(southstar_net::Response);
 
 impl Response {
     pub fn navigate(
@@ -114,93 +41,61 @@ impl Response {
         user_activated: bool,
         post: Option<&Post<'_>>,
     ) -> Option<Response> {
-        let mut error: *mut GError = ptr::null_mut();
-        let resp = match post {
-            Some(post) => unsafe {
-                ns_engine_navigate_post_blocking(
-                    url.as_ptr(),
-                    opt(referrer),
-                    post.body,
-                    post.len,
-                    opt(post.content_type),
-                    glib::boolean(user_activated),
-                    &mut error,
-                )
-            },
-            None => unsafe {
-                ns_engine_navigate_blocking(
-                    url.as_ptr(),
-                    opt(referrer),
-                    glib::boolean(user_activated),
-                    &mut error,
-                )
-            },
-        };
-        unsafe { g_clear_error(&mut error) };
-        NonNull::new(resp).map(Response)
-    }
-
-    fn raw(&self) -> &NsResponse {
-        unsafe { self.0.as_ref() }
-    }
-
-    fn raw_mut(&mut self) -> &mut NsResponse {
-        unsafe { self.0.as_mut() }
+        southstar_engine::navigate_blocking(url, referrer, user_activated, post)
+            .ok()
+            .map(Response)
     }
 
     pub fn status(&self) -> c_long {
-        self.raw().status
+        self.0.status()
     }
 
     pub fn error(&self) -> Option<&CStr> {
-        text(self.raw().error)
+        self.0.error()
     }
 
     pub fn has_body(&self) -> bool {
-        !self.raw().body.is_null()
+        self.0.body().is_some()
     }
 
     pub fn body(&self) -> &[u8] {
-        match unsafe { self.raw().body.as_ref() } {
-            Some(body) => unsafe { glib::slice(body.data, body.len as usize) },
-            None => &[],
-        }
+        self.0.body().unwrap_or_default()
     }
 
     pub fn final_url(&self) -> Option<&CStr> {
-        text(self.raw().final_url)
+        self.0.final_url()
     }
 
     pub fn content_type(&self) -> Option<&CStr> {
-        text(self.raw().content_type)
+        self.0.content_type()
     }
 
     pub fn refresh(&self) -> Option<&CStr> {
-        text(self.raw().refresh)
+        self.0.refresh()
     }
 
     pub fn content_language(&self) -> Option<&CStr> {
-        text(self.raw().content_language)
+        self.0.content_language()
     }
 
     pub fn csp_header(&self) -> Option<&CStr> {
-        text(self.raw().csp_header)
+        self.0.csp_header()
     }
 
     pub fn raw_headers(&self) -> Option<&CStr> {
-        text(self.raw().raw_headers)
+        self.0.raw_headers()
     }
 
     pub fn remote_ip(&self) -> Option<&CStr> {
-        text(self.raw().remote_ip)
+        self.0.remote_ip()
     }
 
     pub fn security(&self) -> c_int {
-        self.raw().security
+        self.0.security()
     }
 
     pub fn timing(&self) -> NavigationTiming {
-        let r = self.raw();
+        let r = self.0.timing();
         NavigationTiming {
             origin_us: r.request_start_us,
             origin_real_ms: r.request_start_real_ms,
@@ -219,13 +114,6 @@ impl Response {
         }
     }
 
-    fn body_parts(&self) -> (*const u8, usize) {
-        match unsafe { self.raw().body.as_ref() } {
-            Some(body) => (body.data, body.len as usize),
-            None => (ptr::null(), 0),
-        }
-    }
-
     pub fn decoded_text(&self) -> Vec<u8> {
         let content_type = self.content_type().map(CStr::to_bytes);
         let (mut decoded, _) = southstar_html_util::decode_body(self.body(), content_type);
@@ -236,48 +124,29 @@ impl Response {
     }
 
     pub fn pdf_document(&self, url: &CStr) -> Option<GStr> {
-        let (data, len) = self.body_parts();
-        take(unsafe { ns_pdf_document_html(data, len, url.as_ptr()) })
+        let body = self.body();
+        // SAFETY: body is len readable bytes and url a NUL-terminated string, both live for the call.
+        take(unsafe { ns_pdf_document_html(body.as_ptr(), body.len(), url.as_ptr()) })
     }
 
     pub fn set_body(&mut self, bytes: &[u8]) {
-        let r = self.raw_mut();
-        if r.body.is_null() {
-            r.body = unsafe { g_byte_array_new() };
-        }
-        unsafe {
-            g_byte_array_set_size(r.body, 0);
-            g_byte_array_append(r.body, bytes.as_ptr(), bytes.len() as c_uint);
-        }
-    }
-
-    fn replace_text(slot: &mut *mut c_char, value: Option<&CStr>) {
-        let new = value.map_or(ptr::null_mut(), |v| unsafe { glib::g_strdup(v.as_ptr()) });
-        let old = core::mem::replace(slot, new);
-        unsafe { glib::g_free(old.cast()) };
+        self.0.set_body(bytes);
     }
 
     pub fn set_content_type(&mut self, value: &CStr) {
-        Response::replace_text(&mut self.raw_mut().content_type, Some(value));
+        self.0.set_content_type(value);
     }
 
     pub fn set_final_url(&mut self, value: &CStr) {
-        Response::replace_text(&mut self.raw_mut().final_url, Some(value));
+        self.0.set_final_url(value);
     }
 
     pub fn clear_error(&mut self) {
-        Response::replace_text(&mut self.raw_mut().error, None);
+        self.0.clear_error();
     }
 
     pub fn set_security(&mut self, security: c_int) {
-        self.raw_mut().security = security;
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        // SAFETY: self.0 is the ns_response this value owns; NsResponse mirrors its layout.
-        drop(unsafe { southstar_net::Response::from_raw(self.0.as_ptr().cast()) });
+        self.0.set_security(security);
     }
 }
 

@@ -24,7 +24,8 @@ mod view_source;
 
 pub use error_page::build as build_error_page;
 pub use ffi::fetch::{
-    Response, accept_header_lines, ns_net_accept_headers_for as accept_headers_for, request_key,
+    Response, Timing as ResponseTiming, accept_header_lines,
+    ns_net_accept_headers_for as accept_headers_for, request_key,
 };
 pub use ffi::netlog::set_log_fetches;
 pub use ffi::proxy::{http_proxy, https_proxy, no_proxy, proxy_override, set_proxy_override};

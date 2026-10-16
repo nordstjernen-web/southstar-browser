@@ -12,9 +12,9 @@ use crate::ffi::{Capture, Out};
 
 pub use crate::fetch::speculative_preload;
 pub use crate::ffi::{
-    CssCache, ImageFetch, ImageSession, Page, PrintSetup, Relayout, Sheet, anim_observe,
-    compute_cascade, dump_layout, dump_text, fetch_images, in_blocking_fetch, load_keyframes,
-    print_sheets, relayout, start_image_session,
+    CssCache, ImageFetch, ImageSession, Page, Post, PrintSetup, Relayout, Sheet, anim_observe,
+    compute_cascade, dump_layout, dump_text, fetch_blocking, fetch_images, in_blocking_fetch,
+    load_keyframes, navigate_blocking, print_sheets, relayout, start_image_session,
 };
 pub use southstar_render::page_rule;
 

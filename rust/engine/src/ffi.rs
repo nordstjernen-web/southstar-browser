@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
@@ -27,9 +27,9 @@ pub use css::{
 };
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
-    Bytes, CssCache, Dest, NsResponse, Request, fetch_blocking_with_headers, in_blocking_fetch,
-    monotonic_us, nosniff, preconnect, preload_clear, preload_request, record_timing,
-    url_is_http_or_https, url_origin, url_resolve,
+    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, in_blocking_fetch,
+    monotonic_us, navigate_blocking, nosniff, preconnect, preload_clear, preload_request,
+    record_timing, url_is_http_or_https, url_origin, url_resolve,
 };
 
 use crate::fetch;
@@ -392,71 +392,6 @@ pub unsafe extern "C" fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *m
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_engine_in_blocking_fetch() -> GBoolean {
     glib::boolean(in_blocking_fetch())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_fetch_blocking(
-    url: *const c_char,
-    top_url: *const c_char,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
-    let r = Request {
-        url,
-        top_url,
-        method: c"GET",
-        body: ptr::null(),
-        body_len: 0,
-        content_type: ptr::null(),
-        navigation: false,
-        user_activated: false,
-        headers: ptr::null(),
-    };
-    unsafe { net::request_blocking(&r, error) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_navigate_blocking(
-    url: *const c_char,
-    top_url: *const c_char,
-    user_activated: GBoolean,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
-    let r = Request {
-        url,
-        top_url,
-        method: c"GET",
-        body: ptr::null(),
-        body_len: 0,
-        content_type: ptr::null(),
-        navigation: true,
-        user_activated: user_activated != 0,
-        headers: ptr::null(),
-    };
-    unsafe { net::request_blocking(&r, error) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_navigate_post_blocking(
-    url: *const c_char,
-    top_url: *const c_char,
-    body: *const c_void,
-    body_len: usize,
-    content_type: *const c_char,
-    user_activated: GBoolean,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
-    let r = Request {
-        url,
-        top_url,
-        method: c"POST",
-        body,
-        body_len,
-        content_type,
-        navigation: true,
-        user_activated: user_activated != 0,
-        headers: ptr::null(),
-    };
-    unsafe { net::request_blocking(&r, error) }
 }
 
 #[unsafe(no_mangle)]

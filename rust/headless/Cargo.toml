@@ -21,15 +21,16 @@ southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
+southstar-image = { path = "../image" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-input = { path = "../js-input" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-window = { path = "../js-window" }
-southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-query = { path = "../layout-query" }
+southstar-net = { path = "../net" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-paint = { path = "../paint" }
 southstar-renderer-client = { path = "../renderer-client" }

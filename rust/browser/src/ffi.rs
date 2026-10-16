@@ -1084,10 +1084,13 @@ pub unsafe extern "C" fn ns_browser_open_post_viewport(
     body_len: usize,
     content_type: *const c_char,
 ) -> *mut NsBrowser {
-    let post = (!body.is_null()).then(|| Post {
-        body,
-        len: body_len,
-        content_type: c_str(content_type),
+    let post = (!body.is_null()).then(|| {
+        // SAFETY: the embedder passes body_len readable bytes at body, live for the call.
+        let body = unsafe { southstar_glib::slice(body.cast(), body_len) };
+        Post {
+            body,
+            content_type: c_str(content_type),
+        }
     });
     open_with(
         c_str(url),

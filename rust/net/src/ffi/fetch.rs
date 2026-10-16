@@ -118,6 +118,17 @@ pub fn net_error_domain() -> u32 {
     unsafe { g_quark_from_static_string(c"nd-net-error".as_ptr()) }
 }
 
+pub struct Timing {
+    pub request_start_us: i64,
+    pub request_start_real_ms: f64,
+    pub domain_lookup_ms: f64,
+    pub connect_ms: f64,
+    pub tls_ms: f64,
+    pub pretransfer_ms: f64,
+    pub response_start_ms: f64,
+    pub response_end_ms: f64,
+}
+
 pub struct Response(NonNull<NsResponse>);
 
 unsafe impl Send for Response {}
@@ -194,6 +205,71 @@ impl Response {
         let body = unsafe { self.view().body.as_ref() }?;
         // SAFETY: the array holds len initialized bytes at data, or data is null.
         Some(unsafe { glib::slice(body.data, body.len as usize) })
+    }
+
+    pub fn refresh(&self) -> Option<&CStr> {
+        c_str(self.view().refresh)
+    }
+
+    pub fn content_language(&self) -> Option<&CStr> {
+        c_str(self.view().content_language)
+    }
+
+    pub fn csp_header(&self) -> Option<&CStr> {
+        c_str(self.view().csp_header)
+    }
+
+    pub fn raw_headers(&self) -> Option<&CStr> {
+        c_str(self.view().raw_headers)
+    }
+
+    pub fn remote_ip(&self) -> Option<&CStr> {
+        c_str(self.view().remote_ip)
+    }
+
+    pub fn security(&self) -> c_int {
+        self.view().security
+    }
+
+    pub fn timing(&self) -> Timing {
+        let r = self.view();
+        Timing {
+            request_start_us: r.request_start_us,
+            request_start_real_ms: r.request_start_real_ms,
+            domain_lookup_ms: r.domain_lookup_ms,
+            connect_ms: r.connect_ms,
+            tls_ms: r.tls_ms,
+            pretransfer_ms: r.pretransfer_ms,
+            response_start_ms: r.response_start_ms,
+            response_end_ms: r.response_end_ms,
+        }
+    }
+
+    pub fn set_body(&mut self, bytes: &[u8]) {
+        let r = self.get();
+        if r.body.is_null() {
+            // SAFETY: g_byte_array_new has no preconditions and never returns null.
+            r.body = unsafe { g_byte_array_new() };
+        }
+        // SAFETY: the body is the live GByteArray this response owns.
+        unsafe { g_byte_array_set_size(r.body, 0) };
+        append(r.body, bytes);
+    }
+
+    pub fn set_content_type(&mut self, value: &CStr) {
+        replace(&mut self.get().content_type, Some(value.to_bytes()));
+    }
+
+    pub fn set_final_url(&mut self, value: &CStr) {
+        replace(&mut self.get().final_url, Some(value.to_bytes()));
+    }
+
+    pub fn clear_error(&mut self) {
+        replace(&mut self.get().error, None);
+    }
+
+    pub fn set_security(&mut self, security: c_int) {
+        self.get().security = security;
     }
 
     fn with_error(url: &[u8], status: c_long, error: &[u8]) -> Response {

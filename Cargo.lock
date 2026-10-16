@@ -2110,6 +2110,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-hit",
  "southstar-layout-query",
+ "southstar-net",
  "southstar-numfmt",
  "southstar-paint",
  "southstar-renderer-client",

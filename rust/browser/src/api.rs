@@ -118,8 +118,7 @@ impl Page {
             settle_ms,
         };
         let post = post.map(|post| ffi::Post {
-            body: post.body.as_ptr().cast(),
-            len: post.body.len(),
+            body: &post.body,
             content_type: post.content_type.as_deref(),
         });
         open::open(url, &view, post.as_ref())

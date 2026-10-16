@@ -208,6 +208,64 @@ pub fn fetch_blocking_with_headers(
     unsafe { Response::from_raw(request_blocking(&r, ptr::null_mut())) }
 }
 
+pub struct Post<'a> {
+    pub body: &'a [u8],
+    pub content_type: Option<&'a CStr>,
+}
+
+fn take_error(error: *mut GError) -> Option<Vec<u8>> {
+    // SAFETY: error is null or a GError the finished request handed over.
+    let e = unsafe { error.as_ref() }?;
+    // SAFETY: a GError's message is null or a NUL-terminated string it owns.
+    let message = unsafe { glib::bytes(e.message) }.map(<[u8]>::to_vec);
+    // SAFETY: error is owned here and nothing else refers to it.
+    unsafe { glib::g_error_free(error) };
+    message
+}
+
+pub fn navigate_blocking(
+    url: &CStr,
+    top_url: Option<&CStr>,
+    user_activated: bool,
+    post: Option<&Post<'_>>,
+) -> Result<Response, Option<Vec<u8>>> {
+    let r = Request {
+        url: url.as_ptr(),
+        top_url: ptr_or_null(top_url),
+        method: if post.is_some() { c"POST" } else { c"GET" },
+        body: post.map_or(ptr::null(), |p| p.body.as_ptr().cast()),
+        body_len: post.map_or(0, |p| p.body.len()),
+        content_type: post.map_or(ptr::null(), |p| ptr_or_null(p.content_type)),
+        navigation: true,
+        user_activated,
+        headers: ptr::null(),
+    };
+    let mut error = ptr::null_mut();
+    // SAFETY: the request's strings and body outlive the blocking call, and error starts null.
+    let resp = unsafe { request_blocking(&r, &mut error) };
+    let message = take_error(error);
+    // SAFETY: request_blocking hands over a response the caller owns, or null.
+    unsafe { Response::from_raw(resp) }.ok_or(message)
+}
+
+pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
+    let r = Request {
+        url: url.as_ptr(),
+        top_url: ptr_or_null(top_url),
+        method: c"GET",
+        body: ptr::null(),
+        body_len: 0,
+        content_type: ptr::null(),
+        navigation: false,
+        user_activated: false,
+        headers: ptr::null(),
+    };
+    // SAFETY: the request's strings outlive the blocking call, and a null error slot is allowed.
+    let resp = unsafe { request_blocking(&r, ptr::null_mut()) };
+    // SAFETY: request_blocking hands over a response the caller owns, or null.
+    unsafe { Response::from_raw(resp) }
+}
+
 pub struct Bytes(NonNull<GBytes>);
 
 impl Bytes {

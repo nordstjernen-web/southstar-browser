@@ -3,20 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_engine::Page;
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox};
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
 
 #[repr(C)]
 pub struct GString {
@@ -25,61 +19,9 @@ pub struct GString {
     allocated_len: usize,
 }
 
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    _content_disposition: *mut c_char,
-    _csp_header: *mut c_char,
-    _xframe_options: *mut c_char,
-    _x_content_type_options: *mut c_char,
-    _cors_allow_origin: *mut c_char,
-    _refresh: *mut c_char,
-    content_language: *mut c_char,
-    _raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    _tls_warning: *mut c_char,
-    _remote_ip: *mut c_char,
-    _next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184);
-
 pub use southstar_engine::{CssCache, PrintSetup};
 
 unsafe extern "C" {
-    fn ns_engine_navigate_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        user_activated: GBoolean,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
-    fn ns_engine_navigate_post_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        user_activated: GBoolean,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
-    fn ns_engine_fetch_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
     fn ns_build_error_page(
         url: *const c_char,
         status: c_long,
@@ -90,10 +32,6 @@ unsafe extern "C" {
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
 }
@@ -102,16 +40,7 @@ pub fn take_string(p: *mut c_char) -> Option<Vec<u8>> {
     unsafe { GStr::take(p) }.map(|s| s.to_bytes().to_vec())
 }
 
-pub struct Timing {
-    pub request_start_us: i64,
-    pub request_start_real_ms: f64,
-    pub domain_lookup_ms: f64,
-    pub connect_ms: f64,
-    pub tls_ms: f64,
-    pub pretransfer_ms: f64,
-    pub response_start_ms: f64,
-    pub response_end_ms: f64,
-}
+pub use southstar_net::ResponseTiming as Timing;
 
 pub struct Response {
     pub status: c_long,
@@ -123,46 +52,20 @@ pub struct Response {
     pub timing: Timing,
 }
 
-fn owned(p: *const c_char) -> Option<Vec<u8>> {
-    c_str(p).map(|s| s.to_bytes().to_vec())
+fn owned(text: Option<&CStr>) -> Option<Vec<u8>> {
+    text.map(|t| t.to_bytes().to_vec())
 }
 
-unsafe fn take_response(resp: *mut NsResponse) -> Option<Response> {
-    let r = unsafe { resp.as_ref() }?;
-    let body = unsafe { r.body.as_ref() }.map(|b| {
-        if b.data.is_null() || b.len == 0 {
-            Vec::new()
-        } else {
-            unsafe { core::slice::from_raw_parts(b.data, b.len as usize) }.to_vec()
-        }
-    });
-    let out = Response {
-        status: r.status,
-        final_url: owned(r.final_url),
-        content_type: owned(r.content_type),
-        content_language: owned(r.content_language),
-        body,
-        error: owned(r.error),
-        timing: Timing {
-            request_start_us: r.request_start_us,
-            request_start_real_ms: r.request_start_real_ms,
-            domain_lookup_ms: r.domain_lookup_ms,
-            connect_ms: r.connect_ms,
-            tls_ms: r.tls_ms,
-            pretransfer_ms: r.pretransfer_ms,
-            response_start_ms: r.response_start_ms,
-            response_end_ms: r.response_end_ms,
-        },
-    };
-    unsafe { ns_response_free(resp) };
-    Some(out)
-}
-
-fn error_message(err: *mut GError) -> Option<Vec<u8>> {
-    let e = unsafe { err.as_ref() }?;
-    let msg = owned(e.message);
-    unsafe { glib::g_error_free(err) };
-    msg
+fn take_response(resp: southstar_net::Response) -> Response {
+    Response {
+        status: resp.status(),
+        final_url: owned(resp.final_url()),
+        content_type: owned(resp.content_type()),
+        content_language: owned(resp.content_language()),
+        body: resp.body().map(<[u8]>::to_vec),
+        error: owned(resp.error()),
+        timing: resp.timing(),
+    }
 }
 
 pub fn navigate(
@@ -171,43 +74,16 @@ pub fn navigate(
     post: Option<(&[u8], &CStr)>,
     user_activated: bool,
 ) -> Result<Response, Option<Vec<u8>>> {
-    let mut err: *mut GError = ptr::null_mut();
-    let resp = unsafe {
-        match post {
-            Some((body, content_type)) => ns_engine_navigate_post_blocking(
-                url.as_ptr(),
-                ptr_or_null(top_url),
-                body.as_ptr().cast(),
-                body.len(),
-                content_type.as_ptr(),
-                glib::boolean(user_activated),
-                &mut err,
-            ),
-            None => ns_engine_navigate_blocking(
-                url.as_ptr(),
-                ptr_or_null(top_url),
-                glib::boolean(user_activated),
-                &mut err,
-            ),
-        }
-    };
-    match unsafe { take_response(resp) } {
-        Some(r) => {
-            drop(error_message(err));
-            Ok(r)
-        }
-        None => Err(error_message(err)),
-    }
+    let post = post.map(|(body, content_type)| southstar_engine::Post {
+        body,
+        content_type: Some(content_type),
+    });
+    southstar_engine::navigate_blocking(url, top_url, user_activated, post.as_ref())
+        .map(take_response)
 }
 
 pub fn fetch(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
-    unsafe {
-        take_response(ns_engine_fetch_blocking(
-            url.as_ptr(),
-            ptr_or_null(top_url),
-            ptr::null_mut(),
-        ))
-    }
+    southstar_engine::fetch_blocking(url, top_url).map(take_response)
 }
 
 pub fn error_page(url: Option<&CStr>, status: c_long, transport_error: Option<&CStr>) -> Vec<u8> {
