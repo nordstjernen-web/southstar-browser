@@ -9,7 +9,6 @@ mod tree;
 mod walks;
 
 use core::ffi::CStr;
-use core::ptr;
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
@@ -40,7 +39,7 @@ pub fn hit_node(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
 }
 
 pub fn hit_form_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
-    walks::form_hit(root, x, y, ptr::null())
+    walks::form_hit(root, x, y, None)
 }
 
 pub fn hit_inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {

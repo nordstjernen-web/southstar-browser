@@ -4,34 +4,14 @@
 
 use core::cmp::Ordering;
 
-use southstar_dom::Node;
 use southstar_dom::index::document_order_cmp;
 use southstar_layout::{BoxKind, BoxRef, children};
-use southstar_style::{Kind, PropId, StyleRef};
+use southstar_style::{Kind, PropId};
 
 use crate::ffi;
 use crate::geometry::position_keyword;
 
-pub fn node_is_form_hit_target(n: Option<Node<'_>>) -> bool {
-    n.filter(|n| n.is_element())
-        .and_then(Node::name)
-        .is_some_and(|name| {
-            matches!(
-                name.to_bytes(),
-                b"button" | b"input" | b"select" | b"textarea"
-            )
-        })
-}
-
-pub fn style_blocks_hit_testing(s: Option<StyleRef<'_>>) -> bool {
-    let Some(s) = s else {
-        return false;
-    };
-    s.get(PropId::PointerEvents)
-        .is_some_and(|v| v.is_keyword(c"none"))
-        || s.keyword_of(PropId::Visibility)
-            .is_some_and(|v| v == c"hidden" || v == c"collapse")
-}
+pub use southstar_layout_geom::{node_is_form_hit_target, style_blocks_hit_testing};
 
 pub fn box_blocks_hit_testing(b: BoxRef<'_>) -> bool {
     style_blocks_hit_testing(ffi::style_of(b))

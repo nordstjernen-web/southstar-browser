@@ -5,8 +5,10 @@
 #![forbid(unsafe_code)]
 
 pub mod flex;
+mod hit;
 mod text;
 
+pub use hit::{node_is_form_hit_target, style_blocks_hit_testing};
 pub use text::{utf8_skip, vertical_stack_text};
 
 use core::ffi::CStr;

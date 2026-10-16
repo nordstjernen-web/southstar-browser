@@ -12,11 +12,9 @@ use southstar_glib::{
     g_ptr_array_new, g_ptr_array_new_with_free_func, strdup,
 };
 use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
-use southstar_paint::ffi as paint;
-use southstar_paint::ffi::pango::{AttrList, Context, Layout};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
 
-use crate::{block, build, classify, generated, hit, media, state};
+use crate::{block, build, classify, generated, media, state};
 
 #[repr(C)]
 #[derive(Default)]
@@ -55,12 +53,6 @@ unsafe extern "C" {
     fn ns_layout_process_absolute_boxes(root: *mut NsBox, styles: *mut GHashTable, vw: f64);
     fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
     fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64);
-    fn ns_inline_apply_atomic_shapes(list: *mut c_void, b: *const NsBox);
-    fn ns_layout_apply_inline_spacing(list: *mut c_void, s: *const Style, text: *const c_char);
-    fn ns_layout_apply_inline_layout_attrs(list: *mut c_void, b: *const NsBox);
-    fn ns_inline_layout_set_attrs(layout: *mut c_void, list: *mut c_void, b: *const NsBox);
-    fn ns_layout_style_blocks_hit_testing(s: *const Style) -> GBoolean;
-    fn ns_layout_node_is_form_hit_target(n: *const NsNode) -> GBoolean;
     fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
     fn ns_paint_li_marker_text(
         li: *const NsNode,
@@ -233,45 +225,6 @@ pub fn record_frame_viewports(root: *mut NsBox) {
     southstar_layout_query::record_frame_viewports(box_ref(root));
 }
 
-pub fn new_layout(parent_style: *const Style) -> Layout {
-    let layout = Layout::new(unsafe { Context::from_raw(paint::ns_paint_text_context()) });
-    unsafe { paint::ns_paint_apply_inline_font(layout.raw(), parent_style) };
-    layout
-}
-
-pub fn wrap_mode_for(s: *const Style) -> c_int {
-    unsafe { paint::ns_paint_wrap_mode_for(s) }
-}
-
-pub fn apply_css_line_spacing(layout: &Layout, s: *const Style) {
-    unsafe { paint::ns_paint_apply_css_line_spacing(layout.raw(), s) };
-}
-
-pub fn apply_inline_attrs(layout: &Layout, i18n: &AttrList, b: BoxRef<'_>, ps: *const Style) {
-    unsafe {
-        paint::ns_paint_apply_i18n(layout.raw(), i18n.raw(), b.as_ptr());
-        paint::ns_paint_apply_font_features(i18n.raw(), ps, 0, u32::MAX);
-        ns_inline_apply_atomic_shapes(i18n.raw(), b.as_ptr());
-        ns_layout_apply_inline_spacing(i18n.raw(), ps, b.text_ptr());
-        ns_layout_apply_inline_layout_attrs(i18n.raw(), b.as_ptr());
-        ns_inline_layout_set_attrs(layout.raw(), i18n.raw(), b.as_ptr());
-    }
-}
-
-pub fn start_align_overflow(layout: &Layout) {
-    unsafe { paint::ns_paint_start_align_overflow(layout.raw()) };
-}
-
-pub fn style_blocks_hit_testing(s: Option<StyleRef<'_>>) -> bool {
-    unsafe { ns_layout_style_blocks_hit_testing(style_ptr(s)) != 0 }
-}
-
-pub fn node_is_form_hit_target(n: Option<Node<'_>>) -> bool {
-    unsafe { ns_layout_node_is_form_hit_target(Node::ptr_or_null(n)) != 0 }
-}
-
-pub use southstar_layout_content::inline_attr_control_width;
-
 pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
     let sp = style_ptr(s);
     if unsafe { ns_paint_li_is_inside(sp) } == 0 {
@@ -436,18 +389,6 @@ pub unsafe extern "C" fn ns_layout_translate_subtree(b: *mut NsBox, dx: f64, dy:
         return;
     }
     unsafe { ns_layout_shift_box_tree(b, dx, dy) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_box_form_hit(
-    b: *const NsBox,
-    local_x: f64,
-    local_y: f64,
-    parent_style: *const Style,
-) -> *const NsNode {
-    let hit =
-        box_ref(b).and_then(|b| hit::inline_box_form_hit(b, local_x, local_y, style(parent_style)));
-    Node::ptr_or_null(hit)
 }
 
 #[unsafe(no_mangle)]

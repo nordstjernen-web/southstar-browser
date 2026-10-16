@@ -2856,7 +2856,6 @@ dependencies = [
  "southstar-layout-tree",
  "southstar-net",
  "southstar-numfmt",
- "southstar-paint",
  "southstar-style",
  "southstar-url",
 ]
@@ -2904,6 +2903,7 @@ name = "southstar-layout-geom"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-css",
+ "southstar-dom",
  "southstar-layout",
  "southstar-style",
 ]
@@ -2931,6 +2931,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-float",
  "southstar-layout-geom",
+ "southstar-layout-inline",
  "southstar-mat4",
  "southstar-style",
 ]

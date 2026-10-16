@@ -215,30 +215,6 @@ pub unsafe extern "C" fn ns_layout_inline_min_width(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_apply_inline_spacing(
-    list: *mut c_void,
-    s: *const Style,
-    text: *const c_char,
-) {
-    if list.is_null() || text.is_null() {
-        return;
-    }
-    let list = unsafe { AttrList::borrowed(list) };
-    let text = unsafe { CStr::from_ptr(text) };
-    attrs::apply_spacing(&list, style(s), text.to_bytes());
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_apply_inline_layout_attrs(list: *mut c_void, b: *const NsBox) {
-    if list.is_null() {
-        return;
-    }
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        attrs::apply_layout_attrs(&*unsafe { AttrList::borrowed(list) }, b);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_inline_apply_atomic_shapes(list: *mut c_void, b: *const NsBox) {
     if list.is_null() {
         return;

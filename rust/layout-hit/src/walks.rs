@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
-use southstar_layout::{BoxKind, BoxRef, LinkRange, Style, children, inline_kind};
+use southstar_layout::{BoxKind, BoxRef, LinkRange, children, inline_kind};
+use southstar_style::StyleRef;
 
 use crate::ffi;
 use crate::geometry::{
@@ -12,14 +13,15 @@ use crate::geometry::{
 };
 use crate::stack::{box_blocks_hit_testing, children_stacked, node_is_form_hit_target};
 
-pub fn form_hit<'a>(b: BoxRef<'a>, x: f64, y: f64, inherited: *const Style) -> Option<Node<'a>> {
+pub fn form_hit<'a>(
+    b: BoxRef<'a>,
+    x: f64,
+    y: f64,
+    inherited: Option<StyleRef<'a>>,
+) -> Option<Node<'a>> {
     let (x, y) = enter(b, x, y);
     let (x, y) = untransform(b, x, y)?;
-    let child_inherited = if b.style().is_null() {
-        inherited
-    } else {
-        b.style()
-    };
+    let child_inherited = ffi::style_of(b).or(inherited);
     let dom = ffi::dom_of(b);
     let self_hit =
         (node_is_form_hit_target(dom) && border_contains(b, x, y) && !box_blocks_hit_testing(b))
@@ -177,7 +179,7 @@ pub fn hit_node(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     if let Some(m) = inline_dom(root, x, y) {
         target = Some(m);
     }
-    if let Some(m) = form_hit(root, x, y, core::ptr::null()) {
+    if let Some(m) = form_hit(root, x, y, None) {
         target = Some(m);
     }
     if let Some(hit) = hit

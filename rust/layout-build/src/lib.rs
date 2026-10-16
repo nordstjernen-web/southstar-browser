@@ -10,7 +10,6 @@ mod collect;
 mod controls;
 mod ffi;
 mod generated;
-mod hit;
 mod media;
 mod run;
 mod state;

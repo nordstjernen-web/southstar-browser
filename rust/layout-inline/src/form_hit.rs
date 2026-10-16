@@ -7,13 +7,13 @@ use core::ffi::{c_int, c_uint};
 use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::keyword_is;
-use southstar_layout_geom::text_indent_px;
+use southstar_layout_geom::{node_is_form_hit_target, style_blocks_hit_testing, text_indent_px};
 use southstar_paint::ffi::pango::{
     ALIGN_CENTER, ALIGN_LEFT, ALIGN_RIGHT, AttrList, DIRECTION_RTL, ELLIPSIZE_END, SCALE,
 };
 use southstar_style::{PropId, StyleRef};
 
-use crate::ffi;
+use crate::{attrs, ffi};
 
 fn is_form_hit(k: c_uint) -> bool {
     matches!(
@@ -44,7 +44,7 @@ fn hit_candidate(r: &InlineAttr, parent_style: Option<StyleRef<'_>>) -> bool {
         return false;
     }
     let rs = ffi::style(r.style()).or(parent_style);
-    !ffi::style_blocks_hit_testing(rs)
+    !style_blocks_hit_testing(rs)
 }
 
 pub fn inline_box_form_hit<'a>(
@@ -82,7 +82,12 @@ pub fn inline_box_form_hit<'a>(
     }
     layout.set_text(text);
     let i18n = AttrList::new();
-    ffi::apply_inline_attrs(&layout, &i18n, b, ps);
+    ffi::apply_i18n(&layout, &i18n, b);
+    ffi::apply_font_features(&i18n, ps);
+    attrs::apply_atomic_shapes(&i18n, b);
+    attrs::apply_spacing(&i18n, parent_style, text.to_bytes());
+    attrs::apply_layout_attrs(&i18n, b);
+    attrs::set_attrs(&layout, Some(&i18n), Some(b));
     let ta = parent_style.and_then(|s| s.get(PropId::TextAlign));
     let rtl = layout.context().base_dir() == DIRECTION_RTL;
     if keyword_is(ta, c"center") {
@@ -116,7 +121,7 @@ pub fn inline_box_form_hit<'a>(
             if idx < a.byte_off() || idx >= a.byte_off() + 3 {
                 continue;
             }
-            if let Some(dom) = ab.dom().filter(|d| ffi::node_is_form_hit_target(Some(*d))) {
+            if let Some(dom) = ab.dom().filter(|d| node_is_form_hit_target(Some(*d))) {
                 atomic_hit = Some(dom.as_ptr());
             }
         }
@@ -144,7 +149,7 @@ pub fn inline_box_form_hit<'a>(
         let mut y0 = f64::from(r0.y) / scale - bleed_y;
         let mut x1 = f64::from(r1.x + r1.width) / scale + bleed_x;
         let mut y1 = f64::from(r0.y + r0.height) / scale + bleed_y;
-        let css_w = ffi::inline_attr_control_width(r, b);
+        let css_w = ffi::control_width(r, b);
         if css_w > 0.0 {
             x0 = f64::from(r0.x) / scale;
             x1 = x0 + css_w;
@@ -166,5 +171,5 @@ pub fn inline_box_form_hit<'a>(
     let hit = atomic_hit
         .or(button_hit.map(|p| p.cast()))
         .or(field_hit.map(|p| p.cast()))?;
-    ffi::node(hit)
+    ffi::node(hit.cast())
 }

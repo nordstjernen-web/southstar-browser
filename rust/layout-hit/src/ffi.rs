@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, boolean};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, Transform};
 
@@ -22,12 +22,6 @@ struct CairoMatrix {
 }
 
 unsafe extern "C" {
-    fn ns_layout_inline_box_form_hit(
-        b: *const NsBox,
-        local_x: f64,
-        local_y: f64,
-        parent_style: *const Style,
-    ) -> *const NsNode;
     fn ns_box_sticky_offset(
         b: *const NsBox,
         vp_x0: f64,
@@ -65,16 +59,9 @@ pub fn inline_box_form_hit<'a>(
     b: BoxRef<'a>,
     local_x: f64,
     local_y: f64,
-    parent_style: *const Style,
+    parent_style: Option<StyleRef<'_>>,
 ) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_layout_inline_box_form_hit(
-            b.as_ptr(),
-            local_x,
-            local_y,
-            parent_style,
-        ))
-    }
+    southstar_layout_inline::inline_box_form_hit(b, local_x, local_y, parent_style)
 }
 
 pub use southstar_layout_float::box_clips_children as clips_children;
@@ -147,20 +134,6 @@ fn store(out: *mut f64, v: f64) {
     if let Some(out) = unsafe { out.as_mut() } {
         *out = v;
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_style_blocks_hit_testing(s: *const Style) -> GBoolean {
-    boolean(crate::stack::style_blocks_hit_testing(unsafe {
-        StyleRef::from_ptr(s)
-    }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_node_is_form_hit_target(n: *const NsNode) -> GBoolean {
-    boolean(crate::stack::node_is_form_hit_target(unsafe {
-        Node::from_ptr(n)
-    }))
 }
 
 #[unsafe(no_mangle)]
