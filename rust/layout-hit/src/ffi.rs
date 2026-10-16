@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, boolean};
-use southstar_layout::{BoxRef, LinkRange, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, Transform};
 
@@ -132,6 +132,11 @@ pub fn inline_xy_to_byte(b: BoxRef<'_>, rel_x: f64, rel_y: f64) -> Option<usize>
         .then_some(byte)
 }
 
+pub fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: `p` is null or a NUL-terminated string the box tree owns for as long as its boxes are borrowed.
+    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
+}
+
 pub fn active_modal<'a>() -> Option<Node<'a>> {
     unsafe { Node::from_ptr(ns_dom_active_modal()) }
 }
@@ -199,65 +204,4 @@ pub unsafe extern "C" fn ns_box_hit_test_local(
     store(local_x, lx);
     store(local_y, ly);
     box_out(hit)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_node(root: *const NsBox, x: f64, y: f64) -> *const NsNode {
-    Node::ptr_or_null(entry(root).and_then(|root| crate::walks::hit_node(root, x, y)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_form_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode {
-    Node::ptr_or_null(entry(root).and_then(|root| crate::walks::form_hit(root, x, y, ptr::null())))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_inline_dom(
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> *const NsNode {
-    Node::ptr_or_null(entry(root).and_then(|root| crate::walks::inline_dom(root, x, y)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_link_range(
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> *const LinkRange {
-    entry(root)
-        .and_then(|root| crate::walks::link_range(root, x, y))
-        .map_or(ptr::null(), |r| r as *const LinkRange)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_link(root: *const NsBox, x: f64, y: f64) -> *const c_char {
-    entry(root)
-        .and_then(|root| crate::walks::link_range(root, x, y))
-        .map_or(ptr::null(), LinkRange::href_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_scrollable(root: *mut NsBox, x: f64, y: f64) -> *mut NsBox {
-    entry(root)
-        .and_then(|root| crate::walks::scrollable(root, x, y))
-        .map_or(ptr::null_mut(), |(b, _, _)| b.as_mut_ptr())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_scrollbar(
-    root: *mut NsBox,
-    x: f64,
-    y: f64,
-    lx: *mut f64,
-    ly: *mut f64,
-) -> *mut NsBox {
-    let Some((b, px, py)) = entry(root).and_then(|root| crate::walks::scrollable(root, x, y))
-    else {
-        return ptr::null_mut();
-    };
-    store(lx, px);
-    store(ly, py);
-    b.as_mut_ptr()
 }

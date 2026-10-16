@@ -114,9 +114,6 @@ unsafe extern "C" {
         sel: *const c_void,
     );
     fn ns_paint_canvas_color(root: *const NsBox, rgba: *mut f64) -> GBoolean;
-    fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
-    fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
-    fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
     fn ns_box_sticky_y_model(b: *const NsBox, viewport_h: f64, out: *mut StickyY) -> GBoolean;
     fn ns_box_sticky_offset(
         b: *const NsBox,
@@ -562,19 +559,9 @@ pub fn canvas_color(layout: BoxRef<'_>, rgba: &mut [f64; 4]) -> bool {
     unsafe { ns_paint_canvas_color(layout.as_ptr(), rgba.as_mut_ptr()) != 0 }
 }
 
-pub fn set_hit_viewport(x: f64, y: f64) {
-    unsafe { ns_box_set_hit_viewport(x, y) };
-}
-
-pub fn box_is_fixed(b: BoxRef<'_>) -> bool {
-    unsafe { ns_box_is_fixed(b.as_ptr()) != 0 }
-}
-
-pub fn box_hit_offset(b: BoxRef<'_>) -> (f64, f64) {
-    let (mut dx, mut dy) = (0.0, 0.0);
-    unsafe { ns_box_hit_offset(b.as_ptr(), &mut dx, &mut dy) };
-    (dx, dy)
-}
+pub use southstar_layout_hit::{
+    hit_offset as box_hit_offset, is_fixed as box_is_fixed, set_hit_viewport,
+};
 
 pub fn subtree_extent_y(b: BoxRef<'_>, out: &mut VpLayerInfo) -> bool {
     let extent = southstar_layout_query::subtree_extent_y(b);

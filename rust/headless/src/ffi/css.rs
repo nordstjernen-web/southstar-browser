@@ -4,11 +4,11 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::marker::PhantomData;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GHashTable};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -45,10 +45,6 @@ const KIND_LENGTH: c_uint = 1;
 const KIND_COLOR: c_uint = 3;
 const KIND_CALC: c_uint = 4;
 const KIND_URL: c_uint = 8;
-
-unsafe extern "C" {
-    fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox;
-}
 
 pub enum Value<'a> {
     Keyword(Option<&'a CStr>),
@@ -97,8 +93,7 @@ pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
 }
 
 pub fn hit_test(root: Option<BoxRef<'_>>, x: f64, y: f64) -> Option<BoxRef<'_>> {
-    let root = root.map_or(ptr::null(), BoxRef::as_ptr);
-    unsafe { BoxRef::from_ptr(ns_box_hit_test(root, x, y)) }
+    root.and_then(|root| southstar_layout_hit::hit_test(root, x, y))
 }
 
 #[derive(Clone, Copy)]

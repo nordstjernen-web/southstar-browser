@@ -54,15 +54,6 @@ struct NsResponse {
 const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184);
 
 #[repr(C)]
-struct NsLinkRange {
-    _start: usize,
-    _len: usize,
-    href: *mut c_char,
-    _target: *mut c_char,
-    dom: *const NsNode,
-}
-
-#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct PrintSetup {
     pub width: f64,
@@ -148,9 +139,6 @@ unsafe extern "C" {
         setup: *const PrintSetup,
     ) -> c_int;
     fn ns_box_free(b: *mut NsBox);
-    fn ns_box_hit_link_range(root: *const NsBox, x: f64, y: f64) -> *const NsLinkRange;
-    fn ns_box_hit_form_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
-    fn ns_box_hit_inline_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_paint_set_js(js: *mut c_void);
@@ -523,26 +511,7 @@ pub fn write_pdf_paged(root: *const NsBox, path: Option<&CStr>, setup: &PrintSet
     unsafe { ns_engine_write_pdf_paged(root, ptr_or_null(path), setup) }
 }
 
-pub struct LinkHit<'a> {
-    pub dom: Option<Node<'a>>,
-    pub href: Option<&'a CStr>,
-}
-
-pub fn hit_link(root: BoxRef<'_>, x: f64, y: f64) -> Option<LinkHit<'_>> {
-    let link = unsafe { ns_box_hit_link_range(root.as_ptr(), x, y).as_ref() }?;
-    Some(LinkHit {
-        dom: unsafe { Node::from_ptr(link.dom) },
-        href: c_str(link.href),
-    })
-}
-
-pub fn hit_form_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(ns_box_hit_form_dom(root.as_ptr(), x, y)) }
-}
-
-pub fn hit_inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(ns_box_hit_inline_dom(root.as_ptr(), x, y)) }
-}
+pub use southstar_layout_hit::{hit_form_dom, hit_inline_dom, hit_link};
 
 pub use southstar_layout_query::collect_videos;
 

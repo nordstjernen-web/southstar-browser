@@ -22,6 +22,7 @@ southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
+southstar-layout-hit = { path = "../layout-hit" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-renderer-client = { path = "../renderer-client" }

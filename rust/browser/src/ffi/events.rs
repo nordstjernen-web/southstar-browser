@@ -103,18 +103,6 @@ unsafe extern "C" {
     fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
     fn ns_js_activate_element(js: *mut c_void, el: *const NsNode);
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
-    fn ns_box_hit_link(root: *const NsBox, x: f64, y: f64) -> *const c_char;
-    fn ns_box_hit_node(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
-    fn ns_box_hit_form_dom(root: *const NsBox, x: f64, y: f64) -> *const NsNode;
-    fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox;
-    fn ns_box_hit_scrollable(root: *mut NsBox, x: f64, y: f64) -> *mut NsBox;
-    fn ns_box_hit_scrollbar(
-        root: *mut NsBox,
-        x: f64,
-        y: f64,
-        lx: *mut f64,
-        ly: *mut f64,
-    ) -> *mut NsBox;
     fn ns_selection_text_at(root: *const NsBox, x: f64, y: f64) -> GBoolean;
     fn ns_selection_anchor_at(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
     fn ns_selection_extend_to(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
@@ -407,31 +395,16 @@ pub fn keyboard_activates(el: Node<'_>, key: Option<&CStr>) -> bool {
 }
 
 pub fn hit_link(layout: BoxRef<'_>, x: f64, y: f64) -> Option<&CStr> {
-    let href = unsafe { ns_box_hit_link(layout.as_ptr(), x, y) };
-    (!href.is_null()).then(|| unsafe { CStr::from_ptr(href) })
+    southstar_layout_hit::hit_link(layout, x, y).and_then(|link| link.href)
 }
 
-pub fn hit_node(layout: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(ns_box_hit_node(layout.as_ptr(), x, y)) }
-}
-
-pub fn hit_form_dom(layout: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(ns_box_hit_form_dom(layout.as_ptr(), x, y)) }
-}
-
-pub fn hit_test(layout: BoxRef<'_>, x: f64, y: f64) -> Option<BoxRef<'_>> {
-    unsafe { BoxRef::from_ptr(ns_box_hit_test(layout.as_ptr(), x, y)) }
-}
+pub use southstar_layout_hit::{hit_form_dom, hit_node, hit_test};
 
 pub fn hit_scrollable(layout: BoxRef<'_>, x: f64, y: f64) -> Option<BoxRef<'_>> {
-    unsafe { BoxRef::from_ptr(ns_box_hit_scrollable(layout.as_ptr().cast_mut(), x, y)) }
+    southstar_layout_hit::hit_scrollable(layout, x, y).map(|(b, _, _)| b)
 }
 
-pub fn hit_scrollbar(layout: BoxRef<'_>, x: f64, y: f64) -> Option<(BoxRef<'_>, f64, f64)> {
-    let (mut lx, mut ly) = (0.0, 0.0);
-    let b = unsafe { ns_box_hit_scrollbar(layout.as_ptr().cast_mut(), x, y, &mut lx, &mut ly) };
-    unsafe { BoxRef::from_ptr(b) }.map(|b| (b, lx, ly))
-}
+pub use southstar_layout_hit::hit_scrollable as hit_scrollbar;
 
 pub fn scroll_snap_from(scroller: BoxRef<'_>, prev_x: f64, prev_y: f64) {
     southstar_layout_query::scroll_snap_from(scroller, prev_x, prev_y);
