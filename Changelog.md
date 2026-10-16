@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Text before a <br> keeps its formatting up to the break. Dropping the
+  space before the break left the positions of the text after it one
+  byte too far, so an element that ended on that space ended inside the
+  line break instead: paulgraham.com's links box drew two replacement-
+  character boxes where its spacer image sits.
 * A block's negative horizontal margins reduce its parent's max-content
   width, as in other browsers. The shrink-to-fit measurement took the
   larger of the child's margin box and its content width, so negative
