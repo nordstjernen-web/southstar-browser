@@ -73,8 +73,7 @@ fn set_by_name(
 
     // Cache the property.
     let slot = *context.slot();
-    let array_length = object.is_array() && name == PropertyKey::from(js_str!("length"));
-    if succeeded && slot.is_cacheable() && !array_length {
+    if succeeded && slot.is_cacheable() {
         let ic = &context.vm.frame().code_block.ic[usize::from(index)];
         let object_borrowed = object.borrow();
         let shape = object_borrowed.shape();

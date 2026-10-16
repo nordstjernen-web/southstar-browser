@@ -132,10 +132,6 @@ Southstar Browser 0.9.11-dev:
   ::slotted() are serialized recursively (keeping the text of items a
   forgiving list drops), and An+B is parsed strictly by the CSS Syntax
   rules. The new rust/selector-text crate does this for selectorText.
-* Shrinking an array's length twice from the same line of script left
-  its old elements readable, because the engine cached the store to
-  length; a style sheet whose text changed kept answering cssRules[0]
-  with a rule it no longer had.
 * overscroll-behavior (with its -x, -y, -inline and -block longhands),
   interactivity and background-blend-mode are known properties, and
   the logical scroll-margin-block/-inline and scroll-padding-block/-inline
