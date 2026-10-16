@@ -1226,6 +1226,21 @@ fn rule(out: &mut Out, text: &[u8], width: Prop, style: Prop, color: Prop) {
 }
 
 fn text_decoration(out: &mut Out, text: &[u8], line_only: bool) {
+    if let Some(wide) = wide_keyword(text) {
+        if line_only {
+            out.push(Prop::TextDecoration, wide);
+        } else {
+            out.shared(
+                &[
+                    Prop::TextDecoration,
+                    Prop::TextDecorationStyle,
+                    Prop::TextDecorationColor,
+                ],
+                wide,
+            );
+        }
+        return;
+    }
     let mut lines = Vec::new();
     for tk in split_ws(text) {
         if [&b"underline"[..], b"overline", b"line-through", b"none"]
