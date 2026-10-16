@@ -71,7 +71,7 @@ fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
     text
 }
 
-pub(crate) fn style_element_text(style: Node) -> Option<Vec<u8>> {
+pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
     if style.element_name() != Some(b"style") {
         return None;
     }
@@ -95,7 +95,7 @@ pub(crate) fn style_element_text(style: Node) -> Option<Vec<u8>> {
     Some(text)
 }
 
-pub(crate) fn shadow_adopted_text(root: Node) -> Option<Vec<u8>> {
+pub fn shadow_adopted_text(root: Node) -> Option<Vec<u8>> {
     let css = root.attr(ADOPTED_CSS_ATTR).filter(|css| !css.is_empty())?;
     let host_id = shadow_host_scope_id(root)?;
     Some(until_nul(scoped_css(css.to_bytes(), &host_id, false)))

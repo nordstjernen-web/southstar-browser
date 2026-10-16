@@ -29,17 +29,6 @@ pub unsafe extern "C" fn ns_css_text_orientation(style: *const RawStyle) -> c_in
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_layer_count(head: *const NsCssValue) -> c_int {
-    let mut n = 0;
-    let mut layer = head;
-    while let Some(v) = unsafe { layer.as_ref() } {
-        n += 1;
-        layer = v.next_layer;
-    }
-    n
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_dimension_px(
     v: *const NsCssValue,
     font_size: c_double,

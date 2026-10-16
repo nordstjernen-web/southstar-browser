@@ -65,6 +65,9 @@ pub use cascade::currentcolor_bit;
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::unit_dims as container_unit_dims;
+pub use container::{
+    features_begin as container_features_begin, features_used as container_features_used,
+};
 pub use content::append_unescaped;
 pub use counter::list_style_serialize;
 pub use declarations::{named_declaration_valid, named_property_supported};
@@ -72,10 +75,12 @@ pub use element_state::node_dir;
 pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target_fragment};
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
-    MatchContext, NsCssValue, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
-    RegisterError, Registration, Selector, SelectorList, clear_registered_properties,
-    register_property, set_active_node, set_focus_node, set_focus_visible_node, set_font_alias,
-    set_fullscreen_node, set_hover_node,
+    FontFaceRule, FrameViewport, ImportRule, MatchContext, NsCssValue, PageRule, QueryKey,
+    RawAreaRect as GridAreaRect, RawAreas as GridAreas, RegisterError, Registration, Selector,
+    SelectorList, Sheet, clear_registered_properties, register_property, relayout_enter,
+    relayout_leave, selector_cache_begin, selector_cache_end, set_active_node, set_focus_node,
+    set_focus_visible_node, set_font_alias, set_frame_viewport_measure, set_fullscreen_node,
+    set_hover_node, set_render_zoom, style_element_cache_begin, style_element_cache_end,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
@@ -100,12 +105,14 @@ pub use inline::{
     serialize as inline_style_serialize, set as inline_style_set,
 };
 pub use matcher::{clear_defined_elements, register_defined_element};
+pub use nesting::has_container_units as text_has_container_units;
 pub use prop::Prop;
 pub use restyle::{
     attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_restyle_dirty,
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
+pub use style_text::{shadow_adopted_text, style_element_text};
 pub use supports::{condition as supports_condition, declaration as supports_declaration};
 pub use time::list_serialize as time_list_serialize;
 pub use timing::{

@@ -110,7 +110,7 @@ unsafe extern "C" fn group_free(data: *mut c_void) {
 }
 
 unsafe extern "C" fn selector_free_notify(data: *mut c_void) {
-    unsafe { ns_css_selector_free(data.cast()) };
+    unsafe { selector_free(data.cast()) };
 }
 
 pub(super) fn group_to_c(group: &[Selector]) -> *mut GPtrArray {
@@ -246,8 +246,7 @@ unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_selector_free(sel: *mut c_void) {
+pub(super) unsafe fn selector_free(sel: *mut c_void) {
     let raw = sel.cast::<RawSelector>();
     let Some(selector) = (unsafe { raw.as_mut() }) else {
         return;
@@ -268,18 +267,6 @@ pub unsafe extern "C" fn ns_css_parse_selector_list(text: *const c_char) -> *mut
     let list = unsafe { bytes(text) }
         .map(selector::parse_list)
         .unwrap_or_default();
-    group_to_c(&list)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_selector_list_checked(
-    text: *const c_char,
-    out_valid: *mut GBoolean,
-) -> *mut GPtrArray {
-    let (list, valid) = selector::parse_list_checked(unsafe { bytes(text) });
-    if let Some(out) = unsafe { out_valid.as_mut() } {
-        *out = glib::boolean(valid);
-    }
     group_to_c(&list)
 }
 

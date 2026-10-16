@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Style sheets have a typed view in rust/css, southstar_css::Sheet, with
+  its font faces, imports, @page rule and container/hover/active flags.
+  The renderer and the engine read sheets through it instead of their own
+  copies of the C struct's first fields (SheetHead, NsCssStylesheetHead),
+  which had to be kept in step with rust/css by hand. The selector cache,
+  render zoom, container-feature tracking, style-element caches, relayout
+  scope and <style>/adoptedStyleSheets text are Rust functions too, the
+  frame-viewport callback the engine installs is a Rust fn(Node) instead
+  of an unsafe extern "C" fn writing through out-pointers, and 25 more
+  ns_css_* exports are gone.
 * rust/css has a typed Rust API for the state other crates set and the
   marks they leave: the focus, hover, active, focus-visible and
   fullscreen nodes, the document base, language and :target fragment,

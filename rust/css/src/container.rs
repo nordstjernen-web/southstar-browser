@@ -31,7 +31,7 @@ pub fn unit_dims() -> (f64, f64) {
     UNIT_DIMS.with(Cell::get)
 }
 
-pub(crate) fn features_begin() {
+pub fn features_begin() {
     FEATURES_USED.with(|used| used.set(false));
 }
 
@@ -39,7 +39,7 @@ pub(crate) fn note_features() {
     FEATURES_USED.with(|used| used.set(true));
 }
 
-pub(crate) fn features_used() -> bool {
+pub fn features_used() -> bool {
     FEATURES_USED.with(Cell::get)
 }
 

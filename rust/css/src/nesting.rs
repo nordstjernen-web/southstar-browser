@@ -375,7 +375,7 @@ pub(crate) fn flatten(text: &[u8]) -> Vec<u8> {
     flattener.out
 }
 
-pub(crate) fn has_container_units(text: &[u8]) -> bool {
+pub fn has_container_units(text: &[u8]) -> bool {
     (0..text.len()).any(|p| {
         let rest = &text[p..];
         (rest[0] == b'c' || rest[0] == b'C')

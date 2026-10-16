@@ -4,9 +4,9 @@
 
 use std::sync::{Mutex, PoisonError};
 
-use southstar_dom::NsNode;
+use southstar_dom::Node;
 
-pub(super) type FrameViewport = unsafe extern "C" fn(*const NsNode, *mut f64, *mut f64);
+pub type FrameViewport = fn(Node<'_>) -> (f64, f64);
 
 static FRAME_VIEWPORT: Mutex<Option<FrameViewport>> = Mutex::new(None);
 
@@ -24,8 +24,7 @@ pub(super) fn frame_viewport() -> Option<FrameViewport> {
         .unwrap_or_else(PoisonError::into_inner)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_frame_viewport_cb(cb: Option<FrameViewport>) {
+pub fn set_frame_viewport_measure(cb: Option<FrameViewport>) {
     *FRAME_VIEWPORT
         .lock()
         .unwrap_or_else(PoisonError::into_inner) = cb;

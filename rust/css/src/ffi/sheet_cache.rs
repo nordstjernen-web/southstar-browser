@@ -11,7 +11,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 
 use super::sheet::{
-    RawSheet, ns_css_stylesheet_force_layer, ns_css_stylesheet_free, ns_css_stylesheet_parse,
+    RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse, stylesheet_force_layer,
 };
 use crate::style_text;
 
@@ -205,7 +205,7 @@ unsafe fn parse_in_layer(bytes: NonNull<c_void>, layer: *const c_char) -> *mut c
     let data = unsafe { g_bytes_get_data(bytes.as_ptr(), &mut len) };
     let sheet = unsafe { parse(data.cast(), len as isize) };
     if !sheet.is_null() && !layer.is_null() {
-        unsafe { ns_css_stylesheet_force_layer(sheet, layer) };
+        unsafe { stylesheet_force_layer(sheet, layer) };
     }
     sheet
 }
@@ -221,20 +221,6 @@ unsafe fn url_key(url: *const c_char, layer: *const c_char) -> Option<UrlKey> {
         layer: unsafe { owned_bytes(layer) },
         url: url.to_vec(),
     })
-}
-
-fn take_text(text: Option<Vec<u8>>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), |text| glib::strdup(&text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_style_element_text(style: *mut NsNode) -> *mut c_char {
-    take_text(unsafe { Node::from_ptr(style) }.and_then(style_text::style_element_text))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_shadow_adopted_css(root: *mut NsNode) -> *mut c_char {
-    take_text(unsafe { Node::from_ptr(root) }.and_then(style_text::shadow_adopted_text))
 }
 
 #[unsafe(no_mangle)]
@@ -366,18 +352,15 @@ pub unsafe extern "C" fn ns_css_stylesheet_parse_import_cached(
     out
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_relayout_enter() {
+pub fn relayout_enter() {
     with(|caches| caches.relayout_depth += 1);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_relayout_leave() {
+pub fn relayout_leave() {
     with(|caches| caches.relayout_depth = caches.relayout_depth.saturating_sub(1));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_element_cache_begin() {
+pub fn style_element_cache_begin() {
     with(|caches| {
         if caches.nested_relayout() {
             return;
@@ -396,8 +379,7 @@ pub extern "C" fn ns_css_style_element_cache_begin() {
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_element_cache_end() {
+pub fn style_element_cache_end() {
     with(|caches| {
         if !caches.nested_relayout() {
             caches.trim_merged(caches.pass_start);

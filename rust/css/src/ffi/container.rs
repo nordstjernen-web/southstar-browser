@@ -59,16 +59,6 @@ pub extern "C" fn ns_css_set_container_dims(inline_px: c_double, block_px: c_dou
     container::set_unit_dims(inline_px, block_px);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_features_begin() {
-    container::features_begin();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_features_used() -> GBoolean {
-    glib::boolean(container::features_used())
-}
-
 unsafe extern "C" fn container_free(data: *mut c_void) {
     let container = data.cast::<Container>();
     if let Some(container) = unsafe { container.as_ref() } {
@@ -237,8 +227,7 @@ pub(super) fn container_stack_push(node: Node<'_>) -> bool {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_rule_matches(
+pub(super) unsafe fn container_rule_matches(
     condition: *const c_char,
     cache: *mut *mut c_void,
 ) -> GBoolean {
@@ -253,8 +242,7 @@ pub unsafe extern "C" fn ns_css_container_rule_matches(
     glib::boolean(query.matches())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_query_free(query: *mut c_void) {
+pub(super) unsafe fn container_query_free(query: *mut c_void) {
     if !query.is_null() {
         drop(unsafe { Box::from_raw(query.cast::<Query>()) });
     }

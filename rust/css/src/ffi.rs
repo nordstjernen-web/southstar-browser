@@ -19,7 +19,6 @@ mod inline;
 mod keyframes;
 mod layers;
 mod matcher;
-mod nesting;
 mod pending;
 mod property;
 mod query;
@@ -45,6 +44,7 @@ use southstar_glib::{self as glib, GBoolean};
 
 use crate::{calc, units};
 
+pub use compute::set_render_zoom;
 pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
@@ -55,6 +55,7 @@ pub(crate) use element_state::{
 pub(crate) use font::relative_unit_px as font_relative_px;
 pub use font::set_font_alias;
 pub(crate) use font::{font_alias, font_available, font_generation, font_oracle_serial};
+pub use gather::{selector_cache_begin, selector_cache_end};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use host_scope::scoped as scoped_css;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
@@ -70,10 +71,15 @@ pub use registry::{RegisterError, Registration, clear_registered_properties, reg
 pub(crate) use selector_view::{
     AttrRef, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef, SheetRef,
 };
-pub(crate) use sheet::{PageRule, SheetBuilder, SyntaxDef};
+pub use sheet::{FontFaceRule, ImportRule, PageRule, Sheet};
+pub(crate) use sheet::{SheetBuilder, SyntaxDef};
+pub use sheet_cache::{
+    relayout_enter, relayout_leave, style_element_cache_begin, style_element_cache_end,
+};
 pub(crate) use shorthand::prop_named;
 pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, RawAreaRect, RawAreas};
+pub use viewport::{FrameViewport, set_frame_viewport_measure};
 
 pub(crate) fn prefers_dark() -> bool {
     southstar_css_media::prefers_dark()

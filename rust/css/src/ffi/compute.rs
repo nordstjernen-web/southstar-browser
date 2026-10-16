@@ -208,11 +208,7 @@ fn font_size_px(style: &RawStyle) -> Option<f64> {
 
 fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f64)> {
     let size_frame = viewport::frame_viewport()?;
-    let (w, h) = frame_viewport_from_style(parent).unwrap_or_else(|| {
-        let (mut w, mut h) = (0.0, 0.0);
-        unsafe { size_frame(frame.as_ptr(), &mut w, &mut h) };
-        (w, h)
-    });
+    let (w, h) = frame_viewport_from_style(parent).unwrap_or_else(|| size_frame(frame));
     let (vw, vh) = viewport::get();
     let differs = (w - vw).abs() > 0.01 || (h - vh).abs() > 0.01;
     (w > 0.0 && h > 0.0 && differs).then(|| viewport::replace(w, h))
@@ -704,8 +700,7 @@ pub extern "C" fn ns_css_style_before_change(node: *const c_void) -> *const RawS
         .map_or(ptr::null(), |style| style.0)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_render_zoom(zoom: f64) {
+pub fn set_render_zoom(zoom: f64) {
     let zoom = if zoom > 0.0 { zoom } else { 1.0 };
     ZOOM.store(zoom.to_bits(), Ordering::Relaxed);
 }

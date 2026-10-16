@@ -8,8 +8,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
+use southstar_css::{PageRule, Sheet};
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
@@ -70,54 +71,12 @@ const _: () = assert!(
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct PageRule {
-    width: f64,
-    height: f64,
-    has_size: GBoolean,
-    landscape: GBoolean,
-    margin: [f64; 4],
-    has_margin: [GBoolean; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
 struct FontDescriptors {
     weight: c_int,
     slant: c_int,
 }
 
-#[repr(C)]
-struct FontFace {
-    family: *const c_char,
-    src_url: *const c_char,
-    unicode_range: *const c_char,
-    descriptors: FontDescriptors,
-}
-
-#[repr(C)]
-struct SheetHead {
-    _rules: *mut c_void,
-    _imports: *mut c_void,
-    _layer_names: *mut c_void,
-    _layers: *mut c_void,
-    font_faces: *mut GArray,
-    _keyframes: *mut c_void,
-    _property_rules: *mut c_void,
-    page_rule: *const PageRule,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<PageRule>() == 72
-        && core::mem::size_of::<FontFace>() == 32
-        && core::mem::offset_of!(SheetHead, font_faces) == 32
-        && core::mem::offset_of!(SheetHead, page_rule) == 56
-);
-
 unsafe extern "C" {
-    fn ns_css_set_render_zoom(zoom: f64);
-    fn ns_css_selector_cache_begin();
-    fn ns_css_selector_cache_end();
     fn ns_css_set_container_map(map: *mut GHashTable);
     fn ns_css_container_map_new() -> *mut GHashTable;
     fn ns_css_container_maps_equal(a: *mut GHashTable, b: *mut GHashTable) -> GBoolean;
@@ -130,19 +89,12 @@ unsafe extern "C" {
         h: f64,
         vertical: GBoolean,
     );
-    fn ns_css_container_features_begin();
-    fn ns_css_container_features_used() -> GBoolean;
     fn ns_css_compute(
         doc: *mut NsNode,
         sheets: *const *const c_void,
         docs: *const *const NsNode,
         n: c_uint,
     ) -> *mut GHashTable;
-    fn ns_css_stylesheet_has_container_rules(sheet: *const c_void) -> GBoolean;
-    fn ns_css_stylesheet_has_container_units(sheet: *const c_void) -> GBoolean;
-    fn ns_css_stylesheet_has_hover_rules(sheet: *const c_void) -> GBoolean;
-    fn ns_css_stylesheet_has_active_rules(sheet: *const c_void) -> GBoolean;
-    fn ns_css_text_has_container_units(text: *const c_char, len: isize) -> GBoolean;
     fn ns_css_style_scale_font_size(style: *mut Style, factor: f64);
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
@@ -216,6 +168,12 @@ impl RenderCtx {
         unsafe { core::slice::from_raw_parts(self.sheets, self.n_sheets as usize) }
     }
 
+    fn style_sheets(&self) -> impl Iterator<Item = &Sheet> {
+        self.sheets()
+            .iter()
+            .filter_map(|&sheet| unsafe { Sheet::from_ptr(sheet) })
+    }
+
     fn doc(&self) -> Option<Node<'_>> {
         unsafe { Node::from_ptr(self.doc) }
     }
@@ -223,20 +181,6 @@ impl RenderCtx {
     fn zoom(&self) -> f64 {
         if self.zoom > 0.0 { self.zoom } else { 1.0 }
     }
-}
-
-fn sheet_head<'a>(sheet: *const c_void) -> Option<&'a SheetHead> {
-    unsafe { sheet.cast::<SheetHead>().as_ref() }
-}
-
-fn font_faces<'a>(sheet: *const c_void) -> &'a [FontFace] {
-    let Some(faces) = sheet_head(sheet).and_then(|h| unsafe { h.font_faces.as_ref() }) else {
-        return &[];
-    };
-    if faces.data.is_null() {
-        return &[];
-    }
-    unsafe { core::slice::from_raw_parts(faces.data.cast::<FontFace>(), faces.len as usize) }
 }
 
 fn add_styled(style: Option<StyleRef<'_>>, text: &[u8], families: &mut HashMap<Vec<u8>, Usage>) {
@@ -296,9 +240,9 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
         return;
     }
     let mut families: HashMap<Vec<u8>, Usage> = HashMap::new();
-    for &sheet in c.sheets() {
-        for face in font_faces(sheet) {
-            if let Some(family) = text(face.family).filter(|f| !f.is_empty()) {
+    for sheet in c.style_sheets() {
+        for face in sheet.font_faces() {
+            if let Some(family) = face.family.map(CStr::to_bytes).filter(|f| !f.is_empty()) {
                 families.entry(family.to_vec()).or_default();
             }
         }
@@ -306,18 +250,18 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
     if let Some(doc) = c.doc() {
         collect_font_usage(doc, styles, &mut families);
     }
-    for &sheet in c.sheets() {
-        for face in font_faces(sheet) {
-            let (Some(family), false) = (text(face.family), face.src_url.is_null()) else {
+    for sheet in c.style_sheets() {
+        for face in sheet.font_faces() {
+            let (Some(family), Some(src_url)) = (face.family, face.src_url) else {
                 continue;
             };
-            if !fonts::range_matches(text(face.unicode_range), families.get(family)) {
+            let range = face.unicode_range.map(CStr::to_bytes);
+            if !fonts::range_matches(range, families.get(family.to_bytes())) {
                 continue;
             }
             let abs = match c.resolve_url {
-                Some(resolve) => unsafe { resolve(face.src_url, c.cb_ud) },
-                None => text(face.src_url)
-                    .and_then(|src| southstar_url::bytes::resolve(text(c.base_url), src))
+                Some(resolve) => unsafe { resolve(src_url.as_ptr(), c.cb_ud) },
+                None => southstar_url::bytes::resolve(text(c.base_url), src_url.to_bytes())
                     .map_or(ptr::null_mut(), |abs| glib::strdup(&abs)),
             };
             let Some(abs) = (unsafe { GStr::take(abs) }) else {
@@ -328,7 +272,11 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
             {
                 continue;
             }
-            unsafe { ns_font_request(face.family, abs.as_ptr(), c.base_url, face.descriptors) };
+            let descriptors = FontDescriptors {
+                weight: face.weight,
+                slant: face.slant,
+            };
+            unsafe { ns_font_request(family.as_ptr(), abs.as_ptr(), c.base_url, descriptors) };
         }
     }
 }
@@ -469,11 +417,12 @@ fn remember(doc: *mut NsNode, viewport_width: f64, layout: *mut NsBox, want: boo
 fn dom_uses_container_units(root: Option<Node<'_>>) -> bool {
     let mut cur = root;
     while let Some(node) = cur {
-        if node.is_element() {
-            let style = node.attr(c"style").map_or(ptr::null(), CStr::as_ptr);
-            if unsafe { ns_css_text_has_container_units(style, -1) } != 0 {
-                return true;
-            }
+        if node.is_element()
+            && node
+                .attr(c"style")
+                .is_some_and(|style| southstar_css::text_has_container_units(style.to_bytes()))
+        {
+            return true;
         }
         cur = southstar_dom::index::next_in_subtree(node, root, true);
     }
@@ -483,12 +432,12 @@ fn dom_uses_container_units(root: Option<Node<'_>>) -> bool {
 fn containers_wanted(c: &RenderCtx) -> (bool, bool) {
     let mut units = dom_uses_container_units(c.doc());
     let mut want = units;
-    for &sheet in c.sheets() {
-        if unsafe { ns_css_stylesheet_has_container_units(sheet) } != 0 {
+    for sheet in c.style_sheets() {
+        if sheet.has_container_units() {
             units = true;
             want = true;
         }
-        if unsafe { ns_css_stylesheet_has_container_rules(sheet) } != 0 {
+        if sheet.has_container_rules() {
             want = true;
         }
     }
@@ -499,10 +448,8 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: *mut GHashTable) -> bool {
     if !predicted.is_null() && lock(&CONTAINERS).settled {
         return false;
     }
-    c.sheets().iter().any(|&sheet| unsafe {
-        ns_css_stylesheet_has_container_rules(sheet) != 0
-            || ns_css_stylesheet_has_container_units(sheet) != 0
-    })
+    c.style_sheets()
+        .any(|sheet| sheet.has_container_rules() || sheet.has_container_units())
 }
 
 fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
@@ -525,17 +472,15 @@ fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> 
 
 fn record_page_state(c: &RenderCtx) {
     let page_rule = c
-        .sheets()
-        .iter()
-        .filter_map(|&sheet| sheet_head(sheet).and_then(|h| unsafe { h.page_rule.as_ref() }))
-        .next_back()
+        .style_sheets()
+        .filter_map(Sheet::page_rule)
+        .last()
         .copied();
     *lock(&PAGE_RULE) = page_rule;
-    let uses = |has: unsafe extern "C" fn(*const c_void) -> GBoolean| {
-        c.sheets().iter().any(|&sheet| unsafe { has(sheet) } != 0)
-    };
-    USES_HOVER.store(uses(ns_css_stylesheet_has_hover_rules), Ordering::Relaxed);
-    USES_ACTIVE.store(uses(ns_css_stylesheet_has_active_rules), Ordering::Relaxed);
+    let uses_hover = c.style_sheets().any(Sheet::has_hover_rules);
+    let uses_active = c.style_sheets().any(Sheet::has_active_rules);
+    USES_HOVER.store(uses_hover, Ordering::Relaxed);
+    USES_ACTIVE.store(uses_active, Ordering::Relaxed);
 }
 
 fn relayout(
@@ -558,12 +503,12 @@ fn relayout(
     record_page_state(c);
 
     let t0 = clock();
-    unsafe { ns_css_set_render_zoom(c.zoom()) };
+    southstar_css::set_render_zoom(c.zoom());
     let (want_cq, uses_cq_units) = containers_wanted(c);
     let predicted = predicted_map(c.doc, viewport_width, want_cq);
     let cache_selectors = selector_cache_wanted(c, predicted);
     if cache_selectors {
-        unsafe { ns_css_selector_cache_begin() };
+        southstar_css::selector_cache_begin();
     }
     let compute = || unsafe { ns_css_compute(c.doc, c.sheets, c.sheet_docs, c.n_sheets) };
     unsafe { ns_css_set_container_map(predicted) };
@@ -609,14 +554,12 @@ fn relayout(
             p.container_pass = glib::TRUE;
             p.container_passes += 1;
         }
-        unsafe {
-            ns_css_set_container_map(containers);
-            ns_css_container_features_begin();
-        }
+        unsafe { ns_css_set_container_map(containers) };
+        southstar_css::container_features_begin();
         let t4 = clock();
         let styles2 = compute();
         let t5 = clock();
-        let features_used = unsafe { ns_css_container_features_used() } != 0;
+        let features_used = southstar_css::container_features_used();
         unsafe { ns_css_set_container_map(ptr::null_mut()) };
         if (!features_used && !stale) || styles_tables_equal(styles, styles2) {
             if let Some(p) = profile.as_deref_mut() {
@@ -667,7 +610,7 @@ fn relayout(
     remember(c.doc, viewport_width, layout, want_cq);
     unsafe {
         if cache_selectors {
-            ns_css_selector_cache_end();
+            southstar_css::selector_cache_end();
         }
         southstar_css::set_focus_node(None);
         southstar_css::set_hover_node(None);

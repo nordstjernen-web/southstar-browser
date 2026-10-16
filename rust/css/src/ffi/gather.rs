@@ -14,7 +14,7 @@ use southstar_dom::{Node, attrs};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::cascade::RawMatch;
-use super::container::ns_css_container_rule_matches;
+use super::container::container_rule_matches;
 use super::custom_props::RawVarMatch;
 use super::declarations::{DECL_SLOT_SPAN, RawPending, RawRule};
 use super::layers::LayerRanks;
@@ -172,13 +172,11 @@ pub(super) fn ancestor_filter_restore(saved: Option<SavedFilter>) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_selector_cache_begin() {
+pub fn selector_cache_begin() {
     SELECTOR_CACHE.with(|c| *c.borrow_mut() = Some(SelectorCache::default()));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_selector_cache_end() {
+pub fn selector_cache_end() {
     SELECTOR_CACHE.with(|c| *c.borrow_mut() = None);
 }
 
@@ -414,10 +412,7 @@ impl Gather<'_> {
             };
             if !rule.container_condition.is_null()
                 && unsafe {
-                    ns_css_container_rule_matches(
-                        rule.container_condition,
-                        &raw mut rule.container_query,
-                    )
+                    container_rule_matches(rule.container_condition, &raw mut rule.container_query)
                 } == 0
             {
                 continue;

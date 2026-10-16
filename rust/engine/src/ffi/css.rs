@@ -7,27 +7,12 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
 use southstar_layout::NsBox;
 
 use super::net::{Bytes, GBytes};
 
-#[repr(C)]
-struct NsCssImport {
-    url: *mut c_char,
-    layer_name: *mut c_char,
-    media: *mut c_char,
-}
-
-#[repr(C)]
-struct NsCssStylesheetHead {
-    _rules: *mut GPtrArray,
-    imports: *mut GArray,
-}
-
 pub use southstar_render::{RenderCtx, RenderProfile};
-
-type FrameViewportCb = unsafe extern "C" fn(frame: *const NsNode, w: *mut f64, h: *mut f64);
 
 unsafe extern "C" {
     fn ns_css_stylesheet_parse_import_cached(
@@ -47,14 +32,7 @@ unsafe extern "C" {
         base_url: *const c_char,
     ) -> *mut c_void;
     fn ns_css_stylesheet_from_style_element_cached(style: *mut NsNode) -> *mut c_void;
-    fn ns_css_style_element_text(style: *mut NsNode) -> *mut c_char;
-    fn ns_css_shadow_adopted_css(root: *mut NsNode) -> *mut c_char;
-    fn ns_css_style_element_cache_begin();
-    fn ns_css_style_element_cache_end();
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
-    fn ns_css_set_frame_viewport_cb(cb: FrameViewportCb);
-    fn ns_css_relayout_enter();
-    fn ns_css_relayout_leave();
     fn ns_css_compute(
         doc: *mut NsNode,
         sheets: *const *const c_void,
@@ -72,16 +50,8 @@ unsafe extern "C" {
     fn g_ptr_array_set_size(array: *mut GPtrArray, length: c_int);
 }
 
-fn c_str_ptr<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-fn take_text(p: *mut c_char) -> Option<Vec<u8>> {
-    unsafe { GStr::take(p) }.map(|s| s.to_bytes().to_vec())
 }
 
 pub struct SheetList(NonNull<GPtrArray>);
@@ -144,19 +114,15 @@ impl Stylesheet {
     }
 
     pub fn imports<'a>(self) -> Vec<Import<'a>> {
-        let head = unsafe { &*self.0.as_ptr().cast::<NsCssStylesheetHead>() };
-        let Some(imports) = (unsafe { head.imports.as_ref() }) else {
+        let Some(sheet) = (unsafe { southstar_css::Sheet::from_ptr(self.as_ptr()) }) else {
             return Vec::new();
         };
-        let data = imports.data.cast::<NsCssImport>();
-        (0..imports.len as usize)
-            .map(|i| {
-                let im = unsafe { &*data.add(i) };
-                Import {
-                    url: c_str_ptr(im.url),
-                    layer_name: c_str_ptr(im.layer_name),
-                    media: c_str_ptr(im.media),
-                }
+        sheet
+            .imports()
+            .map(|import| Import {
+                url: import.url,
+                layer_name: import.layer_name,
+                media: import.media,
             })
             .collect()
     }
@@ -205,11 +171,11 @@ pub fn stylesheet_from_style_element_cached(style: Node) -> Option<Stylesheet> {
 }
 
 pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
-    take_text(unsafe { ns_css_style_element_text(style.as_mut_ptr()) })
+    southstar_css::style_element_text(style)
 }
 
 pub fn shadow_adopted_css(root: Node) -> Option<Vec<u8>> {
-    take_text(unsafe { ns_css_shadow_adopted_css(root.as_mut_ptr()) })
+    southstar_css::shadow_adopted_text(root)
 }
 
 pub fn is_self_contained(css: &[u8]) -> bool {
@@ -218,7 +184,7 @@ pub fn is_self_contained(css: &[u8]) -> bool {
 }
 
 pub fn style_element_cache_end() {
-    unsafe { ns_css_style_element_cache_end() };
+    southstar_css::style_element_cache_end();
 }
 
 pub fn media_viewport_push(w: f64, h: f64) {
@@ -239,19 +205,6 @@ pub fn layout_frame_viewport(frame: Node) -> Option<(f64, f64)> {
     layout_frame_viewport_raw(frame.as_ptr() as usize)
 }
 
-unsafe extern "C" fn on_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) {
-    let (fw, fh) =
-        unsafe { Node::from_ptr(frame) }.map_or((0.0, 0.0), crate::styles::frame_viewport_measured);
-    unsafe {
-        if !w.is_null() {
-            *w = fw;
-        }
-        if !h.is_null() {
-            *h = fh;
-        }
-    }
-}
-
 pub struct Relayout<'a> {
     pub doc: *mut NsNode,
     pub base: Option<&'a CStr>,
@@ -270,23 +223,21 @@ pub struct CssScope;
 
 impl CssScope {
     pub fn enter(base: Option<&CStr>) -> CssScope {
-        unsafe {
-            ns_css_set_frame_viewport_cb(on_frame_viewport);
-            ns_css_relayout_enter();
-            southstar_css::set_doc_base(base.map(CStr::to_bytes));
-            ns_css_style_element_cache_begin();
-        }
+        southstar_css::set_frame_viewport_measure(Some(crate::styles::frame_viewport_measured));
+        southstar_css::relayout_enter();
+        southstar_css::set_doc_base(base.map(CStr::to_bytes));
+        southstar_css::style_element_cache_begin();
         CssScope
     }
 
     pub fn cache_begin(&self) {
-        unsafe { ns_css_style_element_cache_begin() };
+        southstar_css::style_element_cache_begin();
     }
 }
 
 impl Drop for CssScope {
     fn drop(&mut self) {
-        unsafe { ns_css_relayout_leave() };
+        southstar_css::relayout_leave();
     }
 }
 

@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
+use super::container::container_query_free;
 use super::declarations::{RawPending, RawRule, RuleSink};
 use super::rule_index::index_free;
 use super::selector::{group_to_c, selector_to_c};
@@ -147,8 +148,8 @@ impl RawPropertyRule {
 }
 
 #[repr(C)]
-#[derive(Default)]
-pub(crate) struct PageRule {
+#[derive(Clone, Copy, Default)]
+pub struct PageRule {
     pub width: f64,
     pub height: f64,
     pub has_size: GBoolean,
@@ -188,7 +189,6 @@ unsafe extern "C" {
         compare: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
     );
     fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
-    fn ns_css_container_query_free(query: *mut c_void);
 }
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
@@ -303,15 +303,14 @@ unsafe extern "C" fn stop_cmp(a: *const c_void, b: *const c_void) -> c_int {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_rule_free(data: *mut c_void) {
+pub(super) unsafe fn rule_free(data: *mut c_void) {
     let rule = data.cast::<RawRule>();
     let Some(raw) = (unsafe { rule.as_ref() }) else {
         return;
     };
     unsafe {
         for &sel in pointers::<c_void>(raw.selectors) {
-            super::selector::ns_css_selector_free(sel);
+            super::selector::selector_free(sel);
         }
         glib::g_ptr_array_free(raw.selectors, glib::TRUE);
         for decl in elements::<RawDecl>(raw.decls) {
@@ -329,7 +328,7 @@ pub unsafe extern "C" fn ns_css_rule_free(data: *mut c_void) {
         }
         glib::g_free(raw.layer_name.cast());
         glib::g_free(raw.container_condition.cast());
-        ns_css_container_query_free(raw.container_query);
+        container_query_free(raw.container_query);
         if !raw.scopes.is_null() {
             glib::g_ptr_array_free(raw.scopes, glib::TRUE);
         }
@@ -367,7 +366,7 @@ pub(crate) struct RuleBuilder {
 
 impl Drop for RuleBuilder {
     fn drop(&mut self) {
-        unsafe { ns_css_rule_free(self.raw.cast()) };
+        unsafe { rule_free(self.raw.cast()) };
     }
 }
 
@@ -623,7 +622,7 @@ impl SheetBuilder {
 }
 
 unsafe extern "C" fn rule_free_notify(data: *mut c_void) {
-    unsafe { ns_css_rule_free(data) };
+    unsafe { rule_free(data) };
 }
 
 #[unsafe(no_mangle)]
@@ -794,28 +793,88 @@ pub unsafe extern "C" fn ns_css_stylesheet_resolve_urls(
     }
 }
 
-fn flag(sheet: *const RawSheet, read: fn(&RawSheet) -> GBoolean) -> GBoolean {
-    unsafe { sheet.as_ref() }.map_or(glib::FALSE, |sheet| glib::boolean(read(sheet) != 0))
+#[repr(transparent)]
+pub struct Sheet(RawSheet);
+
+pub struct FontFaceRule<'a> {
+    pub family: Option<&'a CStr>,
+    pub src_url: Option<&'a CStr>,
+    pub unicode_range: Option<&'a CStr>,
+    pub weight: c_int,
+    pub slant: c_int,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_stylesheet_has_container_rules(sheet: *const RawSheet) -> GBoolean {
-    flag(sheet, |s| s.has_container_rules)
+pub struct ImportRule<'a> {
+    pub url: Option<&'a CStr>,
+    pub layer_name: Option<&'a CStr>,
+    pub media: Option<&'a CStr>,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_stylesheet_has_container_units(sheet: *const RawSheet) -> GBoolean {
-    flag(sheet, |s| s.has_container_units)
+fn text_at<'a>(text: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: a sheet's strings are null or NUL-terminated and live as long as the sheet.
+    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_stylesheet_has_hover_rules(sheet: *const RawSheet) -> GBoolean {
-    flag(sheet, |s| s.has_hover_rules)
+impl Sheet {
+    /// # Safety
+    ///
+    /// `sheet` is null or points to a style sheet made by this crate that outlives `'a`.
+    pub unsafe fn from_ptr<'a>(sheet: *const c_void) -> Option<&'a Sheet> {
+        // SAFETY: the caller passes null or a live sheet, and Sheet is a transparent RawSheet.
+        unsafe { sheet.cast::<Sheet>().as_ref() }
+    }
+
+    pub fn has_container_rules(&self) -> bool {
+        self.0.has_container_rules != 0
+    }
+
+    pub fn has_container_units(&self) -> bool {
+        self.0.has_container_units != 0
+    }
+
+    pub fn has_hover_rules(&self) -> bool {
+        self.0.has_hover_rules != 0
+    }
+
+    pub fn has_active_rules(&self) -> bool {
+        self.0.has_active_rules != 0
+    }
+
+    pub fn page_rule(&self) -> Option<&PageRule> {
+        // SAFETY: page_rule is null or the sheet's own PageRule, freed with the sheet.
+        unsafe { self.0.page_rule.as_ref() }
+    }
+
+    pub fn font_faces(&self) -> impl Iterator<Item = FontFaceRule<'_>> {
+        // SAFETY: font_faces is null or the sheet's array of RawFontFace.
+        let faces: &[RawFontFace] = unsafe { shared_elements(self.0.font_faces) };
+        faces.iter().map(|face| FontFaceRule {
+            family: text_at(face.family),
+            src_url: text_at(face.src_url),
+            unicode_range: text_at(face.unicode_range),
+            weight: face.weight,
+            slant: face.slant,
+        })
+    }
+
+    pub fn imports(&self) -> impl Iterator<Item = ImportRule<'_>> {
+        // SAFETY: imports is null or the sheet's array of RawImport.
+        let imports: &[RawImport] = unsafe { shared_elements(self.0.imports) };
+        imports.iter().map(|import| ImportRule {
+            url: text_at(import.url),
+            layer_name: text_at(import.layer_name),
+            media: text_at(import.media),
+        })
+    }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_stylesheet_has_active_rules(sheet: *const RawSheet) -> GBoolean {
-    flag(sheet, |s| s.has_active_rules)
+unsafe fn shared_elements<'a, T>(array: *const GArray) -> &'a [T] {
+    match unsafe { array.as_ref() } {
+        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
+            core::slice::from_raw_parts(a.data.cast::<T>(), a.len as usize)
+        },
+        _ => &[],
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -851,11 +910,7 @@ pub unsafe extern "C" fn ns_css_stylesheet_free(s: *mut RawSheet) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_stylesheet_force_layer(
-    sheet: *mut c_void,
-    layer_name: *const c_char,
-) {
+pub(super) unsafe fn stylesheet_force_layer(sheet: *mut c_void, layer_name: *const c_char) {
     let raw = sheet.cast::<RawSheet>();
     let (Some(sheet), Some(layer)) = (unsafe { raw.as_mut() }, unsafe { bytes(layer_name) }) else {
         return;

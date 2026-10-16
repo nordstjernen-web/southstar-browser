@@ -97,11 +97,10 @@ pub(crate) fn relative_unit_px(
     italic: bool,
 ) -> f64 {
     let family = family.map_or(core::ptr::null(), CStr::as_ptr);
-    unsafe { ns_css_font_relative_unit_px(unit, font_px, family, weight, glib::boolean(italic)) }
+    unsafe { font_relative_unit_px(unit, font_px, family, weight, glib::boolean(italic)) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_font_relative_unit_px(
+pub(super) unsafe fn font_relative_unit_px(
     unit: c_uint,
     font_px: c_double,
     family: *const c_char,
