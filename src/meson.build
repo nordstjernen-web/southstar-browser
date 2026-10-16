@@ -160,17 +160,6 @@ libsouthstar_lib = library(
   install: true,
 )
 
-# A static variant of the engine so the out-of-process renderer links it in
-# and ships as a single self-contained executable (no libsouthstar.so
-# runtime dependency to bundle in distro packages).
-libsouthstar_static = static_library(
-  'southstar-static',
-  southstar_embed_sources,
-  dependencies: southstar_deps + ns_sdl_deps,
-  c_args: ns_lib_c_args,
-  install: false,
-)
-
 install_headers('libsouthstar.h', subdir: 'southstar')
 
 # The out-of-process renderer: the engine served over the IPC control channel
@@ -193,7 +182,7 @@ endif
 
 executable(
   'southstar-renderer',
-  link_with: libsouthstar_static,
+  link_language: 'c',
   dependencies: southstar_deps + ns_sdl_deps + rproc_deps,
   link_args: southstar_exe_link_args + renderer_entry_args,
   win_subsystem: 'windows',
