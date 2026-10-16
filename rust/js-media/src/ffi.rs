@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::hooks::{self, Hook};
@@ -86,7 +86,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -181,7 +180,7 @@ pub(crate) fn video_codec_available(codec: &str) -> bool {
 }
 
 pub(crate) fn perf_now(scope: &Scope<'_>) -> f64 {
-    unsafe { ns_perf_realm_now_ms(scope.handle()) }
+    southstar_js_perf::context_now_ms(scope.handle())
 }
 
 #[derive(Clone, Copy)]

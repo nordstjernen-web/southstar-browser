@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint};
 use core::ptr::NonNull;
 use std::ffi::CString;
 
@@ -50,18 +50,8 @@ const SCRIPT_ASYNC: c_int = 2;
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn ns_js_start_frame_clock(js: *mut NsJs, frame: *const c_void);
     fn ns_response_free(resp: *mut NsResponse);
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut ResourceInfo);
-    fn ns_perf_add_resource_timed(
-        js: *mut NsJs,
-        info: *const ResourceInfo,
-        url: *const c_char,
-        initiator: *const c_char,
-        start_us: i64,
-        end_us: i64,
-        resp: *const NsResponse,
-    );
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_content_type_is_javascript(content_type: *const c_char) -> GBoolean;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
@@ -254,7 +244,7 @@ pub(crate) fn log_line(js: Js, line: &[u8]) {
 }
 
 pub(crate) fn start_frame_clock(js: Js, frame: Node<'_>) {
-    unsafe { ns_js_start_frame_clock(js.ptr(), frame.as_ptr().cast()) };
+    southstar_js_perf::start_frame_clock(js.ptr(), frame);
 }
 
 pub(crate) fn fetch_resource(
@@ -298,15 +288,16 @@ pub(crate) fn add_resource_timing(
     span: (i64, i64),
     resp: Option<&Response>,
 ) {
+    let resp = resp.map_or(core::ptr::null(), Response::as_ptr);
+    // SAFETY: the info's strings and the response are the caller's and outlive the call.
     unsafe {
-        ns_perf_add_resource_timed(
+        southstar_js_perf::add_resource_timed(
             js.ptr(),
-            info,
-            url.as_ptr(),
-            initiator.as_ptr(),
-            span.0,
-            span.1,
-            resp.map_or(core::ptr::null(), Response::as_ptr),
+            Some(info),
+            url,
+            Some(initiator),
+            span,
+            resp.cast(),
         )
     };
 }

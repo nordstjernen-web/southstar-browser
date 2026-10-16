@@ -13,9 +13,16 @@ use std::rc::Rc;
 
 use southstar_js_engine::{NativeFn, Scope, Trace, Value};
 
-use crate::entry::{Entry, Fetch, ResourceInfo, Response, relative_ms};
+use crate::entry::{Entry, Fetch, ResourceInfo, Response};
 use crate::ffi::Js;
 use crate::timeline::{Observer, ObserverState};
+
+pub use crate::entry::relative_ms;
+pub use crate::ffi::{
+    add_resource_timed, adopt_frame_clock, clear_frame_clocks, context_now_ms, has_resource_timing,
+    install_runtime_hooks, mark_navigation, move_frame_timeline, page_now_ms, reset_observers,
+    scope_now_ms, start_frame_clock, time_origin_us,
+};
 
 const SUPPORTED_ENTRY_TYPES: [&str; 5] = ["mark", "measure", "navigation", "paint", "resource"];
 
@@ -309,7 +316,7 @@ fn push_to_timeline(js: Js, entry: Entry) {
     }
 }
 
-pub(crate) fn add_resource_timed(
+pub(crate) fn add_resource_entry(
     js: Js,
     info: &ResourceInfo<'_>,
     fetch: &Fetch<'_>,
@@ -776,7 +783,7 @@ fn entry_list_from_array(scope: &mut Scope<'_>, entries: &Value) -> Value {
     list
 }
 
-pub(crate) fn install_entry_list(scope: &mut Scope<'_>, global: &Value) {
+pub fn install_entry_list(scope: &mut Scope<'_>, global: &Value) {
     let ctor = scope
         .get(global, "PerformanceObserverEntryList")
         .unwrap_or_else(|_| Value::undefined());

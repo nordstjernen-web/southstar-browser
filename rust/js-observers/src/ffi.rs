@@ -7,7 +7,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GPtrArray};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
@@ -42,7 +42,6 @@ pub(crate) struct Rect {
 }
 
 unsafe extern "C" {
-    safe fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_border_box(b: *const NsBox, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64);
     fn ns_box_visual_border_box(
@@ -139,7 +138,7 @@ pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: Rect) -> Value {
 }
 
 pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {
-    ns_perf_realm_now_ms(scope.handle())
+    southstar_js_perf::context_now_ms(scope.handle())
 }
 
 pub(crate) fn box_for(scope: &mut Scope<'_>, value: &Value) -> Option<BoxRef<'static>> {

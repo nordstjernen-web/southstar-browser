@@ -14,6 +14,7 @@ use crate::scheduling;
 
 mod enter;
 mod hooks;
+mod hooks_i;
 mod nodes;
 mod page;
 mod tasks;
@@ -23,6 +24,7 @@ pub use crate::ffi::record::AdoptedProtos;
 pub use crate::ffi::{Callbacks as PageCallbacks, NavigationTiming, NsJs};
 pub use enter::*;
 pub use hooks::*;
+pub use hooks_i::*;
 pub use nodes::*;
 pub use page::*;
 pub use tasks::*;

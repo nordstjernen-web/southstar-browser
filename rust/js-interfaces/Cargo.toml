@@ -31,6 +31,7 @@ southstar-js-intl = { path = "../js-intl" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-media = { path = "../js-media" }
 southstar-js-node = { path = "../js-node" }
+southstar-js-perf = { path = "../js-perf" }
 southstar-js-realm = { path = "../js-realm" }
 southstar-js-reflect = { path = "../js-reflect" }
 southstar-js-runtime = { path = "../js-runtime" }

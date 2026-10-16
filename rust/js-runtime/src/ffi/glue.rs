@@ -13,6 +13,7 @@ use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 use super::imports;
 use super::state::MessageTask;
 use super::{GMainContext, Js, NsJs};
+use crate::api::ResourceInfo;
 
 pub type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 type ReadyFn = unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
@@ -80,15 +81,6 @@ unsafe extern "C" {
         data: *mut c_void,
     );
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut Response;
-    fn ns_perf_add_resource_timed(
-        js: *mut NsJs,
-        info: *const c_void,
-        url: *const c_char,
-        initiator: *const c_char,
-        start_us: i64,
-        end_us: i64,
-        resp: *const Response,
-    );
     fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_storage_drain_deferred_events(js: *mut NsJs);
     fn ns_js_report_pending_rejections(js: *mut NsJs);
@@ -507,23 +499,16 @@ pub(crate) fn take_error(error: *mut GError) -> Option<CString> {
 
 pub(crate) fn add_resource_timing(
     js: Js,
-    info: *const c_void,
-    url: *const c_char,
-    initiator: *const c_char,
+    info: &ResourceInfo,
+    url: &CStr,
+    initiator: &CStr,
     start_us: i64,
     response: *const Response,
 ) {
-    unsafe {
-        ns_perf_add_resource_timed(
-            js.ptr(),
-            info,
-            url,
-            initiator,
-            start_us,
-            super::monotonic_us(),
-            response,
-        )
-    };
+    let span = (start_us, super::monotonic_us());
+    let add = crate::api::perf_hooks().add_resource_timed;
+    // SAFETY: the info's strings and the response belong to the fetch the caller just finished and outlive the call.
+    unsafe { add(js.ptr(), Some(info), url, Some(initiator), span, response) };
 }
 
 pub struct BytesView {

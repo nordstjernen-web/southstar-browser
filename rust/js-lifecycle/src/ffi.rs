@@ -156,7 +156,7 @@ impl Js {
     }
 
     pub fn time_origin_ms(self, realm: ContextHandle, now_us: i64) -> f64 {
-        unsafe { ns_perf_relative_ms(now_us, ns_js_time_origin_us(self.0, realm.as_ptr())) }
+        southstar_js_perf::relative_ms(now_us, southstar_js_perf::time_origin_us(self.0, realm))
     }
 
     pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
@@ -175,8 +175,8 @@ impl Js {
         api::set_ready_state(self.0, state);
     }
 
-    pub fn mark_navigation(self, key: &CStr) {
-        unsafe { ns_js_mark_navigation(self.0, key.as_ptr()) };
+    pub fn mark_navigation(self, key: &str) {
+        southstar_js_perf::mark_navigation(self.0, key);
     }
 
     pub fn run_next_script_schedule(
@@ -261,8 +261,6 @@ unsafe extern "C" {
     fn ns_js_flush_ready_images(js: *mut NsJs);
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_promote_deferred_iframes(js: *mut NsJs);
-    fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_void) -> i64;
-    fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -278,7 +276,6 @@ unsafe extern "C" {
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn g_get_monotonic_time() -> i64;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_js_mark_navigation(js: *mut NsJs, key: *const c_char);
     fn ns_js_run_next_script_schedule(
         js: *mut NsJs,
         tasks: *mut GArray,

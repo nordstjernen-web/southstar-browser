@@ -1754,6 +1754,7 @@ dependencies = [
  "southstar-js-forms",
  "southstar-js-input",
  "southstar-js-lifecycle",
+ "southstar-js-page",
  "southstar-js-runtime",
  "southstar-js-window",
  "southstar-layout",
@@ -2112,6 +2113,7 @@ dependencies = [
  "southstar-js-forms",
  "southstar-js-input",
  "southstar-js-lifecycle",
+ "southstar-js-page",
  "southstar-js-runtime",
  "southstar-js-window",
  "southstar-layout",
@@ -2390,6 +2392,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
 ]
 
@@ -2441,6 +2444,7 @@ dependencies = [
  "southstar-html-util",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-url",
@@ -2481,6 +2485,7 @@ dependencies = [
  "southstar-dom",
  "southstar-image",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-url",
@@ -2494,6 +2499,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-focus",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
 ]
@@ -2525,6 +2531,7 @@ dependencies = [
  "southstar-js-lifecycle",
  "southstar-js-media",
  "southstar-js-node",
+ "southstar-js-perf",
  "southstar-js-realm",
  "southstar-js-reflect",
  "southstar-js-runtime",
@@ -2557,6 +2564,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-loader",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
 ]
@@ -2583,6 +2591,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",
  "southstar-video",
@@ -2608,6 +2617,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",
 ]
@@ -2631,6 +2641,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
@@ -2646,6 +2657,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",
 ]
@@ -2654,6 +2666,7 @@ dependencies = [
 name = "southstar-js-perf"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-net",
@@ -2802,6 +2815,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout-hit",
  "southstar-url",
@@ -2815,6 +2829,7 @@ dependencies = [
  "southstar-js-bind",
  "southstar-js-clone",
  "southstar-js-engine",
+ "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",
 ]

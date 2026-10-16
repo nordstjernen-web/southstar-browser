@@ -1,17 +1,19 @@
-//! Southstar — the C ABI and Rust-ABI entry points of the Performance API, and the page state they read.
+//! Southstar — the Performance API's entry points for other crates and the page record's hooks, and the page state they read.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use std::ffi::CString;
 
+use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
-use crate::entry::{Fetch, ResourceInfo, Response};
+use crate::entry::{self, Fetch, Response};
 use crate::navigation;
 use crate::timeline::{self, Observer};
 
+use southstar_js_runtime::api::ResourceInfo;
 pub(crate) use southstar_js_runtime::api::{NavigationTiming, NsJs};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,27 +37,13 @@ impl Js {
 pub(crate) struct RawObject(usize);
 
 #[repr(C)]
-pub struct NsPerfResourceInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: c_int,
-    cors_mode: c_int,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: c_long,
-    body_size: i64,
-}
-
-const _: () = assert!(core::mem::size_of::<NsPerfResourceInfo>() == 56);
-
-#[repr(C)]
 struct GByteArray {
     data: *mut u8,
     len: c_uint,
 }
 
 #[repr(C)]
-pub struct NsResponse {
+struct NsResponse {
     status: c_long,
     final_url: *mut c_char,
     content_type: *mut c_char,
@@ -178,86 +166,67 @@ pub(crate) fn enqueue_drain(js: Js) {
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64 {
-    crate::entry::relative_ms(now_us, origin_us)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_now_ms(js: *const NsJs) -> f64 {
+pub fn page_now_ms(js: *const NsJs) -> f64 {
     crate::now_ms(Js::of(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_time_origin_us(js: *const NsJs, realm: *const c_void) -> i64 {
-    timeline::time_origin_us(Js::of(js), realm as usize)
+pub fn time_origin_us(js: *const NsJs, realm: ContextHandle) -> i64 {
+    timeline::time_origin_us(Js::of(js), realm.as_ptr() as usize)
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64 {
+pub fn scope_now_ms(scope: &mut Scope<'_>) -> f64 {
     crate::realm_now_ms(js_of(scope), realm_of(scope))
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64 {
+pub fn context_now_ms(ctx: ContextHandle) -> f64 {
     ctx.with(|scope| crate::realm_now_ms(js_of(scope), realm_of(scope)))
         .unwrap_or_else(|| crate::realm_now_ms(Js(0), 0))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_start_frame_clock(js: *const NsJs, frame: *const c_void) {
-    timeline::start_frame_clock(Js::of(js), frame as usize);
+pub fn start_frame_clock(js: *const NsJs, frame: Node<'_>) {
+    timeline::start_frame_clock(Js::of(js), frame.as_ptr() as usize);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_adopt_frame_clock(
-    js: *const NsJs,
-    frame: *const c_void,
-    ctx: ContextHandle,
-) {
-    timeline::adopt_frame_clock(Js::of(js), frame as usize, ctx.as_ptr() as usize);
+pub fn adopt_frame_clock(js: *const NsJs, frame: Option<Node<'_>>, ctx: ContextHandle) {
+    let frame = Node::ptr_or_null(frame) as usize;
+    timeline::adopt_frame_clock(Js::of(js), frame, ctx.as_ptr() as usize);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_clear_frame_clocks(js: *const NsJs, destroy: c_int) {
-    timeline::clear_frame_clocks(Js::of(js), destroy != 0);
+pub fn clear_frame_clocks(js: *const NsJs, destroy: bool) {
+    timeline::clear_frame_clocks(Js::of(js), destroy);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_init(js: *const NsJs) {
-    timeline::init(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_reset_observers(js: *const NsJs) {
+pub fn reset_observers(js: *const NsJs) {
     timeline::reset_observers(Js::of(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_teardown(js: *const NsJs) {
+fn init(js: *const NsJs) {
+    timeline::init(Js::of(js));
+}
+
+fn teardown(js: *const NsJs) {
     timeline::teardown(Js::of(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_add_resource_timed(
+/// # Safety
+///
+/// The strings `info` points to are null or NUL-terminated and live for the call, and `resp` is
+/// null or a live response.
+pub unsafe fn add_resource_timed(
     js: *const NsJs,
-    info: *const NsPerfResourceInfo,
-    url: *const c_char,
-    initiator: *const c_char,
-    start_us: i64,
-    end_us: i64,
-    resp: *const NsResponse,
+    info: Option<&ResourceInfo>,
+    url: &CStr,
+    initiator: Option<&CStr>,
+    (start_us, end_us): (i64, i64),
+    resp: *const api::Response,
 ) {
     let js = Js::of(js);
-    let Some(url) = (unsafe { bytes(url) }) else {
-        return;
-    };
     if js.is_null() {
         return;
     }
-    let info = match unsafe { info.as_ref() } {
+    let info = match info {
         Some(info) => unsafe {
-            ResourceInfo {
+            entry::ResourceInfo {
                 timeline: info.timeline as usize,
                 document_url: bytes(info.document_url),
                 render_blocking: info.render_blocking != 0,
@@ -268,7 +237,7 @@ pub unsafe extern "C" fn ns_perf_add_resource_timed(
                 body_size: info.body_size,
             }
         },
-        None => ResourceInfo {
+        None => entry::ResourceInfo {
             timeline: 0,
             document_url: None,
             render_blocking: false,
@@ -279,7 +248,7 @@ pub unsafe extern "C" fn ns_perf_add_resource_timed(
             body_size: 0,
         },
     };
-    let response = unsafe { resp.as_ref() }.map(|r| unsafe {
+    let response = unsafe { resp.cast::<NsResponse>().as_ref() }.map(|r| unsafe {
         Response {
             status: long(r.status),
             cors_allow_origin: bytes(r.cors_allow_origin),
@@ -295,65 +264,65 @@ pub unsafe extern "C" fn ns_perf_add_resource_timed(
         }
     });
     let fetch = Fetch {
-        url,
-        initiator: unsafe { bytes(initiator) },
+        url: url.to_bytes(),
+        initiator: initiator.map(CStr::to_bytes),
         start_us,
         end_us,
     };
-    crate::add_resource_timed(js, &info, &fetch, response.as_ref());
+    crate::add_resource_entry(js, &info, &fetch, response.as_ref());
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_has_resource(
+pub unsafe extern "C" fn ns_perf_add_resource_timed(
     js: *const NsJs,
-    timeline: *const c_void,
+    info: *const ResourceInfo,
     url: *const c_char,
     initiator: *const c_char,
-) -> c_int {
-    let js = Js::of(js);
-    let Some(url) = (unsafe { bytes(url) }) else {
-        return 0;
+    start_us: i64,
+    end_us: i64,
+    resp: *const api::Response,
+) {
+    let Some(url) = (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }) else {
+        return;
     };
-    if js.is_null() {
-        return 0;
-    }
-    c_int::from(crate::has_resource(js, timeline as usize, url, unsafe {
-        bytes(initiator)
-    }))
+    let initiator = (!initiator.is_null()).then(|| unsafe { CStr::from_ptr(initiator) });
+    let info = unsafe { info.as_ref() };
+    unsafe { add_resource_timed(js, info, url, initiator, (start_us, end_us), resp) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_move_timeline(
+pub fn has_resource_timing(
     js: *const NsJs,
-    from: *const c_void,
-    to: *const c_void,
-) {
+    timeline: *const c_void,
+    url: &CStr,
+    initiator: Option<&CStr>,
+) -> bool {
+    let js = Js::of(js);
+    !js.is_null()
+        && crate::has_resource(
+            js,
+            timeline as usize,
+            url.to_bytes(),
+            initiator.map(CStr::to_bytes),
+        )
+}
+
+pub fn move_frame_timeline(js: *const NsJs, frame: Node<'_>, realm: ContextHandle) {
     let js = Js::of(js);
     if !js.is_null() {
-        crate::move_timeline(js, from as usize, to as usize);
+        crate::move_timeline(js, frame.as_ptr() as usize, realm.as_ptr() as usize);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming) {
-    if let Some(timing) = unsafe { timing.as_mut() } {
-        navigation::coarsen(timing);
-    }
+fn coarsen_navigation_timing(timing: &mut NavigationTiming) {
+    navigation::coarsen(timing);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const c_char) {
+pub fn mark_navigation(js: *const NsJs, legacy_key: &str) {
     let js = Js::of(js);
-    let Some(key) = (unsafe { bytes(legacy_key) }) else {
-        return;
-    };
-    let Ok(key) = core::str::from_utf8(key) else {
-        return;
-    };
     let Some(mut timing) = api::navigation_timing(js.ptr()) else {
         return;
     };
-    let Some(field) = navigation::milestone(&mut timing, key) else {
+    let Some(field) = navigation::milestone(&mut timing, legacy_key) else {
         return;
     };
     *field = crate::now_ms(js);
@@ -361,70 +330,28 @@ pub unsafe extern "C" fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const
     api::set_navigation_timing(js.ptr(), timing);
     let absolute_ms = (page_time_origin_real_ms(js) + milestone_ms).floor() as i64;
     if let Some(ctx) = main_context(js) {
-        ctx.with(|scope| navigation::record_legacy_milestone(scope, key, absolute_ms));
+        ctx.with(|scope| navigation::record_legacy_milestone(scope, legacy_key, absolute_ms));
     }
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_perf_observer_ctor(
-    scope: &mut Scope<'_>,
-    new_target: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::observer_ctor(scope, new_target, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_perf_observer_observe(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::observe(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_perf_observer_disconnect(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::disconnect(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_perf_observer_take_records(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    crate::take_records(scope, this, args)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, global: &Value) {
-    crate::install_entry_list(scope, global);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_make_performance_object(
-    scope: &mut Scope<'_>,
-    js: *const NsJs,
-    include_memory: bool,
-) -> Value {
+fn make_performance_object(scope: &mut Scope<'_>, js: *const NsJs, include_memory: bool) -> Value {
     crate::object::make_performance_object(scope, Js::of(js), include_memory)
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_perf_supported_entry_types(scope: &mut Scope<'_>) -> Value {
-    crate::supported_entry_types(scope)
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_performance_extend_event_target(
-    scope: &mut Scope<'_>,
-    global: &Value,
-    performance: &Value,
-) {
-    crate::object::extend_event_target(scope, global, performance);
+pub fn install_runtime_hooks() {
+    api::set_perf_hooks(api::PerfHooks {
+        init,
+        teardown,
+        clear_frame_clocks,
+        coarsen_navigation_timing,
+        make_performance_object,
+        supported_entry_types: crate::supported_entry_types,
+        extend_event_target: crate::object::extend_event_target,
+        install_entry_list: crate::install_entry_list,
+        observer_ctor: crate::observer_ctor,
+        observer_observe: crate::observe,
+        observer_disconnect: crate::disconnect,
+        observer_take_records: crate::take_records,
+        add_resource_timed,
+    });
 }

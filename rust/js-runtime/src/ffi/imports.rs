@@ -272,12 +272,6 @@ unsafe extern "Rust" {
         global: &Value,
     );
     pub(crate) safe fn nsr_live_proto(scope: &mut Scope<'_>, which: c_int) -> Value;
-    pub(crate) unsafe fn nsr_make_performance_object(
-        scope: &mut Scope<'_>,
-        js: *const NsJs,
-        include_memory: bool,
-    ) -> Value;
-    pub(crate) safe fn nsr_perf_supported_entry_types(scope: &mut Scope<'_>) -> Value;
     pub(crate) safe fn nsr_mutation_observer_ctor(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -343,32 +337,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_perf_observer_ctor(
-        scope: &mut Scope<'_>,
-        new_target: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_perf_observer_observe(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_perf_observer_disconnect(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_perf_observer_take_records(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_performance_extend_event_target(
-        scope: &mut Scope<'_>,
-        global: &Value,
-        performance: &Value,
-    );
     pub(crate) unsafe fn nsr_realm_proto_for(
         js: *mut NsJs,
         realm: ContextHandle,

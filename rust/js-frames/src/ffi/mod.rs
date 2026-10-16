@@ -7,7 +7,7 @@ pub(crate) mod form;
 mod imports;
 pub(crate) mod load;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -48,8 +48,6 @@ impl Js {
 type JsResult = Result<Value, Value>;
 
 unsafe extern "C" {
-    fn ns_perf_move_timeline(js: *mut NsJs, from: *const c_void, to: *const c_void);
-    fn ns_js_adopt_frame_clock(js: *mut NsJs, frame: *const c_void, ctx: ContextHandle);
     fn ns_js_run_script_element(js: *mut NsJs, node: *mut NsNode, origin: *const c_char);
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
@@ -165,18 +163,11 @@ pub(crate) fn new_frame_context(js: Js) -> Option<Ctx> {
 }
 
 pub(crate) fn move_timeline(js: Js, frame: Node<'_>, ctx: Ctx) {
-    unsafe {
-        ns_perf_move_timeline(
-            js.ptr(),
-            frame.as_ptr().cast(),
-            ctx.handle().as_ptr().cast_const(),
-        )
-    };
+    southstar_js_perf::move_frame_timeline(js.ptr(), frame, ctx.handle());
 }
 
 pub(crate) fn adopt_frame_clock(js: Js, frame: Option<Node<'_>>, ctx: Ctx) {
-    let frame = Node::ptr_or_null(frame);
-    unsafe { ns_js_adopt_frame_clock(js.ptr(), frame.cast(), ctx.handle()) };
+    southstar_js_perf::adopt_frame_clock(js.ptr(), frame, ctx.handle());
 }
 
 pub(crate) fn make_element(ctx: Ctx, node: Node<'_>) -> Value {

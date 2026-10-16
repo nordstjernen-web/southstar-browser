@@ -8,6 +8,15 @@ mod interfaces;
 mod run;
 mod stats;
 
+use std::sync::Once;
+
 use southstar_dom::Node;
 
 pub(crate) type Element = Node<'static>;
+
+pub fn install_runtime_hooks() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        southstar_js_perf::install_runtime_hooks();
+    });
+}

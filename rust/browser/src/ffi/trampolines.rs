@@ -266,6 +266,7 @@ pub fn new_js(b: &NsBrowser, timing: Option<NavigationTiming>) -> Option<Js> {
         navigate: Some(on_navigate),
         navigate_data: ud,
     };
+    southstar_js_page::install_runtime_hooks();
     // SAFETY: new_page returns a page it just created, or null.
     unsafe { Js::from_ptr(api::new_page(callbacks, timing).cast()) }
 }

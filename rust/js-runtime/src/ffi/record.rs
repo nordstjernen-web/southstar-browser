@@ -1029,7 +1029,7 @@ pub(crate) unsafe fn frame_realm_finish(
                     && southstar_js_bind::has_defined_own(scope, &performance, "memory")
             });
         let performance =
-            unsafe { imports::nsr_make_performance_object(scope, js, include_memory) };
+            (crate::api::perf_hooks().make_performance_object)(scope, js, include_memory);
         drop(scope.set(frame_global, "performance", performance));
     });
 }

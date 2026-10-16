@@ -97,20 +97,6 @@ const _: () = assert!(
         && core::mem::offset_of!(NsResponse, response_end_ms) == 184
 );
 
-#[repr(C)]
-struct NsPerfResourceInfo {
-    timeline: *const c_void,
-    document_url: *const c_char,
-    render_blocking: GBoolean,
-    cors_mode: GBoolean,
-    next_hop_protocol: *const c_char,
-    timing_allow_origin: *const c_char,
-    status: c_long,
-    body_size: i64,
-}
-
-const _: () = assert!(core::mem::size_of::<NsPerfResourceInfo>() == 56);
-
 pub(crate) const HO_ABORT_CONTROLLER: HostKind = HostKind::AbortController;
 pub(crate) const HO_ABORT_SIGNAL: HostKind = HostKind::AbortSignal;
 pub(crate) const HO_XHR: HostKind = HostKind::Xhr;
@@ -192,16 +178,6 @@ unsafe extern "C" {
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
 
-    fn ns_perf_now_ms(js: *const NsJs) -> f64;
-    fn ns_perf_add_resource_timed(
-        js: *mut NsJs,
-        info: *const NsPerfResourceInfo,
-        url: *const c_char,
-        initiator: *const c_char,
-        start_us: i64,
-        end_us: i64,
-        resp: *const NsResponse,
-    );
     fn ns_js_blob_url_lookup(
         js: *mut NsJs,
         url: *const c_char,
@@ -700,7 +676,7 @@ impl Js {
         if self.is_null() {
             return 0.0;
         }
-        unsafe { ns_perf_now_ms(self.ptr()) }
+        southstar_js_perf::page_now_ms(self.ptr())
     }
 
     pub fn time_origin_us(self) -> i64 {
@@ -708,26 +684,23 @@ impl Js {
     }
 
     pub fn add_resource_timing(self, timing: &Timing<'_>, resp: &Response) {
-        let info = NsPerfResourceInfo {
+        let info = api::ResourceInfo {
             timeline: timing.timeline.0.as_ptr().cast_const(),
             document_url: api::realm_document_url_ptr(self.ptr(), timing.timeline.0),
-            render_blocking: 0,
             cors_mode: glib::boolean(timing.cors_mode),
-            next_hop_protocol: ptr::null(),
-            timing_allow_origin: ptr::null(),
-            status: 0,
-            body_size: 0,
+            ..api::ResourceInfo::default()
         };
         let url = cstring(timing.url);
+        let span = (timing.start_us, timing.end_us);
+        // SAFETY: the realm's document URL and the response are live for the call.
         unsafe {
-            ns_perf_add_resource_timed(
+            southstar_js_perf::add_resource_timed(
                 self.ptr(),
-                &info,
-                url.as_ptr(),
-                timing.initiator.as_ptr(),
-                timing.start_us,
-                timing.end_us,
-                resp.0,
+                Some(&info),
+                &url,
+                Some(timing.initiator),
+                span,
+                resp.0.cast(),
             )
         };
     }

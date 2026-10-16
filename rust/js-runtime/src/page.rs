@@ -384,6 +384,7 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     let performance = js.make_performance_object(scope, chrome_compat);
     let _ = scope.set(global, "performance", performance);
 
+    let perf = crate::api::perf_hooks();
     let observer_constructors: [(&str, NativeFn); 4] = [
         ("MutationObserver", imports::nsr_mutation_observer_ctor),
         (
@@ -391,7 +392,7 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
             imports::nsr_intersection_observer_ctor,
         ),
         ("ResizeObserver", imports::nsr_resize_observer_ctor),
-        ("PerformanceObserver", imports::nsr_perf_observer_ctor),
+        ("PerformanceObserver", perf.observer_ctor),
     ];
     for (name, constructor) in observer_constructors {
         bind_constructor(scope, global, name, 1, constructor);
@@ -403,7 +404,7 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
         0,
         crate::api::illegal_constructor,
     );
-    imports::nsr_perf_install_entry_list(scope, global);
+    (perf.install_entry_list)(scope, global);
     let observer_methods: [(&str, &str, u32, NativeFn); 13] = [
         (
             "MutationObserver",
@@ -465,23 +466,18 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
             0,
             imports::nsr_resize_observer_disconnect,
         ),
-        (
-            "PerformanceObserver",
-            "observe",
-            1,
-            imports::nsr_perf_observer_observe,
-        ),
+        ("PerformanceObserver", "observe", 1, perf.observer_observe),
         (
             "PerformanceObserver",
             "disconnect",
             0,
-            imports::nsr_perf_observer_disconnect,
+            perf.observer_disconnect,
         ),
         (
             "PerformanceObserver",
             "takeRecords",
             0,
-            imports::nsr_perf_observer_take_records,
+            perf.observer_take_records,
         ),
     ];
     for (constructor, name, arity, native) in observer_methods {

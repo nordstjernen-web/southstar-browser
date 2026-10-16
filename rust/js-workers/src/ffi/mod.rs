@@ -286,7 +286,6 @@ unsafe extern "C" {
         body_len: usize,
         error: *const c_char,
     );
-    fn ns_perf_relative_ms(now_us: i64, origin_us: i64) -> f64;
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -753,7 +752,7 @@ pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {
 
 pub(crate) fn worker_now_ms(js: Js) -> f64 {
     let origin_us = api::time_origin_us(js.page());
-    unsafe { ns_perf_relative_ms(g_get_monotonic_time(), origin_us) }
+    southstar_js_perf::relative_ms(unsafe { g_get_monotonic_time() }, origin_us)
 }
 
 pub(crate) fn url_resolve(base: Option<&str>, href: &str) -> Option<String> {

@@ -169,6 +169,7 @@ pub fn js_raw(js: Option<Js>) -> *mut c_void {
 }
 
 pub fn new_js(nav: &NavCapture, timing: &NavigationTiming) -> Option<Js> {
+    southstar_js_page::install_runtime_hooks();
     let callbacks = api::PageCallbacks {
         log: Some(on_log),
         log_data: ptr::null_mut(),

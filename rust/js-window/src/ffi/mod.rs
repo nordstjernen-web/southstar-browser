@@ -40,7 +40,6 @@ unsafe extern "C" {
     fn ns_iframe_origin_is_opaque(frame: *mut NsNode) -> GBoolean;
     fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
     fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
-    fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
 }
 
 pub(crate) fn main_realm(js: Js) -> Option<Realm> {
@@ -93,7 +92,7 @@ pub(crate) fn structured_clone_transfer(
 }
 
 pub(crate) fn realm_now_ms(realm: Realm) -> f64 {
-    unsafe { ns_perf_realm_now_ms(realm.0) }
+    southstar_js_perf::context_now_ms(realm.0)
 }
 
 pub(crate) fn caller_realm(scope: &mut Scope<'_>) -> Realm {

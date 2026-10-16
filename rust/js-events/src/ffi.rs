@@ -25,7 +25,6 @@ unsafe extern "C" {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_perf_realm_now_ms(scope: &mut Scope<'_>) -> f64;
     safe fn nsr_submit_event_ctor(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -67,7 +66,7 @@ pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) 
 }
 
 pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {
-    nsr_perf_realm_now_ms(scope)
+    southstar_js_perf::scope_now_ms(scope)
 }
 
 pub(crate) fn submit_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {

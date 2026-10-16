@@ -158,7 +158,6 @@ pub(crate) enum ValueInstaller {
 unsafe extern "C" {
     fn ns_js_brand_node_classes(ctx: ContextHandle);
     fn ns_js_link_interfaces(ctx: ContextHandle);
-    fn ns_js_mark_navigation(js: *mut NsJs, legacy_key: *const c_char);
     fn ns_js_profile_enabled() -> GBoolean;
     fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
 
@@ -175,11 +174,9 @@ unsafe extern "C" {
     fn ns_attr_detach_all(js: *mut NsJs);
     fn ns_attribute_maps_release_all(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
-    fn ns_perf_reset_observers(js: *mut NsJs);
     fn ns_js_orphans_take_all(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_frames_reset(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
-    fn ns_js_clear_frame_clocks(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
 
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
@@ -286,7 +283,6 @@ unsafe extern "Rust" {
     safe fn nsr_compression_install(scope: &mut Scope<'_>, target: &Value);
     safe fn nsr_idb_install(scope: &mut Scope<'_>, target: &Value);
     safe fn nsr_net_install_interfaces(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_perf_install_entry_list(scope: &mut Scope<'_>, target: &Value);
     safe fn nsr_live_wire_constructors(scope: &mut Scope<'_>, target: &Value);
     safe fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, target: &Value);
     safe fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, target: &Value);
@@ -365,8 +361,8 @@ impl Js {
             ns_attribute_maps_release_all(self.0);
             api::release_pinned_wrappers(self.0);
             ns_observers_reset(self.0);
-            ns_perf_reset_observers(self.0);
         }
+        southstar_js_perf::reset_observers(self.0);
     }
 
     pub fn free_orphans(self) {
@@ -389,7 +385,7 @@ impl Js {
             ns_js_frames_reset(self.0);
             ns_window_links_clear(self.0, glib::FALSE);
             api::drop_message_tasks(self.0);
-            ns_js_clear_frame_clocks(self.0, glib::FALSE);
+            southstar_js_perf::clear_frame_clocks(self.0, false);
             ns_js_drop_pending_rejections(self.0);
         }
         api::free_frame_contexts(self.0);
@@ -424,10 +420,8 @@ impl Js {
         unsafe { ns_js_lifecycle_clear(self.0) };
         api::set_ready_state(self.0, 0);
         api::clear_doc_ready_states(self.0);
-        unsafe {
-            ns_js_frames_clear_initial_blank(self.0);
-            ns_js_mark_navigation(self.0, c"domLoading".as_ptr());
-        }
+        unsafe { ns_js_frames_clear_initial_blank(self.0) };
+        southstar_js_perf::mark_navigation(self.0, "domLoading");
     }
 
     pub fn run_content_scripts(self, url: Option<&CStr>) {
@@ -586,7 +580,7 @@ pub(crate) fn install_on(scope: &mut Scope<'_>, installer: Installer, global: &V
         Installer::Compression => nsr_compression_install,
         Installer::IndexedDb => nsr_idb_install,
         Installer::NetInterfaces => nsr_net_install_interfaces,
-        Installer::PerfEntryList => nsr_perf_install_entry_list,
+        Installer::PerfEntryList => southstar_js_perf::install_entry_list,
         Installer::LiveConstructors => nsr_live_wire_constructors,
         Installer::EventAttributeGetters => nsr_install_event_attribute_getters,
     };

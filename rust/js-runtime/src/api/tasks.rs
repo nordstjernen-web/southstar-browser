@@ -273,14 +273,7 @@ pub fn fetch_subresource(
         && js.st().worker_host.get().is_null()
         && let Some(initiator) = initiator
     {
-        glue::add_resource_timing(
-            js,
-            ptr::from_ref(info).cast(),
-            url.as_ptr(),
-            initiator.as_ptr(),
-            start,
-            fetched.response,
-        );
+        glue::add_resource_timing(js, info, url, initiator, start, fetched.response);
     }
     fetched
 }

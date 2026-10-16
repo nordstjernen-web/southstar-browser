@@ -110,9 +110,6 @@ const PROTO_TABLE_ELEMENT: c_int = 13;
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
-    fn ns_perf_coarsen_navigation_timing(timing: *mut NavigationTiming);
-    fn ns_perf_init(js: *mut NsJs);
-    fn ns_perf_teardown(js: *mut NsJs);
     fn g_main_context_default() -> *mut GMainContext;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn ns_js_mutation_init(js: *mut NsJs);
@@ -163,7 +160,6 @@ unsafe extern "C" {
     fn ns_url_teardown(js: *mut NsJs);
     fn ns_js_frames_teardown(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
-    fn ns_js_clear_frame_clocks(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
     fn ns_dispatch_teardown(js: *mut NsJs);
 
@@ -272,11 +268,11 @@ impl Js {
     }
 
     pub fn perf_init(self) {
-        unsafe { ns_perf_init(self.0) };
+        (crate::api::perf_hooks().init)(self.0);
     }
 
     pub fn perf_teardown(self) {
-        unsafe { ns_perf_teardown(self.0) };
+        (crate::api::perf_hooks().teardown)(self.0);
     }
 
     pub fn create_runtime(
@@ -374,7 +370,7 @@ impl Js {
     }
 
     pub fn make_performance_object(self, scope: &mut Scope<'_>, include_memory: bool) -> Value {
-        unsafe { imports::nsr_make_performance_object(scope, self.0, include_memory) }
+        (crate::api::perf_hooks().make_performance_object)(scope, self.0, include_memory)
     }
 
     pub fn sync_window_metrics(self) {
@@ -476,7 +472,7 @@ impl Js {
             ns_document_write_teardown(self.0);
             ns_workers_teardown(self.0);
             ns_window_history_teardown(self.0);
-            ns_perf_teardown(self.0);
+            self.perf_teardown();
             ns_traversal_teardown(self.0);
             ns_services_teardown(self.0);
             ns_js_blob_urls_free(self.0);
@@ -548,9 +544,7 @@ impl Js {
             ns_window_links_clear(self.0, glib::TRUE);
         }
         crate::scheduling::drop_message_tasks(self);
-        unsafe {
-            ns_js_clear_frame_clocks(self.0, glib::TRUE);
-        }
+        (crate::api::perf_hooks().clear_frame_clocks)(self.0, true);
     }
 
     pub fn free_window_values(self) {
@@ -634,7 +628,7 @@ pub(crate) fn chrome_compat() -> bool {
 }
 
 pub(crate) fn supported_entry_types(scope: &mut Scope<'_>) -> Value {
-    imports::nsr_perf_supported_entry_types(scope)
+    (crate::api::perf_hooks().supported_entry_types)(scope)
 }
 
 pub(crate) fn performance_extend_event_target(
@@ -642,7 +636,7 @@ pub(crate) fn performance_extend_event_target(
     global: &Value,
     performance: &Value,
 ) {
-    imports::nsr_performance_extend_event_target(scope, global, performance);
+    (crate::api::perf_hooks().extend_event_target)(scope, global, performance);
 }
 
 pub(crate) fn install_canvas(scope: &mut Scope<'_>, global: &Value, window: bool) {
@@ -673,7 +667,7 @@ pub(crate) fn worker_compile(
 }
 
 pub(crate) fn coarsen_navigation_timing(timing: &mut NavigationTiming) {
-    unsafe { ns_perf_coarsen_navigation_timing(timing) };
+    (crate::api::perf_hooks().coarsen_navigation_timing)(timing);
 }
 
 pub(crate) fn default_main_context() -> *mut GMainContext {

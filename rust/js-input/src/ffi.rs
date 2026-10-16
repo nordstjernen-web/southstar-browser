@@ -53,7 +53,6 @@ unsafe extern "C" {
         w: *mut f64,
         h: *mut f64,
     );
-    fn ns_perf_realm_now_ms(ctx: ContextHandle) -> f64;
     fn g_file_get_contents(
         filename: *const c_char,
         contents: *mut *mut c_char,
@@ -251,7 +250,7 @@ pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str, target: Element) -> 
 }
 
 pub(crate) fn realm_now_ms(scope: &Scope<'_>) -> f64 {
-    unsafe { ns_perf_realm_now_ms(scope.handle()) }
+    southstar_js_perf::context_now_ms(scope.handle())
 }
 
 pub(crate) fn is_focusable(el: Element) -> bool {

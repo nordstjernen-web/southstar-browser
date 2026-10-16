@@ -36,21 +36,6 @@ type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 unsafe extern "C" {
     fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
-    fn ns_perf_has_resource(
-        js: *const NsJs,
-        timeline: *const c_void,
-        url: *const c_char,
-        initiator: *const c_char,
-    ) -> c_int;
-    fn ns_perf_add_resource_timed(
-        js: *const NsJs,
-        info: *const PerfInfo,
-        url: *const c_char,
-        initiator: *const c_char,
-        start_us: i64,
-        end_us: i64,
-        resp: *const c_void,
-    );
     fn g_get_monotonic_time() -> i64;
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
@@ -188,13 +173,15 @@ pub(crate) fn request_repaint(js: Js) {
 }
 
 pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
-    let url = img.url();
-    if js.is_null() || url.is_null() {
+    let Some(url) = c_str(img.url()) else {
+        return;
+    };
+    if js.is_null() {
         return;
     }
     let mut info = PerfInfo::default();
     unsafe { ns_js_element_perf_info(js.0, node.as_ptr(), &mut info) };
-    if unsafe { ns_perf_has_resource(js.0, info.timeline, url, c"img".as_ptr()) } != 0 {
+    if southstar_js_perf::has_resource_timing(js.0, info.timeline, url, Some(c"img")) {
         return;
     }
     info.next_hop_protocol = img.next_hop_protocol();
@@ -214,8 +201,16 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     } else {
         now
     };
+    // SAFETY: the info's strings come from the element and the decoded image, which outlive the call.
     unsafe {
-        ns_perf_add_resource_timed(js.0, &info, url, c"img".as_ptr(), start, end, ptr::null())
+        southstar_js_perf::add_resource_timed(
+            js.0,
+            Some(&info),
+            url,
+            Some(c"img"),
+            (start, end),
+            ptr::null(),
+        )
     };
 }
 

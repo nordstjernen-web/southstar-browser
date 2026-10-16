@@ -114,14 +114,14 @@ fn load_blocked(js: Js) -> bool {
 }
 
 fn complete(js: Js, page: &Page, doc: *mut NsNode) {
-    js.mark_navigation(c"domComplete");
+    js.mark_navigation("domComplete");
     js.set_ready_state(2);
     js.scope(|scope| scope.gc());
     js.flush_autofocus();
     js.dispatch(doc, c"readystatechange");
-    js.mark_navigation(c"loadEventStart");
+    js.mark_navigation("loadEventStart");
     js.dispatch(doc, c"load");
-    js.mark_navigation(c"loadEventEnd");
+    js.mark_navigation("loadEventEnd");
     js.fire_page_transition(c"pageshow");
     js.upgrade_custom_elements(doc);
     let origin = page.lifecycle.borrow().origin.clone();
@@ -165,7 +165,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
         .unwrap_or_else(|| c"inline".to_owned());
     match phase {
         Phase::Interactive => {
-            js.mark_navigation(c"domInteractive");
+            js.mark_navigation("domInteractive");
             js.set_ready_state(1);
             js.dispatch(doc, c"readystatechange");
             advance(js, &page, Phase::Deferred);
@@ -175,9 +175,9 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
                 schedule(js, &page);
                 return SOURCE_REMOVE;
             }
-            js.mark_navigation(c"domContentLoadedEventStart");
+            js.mark_navigation("domContentLoadedEventStart");
             js.dispatch(doc, c"DOMContentLoaded");
-            js.mark_navigation(c"domContentLoadedEventEnd");
+            js.mark_navigation("domContentLoadedEventEnd");
             js.upgrade_custom_elements(doc);
             js.fire_parsed_stylesheet_loads(doc);
             advance(js, &page, Phase::Async);
