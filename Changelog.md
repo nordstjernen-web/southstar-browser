@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* em, i, cite and dfn follow their computed font-style. The inline
+  builder made them italic by tag name even when a stylesheet set
+  font-style: normal, so Stripe's hero heading (an em styled upright)
+  rendered slanted.
 * Assigning an array's length a second time from the same line of script
   removes the elements past the new length. The first assignment did, but
   the property cache then treated length as an ordinary property, so

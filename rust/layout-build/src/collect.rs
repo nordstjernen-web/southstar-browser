@@ -482,10 +482,8 @@ impl<'a> Collector<'a> {
         {
             bold = true;
         }
-        if let Some(kw) = get(PropId::FontStyle).and_then(ValueRef::keyword_text)
-            && matches!(kw.to_bytes(), b"italic" | b"oblique")
-        {
-            italic = true;
+        if let Some(kw) = get(PropId::FontStyle).and_then(ValueRef::keyword_text) {
+            italic = kw.to_bytes() == b"italic" || kw.to_bytes().starts_with(b"oblique");
         }
         if let Some(kw) = get(PropId::TextDecoration).and_then(ValueRef::keyword_text) {
             let kw = kw.to_bytes();
