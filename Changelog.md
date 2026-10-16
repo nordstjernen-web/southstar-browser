@@ -3,6 +3,26 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Cairo is declared once, in a new rust/cairo crate (southstar-cairo)
+  with safe RAII types (Context, Surface, Pattern, Path, Matrix and
+  enums for operators, fill rules, line caps and formats) and pixel
+  access lent only to a closure; the painter draws through it instead of
+  its own 88 redeclared Cairo functions and raw cairo_t pointers, and
+  its unsafe count drops from 426 to 332.
+* The DOM, CSP and the JavaScript runtime export no C symbols any more:
+  the bindings, canvas, paint, the shell and the headless driver call
+  dom's attribute, index, tree and control functions directly, the page
+  record owns a Rust Csp that frames, the loader and documents query
+  through its methods, and headless creates and configures pages through
+  js-runtime's API. The Performance API, image tracking and custom
+  element reactions are reached through js-perf's, js-images's and
+  js-custom-elements's Rust APIs, with the runtime calling back into
+  them through tables of Rust functions the page installs at start-up.
+  Bookmarks, history, the HTTP cache, debug logging, the sandbox and
+  textures likewise drop their C exports for typed APIs (a counted
+  TextureRef handle, an RAII log subscription). dom drops from 87 unsafe
+  keywords to 14, js-runtime from 366 to 305 and the sandbox from 104 to
+  79, and csp forbids unsafe code.
 * DOM: <link rel="preload" as="style"> fires load (or error) once its
   fetch ends, and changing a <link>'s rel, href or as loads it again: a
   link that becomes rel="stylesheet" applies its sheet and fires load.
