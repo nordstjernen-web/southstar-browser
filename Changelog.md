@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 0.9.12-dev:
+======
+
 Southstar Browser 0.9.11:
 ======
 * The logo is the N of the Nordstjernen browser again instead of an S:

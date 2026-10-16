@@ -1697,11 +1697,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-about-style"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-anim"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
@@ -1713,7 +1713,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-audio-helper"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-av",
  "southstar-helper-ffi",
@@ -1725,18 +1725,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-av"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-bookmarks"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-browser"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-bytecode-cache",
@@ -1774,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-bytecode-cache"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-digest",
@@ -1783,11 +1783,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-cairo"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-camera"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
@@ -1798,7 +1798,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-canvas"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-digest",
@@ -1815,14 +1815,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-config"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-csp"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-url",
@@ -1830,7 +1830,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-css"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css-color",
  "southstar-css-media",
@@ -1846,14 +1846,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-css-color"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css-syntax",
 ]
 
 [[package]]
 name = "southstar-css-media"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-numfmt",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-css-prop-syntax"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css-color",
  "southstar-css-media",
@@ -1871,29 +1871,29 @@ dependencies = [
 
 [[package]]
 name = "southstar-css-syntax"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-datetime"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-debuglog"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-digest"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "ring",
 ]
 
 [[package]]
 name = "southstar-dom"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-datetime",
  "southstar-glib",
@@ -1904,7 +1904,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-engine"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-cairo",
@@ -1927,7 +1927,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-eventsource"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-http",
@@ -1936,7 +1936,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-extensions"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-digest",
@@ -1946,7 +1946,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-ffi"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-anim",
@@ -2070,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-font"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-forms"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2089,22 +2089,22 @@ dependencies = [
 
 [[package]]
 name = "southstar-glctx"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-glib"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-gtk-ffi"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-headless"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-config",
@@ -2139,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-helper-ffi"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-http",
  "southstar-sandbox",
@@ -2147,7 +2147,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-history"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-glib",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-html-parser"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2165,18 +2165,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-html-util"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-html5"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-http"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "ml-kem",
  "ring",
@@ -2187,7 +2187,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-http-cache"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-digest",
@@ -2198,18 +2198,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-http-wire"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-i18n"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-idb"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-digest",
@@ -2221,7 +2221,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-image"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
@@ -2232,7 +2232,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-image-decoders"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-av",
  "southstar-glib",
@@ -2242,18 +2242,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-intl-core"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-url",
 ]
 
 [[package]]
 name = "southstar-ipc"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-js-attrs"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2263,21 +2263,21 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-bind"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
 ]
 
 [[package]]
 name = "southstar-js-brand"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
 ]
 
 [[package]]
 name = "southstar-js-clone"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-bind",
  "southstar-js-engine",
@@ -2286,7 +2286,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-collections"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2297,14 +2297,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-compression"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
 ]
 
 [[package]]
 name = "southstar-js-crypto"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
  "southstar-sandbox",
@@ -2313,7 +2313,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-cssom"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
@@ -2331,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-custom-elements"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2342,7 +2342,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-dispatch"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-debuglog",
  "southstar-dom",
@@ -2354,7 +2354,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-document"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-csp",
  "southstar-dom",
@@ -2368,7 +2368,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-dom-factory"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2382,7 +2382,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-elements"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2395,7 +2395,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-engine"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "boa_engine",
  "boa_gc",
@@ -2403,7 +2403,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-events"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2415,7 +2415,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-focus"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2426,7 +2426,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-fonts"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
@@ -2434,7 +2434,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-forms"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-datetime",
@@ -2450,7 +2450,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-frames"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-csp",
@@ -2471,7 +2471,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-geometry"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2486,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-html"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2499,7 +2499,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-images"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-image",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-input"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2525,7 +2525,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-interfaces"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-canvas",
  "southstar-dom",
@@ -2566,7 +2566,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-intl"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-i18n",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-lifecycle"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-dom",
@@ -2592,7 +2592,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-loader"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-bytecode-cache",
  "southstar-csp",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-media"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-mutation"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2637,7 +2637,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-net"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-js-bind",
@@ -2649,7 +2649,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-node"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2662,7 +2662,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-observers"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2677,7 +2677,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-page"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-debuglog",
@@ -2694,7 +2694,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-perf"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-js-engine",
@@ -2704,14 +2704,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-realm"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
 ]
 
 [[package]]
 name = "southstar-js-reflect"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2723,7 +2723,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-runtime"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-csp",
@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-services"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-css-media",
@@ -2753,7 +2753,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-shadow"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2764,7 +2764,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-storage"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-digest",
@@ -2777,7 +2777,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-temporal"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-datetime",
  "southstar-glib",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-text"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2798,7 +2798,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-top-layer"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2810,7 +2810,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-traversal"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2821,7 +2821,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-url"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-js-bind",
@@ -2832,7 +2832,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-wasm"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
  "wasmi",
@@ -2840,7 +2840,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-window"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
@@ -2855,7 +2855,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-js-workers"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-js-bind",
@@ -2868,7 +2868,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-jsshell"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
  "southstar-js-intl",
@@ -2877,11 +2877,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-launcher"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-layout"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
@@ -2891,7 +2891,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-block"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2910,7 +2910,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-build"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2929,7 +2929,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-content"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2943,7 +2943,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-flex"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -2956,7 +2956,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-float"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-geom"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -2978,7 +2978,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-grid"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-glib",
@@ -2992,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-hit"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -3008,7 +3008,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-inline"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -3026,7 +3026,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-position"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -3047,7 +3047,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-query"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-sizing"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -3073,7 +3073,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-table"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
@@ -3084,7 +3084,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-layout-tree"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -3096,11 +3096,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-mat4"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-mathml"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -3108,19 +3108,19 @@ dependencies = [
 
 [[package]]
 name = "southstar-media-shm"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-mic"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-minimp3"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-net"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-about-style",
  "southstar-config",
@@ -3139,14 +3139,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-netstore"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-url",
 ]
 
 [[package]]
 name = "southstar-netutil"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-config",
  "southstar-glib",
@@ -3154,11 +3154,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-numfmt"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-paint"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-cairo",
@@ -3178,7 +3178,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-pdf"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
@@ -3187,11 +3187,11 @@ dependencies = [
 
 [[package]]
 name = "southstar-plmpeg"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-print"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-cairo",
  "southstar-css",
@@ -3203,7 +3203,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-raster"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "gif",
  "png",
@@ -3212,7 +3212,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-render"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-css-media",
@@ -3225,7 +3225,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-renderer-client"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-ipc",
@@ -3233,7 +3233,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-renderer-host"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-browser",
  "southstar-glib",
@@ -3246,7 +3246,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-safebrowsing"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-sandbox"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
@@ -3262,7 +3262,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-selection"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-layout",
@@ -3271,14 +3271,14 @@ dependencies = [
 
 [[package]]
 name = "southstar-selector-text"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css-syntax",
 ]
 
 [[package]]
 name = "southstar-shell"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-bookmarks",
  "southstar-bytecode-cache",
@@ -3302,28 +3302,28 @@ dependencies = [
 
 [[package]]
 name = "southstar-spellcheck"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-sqlite"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-static"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-ffi",
 ]
 
 [[package]]
 name = "southstar-style"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
@@ -3333,7 +3333,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-svg"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
@@ -3345,22 +3345,22 @@ dependencies = [
 
 [[package]]
 name = "southstar-texture"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-threaddump"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-url"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-video"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-av",
  "southstar-dom",
@@ -3376,7 +3376,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-video-helper"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-av",
  "southstar-helper-ffi",
@@ -3385,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-watchdog"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-debuglog",
  "southstar-glib",
@@ -3393,18 +3393,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-webaudio"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-js-engine",
 ]
 
 [[package]]
 name = "southstar-webcrypto"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-webgl"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-canvas",
  "southstar-config",
@@ -3417,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-webgpu"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-canvas",
  "southstar-dom",
@@ -3426,7 +3426,7 @@ dependencies = [
 
 [[package]]
 name = "southstar-websocket"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-http",
@@ -3435,18 +3435,18 @@ dependencies = [
 
 [[package]]
 name = "southstar-webvtt"
-version = "0.9.11"
+version = "0.9.12-dev"
 
 [[package]]
 name = "southstar-woff2"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
 ]
 
 [[package]]
 name = "southstar-xml"
-version = "0.9.11"
+version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
 ]
