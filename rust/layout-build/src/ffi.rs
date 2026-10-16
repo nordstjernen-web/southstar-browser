@@ -1,4 +1,4 @@
-//! Southstar — the ns_layout_* entry points the box-tree builder implements, and the css, net, image, svg, paint and layout-crate calls it makes, behind safe wrappers.
+//! Southstar — the open-select and datalist entry points, and the css, image, svg, paint and layout-crate calls the box-tree builder makes, behind safe wrappers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,13 +8,13 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{
-    GBoolean, GHashTable, GPtrArray, boolean, g_array_append_vals, g_free, g_ptr_array_add,
-    g_ptr_array_new, g_ptr_array_new_with_free_func, strdup,
+    GBoolean, GPtrArray, g_array_append_vals, g_free, g_ptr_array_add, g_ptr_array_new,
+    g_ptr_array_new_with_free_func, strdup,
 };
 use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
 
-use crate::{block, build, classify, generated, media, state};
+use crate::{block, generated, media, state};
 
 #[repr(C)]
 #[derive(Default)]
@@ -47,10 +47,6 @@ unsafe extern "C" {
     fn ns_image_cache_begin_generation(cache: *mut c_void);
     fn ns_image_cache_collect(cache: *mut c_void);
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut RawSvgSize);
-    fn ns_layout_reset_container_queries();
-    fn ns_layout_block(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_apply_position_offsets(b: *mut NsBox, parent_w: f64, parent_h: f64);
-    fn ns_layout_process_absolute_boxes(root: *mut NsBox, styles: *mut GHashTable, vw: f64);
     fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
     fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
     fn ns_paint_li_marker_text(
@@ -79,16 +75,8 @@ pub fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
 
-fn styles(t: *mut GHashTable) -> StyleTable {
-    unsafe { StyleTable::from_ptr(t) }
-}
-
 fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
     s.map_or(ptr::null(), StyleRef::as_ptr)
-}
-
-fn box_ptr(b: Option<BoxRef<'_>>) -> *mut NsBox {
-    b.map_or(ptr::null_mut(), BoxRef::as_mut_ptr)
 }
 
 pub fn viewport_w() -> f64 {
@@ -198,22 +186,6 @@ pub fn build_anonymous_table(
     southstar_layout_tree::build_anonymous_table(Some(start), end, st)
 }
 
-pub fn reset_container_queries() {
-    unsafe { ns_layout_reset_container_queries() };
-}
-
-pub fn layout_block(root: BoxRef<'_>, width: f64) {
-    unsafe { ns_layout_block(root.as_mut_ptr(), width, ptr::null()) };
-}
-
-pub fn apply_position_offsets(root: BoxRef<'_>, w: f64, h: f64) {
-    unsafe { ns_layout_apply_position_offsets(root.as_mut_ptr(), w, h) };
-}
-
-pub fn process_absolute_boxes(root: BoxRef<'_>, st: StyleTable, vw: f64) {
-    unsafe { ns_layout_process_absolute_boxes(root.as_mut_ptr(), st.as_ptr(), vw) };
-}
-
 pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
     unsafe { ns_paint_sync_inline_atomic_offsets(root.as_mut_ptr()) };
 }
@@ -310,29 +282,6 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build(
-    doc: *const NsNode,
-    table: *mut GHashTable,
-    viewport_width: f64,
-    focused_input: *const NsNode,
-    focused_caret_byte: usize,
-    focused_sel_anchor_byte: usize,
-    image_cache: *mut c_void,
-    base_url: *const c_char,
-) -> *mut NsBox {
-    build::layout_build(build::BuildInput {
-        doc: node(doc),
-        styles: styles(table),
-        viewport_width,
-        focused_input: node(focused_input),
-        caret_byte: focused_caret_byte,
-        anchor_byte: focused_sel_anchor_byte,
-        image_cache,
-        base_url,
-    })
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_set_open_select(select: *const NsNode) {
     state::set_open_select(select);
 }
@@ -340,46 +289,6 @@ pub unsafe extern "C" fn ns_layout_set_open_select(select: *const NsNode) {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_layout_set_datalist_open(open: GBoolean) {
     state::set_datalist_open(open != 0);
-}
-
-fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
-    if b.parent().is_none() {
-        return false;
-    }
-    if b.dom()
-        .and_then(Node::name)
-        .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"))
-    {
-        return false;
-    }
-    southstar_layout_float::box_clips_children(b)
-}
-
-fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64) {
-    let bottom = b.y() + b.content_height();
-    if bottom > *out {
-        *out = bottom;
-    }
-    if box_clips_for_page_height(b) {
-        return;
-    }
-    for c in southstar_layout::children(b) {
-        walk_max_bottom(c, out);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_max_bottom(root: *const NsBox, seed: f64) -> f64 {
-    let mut out = seed;
-    if let Some(root) = box_ref(root) {
-        walk_max_bottom(root, &mut out);
-    }
-    out
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_peek_image(src: *const c_char) -> *mut c_void {
-    media::peek_image(c_str(src))
 }
 
 pub use block::flat_parent;
@@ -474,110 +383,4 @@ pub fn record_abs_static(key: usize, run: BoxRef<'_>, rel_x: f64, rel_y: f64) {
             m.insert(key, state::AbsStatic { run, rel_x, rel_y });
         }
     });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build_block(
-    n: *const NsNode,
-    table: *mut GHashTable,
-) -> *mut NsBox {
-    box_ptr(block::build_block(node(n), styles(table)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build_inline_run(
-    first: *const NsNode,
-    last_excl: *const NsNode,
-    table: *mut GHashTable,
-) -> *mut NsBox {
-    crate::run::build_inline_run(node(first), last_excl, styles(table), true)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build_pseudo_block_for(
-    ps: *const Style,
-    host: *const NsNode,
-) -> *mut NsBox {
-    box_ptr(generated::build_pseudo_block_for(style(ps), node(host)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build_pseudo_inline_for(
-    ps: *const Style,
-    host: *const NsNode,
-) -> *mut NsBox {
-    box_ptr(generated::build_pseudo_inline_for(style(ps), node(host)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_register_abs_pseudo(host: *const NsNode, ps: *const Style) {
-    generated::register_abs_pseudo(node(host), style(ps));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_queue_absolute_node(n: *const NsNode, s: *const Style) {
-    let fixed = southstar_layout_content::controls::keyword_is(
-        style(s).and_then(|s| s.get(southstar_style::PropId::Position)),
-        c"fixed",
-    );
-    state::queue_absolute(n, fixed);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_collect_box_bg_image(b: *mut NsBox, s: *const Style) {
-    if let Some(b) = box_ref(b) {
-        media::collect_box_bg_image(b, style(s));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_append_display_contents_children(
-    b: *mut NsBox,
-    n: *const NsNode,
-    table: *mut GHashTable,
-    blockify_children: GBoolean,
-    pending_before: *mut *mut NsBox,
-) {
-    let (Some(b), Some(n)) = (box_ref(b), node(n)) else {
-        return;
-    };
-    let Some(slot) = (unsafe { pending_before.as_mut() }) else {
-        block::append_display_contents_children(b, n, styles(table), blockify_children != 0, None);
-        return;
-    };
-    let mut pending = box_ref(*slot);
-    block::append_display_contents_children(
-        b,
-        n,
-        styles(table),
-        blockify_children != 0,
-        Some(&mut pending),
-    );
-    *slot = box_ptr(pending);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_append_generated_after(
-    b: *mut NsBox,
-    generated_box: *mut NsBox,
-) {
-    if let (Some(b), Some(g)) = (box_ref(b), box_ref(generated_box)) {
-        generated::append_generated_after(b, g);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_is_inline_dom(
-    n: *const NsNode,
-    table: *mut GHashTable,
-) -> GBoolean {
-    boolean(classify::is_inline_dom(node(n), styles(table)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_continues_inline_run(
-    n: *const NsNode,
-    table: *mut GHashTable,
-) -> GBoolean {
-    boolean(classify::continues_inline_run(node(n), styles(table)))
 }

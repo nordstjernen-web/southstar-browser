@@ -1,6 +1,6 @@
 [package]
 name = "southstar-layout-build"
-description = "Box-tree construction from src/layout.c: blocks and block containers, inline runs with white-space collapsing, links, inline attributes, form-control text and atomic inline boxes, replaced, media and pseudo-element boxes, shadow slots, display: contents, flex and grid items, fieldset legends, the pending absolutely positioned boxes and the ns_layout_build entry point"
+description = "Box-tree construction from src/layout.c: blocks and block containers, inline runs with white-space collapsing, links, inline attributes, form-control text and atomic inline boxes, replaced, media and pseudo-element boxes, shadow slots, display: contents, flex and grid items, fieldset legends, the pending absolutely positioned boxes and the build-then-lay-out driver"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

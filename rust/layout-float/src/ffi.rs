@@ -1,4 +1,4 @@
-//! Southstar — the float and block formatting context entry points layout.c calls, the float references block layout keeps and the layout.c calls they make back.
+//! Southstar — the float references block layout keeps, and the style, DOM and overflow accessors the float code reads.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,15 +6,8 @@ use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{PropId, StyleRef};
-
-use crate::overflow;
-
-unsafe extern "C" {
-    fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -67,15 +60,4 @@ pub fn overflow_axis_keyword<'a>(s: Option<StyleRef<'a>>, axis: PropId) -> Optio
     Some(southstar_css::overflow_keyword(s.map(StyleRef::data), axis))
 }
 
-pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
-    unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
-}
-
-fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_clips_out_point(b: *const NsBox, x: f64, y: f64) -> GBoolean {
-    boolean(box_ref(b).is_some_and(|b| overflow::clips_out_point(b, x, y)))
-}
+pub use southstar_layout::dispatch::shift_box_tree;

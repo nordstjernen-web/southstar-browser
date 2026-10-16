@@ -13,8 +13,7 @@ use southstar_layout_content::{counters_build, counters_clear};
 use southstar_style::StyleTable;
 
 use crate::block::build_block;
-use crate::ffi;
-use crate::state;
+use crate::{ffi, passes, state};
 
 fn build_once(doc: Option<Node<'_>>, styles: StyleTable, viewport_width: f64) -> *mut NsBox {
     state::with(|st| {
@@ -24,15 +23,15 @@ fn build_once(doc: Option<Node<'_>>, styles: StyleTable, viewport_width: f64) ->
         st.abs_static = Some(HashMap::new());
         st.block_media_cache = Some(HashMap::new());
     });
-    ffi::reset_container_queries();
+    passes::reset_container_queries();
     ffi::set_container_dims(0.0, 0.0);
     let root = build_block(doc, styles);
     if let Some(root) = root {
         root.set_x(0.0);
         root.set_y(0.0);
-        ffi::layout_block(root, viewport_width);
-        ffi::apply_position_offsets(root, viewport_width, root.content_height());
-        ffi::process_absolute_boxes(root, styles, viewport_width);
+        southstar_layout::dispatch::layout_block(root, viewport_width, ptr::null());
+        passes::apply_position_offsets(root, viewport_width, root.content_height());
+        passes::process_absolute_boxes(root, styles, viewport_width);
         ffi::sync_inline_atomic_offsets(root);
         ffi::compute_paint_bounds(root);
     }
@@ -66,6 +65,7 @@ fn contenteditable_focus(n: Option<Node<'_>>) -> bool {
 }
 
 pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
+    passes::install_builders();
     state::with(|st| {
         st.focused_input = Node::ptr_or_null(input.focused_input);
         st.focused_is_contenteditable = contenteditable_focus(input.focused_input);

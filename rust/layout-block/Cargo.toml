@@ -1,6 +1,6 @@
 [package]
 name = "southstar-layout-block"
-description = "Block layout from src/layout.c: the per-box layout dispatch, block widths and auto margins, margin collapsing, floats and clearance, child placement, multicol columns, auto and keyword heights, rendered fieldset legends, legacy alignment and the flex helpers block layout shares"
+description = "Block layout from src/layout.c: the per-box layout dispatch, block widths and auto margins, margin collapsing, floats and clearance, child placement, multicol columns, auto and keyword heights, rendered fieldset legends and legacy alignment"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

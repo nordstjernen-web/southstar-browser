@@ -597,11 +597,6 @@ impl<'a> MediaRef<'a> {
     }
 }
 
-unsafe extern "C" {
-    fn ns_box_max_bottom(root: *const NsBox, seed: f64) -> f64;
-    fn ns_box_clips_out_point(b: *const NsBox, x: f64, y: f64) -> GBoolean;
-}
-
 #[derive(Clone, Copy)]
 pub struct BoxRef<'a>(NonNull<NsBox>, PhantomData<&'a NsBox>);
 
@@ -755,11 +750,11 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn max_bottom(self, seed: f64) -> f64 {
-        unsafe { ns_box_max_bottom(self.as_ptr(), seed) }
+        (crate::dispatch::get().max_bottom)(self, seed)
     }
 
     pub fn clips_out_point(self, x: f64, y: f64) -> bool {
-        unsafe { ns_box_clips_out_point(self.as_ptr(), x, y) != 0 }
+        (crate::dispatch::get().clips_out_point)(self, x, y)
     }
 
     pub fn same(self, other: BoxRef<'_>) -> bool {

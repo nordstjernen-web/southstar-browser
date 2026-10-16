@@ -207,3 +207,35 @@ pub fn multicol_column_host(b: BoxRef<'_>) -> Option<BoxRef<'_>> {
     }
     only.filter(|&o| multicol_distributable_children(o) >= 2)
 }
+
+fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
+    if b.parent().is_none() {
+        return false;
+    }
+    if b.dom()
+        .and_then(Node::name)
+        .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"))
+    {
+        return false;
+    }
+    box_clips_children(b)
+}
+
+fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64) {
+    let bottom = b.y() + b.content_height();
+    if bottom > *out {
+        *out = bottom;
+    }
+    if box_clips_for_page_height(b) {
+        return;
+    }
+    for c in southstar_layout::children(b) {
+        walk_max_bottom(c, out);
+    }
+}
+
+pub fn max_bottom(root: BoxRef<'_>, seed: f64) -> f64 {
+    let mut out = seed;
+    walk_max_bottom(root, &mut out);
+    out
+}

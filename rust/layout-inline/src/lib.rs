@@ -11,5 +11,6 @@ mod measure;
 mod multicol;
 
 pub use form_hit::inline_box_form_hit;
+pub use intrinsic::{min_width as inline_min_width, natural_width as inline_natural_width};
 pub use layout::{inline_layout as layout_inline, line_height};
 pub use multicol::{Columns, can_fragment, layout_single_inline, run_break_before};

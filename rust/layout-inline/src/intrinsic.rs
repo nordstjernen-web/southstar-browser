@@ -115,7 +115,7 @@ fn atomics_outer_width_sum(b: BoxRef<'_>, ps: *const Style) -> f64 {
     sum
 }
 
-pub(crate) fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
+pub fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     let text = b.text().filter(|t| !t.is_empty());
     if text.is_some() && ffi::writing_mode(ps) != 0 && !has_atomics(b) {
         return vertical_measure(b, ps).0;
@@ -161,7 +161,7 @@ pub(crate) fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     pw
 }
 
-pub(crate) fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
+pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     let Some(text) = b.text().filter(|t| !t.is_empty()) else {
         return 0.0;
     };

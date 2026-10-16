@@ -15,4 +15,8 @@ pub use abs::{
     Area, containing_block as abs_containing_block, static_align_offset as abs_static_align_offset,
     static_position as abs_static_position,
 };
+pub use intrinsic::{
+    column_flow_width as grid_column_flow_width, flows_by_column as grid_flows_by_column,
+    natural_width as grid_natural_width,
+};
 pub use layout::layout_grid;

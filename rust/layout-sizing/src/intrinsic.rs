@@ -464,7 +464,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     if let Some(s) = style
         && style_is_grid_container(style)
     {
-        if grid_flows_by_column(s.as_ptr()) {
+        if grid_flows_by_column(Some(s)) {
             let gw = grid_column_flow_width(b, s.as_ptr(), true);
             if gw >= 0.0 {
                 return gw;

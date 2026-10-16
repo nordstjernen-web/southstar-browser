@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::sync::OnceLock;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, g_free, strdup};
@@ -22,11 +23,19 @@ unsafe extern "C" {
     fn g_unichar_totitle(c: u32) -> u32;
     fn g_unichar_isspace(c: u32) -> GBoolean;
     fn g_unichar_to_utf8(c: u32, outbuf: *mut c_char) -> c_int;
-    fn ns_layout_peek_image(src: *const c_char) -> *mut c_void;
+}
+
+static IMAGE_PEEK: OnceLock<fn(&CStr) -> *mut c_void> = OnceLock::new();
+
+pub fn install_image_peek(peek: fn(&CStr) -> *mut c_void) {
+    let _ = IMAGE_PEEK.set(peek);
 }
 
 pub fn peek_image(src: &CStr) -> *mut c_void {
-    unsafe { ns_layout_peek_image(src.as_ptr()) }
+    let peek = IMAGE_PEEK
+        .get()
+        .expect("the image cache peek is installed before the first build");
+    peek(src)
 }
 
 pub fn viewport() -> (f64, f64) {

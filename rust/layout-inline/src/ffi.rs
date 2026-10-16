@@ -1,4 +1,4 @@
-//! Southstar — the inline layout entry points layout.c and paint call and the layout.c, paint and css.c calls inline layout makes back, behind safe wrappers.
+//! Southstar — the inline entry points paint calls, the mathml and form-control calls inline layout makes, and the sibling-crate helpers it borrows.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -14,11 +14,9 @@ use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{AttrList, Attribute, Context, Layout};
 use southstar_style::StyleRef;
 
-use crate::{attrs, intrinsic};
+use crate::attrs;
 
 unsafe extern "C" {
-    fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
 }
@@ -102,13 +100,7 @@ pub(crate) fn font_variations_attr(r: &InlineAttr) -> Option<Attribute> {
     }
 }
 
-pub(crate) fn layout_box(b: BoxRef<'_>, width: f64, inherited: *const Style) {
-    unsafe { ns_layout_box(b.as_ptr(), width, inherited) };
-}
-
-pub(crate) fn shift(b: BoxRef<'_>, dx: f64, dy: f64) {
-    unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) };
-}
+pub(crate) use southstar_layout::dispatch::{layout_box, shift_box_tree as shift};
 
 pub(crate) fn text_indent(run: BoxRef<'_>, s: *const Style, basis: f64) -> f64 {
     southstar_layout_geom::inline_text_indent_px(run, style(s), basis)
@@ -151,22 +143,6 @@ pub(crate) fn text_orientation(s: *const Style) -> c_int {
 
 pub(crate) fn vertical_stack_text(text: &CStr) -> CString {
     southstar_layout_geom::vertical_stack_text(text.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_natural_width(
-    b: *mut NsBox,
-    parent_style: *const Style,
-) -> f64 {
-    unsafe { BoxRef::from_ptr(b) }.map_or(0.0, |b| intrinsic::natural_width(b, parent_style))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_min_width(
-    b: *mut NsBox,
-    parent_style: *const Style,
-) -> f64 {
-    unsafe { BoxRef::from_ptr(b) }.map_or(0.0, |b| intrinsic::min_width(b, parent_style))
 }
 
 #[unsafe(no_mangle)]

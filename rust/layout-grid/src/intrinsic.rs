@@ -46,7 +46,7 @@ fn outer_width(c: BoxRef<'_>, w: f64) -> f64 {
     }
 }
 
-pub(crate) fn flows_by_column(s: Option<StyleRef<'_>>) -> bool {
+pub fn flows_by_column(s: Option<StyleRef<'_>>) -> bool {
     s.and_then(|s| s.get(PropId::GridAutoFlow))
         .and_then(ValueRef::keyword_text)
         .is_some_and(|kw| kw.to_bytes().windows(6).any(|w| w == b"column"))
@@ -62,11 +62,7 @@ fn explicit_row_count(s: Option<StyleRef<'_>>) -> usize {
     }
 }
 
-pub(crate) fn column_flow_width(
-    b: BoxRef<'_>,
-    child_style: *const Style,
-    min_content: bool,
-) -> f64 {
+pub fn column_flow_width(b: BoxRef<'_>, child_style: *const Style, min_content: bool) -> f64 {
     let style = style_of(b);
     let rows = explicit_row_count(style);
     let mut sum = 0.0;
@@ -107,7 +103,7 @@ pub(crate) fn column_flow_width(
     sum + gap * f64::from(columns - 1)
 }
 
-pub(crate) fn natural_width(b: BoxRef<'_>, child_style: *const Style) -> f64 {
+pub fn natural_width(b: BoxRef<'_>, child_style: *const Style) -> f64 {
     let style = style_of(b);
     if flows_by_column(style) {
         return column_flow_width(b, child_style, false);

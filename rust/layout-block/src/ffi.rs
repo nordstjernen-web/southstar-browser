@@ -1,4 +1,4 @@
-//! Southstar — the block layout entry points layout.c calls and the layout.c, css, mathml and layout crate calls block layout makes back.
+//! Southstar — the fieldset legend gap the painters ask for, the mathml measure block layout calls, and the sibling-crate helpers it borrows.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,7 +9,7 @@ use southstar_glib::{GBoolean, boolean};
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::StyleRef;
 
-use crate::{align, block, dispatch, fieldset};
+use crate::fieldset;
 
 unsafe extern "C" {
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
@@ -148,52 +148,6 @@ pub fn set_container_dims(inline_px: f64, block_px: f64) {
 
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_box(
-    b: *mut NsBox,
-    parent_content_width: f64,
-    inherited_style: *const Style,
-) {
-    if let Some(b) = box_ref(b) {
-        dispatch::layout_box(b, parent_content_width, inherited_style);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_block(
-    b: *mut NsBox,
-    parent_content_width: f64,
-    inherited_style: *const Style,
-) {
-    if let Some(b) = box_ref(b) {
-        block::layout_block(b, parent_content_width, inherited_style);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_reset_container_queries() {
-    dispatch::reset_container_queries();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64) {
-    if let Some(b) = box_ref(b) {
-        dispatch::shift_box_tree(b, dx, dy);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_legacy_align_block_child(
-    c: *mut NsBox,
-    avail_x: f64,
-    avail_w: f64,
-    inherited: *const Style,
-) {
-    if let Some(c) = box_ref(c) {
-        align::legacy_align_block_child(c, avail_x, avail_w, inherited);
-    }
 }
 
 fn out(p: *mut f64, v: f64) {

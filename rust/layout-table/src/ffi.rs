@@ -1,36 +1,9 @@
-//! Southstar — the table layout entry points layout.c calls and the layout.c internals table layout calls back into.
+//! Southstar — the style, box and sizing helpers table layout borrows from the other layout crates.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_glib::GBoolean;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 use southstar_style::StyleRef;
-
-use crate::table;
-
-unsafe extern "C" {
-    fn ns_layout_box(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_block(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_legacy_align_block_child(
-        c: *mut NsBox,
-        avail_x: f64,
-        avail_w: f64,
-        inherited: *const Style,
-    );
-    fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_table_intrinsic_width(
-    b: *mut NsBox,
-    inherited: *const Style,
-    min: GBoolean,
-) -> f64 {
-    match unsafe { BoxRef::from_ptr(b) } {
-        Some(b) => table::intrinsic_width(b, inherited, min != 0),
-        None => 0.0,
-    }
-}
 
 pub(crate) fn style_of(s: *const Style) -> Option<StyleRef<'static>> {
     unsafe { StyleRef::from_ptr(s) }
@@ -42,26 +15,9 @@ pub(crate) fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
 
 pub(crate) use southstar_layout_sizing::{measure_natural_width, min_content_width_of};
 
-pub(crate) fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
-    unsafe { ns_layout_box(b.as_mut_ptr(), parent_content_width, inherited) };
-}
-
-pub(crate) fn layout_block(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
-    unsafe { ns_layout_block(b.as_mut_ptr(), parent_content_width, inherited) };
-}
-
-pub(crate) fn legacy_align_block_child(
-    c: BoxRef<'_>,
-    avail_x: f64,
-    avail_w: f64,
-    inherited: *const Style,
-) {
-    unsafe { ns_layout_legacy_align_block_child(c.as_mut_ptr(), avail_x, avail_w, inherited) };
-}
-
-pub(crate) fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
-    unsafe { ns_layout_shift_box_tree(b.as_mut_ptr(), dx, dy) };
-}
+pub(crate) use southstar_layout::dispatch::{
+    layout_block, layout_box, legacy_align_block_child, shift_box_tree,
+};
 
 pub(crate) fn translate_subtree(b: BoxRef<'_>, dx: f64, dy: f64) {
     if dx != 0.0 || dy != 0.0 {

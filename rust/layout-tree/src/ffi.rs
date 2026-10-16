@@ -1,105 +1,84 @@
-//! Southstar — the box-tree entry points layout.c calls and the box-building calls table construction makes back into layout.c.
+//! Southstar — the box builders table construction calls back into, installed by the box-tree builder, and the box freeing the engine calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_void};
-use core::ptr;
+use std::sync::OnceLock;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable};
-use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
+use southstar_dom::Node;
+use southstar_layout::{BoxPool, BoxRef, NsBox};
 use southstar_style::StyleRef;
-
-unsafe extern "C" {
-    fn ns_layout_build_block(n: *const NsNode, styles: *mut GHashTable) -> *mut NsBox;
-    fn ns_layout_build_inline_run(
-        first: *const NsNode,
-        last_excl: *const NsNode,
-        styles: *mut GHashTable,
-    ) -> *mut NsBox;
-    fn ns_layout_build_pseudo_block_for(ps: *const Style, host: *const NsNode) -> *mut NsBox;
-    fn ns_layout_build_pseudo_inline_for(ps: *const Style, host: *const NsNode) -> *mut NsBox;
-    fn ns_layout_register_abs_pseudo(host: *const NsNode, ps: *const Style);
-    fn ns_layout_queue_absolute_node(n: *const NsNode, s: *const Style);
-    fn ns_layout_collect_box_bg_image(b: *mut NsBox, s: *const Style);
-    fn ns_layout_append_display_contents_children(
-        block: *mut NsBox,
-        n: *const NsNode,
-        styles: *mut GHashTable,
-        blockify_children: GBoolean,
-        pending_before: *mut *mut NsBox,
-    );
-    fn ns_layout_append_generated_after(block: *mut NsBox, generated: *mut NsBox);
-    fn ns_layout_is_inline_dom(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
-    fn ns_layout_continues_inline_run(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
-}
 
 pub use southstar_style::StyleTable as Styles;
 
-fn node_ptr(n: Option<Node<'_>>) -> *const NsNode {
-    n.map_or(ptr::null(), Node::as_ptr)
+pub struct Builders {
+    pub build_block: fn(Node<'_>, Styles) -> Option<BoxRef<'static>>,
+    pub build_inline_run: fn(Node<'_>, Option<Node<'_>>, Styles) -> Option<BoxRef<'static>>,
+    pub build_pseudo_block_for: fn(StyleRef<'_>, Node<'_>) -> Option<BoxRef<'static>>,
+    pub build_pseudo_inline_for: fn(StyleRef<'_>, Node<'_>) -> Option<BoxRef<'static>>,
+    pub register_abs_pseudo: fn(Node<'_>, Option<StyleRef<'_>>),
+    pub queue_absolute_node: fn(Node<'_>, StyleRef<'_>),
+    pub collect_box_bg_image: fn(BoxRef<'_>, Option<StyleRef<'_>>),
+    pub append_display_contents_children: fn(BoxRef<'_>, Node<'_>, Styles),
+    pub append_generated_after: fn(BoxRef<'_>, BoxRef<'static>),
+    pub is_inline_dom: fn(Node<'_>, Styles) -> bool,
+    pub continues_inline_run: fn(Node<'_>, Styles) -> bool,
 }
 
-fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
-    s.map_or(ptr::null(), StyleRef::as_ptr)
+static BUILDERS: OnceLock<Builders> = OnceLock::new();
+
+pub fn install(builders: Builders) {
+    let _ = BUILDERS.set(builders);
 }
 
-fn owned<'a>(b: *mut NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
+fn builders() -> &'static Builders {
+    BUILDERS
+        .get()
+        .expect("the box builders are installed before the first build")
 }
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
 }
 
-pub fn build_block<'a>(n: Node<'_>, styles: Styles) -> Option<BoxRef<'a>> {
-    owned(unsafe { ns_layout_build_block(n.as_ptr(), styles.as_ptr()) })
+pub fn build_block(n: Node<'_>, styles: Styles) -> Option<BoxRef<'static>> {
+    (builders().build_block)(n, styles)
 }
 
-pub fn build_inline_run<'a>(
+pub fn build_inline_run(
     first: Node<'_>,
     last_excl: Option<Node<'_>>,
     styles: Styles,
-) -> Option<BoxRef<'a>> {
-    owned(unsafe {
-        ns_layout_build_inline_run(first.as_ptr(), node_ptr(last_excl), styles.as_ptr())
-    })
+) -> Option<BoxRef<'static>> {
+    (builders().build_inline_run)(first, last_excl, styles)
 }
 
-pub fn build_pseudo_block_for<'a>(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'a>> {
-    owned(unsafe { ns_layout_build_pseudo_block_for(ps.as_ptr(), host.as_ptr()) })
+pub fn build_pseudo_block_for(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'static>> {
+    (builders().build_pseudo_block_for)(ps, host)
 }
 
-pub fn build_pseudo_inline_for<'a>(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'a>> {
-    owned(unsafe { ns_layout_build_pseudo_inline_for(ps.as_ptr(), host.as_ptr()) })
+pub fn build_pseudo_inline_for(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'static>> {
+    (builders().build_pseudo_inline_for)(ps, host)
 }
 
 pub fn register_abs_pseudo(host: Node<'_>, ps: Option<StyleRef<'_>>) {
-    unsafe { ns_layout_register_abs_pseudo(host.as_ptr(), style_ptr(ps)) }
+    (builders().register_abs_pseudo)(host, ps);
 }
 
 pub fn queue_absolute_node(n: Node<'_>, s: StyleRef<'_>) {
-    unsafe { ns_layout_queue_absolute_node(n.as_ptr(), s.as_ptr()) }
+    (builders().queue_absolute_node)(n, s);
 }
 
 pub fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {
-    unsafe { ns_layout_collect_box_bg_image(b.as_mut_ptr(), style_ptr(s)) }
+    (builders().collect_box_bg_image)(b, s);
 }
 
 pub fn append_display_contents_children(block: BoxRef<'_>, n: Node<'_>, styles: Styles) {
-    unsafe {
-        ns_layout_append_display_contents_children(
-            block.as_mut_ptr(),
-            n.as_ptr(),
-            styles.as_ptr(),
-            0,
-            ptr::null_mut(),
-        );
-    }
+    (builders().append_display_contents_children)(block, n, styles);
 }
 
-pub fn append_generated_after(block: BoxRef<'_>, generated: BoxRef<'_>) {
-    unsafe { ns_layout_append_generated_after(block.as_mut_ptr(), generated.as_mut_ptr()) }
+pub fn append_generated_after(block: BoxRef<'_>, generated: BoxRef<'static>) {
+    (builders().append_generated_after)(block, generated);
 }
 
 pub fn tag_is_non_rendering(name: &CStr) -> bool {
@@ -107,11 +86,11 @@ pub fn tag_is_non_rendering(name: &CStr) -> bool {
 }
 
 pub fn is_inline_dom(n: Node<'_>, styles: Styles) -> bool {
-    unsafe { ns_layout_is_inline_dom(n.as_ptr(), styles.as_ptr()) != 0 }
+    (builders().is_inline_dom)(n, styles)
 }
 
 pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
-    unsafe { ns_layout_continues_inline_run(n.as_ptr(), styles.as_ptr()) != 0 }
+    (builders().continues_inline_run)(n, styles)
 }
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {

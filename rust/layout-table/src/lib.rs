@@ -6,7 +6,7 @@ mod ffi;
 mod grid;
 mod table;
 
-pub use table::layout as layout_table;
+pub use table::{intrinsic_width as table_intrinsic_width, layout as layout_table};
 
 #[cfg(test)]
 mod tests;

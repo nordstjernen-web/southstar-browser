@@ -1,21 +1,20 @@
-//! Southstar — the positioned-layout entry points layout.c and the painters call, and the layout.c calls positioned layout makes back, behind safe wrappers.
+//! Southstar — the document layout entry point, which installs the layout hooks before building, and the positioned-layout entry points the painters call, with the box builder and sizing calls positioned layout makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::CStr;
+use core::ffi::{CStr, c_char, c_void};
+use std::sync::Once;
 
-use southstar_dom::Node;
+use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_layout::dispatch::Dispatch;
 use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout_build::{BuildInput, Passes};
+use southstar_layout_sizing::Measures;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::sticky::{self, StickyY};
 use crate::{abs, relative};
-
-unsafe extern "C" {
-    fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-}
 
 #[derive(Clone, Copy)]
 pub struct Entry<'a> {
@@ -52,13 +51,7 @@ pub fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
-pub fn layout_box(b: BoxRef<'_>, width: f64, inherited: *const Style) {
-    unsafe { ns_layout_box(b.as_ptr(), width, inherited) }
-}
-
-pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
-    unsafe { ns_layout_shift_box_tree(b.as_ptr(), dx, dy) }
-}
+pub use southstar_layout_block::{layout_box, shift_box_tree};
 
 pub use southstar_layout_geom::flex::{
     align_is_baseline as flex_align_is_baseline, box_is_border_box as flex_box_is_border_box,
@@ -139,30 +132,61 @@ pub fn viewport_h() -> f64 {
     southstar_css::viewport().1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_apply_position_offsets(
-    b: *mut NsBox,
-    parent_w: f64,
-    parent_h: f64,
-) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        relative::apply_position_offsets(b, parent_w, parent_h);
-    }
+fn install_layout_hooks() {
+    static INSTALL: Once = Once::new();
+    INSTALL.call_once(|| {
+        southstar_layout::dispatch::install(Dispatch {
+            layout_box: southstar_layout_block::layout_box,
+            layout_block: southstar_layout_block::layout_block,
+            shift_box_tree: southstar_layout_block::shift_box_tree,
+            legacy_align_block_child: southstar_layout_block::legacy_align_block_child,
+            max_bottom: southstar_layout_float::max_bottom,
+            clips_out_point: southstar_layout_float::clips_out_point,
+        });
+        southstar_layout_build::install_passes(Passes {
+            reset_container_queries: southstar_layout_block::reset_container_queries,
+            apply_position_offsets: relative::apply_position_offsets,
+            process_absolute_boxes: abs::process_absolute_boxes,
+        });
+        southstar_layout_sizing::install(Measures {
+            inline_natural_width: southstar_layout_inline::inline_natural_width,
+            inline_min_width: southstar_layout_inline::inline_min_width,
+            table_intrinsic_width: southstar_layout_table::table_intrinsic_width,
+            grid_natural_width: southstar_layout_grid::grid_natural_width,
+            grid_flows_by_column: southstar_layout_grid::grid_flows_by_column,
+            grid_column_flow_width: southstar_layout_grid::grid_column_flow_width,
+        });
+    });
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_process_absolute_boxes(
-    root: *mut NsBox,
-    styles: *mut GHashTable,
+pub unsafe extern "C" fn ns_layout_build(
+    doc: *const NsNode,
+    table: *mut GHashTable,
     viewport_width: f64,
-) {
-    if let Some(root) = unsafe { BoxRef::from_ptr(root) } {
-        abs::process_absolute_boxes(
-            root,
-            unsafe { StyleTable::from_ptr(styles) },
-            viewport_width,
-        );
-    }
+    focused_input: *const NsNode,
+    focused_caret_byte: usize,
+    focused_sel_anchor_byte: usize,
+    image_cache: *mut c_void,
+    base_url: *const c_char,
+) -> *mut NsBox {
+    install_layout_hooks();
+    // SAFETY: the caller passes the document as null or a live node of this thread's DOM.
+    let doc = unsafe { Node::from_ptr(doc) };
+    // SAFETY: the caller passes the computed-style table of that document, or null.
+    let styles = unsafe { StyleTable::from_ptr(table) };
+    // SAFETY: the focused input is null or a live node of the same document.
+    let focused_input = unsafe { Node::from_ptr(focused_input) };
+    southstar_layout_build::layout_build(BuildInput {
+        doc,
+        styles,
+        viewport_width,
+        focused_input,
+        caret_byte: focused_caret_byte,
+        anchor_byte: focused_sel_anchor_byte,
+        image_cache,
+        base_url,
+    })
 }
 
 #[unsafe(no_mangle)]

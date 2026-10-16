@@ -7,6 +7,7 @@ mod order;
 mod runs;
 mod table;
 
+pub use ffi::{Builders, install};
 pub use order::reorder_children;
 pub use runs::{append_child, clone_range, join_splits, merge_prefix, run_split};
 pub use table::{build_anonymous_table, build_table, is_table_box, node_is_table_internal};
