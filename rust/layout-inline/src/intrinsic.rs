@@ -31,6 +31,7 @@ fn affects_measure(kind: u32) -> bool {
             | k::SUPERSCRIPT
             | k::SUBSCRIPT
             | k::SMALL_CAPS
+            | k::NO_WRAP
     )
 }
 

@@ -287,6 +287,7 @@ pub mod inline_kind {
     pub const ELEMENT: c_uint = 28;
     pub const SPACER: c_uint = 29;
     pub const SPELLCHECK: c_uint = 30;
+    pub const NO_WRAP: c_uint = 31;
 }
 
 #[repr(C)]

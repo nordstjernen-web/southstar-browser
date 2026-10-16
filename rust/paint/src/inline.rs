@@ -680,6 +680,7 @@ fn paint_inline_make_layout(
                 a = Some(Attribute::scale(0.75));
             }
             k::SMALL_CAPS => a = Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::NO_WRAP => a = Some(Attribute::allow_breaks(false)),
             k::SELECTION => {
                 attrs.insert_range(
                     Some(Attribute::background(0xb400, 0xd500, 0xfe00)),
@@ -756,6 +757,7 @@ pub fn build_inline_layout(b: BoxRef<'_>) -> Option<Layout> {
             k::FONT_FAMILY => family_attr(r.family()),
             k::SUPERSCRIPT | k::SUBSCRIPT => Some(Attribute::scale(0.75)),
             k::SMALL_CAPS => Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::NO_WRAP => Some(Attribute::allow_breaks(false)),
             k::SPACER => Some(Attribute::shape((r.box_w * S) as i32)),
             _ => None,
         };

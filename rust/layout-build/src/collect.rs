@@ -81,6 +81,7 @@ pub struct Collector<'a> {
     underline: Span,
     overline: Span,
     strike: Span,
+    no_wrap: Span,
     q_depth: i32,
     pub text_transform: Option<&'a CStr>,
     pub atomics: Vec<(usize, *mut NsBox)>,
@@ -159,6 +160,7 @@ impl<'a> Collector<'a> {
             underline: Span::default(),
             overline: Span::default(),
             strike: Span::default(),
+            no_wrap: Span::default(),
             q_depth: 0,
             text_transform: None,
             atomics: Vec::new(),
@@ -525,6 +527,10 @@ impl<'a> Collector<'a> {
         self.underline.open(uline, at);
         self.overline.open(oline, at);
         self.strike.open(strike, at);
+        let no_wrap = s
+            .and_then(|s| s.keyword_of(PropId::WhiteSpace))
+            .is_some_and(|kw| matches!(kw.to_bytes(), b"nowrap" | b"pre"));
+        self.no_wrap.open(no_wrap, at);
 
         let weight_start = self.out.len();
         let fst = get(PropId::FontStretch);
@@ -693,6 +699,9 @@ impl<'a> Collector<'a> {
         }
         if let Some(start) = self.strike.close(strike) {
             emit_attr_styled(attrs, inline_kind::STRIKETHROUGH, start, end, decor_style);
+        }
+        if let Some(start) = self.no_wrap.close(no_wrap) {
+            emit_attr(attrs, inline_kind::NO_WRAP, start, end);
         }
         if sup && end > rise_start {
             emit_attr(attrs, inline_kind::SUPERSCRIPT, rise_start, end);

@@ -122,6 +122,7 @@ pub(crate) fn apply_layout_attrs(list: &AttrList, b: BoxRef<'_>) {
                 Some(Attribute::scale(0.75))
             }
             k::SMALL_CAPS => Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::NO_WRAP => Some(Attribute::allow_breaks(false)),
             k::SPACER => Some(Attribute::shape_rect(Rectangle {
                 x: 0,
                 y: 0,
