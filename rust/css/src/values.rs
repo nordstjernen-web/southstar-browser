@@ -306,11 +306,6 @@ fn color_lerp(a: &Color, b: &Color, t: f64) -> Color {
     out
 }
 
-fn lerp_channel(a: u8, b: u8, t: f64) -> u8 {
-    let v = (f64::from(a) + (f64::from(b) - f64::from(a)) * t).clamp(0.0, 255.0);
-    (v + 0.5) as u8
-}
-
 fn c_text(bytes: &[u8]) -> CString {
     CString::new(bytes).unwrap_or_default()
 }
