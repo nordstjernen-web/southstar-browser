@@ -115,7 +115,10 @@ Southstar Browser 0.9.11-dev:
   keyframes resolve to the initial or the parent's value and
   interpolate rather than flipping halfway, a shorthand in
   transition-property (border-width) transitions its longhands, and the
-  initial border widths are medium (3px).
+  initial border widths are medium (3px). Shadow lists of different
+  lengths, and none, interpolate by padding the shorter list with
+  transparent zero shadows, with premultiplied colors and blur kept at
+  or above 0.
 * A border side whose style is set but whose width is not now draws at
   the initial medium width (3px) instead of none at all
   (border-bottom-style: solid alone gave no border), and a width set on

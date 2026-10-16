@@ -22,7 +22,7 @@ use crate::prop::Prop;
 use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
 use crate::scan::split_ws_limit;
-use crate::shadow::{self, ShadowList};
+use crate::shadow::{self, Shadow, ShadowList};
 use crate::shorthand::border_radius_canonical;
 use crate::text::split_top_level_commas;
 use crate::time;
@@ -507,36 +507,67 @@ fn transform_lerp(ta: &Transform, tb: &Transform, t: f64) -> Option<Transform> {
 }
 
 fn shadow_lerp(sa: &ShadowList, sb: &ShadowList, t: f64) -> Option<ShadowList> {
-    if sa.n != sb.n || sa.is_text != sb.is_text {
+    if sa.is_text != sb.is_text {
         return None;
     }
-    let n = usize::try_from(sa.n).unwrap_or(0);
-    if sa.s[..n]
-        .iter()
-        .zip(&sb.s[..n])
-        .any(|(x, y)| x.inset != y.inset)
-    {
-        return None;
-    }
+    let (na, nb) = (shadow_count(sa), shadow_count(sb));
+    let n = na.max(nb);
     let mut out = ShadowList {
-        n: sa.n,
+        n: sa.n.max(sb.n),
         is_text: sa.is_text,
         ..ShadowList::default()
     };
     for i in 0..n {
-        let (x, y) = (&sa.s[i], &sb.s[i]);
+        let (x, y) = match (i < na, i < nb) {
+            (true, true) => (sa.s[i], sb.s[i]),
+            (true, false) => (sa.s[i], transparent_like(&sa.s[i])),
+            _ => (transparent_like(&sb.s[i]), sb.s[i]),
+        };
+        if x.inset != y.inset {
+            return None;
+        }
         let o = &mut out.s[i];
         o.x = lerp(x.x, y.x, t);
         o.y = lerp(x.y, y.y, t);
-        o.blur = lerp(x.blur, y.blur, t);
+        o.blur = lerp(x.blur, y.blur, t).max(0.0);
         o.spread = lerp(x.spread, y.spread, t);
-        o.r = lerp_channel(x.r, y.r, t);
-        o.g = lerp_channel(x.g, y.g, t);
-        o.b = lerp_channel(x.b, y.b, t);
-        o.a = lerp_channel(x.a, y.a, t);
+        for k in 0..4 {
+            o.em[k] = lerp(x.em[k], y.em[k], t);
+            o.rem[k] = lerp(x.rem[k], y.rem[k], t);
+        }
+        [o.r, o.g, o.b, o.a] = premultiplied_lerp([x.r, x.g, x.b, x.a], [y.r, y.g, y.b, y.a], t);
         o.inset = x.inset;
     }
     Some(out)
+}
+
+fn shadow_count(list: &ShadowList) -> usize {
+    usize::try_from(list.n).unwrap_or(0).min(list.s.len())
+}
+
+fn transparent_like(shadow: &Shadow) -> Shadow {
+    Shadow {
+        inset: shadow.inset,
+        ..Shadow::default()
+    }
+}
+
+fn premultiplied_lerp(a: [u8; 4], b: [u8; 4], t: f64) -> [u8; 4] {
+    let alpha = |c: [u8; 4]| f64::from(c[3]) / 255.0;
+    let (aa, ab) = (alpha(a), alpha(b));
+    let out_alpha = lerp(aa, ab, t).clamp(0.0, 1.0);
+    let mut out = [0u8; 4];
+    for k in 0..3 {
+        let premultiplied = lerp(f64::from(a[k]) * aa, f64::from(b[k]) * ab, t);
+        let channel = if out_alpha > 0.0 {
+            premultiplied / out_alpha
+        } else {
+            0.0
+        };
+        out[k] = channel.round().clamp(0.0, 255.0) as u8;
+    }
+    out[3] = (out_alpha * 255.0).round() as u8;
+    out
 }
 
 fn rect_lerp(ra: &Rect, rb: &Rect, t: f64) -> Option<Rect> {
@@ -626,7 +657,17 @@ fn interpolate_layer(a: &Value, b: &Value, t: f64) -> Option<Value> {
             }),
         }));
     }
+    let empty_like = |list: &ShadowList| ShadowList {
+        is_text: list.is_text,
+        ..ShadowList::default()
+    };
     let body = match (&a.body, &b.body) {
+        (Body::Keyword(k), Body::Shadow(sb)) if k == b"none" => {
+            Body::Shadow(Box::new(shadow_lerp(&empty_like(sb), sb, t)?))
+        }
+        (Body::Shadow(sa), Body::Keyword(k)) if k == b"none" => {
+            Body::Shadow(Box::new(shadow_lerp(sa, &empty_like(sa), t)?))
+        }
         (Body::Keyword(ka), Body::Keyword(kb)) => Body::Keyword(keyword_lerp(ka, kb, t)?),
         (Body::Rect(ra), Body::Rect(rb)) => Body::Rect(rect_lerp(ra, rb, t)?),
         (Body::Color(ca), Body::Color(cb)) => Body::Color(color_lerp(ca, cb, t)),
