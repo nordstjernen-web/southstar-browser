@@ -29,6 +29,16 @@ Southstar Browser 0.9.11-dev:
   freed: pango_attribute_destroy(NULL) ran for every such run (dozens of
   warnings per page on sites like Ars Technica), and a failed camera open
   closed fd -1.
+* Image requests advertise image/avif only in builds that can decode it.
+  A build without libavif (and every Windows build, which refuses AVIF)
+  still asked for it first, so CDNs that negotiate on the Accept header
+  sent AVIF that could not be shown: every listing photo on Airbnb was
+  missing.
+* TaskController works where AbortSignal's attributes are accessors. The
+  TaskSignal polyfill assigned aborted, reason and onabort, which its
+  prototype defines without setters, so new TaskController() threw
+  "cannot set non-writable property" in strict code; it now defines them
+  on the signal itself. Airbnb's route preparation failed on it.
 * A page with a live WebGL context no longer aborts the browser on exit.
   The script engine's heap is freed while thread-locals are torn down,
   and the WebGL context's destructor read two thread-locals that were
