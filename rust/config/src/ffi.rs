@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the runtime configuration, and the GLib calls behind it.
+//! Southstar — the global runtime configuration behind its lock, and the GLib calls that load and save it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -46,9 +46,6 @@ unsafe extern "C" {
         error: *mut *mut GError,
     ) -> GBoolean;
     fn g_file_error_quark() -> u32;
-    fn g_file_error_from_errno(err_no: c_int) -> c_int;
-    fn g_strerror(errnum: c_int) -> *const c_char;
-    fn g_set_error(err: *mut *mut GError, domain: u32, code: c_int, format: *const c_char, ...);
     fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
     fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
@@ -57,22 +54,6 @@ unsafe extern "C" {
     fn g_mutex_unlock(mutex: *mut GMutex);
     fn ns_net_default_accept_language() -> *const c_char;
     fn ns_net_proxy_mask(proxy_url: *const c_char) -> *mut c_char;
-}
-
-#[cfg(windows)]
-unsafe extern "C" {
-    fn _errno() -> *mut c_int;
-}
-
-fn errno() -> c_int {
-    #[cfg(windows)]
-    {
-        unsafe { *_errno() }
-    }
-    #[cfg(not(windows))]
-    {
-        std::io::Error::last_os_error().raw_os_error().unwrap_or(0)
-    }
 }
 
 fn c_string(bytes: &[u8]) -> CString {
@@ -102,7 +83,7 @@ pub(crate) fn enable_camera() {
     let config = global_config();
     if config.camera_enabled == FALSE {
         config.camera_enabled = TRUE;
-        unsafe { ns_config_save(ptr::null_mut()) };
+        save();
     }
 }
 
@@ -110,7 +91,7 @@ pub(crate) fn enable_webgl() {
     let config = global_config();
     if config.webgl_enabled == FALSE {
         config.webgl_enabled = TRUE;
-        unsafe { ns_config_save(ptr::null_mut()) };
+        save();
     }
 }
 
@@ -209,6 +190,10 @@ fn free_texts(config: &mut NsConfig) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_config_init() {
+    init();
+}
+
+pub fn init() {
     let path = global_path();
     if !path.is_null() {
         return;
@@ -224,8 +209,7 @@ pub extern "C" fn ns_config_init() {
     load(global_config(), *path);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_reload() {
+pub fn reload() {
     let path = *global_path();
     if path.is_null() {
         return;
@@ -237,6 +221,10 @@ pub extern "C" fn ns_config_reload() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_config_shutdown() {
+    shutdown();
+}
+
+pub fn shutdown() {
     let config = global_config();
     free_texts(config);
     *config = NsConfig::ZERO;
@@ -245,70 +233,71 @@ pub extern "C" fn ns_config_shutdown() {
     *path = ptr::null_mut();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_get() -> *const NsConfig {
-    GLOBAL.config.get()
-}
+pub struct ConfigLock(());
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_mut() -> *mut NsConfig {
-    GLOBAL.config.get()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_lock() {
+pub fn lock() -> ConfigLock {
+    // SAFETY: GLOBAL.mutex is a statically zeroed GMutex, which GLib initializes on first use.
     unsafe { g_mutex_lock(GLOBAL.mutex.get()) };
+    ConfigLock(())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_unlock() {
-    unsafe { g_mutex_unlock(GLOBAL.mutex.get()) };
-}
+impl ConfigLock {
+    pub fn reload(&self) {
+        reload();
+    }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_config_save(error: *mut *mut GError) -> GBoolean {
-    let path = *global_path();
-    unsafe {
-        if path.is_null() {
-            g_set_error(
-                error,
-                g_file_error_quark(),
-                FILE_ERROR_NOENT,
-                c"config path not initialized".as_ptr(),
-            );
-            return FALSE;
-        }
-        let dir = g_path_get_dirname(path);
-        if g_mkdir_with_parents(dir, 0o700) != 0 {
-            let err_no = errno();
-            g_set_error(
-                error,
-                g_file_error_quark(),
-                g_file_error_from_errno(err_no),
-                c"could not create config directory %s: %s".as_ptr(),
-                dir,
-                g_strerror(err_no),
-            );
-            glib::g_free(dir.cast());
-            return FALSE;
-        }
-        glib::g_free(dir.cast());
-        let contents = crate::serialize(global_config());
-        let ok = g_file_set_contents(
-            path,
-            contents.as_ptr().cast(),
-            contents.len() as isize,
-            error,
-        );
-        if ok != FALSE {
-            g_chmod(path, 0o600);
-        }
-        ok
+    pub fn get(&self) -> &NsConfig {
+        global_config()
+    }
+
+    pub fn get_mut(&mut self) -> &mut NsConfig {
+        global_config()
+    }
+
+    pub fn save(&self) -> bool {
+        save()
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_config_dump() -> *mut c_char {
+impl Drop for ConfigLock {
+    fn drop(&mut self) {
+        // SAFETY: this guard locked GLOBAL.mutex in lock() and unlocks it exactly once.
+        unsafe { g_mutex_unlock(GLOBAL.mutex.get()) };
+    }
+}
+
+pub fn save() -> bool {
+    let path = *global_path();
+    if path.is_null() {
+        return false;
+    }
+    // SAFETY: path is the NUL-terminated file name init() built.
+    let dir = unsafe { g_path_get_dirname(path) };
+    // SAFETY: dir is the NUL-terminated string g_path_get_dirname returned.
+    let made = unsafe { g_mkdir_with_parents(dir, 0o700) } == 0;
+    // SAFETY: dir came from g_path_get_dirname and is freed exactly once.
+    unsafe { glib::g_free(dir.cast()) };
+    if !made {
+        return false;
+    }
+    let contents = crate::serialize(global_config());
+    // SAFETY: path is NUL-terminated and contents holds contents.len() readable bytes.
+    let written = unsafe {
+        g_file_set_contents(
+            path,
+            contents.as_ptr().cast(),
+            contents.len() as isize,
+            ptr::null_mut(),
+        )
+    } != FALSE;
+    if written {
+        // SAFETY: path is the NUL-terminated file name init() built.
+        unsafe { g_chmod(path, 0o600) };
+    }
+    written
+}
+
+pub fn dump() -> Vec<u8> {
     let path = text(*global_path());
-    glib::strdup(&crate::dump(global_config(), path.as_deref()))
+    crate::render_dump(global_config(), path.as_deref())
 }

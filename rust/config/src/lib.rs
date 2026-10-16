@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{ConfigLock, dump, init, lock, reload, save, shutdown};
+
 use core::ffi::{c_char, c_int};
 use southstar_glib::{FALSE, GBoolean};
 
@@ -503,7 +505,7 @@ fn non_empty(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
     value.filter(|value| !value.is_empty())
 }
 
-fn dump(config: &mut NsConfig, path: Option<&[u8]>) -> Vec<u8> {
+fn render_dump(config: &mut NsConfig, path: Option<&[u8]>) -> Vec<u8> {
     let mut out = Vec::new();
     let mut line = |label: &str, value: &[u8]| {
         out.extend_from_slice(label.as_bytes());

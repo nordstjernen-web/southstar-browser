@@ -36,12 +36,6 @@ unsafe extern "C" {
     fn atoi(text: *const c_char) -> c_int;
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
-    fn ns_config_lock();
-    fn ns_config_unlock();
-    fn ns_config_reload();
-    fn ns_config_get() -> *const NsConfig;
-    fn ns_config_mut() -> *mut NsConfig;
-    fn ns_config_save(error: *mut *mut GError) -> GBoolean;
     fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
     fn ns_history_html_page() -> *mut c_char;
     fn ns_history_clear();
@@ -198,37 +192,6 @@ pub fn atoi_of(text: &[u8]) -> i32 {
     unsafe { atoi(text.as_ptr()) }
 }
 
-pub struct ConfigGuard;
-
-impl ConfigGuard {
-    pub fn lock() -> ConfigGuard {
-        unsafe { ns_config_lock() };
-        ConfigGuard
-    }
-
-    pub fn reload(&self) {
-        unsafe { ns_config_reload() };
-    }
-
-    pub fn get(&self) -> Option<&NsConfig> {
-        unsafe { ns_config_get().as_ref() }
-    }
-
-    pub fn get_mut(&mut self) -> Option<&mut NsConfig> {
-        unsafe { ns_config_mut().as_mut() }
-    }
-
-    pub fn save(&self) {
-        unsafe { ns_config_save(ptr::null_mut()) };
-    }
-}
-
-impl Drop for ConfigGuard {
-    fn drop(&mut self) {
-        unsafe { ns_config_unlock() };
-    }
-}
-
 pub fn config_text(p: *const c_char) -> Option<Vec<u8>> {
     borrowed(p)
 }
@@ -239,7 +202,7 @@ pub fn set_config_text(field: &mut *mut c_char, value: &[u8]) {
 }
 
 pub fn unlocked_config() -> Option<&'static NsConfig> {
-    unsafe { ns_config_get().as_ref() }
+    southstar_config::get()
 }
 
 pub fn user_agent_for_mode(compat_mode: *const c_char) -> Option<Vec<u8>> {

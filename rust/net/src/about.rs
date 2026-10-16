@@ -228,10 +228,8 @@ const DOCUMENT_STYLE: &str = concat!(
 );
 
 fn search_engine() -> Vec<u8> {
-    let config = sys::ConfigGuard::lock();
-    config
-        .get()
-        .and_then(|c| sys::config_text(c.search_engine))
+    let config = southstar_config::lock();
+    sys::config_text(config.get().search_engine)
         .filter(|e| !e.is_empty())
         .unwrap_or_else(|| southstar_config::DEFAULT_SEARCH_ENGINE.as_bytes().to_vec())
 }

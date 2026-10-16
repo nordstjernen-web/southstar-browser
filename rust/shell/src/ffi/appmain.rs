@@ -95,10 +95,6 @@ unsafe extern "C" {
     fn ns_security_add_exec_dir(dir: *const c_char);
     fn ns_security_seccomp_init();
     fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
-    fn ns_config_init();
-    fn ns_config_shutdown();
-    fn ns_config_get() -> *const NsConfig;
-    fn ns_config_dump() -> *mut c_char;
     fn ns_thread_dump_install_signal(label: *const c_char);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
@@ -541,7 +537,7 @@ fn apply_gsk_renderer(pref: Option<&CStr>) {
 }
 
 fn config() -> Option<&'static NsConfig> {
-    unsafe { ns_config_get().as_ref() }
+    southstar_config::get()
 }
 
 fn config_text(field: impl FnOnce(&NsConfig) -> *mut c_char) -> Option<&'static CStr> {
@@ -649,8 +645,8 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
         ns_history_shutdown();
         ns_cache_shutdown();
         ns_net_shutdown();
-        ns_config_shutdown();
     }
+    southstar_config::shutdown();
     rc
 }
 
@@ -673,7 +669,7 @@ fn run_proc_gui(
     let status = ns_procapp_run(start, session_path, recover, private_mode);
     drop(file_url);
     clear_self_exe();
-    unsafe { ns_config_shutdown() };
+    southstar_config::shutdown();
     status
 }
 
@@ -697,11 +693,7 @@ fn write_stdout(bytes: &[u8]) {
 }
 
 fn print_config() {
-    unsafe {
-        if let Some(dump) = GStr::take(ns_config_dump()) {
-            write_stdout(dump.to_bytes());
-        }
-    }
+    write_stdout(&southstar_config::dump());
 }
 
 fn headless_opts(o: &Options<'_>) -> HeadlessOpts {
@@ -760,10 +752,8 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     if appmain::flag_given(&args, b"--private") {
         setenv(c"NS_PRIVATE", c"1");
     }
-    unsafe {
-        ns_config_init();
-        ns_thread_dump_install_signal(c"southstar".as_ptr());
-    }
+    southstar_config::init();
+    unsafe { ns_thread_dump_install_signal(c"southstar".as_ptr()) };
 
     let proc_mode = appmain::proc_mode_wanted(&args);
 
@@ -787,7 +777,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
                 &watchdog_args,
             );
             clear_self_exe();
-            unsafe { ns_config_shutdown() };
+            southstar_config::shutdown();
             return rc;
         }
     }
@@ -835,7 +825,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
             Action::WindowSize(w, h) => ns_procapp_set_window_size(*w, *h),
             Action::PrintConfig => {
                 print_config();
-                unsafe { ns_config_shutdown() };
+                southstar_config::shutdown();
                 return 0;
             }
             Action::BadViewport(spec) => {

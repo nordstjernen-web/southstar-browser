@@ -51,10 +51,6 @@ unsafe extern "C" {
     fn ns_browser_set_color_scheme(dark: c_int);
     fn ns_history_record(url: *const c_char, title: *const c_char);
     fn ns_cache_clear();
-    fn ns_config_get() -> *const NsConfig;
-    fn ns_config_lock();
-    fn ns_config_reload();
-    fn ns_config_unlock();
 }
 
 const WINDOW_KEY: &CStr = c"ns-procwindow";
@@ -133,7 +129,7 @@ fn brand_versioned() -> &'static CStr {
 }
 
 fn config() -> Option<&'static NsConfig> {
-    unsafe { ns_config_get().as_ref() }
+    southstar_config::get()
 }
 
 unsafe extern "C" fn procwindow_free(data: *mut c_void) {
@@ -1129,16 +1125,14 @@ unsafe extern "C" fn on_reload_clicked(_b: *mut GtkWidget, data: *mut c_void) {
 }
 
 fn load_home_page(v: View) {
-    let home = unsafe {
-        ns_config_lock();
-        ns_config_reload();
-        let home = config()
-            .and_then(|c| borrowed(c.home_url))
+    let home = {
+        let config = southstar_config::lock();
+        config.reload();
+        // SAFETY: home_url is null or a NUL-terminated string the config owns while it stays locked.
+        let home = unsafe { borrowed(config.get().home_url) }
             .filter(|h| !h.is_empty())
             .unwrap_or(c"about:start");
-        let home = normalize_url(home);
-        ns_config_unlock();
-        home
+        normalize_url(home)
     };
     v.load(&home);
 }
