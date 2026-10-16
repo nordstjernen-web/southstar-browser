@@ -1,9 +1,11 @@
-//! Southstar — struct ns_css_value as the style engine lays it out for the value kinds the Rust sections build, and building one css.c can own and free.
+//! Southstar — struct ns_css_value as the style engine lays it out for the value kinds the Rust sections build, building one css.c can own and free, and the owned reference other crates hold on one.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::cell::Cell;
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::mem::{offset_of, size_of};
+use core::ops::Deref;
 
 use southstar_css_color::{Color, Space};
 use southstar_glib as glib;
@@ -176,7 +178,7 @@ pub(crate) union ValueUnion {
 #[repr(C)]
 pub struct NsCssValue {
     pub(crate) kind: c_uint,
-    pub(crate) ref_count: c_int,
+    pub(crate) ref_count: Cell<c_int>,
     pub(crate) u: ValueUnion,
     pub(crate) image_set_text: *mut c_char,
     pub(crate) specified: *mut c_char,
@@ -333,20 +335,6 @@ pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
     value_ref.kind = KIND_ANIM;
     value_ref.u.anim = *list;
     value
-}
-
-pub(crate) unsafe fn style_value<'a>(style: *const c_void, prop: c_int) -> Option<&'a NsCssValue> {
-    let index = usize::try_from(prop).ok()?;
-    let values = style.cast::<*const NsCssValue>();
-    unsafe { (*values.add(index)).as_ref() }
-}
-
-pub(crate) unsafe fn keyword_of(v: Option<&NsCssValue>) -> Option<&[u8]> {
-    let v = v?;
-    if v.kind != KIND_KEYWORD || unsafe { v.u.keyword }.is_null() {
-        return None;
-    }
-    Some(unsafe { core::ffi::CStr::from_ptr(v.u.keyword) }.to_bytes())
 }
 
 pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
@@ -521,22 +509,62 @@ impl NsCssValue {
     }
 }
 
-pub(super) struct OwnedValue(pub(super) *mut NsCssValue);
+pub struct OwnedValue(pub(super) *mut NsCssValue);
+
+impl OwnedValue {
+    pub fn retain(value: &NsCssValue) -> OwnedValue {
+        value.add_ref();
+        OwnedValue(core::ptr::from_ref(value).cast_mut())
+    }
+
+    pub fn placeholder() -> OwnedValue {
+        OwnedValue(alloc(KIND_KEYWORD))
+    }
+
+    /// # Safety
+    ///
+    /// `value` is null or a value made by this crate whose one reference the caller hands over.
+    pub unsafe fn from_raw(value: *mut NsCssValue) -> Option<OwnedValue> {
+        (!value.is_null()).then_some(OwnedValue(value))
+    }
+
+    pub fn into_raw(self) -> *mut NsCssValue {
+        let raw = self.0;
+        core::mem::forget(self);
+        raw
+    }
+
+    pub fn as_ptr(&self) -> *const NsCssValue {
+        self.0
+    }
+}
+
+impl Deref for OwnedValue {
+    type Target = NsCssValue;
+
+    fn deref(&self) -> &NsCssValue {
+        // SAFETY: an OwnedValue holds a reference on a live value, which keeps it allocated.
+        unsafe { &*self.0 }
+    }
+}
+
+impl Clone for OwnedValue {
+    fn clone(&self) -> OwnedValue {
+        OwnedValue::retain(self)
+    }
+}
 
 impl Drop for OwnedValue {
     fn drop(&mut self) {
         // SAFETY: an OwnedValue holds the one reference handed to it, on a value nothing else frees.
-        unsafe { ns_css_value_free(self.0) };
+        unsafe { value_free(self.0) };
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_dup(v: *const NsCssValue) -> *mut NsCssValue {
-    let v = v.cast_mut();
-    if let Some(value) = unsafe { v.as_mut() } {
-        value.ref_count += 1;
+impl NsCssValue {
+    pub(crate) fn add_ref(&self) {
+        self.ref_count.set(self.ref_count.get() + 1);
     }
-    v
 }
 
 unsafe fn free_payload(value: &mut NsCssValue) {
@@ -559,11 +587,13 @@ unsafe fn free_payload(value: &mut NsCssValue) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_free(mut v: *mut NsCssValue) {
+/// # Safety
+///
+/// `v` is null or a value made by this crate, and the caller gives up the reference it holds on it.
+pub(crate) unsafe fn value_free(mut v: *mut NsCssValue) {
     while let Some(value) = unsafe { v.as_mut() } {
-        if value.ref_count > 0 {
-            value.ref_count -= 1;
+        if value.ref_count.get() > 0 {
+            value.ref_count.set(value.ref_count.get() - 1);
             return;
         }
         unsafe { free_payload(value) };

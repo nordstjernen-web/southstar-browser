@@ -1,14 +1,15 @@
-//! Southstar — the C ABI of time values and the animation and transition lists.
+//! Southstar — the animation and transition lists css.c keeps in a value, and the ones a computed style's longhands give.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::sync::OnceLock;
 
 use southstar_glib::{self as glib, GBoolean};
 
-use super::value::{self, NsCssValue};
+use super::computed_units::RawStyle;
+use super::value::NsCssValue;
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
 use crate::prop::Prop;
 use crate::timing::Timing;
@@ -150,84 +151,41 @@ fn prop_of(lh: Longhand) -> c_int {
     prop_ids()[i]
 }
 
-unsafe fn longhand_value<'a>(style: *const c_void, lh: Longhand) -> Option<&'a NsCssValue> {
-    unsafe { value::style_value(style, prop_of(lh)) }
+fn longhand_value(style: &RawStyle, lh: Longhand) -> Option<&NsCssValue> {
+    style.value_at(usize::try_from(prop_of(lh)).ok()?)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_list_clear(list: *mut RawList) {
-    let Some(list) = (unsafe { list.as_mut() }) else {
-        return;
+fn longhand_keyword(style: &RawStyle, lh: Longhand) -> Option<&[u8]> {
+    longhand_value(style, lh)?.keyword().map(CStr::to_bytes)
+}
+
+fn c_names(mut entries: Vec<Entry>) -> Vec<Entry> {
+    for entry in &mut entries {
+        if let Some(name) = &mut entry.name
+            && let Some(nul) = name.iter().position(|&c| c == 0)
+        {
+            name.truncate(nul);
+        }
+    }
+    entries
+}
+
+pub fn style_may_animate(style: &RawStyle) -> bool {
+    animation::may_animate(|lh| longhand_value(style, lh).is_some())
+}
+
+pub fn animation_effective(style: &RawStyle, is_animation: bool) -> Vec<Entry> {
+    c_names(animation::effective(
+        |lh| longhand_keyword(style, lh),
+        |lh| longhand_value(style, lh).is_some(),
+        is_animation,
+    ))
+}
+
+pub fn animation_lists(style: Option<&RawStyle>, is_animation: bool) -> (Vec<Entry>, bool) {
+    let Some(style) = style else {
+        return (Vec::new(), false);
     };
-    let n = usize::try_from(list.n).unwrap_or(0).min(ENTRIES_MAX);
-    for e in &list.entries[..n] {
-        unsafe { glib::g_free(e.name.cast()) };
-    }
-    list.n = 0;
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_style_may_animate(style: *const c_void) -> GBoolean {
-    if style.is_null() {
-        return 0;
-    }
-    glib::boolean(animation::may_animate(|lh| {
-        unsafe { longhand_value(style, lh) }.is_some()
-    }))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_effective(
-    style: *const c_void,
-    is_animation: GBoolean,
-    out: *mut RawList,
-) {
-    if out.is_null() {
-        return;
-    }
-    let entries = if style.is_null() {
-        Vec::new()
-    } else {
-        animation::effective(
-            |lh| unsafe { value::keyword_of(longhand_value(style, lh)) },
-            |lh| unsafe { longhand_value(style, lh) }.is_some(),
-            is_animation != 0,
-        )
-    };
-    unsafe { *out = RawList::from_entries(&entries) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_lists(
-    style: *const c_void,
-    is_animation: GBoolean,
-    out: *mut RawList,
-    out_mismatch: *mut GBoolean,
-) {
-    if out.is_null() {
-        return;
-    }
-    let (entries, mismatch) = if style.is_null() {
-        (Vec::new(), false)
-    } else {
-        animation::lists(
-            |lh| unsafe { value::keyword_of(longhand_value(style, lh)) },
-            is_animation != 0,
-        )
-    };
-    unsafe { *out = RawList::from_entries(&entries) };
-    if !out_mismatch.is_null() {
-        unsafe { *out_mismatch = glib::boolean(mismatch) };
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_anim_shorthand_serialize(
-    list: *const RawList,
-    is_animation: GBoolean,
-) -> *mut c_char {
-    let entries = unsafe { list.as_ref() }
-        .map(|l| unsafe { l.entries() })
-        .unwrap_or_default();
-    glib::strdup(&animation::shorthand_serialize(&entries, is_animation != 0))
+    let (entries, mismatch) = animation::lists(|lh| longhand_keyword(style, lh), is_animation);
+    (c_names(entries), mismatch)
 }

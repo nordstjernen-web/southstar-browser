@@ -242,19 +242,19 @@ pub(super) unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
     let Some(shared) = (unsafe { value.as_mut() }) else {
         return value;
     };
-    if shared.ref_count == 0 {
+    if shared.ref_count.get() == 0 {
         return value;
     }
     unsafe {
         let copy = glib::g_malloc0(size_of::<NsCssValue>()).cast::<NsCssValue>();
         ptr::copy_nonoverlapping(value, copy, 1);
-        (*copy).ref_count = 0;
+        (*copy).ref_count.set(0);
         (*copy).image_set_text = glib::g_strdup(shared.image_set_text);
         (*copy).specified = glib::g_strdup(shared.specified);
-        if let Some(next) = (*copy).next_layer.as_mut() {
-            next.ref_count += 1;
+        if let Some(next) = (*copy).next_layer.as_ref() {
+            next.add_ref();
         }
-        shared.ref_count -= 1;
+        shared.ref_count.set(shared.ref_count.get() - 1);
         style.values[prop] = copy;
         copy
     }

@@ -30,7 +30,6 @@ mod sheet;
 mod sheet_cache;
 mod shorthand;
 mod style_alloc;
-mod style_query;
 mod style_share;
 mod ua;
 mod value;
@@ -42,12 +41,14 @@ use core::ffi::CStr;
 
 use southstar_glib::{self as glib};
 
-pub use compute::set_render_zoom;
+pub use animation::{animation_effective, animation_lists, style_may_animate};
+pub use compute::{incremental_exclude, set_render_zoom, style_before_change};
 pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView, slot};
 pub use computed_units::{
     PROP_COUNT, RawStyle, style_retain, style_value_slot, tracks_computed_text,
 };
 pub(crate) use container::{Container, container_map};
+pub use declarations::{Declaration, Declarations};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
     regex_matches_whole, unichar_is_alpha, unichar_is_rtl_script, url_is_valid_absolute,
@@ -60,6 +61,7 @@ pub use gather::{selector_cache_begin, selector_cache_end};
 pub(crate) use hints::image_supports_mime;
 pub(crate) use host_scope::scoped as scoped_css;
 pub(crate) use inline::{SheetDecl, first_rule_declares, sheet_declarations};
+pub use keyframes::{KeyframeStop, Keyframes};
 pub(crate) use matcher::{
     active_node, focus_node, focus_visible_node, fullscreen_node, hover_node, match_scope,
     set_match_scope,
@@ -78,9 +80,10 @@ pub use sheet_cache::{
     relayout_enter, relayout_leave, style_element_cache_begin, style_element_cache_end,
 };
 pub(crate) use shorthand::prop_named;
+pub use style_alloc::RetainedStyle;
 pub(crate) use value::RawCalc;
-pub use value::{NsCssValue, RawAreaRect, RawAreas, ValueKind};
-pub use values::value_serialize;
+pub use value::{NsCssValue, OwnedValue, RawAreaRect, RawAreas, ValueKind};
+pub use values::{value_interpolate, value_serialize, values_equal};
 pub use viewport::{FrameViewport, set_frame_viewport_measure};
 
 pub(crate) fn prefers_dark() -> bool {

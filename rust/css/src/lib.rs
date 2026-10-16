@@ -59,7 +59,10 @@ mod units;
 mod values;
 mod vars;
 
-pub use animation::range_serialize as animation_range_serialize;
+pub use animation::{
+    Entry as AnimationEntry, range_serialize as animation_range_serialize,
+    shorthand_serialize as animation_shorthand_serialize,
+};
 pub use border_image::{Params as BorderImageParams, params as border_image_params};
 pub use calc::{Calc, CalcArg, math_fn_px as calc_math_fn_px};
 pub use cascade::currentcolor_bit;
@@ -76,14 +79,17 @@ pub use element_state::node_dir;
 pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target_fragment};
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
-    FontFaceRule, FontMetrics, FontOracle, FrameViewport, ImportRule, MatchContext, NsCssValue,
-    PROP_COUNT, PageRule, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
-    RawStyle as StyleData, RegisterError, Registration, Selector, SelectorList, Sheet, ValueKind,
-    clear_registered_properties, register_property, relayout_enter, relayout_leave,
-    selector_cache_begin, selector_cache_end, set_active_node, set_focus_node,
-    set_focus_visible_node, set_font_alias, set_font_oracle, set_frame_viewport_measure,
-    set_fullscreen_node, set_hover_node, set_render_zoom, style_element_cache_begin,
-    style_element_cache_end, style_retain, style_value_slot, tracks_computed_text, value_serialize,
+    Declaration, Declarations, FontFaceRule, FontMetrics, FontOracle, FrameViewport, ImportRule,
+    KeyframeStop, Keyframes, MatchContext, NsCssValue, OwnedValue, PROP_COUNT, PageRule, QueryKey,
+    RawAreaRect as GridAreaRect, RawAreas as GridAreas, RawStyle as StyleData, RegisterError,
+    Registration, RetainedStyle, Selector, SelectorList, Sheet, ValueKind, animation_effective,
+    animation_lists, clear_registered_properties, incremental_exclude, register_property,
+    relayout_enter, relayout_leave, selector_cache_begin, selector_cache_end, set_active_node,
+    set_focus_node, set_focus_visible_node, set_font_alias, set_font_oracle,
+    set_frame_viewport_measure, set_fullscreen_node, set_hover_node, set_render_zoom,
+    style_before_change, style_element_cache_begin, style_element_cache_end, style_may_animate,
+    style_retain, style_value_slot, tracks_computed_text, value_interpolate, value_serialize,
+    values_equal,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,

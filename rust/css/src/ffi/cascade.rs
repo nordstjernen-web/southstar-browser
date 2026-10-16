@@ -15,7 +15,7 @@ use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView, cow}
 use super::property::to_c;
 use super::value::{
     KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, new_keyword,
-    ns_css_value_free,
+    value_free,
 };
 use crate::cascade::{self, CURRENTCOLOR_PROPS, DisplayContext, Entry, OverflowFix, Revert};
 use crate::color;
@@ -53,7 +53,7 @@ struct InitialValues(Vec<Option<*mut NsCssValue>>);
 impl Drop for InitialValues {
     fn drop(&mut self) {
         for &value in self.0.iter().flatten() {
-            unsafe { ns_css_value_free(value) };
+            unsafe { value_free(value) };
         }
     }
 }
@@ -72,8 +72,8 @@ fn keyword<'a>(v: *const NsCssValue) -> Option<&'a [u8]> {
 }
 
 fn dup(v: *mut NsCssValue) -> *mut NsCssValue {
-    if let Some(value) = unsafe { v.as_mut() } {
-        value.ref_count += 1;
+    if let Some(value) = unsafe { v.as_ref() } {
+        value.add_ref();
     }
     v
 }
@@ -117,7 +117,7 @@ impl Out<'_> {
     }
 
     fn replace(&mut self, prop: usize, v: *mut NsCssValue) {
-        unsafe { ns_css_value_free(self.style.values[prop]) };
+        unsafe { value_free(self.style.values[prop]) };
         self.style.values[prop] = v;
     }
 }

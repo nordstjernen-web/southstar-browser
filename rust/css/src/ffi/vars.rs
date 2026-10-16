@@ -131,24 +131,6 @@ pub(super) fn substitute_in(
     vars::substitute(value, lookup.filter(|_| !map.is_null()), 0)
 }
 
-pub(super) unsafe fn substitute_vars(
-    value: *const c_char,
-    map: *const c_void,
-    registered: *mut GHashTable,
-    depth: c_int,
-) -> *mut c_char {
-    let Some(value) = (unsafe { text(value) }) else {
-        return ptr::null_mut();
-    };
-    let chain = Chain {
-        map: unsafe { map.cast::<RawVarMap>().as_ref() },
-        registered,
-    };
-    let lookup: Option<&dyn Lookup> = Some(&chain);
-    vars::substitute(value, lookup.filter(|_| !map.is_null()), depth)
-        .map_or(ptr::null_mut(), |out| glib::strdup(&out))
-}
-
 unsafe extern "C" fn name_cmp(a: *const c_void, b: *const c_void) -> c_int {
     let (a, b) = unsafe { (*a.cast::<*const c_char>(), *b.cast::<*const c_char>()) };
     unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) as c_int }

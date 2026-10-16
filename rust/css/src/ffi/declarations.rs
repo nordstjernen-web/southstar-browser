@@ -1,16 +1,17 @@
-//! Southstar — the C ABI of declaration blocks: declarations appended to css.c's arrays, custom properties and waiting values captured into its ns_css_rule, and the validity checks css.c and the bindings call.
+//! Southstar — declaration blocks: declarations appended to css.c's arrays or parsed into an owned block, custom properties and waiting values captured into its ns_css_rule, and the validity checks css.c and the bindings call.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
+use core::ops::Deref;
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
-use super::shorthand::{RawDecl, append_expanded};
-use super::value::ns_css_value_free;
+use super::shorthand::{append_expanded, expanded};
+use super::value::{NsCssValue, OwnedValue};
 use crate::declarations::{self, Sink};
 
 #[repr(C)]
@@ -46,7 +47,6 @@ const _: () = assert!(
 
 unsafe extern "C" {
     fn g_array_set_clear_func(array: *mut GArray, clear_func: glib::GDestroyNotify);
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
 }
 
 fn c_string(text: &[u8]) -> CString {
@@ -196,31 +196,75 @@ impl Sink for RuleSink {
     }
 }
 
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
+#[derive(Clone)]
+pub struct Declaration {
+    prop: c_int,
+    value: OwnedValue,
+    important: bool,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray {
-    let decls =
-        unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, size_of::<RawDecl>() as c_uint) };
-    if let Some(text) = unsafe { bytes(text) } {
-        let mut sink = RuleSink {
-            decls,
-            rule: ptr::null_mut(),
-        };
+impl Declaration {
+    pub fn prop(&self) -> i32 {
+        self.prop
+    }
+
+    pub fn value(&self) -> &NsCssValue {
+        &self.value
+    }
+
+    pub fn important(&self) -> bool {
+        self.important
+    }
+
+    pub fn into_value(self) -> OwnedValue {
+        self.value
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Declarations(Vec<Declaration>);
+
+struct BlockSink(Vec<Declaration>);
+
+impl Sink for BlockSink {
+    fn capturing(&self) -> bool {
+        false
+    }
+
+    fn custom(&mut self, _name: &[u8], _value: &[u8], _important: bool) {}
+
+    fn pending(&mut self, _name: &[u8], _raw: &[u8], _important: bool) {}
+
+    fn declaration(&mut self, name: &[u8], text: &[u8], important: bool) {
+        let expanded = expanded(name, text).into_iter();
+        self.0.extend(expanded.map(|(prop, value)| Declaration {
+            prop,
+            value,
+            important,
+        }));
+    }
+}
+
+impl Declarations {
+    pub fn parse(text: &[u8]) -> Declarations {
+        let mut sink = BlockSink(Vec::new());
         declarations::parse_block(text, 0, &mut sink);
+        Declarations(sink.0)
     }
-    decls
+
+    pub fn remove_important(&mut self) {
+        self.0.retain(|decl| !decl.important);
+    }
+
+    pub fn into_first(self) -> Option<Declaration> {
+        self.0.into_iter().next()
+    }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_declarations_free(decls: *mut GArray) {
-    let Some(array) = (unsafe { decls.as_ref() }) else {
-        return;
-    };
-    for i in 0..array.len as usize {
-        unsafe { ns_css_value_free((*array.data.cast::<RawDecl>().add(i)).value) };
+impl Deref for Declarations {
+    type Target = [Declaration];
+
+    fn deref(&self) -> &[Declaration] {
+        &self.0
     }
-    unsafe { g_array_free(decls, glib::TRUE) };
 }

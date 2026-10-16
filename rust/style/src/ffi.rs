@@ -330,6 +330,10 @@ impl<'a> StyleRef<'a> {
         ptr::from_ref(self.0).cast()
     }
 
+    pub fn new(data: &'a StyleData) -> StyleRef<'a> {
+        StyleRef(data)
+    }
+
     pub fn data(self) -> &'a StyleData {
         self.0
     }
@@ -481,14 +485,6 @@ impl StyleTable {
 pub unsafe fn value_slot(style: *mut Style, index: usize) -> Option<*mut *mut NsCssValue> {
     // SAFETY: the caller's obligations are value_slot's.
     unsafe { southstar_css::style_value_slot(style, index) }
-}
-
-/// # Safety
-///
-/// `style` is null or a live computed style made by rust/css.
-pub unsafe fn retain(style: *mut Style) {
-    // SAFETY: the caller's obligations are style_retain's.
-    unsafe { southstar_css::style_retain(style) };
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {

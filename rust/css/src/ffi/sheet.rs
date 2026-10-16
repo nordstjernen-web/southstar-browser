@@ -13,10 +13,11 @@ use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::container::container_query_free;
 use super::declarations::{RawPending, RawRule, RuleSink};
+use super::keyframes::Keyframes;
 use super::rule_index::index_free;
 use super::selector::{group_to_c, selector_to_c};
 use super::shorthand::RawDecl;
-use super::value::{KIND_URL, NsCssValue, ns_css_value_free};
+use super::value::{KIND_URL, NsCssValue, value_free};
 use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
@@ -72,7 +73,7 @@ struct RawFontFace {
 
 #[repr(C)]
 pub(super) struct RawStop {
-    pct: f64,
+    pub(super) pct: f64,
     opacity: f64,
     has_opacity: GBoolean,
     pub(super) transform: Transform,
@@ -314,7 +315,7 @@ pub(super) unsafe fn rule_free(data: *mut c_void) {
         }
         glib::g_ptr_array_free(raw.selectors, glib::TRUE);
         for decl in elements::<RawDecl>(raw.decls) {
-            ns_css_value_free(decl.value);
+            value_free(decl.value);
         }
         g_array_free(raw.decls, glib::TRUE);
         if !raw.vars.is_null() {
@@ -810,7 +811,7 @@ pub struct ImportRule<'a> {
     pub media: Option<&'a CStr>,
 }
 
-fn text_at<'a>(text: *const c_char) -> Option<&'a CStr> {
+pub(super) fn text_at<'a>(text: *const c_char) -> Option<&'a CStr> {
     // SAFETY: a sheet's strings are null or NUL-terminated and live as long as the sheet.
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
 }
@@ -865,6 +866,12 @@ impl Sheet {
             layer_name: text_at(import.layer_name),
             media: text_at(import.media),
         })
+    }
+
+    pub fn keyframes(&self) -> impl Iterator<Item = Keyframes> + '_ {
+        // SAFETY: keyframes is null or the sheet's array of RawKeyframes.
+        let rules: &[RawKeyframes] = unsafe { shared_elements(self.0.keyframes) };
+        rules.iter().filter_map(Keyframes::of)
     }
 }
 

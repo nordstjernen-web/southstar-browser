@@ -12,7 +12,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use southstar_dom::{Kind, Node, NsNode, children};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GHashTable};
 
 use super::cascade::{Parents, cascade_apply};
 use super::computed_units::{PROP_COUNT, RawStyle};
@@ -33,16 +33,15 @@ use super::registry::{registered_property_serial, registered_props_begin, regist
 use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
 use super::sheet::RawSheet;
-use super::style_alloc::{ns_style_free, style_alloc, style_clone_shared};
+use super::style_alloc::{RetainedStyle, style_alloc, style_clone_shared, style_free};
 use super::style_share::{
     Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
 };
 use super::ua::ua_sheet;
 use super::value::{KIND_LENGTH, OwnedValue};
-use super::values::ns_css_value_equal;
+use super::values::values_equal;
 use super::vars::var_map_unref;
 use super::viewport;
-use crate::NsCssValue;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
 use crate::incremental::{self, PassKey};
 use crate::prop::Prop;
@@ -74,7 +73,7 @@ fn pseudo_slot(pe: c_uint) -> usize {
 }
 
 unsafe extern "C" fn style_free_notify(data: *mut c_void) {
-    unsafe { ns_style_free(data.cast()) };
+    unsafe { style_free(data.cast()) };
 }
 
 unsafe extern "C" fn var_map_unref_notify(data: *mut c_void) {
@@ -126,7 +125,7 @@ unsafe impl Send for StyleRef {}
 
 impl Drop for StyleRef {
     fn drop(&mut self) {
-        unsafe { ns_style_free(self.0) };
+        unsafe { style_free(self.0) };
     }
 }
 
@@ -137,17 +136,15 @@ impl StyleRef {
     }
 }
 
-fn same_value(a: *const NsCssValue, b: *const NsCssValue) -> bool {
-    // SAFETY: both values belong to styles that stay alive for the whole style pass.
-    ptr::eq(a, b) || unsafe { ns_css_value_equal(a, b) } != 0
+fn same_value(before: &RawStyle, after: &RawStyle, prop: usize) -> bool {
+    values_equal(before.value_at(prop), after.value_at(prop))
 }
 
 fn keeps_children(before: &RawStyle, after: &RawStyle, variables_may_differ: bool) -> bool {
     before.display == after.display
         && (!variables_may_differ || ptr::eq(before.vars, after.vars))
         && (0..PROP_COUNT).all(|prop| {
-            !super::cascade::passed_to_children(prop)
-                || same_value(before.values[prop], after.values[prop])
+            !super::cascade::passed_to_children(prop) || same_value(before, after, prop)
         })
 }
 
@@ -508,7 +505,7 @@ fn pseudo_style(
     };
     match slot {
         Some(slot) => style.pseudo_styles[slot] = pseudo_ptr,
-        None => unsafe { ns_style_free(pseudo_ptr) },
+        None => unsafe { style_free(pseudo_ptr) },
     }
     owned.clear();
 }
@@ -681,23 +678,20 @@ pub unsafe extern "C" fn ns_css_compute(
     out
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_incremental_exclude(node: *const c_void, exclude: GBoolean) {
+pub fn incremental_exclude(node: *const NsNode, exclude: bool) {
     if !node.is_null() {
-        set_excluded(node as usize, exclude != 0);
+        set_excluded(node as usize, exclude);
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_before_change(node: *const c_void) -> *const RawStyle {
-    if node.is_null() {
-        return ptr::null();
-    }
-    incremental_state()
+pub fn style_before_change(node: Node<'_>) -> Option<RetainedStyle> {
+    let state = incremental_state();
+    let style = state
         .before_change
-        .as_ref()
-        .and_then(|styles| styles.get(&(node as usize)))
-        .map_or(ptr::null(), |style| style.0)
+        .as_ref()?
+        .get(&(node.as_ptr() as usize))?;
+    // SAFETY: the before-change styles each hold a reference on a live style, and the lock keeps them.
+    unsafe { RetainedStyle::retain(style.0) }
 }
 
 pub fn set_render_zoom(zoom: f64) {

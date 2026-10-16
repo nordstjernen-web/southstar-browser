@@ -39,60 +39,18 @@ impl Js {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub(crate) struct AnimEntry {
-    pub target: c_int,
-    pub name: *mut c_char,
-    pub duration_ms: f64,
-    pub delay_ms: f64,
-    pub timing: css_engine::TimingFunction,
-    pub iter_count: c_int,
-    pub iterations: f64,
-    pub direction: c_int,
-    pub fill: c_int,
-    pub paused: GBoolean,
-    pub duration_auto: GBoolean,
-    pub allow_discrete: GBoolean,
-}
+pub(crate) type AnimEntry = css_engine::AnimationEntry;
 
-const ANIM_ENTRIES_MAX: usize = 8;
-
-#[repr(C)]
-struct RawAnimList {
-    n: c_int,
-    entries: [AnimEntry; ANIM_ENTRIES_MAX],
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<AnimEntry>() == 120
-        && core::mem::offset_of!(AnimEntry, timing) == 32
-        && core::mem::offset_of!(AnimEntry, iterations) == 88
-        && core::mem::size_of::<RawAnimList>() == 968
-);
-
-pub(crate) struct AnimList(RawAnimList);
+pub(crate) struct AnimList(Vec<AnimEntry>);
 
 impl AnimList {
-    fn empty() -> AnimList {
-        AnimList(unsafe { core::mem::zeroed() })
-    }
-
     pub fn entries(&self) -> &[AnimEntry] {
-        let n = usize::try_from(self.0.n).unwrap_or(0).min(ANIM_ENTRIES_MAX);
-        &self.0.entries[..n]
+        &self.0
     }
 
     pub fn shorthand_serialize(&self, is_animation: bool) -> String {
-        take_text(unsafe { ns_css_anim_shorthand_serialize(&self.0, glib::boolean(is_animation)) })
-            .unwrap_or_default()
-    }
-}
-
-impl Drop for AnimList {
-    fn drop(&mut self) {
-        unsafe { ns_css_anim_list_clear(&mut self.0) };
+        let text = css_engine::animation_shorthand_serialize(&self.0, is_animation);
+        lossy(c_string(&text).to_bytes())
     }
 }
 
@@ -159,7 +117,7 @@ type AnimVisitCb = unsafe extern "C" fn(info: *const AnimInfo, user: *mut c_void
 type KeyframeCb = unsafe extern "C" fn(
     offset: f64,
     easing: *const c_char,
-    decls: *const GArray,
+    decls: Option<&css_engine::Declarations>,
     user: *mut c_void,
 );
 
@@ -199,23 +157,8 @@ unsafe extern "C" {
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
-    fn ns_css_parse_declarations(text: *const c_char) -> *mut GArray;
-    fn ns_css_declarations_free(decls: *mut GArray);
     fn ns_css_stylesheet_parse(text: *const c_char, len: isize) -> *mut RawSheet;
     fn ns_css_stylesheet_free(sheet: *mut RawSheet);
-
-    fn ns_css_anim_lists(
-        style: *const Style,
-        is_animation: GBoolean,
-        out: *mut RawAnimList,
-        out_mismatch: *mut GBoolean,
-    );
-    fn ns_css_anim_effective(style: *const Style, is_animation: GBoolean, out: *mut RawAnimList);
-    fn ns_css_anim_list_clear(list: *mut RawAnimList);
-    fn ns_css_anim_shorthand_serialize(
-        list: *const RawAnimList,
-        is_animation: GBoolean,
-    ) -> *mut c_char;
 
     fn ns_anim_visit(a: *mut c_void, node: *const NsNode, cb: AnimVisitCb, user: *mut c_void);
     fn ns_anim_info_for(
@@ -499,12 +442,15 @@ unsafe fn decls_of(array: *const GArray) -> Vec<Decl> {
 }
 
 pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[Decl]) -> R) -> R {
-    let text = c_string(text.as_bytes());
-    let array = unsafe { ns_css_parse_declarations(text.as_ptr()) };
-    let decls = unsafe { decls_of(array) };
-    let result = f(&decls);
-    unsafe { ns_css_declarations_free(array) };
-    result
+    let block = css_engine::Declarations::parse(until_nul(text));
+    let decls: Vec<Decl> = block
+        .iter()
+        .map(|d| Decl {
+            prop: d.prop(),
+            value: core::ptr::from_ref(d.value()),
+        })
+        .collect();
+    f(&decls)
 }
 
 pub(crate) fn with_sheet_declarations<R>(text: &str, f: impl FnOnce(&[Vec<Decl>]) -> R) -> R {
@@ -733,25 +679,16 @@ pub(crate) fn register_property(
 }
 
 pub(crate) fn anim_lists(style: Option<StyleRef<'_>>, is_animation: bool) -> (AnimList, bool) {
-    let mut list = AnimList::empty();
-    let mut mismatch: GBoolean = 0;
-    let p = style.map_or(core::ptr::null(), StyleRef::as_ptr);
-    unsafe { ns_css_anim_lists(p, glib::boolean(is_animation), &mut list.0, &mut mismatch) };
-    (list, mismatch != 0)
+    let (entries, mismatch) = css_engine::animation_lists(style.map(StyleRef::data), is_animation);
+    (AnimList(entries), mismatch)
 }
 
 pub(crate) fn anim_effective(style: StyleRef<'_>, is_animation: bool) -> AnimList {
-    let mut list = AnimList::empty();
-    unsafe { ns_css_anim_effective(style.as_ptr(), glib::boolean(is_animation), &mut list.0) };
-    list
+    AnimList(css_engine::animation_effective(style.data(), is_animation))
 }
 
 pub(crate) fn anim_entry_name(entry: &AnimEntry) -> Option<String> {
-    (!entry.name.is_null()).then(|| {
-        unsafe { CStr::from_ptr(entry.name) }
-            .to_string_lossy()
-            .into_owned()
-    })
+    entry.name.as_deref().map(lossy)
 }
 
 pub(crate) fn easing_canonical(text: &str) -> Option<String> {
@@ -857,14 +794,16 @@ pub(crate) struct Keyframe {
 unsafe extern "C" fn collect_keyframe(
     offset: f64,
     easing: *const c_char,
-    decls: *const GArray,
+    decls: Option<&css_engine::Declarations>,
     user: *mut c_void,
 ) {
     let frames = unsafe { &mut *user.cast::<Vec<Keyframe>>() };
-    let decls = unsafe { decls_of(decls) }
-        .into_iter()
-        .map(|d| (d.prop, d.value))
-        .collect();
+    let decls = decls.map_or_else(Vec::new, |decls| {
+        decls
+            .iter()
+            .map(|d| (d.prop(), core::ptr::from_ref(d.value())))
+            .collect()
+    });
     frames.push(Keyframe {
         offset,
         easing: optional_text(easing),

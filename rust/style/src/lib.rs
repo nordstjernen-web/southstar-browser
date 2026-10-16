@@ -7,7 +7,7 @@ mod ffi;
 pub use ffi::{
     Display, Kind, NsCssValue, PROP_COUNT, Prop, RectValue, SizeValue, StyleRef, StyleTable, Value,
     ValueRef, border_image_params, border_image_source, box_style, display_of, effective_transform,
-    font_family_for_pango, font_stretch_rank, layer, layer_count, retain, styles_equal, value_slot,
+    font_family_for_pango, font_stretch_rank, layer, layer_count, styles_equal, value_slot,
     values_equal,
 };
 pub use southstar_css::{

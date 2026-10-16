@@ -38,17 +38,21 @@ const _: () =
     assert!(core::mem::size_of::<Timing>() == 48 && core::mem::offset_of!(Timing, cb) == 16);
 
 impl Timing {
-    pub fn parse_into(&mut self, text: &CStr) -> bool {
-        let Some(t) = timing_parse(text.to_bytes()) else {
-            return false;
-        };
-        *self = Timing {
+    pub fn of(t: &TimingFunction) -> Timing {
+        Timing {
             kind: t.kind,
             steps: t.steps,
             step_pos: t.step_pos,
             jump_keyword: t.jump_keyword,
             cb: t.cb,
+        }
+    }
+
+    pub fn parse_into(&mut self, text: &CStr) -> bool {
+        let Some(t) = timing_parse(text.to_bytes()) else {
+            return false;
         };
+        *self = Timing::of(&t);
         true
     }
 

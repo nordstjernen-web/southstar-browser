@@ -7,7 +7,7 @@ use core::ptr;
 use southstar_dom::Node;
 
 use super::computed_units::{RawStyle, StyleView};
-use super::value::{new_keyword, ns_css_value_free};
+use super::value::{new_keyword, value_free};
 use crate::display;
 use crate::fixups::{self, WIDGET_DECORATIONS};
 use crate::prop::Prop;
@@ -17,7 +17,7 @@ pub(super) fn display_contents_to_none(el: Node<'_>, style: &mut RawStyle) -> bo
         return false;
     }
     let slot = &mut style.values[Prop::Display.id()];
-    unsafe { ns_css_value_free(*slot) };
+    unsafe { value_free(*slot) };
     *slot = new_keyword(b"none");
     style.display = display::from_keyword(Some(b"none"));
     true
@@ -30,7 +30,7 @@ pub(super) fn strip_native_widget_decorations(el: Node<'_>, style: &mut RawStyle
     for prop in WIDGET_DECORATIONS {
         let slot = &mut style.values[prop.id()];
         if !slot.is_null() {
-            unsafe { ns_css_value_free(*slot) };
+            unsafe { value_free(*slot) };
             *slot = ptr::null_mut();
         }
     }

@@ -120,7 +120,7 @@ const TRANSITION_LIST_PROPS: [Longhand; 5] = [
 ];
 
 #[derive(Clone)]
-pub(crate) struct Entry {
+pub struct Entry {
     pub target: i32,
     pub name: Option<Vec<u8>>,
     pub duration_ms: f64,
@@ -631,7 +631,7 @@ fn longhand_part(e: &Entry, lh: Longhand) -> Vec<u8> {
     entry_longhand_text(e, lh).unwrap_or_default()
 }
 
-pub(crate) fn shorthand_serialize(list: &[Entry], is_animation: bool) -> Vec<u8> {
+pub fn shorthand_serialize(list: &[Entry], is_animation: bool) -> Vec<u8> {
     let mut out = Vec::new();
     for (i, e) in list.iter().enumerate() {
         if i > 0 {

@@ -801,7 +801,7 @@ fn anim_longhand(list: &AnimList, sub: &str) -> Option<String> {
         }
         match sub {
             "duration" => {
-                if e.duration_auto != 0 {
+                if e.duration_auto {
                     out.push_str("auto");
                 } else {
                     out.push_str(&format!("{}s", southstar_numfmt::g(e.duration_ms / 1000.0)));
@@ -830,7 +830,7 @@ fn anim_longhand(list: &AnimList, sub: &str) -> Option<String> {
                     out.push_str("infinite");
                 }
             }
-            "play-state" => out.push_str(if e.paused != 0 { "paused" } else { "running" }),
+            "play-state" => out.push_str(if e.paused { "paused" } else { "running" }),
             "direction" => out.push_str(match e.direction {
                 1 => "reverse",
                 2 => "alternate",

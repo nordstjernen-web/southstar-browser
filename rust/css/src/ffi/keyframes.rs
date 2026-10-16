@@ -1,84 +1,102 @@
-//! Southstar — the C ABI of resolving var() in a @keyframes rule's stops against an element's custom properties, and of a style's own var() text.
+//! Southstar — a @keyframes rule copied out of a style sheet, with var() in its stops resolved against an element's custom properties.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
-use core::mem::{size_of, size_of_val};
-use core::ptr;
-
-use southstar_glib as glib;
-
-use super::registry::pass_registered;
-use super::sheet::{RawKeyframes, RawStop};
-use super::vars::substitute_vars;
+use super::computed_units::RawStyle;
+use super::sheet::{RawKeyframes, RawStop, text_at};
 use crate::keyframes;
 use crate::transform::Transform;
 
-unsafe fn stops<'a>(data: *mut RawStop, n_stops: c_int) -> &'a mut [RawStop] {
-    let n = usize::try_from(n_stops).unwrap_or(0);
-    if data.is_null() || n == 0 {
-        return &mut [];
-    }
-    unsafe { core::slice::from_raw_parts_mut(data, n) }
+#[derive(Clone)]
+pub struct KeyframeStop {
+    pct: f64,
+    transform: Option<Transform>,
+    raw_props: Option<Vec<u8>>,
 }
 
-fn resolve_stop(stop: &mut RawStop, vars: *const c_void) {
-    let raw = core::mem::replace(&mut stop.raw_props, ptr::null_mut());
-    if raw.is_null() {
-        return;
-    }
-    let resolved = unsafe { substitute_vars(raw, vars, pass_registered(), 0) };
-    if resolved.is_null() {
-        return;
-    }
-    let existing = if stop.has_transform != 0 {
-        stop.transform
-    } else {
-        Transform::default()
-    };
-    let text = unsafe { CStr::from_ptr(resolved) }.to_bytes();
-    if let Some(merged) = keyframes::resolved_transform(text, existing) {
-        stop.transform = merged;
-        stop.has_transform = glib::TRUE;
-    }
-    stop.raw_props = resolved;
+#[derive(Clone)]
+pub struct Keyframes {
+    name: Vec<u8>,
+    stops: Vec<KeyframeStop>,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_keyframes_resolve(
-    kf: *const RawKeyframes,
-    vars: *const c_void,
-) -> *mut RawKeyframes {
-    let Some(kf) = (unsafe { kf.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    let source = unsafe { stops(kf.stops, kf.n_stops) };
-    if source.iter().all(|stop| stop.raw_props.is_null()) {
-        return ptr::null_mut();
+fn raw_stops(raw: &RawKeyframes) -> &[RawStop] {
+    let n = usize::try_from(raw.n_stops).unwrap_or(0);
+    if raw.stops.is_null() || n == 0 {
+        return &[];
     }
-    unsafe {
-        let out = glib::g_malloc0(size_of::<RawKeyframes>()).cast::<RawKeyframes>();
-        (*out).n_stops = kf.n_stops;
-        (*out).stops = glib::g_malloc(size_of_val(source)).cast::<RawStop>();
-        ptr::copy_nonoverlapping(source.as_ptr(), (*out).stops, source.len());
-        for stop in stops((*out).stops, (*out).n_stops) {
-            resolve_stop(stop, vars);
+    // SAFETY: a keyframes rule owns n_stops stops at stops, freed with its sheet.
+    unsafe { core::slice::from_raw_parts(raw.stops, n) }
+}
+
+fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
+    if let Some(nul) = text.iter().position(|&c| c == 0) {
+        text.truncate(nul);
+    }
+    text
+}
+
+impl KeyframeStop {
+    fn of(raw: &RawStop) -> KeyframeStop {
+        KeyframeStop {
+            pct: raw.pct,
+            transform: (raw.has_transform != 0).then_some(raw.transform),
+            raw_props: text_at(raw.raw_props).map(|text| text.to_bytes().to_vec()),
         }
-        out
+    }
+
+    pub fn pct(&self) -> f64 {
+        self.pct
+    }
+
+    pub fn transform(&self) -> Option<&Transform> {
+        self.transform.as_ref()
+    }
+
+    pub fn raw_props(&self) -> Option<&[u8]> {
+        self.raw_props.as_deref()
+    }
+
+    fn resolve(&self, style: &RawStyle) -> KeyframeStop {
+        let resolved = self
+            .raw_props
+            .as_deref()
+            .and_then(|raw| style.resolve_vars(raw))
+            .map(until_nul);
+        let merged = resolved.as_deref().and_then(|text| {
+            keyframes::resolved_transform(text, self.transform.unwrap_or_default())
+        });
+        KeyframeStop {
+            pct: self.pct,
+            transform: merged.or(self.transform),
+            raw_props: resolved,
+        }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_keyframes_resolved_free(kf: *mut RawKeyframes) {
-    let Some(kf_ref) = (unsafe { kf.as_ref() }) else {
-        return;
-    };
-    unsafe {
-        glib::g_free(kf_ref.name.cast());
-        for stop in stops(kf_ref.stops, kf_ref.n_stops) {
-            glib::g_free(stop.raw_props.cast());
+impl Keyframes {
+    pub(super) fn of(raw: &RawKeyframes) -> Option<Keyframes> {
+        Some(Keyframes {
+            name: text_at(raw.name)?.to_bytes().to_vec(),
+            stops: raw_stops(raw).iter().map(KeyframeStop::of).collect(),
+        })
+    }
+
+    pub fn name(&self) -> &[u8] {
+        &self.name
+    }
+
+    pub fn stops(&self) -> &[KeyframeStop] {
+        &self.stops
+    }
+
+    pub fn resolve(&self, style: &RawStyle) -> Option<Keyframes> {
+        if self.stops.iter().all(|stop| stop.raw_props.is_none()) {
+            return None;
         }
-        glib::g_free(kf_ref.stops.cast());
-        glib::g_free(kf.cast());
+        Some(Keyframes {
+            name: self.name.clone(),
+            stops: self.stops.iter().map(|stop| stop.resolve(style)).collect(),
+        })
     }
 }

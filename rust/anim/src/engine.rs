@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use southstar_style::{StyleRef, display_of};
 
 use crate::ffi::css::{
-    self, AnimList, Borrowed, Decls, Entry, KeyframeSource, Keyframes, NodePtr, PROP_COUNT,
-    ResolvedKeyframes, RetainedStyle, StyleMut, StylesTable, Target, Val,
+    self, AnimList, Borrowed, Decls, Entry, Keyframes, NodePtr, PROP_COUNT, RetainedStyle,
+    StyleMut, StylesTable, Target, Val,
 };
 use crate::props;
 use crate::timing::Timing;
@@ -178,7 +178,7 @@ struct Run {
     phase: Phase,
     iters_emitted: i32,
     elapsed_base_ms: f64,
-    kf: Option<ResolvedKeyframes>,
+    kf: Option<Keyframes>,
     stops: Option<Vec<KfStop>>,
     start_us: f64,
     duration_ms: f64,
@@ -403,18 +403,21 @@ fn directed_progress(iter: i32, raw: f64, direction: i32) -> f64 {
     if reverse { 1.0 - raw } else { raw }
 }
 
-fn stops_build<K: KeyframeSource + ?Sized>(kf: Option<&K>) -> Vec<KfStop> {
+fn stops_build(kf: Option<&Keyframes>) -> Vec<KfStop> {
     let Some(kf) = kf else {
         return Vec::new();
     };
     kf.stops()
-        .into_iter()
-        .map(|(pct, raw)| {
-            let mut decls = Decls::parse(raw);
+        .iter()
+        .map(|stop| {
+            let mut decls = Decls::parse(stop.raw_props());
             if let Some(d) = decls.as_mut() {
                 d.drop_important();
             }
-            KfStop { pct, decls }
+            KfStop {
+                pct: stop.pct(),
+                decls,
+            }
         })
         .collect()
 }
@@ -829,7 +832,7 @@ impl Shared {
         run_generation: &mut u32,
         r: &mut Run,
         e: Entry<'_>,
-        name: &CStr,
+        name: &[u8],
         style: StyleRef<'_>,
         now_us: i64,
     ) {
@@ -839,7 +842,7 @@ impl Shared {
             }
             self.active_count += 1;
         }
-        r.name = Some(name.to_bytes().to_vec());
+        r.name = Some(name.to_vec());
         r.cancelled_name = None;
         r.start_us = now_us as f64;
         r.configure(e);
@@ -857,8 +860,8 @@ impl Shared {
         r.generation = *run_generation;
         r.kf = None;
         r.stops = None;
-        let registered = self.keyframes.get(name.to_bytes());
-        r.kf = registered.and_then(|k| k.resolve(style.vars_ptr()));
+        let registered = self.keyframes.get(name);
+        r.kf = registered.and_then(|k| k.resolve(style.data()));
         r.stops = Some(match &r.kf {
             Some(resolved) => stops_build(Some(resolved)),
             None => stops_build(registered),
@@ -891,7 +894,7 @@ fn entry_prop(e: Entry<'_>) -> i32 {
         Target::Transform => k.transform,
         Target::Color => k.color,
         Target::BackgroundColor => k.background_color,
-        Target::Other(name) => name.map_or(-1, css::prop_id),
+        Target::Other(name) => name.map_or(-1, css::prop_id_of),
         Target::All | Target::None => -1,
     }
 }
@@ -1199,10 +1202,10 @@ impl Anim {
         if !ch.has_last
             && let Some(before) = node
                 .style_before_change()
-                .filter(|b| b.as_ptr() != style.as_ptr())
+                .filter(|b| b.ptr() != style.as_ptr())
         {
-            ch.last = Val::retain(css::style_value(before, prop));
-            ch.last_currentcolor = css::from_currentcolor(before, prop);
+            ch.last = Val::retain(css::style_value(before.get(), prop));
+            ch.last_currentcolor = css::from_currentcolor(before.get(), prop);
             ch.has_last = true;
         }
         if !ch.has_last {
@@ -1351,7 +1354,7 @@ impl Anim {
             let r = &mut s.runs[i];
             let Some(name) = e.name().filter(|name| {
                 e.duration_ms().partial_cmp(&0.0) != Some(Ordering::Less)
-                    && self.shared.keyframes.contains_key(name.to_bytes())
+                    && self.shared.keyframes.contains_key(*name)
             }) else {
                 if r.name.is_some() {
                     self.shared.run_cancel(node, r);
@@ -1360,12 +1363,12 @@ impl Anim {
                 continue;
             };
             if let Some(cancelled) = &r.cancelled_name {
-                if cancelled.as_slice() == name.to_bytes() {
+                if cancelled.as_slice() == name {
                     continue;
                 }
                 r.cancelled_name = None;
             }
-            if r.name.as_deref() == Some(name.to_bytes()) {
+            if r.name.as_deref() == Some(name) {
                 r.configure(e);
                 if e.paused() != r.css_paused && !r.api_override {
                     r.set_paused(e.paused(), now_us);
@@ -1712,7 +1715,7 @@ impl Anim {
                 .iter()
                 .map(|&(css_text, pct)| KfStop {
                     pct: pct * 100.0,
-                    decls: Decls::parse(css_text),
+                    decls: Decls::parse(css_text.map(CStr::to_bytes)),
                 })
                 .collect(),
         );

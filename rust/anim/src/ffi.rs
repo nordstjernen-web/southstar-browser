@@ -8,8 +8,9 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_css::Declarations;
 use southstar_dom::NsNode;
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_layout::Style;
 use southstar_style::{NsCssValue, StyleRef};
 
@@ -30,7 +31,7 @@ type KeyframeCb = Option<
     unsafe extern "C" fn(
         offset: f64,
         easing: *const c_char,
-        decls: *const GArray,
+        decls: Option<&Declarations>,
         user: *mut c_void,
     ),
 >;
@@ -303,7 +304,7 @@ pub unsafe extern "C" fn ns_anim_keyframes_visit(
     let copies = a.keyframes(node, prop);
     let easings: Vec<CString> = copies.iter().map(|k| cstring(&k.easing)).collect();
     for (copy, easing) in copies.iter().zip(&easings) {
-        let decls = copy.decls.as_ref().map_or(ptr::null(), css::Decls::as_ptr);
+        let decls = copy.decls.as_ref().map(css::Decls::declarations);
         unsafe { cb(copy.offset, easing.as_ptr(), decls, user) };
     }
 }

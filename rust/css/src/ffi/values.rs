@@ -1,16 +1,15 @@
-//! Southstar — the C ABI of value serialization, interpolation, comparison and the specified canonical text, reading css.c's ns_css_value into the Rust value.
+//! Southstar — value serialization, interpolation, comparison and the specified canonical text, reading css.c's ns_css_value into the Rust value.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double};
+use core::ffi::{CStr, c_char};
 use core::ptr;
-
-use southstar_glib::{self as glib, GBoolean};
 
 use super::property::to_c;
 use super::value::{
     KIND_ANIM, KIND_AREAS, KIND_CALC, KIND_COLOR, KIND_GRADIENT, KIND_KEYWORD, KIND_LENGTH,
     KIND_RECT, KIND_SHADOW, KIND_SIZE, KIND_TRACKS, KIND_TRANSFORM, KIND_URL, NsCssValue,
+    OwnedValue,
 };
 use crate::grid::{AreaRect, Areas};
 use crate::property::{Body, Rect, Size, Value};
@@ -100,28 +99,27 @@ pub fn value_serialize(v: &NsCssValue) -> Vec<u8> {
     unsafe { text_of(v, false) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_interpolate(
-    a: *const NsCssValue,
-    b: *const NsCssValue,
-    t: c_double,
-) -> *mut NsCssValue {
-    let (Some(a), Some(b)) = (unsafe { from_c(a, false) }, unsafe { from_c(b, false) }) else {
-        return ptr::null_mut();
-    };
-    values::interpolate(&a, &b, t).map_or(ptr::null_mut(), to_c)
+fn rust_value(v: &NsCssValue, layers: bool) -> Option<Value> {
+    // SAFETY: a reference is a live value, and the strings and layers it points to are its own.
+    unsafe { from_c(v, layers) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_value_equal(
-    a: *const NsCssValue,
-    b: *const NsCssValue,
-) -> GBoolean {
-    if ptr::eq(a, b) {
-        return glib::TRUE;
-    }
-    let (Some(a), Some(b)) = (unsafe { from_c(a, true) }, unsafe { from_c(b, true) }) else {
-        return glib::FALSE;
+pub fn value_interpolate(a: &NsCssValue, b: &NsCssValue, t: f64) -> Option<OwnedValue> {
+    let (Some(a), Some(b)) = (rust_value(a, false), rust_value(b, false)) else {
+        return None;
     };
-    glib::boolean(values::serialize(&a, false) == values::serialize(&b, false))
+    values::interpolate(&a, &b, t).map(|value| OwnedValue(to_c(value)))
+}
+
+pub fn values_equal(a: Option<&NsCssValue>, b: Option<&NsCssValue>) -> bool {
+    let (a, b) = match (a, b) {
+        (None, None) => return true,
+        (Some(a), Some(b)) if ptr::eq(a, b) => return true,
+        (Some(a), Some(b)) => (a, b),
+        _ => return false,
+    };
+    let (Some(a), Some(b)) = (rust_value(a, true), rust_value(b, true)) else {
+        return false;
+    };
+    values::serialize(&a, false) == values::serialize(&b, false)
 }
