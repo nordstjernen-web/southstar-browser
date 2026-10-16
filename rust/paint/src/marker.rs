@@ -7,12 +7,12 @@ use core::ffi::CStr;
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use southstar_cairo::ContextRef;
 use southstar_dom::{Kind as NodeKind, Node, NsNode};
 use southstar_image::ImageRef;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId as P, StyleRef, display_of};
 
-use crate::ffi::cairo::Cr;
 use crate::ffi::engine::{self, Texture};
 use crate::util::{
     Rgba, get, is_space, keyword_is, length_or, rgba_of, skip_spaces, style_of, truncate,
@@ -487,7 +487,7 @@ pub fn li_marker_text(
 }
 
 fn paint_marker_label(
-    cr: Cr,
+    cr: ContextRef,
     label: &[u8],
     edge_x: f64,
     rtl: bool,
@@ -521,7 +521,7 @@ fn marker_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<Texture> {
     (image.loaded() && texture.width() > 0 && texture.height() > 0).then_some(texture)
 }
 
-pub fn paint_marker(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_marker(cr: ContextRef, b: BoxRef<'_>) {
     let s = style_of(b);
     let dom = unsafe { Node::from_ptr(b.dom_ptr().cast()) };
     if !li_generates_marker(dom, s) || li_is_inside(s) {
@@ -583,7 +583,7 @@ pub fn paint_marker(cr: Cr, b: BoxRef<'_>) {
             cr.save();
             cr.translate(dx, dy);
             cr.scale(dw / f64::from(iw), dh / f64::from(ih));
-            cr.set_source_surface(surf, 0.0, 0.0);
+            cr.set_source_surface(surf.as_ref(), 0.0, 0.0);
             cr.paint();
             cr.restore();
             return;

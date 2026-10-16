@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::OnceCell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
@@ -9,8 +10,8 @@ use core::ptr::{self, NonNull};
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
 use southstar_layout::{BoxRef, NsBox, Style};
 
+use southstar_cairo::ContextRef;
 use southstar_engine::Sheet;
-use southstar_paint::Cr;
 use southstar_selection::NsSelection;
 
 use super::{NsBrowser, PrintSetup};
@@ -209,9 +210,9 @@ impl Cairo {
         Surface(NonNull::new(surf).expect("cairo target"))
     }
 
-    fn cr(&self) -> Cr {
-        // SAFETY: the context is live until destroy or finish consumes this value.
-        unsafe { Cr::from_raw(self.raw()) }
+    fn cr(&self) -> ContextRef<'_> {
+        // SAFETY: the context is live until destroy or finish consumes this value, which the borrow of self outlasts.
+        unsafe { ContextRef::from_raw(self.raw()) }.expect("live cairo context")
     }
 
     pub fn paint(&self, b: &NsBrowser, layout: BoxRef<'_>) {
@@ -324,7 +325,7 @@ impl PrintPages {
 
 struct DocTile {
     bufs: *const *mut u8,
-    upper: Vec<Option<Cairo>>,
+    upper: Vec<OnceCell<Cairo>>,
     used: *mut GBoolean,
     width: c_int,
     height: c_int,
@@ -343,9 +344,9 @@ impl DocTile {
 }
 
 impl DocTile {
-    fn upper(&mut self, index: c_int) -> Option<Cr> {
+    fn upper(&self, index: c_int) -> Option<ContextRef<'_>> {
         let i = index as usize;
-        if let Some(cr) = &self.upper[i] {
+        if let Some(cr) = self.upper[i].get() {
             return Some(cr.cr());
         }
         // SAFETY: the embedder passes one buffer per viewport layer after the document's own, and `i` is below the plan's layer count.
@@ -358,9 +359,8 @@ impl DocTile {
         }
         // SAFETY: the embedder's used flags hold one entry per viewport layer.
         unsafe { *self.used.add(i) = glib::boolean(cr.is_some()) };
-        let out = cr.as_ref().map(Cairo::cr);
-        self.upper[i] = cr;
-        out
+        let cr = cr?;
+        Some(self.upper[i].get_or_init(|| cr).cr())
     }
 }
 
@@ -384,9 +384,9 @@ pub fn render_doc_tile(
     end: impl Fn(),
 ) -> c_int {
     let n_upper = plan.viewport_layers();
-    let mut tile = DocTile {
+    let tile = DocTile {
         bufs: target.bufs,
-        upper: (0..n_upper.max(1)).map(|_| None).collect(),
+        upper: (0..n_upper.max(1)).map(|_| OnceCell::new()).collect(),
         used: target.used,
         width: target.width,
         height: target.height,
@@ -421,7 +421,12 @@ pub fn render_doc_tile(
         plan,
     );
     end();
-    for upper in tile.upper.drain(..).take(n_upper).flatten() {
+    for upper in tile
+        .upper
+        .into_iter()
+        .take(n_upper)
+        .filter_map(OnceCell::into_inner)
+    {
         drop(upper.finish());
     }
     drop(cr.finish());

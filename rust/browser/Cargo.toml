@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-anim = { path = "../anim" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
+southstar-cairo = { path = "../cairo" }
 southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }

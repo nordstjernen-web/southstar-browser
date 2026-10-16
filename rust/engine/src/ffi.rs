@@ -155,8 +155,9 @@ impl Capture {
 
     pub fn paint(&self, root: BoxRef) {
         // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
-        let cr = unsafe { southstar_paint::Cr::from_raw(self.cr.cast()) };
-        southstar_paint::paint(cr, root, None, None);
+        if let Some(cr) = unsafe { southstar_cairo::ContextRef::from_raw(self.cr.cast()) } {
+            southstar_paint::paint(cr, root, None, None);
+        }
     }
 
     pub fn show_page(&self) {
@@ -165,8 +166,9 @@ impl Capture {
 
     pub fn draw_sheet(&self, root: BoxRef, setup: &PrintSetup, scale: f64, top: f64, bottom: f64) {
         // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
-        let cr = unsafe { southstar_paint::Cr::from_raw(self.cr.cast()) };
-        southstar_print::draw_page(cr, root, setup, scale, top, bottom);
+        if let Some(cr) = unsafe { southstar_cairo::ContextRef::from_raw(self.cr.cast()) } {
+            southstar_print::draw_page(cr, root, setup, scale, top, bottom);
+        }
     }
 
     pub fn write_png(self, path: &CStr) -> Result<(), Vec<u8>> {

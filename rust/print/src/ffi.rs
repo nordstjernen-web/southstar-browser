@@ -5,9 +5,9 @@
 use core::ffi::{CStr, c_int};
 use std::sync::OnceLock;
 
+use southstar_cairo::ContextRef;
 use southstar_css::PageRule;
 use southstar_layout::{BoxRef, Style};
-use southstar_paint::Cr;
 
 const A4_WIDTH: f64 = 210.0 * 96.0 / 25.4;
 const A4_HEIGHT: f64 = 297.0 * 96.0 / 25.4;
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn ns_print_setup_default(setup: *mut PrintSetup) {
 }
 
 pub fn draw_page(
-    cr: Cr,
+    cr: ContextRef,
     root: BoxRef<'_>,
     setup: &PrintSetup,
     scale: f64,

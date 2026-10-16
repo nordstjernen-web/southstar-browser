@@ -4,12 +4,15 @@
 
 use core::f64::consts::PI;
 
+use southstar_cairo::{
+    Content, Context, ContextRef, Extend, FillRule, Filter, Format, Matrix, Pattern, Surface,
+    SurfaceRef,
+};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr};
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
-use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface, SurfaceRef};
 use crate::ffi::engine::{self, Texture};
 use crate::media::texture_surface_cached;
 use crate::radii::{
@@ -142,17 +145,24 @@ fn border_wedge_apex(
     (a0[0] + t * dax, a0[1] + t * day)
 }
 
-pub fn snap_device_x(cr: Cr, x: f64) -> f64 {
+pub fn snap_device_x(cr: ContextRef, x: f64) -> f64 {
     let (dx, dy) = cr.user_to_device(x, 0.0);
     cr.device_to_user(dx.round(), dy).0
 }
 
-pub fn snap_device_y(cr: Cr, y: f64) -> f64 {
+pub fn snap_device_y(cr: ContextRef, y: f64) -> f64 {
     let (dx, dy) = cr.user_to_device(0.0, y);
     cr.device_to_user(dx, dy.round()).1
 }
 
-fn snap_inner_edge(cr: Cr, outer: f64, inner: f64, width: f64, inward: f64, vertical: bool) -> f64 {
+fn snap_inner_edge(
+    cr: ContextRef,
+    outer: f64,
+    inner: f64,
+    width: f64,
+    inward: f64,
+    vertical: bool,
+) -> f64 {
     if width <= 0.0 {
         return outer;
     }
@@ -180,7 +190,7 @@ struct BorderEdges {
     ib: f64,
 }
 
-fn snap_border_edges(cr: Cr, e: &mut BorderEdges, border: Edges) {
+fn snap_border_edges(cr: ContextRef, e: &mut BorderEdges, border: Edges) {
     let m = cr.matrix();
     if m.xy != 0.0 || m.yx != 0.0 {
         return;
@@ -202,7 +212,7 @@ fn snap_border_edges(cr: Cr, e: &mut BorderEdges, border: Edges) {
 }
 
 fn paint_rounded_mixed_border(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     s: StyleRef<'_>,
     rect: (f64, f64, f64, f64),
@@ -243,7 +253,7 @@ fn paint_rounded_mixed_border(
         cr.line_to(apex_x, apex_y);
         cr.close_path();
         cr.clip();
-        cr.set_fill_rule(cairo::FILL_RULE_EVEN_ODD);
+        cr.set_fill_rule(FillRule::EvenOdd);
         rounded_rect_path(cr, x, y, w, h, outer);
         if iw > 0.0 && ih > 0.0 {
             rounded_rect_path(cr, ix, iy, iw, ih, inner);
@@ -293,7 +303,7 @@ pub fn style_uniform_solid_border(s: Option<StyleRef<'_>>) -> Option<(f64, Rgba)
 }
 
 pub fn paint_inline_box_shadow(
-    cr: Cr,
+    cr: ContextRef,
     s: Option<StyleRef<'_>>,
     rect: (f64, f64, f64, f64),
     radii: CornerRadii,
@@ -444,7 +454,7 @@ fn bg_tile(image: (f64, f64), p: &BgImage<'_>, area: (f64, f64, f64, f64)) -> Ti
 }
 
 fn fill_tiles(
-    cr: Cr,
+    cr: ContextRef,
     surf: SurfaceRef,
     image: (f64, f64),
     tile: &Tile,
@@ -455,12 +465,12 @@ fn fill_tiles(
     let (x, y, w, h) = area;
     let pat = Pattern::for_surface(surf);
     pat.set_extend(if tile.repeat_x || tile.repeat_y {
-        cairo::EXTEND_REPEAT
+        Extend::Repeat
     } else {
-        cairo::EXTEND_NONE
+        Extend::None
     });
     if pixelated {
-        pat.set_filter(cairo::FILTER_NEAREST);
+        pat.set_filter(Filter::Nearest);
     }
     let mut m = Matrix::identity();
     m.scale(iwf / tile.draw_w, ihf / tile.draw_h);
@@ -496,7 +506,7 @@ fn loaded_texture(img: Option<ImageRef<'_>>) -> Option<(Texture, f64, f64)> {
 }
 
 pub fn paint_bg_image_core(
-    cr: Cr,
+    cr: ContextRef,
     img: Option<ImageRef<'_>>,
     p: &BgImage<'_>,
     area: (f64, f64, f64, f64),
@@ -514,12 +524,12 @@ pub fn paint_bg_image_core(
     cr.save();
     rounded_rect_path(cr, cx, cy, cw, ch, radii);
     cr.clip();
-    fill_tiles(cr, surf, (iwf, ihf), &tile, area, p.pixelated);
+    fill_tiles(cr, surf.as_ref(), (iwf, ihf), &tile, area, p.pixelated);
     cr.restore();
 }
 
 fn paint_masked_background(
-    cr: Cr,
+    cr: ContextRef,
     img: Option<ImageRef<'_>>,
     p: &BgImage<'_>,
     color: Rgba,
@@ -540,8 +550,8 @@ fn paint_masked_background(
     cr.save();
     rounded_rect_path(cr, x, y, w, h, radii);
     cr.clip();
-    cr.push_group_alpha();
-    fill_tiles(cr, surf, (iwf, ihf), &tile, area, false);
+    cr.push_group_with_content(Content::Alpha);
+    fill_tiles(cr, surf.as_ref(), (iwf, ihf), &tile, area, false);
     let mask = cr.pop_group();
     color.set_source(cr);
     cr.mask(&mask);
@@ -656,13 +666,13 @@ pub fn gradient_pattern(
         );
     }
     if gr.repeating != 0 {
-        pat.set_extend(cairo::EXTEND_REPEAT);
+        pat.set_extend(Extend::Repeat);
     }
     pat
 }
 
 pub fn paint_bg_gradient_core(
-    cr: Cr,
+    cr: ContextRef,
     gr: &Gradient,
     border: (f64, f64, f64, f64),
     clip: (f64, f64, f64, f64),
@@ -717,16 +727,16 @@ pub fn paint_bg_gradient_core(
             let a2 = f2 * 2.0 * PI - PI / 2.0;
             let (r1, g1, b1, al1) = conic_color_at(gr, f1 + eps);
             let (r2, g2, b2, al2) = conic_color_at(gr, f2 - eps);
-            mesh.mesh_begin_patch();
+            mesh.begin_patch();
             mesh.mesh_move_to(cx, cy);
             mesh.mesh_line_to(cx + r_outer * a1.cos(), cy + r_outer * a1.sin());
             mesh.mesh_line_to(cx + r_outer * a2.cos(), cy + r_outer * a2.sin());
             mesh.mesh_line_to(cx, cy);
-            mesh.mesh_corner_rgba(0, r1, g1, b1, al1);
-            mesh.mesh_corner_rgba(1, r1, g1, b1, al1);
-            mesh.mesh_corner_rgba(2, r2, g2, b2, al2);
-            mesh.mesh_corner_rgba(3, r2, g2, b2, al2);
-            mesh.mesh_end_patch();
+            mesh.set_corner_color_rgba(0, r1, g1, b1, al1);
+            mesh.set_corner_color_rgba(1, r1, g1, b1, al1);
+            mesh.set_corner_color_rgba(2, r2, g2, b2, al2);
+            mesh.set_corner_color_rgba(3, r2, g2, b2, al2);
+            mesh.end_patch();
         }
         cr.set_source(&mesh);
         cr.paint();
@@ -789,7 +799,7 @@ fn bg_gradient_tile_size(size: Option<ValueRef<'_>>, w: f64, h: f64) -> (f64, f6
 }
 
 pub fn paint_bg_gradient_layer(
-    cr: Cr,
+    cr: ContextRef,
     gr: &Gradient,
     p: &BgImage<'_>,
     area: (f64, f64, f64, f64),
@@ -822,18 +832,18 @@ pub fn paint_bg_gradient_layer(
     let scale_y = (y1 - y0).abs().max(1.0);
     let pw = (tw * scale_x).min(4096.0).ceil().max(1.0);
     let ph = (th * scale_y).min(4096.0).ceil().max(1.0);
-    let Some(tile) = Surface::image(cairo::FORMAT_ARGB32, pw as i32, ph as i32) else {
+    let Some(tile) = Surface::image(Format::Argb32, pw as i32, ph as i32) else {
         cr.restore();
         return;
     };
     {
         let ctx = Context::new(tile.as_ref());
-        ctx.cr().scale(pw / tw, ph / th);
+        ctx.as_ref().scale(pw / tw, ph / th);
         let whole = (0.0, 0.0, tw, th);
-        paint_bg_gradient_core(ctx.cr(), gr, whole, whole, CornerRadii::default());
+        paint_bg_gradient_core(ctx.as_ref(), gr, whole, whole, CornerRadii::default());
     }
     let pat = Pattern::for_surface(tile.as_ref());
-    pat.set_extend(cairo::EXTEND_REPEAT);
+    pat.set_extend(Extend::Repeat);
     let mut m = Matrix::identity();
     m.scale(pw / tw, ph / th);
     m.translate(-tx, -ty);
@@ -851,7 +861,7 @@ pub fn paint_bg_gradient_layer(
 }
 
 fn inline_bg_gradients(
-    cr: Cr,
+    cr: ContextRef,
     s: Option<StyleRef<'_>>,
     rect: (f64, f64, f64, f64),
     radii: CornerRadii,
@@ -873,7 +883,7 @@ fn inline_bg_gradients(
 }
 
 fn inline_bg_image(
-    cr: Cr,
+    cr: ContextRef,
     r: &InlineAttr,
     s: Option<StyleRef<'_>>,
     rect: (f64, f64, f64, f64),
@@ -892,7 +902,7 @@ fn inline_bg_image(
     paint_bg_image_core(cr, Some(img), &p, rect, rect, radii);
 }
 
-pub fn paint_inline_css_chrome(cr: Cr, r: Option<&InlineAttr>, rect: (f64, f64, f64, f64)) {
+pub fn paint_inline_css_chrome(cr: ContextRef, r: Option<&InlineAttr>, rect: (f64, f64, f64, f64)) {
     let s = r.and_then(|r| unsafe { StyleRef::from_ptr(r.style()) });
     let (x, y, w, h) = rect;
     if !style_has_inline_box_paint(s) || w <= 0.0 || h <= 0.0 {
@@ -1000,8 +1010,8 @@ fn border_image_tiling(dest: f64, natural: f64, tile: u32) -> BorderImageRun {
 }
 
 fn paint_border_image_part(
-    cr: Cr,
-    surf: crate::ffi::cairo::SurfaceRef,
+    cr: ContextRef,
+    surf: SurfaceRef,
     src: (f64, f64, f64, f64),
     dst: (f64, f64, f64, f64),
     rx: BorderImageRun,
@@ -1029,8 +1039,8 @@ fn paint_border_image_part(
             cr.clip();
             cr.scale(rx.size / sw, ry.size / sh);
             cr.set_source_surface(surf, -sx, -sy);
-            cr.set_source_extend(cairo::EXTEND_PAD);
-            cr.set_source_filter(cairo::FILTER_GOOD);
+            cr.set_source_extend(Extend::Pad);
+            cr.set_source_filter(Filter::Good);
             cr.paint();
             cr.restore();
         }
@@ -1049,7 +1059,7 @@ fn border_image_edge_px(v: f64, unit: u32, border_px: f64, pct_basis: f64, font_
 }
 
 fn paint_border_image(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     s: StyleRef<'_>,
     border: (f64, f64, f64, f64),
@@ -1073,7 +1083,6 @@ fn paint_border_image(
     if area_w <= 0.0 || area_h <= 0.0 {
         return false;
     }
-    let owned: Surface;
     let iw;
     let ih;
     let surf = if src.kind() == Kind::Url {
@@ -1102,18 +1111,18 @@ fn paint_border_image(
         };
         iw = area_w.ceil();
         ih = area_h.ceil();
-        owned = Surface::image_unchecked(cairo::FORMAT_ARGB32, iw as i32, ih as i32);
+        let owned = Surface::image_unchecked(Format::Argb32, iw as i32, ih as i32);
         {
             let ctx = Context::new(owned.as_ref());
             paint_bg_gradient_core(
-                ctx.cr(),
+                ctx.as_ref(),
                 gr,
                 (0.0, 0.0, iw, ih),
                 (0.0, 0.0, iw, ih),
                 CornerRadii::default(),
             );
         }
-        owned.as_ref()
+        owned
     };
 
     let mut slice = [0.0; 4];
@@ -1181,7 +1190,7 @@ fn paint_border_image(
         1.0
     };
     let st = border_image_stretch;
-    let part = |src, dst, rx, ry| paint_border_image_part(cr, surf, src, dst, rx, ry);
+    let part = |src, dst, rx, ry| paint_border_image_part(cr, surf.as_ref(), src, dst, rx, ry);
     part(
         (0.0, 0.0, slice[3], slice[0]),
         (area_x, area_y, width[3], width[0]),
@@ -1268,7 +1277,7 @@ pub fn background_clips_to_text(s: Option<StyleRef<'_>>) -> bool {
     bg_layer_keyword(s, P::BackgroundClip, (layers - 1).max(0)) == Some(b"text")
 }
 
-fn subtree_text_path(cr: Cr, b: BoxRef<'_>) {
+fn subtree_text_path(cr: ContextRef, b: BoxRef<'_>) {
     if b.kind() == BoxKind::Inline {
         crate::inline::text_path(cr, b);
     }
@@ -1279,7 +1288,7 @@ fn subtree_text_path(cr: Cr, b: BoxRef<'_>) {
     }
 }
 
-fn paint_clipped_to_text(cr: Cr, b: BoxRef<'_>, background: &Pattern) {
+fn paint_clipped_to_text(cr: ContextRef, b: BoxRef<'_>, background: &Pattern) {
     cr.save();
     cr.new_path();
     subtree_text_path(cr, b);
@@ -1371,7 +1380,7 @@ fn layer_image(b: BoxRef<'_>, li: i32) -> Option<ImageRef<'_>> {
     unsafe { ImageRef::from_ptr(raw) }
 }
 
-pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     let border_x = b.x() + m.left;
     let mut border_y = b.y() + m.top;
@@ -1539,11 +1548,11 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
     if let Some((_, gap_x0, gap_x1, gap_y0, gap_y1)) = legend {
         cr.save();
         let (cx0, cy0, cx1, cy1) = cr.clip_extents();
-        cr.set_fill_rule(cairo::FILL_RULE_EVEN_ODD);
+        cr.set_fill_rule(FillRule::EvenOdd);
         cr.rectangle(cx0, cy0, cx1 - cx0, cy1 - cy0);
         cr.rectangle(gap_x0, gap_y0, gap_x1 - gap_x0, gap_y1 - gap_y0);
         cr.clip();
-        cr.set_fill_rule(cairo::FILL_RULE_WINDING);
+        cr.set_fill_rule(FillRule::Winding);
     }
     if let Some(st) = s {
         let mut drew_uniform = paint_border_image(cr, b, st, border);
@@ -1654,9 +1663,9 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
             cr.set_line_width(w);
             cr.save();
             if bs == b"dashed" {
-                cr.set_dash(&[w * 3.0, w * 2.0]);
+                cr.set_dash(&[w * 3.0, w * 2.0], 0.0);
             } else if bs == b"dotted" {
-                cr.set_dash(&[w, w]);
+                cr.set_dash(&[w, w], 0.0);
             }
             let (mut x1, mut y1, mut x2, mut y2) = (x1, y1, x2, y2);
             if w < 1.5 {
@@ -1692,9 +1701,9 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
             oc.set_source(cr);
             cr.set_line_width(ow);
             if ostyle == b"dashed" {
-                cr.set_dash(&[ow * 3.0, ow * 2.0]);
+                cr.set_dash(&[ow * 3.0, ow * 2.0], 0.0);
             } else if ostyle == b"dotted" {
-                cr.set_dash(&[ow, ow]);
+                cr.set_dash(&[ow, ow], 0.0);
             }
             let spread = off + ow / 2.0;
             rounded_rect_path(
@@ -1714,7 +1723,7 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
     }
 }
 
-pub fn paint_hr(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_hr(cr: ContextRef, b: BoxRef<'_>) {
     let dom = unsafe { southstar_dom::Node::from_ptr(b.dom_ptr().cast()) };
     if dom
         .and_then(|d| d.name())

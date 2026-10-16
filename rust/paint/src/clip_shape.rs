@@ -4,9 +4,9 @@
 
 use core::f64::consts::{PI, SQRT_2};
 
+use southstar_cairo::{ContextRef, FillRule};
 use southstar_layout::BoxRef;
 
-use crate::ffi::cairo::{self, Cr};
 use crate::radii::{CornerRadii, rounded_rect_path};
 
 const REM_PX: f64 = 16.0;
@@ -115,7 +115,7 @@ fn shape_radius(w: &[u8], closest: f64, farthest: f64, basis: f64, font_size: f6
     }
 }
 
-fn circle(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
+fn circle(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) {
     let ws = words(args);
     let (radius, at) = split_at_keyword(&ws, b"at");
     let (cx, cy) = position(at, r, font_size);
@@ -130,7 +130,7 @@ fn circle(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
     cr.arc(cx, cy, rad.max(0.0), 0.0, 2.0 * PI);
 }
 
-fn ellipse(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
+fn ellipse(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) {
     let ws = words(args);
     let (radii, at) = split_at_keyword(&ws, b"at");
     let (cx, cy) = position(at, r, font_size);
@@ -173,7 +173,7 @@ fn round_radii(ws: &[&[u8]], r: Rect, font_size: f64) -> CornerRadii {
     c
 }
 
-fn inset(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
+fn inset(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) {
     let ws = words(args);
     let (edges, round) = split_at_keyword(&ws, b"round");
     let e = |i: usize, basis: f64| {
@@ -206,7 +206,7 @@ fn inset(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
     );
 }
 
-fn xywh(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
+fn xywh(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) {
     let ws = words(args);
     let (v, round) = split_at_keyword(&ws, b"round");
     let get = |i: usize, basis: f64| {
@@ -230,7 +230,7 @@ fn xywh(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
     );
 }
 
-fn rect(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
+fn rect(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) {
     let ws = words(args);
     let (v, round) = split_at_keyword(&ws, b"round");
     let get = |i: usize, basis: f64, auto: f64| {
@@ -261,7 +261,7 @@ fn rect(cr: Cr, args: &[u8], r: Rect, font_size: f64) {
     );
 }
 
-fn polygon(cr: Cr, args: &[u8], r: Rect, font_size: f64) -> bool {
+fn polygon(cr: ContextRef, args: &[u8], r: Rect, font_size: f64) -> bool {
     let mut items = split_top(args, |c| c == b',');
     let mut even_odd = false;
     if let Some(first) = items.first() {
@@ -300,7 +300,7 @@ fn polygon(cr: Cr, args: &[u8], r: Rect, font_size: f64) -> bool {
     }
     cr.close_path();
     if even_odd {
-        cr.set_fill_rule(cairo::FILL_RULE_EVEN_ODD);
+        cr.set_fill_rule(FillRule::EvenOdd);
     }
     true
 }
@@ -337,7 +337,7 @@ fn reference_box(b: BoxRef<'_>, geometry_box: Option<&[u8]>) -> Rect {
     }
 }
 
-pub fn clip_to_shape(cr: Cr, b: BoxRef<'_>, value: &[u8], font_size: f64) -> bool {
+pub fn clip_to_shape(cr: ContextRef, b: BoxRef<'_>, value: &[u8], font_size: f64) -> bool {
     let ws = words(value);
     let is_box = |w: &&[u8]| w.ends_with(b"-box");
     let geometry_box = ws.iter().find(|w| is_box(w)).copied();
@@ -370,6 +370,6 @@ pub fn clip_to_shape(cr: Cr, b: BoxRef<'_>, value: &[u8], font_size: f64) -> boo
         _ => return false,
     }
     cr.clip();
-    cr.set_fill_rule(cairo::FILL_RULE_WINDING);
+    cr.set_fill_rule(FillRule::Winding);
     true
 }

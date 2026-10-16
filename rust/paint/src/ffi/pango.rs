@@ -5,9 +5,12 @@
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
 use core::ptr;
 
+#[cfg(target_os = "macos")]
+use southstar_cairo::HintStyle;
+use southstar_cairo::{
+    Antialias, ContextRef, FontOptions, FontOptionsRef, HintMetrics, SubpixelOrder,
+};
 use southstar_glib::GBoolean;
-
-use super::cairo::Cr;
 
 pub const SCALE: c_int = 1024;
 pub const SCALE_F: f64 = 1024.0;
@@ -48,12 +51,6 @@ pub const OVERLINE_SINGLE: c_int = 1;
 
 pub const TAB_LEFT: c_int = 0;
 pub const ATTR_SHAPE: c_int = 14;
-
-const CAIRO_ANTIALIAS_GRAY: c_int = 2;
-const CAIRO_SUBPIXEL_ORDER_DEFAULT: c_int = 0;
-const CAIRO_HINT_METRICS_OFF: c_int = 1;
-#[cfg(target_os = "macos")]
-const CAIRO_HINT_STYLE_NONE: c_int = 1;
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
@@ -300,14 +297,6 @@ unsafe extern "C" {
     );
     fn g_object_get_data(object: *mut c_void, key: *const c_char) -> *mut c_void;
     fn g_free(mem: *mut c_void);
-    fn cairo_font_options_create() -> *mut c_void;
-    fn cairo_font_options_destroy(options: *mut c_void);
-    fn cairo_font_options_merge(options: *mut c_void, other: *const c_void);
-    fn cairo_font_options_set_antialias(options: *mut c_void, antialias: c_int);
-    fn cairo_font_options_set_subpixel_order(options: *mut c_void, order: c_int);
-    fn cairo_font_options_set_hint_metrics(options: *mut c_void, metrics: c_int);
-    #[cfg(target_os = "macos")]
-    fn cairo_font_options_set_hint_style(options: *mut c_void, style: c_int);
 }
 
 #[derive(Clone, Copy)]
@@ -353,19 +342,20 @@ impl Context {
     pub fn new_text_context() -> Context {
         let map = unsafe { pango_cairo_font_map_get_default() };
         let ctx = unsafe { pango_font_map_create_context(map) };
+        let mut fo = FontOptions::new();
+        let base = unsafe { pango_cairo_context_get_font_options(ctx) };
+        // SAFETY: Pango returns null or the context's own options, unchanged until they are set below.
+        if let Some(base) = unsafe { FontOptionsRef::from_raw(base) } {
+            fo.merge(base);
+        }
+        fo.set_antialias(Antialias::Gray);
+        fo.set_subpixel_order(SubpixelOrder::Default);
+        fo.set_hint_metrics(HintMetrics::Off);
+        #[cfg(target_os = "macos")]
+        fo.set_hint_style(HintStyle::None);
+        unsafe { pango_cairo_context_set_font_options(ctx, fo.as_raw()) };
+        drop(fo);
         unsafe {
-            let fo = cairo_font_options_create();
-            let base = pango_cairo_context_get_font_options(ctx);
-            if !base.is_null() {
-                cairo_font_options_merge(fo, base);
-            }
-            cairo_font_options_set_antialias(fo, CAIRO_ANTIALIAS_GRAY);
-            cairo_font_options_set_subpixel_order(fo, CAIRO_SUBPIXEL_ORDER_DEFAULT);
-            cairo_font_options_set_hint_metrics(fo, CAIRO_HINT_METRICS_OFF);
-            #[cfg(target_os = "macos")]
-            cairo_font_options_set_hint_style(fo, CAIRO_HINT_STYLE_NONE);
-            pango_cairo_context_set_font_options(ctx, fo);
-            cairo_font_options_destroy(fo);
             pango_context_set_round_glyph_positions(ctx, 0);
             pango_cairo_context_set_resolution(ctx, 72.0);
         }
@@ -765,8 +755,8 @@ impl Layout {
         }
     }
 
-    pub fn show(&self, cr: Cr) {
-        unsafe { pango_cairo_show_layout(cr.raw(), self.0) };
+    pub fn show(&self, cr: ContextRef) {
+        unsafe { pango_cairo_show_layout(cr.as_raw(), self.0) };
     }
 }
 
@@ -855,11 +845,11 @@ impl Line<'_> {
         out
     }
 
-    pub fn show(self, cr: Cr) {
-        unsafe { pango_cairo_show_layout_line(cr.raw(), self.raw()) };
+    pub fn show(self, cr: ContextRef) {
+        unsafe { pango_cairo_show_layout_line(cr.as_raw(), self.raw()) };
     }
 
-    pub fn range_path(self, cr: Cr, x: f64, baseline: f64, range: core::ops::Range<c_int>) {
+    pub fn range_path(self, cr: ContextRef, x: f64, baseline: f64, range: core::ops::Range<c_int>) {
         let mut run_x = x;
         let mut node = self.0.runs;
         // SAFETY: a line's runs are a GSList its layout owns for the line's lifetime.
@@ -881,7 +871,7 @@ impl Line<'_> {
             if item_range.start >= range.start && item_range.end <= range.end {
                 cr.move_to(start_x, baseline);
                 // SAFETY: cr is live and the font and glyph string belong to this run.
-                unsafe { pango_cairo_glyph_string_path(cr.raw(), font, run.glyphs.cast()) };
+                unsafe { pango_cairo_glyph_string_path(cr.as_raw(), font, run.glyphs.cast()) };
             } else if item_range.start < range.end && item_range.end > range.start {
                 let mut glyph_x = start_x;
                 for (info, cluster) in infos.iter().zip(clusters) {
@@ -898,7 +888,7 @@ impl Line<'_> {
     }
 }
 
-fn glyph_path(cr: Cr, font: *mut c_void, info: GlyphInfo, x: f64, baseline: f64) {
+fn glyph_path(cr: ContextRef, font: *mut c_void, info: GlyphInfo, x: f64, baseline: f64) {
     let mut glyph = info;
     let mut cluster: c_int = 0;
     let mut one = GlyphString {
@@ -909,7 +899,7 @@ fn glyph_path(cr: Cr, font: *mut c_void, info: GlyphInfo, x: f64, baseline: f64)
     };
     cr.move_to(x, baseline);
     // SAFETY: one points at a glyph and a cluster that outlive the call, and Pango only reads them.
-    unsafe { pango_cairo_glyph_string_path(cr.raw(), font, &mut one) };
+    unsafe { pango_cairo_glyph_string_path(cr.as_raw(), font, &mut one) };
 }
 
 pub struct LayoutIter<'a>(*mut c_void, core::marker::PhantomData<&'a Layout>);

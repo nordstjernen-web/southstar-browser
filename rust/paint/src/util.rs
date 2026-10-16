@@ -4,10 +4,9 @@
 
 use core::ffi::CStr;
 
+use southstar_cairo::ContextRef;
 use southstar_layout::BoxRef;
 use southstar_style::{PropId, StyleRef, ValueRef};
-
-use crate::ffi::cairo::Cr;
 
 pub const UNIT_PX: u32 = 0;
 pub const UNIT_EM: u32 = 1;
@@ -74,7 +73,7 @@ impl Rgba {
         }
     }
 
-    pub fn set_source(self, cr: Cr) {
+    pub fn set_source(self, cr: ContextRef) {
         cr.set_source_rgba(self.r, self.g, self.b, self.a);
     }
 }

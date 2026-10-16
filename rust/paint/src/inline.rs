@@ -6,6 +6,7 @@ use core::f64::consts::{FRAC_PI_2, PI};
 use core::ffi::{CStr, c_int};
 use core::ops::Range;
 
+use southstar_cairo::{Context, ContextRef, Format, LineCap, Matrix, Pattern, Surface};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind as k};
 use southstar_layout_geom::inline_text_indent_px;
@@ -16,7 +17,6 @@ use crate::decor::{
     ANIM_TARGET_COLOR, paint_inline_css_chrome, rgba_anim, snap_device_x, snap_device_y,
     style_has_inline_box_paint, style_side_visible,
 };
-use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface};
 use crate::ffi::engine::{self, FontMetrics};
 use crate::ffi::pango::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
 use crate::radii::{CornerRadii, rounded_rect_path};
@@ -249,7 +249,7 @@ fn is_decoration(kind: u32) -> bool {
 }
 
 fn paint_inline_dashed_decorations(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     text_x: f64,
@@ -323,11 +323,11 @@ fn paint_inline_dashed_decorations(
                 cr.set_line_width(thick);
                 let on = if dotted { thick } else { thick * 3.0 };
                 let off = if dotted { thick * 1.6 } else { thick * 2.5 };
-                cr.set_dash(&[on, off]);
+                cr.set_dash(&[on, off], 0.0);
                 cr.set_line_cap(if dotted {
-                    cairo::LINE_CAP_ROUND
+                    LineCap::Round
                 } else {
-                    cairo::LINE_CAP_BUTT
+                    LineCap::Butt
                 });
                 cr.move_to(x0, uy);
                 cr.line_to(x1, uy);
@@ -341,7 +341,13 @@ fn paint_inline_dashed_decorations(
     }
 }
 
-fn paint_text_shadow_layer(cr: Cr, layout: &Layout, x: f64, y: f64, sh: &southstar_style::Shadow) {
+fn paint_text_shadow_layer(
+    cr: ContextRef,
+    layout: &Layout,
+    x: f64,
+    y: f64,
+    sh: &southstar_style::Shadow,
+) {
     let (lw, lh) = layout.pixel_size();
     if lw <= 0 || lh <= 0 {
         return;
@@ -372,24 +378,23 @@ fn paint_text_shadow_layer(cr: Cr, layout: &Layout, x: f64, y: f64, sh: &southst
         cr.restore();
         return;
     }
-    let Some(mask) = Surface::image(cairo::FORMAT_A8, mw, mh) else {
+    let Some(mask) = Surface::image(Format::A8, mw, mh) else {
         return;
     };
     {
         let ctx = Context::new(mask.as_ref());
-        let mcr = ctx.cr();
+        let mcr = ctx.as_ref();
         mcr.scale(1.0 / ds, 1.0 / ds);
         mcr.move_to(f64::from(pad) * ds, f64::from(pad) * ds);
         layout.show(mcr);
     }
-    let mut ms = mask.as_ref();
-    ms.flush();
     if blur > 0 {
-        let stride = ms.stride();
-        let data = ms.data_mut();
-        box_blur_a8(data, mw, mh, stride, blur_s);
-        box_blur_a8(data, mw, mh, stride, blur_s);
-        ms.mark_dirty();
+        mask.as_ref().with_data_mut(|data, stride| {
+            box_blur_a8(data, mw, mh, stride as i32, blur_s);
+            box_blur_a8(data, mw, mh, stride as i32, blur_s);
+        });
+    } else {
+        mask.as_ref().flush();
     }
     let ox = x + sh.x - f64::from(pad) * ds;
     let oy = y + sh.y - f64::from(pad) * ds;
@@ -842,7 +847,7 @@ fn selection_pseudo_color(b: BoxRef<'_>, prop: P) -> Option<Rgba> {
 }
 
 fn paint_selection_background(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     ox: f64,
@@ -865,7 +870,7 @@ fn paint_selection_background(
 }
 
 fn paint_selection_foreground(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     ox: f64,
@@ -891,7 +896,7 @@ fn paint_selection_foreground(
 }
 
 fn paint_inline_lines_at_layout_heights(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     text_x: f64,
@@ -955,7 +960,7 @@ fn paint_inline_line_baselines(b: BoxRef<'_>, layout: &Layout, y_origin: f64) ->
     out
 }
 
-fn paint_inline_element_fragment(cr: Cr, r: &InlineAttr, f: &Fragment) {
+fn paint_inline_element_fragment(cr: ContextRef, r: &InlineAttr, f: &Fragment) {
     let reach = (f.y1 - f.y0) + 64.0;
     let bx0 = if f.open_left { f.x0 - reach } else { f.x0 };
     let bx1 = if f.open_right { f.x1 + reach } else { f.x1 };
@@ -1130,7 +1135,13 @@ fn inline_box_is_hidden(s: Option<StyleRef<'_>>) -> bool {
     style_keyword(s, P::Visibility).is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
 }
 
-fn paint_inline_element_boxes(cr: Cr, b: BoxRef<'_>, layout: &Layout, text_x: f64, y_origin: f64) {
+fn paint_inline_element_boxes(
+    cr: ContextRef,
+    b: BoxRef<'_>,
+    layout: &Layout,
+    text_x: f64,
+    y_origin: f64,
+) {
     for r in b.attrs().iter().rev() {
         let st = attr_style(r);
         if r.kind != k::ELEMENT
@@ -1292,7 +1303,7 @@ fn char_span(layout: &Layout, r: &InlineAttr) -> (Rectangle, Rectangle) {
     (r0, r1)
 }
 
-fn paint_form_controls(cr: Cr, b: BoxRef<'_>, layout: &Layout, text_x: f64, y_origin: f64) {
+fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f64, y_origin: f64) {
     let (mut opt_minx, mut opt_maxx, mut opt_miny, mut opt_maxy) = (1e9, -1e9, 1e9, -1e9);
     let mut opt_count = 0;
     let mut opt_sel: Vec<(f64, f64)> = Vec::new();
@@ -1482,7 +1493,7 @@ fn paint_form_controls(cr: Cr, b: BoxRef<'_>, layout: &Layout, text_x: f64, y_or
 }
 
 fn paint_carets(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     s: Option<StyleRef<'_>>,
@@ -1552,7 +1563,7 @@ fn glyph_box(layout: &Layout, r: &InlineAttr, text_x: f64, y_origin: f64) -> (f6
 }
 
 fn paint_check_controls(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     s: Option<StyleRef<'_>>,
@@ -1603,7 +1614,7 @@ fn paint_check_controls(
                 cr.fill();
                 cr.set_source_rgb(1.0, 1.0, 1.0);
                 cr.set_line_width(side * 0.18);
-                cr.set_line_cap(cairo::LINE_CAP_ROUND);
+                cr.set_line_cap(LineCap::Round);
                 cr.move_to(bx + side * 0.20, by + side * 0.55);
                 cr.line_to(bx + side * 0.42, by + side * 0.78);
                 cr.line_to(bx + side * 0.80, by + side * 0.28);
@@ -1615,7 +1626,7 @@ fn paint_check_controls(
 }
 
 fn paint_meters(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     s: Option<StyleRef<'_>>,
@@ -1673,7 +1684,7 @@ fn paint_meters(
 }
 
 fn paint_inline_atomics(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     layout: &Layout,
     text_x: f64,
@@ -1702,7 +1713,7 @@ fn paint_inline_atomics(
     }
 }
 
-fn debug_text(cr: Cr, b: BoxRef<'_>, color: Rgba, text_x: f64, y_origin: f64) {
+fn debug_text(cr: ContextRef, b: BoxRef<'_>, color: Rgba, text_x: f64, y_origin: f64) {
     let Some((dx, dy)) = state::debug_point() else {
         return;
     };
@@ -1722,14 +1733,14 @@ fn debug_text(cr: Cr, b: BoxRef<'_>, color: Rgba, text_x: f64, y_origin: f64) {
             color.g,
             color.b,
             color.a,
-            i32::from(cr.group_target() != cr.target())
+            i32::from(cr.group_target().as_ref() != cr.target())
         );
         southstar_glib::stderr_write(line.as_bytes());
     }
 }
 
 fn paint_vertical(
-    cr: Cr,
+    cr: ContextRef,
     b: BoxRef<'_>,
     s: Option<StyleRef<'_>>,
     color: Rgba,
@@ -1814,7 +1825,13 @@ fn inline_layout(
     Some(layout)
 }
 
-fn layout_range_path(cr: Cr, layout: &Layout, text_x: f64, y_origin: f64, range: Range<c_int>) {
+fn layout_range_path(
+    cr: ContextRef,
+    layout: &Layout,
+    text_x: f64,
+    y_origin: f64,
+    range: Range<c_int>,
+) {
     let mut it = layout.iter();
     loop {
         let logical = it.line_logical_extents();
@@ -1829,7 +1846,7 @@ fn layout_range_path(cr: Cr, layout: &Layout, text_x: f64, y_origin: f64, range:
     }
 }
 
-pub fn text_path(cr: Cr, b: BoxRef<'_>) {
+pub fn text_path(cr: ContextRef, b: BoxRef<'_>) {
     if b.text().is_none_or(|t| t.is_empty()) || b.vertical_wm() != 0 {
         return;
     }
@@ -1841,7 +1858,7 @@ pub fn text_path(cr: Cr, b: BoxRef<'_>) {
     layout_range_path(cr, &layout, inline_text_x(b, s), y_origin, 0..c_int::MAX);
 }
 
-pub fn paint_inline(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
+pub fn paint_inline(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let Some(text) = b.text().filter(|t| !t.is_empty()) else {
         return;
     };

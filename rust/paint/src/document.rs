@@ -5,12 +5,12 @@
 use core::ffi::{CStr, c_void};
 use core::ptr;
 
+use southstar_cairo::{ContextRef, Matrix};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_style::{PropId as P, ValueRef, layer, layer_count};
 
-use crate::ffi::cairo::{Cr, Matrix};
 use crate::ffi::engine::{self, Video};
 use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
@@ -99,7 +99,7 @@ fn top_layer_box(root: BoxRef<'_>) -> Option<BoxRef<'_>> {
     find_box_for_node(root, modal)
 }
 
-fn paint_top_layer(cr: Cr, root: BoxRef<'_>, highlight: Option<&CStr>) {
+fn paint_top_layer(cr: ContextRef, root: BoxRef<'_>, highlight: Option<&CStr>) {
     let Some(top) = top_layer_box(root) else {
         return;
     };
@@ -148,7 +148,12 @@ fn end_pass() {
     marker::ordinals_end();
 }
 
-pub fn paint_document(cr: Cr, root: BoxRef<'_>, highlight: Option<&CStr>, sel: *const c_void) {
+pub fn paint_document(
+    cr: ContextRef,
+    root: BoxRef<'_>,
+    highlight: Option<&CStr>,
+    sel: *const c_void,
+) {
     marker::ordinals_begin();
     walk::clear_video_holes();
     let bg = canvas_background_of(root).unwrap_or(Rgba::new(
@@ -302,7 +307,7 @@ fn set_layers(layers: Layers) {
     walk::with(|w| *w.layers.borrow_mut() = layers);
 }
 
-pub fn plan_layers(cr: Cr, root: Option<BoxRef<'_>>, plan: &mut LayerPlan) {
+pub fn plan_layers(cr: ContextRef, root: Option<BoxRef<'_>>, plan: &mut LayerPlan) {
     plan.dynamic = 0;
     unsafe {
         glib::g_hash_table_remove_all(plan.kinds);
@@ -339,7 +344,7 @@ pub struct DocLayers {
 }
 
 pub fn doc_layers(
-    cr: Cr,
+    cr: ContextRef,
     up: DocLayers,
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
@@ -349,7 +354,7 @@ pub fn doc_layers(
     let mut layers = Layers::off();
     layers.mode = LAYERS_DOC;
     layers.root = root.as_ptr();
-    layers.doc = cr.raw();
+    layers.doc = cr.as_raw();
     layers.kinds = plan.kinds;
     layers.upper = up.upper;
     layers.upper_data = up.upper_data;
@@ -366,7 +371,7 @@ pub fn doc_layers(
 }
 
 pub fn vp_layer(
-    cr: Cr,
+    cr: ContextRef,
     root: BoxRef<'_>,
     layer: &VpCapture,
     vp: (f64, f64),

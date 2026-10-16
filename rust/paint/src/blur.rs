@@ -5,7 +5,8 @@
 use core::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::ffi::cairo::{self, Context, Cr, Surface};
+use southstar_cairo::{Context, ContextRef, FillRule, Format, Surface};
+
 use crate::radii::{CornerRadii, rounded_rect_path};
 use crate::util::cmax;
 
@@ -162,22 +163,20 @@ fn blurred_shadow_surface_new(
     surf_w: i32,
     surf_h: i32,
 ) -> Option<Surface> {
-    let surf = Surface::image(cairo::FORMAT_ARGB32, surf_w, surf_h)?;
+    let surf = Surface::image(Format::Argb32, surf_w, surf_h)?;
     {
         let ctx = Context::new(surf.as_ref());
-        let scr = ctx.cr();
+        let scr = ctx.as_ref();
         rounded_rect_path(scr, f64::from(pad), f64::from(pad), k.sw, k.sh, k.radii);
         scr.set_source_rgba(k.r, k.g, k.b, k.a);
         scr.fill();
     }
-    let mut s = surf.as_ref();
-    s.flush();
-    let stride = s.stride();
-    let data = s.data_mut();
-    box_blur_argb(data, stride, surf_w, surf_h, k.radius);
-    box_blur_argb(data, stride, surf_w, surf_h, k.radius);
-    box_blur_argb(data, stride, surf_w, surf_h, k.radius);
-    s.mark_dirty();
+    surf.as_ref().with_data_mut(|data, stride| {
+        let stride = stride as i32;
+        box_blur_argb(data, stride, surf_w, surf_h, k.radius);
+        box_blur_argb(data, stride, surf_w, surf_h, k.radius);
+        box_blur_argb(data, stride, surf_w, surf_h, k.radius);
+    });
     Some(surf)
 }
 
@@ -247,14 +246,24 @@ fn shadow_bands(k: &ShadowKey, pad: i32) -> Option<Bands> {
 }
 
 fn shadow_expand_bands(small: &Surface, surf_w: i32, surf_h: i32, b: &Bands) -> Option<Surface> {
-    let full = Surface::image(cairo::FORMAT_ARGB32, surf_w, surf_h)?;
-    let mut dst_s = full.as_ref();
-    dst_s.flush();
-    let src_s = small.as_ref();
-    let src_stride = src_s.stride() as usize;
-    let dst_stride = dst_s.stride() as usize;
-    let src = src_s.data();
-    let dst = dst_s.data_mut();
+    let full = Surface::image(Format::Argb32, surf_w, surf_h)?;
+    small.as_ref().with_data(|src, src_stride| {
+        full.as_ref().with_data_mut(|dst, dst_stride| {
+            expand_bands(src, src_stride, dst, dst_stride, surf_w, surf_h, b)
+        })
+    });
+    Some(full)
+}
+
+fn expand_bands(
+    src: &[u8],
+    src_stride: usize,
+    dst: &mut [u8],
+    dst_stride: usize,
+    surf_w: i32,
+    surf_h: i32,
+    b: &Bands,
+) {
     let head = (b.mid_x + 1) as usize * 4;
     let tail = (surf_w - b.mid_x - 1 - b.dx) as usize * 4;
     let row_bytes = surf_w as usize * 4;
@@ -276,8 +285,6 @@ fn shadow_expand_bands(small: &Surface, surf_w: i32, surf_h: i32, b: &Bands) -> 
         let at = row + head + b.dx as usize * 4;
         dst[at..at + tail].copy_from_slice(&srow[head..head + tail]);
     }
-    dst_s.mark_dirty();
-    Some(full)
 }
 
 fn blurred_shadow_surface(k: &ShadowKey, pad: i32, surf_w: i32, surf_h: i32) -> Option<Surface> {
@@ -310,7 +317,7 @@ pub struct BlurredShadow {
     pub clip_radii: CornerRadii,
 }
 
-pub fn paint_blurred_box_shadow(cr: Cr, s: &BlurredShadow) {
+pub fn paint_blurred_box_shadow(cr: ContextRef, s: &BlurredShadow) {
     let (sx, sy, sw, sh_h) = s.rect;
     let radius = ((s.blur * 0.5 + 0.5) as i32).clamp(1, 256);
     let pad = radius * 3 + 2;
@@ -340,9 +347,9 @@ pub fn paint_blurred_box_shadow(cr: Cr, s: &BlurredShadow) {
     cr.new_path();
     cr.rectangle(sx - padf, sy - padf, f64::from(surf_w), f64::from(surf_h));
     rounded_rect_path(cr, cx, cy, cw, ch, s.clip_radii);
-    cr.set_fill_rule(cairo::FILL_RULE_EVEN_ODD);
+    cr.set_fill_rule(FillRule::EvenOdd);
     cr.clip();
-    cr.set_fill_rule(cairo::FILL_RULE_WINDING);
+    cr.set_fill_rule(FillRule::Winding);
     cr.set_source_surface(surf.as_ref(), sx - padf, sy - padf);
     cr.paint();
     cr.restore();

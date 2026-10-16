@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_cairo::{Content, ContextRef, Operator, Pattern};
 use southstar_layout::BoxRef;
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::decor::gradient_pattern;
-use crate::ffi::cairo::{self, Cr, Pattern};
 use crate::radii::{border_box_size, box_border_radii, rounded_rect_path};
 use crate::util::{cmax, get, keyword, style_of};
 
@@ -43,20 +43,20 @@ pub fn mask_layers_paintable(s: Option<StyleRef<'_>>) -> bool {
     any
 }
 
-fn mask_composite_operator(v: Option<ValueRef<'_>>) -> i32 {
+fn mask_composite_operator(v: Option<ValueRef<'_>>) -> Operator {
     let op = v
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text)
         .map(|k| k.to_bytes());
     match op {
-        Some(b"subtract") => cairo::OPERATOR_OUT,
-        Some(b"intersect") => cairo::OPERATOR_IN,
-        Some(b"exclude") => cairo::OPERATOR_XOR,
-        _ => cairo::OPERATOR_OVER,
+        Some(b"subtract") => Operator::Out,
+        Some(b"intersect") => Operator::In,
+        Some(b"exclude") => Operator::Xor,
+        _ => Operator::Over,
     }
 }
 
-fn mask_clip_box_path(cr: Cr, b: BoxRef<'_>, clip: Option<ValueRef<'_>>) {
+fn mask_clip_box_path(cr: ContextRef, b: BoxRef<'_>, clip: Option<ValueRef<'_>>) {
     let kw = clip
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text)
@@ -95,14 +95,14 @@ fn mask_clip_box_path(cr: Cr, b: BoxRef<'_>, clip: Option<ValueRef<'_>>) {
     );
 }
 
-pub fn mask_layers_pattern(cr: Cr, b: BoxRef<'_>) -> Pattern {
+pub fn mask_layers_pattern(cr: ContextRef, b: BoxRef<'_>) -> Pattern {
     let s = style_of(b);
     let mask = get(s, P::MaskImage);
     let n = layer_count(mask);
     let m = b.margin();
     let (bw, bh) = border_box_size(b);
     let border = (b.x() + m.left, b.y() + m.top, bw, bh);
-    cr.push_group_alpha();
+    cr.push_group_with_content(Content::Alpha);
     for i in (0..n).rev() {
         let lv = layer(mask, i);
         let grad = layer_gradient(lv).and_then(|g| mask_gradient_pattern(g, border));
@@ -111,7 +111,7 @@ pub fn mask_layers_pattern(cr: Cr, b: BoxRef<'_>) -> Pattern {
         mask_clip_box_path(cr, b, layer(get(s, P::MaskClip), i));
         cr.clip();
         cr.set_operator(if i == n - 1 {
-            cairo::OPERATOR_OVER
+            Operator::Over
         } else {
             mask_composite_operator(layer(get(s, P::MaskComposite), i))
         });

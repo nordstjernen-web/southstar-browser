@@ -25,5 +25,4 @@ pub use api::{
     set_js, set_search, vp_layer,
 };
 pub use document::LayerPlan;
-pub use ffi::cairo::Cr;
 pub use walk::VpCapture;

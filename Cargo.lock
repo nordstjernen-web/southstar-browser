@@ -1740,6 +1740,7 @@ version = "0.9.11-dev"
 dependencies = [
  "southstar-anim",
  "southstar-bytecode-cache",
+ "southstar-cairo",
  "southstar-config",
  "southstar-css",
  "southstar-css-media",
@@ -1899,6 +1900,7 @@ name = "southstar-engine"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-anim",
+ "southstar-cairo",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-syntax",
@@ -3103,6 +3105,7 @@ name = "southstar-paint"
 version = "0.9.11-dev"
 dependencies = [
  "southstar-anim",
+ "southstar-cairo",
  "southstar-css",
  "southstar-dom",
  "southstar-font",
@@ -3133,6 +3136,7 @@ version = "0.9.11-dev"
 name = "southstar-print"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-css",
  "southstar-glib",
  "southstar-layout",

@@ -6,11 +6,11 @@ use core::ffi::{CStr, c_void};
 use core::ptr;
 
 use southstar_anim::AnimHandle;
+use southstar_cairo::ContextRef;
 use southstar_layout::{BoxRef, NsBox};
 use southstar_selection::NsSelection;
 
 use crate::document::{self, DocLayers, LayerPlan};
-use crate::ffi::cairo::Cr;
 use crate::walk::VpCapture;
 use crate::{state, three_d};
 
@@ -18,24 +18,29 @@ fn selection_ptr(sel: Option<&NsSelection>) -> *const c_void {
     sel.map_or(ptr::null(), |s| ptr::from_ref(s).cast())
 }
 
-pub fn paint(cr: Cr, root: BoxRef<'_>, highlight: Option<&CStr>, sel: Option<&NsSelection>) {
+pub fn paint(
+    cr: ContextRef,
+    root: BoxRef<'_>,
+    highlight: Option<&CStr>,
+    sel: Option<&NsSelection>,
+) {
     document::paint_document(cr, root, highlight, selection_ptr(sel));
 }
 
-pub fn plan_layers(cr: Cr, root: BoxRef<'_>, plan: &mut LayerPlan) {
+pub fn plan_layers(cr: ContextRef, root: BoxRef<'_>, plan: &mut LayerPlan) {
     document::plan_layers(cr, Some(root), plan);
 }
 
-type Upper<'u> = &'u mut dyn FnMut(i32) -> Option<Cr>;
+type Upper<'u> = &'u mut dyn FnMut(i32) -> Option<ContextRef<'u>>;
 
 unsafe extern "C" fn upper_trampoline(index: i32, data: *mut c_void) -> *mut c_void {
     // SAFETY: doc_layers passes a pointer to its own Upper closure reference, which outlives the walk that calls back.
     let upper = unsafe { &mut *data.cast::<Upper<'_>>() };
-    upper(index).map_or(ptr::null_mut(), Cr::raw)
+    upper(index).map_or(ptr::null_mut(), |cr| cr.as_raw())
 }
 
 pub fn doc_layers(
-    cr: Cr,
+    cr: ContextRef,
     mut upper: Upper<'_>,
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
@@ -50,7 +55,7 @@ pub fn doc_layers(
 }
 
 pub fn vp_layer(
-    cr: Cr,
+    cr: ContextRef,
     root: BoxRef<'_>,
     layer: &VpCapture,
     vp: (f64, f64),

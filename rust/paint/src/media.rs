@@ -6,6 +6,7 @@ use core::f64::consts::PI;
 use core::ffi::{CStr, c_void};
 use std::ffi::CString;
 
+use southstar_cairo::{ContextRef, Filter, Format, Operator, Surface};
 use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef};
@@ -13,7 +14,6 @@ use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 
 use crate::clip_shape::clip_to_shape;
 use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
-use crate::ffi::cairo::{self, Cr, Surface, SurfaceRef};
 use crate::ffi::engine::{self, Texture, Video};
 use crate::ffi::pango::{self, FontDescription};
 use crate::filter::{
@@ -41,19 +41,17 @@ fn texture_surface_create(
     ih: i32,
     filter: Option<&CStr>,
 ) -> Option<Surface> {
-    let surf = Surface::image(cairo::FORMAT_ARGB32, iw, ih)?;
-    let mut s = surf.as_ref();
-    let stride = s.stride();
-    let data = s.data_mut();
-    tex.download(data, stride as usize);
-    if filter.is_some() {
-        apply_image_filter(data, stride, iw, ih, filter);
-    }
-    s.mark_dirty();
+    let surf = Surface::image(Format::Argb32, iw, ih)?;
+    surf.as_ref().with_data_mut(|data, stride| {
+        tex.download(data, stride);
+        if filter.is_some() {
+            apply_image_filter(data, stride as i32, iw, ih, filter);
+        }
+    });
     Some(surf)
 }
 
-pub fn texture_surface_cached(tex: Texture, filter: Option<&CStr>) -> Option<SurfaceRef> {
+pub fn texture_surface_cached(tex: Texture, filter: Option<&CStr>) -> Option<Surface> {
     let iw = tex.width();
     let ih = tex.height();
     if iw <= 0 || ih <= 0 {
@@ -73,15 +71,15 @@ pub fn texture_surface_cached(tex: Texture, filter: Option<&CStr>) -> Option<Sur
         if ts.plain.is_none() {
             ts.plain = texture_surface_create(tex, iw, ih, None);
         }
-        return ts.plain.as_ref().map(Surface::as_ref);
+        return ts.plain.clone();
     };
     if ts.filtered.is_some() && ts.filter.as_deref() == Some(filter.to_bytes()) {
-        return ts.filtered.as_ref().map(Surface::as_ref);
+        return ts.filtered.clone();
     }
     let surf = texture_surface_create(tex, iw, ih, Some(filter))?;
     ts.filtered = Some(surf);
     ts.filter = Some(filter.to_bytes().to_vec());
-    ts.filtered.as_ref().map(Surface::as_ref)
+    ts.filtered.clone()
 }
 
 fn strtod(text: &[u8], pos: usize) -> Option<(f64, usize)> {
@@ -89,7 +87,7 @@ fn strtod(text: &[u8], pos: usize) -> Option<(f64, usize)> {
     (n > 0).then_some((v, pos + n))
 }
 
-pub fn apply_box_content_clip(cr: Cr, b: BoxRef<'_>) -> bool {
+pub fn apply_box_content_clip(cr: ContextRef, b: BoxRef<'_>) -> bool {
     if b.x().is_nan() || b.y().is_nan() || b.content_width().is_nan() || b.content_height().is_nan()
     {
         return false;
@@ -148,7 +146,7 @@ fn video_of(b: BoxRef<'_>) -> Option<Video<'_>> {
         .and_then(|m| unsafe { Video::from_ptr(m.video()) })
 }
 
-pub fn paint_texture(cr: Cr, b: BoxRef<'_>, tex: Texture) -> bool {
+pub fn paint_texture(cr: ContextRef, b: BoxRef<'_>, tex: Texture) -> bool {
     let iw = tex.width();
     let ih = tex.height();
     if iw <= 0 || ih <= 0 {
@@ -162,9 +160,10 @@ pub fn paint_texture(cr: Cr, b: BoxRef<'_>, tex: Texture) -> bool {
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text);
     let surface_filter = filter_kw.filter(|f| filter_has_bitmap_effect(Some(f)));
-    let Some(surf) = texture_surface_cached(tex, surface_filter) else {
+    let Some(surface) = texture_surface_cached(tex, surface_filter) else {
         return false;
     };
+    let surf = surface.as_ref();
     let cw = b.content_width();
     let ch = b.content_height();
     let (iwf, ihf) = (f64::from(iw), f64::from(ih));
@@ -205,16 +204,16 @@ pub fn paint_texture(cr: Cr, b: BoxRef<'_>, tex: Texture) -> bool {
     cr.scale(sx, sy);
     cr.set_source_surface(surf, 0.0, 0.0);
     if video_of(b).is_some_and(|v| v.playing() && v.frame_texture() == Some(tex)) {
-        cr.set_source_filter(cairo::FILTER_FAST);
+        cr.set_source_filter(Filter::Fast);
     }
     if crate::decor::style_pixelated(st) {
-        cr.set_source_filter(cairo::FILTER_NEAREST);
+        cr.set_source_filter(Filter::Nearest);
     }
     cr.paint();
     true
 }
 
-fn paint_failed_image(cr: Cr, b: BoxRef<'_>) {
+fn paint_failed_image(cr: ContextRef, b: BoxRef<'_>) {
     let w = b.content_width();
     let h = b.content_height();
     if w <= 0.0 || h <= 0.0 {
@@ -255,7 +254,7 @@ fn content_origin(b: BoxRef<'_>) -> (f64, f64) {
     )
 }
 
-pub fn paint_svg(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_svg(cr: ContextRef, b: BoxRef<'_>) {
     if b.dom_ptr().is_null() {
         return;
     }
@@ -271,7 +270,7 @@ pub fn paint_svg(cr: Cr, b: BoxRef<'_>) {
     cr.restore();
 }
 
-pub fn paint_math(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_math(cr: ContextRef, b: BoxRef<'_>) {
     if b.dom_ptr().is_null() {
         return;
     }
@@ -288,7 +287,7 @@ fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
     unsafe { Node::from_ptr(b.dom_ptr().cast()) }
 }
 
-pub fn paint_image(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_image(cr: ContextRef, b: BoxRef<'_>) {
     let dom = box_node(b);
     if dom.and_then(Node::element_name) == Some(b"canvas") {
         return;
@@ -349,7 +348,7 @@ pub fn paint_image(cr: Cr, b: BoxRef<'_>) {
     cr.restore();
 }
 
-fn paint_video_caption(cr: Cr, b: BoxRef<'_>, cue: &[u8]) {
+fn paint_video_caption(cr: ContextRef, b: BoxRef<'_>, cue: &[u8]) {
     let lines: Vec<&[u8]> = cue.split(|&c| c == b'\n').collect();
     if lines.is_empty() {
         return;
@@ -395,7 +394,7 @@ fn paint_video_caption(cr: Cr, b: BoxRef<'_>, cue: &[u8]) {
     cr.restore();
 }
 
-fn paint_video_note_rects(cr: Cr, b: BoxRef<'_>, v: Video<'_>, fit_mode: i32) {
+fn paint_video_note_rects(cr: ContextRef, b: BoxRef<'_>, v: Video<'_>, fit_mode: i32) {
     let (dx0, dy0) = cr.user_to_device(b.x(), b.y());
     let (dx1, dy1) = cr.user_to_device(b.x() + b.content_width(), b.y() + b.content_height());
     v.note_paint_rect(dx0, dy0, dx1 - dx0, dy1 - dy0, fit_mode);
@@ -410,7 +409,7 @@ fn paint_video_note_rects(cr: Cr, b: BoxRef<'_>, v: Video<'_>, fit_mode: i32) {
     );
 }
 
-fn paint_audio_control(cr: Cr, b: BoxRef<'_>) {
+fn paint_audio_control(cr: ContextRef, b: BoxRef<'_>) {
     let x = b.x();
     let y = b.y();
     let w = b.content_width();
@@ -498,7 +497,7 @@ fn debug_composite(v: Video<'_>, punched: bool, has_tex: bool, b: BoxRef<'_>) {
     southstar_glib::stderr_write(line.as_bytes());
 }
 
-pub fn paint_video(cr: Cr, b: BoxRef<'_>) {
+pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
     if let Some(media) = b.media()
         && media.video_audio_src().is_some()
         && media.video_src().is_none()
@@ -539,7 +538,7 @@ pub fn paint_video(cr: Cr, b: BoxRef<'_>) {
     if punched {
         crate::walk::layers_note_video(cr);
         crate::walk::video_hole_record(cr, b.x(), b.y(), b.content_width(), b.content_height());
-        cr.set_operator(cairo::OPERATOR_CLEAR);
+        cr.set_operator(Operator::Clear);
         cr.rectangle(b.x(), b.y(), b.content_width(), b.content_height());
         cr.fill();
     } else if let Some(tex) = tex {

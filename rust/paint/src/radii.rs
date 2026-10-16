@@ -4,10 +4,10 @@
 
 use core::f64::consts::{FRAC_PI_2, PI};
 
+use southstar_cairo::{ContextRef, FillRule};
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 
-use crate::ffi::cairo::Cr;
 use crate::util::{UNIT_PERCENT, cmax, cmin, style_of};
 
 #[repr(C)]
@@ -216,7 +216,7 @@ pub fn box_border_radii(b: Option<BoxRef<'_>>) -> CornerRadii {
     style_border_radii(style_of(b), w, h)
 }
 
-fn corner_arc(cr: Cr, cx: f64, cy: f64, rx: f64, ry: f64, a0: f64, a1: f64) {
+fn corner_arc(cr: ContextRef, cx: f64, cy: f64, rx: f64, ry: f64, a0: f64, a1: f64) {
     cr.save();
     cr.translate(cx, cy);
     cr.scale(rx, ry);
@@ -224,7 +224,7 @@ fn corner_arc(cr: Cr, cx: f64, cy: f64, rx: f64, ry: f64, a0: f64, a1: f64) {
     cr.restore();
 }
 
-pub fn rounded_rect_path(cr: Cr, x: f64, y: f64, w: f64, h: f64, c: CornerRadii) {
+pub fn rounded_rect_path(cr: ContextRef, x: f64, y: f64, w: f64, h: f64, c: CornerRadii) {
     if c.is_zero() || w.is_nan() || w <= 0.0 || h.is_nan() || h <= 0.0 {
         cr.rectangle(x, y, w, h);
         return;
@@ -255,7 +255,7 @@ pub fn rounded_rect_path(cr: Cr, x: f64, y: f64, w: f64, h: f64, c: CornerRadii)
 }
 
 pub fn fill_outer_shadow(
-    cr: Cr,
+    cr: ContextRef,
     outer: (f64, f64, f64, f64),
     inner: (f64, f64, f64, f64),
     radii: CornerRadii,
@@ -270,9 +270,9 @@ pub fn fill_outer_shadow(
     cr.new_path();
     cr.rectangle(x0, y0, x1 - x0, y1 - y0);
     rounded_rect_path(cr, ix, iy, iw, ih, radii);
-    cr.set_fill_rule(crate::ffi::cairo::FILL_RULE_EVEN_ODD);
+    cr.set_fill_rule(FillRule::EvenOdd);
     cr.clip();
-    cr.set_fill_rule(crate::ffi::cairo::FILL_RULE_WINDING);
+    cr.set_fill_rule(FillRule::Winding);
     rounded_rect_path(cr, ox, oy, ow, oh, radii);
     cr.fill();
     cr.restore();

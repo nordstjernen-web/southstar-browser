@@ -7,13 +7,13 @@ use core::ffi::{CStr, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_cairo::{ContextRef, Matrix, Operator, Pattern};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_glib::{GArray, GHashTable};
 use southstar_layout::{BoxKind, BoxRef, NsBox};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef, display_of, parse_color};
 
 use crate::decor::paint_block;
-use crate::ffi::cairo::{self, Cr, Matrix, Pattern};
 use crate::ffi::engine;
 use crate::inline::paint_inline;
 use crate::marker::paint_marker;
@@ -83,7 +83,7 @@ impl Layers {
             owner: ptr::null(),
             flush_layered: false,
             vp_seen: 0,
-            base: Matrix::zero(),
+            base: Matrix::default(),
             doc: ptr::null_mut(),
             kinds: ptr::null_mut(),
             found: ptr::null_mut(),
@@ -151,7 +151,7 @@ pub fn with<R>(f: impl FnOnce(&Walk) -> R) -> R {
     WALK.with(f)
 }
 
-pub fn video_hole_record(cr: Cr, x: f64, y: f64, w: f64, h: f64) {
+pub fn video_hole_record(cr: ContextRef, x: f64, y: f64, w: f64, h: f64) {
     let (mut x0, mut y0) = cr.user_to_device(x, y);
     let (mut x1, mut y1) = cr.user_to_device(x + w, y + h);
     if x0 > x1 {
@@ -168,7 +168,7 @@ pub fn clear_video_holes() {
 }
 
 fn paint_group_video_holes(
-    cr: Cr,
+    cr: ContextRef,
     source: &Pattern,
     mask: Option<&Pattern>,
     opacity: f64,
@@ -193,7 +193,7 @@ fn paint_group_video_holes(
     }
     cr.clip();
     cr.set_source(source);
-    cr.set_operator(cairo::OPERATOR_SOURCE);
+    cr.set_operator(Operator::Source);
     if let Some(mask) = mask {
         cr.mask(mask);
     } else if opacity < 0.999 {
@@ -208,10 +208,10 @@ pub fn layers_mode() -> i32 {
     with(|w| w.layers.borrow().mode)
 }
 
-pub fn layers_note_video(cr: Cr) {
+pub fn layers_note_video(cr: ContextRef) {
     with(|w| {
         let mut l = w.layers.borrow_mut();
-        if l.mode == LAYERS_DOC && cr.raw() != l.doc {
+        if l.mode == LAYERS_DOC && cr.as_raw() != l.doc {
             l.video_above = true;
         }
     });
@@ -236,7 +236,7 @@ pub fn selection_run(b: BoxRef<'_>) -> Option<SelectionRun> {
     unsafe { run.cast::<SelectionRun>().as_ref() }.copied()
 }
 
-pub fn paint_walk_atomic(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
+pub fn paint_walk_atomic(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let saved = with(|w| {
         w.no_cull.set(w.no_cull.get() + 1);
         w.flush_box.replace(b.as_ptr())
@@ -494,13 +494,13 @@ pub fn merge_sort_by<T: Copy>(items: &mut [T], cmp: &impl Fn(&T, &T) -> i32) {
     items.copy_from_slice(&merged);
 }
 
-fn layers_record(cr: Cr, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
+fn layers_record(cr: ContextRef, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
     with(|w| {
         let l = w.layers.borrow();
         let mut m = cr.matrix();
         m.translate(dx, dy);
         let mut inv = l.base;
-        if !inv.invert() {
+        if inv.invert().is_err() {
             inv = Matrix::identity();
         }
         let layer = VpCapture {
@@ -512,7 +512,12 @@ fn layers_record(cr: Cr, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
     });
 }
 
-fn layers_target(cr: Cr, cap: &Capture, dx: f64, dy: f64) -> Option<Cr> {
+fn layers_target<'a>(
+    cr: ContextRef<'a>,
+    cap: &Capture,
+    dx: f64,
+    dy: f64,
+) -> Option<ContextRef<'a>> {
     let (kinds, mode) = with(|w| {
         let l = w.layers.borrow();
         (l.kinds, l.mode)
@@ -532,19 +537,21 @@ fn layers_target(cr: Cr, cap: &Capture, dx: f64, dy: f64) -> Option<Cr> {
         let l = w.layers.borrow();
         (l.vp_seen, l.n_upper, l.doc, l.upper, l.upper_data)
     });
-    let doc = unsafe { Cr::from_raw(doc) };
+    // SAFETY: doc_layers records the document context it was handed, which stays alive until it returns and clears the layers.
+    let doc = unsafe { ContextRef::from_raw(doc) };
     if vp_seen == 0 || n_upper == 0 {
-        return Some(doc);
+        return doc;
     }
     let i = vp_seen.min(n_upper) - 1;
     let Some(upper) = upper else {
-        return Some(doc);
+        return doc;
     };
     let target = unsafe { upper(i, data) };
     if target.is_null() {
-        Some(doc)
+        doc
     } else {
-        Some(unsafe { Cr::from_raw(target) })
+        // SAFETY: the upper-layer callback hands out contexts the embedder keeps alive until doc_layers returns.
+        unsafe { ContextRef::from_raw(target) }
     }
 }
 
@@ -574,7 +581,7 @@ fn truncated(s: &str, max: usize) -> String {
     String::from_utf8_lossy(&bytes[..bytes.len().min(max)]).into_owned()
 }
 
-fn paint_flush_deferred(cr: Cr, list: Vec<Capture>, highlight: Option<&CStr>) {
+fn paint_flush_deferred(cr: ContextRef, list: Vec<Capture>, highlight: Option<&CStr>) {
     let layered = with(|w| {
         let mut l = w.layers.borrow_mut();
         let layered = l.mode != LAYERS_OFF && l.flush_layered;
@@ -664,7 +671,7 @@ fn paint_flush_deferred(cr: Cr, list: Vec<Capture>, highlight: Option<&CStr>) {
     with(|w| w.flush_box.set(saved_flush));
 }
 
-fn paint_anchor_leave(cr: Cr, saved: (f64, f64)) {
+fn paint_anchor_leave(cr: ContextRef, saved: (f64, f64)) {
     cr.restore();
     with(|w| {
         w.anchor_dx.set(saved.0);
@@ -672,7 +679,7 @@ fn paint_anchor_leave(cr: Cr, saved: (f64, f64)) {
     });
 }
 
-fn compute_sticky_offset(b: BoxRef<'_>, cr: Cr) -> (f64, f64) {
+fn compute_sticky_offset(b: BoxRef<'_>, cr: ContextRef) -> (f64, f64) {
     let Some(s) = style_of(b) else {
         return (0.0, 0.0);
     };
@@ -689,34 +696,34 @@ fn compute_sticky_offset(b: BoxRef<'_>, cr: Cr) -> (f64, f64) {
     engine::box_sticky_offset(b, cr.clip_extents())
 }
 
-pub fn blend_mode_operator(s: Option<StyleRef<'_>>) -> i32 {
+pub fn blend_mode_operator(s: Option<StyleRef<'_>>) -> Operator {
     let Some(k) = get(s, P::MixBlendMode)
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text)
     else {
-        return cairo::OPERATOR_OVER;
+        return Operator::Over;
     };
     match k.to_bytes() {
-        b"multiply" => cairo::OPERATOR_MULTIPLY,
-        b"screen" => cairo::OPERATOR_SCREEN,
-        b"overlay" => cairo::OPERATOR_OVERLAY,
-        b"darken" => cairo::OPERATOR_DARKEN,
-        b"lighten" => cairo::OPERATOR_LIGHTEN,
-        b"color-dodge" => cairo::OPERATOR_COLOR_DODGE,
-        b"color-burn" => cairo::OPERATOR_COLOR_BURN,
-        b"hard-light" => cairo::OPERATOR_HARD_LIGHT,
-        b"soft-light" => cairo::OPERATOR_SOFT_LIGHT,
-        b"difference" => cairo::OPERATOR_DIFFERENCE,
-        b"exclusion" => cairo::OPERATOR_EXCLUSION,
-        b"hue" => cairo::OPERATOR_HSL_HUE,
-        b"saturation" => cairo::OPERATOR_HSL_SATURATION,
-        b"color" => cairo::OPERATOR_HSL_COLOR,
-        b"luminosity" => cairo::OPERATOR_HSL_LUMINOSITY,
-        _ => cairo::OPERATOR_OVER,
+        b"multiply" => Operator::Multiply,
+        b"screen" => Operator::Screen,
+        b"overlay" => Operator::Overlay,
+        b"darken" => Operator::Darken,
+        b"lighten" => Operator::Lighten,
+        b"color-dodge" => Operator::ColorDodge,
+        b"color-burn" => Operator::ColorBurn,
+        b"hard-light" => Operator::HardLight,
+        b"soft-light" => Operator::SoftLight,
+        b"difference" => Operator::Difference,
+        b"exclusion" => Operator::Exclusion,
+        b"hue" => Operator::HslHue,
+        b"saturation" => Operator::HslSaturation,
+        b"color" => Operator::HslColor,
+        b"luminosity" => Operator::HslLuminosity,
+        _ => Operator::Over,
     }
 }
 
-pub fn paint_cache_clip(cr: Cr) {
+pub fn paint_cache_clip(cr: ContextRef) {
     let (x0, y0, _x1, y1) = cr.clip_extents();
     with(|w| {
         w.clip_y0.set(y0);
@@ -741,7 +748,7 @@ fn ancestor_chain(b: BoxRef<'_>, item: impl Fn(BoxRef<'_>) -> String) -> String 
     out
 }
 
-fn dbg_paint_probe(cr: Cr, b: BoxRef<'_>) {
+fn dbg_paint_probe(cr: ContextRef, b: BoxRef<'_>) {
     let Some((px, py)) = state::debug_point() else {
         return;
     };
@@ -867,7 +874,7 @@ fn strip(token: &[u8]) -> &[u8] {
     &token[start..end.max(start)]
 }
 
-fn paint_scrollbars(cr: Cr, b: BoxRef<'_>) {
+fn paint_scrollbars(cr: ContextRef, b: BoxRef<'_>) {
     let s = style_of(b);
     let sbw_kw = get(s, P::ScrollbarWidth)
         .filter(|v| v.kind() == Kind::Keyword)
@@ -935,7 +942,7 @@ fn paint_scrollbars(cr: Cr, b: BoxRef<'_>) {
     }
 }
 
-fn paint_column_rules(cr: Cr, b: BoxRef<'_>, s: StyleRef<'_>) {
+fn paint_column_rules(cr: ContextRef, b: BoxRef<'_>, s: StyleRef<'_>) {
     let n_cols = b.columns();
     let (_, col_gap) = southstar_css::used_column_count(Some(s.data()), b.content_width());
     let rule_w = length_or(s.get(P::ColumnRuleWidth), 0.0);
@@ -962,9 +969,9 @@ fn paint_column_rules(cr: Cr, b: BoxRef<'_>, s: StyleRef<'_>) {
     rc.set_source(cr);
     cr.set_line_width(rule_w);
     if rstyle == b"dashed" {
-        cr.set_dash(&[rule_w * 3.0, rule_w * 2.0]);
+        cr.set_dash(&[rule_w * 3.0, rule_w * 2.0], 0.0);
     } else if rstyle == b"dotted" {
-        cr.set_dash(&[rule_w, rule_w]);
+        cr.set_dash(&[rule_w, rule_w], 0.0);
     }
     for i in 0..n_cols - 1 {
         let fi = f64::from(i);
@@ -976,10 +983,11 @@ fn paint_column_rules(cr: Cr, b: BoxRef<'_>, s: StyleRef<'_>) {
     cr.restore();
 }
 
-fn paint_canvas_element(cr: Cr, b: BoxRef<'_>) {
-    let Some(surf) = engine::canvas_surface(b) else {
+fn paint_canvas_element(cr: ContextRef, b: BoxRef<'_>) {
+    let Some(surface) = engine::canvas_surface(b) else {
         return;
     };
+    let surf = surface.as_ref();
     let sw = surf.width();
     let sh = surf.height();
     if sw <= 0 || sh <= 0 {
@@ -1012,7 +1020,7 @@ fn hosts_document(n: Node<'_>) -> bool {
             .any(|c| c.kind() == NodeKind::Document)
 }
 
-fn paint_frame_canvas(cr: Cr, b: BoxRef<'_>) {
+fn paint_frame_canvas(cr: ContextRef, b: BoxRef<'_>) {
     let Some(bg) = crate::document::frame_canvas_background(b) else {
         return;
     };
@@ -1029,7 +1037,7 @@ fn paint_frame_canvas(cr: Cr, b: BoxRef<'_>) {
     cr.restore();
 }
 
-pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
+pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if box_is_hidden(b) {
         return;
     }
@@ -1093,7 +1101,7 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let op = box_opacity(b);
     let blend = blend_mode_operator(style);
     let mask_grad = mask_layers_paintable(style);
-    let grouped = op < 0.999 || blend != cairo::OPERATOR_OVER || mask_grad;
+    let grouped = op < 0.999 || blend != Operator::Over || mask_grad;
     let (mut sticky_dx, mut sticky_dy) = compute_sticky_offset(b, cr);
     if sticky_dx.is_nan() || sticky_dy.is_nan() {
         if debug_on() {
@@ -1482,7 +1490,7 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
         cr.pop_group_to_source();
         let group_source = cr.source();
         let saved_op = cr.operator();
-        if blend != cairo::OPERATOR_OVER {
+        if blend != Operator::Over {
             cr.set_operator(blend);
         }
         let mp = if mask_grad {
@@ -1494,7 +1502,7 @@ pub fn paint_walk(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
             Some(mp) => cr.mask(mp),
             None => cr.paint_with_alpha(op),
         }
-        if blend != cairo::OPERATOR_OVER {
+        if blend != Operator::Over {
             cr.set_operator(saved_op);
         }
         paint_group_video_holes(cr, &group_source, mp.as_ref(), op, first_group_hole);

@@ -6,13 +6,13 @@ use core::cell::RefCell;
 use core::ffi::CStr;
 use std::collections::HashMap;
 
+use southstar_cairo::{Context, ContextRef, Extend, Filter, Format, Matrix, Pattern, Surface};
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{Kind, PropId as P, ValueRef};
 
 use crate::decor::{ANIM_TARGET_BG_COLOR, ANIM_TARGET_COLOR, paint_block};
-use crate::ffi::cairo::{self, Context, Cr, Matrix, Pattern, Surface};
 use crate::ffi::engine;
 use crate::filter::{apply_image_filter, filter_has_bitmap_effect};
 use crate::radii::border_box_size;
@@ -264,10 +264,10 @@ fn quad_texture(q: &Qb<'_>, tw: i32, th: i32, k: f64, highlight: Option<&CStr>) 
             return hit;
         }
     }
-    let tex = Surface::image(cairo::FORMAT_ARGB32, tw, th)?;
+    let tex = Surface::image(Format::Argb32, tw, th)?;
     {
         let ctx = Context::new(tex.as_ref());
-        let tcr = ctx.cr();
+        let tcr = ctx.as_ref();
         tcr.scale(k, k);
         tcr.translate(-q.q.bx, -q.q.by);
         let (saved_root, saved_flush) = walk::with(|w| {
@@ -292,11 +292,9 @@ fn quad_texture(q: &Qb<'_>, tw: i32, th: i32, k: f64, highlight: Option<&CStr>) 
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text);
     if filter_kw.is_some_and(|f| filter_has_bitmap_effect(Some(f))) {
-        let mut s = tex.as_ref();
-        s.flush();
-        let stride = s.stride();
-        apply_image_filter(s.data_mut(), stride, tw, th, filter_kw);
-        s.mark_dirty();
+        tex.as_ref().with_data_mut(|data, stride| {
+            apply_image_filter(data, stride as i32, tw, th, filter_kw);
+        });
     }
     if cacheable {
         REGISTRY.with(|r| {
@@ -318,7 +316,7 @@ struct Qb<'a> {
     b: BoxRef<'a>,
 }
 
-fn paint_quad3(cr: Cr, quad: &Quad3, highlight: Option<&CStr>) {
+fn paint_quad3(cr: ContextRef, quad: &Quad3, highlight: Option<&CStr>) {
     let Some(b) = quad_box(quad) else {
         return;
     };
@@ -441,8 +439,8 @@ fn paint_quad3(cr: Cr, quad: &Quad3, highlight: Option<&CStr>) {
         }
     }
     let pat = Pattern::for_surface(tex.as_ref());
-    pat.set_extend(cairo::EXTEND_PAD);
-    pat.set_filter(cairo::FILTER_GOOD);
+    pat.set_extend(Extend::Pad);
+    pat.set_filter(Filter::Good);
     let (twf, thf) = (f64::from(tw), f64::from(th));
     for j in 0..n as usize {
         for i in 0..n as usize {
@@ -780,7 +778,7 @@ fn debug_3d(b: BoxRef<'_>, quads: &[Quad3]) {
     southstar_glib::stderr_write(out.as_bytes());
 }
 
-pub fn paint_3d_root(cr: Cr, b: BoxRef<'_>, highlight: Option<&CStr>) {
+pub fn paint_3d_root(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if box_establishes_3d(b)
         && matches!(
             b.kind(),

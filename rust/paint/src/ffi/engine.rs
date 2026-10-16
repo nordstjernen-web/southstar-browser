@@ -6,13 +6,13 @@ use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_cairo::{ContextRef, Surface, SurfaceRef};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::{StyleRef, Transform, ValueRef};
 
-use super::cairo::{Cr, SurfaceRef};
 use super::pango::{AttrList, Layout};
 use crate::util::Rgba;
 
@@ -369,12 +369,12 @@ pub fn js_image_for_node(b: BoxRef<'_>) -> Option<ImageRef<'_>> {
     unsafe { ImageRef::from_ptr(ns_js_image_for_node(js, b.dom_ptr())) }
 }
 
-pub fn svg_render_node(cr: Cr, b: BoxRef<'_>, w: f64, h: f64) {
-    unsafe { ns_svg_render_node(cr.raw(), b.dom_ptr(), w, h, b.svg_styles(), b.style()) };
+pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
+    unsafe { ns_svg_render_node(cr.as_raw(), b.dom_ptr(), w, h, b.svg_styles(), b.style()) };
 }
 
-pub fn math_paint(cr: Cr, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {
-    unsafe { ns_math_paint(cr.raw(), b.dom_ptr(), x, y, font_px, c.r, c.g, c.b, c.a) };
+pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {
+    unsafe { ns_math_paint(cr.as_raw(), b.dom_ptr(), x, y, font_px, c.r, c.g, c.b, c.a) };
 }
 
 unsafe extern "C" {
@@ -442,12 +442,14 @@ pub unsafe fn selection_ranges(root: BoxRef<'_>, sel: *const c_void) -> *mut GHa
     unsafe { ns_selection_ranges(root.as_ptr(), sel) }
 }
 
-pub fn canvas_surface(b: BoxRef<'_>) -> Option<SurfaceRef> {
+pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
     let js = crate::state::js();
     if js.is_null() {
         return None;
     }
-    unsafe { SurfaceRef::from_raw(ns_js_canvas_surface(js, b.dom_ptr())) }
+    let surface = unsafe { ns_js_canvas_surface(js, b.dom_ptr()) };
+    // SAFETY: the canvas keeps its surface alive while the page paints, and it is referenced here before anything can replace it.
+    unsafe { SurfaceRef::from_raw(surface) }.map(|s| s.reference())
 }
 
 pub fn monotonic_time() -> i64 {

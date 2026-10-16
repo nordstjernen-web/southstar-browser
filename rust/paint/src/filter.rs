@@ -5,11 +5,11 @@
 use core::ffi::CStr;
 use std::ffi::CString;
 
+use southstar_cairo::{Context, ContextRef, Format, Operator, Surface, SurfaceRef};
 use southstar_layout::BoxRef;
 use southstar_style::{PropId as P, parse_color};
 
 use crate::blur::box_blur_argb;
-use crate::ffi::cairo::{self, Context, Cr, Surface, SurfaceRef};
 use crate::ffi::engine;
 use crate::util::{Rgba, is_space, rgba_of, skip_spaces, style_of};
 
@@ -269,13 +269,13 @@ fn drop_shadow_surface(
     let pad = radius * 2 + 2;
     let sw = cw + pad * 2;
     let sh = ch + pad * 2;
-    let shadow_surf = Surface::image(cairo::FORMAT_ARGB32, sw, sh)?;
+    let shadow_surf = Surface::image(Format::Argb32, sw, sh)?;
     {
         let ctx = Context::new(shadow_surf.as_ref());
-        let s_cr = ctx.cr();
-        s_cr.set_operator(cairo::OPERATOR_CLEAR);
+        let s_cr = ctx.as_ref();
+        s_cr.set_operator(Operator::Clear);
         s_cr.paint();
-        s_cr.set_operator(cairo::OPERATOR_OVER);
+        s_cr.set_operator(Operator::Over);
         s_cr.rectangle(f64::from(pad), f64::from(pad), f64::from(cw), f64::from(ch));
         s_cr.clip();
         s_cr.translate(f64::from(pad) + at.ox, f64::from(pad) + at.oy);
@@ -283,26 +283,23 @@ fn drop_shadow_surface(
         s_cr.set_source_surface(src, 0.0, 0.0);
         s_cr.paint();
     }
-    let mut s = shadow_surf.as_ref();
-    s.flush();
-    let stride = s.stride();
-    let data = s.data_mut();
     let c = shadow.color;
-    for y in 0..sh as usize {
-        let row = &mut data[y * stride as usize..];
-        for x in 0..sw as usize {
-            let px = &mut row[x * 4..x * 4 + 4];
-            let a = f64::from(px[3]) / 255.0 * c.a;
-            px[0] = (c.b * a * 255.0 + 0.5) as u8;
-            px[1] = (c.g * a * 255.0 + 0.5) as u8;
-            px[2] = (c.r * a * 255.0 + 0.5) as u8;
-            px[3] = (a * 255.0 + 0.5) as u8;
+    shadow_surf.as_ref().with_data_mut(|data, stride| {
+        for y in 0..sh as usize {
+            let row = &mut data[y * stride..];
+            for x in 0..sw as usize {
+                let px = &mut row[x * 4..x * 4 + 4];
+                let a = f64::from(px[3]) / 255.0 * c.a;
+                px[0] = (c.b * a * 255.0 + 0.5) as u8;
+                px[1] = (c.g * a * 255.0 + 0.5) as u8;
+                px[2] = (c.r * a * 255.0 + 0.5) as u8;
+                px[3] = (a * 255.0 + 0.5) as u8;
+            }
         }
-    }
-    if radius > 0 {
-        box_blur_argb(data, stride, sw, sh, radius);
-    }
-    s.mark_dirty();
+        if radius > 0 {
+            box_blur_argb(data, stride as i32, sw, sh, radius);
+        }
+    });
     Some((shadow_surf, pad))
 }
 
@@ -314,7 +311,7 @@ pub struct TextureFit {
 }
 
 pub fn paint_texture_drop_shadows(
-    cr: Cr,
+    cr: ContextRef,
     surf: SurfaceRef,
     b: BoxRef<'_>,
     fit: &TextureFit,
