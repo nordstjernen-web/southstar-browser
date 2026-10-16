@@ -19,7 +19,7 @@ fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
 }
 
-fn choose(node: Node<'_>) -> Chosen<'_> {
+pub fn choose_img(node: Node<'_>) -> Chosen<'_> {
     let resolve_sizes =
         |sizes: Option<&[u8]>| southstar_css::sizes_resolve(sizes.unwrap_or_default());
     let media_matches = |query: &[u8]| southstar_css_media::query_matches(query);
@@ -39,35 +39,14 @@ fn url_ptr(url: Option<Vec<u8>>) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_choose_img_url(
-    n: *const NsNode,
-    img_out: *mut *const NsNode,
-    density: *mut f64,
-) -> *mut c_char {
-    let Some(node) = (unsafe { Node::from_ptr(n) }) else {
-        return ptr::null_mut();
-    };
-    let chosen = choose(node);
-    unsafe {
-        if let Some(img_out) = img_out.as_mut() {
-            *img_out = chosen.img.as_ptr();
-        }
-        if let Some(density) = density.as_mut() {
-            *density = chosen.density;
-        }
-    }
-    url_ptr(chosen.url)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char {
-    unsafe { Node::from_ptr(n) }.map_or(ptr::null_mut(), |node| url_ptr(choose(node).url))
+    unsafe { Node::from_ptr(n) }.map_or(ptr::null_mut(), |node| url_ptr(choose_img(node).url))
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_img_chosen_density(n: *const NsNode) -> f64 {
     unsafe { Node::from_ptr(n) }
-        .map(|node| choose(node).density)
+        .map(|node| choose_img(node).density)
         .filter(|&density| density > 0.0)
         .unwrap_or(1.0)
 }

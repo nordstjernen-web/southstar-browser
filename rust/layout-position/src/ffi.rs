@@ -20,8 +20,6 @@ unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
     fn ns_layout_estimate_natural_width(b: *const NsBox, cap: f64) -> f64;
-    fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
-    fn ns_layout_box_append_child(parent: *mut NsBox, child: *mut NsBox);
     fn ns_layout_flat_parent(n: *const NsNode) -> *const NsNode;
     fn ns_layout_abs_pending_len() -> c_uint;
     fn ns_layout_abs_pending_entry(
@@ -61,14 +59,6 @@ unsafe extern "C" {
         free_space: f64,
         flip: GBoolean,
     ) -> f64;
-    fn ns_box_inline_rect_for_dom(
-        root: *const NsBox,
-        target: *const NsNode,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    ) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -135,13 +125,9 @@ pub fn estimate_natural_width(b: BoxRef<'_>, cap: f64) -> f64 {
     unsafe { ns_layout_estimate_natural_width(b.as_ptr(), cap) }
 }
 
-pub fn box_clips_children(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }
-}
+pub use southstar_layout_float::box_clips_children;
 
-pub fn append_child(parent: BoxRef<'_>, child: BoxRef<'_>) {
-    unsafe { ns_layout_box_append_child(parent.as_mut_ptr(), child.as_mut_ptr()) }
-}
+pub use southstar_layout_tree::append_child;
 
 pub fn flat_parent(n: Node<'_>) -> Option<Node<'_>> {
     unsafe { Node::from_ptr(ns_layout_flat_parent(n.as_ptr())) }
@@ -191,23 +177,12 @@ pub fn build_abs_box<'a>(e: Entry<'_>, styles: StyleTable) -> Option<BoxRef<'a>>
 }
 
 pub fn inline_containing_block(root: BoxRef<'_>, target: Node<'_>) -> Option<Area> {
-    let mut a = Area {
-        x: 0.0,
-        y: 0.0,
-        w: 0.0,
-        h: 0.0,
-    };
-    let found = unsafe {
-        ns_box_inline_rect_for_dom(
-            root.as_ptr(),
-            target.as_ptr(),
-            &mut a.x,
-            &mut a.y,
-            &mut a.w,
-            &mut a.h,
-        )
-    };
-    (found != 0).then_some(a)
+    southstar_layout_query::inline_rect_for_dom(root, target).map(|(x, y, w, h)| Area {
+        x,
+        y,
+        w,
+        h,
+    })
 }
 
 pub fn grid_abs_containing_block(cb: BoxRef<'_>, st: *const Style) -> Option<Area> {

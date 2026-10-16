@@ -12,7 +12,8 @@ use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
 
-pub use extent::Extent;
+pub use collect::record_frame_viewports;
+pub use extent::{Extent, compute_paint_bounds};
 
 pub fn count_matches(root: BoxRef<'_>, needle: &[u8], case_sensitive: bool) -> u32 {
     if needle.is_empty() {

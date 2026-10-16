@@ -4,9 +4,10 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GStr};
+use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{AttrList, Attribute, Context, Layout};
@@ -17,8 +18,6 @@ use crate::{attrs, intrinsic, layout, multicol};
 unsafe extern "C" {
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
-    fn ns_layout_inline_attr_control_width(r: *const InlineAttr, b: *const NsBox) -> f64;
     fn ns_layout_box_is_abs_placeholder(b: *const NsBox) -> GBoolean;
     fn ns_layout_abs_static_target(b: *const NsBox) -> *const c_void;
     fn ns_layout_record_abs_static(dom: *const c_void, run: *const NsBox, rel_x: f64, rel_y: f64);
@@ -30,7 +29,6 @@ unsafe extern "C" {
     fn ns_layout_measure_inline_atomics_end(saved: *mut c_void);
     fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
     fn ns_input_is_one_line_text(n: *const NsNode) -> GBoolean;
-    fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char;
 }
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
@@ -126,13 +124,9 @@ pub(crate) fn text_indent(run: BoxRef<'_>, s: *const Style, basis: f64) -> f64 {
 
 pub(crate) use southstar_layout_geom::flex::box_first_baseline as first_baseline;
 
-pub(crate) fn clips_children(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }
-}
+pub(crate) use southstar_layout_float::box_clips_children as clips_children;
 
-pub(crate) fn control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_inline_attr_control_width(r, b.as_ptr()) }
-}
+pub(crate) use southstar_layout_content::inline_attr_control_width as control_width;
 
 pub(crate) fn is_abs_placeholder(b: BoxRef<'_>) -> bool {
     unsafe { ns_layout_box_is_abs_placeholder(b.as_ptr()) != 0 }
@@ -184,8 +178,8 @@ pub(crate) fn text_orientation(s: *const Style) -> c_int {
     southstar_css::text_orientation(style(s).map(StyleRef::data))
 }
 
-pub(crate) fn vertical_stack_text(text: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(ns_vertical_stack_text(text.as_ptr())) }
+pub(crate) fn vertical_stack_text(text: &CStr) -> CString {
+    southstar_layout_geom::vertical_stack_text(text.to_bytes())
 }
 
 #[unsafe(no_mangle)]

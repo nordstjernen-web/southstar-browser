@@ -71,7 +71,7 @@ fn node_table_internal(n: Node<'_>, styles: Styles) -> u8 {
     if !n.is_element() {
         return INTERNAL_NONE;
     }
-    let s = if styles.is_null() {
+    let s = if styles.as_ptr().is_null() {
         None
     } else {
         styles.get(n)
@@ -175,7 +175,7 @@ fn node_row_group(n: Node<'_>, styles: Styles) -> RowGroup {
     if named(n, b"tfoot") {
         return RowGroup::Footer;
     }
-    let s = if styles.is_null() {
+    let s = if styles.as_ptr().is_null() {
         None
     } else {
         styles.get(n)
@@ -319,7 +319,7 @@ fn append_table_col_hint(
     fallback: Option<StyleRef<'_>>,
 ) {
     let span = if span < 1 { 1 } else { span };
-    let s = if styles.is_null() {
+    let s = if styles.as_ptr().is_null() {
         None
     } else {
         styles.get(n)
@@ -344,7 +344,7 @@ fn collect_table_col_hints(table: BoxRef<'_>, n: Node<'_>, styles: Styles) {
         if tag != b"colgroup" {
             continue;
         }
-        let group_style = if styles.is_null() {
+        let group_style = if styles.as_ptr().is_null() {
             None
         } else {
             styles.get(c)

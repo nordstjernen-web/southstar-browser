@@ -2837,6 +2837,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-float",
  "southstar-layout-geom",
+ "southstar-layout-tree",
  "southstar-style",
 ]
 
@@ -2849,8 +2850,11 @@ dependencies = [
  "southstar-glib",
  "southstar-layout",
  "southstar-layout-content",
+ "southstar-layout-float",
  "southstar-layout-geom",
+ "southstar-layout-query",
  "southstar-layout-tree",
+ "southstar-net",
  "southstar-numfmt",
  "southstar-paint",
  "southstar-style",
@@ -2911,6 +2915,7 @@ dependencies = [
  "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-numfmt",
  "southstar-style",
@@ -2924,6 +2929,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-mat4",
  "southstar-style",
@@ -2937,6 +2943,8 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-content",
+ "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-layout-tree",
  "southstar-paint",
@@ -2951,7 +2959,10 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-float",
  "southstar-layout-geom",
+ "southstar-layout-query",
+ "southstar-layout-tree",
  "southstar-style",
 ]
 
@@ -2997,6 +3008,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-content",
  "southstar-layout-geom",
  "southstar-style",
 ]

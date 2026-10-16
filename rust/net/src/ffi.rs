@@ -121,6 +121,21 @@ pub unsafe extern "C" fn ns_build_error_page(
     glib::strdup(&error_page::build(text(url), status, text(transport_error)))
 }
 
+struct VecSink(Vec<u8>);
+
+impl Sink for VecSink {
+    fn append(&mut self, bytes: &[u8]) {
+        self.0.extend_from_slice(bytes);
+    }
+}
+
+pub fn decode_data_url(url: &[u8], budget: u64) -> Option<Vec<u8>> {
+    let mut sink = VecSink(Vec::new());
+    let mut budgeted = Budgeted::new(&mut sink, budget);
+    data_url::decode(url, &mut budgeted)?.result.ok()?;
+    Some(sink.0)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_data_url_decode(
     url: *const c_char,

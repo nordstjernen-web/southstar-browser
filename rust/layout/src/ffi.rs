@@ -6,6 +6,8 @@ mod image_map;
 mod image_source;
 mod tree;
 
+pub use image_map::image_map_area;
+pub use image_source::choose_img;
 pub use tree::{BoxPool, LinkVec, link_clear_fn};
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};

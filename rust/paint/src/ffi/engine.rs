@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_glib::{GBoolean, GHashTable};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::{StyleRef, Transform, ValueRef};
@@ -201,7 +201,6 @@ unsafe extern "C" {
     fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
-    fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char;
     fn ns_spell_available() -> GBoolean;
     fn ns_spell_word_ok(word: *const c_char, len: isize, lang: *const c_char) -> GBoolean;
     fn ns_node_spellcheck_host(n: *const NsNode) -> *const NsNode;
@@ -346,9 +345,8 @@ pub fn control_css_extra_w(r: &InlineAttr, s: StyleRef<'_>) -> f64 {
     unsafe { ns_control_css_extra_w(r.dom_ptr(), s.as_ptr()) }
 }
 
-pub fn vertical_stack_text(text: &CStr) -> GStr {
-    unsafe { GStr::take(ns_vertical_stack_text(text.as_ptr())) }
-        .unwrap_or_else(|| unsafe { GStr::take(southstar_glib::strdup(b"")) }.expect("g_malloc"))
+pub fn vertical_stack_text(text: &CStr) -> CString {
+    southstar_layout_geom::vertical_stack_text(text.to_bytes())
 }
 
 pub fn spell_available() -> bool {

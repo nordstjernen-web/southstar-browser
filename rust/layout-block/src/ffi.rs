@@ -23,8 +23,6 @@ unsafe extern "C" {
     ) -> f64;
     fn ns_layout_text_input_intrinsic_width(b: *const NsBox) -> f64;
     fn ns_layout_size_keyword_is_intrinsic(v: *const NsCssValue) -> GBoolean;
-    fn ns_layout_inline_runs_join_splits(b: *mut NsBox);
-    fn ns_layout_reorder_children_by_order(b: *mut NsBox);
     fn ns_layout_inline_box_can_fragment_multicol(
         b: *const NsBox,
         style: *const Style,
@@ -41,7 +39,6 @@ unsafe extern "C" {
         cursor_y: *mut f64,
     ) -> GBoolean;
     fn ns_layout_inline_run_break_before(run: *const NsBox, band_height: f64) -> usize;
-    fn ns_layout_inline_run_split(run: *mut NsBox, split: usize) -> *mut NsBox;
     fn ns_layout_inline_line_height(parent_style: *const Style) -> f64;
     fn ns_layout_inline(b: *mut NsBox, content_width: f64, parent_style: *const Style);
     fn ns_layout_table(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
@@ -128,13 +125,9 @@ pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
     unsafe { ns_layout_size_keyword_is_intrinsic(value_ptr(v)) != 0 }
 }
 
-pub fn inline_runs_join_splits(b: BoxRef<'_>) {
-    unsafe { ns_layout_inline_runs_join_splits(b.as_mut_ptr()) }
-}
-
-pub fn reorder_children_by_order(b: BoxRef<'_>) {
-    unsafe { ns_layout_reorder_children_by_order(b.as_mut_ptr()) }
-}
+pub use southstar_layout_tree::{
+    join_splits as inline_runs_join_splits, reorder_children as reorder_children_by_order,
+};
 
 pub fn inline_box_can_fragment_multicol(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
     unsafe { ns_layout_inline_box_can_fragment_multicol(b.as_ptr(), style, basis) != 0 }
@@ -170,7 +163,7 @@ pub fn inline_run_break_before(run: BoxRef<'_>, band_height: f64) -> usize {
 }
 
 pub fn inline_run_split(run: BoxRef<'_>, split: usize) {
-    unsafe { ns_layout_inline_run_split(run.as_mut_ptr(), split) };
+    southstar_layout_tree::run_split(run, split);
 }
 
 pub fn inline_line_height(parent_style: *const Style) -> f64 {

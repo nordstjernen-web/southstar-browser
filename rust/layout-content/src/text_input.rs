@@ -17,16 +17,7 @@ thread_local! {
     static COLUMNS: RefCell<Option<HashMap<usize, c_int>>> = const { RefCell::new(None) };
 }
 
-pub fn utf8_skip(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
-    }
-}
+pub use southstar_layout_geom::utf8_skip;
 
 pub fn utf8_len(s: &[u8]) -> c_long {
     let mut i = 0;

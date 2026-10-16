@@ -145,10 +145,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
     if ffi::text_orientation(ps) == 1 {
         layout.set_width(-1);
         layout.set_alignment(pango::ALIGN_CENTER);
-        match ffi::vertical_stack_text(text) {
-            Some(stacked) => layout.set_text(&stacked),
-            None => layout.set_text(c""),
-        }
+        layout.set_text(&ffi::vertical_stack_text(text));
         let (pw, ph) = layout.pixel_size();
         (f64::from(pw), f64::from(ph))
     } else {

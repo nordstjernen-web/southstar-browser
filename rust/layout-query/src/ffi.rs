@@ -78,13 +78,6 @@ pub unsafe extern "C" fn ns_box_scroll_snap(scroller: *mut NsBox) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_compute_paint_bounds(root: *mut NsBox) {
-    if let Some(root) = entry(root) {
-        extent::compute_paint_bounds(root);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_inline_rect_for_dom(
     root: *const NsBox,
     target: *const NsNode,
@@ -104,11 +97,6 @@ pub unsafe extern "C" fn ns_box_inline_rect_for_dom(
     store(w, r.x1 - r.x0);
     store(h, r.y1 - r.y0);
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_record_frame_viewports(root: *const NsBox) {
-    collect::record_frame_viewports(entry(root));
 }
 
 #[unsafe(no_mangle)]

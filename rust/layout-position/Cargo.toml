@@ -12,7 +12,10 @@ southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-layout-float = { path = "../layout-float" }
 southstar-layout-geom = { path = "../layout-geom" }
+southstar-layout-query = { path = "../layout-query" }
+southstar-layout-tree = { path = "../layout-tree" }
 southstar-style = { path = "../style" }
 
 [lints]

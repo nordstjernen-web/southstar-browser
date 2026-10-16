@@ -35,7 +35,7 @@ pub use ffi::queue::{
 };
 pub use ffi::transport::{ca_bundle_path, init};
 pub use ffi::url::{https_first_upgrade, strip_tracking_params};
-pub use ffi::{NsResponse, set_allow_file_urls};
+pub use ffi::{NsResponse, decode_data_url, set_allow_file_urls};
 pub use forms::set_submission_charset;
 pub use netlog::{
     Snapshot as PerfSnapshot, clear as log_clear, dump as log_dump, snapshot as perf_snapshot,

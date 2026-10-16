@@ -21,7 +21,6 @@ unsafe extern "C" {
     ) -> f64;
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_min_content_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
-    fn ns_layout_box_is_scroll_container(b: *const NsBox) -> GBoolean;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
 }
@@ -54,9 +53,7 @@ pub fn min_content_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     unsafe { ns_layout_min_content_width_of(b.as_ptr(), parent_style) }
 }
 
-pub fn box_is_scroll_container(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_box_is_scroll_container(b.as_ptr()) != 0 }
-}
+pub use southstar_layout_float::box_is_scroll_container;
 
 pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
     unsafe { ns_layout_box(b.as_ptr(), parent_content_width, inherited) }

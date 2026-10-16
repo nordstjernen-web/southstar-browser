@@ -5,6 +5,9 @@
 #![forbid(unsafe_code)]
 
 pub mod flex;
+mod text;
+
+pub use text::{utf8_skip, vertical_stack_text};
 
 use core::ffi::CStr;
 

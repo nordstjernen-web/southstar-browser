@@ -19,12 +19,6 @@ use southstar_style::{StyleRef, StyleTable, ValueRef};
 use crate::{block, build, classify, generated, hit, media, state};
 
 #[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: u32,
-}
-
-#[repr(C)]
 #[derive(Default)]
 struct RawSvgSize {
     width: f64,
@@ -45,8 +39,6 @@ pub struct SvgSize {
 }
 
 unsafe extern "C" {
-    fn ns_layout_clear_kind_of(s: *const Style) -> c_int;
-    fn ns_layout_float_side_of(s: *const Style) -> c_int;
     fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
     fn ns_image_cache_insert_encoded(
         cache: *mut c_void,
@@ -56,46 +48,19 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn ns_image_cache_begin_generation(cache: *mut c_void);
     fn ns_image_cache_collect(cache: *mut c_void);
-    fn ns_data_url_decode(
-        url: *const c_char,
-        out: *mut GByteArray,
-        budget: u64,
-        out_content_type: *mut *mut c_char,
-        too_large: *mut GBoolean,
-    ) -> GBoolean;
-    fn g_byte_array_new() -> *mut GByteArray;
-    fn g_byte_array_free(array: *mut GByteArray, free_segment: GBoolean) -> *mut u8;
-    fn ns_layout_choose_img_url(
-        n: *const NsNode,
-        img_out: *mut *const NsNode,
-        density: *mut f64,
-    ) -> *mut c_char;
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut RawSvgSize);
-    fn ns_layout_inline_merge_prefix(prefix: *mut NsBox, suffix: *mut NsBox) -> *mut NsBox;
-    fn ns_layout_is_table_box(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
-    fn ns_layout_node_is_table_internal(n: *const NsNode, styles: *mut GHashTable) -> GBoolean;
-    fn ns_layout_build_table(n: *const NsNode, styles: *mut GHashTable) -> *mut NsBox;
-    fn ns_layout_build_anonymous_table(
-        start: *const NsNode,
-        end: *const NsNode,
-        styles: *mut GHashTable,
-    ) -> *mut NsBox;
     fn ns_layout_reset_container_queries();
     fn ns_layout_block(b: *mut NsBox, parent_content_width: f64, inherited: *const Style);
     fn ns_layout_apply_position_offsets(b: *mut NsBox, parent_w: f64, parent_h: f64);
     fn ns_layout_process_absolute_boxes(root: *mut NsBox, styles: *mut GHashTable, vw: f64);
     fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
-    fn ns_layout_compute_paint_bounds(root: *mut NsBox);
-    fn ns_layout_record_frame_viewports(root: *const NsBox);
     fn ns_layout_shift_box_tree(b: *mut NsBox, dx: f64, dy: f64);
-    fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_inline_apply_atomic_shapes(list: *mut c_void, b: *const NsBox);
     fn ns_layout_apply_inline_spacing(list: *mut c_void, s: *const Style, text: *const c_char);
     fn ns_layout_apply_inline_layout_attrs(list: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, list: *mut c_void, b: *const NsBox);
     fn ns_layout_style_blocks_hit_testing(s: *const Style) -> GBoolean;
     fn ns_layout_node_is_form_hit_target(n: *const NsNode) -> GBoolean;
-    fn ns_layout_inline_attr_control_width(r: *const InlineAttr, b: *const NsBox) -> f64;
     fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
     fn ns_paint_li_marker_text(
         li: *const NsNode,
@@ -155,13 +120,7 @@ pub fn set_container_dims(inline_px: f64, block_px: f64) {
     southstar_css::set_container_unit_dims(inline_px, block_px);
 }
 
-pub fn clear_kind_of(s: Option<StyleRef<'_>>) -> c_int {
-    unsafe { ns_layout_clear_kind_of(style_ptr(s)) }
-}
-
-pub fn float_side_of(s: Option<StyleRef<'_>>) -> c_int {
-    unsafe { ns_layout_float_side_of(style_ptr(s)) }
-}
+pub use southstar_layout_float::{clear_kind_of, float_side_of};
 
 pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
     let base = base?;
@@ -186,24 +145,13 @@ pub fn image_cache_collect(cache: *mut c_void) {
 }
 
 pub fn data_url_decode(url: &CStr, budget: u64) -> Option<Vec<u8>> {
-    unsafe {
-        let bytes = g_byte_array_new();
-        let mut ctype: *mut c_char = ptr::null_mut();
-        let mut too_large: GBoolean = 0;
-        let ok = ns_data_url_decode(url.as_ptr(), bytes, budget, &mut ctype, &mut too_large);
-        g_free(ctype.cast());
-        let out = (ok != 0 && too_large == 0)
-            .then(|| core::slice::from_raw_parts((*bytes).data, (*bytes).len as usize).to_vec());
-        g_byte_array_free(bytes, 1);
-        out
-    }
+    southstar_net::decode_data_url(url.to_bytes(), budget)
 }
 
 pub fn choose_img_url<'a>(n: Node<'a>) -> (*mut c_char, Option<Node<'a>>, f64) {
-    let mut img: *const NsNode = n.as_ptr();
-    let mut density = 1.0;
-    let url = unsafe { ns_layout_choose_img_url(n.as_ptr(), &mut img, &mut density) };
-    (url, node(img), density)
+    let chosen = southstar_layout::choose_img(n);
+    let url = chosen.url.map_or(ptr::null_mut(), |url| strdup(&url));
+    (url, Some(chosen.img), chosen.density)
 }
 
 pub fn svg_intrinsic_size(n: Node<'_>) -> SvgSize {
@@ -236,19 +184,19 @@ pub fn inline_merge_prefix(
     prefix: BoxRef<'static>,
     suffix: Option<BoxRef<'static>>,
 ) -> Option<BoxRef<'static>> {
-    box_ref(unsafe { ns_layout_inline_merge_prefix(prefix.as_mut_ptr(), box_ptr(suffix)) })
+    southstar_layout_tree::merge_prefix(Some(prefix), suffix)
 }
 
 pub fn is_table_box(n: Node<'_>, st: StyleTable) -> bool {
-    unsafe { ns_layout_is_table_box(n.as_ptr(), st.as_ptr()) != 0 }
+    southstar_layout_tree::is_table_box(Some(n), st)
 }
 
 pub fn node_is_table_internal(n: Option<Node<'_>>, st: StyleTable) -> bool {
-    unsafe { ns_layout_node_is_table_internal(Node::ptr_or_null(n), st.as_ptr()) != 0 }
+    southstar_layout_tree::node_is_table_internal(n, st)
 }
 
 pub fn build_table(n: Node<'_>, st: StyleTable) -> Option<BoxRef<'static>> {
-    box_ref(unsafe { ns_layout_build_table(n.as_ptr(), st.as_ptr()) })
+    Some(southstar_layout_tree::build_table(n, st))
 }
 
 pub fn build_anonymous_table(
@@ -256,9 +204,7 @@ pub fn build_anonymous_table(
     end: Option<Node<'_>>,
     st: StyleTable,
 ) -> Option<BoxRef<'static>> {
-    box_ref(unsafe {
-        ns_layout_build_anonymous_table(start.as_ptr(), Node::ptr_or_null(end), st.as_ptr())
-    })
+    southstar_layout_tree::build_anonymous_table(Some(start), end, st)
 }
 
 pub fn reset_container_queries() {
@@ -281,12 +227,10 @@ pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
     unsafe { ns_paint_sync_inline_atomic_offsets(root.as_mut_ptr()) };
 }
 
-pub fn compute_paint_bounds(root: BoxRef<'_>) {
-    unsafe { ns_layout_compute_paint_bounds(root.as_mut_ptr()) };
-}
+pub use southstar_layout_query::compute_paint_bounds;
 
 pub fn record_frame_viewports(root: *mut NsBox) {
-    unsafe { ns_layout_record_frame_viewports(root) };
+    southstar_layout_query::record_frame_viewports(box_ref(root));
 }
 
 pub fn new_layout(parent_style: *const Style) -> Layout {
@@ -326,9 +270,7 @@ pub fn node_is_form_hit_target(n: Option<Node<'_>>) -> bool {
     unsafe { ns_layout_node_is_form_hit_target(Node::ptr_or_null(n)) != 0 }
 }
 
-pub fn inline_attr_control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {
-    unsafe { ns_layout_inline_attr_control_width(r, b.as_ptr()) }
-}
+pub use southstar_layout_content::inline_attr_control_width;
 
 pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
     let sp = style_ptr(s);
@@ -448,25 +390,6 @@ pub extern "C" fn ns_layout_set_datalist_open(open: GBoolean) {
     state::set_datalist_open(open != 0);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_vertical_stack_text(text: *const c_char) -> *mut c_char {
-    let Some(text) = c_str(text) else {
-        return strdup(b"");
-    };
-    let bytes = text.to_bytes();
-    let mut out = Vec::with_capacity(bytes.len() * 2);
-    let mut p = 0;
-    while p < bytes.len() {
-        let next = (p + southstar_layout_content::text_input::utf8_skip(bytes[p])).min(bytes.len());
-        if !out.is_empty() {
-            out.push(b'\n');
-        }
-        out.extend_from_slice(&bytes[p..next]);
-        p = next;
-    }
-    strdup(&out)
-}
-
 fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
     if b.parent().is_none() {
         return false;
@@ -477,7 +400,7 @@ fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
     {
         return false;
     }
-    unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }
+    southstar_layout_float::box_clips_children(b)
 }
 
 fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64) {

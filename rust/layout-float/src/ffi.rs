@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_style::{PropId, StyleRef};
 
 use crate::overflow;
@@ -75,36 +75,7 @@ fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
 
-fn style_ref<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean {
-    boolean(box_ref(b).is_some_and(overflow::box_clips_children))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_box_is_scroll_container(b: *const NsBox) -> GBoolean {
-    boolean(box_ref(b).is_some_and(overflow::box_is_scroll_container))
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_clips_out_point(b: *const NsBox, x: f64, y: f64) -> GBoolean {
     boolean(box_ref(b).is_some_and(|b| overflow::clips_out_point(b, x, y)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_float_side_of(s: *const Style) -> c_int {
-    overflow::float_side_of(style_ref(s))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_clear_kind_of(s: *const Style) -> c_int {
-    overflow::clear_kind_of(style_ref(s))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_overflow_establishes_bfc(s: *const Style) -> GBoolean {
-    boolean(overflow::overflow_establishes_bfc(style_ref(s)))
 }

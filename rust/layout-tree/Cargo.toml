@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-layout-content = { path = "../layout-content" }
 southstar-layout-geom = { path = "../layout-geom" }
 southstar-style = { path = "../style" }
 

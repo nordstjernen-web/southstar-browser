@@ -6,13 +6,13 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, boolean, g_free, strdup};
-use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
+use southstar_glib::{GBoolean, g_free, strdup};
+use southstar_layout::{BoxRef, InlineAttr, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{Context, Layout};
 use southstar_style::{NsCssValue, StyleRef, ValueRef};
 
-use crate::{controls, pseudo, tags};
+use crate::{controls, pseudo};
 
 unsafe extern "C" {
     fn g_utf8_strup(s: *const c_char, len: isize) -> *mut c_char;
@@ -91,10 +91,6 @@ pub fn char_cell_px(s: *const Style) -> f64 {
     })
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(n) }
 }
@@ -112,26 +108,12 @@ fn dup_or_null(bytes: Option<Vec<u8>>) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_tag_is_non_rendering(name: *const c_char) -> GBoolean {
-    boolean(tags::is_non_rendering(c_str(name)))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_control_css_extra_w(dom: *const NsNode, s: *const Style) -> f64 {
     controls::css_extra(node(dom), style(s), false)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_inline_attr_control_width(
-    r: *const InlineAttr,
-    b: *const NsBox,
-) -> f64 {
-    let Some(r) = (unsafe { r.as_ref() }) else {
-        return 0.0;
-    };
-    controls::inline_attr_control_width(r, style(r.style()), node(r.dom_ptr().cast()), unsafe {
-        BoxRef::from_ptr(b)
-    })
+pub fn inline_attr_control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {
+    controls::inline_attr_control_width(r, style(r.style()), node(r.dom_ptr().cast()), Some(b))
 }
 
 #[unsafe(no_mangle)]

@@ -23,7 +23,6 @@ unsafe extern "C" {
     fn ns_layout_measure_natural_width(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_min_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
-    fn ns_layout_overflow_establishes_bfc(s: *const Style) -> GBoolean;
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
 }
 
@@ -48,7 +47,7 @@ pub(crate) fn shift(b: BoxRef<'_>, dx: f64, dy: f64) {
 }
 
 pub(crate) fn establishes_bfc(s: StyleRef<'_>) -> bool {
-    unsafe { ns_layout_overflow_establishes_bfc(s.as_ptr()) != 0 }
+    southstar_layout_float::overflow_establishes_bfc(Some(s))
 }
 
 pub(crate) fn new_track_array() -> *mut GArray {

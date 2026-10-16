@@ -28,7 +28,6 @@ unsafe extern "C" {
         local_y: f64,
         parent_style: *const Style,
     ) -> *const NsNode;
-    fn ns_layout_box_clips_children(b: *const NsBox) -> GBoolean;
     fn ns_box_sticky_offset(
         b: *const NsBox,
         vp_x0: f64,
@@ -38,7 +37,6 @@ unsafe extern "C" {
         out_dx: *mut f64,
         out_dy: *mut f64,
     );
-    fn ns_box_image_map_area(b: *const NsBox, local_x: f64, local_y: f64) -> *const NsNode;
     fn ns_paint_3d_registered(b: *const NsBox) -> GBoolean;
     fn ns_paint_3d_pick(root3d: *const NsBox, x: f64, y: f64) -> *const NsBox;
     fn ns_paint_inline_xy_to_byte(
@@ -79,9 +77,7 @@ pub fn inline_box_form_hit<'a>(
     }
 }
 
-pub fn clips_children(b: BoxRef<'_>) -> bool {
-    unsafe { ns_layout_box_clips_children(b.as_ptr()) != 0 }
-}
+pub use southstar_layout_float::box_clips_children as clips_children;
 
 pub fn effective_transform(s: StyleRef<'_>) -> Transform {
     southstar_style::effective_transform(Some(s), None)
@@ -114,9 +110,7 @@ pub fn sticky_offset(b: BoxRef<'_>, x0: f64, y0: f64, x1: f64, y1: f64) -> (f64,
     (dx, dy)
 }
 
-pub fn image_map_area<'a>(b: BoxRef<'a>, local_x: f64, local_y: f64) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(ns_box_image_map_area(b.as_ptr(), local_x, local_y)) }
-}
+pub use southstar_layout::image_map_area;
 
 pub fn paint_3d_registered(b: BoxRef<'_>) -> bool {
     unsafe { ns_paint_3d_registered(b.as_ptr()) != 0 }
