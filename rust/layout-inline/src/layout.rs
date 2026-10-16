@@ -194,7 +194,7 @@ fn record_abs_statics(layout: &Layout, b: BoxRef<'_>, ps: *const Style, content_
             continue;
         }
         let off = a.byte_off() as i32;
-        let pos = layout.index_to_pos(off);
+        let pos = layout.index_to_box(off);
         let line_index = layout.index_to_line(off);
         ffi::record_abs_static(
             dom,
@@ -266,7 +266,7 @@ fn place_atomics(
             continue;
         };
         let off = a.byte_off() as i32;
-        let pos = layout.index_to_pos(off);
+        let pos = layout.index_to_box(off);
         let line = layout.index_to_line(off);
         let on_line = usize::try_from(line).ok().filter(|&l| l < line_count);
         let line_y = line_heights[..usize::try_from(line).unwrap_or(0).min(line_count)]
