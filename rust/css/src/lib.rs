@@ -77,12 +77,13 @@ pub use element_state::{mark_visited, set_doc_base, set_doc_language, set_target
 pub use ffi::viewport::get as viewport;
 pub use ffi::{
     FontFaceRule, FontMetrics, FontOracle, FrameViewport, ImportRule, MatchContext, NsCssValue,
-    PageRule, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas, RegisterError,
-    Registration, Selector, SelectorList, Sheet, clear_registered_properties, register_property,
-    relayout_enter, relayout_leave, selector_cache_begin, selector_cache_end, set_active_node,
-    set_focus_node, set_focus_visible_node, set_font_alias, set_font_oracle,
-    set_frame_viewport_measure, set_fullscreen_node, set_hover_node, set_render_zoom,
-    style_element_cache_begin, style_element_cache_end,
+    PROP_COUNT, PageRule, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
+    RawStyle as StyleData, RegisterError, Registration, Selector, SelectorList, Sheet, ValueKind,
+    clear_registered_properties, register_property, relayout_enter, relayout_leave,
+    selector_cache_begin, selector_cache_end, set_active_node, set_focus_node,
+    set_focus_visible_node, set_font_alias, set_font_oracle, set_frame_viewport_measure,
+    set_fullscreen_node, set_hover_node, set_render_zoom, style_element_cache_begin,
+    style_element_cache_end, style_retain, style_value_slot,
 };
 pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,

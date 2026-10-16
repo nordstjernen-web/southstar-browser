@@ -361,10 +361,17 @@ impl<'a> Ctx<'a> {
         let Some(resolved) = st.resolve_vars(&v) else {
             return Some(v);
         };
-        if resolved.to_bytes().len() >= DECL_MAX {
+        let end = resolved
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(resolved.len());
+        if end >= DECL_MAX {
             return Some(v);
         }
-        Some(Cow::Owned(resolved.to_owned()))
+        CString::new(&resolved[..end])
+            .ok()
+            .map(Cow::Owned)
+            .or(Some(v))
     }
 
     fn color_inherited_outside_instance(&self, n: Node<'a>, color: [u8; 4]) -> bool {

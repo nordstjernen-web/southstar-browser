@@ -38,14 +38,13 @@ mod values;
 mod vars;
 pub(crate) mod viewport;
 
-use core::ffi::{CStr, c_double};
+use core::ffi::CStr;
 
 use southstar_glib::{self as glib};
 
-use crate::units;
-
 pub use compute::set_render_zoom;
-pub(crate) use computed_units::{ComputedStyle, PROP_COUNT, Slot, SlotMut, StyleView};
+pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView};
+pub use computed_units::{PROP_COUNT, RawStyle, style_retain, style_value_slot};
 pub(crate) use container::{Container, container_map};
 pub(crate) use declarations::{media_query_matches, syntax_def_valid};
 pub(crate) use element_state::{
@@ -78,7 +77,7 @@ pub use sheet_cache::{
 };
 pub(crate) use shorthand::prop_named;
 pub(crate) use value::RawCalc;
-pub use value::{NsCssValue, RawAreaRect, RawAreas};
+pub use value::{NsCssValue, RawAreaRect, RawAreas, ValueKind};
 pub use viewport::{FrameViewport, set_frame_viewport_measure};
 
 pub(crate) fn prefers_dark() -> bool {
@@ -96,14 +95,4 @@ pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
 
 pub(crate) fn strtod(text: &CStr, pos: usize) -> (f64, usize) {
     glib::ascii_strtod_at(text, pos)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_length_or(v: *const NsCssValue, fallback: c_double) -> c_double {
-    if let Some(length) = unsafe { value::length_of(v) }
-        && (length.unit == units::PX || length.unit == units::NUMBER)
-    {
-        return length.v;
-    }
-    unsafe { value::calc_of(v) }.map_or(fallback, |calc| calc.px)
 }

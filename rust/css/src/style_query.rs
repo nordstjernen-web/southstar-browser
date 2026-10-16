@@ -149,7 +149,7 @@ pub fn alignment_base(kw: &CStr) -> &CStr {
         .unwrap_or(kw)
 }
 
-fn is_alignment(prop: Prop) -> bool {
+pub(crate) fn is_alignment(prop: Prop) -> bool {
     matches!(
         prop,
         Prop::JustifyContent

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::{offset_of, size_of};
 
 use southstar_css_color::{Color, Space};
@@ -283,20 +283,6 @@ pub(crate) fn new_transform(transform: &Transform) -> *mut NsCssValue {
     value
 }
 
-pub(crate) unsafe fn calc_of(value: *const NsCssValue) -> Option<Calc> {
-    let value = unsafe { value.as_ref() }?;
-    (value.kind == KIND_CALC).then(|| unsafe { value.u.calc }.to_calc())
-}
-
-pub(crate) unsafe fn length_of(value: *const NsCssValue) -> Option<Length> {
-    let value = unsafe { value.as_ref() }?;
-    if value.kind == KIND_LENGTH {
-        Some(unsafe { value.u.length })
-    } else {
-        None
-    }
-}
-
 pub(crate) fn new_tracks(tracks: &Tracks) -> *mut NsCssValue {
     let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
     let value_ref = unsafe { &mut *value };
@@ -367,6 +353,172 @@ pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
     let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
     unsafe { (*value).kind = kind };
     value
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ValueKind {
+    Keyword,
+    Length,
+    Size,
+    Color,
+    Calc,
+    Shadow,
+    Gradient,
+    Url,
+    Transform,
+    Rect,
+    Other,
+}
+
+impl NsCssValue {
+    pub fn kind(&self) -> c_uint {
+        self.kind
+    }
+
+    pub fn value_kind(&self) -> ValueKind {
+        match self.kind {
+            KIND_KEYWORD => ValueKind::Keyword,
+            KIND_LENGTH => ValueKind::Length,
+            KIND_SIZE => ValueKind::Size,
+            KIND_COLOR => ValueKind::Color,
+            KIND_CALC => ValueKind::Calc,
+            KIND_SHADOW => ValueKind::Shadow,
+            KIND_GRADIENT => ValueKind::Gradient,
+            KIND_URL => ValueKind::Url,
+            KIND_TRANSFORM => ValueKind::Transform,
+            KIND_RECT => ValueKind::Rect,
+            _ => ValueKind::Other,
+        }
+    }
+
+    pub fn keyword(&self) -> Option<&CStr> {
+        if self.kind != KIND_KEYWORD {
+            return None;
+        }
+        // SAFETY: a keyword value keeps its text pointer in the keyword field.
+        let keyword = unsafe { self.u.keyword };
+        if keyword.is_null() {
+            return None;
+        }
+        // SAFETY: the keyword is a NUL-terminated string the value owns.
+        Some(unsafe { CStr::from_ptr(keyword) })
+    }
+
+    pub fn length(&self) -> Option<(f64, c_uint)> {
+        if self.kind != KIND_LENGTH {
+            return None;
+        }
+        // SAFETY: a length value keeps a Length in the union.
+        let v = unsafe { self.u.length };
+        Some((v.v, v.unit))
+    }
+
+    pub fn color_rgba(&self) -> Option<[u8; 4]> {
+        if self.kind != KIND_COLOR {
+            return None;
+        }
+        // SAFETY: a colour value keeps a RawColor in the union.
+        let v = unsafe { self.u.color };
+        Some([v.r, v.g, v.b, v.a])
+    }
+
+    pub fn size_parts(&self) -> Option<([f64; 2], [c_uint; 2], [bool; 2])> {
+        if self.kind != KIND_SIZE {
+            return None;
+        }
+        // SAFETY: a size value keeps a RawSize in the union.
+        let v = unsafe { self.u.size };
+        Some((
+            [v.w, v.h],
+            [v.w_unit, v.h_unit],
+            [v.w_auto != 0, v.h_auto != 0],
+        ))
+    }
+
+    pub fn calc(&self) -> Option<Calc> {
+        if self.kind != KIND_CALC {
+            return None;
+        }
+        // SAFETY: a calc value keeps a RawCalc in the union.
+        let v = unsafe { self.u.calc };
+        Some(v.to_calc())
+    }
+
+    pub fn url(&self) -> Option<&CStr> {
+        if self.kind != KIND_URL {
+            return None;
+        }
+        // SAFETY: a URL value keeps its text pointer in the url field.
+        let url = unsafe { self.u.url };
+        if url.is_null() {
+            return None;
+        }
+        // SAFETY: the URL is a NUL-terminated string the value owns.
+        Some(unsafe { CStr::from_ptr(url) })
+    }
+
+    pub fn rect_parts(&self) -> Option<([f64; 4], [c_uint; 4], [bool; 4])> {
+        if self.kind != KIND_RECT {
+            return None;
+        }
+        // SAFETY: a rect value keeps a RawRect in the union.
+        let v = unsafe { self.u.rect };
+        Some((v.v, v.unit, v.is_auto.map(|a| a != 0)))
+    }
+
+    pub fn gradient(&self) -> Option<&Gradient> {
+        if self.kind != KIND_GRADIENT {
+            return None;
+        }
+        // SAFETY: a gradient value keeps a Gradient in the union.
+        Some(unsafe { &self.u.gradient })
+    }
+
+    pub fn shadows(&self) -> Option<&ShadowList> {
+        if self.kind != KIND_SHADOW {
+            return None;
+        }
+        // SAFETY: a shadow value keeps a ShadowList in the union.
+        Some(unsafe { &self.u.shadow })
+    }
+
+    pub fn tracks(&self) -> Option<&Tracks> {
+        if self.kind != KIND_TRACKS {
+            return None;
+        }
+        // SAFETY: a tracks value keeps Tracks in the union.
+        Some(unsafe { &self.u.tracks })
+    }
+
+    pub fn areas(&self) -> Option<&RawAreas> {
+        if self.kind != KIND_AREAS {
+            return None;
+        }
+        // SAFETY: an areas value keeps RawAreas in the union.
+        Some(unsafe { &self.u.areas })
+    }
+
+    pub fn transform(&self) -> Option<&Transform> {
+        if self.kind != KIND_TRANSFORM {
+            return None;
+        }
+        // SAFETY: a transform value keeps a Transform in the union.
+        Some(unsafe { &self.u.transform })
+    }
+
+    pub fn next_layer(&self) -> Option<&NsCssValue> {
+        // SAFETY: next_layer is null or the next layer this value owns.
+        unsafe { self.next_layer.as_ref() }
+    }
+
+    pub fn length_or(&self, fallback: f64) -> f64 {
+        if let Some((v, unit)) = self.length()
+            && (unit == crate::units::PX || unit == crate::units::NUMBER)
+        {
+            return v;
+        }
+        self.calc().map_or(fallback, |calc| calc.px)
+    }
 }
 
 pub(super) struct OwnedValue(pub(super) *mut NsCssValue);

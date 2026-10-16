@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* rust/style, the computed-style view layout, paint, SVG and printing
+  read, no longer keeps its own #[repr(C)] copies of rust/css's value
+  union, style struct and variable map, which had to match rust/css's
+  layout by hand: it wraps rust/css's own types, whose new accessors
+  check the union tag before reading a field. Six C exports for
+  keywords, the display type, lengths and custom-property lookup are
+  gone, and rust/style drops from 54 unsafe keywords to 12.
 * rust/css asks the painter about fonts through a FontOracle of plain
   Rust functions instead of three unsafe extern "C" callbacks that took
   raw C strings and wrote through an out-pointer, and the headless

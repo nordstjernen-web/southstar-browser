@@ -2,14 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GPtrArray};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 
 use crate::mutation::{self, Emit};
 use crate::{intersection, page, resize};
@@ -67,7 +67,6 @@ unsafe extern "C" {
         w: *mut f64,
         h: *mut f64,
     );
-    fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
 }
 
 unsafe extern "Rust" {
@@ -198,10 +197,9 @@ pub(crate) fn visual_padding_box(b: BoxRef<'_>) -> Rect {
     geometry(b, ns_box_visual_padding_box)
 }
 
-pub(crate) fn style_keyword(b: BoxRef<'_>, property: &CStr) -> Option<&'static CStr> {
-    let prop = southstar_css::Prop::from_name(property.to_bytes()).map_or(-1, |p| p.id() as c_int);
-    let keyword = unsafe { ns_style_keyword(b.style(), prop) };
-    (!keyword.is_null()).then(|| unsafe { CStr::from_ptr(keyword) })
+pub(crate) fn style_keyword<'a>(b: BoxRef<'a>, property: &CStr) -> Option<&'a CStr> {
+    let prop = southstar_css::Prop::from_name(property.to_bytes())?;
+    southstar_style::box_style(b)?.keyword_of(prop)
 }
 
 unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {

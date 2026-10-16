@@ -3,14 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_double, c_int};
-use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
 
 use super::computed_units::{RawStyle, StyleView, slot};
 use super::value::{KIND_KEYWORD, NsCssValue};
 use crate::cascade::CURRENTCOLOR_PROPS;
-use crate::display::Display;
 use crate::prop::Prop;
 use crate::style_query;
 
@@ -55,22 +53,6 @@ pub unsafe extern "C" fn ns_css_keyword_is(v: *const NsCssValue, kw: *const c_ch
         return glib::FALSE;
     }
     glib::boolean(unsafe { CStr::from_ptr(keyword) == CStr::from_ptr(kw) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_display_of(style: *const RawStyle) -> Display {
-    unsafe { style.as_ref() }.map_or_else(Display::default, |s| s.display)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_style_keyword(style: *const RawStyle, prop: c_int) -> *const c_char {
-    let (Some(view), Some(prop)) = (
-        unsafe { view(style) },
-        usize::try_from(prop).ok().and_then(Prop::from_id),
-    ) else {
-        return ptr::null();
-    };
-    style_query::style_keyword(&view, prop).map_or(ptr::null(), CStr::as_ptr)
 }
 
 #[unsafe(no_mangle)]

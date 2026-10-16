@@ -41,7 +41,6 @@ pub enum BreakProp {
 }
 
 unsafe extern "C" {
-    fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_paint(cr: *mut c_void, root: *const NsBox, highlight_query: *const c_char);
     fn cairo_save(cr: *mut c_void);
@@ -62,12 +61,10 @@ fn break_props() -> &'static [c_int; 3] {
 }
 
 pub fn break_keyword(b: BoxRef<'_>, prop: BreakProp) -> Option<&CStr> {
-    let style = b.style();
-    if style.is_null() {
-        return None;
-    }
-    let kw = unsafe { ns_style_keyword(style, break_props()[prop as usize]) };
-    (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+    let prop = usize::try_from(break_props()[prop as usize])
+        .ok()
+        .and_then(southstar_css::Prop::from_id)?;
+    southstar_style::box_style(b)?.keyword_of(prop)
 }
 
 pub fn line_height_px(b: BoxRef<'_>) -> f64 {

@@ -1,141 +1,22 @@
-//! Southstar — struct ns_style and struct ns_css_value as the style engine lays them out, and the style-engine calls over them.
+//! Southstar — computed styles read from Rust over rust/css's own style and value types: values by property, their gradients, shadows, transforms and layers, display and pseudo-element styles, custom properties, and comparing two styles.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::marker::PhantomData;
-use core::ptr::NonNull;
+use core::ffi::{CStr, c_uint, c_void};
+use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
 use southstar_css::{
-    BorderImageParams, Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList, Transform,
+    BorderImageParams, Calc, Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList,
+    StyleData, Transform,
 };
+pub use southstar_css::{NsCssValue, ValueKind as Kind};
 use southstar_dom::Node;
-use southstar_glib::{
-    GBoolean, GHashTable, GPtrArray, GStr, g_hash_table_lookup, g_ptr_array_unref,
-};
+use southstar_glib::{GHashTable, g_hash_table_lookup};
 use southstar_layout::{BoxRef, Style};
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Length {
-    v: f64,
-    unit: c_uint,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Size {
-    w: f64,
-    h: f64,
-    w_unit: c_uint,
-    h_unit: c_uint,
-    w_auto: GBoolean,
-    h_auto: GBoolean,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct CalcHead {
-    pct: f64,
-    px: f64,
-    em: f64,
-    rem: f64,
-    vw: f64,
-    vh: f64,
-    vmin: f64,
-    vmax: f64,
-    parsed_vw: f64,
-    parsed_vh: f64,
-    func: u8,
-    n_args: u8,
-    arg_none: u8,
-    args: [CalcArg; 4],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct CalcArg {
-    px: f64,
-    pct: f64,
-}
-
-impl CalcHead {
-    fn to_calc(self) -> southstar_css::Calc {
-        southstar_css::Calc {
-            pct: self.pct,
-            px: self.px,
-            em: self.em,
-            rem: self.rem,
-            vw: self.vw,
-            vh: self.vh,
-            vmin: self.vmin,
-            vmax: self.vmax,
-            parsed_vw: self.parsed_vw,
-            parsed_vh: self.parsed_vh,
-            func: self.func,
-            n_args: self.n_args,
-            arg_none: self.arg_none,
-            args: self.args.map(|a| southstar_css::CalcArg {
-                px: a.px,
-                pct: a.pct,
-            }),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Rect {
-    v: [f64; 4],
-    unit: [c_uint; 4],
-    is_auto: [GBoolean; 4],
-}
-
-#[repr(C)]
-union ValueUnion {
-    keyword: *const c_char,
-    length: Length,
-    size: Size,
-    color: [u8; 4],
-    calc: CalcHead,
-    url: *const c_char,
-    rect: Rect,
-    gradient: Gradient,
-    shadow: ShadowList,
-    transform: Transform,
-    tracks: GridTracks,
-    areas: GridAreas,
-    _storage: [u64; 381],
-}
-
-#[repr(C)]
-pub struct NsCssValue {
-    kind: c_uint,
-    _ref: c_int,
-    u: ValueUnion,
-    _image_set_text: *mut c_char,
-    _specified: *mut c_char,
-    next_layer: *const NsCssValue,
-}
-
-const _: () = assert!(core::mem::size_of::<ValueUnion>() == 381 * 8);
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<NsCssValue>() == 3080
-        && core::mem::offset_of!(NsCssValue, u) == 8
-        && core::mem::offset_of!(NsCssValue, next_layer) == 3072
-        && core::mem::size_of::<Size>() == 32
-        && core::mem::offset_of!(Rect, unit) == 32
-        && core::mem::offset_of!(Rect, is_auto) == 48
-        && core::mem::offset_of!(CalcHead, func) == 80
-        && core::mem::offset_of!(CalcHead, args) == 88
-        && core::mem::size_of::<CalcHead>() == 152
-);
-
-pub const PROP_COUNT: usize = 277;
+pub const PROP_COUNT: usize = southstar_css::PROP_COUNT;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -158,70 +39,17 @@ impl Display {
     pub fn is_grid_container(self) -> bool {
         self.box_ == 0 && self.internal == 0 && self.inner == DISPLAY_INNER_GRID
     }
-}
 
-#[repr(C)]
-struct NsStyle {
-    values: [*const NsCssValue; PROP_COUNT],
-    display: Display,
-    specified_inline: u8,
-    before: *const Style,
-    after: *const Style,
-    first_letter: *const Style,
-    first_line: *const Style,
-    placeholder: *const Style,
-    selection: *const Style,
-    marker: *const Style,
-    backdrop: *const Style,
-    file_selector_button: *const Style,
-    hidden_before: *const Style,
-    hidden_after: *const Style,
-    _share_id: u64,
-    _ref: c_int,
-    currentcolor_bits: u32,
-    vars: *const VarMap,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<NsStyle>() == 2336
-        && core::mem::offset_of!(NsStyle, display) == 2216
-        && core::mem::offset_of!(NsStyle, before) == 2224
-        && core::mem::offset_of!(NsStyle, file_selector_button) == 2288
-        && core::mem::offset_of!(NsStyle, vars) == 2328
-);
-
-#[repr(C)]
-struct VarMap {
-    _private: [u8; 0],
-}
-
-const KIND_KEYWORD: c_uint = 0;
-const KIND_LENGTH: c_uint = 1;
-const KIND_SIZE: c_uint = 2;
-const KIND_COLOR: c_uint = 3;
-const KIND_CALC: c_uint = 4;
-const KIND_SHADOW: c_uint = 5;
-const KIND_GRADIENT: c_uint = 6;
-const KIND_TRACKS: c_uint = 7;
-const KIND_URL: c_uint = 8;
-const KIND_TRANSFORM: c_uint = 9;
-const KIND_AREAS: c_uint = 10;
-const KIND_RECT: c_uint = 12;
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Kind {
-    Keyword,
-    Length,
-    Size,
-    Color,
-    Calc,
-    Shadow,
-    Gradient,
-    Url,
-    Transform,
-    Rect,
-    Other,
+    fn of(parts: [u8; 5]) -> Display {
+        let [box_, outer, inner, internal, list_item] = parts;
+        Display {
+            box_,
+            outer,
+            inner,
+            internal,
+            list_item,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -238,15 +66,6 @@ pub struct SizeValue {
 pub struct RectValue {
     pub v: [f64; 4],
     pub is_auto: [bool; 4],
-}
-
-unsafe extern "C" {
-    fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
-    fn ns_css_length_or(v: *const NsCssValue, fallback: f64) -> f64;
-    fn ns_css_resolve_style_vars(text: *const c_char, style: *const Style) -> *mut c_char;
-    fn ns_css_display_of(style: *const Style) -> Display;
-    fn ns_var_map_names(map: *const VarMap) -> *mut GPtrArray;
-    fn ns_var_map_lookup(map: *const VarMap, name: *const c_char) -> *const c_char;
 }
 
 pub struct Prop {
@@ -273,11 +92,11 @@ impl Prop {
 enum Payload<'a> {
     Keyword(Option<&'a CStr>),
     Length(f64, c_uint),
-    Size([f64; 2], [c_uint; 2], [GBoolean; 2]),
+    Size([f64; 2], [c_uint; 2], [bool; 2]),
     Color([u8; 4]),
     Calc([f64; 4]),
     Url(Option<&'a CStr>),
-    Rect([f64; 4], [c_uint; 4], [GBoolean; 4]),
+    Rect([f64; 4], [c_uint; 4], [bool; 4]),
 }
 
 pub enum Value<'a> {
@@ -289,30 +108,24 @@ pub enum Value<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct ValueRef<'a>(NonNull<NsCssValue>, PhantomData<&'a NsCssValue>);
+pub struct ValueRef<'a>(&'a NsCssValue);
 
 impl<'a> ValueRef<'a> {
-    fn raw(self) -> &'a NsCssValue {
-        unsafe { &*self.0.as_ptr() }
-    }
-
     pub fn get(self) -> Value<'a> {
-        let v = self.raw();
-        unsafe {
-            match v.kind {
-                KIND_KEYWORD => {
-                    Value::Keyword((!v.u.keyword.is_null()).then(|| CStr::from_ptr(v.u.keyword)))
-                }
-                KIND_LENGTH => Value::Length(v.u.length.v, v.u.length.unit),
-                KIND_COLOR => Value::Color(v.u.color),
-                KIND_CALC => Value::Calc,
-                _ => Value::Other,
-            }
+        match self.kind() {
+            Kind::Keyword => Value::Keyword(self.0.keyword()),
+            Kind::Length => self
+                .0
+                .length()
+                .map_or(Value::Other, |(v, unit)| Value::Length(v, unit)),
+            Kind::Color => self.0.color_rgba().map_or(Value::Other, Value::Color),
+            Kind::Calc => Value::Calc,
+            _ => Value::Other,
         }
     }
 
     pub fn as_ptr(self) -> *const NsCssValue {
-        self.0.as_ptr()
+        ptr::from_ref(self.0)
     }
 
     pub fn font_slanted(self) -> bool {
@@ -323,57 +136,43 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn keyword_text(self) -> Option<&'a CStr> {
-        match self.get() {
-            Value::Keyword(kw) => kw,
-            _ => None,
-        }
+        self.0.keyword()
     }
 
     fn payload(self) -> Option<Payload<'a>> {
-        let v = self.raw();
-        let text = |p: *const c_char| (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) });
-        unsafe {
-            Some(match v.kind {
-                KIND_KEYWORD => Payload::Keyword(text(v.u.keyword)),
-                KIND_LENGTH => Payload::Length(v.u.length.v, v.u.length.unit),
-                KIND_SIZE => {
-                    let s = v.u.size;
-                    Payload::Size([s.w, s.h], [s.w_unit, s.h_unit], [s.w_auto, s.h_auto])
-                }
-                KIND_COLOR => Payload::Color(v.u.color),
-                KIND_CALC => {
-                    let c = v.u.calc;
-                    Payload::Calc([c.pct, c.px, c.em, c.rem])
-                }
-                KIND_URL => Payload::Url(text(v.u.url)),
-                KIND_RECT => Payload::Rect(v.u.rect.v, v.u.rect.unit, v.u.rect.is_auto),
-                _ => return None,
-            })
-        }
+        let v = self.0;
+        Some(match self.kind() {
+            Kind::Keyword => Payload::Keyword(v.keyword()),
+            Kind::Length => v.length().map(|(len, unit)| Payload::Length(len, unit))?,
+            Kind::Size => v
+                .size_parts()
+                .map(|(len, unit, auto)| Payload::Size(len, unit, auto))?,
+            Kind::Color => Payload::Color(v.color_rgba()?),
+            Kind::Calc => v
+                .calc()
+                .map(|c| Payload::Calc([c.pct, c.px, c.em, c.rem]))?,
+            Kind::Url => Payload::Url(v.url()),
+            Kind::Rect => v
+                .rect_parts()
+                .map(|(len, unit, auto)| Payload::Rect(len, unit, auto))?,
+            _ => return None,
+        })
     }
 
     pub fn next_layer(self) -> Option<ValueRef<'a>> {
-        NonNull::new(self.raw().next_layer.cast_mut()).map(|p| ValueRef(p, PhantomData))
+        self.0.next_layer().map(ValueRef)
     }
 
+    /// # Safety
+    ///
+    /// `p` is null or a value made by rust/css that outlives `'a`.
     pub unsafe fn from_ptr(p: *const NsCssValue) -> Option<ValueRef<'a>> {
-        NonNull::new(p.cast_mut()).map(|p| ValueRef(p, PhantomData))
+        // SAFETY: the caller passes null or a live value.
+        unsafe { p.as_ref() }.map(ValueRef)
     }
 
     pub fn kind(self) -> Kind {
-        match self.raw().kind {
-            KIND_KEYWORD => Kind::Keyword,
-            KIND_LENGTH => Kind::Length,
-            KIND_SIZE => Kind::Size,
-            KIND_COLOR => Kind::Color,
-            KIND_CALC => Kind::Calc,
-            KIND_SHADOW => Kind::Shadow,
-            KIND_GRADIENT => Kind::Gradient,
-            KIND_URL => Kind::Url,
-            KIND_TRANSFORM => Kind::Transform,
-            KIND_RECT => Kind::Rect,
-            _ => Kind::Other,
-        }
+        self.0.value_kind()
     }
 
     pub fn is_keyword(self, kw: &CStr) -> bool {
@@ -381,45 +180,26 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn length(self) -> Option<(f64, u32)> {
-        let v = self.raw();
-        if v.kind == KIND_LENGTH {
-            Some(unsafe { (v.u.length.v, v.u.length.unit) })
-        } else {
-            None
-        }
+        self.0.length()
     }
 
     pub fn color(self) -> Option<[u8; 4]> {
-        let v = self.raw();
-        if v.kind == KIND_COLOR {
-            Some(unsafe { v.u.color })
-        } else {
-            None
-        }
+        self.0.color_rgba()
     }
 
     pub fn size(self) -> Option<SizeValue> {
-        let v = self.raw();
-        (v.kind == KIND_SIZE).then(|| {
-            let s = unsafe { v.u.size };
-            SizeValue {
-                w: s.w,
-                h: s.h,
-                w_unit: s.w_unit,
-                h_unit: s.h_unit,
-                w_auto: s.w_auto != 0,
-                h_auto: s.h_auto != 0,
-            }
+        self.0.size_parts().map(|(len, unit, auto)| SizeValue {
+            w: len[0],
+            h: len[1],
+            w_unit: unit[0],
+            h_unit: unit[1],
+            w_auto: auto[0],
+            h_auto: auto[1],
         })
     }
 
-    fn calc_head(self) -> Option<CalcHead> {
-        let v = self.raw();
-        if v.kind != KIND_CALC {
-            return None;
-        }
-        // SAFETY: the style engine stores a calc payload in the union whenever kind is KIND_CALC.
-        Some(unsafe { v.u.calc })
+    fn calc_head(self) -> Option<Calc> {
+        self.0.calc()
     }
 
     pub fn calc_terms(self) -> Option<[f64; 4]> {
@@ -446,72 +226,37 @@ impl<'a> ValueRef<'a> {
 
     pub fn math_fn_px(self, basis: f64) -> f64 {
         self.calc_head()
-            .map_or(0.0, |c| southstar_css::calc_math_fn_px(&c.to_calc(), basis))
+            .map_or(0.0, |c| southstar_css::calc_math_fn_px(&c, basis))
     }
 
     pub fn url(self) -> Option<&'a CStr> {
-        let v = self.raw();
-        if v.kind != KIND_URL {
-            return None;
-        }
-        let url = unsafe { v.u.url };
-        (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) })
+        self.0.url()
     }
 
     pub fn rect(self) -> Option<RectValue> {
-        let v = self.raw();
-        (v.kind == KIND_RECT).then(|| {
-            let r = unsafe { v.u.rect };
-            RectValue {
-                v: r.v,
-                is_auto: r.is_auto.map(|a| a != 0),
-            }
-        })
+        self.0
+            .rect_parts()
+            .map(|(v, _, is_auto)| RectValue { v, is_auto })
     }
 
     pub fn gradient(self) -> Option<&'a Gradient> {
-        let v = self.raw();
-        if v.kind == KIND_GRADIENT {
-            Some(unsafe { &v.u.gradient })
-        } else {
-            None
-        }
+        self.0.gradient()
     }
 
     pub fn shadows(self) -> Option<&'a ShadowList> {
-        let v = self.raw();
-        if v.kind == KIND_SHADOW {
-            Some(unsafe { &v.u.shadow })
-        } else {
-            None
-        }
+        self.0.shadows()
     }
 
     pub fn tracks(self) -> Option<&'a GridTracks> {
-        let v = self.raw();
-        if v.kind == KIND_TRACKS {
-            Some(unsafe { &v.u.tracks })
-        } else {
-            None
-        }
+        self.0.tracks()
     }
 
     pub fn areas(self) -> Option<&'a GridAreas> {
-        let v = self.raw();
-        if v.kind == KIND_AREAS {
-            Some(unsafe { &v.u.areas })
-        } else {
-            None
-        }
+        self.0.areas()
     }
 
     pub fn transform(self) -> Option<&'a Transform> {
-        let v = self.raw();
-        if v.kind == KIND_TRANSFORM {
-            Some(unsafe { &v.u.transform })
-        } else {
-            None
-        }
+        self.0.transform()
     }
 
     pub fn layers(self) -> impl Iterator<Item = ValueRef<'a>> {
@@ -519,7 +264,7 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn length_or(self, fallback: f64) -> f64 {
-        unsafe { ns_css_length_or(self.0.as_ptr(), fallback) }
+        self.0.length_or(fallback)
     }
 
     pub fn font_weight_or(self, fallback: i32) -> i32 {
@@ -554,44 +299,51 @@ pub fn layer(head: Option<ValueRef<'_>>, index: i32) -> Option<ValueRef<'_>> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleRef<'a>(NonNull<Style>, PhantomData<&'a Style>);
+pub struct StyleRef<'a>(&'a StyleData);
+
+const BEFORE: usize = 0;
+const AFTER: usize = 1;
+const FIRST_LETTER: usize = 2;
+const FIRST_LINE: usize = 3;
+const PLACEHOLDER: usize = 4;
+const SELECTION: usize = 5;
+const MARKER: usize = 6;
+const BACKDROP: usize = 7;
+const FILE_SELECTOR_BUTTON: usize = 8;
+const HIDDEN_BEFORE: usize = 9;
+const HIDDEN_AFTER: usize = 10;
 
 impl<'a> StyleRef<'a> {
+    /// # Safety
+    ///
+    /// `p` is null or a computed style made by rust/css that outlives `'a`.
     pub unsafe fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
-        NonNull::new(p.cast_mut()).map(|p| StyleRef(p, PhantomData))
+        // SAFETY: the caller passes null or a live computed style.
+        unsafe { StyleData::from_ptr(p) }.map(StyleRef)
     }
 
     pub fn as_ptr(self) -> *const Style {
-        self.0.as_ptr()
+        ptr::from_ref(self.0).cast()
     }
 
     pub fn value(self, prop: &Prop) -> Option<ValueRef<'a>> {
-        let id = prop.id()?;
-        let slot = unsafe { *self.0.as_ptr().cast::<*const NsCssValue>().add(id) };
-        NonNull::new(slot.cast_mut()).map(|p| ValueRef(p, PhantomData))
+        self.value_at(prop.id()?)
     }
 
     pub fn keyword(self, prop: &Prop) -> Option<&'a CStr> {
-        let id = c_int::try_from(prop.id()?).ok()?;
-        let kw = unsafe { ns_style_keyword(self.0.as_ptr(), id) };
-        (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
-    }
-
-    fn fields(self) -> &'a NsStyle {
-        unsafe { &*self.0.as_ptr().cast::<NsStyle>() }
+        self.0.keyword(PropId::from_id(prop.id()?)?)
     }
 
     pub fn value_at(self, index: usize) -> Option<ValueRef<'a>> {
-        let slot = *self.fields().values.get(index)?;
-        NonNull::new(slot.cast_mut()).map(|p| ValueRef(p, PhantomData))
+        self.0.value_at(index).map(ValueRef)
     }
 
     pub fn display(self) -> Display {
-        self.fields().display
+        Display::of(self.0.display_parts())
     }
 
     pub fn specified_inline(self) -> bool {
-        self.fields().specified_inline != 0
+        self.0.specified_inline()
     }
 
     pub fn text_fill_color(self) -> Option<ValueRef<'a>> {
@@ -602,11 +354,11 @@ impl<'a> StyleRef<'a> {
 
     pub fn from_currentcolor(self, prop: PropId) -> bool {
         southstar_css::currentcolor_bit(prop)
-            .is_some_and(|bit| (self.fields().currentcolor_bits >> bit) & 1 != 0)
+            .is_some_and(|bit| (self.0.currentcolor_bits() >> bit) & 1 != 0)
     }
 
     pub fn vars_ptr(self) -> *const c_void {
-        self.fields().vars.cast()
+        self.0.vars_ptr()
     }
 
     pub fn get(self, prop: PropId) -> Option<ValueRef<'a>> {
@@ -614,88 +366,79 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn keyword_of(self, prop: PropId) -> Option<&'a CStr> {
-        let kw = unsafe { ns_style_keyword(self.0.as_ptr(), prop as c_int) };
-        (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+        self.0.keyword(prop)
+    }
+
+    fn pseudo(self, slot: usize) -> Option<StyleRef<'a>> {
+        self.0.pseudo(slot).map(StyleRef)
     }
 
     pub fn first_line(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().first_line) }
+        self.pseudo(FIRST_LINE)
     }
 
     pub fn selection(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().selection) }
+        self.pseudo(SELECTION)
     }
 
     pub fn marker(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().marker) }
+        self.pseudo(MARKER)
     }
 
     pub fn backdrop(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().backdrop) }
+        self.pseudo(BACKDROP)
     }
 
     pub fn before(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().before) }
+        self.pseudo(BEFORE)
     }
 
     pub fn after(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().after) }
+        self.pseudo(AFTER)
     }
 
     pub fn first_letter(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().first_letter) }
+        self.pseudo(FIRST_LETTER)
     }
 
     pub fn placeholder(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().placeholder) }
+        self.pseudo(PLACEHOLDER)
     }
 
     pub fn file_selector_button(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().file_selector_button) }
+        self.pseudo(FILE_SELECTOR_BUTTON)
     }
 
     pub fn hidden_before(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().hidden_before) }
+        self.pseudo(HIDDEN_BEFORE)
     }
 
     pub fn hidden_after(self) -> Option<StyleRef<'a>> {
-        unsafe { StyleRef::from_ptr(self.fields().hidden_after) }
+        self.pseudo(HIDDEN_AFTER)
     }
 
     pub fn has_vars(self) -> bool {
-        !self.fields().vars.is_null()
+        self.0.has_vars()
     }
 
     pub fn var(self, name: &CStr) -> Option<&'a CStr> {
-        let map = self.fields().vars;
-        if map.is_null() {
-            return None;
-        }
-        var_value(map, name)
+        self.0.var(name.to_bytes())
     }
 
     pub fn var_names(self) -> Vec<Vec<u8>> {
-        let map = self.fields().vars;
-        if map.is_null() {
-            return Vec::new();
-        }
-        Names::of(map)
-            .get()
-            .iter()
+        self.0
+            .var_names()
+            .into_iter()
             .map(|name| name.to_bytes().to_vec())
             .collect()
     }
 
     pub fn var_count(self) -> usize {
-        let map = self.fields().vars;
-        if map.is_null() {
-            return 0;
-        }
-        Names::of(map).get().len()
+        self.0.var_names().len()
     }
 
-    pub fn resolve_vars(self, text: &CStr) -> Option<GStr> {
-        unsafe { GStr::take(ns_css_resolve_style_vars(text.as_ptr(), self.0.as_ptr())) }
+    pub fn resolve_vars(self, text: &CStr) -> Option<Vec<u8>> {
+        self.0.resolve_vars(text.to_bytes())
     }
 }
 
@@ -724,17 +467,20 @@ impl StyleTable {
     }
 }
 
+/// # Safety
+///
+/// `style` is null or a live computed style made by rust/css that nothing else is reading or writing.
 pub unsafe fn value_slot(style: *mut Style, index: usize) -> Option<*mut *mut NsCssValue> {
-    if style.is_null() || index >= PROP_COUNT {
-        return None;
-    }
-    Some(unsafe { core::ptr::addr_of_mut!((*style.cast::<NsStyle>()).values[index]) }.cast())
+    // SAFETY: the caller's obligations are value_slot's.
+    unsafe { southstar_css::style_value_slot(style, index) }
 }
 
+/// # Safety
+///
+/// `style` is null or a live computed style made by rust/css.
 pub unsafe fn retain(style: *mut Style) {
-    if let Some(fields) = unsafe { style.cast::<NsStyle>().as_mut() } {
-        fields._ref += 1;
-    }
+    // SAFETY: the caller's obligations are style_retain's.
+    unsafe { southstar_css::style_retain(style) };
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
@@ -743,7 +489,7 @@ pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
 }
 
 pub fn display_of(style: Option<StyleRef<'_>>) -> Display {
-    unsafe { ns_css_display_of(style.map_or(core::ptr::null(), StyleRef::as_ptr)) }
+    style.map_or(Display::of([0; 5]), StyleRef::display)
 }
 
 pub fn values_equal(a: Option<ValueRef<'_>>, b: Option<ValueRef<'_>>) -> bool {
@@ -752,10 +498,10 @@ pub fn values_equal(a: Option<ValueRef<'_>>, b: Option<ValueRef<'_>>) -> bool {
         (Some(a), Some(b)) => (a, b),
         _ => return false,
     };
-    if a.0 == b.0 {
+    if ptr::eq(a.0, b.0) {
         return true;
     }
-    if a.raw().kind != b.raw().kind {
+    if a.0.kind() != b.0.kind() {
         return false;
     }
     match (a.payload(), b.payload()) {
@@ -764,47 +510,16 @@ pub fn values_equal(a: Option<ValueRef<'_>>, b: Option<ValueRef<'_>>) -> bool {
     }
 }
 
-struct Names(*mut GPtrArray);
-
-impl Names {
-    fn of(map: *const VarMap) -> Names {
-        Names(unsafe { ns_var_map_names(map) })
-    }
-
-    fn get(&self) -> Vec<&CStr> {
-        let Some(array) = (unsafe { self.0.as_ref() }) else {
-            return Vec::new();
-        };
-        (0..array.len as usize)
-            .map(|i| unsafe { CStr::from_ptr((*array.pdata.add(i)).cast()) })
-            .collect()
-    }
-}
-
-impl Drop for Names {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe { g_ptr_array_unref(self.0) };
-        }
-    }
-}
-
-fn var_value<'a>(map: *const VarMap, name: &CStr) -> Option<&'a CStr> {
-    let value = unsafe { ns_var_map_lookup(map, name.as_ptr()) };
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
-}
-
-fn vars_equal(a: *const VarMap, b: *const VarMap) -> bool {
-    if a == b {
+fn vars_equal(a: StyleRef<'_>, b: StyleRef<'_>) -> bool {
+    if a.0.same_vars(b.0) {
         return true;
     }
-    let (names_a, names_b) = (Names::of(a), Names::of(b));
-    let (na, nb) = (names_a.get(), names_b.get());
+    let (na, nb) = (a.0.var_names(), b.0.var_names());
     na.len() == nb.len()
         && na
             .iter()
             .zip(&nb)
-            .all(|(x, y)| x == y && var_value(a, x) == var_value(b, y))
+            .all(|(x, y)| x == y && a.0.var(x.to_bytes()) == b.0.var(y.to_bytes()))
 }
 
 pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
@@ -813,31 +528,17 @@ pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
         (Some(a), Some(b)) => (a, b),
         _ => return false,
     };
-    if a.0 == b.0 {
+    if ptr::eq(a.0, b.0) {
         return true;
     }
-    let (fa, fb) = (a.fields(), b.fields());
-    if fa.display != fb.display {
+    if a.display() != b.display() {
         return false;
     }
     if !(0..PROP_COUNT).all(|i| values_equal(a.value_at(i), b.value_at(i))) {
         return false;
     }
-    let pseudo = |s: *const Style| unsafe { StyleRef::from_ptr(s) };
-    vars_equal(fa.vars, fb.vars)
-        && [
-            (fa.before, fb.before),
-            (fa.after, fb.after),
-            (fa.first_letter, fb.first_letter),
-            (fa.first_line, fb.first_line),
-            (fa.placeholder, fb.placeholder),
-            (fa.selection, fb.selection),
-            (fa.marker, fb.marker),
-            (fa.backdrop, fb.backdrop),
-            (fa.file_selector_button, fb.file_selector_button),
-        ]
-        .into_iter()
-        .all(|(x, y)| styles_equal(pseudo(x), pseudo(y)))
+    vars_equal(a, b)
+        && (BEFORE..=FILE_SELECTOR_BUTTON).all(|slot| styles_equal(a.pseudo(slot), b.pseudo(slot)))
 }
 
 pub fn font_family_for_pango(family: &CStr) -> CString {

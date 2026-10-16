@@ -93,7 +93,6 @@ unsafe extern "C" {
     fn ns_render_page_rule() -> *const c_void;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const c_void);
-    fn ns_style_keyword(style: *const Style, prop: c_int) -> *const c_char;
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
@@ -498,14 +497,19 @@ pub fn css_prop_id(name: &CStr) -> c_int {
     southstar_css::Prop::from_name(name.to_bytes()).map_or(-1, |prop| prop.id() as c_int)
 }
 
+fn keyword_in<'a>(style: Option<southstar_style::StyleRef<'a>>, prop: c_int) -> Option<&'a CStr> {
+    let prop = usize::try_from(prop)
+        .ok()
+        .and_then(southstar_css::Prop::from_id)?;
+    style?.keyword_of(prop)
+}
+
 pub fn style_keyword(b: BoxRef<'_>, prop: c_int) -> Option<&CStr> {
-    let kw = unsafe { ns_style_keyword(b.style(), prop) };
-    (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+    keyword_in(southstar_style::box_style(b), prop)
 }
 
 pub fn style_keyword_raw<'a>(style: *const Style, prop: c_int) -> Option<&'a CStr> {
-    let kw = unsafe { ns_style_keyword(style, prop) };
-    (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) })
+    keyword_in(unsafe { southstar_style::StyleRef::from_ptr(style) }, prop)
 }
 
 pub fn layout_set_datalist_open(open: bool) {

@@ -17,6 +17,7 @@ southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-layout = { path = "../layout" }
+southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 
 [lints]

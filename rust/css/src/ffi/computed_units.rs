@@ -22,10 +22,10 @@ use crate::track_text;
 use crate::transform::Transform;
 use crate::units::PX;
 
-pub(crate) const PROP_COUNT: usize = Prop::ALL.len();
+pub const PROP_COUNT: usize = Prop::ALL.len();
 
 #[repr(C)]
-pub(crate) struct RawStyle {
+pub struct RawStyle {
     pub(super) values: [*mut NsCssValue; PROP_COUNT],
     pub(super) display: Display,
     pub(super) specified_inline: u8,
@@ -44,11 +44,104 @@ const _: () = assert!(
         && offset_of!(RawStyle, vars) == 2328
 );
 
+/// # Safety
+///
+/// `style` is null or a live computed style made by this crate that nothing else is reading or writing.
+pub unsafe fn style_value_slot<T>(style: *mut T, index: usize) -> Option<*mut *mut NsCssValue> {
+    if style.is_null() || index >= PROP_COUNT {
+        return None;
+    }
+    // SAFETY: the caller passes a live style, and index is within its value slots.
+    Some(unsafe { ptr::addr_of_mut!((*style.cast::<RawStyle>()).values[index]) })
+}
+
+/// # Safety
+///
+/// `style` is null or a live computed style made by this crate.
+pub unsafe fn style_retain<T>(style: *mut T) {
+    // SAFETY: the caller passes null or a live style.
+    if let Some(style) = unsafe { style.cast::<RawStyle>().as_mut() } {
+        style.ref_count += 1;
+    }
+}
+
 impl RawStyle {
     pub(super) fn value(&self, prop: usize) -> *const NsCssValue {
         self.values
             .get(prop)
             .map_or(ptr::null(), |&v| v.cast_const())
+    }
+
+    /// # Safety
+    ///
+    /// `style` is null or a computed style made by this crate that outlives `'a`.
+    pub unsafe fn from_ptr<'a, T>(style: *const T) -> Option<&'a RawStyle> {
+        // SAFETY: the caller passes null or a live computed style.
+        unsafe { style.cast::<RawStyle>().as_ref() }
+    }
+
+    pub fn value_at(&self, prop: usize) -> Option<&NsCssValue> {
+        let value = *self.values.get(prop)?;
+        // SAFETY: a style's value slots are null or values the style holds a reference on.
+        unsafe { value.as_ref() }
+    }
+
+    pub fn display_parts(&self) -> [u8; 5] {
+        let d = self.display;
+        [d.box_, d.outer, d.inner, d.internal, d.list_item]
+    }
+
+    pub fn specified_inline(&self) -> bool {
+        self.specified_inline != 0
+    }
+
+    pub fn pseudo(&self, slot: usize) -> Option<&RawStyle> {
+        let pseudo = *self.pseudo_styles.get(slot)?;
+        // SAFETY: pseudo-element slots are null or styles this style owns.
+        unsafe { pseudo.as_ref() }
+    }
+
+    pub fn currentcolor_bits(&self) -> u32 {
+        self.currentcolor_bits
+    }
+
+    pub fn has_vars(&self) -> bool {
+        !self.vars.is_null()
+    }
+
+    pub fn vars_ptr(&self) -> *const core::ffi::c_void {
+        self.vars.cast_const().cast()
+    }
+
+    fn var_map(&self) -> Option<&RawVarMap> {
+        // SAFETY: vars is null or a variable map this style holds a reference on.
+        unsafe { self.vars.as_ref() }
+    }
+
+    pub fn same_vars(&self, other: &RawStyle) -> bool {
+        ptr::eq(self.vars, other.vars)
+    }
+
+    pub fn var(&self, name: &[u8]) -> Option<&CStr> {
+        super::vars::chain_lookup_text(self.var_map(), name)
+    }
+
+    pub fn var_names(&self) -> Vec<&CStr> {
+        self.var_map()
+            .map_or_else(Vec::new, super::vars::chain_names)
+    }
+
+    pub fn keyword(&self, prop: Prop) -> Option<&CStr> {
+        let keyword = self.value_at(prop.id())?.keyword()?;
+        Some(if crate::style_query::is_alignment(prop) {
+            crate::style_query::alignment_base(keyword)
+        } else {
+            keyword
+        })
+    }
+
+    pub fn resolve_vars(&self, text: &[u8]) -> Option<Vec<u8>> {
+        super::vars::substitute_in(text, self.vars, super::registry::pass_registered())
     }
 }
 

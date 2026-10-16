@@ -80,18 +80,25 @@ struct Chain<'a> {
     registered: *mut GHashTable,
 }
 
-pub(super) fn chain_lookup<'a>(mut map: Option<&'a RawVarMap>, name: &[u8]) -> Option<&'a [u8]> {
+pub(super) fn chain_lookup_text<'a>(
+    mut map: Option<&'a RawVarMap>,
+    name: &[u8],
+) -> Option<&'a CStr> {
     let key = c_string(name);
     while let Some(m) = map {
         if !m.own.is_null() {
             let value = unsafe { glib::g_hash_table_lookup(m.own, key.as_ptr().cast()) };
             if !value.is_null() {
-                return unsafe { text(value.cast()) };
+                return Some(unsafe { CStr::from_ptr(value.cast()) });
             }
         }
         map = unsafe { m.parent.as_ref() };
     }
     None
+}
+
+pub(super) fn chain_lookup<'a>(map: Option<&'a RawVarMap>, name: &[u8]) -> Option<&'a [u8]> {
+    chain_lookup_text(map, name).map(CStr::to_bytes)
 }
 
 impl Lookup for Chain<'_> {
@@ -142,26 +149,31 @@ pub(super) unsafe fn substitute_vars(
         .map_or(ptr::null_mut(), |out| glib::strdup(&out))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_var_map_lookup(
-    map: *const c_void,
-    name: *const c_char,
-) -> *const c_char {
-    let Some(name) = (unsafe { text(name) }) else {
-        return ptr::null();
-    };
-    chain_lookup(unsafe { map.cast::<RawVarMap>().as_ref() }, name)
-        .map_or(ptr::null(), |v| v.as_ptr().cast())
-}
-
 unsafe extern "C" fn name_cmp(a: *const c_void, b: *const c_void) -> c_int {
     let (a, b) = unsafe { (*a.cast::<*const c_char>(), *b.cast::<*const c_char>()) };
     unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) as c_int }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_var_map_names(map: *const c_void) -> *mut GPtrArray {
-    let raw = map.cast::<RawVarMap>().cast_mut();
+pub(super) fn chain_names(map: &RawVarMap) -> Vec<&CStr> {
+    let array = unsafe { names_array(map) };
+    let names = match unsafe { array.as_ref() } {
+        Some(a) if !a.pdata.is_null() => {
+            // SAFETY: a non-empty pointer array's pdata holds len name pointers.
+            let names = unsafe { core::slice::from_raw_parts(a.pdata, a.len as usize) };
+            names
+                .iter()
+                // SAFETY: each name is a NUL-terminated key owned by the variable map.
+                .map(|&name| unsafe { CStr::from_ptr(name.cast()) })
+                .collect()
+        }
+        _ => Vec::new(),
+    };
+    unsafe { glib::g_ptr_array_unref(array) };
+    names
+}
+
+unsafe fn names_array(map: *const RawVarMap) -> *mut GPtrArray {
+    let raw = map.cast_mut();
     if let Some(m) = unsafe { raw.as_ref() }
         && !m.names.is_null()
     {

@@ -2,13 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::mem::{size_of, size_of_val};
 use core::ptr;
 
 use southstar_glib as glib;
 
-use super::computed_units::RawStyle;
 use super::registry::pass_registered;
 use super::sheet::{RawKeyframes, RawStop};
 use super::vars::substitute_vars;
@@ -82,13 +81,4 @@ pub unsafe extern "C" fn ns_css_keyframes_resolved_free(kf: *mut RawKeyframes) {
         glib::g_free(kf_ref.stops.cast());
         glib::g_free(kf.cast());
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_resolve_style_vars(
-    text: *const c_char,
-    style: *const RawStyle,
-) -> *mut c_char {
-    let vars = unsafe { style.as_ref() }.map_or(ptr::null(), |s| s.vars.cast_const().cast());
-    unsafe { substitute_vars(text, vars, pass_registered(), 0) }
 }

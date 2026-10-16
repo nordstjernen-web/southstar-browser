@@ -1747,6 +1747,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-html-util",
  "southstar-layout",
+ "southstar-style",
  "southstar-url",
 ]
 
@@ -2568,6 +2569,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
+ "southstar-style",
 ]
 
 [[package]]
@@ -3027,6 +3029,7 @@ dependencies = [
  "southstar-css",
  "southstar-glib",
  "southstar-layout",
+ "southstar-style",
 ]
 
 [[package]]
