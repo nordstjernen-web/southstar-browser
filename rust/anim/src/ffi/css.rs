@@ -13,7 +13,7 @@ use southstar_css::{
 use southstar_dom::{Node, NsNode};
 use southstar_glib as glib;
 use southstar_layout::Style;
-use southstar_style::{StyleRef, UNIT_PERCENT};
+use southstar_style::{StyleRef, UNIT_PERCENT, UNIT_PX};
 
 use crate::timing::Timing;
 
@@ -37,6 +37,10 @@ impl Val {
 
     pub fn borrow(&self) -> Borrowed {
         Borrowed(self.0.as_ptr())
+    }
+
+    pub fn font_units_resolved(&self, font_px: f64, root_px: f64) -> Option<Val> {
+        southstar_css::value_resolve_font_units(&self.0, font_px, root_px).map(Val)
     }
 
     pub fn interpolate(prop: i32, a: Borrowed, b: Borrowed, t: f64) -> Option<Val> {
@@ -84,6 +88,11 @@ impl Borrowed {
 
     pub fn keyword(self) -> Option<&'static CStr> {
         self.get()?.keyword()
+    }
+
+    pub fn px(self) -> Option<f64> {
+        let (v, unit) = self.get()?.length()?;
+        (unit == UNIT_PX).then_some(v)
     }
 
     pub fn opacity(self) -> Option<f64> {

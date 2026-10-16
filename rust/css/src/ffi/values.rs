@@ -105,6 +105,11 @@ fn rust_value(v: &NsCssValue, layers: bool) -> Option<Value> {
     unsafe { from_c(v, layers) }
 }
 
+pub fn value_resolve_font_units(v: &NsCssValue, font_px: f64, root_px: f64) -> Option<OwnedValue> {
+    let mut value = rust_value(v, true)?;
+    values::resolve_font_units(&mut value, font_px, root_px).then(|| OwnedValue(to_c(value)))
+}
+
 pub fn value_interpolate(
     prop: Option<Prop>,
     a: &NsCssValue,

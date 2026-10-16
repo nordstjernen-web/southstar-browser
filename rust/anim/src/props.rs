@@ -44,6 +44,7 @@ pub struct Known {
     pub color: i32,
     pub background_color: i32,
     pub animation_timing_function: i32,
+    pub font_size: i32,
 }
 
 fn mark(table: &mut [bool; PROP_COUNT], names: &[&CStr], value: bool) {
@@ -73,6 +74,7 @@ pub fn known() -> &'static Known {
             color: prop_id(c"color"),
             background_color: prop_id(c"background-color"),
             animation_timing_function: prop_id(c"animation-timing-function"),
+            font_size: prop_id(c"font-size"),
         }
     })
 }

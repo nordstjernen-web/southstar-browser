@@ -86,7 +86,7 @@ pub(crate) use shorthand::prop_named;
 pub use style_alloc::RetainedStyle;
 pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, OwnedValue, RawAreaRect, RawAreas, ValueKind};
-pub use values::{value_interpolate, value_serialize, values_equal};
+pub use values::{value_interpolate, value_resolve_font_units, value_serialize, values_equal};
 pub use viewport::{FrameViewport, set_frame_viewport_measure};
 
 pub(crate) fn prefers_dark() -> bool {

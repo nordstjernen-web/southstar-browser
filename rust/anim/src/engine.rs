@@ -1015,7 +1015,20 @@ fn apply_animated_value(
             Val::retain(base).unwrap_or_else(Val::placeholder)
         }
     });
-    let old = st.replace(prop, current.clone());
+    let font_size = props::known().font_size;
+    let font_px = st.value(font_size).px().unwrap_or(16.0);
+    let root_px = node
+        .ancestors()
+        .filter_map(|a| a.style_in(styles))
+        .last()
+        .and_then(|root| css::style_value(root, font_size).px())
+        .unwrap_or(font_px);
+    let resolved = if prop == font_size {
+        None
+    } else {
+        current.font_units_resolved(font_px, root_px)
+    };
+    let old = st.replace(prop, resolved.unwrap_or_else(|| current.clone()));
     if !base.is_null() && css::prop_inherits(prop) {
         apply_propagate(styles, node, prop, base, current);
     }

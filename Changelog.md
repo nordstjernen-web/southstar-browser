@@ -118,7 +118,9 @@ Southstar Browser 0.9.11-dev:
   initial border widths are medium (3px). Shadow lists of different
   lengths, and none, interpolate by padding the shorter list with
   transparent zero shadows, with premultiplied colors and blur kept at
-  or above 0.
+  or above 0. em and rem lengths in keyframes (in lengths, calc(),
+  shadows and transforms) resolve against the animated element's own
+  and the root's font size instead of 16px.
 * A border side whose style is set but whose width is not now draws at
   the initial medium width (3px) instead of none at all
   (border-bottom-style: solid alone gave no border), and a width set on

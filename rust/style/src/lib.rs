@@ -17,4 +17,5 @@ pub use southstar_css::{
     timing_serialize, transform_is_3d, transform_to_mat4,
 };
 
+pub const UNIT_PX: u32 = 0;
 pub const UNIT_PERCENT: u32 = 3;

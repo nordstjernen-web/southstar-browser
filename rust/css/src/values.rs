@@ -587,6 +587,63 @@ fn is_none_keyword(v: &Value) -> bool {
     matches!(&v.body, Body::Keyword(k) if k == b"none")
 }
 
+pub(crate) fn resolve_font_units(value: &mut Value, font_px: f64, root_px: f64) -> bool {
+    let scaled = |em: f64, rem: f64| em * font_px + rem * root_px;
+    let changed = match &mut value.body {
+        Body::Length(n, unit) if *unit == EM || *unit == units::REM => {
+            *n *= if *unit == EM { font_px } else { root_px };
+            *unit = PX;
+            true
+        }
+        Body::Calc(c) if c.func == 0 && (c.em != 0.0 || c.rem != 0.0) => {
+            c.px += scaled(c.em, c.rem);
+            c.em = 0.0;
+            c.rem = 0.0;
+            true
+        }
+        Body::Shadow(list) => {
+            let n = shadow_count(list);
+            let mut any = false;
+            for sh in &mut list.s[..n] {
+                if sh.em.iter().chain(&sh.rem).all(|&v| v == 0.0) {
+                    continue;
+                }
+                let fields = [&mut sh.x, &mut sh.y, &mut sh.blur, &mut sh.spread];
+                for (m, field) in fields.into_iter().enumerate() {
+                    *field += scaled(sh.em[m], sh.rem[m]);
+                }
+                sh.em = [0.0; 4];
+                sh.rem = [0.0; 4];
+                any = true;
+            }
+            any
+        }
+        Body::Transform(t) => {
+            let n = usize::try_from(t.n_ops).unwrap_or(0).min(t.ops.len());
+            let mut any = false;
+            for op in &mut t.ops[..n] {
+                if op.em.iter().chain(&op.rem).all(|&v| v == 0.0) {
+                    continue;
+                }
+                let axes = [&mut op.a, &mut op.b, &mut op.c];
+                for (m, axis) in axes.into_iter().enumerate() {
+                    *axis += scaled(op.em[m], op.rem[m]);
+                }
+                op.em = [0.0; 3];
+                op.rem = [0.0; 3];
+                any = true;
+            }
+            any
+        }
+        _ => false,
+    };
+    let rest = value
+        .next_layer
+        .as_mut()
+        .is_some_and(|next| resolve_font_units(next, font_px, root_px));
+    changed || rest
+}
+
 pub(crate) fn interpolate_prop(prop: Option<Prop>, a: &Value, b: &Value, t: f64) -> Option<Value> {
     let mut value = interpolate(a, b, t)?;
     let Some(prop) = prop else {
