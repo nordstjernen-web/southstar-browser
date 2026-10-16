@@ -581,8 +581,47 @@ fn finish_written_document(js: Js, iframe: Node<'_>) -> bool {
     }
     ffi::set_attr(iframe, c"data-nd-frame-loaded", Some(c"1"));
     load::mark_attr_dirty(iframe, c"data-nd-frame-loaded");
+    run_written_scripts(js, iframe);
+    ffi::mark_mutated(js);
+    load::schedule_pending_script_drain(js);
     load::dispatch_resource_event(js, iframe, c"load");
     true
+}
+
+fn run_written_scripts(js: Js, iframe: Node<'_>) {
+    let Some(doc) = owner::document_node(iframe) else {
+        return;
+    };
+    let Some(root) = southstar_dom::children(doc).find(|c| c.kind() == Kind::Element) else {
+        return;
+    };
+    let sandbox = sandbox::effective(iframe);
+    if sandbox & sandbox::ACTIVE != 0 && sandbox & sandbox::ALLOW_SCRIPTS == 0 {
+        load::mark_scripts_already_started(root);
+        return;
+    }
+    let ctx = ffi::current_realm(js);
+    let mut realm_doc = ctx.get(&ffi::make_element(ctx, iframe), "__ndRealmDoc");
+    if !realm_doc.is_object() && doc.has_js_wrapper() {
+        realm_doc = ffi::make_element(ctx, doc);
+    }
+    if !realm_doc.is_object() {
+        return;
+    }
+    let origin = non_empty(load::page_url(js).as_deref())
+        .unwrap_or(c"inline")
+        .to_owned();
+    load::during_frame_load(js, iframe, doc, &origin, &realm_doc, || {
+        scripts::run(
+            js,
+            root,
+            &origin,
+            &realm_doc,
+            &Value::null(),
+            sandbox,
+            Some(iframe),
+        );
+    });
 }
 
 pub(crate) fn load_now(js: Js, iframe: Node<'_>) {

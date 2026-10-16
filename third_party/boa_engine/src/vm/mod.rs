@@ -90,6 +90,10 @@ pub struct Vm {
     /// because we don't push a frame for them.
     pub(crate) native_active_function: Option<JsObject>,
 
+    /// The realm that was current when the running native function was called, before the call
+    /// switched to the function's own realm.
+    pub(crate) native_caller_realm: Option<Realm>,
+
     /// The `this` value a native constructor received when it was called
     /// without `new`; native constructors are invoked with `undefined`.
     pub(crate) native_constructor_receiver: JsValue,
@@ -435,6 +439,7 @@ impl Vm {
             pending_exception: None,
             runtime_limits: RuntimeLimits::default(),
             native_active_function: None,
+            native_caller_realm: None,
             native_constructor_receiver: JsValue::undefined(),
             host_call_depth: 0,
             shadow_stack: ShadowStack::default(),

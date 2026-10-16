@@ -389,6 +389,8 @@ pub(crate) fn native_function_call(
 
     context.swap_realm(&mut realm);
     context.vm.native_active_function = Some(this_function_object);
+    let previous_caller_realm =
+        std::mem::replace(&mut context.vm.native_caller_realm, Some(realm.clone()));
 
     let receiver = if constructor.is_some() {
         this.clone()
@@ -404,6 +406,7 @@ pub(crate) fn native_function_call(
     }
     .map_err(|err| err.inject_realm(context.realm().clone()));
     context.vm.native_constructor_receiver = previous_receiver;
+    context.vm.native_caller_realm = previous_caller_realm;
 
     context.vm.native_active_function = None;
     context.swap_realm(&mut realm);

@@ -762,6 +762,13 @@ impl Scope<'_> {
         self.handle()
     }
 
+    pub fn calling_frame_handle(&mut self) -> ContextHandle {
+        match self.cx().native_caller_realm().cloned() {
+            Some(realm) => handle_of_realm(self.cx(), &realm),
+            None => self.handle(),
+        }
+    }
+
     pub fn function_handle(&mut self, function: &Value) -> Result<ContextHandle, Value> {
         let Some(object) = function.0.as_object() else {
             return Err(self.type_error("not a function"));

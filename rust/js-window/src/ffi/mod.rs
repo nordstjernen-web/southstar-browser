@@ -96,7 +96,7 @@ pub(crate) fn realm_now_ms(realm: Realm) -> f64 {
 }
 
 pub(crate) fn caller_realm(scope: &mut Scope<'_>) -> Realm {
-    Realm::from_handle(scope.caller_handle()).unwrap_or_else(|| Realm::of(scope))
+    Realm::from_handle(scope.calling_frame_handle()).unwrap_or_else(|| Realm::of(scope))
 }
 
 pub(crate) fn function_realm(scope: &mut Scope<'_>, function: &Value) -> Realm {

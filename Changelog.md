@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* A page whose html element scrolls (overflow: auto) while its body has
+  overflow: hidden scrolls again. Overflow propagates to the viewport
+  from the root element, and from the body only when the root is
+  overflow: visible; any hidden html or body locked the whole page.
+  DuckDuckGo's result page could not be scrolled.
+* Scripts written into an iframe with document.open(), write() and
+  close() run, in the frame's realm. They were parsed into the frame's
+  document and never executed.
+* postMessage() called on a frame's contentWindow gives the message
+  event the calling window as its source. The call ran in the frame's
+  realm, so the frame saw itself as the sender and a check of
+  event.source === parent failed. Together these made clicks on
+  DuckDuckGo results do nothing.
 
 Southstar Browser 0.9.11:
 ======

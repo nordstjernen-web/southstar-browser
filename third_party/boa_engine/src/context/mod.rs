@@ -471,6 +471,13 @@ impl Context {
         self.vm.frames.len()
     }
 
+    /// Returns the realm that was current when the running native function was called, before
+    /// the call entered the function's own realm, or `None` outside a native call.
+    #[must_use]
+    pub fn native_caller_realm(&self) -> Option<&Realm> {
+        self.vm.native_caller_realm.as_ref()
+    }
+
     /// Returns the source path of the code running in the call frame at `index`.
     #[must_use]
     pub fn frame_source_path(&self, index: usize) -> Option<crate::vm::SourcePath> {

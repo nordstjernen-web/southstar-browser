@@ -244,38 +244,52 @@ fn overflow_props() -> &'static [c_int; 3] {
     PROPS.get_or_init(|| [c"overflow-x", c"overflow-y", c"overflow"].map(ffi::css_prop_id))
 }
 
-fn overflow_keyword_hidden(kw: Option<&CStr>) -> bool {
-    kw.is_some_and(|kw| {
+fn overflow_keyword(b: BoxRef<'_>, axis: usize) -> Option<&CStr> {
+    if b.style().is_null() {
+        return None;
+    }
+    let props = overflow_props();
+    ffi::style_keyword(b, props[axis]).or_else(|| ffi::style_keyword(b, props[2]))
+}
+
+fn box_axis_overflow_hidden(b: BoxRef<'_>, axis: usize) -> bool {
+    overflow_keyword(b, axis).is_some_and(|kw| {
         let kw = kw.to_bytes();
         kw.eq_ignore_ascii_case(b"hidden") || kw.eq_ignore_ascii_case(b"clip")
     })
 }
 
-fn box_axis_overflow_hidden(b: BoxRef<'_>, axis: usize) -> bool {
-    if b.style().is_null() {
-        return false;
-    }
-    let props = overflow_props();
-    let kw = ffi::style_keyword(b, props[axis]).or_else(|| ffi::style_keyword(b, props[2]));
-    overflow_keyword_hidden(kw)
+fn box_overflow_visible(b: BoxRef<'_>) -> bool {
+    (0..2).all(|axis| {
+        overflow_keyword(b, axis).is_none_or(|kw| kw.to_bytes().eq_ignore_ascii_case(b"visible"))
+    })
 }
 
-fn root_axis_overflow_hidden(b: BoxRef<'_>, axis: usize) -> bool {
-    let is_root_element = ffi::box_dom(b)
+fn find_element_box<'a>(b: BoxRef<'a>, name: &[u8]) -> Option<BoxRef<'a>> {
+    if ffi::box_dom(b)
         .and_then(Node::name)
-        .is_some_and(|name| matches!(name.to_bytes(), b"html" | b"body"));
-    if is_root_element && box_axis_overflow_hidden(b, axis) {
-        return true;
+        .is_some_and(|n| n.to_bytes() == name)
+    {
+        return Some(b);
     }
-    children(b).any(|c| root_axis_overflow_hidden(c, axis))
+    children(b).find_map(|c| find_element_box(c, name))
+}
+
+fn viewport_overflow_source(layout: BoxRef<'_>) -> Option<BoxRef<'_>> {
+    let html = find_element_box(layout, b"html");
+    if let Some(html) = html.filter(|html| !box_overflow_visible(*html)) {
+        return Some(html);
+    }
+    find_element_box(html.unwrap_or(layout), b"body").or(html)
 }
 
 pub fn page_size(b: &NsBrowser) -> Option<(c_int, c_int)> {
     let layout = b.layout()?;
     let vw = f64::from(b.vw.get());
     let vh = b.vh.get();
-    let hide_x = root_axis_overflow_hidden(layout, 0);
-    let hide_y = root_axis_overflow_hidden(layout, 1);
+    let source = viewport_overflow_source(layout);
+    let hide_x = source.is_some_and(|s| box_axis_overflow_hidden(s, 0));
+    let hide_y = source.is_some_and(|s| box_axis_overflow_hidden(s, 1));
     let mut w = if hide_x { vw } else { layout.content_width() };
     if w.is_nan() || w <= 0.0 {
         w = vw;
