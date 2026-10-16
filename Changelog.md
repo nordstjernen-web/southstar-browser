@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A module loaded by <script type="module" src> and imported again from
+  another module, or by import(), runs once, as the module map requires.
+  The script element evaluated its own copy outside the map, so the
+  module's top level ran twice and its state was split in two: Nuxt
+  sites (GitLab's homepage) failed with "Context conflict" and a
+  hydration mismatch because the app was set up twice.
 * Promise callbacks queued by an event listener run after the script
   that dispatched the event, as the HTML event loop requires: el.click()
   or dispatchEvent() from script no longer drains microtasks between
