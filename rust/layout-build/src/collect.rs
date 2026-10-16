@@ -99,7 +99,7 @@ pub fn style_is_absolute_or_fixed(s: StyleRef<'_>) -> bool {
     keyword_is(pos, c"absolute") || keyword_is(pos, c"fixed")
 }
 
-fn is_atomic_inline_display(s: StyleRef<'_>) -> bool {
+pub(crate) fn is_atomic_inline_display(s: StyleRef<'_>) -> bool {
     let d = display_of(Some(s));
     d.box_ == BOX_NORMAL
         && d.internal == INTERNAL_NONE

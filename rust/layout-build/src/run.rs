@@ -12,9 +12,10 @@ use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::collect::{
     Collector, LINE_SEPARATOR, WS_COLLAPSE, WS_PRE_LINE, WS_PRESERVE, contains, has_small_caps,
-    white_space_mode,
+    is_atomic_inline_display, style_is_absolute_or_fixed, white_space_mode,
 };
 use crate::ffi::{self, RawLink, RunParts};
+use crate::geom::style_is_contents;
 use southstar_layout_content::text_input::utf8_skip;
 
 struct Collapsed {
@@ -126,6 +127,32 @@ fn decoration_attrs(ps: StyleRef<'_>, len: usize, out: &mut Vec<InlineAttr>) {
     ] {
         if contains(kw, word) {
             out.push(InlineAttr::new(kind, 0, len).with_style(ps.as_ptr()));
+        }
+    }
+}
+
+fn decoration_stops_at(s: StyleRef<'_>) -> bool {
+    style_is_absolute_or_fixed(s) || ffi::float_side_of(Some(s)) >= 0 || is_atomic_inline_display(s)
+}
+
+fn ancestor_decoration_attrs(
+    parent: Option<Node<'_>>,
+    styles: StyleTable,
+    len: usize,
+    out: &mut Vec<InlineAttr>,
+) {
+    let mut node = parent;
+    while let Some(n) = node.filter(|n| n.is_element()) {
+        let Some(s) = styles.get(n) else {
+            break;
+        };
+        node = n.parent();
+        if style_is_contents(Some(s)) {
+            continue;
+        }
+        decoration_attrs(s, len, out);
+        if decoration_stops_at(s) {
+            break;
         }
     }
 }
@@ -276,11 +303,14 @@ pub fn build_inline_run(
         }
     }
 
-    if let Some(ps) = parent_style.filter(|_| !collapsed.text.is_empty()) {
-        decoration_attrs(ps, collapsed.text.len(), &mut attrs);
-        if first_child_of_parent && let Some(fl) = ps.first_letter() {
-            first_letter_attrs(fl, &collapsed.text, &mut attrs);
-        }
+    if !collapsed.text.is_empty() {
+        ancestor_decoration_attrs(parent, styles, collapsed.text.len(), &mut attrs);
+    }
+    if let Some(ps) = parent_style.filter(|_| !collapsed.text.is_empty())
+        && first_child_of_parent
+        && let Some(fl) = ps.first_letter()
+    {
+        first_letter_attrs(fl, &collapsed.text, &mut attrs);
     }
 
     let atomics = c

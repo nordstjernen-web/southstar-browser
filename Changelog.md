@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Text decorations propagate from a block to the text of its block
+  descendants, as CSS requires: a display: block or flex link around a
+  <div> or <p> underlines its text, and text-decoration on a flex or grid
+  container reaches its items. Only the element whose inline content held
+  the text was consulted. Propagation stops at floats, absolutely
+  positioned boxes and inline-blocks, and an element with display:
+  contents decorates nothing (MDN's banner link).
 * background-clip: text (and -webkit-background-clip: text) paints the
   background only inside the glyphs of the element's text, for blocks and
   for inline elements, and -webkit-text-fill-color sets the colour text
