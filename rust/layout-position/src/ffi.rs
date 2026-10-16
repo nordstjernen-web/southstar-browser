@@ -262,12 +262,12 @@ pub fn pending_clear() {
 }
 
 pub fn static_run<'a>(e: Entry<'_>) -> Option<(BoxRef<'a>, f64, f64)> {
-    if e.pseudo.is_some() {
-        return None;
-    }
+    let key = e
+        .pseudo
+        .map_or(e.dom.as_ptr(), |ps| ps.as_ptr().cast::<NsNode>());
     let mut rel_x = 0.0;
     let mut rel_y = 0.0;
-    let run = unsafe { ns_layout_abs_static_run(e.dom.as_ptr(), &mut rel_x, &mut rel_y) };
+    let run = unsafe { ns_layout_abs_static_run(key, &mut rel_x, &mut rel_y) };
     unsafe { BoxRef::from_ptr(run) }.map(|run| (run, rel_x, rel_y))
 }
 

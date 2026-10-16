@@ -352,6 +352,13 @@ impl<'a> Collector<'a> {
         if style_is_absolute_or_fixed(ps) {
             if state::with(|st| st.abs_pending.is_some()) {
                 crate::generated::register_abs_pseudo(Some(host), Some(ps));
+                let fixed = keyword_is(ps.get(PropId::Position), c"fixed");
+                if !fixed
+                    && self.abs_placeholders
+                    && let Some(ph) = state::abs_placeholder(ps.as_ptr().cast())
+                {
+                    self.push_atomic(ph.as_mut_ptr());
+                }
             } else {
                 self.pseudo_text(ps, content, host);
             }

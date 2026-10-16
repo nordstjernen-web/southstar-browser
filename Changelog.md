@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* An absolutely positioned ::before/::after of an inline element starts
+  where it sits in the line, like an absolutely positioned child element:
+  it left no placeholder in the line, so with no insets it was placed at
+  the top left of the paragraph. A box whose position comes from its
+  line now starts at that line's top as laid out with the CSS
+  line-height. MDN's external-link icons, an absolute ::after of each
+  link, sat at the start of their paragraphs.
 * Text decorations propagate from a block to the text of its block
   descendants, as CSS requires: a display: block or flex link around a
   <div> or <p> underlines its text, and text-decoration on a flex or grid
