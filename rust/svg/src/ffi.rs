@@ -654,7 +654,7 @@ impl Canvas {
 
     pub fn copy_path(self) -> Option<Path> {
         let p = unsafe { cairo_copy_path(self.0) };
-        (!p.is_null()).then_some(Path(p))
+        (!p.is_null()).then(|| Path(p))
     }
 
     pub fn append_path(self, p: &Path) {

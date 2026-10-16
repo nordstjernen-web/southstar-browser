@@ -126,7 +126,7 @@ impl AudioStream {
                 device_rate,
             )
         };
-        (!stream.is_null()).then_some(AudioStream(stream))
+        (!stream.is_null()).then(|| AudioStream(stream))
     }
 
     pub fn put(&mut self, samples: &[f32]) -> bool {

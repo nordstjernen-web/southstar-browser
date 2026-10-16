@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Text runs without font features no longer log a Pango critical. The
+  FFI wrappers that turn a nullable pointer into an Option built the
+  wrapper before checking the pointer, so a null result was dropped and
+  freed: pango_attribute_destroy(NULL) ran for every such run (dozens of
+  warnings per page on sites like Ars Technica), and a failed camera open
+  closed fd -1.
 * Request has a signal. new Request() left it undefined and ignored the
   signal, mode, credentials, cache, redirect, referrerPolicy, integrity
   and keepalive it was given; the request's signal now follows the one

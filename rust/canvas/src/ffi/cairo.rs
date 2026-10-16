@@ -296,7 +296,7 @@ pub(crate) struct Surface(*mut c_void);
 
 impl Surface {
     pub unsafe fn from_raw(surface: *mut c_void) -> Option<Surface> {
-        (!surface.is_null()).then_some(Surface(surface))
+        (!surface.is_null()).then(|| Surface(surface))
     }
 
     pub unsafe fn from_borrowed(surface: *mut c_void) -> Option<Surface> {

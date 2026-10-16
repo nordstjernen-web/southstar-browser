@@ -136,7 +136,7 @@ impl LocalTime {
 
     pub(crate) fn from_unix(t: i64) -> Option<LocalTime> {
         let dt = unsafe { g_date_time_new_from_unix_local(t) };
-        (!dt.is_null()).then_some(LocalTime(dt))
+        (!dt.is_null()).then(|| LocalTime(dt))
     }
 
     pub(crate) fn day_of_year(&self) -> i32 {

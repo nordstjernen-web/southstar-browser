@@ -374,7 +374,7 @@ impl Context {
 
     pub fn metrics(self, desc: FontDescRef) -> Option<FontMetrics> {
         let m = unsafe { pango_context_get_metrics(self.0, desc.0, ptr::null_mut()) };
-        (!m.is_null()).then_some(FontMetrics(m))
+        (!m.is_null()).then(|| FontMetrics(m))
     }
 
     pub fn font_description(self) -> FontDescRef {
@@ -937,7 +937,7 @@ impl Attribute {
     }
 
     pub unsafe fn from_raw(raw: *mut RawAttribute) -> Option<Attribute> {
-        (!raw.is_null()).then_some(Attribute(raw))
+        (!raw.is_null()).then(|| Attribute(raw))
     }
 
     pub fn into_raw(self) -> *mut RawAttribute {

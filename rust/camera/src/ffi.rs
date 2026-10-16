@@ -158,7 +158,7 @@ mod v4l2 {
     impl Device {
         fn open(path: &CString) -> Option<Device> {
             let fd = unsafe { open(path.as_ptr(), O_RDWR | O_NONBLOCK | O_CLOEXEC) };
-            (fd >= 0).then_some(Device(fd))
+            (fd >= 0).then(|| Device(fd))
         }
 
         fn ioctl<T>(&self, request: c_ulong, arg: &mut T) -> bool {

@@ -705,7 +705,7 @@ impl Js {
             message
         });
         Fetched {
-            response: (!resp.is_null()).then_some(Response(resp)),
+            response: (!resp.is_null()).then(|| Response(resp)),
             error,
         }
     }

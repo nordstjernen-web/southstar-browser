@@ -206,7 +206,7 @@ struct Packet(*mut AVPacket);
 impl Packet {
     fn alloc() -> Option<Packet> {
         let p = unsafe { av::av_packet_alloc() };
-        (!p.is_null()).then_some(Packet(p))
+        (!p.is_null()).then(|| Packet(p))
     }
 
     fn stream_index(&self) -> c_int {

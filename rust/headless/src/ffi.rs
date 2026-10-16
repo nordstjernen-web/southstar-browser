@@ -167,7 +167,7 @@ pub fn subscribe_dlog(mask: u32) -> Option<DlogSubscription> {
         return None;
     }
     let id = unsafe { ns_debug_log_subscribe(on_dlog, mask as usize as *mut c_void) };
-    (id != 0).then_some(DlogSubscription(id))
+    (id != 0).then(|| DlogSubscription(id))
 }
 
 impl Drop for DlogSubscription {
