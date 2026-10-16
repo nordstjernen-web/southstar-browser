@@ -479,9 +479,9 @@ impl Js {
         script: Node,
         source: &[u8],
         origin: Option<&CStr>,
-        is_module: bool,
+        kind: crate::eval::ScriptKind,
     ) {
-        crate::eval::eval_script_source(self, script, source, origin, is_module);
+        crate::eval::eval_script_source(self, script, source, origin, kind);
     }
 
     pub(crate) fn forget_script_roots_in(self, root: Node) {

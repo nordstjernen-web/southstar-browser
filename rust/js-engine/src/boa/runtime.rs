@@ -688,6 +688,41 @@ impl Scope<'_> {
         }
     }
 
+    pub fn mapped_module(&mut self, specifier: &str) -> Option<Value> {
+        let runtime = runtime_of(self.cx())?;
+        let realm = self.cx().realm().clone();
+        let module = runtime.loader.loaded(specifier, &realm)?;
+        Some(self.compiled(Compiled::Module(module)))
+    }
+
+    pub fn map_module(&mut self, specifier: &str, module: &Value) {
+        let Some(module) =
+            module
+                .0
+                .as_object()
+                .and_then(|object| match &*object.downcast_ref::<Compiled>()? {
+                    Compiled::Module(module) => Some(module.clone()),
+                    Compiled::Script(_) => None,
+                })
+        else {
+            return;
+        };
+        let Some(runtime) = runtime_of(self.cx()) else {
+            return;
+        };
+        let realm = self.cx().realm().clone();
+        if runtime.loader.loaded(specifier, &realm).is_some() {
+            return;
+        }
+        runtime
+            .loader
+            .modules
+            .borrow_mut()
+            .entry(specifier.to_owned())
+            .or_default()
+            .push((realm, module));
+    }
+
     pub fn define_module_source(
         &mut self,
         specifier: &str,

@@ -7,6 +7,7 @@ use core::ffi::CStr;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 
+use crate::eval::ScriptKind;
 use crate::ffi::{self, CSP_SCRIPT, CSP_STYLE, Fetched, Js};
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_LINK_LOAD_FIRED, FLAG_NOT_PARSER_INSERTED,
@@ -57,7 +58,7 @@ fn run_external(
     if starts_with(src, b"data:") {
         match ffi::decode_data_url(src) {
             Some(body) => {
-                js.eval_script_source(n, &body, Some(c"data:"), is_module);
+                js.eval_script_source(n, &body, Some(c"data:"), ScriptKind::of(is_module, false));
                 js.dispatch_resource_event(n, c"load");
             }
             None => js.dispatch_resource_event(n, c"error"),
@@ -67,7 +68,7 @@ fn run_external(
     if starts_with(src, b"blob:") {
         match js.with_blob(src, <[u8]>::to_vec) {
             Some(body) => {
-                js.eval_script_source(n, &body, Some(src), is_module);
+                js.eval_script_source(n, &body, Some(src), ScriptKind::of(is_module, true));
                 js.dispatch_resource_event(n, c"load");
             }
             None => js.dispatch_resource_event(n, c"error"),
@@ -137,7 +138,7 @@ fn run_external(
         }
         Some(body) => {
             if !body.is_empty() {
-                js.eval_script_source(n, body, Some(&abs_url), is_module);
+                js.eval_script_source(n, body, Some(&abs_url), ScriptKind::of(is_module, true));
             }
             loaded = true;
         }
@@ -188,7 +189,7 @@ pub(crate) fn run_script_element(js: Js, n: Node, origin: Option<&CStr>) {
             js.log(&line(&[b"CSP blocked: inline <script> on ", shown(origin)]));
             continue;
         }
-        js.eval_script_source(n, text, origin, is_module);
+        js.eval_script_source(n, text, origin, ScriptKind::of(is_module, false));
     }
 }
 

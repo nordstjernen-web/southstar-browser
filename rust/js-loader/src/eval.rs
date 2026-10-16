@@ -21,6 +21,23 @@ const CONTENT_SCRIPT_NATIVES: [&str; 6] = [
     "__nd_ext_uilang",
 ];
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScriptKind {
+    Classic,
+    InlineModule,
+    ExternalModule,
+}
+
+impl ScriptKind {
+    pub(crate) fn of(is_module: bool, external: bool) -> ScriptKind {
+        match (is_module, external) {
+            (false, _) => ScriptKind::Classic,
+            (true, false) => ScriptKind::InlineModule,
+            (true, true) => ScriptKind::ExternalModule,
+        }
+    }
+}
+
 fn source_text(source: &[u8]) -> Vec<u8> {
     let mut text = source.to_vec();
     if let Some(end) = text.iter().position(|&b| b == 0) {
@@ -234,15 +251,32 @@ pub(crate) fn load_module(
     module
 }
 
-pub(crate) fn eval_module(js: Js, src: &[u8], origin: Option<&CStr>) {
+fn script_module(
+    scope: &mut Scope<'_>,
+    source: &[u8],
+    name: &[u8],
+    external: bool,
+) -> Result<Value, Value> {
+    let specifier = String::from_utf8_lossy(name);
+    if external && let Some(module) = scope.mapped_module(&specifier) {
+        return Ok(module);
+    }
+    let module = compile_module_cached(scope, source, name)?;
+    compile::set_import_meta(scope, &module, true)?;
+    if external {
+        scope.map_module(&specifier, &module);
+    }
+    Ok(module)
+}
+
+pub(crate) fn eval_module(js: Js, src: &[u8], origin: Option<&CStr>, external: bool) {
     let budget = js.budget_enter();
     js.module_realm().enter(|scope| {
         let name = or_default(origin, c"module");
         let copy = source_text(src);
         let started = compile::profile_begin();
         js.eval_depth_add(1);
-        let module = compile_module_cached(scope, &copy, name)
-            .and_then(|module| compile::set_import_meta(scope, &module, true).map(|()| module));
+        let module = script_module(scope, &copy, name, external);
         js.ignore_destructive_writes_add(1);
         let result = module.and_then(|module| scope.evaluate(module));
         js.ignore_destructive_writes_add(-1);
@@ -306,12 +340,14 @@ pub(crate) fn eval_script_source(
     script: Node,
     source: &[u8],
     origin: Option<&CStr>,
-    is_module: bool,
+    kind: ScriptKind,
 ) {
+    let is_module = kind != ScriptKind::Classic;
+    let external = kind == ScriptKind::ExternalModule;
     let realm = js.node_realm(script);
     let Some(realm) = realm.filter(|&realm| realm != js.main_realm()) else {
         if is_module {
-            eval_module(js, source, origin);
+            eval_module(js, source, origin, external);
         } else {
             let previous = js.swap_current_script(Some(script));
             eval(js, source, origin);
@@ -327,7 +363,7 @@ pub(crate) fn eval_script_source(
     let frame_url = js.frame_url_push(origin);
     if is_module {
         let previous_module_realm = js.swap_module_realm(Some(realm));
-        eval_module(js, source, origin);
+        eval_module(js, source, origin, external);
         js.swap_module_realm(previous_module_realm);
     } else {
         eval_in_realm(js, realm, source, origin);
