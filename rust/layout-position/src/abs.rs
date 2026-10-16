@@ -57,10 +57,19 @@ fn flat_ancestors(n: Node<'_>) -> impl Iterator<Item = Node<'_>> {
     core::iter::successors(flat_parent(n), |p| flat_parent(*p))
 }
 
+fn is_frame_owner(n: Node<'_>) -> bool {
+    match n.element_name() {
+        Some(b"iframe" | b"frame") => true,
+        Some(b"object") => core::iter::successors(n.first_child(), |c| c.next_sibling())
+            .any(|c| c.kind() == NodeKind::Document),
+        _ => false,
+    }
+}
+
 fn find_abs_containing_block_dom<'n>(n: Node<'n>, styles: StyleTable) -> Option<Node<'n>> {
     flat_ancestors(n)
         .filter(|p| p.kind() == NodeKind::Element)
-        .find(|p| style_creates_abs_cb(styles.get(*p)))
+        .find(|p| is_frame_owner(*p) || style_creates_abs_cb(styles.get(*p)))
 }
 
 fn abs_entry_cb_dom<'n>(e: Entry<'n>, styles: StyleTable) -> Option<Node<'n>> {
@@ -76,7 +85,7 @@ fn fixed_entry_cb_dom<'n>(e: Entry<'n>, styles: StyleTable) -> Option<Node<'n>> 
     }
     flat_ancestors(e.dom)
         .filter(|p| p.kind() == NodeKind::Element)
-        .find(|p| style_creates_fixed_cb(styles.get(*p)))
+        .find(|p| is_frame_owner(*p) || style_creates_fixed_cb(styles.get(*p)))
 }
 
 fn positioned_entry_cb_dom<'n>(e: Entry<'n>, styles: StyleTable) -> Option<Node<'n>> {
