@@ -424,6 +424,7 @@ pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
 
 pub fn free_layout(layout: *mut NsBox) {
     southstar_paint::invalidate_3d();
+    // SAFETY: the run passes its own layout tree, which nothing reads after this.
     unsafe { ns_box_free(layout) };
 }
 

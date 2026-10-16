@@ -125,7 +125,12 @@ impl NsSelection {
 }
 
 unsafe fn read<'a>(sel: *const NsSelection) -> Selection<'a> {
-    unsafe { sel.as_ref().map(|s| s.load()).unwrap_or_default() }
+    // SAFETY: paint passes null or the page's stored selection, alive for the call.
+    let Some(sel) = (unsafe { sel.as_ref() }) else {
+        return Selection::default();
+    };
+    // SAFETY: the page clears its selection before it frees the layout, so the boxes it names are alive.
+    unsafe { sel.load() }
 }
 
 #[unsafe(no_mangle)]
