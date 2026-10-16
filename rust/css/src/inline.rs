@@ -1301,6 +1301,13 @@ fn shorthand_longhands(name: &[u8], value: &[u8]) -> Option<Vec<Prop>> {
 pub fn longhand_names(style: &[u8]) -> Vec<Vec<u8>> {
     let mut names: Vec<Vec<u8>> = Vec::new();
     for (key, value) in declarations(style) {
+        let plain = strip(strip_important(value).0);
+        let valid = is_custom(key)
+            || (declarations::named_property_supported(&lower(key))
+                && declarations::named_declaration_valid(&lower(key), plain));
+        if plain.is_empty() || !valid {
+            continue;
+        }
         let expanded = shorthand_longhands(key, value)
             .map(|props| props.iter().map(|p| p.name().to_vec()).collect())
             .unwrap_or_else(|| vec![key.to_vec()]);

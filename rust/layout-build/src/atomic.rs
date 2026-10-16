@@ -72,7 +72,7 @@ pub fn style_has_atomic_inline_box(s: Option<StyleRef<'_>>) -> bool {
             continue;
         }
         let st = s.get(st);
-        if !keyword_is(st, c"none") && !keyword_is(st, c"hidden") {
+        if st.is_some() && !keyword_is(st, c"none") && !keyword_is(st, c"hidden") {
             return true;
         }
     }

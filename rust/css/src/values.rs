@@ -612,7 +612,9 @@ const COLOR_PROPS: [&[u8]; 23] = [
     b"border-inline-end-color",
 ];
 
-const KEYWORD_CANONICAL_PROPS: [&[u8]; 29] = [
+const KEYWORD_CANONICAL_PROPS: [&[u8]; 31] = [
+    b"vertical-align",
+    b"baseline-shift",
     b"clip-path",
     b"shape-outside",
     b"contain",

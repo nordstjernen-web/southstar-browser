@@ -186,6 +186,17 @@ fn collapse(node: Node) -> Node {
     }
 }
 
+pub(crate) fn has_percent(node: &Node) -> bool {
+    match node {
+        Node::Value(_, unit) => *unit == Unit::Percent,
+        Node::Channel(_) => false,
+        Node::Sum(nodes) | Node::Product(nodes) | Node::Func(_, nodes) => {
+            nodes.iter().any(has_percent)
+        }
+        Node::Negate(x) | Node::Invert(x) => has_percent(x),
+    }
+}
+
 pub(crate) fn eval(node: &Node, channel: &dyn Fn(&str) -> Option<f64>) -> Option<(f64, Unit)> {
     use Unit::*;
     Some(match node {

@@ -1824,7 +1824,7 @@ fn border_radius(out: &mut Out, text: &[u8]) {
 }
 
 fn logical_pair(out: &mut Out, text: &[u8], a: Prop, b: Prop) {
-    border_pair(out, text, a, b);
+    axis_pair(out, text, a, b);
 }
 
 fn box_quad(out: &mut Out, text: &[u8], props: [Prop; 4]) {

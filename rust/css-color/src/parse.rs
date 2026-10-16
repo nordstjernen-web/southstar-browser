@@ -250,7 +250,7 @@ fn single_color(mut t: Tokens<'_>, depth: u32) -> Option<Specified> {
     t.at_end().then_some(value)
 }
 
-fn literal(t: &mut Tokens<'_>, allow_none: bool) -> Option<Option<(f64, Unit)>> {
+fn literal(t: &mut Tokens<'_>, allow_none: bool, hue: bool) -> Option<Option<(f64, Unit)>> {
     let c = t.next()?;
     Some(match c.kind {
         Kind::Number => Some((c.number, Unit::Number)),
@@ -259,6 +259,9 @@ fn literal(t: &mut Tokens<'_>, allow_none: bool) -> Option<Option<(f64, Unit)>> 
         Kind::Ident if allow_none && t.name(c) == "none" => None,
         Kind::Function => {
             let node = calc::Parser { channels: &[] }.function(t, c)?;
+            if hue && calc::has_percent(&node) {
+                return None;
+            }
             Some(calc::eval(&node, &|_| None)?)
         }
         _ => return None,
@@ -287,8 +290,8 @@ fn legacy_function(kind: FnKind, args: Tokens<'_>) -> Option<Specified> {
             return None;
         }
         let mut values = Vec::new();
-        for mut part in parts {
-            let v = literal(&mut part, false)??;
+        for (i, mut part) in parts.into_iter().enumerate() {
+            let v = literal(&mut part, false, i == 0 && kind != FnKind::Rgb)??;
             if !part.at_end() {
                 return None;
             }
@@ -308,11 +311,11 @@ fn legacy_function(kind: FnKind, args: Tokens<'_>) -> Option<Specified> {
     } else {
         let mut args = args;
         let mut values = Vec::new();
-        for _ in 0..3 {
-            values.push(literal(&mut args, true)?);
+        for i in 0..3 {
+            values.push(literal(&mut args, true, i == 0 && kind != FnKind::Rgb)?);
         }
         let alpha = if args.eat_delim(b'/') {
-            Some(literal(&mut args, true)?)
+            Some(literal(&mut args, true, false)?)
         } else {
             None
         };
@@ -410,7 +413,7 @@ fn component(t: &mut Tokens<'_>, channels: &[&str], hue: bool) -> Option<Comp> {
             let node = calc::Parser { channels }.function(t, c)?;
             let (_, unit) = calc::eval(&node, &|_| Some(1.0))?;
             let ok = if hue {
-                unit != Unit::Percent
+                unit != Unit::Percent && !calc::has_percent(&node)
             } else {
                 unit != Unit::Angle
             };

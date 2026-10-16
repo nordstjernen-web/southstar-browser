@@ -45,6 +45,23 @@ Southstar Browser 0.9.11-dev:
   tab; a form inside an iframe navigates its own frame. Rakuten's tag
   manager posts to a hidden iframe on every page view, which replaced the
   page with a blank document.
+* A border side whose style is set but whose width is not now draws at
+  the initial medium width (3px) instead of none at all
+  (border-bottom-style: solid alone gave no border), and a width set on
+  a side with no border style no longer takes up layout space; computed
+  border widths follow (0px for a none or hidden side).
+* vertical-align is parsed as the CSS Inline 3 shorthand
+  ([first | last] || alignment || shift, serialized in canonical order),
+  with its alignment-baseline and baseline-shift longhands. Logical
+  properties (inline-size, margin-block-start, ...) report their
+  physical counterpart's resolved value in getComputedStyle, the
+  margin-/padding-/inset- block and inline shorthands serialize like
+  the other axis pairs, calc() with ex, ch, viewport, lh or cap units
+  keeps its specified form, and style.length no longer counts
+  declarations the parser rejected. A percentage inside a hue or an
+  oblique angle's math function (hsl(calc(sign(50%) * 1deg) ...)) is
+  rejected, and font-feature-settings takes only integer tokens
+  ("liga" 1e1 is invalid).
 * SHA digests and base64 come from rust/digest, a new crate that forbids
   unsafe code and hashes through ring, already in the tree for TLS. CSP
   hash-sources, Subresource Integrity, the HTTP cache keys, the bytecode,

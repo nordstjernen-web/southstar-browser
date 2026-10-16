@@ -824,6 +824,17 @@ fn dasharray(t: &[u8]) -> Option<Value> {
     Some(Value::keyword(kw))
 }
 
+fn folds_relative_units(t: &[u8]) -> bool {
+    const UNITS: [&[u8]; 9] = [
+        b"ex", b"ch", b"vw", b"vh", b"vmin", b"vmax", b"lh", b"cap", b"cq",
+    ];
+    let lower = t.to_ascii_lowercase();
+    t.contains(&b'(')
+        && lower.windows(2).enumerate().any(|(i, _)| {
+            lower[i].is_ascii_digit() && UNITS.iter().any(|unit| lower[i + 1..].starts_with(unit))
+        })
+}
+
 fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     if prop == Prop::FontSize {
         if eq(t, b"larger") || eq(t, b"smaller") {
@@ -884,7 +895,11 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     let mut v = if keyword {
         Some(Value::keyword(lower(t)))
     } else if let Some(parsed) = calc_value(t) {
-        Some(Value::from_parsed(parsed))
+        let mut value = Value::from_parsed(parsed);
+        if folds_relative_units(t) {
+            value.specified = crate::math::math_canonical(&c_text(t)).or_else(|| Some(lower(t)));
+        }
+        Some(value)
     } else {
         length(t).map(|(num, unit)| Value::length(num, unit))
     };
@@ -1168,6 +1183,58 @@ fn shape_outside(t: &[u8]) -> Option<Value> {
         return None;
     }
     clip_path::canonical(t, b"margin-box").map(Value::keyword)
+}
+
+const ALIGNMENT_BASELINES: &str =
+    "baseline text-bottom alphabetic ideographic middle central mathematical text-top hanging";
+
+fn shift_text(t: &[u8]) -> Option<Vec<u8>> {
+    if word_is_one_of(t, "sub super top center bottom") {
+        return Some(lower(t));
+    }
+    let numeric =
+        calc_value(t).is_some() || length(t).is_some_and(|(n, unit)| unit != NUMBER || n == 0.0);
+    numeric.then(|| lower(t))
+}
+
+fn baseline_shift(t: &[u8]) -> Option<Value> {
+    let text = shift_text(strip(t))?;
+    Some(Value::keyword(if text == b"0" {
+        b"0px".to_vec()
+    } else {
+        text
+    }))
+}
+
+fn vertical_align(t: &[u8]) -> Option<Value> {
+    let (mut source, mut align, mut shift): (Option<Vec<u8>>, Option<Vec<u8>>, Option<Vec<u8>>) =
+        (None, None, None);
+    for word in split_ws_limit(strip(t), 5) {
+        if word_is_one_of(word, "first last") && source.is_none() {
+            source = Some(lower(word));
+        } else if word_is_one_of(word, ALIGNMENT_BASELINES)
+            && !eq(word, b"hanging")
+            && align.is_none()
+        {
+            align = Some(lower(word));
+        } else if shift.is_none()
+            && let Some(text) = shift_text(word)
+        {
+            shift = Some(text);
+        } else {
+            return None;
+        }
+    }
+    let zero = |s: &[u8]| !s.contains(&b'(') && length(s).is_some_and(|(n, _)| n == 0.0);
+    let shift = shift.filter(|s| !zero(s));
+    let align = align.filter(|a| a != b"baseline" || (source.is_none() && shift.is_none()));
+    let parts: Vec<Vec<u8>> = [source, align, shift].into_iter().flatten().collect();
+    let text = if parts.is_empty() {
+        b"baseline".to_vec()
+    } else {
+        parts.join(&b' ')
+    };
+    Some(Value::keyword(text))
 }
 
 fn contain(t: &[u8]) -> Option<Value> {
@@ -1765,6 +1832,9 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::TextAlign => keyword_choice(t, "start end left right center justify match-parent"),
         P::TextTransform => text_transform(t),
         P::Contain => contain(t),
+        P::VerticalAlign => vertical_align(t),
+        P::AlignmentBaseline => keyword_choice(t, ALIGNMENT_BASELINES),
+        P::BaselineShift => baseline_shift(t),
         P::WillChange => will_change(t),
         P::JustifyContent => alignment_keyword(
             t,

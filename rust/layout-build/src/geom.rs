@@ -446,9 +446,11 @@ pub fn self_start_is_far_side(s: Option<StyleRef<'_>>, horizontal_axis: bool) ->
 }
 
 fn border_side_width(s: StyleRef<'_>, width: PropId, style: PropId) -> f64 {
-    if s.get(style)
-        .and_then(ValueRef::keyword_text)
-        .is_some_and(|k| matches!(k.to_bytes(), b"none" | b"hidden"))
+    let line = s.get(style);
+    if line.is_none()
+        || line
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|k| matches!(k.to_bytes(), b"none" | b"hidden"))
     {
         return 0.0;
     }

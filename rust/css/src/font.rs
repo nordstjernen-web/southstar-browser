@@ -870,7 +870,9 @@ fn feature_settings_items(s: &[u8]) -> Option<Vec<(String, i64)>> {
         let value = match tokens.next() {
             None => 1,
             Some(c)
-                if c.kind == SyntaxKind::Number && c.number >= 0.0 && c.number.fract() == 0.0 =>
+                if c.kind == SyntaxKind::Number
+                    && c.number >= 0.0
+                    && is_integer_token(&s[c.start..c.end]) =>
             {
                 c.number as i64
             }
@@ -889,6 +891,11 @@ fn feature_settings_items(s: &[u8]) -> Option<Vec<(String, i64)>> {
         out.push((tag, value));
     }
     Some(out)
+}
+
+fn is_integer_token(text: &[u8]) -> bool {
+    let digits = text.strip_prefix(b"+").unwrap_or(text);
+    !digits.is_empty() && digits.iter().all(u8::is_ascii_digit)
 }
 
 fn unescape_string(raw: &[u8]) -> String {
@@ -957,6 +964,9 @@ pub(crate) fn feature_settings_canonical(s: &[u8], computed: bool) -> Option<Vec
 
 pub(crate) fn oblique_angle(angle: &[u8]) -> Option<f64> {
     let math = angle.contains(&b'(');
+    if math && angle.contains(&b'%') {
+        return None;
+    }
     let lower = angle.to_ascii_lowercase();
     let unit = [&b"deg"[..], b"grad", b"rad", b"turn"]
         .iter()

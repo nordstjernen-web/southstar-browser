@@ -433,6 +433,30 @@ pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&StyleView<'_>
             apply(change, slot, &basis);
         }
     }
+    resolve_border_widths(out);
+}
+
+const BORDER_SIDES: [(Prop, Prop); 4] = [
+    (Prop::BorderTopWidth, Prop::BorderTopStyle),
+    (Prop::BorderRightWidth, Prop::BorderRightStyle),
+    (Prop::BorderBottomWidth, Prop::BorderBottomStyle),
+    (Prop::BorderLeftWidth, Prop::BorderLeftStyle),
+];
+
+const MEDIUM_BORDER_PX: f64 = 3.0;
+
+fn resolve_border_widths(out: &mut ComputedStyle<'_>) {
+    for (width, line) in BORDER_SIDES {
+        let (width, line) = (width as usize, line as usize);
+        let visible = match out.slot(line) {
+            None => false,
+            Some(Slot::Keyword(Some(kw))) => !matches!(kw.to_bytes(), b"none" | b"hidden"),
+            Some(_) => true,
+        };
+        if visible && out.slot(width).is_none() {
+            out.set_length_px(width, MEDIUM_BORDER_PX);
+        }
+    }
 }
 
 pub(crate) fn style_font_px(style: &StyleView<'_>) -> f64 {

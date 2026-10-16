@@ -283,10 +283,12 @@ pub enum Prop {
     WillChange,
     ShapeOutside,
     WebkitTextFillColor,
+    AlignmentBaseline,
+    BaselineShift,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 275] = [
+    pub(crate) const ALL: [Prop; 277] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -562,6 +564,8 @@ impl Prop {
         Prop::WillChange,
         Prop::ShapeOutside,
         Prop::WebkitTextFillColor,
+        Prop::AlignmentBaseline,
+        Prop::BaselineShift,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -936,6 +940,8 @@ impl Prop {
             Prop::WillChange => c"will-change",
             Prop::ShapeOutside => c"shape-outside",
             Prop::WebkitTextFillColor => c"-webkit-text-fill-color",
+            Prop::AlignmentBaseline => c"alignment-baseline",
+            Prop::BaselineShift => c"baseline-shift",
         }
     }
 }

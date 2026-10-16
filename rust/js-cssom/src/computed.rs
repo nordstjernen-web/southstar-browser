@@ -1287,12 +1287,48 @@ pub(crate) fn lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     lookup_value(js, n, name)
 }
 
+fn physical_name(name: &str) -> Option<String> {
+    let sizes = [
+        ("inline-size", "width"),
+        ("block-size", "height"),
+        ("min-inline-size", "min-width"),
+        ("min-block-size", "min-height"),
+        ("max-inline-size", "max-width"),
+        ("max-block-size", "max-height"),
+    ];
+    if let Some((_, physical)) = sizes.iter().find(|(logical, _)| *logical == name) {
+        return Some((*physical).to_string());
+    }
+    let sides = [
+        ("block-start", "top"),
+        ("block-end", "bottom"),
+        ("inline-start", "left"),
+        ("inline-end", "right"),
+    ];
+    for prefix in ["margin-", "padding-", "border-", "inset-"] {
+        let Some(rest) = name.strip_prefix(prefix) else {
+            continue;
+        };
+        for (logical, physical) in sides {
+            if let Some(suffix) = rest.strip_prefix(logical)
+                && (suffix.is_empty() || ["-width", "-style", "-color"].contains(&suffix))
+            {
+                let base = if prefix == "inset-" { "" } else { prefix };
+                return Some(format!("{base}{physical}{suffix}"));
+            }
+        }
+    }
+    None
+}
+
 fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     let name = if name == "css-float" || name == "cssFloat" {
         "float"
     } else {
         name
     };
+    let physical = physical_name(name);
+    let name = physical.as_deref().unwrap_or(name);
     if let Some(value) = shorthand(js, n, name) {
         return value;
     }
