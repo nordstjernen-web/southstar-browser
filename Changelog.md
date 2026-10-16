@@ -3,6 +3,28 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The layout crates no longer call each other through C symbols. A call
+  down the crate order is an ordinary Cargo dependency; a call that has
+  to come back up (block layout into flex, grid, table and inline, the
+  box builders table construction needs, intrinsic-size measures, the
+  positioned-box passes) goes through a small table of plain Rust fn
+  pointers that the top-level layout entry fills once. Block, build,
+  inline, sizing, table, tree, float, flex, grid and positioned layout
+  drop from 445 unsafe keywords to 89, and layout-flex forbids unsafe
+  code.
+* The browser crate and the headless driver drive the engine, painter,
+  selection, hit testing, layout queries, video, animation, image cache,
+  printing, HTML helpers and the focus, forms, input, lifecycle and
+  window bindings through typed Rust APIs instead of about 150 C
+  exports: the animation engine, image cache and video cache are owned
+  handles, embedder callbacks are Rust closures, text and layout dumps
+  come back as Vec<u8>, print pages as a Vec, and blocking navigation
+  returns net's own Response type instead of a mirrored C struct. The
+  shell, engine, browser and renderer host reach net, the configuration,
+  the watchdog and the image decoders the same way, so html-util,
+  image-decoders, config and watchdog export nothing. browser drops from
+  678 unsafe keywords to 546, headless from 236 to 164, engine from 223
+  to 144 and video from 204 to 116.
 * rust/css keeps a parsed style sheet in Rust-owned types instead of
   the GLib arrays, hash tables and strdup'd strings the C code used:
   rules are a Vec of Rule structs owning their declarations, waiting
