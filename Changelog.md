@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* A page that deletes a property from a prototype, such as
+  Object.prototype, no longer crashes the tab or reads the wrong value.
+  The script engine's property cache remembered where an inherited
+  property sat in the prototype and kept using that position after the
+  prototype lost a property, also when a getter or setter deleted it
+  while it ran, reading past the end of its storage or the property that
+  had moved into that place. Nine lines of script were enough to abort the
+  renderer. The same cache also kept writing a property of
+  Object.prototype after the page made it read-only.
 * JavaScript: removed the last site-specific hack, a script that ran
   after every script evaluation on freecivweb.com and filled in missing
   match_style/sprite_type fields of the page's tileset table. Boa

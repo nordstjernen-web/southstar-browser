@@ -7,7 +7,7 @@ use crate::{
     builtins::function::set_function_name,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::{PropertyDescriptor, PropertyKey},
-    vm::opcode::Operation,
+    vm::{LookedUp, opcode::Operation},
 };
 use boa_macros::js_str;
 
@@ -58,7 +58,7 @@ fn set_by_name(
         }
         return Ok(());
     }
-    let looked_up = object_borrowed.shape().clone();
+    let looked_up = LookedUp::new(object_borrowed.shape());
     drop(object_borrowed);
 
     let name: PropertyKey = ic.name.clone().into();

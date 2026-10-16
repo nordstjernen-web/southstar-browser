@@ -5,7 +5,10 @@ use crate::{
     error::JsNativeError,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
-    vm::opcode::{IndexOperand, Operation, RegisterOperand},
+    vm::{
+        LookedUp,
+        opcode::{IndexOperand, Operation, RegisterOperand},
+    },
 };
 
 /// `GetName` implements the Opcode Operation for `Opcode::GetName`
@@ -102,7 +105,7 @@ fn get_global_object_binding(
         return Ok(result);
     }
 
-    let looked_up = object_borrowed.shape().clone();
+    let looked_up = LookedUp::new(object_borrowed.shape());
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();

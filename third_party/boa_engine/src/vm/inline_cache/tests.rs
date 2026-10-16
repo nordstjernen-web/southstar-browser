@@ -465,3 +465,164 @@ fn test_megamorphic_inline_cache() -> JsResult<()> {
 
     Ok(())
 }
+
+#[test]
+fn prototype_slot_not_served_after_prototype_property_deleted() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        function readB(o) { return o.b; }
+        Object.defineProperty(Object.prototype, 'a', { value: 'A', configurable: true });
+        Object.defineProperty(Object.prototype, 'b', { value: 'B', configurable: true });
+        Object.defineProperty(Object.prototype, 'c', { value: 'C', configurable: true });
+        const cached = readB({}) + readB({});
+        delete Object.prototype.a;
+        const shifted = readB({});
+        delete Object.prototype.b;
+        delete Object.prototype.c;
+        cached + shifted + String(readB({}));
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(js_string!("BBBundefined")));
+
+    Ok(())
+}
+
+#[test]
+fn global_prototype_slot_not_served_after_prototype_property_deleted() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        Object.defineProperty(Object.prototype, 'a', { value: 'A', configurable: true });
+        Object.defineProperty(Object.prototype, 'gb', { value: 'B', configurable: true });
+        Object.defineProperty(Object.prototype, 'c', { value: 'C', configurable: true });
+        function readGb() { return gb; }
+        const cached = readGb() + readGb();
+        delete Object.prototype.a;
+        const shifted = readGb();
+        delete Object.prototype.gb;
+        delete Object.prototype.c;
+        let gone;
+        try { readGb(); gone = 'found'; } catch (e) { gone = e.name; }
+        cached + shifted + gone;
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(js_string!("BBBReferenceError")));
+
+    Ok(())
+}
+
+#[test]
+fn prototype_slot_not_served_after_prototype_property_becomes_accessor() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        function readB(o) { return o.b; }
+        Object.defineProperty(Object.prototype, 'a', { value: 'A', configurable: true });
+        Object.defineProperty(Object.prototype, 'b', { value: 'B', configurable: true });
+        readB({});
+        readB({});
+        Object.defineProperty(Object.prototype, 'a', { get() { return 'getter'; }, configurable: true });
+        const shifted = readB({});
+        delete Object.prototype.a;
+        delete Object.prototype.b;
+        shifted;
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(js_string!("B")));
+
+    Ok(())
+}
+
+#[test]
+fn prototype_slot_not_cached_when_getter_reshapes_prototype() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        const P = {};
+        for (const k of ['a', 'x', 'y']) {
+            Object.defineProperty(P, k, { value: k, configurable: true });
+        }
+        let first = true;
+        Object.defineProperty(P, 'b', {
+            get() {
+                if (first) {
+                    first = false;
+                    delete P.a;
+                    delete P.x;
+                    delete P.y;
+                }
+                return 'B';
+            },
+            configurable: true,
+        });
+        const o = Object.create(P);
+        function readB(o) { return o.b; }
+        readB(o) + readB(o) + readB(o);
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(js_string!("BBB")));
+
+    Ok(())
+}
+
+#[test]
+fn prototype_slot_not_cached_when_setter_reshapes_prototype() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        const P = {};
+        for (const k of ['a', 'x', 'y']) {
+            Object.defineProperty(P, k, { value: k, configurable: true });
+        }
+        let first = true;
+        const seen = [];
+        Object.defineProperty(P, 'b', {
+            set(v) {
+                seen.push(v);
+                if (first) {
+                    first = false;
+                    delete P.a;
+                }
+            },
+            configurable: true,
+        });
+        const o = Object.create(P);
+        function writeB(o, v) { o.b = v; }
+        writeB(o, 1);
+        writeB(o, 2);
+        writeB(o, 3);
+        seen.join();
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(js_string!("1,2,3")));
+
+    Ok(())
+}
+
+#[test]
+fn own_slot_not_served_after_unique_shape_attribute_change() -> JsResult<()> {
+    let context = &mut Context::default();
+    let result = context.eval(Source::from_bytes(
+        r"
+        function writeW(o, v) { o.w = v; }
+        Object.prototype.w = 1;
+        writeW(Object.prototype, 2);
+        writeW(Object.prototype, 2);
+        Object.defineProperty(Object.prototype, 'w', { writable: false });
+        writeW(Object.prototype, 3);
+        const w = Object.prototype.w;
+        delete Object.prototype.w;
+        w;
+        ",
+    ))?;
+
+    assert_eq!(result, JsValue::from(2));
+
+    Ok(())
+}

@@ -5,7 +5,10 @@ use crate::{
     environments::Environment,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
-    vm::opcode::{IndexOperand, Operation, RegisterOperand},
+    vm::{
+        LookedUp,
+        opcode::{IndexOperand, Operation, RegisterOperand},
+    },
 };
 
 /// `ThrowMutateImmutable` implements the Opcode Operation for `Opcode::ThrowMutateImmutable`
@@ -233,7 +236,7 @@ pub(crate) fn set_global_object_binding(
         object.borrow_mut().properties_mut().storage[slot.index as usize] = value;
         return Ok(());
     }
-    let looked_up = object_borrowed.shape().clone();
+    let looked_up = LookedUp::new(object_borrowed.shape());
     drop(object_borrowed);
 
     let key: PropertyKey = ic.name.clone().into();
