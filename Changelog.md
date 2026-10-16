@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Table cells that follow a rowspan land in the right column. Column
+  counting and column widths ignored the slots a rowspan holds in later
+  rows, so a cell after one was measured into the column to its left, or
+  placed over the spanning cell with no width when the row ran past the
+  counted columns. Cells spanning several columns now widen them by what
+  they lack, in proportion to their widths, after the single-column cells
+  have been measured; rowspan cells honour vertical-align; and colspan
+  and rowspan take values up to 1000 and 65534 as HTML allows.
 * An arrow function nested in another arrow function sees the this of
   the method around them: when the outer arrow did not mention this
   itself, the inner one got the global object, so code such as

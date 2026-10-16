@@ -2,7 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxKind, BoxRef, Edges, NsBox, Style, children};
+use core::ops::Range;
+
+use southstar_layout::{BoxKind, BoxRef, Edges, Style, children};
 use southstar_style::{Kind, PropId, UNIT_PERCENT, ValueRef};
 
 use crate::ffi::{
@@ -10,8 +12,7 @@ use crate::ffi::{
     length_resolve, measure_natural_width, min_content_width_of, min_width_of, resolve_used_height,
     shift_box_tree, style_of, translate_subtree, value_is_percent,
 };
-
-const MAX_COLS: usize = 4096;
+use crate::grid::{self, Placement, Span};
 
 fn value(s: *const Style, prop: PropId) -> Option<ValueRef<'static>> {
     style_of(s).and_then(|s| s.get(prop))
@@ -90,27 +91,55 @@ fn styled_or(b: BoxRef<'_>, fallback: *const Style) -> *const Style {
     }
 }
 
-fn column_count(b: BoxRef<'_>) -> usize {
-    let mut max_cols = 0;
-    for row in rows(b) {
-        let mut c = 0;
-        for cell in children(row) {
-            c += colspan(cell);
-            if c > MAX_COLS {
-                c = MAX_COLS;
-                break;
-            }
-        }
-        max_cols = max_cols.max(c);
-    }
-    max_cols
+#[derive(Clone, Copy)]
+struct GridCell<'a> {
+    cell: BoxRef<'a>,
+    at: Placement,
 }
 
-fn widen_columns(cols: &mut [f64], col: usize, span: usize, outer: f64) {
-    let per = outer / span as f64;
-    for c in cols.iter_mut().skip(col).take(span) {
-        if per > *c {
-            *c = per;
+fn grid_cells(b: BoxRef<'_>) -> (Vec<GridCell<'_>>, usize) {
+    let row_count = rows(b).count();
+    let spans = rows(b).map(|row| {
+        children(row).map(|cell| Span {
+            cols: colspan(cell),
+            rows: rowspan(cell),
+        })
+    });
+    let (placements, max_cols) = grid::place(spans, row_count);
+    let cells = rows(b)
+        .flat_map(children)
+        .zip(placements)
+        .map(|(cell, at)| GridCell { cell, at })
+        .collect();
+    (cells, max_cols)
+}
+
+fn narrowest_first<'c, 'a>(cells: &'c [GridCell<'a>]) -> Vec<&'c GridCell<'a>> {
+    let mut ordered: Vec<&GridCell<'a>> = cells.iter().filter(|c| c.at.cols > 0).collect();
+    ordered.sort_by_key(|c| c.at.cols);
+    ordered
+}
+
+fn widen_columns(cols: &mut [f64], range: Range<usize>, outer: f64, hsp: f64) {
+    let range = range.start.min(cols.len())..range.end.min(cols.len());
+    let span = range.len();
+    if span == 0 {
+        return;
+    }
+    let spanned = &mut cols[range];
+    let base: f64 = spanned.iter().sum();
+    let excess = outer - base - hsp * (span - 1) as f64;
+    if excess <= 0.0 {
+        return;
+    }
+    if base > 0.0 {
+        for c in spanned.iter_mut() {
+            *c += excess * *c / base;
+        }
+    } else {
+        let per = excess / span as f64;
+        for c in spanned.iter_mut() {
+            *c += per;
         }
     }
 }
@@ -170,18 +199,14 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
             captions = w;
         }
     }
-    let max_cols = column_count(b);
+    let (cells, max_cols) = grid_cells(b);
     if max_cols == 0 {
         return captions;
     }
+    let (hsp, _) = border_spacing(b.style());
     let mut cols = vec![0.0; max_cols];
-    for row in rows(b) {
-        let mut col = 0;
-        for cell in children(row) {
-            if col >= max_cols {
-                break;
-            }
-            let span = colspan(cell);
+    for &GridCell { cell, at } in narrowest_first(&cells) {
+        {
             let cs = styled_or(cell, inherited);
             let (m, p, bd) = edges_from_style(cell.style(), 0.0);
             let extra = margin_padding_border_h(&m, &p, &bd);
@@ -199,8 +224,12 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
                     w = if e > content_min { e } else { content_min };
                 }
             }
-            widen_columns(&mut cols, col, span, cell_clamp(cell, extra, w + extra));
-            col += span;
+            widen_columns(
+                &mut cols,
+                at.columns(),
+                cell_clamp(cell, extra, w + extra),
+                hsp,
+            );
         }
     }
     let mut col = 0;
@@ -215,12 +244,11 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
         {
             let w = length_resolve(wv, 0.0, -1.0);
             if w >= 0.0 {
-                widen_columns(&mut cols, col, span, w);
+                widen_columns(&mut cols, col..col + span, w, hsp);
             }
         }
         col += span;
     }
-    let (hsp, _) = border_spacing(b.style());
     let mut sum = (max_cols + 1) as f64 * hsp;
     for w in &cols {
         sum += w;
@@ -251,7 +279,13 @@ fn apply_fixed_width(widths: &mut [f64], fixed: &mut [bool], col: usize, span: u
     }
 }
 
-fn fixed_columns(b: BoxRef<'_>, cw: f64, widths: &mut [f64], fixed: &mut [bool]) -> f64 {
+fn fixed_columns(
+    b: BoxRef<'_>,
+    cells: &[GridCell<'_>],
+    cw: f64,
+    widths: &mut [f64],
+    fixed: &mut [bool],
+) -> f64 {
     let max_cols = widths.len();
     let mut col = 0;
     for hint in b.table_col_hints() {
@@ -264,16 +298,11 @@ fn fixed_columns(b: BoxRef<'_>, cw: f64, widths: &mut [f64], fixed: &mut [bool])
         col += hint_span(hint.span());
     }
 
-    if let Some(first_row) = rows(b).next() {
-        let mut col = 0;
-        for cell in children(first_row) {
-            let span = colspan(cell);
-            if let Some(mut w) = width_from_style(cell.style(), cw) {
-                let (m, p, bd) = edges_from_style(cell.style(), cw);
-                w += margin_padding_border_h(&m, &p, &bd);
-                apply_fixed_width(widths, fixed, col, span, w);
-            }
-            col += span;
+    for &GridCell { cell, at } in cells.iter().take_while(|c| c.at.row == 0) {
+        if let Some(mut w) = width_from_style(cell.style(), cw) {
+            let (m, p, bd) = edges_from_style(cell.style(), cw);
+            w += margin_padding_border_h(&m, &p, &bd);
+            apply_fixed_width(widths, fixed, at.col, at.cols, w);
         }
     }
 
@@ -340,72 +369,40 @@ fn layout_captions(
     }
 }
 
-struct CellPos<'a> {
-    cell: BoxRef<'a>,
-    r0: usize,
-    c0: usize,
-    cov: usize,
-    rsp: usize,
-}
-
-fn collapse_borders(b: BoxRef<'_>, max_cols: usize) {
-    if max_cols == 0 {
-        return;
-    }
-    let row_count = rows(b).count();
-    if row_count == 0 {
+fn collapse_borders(cells: &[GridCell<'_>], max_cols: usize, row_count: usize) {
+    if max_cols == 0 || row_count == 0 {
         return;
     }
     let Some(slots) = row_count.checked_mul(max_cols) else {
         return;
     };
-    let mut grid: Vec<*const NsBox> = vec![core::ptr::null(); slots];
-    let mut cells: Vec<CellPos<'_>> = Vec::new();
-    for (r, row) in rows(b).enumerate() {
-        let mut col = 0;
-        for cell in children(row) {
-            while col < max_cols && !grid[r * max_cols + col].is_null() {
-                col += 1;
+    let mut taken = vec![false; slots];
+    for GridCell { at, .. } in cells {
+        for r in at.row..=at.last_row().min(row_count - 1) {
+            for c in at.columns().take_while(|&c| c < max_cols) {
+                taken[r * max_cols + c] = true;
             }
-            if col >= max_cols {
-                break;
-            }
-            let cov = colspan(cell);
-            let rsp = rowspan(cell);
-            for dr in 0..rsp.min(row_count - r) {
-                for dc in 0..cov.min(max_cols - col) {
-                    grid[(r + dr) * max_cols + col + dc] = cell.as_ptr();
-                }
-            }
-            cells.push(CellPos {
-                cell,
-                r0: r,
-                c0: col,
-                cov,
-                rsp,
-            });
-            col += cov;
         }
     }
-
-    for cp in &cells {
-        let cr = cp.c0 + cp.cov;
-        let right_nb = cr < max_cols
-            && (cp.r0..(cp.r0 + cp.rsp).min(row_count))
-                .any(|rr| !grid[rr * max_cols + cr].is_null());
-        let br = cp.r0 + cp.rsp;
-        let below_nb = br < row_count
-            && (cp.c0..(cp.c0 + cp.cov).min(max_cols))
-                .any(|cc| !grid[br * max_cols + cc].is_null());
+    for &GridCell { cell, at } in cells {
+        let last_row = at.last_row().min(row_count - 1);
+        let right = at.col + at.cols;
+        let right_nb = right < max_cols && (at.row..=last_row).any(|r| taken[r * max_cols + right]);
+        let below = last_row + 1;
+        let below_nb = below < row_count
+            && at
+                .columns()
+                .take_while(|&c| c < max_cols)
+                .any(|c| taken[below * max_cols + c]);
         if right_nb || below_nb {
-            let mut border = cp.cell.border();
+            let mut border = cell.border();
             if right_nb {
                 border.right = 0.0;
             }
             if below_nb {
                 border.bottom = 0.0;
             }
-            cp.cell.set_border(border);
+            cell.set_border(border);
         }
     }
 }
@@ -463,21 +460,24 @@ struct AutoColumns {
     explicit: Vec<f64>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn auto_columns(
     b: BoxRef<'_>,
+    cells: &[GridCell<'_>],
     explicit_width: bool,
     measure_inherited: *const Style,
     cols: &mut AutoColumns,
     col_avail: &mut f64,
     cw: &mut f64,
-    total_hsp: f64,
+    hsp: f64,
 ) {
     let max_cols = cols.widths.len();
+    let total_hsp = (max_cols + 1) as f64 * hsp;
     let mut has_explicit_cols = false;
-    for row in rows(b) {
-        let mut col = 0;
-        for cell in children(row) {
-            let span = colspan(cell);
+    let ordered = narrowest_first(cells);
+    for &&GridCell { cell, at } in &ordered {
+        {
+            let span = at.cols;
             let cs = styled_or(cell, measure_inherited);
             let natural = measure_natural_width(cell, cs);
             box_edges_from_style(cell, if *cw > 0.0 { *cw } else { 1000.0 });
@@ -494,12 +494,8 @@ fn auto_columns(
                     cell_explicit = cell_clamp(cell, h_extra, w + h_extra);
                 }
             }
-            let per_col = cell_outer / span as f64;
-            let end = (col + span).min(max_cols);
-            for i in col.min(end)..end {
-                if per_col > cols.widths[i] {
-                    cols.widths[i] = per_col;
-                }
+            widen_columns(&mut cols.widths, at.columns(), cell_outer, hsp);
+            for i in at.columns().take_while(|&i| i < max_cols) {
                 if cell_fixed && span == 1 {
                     cols.fixed[i] = true;
                     has_explicit_cols = true;
@@ -509,7 +505,6 @@ fn auto_columns(
                     has_explicit_cols = true;
                 }
             }
-            col += span;
         }
     }
     let mut col = 0;
@@ -534,24 +529,12 @@ fn auto_columns(
         natural_sum_pre += w;
     }
     if has_explicit_cols || (natural_sum_pre > *col_avail && *col_avail > 0.0) {
-        for row in rows(b) {
-            let mut col = 0;
-            for cell in children(row) {
-                let span = colspan(cell);
-                let cs = styled_or(cell, measure_inherited);
-                let (m, p, bd) =
-                    edges_from_style(cell.style(), if *cw > 0.0 { *cw } else { 1000.0 });
-                let h_extra = padding_border_margin_h(&m, &p, &bd);
-                let per_col_min =
-                    cell_clamp(cell, h_extra, min_content_width_of(cell, cs) + h_extra)
-                        / span as f64;
-                for mn in cols.min.iter_mut().skip(col).take(span) {
-                    if per_col_min > *mn {
-                        *mn = per_col_min;
-                    }
-                }
-                col += span;
-            }
+        for &&GridCell { cell, at } in &ordered {
+            let cs = styled_or(cell, measure_inherited);
+            let (m, p, bd) = edges_from_style(cell.style(), if *cw > 0.0 { *cw } else { 1000.0 });
+            let h_extra = padding_border_margin_h(&m, &p, &bd);
+            let cell_min = cell_clamp(cell, h_extra, min_content_width_of(cell, cs) + h_extra);
+            widen_columns(&mut cols.min, at.columns(), cell_min, hsp);
         }
     }
     for i in 0..max_cols {
@@ -726,62 +709,71 @@ fn cell_height(cell: BoxRef<'_>, cell_inner_w: f64, mut cell_h: f64) -> f64 {
     cell_h
 }
 
-struct RowSpans<'a> {
-    remain: Vec<usize>,
-    cell: Vec<Option<BoxRef<'a>>>,
-    ending: Vec<*const NsBox>,
+struct Columns<'c> {
+    widths: &'c [f64],
+    x: &'c [f64],
+    hsp: f64,
+}
+
+impl Columns<'_> {
+    fn outer_width(&self, at: Placement) -> f64 {
+        let n = self.widths.len();
+        let covered = &self.widths[at.col.min(n)..(at.col + at.cols).min(n)];
+        let w: f64 = covered.iter().sum();
+        if covered.len() > 1 {
+            w + self.hsp * (covered.len() - 1) as f64
+        } else {
+            w
+        }
+    }
+
+    fn x_of(&self, at: Placement) -> f64 {
+        self.x.get(at.col).copied().unwrap_or(0.0)
+    }
+}
+
+fn fill_cell_height(cell: BoxRef<'_>, avail: f64) {
+    let natural: f64 = children(cell).map(flow_height).sum();
+    let extra = avail - natural;
+    if extra > 0.0 {
+        let factor = vertical_align_factor(cell);
+        if factor > 0.0 {
+            for ch in children(cell) {
+                shift_box_tree(ch, 0.0, extra * factor);
+            }
+        }
+    }
+    if avail > cell.content_height() {
+        cell.set_content_height(avail);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn layout_row<'a>(
     row: BoxRef<'a>,
+    row_cells: &[GridCell<'a>],
+    ending: &[BoxRef<'a>],
     inner_x: f64,
     cursor_y: f64,
     cw: f64,
-    col_widths: &[f64],
-    col_x: &[f64],
-    hsp: f64,
+    cols: &Columns<'_>,
     child_inherited: *const Style,
-    spans: &mut RowSpans<'a>,
 ) -> f64 {
-    let max_cols = col_widths.len();
     row.set_x(inner_x);
     row.set_y(cursor_y);
     row.set_content_width(cw);
     let mut row_height: f64 = 0.0;
-    let mut col = 0;
-    for cell in children(row) {
-        while col < max_cols && spans.remain[col] > 0 {
-            col += 1;
-        }
-        let span = colspan(cell);
-        let rspan = rowspan(cell);
-        let end = (col + span).min(max_cols);
-        let mut cell_outer_w = 0.0;
-        let mut covered = 0;
-        for w in &col_widths[col.min(end)..end] {
-            cell_outer_w += w;
-            covered += 1;
-        }
-        if covered > 1 {
-            cell_outer_w += hsp * (covered - 1) as f64;
-        }
-        if rspan > 1 {
-            for i in col.min(end)..end {
-                spans.remain[i] = rspan;
-                spans.cell[i] = Some(cell);
-            }
-        }
-        cell.set_x(inner_x + if col < max_cols { col_x[col] } else { 0.0 });
+    for &GridCell { cell, at } in row_cells {
+        cell.set_x(inner_x + cols.x_of(at));
         cell.set_y(cursor_y);
-        let (cell_inner_w, cell_h) = layout_cell_content(cell, cell_outer_w, child_inherited);
+        let (cell_inner_w, cell_h) =
+            layout_cell_content(cell, cols.outer_width(at), child_inherited);
         let cell_h = cell_height(cell, cell_inner_w, cell_h);
         cell.set_content_height(cell_h);
         let cell_outer_h = plus_outer_v(cell_h, cell);
-        if rspan <= 1 && cell_outer_h > row_height {
+        if at.rows <= 1 && cell_outer_h > row_height {
             row_height = cell_outer_h;
         }
-        col += span;
     }
     if let Some(rhv) = definite(value(row.style(), PropId::Height)) {
         let rh = length_resolve(rhv, 0.0, -1.0);
@@ -789,44 +781,15 @@ fn layout_row<'a>(
             row_height = rh;
         }
     }
-    spans.ending.clear();
-    for i in 0..max_cols {
-        if spans.remain[i] != 1 {
-            continue;
-        }
-        let Some(rc) = spans.cell[i] else {
-            continue;
-        };
-        if spans.ending.contains(&rc.as_ptr()) {
-            continue;
-        }
-        spans.ending.push(rc.as_ptr());
-        let span_bottom = cursor_y + row_height;
-        let avail = minus_outer_v(span_bottom - rc.y(), rc);
+    for &rc in ending {
+        let avail = minus_outer_v(cursor_y + row_height - rc.y(), rc);
         if rc.content_height() > avail {
             row_height += rc.content_height() - avail;
         }
     }
-    for cell in children(row) {
-        if rowspan(cell) > 1 {
-            continue;
-        }
-        let avail = minus_outer_v(row_height, cell);
-        let mut natural = 0.0;
-        for ch in children(cell) {
-            natural += flow_height(ch);
-        }
-        let extra = avail - natural;
-        if extra > 0.0 {
-            let factor = vertical_align_factor(cell);
-            if factor > 0.0 {
-                for ch in children(cell) {
-                    shift_box_tree(ch, 0.0, extra * factor);
-                }
-            }
-        }
-        if avail > cell.content_height() {
-            cell.set_content_height(avail);
+    for &GridCell { cell, at } in row_cells {
+        if at.rows <= 1 {
+            fill_cell_height(cell, minus_outer_v(row_height, cell));
         }
     }
     row.set_content_height(row_height);
@@ -875,7 +838,7 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
     b.set_content_width(cw);
     let child_inherited = styled_or(b, inherited);
 
-    let max_cols = column_count(b);
+    let (cells, max_cols) = grid_cells(b);
     if max_cols == 0 {
         let (m, p, bd) = (b.margin(), b.padding(), b.border());
         let inner_x = b.x() + m.left + bd.left + p.left;
@@ -903,7 +866,7 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
         explicit: Vec::new(),
     };
     if fixed_layout {
-        let fixed_sum = fixed_columns(b, col_avail, &mut cols.widths, &mut cols.fixed);
+        let fixed_sum = fixed_columns(b, &cells, col_avail, &mut cols.widths, &mut cols.fixed);
         if fixed_sum > col_avail {
             col_avail = fixed_sum;
             cw = col_avail + total_hsp;
@@ -914,12 +877,13 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
         cols.explicit = vec![-1.0; max_cols];
         auto_columns(
             b,
+            &cells,
             explicit_width,
             child_inherited,
             &mut cols,
             &mut col_avail,
             &mut cw,
-            total_hsp,
+            hsp,
         );
     }
     let col_widths = cols.widths;
@@ -940,43 +904,49 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
     layout_captions(b, false, inner_x, cw, child_inherited, &mut cursor_y);
     cursor_y += vsp;
 
-    let mut spans = RowSpans {
-        remain: vec![0; max_cols],
-        cell: vec![None; max_cols],
-        ending: Vec::new(),
+    let columns = Columns {
+        widths: &col_widths,
+        x: &col_x,
+        hsp,
     };
-    for row in rows(b) {
+    let mut row_count = 0;
+    let mut next = 0;
+    let mut open: Vec<GridCell<'_>> = Vec::new();
+    for (r, row) in rows(b).enumerate() {
+        row_count = r + 1;
+        let start = next;
+        while next < cells.len() && cells[next].at.row == r {
+            next += 1;
+        }
+        let row_cells = &cells[start..next];
+        let ending: Vec<BoxRef<'_>> = open
+            .iter()
+            .filter(|c| c.at.last_row() == r)
+            .map(|c| c.cell)
+            .collect();
         let row_height = layout_row(
             row,
+            row_cells,
+            &ending,
             inner_x,
             cursor_y,
             cw,
-            &col_widths,
-            &col_x,
-            hsp,
+            &columns,
             child_inherited,
-            &mut spans,
         );
         cursor_y += row_height + vsp;
-        for i in 0..max_cols {
-            if spans.remain[i] == 0 {
-                continue;
+        open.extend(row_cells.iter().filter(|c| c.at.rows > 1).copied());
+        open.retain(|c| {
+            if c.at.last_row() > r {
+                return true;
             }
-            spans.remain[i] -= 1;
-            if spans.remain[i] != 0 {
-                continue;
-            }
-            if let Some(rc) = spans.cell[i].take() {
-                let h = minus_outer_v(cursor_y - vsp - rc.y(), rc);
-                if h > rc.content_height() {
-                    rc.set_content_height(h);
-                }
-            }
-        }
+            fill_cell_height(c.cell, minus_outer_v(cursor_y - vsp - c.cell.y(), c.cell));
+            false
+        });
     }
     layout_captions(b, true, inner_x, cw, child_inherited, &mut cursor_y);
     if is_collapse(b.style()) {
-        collapse_borders(b, max_cols);
+        collapse_borders(&cells, max_cols, row_count);
     }
     b.set_content_height(cursor_y - inner_y);
     stretch_to_height(b, cw);

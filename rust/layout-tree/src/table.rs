@@ -275,10 +275,10 @@ fn build_cell<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     collect_box_bg_image(cell, s);
     let colspan = n
         .attr(c"colspan")
-        .map_or(1, |v| parse_int(Some(v), 1, 1, 100));
+        .map_or(1, |v| parse_int(Some(v), 1, 1, 1000));
     let rowspan = n
         .attr(c"rowspan")
-        .map_or(1, |v| parse_int(Some(v), 1, 1, 100));
+        .map_or(1, |v| parse_int(Some(v), 1, 1, 65534));
     cell.set_spans(colspan, rowspan);
     if let Some(s) = s {
         register_abs_pseudo(n, s.before());
