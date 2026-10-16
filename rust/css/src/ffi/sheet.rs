@@ -362,7 +362,7 @@ impl SyntaxDef {
     pub(crate) fn parse(text: &[u8]) -> Option<SyntaxDef> {
         let text = c_string(text);
         let raw = unsafe { ns_css_syntax_def_parse(text.as_ptr()) };
-        (!raw.is_null()).then_some(SyntaxDef(raw))
+        (!raw.is_null()).then(|| SyntaxDef(raw))
     }
 
     pub(crate) fn universal(&self) -> bool {
