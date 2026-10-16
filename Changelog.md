@@ -24,6 +24,15 @@ Southstar Browser 0.9.11-dev:
   freed: pango_attribute_destroy(NULL) ran for every such run (dozens of
   warnings per page on sites like Ars Technica), and a failed camera open
   closed fd -1.
+* A connection the server or a proxy resets during a TLS exchange no
+  longer kills the browser with SIGPIPE. The close_notify alert went out
+  through writev(), which raises the signal on a dead socket; TLS records
+  are now sent with send() and MSG_NOSIGNAL, and sockets on macOS set
+  SO_NOSIGPIPE. Headless PNG, PDF and WPT runs ended with exit status 141
+  on such sites.
+* A zlib or Brotli stream whose initialisation fails is no longer torn
+  down as if it had started: its wrapper was built, and dropped, before
+  the result was checked.
 * Request has a signal. new Request() left it undefined and ignored the
   signal, mode, credentials, cache, redirect, referrerPolicy, integrity
   and keepalive it was given; the request's signal now follows the one
