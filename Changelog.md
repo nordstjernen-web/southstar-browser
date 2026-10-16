@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* text-decoration: inherit, initial, unset and revert take effect. The
+  shorthand dropped CSS-wide keywords, so a link styled with Tailwind's
+  preflight (a { text-decoration: inherit }) kept the UA underline; the
+  navigation and buttons on react.dev and other Tailwind sites were
+  underlined.
 * Text runs without font features no longer log a Pango critical. The
   FFI wrappers that turn a nullable pointer into an Option built the
   wrapper before checking the pointer, so a null result was dropped and
