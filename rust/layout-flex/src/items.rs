@@ -324,11 +324,9 @@ pub fn resolve_lengths(items: &mut [Item<'_>], available: f64) {
 }
 
 pub fn container_scrolls(b: BoxRef<'_>) -> bool {
-    let s = b.style();
-    if s.is_null() {
-        return false;
-    }
-    overflow_scrolls(s, PropId::OverflowX) || overflow_scrolls(s, PropId::OverflowY)
+    style_of(b).is_some_and(|s| {
+        overflow_scrolls(s, PropId::OverflowX) || overflow_scrolls(s, PropId::OverflowY)
+    })
 }
 
 pub fn justify_offsets(

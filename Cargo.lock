@@ -2817,6 +2817,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-style",
 ]

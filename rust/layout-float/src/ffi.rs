@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use southstar_dom::Node;
@@ -63,10 +63,6 @@ pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 pub fn overflow_axis_keyword<'a>(s: Option<StyleRef<'a>>, axis: PropId) -> Option<&'a CStr> {
     Some(southstar_css::overflow_keyword(s.map(StyleRef::data), axis))
 }
@@ -81,23 +77,6 @@ fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
 
 fn style_ref<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_overflow_axis_keyword(
-    s: *const Style,
-    axis: c_int,
-) -> *const c_char {
-    let axis = usize::try_from(axis)
-        .ok()
-        .and_then(PropId::from_id)
-        .unwrap_or(PropId::OverflowX);
-    overflow_axis_keyword(style_ref(s), axis).map_or(ptr::null(), CStr::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_overflow_kw_scrolls(ov: *const c_char) -> GBoolean {
-    boolean(overflow::kw_scrolls(c_str(ov)))
 }
 
 #[unsafe(no_mangle)]

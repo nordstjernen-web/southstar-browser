@@ -553,8 +553,7 @@ pub fn layout(b: BoxRef<'_>, at: &Frame, parent_content_height: f64) -> f64 {
                 let natural_h = c.content_height();
                 let shrank = target_h < natural_h;
                 c.set_content_height(target_h);
-                if shrank && !c.style().is_null() && overflow_scrolls(c.style(), PropId::OverflowY)
-                {
+                if shrank && style_of(c).is_some_and(|s| overflow_scrolls(s, PropId::OverflowY)) {
                     let mut max_y = natural_h - target_h;
                     if max_y < 0.0 {
                         max_y = 0.0;

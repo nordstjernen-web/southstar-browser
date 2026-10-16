@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use southstar_dom::Node;
 use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
 use southstar_style::{NsCssValue, PropId, StyleRef, ValueRef};
 
 unsafe extern "C" {
@@ -22,8 +23,6 @@ unsafe extern "C" {
     fn ns_layout_min_content_width_of(b: *const NsBox, parent_style: *const Style) -> f64;
     fn ns_layout_box_is_scroll_container(b: *const NsBox) -> GBoolean;
     fn ns_layout_box(b: *const NsBox, parent_content_width: f64, inherited: *const Style);
-    fn ns_layout_overflow_axis_keyword(s: *const Style, axis: c_int) -> *const c_char;
-    fn ns_layout_overflow_kw_scrolls(ov: *const c_char) -> GBoolean;
     fn ns_layout_shift_box_tree(b: *const NsBox, dx: f64, dy: f64);
     fn ns_layout_gap_px(
         specific: *const NsCssValue,
@@ -80,8 +79,8 @@ pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const St
     unsafe { ns_layout_box(b.as_ptr(), parent_content_width, inherited) }
 }
 
-pub fn overflow_scrolls(s: *const Style, axis: PropId) -> bool {
-    unsafe { ns_layout_overflow_kw_scrolls(ns_layout_overflow_axis_keyword(s, axis as c_int)) != 0 }
+pub fn overflow_scrolls(s: StyleRef<'_>, axis: PropId) -> bool {
+    kw_scrolls(overflow_axis_keyword(Some(s), axis))
 }
 
 pub fn shift_box_tree(b: BoxRef<'_>, dx: f64, dy: f64) {
