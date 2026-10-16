@@ -2669,7 +2669,7 @@ impl Array {
         }
         // 4. Sort items using an implementation-defined sequence of calls to SortCompare. If any such call returns an abrupt completion, stop before performing any further calls to SortCompare and return that Completion Record.
         let mut sort_err = Ok(());
-        items.sort_by(|x, y| {
+        merge_sort_by(&mut items, |x, y| {
             if sort_err.is_ok() {
                 sort_compare(x, y, context).unwrap_or_else(|err| {
                     sort_err = Err(err);
@@ -3443,6 +3443,45 @@ pub(crate) fn find_via_predicate(
 ///  - [ECMAScript reference][spec]
 ///
 /// [spec]: https://tc39.es/ecma262/#sec-array-exotic-objects-defineownproperty-p-desc
+/// Sorts `items` stably with a bottom-up merge sort.
+///
+/// Unlike `slice::sort_by`, this tolerates a comparator that is not a total
+/// order (which JavaScript allows and leaves the result implementation-defined)
+/// instead of panicking.
+fn merge_sort_by<T: Clone>(items: &mut Vec<T>, mut compare: impl FnMut(&T, &T) -> Ordering) {
+    let len = items.len();
+    if len < 2 {
+        return;
+    }
+    let mut src = std::mem::take(items);
+    let mut dst: Vec<T> = Vec::with_capacity(len);
+    let mut width = 1;
+    while width < len {
+        dst.clear();
+        let mut start = 0;
+        while start < len {
+            let mid = (start + width).min(len);
+            let end = (start + 2 * width).min(len);
+            let (mut i, mut j) = (start, mid);
+            while i < mid && j < end {
+                if compare(&src[j], &src[i]) == Ordering::Less {
+                    dst.push(src[j].clone());
+                    j += 1;
+                } else {
+                    dst.push(src[i].clone());
+                    i += 1;
+                }
+            }
+            dst.extend_from_slice(&src[i..mid]);
+            dst.extend_from_slice(&src[j..end]);
+            start = end;
+        }
+        std::mem::swap(&mut src, &mut dst);
+        width *= 2;
+    }
+    *items = src;
+}
+
 fn array_exotic_define_own_property(
     obj: &JsObject,
     key: &PropertyKey,
