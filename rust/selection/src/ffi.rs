@@ -1,13 +1,13 @@
-//! Southstar — the C ABI of text selection, over the style and inline-paint calls it needs.
+//! Southstar — the stored form of a text selection and the C ABI paint reads its ranges through, over the style and inline-paint calls selection needs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use core::ptr;
 
 use southstar_glib::{
     FALSE, GBoolean, GHashTable, boolean, g_direct_equal, g_direct_hash, g_free,
-    g_hash_table_insert, g_hash_table_new_full, g_malloc, strdup,
+    g_hash_table_insert, g_hash_table_new_full, g_malloc,
 };
 use southstar_layout::{BoxRef, NsBox};
 use southstar_style::PropId;
@@ -15,6 +15,7 @@ use southstar_style::PropId;
 use crate::Selection;
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct NsSelection {
     anchor_box: *const NsBox,
     anchor_byte: usize,
@@ -88,116 +89,43 @@ pub fn range_extents(b: BoxRef<'_>, start: usize, len: usize) -> Option<(f64, f6
     (found != 0).then_some((x, y, w, h))
 }
 
-unsafe fn load<'a>(sel: &NsSelection) -> Selection<'a> {
-    unsafe {
+impl NsSelection {
+    pub const EMPTY: NsSelection = NsSelection {
+        anchor_box: ptr::null(),
+        anchor_byte: 0,
+        focus_box: ptr::null(),
+        focus_byte: 0,
+        active: FALSE,
+    };
+
+    /// # Safety
+    ///
+    /// The boxes the selection names, if any, stay alive for `'a`.
+    pub unsafe fn load<'a>(&self) -> Selection<'a> {
         Selection {
-            anchor: BoxRef::from_ptr(sel.anchor_box),
+            // SAFETY: the caller guarantees the anchor box is null or alive for 'a.
+            anchor: unsafe { BoxRef::from_ptr(self.anchor_box) },
+            anchor_byte: self.anchor_byte,
+            // SAFETY: the caller guarantees the focus box is null or alive for 'a.
+            focus: unsafe { BoxRef::from_ptr(self.focus_box) },
+            focus_byte: self.focus_byte,
+            active: self.active != 0,
+        }
+    }
+
+    pub fn store(sel: &Selection<'_>) -> NsSelection {
+        NsSelection {
+            anchor_box: sel.anchor.map_or(ptr::null(), |b| b.as_ptr()),
             anchor_byte: sel.anchor_byte,
-            focus: BoxRef::from_ptr(sel.focus_box),
+            focus_box: sel.focus.map_or(ptr::null(), |b| b.as_ptr()),
             focus_byte: sel.focus_byte,
-            active: sel.active != 0,
+            active: boolean(sel.active),
         }
     }
 }
 
-fn store(out: &mut NsSelection, sel: &Selection<'_>) {
-    *out = NsSelection {
-        anchor_box: sel.anchor.map_or(ptr::null(), |b| b.as_ptr()),
-        anchor_byte: sel.anchor_byte,
-        focus_box: sel.focus.map_or(ptr::null(), |b| b.as_ptr()),
-        focus_byte: sel.focus_byte,
-        active: boolean(sel.active),
-    };
-}
-
-unsafe fn update<'a>(
-    sel: *mut NsSelection,
-    f: impl FnOnce(&mut Selection<'a>) -> bool,
-) -> GBoolean {
-    let Some(out) = (unsafe { sel.as_mut() }) else {
-        return FALSE;
-    };
-    let mut s = unsafe { load(out) };
-    let result = f(&mut s);
-    store(out, &s);
-    boolean(result)
-}
-
 unsafe fn read<'a>(sel: *const NsSelection) -> Selection<'a> {
-    unsafe { sel.as_ref().map(|s| load(s)).unwrap_or_default() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_clear(sel: *mut NsSelection) {
-    unsafe {
-        update(sel, |s| {
-            s.clear();
-            false
-        })
-    };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_has_range(sel: *const NsSelection) -> GBoolean {
-    boolean(unsafe { read(sel) }.has_range())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_text_at(root: *const NsBox, x: f64, y: f64) -> GBoolean {
-    boolean(crate::text_at(unsafe { BoxRef::from_ptr(root) }, x, y))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_anchor_at(
-    sel: *mut NsSelection,
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> GBoolean {
-    let root = unsafe { BoxRef::from_ptr(root) };
-    unsafe { update(sel, |s| s.anchor_at(root, x, y)) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_extend_to(
-    sel: *mut NsSelection,
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> GBoolean {
-    let root = unsafe { BoxRef::from_ptr(root) };
-    unsafe { update(sel, |s| s.extend_to(root, x, y)) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_select_all(
-    sel: *mut NsSelection,
-    root: *const NsBox,
-) -> GBoolean {
-    let root = unsafe { BoxRef::from_ptr(root) };
-    unsafe { update(sel, |s| s.select_all(root)) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_select_word_at(
-    sel: *mut NsSelection,
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> GBoolean {
-    let root = unsafe { BoxRef::from_ptr(root) };
-    unsafe { update(sel, |s| s.select_word_at(root, x, y)) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_select_block_at(
-    sel: *mut NsSelection,
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-) -> GBoolean {
-    let root = unsafe { BoxRef::from_ptr(root) };
-    unsafe { update(sel, |s| s.select_block_at(root, x, y)) }
+    unsafe { sel.as_ref().map(|s| s.load()).unwrap_or_default() }
 }
 
 #[unsafe(no_mangle)]
@@ -226,34 +154,4 @@ pub unsafe extern "C" fn ns_selection_ranges(
         }
         table
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_bounds(
-    root: *const NsBox,
-    sel: *const NsSelection,
-    out_x: *mut f64,
-    out_y: *mut f64,
-    out_w: *mut f64,
-    out_h: *mut f64,
-) -> GBoolean {
-    let Some((x, y, w, h)) = unsafe { read(sel) }.bounds(unsafe { BoxRef::from_ptr(root) }) else {
-        return FALSE;
-    };
-    for (out, v) in [(out_x, x), (out_y, y), (out_w, w), (out_h, h)] {
-        if let Some(out) = unsafe { out.as_mut() } {
-            *out = v;
-        }
-    }
-    boolean(true)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_selection_collect_text(
-    root: *const NsBox,
-    sel: *const NsSelection,
-) -> *mut c_char {
-    unsafe { read(sel) }
-        .collect_text(unsafe { BoxRef::from_ptr(root) })
-        .map_or(ptr::null_mut(), |text| strdup(&text))
 }

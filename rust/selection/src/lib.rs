@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::NsSelection;
+
 use southstar_layout::{BoxKind, BoxRef, children};
 
 const LINE_SEPARATOR: &[u8] = "\u{2028}".as_bytes();

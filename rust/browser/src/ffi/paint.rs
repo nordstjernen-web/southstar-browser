@@ -622,7 +622,7 @@ impl NsBrowser {
 
     pub fn selection_if_range(&self) -> *const c_void {
         if self.selection_has_range() {
-            self.selection.get().cast_const().cast()
+            self.selection.as_ptr().cast_const().cast()
         } else {
             ptr::null()
         }

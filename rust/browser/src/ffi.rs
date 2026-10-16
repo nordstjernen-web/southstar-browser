@@ -11,15 +11,17 @@ mod net;
 mod paint;
 mod trampolines;
 
-use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 use core::ptr;
+use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode, Tree, WeakNode};
 use southstar_glib::{GBoolean, GHashTable, GPtrArray, GStr};
 use southstar_layout::{BoxRef, NsBox};
+use southstar_selection::{NsSelection, Selection};
 
 pub use dom::*;
 pub use engine::*;
@@ -117,15 +119,6 @@ impl BoxSlot {
     }
 }
 
-#[repr(C)]
-struct RawSelection {
-    anchor_box: *const NsBox,
-    anchor_byte: usize,
-    focus_box: *const NsBox,
-    focus_byte: usize,
-    active: GBoolean,
-}
-
 pub struct NsBrowser {
     doc: RefCell<Option<Tree>>,
     layout: Cell<*mut NsBox>,
@@ -182,7 +175,7 @@ pub struct NsBrowser {
     pub caret_blink_epoch_us: Cell<i64>,
     pub caret_blink_active: Flag,
     pub caret_paint_visible: Flag,
-    selection: UnsafeCell<RawSelection>,
+    selection: Cell<NsSelection>,
     pub selection_dragged: Flag,
     pub hover_node: NodeSlot,
     pub open_select: NodeSlot,
@@ -314,43 +307,43 @@ impl NsBrowser {
         }
     }
 
+    fn selection<'a>(&'a self) -> Selection<'a> {
+        // SAFETY: the page clears its selection before it frees or replaces the layout, so the boxes it names belong to the live layout tree.
+        unsafe { self.selection.get().load() }
+    }
+
+    pub fn update_selection<'a>(&'a self, f: impl FnOnce(&mut Selection<'a>) -> bool) -> bool {
+        let mut selection = self.selection();
+        let changed = f(&mut selection);
+        self.selection.set(NsSelection::store(&selection));
+        changed
+    }
+
     pub fn selection_clear(&self) {
-        unsafe { selection::ns_selection_clear(self.selection.get().cast()) };
+        self.selection.set(NsSelection::EMPTY);
     }
 
     pub fn selection_has_range(&self) -> bool {
-        unsafe { selection::ns_selection_has_range(self.selection.get().cast()) != 0 }
+        self.selection().has_range()
     }
 
     pub fn selection_select_all(&self, layout: BoxRef<'_>) -> bool {
-        unsafe {
-            selection::ns_selection_select_all(self.selection.get().cast(), layout.as_ptr()) != 0
-        }
+        self.update_selection(|s| s.select_all(Some(layout)))
     }
 
-    pub fn selection_text(&self) -> Option<GStr> {
-        unsafe {
-            GStr::take(selection::ns_selection_collect_text(
-                self.layout.get(),
-                self.selection.get().cast(),
-            ))
+    pub fn selection_text(&self) -> Option<CString> {
+        let mut text = self.selection().collect_text(self.layout())?;
+        if let Some(nul) = text.iter().position(|&b| b == 0) {
+            text.truncate(nul);
         }
+        CString::new(text).ok()
     }
 
     pub fn selection_bounds(&self) -> (bool, [f64; 4]) {
-        let mut r = [0.0f64; 4];
-        let [x, y, w, h] = &mut r;
-        let ok = unsafe {
-            selection::ns_selection_bounds(
-                self.layout.get(),
-                self.selection.get().cast(),
-                x,
-                y,
-                w,
-                h,
-            )
-        };
-        (ok != 0, r)
+        match self.selection().bounds(self.layout()) {
+            Some((x, y, w, h)) => (true, [x, y, w, h]),
+            None => (false, [0.0; 4]),
+        }
     }
 
     pub fn sessions(&self) -> Sessions<'_> {

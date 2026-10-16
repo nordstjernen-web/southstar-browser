@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GStr};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use super::{Js, NsBrowser};
 
@@ -103,21 +103,6 @@ unsafe extern "C" {
     fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
     fn ns_js_activate_element(js: *mut c_void, el: *const NsNode);
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
-    fn ns_selection_text_at(root: *const NsBox, x: f64, y: f64) -> GBoolean;
-    fn ns_selection_anchor_at(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
-    fn ns_selection_extend_to(sel: *mut c_void, root: *const NsBox, x: f64, y: f64) -> GBoolean;
-    fn ns_selection_select_word_at(
-        sel: *mut c_void,
-        root: *const NsBox,
-        x: f64,
-        y: f64,
-    ) -> GBoolean;
-    fn ns_selection_select_block_at(
-        sel: *mut c_void,
-        root: *const NsBox,
-        x: f64,
-        y: f64,
-    ) -> GBoolean;
     fn ns_node_is_focusable(n: *const NsNode) -> GBoolean;
     fn ns_option_label_dup(option: *const NsNode) -> *mut c_char;
     fn ns_element_effectively_inert(el: *const NsNode) -> GBoolean;
@@ -438,7 +423,7 @@ pub fn match_ordinal(
 }
 
 pub fn selection_text_at(layout: BoxRef<'_>, x: f64, y: f64) -> bool {
-    unsafe { ns_selection_text_at(layout.as_ptr(), x, y) != 0 }
+    southstar_selection::text_at(Some(layout), x, y)
 }
 
 pub fn is_contenteditable_host(n: Node<'_>) -> bool {
@@ -550,19 +535,19 @@ pub fn parse_int(s: &CStr) -> c_int {
 
 impl NsBrowser {
     pub fn selection_anchor_at(&self, layout: BoxRef<'_>, x: f64, y: f64) {
-        unsafe { ns_selection_anchor_at(self.selection.get().cast(), layout.as_ptr(), x, y) };
+        self.update_selection(|s| s.anchor_at(Some(layout), x, y));
     }
 
     pub fn selection_extend_to(&self, layout: BoxRef<'_>, x: f64, y: f64) {
-        unsafe { ns_selection_extend_to(self.selection.get().cast(), layout.as_ptr(), x, y) };
+        self.update_selection(|s| s.extend_to(Some(layout), x, y));
     }
 
     pub fn selection_word_at(&self, layout: BoxRef<'_>, x: f64, y: f64) {
-        unsafe { ns_selection_select_word_at(self.selection.get().cast(), layout.as_ptr(), x, y) };
+        self.update_selection(|s| s.select_word_at(Some(layout), x, y));
     }
 
     pub fn selection_block_at(&self, layout: BoxRef<'_>, x: f64, y: f64) {
-        unsafe { ns_selection_select_block_at(self.selection.get().cast(), layout.as_ptr(), x, y) };
+        self.update_selection(|s| s.select_block_at(Some(layout), x, y));
     }
 
     pub fn sb_box(&self) -> Option<BoxRef<'_>> {

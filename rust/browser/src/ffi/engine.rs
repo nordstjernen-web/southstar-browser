@@ -27,32 +27,6 @@ pub struct PrintSetup {
     pub margin_left: f64,
 }
 
-pub mod selection {
-    use core::ffi::c_char;
-
-    use southstar_glib::GBoolean;
-    use southstar_layout::NsBox;
-
-    unsafe extern "C" {
-        pub fn ns_selection_clear(sel: *mut core::ffi::c_void);
-        pub fn ns_selection_has_range(sel: *const core::ffi::c_void) -> GBoolean;
-        pub fn ns_selection_select_all(sel: *mut core::ffi::c_void, root: *const NsBox)
-        -> GBoolean;
-        pub fn ns_selection_collect_text(
-            root: *const NsBox,
-            sel: *const core::ffi::c_void,
-        ) -> *mut c_char;
-        pub fn ns_selection_bounds(
-            root: *const NsBox,
-            sel: *const core::ffi::c_void,
-            x: *mut f64,
-            y: *mut f64,
-            w: *mut f64,
-            h: *mut f64,
-        ) -> GBoolean;
-    }
-}
-
 unsafe extern "C" {
     fn ns_engine_relayout(
         doc: *mut NsNode,
