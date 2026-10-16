@@ -828,7 +828,7 @@ pub fn run_one(
             drop(initial);
 
             if let Some(js) = js {
-                js.fire_media_load_events(ctx.layout.get());
+                js.fire_media_load_events(ctx.layout());
             }
             settle(time_ms, &ctx);
             relayout(&ctx);

@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_anim::AnimHandle;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GArray, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -425,30 +426,35 @@ pub fn nsr_window_cancelAnimationFrame(
     frames::cancel_animation_frame(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_animation_frame(js: *mut NsJs) -> GBoolean {
-    let js = Js(js);
-    if js.is_null() {
-        return glib::FALSE;
-    }
-    glib::boolean(frames::run(js))
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn run_animation_frame(js: *mut c_void) -> bool {
+    let js = Js::from_data(js);
+    !js.is_null() && frames::run(js)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_pending_animation_frame(js: *const NsJs) -> GBoolean {
-    glib::boolean(frames::has_pending(Js(js.cast_mut())))
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn has_pending_animation_frame(js: *mut c_void) -> bool {
+    frames::has_pending(Js::from_data(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_pending_work(js: *const NsJs) -> GBoolean {
-    let js = Js(js.cast_mut());
-    glib::boolean(!js.is_null() && js.has_pending_work())
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn has_pending_work(js: *mut c_void) -> bool {
+    let js = Js::from_data(js);
+    !js.is_null() && js.has_pending_work()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_needs_tick(js: *const NsJs) -> GBoolean {
-    let js = Js(js.cast_mut());
-    glib::boolean(!js.is_null() && js.needs_tick())
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn needs_tick(js: *mut c_void) -> bool {
+    let js = Js::from_data(js);
+    !js.is_null() && js.needs_tick()
 }
 
 #[unsafe(no_mangle)]
@@ -486,14 +492,21 @@ pub unsafe extern "C" fn ns_js_queue_scrollend_document(js: *mut NsJs) {
     scrollend::queue_document(Js(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_anim_events(js: *mut NsJs, anim: *mut c_void) {
-    events::dispatch_anim_events(Js(js), anim);
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_anim_events(js: *mut c_void, anim: AnimHandle) {
+    events::dispatch_anim_events(Js::from_data(js), anim.raw());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_fire_media_load_events(js: *mut NsJs, layout: *const NsBox) {
-    events::fire_media_load_events(Js(js), layout);
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn fire_media_load_events(js: *mut c_void, layout: Option<BoxRef<'_>>) {
+    events::fire_media_load_events(
+        Js::from_data(js),
+        layout.map_or(ptr::null(), BoxRef::as_ptr),
+    );
 }
 
 #[unsafe(no_mangle)]

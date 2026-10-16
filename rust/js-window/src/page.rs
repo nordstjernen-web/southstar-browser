@@ -85,7 +85,7 @@ pub(crate) fn dispatch_resize(js: Js) {
         return;
     };
     ffi::dispatch_window_only_event(js, ffi::current_document(js), c"resize", event);
-    ffi::reeval_media_queries(js);
+    ffi::reeval_services_media_queries(js);
 }
 
 pub(crate) fn fire_page_transition(js: Js, kind: &core::ffi::CStr, persisted: bool) {

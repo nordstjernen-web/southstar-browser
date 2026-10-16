@@ -14,6 +14,11 @@ use std::rc::Rc;
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{
+    dispatch_anim_events, fire_media_load_events, has_pending_animation_frame, has_pending_work,
+    needs_tick, run_animation_frame,
+};
+
 #[derive(Default)]
 pub(crate) struct Page {
     frames: RefCell<frames::Frames>,

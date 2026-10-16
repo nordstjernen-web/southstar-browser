@@ -22,6 +22,11 @@ use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{
+    dispatch_resize, fire_page_transition, note_viewport_scroll, reeval_media_queries,
+    sync_window_metrics,
+};
+
 pub(crate) struct Entry {
     pub url: Vec<u8>,
     pub state: Value,

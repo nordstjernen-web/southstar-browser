@@ -18,6 +18,8 @@ southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
+southstar-js-lifecycle = { path = "../js-lifecycle" }
+southstar-js-window = { path = "../js-window" }
 southstar-image = { path = "../image" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }

@@ -8,30 +8,19 @@ use core::ptr::{self, NonNull};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
 use southstar_js_runtime::api::{self, NsJs};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use super::engine::{Anim, Images};
 use super::glib::{GString, StrBufOwned};
 
 unsafe extern "C" {
-    fn ns_js_sync_window_metrics(js: *mut c_void);
     fn ns_js_focused_node(js: *const c_void) -> *const NsNode;
-    fn ns_js_fire_media_load_events(js: *mut c_void, layout: *const NsBox);
-    fn ns_js_has_pending_work(js: *const c_void) -> GBoolean;
-    fn ns_js_has_pending_animation_frame(js: *const c_void) -> GBoolean;
-    fn ns_js_dispatch_anim_events(js: *mut c_void, anim: *mut c_void);
-    fn ns_js_run_animation_frame(js: *mut c_void) -> GBoolean;
     pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
     fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
-    fn ns_js_note_viewport_scroll(js: *mut c_void, x: f64, y: f64);
-    fn ns_js_needs_tick(js: *const c_void) -> GBoolean;
-    fn ns_js_dispatch_resize(js: *mut c_void);
-    fn ns_js_reeval_media_queries(js: *mut c_void);
     fn ns_js_window_action_applied(js: *mut c_void);
     fn ns_js_dump_stats(js: *mut c_void, out: *mut GString);
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
-    fn ns_js_fire_page_transition(js: *mut c_void, kind: *const c_char, persisted: GBoolean);
     fn ns_js_dispatch_event(
         js: *mut c_void,
         target: *const NsNode,
@@ -67,7 +56,8 @@ impl Js {
     }
 
     pub fn sync_window_metrics(self) {
-        unsafe { ns_js_sync_window_metrics(self.raw()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_window::sync_window_metrics(self.raw()) };
     }
 
     pub fn set_layout_root(self, root: Option<BoxRef<'_>>) {
@@ -83,23 +73,28 @@ impl Js {
     }
 
     pub fn fire_media_load_events(self, layout: BoxRef<'_>) {
-        unsafe { ns_js_fire_media_load_events(self.raw(), layout.as_ptr()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::fire_media_load_events(self.raw(), Some(layout)) };
     }
 
     pub fn has_pending_work(self) -> bool {
-        unsafe { ns_js_has_pending_work(self.raw()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::has_pending_work(self.raw()) }
     }
 
     pub fn has_pending_animation_frame(self) -> bool {
-        unsafe { ns_js_has_pending_animation_frame(self.raw()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::has_pending_animation_frame(self.raw()) }
     }
 
     pub fn dispatch_anim_events(self, anim: Anim) {
-        unsafe { ns_js_dispatch_anim_events(self.raw(), anim.raw()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::dispatch_anim_events(self.raw(), anim) };
     }
 
     pub fn run_animation_frame(self) -> bool {
-        unsafe { ns_js_run_animation_frame(self.raw()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::run_animation_frame(self.raw()) }
     }
 
     pub fn set_selection(self, text: Option<&CStr>, has_range: bool, r: [f64; 4]) {
@@ -120,19 +115,23 @@ impl Js {
     }
 
     pub fn note_viewport_scroll(self, x: f64, y: f64) {
-        unsafe { ns_js_note_viewport_scroll(self.raw(), x, y) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_window::note_viewport_scroll(self.raw(), x, y) };
     }
 
     pub fn needs_tick(self) -> bool {
-        unsafe { ns_js_needs_tick(self.raw()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_lifecycle::needs_tick(self.raw()) }
     }
 
     pub fn dispatch_resize(self) {
-        unsafe { ns_js_dispatch_resize(self.raw()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_window::dispatch_resize(self.raw()) };
     }
 
     pub fn reeval_media_queries(self) {
-        unsafe { ns_js_reeval_media_queries(self.raw()) };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_window::reeval_media_queries(self.raw()) };
     }
 
     pub fn window_action_applied(self) {
@@ -148,13 +147,8 @@ impl Js {
     }
 
     pub fn fire_page_transition(self, kind: &CStr, persisted: bool) {
-        unsafe {
-            ns_js_fire_page_transition(
-                self.raw(),
-                kind.as_ptr(),
-                southstar_glib::boolean(persisted),
-            )
-        };
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_window::fire_page_transition(self.raw(), kind, persisted) };
     }
 
     pub fn in_pump(self) -> bool {

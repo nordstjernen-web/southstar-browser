@@ -1749,7 +1749,9 @@ dependencies = [
  "southstar-html-parser",
  "southstar-html-util",
  "southstar-image",
+ "southstar-js-lifecycle",
  "southstar-js-runtime",
+ "southstar-js-window",
  "southstar-layout",
  "southstar-layout-hit",
  "southstar-layout-query",
@@ -2094,6 +2096,8 @@ dependencies = [
  "southstar-html-parser",
  "southstar-html-util",
  "southstar-image",
+ "southstar-js-lifecycle",
+ "southstar-js-window",
  "southstar-layout",
  "southstar-layout-hit",
  "southstar-layout-query",
@@ -2527,6 +2531,7 @@ dependencies = [
 name = "southstar-js-lifecycle"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-dom",
  "southstar-glib",
  "southstar-js-engine",
@@ -2771,6 +2776,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
+ "southstar-layout-hit",
  "southstar-url",
 ]
 

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -548,15 +548,25 @@ pub fn nsr_window_install_actions(scope: &mut Scope<'_>, global: &Value) {
     context::install_actions(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
-    let js = Js::of(js);
+fn sync_metrics(js: Js) {
     if js.is_null() {
         return;
     }
     in_main_realm_scope(js, || {
         with_main_context(js, context::sync_metrics);
     });
+}
+
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn sync_window_metrics(js: *mut c_void) {
+    sync_metrics(Js::of(js.cast()));
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
+    sync_metrics(Js::of(js));
 }
 
 #[unsafe(no_mangle)]
@@ -596,7 +606,6 @@ pub unsafe fn nsr_document_expose_legacy_named(
 unsafe extern "C" {
     fn ns_window_scroll_prop(ctx: ContextHandle, prop: *const c_char) -> f64;
     fn ns_js_queue_scrollend_document(js: *mut NsJs);
-    fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -629,7 +638,7 @@ pub(crate) fn queue_scrollend_document(js: Js) {
 }
 
 pub(crate) fn set_hit_viewport(x: f64, y: f64) {
-    unsafe { ns_box_set_hit_viewport(x, y) };
+    southstar_layout_hit::set_hit_viewport(x, y);
 }
 
 pub(crate) fn dispatch_node_event(js: Js, target: Node<'_>, kind: &CStr) {
@@ -663,7 +672,7 @@ pub(crate) fn schedule_observer_tick(js: Js) {
     api::observer_schedule_tick(js.ptr());
 }
 
-pub(crate) fn reeval_media_queries(js: Js) {
+pub(crate) fn reeval_services_media_queries(js: Js) {
     unsafe { ns_services_reeval_media_queries(js.ptr()) };
 }
 
@@ -713,21 +722,41 @@ pub unsafe extern "C" fn ns_js_anchor_fragment_navigate(
     southstar_glib::boolean(page::anchor_fragment_navigate(Js::of(js), abs_url))
 }
 
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn note_viewport_scroll(js: *mut c_void, x: f64, y: f64) {
+    page::note_viewport_scroll(Js::of(js.cast()), x, y);
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64) {
     page::note_viewport_scroll(Js::of(js), x, y);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_resize(js: *mut NsJs) {
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_resize(js: *mut c_void) {
     if !js.is_null() {
-        page::dispatch_resize(Js::of(js));
+        page::dispatch_resize(Js::of(js.cast()));
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_reeval_media_queries(js: *mut NsJs) {
-    reeval_media_queries(Js::of(js));
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn reeval_media_queries(js: *mut c_void) {
+    reeval_services_media_queries(Js::of(js.cast()));
+}
+
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn fire_page_transition(js: *mut c_void, kind: &CStr, persisted: bool) {
+    if !js.is_null() {
+        page::fire_page_transition(Js::of(js.cast()), kind, persisted);
+    }
 }
 
 #[unsafe(no_mangle)]

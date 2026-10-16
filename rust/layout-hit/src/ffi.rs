@@ -170,11 +170,6 @@ pub unsafe extern "C" fn ns_layout_node_is_form_hit_target(n: *const NsNode) -> 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_box_set_hit_viewport(scroll_x: f64, scroll_y: f64) {
-    crate::geometry::set_viewport(scroll_x, scroll_y);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_is_fixed(b: *const NsBox) -> GBoolean {
     boolean(entry(b).is_some_and(crate::geometry::is_fixed))
 }

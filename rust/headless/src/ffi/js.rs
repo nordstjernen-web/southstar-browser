@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
-use southstar_layout::NsBox;
+use southstar_layout::{BoxRef, NsBox};
 
 use super::engine::{Anim, ImageCache, VideoCache};
 use crate::inproc::{Ctx, NavCapture};
@@ -158,11 +158,7 @@ unsafe extern "C" {
     fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_note_pointer_input(js: *mut c_void, pointer: GBoolean);
-    fn ns_js_note_viewport_scroll(js: *mut c_void, x: f64, y: f64);
     fn ns_js_sequential_focus_target(js: *mut c_void, backward: GBoolean) -> *const NsNode;
-    fn ns_js_dispatch_anim_events(js: *mut c_void, anim: *mut c_void);
-    fn ns_js_run_animation_frame(js: *mut c_void) -> GBoolean;
-    fn ns_js_fire_media_load_events(js: *mut c_void, layout: *const NsBox);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
 
@@ -300,7 +296,8 @@ pub fn note_pointer_input(js: Option<Js>, pointer: bool) {
 }
 
 pub fn note_viewport_scroll(js: Option<Js>, x: f64, y: f64) {
-    unsafe { ns_js_note_viewport_scroll(js_raw(js), x, y) };
+    // SAFETY: js_raw gives null or the run's live script engine.
+    unsafe { southstar_js_window::note_viewport_scroll(js_raw(js), x, y) };
 }
 
 impl Js {
@@ -473,15 +470,18 @@ impl Js {
     }
 
     pub fn dispatch_anim_events(self, anim: Anim) {
-        unsafe { ns_js_dispatch_anim_events(self.raw(), anim.raw()) };
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_lifecycle::dispatch_anim_events(self.raw(), anim) };
     }
 
     pub fn run_animation_frame(self) {
-        unsafe { ns_js_run_animation_frame(self.raw()) };
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_lifecycle::run_animation_frame(self.raw()) };
     }
 
-    pub fn fire_media_load_events(self, layout: *const NsBox) {
-        unsafe { ns_js_fire_media_load_events(self.raw(), layout) };
+    pub fn fire_media_load_events(self, layout: Option<BoxRef<'_>>) {
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_lifecycle::fire_media_load_events(self.raw(), layout) };
     }
 
     pub fn drag_session(self) -> Option<DragSession> {
