@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Assigning an array's length a second time from the same line of script
+  removes the elements past the new length. The first assignment did, but
+  the property cache then treated length as an ordinary property, so
+  arr.length = 0 left the old elements in place and the array kept them
+  once refilled; Twitch's GraphQL client failed with "unknown value" and
+  rendered no stream directory.
 * Running out of call stack throws a RangeError ("Maximum call stack
   size exceeded") that scripts can catch, as in other browsers. It used
   to end the script with an uncatchable error, so code that measures the
