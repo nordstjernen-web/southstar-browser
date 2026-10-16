@@ -24,6 +24,11 @@ Southstar Browser 0.9.11-dev:
   freed: pango_attribute_destroy(NULL) ran for every such run (dozens of
   warnings per page on sites like Ars Technica), and a failed camera open
   closed fd -1.
+* A page with a live WebGL context no longer aborts the browser on exit.
+  The script engine's heap is freed while thread-locals are torn down,
+  and the WebGL context's destructor read two thread-locals that were
+  already gone; it now skips them. x.com crashed this way about half
+  the time after a headless dump.
 * A connection the server or a proxy resets during a TLS exchange no
   longer kills the browser with SIGPIPE. The close_notify alert went out
   through writev(), which raises the signal on a dead socket; TLS records

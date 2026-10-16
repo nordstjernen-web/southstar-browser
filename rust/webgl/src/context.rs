@@ -694,7 +694,7 @@ impl Drop for WebGl {
         }
         self.gl.release();
         let me = self as *const WebGl;
-        ACTIVE.with(|a| {
+        let _ = ACTIVE.try_with(|a| {
             let Ok(mut active) = a.try_borrow_mut() else {
                 return;
             };
