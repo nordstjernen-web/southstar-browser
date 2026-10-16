@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* Outlines follow the border-radius of their box, as in current
+  browsers: the curve grows by outline-offset and shrinks for a negative
+  offset. They were always drawn as rectangles, so pill-shaped search
+  fields and rounded buttons (Yahoo's search box, focus rings) showed
+  square outlines around round corners.
 * Elements have an onerror property on HTMLElement.prototype (and on SVG
   and MathML elements and the document), like every other event handler.
   It was missing from the prototypes, so scripts that wrap the built-in

@@ -1663,11 +1663,14 @@ pub fn paint_block(cr: Cr, b: BoxRef<'_>) {
             } else if ostyle == b"dotted" {
                 cr.set_dash(&[ow, ow]);
             }
-            cr.rectangle(
-                border_x - off - ow / 2.0,
-                border_y - off - ow / 2.0,
-                border_w + (off + ow / 2.0) * 2.0,
-                border_h + (off + ow / 2.0) * 2.0,
+            let spread = off + ow / 2.0;
+            rounded_rect_path(
+                cr,
+                border_x - spread,
+                border_y - spread,
+                border_w + spread * 2.0,
+                border_h + spread * 2.0,
+                radii.fit(border_w, border_h).outset(spread),
             );
             cr.stroke();
             cr.restore();

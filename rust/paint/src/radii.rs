@@ -90,6 +90,23 @@ impl CornerRadii {
             .any(|(sum, len)| sum > 0.0 && len / sum < 1.0)
     }
 
+    pub fn outset(self, by: f64) -> CornerRadii {
+        if self.is_zero() {
+            return self;
+        }
+        let grow = |r: f64| if r > 0.0 { cmax(0.0, r + by) } else { 0.0 };
+        CornerRadii {
+            tl: grow(self.tl),
+            tr: grow(self.tr),
+            br: grow(self.br),
+            bl: grow(self.bl),
+            tlv: grow(self.tlv),
+            trv: grow(self.trv),
+            brv: grow(self.brv),
+            blv: grow(self.blv),
+        }
+    }
+
     pub fn inset(self, top: f64, right: f64, bottom: f64, left: f64) -> CornerRadii {
         CornerRadii {
             tl: cmax(0.0, self.tl - left),
