@@ -275,6 +275,13 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* XMLSerializer produces real XML: namespace declarations and prefixes
+  per DOM Parsing, self-closing empty elements and escaped attribute
+  values, instead of the element's HTML outerHTML. DOMParser returns a
+  Document for XML types and a parsererror document for unclosed
+  elements. HTML serialization no longer doubles a leading newline in
+  pre, textarea and listing. Forms inside templates are parsed as the
+  current HTML standard says.
 * NUL characters in HTML no longer cut a document short. Page and frame
   loads, document.write and DOMParser passed the decoded text around as
   C strings, so everything after a NUL byte was lost; the text now stays
