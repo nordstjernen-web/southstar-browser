@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the HTTP cache, and the GLib, file and ACL calls behind it.
+//! Southstar — the GLib, file and ACL calls behind the HTTP cache.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -441,19 +441,4 @@ pub(crate) fn parse_http_date(text: &[u8]) -> i64 {
         g_time_zone_unref(utc);
         unix_from(dt)
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_cache_init() {
-    crate::init();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_cache_shutdown() {
-    crate::shutdown();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_cache_clear() {
-    crate::clear();
 }

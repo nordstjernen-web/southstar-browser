@@ -99,8 +99,6 @@ unsafe extern "C" {
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
-    fn ns_cache_init();
-    fn ns_cache_shutdown();
     fn ns_font_init();
     fn ns_spell_init();
 }
@@ -608,9 +606,9 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
     if log_net {
         southstar_net::set_log_fetches(true);
     }
+    southstar_http_cache::init();
+    southstar_history::init();
     unsafe {
-        ns_cache_init();
-        southstar_history::init();
         ns_font_init();
         ns_spell_init();
     }
@@ -630,9 +628,7 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
     drop(file_url);
     southstar_bytecode_cache::shutdown();
     southstar_history::shutdown();
-    unsafe {
-        ns_cache_shutdown();
-    }
+    southstar_http_cache::shutdown();
     southstar_net::shutdown();
     southstar_config::shutdown();
     rc

@@ -32,7 +32,6 @@ unsafe extern "C" {
     fn ns_address_is_search(s: *const c_char) -> GBoolean;
     fn ns_search_url_for(query: *const c_char) -> *mut c_char;
     fn ns_browser_set_color_scheme(dark: c_int);
-    fn ns_cache_clear();
 }
 
 const WINDOW_KEY: &CStr = c"ns-procwindow";
@@ -1173,7 +1172,7 @@ unsafe extern "C" fn act_hard_reload(_a: *mut c_void, _p: *mut c_void, data: *mu
     let Some(v) = unsafe { pw(data) }.current_view() else {
         return;
     };
-    unsafe { ns_cache_clear() };
+    southstar_http_cache::clear();
     v.reload();
 }
 

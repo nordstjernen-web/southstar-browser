@@ -37,7 +37,6 @@ unsafe extern "C" {
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
     fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
-    fn ns_cache_clear();
     fn ns_net_cookies_clear();
     fn ns_net_site_storage_clear();
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_version_string")]
@@ -212,8 +211,8 @@ pub fn history_page() -> Vec<u8> {
 
 pub fn clear_browsing_data() {
     southstar_history::clear();
+    southstar_http_cache::clear();
     unsafe {
-        ns_cache_clear();
         ns_net_cookies_clear();
         ns_net_site_storage_clear();
     }

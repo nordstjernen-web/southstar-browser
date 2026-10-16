@@ -25,8 +25,6 @@ unsafe extern "C" {
     fn ns_security_win32_mitigations_init(allow_child_processes: GBoolean);
     fn ns_security_sandbox_init(self_exe: *const c_char);
     fn ns_security_seccomp_init();
-    fn ns_cache_init();
-    fn ns_cache_shutdown();
     fn ns_font_init();
     fn ns_font_shutdown();
     fn ns_spell_init();
@@ -211,9 +209,9 @@ pub fn init_subsystems() {
     }
     southstar_net::init();
     southstar_net::set_allow_file_urls(true);
+    southstar_http_cache::init();
+    southstar_history::init();
     unsafe {
-        ns_cache_init();
-        southstar_history::init();
         ns_font_init();
         ns_spell_init();
     }
@@ -232,9 +230,9 @@ pub fn shutdown() {
     southstar_bytecode_cache::shutdown();
     unsafe {
         ns_font_shutdown();
-        southstar_history::shutdown();
-        ns_cache_shutdown();
     }
+    southstar_history::shutdown();
+    southstar_http_cache::shutdown();
     southstar_net::shutdown();
     southstar_config::shutdown();
 }
