@@ -104,7 +104,7 @@ impl Zlib {
                 )
             }
         };
-        (rc == Z_OK).then_some(Zlib { stream, decompress })
+        (rc == Z_OK).then(|| Zlib { stream, decompress })
     }
 
     pub fn decompress(&self) -> bool {

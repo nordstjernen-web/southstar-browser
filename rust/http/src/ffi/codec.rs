@@ -77,7 +77,7 @@ impl Inflate {
                 core::mem::size_of::<ZStream>() as c_int,
             )
         };
-        (rc == Z_OK).then_some(Inflate {
+        (rc == Z_OK).then(|| Inflate {
             stream,
             finished: false,
         })
@@ -169,7 +169,7 @@ mod brotli {
                     core::ptr::null_mut(),
                 )
             };
-            (!state.is_null()).then_some(Brotli {
+            (!state.is_null()).then(|| Brotli {
                 state,
                 finished: false,
             })
