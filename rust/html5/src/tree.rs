@@ -778,6 +778,10 @@ impl<'s, S: TreeSink> Builder<'s, S> {
         self.open.iter().any(|e| e.is(Tag::Template))
     }
 
+    fn parsing_template_contents(&self) -> bool {
+        !self.template_modes.is_empty()
+    }
+
     fn remove_from_stack(&mut self, h: S::Handle) {
         if let Some(i) = self.open.iter().rposition(|e| e.h == h) {
             self.open.remove(i);
@@ -1438,12 +1442,12 @@ impl<'s, S: TreeSink> Builder<'s, S> {
                 self.frameset_ok = false;
             }
             Tag::Form => {
-                if self.form.is_some() && !self.has_template() {
+                if self.form.is_some() && !self.parsing_template_contents() {
                     return Step::Done;
                 }
                 self.close_p_in_button_scope();
                 let h = self.insert_html(t);
-                if !self.has_template() {
+                if !self.parsing_template_contents() {
                     self.form = Some(h);
                 }
             }
@@ -1751,7 +1755,7 @@ impl<'s, S: TreeSink> Builder<'s, S> {
                 }
             }
             Tag::Form => {
-                if self.has_template() {
+                if self.parsing_template_contents() {
                     if self.in_scope(Tag::Form, Scope::Default) {
                         self.generate_implied_end_tags(None);
                         self.pop_until(Tag::Form);
@@ -1928,11 +1932,13 @@ impl<'s, S: TreeSink> Builder<'s, S> {
                     Step::Done
                 }
                 Tag::Form => {
-                    if self.has_template() || self.form.is_some() {
+                    if self.form.is_some() && !self.parsing_template_contents() {
                         return Step::Done;
                     }
                     let h = self.insert_html(t);
-                    self.form = Some(h);
+                    if !self.parsing_template_contents() {
+                        self.form = Some(h);
+                    }
                     self.open.pop();
                     Step::Done
                 }
