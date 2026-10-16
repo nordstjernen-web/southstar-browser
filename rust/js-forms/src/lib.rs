@@ -16,6 +16,11 @@ pub mod submit;
 pub mod validity;
 pub mod value;
 
+pub use ffi::{
+    click_activate, dispatch_submit_event, select_choose_option, select_edge, select_step,
+    select_toggle_option, select_typeahead,
+};
+
 use core::ffi::CStr;
 
 use southstar_dom::{Kind, Node, children, serialize};

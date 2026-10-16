@@ -96,12 +96,6 @@ unsafe extern "C" {
         kind: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_dispatch_submit_event(
-        js: *mut c_void,
-        form: *const NsNode,
-        submitter: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_dispatch_key_event(
         js: *mut c_void,
         target: *const NsNode,
@@ -153,7 +147,6 @@ unsafe extern "C" {
     fn ns_js_drag_session_new(js: *mut c_void) -> *mut c_void;
     fn ns_js_drag_session_free(session: *mut c_void);
     fn ns_js_drag_session_set_data(session: *mut c_void, kind: *const c_char, data: *const c_char);
-    fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
@@ -383,16 +376,10 @@ impl Js {
     }
 
     pub fn dispatch_submit(self, form: Node, submitter: Node) -> bool {
-        let mut prevented: GBoolean = glib::FALSE;
-        unsafe {
-            ns_js_dispatch_submit_event(
-                self.raw(),
-                form.as_ptr(),
-                submitter.as_ptr(),
-                &mut prevented,
-            )
-        };
-        prevented != 0
+        // SAFETY: a Js handle names the run's live script engine.
+        let (_, prevented) =
+            unsafe { southstar_js_forms::dispatch_submit_event(self.raw(), form, Some(submitter)) };
+        prevented
     }
 
     pub fn dispatch_key(
@@ -457,7 +444,8 @@ impl Js {
     }
 
     pub fn click_activate(self, node: Node) -> bool {
-        unsafe { ns_js_click_activate(self.raw(), node.as_ptr()) != 0 }
+        // SAFETY: a Js handle names the run's live script engine.
+        unsafe { southstar_js_forms::click_activate(self.raw(), node) }
     }
 
     pub fn details_toggle_open(self, details: Node, open: bool) {

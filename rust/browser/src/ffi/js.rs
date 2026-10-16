@@ -25,12 +25,6 @@ unsafe extern "C" {
         kind: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_dispatch_submit_event(
-        js: *mut c_void,
-        form: *const NsNode,
-        submitter: *const NsNode,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -174,16 +168,10 @@ impl Js {
     }
 
     pub fn dispatch_submit_event(self, form: Node<'_>, submitter: Node<'_>) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_submit_event(
-                self.raw(),
-                form.as_ptr(),
-                submitter.as_ptr(),
-                &mut prevented,
-            )
-        };
-        prevented != 0
+        // SAFETY: a Js handle names the page's live script engine.
+        let (_, prevented) =
+            unsafe { southstar_js_forms::dispatch_submit_event(self.raw(), form, Some(submitter)) };
+        prevented
     }
 
     pub fn set_image_cache(self, images: Option<Images>) {

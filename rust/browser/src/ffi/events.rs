@@ -81,14 +81,7 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_note_user_edit(js: *mut c_void, el: *const NsNode, value_before: *const c_char);
     fn ns_js_commit_change(js: *mut c_void, el: *const NsNode);
-    fn ns_js_click_activate(js: *mut c_void, node: *const NsNode) -> GBoolean;
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
-    fn ns_js_select_toggle_option(js: *mut c_void, option: *mut NsNode) -> GBoolean;
-    fn ns_js_select_choose_option(js: *mut c_void, option: *mut NsNode) -> GBoolean;
-    fn ns_js_select_step(js: *mut c_void, select: *mut NsNode, dir: c_int) -> GBoolean;
-    fn ns_js_select_edge(js: *mut c_void, select: *mut NsNode, last: GBoolean) -> GBoolean;
-    fn ns_js_select_typeahead(js: *mut c_void, select: *mut NsNode, key: *const c_char)
-    -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
     fn ns_option_label_dup(option: *const NsNode) -> *mut c_char;
@@ -295,7 +288,8 @@ impl Js {
     }
 
     pub fn click_activate(self, node: Node<'_>) -> bool {
-        unsafe { ns_js_click_activate(self.raw(), node.as_ptr()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::click_activate(self.raw(), node) }
     }
 
     pub fn activate_summary(self, el: Node<'_>) -> bool {
@@ -307,23 +301,28 @@ impl Js {
     }
 
     pub fn select_toggle_option(self, option: Node<'_>) -> bool {
-        unsafe { ns_js_select_toggle_option(self.raw(), option.as_mut_ptr()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::select_toggle_option(self.raw(), option) }
     }
 
     pub fn select_choose_option(self, option: Node<'_>) -> bool {
-        unsafe { ns_js_select_choose_option(self.raw(), option.as_mut_ptr()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::select_choose_option(self.raw(), option) }
     }
 
     pub fn select_step(self, select: Node<'_>, dir: c_int) -> bool {
-        unsafe { ns_js_select_step(self.raw(), select.as_mut_ptr(), dir) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::select_step(self.raw(), select, dir) }
     }
 
     pub fn select_edge(self, select: Node<'_>, last: bool) -> bool {
-        unsafe { ns_js_select_edge(self.raw(), select.as_mut_ptr(), glib::boolean(last)) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::select_edge(self.raw(), select, last) }
     }
 
     pub fn select_typeahead(self, select: Node<'_>, key: &CStr) -> bool {
-        unsafe { ns_js_select_typeahead(self.raw(), select.as_mut_ptr(), key.as_ptr()) != 0 }
+        // SAFETY: a Js handle names the page's live script engine.
+        unsafe { southstar_js_forms::select_typeahead(self.raw(), select, key.to_bytes()) }
     }
 
     pub fn keyboard_activate(self, el: Node<'_>, key: Option<&CStr>, keyup: bool) -> bool {

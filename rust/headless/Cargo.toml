@@ -22,6 +22,7 @@ southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-js-focus = { path = "../js-focus" }
+southstar-js-forms = { path = "../js-forms" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-window = { path = "../js-window" }
 southstar-image = { path = "../image" }

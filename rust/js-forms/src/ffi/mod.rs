@@ -86,6 +86,10 @@ fn node(ptr: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(ptr) }
 }
 
+fn live(n: Node<'_>) -> Option<Element> {
+    n.downgrade().get()
+}
+
 fn mut_ptr(node: Element) -> *mut NsNode {
     node.as_ptr().cast_mut()
 }
@@ -592,24 +596,18 @@ pub unsafe extern "C" fn ns_node_is_reset_trigger(el: *const NsNode) -> GBoolean
     glib::boolean(node(el).is_some_and(crate::submit::is_reset_trigger))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_submit_event(
-    js: *mut NsJs,
-    form: *const NsNode,
-    submitter: *const NsNode,
-    default_prevented: *mut GBoolean,
-) -> GBoolean {
-    if !default_prevented.is_null() {
-        unsafe { *default_prevented = 0 };
-    }
-    let (false, Some(form)) = (js.is_null(), node(form)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn dispatch_submit_event(
+    js: *mut c_void,
+    form: Node<'_>,
+    submitter: Option<Node<'_>>,
+) -> (bool, bool) {
+    let (Some(page), Some(form)) = (page_of(js.cast()), live(form)) else {
+        return (false, false);
     };
-    let (dispatched, prevented) = Page(js).dispatch_submit(form, node(submitter));
-    if !default_prevented.is_null() {
-        unsafe { *default_prevented = glib::boolean(prevented) };
-    }
-    glib::boolean(dispatched)
+    page.dispatch_submit(form, submitter.and_then(live))
 }
 
 #[unsafe(no_mangle)]
@@ -685,70 +683,62 @@ pub unsafe extern "C" fn ns_checkable_post_click(
     crate::checkable::post_click(page_of(js), el, kind, &state, prevented != 0);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_click_activate(js: *mut NsJs, n: *const NsNode) -> GBoolean {
-    let (Some(page), Some(n)) = (page_of(js), node(n)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn click_activate(js: *mut c_void, n: Node<'_>) -> bool {
+    let (Some(page), Some(n)) = (page_of(js.cast()), live(n)) else {
+        return false;
     };
-    glib::boolean(crate::checkable::click_activate(page, n))
+    crate::checkable::click_activate(page, n)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_select_choose_option(
-    js: *mut NsJs,
-    option: *mut NsNode,
-) -> GBoolean {
-    let (Some(page), Some(option)) = (page_of(js), node(option)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn select_choose_option(js: *mut c_void, option: Node<'_>) -> bool {
+    let (Some(page), Some(option)) = (page_of(js.cast()), live(option)) else {
+        return false;
     };
-    glib::boolean(crate::select::choose_option(page, option))
+    crate::select::choose_option(page, option)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_select_toggle_option(
-    js: *mut NsJs,
-    option: *mut NsNode,
-) -> GBoolean {
-    let (Some(page), Some(option)) = (page_of(js), node(option)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn select_toggle_option(js: *mut c_void, option: Node<'_>) -> bool {
+    let (Some(page), Some(option)) = (page_of(js.cast()), live(option)) else {
+        return false;
     };
-    glib::boolean(crate::select::toggle_option(page, option))
+    crate::select::toggle_option(page, option)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_select_step(
-    js: *mut NsJs,
-    select: *mut NsNode,
-    dir: c_int,
-) -> GBoolean {
-    let (Some(page), Some(select)) = (page_of(js), node(select)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn select_step(js: *mut c_void, select: Node<'_>, dir: c_int) -> bool {
+    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+        return false;
     };
-    glib::boolean(crate::select::step(page, select, dir))
+    crate::select::step(page, select, dir)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_select_edge(
-    js: *mut NsJs,
-    select: *mut NsNode,
-    last: GBoolean,
-) -> GBoolean {
-    let (Some(page), Some(select)) = (page_of(js), node(select)) else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn select_edge(js: *mut c_void, select: Node<'_>, last: bool) -> bool {
+    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+        return false;
     };
-    glib::boolean(crate::select::edge(page, select, last != 0))
+    crate::select::edge(page, select, last)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_select_typeahead(
-    js: *mut NsJs,
-    select: *mut NsNode,
-    key: *const c_char,
-) -> GBoolean {
-    let (Some(page), Some(select), Some(key)) =
-        (page_of(js), node(select), unsafe { glib::bytes(key) })
-    else {
-        return glib::FALSE;
+/// # Safety
+///
+/// `js` is null or a live script engine.
+pub unsafe fn select_typeahead(js: *mut c_void, select: Node<'_>, key: &[u8]) -> bool {
+    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+        return false;
     };
-    glib::boolean(crate::select::typeahead(page, select, key))
+    crate::select::typeahead(page, select, key)
 }
