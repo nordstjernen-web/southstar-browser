@@ -234,6 +234,19 @@ pub struct Tls {
     tcp: TcpStream,
 }
 
+struct Sender<'a>(&'a TcpStream);
+
+impl Write for Sender<'_> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut tcp = self.0;
+        tcp.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 pub enum Io {
     Done(usize),
     WouldBlock,
@@ -314,7 +327,7 @@ impl Tls {
 
     fn flush_tls(&mut self) -> io::Result<bool> {
         while self.conn.wants_write() {
-            match self.conn.write_tls(&mut &self.tcp) {
+            match self.conn.write_tls(&mut Sender(&self.tcp)) {
                 Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
                 Ok(_) => {}
                 Err(error) if would_block(&error) => return Ok(false),

@@ -101,6 +101,41 @@ unsafe extern "C" {
     fn poll(fds: *mut PollFdC, nfds: Nfds, timeout: c_int) -> c_int;
 }
 
+#[cfg(target_os = "macos")]
+const SOL_SOCKET: c_int = 0xffff;
+#[cfg(target_os = "macos")]
+const SO_NOSIGPIPE: c_int = 0x1022;
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn setsockopt(
+        fd: c_int,
+        level: c_int,
+        name: c_int,
+        value: *const core::ffi::c_void,
+        len: u32,
+    ) -> c_int;
+}
+
+#[cfg(target_os = "macos")]
+fn no_sigpipe(stream: &TcpStream) {
+    let on: c_int = 1;
+    // SAFETY: the descriptor is the open socket `stream` owns, and the option value points at a
+    // live c_int whose size is passed alongside it.
+    unsafe {
+        setsockopt(
+            stream.as_raw_fd(),
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            (&raw const on).cast(),
+            size_of::<c_int>() as u32,
+        )
+    };
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn no_sigpipe(_stream: &TcpStream) {}
+
 #[cfg(windows)]
 #[link(name = "ws2_32")]
 unsafe extern "system" {
@@ -200,7 +235,9 @@ pub fn encode_addr(addr: &SocketAddr) -> (Vec<u8>, c_int) {
 #[cfg(unix)]
 fn new_socket(family: c_int) -> Option<TcpStream> {
     let fd = unsafe { socket(family, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP) };
-    (fd >= 0).then(|| unsafe { TcpStream::from_raw_fd(fd) })
+    let stream = (fd >= 0).then(|| unsafe { TcpStream::from_raw_fd(fd) })?;
+    no_sigpipe(&stream);
+    Some(stream)
 }
 
 #[cfg(windows)]
