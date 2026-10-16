@@ -76,6 +76,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn ns_js_free(js: *mut c_void);
     fn ns_js_set_form_submit_cb(js: *mut c_void, cb: Option<FormSubmitCb>, ud: *mut c_void);
+    fn ns_js_submit_form(js: *mut c_void, form: *const NsNode, submitter: *const NsNode);
     fn ns_js_set_style_table(js: *mut c_void, styles: *mut GHashTable);
     fn ns_js_set_image_cache(js: *mut c_void, cache: *mut c_void);
     fn ns_js_set_anim(js: *mut c_void, anim: *mut c_void);
@@ -405,6 +406,11 @@ impl Js {
         let mut prevented: GBoolean = glib::FALSE;
         unsafe { ns_js_dispatch_event(self.raw(), target.as_ptr(), kind.as_ptr(), &mut prevented) };
         prevented != 0
+    }
+
+    pub fn submit_form(self, form: Node, submitter: Node) {
+        // SAFETY: the page is live and both nodes belong to it.
+        unsafe { ns_js_submit_form(self.raw(), form.as_ptr(), submitter.as_ptr()) };
     }
 
     pub fn dispatch_submit(self, form: Node, submitter: Node) -> bool {
