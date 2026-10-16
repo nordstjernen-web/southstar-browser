@@ -10,7 +10,7 @@ use southstar_glib as glib;
 
 use super::computed_units::RawStyle;
 use super::value::ns_css_value_free;
-use super::vars::{map_ref, ns_var_map_unref};
+use super::vars::{map_ref, var_map_unref};
 
 const POOL_MAX: usize = 16384;
 
@@ -34,8 +34,7 @@ fn release(style: *mut RawStyle) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_style_alloc() -> *mut RawStyle {
+pub(super) fn style_alloc() -> *mut RawStyle {
     match pooled() {
         Some(style) => {
             unsafe { ptr::write_bytes(style, 0, 1) };
@@ -63,17 +62,13 @@ pub unsafe extern "C" fn ns_style_free(s: *mut RawStyle) {
         unsafe { ns_style_free(pseudo) };
     }
     if !style.vars.is_null() {
-        unsafe { ns_var_map_unref(style.vars) };
+        unsafe { var_map_unref(style.vars) };
     }
     release(s);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_style_clone_shared(s: *const RawStyle) -> *mut RawStyle {
-    let Some(source) = (unsafe { s.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    let out = ns_style_alloc();
+pub(super) fn style_clone_shared(source: &RawStyle) -> *mut RawStyle {
+    let out = style_alloc();
     let clone = unsafe { &mut *out };
     clone.share_id = source.share_id;
     clone.display = source.display;
@@ -84,7 +79,7 @@ pub unsafe extern "C" fn ns_style_clone_shared(s: *const RawStyle) -> *mut RawSt
         *slot = value;
     }
     for (slot, &pseudo) in clone.pseudo_styles.iter_mut().zip(&source.pseudo_styles) {
-        *slot = unsafe { ns_style_clone_shared(pseudo) };
+        *slot = unsafe { pseudo.as_ref() }.map_or(ptr::null_mut(), style_clone_shared);
     }
     clone.vars = unsafe { map_ref(source.vars) };
     out

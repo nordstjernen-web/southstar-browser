@@ -263,24 +263,12 @@ impl<'a> ScopeRef<'a> {
 }
 
 impl<'a> SheetRef<'a> {
-    pub(super) unsafe fn from_ptr(sheet: *const c_void) -> Option<Self> {
-        unsafe { sheet.cast::<RawSheet>().as_ref() }.map(SheetRef)
+    pub(super) fn new(sheet: &'a RawSheet) -> Self {
+        SheetRef(sheet)
     }
 
-    pub(super) unsafe fn list(
-        ua: *const c_void,
-        author: *const *const c_void,
-        n_author: usize,
-    ) -> Vec<SheetRef<'a>> {
-        let author: &[*const c_void] = if author.is_null() || n_author == 0 {
-            &[]
-        } else {
-            unsafe { slice::from_raw_parts(author, n_author) }
-        };
-        core::iter::once(ua)
-            .chain(author.iter().copied())
-            .filter_map(|sheet| unsafe { SheetRef::from_ptr(sheet) })
-            .collect()
+    pub(super) fn raw(self) -> &'a RawSheet {
+        self.0
     }
 
     pub(crate) fn layer_names(self) -> impl Iterator<Item = &'a [u8]> {

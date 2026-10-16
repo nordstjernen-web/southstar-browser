@@ -114,11 +114,7 @@ pub(super) unsafe fn index_free(idx: *mut RawIndex) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_rule_index_build(sheet: *mut c_void) -> *mut c_void {
-    let Some(sheet) = (unsafe { sheet.cast::<RawSheet>().as_mut() }) else {
-        return ptr::null_mut();
-    };
+pub(super) fn rule_index_build(sheet: &mut RawSheet) -> *mut RawIndex {
     let mut rules = Vec::new();
     for &rule in unsafe { rule_slice(sheet) } {
         let Some(rule) = (unsafe { rule.as_mut() }) else {
@@ -168,5 +164,5 @@ pub unsafe extern "C" fn ns_css_rule_index_build(sheet: *mut c_void) -> *mut c_v
     }
     let raw = unsafe { glib::g_malloc0(size_of::<RawIndex>()) }.cast::<RawIndex>();
     unsafe { raw.write(index) };
-    raw.cast()
+    raw
 }

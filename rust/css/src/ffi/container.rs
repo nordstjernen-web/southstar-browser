@@ -69,11 +69,6 @@ pub extern "C" fn ns_css_container_features_used() -> GBoolean {
     glib::boolean(container::features_used())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_features_note() {
-    container::note_features();
-}
-
 unsafe extern "C" fn container_free(data: *mut c_void) {
     let container = data.cast::<Container>();
     if let Some(container) = unsafe { container.as_ref() } {
@@ -213,8 +208,7 @@ fn container_hash(node: *const c_void, c: &Container) -> u64 {
     x
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_map_signature() -> u64 {
+pub(super) fn container_map_signature() -> u64 {
     let map = container_map();
     if map.is_null() {
         return 0;
@@ -228,41 +222,19 @@ pub extern "C" fn ns_css_container_map_signature() -> u64 {
     signature
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_stack_reset() {
-    container::stack_reset();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_stack_push(node: *const c_void) -> GBoolean {
+pub(super) fn container_stack_push(node: Node<'_>) -> bool {
     let map = container_map();
     if map.is_null() {
-        return glib::FALSE;
+        return false;
     }
-    let info = unsafe { glib::g_hash_table_lookup(map, node) }.cast::<Container>();
+    let info = unsafe { glib::g_hash_table_lookup(map, node.as_ptr().cast()) }.cast::<Container>();
     match unsafe { info.as_ref() } {
         Some(info) => {
             container::stack_push(*info);
-            glib::TRUE
+            true
         }
-        None => glib::FALSE,
+        None => false,
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_container_stack_pop() {
-    container::stack_pop();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_container_stack_copy(out: *mut u8, max_bytes: usize) -> usize {
-    container::with_stack(|stack| {
-        let bytes = core::mem::size_of_val(stack);
-        if !out.is_null() && bytes <= max_bytes {
-            unsafe { ptr::copy_nonoverlapping(stack.as_ptr().cast::<u8>(), out, bytes) };
-        }
-        bytes
-    })
 }
 
 #[unsafe(no_mangle)]

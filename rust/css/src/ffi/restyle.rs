@@ -1,38 +1,16 @@
-//! Southstar — the C ABI of restyle invalidation: the selector dependencies prepared for a style pass, the dirty elements it recomputes, and the marks a DOM mutation leaves.
+//! Southstar — restyle invalidation: the marks a DOM mutation leaves for the next style pass, as the C ABI the bindings call.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_char};
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 
-use super::selector_view::SheetRef;
 use crate::restyle;
 
 unsafe fn bytes<'a>(text: *const c_char) -> Option<&'a [u8]> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_restyle_prepare(
-    ua: *const c_void,
-    author: *const *const c_void,
-    n_author: usize,
-    sig: u64,
-) -> GBoolean {
-    let sheets = unsafe { SheetRef::list(ua, author, n_author) };
-    glib::boolean(restyle::prepare(&sheets, sig))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_restyle_dirty(node: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { Node::from_ptr(node) }.is_some_and(restyle::is_dirty))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_restyle_dirty_clear() {
-    restyle::clear_dirty();
 }
 
 #[unsafe(no_mangle)]

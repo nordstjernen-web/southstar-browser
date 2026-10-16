@@ -6,10 +6,12 @@ use core::ffi::{CStr, c_void};
 use core::ptr::NonNull;
 use core::slice;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 use southstar_glib::{self as glib, GPtrArray};
 
-use super::matcher::{ns_css_set_focus_node, ns_css_set_match_scope};
+use super::matcher::{
+    replace_focus_node, replace_match_scope, restore_focus_node, restore_match_scope,
+};
 use super::selector::group_to_c;
 use super::selector_view::SelectorRef;
 use crate::{element_state, matcher, selector};
@@ -85,8 +87,8 @@ impl<'a> Selector<'a> {
 }
 
 pub struct MatchContext {
-    prev_scope: *const NsNode,
-    prev_focus: *const NsNode,
+    prev_scope: Option<WeakNode>,
+    prev_focus: Option<WeakNode>,
     batch: bool,
 }
 
@@ -100,9 +102,9 @@ impl MatchContext {
         if batch {
             matcher::batch_begin();
         }
-        let prev_scope = ns_css_set_match_scope(scope.as_ptr());
+        let prev_scope = replace_match_scope(Some(scope));
         element_state::set_target_fragment(fragment);
-        let prev_focus = ns_css_set_focus_node(Node::ptr_or_null(focus));
+        let prev_focus = replace_focus_node(focus);
         MatchContext {
             prev_scope,
             prev_focus,
@@ -113,8 +115,8 @@ impl MatchContext {
 
 impl Drop for MatchContext {
     fn drop(&mut self) {
-        ns_css_set_focus_node(self.prev_focus);
-        ns_css_set_match_scope(self.prev_scope);
+        restore_focus_node(self.prev_focus);
+        restore_match_scope(self.prev_scope);
         element_state::set_target_fragment(None);
         if self.batch {
             matcher::batch_end();

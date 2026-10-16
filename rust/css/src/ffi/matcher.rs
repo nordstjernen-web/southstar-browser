@@ -42,6 +42,22 @@ pub(crate) fn match_scope<'a>() -> Option<Node<'a>> {
     load(&MATCH_SCOPE)
 }
 
+pub(crate) fn replace_match_scope(scope: Option<Node<'_>>) -> Option<WeakNode> {
+    MATCH_SCOPE.replace(scope.map(Node::downgrade))
+}
+
+pub(crate) fn restore_match_scope(previous: Option<WeakNode>) {
+    MATCH_SCOPE.set(previous);
+}
+
+pub(crate) fn replace_focus_node(node: Option<Node<'_>>) -> Option<WeakNode> {
+    FOCUS.replace(node.map(Node::downgrade))
+}
+
+pub(crate) fn restore_focus_node(previous: Option<WeakNode>) {
+    FOCUS.set(previous);
+}
+
 pub(crate) fn set_match_scope(scope: Option<Node<'_>>) {
     store(&MATCH_SCOPE, scope);
 }
@@ -67,11 +83,6 @@ pub(crate) fn fullscreen_node<'a>() -> Option<Node<'a>> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_css_set_match_scope(scope: *const NsNode) -> *const NsNode {
-    store(&MATCH_SCOPE, node_at(scope))
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_focus_node(node: *const NsNode) -> *const NsNode {
     store(&FOCUS, node_at(node))
 }
@@ -94,46 +105,6 @@ pub extern "C" fn ns_css_set_active_node(node: *const NsNode) -> *const NsNode {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_css_set_fullscreen_node(node: *const NsNode) -> *const NsNode {
     store(&FULLSCREEN, node_at(node))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_focus_node() -> *const NsNode {
-    Node::ptr_or_null(focus_node())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_hover_node() -> *const NsNode {
-    Node::ptr_or_null(hover_node())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_active_node() -> *const NsNode {
-    Node::ptr_or_null(active_node())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_fullscreen_node() -> *const NsNode {
-    Node::ptr_or_null(fullscreen_node())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_selector_batch_begin() {
-    matcher::batch_begin();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_selector_batch_end() {
-    matcher::batch_end();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_has_memo_begin() {
-    matcher::has_memo_begin();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_has_memo_end() {
-    matcher::has_memo_end();
 }
 
 #[unsafe(no_mangle)]

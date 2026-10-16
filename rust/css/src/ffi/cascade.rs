@@ -3,14 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_double, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
-use core::slice;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_color::Color;
-use southstar_glib::{GArray, GBoolean};
+use southstar_glib::GBoolean;
 
 use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView, cow};
 use super::property::to_c;
@@ -101,15 +100,6 @@ fn revert_of(v: *const NsCssValue) -> Option<Revert> {
         b"revert-layer" => Some(Revert::Layer),
         b"revert-rule" => Some(Revert::Rule),
         _ => None,
-    }
-}
-
-unsafe fn entries<'a>(array: *const GArray) -> &'a [RawMatch] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            slice::from_raw_parts(a.data.cast::<RawMatch>(), a.len as usize)
-        },
-        _ => &[],
     }
 }
 
@@ -357,26 +347,25 @@ fn fix_display(out: &mut Out<'_>, layout_parent: Option<&RawStyle>, is_root: boo
     out.style.display = used;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_cascade_apply(
-    matches: *const GArray,
-    out: *mut RawStyle,
-    parent_style: *const RawStyle,
-    layout_parent: *const RawStyle,
-    is_root: GBoolean,
-    root_px: c_double,
+pub(super) struct Parents<'a> {
+    pub(super) style: Option<&'a RawStyle>,
+    pub(super) layout: Option<&'a RawStyle>,
+}
+
+pub(super) fn cascade_apply(
+    matches: &[RawMatch],
+    style: &mut RawStyle,
+    parents: &Parents<'_>,
+    is_root: bool,
+    root_px: f64,
 ) {
-    let Some(style) = (unsafe { out.as_mut() }) else {
-        return;
-    };
-    let parent = unsafe { parent_style.as_ref() };
-    let layout_parent = unsafe { layout_parent.as_ref() };
+    let parent = parents.style;
     let mut out = Out { style };
-    apply_winners(&mut out, unsafe { entries(matches) });
+    apply_winners(&mut out, matches);
     normalize_overflow(&mut out);
     resolve_wide_keywords(&mut out, parent);
     resolve_color_keywords(&mut out, parent);
-    fix_display(&mut out, layout_parent, is_root != 0);
+    fix_display(&mut out, parents.layout, is_root);
     let parent_view = parent.map(StyleView);
     computed_units::resolve(&mut ComputedStyle(out.style), parent_view.as_ref(), root_px);
 }

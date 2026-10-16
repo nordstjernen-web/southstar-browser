@@ -283,7 +283,6 @@ pub unsafe extern "C" fn ns_css_parse_selector_list_checked(
     group_to_c(&list)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_selector_attr_ancestor_hashes() -> GBoolean {
-    glib::boolean(selector::get(&FLAGS.attr_ancestor_hashes))
+pub(super) fn attr_ancestor_hashes() -> bool {
+    selector::get(&FLAGS.attr_ancestor_hashes)
 }

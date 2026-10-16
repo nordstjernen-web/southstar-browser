@@ -3,14 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::OnceCell;
-use core::ffi::{CStr, c_char, c_double, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
-use core::slice;
 use std::ffi::CString;
 
 use southstar_css_prop_syntax::{self as prop_syntax, Context};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 
 use super::computed_units::{RawStyle, StyleView};
 use super::font::relative_unit_px;
@@ -94,15 +93,6 @@ impl Inherited for Parent<'_> {
     }
 }
 
-unsafe fn entries<'a>(array: *const GArray) -> &'a [RawVarMatch] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            slice::from_raw_parts(a.data.cast::<RawVarMatch>(), a.len as usize)
-        },
-        _ => &[],
-    }
-}
-
 fn views(raw: &[RawVarMatch]) -> Vec<VarMatch<'_>> {
     raw.iter()
         .filter(|m| !m.name.is_null() && !m.text.is_null())
@@ -144,15 +134,12 @@ fn own_table(own: Own) -> *mut GHashTable {
     table
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_build_vars(
-    parent: *mut c_void,
-    var_matches: *mut GArray,
+pub(super) fn build_vars(
+    parent: *mut RawVarMap,
+    raw: &[RawVarMatch],
     registered_props: *mut GHashTable,
     adjust_cache: *mut GHashTable,
-) -> *mut c_void {
-    let parent = parent.cast::<RawVarMap>();
-    let raw = unsafe { entries(var_matches) };
+) -> *mut RawVarMap {
     let have_regs =
         !registered_props.is_null() && unsafe { glib::g_hash_table_size(registered_props) } > 0;
     let have_local = !raw.is_empty();
@@ -167,16 +154,16 @@ pub unsafe extern "C" fn ns_css_build_vars(
     }
     if !have_regs {
         if !have_local {
-            return unsafe { map_ref(parent) }.cast();
+            return unsafe { map_ref(parent) };
         }
         let own = custom_props::unregistered(&matches, inherited);
-        return unsafe { new_map(own_table(own), map_ref(parent)) }.cast();
+        return unsafe { new_map(own_table(own), map_ref(parent)) };
     }
     let cacheable = !parent.is_null() && !have_local && !adjust_cache.is_null();
     if cacheable {
         let hit = unsafe { glib::g_hash_table_lookup(adjust_cache, parent.cast()) };
         if !hit.is_null() {
-            return unsafe { map_ref(hit.cast()) }.cast();
+            return unsafe { map_ref(hit.cast()) };
         }
     }
     let own = custom_props::registered(&matches, inherited, &Props(registered_props));
@@ -190,7 +177,7 @@ pub unsafe extern "C" fn ns_css_build_vars(
             glib::g_hash_table_insert(adjust_cache, map_ref(parent).cast(), map_ref(built).cast())
         };
     }
-    built.cast()
+    built
 }
 
 fn relative(unit: u32, px: f64, font: &Font<'_>) -> f64 {
@@ -225,23 +212,19 @@ fn syntax_ctx<'a>(style: &StyleView<'_>, root_px: f64, current_color: &'a [u8]) 
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_compute_registered_vars(
-    style: *const RawStyle,
-    parent_style: *const RawStyle,
+pub(super) fn compute_registered_vars(
+    style: &RawStyle,
+    parent_style: Option<&RawStyle>,
     registered_props: *mut GHashTable,
-    root_px: c_double,
+    root_px: f64,
 ) {
-    let Some(style) = (unsafe { style.as_ref() }) else {
-        return;
-    };
     let Some(vars) = (unsafe { style.vars.as_ref() }) else {
         return;
     };
     if registered_props.is_null() || vars.own.is_null() {
         return;
     }
-    if unsafe { parent_style.as_ref() }.is_some_and(|p| p.vars == style.vars) {
+    if parent_style.is_some_and(|p| p.vars == style.vars) {
         return;
     }
     if unsafe { glib::g_hash_table_size(registered_props) } == 0 {

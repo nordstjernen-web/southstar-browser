@@ -6,12 +6,13 @@ use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::slice;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_dom::Node;
+use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 
 use super::cascade::RawMatch;
 use super::declarations::{RawPending, parse_decls_into};
 use super::shorthand::RawDecl;
+use super::value::OwnedValue;
 use super::vars::{RawVarMap, substitute_in};
 use crate::pending::{self, Pending};
 
@@ -38,22 +39,13 @@ unsafe extern "C" {
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
 }
 
-unsafe fn entries<'a>(array: *const GArray) -> &'a [RawPendingMatch] {
-    match unsafe { array.as_ref() } {
-        Some(a) if !a.data.is_null() && a.len > 0 => unsafe {
-            slice::from_raw_parts(a.data.cast::<RawPendingMatch>(), a.len as usize)
-        },
-        _ => &[],
-    }
-}
-
 fn append_decls(
     pm: &RawPendingMatch,
     pd: &RawPending,
     name: &[u8],
     value: &[u8],
-    matches: *mut GArray,
-    owned: *mut GPtrArray,
+    matches: &mut Vec<RawMatch>,
+    owned: &mut Vec<OwnedValue>,
 ) -> bool {
     let mut synth = Vec::with_capacity(name.len() + value.len() + 4);
     synth.extend_from_slice(name);
@@ -71,7 +63,7 @@ fn append_decls(
     };
     let mut any = false;
     for d in decls.iter().filter(|d| !d.value.is_null()) {
-        unsafe { glib::g_ptr_array_add(owned, d.value.cast()) };
+        owned.push(OwnedValue(d.value));
         let entry = RawMatch {
             origin: pm.origin,
             spec_a: pm.spec_a,
@@ -88,23 +80,29 @@ fn append_decls(
             value: d.value,
             prop: d.prop,
         };
-        unsafe { glib::g_array_append_vals(matches, (&raw const entry).cast(), 1) };
+        matches.push(entry);
         any = true;
     }
     unsafe { g_array_free(temp, glib::TRUE) };
     any
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_resolve_pending(
-    pending_matches: *const GArray,
+pub(super) struct Resolved<'a> {
+    pub(super) matches: &'a mut Vec<RawMatch>,
+    pub(super) owned: &'a mut Vec<OwnedValue>,
+}
+
+pub(super) fn resolve_pending(
+    raw: &[RawPendingMatch],
     vars: *const RawVarMap,
     registered: *mut GHashTable,
-    matches: *mut GArray,
-    owned_values: *mut GPtrArray,
-    node: *const NsNode,
+    out: Resolved<'_>,
+    node: Node<'_>,
 ) {
-    let raw = unsafe { entries(pending_matches) };
+    let Resolved {
+        matches,
+        owned: owned_values,
+    } = out;
     if raw.is_empty() {
         return;
     }
@@ -121,7 +119,7 @@ pub unsafe extern "C" fn ns_css_resolve_pending(
             inline_style: m.inline_style != 0,
         })
         .collect();
-    let node = unsafe { Node::from_ptr(node) };
+    let node = Some(node);
     for i in pending::order(&list) {
         let pm = &raw[i];
         let Some(pd) = (unsafe { pm.pd.as_ref() }) else {

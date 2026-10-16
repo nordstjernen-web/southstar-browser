@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 0.9.11-dev:
 ======
+* The style pass in rust/css no longer runs on GLib arrays and its own C
+  ABI. Each element's matched declarations, custom properties and
+  var()-dependent values are collected into Rust Vecs instead of GArrays
+  read back through pointer casts, the parsed values a pass owns are freed
+  by a Drop guard, layer ranks are a HashMap, the style-sharing key hashes
+  the container stack field by field instead of copying its raw bytes, and
+  the walk calls the gather, cascade, custom-property, sharing, fix-up and
+  restyle steps as typed Rust functions. 52 #[no_mangle] exports that only
+  rust/css itself called are gone (css: 1007 -> 845 unsafe, 153 -> 101
+  exports); page layouts, text and renderings are unchanged.
 * rust/css-prop-syntax, the @property <syntax> grammar, has no C ABI left
   and forbids unsafe code: rust/css, CSS.registerProperty() and the
   CSSPropertyRule bindings call its Rust API instead of six

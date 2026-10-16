@@ -11,7 +11,7 @@ use southstar_glib as glib;
 use super::computed_units::RawStyle;
 use super::registry::pass_registered;
 use super::sheet::{RawKeyframes, RawStop};
-use super::vars::ns_css_substitute_vars;
+use super::vars::substitute_vars;
 use crate::keyframes;
 use crate::transform::Transform;
 
@@ -28,7 +28,7 @@ fn resolve_stop(stop: &mut RawStop, vars: *const c_void) {
     if raw.is_null() {
         return;
     }
-    let resolved = unsafe { ns_css_substitute_vars(raw, vars, pass_registered(), 0) };
+    let resolved = unsafe { substitute_vars(raw, vars, pass_registered(), 0) };
     if resolved.is_null() {
         return;
     }
@@ -90,5 +90,5 @@ pub unsafe extern "C" fn ns_css_resolve_style_vars(
     style: *const RawStyle,
 ) -> *mut c_char {
     let vars = unsafe { style.as_ref() }.map_or(ptr::null(), |s| s.vars.cast_const().cast());
-    unsafe { ns_css_substitute_vars(text, vars, pass_registered(), 0) }
+    unsafe { substitute_vars(text, vars, pass_registered(), 0) }
 }

@@ -97,8 +97,3 @@ pub unsafe extern "C" fn ns_css_set_doc_base(base_url: *const c_char) {
 pub unsafe extern "C" fn ns_css_set_doc_language(lang: *const c_char) {
     element_state::set_doc_language(unsafe { bytes(lang) });
 }
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_language_cache_reset() {
-    element_state::reset_language_cache();
-}

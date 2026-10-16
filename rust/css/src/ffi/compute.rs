@@ -3,8 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use core::mem::size_of;
+use core::ffi::{c_int, c_uint, c_void};
 use core::ptr;
 use core::slice;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -13,54 +12,42 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use southstar_dom::{Kind, Node, NsNode, children};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 
-use super::cascade::{RawMatch, ns_css_cascade_apply};
+use super::cascade::{Parents, cascade_apply};
 use super::computed_units::{PROP_COUNT, RawStyle};
-use super::container::{
-    ns_css_container_map_signature, ns_css_container_stack_pop, ns_css_container_stack_push,
-    ns_css_container_stack_reset,
-};
-use super::custom_props::{RawVarMatch, ns_css_build_vars, ns_css_compute_registered_vars};
-use super::element_state::ns_css_language_cache_reset;
+use super::container::{container_map_signature, container_stack_push};
+use super::custom_props::{build_vars, compute_registered_vars};
 use super::fixups::{
-    ns_css_display_contents_to_none, ns_css_frame_viewport_from_style,
-    ns_css_strip_native_widget_decorations,
+    display_contents_to_none, frame_viewport_from_style, strip_native_widget_decorations,
 };
 use super::gather::{
-    RawDest, ns_css_ancestor_filter_begin, ns_css_ancestor_filter_end,
-    ns_css_ancestor_filter_enter, ns_css_ancestor_filter_leave, ns_css_ancestor_filter_restore,
-    ns_css_ancestor_filter_save, ns_css_ancestor_filter_subject, ns_css_decl_sheet_cache_trim,
-    ns_css_gather_element_declarations, ns_css_gather_matches, ns_css_rule_index_ensure,
+    Matches, Origin, ancestor_filter_begin, ancestor_filter_end, ancestor_filter_enter,
+    ancestor_filter_leave, ancestor_filter_restore, ancestor_filter_save, ancestor_filter_subject,
+    decl_sheet_cache_trim, gather_element_declarations, gather_matches, rule_index_ensure,
 };
-use super::layers::ns_css_layer_ranks_build;
-use super::matcher::{
-    ns_css_active_node, ns_css_focus_node, ns_css_fullscreen_node, ns_css_has_memo_begin,
-    ns_css_has_memo_end, ns_css_hover_node, ns_css_selector_batch_begin, ns_css_selector_batch_end,
-};
-use super::pending::{RawPendingMatch, ns_css_resolve_pending};
-use super::registry::{
-    ns_css_registered_property_serial, ns_css_registered_props_begin, ns_css_registered_props_end,
-};
-use super::restyle::{ns_css_restyle_dirty, ns_css_restyle_dirty_clear, ns_css_restyle_prepare};
-use super::selector::ns_css_selector_attr_ancestor_hashes;
+use super::layers::{LayerRanks, layer_ranks_build};
+use super::matcher::{active_node, focus_node, fullscreen_node, hover_node};
+use super::pending::{Resolved, resolve_pending};
+use super::registry::{registered_property_serial, registered_props_begin, registered_props_end};
+use super::selector::attr_ancestor_hashes;
+use super::selector_view::SheetRef;
 use super::sheet::RawSheet;
-use super::style_alloc::{ns_style_alloc, ns_style_clone_shared, ns_style_free};
+use super::style_alloc::{ns_style_free, style_alloc, style_clone_shared};
 use super::style_share::{
-    ns_css_style_share_begin, ns_css_style_share_end, ns_css_style_share_find,
-    ns_css_style_share_insert,
+    Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
 };
-use super::ua::ns_css_ua_sheet;
-use super::value::{KIND_LENGTH, ns_css_value_free};
+use super::ua::ua_sheet;
+use super::value::{KIND_LENGTH, OwnedValue};
 use super::values::ns_css_value_equal;
-use super::vars::ns_var_map_unref;
+use super::vars::var_map_unref;
 use super::viewport;
 use crate::NsCssValue;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
 use crate::incremental::{self, PassKey};
 use crate::prop::Prop;
-use crate::restyle;
 use crate::units::PX;
+use crate::{container, element_state, matcher, restyle};
 
 const MAX_DEPTH: i32 = 512;
 const ORIGIN_UA: c_int = 0;
@@ -71,11 +58,6 @@ const PE_AFTER: c_uint = 2;
 const PSEUDO_ELEMENTS: [c_uint; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const HIDDEN_BEFORE: usize = 9;
 const HIDDEN_AFTER: usize = 10;
-
-unsafe extern "C" {
-    fn g_array_set_size(array: *mut GArray, length: c_uint) -> *mut GArray;
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-}
 
 fn pseudo_slot(pe: c_uint) -> usize {
     match pe {
@@ -91,16 +73,12 @@ fn pseudo_slot(pe: c_uint) -> usize {
     }
 }
 
-unsafe extern "C" fn value_free_notify(data: *mut c_void) {
-    unsafe { ns_css_value_free(data.cast()) };
-}
-
 unsafe extern "C" fn style_free_notify(data: *mut c_void) {
     unsafe { ns_style_free(data.cast()) };
 }
 
 unsafe extern "C" fn var_map_unref_notify(data: *mut c_void) {
-    unsafe { ns_var_map_unref(data.cast()) };
+    unsafe { var_map_unref(data.cast()) };
 }
 
 unsafe fn items<'a, T>(data: *const T, len: usize) -> &'a [T] {
@@ -111,80 +89,31 @@ unsafe fn items<'a, T>(data: *const T, len: usize) -> &'a [T] {
     }
 }
 
-struct Arrays {
-    matches: *mut GArray,
-    vars: *mut GArray,
-    pending: *mut GArray,
-}
-
-impl Arrays {
-    fn new() -> Self {
-        let array =
-            |size: usize| unsafe { glib::g_array_new(glib::FALSE, glib::FALSE, size as c_uint) };
-        Arrays {
-            matches: array(size_of::<RawMatch>()),
-            vars: array(size_of::<RawVarMatch>()),
-            pending: array(size_of::<RawPendingMatch>()),
-        }
-    }
-
-    fn clear(&self) {
-        for array in [self.matches, self.vars, self.pending] {
-            unsafe { g_array_set_size(array, 0) };
-        }
-    }
-
-    fn dest(&self, pe: c_uint) -> RawDest {
-        RawDest {
-            pe,
-            out: self.matches,
-            var_out: self.vars,
-            pending_out: self.pending,
-        }
-    }
-}
-
-impl Drop for Arrays {
-    fn drop(&mut self) {
-        for array in [self.matches, self.vars, self.pending] {
-            unsafe { g_array_free(array, glib::TRUE) };
-        }
-    }
-}
-
 struct Scratch {
-    element: Arrays,
-    owned: *mut GPtrArray,
-    pseudo: Vec<Arrays>,
-    pseudo_owned: *mut GPtrArray,
+    matches: Vec<Matches>,
+    owned: Vec<OwnedValue>,
+    pseudo_owned: Vec<OwnedValue>,
 }
 
 impl Scratch {
     fn new() -> Self {
-        let owned = || unsafe { glib::g_ptr_array_new_with_free_func(Some(value_free_notify)) };
         Scratch {
-            element: Arrays::new(),
-            owned: owned(),
-            pseudo: Vec::new(),
-            pseudo_owned: owned(),
+            matches: Vec::new(),
+            owned: Vec::new(),
+            pseudo_owned: Vec::new(),
         }
-    }
-
-    fn pseudo(&mut self, index: usize) -> &Arrays {
-        while self.pseudo.len() <= index {
-            self.pseudo.push(Arrays::new());
-        }
-        &self.pseudo[index]
     }
 }
 
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        unsafe {
-            glib::g_ptr_array_free(self.owned, glib::TRUE);
-            glib::g_ptr_array_free(self.pseudo_owned, glib::TRUE);
-        }
+fn targets(matches: &mut Vec<Matches>, n: usize) -> &mut [Matches] {
+    if matches.len() < n {
+        matches.resize_with(n, Matches::default);
     }
+    let targets = &mut matches[..n];
+    for target in targets.iter_mut() {
+        target.clear();
+    }
+    targets
 }
 
 thread_local! {
@@ -277,28 +206,38 @@ fn font_size_px(style: &RawStyle) -> Option<f64> {
     (value.kind == KIND_LENGTH && length.unit == PX).then_some(length.v)
 }
 
-fn frame_viewport(frame: Node<'_>, parent: *const RawStyle) -> Option<(f64, f64)> {
+fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f64)> {
     let size_frame = viewport::frame_viewport()?;
-    let (mut w, mut h) = (0.0, 0.0);
-    if unsafe { ns_css_frame_viewport_from_style(parent, &mut w, &mut h) } == 0 {
+    let (w, h) = frame_viewport_from_style(parent).unwrap_or_else(|| {
+        let (mut w, mut h) = (0.0, 0.0);
         unsafe { size_frame(frame.as_ptr(), &mut w, &mut h) };
-    }
+        (w, h)
+    });
     let (vw, vh) = viewport::get();
     let differs = (w - vw).abs() > 0.01 || (h - vh).abs() > 0.01;
     (w > 0.0 && h > 0.0 && differs).then(|| viewport::replace(w, h))
 }
 
-fn pseudo_mask(sheet: *const RawSheet) -> c_uint {
-    unsafe { sheet.as_ref() }.map_or(0, |sheet| sheet.pseudo_mask)
+fn pseudo_mask(sheet: Option<&RawSheet>) -> c_uint {
+    sheet.map_or(0, |sheet| sheet.pseudo_mask)
+}
+
+type Sheets<'a> = [Option<&'a RawSheet>];
+
+#[derive(Clone, Copy)]
+struct Pass {
+    registered: *mut GHashTable,
+    adjust_cache: *mut GHashTable,
+    root_px: f64,
 }
 
 struct Walk<'a> {
-    ua: *const RawSheet,
-    layer_ranks: *mut GHashTable,
+    ua: Option<&'a RawSheet>,
+    layer_ranks: &'a LayerRanks,
     out: *mut GHashTable,
     registered: *mut GHashTable,
     adjust_cache: *mut GHashTable,
-    doc_sheets: Option<HashMap<usize, Vec<*const RawSheet>>>,
+    doc_sheets: Option<HashMap<usize, Vec<Option<&'a RawSheet>>>>,
     reuse: Option<&'a Styles>,
     scratch: &'a mut Scratch,
     root_px: f64,
@@ -307,11 +246,11 @@ struct Walk<'a> {
     recomputed: u32,
 }
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
     fn walk(
         &mut self,
         node: Node<'_>,
-        author: &[*const RawSheet],
+        author: &Sheets<'a>,
         parent: *const RawStyle,
         layout_parent: *const RawStyle,
         under_dirty: bool,
@@ -324,11 +263,11 @@ impl Walk<'_> {
         let is_document = node.kind() == Kind::Document;
         let saved_viewport = if is_document {
             node.parent()
-                .and_then(|frame| frame_viewport(frame, parent))
+                .and_then(|frame| frame_viewport(frame, unsafe { parent.as_ref() }))
         } else {
             None
         };
-        let own_sheets: Vec<*const RawSheet>;
+        let own_sheets: Vec<Option<&'a RawSheet>>;
         let author = match &self.doc_sheets {
             Some(by_doc) if is_document => {
                 own_sheets = by_doc.get(&(ptr as usize)).cloned().unwrap_or_default();
@@ -349,7 +288,7 @@ impl Walk<'_> {
         };
         let mut recurse_dirty = under_dirty;
         if node.is_element() {
-            let restyled = under_dirty || unsafe { ns_css_restyle_dirty(ptr) } != 0;
+            let restyled = under_dirty || restyle::is_dirty(node);
             let inline_styled = !restyled && restyle::inline_style_changed(node);
             let animated = !restyled && excluded(ptr as usize);
             let own_only = inline_styled || animated;
@@ -390,13 +329,13 @@ impl Walk<'_> {
                         keeps_children(before.get(), computed, inline_styled)
                     }));
         }
-        let pushed = ns_css_container_stack_push(ptr.cast()) != 0;
-        let outer_filter = if is_document && node.parent().is_some() {
-            ns_css_ancestor_filter_save()
+        let pushed = container_stack_push(node);
+        let outer_filter = if nested_document {
+            ancestor_filter_save()
         } else {
-            ptr::null_mut()
+            None
         };
-        let filter_element = unsafe { ns_css_ancestor_filter_enter(ptr) } != 0;
+        let filter_element = ancestor_filter_enter(node);
         for child in children(node) {
             self.walk(
                 child,
@@ -407,11 +346,11 @@ impl Walk<'_> {
             );
         }
         if filter_element {
-            unsafe { ns_css_ancestor_filter_leave(ptr) };
+            ancestor_filter_leave(node);
         }
-        unsafe { ns_css_ancestor_filter_restore(outer_filter) };
+        ancestor_filter_restore(outer_filter);
         if pushed {
-            ns_css_container_stack_pop();
+            container::stack_pop();
         }
         if let Some((w, h)) = saved_viewport {
             viewport::replace(w, h);
@@ -426,174 +365,156 @@ impl Walk<'_> {
     fn compute_element(
         &mut self,
         node: Node<'_>,
-        author: &[*const RawSheet],
+        author: &Sheets<'a>,
         parent: *const RawStyle,
         layout_parent: *const RawStyle,
     ) -> *mut RawStyle {
-        let ptr = node.as_ptr();
-        let element = self.scratch.element.dest(0);
-        let owned = self.scratch.owned;
-        self.scratch.element.clear();
-        unsafe { glib::g_ptr_array_set_size(owned, 0) };
         let mask = author.iter().fold(pseudo_mask(self.ua), |mask, &sheet| {
             mask | pseudo_mask(sheet)
         });
-        let mut dests = [element; 10];
+        let mut pes = [0; 10];
         let mut n = 1;
         if mask != 0 {
             for pe in PSEUDO_ELEMENTS {
                 if mask & (1 << pe) == 0 {
                     continue;
                 }
-                let arrays = self.scratch.pseudo(n - 1);
-                arrays.clear();
-                dests[n] = arrays.dest(pe);
+                pes[n] = pe;
                 n += 1;
             }
         }
-        let n_dests = n as c_uint;
-        let dests_ptr = dests.as_ptr();
-        unsafe {
-            ns_css_ancestor_filter_subject(ptr);
-            ns_css_gather_matches(
-                self.ua,
-                ORIGIN_UA,
-                0,
-                ptr,
-                dests_ptr.cast(),
-                n_dests,
-                self.layer_ranks,
-            );
-            for (i, &sheet) in author.iter().enumerate() {
-                ns_css_gather_matches(
-                    sheet,
-                    ORIGIN_AUTHOR,
-                    (i + 1) as c_int,
-                    ptr,
-                    dests_ptr.cast(),
-                    n_dests,
-                    self.layer_ranks,
-                );
+        let pes = &pes[..n];
+        let Scratch {
+            matches,
+            owned,
+            pseudo_owned,
+        } = &mut *self.scratch;
+        owned.clear();
+        let outs = targets(matches, n);
+        ancestor_filter_subject(node);
+        if let Some(ua) = self.ua {
+            let origin = Origin {
+                origin: ORIGIN_UA,
+                sheet_index: 0,
+            };
+            gather_matches(ua, origin, node, pes, outs, self.layer_ranks);
+        }
+        for (i, sheet) in author.iter().enumerate() {
+            if let Some(sheet) = sheet {
+                let origin = Origin {
+                    origin: ORIGIN_AUTHOR,
+                    sheet_index: (i + 1) as c_int,
+                };
+                gather_matches(sheet, origin, node, pes, outs, self.layer_ranks);
             }
-            ns_css_gather_element_declarations(
-                ptr,
-                element.out,
-                element.var_out,
-                element.pending_out,
-            );
         }
-        let mut shared = ptr::null();
-        let mut keyed = unsafe {
-            ns_css_style_share_find(parent, self.root_px, dests_ptr, n_dests, &mut shared)
-        } != 0;
+        gather_element_declarations(node, &mut outs[0]);
+        let parent_style = unsafe { parent.as_ref() };
+        let shared = style_share_find(parent_style, self.root_px, pes, outs);
+        let mut keyed = !matches!(shared, Shared::Unkeyed);
         if !keyed {
-            set_excluded(ptr as usize, true);
+            set_excluded(node.as_ptr() as usize, true);
         }
-        if !shared.is_null() {
-            let style = unsafe { ns_style_clone_shared(shared) };
-            unsafe { ns_css_display_contents_to_none(ptr, style) };
-            self.scratch.element.clear();
-            unsafe { glib::g_ptr_array_set_size(owned, 0) };
+        if let Shared::Hit(shared) = shared {
+            let style = style_clone_shared(unsafe { &*shared });
+            display_contents_to_none(node, unsafe { &mut *style });
+            outs[0].clear();
+            owned.clear();
             return style;
         }
-        let style = ns_style_alloc();
-        let parent_vars = unsafe { parent.as_ref() }.map_or(ptr::null_mut(), |p| p.vars);
+        let style_ptr = style_alloc();
+        let style = unsafe { &mut *style_ptr };
+        let parent_vars = parent_style.map_or(ptr::null_mut(), |p| p.vars);
         let is_root = node.parent().is_some_and(|p| p.kind() == Kind::Document);
-        unsafe {
-            (*style).share_id = NEXT_SHARE_ID.fetch_add(1, Ordering::Relaxed) + 1;
-            (*style).vars = ns_css_build_vars(
-                parent_vars.cast(),
-                element.var_out,
-                self.registered,
-                self.adjust_cache,
-            )
-            .cast();
-            ns_css_resolve_pending(
-                element.pending_out,
-                (*style).vars,
-                self.registered,
-                element.out,
-                owned,
-                ptr,
-            );
-            ns_css_cascade_apply(
-                element.out,
-                style,
-                parent,
-                layout_parent,
-                glib::boolean(is_root),
-                self.root_px,
-            );
-            ns_css_compute_registered_vars(style, parent, self.registered, self.root_px);
-            ns_css_strip_native_widget_decorations(ptr, style);
-            if ns_css_display_contents_to_none(ptr, style) != 0 {
-                keyed = false;
-            }
+        let pass = Pass {
+            registered: self.registered,
+            adjust_cache: self.adjust_cache,
+            root_px: self.root_px,
+        };
+        style.share_id = NEXT_SHARE_ID.fetch_add(1, Ordering::Relaxed) + 1;
+        let (element, pseudo) = outs.split_at_mut(1);
+        let Matches {
+            decls,
+            vars,
+            pending,
+        } = &mut element[0];
+        style.vars = build_vars(parent_vars, vars, pass.registered, pass.adjust_cache);
+        let resolved = Resolved {
+            matches: decls,
+            owned,
+        };
+        resolve_pending(pending, style.vars, pass.registered, resolved, node);
+        let parents = Parents {
+            style: parent_style,
+            layout: unsafe { layout_parent.as_ref() },
+        };
+        cascade_apply(decls, style, &parents, is_root, pass.root_px);
+        compute_registered_vars(style, parent_style, pass.registered, pass.root_px);
+        strip_native_widget_decorations(node, style);
+        if display_contents_to_none(node, style) {
+            keyed = false;
         }
-        self.scratch.element.clear();
-        unsafe { glib::g_ptr_array_set_size(owned, 0) };
-        for dest in &dests[1..n] {
-            self.pseudo_style(ptr, style, dest);
+        element[0].clear();
+        owned.clear();
+        for (&pe, dest) in pes[1..].iter().zip(pseudo.iter_mut()) {
+            pseudo_style(&pass, node, style, pe, dest, pseudo_owned);
         }
         if keyed {
-            ns_css_style_share_insert(style);
+            style_share_insert(style_ptr);
         }
-        style
+        style_ptr
     }
+}
 
-    fn pseudo_style(&mut self, node: *const NsNode, style: *mut RawStyle, dest: &RawDest) {
-        let len = |array: *mut GArray| unsafe { array.as_ref() }.map_or(0, |a| a.len);
-        if len(dest.out) == 0 && len(dest.pending_out) == 0 {
-            return;
-        }
-        let owned = self.scratch.pseudo_owned;
-        let generated = dest.pe == PE_BEFORE || dest.pe == PE_AFTER;
-        let pseudo = ns_style_alloc();
-        unsafe {
-            (*pseudo).vars = ns_css_build_vars(
-                (*style).vars.cast(),
-                dest.var_out,
-                self.registered,
-                self.adjust_cache,
-            )
-            .cast();
-            ns_css_resolve_pending(
-                dest.pending_out,
-                (*pseudo).vars,
-                self.registered,
-                dest.out,
-                owned,
-                node,
-            );
-            ns_css_cascade_apply(
-                dest.out,
-                pseudo,
-                style,
-                if generated { style } else { ptr::null() },
-                glib::FALSE,
-                self.root_px,
-            );
-            ns_css_compute_registered_vars(pseudo, style, self.registered, self.root_px);
-        }
-        let computed = unsafe { &*pseudo };
-        let keep = !generated || !computed.values[Prop::Content.id()].is_null();
-        let slot = if !keep {
-            None
-        } else if generated && computed.display.box_ == BOX_NONE {
-            Some(if dest.pe == PE_BEFORE {
-                HIDDEN_BEFORE
-            } else {
-                HIDDEN_AFTER
-            })
-        } else {
-            Some(pseudo_slot(dest.pe))
-        };
-        match slot {
-            Some(slot) => unsafe { (*style).pseudo_styles[slot] = pseudo },
-            None => unsafe { ns_style_free(pseudo) },
-        }
-        unsafe { glib::g_ptr_array_set_size(owned, 0) };
+fn pseudo_style(
+    pass: &Pass,
+    node: Node<'_>,
+    style: &mut RawStyle,
+    pe: c_uint,
+    dest: &mut Matches,
+    owned: &mut Vec<OwnedValue>,
+) {
+    if dest.decls.is_empty() && dest.pending.is_empty() {
+        return;
     }
+    let generated = pe == PE_BEFORE || pe == PE_AFTER;
+    let pseudo_ptr = style_alloc();
+    let pseudo = unsafe { &mut *pseudo_ptr };
+    let Matches {
+        decls,
+        vars,
+        pending,
+    } = dest;
+    pseudo.vars = build_vars(style.vars, vars, pass.registered, pass.adjust_cache);
+    let resolved = Resolved {
+        matches: decls,
+        owned,
+    };
+    resolve_pending(pending, pseudo.vars, pass.registered, resolved, node);
+    let parent: &RawStyle = style;
+    let parents = Parents {
+        style: Some(parent),
+        layout: generated.then_some(parent),
+    };
+    cascade_apply(decls, pseudo, &parents, false, pass.root_px);
+    compute_registered_vars(pseudo, Some(parent), pass.registered, pass.root_px);
+    let keep = !generated || !pseudo.values[Prop::Content.id()].is_null();
+    let slot = if !keep {
+        None
+    } else if generated && pseudo.display.box_ == BOX_NONE {
+        Some(if pe == PE_BEFORE {
+            HIDDEN_BEFORE
+        } else {
+            HIDDEN_AFTER
+        })
+    } else {
+        Some(pseudo_slot(pe))
+    };
+    match slot {
+        Some(slot) => style.pseudo_styles[slot] = pseudo_ptr,
+        None => unsafe { ns_style_free(pseudo_ptr) },
+    }
+    owned.clear();
 }
 
 fn retained(out: *mut GHashTable) -> Styles {
@@ -611,10 +532,10 @@ fn interaction_key(doc: usize, sheets: u64, containers: u64) -> PassKey {
         doc,
         sheets,
         containers,
-        focus: ns_css_focus_node() as usize,
-        hover: ns_css_hover_node() as usize,
-        active: ns_css_active_node() as usize,
-        fullscreen: ns_css_fullscreen_node() as usize,
+        focus: Node::ptr_or_null(focus_node()) as usize,
+        hover: Node::ptr_or_null(hover_node()) as usize,
+        active: Node::ptr_or_null(active_node()) as usize,
+        fullscreen: Node::ptr_or_null(fullscreen_node()) as usize,
     }
 }
 
@@ -637,26 +558,34 @@ pub unsafe extern "C" fn ns_css_compute(
             Some(style_free_notify),
         )
     };
-    ns_css_language_cache_reset();
+    element_state::reset_language_cache();
     let doc_node = unsafe { Node::from_ptr(doc) };
     let quirks = doc_node.is_some_and(|d| d.flags() & NODE_QUIRKS != 0);
-    let ua = ns_css_ua_sheet(glib::boolean(quirks)).cast::<RawSheet>();
+    let ua_ptr = ua_sheet(quirks);
     let profile = std::env::var_os("NS_PROFILE").is_some();
     let started = Instant::now();
-    let authors = unsafe { items(author_sheets, n_sheets) };
-    unsafe {
-        ns_css_rule_index_ensure(ua);
-        for &sheet in authors {
-            ns_css_rule_index_ensure(sheet);
+    let author_ptrs = unsafe { items(author_sheets, n_sheets) };
+    for &sheet in core::iter::once(&ua_ptr).chain(author_ptrs) {
+        if let Some(sheet) = unsafe { sheet.cast_mut().as_mut() } {
+            rule_index_ensure(sheet);
         }
     }
     let indexed = Instant::now();
-    let layer_ranks =
-        unsafe { ns_css_layer_ranks_build(ua.cast(), author_sheets.cast(), n_sheets) };
-    let registered = unsafe { ns_css_registered_props_begin(ua, author_sheets, n_sheets) };
-    ns_css_decl_sheet_cache_trim();
-    ns_css_container_stack_reset();
-    ns_css_style_share_begin();
+    let ua = unsafe { ua_ptr.as_ref() };
+    let authors: Vec<Option<&RawSheet>> = author_ptrs
+        .iter()
+        .map(|&sheet| unsafe { sheet.as_ref() })
+        .collect();
+    let sheet_refs: Vec<SheetRef<'_>> = ua
+        .into_iter()
+        .chain(authors.iter().flatten().copied())
+        .map(SheetRef::new)
+        .collect();
+    let layer_ranks = layer_ranks_build(&sheet_refs);
+    let registered = registered_props_begin(&sheet_refs);
+    decl_sheet_cache_trim();
+    container::stack_reset();
+    style_share_begin();
     let adjust_cache = unsafe {
         glib::g_hash_table_new_full(
             Some(glib::g_direct_hash),
@@ -665,30 +594,26 @@ pub unsafe extern "C" fn ns_css_compute(
             Some(var_map_unref_notify),
         )
     };
-    ns_css_has_memo_begin();
-    ns_css_selector_batch_begin();
+    matcher::has_memo_begin();
+    matcher::batch_begin();
 
-    let serial = |sheet: *const RawSheet| unsafe { sheet.as_ref() }.map_or(0, RawSheet::serial);
+    let serial = |sheet: Option<&RawSheet>| sheet.map_or(0, RawSheet::serial);
     let author_serials: Vec<u64> = authors.iter().map(|&sheet| serial(sheet)).collect();
-    let sig = incremental::sheet_signature(
-        serial(ua),
-        &author_serials,
-        ns_css_registered_property_serial(),
-    );
-    let eligible =
-        unsafe { ns_css_restyle_prepare(ua.cast(), author_sheets.cast(), n_sheets, sig) } != 0;
+    let sig =
+        incremental::sheet_signature(serial(ua), &author_serials, registered_property_serial());
+    let eligible = restyle::prepare(&sheet_refs, sig);
     let usable = std::env::var_os("NS_NO_INCR_RESTYLE").is_none()
         && eligible
         && incremental::zoom_allows_reuse(zoom());
-    let containers = ns_css_container_map_signature();
+    let containers = container_map_signature();
     let key = interaction_key(doc as usize, sig, containers);
     let previous = incremental_state().previous.take();
     let active = usable && previous.as_ref().is_some_and(|p| p.key == key);
 
-    ns_css_ancestor_filter_begin(ns_css_selector_attr_ancestor_hashes());
+    ancestor_filter_begin(attr_ancestor_hashes());
     let doc_sheets = (!sheet_docs.is_null()).then(|| {
-        let mut by_doc: HashMap<usize, Vec<*const RawSheet>> = HashMap::new();
-        for (&owner, &sheet) in unsafe { items(sheet_docs, n_sheets) }.iter().zip(authors) {
+        let mut by_doc: HashMap<usize, Vec<Option<&RawSheet>>> = HashMap::new();
+        for (&owner, &sheet) in unsafe { items(sheet_docs, n_sheets) }.iter().zip(&authors) {
             by_doc.entry(owner as usize).or_default().push(sheet);
         }
         by_doc
@@ -696,7 +621,7 @@ pub unsafe extern "C" fn ns_css_compute(
     let mut scratch = SCRATCH.take().unwrap_or_else(|| Box::new(Scratch::new()));
     let mut walk = Walk {
         ua,
-        layer_ranks,
+        layer_ranks: &layer_ranks,
         out,
         registered,
         adjust_cache,
@@ -709,11 +634,11 @@ pub unsafe extern "C" fn ns_css_compute(
         recomputed: 0,
     };
     if let Some(doc) = doc_node {
-        walk.walk(doc, authors, ptr::null(), ptr::null(), false);
+        walk.walk(doc, &authors, ptr::null(), ptr::null(), false);
     }
     let (reused, recomputed) = (walk.reused, walk.recomputed);
     SCRATCH.set(Some(scratch));
-    ns_css_ancestor_filter_end();
+    ancestor_filter_end();
 
     if usable {
         let current = Previous {
@@ -740,15 +665,12 @@ pub unsafe extern "C" fn ns_css_compute(
         drop(previous);
         drop(stale);
     }
-    ns_css_restyle_dirty_clear();
-    ns_css_has_memo_end();
-    ns_css_selector_batch_end();
-    ns_css_style_share_end();
-    unsafe {
-        glib::g_hash_table_destroy(adjust_cache);
-        glib::g_hash_table_destroy(layer_ranks);
-    }
-    ns_css_registered_props_end();
+    restyle::clear_dirty();
+    matcher::has_memo_end();
+    matcher::batch_end();
+    style_share_end();
+    unsafe { glib::g_hash_table_destroy(adjust_cache) };
+    registered_props_end();
     if profile {
         let finished = Instant::now();
         glib::stderr_write(

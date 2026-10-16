@@ -39,8 +39,7 @@ pub(super) unsafe fn map_ref(map: *mut RawVarMap) -> *mut RawVarMap {
     map
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_var_map_unref(mut map: *mut RawVarMap) {
+pub(super) unsafe fn var_map_unref(mut map: *mut RawVarMap) {
     while let Some(m) = unsafe { map.as_mut() } {
         m.ref_count -= 1;
         if m.ref_count > 0 {
@@ -125,8 +124,7 @@ pub(super) fn substitute_in(
     vars::substitute(value, lookup.filter(|_| !map.is_null()), 0)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_substitute_vars(
+pub(super) unsafe fn substitute_vars(
     value: *const c_char,
     map: *const c_void,
     registered: *mut GHashTable,

@@ -3,37 +3,26 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
-use core::slice;
 
-use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_glib as glib;
 
 use super::cascade::RawMatch;
 use super::computed_units::RawStyle;
-use super::container::ns_css_container_stack_copy;
+use super::container::Container;
 use super::custom_props::RawVarMatch;
-use super::gather::RawDest;
+use super::gather::Matches;
 use super::pending::RawPendingMatch;
 use super::value::{KIND_LENGTH, NsCssValue};
+use crate::container;
 use crate::nesting;
 use crate::prop::Prop;
 use crate::style_share::{self, ShareTable};
 use crate::units::{CQH, CQMAX, CQMIN, CQW};
 
-const CONTAINER_BYTES: usize = 40;
-
 thread_local! {
     static TABLE: RefCell<ShareTable> = RefCell::new(ShareTable::default());
-}
-
-unsafe fn elements<'a, T>(array: *const GArray) -> &'a [T] {
-    match unsafe { array.as_ref() } {
-        Some(array) if !array.data.is_null() && array.len > 0 => unsafe {
-            slice::from_raw_parts(array.data.cast::<T>(), array.len as usize)
-        },
-        _ => &[],
-    }
 }
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
@@ -68,14 +57,12 @@ struct Arrays<'a> {
 }
 
 impl<'a> Arrays<'a> {
-    fn of(dest: &'a RawDest) -> Self {
-        unsafe {
-            Arrays {
-                pe: dest.pe,
-                matches: elements(dest.out),
-                vars: elements(dest.var_out),
-                pending: elements(dest.pending_out),
-            }
+    fn of(pe: c_uint, matches: &'a Matches) -> Self {
+        Arrays {
+            pe,
+            matches: &matches.decls,
+            vars: &matches.vars,
+            pending: &matches.pending,
         }
     }
 
@@ -170,25 +157,31 @@ impl<'a> Arrays<'a> {
     }
 }
 
-fn arrays(dests: &[RawDest]) -> impl Iterator<Item = Arrays<'_>> + Clone {
-    dests.iter().map(Arrays::of)
+fn put_container(key: &mut Vec<u8>, c: &Container) {
+    put_ptr(key, c.names().map_or(ptr::null(), CStr::as_ptr));
+    key.extend_from_slice(&c.width.to_ne_bytes());
+    key.extend_from_slice(&c.height.to_ne_bytes());
+    put_ints(key, &[c.kind, c.vertical, c.sibling_index, c.sibling_count]);
 }
 
-fn build_key(key: &mut Vec<u8>, parent_id: u64, root_px: f64, dests: &[RawDest]) {
-    let mut cq_bytes = unsafe { ns_css_container_stack_copy(ptr::null_mut(), 0) };
-    if cq_bytes > 0 && !arrays(dests).any(|a| a.needs_container()) {
-        cq_bytes = 0;
-    }
-    let cq_len = (cq_bytes / CONTAINER_BYTES) as u32;
+fn arrays<'a>(pes: &'a [c_uint], outs: &'a [Matches]) -> impl Iterator<Item = Arrays<'a>> + Clone {
+    pes.iter()
+        .zip(outs)
+        .map(|(&pe, matches)| Arrays::of(pe, matches))
+}
+
+fn build_key(key: &mut Vec<u8>, parent_id: u64, root_px: f64, pes: &[c_uint], outs: &[Matches]) {
+    let needs_container = arrays(pes, outs).any(|a| a.needs_container());
     key.extend_from_slice(&parent_id.to_ne_bytes());
     key.extend_from_slice(&root_px.to_ne_bytes());
-    key.extend_from_slice(&cq_len.to_ne_bytes());
-    if cq_len > 0 {
-        let start = key.len();
-        key.resize(start + cq_bytes, 0);
-        unsafe { ns_css_container_stack_copy(key[start..].as_mut_ptr(), cq_bytes) };
-    }
-    for (i, a) in arrays(dests).enumerate() {
+    container::with_stack(|stack| {
+        let stack = if needs_container { stack } else { &[] };
+        key.extend_from_slice(&(stack.len() as u32).to_ne_bytes());
+        for c in stack {
+            put_container(key, c);
+        }
+    });
+    for (i, a) in arrays(pes, outs).enumerate() {
         if i > 0 {
             key.extend_from_slice(&a.pe.to_ne_bytes());
         }
@@ -196,50 +189,42 @@ fn build_key(key: &mut Vec<u8>, parent_id: u64, root_px: f64, dests: &[RawDest])
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_share_begin() {
+pub(super) fn style_share_begin() {
     TABLE.with_borrow_mut(ShareTable::begin);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_share_end() {
+pub(super) fn style_share_end() {
     TABLE.with_borrow_mut(ShareTable::end);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_style_share_find(
-    parent: *const RawStyle,
+pub(super) enum Shared {
+    Unkeyed,
+    Miss,
+    Hit(*const RawStyle),
+}
+
+pub(super) fn style_share_find(
+    parent: Option<&RawStyle>,
     root_px: f64,
-    dests: *const RawDest,
-    n_dests: c_uint,
-    shared: *mut *const RawStyle,
-) -> GBoolean {
-    let Some(shared) = (unsafe { shared.as_mut() }) else {
-        return glib::FALSE;
-    };
-    *shared = ptr::null();
-    let dests = if dests.is_null() {
-        &[][..]
-    } else {
-        unsafe { slice::from_raw_parts(dests, n_dests as usize) }
-    };
+    pes: &[c_uint],
+    outs: &[Matches],
+) -> Shared {
     TABLE.with_borrow_mut(|table| {
         if !table.active() {
-            return glib::TRUE;
+            return Shared::Miss;
         }
-        if arrays(dests).any(|a| a.uses_attr()) {
-            return glib::FALSE;
+        if arrays(pes, outs).any(|a| a.uses_attr()) {
+            return Shared::Unkeyed;
         }
-        let parent_id = unsafe { parent.as_ref() }.map_or(0, |p| p.share_id);
-        build_key(table.new_key(), parent_id, root_px, dests);
-        *shared = table
-            .find()
-            .map_or(ptr::null(), |style| style as *const RawStyle);
-        glib::TRUE
+        let parent_id = parent.map_or(0, |p| p.share_id);
+        build_key(table.new_key(), parent_id, root_px, pes, outs);
+        match table.find() {
+            Some(style) => Shared::Hit(style as *const RawStyle),
+            None => Shared::Miss,
+        }
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_style_share_insert(style: *const RawStyle) {
+pub(super) fn style_share_insert(style: *const RawStyle) {
     TABLE.with_borrow_mut(|table| table.insert(style as usize));
 }

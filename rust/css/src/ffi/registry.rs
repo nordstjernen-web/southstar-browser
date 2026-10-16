@@ -11,6 +11,7 @@ use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
 
+use super::selector_view::SheetRef;
 use super::sheet::{RawPropertyRule, RawSheet, property_rule_clear};
 
 const REGISTER_OK: c_int = 0;
@@ -119,15 +120,11 @@ pub extern "C" fn ns_css_clear_registered_properties() {
     drop(cleared);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_registered_property_serial() -> u64 {
+pub(super) fn registered_property_serial() -> u64 {
     registry().serial
 }
 
-unsafe fn put_rules(table: *mut GHashTable, sheet: *const RawSheet) {
-    let Some(sheet) = (unsafe { sheet.as_ref() }) else {
-        return;
-    };
+fn put_rules(table: *mut GHashTable, sheet: &RawSheet) {
     for rule in sheet.property_rules() {
         if !rule.name().is_null() {
             unsafe {
@@ -145,26 +142,17 @@ pub(super) fn pass_registered() -> *mut GHashTable {
     PASS.get()
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_registered_props_end() {
+pub(super) fn registered_props_end() {
     let table = PASS.replace(ptr::null_mut());
     if !table.is_null() {
         unsafe { glib::g_hash_table_destroy(table) };
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_registered_props_begin(
-    ua: *const RawSheet,
-    author: *const *const RawSheet,
-    n_author: usize,
-) -> *mut GHashTable {
+pub(super) fn registered_props_begin(sheets: &[SheetRef<'_>]) -> *mut GHashTable {
     let table = unsafe { glib::g_hash_table_new(Some(glib::g_str_hash), Some(glib::g_str_equal)) };
-    unsafe { put_rules(table, ua) };
-    if !author.is_null() {
-        for &sheet in unsafe { core::slice::from_raw_parts(author, n_author) } {
-            unsafe { put_rules(table, sheet) };
-        }
+    for sheet in sheets {
+        put_rules(table, sheet.raw());
     }
     for registered in registry().rules.values() {
         let rule = &*registered.0;

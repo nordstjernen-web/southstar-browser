@@ -5,22 +5,22 @@
 use core::cell::RefCell;
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::hash::BuildHasherDefault;
-use core::mem::size_of;
 use core::ptr;
 use core::slice;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, PoisonError};
 
-use southstar_dom::{Node, NsNode, attrs};
+use southstar_dom::{Node, attrs};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable, GPtrArray};
 
 use super::cascade::RawMatch;
-use super::container::{ns_css_container_features_note, ns_css_container_rule_matches};
+use super::container::ns_css_container_rule_matches;
 use super::custom_props::RawVarMatch;
 use super::declarations::{DECL_SLOT_SPAN, RawPending, RawRule};
+use super::layers::LayerRanks;
 use super::matcher::match_scope;
 use super::pending::RawPendingMatch;
-use super::rule_index::{Candidate, RawIndex, ns_css_rule_index_build};
+use super::rule_index::{Candidate, RawIndex, rule_index_build};
 use super::selector::RawSelector;
 use super::selector_view::{RuleRef, SelectorRef};
 use super::sheet::{RawSheet, ns_css_stylesheet_free, ns_css_stylesheet_parse};
@@ -37,17 +37,22 @@ const ORIGIN_PRESENTATIONAL: c_int = 1;
 const ORIGIN_AUTHOR: c_int = 2;
 const INLINE_SPECIFICITY: (c_int, c_int, c_int) = (1000, 0, 0);
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub(super) struct RawDest {
-    pub(super) pe: c_uint,
-    pub(super) out: *mut GArray,
-    pub(super) var_out: *mut GArray,
-    pub(super) pending_out: *mut GArray,
+#[derive(Default)]
+pub(super) struct Matches {
+    pub(super) decls: Vec<RawMatch>,
+    pub(super) vars: Vec<RawVarMatch>,
+    pub(super) pending: Vec<RawPendingMatch>,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawDest>() == 32);
+impl Matches {
+    pub(super) fn clear(&mut self) {
+        self.decls.clear();
+        self.vars.clear();
+        self.pending.clear();
+    }
+}
+
+pub(super) type SavedFilter = Box<[u8; crate::gather::FILTER_SIZE]>;
 
 type CacheKey = (usize, usize, usize, c_uint);
 type SelectorCache = HashMap<CacheKey, (bool, c_int), BuildHasherDefault<AddrHasher>>;
@@ -92,10 +97,6 @@ unsafe fn elements<'a, T>(array: *const GArray) -> &'a [T] {
     }
 }
 
-unsafe fn append<T>(array: *mut GArray, item: &T) {
-    unsafe { glib::g_array_append_vals(array, ptr::from_ref(item).cast(), 1) };
-}
-
 fn filter_update(filter: &mut AncestorFilter, el: Node<'_>, delta: i32) {
     if let Some(name) = el.name() {
         filter.count(identifier_hash(b'%', name.to_bytes()), delta);
@@ -117,18 +118,16 @@ fn filter_update(filter: &mut AncestorFilter, el: Node<'_>, delta: i32) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_ancestor_filter_begin(attr_hashes: GBoolean) {
+pub(super) fn ancestor_filter_begin(attr_hashes: bool) {
     FILTER.with(|f| {
         let mut f = f.borrow_mut();
         f.counts.fill(0);
         f.active = true;
-        f.attrs = attr_hashes != 0;
+        f.attrs = attr_hashes;
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_ancestor_filter_end() {
+pub(super) fn ancestor_filter_end() {
     FILTER.with(|f| {
         let mut f = f.borrow_mut();
         f.active = false;
@@ -136,53 +135,41 @@ pub extern "C" fn ns_css_ancestor_filter_end() {
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_ancestor_filter_subject(node: *const NsNode) {
-    FILTER.with(|f| f.borrow_mut().subject = node as usize);
+pub(super) fn ancestor_filter_subject(node: Node<'_>) {
+    FILTER.with(|f| f.borrow_mut().subject = node.as_ptr() as usize);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_ancestor_filter_enter(node: *const NsNode) -> GBoolean {
-    let Some(el) = (unsafe { Node::from_ptr(node) }) else {
-        return glib::FALSE;
-    };
+pub(super) fn ancestor_filter_enter(el: Node<'_>) -> bool {
     FILTER.with(|f| {
         let mut f = f.borrow_mut();
         let enter = f.active && el.is_element() && el.first_child().is_some();
         if enter {
             filter_update(&mut f, el, 1);
         }
-        glib::boolean(enter)
+        enter
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_ancestor_filter_leave(node: *const NsNode) {
-    if let Some(el) = unsafe { Node::from_ptr(node) } {
-        FILTER.with(|f| filter_update(&mut f.borrow_mut(), el, -1));
-    }
+pub(super) fn ancestor_filter_leave(el: Node<'_>) {
+    FILTER.with(|f| filter_update(&mut f.borrow_mut(), el, -1));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_ancestor_filter_save() -> *mut c_void {
+pub(super) fn ancestor_filter_save() -> Option<SavedFilter> {
     FILTER.with(|f| {
         let mut f = f.borrow_mut();
         if !f.active {
-            return ptr::null_mut();
+            return None;
         }
         let saved = Box::new(f.counts);
         f.counts.fill(0);
-        Box::into_raw(saved).cast()
+        Some(saved)
     })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_ancestor_filter_restore(saved: *mut c_void) {
-    if saved.is_null() {
-        return;
+pub(super) fn ancestor_filter_restore(saved: Option<SavedFilter>) {
+    if let Some(saved) = saved {
+        FILTER.with(|f| f.borrow_mut().counts = *saved);
     }
-    let saved = unsafe { Box::from_raw(saved.cast::<[u8; crate::gather::FILTER_SIZE]>()) };
-    FILTER.with(|f| f.borrow_mut().counts = *saved);
 }
 
 #[unsafe(no_mangle)]
@@ -228,15 +215,10 @@ fn cached_match(
     result
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_rule_index_ensure(sheet: *const RawSheet) -> *const RawIndex {
-    let Some(raw) = (unsafe { sheet.cast_mut().as_mut() }) else {
-        return ptr::null();
-    };
-    if raw.index.is_null() {
-        raw.index = unsafe { ns_css_rule_index_build((&raw mut *raw).cast()) }.cast();
+pub(super) fn rule_index_ensure(sheet: &mut RawSheet) {
+    if sheet.index.is_null() {
+        sheet.index = rule_index_build(sheet).cast();
     }
-    raw.index.cast()
 }
 
 fn bucket<'a>(
@@ -287,30 +269,23 @@ fn collect_candidates(idx: &RawIndex, el: Option<Node<'_>>, scratch: &mut Scratc
     candidates.extend_from_slice(unsafe { elements(idx.universal) });
 }
 
-fn layer_rank(layer_ranks: *mut GHashTable, name: *const c_char) -> c_int {
-    if name.is_null() || layer_ranks.is_null() {
-        return LAYER_NONE;
-    }
-    let v = unsafe { glib::g_hash_table_lookup(layer_ranks, name.cast()) };
-    if v.is_null() {
-        LAYER_NONE
-    } else {
-        v as isize as c_int - 1
-    }
+fn layer_rank(layer_ranks: &LayerRanks, name: *const c_char) -> c_int {
+    unsafe { glib::bytes(name) }
+        .and_then(|name| layer_ranks.get(name).copied())
+        .unwrap_or(LAYER_NONE)
 }
 
-struct Output<'a> {
+struct Output {
     origin: c_int,
     sheet_index: c_int,
     source_order: Option<c_int>,
     inline_style: GBoolean,
-    dests: &'a [RawDest],
 }
 
-impl Output<'_> {
-    fn emit(&self, rule: &RawRule, acc: &Accum, layer_order: c_int) {
+impl Output {
+    fn emit(&self, outs: &mut [Matches], rule: &RawRule, acc: &Accum, layer_order: c_int) {
         let rule_ptr = ptr::from_ref(rule).cast::<c_void>();
-        for (dd, dst) in self.dests.iter().enumerate() {
+        for (dd, dst) in outs.iter_mut().enumerate() {
             if !acc.any[dd] {
                 continue;
             }
@@ -336,9 +311,9 @@ impl Output<'_> {
                     value: d.value,
                     prop: d.prop,
                 };
-                unsafe { append(dst.out, &entry) };
+                dst.decls.push(entry);
             }
-            if !dst.var_out.is_null() && !rule.vars.is_null() {
+            if !rule.vars.is_null() {
                 for (decl_order, (k, v)) in
                     unsafe { glib::hash_table_entries(rule.vars) }.enumerate()
                 {
@@ -360,27 +335,25 @@ impl Output<'_> {
                         name: k.cast(),
                         text: v.cast(),
                     };
-                    unsafe { append(dst.var_out, &entry) };
+                    dst.vars.push(entry);
                 }
             }
-            if !dst.pending_out.is_null() {
-                for pd in unsafe { elements::<RawPending>(rule.pending) } {
-                    let entry = RawPendingMatch {
-                        origin: self.origin,
-                        spec_a,
-                        spec_b,
-                        spec_c,
-                        sheet_index: self.sheet_index,
-                        layer_order,
-                        scope_order,
-                        source_order: self.source_order.unwrap_or(rule.source_order),
-                        decl_order_base: pd.decl_slot(),
-                        inline_style: self.inline_style,
-                        rule: rule_ptr,
-                        pd,
-                    };
-                    unsafe { append(dst.pending_out, &entry) };
-                }
+            for pd in unsafe { elements::<RawPending>(rule.pending) } {
+                let entry = RawPendingMatch {
+                    origin: self.origin,
+                    spec_a,
+                    spec_b,
+                    spec_c,
+                    sheet_index: self.sheet_index,
+                    layer_order,
+                    scope_order,
+                    source_order: self.source_order.unwrap_or(rule.source_order),
+                    decl_order_base: pd.decl_slot(),
+                    inline_style: self.inline_style,
+                    rule: rule_ptr,
+                    pd,
+                };
+                dst.pending.push(entry);
             }
         }
     }
@@ -388,7 +361,7 @@ impl Output<'_> {
 
 struct Gather<'a> {
     rules: &'a [*mut RawRule],
-    dests: &'a [RawDest],
+    pes: &'a [c_uint],
     dest_of_pe: &'a [Option<usize>; DESTS],
     node: Option<Node<'a>>,
     filter: Option<&'a AncestorFilter>,
@@ -414,9 +387,9 @@ impl Gather<'_> {
         idx: &RawIndex,
         cache: &mut Option<SelectorCache>,
         scratch: &mut Scratch,
-        layer_ranks: *mut GHashTable,
-        origin: c_int,
-        sheet_index: c_int,
+        outs: &mut [Matches],
+        layer_ranks: &LayerRanks,
+        origin: Origin,
     ) {
         collect_candidates(idx, self.node, scratch);
         if scratch.accums.len() < self.rules.len() {
@@ -458,10 +431,10 @@ impl Gather<'_> {
                     Some(&Some(dd)) => dd..dd + 1,
                     _ => continue,
                 },
-                None => 0..self.dests.len(),
+                None => 0..self.pes.len(),
             };
             for dd in range {
-                let pe = self.dests[dd].pe;
+                let pe = self.pes[dd];
                 if pe != 0 && rule.pe_mask & 1u32.checked_shl(pe).unwrap_or(0) == 0 {
                     continue;
                 }
@@ -473,7 +446,7 @@ impl Gather<'_> {
                     continue;
                 }
                 if !rule.container_condition.is_null() {
-                    ns_css_container_features_note();
+                    crate::container::note_features();
                 }
                 let acc = &mut scratch.accums[ri];
                 if acc.epoch != epoch {
@@ -489,11 +462,10 @@ impl Gather<'_> {
         }
         scratch.candidates = candidates;
         let output = Output {
-            origin,
-            sheet_index,
+            origin: origin.origin,
+            sheet_index: origin.sheet_index,
             source_order: None,
             inline_style: glib::FALSE,
-            dests: self.dests,
         };
         for &ri in &scratch.matched {
             let Some(rule) = self.rules.get(ri).and_then(|&r| unsafe { r.as_ref() }) else {
@@ -503,37 +475,31 @@ impl Gather<'_> {
             let layer_order = *acc
                 .layer_order
                 .get_or_insert_with(|| layer_rank(layer_ranks, rule.layer_name));
-            output.emit(rule, acc, layer_order);
+            output.emit(outs, rule, acc, layer_order);
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_gather_matches(
-    sheet: *const RawSheet,
-    origin: c_int,
-    sheet_index: c_int,
-    el: *const NsNode,
-    dests: *const c_void,
-    n_dests: c_uint,
-    layer_ranks: *mut GHashTable,
+pub(super) struct Origin {
+    pub(super) origin: c_int,
+    pub(super) sheet_index: c_int,
+}
+
+pub(super) fn gather_matches(
+    sheet: &RawSheet,
+    origin: Origin,
+    el: Node<'_>,
+    pes: &[c_uint],
+    outs: &mut [Matches],
+    layer_ranks: &LayerRanks,
 ) {
-    let Some(raw_sheet) = (unsafe { sheet.as_ref() }) else {
+    let Some(idx) = (unsafe { sheet.index.cast::<RawIndex>().as_ref() }) else {
         return;
     };
-    let Some(idx) = (unsafe { ns_css_rule_index_ensure(sheet).as_ref() }) else {
-        return;
-    };
-    let dests: &[RawDest] = if dests.is_null() || n_dests == 0 {
-        &[]
-    } else {
-        unsafe { slice::from_raw_parts(dests.cast(), n_dests as usize) }
-    };
-    let node = unsafe { Node::from_ptr(el) };
-    let rules = unsafe { pointers::<RawRule>(raw_sheet.rules) };
+    let rules = unsafe { pointers::<RawRule>(sheet.rules) };
     let mut dest_of_pe = [None; DESTS];
-    for (dd, dst) in dests.iter().enumerate() {
-        if let Some(slot) = dest_of_pe.get_mut(dst.pe as usize) {
+    for (dd, &pe) in pes.iter().enumerate() {
+        if let Some(slot) = dest_of_pe.get_mut(pe as usize) {
             *slot = Some(dd);
         }
     }
@@ -541,25 +507,19 @@ pub unsafe extern "C" fn ns_css_gather_matches(
         SELECTOR_CACHE.with(|c| {
             SCRATCH.with(|s| {
                 let filter = f.borrow();
-                let filter_usable =
-                    filter.active && filter.subject == el as usize && match_scope().is_none();
+                let filter_usable = filter.active
+                    && filter.subject == el.as_ptr() as usize
+                    && match_scope().is_none();
                 let mut cache = c.borrow_mut();
                 let mut scratch = s.borrow_mut();
                 let gather = Gather {
                     rules,
-                    dests,
+                    pes,
                     dest_of_pe: &dest_of_pe,
-                    node,
+                    node: Some(el),
                     filter: filter_usable.then_some(&*filter),
                 };
-                gather.run(
-                    idx,
-                    &mut cache,
-                    &mut scratch,
-                    layer_ranks,
-                    origin,
-                    sheet_index,
-                );
+                gather.run(idx, &mut cache, &mut scratch, outs, layer_ranks, origin);
             })
         })
     });
@@ -600,7 +560,8 @@ fn decl_sheet(decls: &[u8]) -> *const RawSheet {
 
 fn emit_decl_sheet(
     sheet: *const RawSheet,
-    output: &Output<'_>,
+    output: &Output,
+    out: &mut Matches,
     specificity: (c_int, c_int, c_int),
 ) {
     let Some(sheet) = (unsafe { sheet.as_ref() }) else {
@@ -610,36 +571,20 @@ fn emit_decl_sheet(
     acc.note(0, specificity, 0);
     for &rule in unsafe { pointers::<RawRule>(sheet.rules) } {
         if let Some(rule) = unsafe { rule.as_ref() } {
-            output.emit(rule, &acc, LAYER_NONE);
+            output.emit(slice::from_mut(out), rule, &acc, LAYER_NONE);
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_css_gather_element_declarations(
-    el: *const NsNode,
-    matches: *mut GArray,
-    var_matches: *mut GArray,
-    pending_matches: *mut GArray,
-) {
-    let Some(node) = (unsafe { Node::from_ptr(el) }) else {
-        return;
-    };
-    let dests = [RawDest {
-        pe: 0,
-        out: matches,
-        var_out: var_matches,
-        pending_out: pending_matches,
-    }];
+pub(super) fn gather_element_declarations(node: Node<'_>, out: &mut Matches) {
     if let Some(hints) = hints::presentational_hints(node) {
         let output = Output {
             origin: ORIGIN_PRESENTATIONAL,
             sheet_index: 0,
             source_order: Some(c_int::MIN),
             inline_style: glib::FALSE,
-            dests: &dests,
         };
-        emit_decl_sheet(decl_sheet(&hints), &output, (0, 0, 0));
+        emit_decl_sheet(decl_sheet(&hints), &output, out, (0, 0, 0));
     }
     if let Some(style) = node.attr(c"style") {
         let output = Output {
@@ -647,14 +592,17 @@ pub unsafe extern "C" fn ns_css_gather_element_declarations(
             sheet_index: 0,
             source_order: Some(c_int::MAX),
             inline_style: glib::TRUE,
-            dests: &dests,
         };
-        emit_decl_sheet(decl_sheet(style.to_bytes()), &output, INLINE_SPECIFICITY);
+        emit_decl_sheet(
+            decl_sheet(style.to_bytes()),
+            &output,
+            out,
+            INLINE_SPECIFICITY,
+        );
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_css_decl_sheet_cache_trim() {
+pub(super) fn decl_sheet_cache_trim() {
     let dropped = {
         let mut sheets = decl_sheets();
         if sheets.len() >= DECL_SHEETS_MAX {

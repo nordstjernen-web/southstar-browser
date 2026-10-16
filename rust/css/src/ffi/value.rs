@@ -369,6 +369,15 @@ pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
     value
 }
 
+pub(super) struct OwnedValue(pub(super) *mut NsCssValue);
+
+impl Drop for OwnedValue {
+    fn drop(&mut self) {
+        // SAFETY: an OwnedValue holds the one reference handed to it, on a value nothing else frees.
+        unsafe { ns_css_value_free(self.0) };
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_css_value_dup(v: *const NsCssValue) -> *mut NsCssValue {
     let v = v.cast_mut();
