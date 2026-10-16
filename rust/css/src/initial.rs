@@ -97,7 +97,6 @@ const INITIALS: [(&[u8], &CStr); 280] = [
     (b"font-palette", c"normal"),
     (b"column-height", c"auto"),
     (b"contain", c"none"),
-    (b"will-change", c"auto"),
     (b"font-variant-ligatures", c"normal"),
     (b"font-feature-settings", c"normal"),
     (b"font-variation-settings", c"normal"),
@@ -283,6 +282,7 @@ const INITIALS: [(&[u8], &CStr); 280] = [
     (b"empty-cells", c"show"),
     (b"border-image-source", c"none"),
     (b"will-change", c"auto"),
+    (b"shape-outside", c"none"),
     (b"touch-action", c"auto"),
     (b"scroll-behavior", c"auto"),
 ];

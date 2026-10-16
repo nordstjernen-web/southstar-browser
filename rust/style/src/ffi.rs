@@ -103,7 +103,7 @@ const _: () = assert!(
         && core::mem::offset_of!(Rect, is_auto) == 48
 );
 
-pub const PROP_COUNT: usize = 273;
+pub const PROP_COUNT: usize = 274;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -152,11 +152,11 @@ struct NsStyle {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    core::mem::size_of::<NsStyle>() == 2304
-        && core::mem::offset_of!(NsStyle, display) == 2184
-        && core::mem::offset_of!(NsStyle, before) == 2192
-        && core::mem::offset_of!(NsStyle, file_selector_button) == 2256
-        && core::mem::offset_of!(NsStyle, vars) == 2296
+    core::mem::size_of::<NsStyle>() == 2312
+        && core::mem::offset_of!(NsStyle, display) == 2192
+        && core::mem::offset_of!(NsStyle, before) == 2200
+        && core::mem::offset_of!(NsStyle, file_selector_button) == 2264
+        && core::mem::offset_of!(NsStyle, vars) == 2304
 );
 
 #[repr(C)]

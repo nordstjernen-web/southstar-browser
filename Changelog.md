@@ -198,6 +198,12 @@ Southstar Browser 0.9.11-dev:
   they lack, in proportion to their widths, after the single-column cells
   have been measured; rowspan cells honour vertical-align; and colspan
   and rowspan take values up to 1000 and 65534 as HTML allows.
+* clip-path basic shapes serialize canonically (lengths with units,
+  default radii, fill rules, rounds and geometry boxes omitted,
+  positions in x-then-y order, path data normalized), shape() is parsed
+  by its grammar instead of only checked for "from", and shape-outside
+  is a property (basic shapes, shape boxes and images). WPT css-shapes
+  and clip-path parsing: +210 subtests.
 * -webkit-transform, -webkit-transform-origin, -webkit-transition,
   -webkit-animation (and their longhands), -webkit-box-shadow,
   -webkit-filter, -webkit-box-sizing, -webkit-clip-path,

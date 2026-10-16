@@ -281,10 +281,11 @@ pub enum Prop {
     ColumnHeight,
     Contain,
     WillChange,
+    ShapeOutside,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 273] = [
+    pub(crate) const ALL: [Prop; 274] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -558,6 +559,7 @@ impl Prop {
         Prop::ColumnHeight,
         Prop::Contain,
         Prop::WillChange,
+        Prop::ShapeOutside,
     ];
 
     pub(crate) fn name(self) -> &'static [u8] {
@@ -929,6 +931,7 @@ impl Prop {
             Prop::ColumnHeight => c"column-height",
             Prop::Contain => c"contain",
             Prop::WillChange => c"will-change",
+            Prop::ShapeOutside => c"shape-outside",
         }
     }
 }

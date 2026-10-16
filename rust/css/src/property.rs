@@ -21,7 +21,7 @@ use crate::gradient::{self, Gradient};
 use crate::grid::{self, Areas, Tracks};
 use crate::image;
 use crate::prop::Prop;
-use crate::scan::{is_gspace, is_ws, split_ws_limit, strip, strtol10, trim_range};
+use crate::scan::{is_gspace, is_ws, split_ws_limit, starts_with_ci, strip, strtol10, trim_range};
 use crate::shadow::{self, ShadowList};
 use crate::time;
 use crate::transform::{self, Individual, Transform};
@@ -1154,6 +1154,22 @@ fn font_style(t: &[u8]) -> Option<Value> {
     }))
 }
 
+fn shape_outside(t: &[u8]) -> Option<Value> {
+    let stripped = strip(t);
+    if starts_with_ci(stripped, b"url(")
+        || stripped.contains(&b'(') && !clip_path::is_shape_text(stripped)
+    {
+        return image_prop(t);
+    }
+    if split_ws_limit(stripped, 3)
+        .iter()
+        .any(|w| word_is_one_of(w, "fill-box stroke-box view-box"))
+    {
+        return None;
+    }
+    clip_path::canonical(t, b"margin-box").map(Value::keyword)
+}
+
 fn contain(t: &[u8]) -> Option<Value> {
     if let Some(v) = keyword_choice(t, "none strict content") {
         return Some(v);
@@ -2064,7 +2080,15 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::GridRowStart | P::GridRowEnd | P::GridColumnStart | P::GridColumnEnd => {
             keyword_text(grid::line_canonical(t).map(|(text, _)| text))
         }
-        P::ClipPath => clip_path::valid(t).then(|| Value::keyword(lower_outside_strings(t))),
+        P::ClipPath => {
+            let raw = contains(t, b"var(") || starts_with_ci(strip(t), b"url(");
+            if raw {
+                clip_path::valid(t).then(|| Value::keyword(lower_outside_strings(t)))
+            } else {
+                clip_path::canonical(t, b"border-box").map(Value::keyword)
+            }
+        }
+        P::ShapeOutside => shape_outside(t),
         _ => match longhand(prop) {
             Some(lh) => keyword_text(animation::longhand_canonical(lh, t)),
             None => Some(Value::keyword(lower(t))),
