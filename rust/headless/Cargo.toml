@@ -11,6 +11,7 @@ publish.workspace = true
 libav = []
 
 [dependencies]
+southstar-anim = { path = "../anim" }
 southstar-config = { path = "../config" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }

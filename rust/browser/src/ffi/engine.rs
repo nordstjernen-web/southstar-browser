@@ -12,6 +12,8 @@ use southstar_layout::{BoxRef, NsBox, Style};
 use super::glib::{GString, StrBufOwned};
 use super::{Js, NsBrowser};
 
+pub use southstar_anim::AnimHandle as Anim;
+
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct PrintSetup {
@@ -107,11 +109,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_js(js: *mut c_void);
     fn ns_paint_set_anim(anim: *mut c_void);
-    fn ns_anim_new() -> *mut c_void;
-    fn ns_anim_free(a: *mut c_void);
-    fn ns_anim_tick(a: *mut c_void, now_us: i64) -> GBoolean;
-    fn ns_anim_has_active(a: *const c_void) -> GBoolean;
-    fn ns_anim_needs_layout(a: *const c_void) -> GBoolean;
     fn ns_image_cache_new() -> *mut c_void;
     fn ns_image_cache_free(c: *mut c_void);
     fn ns_image_cache_tick(c: *mut c_void, now_us: i64) -> GBoolean;
@@ -214,7 +211,7 @@ impl NsBrowser {
                 self.vw.get(),
                 self.vh.get(),
                 self.images.get(),
-                self.anim.get(),
+                self.anim.get().map_or(ptr::null_mut(), Anim::raw),
                 self.js.get(),
                 self.css_cache.get(),
                 Node::ptr_or_null(focused),
@@ -264,39 +261,6 @@ impl NsBrowser {
 
     pub fn set_open_select_for_layout(&self) {
         unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Anim(NonNull<c_void>);
-
-impl Anim {
-    pub fn from_raw(p: *mut c_void) -> Option<Anim> {
-        NonNull::new(p).map(Anim)
-    }
-
-    pub fn create() -> Option<Anim> {
-        Anim::from_raw(unsafe { ns_anim_new() })
-    }
-
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_anim_free(self.raw()) };
-    }
-
-    pub fn tick(self, now_us: i64) -> bool {
-        unsafe { ns_anim_tick(self.raw(), now_us) != 0 }
-    }
-
-    pub fn has_active(self) -> bool {
-        unsafe { ns_anim_has_active(self.raw()) != 0 }
-    }
-
-    pub fn needs_layout(self) -> bool {
-        unsafe { ns_anim_needs_layout(self.raw()) != 0 }
     }
 }
 

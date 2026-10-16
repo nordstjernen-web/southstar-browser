@@ -1738,6 +1738,7 @@ dependencies = [
 name = "southstar-browser"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-bytecode-cache",
  "southstar-config",
  "southstar-css",
@@ -2071,6 +2072,7 @@ version = "0.9.11-dev"
 name = "southstar-headless"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-config",
  "southstar-css",
  "southstar-css-media",

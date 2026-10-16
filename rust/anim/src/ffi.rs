@@ -131,18 +131,6 @@ impl NsAnimInfo {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_anim_new() -> *mut Anim {
-    Box::into_raw(Box::new(Anim::new()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_free(a: *mut Anim) {
-    if !a.is_null() {
-        drop(unsafe { Box::from_raw(a) });
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_anim_load_from_stylesheet(a: *mut Anim, sheet: *const c_void) {
     if let (Some(a), false) = (engine(a), sheet.is_null()) {
         a.load_keyframes(sheet);
@@ -166,21 +154,6 @@ pub unsafe extern "C" fn ns_anim_observe_all(a: *mut Anim, styles: *mut GHashTab
     if let (Some(a), Some(styles)) = (engine(a), StylesTable::new(styles)) {
         a.observe_all(styles, now_us);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_tick(a: *mut Anim, now_us: i64) -> GBoolean {
-    glib::boolean(engine(a).is_some_and(|a| a.tick(now_us)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_has_active(a: *const Anim) -> GBoolean {
-    glib::boolean(unsafe { a.as_ref() }.is_some_and(Anim::has_active))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_needs_layout(a: *const Anim) -> GBoolean {
-    glib::boolean(unsafe { a.as_ref() }.is_some_and(Anim::needs_layout))
 }
 
 #[unsafe(no_mangle)]
@@ -387,11 +360,4 @@ pub unsafe extern "C" fn ns_anim_script_start(
         }
     }
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_anim_rebase(a: *mut Anim, base_us: i64) {
-    if let Some(a) = engine(a) {
-        a.rebase(base_us);
-    }
 }

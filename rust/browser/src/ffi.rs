@@ -131,7 +131,7 @@ pub struct NsBrowser {
     layout: Cell<*mut NsBox>,
     styles: Cell<*mut GHashTable>,
     js: Cell<*mut c_void>,
-    anim: Cell<*mut c_void>,
+    anim: Cell<Option<Anim>>,
     images: Cell<*mut c_void>,
     videos: Cell<*mut c_void>,
     css_cache: Cell<*mut GHashTable>,
@@ -260,7 +260,7 @@ impl NsBrowser {
             .cast::<RefCell<Option<Tree>>>();
         // SAFETY: `doc` is the aligned address of the document field inside the allocation.
         unsafe { doc.write(RefCell::new(None)) };
-        // SAFETY: the Text, NodeSlot, POST body and document fields were written above; every other field is a cell of integers, floats or raw pointers, for which all-zero bytes are a valid value.
+        // SAFETY: the Text, NodeSlot, POST body and document fields were written above; every other field is a cell of integers, floats, raw pointers or optional handles around a non-null pointer, for which all-zero bytes are a valid value.
         Page::adopt(unsafe { slot.assume_init() })
     }
 
@@ -285,7 +285,7 @@ impl NsBrowser {
     }
 
     pub fn anim(&self) -> Option<Anim> {
-        Anim::from_raw(self.anim.get())
+        self.anim.get()
     }
 
     pub fn images(&self) -> Option<Images> {
@@ -390,8 +390,9 @@ impl NsBrowser {
             js.set_layout_root(None);
             js.set_style_table(None);
         }
-        if let Some(anim) = self.anim() {
-            anim.free();
+        if let Some(anim) = self.anim.take() {
+            // SAFETY: the handle is out of the page's slot, paint was detached from it above, and nothing samples animations or runs script before the script engine's copy is released below.
+            unsafe { anim.free() };
         }
         let layout = self.layout.replace(ptr::null_mut());
         if !layout.is_null() {
@@ -551,7 +552,7 @@ pub fn attach_caches(b: &NsBrowser) {
 }
 
 pub fn set_anim(b: &NsBrowser, anim: Anim) {
-    b.anim.set(anim.raw());
+    b.anim.set(Some(anim));
 }
 
 pub fn wire_js_callbacks(b: &NsBrowser, js: Js) {

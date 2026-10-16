@@ -642,11 +642,10 @@ pub fn run_one(
     let css_cache = ffi::new_css_cache();
     let styles = ffi::compute_cascade(&doc, page_url.as_deref(), css_cache);
 
-    let anim = Anim::new();
-    if let Some(anim) = anim {
-        anim.load_keyframes(&doc, page_url.as_deref(), css_cache);
-        anim.observe(styles, ffi::monotonic_us());
-    }
+    let anim = Anim::create();
+    ffi::load_keyframes(anim, &doc, page_url.as_deref(), css_cache);
+    ffi::anim_observe(anim, styles, ffi::monotonic_us());
+    let anim = Some(anim);
 
     let nav = NavCapture::default();
     let timing = page
@@ -736,7 +735,8 @@ pub fn run_one(
             js.set_style_table(ptr::null_mut());
         }
         if let Some(anim) = anim {
-            anim.free();
+            // SAFETY: this page's run is over: script and the layout flush were detached above and the next page creates its own engine.
+            unsafe { anim.free() };
         }
         if !ctx.layout.get().is_null() {
             ffi::free_layout(ctx.layout.get());
@@ -870,7 +870,8 @@ pub fn run_one(
     nav.clear_post();
     ffi::paint_set_anim(None);
     if let Some(anim) = anim {
-        anim.free();
+        // SAFETY: the run is over and paint was detached from the engine above; script is not run again before it is freed below.
+        unsafe { anim.free() };
     }
     if let Some(js) = js {
         js.set_layout_root(ptr::null());

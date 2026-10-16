@@ -4,5 +4,8 @@
 
 mod engine;
 mod ffi;
+mod handle;
 mod props;
 mod timing;
+
+pub use handle::AnimHandle;

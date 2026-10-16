@@ -120,10 +120,9 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
         videos.set_base(b.base_url.get().as_deref());
     }
     b.compute_cascade();
-    if let Some(anim) = ffi::Anim::create() {
-        ffi::set_anim(b, anim);
-        b.load_keyframes(anim);
-    }
+    let anim = ffi::Anim::create();
+    ffi::set_anim(b, anim);
+    b.load_keyframes(anim);
     if let Some(js) = ffi::attach_js(b, setup.navigation_timing) {
         b.load_delay_deadline_us
             .set(ffi::monotonic_us() + LOAD_DELAY_US);

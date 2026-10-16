@@ -231,11 +231,6 @@ unsafe extern "C" {
     fn ns_paint_3d_invalidate();
     fn ns_paint_set_anim(anim: *mut c_void);
     fn ns_paint_set_js(js: *mut c_void);
-    fn ns_anim_new() -> *mut c_void;
-    fn ns_anim_free(anim: *mut c_void);
-    fn ns_anim_tick(anim: *mut c_void, now_us: i64) -> GBoolean;
-    fn ns_anim_rebase(anim: *mut c_void, base_us: i64);
-    fn ns_anim_needs_layout(anim: *const c_void) -> GBoolean;
     fn ns_image_cache_new() -> *mut c_void;
     fn ns_image_cache_free(cache: *mut c_void);
     fn ns_image_cache_tick(cache: *mut c_void, now_us: i64) -> GBoolean;
@@ -550,41 +545,14 @@ pub fn destroy_table(table: *mut GHashTable) {
     unsafe { glib::g_hash_table_destroy(table) };
 }
 
-#[derive(Clone, Copy)]
-pub struct Anim(NonNull<c_void>);
+pub use southstar_anim::AnimHandle as Anim;
 
-impl Anim {
-    pub fn new() -> Option<Anim> {
-        NonNull::new(unsafe { ns_anim_new() }).map(Anim)
-    }
+pub fn load_keyframes(anim: Anim, doc: &Document, base: Option<&CStr>, css_cache: *mut GHashTable) {
+    unsafe { ns_engine_load_keyframes(anim.raw(), doc.as_ptr(), ptr_or_null(base), css_cache) };
+}
 
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-
-    pub fn free(self) {
-        unsafe { ns_anim_free(self.raw()) };
-    }
-
-    pub fn tick(self, now_us: i64) -> bool {
-        unsafe { ns_anim_tick(self.raw(), now_us) != 0 }
-    }
-
-    pub fn rebase(self, base_us: i64) {
-        unsafe { ns_anim_rebase(self.raw(), base_us) };
-    }
-
-    pub fn needs_layout(self) -> bool {
-        unsafe { ns_anim_needs_layout(self.raw()) != 0 }
-    }
-
-    pub fn load_keyframes(self, doc: &Document, base: Option<&CStr>, css_cache: *mut GHashTable) {
-        unsafe { ns_engine_load_keyframes(self.raw(), doc.as_ptr(), ptr_or_null(base), css_cache) };
-    }
-
-    pub fn observe(self, styles: *mut GHashTable, now_us: i64) {
-        unsafe { ns_engine_anim_observe(self.raw(), styles, now_us) };
-    }
+pub fn anim_observe(anim: Anim, styles: *mut GHashTable, now_us: i64) {
+    unsafe { ns_engine_anim_observe(anim.raw(), styles, now_us) };
 }
 
 pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
