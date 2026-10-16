@@ -1,8 +1,88 @@
-//! Southstar — bookmarks storage: parsing and writing the tab-separated bookmarks file.
+//! Southstar — bookmarks storage: the saved list, parsing and writing the tab-separated bookmarks file.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+
+use core::ffi::CStr;
+use std::ffi::CString;
+
+pub struct Bookmark {
+    url: CString,
+    title: CString,
+}
+
+impl Bookmark {
+    fn new(url: &[u8], title: &[u8]) -> Bookmark {
+        Bookmark {
+            url: CString::new(url).unwrap_or_default(),
+            title: CString::new(title).unwrap_or_default(),
+        }
+    }
+
+    pub fn url(&self) -> &CStr {
+        &self.url
+    }
+
+    pub fn title(&self) -> &CStr {
+        &self.title
+    }
+}
+
+pub struct Bookmarks {
+    items: Vec<Bookmark>,
+    path: CString,
+}
+
+impl Bookmarks {
+    pub fn load() -> Bookmarks {
+        let path = ffi::bookmarks_path();
+        let contents = ffi::read(&path).unwrap_or_default();
+        let items = parse(&contents)
+            .into_iter()
+            .map(|(url, title)| Bookmark::new(url, title))
+            .collect();
+        Bookmarks { items, path }
+    }
+
+    pub fn items(&self) -> &[Bookmark] {
+        &self.items
+    }
+
+    fn position(&self, url: &CStr) -> Option<usize> {
+        self.items.iter().position(|b| b.url.as_c_str() == url)
+    }
+
+    pub fn contains(&self, url: &CStr) -> bool {
+        self.position(url).is_some()
+    }
+
+    pub fn add(&mut self, url: &CStr, title: Option<&CStr>) {
+        if self.contains(url) {
+            return;
+        }
+        let title = title.unwrap_or(url);
+        self.items
+            .push(Bookmark::new(url.to_bytes(), title.to_bytes()));
+        self.save();
+    }
+
+    pub fn remove(&mut self, url: &CStr) {
+        if let Some(i) = self.position(url) {
+            self.items.remove(i);
+            self.save();
+        }
+    }
+
+    fn save(&self) {
+        let out = serialize(
+            self.items
+                .iter()
+                .map(|b| (Some(b.url.to_bytes()), Some(b.title.to_bytes()))),
+        );
+        ffi::write(&self.path, &out);
+    }
+}
 
 fn strip(line: &[u8]) -> &[u8] {
     let start = line

@@ -8,6 +8,7 @@ use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
+use southstar_bookmarks::Bookmarks;
 use southstar_config::NsConfig;
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkRgba, GtkWidget};
 
@@ -26,25 +27,7 @@ use super::view::{self, View};
 use super::{downloads, taskmgr};
 use crate::window as rules;
 
-#[repr(C)]
-struct NsBookmarks {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct NsBookmark {
-    url: *mut c_char,
-    title: *mut c_char,
-}
-
 unsafe extern "C" {
-    fn ns_bookmarks_load() -> *mut NsBookmarks;
-    fn ns_bookmarks_free(bm: *mut NsBookmarks);
-    fn ns_bookmarks_count(bm: *const NsBookmarks) -> c_uint;
-    fn ns_bookmarks_get(bm: *const NsBookmarks, i: c_uint) -> *const NsBookmark;
-    fn ns_bookmarks_contains(bm: *const NsBookmarks, url: *const c_char) -> GBoolean;
-    fn ns_bookmarks_add(bm: *mut NsBookmarks, url: *const c_char, title: *const c_char);
-    fn ns_bookmarks_remove(bm: *mut NsBookmarks, url: *const c_char);
     fn ns_url_from_local_path(path: *const c_char) -> *mut c_char;
     fn ns_address_is_search(s: *const c_char) -> GBoolean;
     fn ns_search_url_for(query: *const c_char) -> *mut c_char;
@@ -102,7 +85,7 @@ pub struct ProcWindow {
     fullscreen_view: Cell<Option<View>>,
     fullscreen_notice: Cell<*mut GtkWidget>,
     fullscreen_notice_timer: Cell<c_uint>,
-    bookmarks: *mut NsBookmarks,
+    bookmarks: RefCell<Bookmarks>,
     pub session_path: RefCell<Option<CString>>,
     pub session_timer: Cell<c_uint>,
 }
@@ -151,9 +134,6 @@ unsafe extern "C" fn procwindow_free(data: *mut c_void) {
                     gtk::g_signal_handler_disconnect(settings, id);
                 }
             }
-        }
-        if !pw.bookmarks.is_null() {
-            ns_bookmarks_free(pw.bookmarks);
         }
     }
 }
@@ -370,12 +350,7 @@ impl ProcWindow {
 
     fn current_page_bookmarked(&self) -> bool {
         let url = self.current_view().and_then(View::url);
-        match url {
-            Some(url) if !url.is_empty() && !self.bookmarks.is_null() => unsafe {
-                ns_bookmarks_contains(self.bookmarks, url.as_ptr()) != 0
-            },
-            _ => false,
-        }
+        url.is_some_and(|url| !url.is_empty() && self.bookmarks.borrow().contains(&url))
     }
 
     fn update_bookmark_indicator(&self) {
@@ -756,25 +731,17 @@ impl ProcWindow {
         let Some(v) = self.current_view() else {
             return false;
         };
-        if self.bookmarks.is_null() {
-            return false;
-        }
         let Some(url) = v.url().filter(|u| !u.is_empty()) else {
             return false;
         };
-        unsafe {
-            if ns_bookmarks_contains(self.bookmarks, url.as_ptr()) != 0 {
-                ns_bookmarks_remove(self.bookmarks, url.as_ptr());
-                self.set_status(tr(c"Bookmark removed"));
-            } else {
-                let title = v.title();
-                ns_bookmarks_add(
-                    self.bookmarks,
-                    url.as_ptr(),
-                    title.as_deref().map_or(ptr::null(), CStr::as_ptr),
-                );
-                self.set_status(tr(c"Bookmark added"));
-            }
+        let saved = self.bookmarks.borrow().contains(&url);
+        if saved {
+            self.bookmarks.borrow_mut().remove(&url);
+            self.set_status(tr(c"Bookmark removed"));
+        } else {
+            let title = v.title();
+            self.bookmarks.borrow_mut().add(&url, title.as_deref());
+            self.set_status(tr(c"Bookmark added"));
         }
         self.update_bookmark_indicator();
         true
@@ -1469,10 +1436,10 @@ unsafe extern "C" fn on_bookmark_remove(button: *mut GtkWidget, data: *mut c_voi
     let pw = unsafe { pw(data) };
     unsafe {
         let url = gtk::g_object_get_data(button.cast(), BOOKMARK_URL_KEY.as_ptr()).cast::<c_char>();
-        if url.is_null() || pw.bookmarks.is_null() {
+        if url.is_null() {
             return;
         }
-        ns_bookmarks_remove(pw.bookmarks, url);
+        pw.bookmarks.borrow_mut().remove(CStr::from_ptr(url));
         let row = gtk::gtk_widget_get_parent(button);
         let list = if row.is_null() {
             ptr::null_mut()
@@ -1535,26 +1502,25 @@ unsafe fn build_bookmarks_popover(pw: &ProcWindow) -> *mut GtkWidget {
         gtk::gtk_scrolled_window_set_propagate_natural_height(scroll, 1);
         gtk::gtk_scrolled_window_set_max_content_height(scroll, 320);
         let list = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 2);
-        let n = if pw.bookmarks.is_null() {
-            0
-        } else {
-            ns_bookmarks_count(pw.bookmarks)
-        };
-        if n == 0 {
+        let saved: Vec<(CString, CString)> = pw
+            .bookmarks
+            .borrow()
+            .items()
+            .iter()
+            .map(|b| (b.url().to_owned(), b.title().to_owned()))
+            .collect();
+        if saved.is_empty() {
             let empty = gtk::gtk_label_new(tr(c"No bookmarks yet").as_ptr());
             gtk::gtk_widget_add_css_class(empty, c"dim-label".as_ptr());
             gtk::gtk_widget_set_margin_top(empty, 12);
             gtk::gtk_widget_set_margin_bottom(empty, 12);
             gtk::gtk_box_append(list, empty);
         }
-        for i in 0..n {
-            let Some(bm) = ns_bookmarks_get(pw.bookmarks, i).as_ref() else {
-                continue;
-            };
-            let Some(url) = borrowed(bm.url) else {
-                continue;
-            };
-            let title = borrowed(bm.title).filter(|t| !t.is_empty()).unwrap_or(url);
+        for (url, title) in &saved {
+            let url = url.as_c_str();
+            let title = Some(title.as_c_str())
+                .filter(|t| !t.is_empty())
+                .unwrap_or(url);
             let row = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 4);
             let open = bookmark_button(title, url);
             gtk::gtk_button_set_has_frame(open, 0);
@@ -1729,7 +1695,7 @@ pub unsafe fn proc_window_new(
             fullscreen_view: Cell::new(None),
             fullscreen_notice: Cell::new(ptr::null_mut()),
             fullscreen_notice_timer: Cell::new(0),
-            bookmarks: ns_bookmarks_load(),
+            bookmarks: RefCell::new(Bookmarks::load()),
             session_path: RefCell::new(None),
             session_timer: Cell::new(0),
         }));

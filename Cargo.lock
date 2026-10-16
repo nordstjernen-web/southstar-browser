@@ -3261,6 +3261,7 @@ dependencies = [
 name = "southstar-shell"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-bookmarks",
  "southstar-bytecode-cache",
  "southstar-config",
  "southstar-dom",

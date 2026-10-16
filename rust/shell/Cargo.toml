@@ -12,6 +12,7 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+southstar-bookmarks = { path = "../bookmarks" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-dom = { path = "../dom" }
