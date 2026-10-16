@@ -38,32 +38,13 @@ pub fn image_arrived(b: &NsBrowser) {
 }
 
 pub fn images_outstanding(b: &NsBrowser) -> c_int {
-    let sessions = b.sessions();
-    if !sessions.exists() {
-        return 0;
-    }
-    let mut total = 0;
-    let mut i = 0;
-    while i < sessions.len() {
-        let session = sessions.get(i);
-        let outstanding = session.outstanding();
-        if outstanding == 0 {
-            session.close();
-            sessions.remove_fast(i);
-            continue;
-        }
-        total += outstanding;
-        i += 1;
-    }
-    total
+    b.sessions().outstanding()
 }
 
 pub fn ensure_images(b: &NsBrowser) {
     if b.images_fetched.get() && !b.has_deferred_lazy.get() {
         return;
     }
-    b.requested_images();
-    b.sessions().ensure();
     let viewport_h = if b.cur_viewport_h.get() > 0.0 {
         b.cur_viewport_h.get()
     } else {

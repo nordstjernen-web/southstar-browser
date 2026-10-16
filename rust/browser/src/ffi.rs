@@ -11,14 +11,16 @@ mod net;
 mod paint;
 mod trampolines;
 
-use core::cell::{Cell, RefCell};
+use core::cell::{Cell, RefCell, RefMut};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::mem::offset_of;
 use core::ptr;
+use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode, Tree, WeakNode};
+use southstar_dom::{Node, Tree, WeakNode};
+use southstar_engine::CssCache;
 use southstar_glib::{GBoolean, GHashTable, GPtrArray, GStr};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_selection::{NsSelection, Selection};
@@ -127,7 +129,7 @@ pub struct NsBrowser {
     anim: Cell<Option<Anim>>,
     images: Cell<Option<Images>>,
     videos: Cell<Option<Videos>>,
-    css_cache: Cell<*mut GHashTable>,
+    css_cache: Cell<Option<CssCache>>,
     pub base_url: Text,
     pub doc_charset: Text,
     pub doc_language: Text,
@@ -147,12 +149,12 @@ pub struct NsBrowser {
     pub pending_scroll: Flag,
     pub scroll_anchor: NodeSlot,
     pub scroll_anchor_y: Cell<c_int>,
-    img_sessions: Cell<*mut GPtrArray>,
+    img_sessions: RefCell<Vec<Session>>,
     pub image_arrivals_since_layout: Cell<c_uint>,
     pub media_events_source: Cell<c_uint>,
     pub images_arrived_since_layout: Flag,
     pub load_delay_deadline_us: Cell<i64>,
-    img_requested: Cell<*mut GHashTable>,
+    img_requested: RefCell<HashSet<CString>>,
     pub dirty: Flag,
     pub dppx: Cell<f64>,
     pub cascade_dirty: Flag,
@@ -253,7 +255,17 @@ impl NsBrowser {
             .cast::<RefCell<Option<Tree>>>();
         // SAFETY: `doc` is the aligned address of the document field inside the allocation.
         unsafe { doc.write(RefCell::new(None)) };
-        // SAFETY: the Text, NodeSlot, POST body and document fields were written above; every other field is a cell of integers, floats, raw pointers or optional handles around a non-null pointer, for which all-zero bytes are a valid value.
+        let sessions = raw
+            .wrapping_byte_add(offset_of!(NsBrowser, img_sessions))
+            .cast::<RefCell<Vec<Session>>>();
+        // SAFETY: `sessions` is the aligned address of the image session field inside the allocation.
+        unsafe { sessions.write(RefCell::new(Vec::new())) };
+        let requested = raw
+            .wrapping_byte_add(offset_of!(NsBrowser, img_requested))
+            .cast::<RefCell<HashSet<CString>>>();
+        // SAFETY: `requested` is the aligned address of the requested-image field inside the allocation.
+        unsafe { requested.write(RefCell::new(HashSet::new())) };
+        // SAFETY: the Text, NodeSlot, POST body, document, image session and requested-image fields were written above; every other field is a cell of integers, floats, raw pointers or optional handles around a non-null pointer, for which all-zero bytes are a valid value.
         Page::adopt(unsafe { slot.assume_init() })
     }
 
@@ -263,10 +275,6 @@ impl NsBrowser {
 
     pub fn doc(&self) -> Option<Node<'_>> {
         self.doc.borrow().as_ref().map(Tree::root)
-    }
-
-    pub(crate) fn doc_ptr(&self) -> *mut NsNode {
-        Node::ptr_or_null(self.doc()).cast_mut()
     }
 
     pub fn layout(&self) -> Option<BoxRef<'_>> {
@@ -350,11 +358,8 @@ impl NsBrowser {
         Sessions(&self.img_sessions)
     }
 
-    pub fn requested_images(&self) -> *mut GHashTable {
-        if self.img_requested.get().is_null() {
-            self.img_requested.set(new_string_set());
-        }
-        self.img_requested.get()
+    pub fn requested_images(&self) -> RefMut<'_, HashSet<CString>> {
+        self.img_requested.borrow_mut()
     }
 
     pub fn set_post(&self, body: StrBufOwned, content_type: &CStr) {
@@ -373,10 +378,7 @@ impl NsBrowser {
             source_remove(source);
         }
         self.sessions().close_all();
-        let requested = self.img_requested.replace(ptr::null_mut());
-        if !requested.is_null() {
-            unsafe { southstar_glib::g_hash_table_destroy(requested) };
-        }
+        self.img_requested.borrow_mut().clear();
         css_set_active_node(None);
         paint_set_anim(None);
         if let Some(js) = self.js() {
@@ -393,9 +395,9 @@ impl NsBrowser {
             unsafe { box_free(layout) };
         }
         self.drop_styles();
-        let cache = self.css_cache.replace(ptr::null_mut());
-        if !cache.is_null() {
-            unsafe { southstar_glib::g_hash_table_destroy(cache) };
+        if let Some(cache) = self.css_cache.take() {
+            // SAFETY: the cache is out of the page's slot and the engine holds no copy between calls.
+            unsafe { cache.free() };
         }
         if let Some(js) = self.js() {
             js.free();
@@ -434,45 +436,38 @@ impl NsBrowser {
     }
 }
 
-pub struct Sessions<'a>(&'a Cell<*mut GPtrArray>);
+pub struct Sessions<'a>(&'a RefCell<Vec<Session>>);
 
 impl Sessions<'_> {
-    pub fn ensure(&self) {
-        if self.0.get().is_null() {
-            self.0.set(unsafe { southstar_glib::g_ptr_array_new() });
-        }
-    }
-
-    pub fn exists(&self) -> bool {
-        !self.0.get().is_null()
-    }
-
     pub fn push(&self, session: Session) {
-        unsafe { southstar_glib::g_ptr_array_add(self.0.get(), session.0) };
+        self.0.borrow_mut().push(session);
     }
 
-    pub fn len(&self) -> usize {
-        unsafe { self.0.get().as_ref() }.map_or(0, |a| a.len as usize)
-    }
-
-    pub fn get(&self, i: usize) -> Session {
-        Session(unsafe { *(*self.0.get()).pdata.add(i) })
-    }
-
-    pub fn remove_fast(&self, i: usize) {
-        unsafe { glib::g_ptr_array_remove_index_fast(self.0.get(), i as c_uint) };
+    pub fn outstanding(&self) -> c_int {
+        let mut total = 0;
+        let mut i = 0;
+        loop {
+            let mut sessions = self.0.borrow_mut();
+            let Some(outstanding) = sessions.get(i).map(Session::outstanding) else {
+                break;
+            };
+            if outstanding == 0 {
+                let finished = sessions.swap_remove(i);
+                drop(sessions);
+                finished.close();
+                continue;
+            }
+            total += outstanding;
+            i += 1;
+        }
+        total
     }
 
     fn close_all(&self) {
-        let array = self.0.replace(ptr::null_mut());
-        if array.is_null() {
-            return;
+        let sessions = self.0.take();
+        for session in sessions {
+            session.close();
         }
-        let sessions = Sessions(&Cell::new(array)).len();
-        for i in 0..sessions {
-            Session(unsafe { *(*array).pdata.add(i) }).close();
-        }
-        unsafe { southstar_glib::g_ptr_array_free(array, southstar_glib::TRUE) };
     }
 }
 
@@ -541,7 +536,7 @@ pub fn attach_js(b: &NsBrowser, navigation_timing: Option<NavigationTiming>) -> 
 }
 
 pub fn attach_caches(b: &NsBrowser) {
-    b.css_cache.set(new_css_cache());
+    b.css_cache.set(Some(CssCache::create()));
     b.images.set(Some(Images::create()));
     b.videos.set(Some(Videos::create()));
 }

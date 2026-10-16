@@ -10,6 +10,13 @@ use southstar_layout::{BoxKind, BoxRef};
 
 use crate::ffi::{Capture, Out};
 
+pub use crate::fetch::speculative_preload;
+pub use crate::ffi::{
+    CssCache, ImageFetch, ImageSession, Page, PrintSetup, Relayout, Sheet, anim_observe,
+    compute_cascade, dump_layout, dump_text, fetch_images, in_blocking_fetch, load_keyframes,
+    print_sheets, relayout, start_image_session,
+};
+
 const CAIRO_MAX: i32 = 30000;
 const PT_PER_PX: f64 = 72.0 / 96.0;
 
@@ -114,7 +121,7 @@ pub fn print_recordings(root: BoxRef, setup: &ffi::PrintSetup) -> Vec<Capture> {
         .collect()
 }
 
-pub fn dump_text(b: BoxRef, out: &mut Out) {
+fn write_text(b: BoxRef, out: &mut Out) {
     match b.kind() {
         BoxKind::Inline => {
             if let Some(text) = b.text().filter(|t| !t.is_empty()) {
@@ -135,14 +142,14 @@ pub fn dump_text(b: BoxRef, out: &mut Out) {
         _ => {}
     }
     for c in southstar_layout::children(b) {
-        dump_text(c, out);
+        write_text(c, out);
     }
     for atomic in b.inline_atomic_boxes() {
-        dump_text(atomic, out);
+        write_text(atomic, out);
     }
 }
 
-pub fn dump_layout(b: BoxRef, indent: i32, out: &mut Out) {
+fn write_layout(b: BoxRef, indent: i32, out: &mut Out) {
     for _ in 0..indent {
         out.append(b" ");
     }
@@ -173,10 +180,10 @@ pub fn dump_layout(b: BoxRef, indent: i32, out: &mut Out) {
     }
     out.append(b"\n");
     for c in southstar_layout::children(b) {
-        dump_layout(c, indent + 2, out);
+        write_layout(c, indent + 2, out);
     }
     for atomic in b.inline_atomic_boxes() {
-        dump_layout(atomic, indent + 2, out);
+        write_layout(atomic, indent + 2, out);
     }
 }
 

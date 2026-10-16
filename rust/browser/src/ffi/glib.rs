@@ -6,7 +6,7 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_ulong, c_void};
 use core::ptr;
 
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray, GStr};
+use southstar_glib::{self as glib, GBoolean, GStr};
 
 #[repr(C)]
 pub struct GString {
@@ -40,8 +40,6 @@ unsafe extern "C" {
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_printerr(format: *const c_char, ...);
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    pub fn g_ptr_array_remove_index_fast(array: *mut GPtrArray, index: c_uint) -> *mut c_void;
-    fn g_bytes_unref(bytes: *mut c_void);
     fn ns_debug_log_emit_take(level: c_uint, category: *const c_char, message: *mut c_char);
     fn malloc(size: usize) -> *mut c_void;
     fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut glib::GError)
@@ -245,28 +243,6 @@ pub fn malloc_dup(bytes: &[u8]) -> *mut c_char {
         *out.add(bytes.len()) = 0;
     }
     out.cast()
-}
-
-pub fn new_string_set() -> *mut GHashTable {
-    unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            None,
-        )
-    }
-}
-
-pub fn new_css_cache() -> *mut GHashTable {
-    unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            Some(g_bytes_unref),
-        )
-    }
 }
 
 pub enum Threads {

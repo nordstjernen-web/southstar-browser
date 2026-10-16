@@ -6,7 +6,7 @@ use core::ffi::{c_char, c_uint};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GPtrArray, g_ptr_array_add};
+use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, inline_kind};
 use southstar_style::StyleRef;
 
@@ -65,12 +65,6 @@ fn store(out: *mut f64, v: f64) {
     }
 }
 
-fn push_all(out: *mut GPtrArray, boxes: Vec<BoxRef<'_>>) {
-    for b in boxes {
-        unsafe { g_ptr_array_add(out, b.as_mut_ptr().cast()) };
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_box_kind_name(kind: c_uint) -> *const c_char {
     collect::kind_name(kind).as_ptr()
@@ -110,15 +104,6 @@ pub unsafe extern "C" fn ns_box_inline_rect_for_dom(
     store(w, r.x1 - r.x0);
     store(h, r.y1 - r.y0);
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_collect_images(root: *const NsBox, out: *mut GPtrArray) {
-    let mut boxes = Vec::new();
-    if let Some(root) = entry(root) {
-        collect::images(root, &mut boxes);
-    }
-    push_all(out, boxes);
 }
 
 #[unsafe(no_mangle)]

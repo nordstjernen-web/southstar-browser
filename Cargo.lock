@@ -1744,6 +1744,7 @@ dependencies = [
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-html-parser",
  "southstar-html-util",
@@ -1887,12 +1888,15 @@ dependencies = [
 name = "southstar-engine"
 version = "0.9.11-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-syntax",
  "southstar-dom",
  "southstar-glib",
+ "southstar-image",
  "southstar-layout",
+ "southstar-layout-query",
  "southstar-paint",
  "southstar-render",
  "southstar-url",
@@ -2085,6 +2089,7 @@ dependencies = [
  "southstar-css-media",
  "southstar-digest",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-html-parser",
  "southstar-html-util",

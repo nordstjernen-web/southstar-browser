@@ -4,12 +4,12 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
 use core::ptr::{self, NonNull};
 
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
 use southstar_layout::{BoxRef, NsBox, Style};
 
+use southstar_engine::Sheet;
 use southstar_paint::Cr;
 use southstar_selection::NsSelection;
 
@@ -79,7 +79,6 @@ unsafe extern "C" {
         dx: *mut f64,
         dy: *mut f64,
     );
-    fn ns_engine_print_recordings(root: *const NsBox, setup: *const PrintSetup) -> *mut GPtrArray;
 }
 
 pub struct Surface(NonNull<c_void>);
@@ -290,20 +289,11 @@ impl<'a> PixelBuf<'a> {
     }
 }
 
-pub struct PrintPages(Option<NonNull<GPtrArray>>);
+pub struct PrintPages(Option<Vec<Sheet>>);
 
 impl PrintPages {
-    fn sheets(&self) -> &[*mut c_void] {
-        let Some(array) = self.0 else {
-            return &[];
-        };
-        // SAFETY: the array came from ns_engine_print_recordings and lives until this value drops.
-        let array = unsafe { array.as_ref() };
-        if array.len == 0 {
-            return &[];
-        }
-        // SAFETY: a non-empty pointer array holds `len` sheet pointers at `pdata`.
-        unsafe { core::slice::from_raw_parts(array.pdata, array.len as usize) }
+    fn sheets(&self) -> &[Sheet] {
+        self.0.as_deref().unwrap_or_default()
     }
 
     pub fn len(&self) -> usize {
@@ -315,26 +305,20 @@ impl PrintPages {
     }
 
     pub fn sheet(&self, index: usize) -> Option<NonNull<c_void>> {
-        self.sheets().get(index).copied().and_then(NonNull::new)
+        self.sheets().get(index).map(Sheet::as_ptr)
     }
 
     pub fn into_raw(self) -> *mut GPtrArray {
-        ManuallyDrop::new(self)
-            .0
-            .map_or(ptr::null_mut(), NonNull::as_ptr)
-    }
-}
-
-impl Drop for PrintPages {
-    fn drop(&mut self) {
-        for &sheet in self.sheets() {
-            // SAFETY: each sheet is a cairo recording surface whose one reference this array holds.
-            unsafe { cairo_surface_destroy(sheet) };
+        let Some(sheets) = self.0 else {
+            return ptr::null_mut();
+        };
+        // SAFETY: g_ptr_array_new has no preconditions.
+        let array = unsafe { glib::g_ptr_array_new() };
+        for sheet in sheets {
+            // SAFETY: `array` is the live array made above, and it takes over the sheet's surface reference.
+            unsafe { glib::g_ptr_array_add(array, sheet.into_raw().as_ptr()) };
         }
-        if let Some(array) = self.0 {
-            // SAFETY: the array is owned here and freed once, after the sheets it held.
-            unsafe { glib::g_ptr_array_free(array.as_ptr(), glib::TRUE) };
-        }
+        array
     }
 }
 
@@ -507,10 +491,10 @@ pub fn snap_type_is_set(style: *const Style) -> bool {
 
 impl NsBrowser {
     pub fn print_recordings(&self, setup: &PrintSetup) -> PrintPages {
-        // SAFETY: the layout root is null or this page's live box tree, and `setup` is a valid page setup.
-        PrintPages(NonNull::new(unsafe {
-            ns_engine_print_recordings(self.layout.get(), setup)
-        }))
+        PrintPages(
+            self.layout()
+                .map(|layout| southstar_engine::print_sheets(layout, setup)),
+        )
     }
 
     pub fn selection_if_range(&self) -> Option<NsSelection> {

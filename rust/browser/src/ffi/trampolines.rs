@@ -7,21 +7,17 @@ use core::ptr;
 use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 use southstar_js_runtime::api::{self, NavigationTiming};
-use southstar_layout::NsBox;
 
 use super::glib::{
     g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
 };
 use super::js::ns_js_video_event;
-use super::{
-    Images, Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove,
-};
+use super::{Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove};
 use crate::{build, callbacks, images, page, scroll, settle};
 
 type TextCb = unsafe extern "C" fn(text: *const c_char, ud: *mut c_void);
-type UdCb = unsafe extern "C" fn(ud: *mut c_void);
 type MediaSeekCb =
     unsafe extern "C" fn(node: *const c_void, seconds: f64, ud: *mut c_void) -> GBoolean;
 type MediaFlagCb = unsafe extern "C" fn(node: *const c_void, on: GBoolean, ud: *mut c_void);
@@ -55,17 +51,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
     fn ns_js_set_media_volume_cb(js: *mut c_void, cb: MediaVolumeCb, ud: *mut c_void);
-    fn ns_engine_fetch_images_start(
-        root: *mut NsBox,
-        base_url: *const c_char,
-        cache: *mut c_void,
-        requested: *mut GHashTable,
-        scroll_y: f64,
-        viewport_h: f64,
-        deferred_any: *mut GBoolean,
-        arrived_cb: UdCb,
-        ud: *mut c_void,
-    ) -> *mut c_void;
 }
 
 unsafe extern "C" fn on_log(line: *const c_char, ud: *mut c_void) {
@@ -271,12 +256,6 @@ unsafe extern "C" fn on_fire_media_events(ud: *mut c_void) -> GBoolean {
     0
 }
 
-unsafe extern "C" fn on_image_arrived(ud: *mut c_void) {
-    if let Some(b) = browser_for(ud) {
-        images::image_arrived(b);
-    }
-}
-
 pub fn new_js(b: &NsBrowser, timing: Option<NavigationTiming>) -> Option<Js> {
     let ud = b.as_ptr().cast::<c_void>();
     let callbacks = api::PageCallbacks {
@@ -335,22 +314,24 @@ pub fn add_media_events_timeout(b: &NsBrowser) -> c_uint {
 }
 
 pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, bool) {
-    let mut deferred: GBoolean = 0;
     let base = b.base_url.get();
-    let session = unsafe {
-        ns_engine_fetch_images_start(
-            b.layout.get(),
-            base.as_deref().map_or(ptr::null(), CStr::as_ptr),
-            b.images().map_or(ptr::null_mut(), Images::raw),
-            b.img_requested.get(),
-            b.cur_scroll_y.get(),
-            viewport_h,
-            &mut deferred,
-            on_image_arrived,
-            b.as_ptr().cast(),
-        )
+    let (Some(root), Some(base), Some(cache)) = (b.layout(), base.as_deref(), b.images()) else {
+        return (None, false);
     };
-    (Session::from_raw(session), deferred != 0)
+    let fetch = southstar_engine::ImageFetch {
+        root,
+        base,
+        cache,
+        scroll_y: b.cur_scroll_y.get(),
+        viewport_h,
+    };
+    let ud = b.as_ptr().cast::<c_void>();
+    let arrived = Rc::new(move || {
+        if let Some(b) = browser_for(ud) {
+            images::image_arrived(b);
+        }
+    });
+    southstar_engine::start_image_session(&fetch, &mut b.requested_images(), arrived)
 }
 
 struct SettleCtx<'a> {

@@ -14,8 +14,8 @@ use southstar_glib::{GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::ffi::{
-    self, Anim, Document, ImageCache, Js, NavigationTiming, PrintSetup, Relayout, Response, Video,
-    VideoCache, err, out,
+    self, Anim, CssCache, Document, ImageCache, Js, NavigationTiming, PrintSetup, Relayout,
+    Response, Video, VideoCache, err, out,
 };
 use crate::{Dump, Opts, nonempty};
 
@@ -115,7 +115,7 @@ pub struct Ctx {
     pub image_cache: Option<ImageCache>,
     pub video_cache: Option<VideoCache>,
     pub anim: Option<Anim>,
-    pub css_cache: *mut GHashTable,
+    pub css_cache: CssCache,
     pub styles: Cell<*mut GHashTable>,
     pub layout: Cell<*mut NsBox>,
     pub focused: Cell<Option<WeakNode>>,
@@ -141,9 +141,9 @@ impl Ctx {
         self.focused.set(n.map(Node::downgrade));
     }
 
-    fn focus_for_layout(&self) -> *const NsNode {
+    fn focus_for_layout(&self) -> Option<Node<'_>> {
         let from_js = self.js.and_then(|js| js.focused_node());
-        Node::ptr_or_null(from_js.or_else(|| self.focused()))
+        from_js.or_else(|| self.focused())
     }
 }
 
@@ -169,19 +169,19 @@ pub fn relayout(c: &Ctx) {
         ffi::destroy_table(c.styles.replace(ptr::null_mut()));
     }
     let args = Relayout {
-        doc: c.doc,
+        doc: c.doc(),
         base: c.base.as_deref(),
         vw: c.vw,
         vh: c.vh,
-        images: ffi::image_cache_raw(c.image_cache),
-        anim: ffi::anim_raw(c.anim),
-        js: ffi::js_raw(c.js),
+        images: c.image_cache,
+        anim: c.anim,
+        js: c.js,
         css_cache: c.css_cache,
         focused: c.focus_for_layout(),
         caret: c.caret.get(),
         anchor: c.anchor.get(),
     };
-    c.styles.set(ffi::relayout(&args, c.layout.as_ptr()));
+    c.styles.set(ffi::relayout(&args, &c.layout));
     c.relaying.set(false);
 }
 
@@ -447,7 +447,12 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
     }
 }
 
-fn write_capture(root: *const NsBox, path: Option<&CStr>, kind: Dump, setup: &PrintSetup) -> c_int {
+fn write_capture(
+    root: Option<BoxRef<'_>>,
+    path: Option<&CStr>,
+    kind: Dump,
+    setup: &PrintSetup,
+) -> c_int {
     match kind {
         Dump::Print => ffi::write_pdf_paged(root, path, setup),
         Dump::Pdf => ffi::write_pdf(root, path),
@@ -635,7 +640,7 @@ pub fn run_one(
     if let Some(frag) = &target_frag {
         reveal_fragment(doc.node(), frag);
     }
-    let css_cache = ffi::new_css_cache();
+    let css_cache = CssCache::create();
     let styles = ffi::compute_cascade(&doc, page_url.as_deref(), css_cache);
 
     let anim = Anim::create();
@@ -740,7 +745,8 @@ pub fn run_one(
         if !ctx.styles.get().is_null() {
             ffi::destroy_table(ctx.styles.get());
         }
-        ffi::destroy_table(css_cache);
+        // SAFETY: the cascade and relayouts that used the cache are done and the next page makes its own.
+        unsafe { css_cache.free() };
         if let Some(js) = js {
             js.free();
         }
@@ -788,12 +794,12 @@ pub fn run_one(
     }
 
     match o.dump {
-        Dump::Text => out(&ffi::dump_text(ctx.layout.get())),
+        Dump::Text => out(&ffi::dump_text(ctx.layout())),
         Dump::Dom => out(&ffi::node_dump(doc.node())),
-        Dump::Layout => out(&ffi::dump_layout(ctx.layout.get())),
+        Dump::Layout => out(&ffi::dump_layout(ctx.layout())),
         Dump::Png | Dump::Pdf | Dump::Print => {
             let base = page_url.as_deref();
-            ffi::fetch_images(ctx.layout.get(), base, image_cache);
+            ffi::fetch_images(ctx.layout(), base, image_cache);
             relayout(&ctx);
             if o.dump == Dump::Print {
                 ffi::apply_render_page_rule(&mut print_setup);
@@ -816,7 +822,7 @@ pub fn run_one(
             }
             ffi::paint_set_anim(anim);
             let initial = ffi::suffix_before_ext(o.out_path, c"-initial");
-            rc = write_capture(ctx.layout.get(), initial.as_deref(), o.dump, &print_setup);
+            rc = write_capture(ctx.layout(), initial.as_deref(), o.dump, &print_setup);
             let shown = initial.as_ref().map_or(&b"(null)"[..], |p| p.to_bytes());
             err(&[b"[headless] initial render -> ", shown, b"\n"].concat());
             drop(initial);
@@ -838,7 +844,7 @@ pub fn run_one(
                 anim.tick(end);
             }
             ffi::paint_set_anim(anim);
-            let rc2 = write_capture(ctx.layout.get(), o.out_path, o.dump, &print_setup);
+            let rc2 = write_capture(ctx.layout(), o.out_path, o.dump, &print_setup);
             let path = o.out_path.map_or(&b"(null)"[..], CStr::to_bytes);
             err(&[
                 format!("[headless] after {time_ms}ms -> ").as_bytes(),
@@ -881,7 +887,8 @@ pub fn run_one(
     if !ctx.styles.get().is_null() {
         ffi::destroy_table(ctx.styles.get());
     }
-    ffi::destroy_table(css_cache);
+    // SAFETY: the run is over and nothing relays out its page again.
+    unsafe { css_cache.free() };
     if let Some(js) = js {
         js.free();
     }

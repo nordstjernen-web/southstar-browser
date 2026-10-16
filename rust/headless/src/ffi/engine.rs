@@ -2,10 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
+use southstar_engine::Page;
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -53,16 +56,7 @@ struct NsResponse {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::offset_of!(NsResponse, response_end_ms) == 184);
 
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct PrintSetup {
-    pub width: f64,
-    pub height: f64,
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
-}
+pub use southstar_engine::{CssCache, PrintSetup};
 
 #[repr(C)]
 struct PageRule {
@@ -99,53 +93,7 @@ unsafe extern "C" {
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const PageRule);
     fn ns_render_page_rule() -> *const PageRule;
-    fn ns_engine_compute_cascade(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        css_cache: *mut GHashTable,
-        anim: *mut c_void,
-    ) -> *mut GHashTable;
-    fn ns_engine_relayout(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        viewport_width: c_int,
-        viewport_height: f64,
-        images: *mut c_void,
-        anim: *mut c_void,
-        js: *mut c_void,
-        css_cache: *mut GHashTable,
-        focused: *const NsNode,
-        hover: *const NsNode,
-        caret_byte: usize,
-        sel_anchor_byte: usize,
-        out_layout: *mut *mut NsBox,
-    ) -> *mut GHashTable;
-    fn ns_engine_load_keyframes(
-        anim: *mut c_void,
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        css_cache: *mut GHashTable,
-    );
-    fn ns_engine_anim_observe(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn ns_engine_dump_text(root: *const NsBox, out: *mut GString);
-    fn ns_engine_dump_layout(root: *const NsBox, indent: c_int, out: *mut GString);
-    fn ns_engine_fetch_images(root: *mut NsBox, base_url: *const c_char, cache: *mut c_void);
-    fn ns_engine_suffix_before_ext(path: *const c_char, suffix: *const c_char) -> *mut c_char;
-    fn ns_engine_write_png(root: *const NsBox, path: *const c_char) -> c_int;
-    fn ns_engine_write_pdf(root: *const NsBox, path: *const c_char) -> c_int;
-    fn ns_engine_write_pdf_paged(
-        root: *const NsBox,
-        path: *const c_char,
-        setup: *const PrintSetup,
-    ) -> c_int;
     fn ns_box_free(b: *mut NsBox);
-    fn g_hash_table_new_full(
-        hash: unsafe extern "C" fn(*const c_void) -> c_uint,
-        equal: unsafe extern "C" fn(*const c_void, *const c_void) -> GBoolean,
-        key_destroy: glib::GDestroyNotify,
-        value_destroy: glib::GDestroyNotify,
-    ) -> *mut GHashTable;
-    fn g_bytes_unref(bytes: *mut c_void);
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
 }
@@ -302,13 +250,10 @@ pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
-pub fn suffix_before_ext(path: Option<&CStr>, suffix: &CStr) -> Option<GStr> {
-    unsafe {
-        GStr::take(ns_engine_suffix_before_ext(
-            ptr_or_null(path),
-            suffix.as_ptr(),
-        ))
-    }
+pub fn suffix_before_ext(path: Option<&CStr>, suffix: &CStr) -> Option<CString> {
+    let path = path?;
+    let joined = southstar_engine::suffix_before_ext(path.to_bytes(), suffix.to_bytes());
+    Some(CString::new(joined).unwrap_or_default())
 }
 
 pub struct Document(Tree);
@@ -354,12 +299,12 @@ pub fn with_gstring(fill: impl FnOnce(*mut GString)) -> Vec<u8> {
     gstring_take(s)
 }
 
-pub fn dump_text(root: *const NsBox) -> Vec<u8> {
-    with_gstring(|s| unsafe { ns_engine_dump_text(root, s) })
+pub fn dump_text(root: Option<BoxRef<'_>>) -> Vec<u8> {
+    root.map_or_else(Vec::new, southstar_engine::dump_text)
 }
 
-pub fn dump_layout(root: *const NsBox) -> Vec<u8> {
-    with_gstring(|s| unsafe { ns_engine_dump_layout(root, 0, s) })
+pub fn dump_layout(root: Option<BoxRef<'_>>) -> Vec<u8> {
+    root.map_or_else(Vec::new, southstar_engine::dump_layout)
 }
 
 pub fn print_setup_default() -> PrintSetup {
@@ -392,29 +337,20 @@ pub fn css_set_active_node(node: Option<Node>) {
     southstar_css::set_active_node(node);
 }
 
-unsafe extern "C" fn bytes_unref(p: *mut c_void) {
-    unsafe { g_bytes_unref(p) };
-}
-
-pub fn new_css_cache() -> *mut GHashTable {
-    unsafe {
-        g_hash_table_new_full(
-            glib::g_str_hash,
-            glib::g_str_equal,
-            Some(glib::g_free),
-            Some(bytes_unref),
-        )
+fn page<'a>(doc: &Document, base: Option<&'a CStr>, css_cache: CssCache) -> Page<'a> {
+    Page {
+        doc: Some(doc.node()),
+        base,
+        css_cache: Some(css_cache),
     }
 }
 
 pub fn compute_cascade(
     doc: &Document,
     base: Option<&CStr>,
-    css_cache: *mut GHashTable,
+    css_cache: CssCache,
 ) -> *mut GHashTable {
-    unsafe {
-        ns_engine_compute_cascade(doc.as_ptr(), ptr_or_null(base), css_cache, ptr::null_mut())
-    }
+    southstar_engine::compute_cascade(&page(doc, base, css_cache))
 }
 
 pub fn destroy_table(table: *mut GHashTable) {
@@ -423,12 +359,13 @@ pub fn destroy_table(table: *mut GHashTable) {
 
 pub use southstar_anim::AnimHandle as Anim;
 
-pub fn load_keyframes(anim: Anim, doc: &Document, base: Option<&CStr>, css_cache: *mut GHashTable) {
-    unsafe { ns_engine_load_keyframes(anim.raw(), doc.as_ptr(), ptr_or_null(base), css_cache) };
+pub fn load_keyframes(anim: Anim, doc: &Document, base: Option<&CStr>, css_cache: CssCache) {
+    southstar_engine::load_keyframes(anim, &page(doc, base, css_cache));
 }
 
 pub fn anim_observe(anim: Anim, styles: *mut GHashTable, now_us: i64) {
-    unsafe { ns_engine_anim_observe(anim.raw(), styles, now_us) };
+    // SAFETY: the run passes the style table its cascade just computed, which is alive.
+    unsafe { southstar_engine::anim_observe(anim, styles, now_us) };
 }
 
 pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
@@ -451,37 +388,38 @@ pub fn image_cache_raw(cache: Option<ImageCache>) -> *mut c_void {
 pub use southstar_video::VideoCache;
 
 pub struct Relayout<'a> {
-    pub doc: *mut NsNode,
+    pub doc: Option<Node<'a>>,
     pub base: Option<&'a CStr>,
     pub vw: c_int,
     pub vh: f64,
-    pub images: *mut c_void,
-    pub anim: *mut c_void,
-    pub js: *mut c_void,
-    pub css_cache: *mut GHashTable,
-    pub focused: *const NsNode,
+    pub images: Option<ImageCache>,
+    pub anim: Option<Anim>,
+    pub js: Option<super::Js>,
+    pub css_cache: CssCache,
+    pub focused: Option<Node<'a>>,
     pub caret: usize,
     pub anchor: usize,
 }
 
-pub fn relayout(r: &Relayout, out_layout: *mut *mut NsBox) -> *mut GHashTable {
-    unsafe {
-        ns_engine_relayout(
-            r.doc,
-            ptr_or_null(r.base),
-            r.vw,
-            r.vh,
-            r.images,
-            r.anim,
-            r.js,
-            r.css_cache,
-            r.focused,
-            ptr::null(),
-            r.caret,
-            r.anchor,
-            out_layout,
-        )
-    }
+pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
+    let req = southstar_engine::Relayout {
+        page: Page {
+            doc: r.doc,
+            base: r.base,
+            css_cache: Some(r.css_cache),
+        },
+        viewport_width: r.vw,
+        viewport_height: r.vh,
+        images: r.images,
+        anim: r.anim,
+        js: super::js_raw(r.js),
+        focused: r.focused,
+        hover: None,
+        caret_byte: r.caret,
+        sel_anchor_byte: r.anchor,
+    };
+    // SAFETY: the run's script engine, if any, is alive while it relays out its page.
+    unsafe { southstar_engine::relayout(&req, layout) }
 }
 
 pub fn free_layout(layout: *mut NsBox) {
@@ -489,20 +427,31 @@ pub fn free_layout(layout: *mut NsBox) {
     unsafe { ns_box_free(layout) };
 }
 
-pub fn fetch_images(root: *mut NsBox, base: Option<&CStr>, cache: Option<ImageCache>) {
-    unsafe { ns_engine_fetch_images(root, ptr_or_null(base), image_cache_raw(cache)) };
+pub fn fetch_images(root: Option<BoxRef<'_>>, base: Option<&CStr>, cache: Option<ImageCache>) {
+    if let (Some(root), Some(base), Some(cache)) = (root, base, cache) {
+        southstar_engine::fetch_images(root, base, cache);
+    }
 }
 
-pub fn write_png(root: *const NsBox, path: Option<&CStr>) -> c_int {
-    unsafe { ns_engine_write_png(root, ptr_or_null(path)) }
+pub fn write_png(root: Option<BoxRef<'_>>, path: Option<&CStr>) -> c_int {
+    match (root, path) {
+        (Some(root), Some(path)) => southstar_engine::write_png(root, path),
+        _ => 2,
+    }
 }
 
-pub fn write_pdf(root: *const NsBox, path: Option<&CStr>) -> c_int {
-    unsafe { ns_engine_write_pdf(root, ptr_or_null(path)) }
+pub fn write_pdf(root: Option<BoxRef<'_>>, path: Option<&CStr>) -> c_int {
+    match (root, path) {
+        (Some(root), Some(path)) => southstar_engine::write_pdf(root, path),
+        _ => 2,
+    }
 }
 
-pub fn write_pdf_paged(root: *const NsBox, path: Option<&CStr>, setup: &PrintSetup) -> c_int {
-    unsafe { ns_engine_write_pdf_paged(root, ptr_or_null(path), setup) }
+pub fn write_pdf_paged(root: Option<BoxRef<'_>>, path: Option<&CStr>, setup: &PrintSetup) -> c_int {
+    match (root, path) {
+        (Some(root), Some(path)) => southstar_engine::write_pdf_paged(root, path, setup),
+        _ => 2,
+    }
 }
 
 pub use southstar_layout_hit::{hit_form_dom, hit_inline_dom, hit_link};

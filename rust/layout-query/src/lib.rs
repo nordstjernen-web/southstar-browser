@@ -100,6 +100,12 @@ pub fn inline_rect_for_dom(root: BoxRef<'_>, target: Node<'_>) -> Option<(f64, f
     extent::inline_rect_for_dom(root, target).map(|r| (r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0))
 }
 
+pub fn collect_images(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
+    let mut boxes = Vec::new();
+    collect::images(root, &mut boxes);
+    boxes
+}
+
 pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
     let mut boxes = Vec::new();
     collect::videos(root, &mut boxes);

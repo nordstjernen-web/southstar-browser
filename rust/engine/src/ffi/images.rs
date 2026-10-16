@@ -2,12 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
+use std::collections::HashSet;
+use std::ffi::CString;
+use std::rc::Rc;
 
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 
 use super::net::{self, Dest, NestedLoop, Response};
 
@@ -19,7 +21,6 @@ struct NsImagePrefix {
 }
 
 unsafe extern "C" {
-    fn ns_layout_collect_images(root: *const NsBox, out: *mut GPtrArray);
     fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
     fn ns_image_cache_insert_encoded(
         cache: *mut c_void,
@@ -35,23 +36,14 @@ unsafe extern "C" {
     ) -> *mut GHashTable;
 }
 
-pub fn collect_images(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
-    let array = unsafe { glib::g_ptr_array_new() };
-    unsafe { ns_layout_collect_images(root.as_ptr(), array) };
-    let a = unsafe { &*array };
-    let boxes = (0..a.len as usize)
-        .filter_map(|i| unsafe { BoxRef::from_ptr((*a.pdata.add(i)).cast()) })
-        .collect();
-    unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    boxes
-}
+pub use southstar_layout_query::collect_images;
 
 #[derive(Clone, Copy)]
 pub struct ImageCache(NonNull<c_void>);
 
 impl ImageCache {
-    pub unsafe fn from_ptr(cache: *mut c_void) -> Option<ImageCache> {
-        NonNull::new(cache).map(ImageCache)
+    pub fn of(cache: southstar_image::ImageCache) -> ImageCache {
+        ImageCache(NonNull::new(cache.raw()).expect("image cache handle"))
     }
 
     pub fn peek(self, url: &CStr) -> bool {
@@ -115,17 +107,17 @@ impl Wanted {
         unsafe { glib::g_hash_table_size(self.0.as_ptr()) as usize }
     }
 
-    pub fn exclude_and_record(&self, requested: *mut GHashTable) {
-        if requested.is_null() {
-            return;
-        }
+    pub fn exclude_and_record(&self, requested: &mut HashSet<CString>) {
         for key in self.keys() {
-            if unsafe { glib::g_hash_table_contains(requested, key.cast()) } != 0 {
+            // SAFETY: the key is a NUL-terminated string the table owns until it is removed.
+            if requested.contains(unsafe { CStr::from_ptr(key) }) {
+                // SAFETY: the key is still in this live table.
                 unsafe { glib::g_hash_table_remove(self.0.as_ptr(), key.cast()) };
             }
         }
         for key in self.keys() {
-            unsafe { glib::g_hash_table_add(requested, glib::g_strdup(key).cast()) };
+            // SAFETY: the key is a NUL-terminated string the table owns.
+            requested.insert(unsafe { CStr::from_ptr(key) }.to_owned());
         }
     }
 }
@@ -184,15 +176,14 @@ pub fn fetch_images_blocking(wanted: &Wanted, base: &CStr, cache: ImageCache) {
     main_loop.run_blocking();
 }
 
-pub type ArrivedCb = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
+pub type Arrived = Rc<dyn Fn()>;
 
 pub struct Session {
     refs: Cell<i32>,
     dead: Cell<bool>,
     outstanding: Cell<i32>,
     cache: ImageCache,
-    arrived_cb: Cell<ArrivedCb>,
-    user_data: *mut c_void,
+    arrived: RefCell<Option<Arrived>>,
 }
 
 struct SessionItem {
@@ -223,10 +214,11 @@ unsafe extern "C" fn on_session_image_fetched(
     if s.outstanding.get() > 0 {
         s.outstanding.set(s.outstanding.get() - 1);
     }
-    if !s.dead.get()
-        && let Some(cb) = s.arrived_cb.get()
-    {
-        unsafe { cb(s.user_data) };
+    if !s.dead.get() {
+        let arrived = s.arrived.borrow().clone();
+        if let Some(arrived) = arrived {
+            arrived();
+        }
     }
     unsafe { session_unref(item.session) };
     unsafe { glib::g_free(item.abs.cast()) };
@@ -236,16 +228,14 @@ pub fn start_session(
     wanted: &Wanted,
     base: &CStr,
     cache: ImageCache,
-    arrived_cb: ArrivedCb,
-    user_data: *mut c_void,
-) -> *mut Session {
+    arrived: Arrived,
+) -> ImageSession {
     let session = Box::into_raw(Box::new(Session {
         refs: Cell::new(1),
         dead: Cell::new(false),
         outstanding: Cell::new(wanted.len() as i32),
         cache,
-        arrived_cb: Cell::new(arrived_cb),
-        user_data,
+        arrived: RefCell::new(Some(arrived)),
     }));
     for key in wanted.keys() {
         let item = Box::new(SessionItem {
@@ -263,22 +253,32 @@ pub fn start_session(
             Box::into_raw(item).cast(),
         );
     }
-    session
+    ImageSession(NonNull::new(session).expect("Box::into_raw"))
 }
 
-pub unsafe fn session_outstanding(s: *const Session) -> i32 {
-    unsafe { s.as_ref() }.map_or(0, |s| s.outstanding.get())
+pub struct ImageSession(NonNull<Session>);
+
+impl ImageSession {
+    fn session(&self) -> &Session {
+        // SAFETY: this handle holds one of the session's references, so the session is alive.
+        unsafe { self.0.as_ref() }
+    }
+
+    pub fn outstanding(&self) -> i32 {
+        self.session().outstanding.get()
+    }
+
+    pub fn close(self) {
+        drop(self);
+    }
 }
 
-pub unsafe fn session_close(s: *mut Session) {
-    let Some(session) = (unsafe { s.as_ref() }) else {
-        return;
-    };
-    session.dead.set(true);
-    session.arrived_cb.set(None);
-    unsafe { session_unref(s) };
-}
-
-pub fn null_session() -> *mut Session {
-    ptr::null_mut()
+impl Drop for ImageSession {
+    fn drop(&mut self) {
+        let session = self.session();
+        session.dead.set(true);
+        drop(session.arrived.replace(None));
+        // SAFETY: this handle's reference is released exactly once, here.
+        unsafe { session_unref(self.0.as_ptr()) };
+    }
 }

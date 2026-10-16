@@ -9,65 +9,15 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
 use southstar_layout::{BoxRef, NsBox, Style};
 
-use super::glib::{GString, StrBufOwned};
+use super::glib::StrBufOwned;
 use super::{Js, NsBrowser};
 
 pub use southstar_anim::AnimHandle as Anim;
+pub use southstar_engine::{ImageSession as Session, PrintSetup};
 pub use southstar_image::ImageCache as Images;
 pub use southstar_video::VideoCache as Videos;
 
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct PrintSetup {
-    pub width: f64,
-    pub height: f64,
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
-}
-
 unsafe extern "C" {
-    fn ns_engine_relayout(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        viewport_width: c_int,
-        viewport_height: f64,
-        images: *mut c_void,
-        anim: *mut c_void,
-        js: *mut c_void,
-        css_cache: *mut GHashTable,
-        focused: *const NsNode,
-        hover: *const NsNode,
-        caret_byte: usize,
-        sel_anchor_byte: usize,
-        out_layout: *mut *mut NsBox,
-    ) -> *mut GHashTable;
-    fn ns_engine_compute_cascade(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        css_cache: *mut GHashTable,
-        anim: *mut c_void,
-    ) -> *mut GHashTable;
-    fn ns_engine_load_keyframes(
-        anim: *mut c_void,
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        css_cache: *mut GHashTable,
-    );
-    fn ns_engine_anim_observe(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn ns_engine_speculative_preload(
-        doc: *mut NsNode,
-        base_url: *const c_char,
-        include_images: GBoolean,
-    );
-    fn ns_engine_img_session_outstanding(s: *const c_void) -> c_int;
-    fn ns_engine_img_session_close(s: *mut c_void);
-    fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_engine_write_png(root: *const NsBox, path: *const c_char) -> c_int;
-    fn ns_engine_write_pdf(root: *const NsBox, path: *const c_char) -> c_int;
-    fn ns_engine_dump_text(root: *const NsBox, out: *mut GString);
-    fn ns_engine_dump_layout(root: *const NsBox, indent: c_int, out: *mut GString);
     fn ns_render_page_rule() -> *const c_void;
     fn ns_print_setup_default(setup: *mut PrintSetup);
     fn ns_print_setup_apply_page_rule(setup: *mut PrintSetup, rule: *const c_void);
@@ -101,57 +51,51 @@ fn opt(s: Option<&CStr>) -> *const c_char {
 }
 
 impl NsBrowser {
+    fn engine_page<'a>(&'a self, base: Option<&'a CStr>) -> southstar_engine::Page<'a> {
+        southstar_engine::Page {
+            doc: self.doc(),
+            base,
+            css_cache: self.css_cache.get(),
+        }
+    }
+
     pub fn engine_relayout(&self, focused: Option<Node<'_>>) {
         let base = self.base_url.get();
-        let styles = unsafe {
-            ns_engine_relayout(
-                self.doc_ptr(),
-                opt(base.as_deref()),
-                self.vw.get(),
-                self.vh.get(),
-                self.images.get().map_or(ptr::null_mut(), Images::raw),
-                self.anim.get().map_or(ptr::null_mut(), Anim::raw),
-                self.js.get(),
-                self.css_cache.get(),
-                Node::ptr_or_null(focused),
-                Node::ptr_or_null(self.hover_node.get()),
-                self.caret_byte.get(),
-                self.sel_anchor_byte.get(),
-                self.layout.as_ptr(),
-            )
+        let relayout = southstar_engine::Relayout {
+            page: self.engine_page(base.as_deref()),
+            viewport_width: self.vw.get(),
+            viewport_height: self.vh.get(),
+            images: self.images.get(),
+            anim: self.anim.get(),
+            js: self.js.get(),
+            focused,
+            hover: self.hover_node.get(),
+            caret_byte: self.caret_byte.get(),
+            sel_anchor_byte: self.sel_anchor_byte.get(),
         };
+        // SAFETY: the page's script engine slot is null or holds its live engine.
+        let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout) };
         self.styles.set(styles);
     }
 
     pub fn compute_cascade(&self) {
         let base = self.base_url.get();
-        let styles = unsafe {
-            ns_engine_compute_cascade(
-                self.doc_ptr(),
-                opt(base.as_deref()),
-                self.css_cache.get(),
-                ptr::null_mut(),
-            )
-        };
+        let styles = southstar_engine::compute_cascade(&self.engine_page(base.as_deref()));
         self.styles.set(styles);
     }
 
     pub fn load_keyframes(&self, anim: Anim) {
         let base = self.base_url.get();
-        unsafe {
-            ns_engine_load_keyframes(
-                anim.raw(),
-                self.doc_ptr(),
-                opt(base.as_deref()),
-                self.css_cache.get(),
-            )
-        };
-        unsafe { ns_engine_anim_observe(anim.raw(), self.styles.get(), super::monotonic_us()) };
+        southstar_engine::load_keyframes(anim, &self.engine_page(base.as_deref()));
+        // SAFETY: the page's style table is null or the live table of its last cascade.
+        unsafe { southstar_engine::anim_observe(anim, self.styles.get(), super::monotonic_us()) };
     }
 
     pub fn speculative_preload(&self) {
         let base = self.base_url.get();
-        unsafe { ns_engine_speculative_preload(self.doc_ptr(), opt(base.as_deref()), 0) };
+        if let (Some(doc), Some(base)) = (self.doc(), base.as_deref()) {
+            southstar_engine::speculative_preload(doc, base, false);
+        }
     }
 
     pub fn styles_raw(&self) -> *mut GHashTable {
@@ -163,45 +107,26 @@ impl NsBrowser {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Session(pub(super) *mut c_void);
-
-impl Session {
-    pub fn from_raw(p: *mut c_void) -> Option<Session> {
-        (!p.is_null()).then_some(Session(p))
-    }
-
-    pub fn outstanding(self) -> c_int {
-        unsafe { ns_engine_img_session_outstanding(self.0) }
-    }
-
-    pub fn close(self) {
-        unsafe { ns_engine_img_session_close(self.0) };
-    }
-}
-
 pub unsafe fn box_free(b: *mut NsBox) {
     unsafe { ns_box_free(b) };
 }
 
-pub fn engine_in_blocking_fetch() -> bool {
-    unsafe { ns_engine_in_blocking_fetch() != 0 }
-}
+pub use southstar_engine::in_blocking_fetch as engine_in_blocking_fetch;
 
 pub fn write_capture(layout: BoxRef<'_>, path: &CStr, pdf: bool) -> c_int {
     if pdf {
-        unsafe { ns_engine_write_pdf(layout.as_ptr(), path.as_ptr()) }
+        southstar_engine::write_pdf(layout, path)
     } else {
-        unsafe { ns_engine_write_png(layout.as_ptr(), path.as_ptr()) }
+        southstar_engine::write_png(layout, path)
     }
 }
 
 pub fn dump_text(layout: BoxRef<'_>, out: &StrBufOwned) {
-    unsafe { ns_engine_dump_text(layout.as_ptr(), out.raw()) };
+    out.append(&southstar_engine::dump_text(layout));
 }
 
 pub fn dump_layout(layout: BoxRef<'_>, out: &StrBufOwned) {
-    unsafe { ns_engine_dump_layout(layout.as_ptr(), 0, out.raw()) };
+    out.append(&southstar_engine::dump_layout(layout));
 }
 
 pub fn print_setup_default() -> PrintSetup {

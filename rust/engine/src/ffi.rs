@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the engine: captures, dumps, fetches, style sheet collection, cascade and relayout.
+//! Southstar — the entry points of the engine and its remaining C ABI: captures, dumps, print sheets, fetches, style sheet collection, cascade and relayout.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,12 +6,16 @@ mod css;
 mod images;
 mod net;
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
+use std::collections::HashSet;
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::OnceLock;
 
-use southstar_dom::{Node, NsNode};
+use southstar_anim::AnimHandle;
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GArray, GBoolean, GError, GHashTable, GPtrArray};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -21,7 +25,7 @@ pub use css::{
     parse_import_cached, parse_url_cached, shadow_adopted_css, style_element_cache_end,
     style_element_text, stylesheet_from_style_element_cached, url_resolve_opt,
 };
-pub use images::{ImageCache, Session, Wanted, collect_images};
+pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
     Bytes, CssCache, Dest, NsResponse, Request, fetch_blocking_with_headers, in_blocking_fetch,
     monotonic_us, preconnect, preload_clear, preload_request, record_timing, url_is_http_or_https,
@@ -31,7 +35,7 @@ pub use net::{
 use crate::fetch;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct PrintSetup {
     pub width: f64,
     pub height: f64,
@@ -43,8 +47,8 @@ pub struct PrintSetup {
 
 #[repr(C)]
 pub struct GString {
-    _str: *mut c_char,
-    _len: usize,
+    str: *mut c_char,
+    len: usize,
     _allocated_len: usize,
 }
 
@@ -104,6 +108,8 @@ unsafe extern "C" {
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
     fn g_array_free(array: *mut GArray, free_segment: glib::GBoolean) -> *mut c_char;
+    fn g_string_new(init: *const c_char) -> *mut GString;
+    fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_string_append_printf(s: *mut GString, format: *const c_char, ...);
 }
@@ -193,7 +199,12 @@ impl Capture {
     }
 
     fn into_surface(self) -> *mut CairoSurface {
-        let surface = self.surface.as_ptr();
+        self.into_surface_ref().as_ptr()
+    }
+
+    fn into_surface_ref(self) -> NonNull<CairoSurface> {
+        let surface = self.surface;
+        // SAFETY: the capture owns its context and destroys it once, here, keeping the surface's reference.
         unsafe { cairo_destroy(self.cr) };
         core::mem::forget(self);
         surface
@@ -255,6 +266,24 @@ pub fn page_offsets(root: BoxRef, page_h: f64) -> Offsets {
 pub struct Out(NonNull<GString>);
 
 impl Out {
+    fn collect(fill: impl FnOnce(&mut Out)) -> Vec<u8> {
+        // SAFETY: a null initial value asks for a new empty string.
+        let string = unsafe { g_string_new(ptr::null()) };
+        let mut out = Out(NonNull::new(string).expect("g_string_new"));
+        fill(&mut out);
+        // SAFETY: the string is live until it is freed below.
+        let g = unsafe { out.0.as_ref() };
+        let bytes = if g.str.is_null() || g.len == 0 {
+            Vec::new()
+        } else {
+            // SAFETY: a GString's buffer holds `len` bytes.
+            unsafe { core::slice::from_raw_parts(g.str.cast::<u8>(), g.len) }.to_vec()
+        };
+        // SAFETY: the string was made above and is freed once, with its buffer.
+        unsafe { g_string_free(out.0.as_ptr(), glib::TRUE) };
+        bytes
+    }
+
     pub fn append(&mut self, bytes: &[u8]) {
         unsafe {
             g_string_append_len(self.0.as_ptr(), bytes.as_ptr().cast(), bytes.len() as isize)
@@ -281,158 +310,71 @@ fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
-unsafe fn root<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
+pub struct Page<'a> {
+    pub doc: Option<Node<'a>>,
+    pub base: Option<&'a CStr>,
+    pub css_cache: Option<CssCache>,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_write_png(root_box: *const NsBox, path: *const c_char) -> c_int {
-    match (unsafe { root(root_box) }, c_str(path)) {
-        (Some(r), Some(path)) => crate::write_png(r, path),
-        _ => 2,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_write_pdf(root_box: *const NsBox, path: *const c_char) -> c_int {
-    match (unsafe { root(root_box) }, c_str(path)) {
-        (Some(r), Some(path)) => crate::write_pdf(r, path),
-        _ => 2,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_write_pdf_paged(
-    root_box: *const NsBox,
-    path: *const c_char,
-    setup: *const PrintSetup,
-) -> c_int {
-    match (unsafe { root(root_box) }, c_str(path), unsafe {
-        setup.as_ref()
-    }) {
-        (Some(r), Some(path), Some(setup)) => crate::write_pdf_paged(r, path, setup),
-        _ => 2,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_print_recordings(
-    root_box: *const NsBox,
-    setup: *const PrintSetup,
-) -> *mut GPtrArray {
-    let (Some(r), Some(setup)) = (unsafe { root(root_box) }, unsafe { setup.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    let sheets = crate::print_recordings(r, setup);
-    let pages = unsafe { glib::g_ptr_array_new() };
-    for sheet in sheets {
-        unsafe { glib::g_ptr_array_add(pages, sheet.into_surface().cast()) };
-    }
-    pages
-}
-
-unsafe fn out(s: *mut GString) -> Option<Out> {
-    NonNull::new(s).map(Out)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_dump_text(b: *const NsBox, s: *mut GString) {
-    if let (Some(b), Some(mut out)) = (unsafe { root(b) }, unsafe { out(s) }) {
-        crate::dump_text(b, &mut out);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_dump_layout(b: *const NsBox, indent: c_int, s: *mut GString) {
-    if let (Some(b), Some(mut out)) = (unsafe { root(b) }, unsafe { out(s) }) {
-        crate::dump_layout(b, indent, &mut out);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_suffix_before_ext(
-    path: *const c_char,
-    suffix: *const c_char,
-) -> *mut c_char {
-    let Some(path) = c_str(path) else {
-        return ptr::null_mut();
-    };
-    let suffix = c_str(suffix).map_or(&b""[..], CStr::to_bytes);
-    glib::strdup(&crate::suffix_before_ext(path.to_bytes(), suffix))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_load_keyframes(
-    anim: *mut c_void,
-    doc: *mut NsNode,
-    base_url: *const c_char,
-    css_cache: *mut GHashTable,
-) {
-    if anim.is_null() {
-        return;
-    }
-    let sheets = crate::styles::collect_stylesheets(
-        unsafe { Node::from_ptr(doc) },
-        c_str(base_url),
-        unsafe { CssCache::from_ptr(css_cache) },
-    );
-    css::load_into_anim(anim, &sheets);
-    drop(sheets);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_compute_cascade(
-    doc: *mut NsNode,
-    base_url: *const c_char,
-    css_cache: *mut GHashTable,
-    anim: *mut c_void,
-) -> *mut GHashTable {
-    let base = c_str(base_url);
-    let _scope = CssScope::enter(base);
-    // SAFETY: the embedder passes null or a node of this thread's DOM.
-    let doc_node = unsafe { Node::from_ptr(doc) };
-    // SAFETY: the embedder passes null or its live CSS byte cache.
-    let cache = unsafe { CssCache::from_ptr(css_cache) };
-    let sheets = crate::styles::collect_stylesheets(doc_node, base, cache);
-    if !anim.is_null() {
-        css::load_into_anim(anim, &sheets);
-    }
-    let styles = css::css_compute(doc_node, &sheets);
+pub fn compute_cascade(page: &Page<'_>) -> *mut GHashTable {
+    let _scope = CssScope::enter(page.base);
+    let sheets = crate::styles::collect_stylesheets(page.doc, page.base, page.css_cache);
+    let styles = css::css_compute(page.doc, &sheets);
     drop(sheets);
     styles
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_relayout(
-    doc: *mut NsNode,
-    base_url: *const c_char,
-    viewport_width: c_int,
-    viewport_height: f64,
-    images: *mut c_void,
-    anim: *mut c_void,
-    js: *mut c_void,
-    css_cache: *mut GHashTable,
-    focused: *const NsNode,
-    hover: *const NsNode,
-    caret_byte: usize,
-    sel_anchor_byte: usize,
-    out_layout: *mut *mut NsBox,
-) -> *mut GHashTable {
+pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
+    let sheets = crate::styles::collect_stylesheets(page.doc, page.base, page.css_cache);
+    css::load_into_anim(anim.raw(), &sheets);
+    drop(sheets);
+}
+
+/// # Safety
+///
+/// `styles` is null or a live style table of the page the engine animates.
+pub unsafe fn anim_observe(anim: AnimHandle, styles: *mut GHashTable, now_us: i64) {
+    // SAFETY: the handle keeps the engine alive and the caller vouches for the style table.
+    unsafe { ns_anim_observe_all(anim.raw(), styles, now_us) };
+}
+
+pub struct Relayout<'a> {
+    pub page: Page<'a>,
+    pub viewport_width: c_int,
+    pub viewport_height: f64,
+    pub images: Option<southstar_image::ImageCache>,
+    pub anim: Option<AnimHandle>,
+    pub js: *mut c_void,
+    pub focused: Option<Node<'a>>,
+    pub hover: Option<Node<'a>>,
+    pub caret_byte: usize,
+    pub sel_anchor_byte: usize,
+}
+
+/// # Safety
+///
+/// `js` is null or the page's live script engine.
+pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
+    let viewport_width = req.viewport_width;
+    let js = req.js;
+    let out_layout = layout.as_ptr();
     let r = css::Relayout {
-        doc,
-        base: c_str(base_url),
+        doc: req.page.doc.map_or(ptr::null_mut(), Node::as_mut_ptr),
+        base: req.page.base,
         viewport_width,
-        viewport_height,
-        images,
-        anim,
+        viewport_height: req.viewport_height,
+        images: req
+            .images
+            .map_or(ptr::null_mut(), southstar_image::ImageCache::raw),
+        anim: req.anim.map_or(ptr::null_mut(), AnimHandle::raw),
         js,
-        focused,
-        hover,
-        caret_byte,
-        sel_anchor_byte,
+        focused: Node::ptr_or_null(req.focused),
+        hover: Node::ptr_or_null(req.hover),
+        caret_byte: req.caret_byte,
+        sel_anchor_byte: req.sel_anchor_byte,
     };
-    let cache = unsafe { CssCache::from_ptr(css_cache) };
-    let doc_node = unsafe { Node::from_ptr(doc) };
+    let cache = req.page.css_cache;
+    let doc_node = req.page.doc;
     let scope = CssScope::enter(r.base);
     let mut sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
     let ctx = css::render_ctx(&r, &sheets);
@@ -472,15 +414,6 @@ pub unsafe extern "C" fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *m
             *t = ms;
         }
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_anim_observe(
-    anim: *mut c_void,
-    styles: *mut GHashTable,
-    now_us: i64,
-) {
-    unsafe { ns_anim_observe_all(anim, styles, now_us) };
 }
 
 #[unsafe(no_mangle)]
@@ -566,69 +499,75 @@ pub unsafe extern "C" fn ns_engine_take_resource_timings(top_url: *const c_char)
     net::take_resource_timings(c_str(top_url))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_speculative_preload(
-    doc: *mut NsNode,
-    base_url: *const c_char,
-    include_images: GBoolean,
-) {
-    let (Some(doc), Some(base)) = (unsafe { Node::from_ptr(doc) }, c_str(base_url)) else {
-        return;
-    };
-    fetch::speculative_preload(doc, base, include_images != 0);
+pub fn dump_text(root: BoxRef<'_>) -> Vec<u8> {
+    Out::collect(|out| crate::write_text(root, out))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_fetch_images(
-    root_box: *mut NsBox,
-    base_url: *const c_char,
-    cache: *mut c_void,
-) {
-    let (Some(r), Some(base), Some(cache)) = (unsafe { root(root_box) }, c_str(base_url), unsafe {
-        ImageCache::from_ptr(cache)
-    }) else {
-        return;
-    };
-    let wanted = fetch::collect_wanted_images(r, base, cache, 0.0, 0.0).wanted;
+pub fn dump_layout(root: BoxRef<'_>) -> Vec<u8> {
+    Out::collect(|out| crate::write_layout(root, 0, out))
+}
+
+pub struct Sheet(NonNull<CairoSurface>);
+
+impl Sheet {
+    pub fn as_ptr(&self) -> NonNull<c_void> {
+        self.0.cast()
+    }
+
+    pub fn into_raw(self) -> NonNull<c_void> {
+        let surface = self.0.cast();
+        core::mem::forget(self);
+        surface
+    }
+}
+
+impl Drop for Sheet {
+    fn drop(&mut self) {
+        // SAFETY: the sheet owns one reference to its recording surface and releases it once.
+        unsafe { cairo_surface_destroy(self.0.as_ptr()) };
+    }
+}
+
+pub fn print_sheets(root: BoxRef<'_>, setup: &PrintSetup) -> Vec<Sheet> {
+    crate::print_recordings(root, setup)
+        .into_iter()
+        .map(|capture| Sheet(capture.into_surface_ref()))
+        .collect()
+}
+
+pub fn fetch_images(root: BoxRef<'_>, base: &CStr, cache: southstar_image::ImageCache) {
+    let cache = ImageCache::of(cache);
+    let wanted = fetch::collect_wanted_images(root, base, cache, 0.0, 0.0).wanted;
     if wanted.len() > 0 {
         images::fetch_images_blocking(&wanted, base, cache);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_fetch_images_start(
-    root_box: *mut NsBox,
-    base_url: *const c_char,
-    cache: *mut c_void,
-    requested: *mut GHashTable,
-    scroll_y: f64,
-    viewport_h: f64,
-    deferred_any: *mut GBoolean,
-    arrived_cb: images::ArrivedCb,
-    user_data: *mut c_void,
-) -> *mut Session {
-    let (Some(r), Some(base), Some(cache)) = (unsafe { root(root_box) }, c_str(base_url), unsafe {
-        ImageCache::from_ptr(cache)
-    }) else {
-        return images::null_session();
-    };
-    let found = fetch::collect_wanted_images(r, base, cache, scroll_y, viewport_h);
-    if found.deferred_any && !deferred_any.is_null() {
-        unsafe { *deferred_any = glib::TRUE };
-    }
+pub struct ImageFetch<'a> {
+    pub root: BoxRef<'a>,
+    pub base: &'a CStr,
+    pub cache: southstar_image::ImageCache,
+    pub scroll_y: f64,
+    pub viewport_h: f64,
+}
+
+pub fn start_image_session(
+    fetch: &ImageFetch<'_>,
+    requested: &mut HashSet<CString>,
+    arrived: Rc<dyn Fn()>,
+) -> (Option<ImageSession>, bool) {
+    let cache = ImageCache::of(fetch.cache);
+    let found = fetch::collect_wanted_images(
+        fetch.root,
+        fetch.base,
+        cache,
+        fetch.scroll_y,
+        fetch.viewport_h,
+    );
     found.wanted.exclude_and_record(requested);
     if found.wanted.len() == 0 {
-        return images::null_session();
+        return (None, found.deferred_any);
     }
-    images::start_session(&found.wanted, base, cache, arrived_cb, user_data)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_img_session_outstanding(s: *const Session) -> c_int {
-    unsafe { images::session_outstanding(s) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_img_session_close(s: *mut Session) {
-    unsafe { images::session_close(s) };
+    let session = images::start_session(&found.wanted, fetch.base, cache, arrived);
+    (Some(session), found.deferred_any)
 }

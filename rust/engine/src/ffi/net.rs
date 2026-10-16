@@ -352,12 +352,35 @@ impl Drop for Bytes {
     }
 }
 
+unsafe extern "C" fn bytes_unref(bytes: *mut c_void) {
+    // SAFETY: the table only holds GBytes values, each carrying the reference the table owns.
+    unsafe { g_bytes_unref(bytes.cast()) };
+}
+
+#[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct CssCache(NonNull<GHashTable>);
 
 impl CssCache {
-    pub unsafe fn from_ptr(table: *mut GHashTable) -> Option<CssCache> {
-        NonNull::new(table).map(CssCache)
+    pub fn create() -> CssCache {
+        // SAFETY: the keys are g_strdup'd strings and the values GBytes, matching the hash, equality and destroy functions.
+        let table = unsafe {
+            glib::g_hash_table_new_full(
+                Some(glib::g_str_hash),
+                Some(glib::g_str_equal),
+                Some(glib::g_free),
+                Some(bytes_unref),
+            )
+        };
+        CssCache(NonNull::new(table).expect("g_hash_table_new_full"))
+    }
+
+    /// # Safety
+    ///
+    /// No copy of this handle may be used afterwards.
+    pub unsafe fn free(self) {
+        // SAFETY: the table was made by create() and the caller guarantees nothing uses it again.
+        unsafe { glib::g_hash_table_destroy(self.0.as_ptr()) };
     }
 
     pub fn lookup(self, url: &CStr) -> Option<Bytes> {
