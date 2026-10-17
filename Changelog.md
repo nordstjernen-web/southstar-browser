@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Windows: the JavaScript native-stack limit is sized from the thread's
+  real stack (`GetCurrentThreadStackLimits`) instead of a fixed 1 MiB, so
+  workers on their 8 MiB threads no longer stop at 768 KiB. Large worker
+  scripts such as reCAPTCHA's failed with "Maximum call stack size
+  exceeded" on Google's search page.
+* Windows: opening a tab no longer logs a GTK critical
+  (`gtk_native_get_surface: assertion 'GTK_IS_NATIVE (self)' failed`): the
+  page's input-method context is attached to the page area only while the
+  area is realized.
+* Internal: about 140 cross-crate `ns_*` C-ABI exports and some 190
+  `extern` declarations are replaced by ordinary Rust calls with typed
+  arguments (DOM change recording, shadow/reflect/traversal helpers, event
+  dispatch, frames and realms, script collection and running, interface
+  installation and page reset), shrinking the unsafe budget across the
+  js-* crates.
 * CSS animations attached to a scroll or view timeline
   (`animation-timeline` other than `auto`) no longer play as if on the
   document timeline. With `animation-duration: auto` and
