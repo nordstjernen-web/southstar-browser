@@ -98,40 +98,12 @@ fn box_out(b: Option<BoxRef<'_>>) -> *const NsBox {
     b.map_or(ptr::null(), BoxRef::as_ptr)
 }
 
-fn store(out: *mut f64, v: f64) {
-    if let Some(out) = unsafe { out.as_mut() } {
-        *out = v;
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_is_fixed(b: *const NsBox) -> GBoolean {
     boolean(entry(b).is_some_and(crate::geometry::is_fixed))
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64) {
-    let (x, y) = entry(b).map_or((0.0, 0.0), crate::geometry::hit_offset);
-    store(dx, x);
-    store(dy, y);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox {
     box_out(entry(root).and_then(|root| crate::tree::hit_test(root, x, y)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_test_local(
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-    local_x: *mut f64,
-    local_y: *mut f64,
-) -> *const NsBox {
-    let hit = entry(root).and_then(|root| crate::tree::hit_test(root, x, y));
-    let (lx, ly) = crate::tree::last_local();
-    store(local_x, lx);
-    store(local_y, ly);
-    box_out(hit)
 }

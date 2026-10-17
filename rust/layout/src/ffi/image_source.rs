@@ -1,13 +1,12 @@
-//! Southstar — the C ABI of choosing an <img>'s URL and density, with the device pixel ratio, sizes, media query and image type answers the choice needs.
+//! Southstar — choosing an <img>'s URL and density, with the device pixel ratio, sizes, media query and image type answers the choice needs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_char;
-use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
+use southstar_glib::GBoolean;
 
 use crate::image_source::{Chosen, Environment};
 
@@ -34,19 +33,12 @@ pub fn choose_img(node: Node<'_>) -> Chosen<'_> {
     .choose(node)
 }
 
-fn url_ptr(url: Option<Vec<u8>>) -> *mut c_char {
-    url.map_or(ptr::null_mut(), |url| glib::strdup(&url))
+pub fn img_chosen_url(node: Node<'_>) -> Option<Vec<u8>> {
+    choose_img(node).url
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char {
-    unsafe { Node::from_ptr(n) }.map_or(ptr::null_mut(), |node| url_ptr(choose_img(node).url))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_img_chosen_density(n: *const NsNode) -> f64 {
-    unsafe { Node::from_ptr(n) }
-        .map(|node| choose_img(node).density)
+pub fn img_chosen_density(node: Option<Node<'_>>) -> f64 {
+    node.map(|node| choose_img(node).density)
         .filter(|&density| density > 0.0)
         .unwrap_or(1.0)
 }

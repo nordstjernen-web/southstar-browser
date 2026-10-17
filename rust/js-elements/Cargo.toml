@@ -19,6 +19,7 @@ southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-reflect = { path = "../js-reflect" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-layout = { path = "../layout" }
 southstar-url = { path = "../url" }
 
 [lints]

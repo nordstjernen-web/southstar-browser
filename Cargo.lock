@@ -2418,6 +2418,7 @@ dependencies = [
  "southstar-js-reflect",
  "southstar-js-runtime",
  "southstar-js-shadow",
+ "southstar-layout",
  "southstar-url",
 ]
 
@@ -2519,6 +2520,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-layout-hit",
  "southstar-layout-query",
  "southstar-mat4",
  "southstar-style",

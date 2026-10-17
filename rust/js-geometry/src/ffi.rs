@@ -46,15 +46,6 @@ unsafe extern "C" {
         name: *const c_char,
         value: *const c_char,
     );
-    fn ns_box_hit_test_local(
-        root: *const NsBox,
-        x: f64,
-        y: f64,
-        local_x: *mut f64,
-        local_y: *mut f64,
-    ) -> *const NsBox;
-    fn ns_box_image_map_area(b: *const NsBox, local_x: f64, local_y: f64) -> *const NsNode;
-    fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64);
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
     fn ns_js_computed_text(
         ctx: ContextHandle,
@@ -198,19 +189,8 @@ pub(crate) fn computed_text(scope: &mut Scope<'_>, node: Element, name: &CStr) -
     Some(owned)
 }
 
-pub(crate) fn hit_test_local(
-    root: BoxRef<'_>,
-    x: f64,
-    y: f64,
-) -> Option<(BoxRef<'static>, f64, f64)> {
-    let (mut local_x, mut local_y) = (0.0, 0.0);
-    let hit = unsafe { ns_box_hit_test_local(root.as_ptr(), x, y, &mut local_x, &mut local_y) };
-    unsafe { BoxRef::from_ptr(hit) }.map(|b| (b, local_x, local_y))
-}
-
-pub(crate) fn image_map_area(b: BoxRef<'_>, local_x: f64, local_y: f64) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_box_image_map_area(b.as_ptr(), local_x, local_y)) }
-}
+pub(crate) use southstar_layout::image_map_area;
+pub(crate) use southstar_layout_hit::{hit_offset, hit_test_local};
 
 pub(crate) fn current_doc(js: Js) -> Option<Element> {
     api::current_document(js.0)
@@ -219,12 +199,6 @@ pub(crate) fn current_doc(js: Js) -> Option<Element> {
 pub(crate) fn inline_rect_for_dom(root: BoxRef<'_>, node: Element) -> Option<Rect> {
     let (x, y, w, h) = southstar_layout_query::inline_rect_for_dom(root, node)?;
     Some(Rect { x, y, w, h })
-}
-
-pub(crate) fn hit_offset(b: BoxRef<'_>) -> (f64, f64) {
-    let (mut dx, mut dy) = (0.0, 0.0);
-    unsafe { ns_box_hit_offset(b.as_ptr(), &mut dx, &mut dy) };
-    (dx, dy)
 }
 
 pub(crate) use southstar_layout_query::scroll_snap;

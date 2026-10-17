@@ -21,8 +21,6 @@ pub(crate) struct Js(*mut NsJs);
 const LIVE_LABELS: c_int = 13;
 
 unsafe extern "C" {
-    fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char;
-    fn ns_img_chosen_density(n: *const NsNode) -> f64;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
@@ -174,13 +172,9 @@ pub(crate) fn image_for_node(js: Option<Js>, node: Element) -> Option<ImageRef<'
     southstar_js_images::image_for_node(raw_js(js), node)
 }
 
-pub(crate) fn chosen_url(node: Element) -> Option<Vec<u8>> {
-    owned_text(unsafe { ns_img_chosen_url(node.as_ptr()) })
-}
-
-pub(crate) fn chosen_density(node: Option<Element>) -> f64 {
-    unsafe { ns_img_chosen_density(Node::ptr_or_null(node)) }
-}
+pub(crate) use southstar_layout::{
+    img_chosen_density as chosen_density, img_chosen_url as chosen_url,
+};
 
 pub(crate) fn resolve_against_doc_base(
     js: Option<Js>,
