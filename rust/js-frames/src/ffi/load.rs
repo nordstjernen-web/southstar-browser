@@ -13,7 +13,7 @@ use southstar_js_runtime::api::{self, ResourceInfo, Upload};
 
 use super::ctx::Ctx;
 use super::imports::{nsr_realmdoc_deny_cookie, nsr_window_link_outward};
-use super::{Js, NsJs, c_string, owned_text};
+use super::{Js, NsJs, c_string};
 
 #[repr(C)]
 pub(crate) struct NsResponse {
