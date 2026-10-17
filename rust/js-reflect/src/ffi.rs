@@ -4,8 +4,6 @@
 
 use core::ffi::CStr;
 
-use southstar_dom::NsNode;
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_js_runtime::api;
 

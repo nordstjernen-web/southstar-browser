@@ -117,10 +117,6 @@ impl StrBufOwned {
         StrBufOwned(unsafe { g_string_new(ptr::null()) })
     }
 
-    pub fn raw(&self) -> *mut GString {
-        self.0
-    }
-
     pub fn bytes(&self) -> &[u8] {
         let s = unsafe { &*self.0 };
         unsafe { glib::slice(s.str_.cast(), s.len) }

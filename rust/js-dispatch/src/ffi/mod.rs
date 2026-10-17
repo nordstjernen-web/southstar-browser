@@ -9,7 +9,6 @@ use core::ffi::{CStr, c_char, c_int};
 use std::borrow::Cow;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;

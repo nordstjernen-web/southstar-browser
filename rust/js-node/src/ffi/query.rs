@@ -5,12 +5,11 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-use super::{Js, NsJs, imports, raw_js};
+use super::{Js, imports, raw_js};
 use crate::{Element, JsResult};
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {

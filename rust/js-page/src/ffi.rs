@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_js_engine::{ContextHandle, MemoryUsage, NativeFn, Scope, Value};
+use southstar_js_engine::{MemoryUsage, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, run, stats};
@@ -118,7 +118,6 @@ pub(crate) enum ValueInstaller {
 unsafe extern "C" {
 
     fn ns_observers_reset(js: *mut NsJs);
-
 
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
 
@@ -238,11 +237,8 @@ impl Js {
     }
 
     pub fn reset_page_state(self) {
-        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
-        unsafe {
-            southstar_js_top_layer::clear_top_layer(self.0);
-            southstar_js_focus::reset_focus(self.0);
-        }
+        southstar_js_top_layer::clear_top_layer(self.0);
+        southstar_js_focus::reset_focus(self.0);
         southstar_js_mutation::forget_pending_change(self.0);
         // SAFETY: a Js handle names the page's live script engine, which these resets accept.
         unsafe {

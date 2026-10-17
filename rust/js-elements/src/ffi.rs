@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
