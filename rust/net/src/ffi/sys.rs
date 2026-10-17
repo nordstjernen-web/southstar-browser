@@ -252,6 +252,22 @@ pub fn stat(path: &[u8]) -> Option<Stat> {
         .map(|meta| stat_of(&meta))
 }
 
+pub fn version(path: &[u8]) -> Option<(u64, std::time::SystemTime)> {
+    let meta = std::fs::metadata(os_path(path)?).ok()?;
+    Some((meta.len(), meta.modified().ok()?))
+}
+
+pub fn lock_exclusive(path: &[u8]) -> Option<std::fs::File> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(os_path(path)?)
+        .ok()?;
+    file.lock().ok()?;
+    Some(file)
+}
+
 pub fn local_time_label(secs: i64) -> Option<Vec<u8>> {
     let dt = unsafe { g_date_time_new_from_unix_local(secs) };
     if dt.is_null() {

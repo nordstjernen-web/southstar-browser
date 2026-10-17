@@ -2,10 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
+
 use southstar_netstore::cookies::{self as rules, Cookie};
 
 use crate::ffi::sys;
 use crate::{storage, url};
+
+static JAR_WRITE: Mutex<()> = Mutex::new(());
+static JAR_WRITES: AtomicU64 = AtomicU64::new(0);
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
@@ -28,6 +35,22 @@ pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
         storage::cookie_jar_path(Some(&site), true),
     ];
     collect_from(&parts, &jars, include_httponly)
+}
+
+pub fn for_js(target: &[u8]) -> Option<Vec<u8>> {
+    collect(target, false)
+}
+
+pub fn jar_version(target: &[u8]) -> Option<u64> {
+    let site = url::site_from(target).filter(|s| !s.is_empty())?;
+    let mut hasher = DefaultHasher::new();
+    JAR_WRITES.load(Ordering::Acquire).hash(&mut hasher);
+    for js in [false, true] {
+        storage::cookie_jar_path(Some(&site), js)
+            .and_then(|jar| sys::version(&jar))
+            .hash(&mut hasher);
+    }
+    Some(hasher.finish())
 }
 
 pub fn collect_in(target: &[u8], jars: &[Option<Vec<u8>>]) -> Option<Vec<u8>> {
@@ -66,6 +89,10 @@ pub fn store(target: &[u8], cookie: &[u8], from_http: bool) {
     write_cookie(&jar, from_http, &c, &site);
 }
 
+pub fn store_from_js(target: &[u8], cookie: &[u8]) {
+    store(target, cookie, false);
+}
+
 pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8]) {
     if let Some((c, site)) = parse(target, cookie) {
         write_cookie(jar, true, &c, &site);
@@ -73,6 +100,8 @@ pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8]) {
 }
 
 fn write_cookie(jar: &[u8], from_http: bool, c: &Cookie, site: &[u8]) {
+    let _writing = JAR_WRITE.lock().unwrap_or_else(PoisonError::into_inner);
+    let _locked = storage::lock_cookie_jars();
     if !from_http {
         let http_jar = storage::cookie_jar_path(Some(site), false);
         if http_jar
@@ -86,4 +115,5 @@ fn write_cookie(jar: &[u8], from_http: bool, c: &Cookie, site: &[u8]) {
     if sys::write_file(jar, &out) {
         sys::chmod(jar, 0o600);
     }
+    JAR_WRITES.fetch_add(1, Ordering::Release);
 }

@@ -3,6 +3,27 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Security: a local HTML file can no longer read other local files. Every
+  `file:` document is now an opaque origin: `fetch()` and
+  `XMLHttpRequest` from a `file:` page treated every other `file:` URL as
+  same-origin, so a page opened from the downloads folder could read
+  another program's tokens under `~/.config` and list directories, and a
+  local image from another folder drawn into a canvas did not taint it. A
+  local page still loads its own scripts, style sheets and images.
+  Ported to Nordstjernen and Northstar under the same name.
+* Cookies set by responses that arrive at the same time are all kept.
+  Every Set-Cookie header read the site's jar file, added its cookie and
+  wrote the whole file back with no lock, so concurrent responses, in one
+  renderer or several, overwrote each other: of eight cookies set by
+  eight parallel `fetch()` calls, the next request carried five or six,
+  and a rotated session cookie could come back. Jar writes now hold a
+  process-wide lock and an exclusive lock on `cookies/.lock`.
+  `document.cookie` also follows the jar: it was a copy taken when the
+  page loaded, so a cookie set or deleted by a `fetch()` or XHR response
+  never appeared, which broke sites that copy a CSRF token from a cookie
+  into a request header. A read now takes the jar again when its version
+  (the process's write count and the jar files' size and modification
+  time) has changed.
 * Security: a web page can no longer navigate to the browser's privileged
   pages. A link, a location assignment, a form submission or a Refresh
   could open about:settings-save, about:settings-clear, about:history,

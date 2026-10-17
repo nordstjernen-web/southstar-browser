@@ -253,6 +253,14 @@ pub fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
     record::set_cookie_value(js, value);
 }
 
+pub fn cookie_version(js: *const NsJs) -> u64 {
+    record::cookie_version(js)
+}
+
+pub fn set_cookie_version(js: *const NsJs, version: u64) {
+    record::set_cookie_version(js, version);
+}
+
 pub fn partition_key(js: *const NsJs) -> Option<CString> {
     record::partition_key(js)
 }

@@ -3,19 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_char;
-use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
 
+use crate::hsts;
 use crate::storage::{self};
-use crate::{cookies, hsts};
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
-}
-
-fn dup(value: Option<Vec<u8>>) -> *mut c_char {
-    value.map_or(ptr::null_mut(), |v| glib::strdup(&v))
 }
 
 #[unsafe(no_mangle)]
@@ -34,18 +29,6 @@ pub extern "C" fn ns_net_state_shutdown() {
     super::proxy::shutdown();
     storage::shutdown();
     hsts::shutdown();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_cookies_for_js(url: *const c_char) -> *mut c_char {
-    dup(text(url).and_then(|u| cookies::collect(u, false)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_cookie_store_from_js(url: *const c_char, cookie: *const c_char) {
-    if let (Some(url), Some(cookie)) = (text(url), text(cookie)) {
-        cookies::store(url, cookie, false);
-    }
 }
 
 #[unsafe(no_mangle)]

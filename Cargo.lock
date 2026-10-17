@@ -2363,6 +2363,7 @@ dependencies = [
  "southstar-js-custom-elements",
  "southstar-js-engine",
  "southstar-js-runtime",
+ "southstar-net",
  "southstar-url",
 ]
 

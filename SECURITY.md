@@ -276,6 +276,12 @@ document) are blocked.
   the same registrable domain share one cookie jar and one cache
   partition; everything else is isolated. Third-party cookies are
   blocked by default.
+- Every `file:` document is an opaque origin. A local page still loads
+  its own scripts, style sheets and images, but `fetch()` and
+  `XMLHttpRequest` cannot read another `file:` URL or a directory
+  listing, a `file:` frame is cross-origin to its embedder, and a
+  `file:` image drawn into a canvas taints it, so an HTML file opened
+  from the downloads folder cannot read the rest of the disk.
 - CSP (`default-src`, `script-src`, `style-src`, `img-src`,
   `media-src`, `connect-src`, `font-src`, `frame-src`,
   `frame-ancestors`) is parsed and enforced for both inline and
@@ -388,11 +394,16 @@ Network cookies live in a per-site, Netscape-format cookie jar on disk
 network stack, honouring `HttpOnly`,
 `Secure`, `SameSite`, `Path`, `Domain`, and expiry. At navigation the
 non-`HttpOnly` cookies for the document's origin are read back out of
-the jar (`ns_net_cookies_for_js`) and seeded into `document.cookie`,
-and the `document.cookie` setter writes back into that same per-site
-jar (`ns_net_cookie_store_from_js`) — so a cookie set from JS is sent
-on the next request, and a cookie set over the network is visible to a
-later `document.cookie` read. `HttpOnly` cookies are written to the jar
+the jar (`southstar_net::cookies_for_js`) and seeded into
+`document.cookie`, and the `document.cookie` setter writes back into that
+same per-site jar (`southstar_net::cookie_store_from_js`) — so a cookie set
+from JS is sent on the next request. A `document.cookie` read re-reads the
+jar whenever `southstar_net::cookie_jar_version` says it changed, so a
+cookie set or deleted over the network, by this page or another tab, is
+visible to the next read. Writes to a jar are serialised by a process-wide
+lock and an exclusive lock on `cookies/.lock`, so concurrent responses and
+renderer processes cannot overwrite each other's cookies. `HttpOnly`
+cookies are written to the jar
 with a `#HttpOnly_` line prefix that the JS read path skips, so they
 stay invisible to script.
 

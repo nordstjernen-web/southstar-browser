@@ -23,6 +23,10 @@ mod url;
 mod view_source;
 
 pub use about::{is_chrome_page, is_privileged_page};
+pub use cookies::{
+    for_js as cookies_for_js, jar_version as cookie_jar_version,
+    store_from_js as cookie_store_from_js,
+};
 pub use error_page::build as build_error_page;
 pub use ffi::fetch::{
     Response, Timing as ResponseTiming, accept_header_lines,
