@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use ffi::Cancellable;
+use southstar_net::{Cancellable, FetchDest, FetchRequest};
 
 #[derive(Clone, Copy)]
 pub struct Descriptors {
@@ -243,7 +243,29 @@ pub fn request(family: &[u8], src_url: &[u8], base_url: Option<&[u8]>, descripto
         loader.pending.insert(entry.url.clone(), pending);
         cancel
     };
-    ffi::fetch(&url, base_url, &cancel);
+    fetch(&url, base_url, &cancel);
+}
+
+fn fetch(url: &[u8], base_url: Option<&[u8]>, cancel: &Cancellable) {
+    let headers = FetchDest::Font.header_lines();
+    let request = FetchRequest {
+        url,
+        top_url: base_url,
+        method: Some(b"GET"),
+        headers: &headers,
+        ..FetchRequest::default()
+    };
+    let key = url.to_vec();
+    southstar_net::request_with(&request, Some(cancel), move |outcome| {
+        let body = outcome
+            .as_ref()
+            .ok()
+            .filter(|resp| resp.error().is_none() && resp.status() < 400)
+            .and_then(|resp| resp.body())
+            .filter(|body| !body.is_empty());
+        fetched(&key, body);
+        notify_idle();
+    });
 }
 
 fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {

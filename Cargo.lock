@@ -2080,6 +2080,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-digest",
  "southstar-glib",
+ "southstar-net",
  "southstar-url",
  "southstar-woff2",
 ]
@@ -2950,6 +2951,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-js-url",
+ "southstar-net",
  "southstar-url",
 ]
 
@@ -3461,6 +3463,7 @@ dependencies = [
  "southstar-image",
  "southstar-layout",
  "southstar-layout-query",
+ "southstar-net",
  "southstar-plmpeg",
  "southstar-style",
  "southstar-texture",

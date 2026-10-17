@@ -214,21 +214,6 @@ struct GMainLoop {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: core::ffi::c_uint,
-}
-
-#[repr(C)]
-struct NsResponse {
-    status: core::ffi::c_long,
-    final_url: *mut c_char,
-    _headers: [*mut c_char; 9],
-    body: *mut GByteArray,
-    error: *mut c_char,
-}
-
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 type GDestroyNotify = unsafe extern "C" fn(data: *mut c_void);
 unsafe extern "C" {
@@ -253,18 +238,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
 
     fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
-    fn ns_net_request_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        error: *mut *mut southstar_glib::GError,
-    ) -> *mut NsResponse;
-    fn ns_response_free(response: *mut NsResponse);
 
 }
 
@@ -747,51 +720,33 @@ pub(crate) struct NetResponse {
 }
 
 pub(crate) fn net_get(url: &str, top_url: &str, header: &str) -> NetResponse {
-    let url = c_string(url);
-    let top_url = c_string(top_url);
-    let header = c_string(header);
-    let headers = [header.as_ptr(), core::ptr::null()];
-    let mut error: *mut southstar_glib::GError = core::ptr::null_mut();
-    let response = unsafe {
-        ns_net_request_blocking(
-            url.as_ptr(),
-            top_url.as_ptr(),
-            c"GET".as_ptr(),
-            core::ptr::null(),
-            0,
-            core::ptr::null(),
-            headers.as_ptr(),
-            core::ptr::null_mut(),
-            &mut error,
-        )
+    let text = |s: &str| c_string(s).into_bytes();
+    let (url, top_url) = (text(url), text(top_url));
+    let headers = [text(header)];
+    let request = southstar_net::FetchRequest {
+        url: &url,
+        top_url: Some(&top_url),
+        method: Some(b"GET"),
+        headers: &headers,
+        ..southstar_net::FetchRequest::default()
     };
-    let gerror = unsafe { error.as_ref() }.and_then(|e| unsafe { borrowed(e.message) });
-    if !error.is_null() {
-        unsafe { southstar_glib::g_error_free(error) };
+    let lossy = |s: &core::ffi::CStr| s.to_string_lossy().into_owned();
+    match southstar_net::request_blocking(&request) {
+        Ok(response) => NetResponse {
+            received: true,
+            status: response.status(),
+            final_url: response.final_url().map(lossy),
+            body: response.body().map(<[u8]>::to_vec),
+            error: response.error().map(lossy),
+        },
+        Err(failure) => NetResponse {
+            received: false,
+            status: 0,
+            final_url: None,
+            body: None,
+            error: Some(String::from_utf8_lossy(failure.message()).into_owned()),
+        },
     }
-    let mut out = NetResponse {
-        received: !response.is_null(),
-        status: 0,
-        final_url: None,
-        body: None,
-        error: gerror,
-    };
-    if let Some(r) = unsafe { response.as_ref() } {
-        out.status = r.status;
-        out.final_url = unsafe { borrowed(r.final_url) };
-        out.body = unsafe { r.body.as_ref() }.map(|b| {
-            if b.data.is_null() || b.len == 0 {
-                Vec::new()
-            } else {
-                unsafe { core::slice::from_raw_parts(b.data, b.len as usize) }.to_vec()
-            }
-        });
-        if out.error.is_none() {
-            out.error = unsafe { borrowed(r.error) };
-        }
-        unsafe { ns_response_free(response) };
-    }
-    out
 }
 
 #[unsafe(no_mangle)]

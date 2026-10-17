@@ -111,7 +111,7 @@ fn return_outcome(task: *mut c_void, outcome: Result<Response, Failure>) {
 }
 
 fn fetch_async_tag(task: Task) -> Task {
-    task.tagged(ns_net_fetch_async as *const c_void, c"ns_net_fetch_async")
+    task.tagged(fetch_async_tag as *const c_void, c"net_fetch_shared")
 }
 
 struct FetchCtx {
@@ -671,30 +671,6 @@ pub fn preconnect_async(url: &CStr) {
 
 pub fn set_blob_resolver(resolver: BlobResolver) {
     *lock(&BLOB_RESOLVER) = Some(resolver);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_fetch_async(
-    url: *const c_char,
-    top_url: *const c_char,
-    cancellable: *mut c_void,
-    callback: ReadyCallback,
-    user_data: *mut c_void,
-) {
-    unsafe {
-        ns_net_request_async(
-            url,
-            top_url,
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            ptr::null(),
-            cancellable,
-            callback,
-            user_data,
-        )
-    };
 }
 
 /// # Safety

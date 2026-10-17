@@ -937,11 +937,7 @@ unsafe fn start_request(
         (*img).request_us = monotonic_us();
         (*img).response_us = 0;
     }
-    let headers: Vec<Vec<u8>> = southstar_net::FetchDest::Image
-        .accept_lines()
-        .iter()
-        .map(|line| line.to_bytes().to_vec())
-        .collect();
+    let headers = southstar_net::FetchDest::Image.header_lines();
     let request = southstar_net::FetchRequest {
         url: url.to_bytes(),
         top_url: top_url.map(CStr::to_bytes),

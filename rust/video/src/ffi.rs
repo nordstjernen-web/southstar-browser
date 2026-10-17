@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::rc::Rc;
@@ -228,63 +228,22 @@ pub fn mark_dead(pending: &[PendingPtr]) {
     }
 }
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    _headers: [*mut c_char; 9],
-    body: *mut GByteArray,
-    error: *mut c_char,
-}
-
-pub struct Response(*mut NsResponse);
+pub struct Response(Option<southstar_net::Response>);
 
 impl Response {
     pub fn body(&self) -> Option<&[u8]> {
-        let r = unsafe { self.0.as_ref() }?;
-        if !r.error.is_null() || r.body.is_null() {
-            return None;
-        }
-        let body = unsafe { &*r.body };
-        if body.len == 0 || body.data.is_null() {
-            return None;
-        }
-        Some(unsafe { glib::slice(body.data, body.len as usize) })
+        let resp = self.0.as_ref().filter(|resp| resp.error().is_none())?;
+        resp.body().filter(|body| !body.is_empty())
     }
 
     pub fn final_url(&self) -> Option<&[u8]> {
-        let r = unsafe { self.0.as_ref() }?;
-        unsafe { glib::bytes(r.final_url) }
+        self.0.as_ref()?.final_url().map(CStr::to_bytes)
     }
 }
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        unsafe { ns_response_free(self.0) };
-    }
-}
-
-type ReadyCallback =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
 
 unsafe extern "C" {
     fn ns_camera_active() -> *mut c_void;
     fn ns_camera_next_frame(camera: *mut c_void) -> *mut c_void;
-    fn ns_net_fetch_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        cancellable: *mut c_void,
-        callback: Option<ReadyCallback>,
-        user_data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
     fn g_get_monotonic_time() -> i64;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_file_set_contents(
@@ -419,27 +378,20 @@ pub fn fetch(cache: &mut Cache, url: &[u8], video: VideoPtr, kind: FetchKind) {
         dead: false,
     })));
     cache.pending.push(pending);
-    let url = cstring(url);
-    let base = cache.base_url.as_deref().map(cstring);
-    unsafe {
-        ns_net_fetch_async(
-            url.as_ptr(),
-            base.as_ref().map_or(ptr::null(), |b| b.as_ptr()),
-            ptr::null_mut(),
-            Some(on_fetched),
-            pending.as_ptr().cast(),
-        )
+    let request = southstar_net::FetchRequest {
+        url: until_nul(url),
+        top_url: cache.base_url.as_deref().map(until_nul),
+        method: Some(b"GET"),
+        ..southstar_net::FetchRequest::default()
     };
+    southstar_net::request_with(&request, None, move |outcome| {
+        // SAFETY: the pending fetch was leaked for this request and is reclaimed once, here.
+        unsafe { on_fetched(pending.as_ptr(), Response(outcome.ok())) }
+    });
 }
 
-unsafe extern "C" fn on_fetched(_source: *mut c_void, result: *mut c_void, user_data: *mut c_void) {
-    let raw = user_data.cast::<Pending>();
+unsafe fn on_fetched(raw: *mut Pending, resp: Response) {
     let pending = unsafe { Box::from_raw(raw) };
-    let mut error = ptr::null_mut();
-    let resp = Response(unsafe { ns_net_fetch_finish(result, &mut error) });
-    if !error.is_null() {
-        unsafe { glib::g_error_free(error) };
-    }
     if pending.dead {
         return;
     }

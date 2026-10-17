@@ -73,6 +73,13 @@ impl FetchDest {
         }
     }
 
+    pub fn header_lines(self) -> Vec<Vec<u8>> {
+        self.accept_lines()
+            .iter()
+            .map(|line| line.to_bytes().to_vec())
+            .collect()
+    }
+
     fn raw_accept_lines(self) -> &'static AcceptLines {
         match self {
             FetchDest::Script => &SCRIPT_ACCEPT,
@@ -169,8 +176,14 @@ pub struct Response(NonNull<NsResponse>);
 
 unsafe impl Send for Response {}
 
+impl Default for Response {
+    fn default() -> Response {
+        Response::new()
+    }
+}
+
 impl Response {
-    pub(crate) fn new() -> Response {
+    pub fn new() -> Response {
         let raw =
             unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast::<NsResponse>();
         let resp = Response(NonNull::new(raw).expect("g_malloc0 aborts on failure"));
@@ -261,6 +274,34 @@ impl Response {
 
     pub fn next_hop_protocol(&self) -> Option<&CStr> {
         c_str(self.view().next_hop_protocol)
+    }
+
+    pub fn content_disposition(&self) -> Option<&CStr> {
+        c_str(self.view().content_disposition)
+    }
+
+    pub fn xframe_options(&self) -> Option<&CStr> {
+        c_str(self.view().xframe_options)
+    }
+
+    pub fn redirect_count(&self) -> c_int {
+        self.view().redirect_count
+    }
+
+    pub fn set_status(&mut self, status: c_long) {
+        self.get().status = status;
+    }
+
+    pub fn set_error(&mut self, message: &[u8]) {
+        replace(&mut self.get().error, Some(message));
+    }
+
+    pub fn set_cors_allow_origin(&mut self, value: &[u8]) {
+        replace(&mut self.get().cors_allow_origin, Some(value));
+    }
+
+    pub fn set_raw_headers(&mut self, value: &[u8]) {
+        replace(&mut self.get().raw_headers, Some(value));
     }
 
     pub fn remote_ip(&self) -> Option<&CStr> {
@@ -1005,10 +1046,5 @@ pub fn request_key(
 }
 
 pub fn accept_header_lines(dest: c_int) -> Vec<Vec<u8>> {
-    FetchDest::from_raw(dest).map_or_else(Vec::new, |dest| {
-        dest.accept_lines()
-            .iter()
-            .map(|line| line.to_bytes().to_vec())
-            .collect()
-    })
+    FetchDest::from_raw(dest).map_or_else(Vec::new, FetchDest::header_lines)
 }

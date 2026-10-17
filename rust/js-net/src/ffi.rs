@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
@@ -55,56 +55,12 @@ impl Realm {
     }
 }
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-pub(crate) struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    tls_warning: *mut c_char,
-    remote_ip: *mut c_char,
-    next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-    security: c_int,
-    redirect_count: c_int,
-}
-
-const _: () = assert!(
-    core::mem::size_of::<NsResponse>() == 200
-        && core::mem::offset_of!(NsResponse, body) == 88
-        && core::mem::offset_of!(NsResponse, response_end_ms) == 184
-);
-
 pub(crate) const HO_ABORT_CONTROLLER: HostKind = HostKind::AbortController;
 pub(crate) const HO_ABORT_SIGNAL: HostKind = HostKind::AbortSignal;
 pub(crate) const HO_XHR: HostKind = HostKind::Xhr;
 pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-type GAsyncReadyCallback =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
 
 #[repr(C)]
 struct WsCallbacks {
@@ -153,28 +109,6 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
-    fn g_cancellable_new() -> *mut c_void;
-    fn g_cancellable_cancel(cancellable: *mut c_void);
-    fn g_object_ref(object: *mut c_void) -> *mut c_void;
-    fn g_object_unref(object: *mut c_void);
-    fn g_byte_array_sized_new(reserved: c_uint) -> *mut GByteArray;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
-
-    fn ns_net_request_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        callback: GAsyncReadyCallback,
-        user_data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
 
     fn ns_sw_controller_for(js: *mut NsJs, abs_url: *const c_char) -> *mut c_void;
     fn ns_sw_post_fetch_request(
@@ -208,10 +142,6 @@ unsafe fn take_gstr(raw: *mut c_char) -> Option<Vec<u8>> {
     let bytes = unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec();
     unsafe { glib::g_free(raw.cast()) };
     Some(bytes)
-}
-
-fn borrowed(raw: *const c_char) -> Option<Vec<u8>> {
-    (!raw.is_null()).then(|| unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec())
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -692,7 +622,10 @@ impl Js {
                 &url,
                 Some(timing.initiator),
                 span,
-                resp.0.cast(),
+                resp.0
+                    .as_ref()
+                    .map_or(ptr::null_mut(), southstar_net::Response::as_ptr)
+                    .cast(),
             )
         };
     }
@@ -764,27 +697,7 @@ impl ServiceWorker {
     }
 }
 
-pub(crate) struct Cancellable(*mut c_void);
-
-impl Cancellable {
-    pub fn new() -> Cancellable {
-        Cancellable(unsafe { g_cancellable_new() })
-    }
-
-    pub fn cancel(&self) {
-        unsafe { g_cancellable_cancel(self.0) };
-    }
-
-    pub fn share(&self) -> Cancellable {
-        Cancellable(unsafe { g_object_ref(self.0) })
-    }
-}
-
-impl Drop for Cancellable {
-    fn drop(&mut self) {
-        unsafe { g_object_unref(self.0) };
-    }
-}
+pub(crate) use southstar_net::Cancellable;
 
 pub(crate) struct Request {
     pub url: CString,
@@ -808,167 +721,145 @@ impl Request {
     pub fn send(
         &self,
         cancellable: Option<&Cancellable>,
-        callback: GAsyncReadyCallback,
-        data: *mut c_void,
+        done: impl FnOnce(Response, Option<Vec<u8>>) + 'static,
     ) {
-        let headers = self.header_pointers();
-        let body = if self.has_body {
-            self.body.as_ptr().cast()
-        } else {
-            ptr::null()
+        let headers: Vec<Vec<u8>> = self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
+        let request = southstar_net::FetchRequest {
+            url: self.url.to_bytes(),
+            top_url: self.top.as_deref().map(CStr::to_bytes),
+            method: Some(self.method.to_bytes()),
+            body: self.has_body.then_some(self.body.as_slice()),
+            content_type: self.content_type.as_deref().map(CStr::to_bytes),
+            headers: &headers,
         };
-        unsafe {
-            ns_net_request_async(
-                self.url.as_ptr(),
-                opt_ptr(self.top.as_ref()),
-                self.method.as_ptr(),
-                body,
-                self.body.len(),
-                opt_ptr(self.content_type.as_ref()),
-                headers.as_ptr(),
-                cancellable.map_or(ptr::null_mut(), |c| c.0),
-                callback,
-                data,
-            )
-        };
+        southstar_net::request_with(&request, cancellable, move |outcome| match outcome {
+            Ok(resp) => done(Response(Some(resp)), None),
+            Err(message) => done(Response(None), Some(message)),
+        });
     }
 }
 
-pub(crate) struct Response(*mut NsResponse);
+pub(crate) struct Response(Option<southstar_net::Response>);
+
+fn text_of(value: Option<&CStr>) -> Option<Vec<u8>> {
+    value.map(|v| v.to_bytes().to_vec())
+}
 
 impl Response {
-    pub unsafe fn finish(result: *mut c_void) -> (Response, Option<Vec<u8>>) {
-        let mut error: *mut GError = ptr::null_mut();
-        let resp = unsafe { ns_net_fetch_finish(result, &mut error) };
-        let message = unsafe { error.as_ref() }.map(|e| borrowed(e.message).unwrap_or_default());
-        if !error.is_null() {
-            unsafe { glib::g_error_free(error) };
-        }
-        (Response(resp), message)
-    }
-
     pub fn synthesized() -> Response {
-        Response(unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast())
+        Response(Some(southstar_net::Response::new()))
     }
 
     pub fn is_null(&self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
-    fn get(&self) -> Option<&NsResponse> {
-        unsafe { self.0.as_ref() }
-    }
-
-    fn get_mut(&mut self) -> Option<&mut NsResponse> {
-        unsafe { self.0.as_mut() }
+    fn get(&self) -> Option<&southstar_net::Response> {
+        self.0.as_ref()
     }
 
     pub fn status(&self) -> i64 {
-        self.get().map_or(0, |r| long(r.status))
+        self.get().map_or(0, |r| long(r.status()))
     }
 
     pub fn error(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.error))
+        self.get().and_then(|r| text_of(r.error()))
     }
 
     pub fn final_url(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.final_url))
+        self.get().and_then(|r| text_of(r.final_url()))
     }
 
     pub fn content_type(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.content_type))
+        self.get().and_then(|r| text_of(r.content_type()))
     }
 
     pub fn cors_allow_origin(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.cors_allow_origin))
+        self.get().and_then(|r| text_of(r.cors_allow_origin()))
     }
 
     pub fn raw_headers(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.raw_headers))
+        self.get().and_then(|r| text_of(r.raw_headers()))
     }
 
     pub fn redirect_count(&self) -> i32 {
-        self.get().map_or(0, |r| r.redirect_count)
+        self.get()
+            .map_or(0, southstar_net::Response::redirect_count)
     }
 
     pub fn known_headers(&self) -> [(&'static [u8], Option<Vec<u8>>); 5] {
-        let field = |f: fn(&NsResponse) -> *mut c_char| self.get().and_then(|r| borrowed(f(r)));
+        let field = |f: fn(&southstar_net::Response) -> Option<&CStr>| {
+            self.get().and_then(|r| text_of(f(r)))
+        };
         [
-            (b"content-type", field(|r| r.content_type)),
-            (b"content-disposition", field(|r| r.content_disposition)),
-            (b"content-security-policy", field(|r| r.csp_header)),
-            (b"x-frame-options", field(|r| r.xframe_options)),
+            (
+                b"content-type",
+                field(southstar_net::Response::content_type),
+            ),
+            (
+                b"content-disposition",
+                field(southstar_net::Response::content_disposition),
+            ),
+            (
+                b"content-security-policy",
+                field(southstar_net::Response::csp_header),
+            ),
+            (
+                b"x-frame-options",
+                field(southstar_net::Response::xframe_options),
+            ),
             (
                 b"access-control-allow-origin",
-                field(|r| r.cors_allow_origin),
+                field(southstar_net::Response::cors_allow_origin),
             ),
         ]
     }
 
     pub fn body(&self) -> &[u8] {
-        let Some(body) = self.get().and_then(|r| unsafe { r.body.as_ref() }) else {
-            return &[];
-        };
-        if body.data.is_null() || body.len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(body.data, body.len as usize) }
+        self.get()
+            .and_then(southstar_net::Response::body)
+            .unwrap_or_default()
     }
 
     pub fn set_error(&mut self, message: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            if !r.error.is_null() {
-                unsafe { glib::g_free(r.error.cast()) };
-            }
-            r.error = glib::strdup(message);
+        if let Some(r) = self.0.as_mut() {
+            r.set_error(message);
         }
     }
 
     pub fn set_status(&mut self, status: i64) {
-        if let Some(r) = self.get_mut() {
-            r.status = status as c_long;
+        if let Some(r) = self.0.as_mut() {
+            r.set_status(status as c_long);
         }
     }
 
     pub fn set_final_url(&mut self, url: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.final_url = glib::strdup(url);
+        if let Some(r) = self.0.as_mut() {
+            r.set_final_url(&cstring(url));
         }
     }
 
     pub fn set_content_type(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.content_type = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_content_type(&cstring(value));
         }
     }
 
     pub fn set_cors_allow_origin(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.cors_allow_origin = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_cors_allow_origin(value);
         }
     }
 
     pub fn set_raw_headers(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.raw_headers = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_raw_headers(value);
         }
     }
 
     pub fn set_body(&mut self, bytes: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            let array = unsafe { g_byte_array_sized_new(bytes.len() as c_uint) };
-            if !bytes.is_empty() {
-                unsafe { g_byte_array_append(array, bytes.as_ptr(), bytes.len() as c_uint) };
-            }
-            r.body = array;
-        }
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe { ns_response_free(self.0) };
+        if let Some(r) = self.0.as_mut() {
+            r.set_body(bytes);
         }
     }
 }
@@ -1058,24 +949,6 @@ pub fn service_worker_fetch_result(js: *const NsJs, id: u32, outcome: crate::fet
     crate::fetch::service_worker_result(Js::of_ptr(js), id, outcome);
 }
 
-pub(crate) unsafe extern "C" fn on_beacon_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    _data: *mut c_void,
-) {
-    drop(unsafe { Response::finish(result) });
-}
-
-pub(crate) unsafe extern "C" fn on_fetch_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    data: *mut c_void,
-) {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::fetch::Ticket>()) };
-    let (resp, error) = unsafe { Response::finish(result) };
-    crate::fetch::done(*ticket, resp, error);
-}
-
 pub(crate) unsafe extern "C" fn on_fetch_idle(data: *mut c_void) -> GBoolean {
     let delivery = unsafe { Box::from_raw(data.cast::<crate::fetch::Delivery>()) };
     crate::fetch::deliver_idle(*delivery);
@@ -1089,16 +962,6 @@ pub(crate) fn schedule_fetch_idle(js: Js, delivery: crate::fetch::Delivery, retr
     } else {
         js.attach_idle(on_fetch_idle, data);
     }
-}
-
-pub(crate) unsafe extern "C" fn on_xhr_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    data: *mut c_void,
-) {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::xhr::Ticket>()) };
-    let (resp, error) = unsafe { Response::finish(result) };
-    crate::xhr::done(*ticket, resp, error.is_some());
 }
 
 unsafe extern "C" fn on_xhr_idle(data: *mut c_void) -> GBoolean {
