@@ -118,7 +118,7 @@ impl Js {
     }
 
     pub fn flush_autofocus(self) {
-        unsafe { ns_js_flush_autofocus(self.0) };
+        southstar_js_top_layer::flush_autofocus(self.0);
     }
 
     pub fn promote_deferred_iframes(self) {
@@ -274,7 +274,6 @@ pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
 pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
-    fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;

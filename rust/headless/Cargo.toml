@@ -32,6 +32,7 @@ southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-page = { path = "../js-page" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-window = { path = "../js-window" }
 southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }

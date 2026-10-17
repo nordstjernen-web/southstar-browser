@@ -12,8 +12,6 @@ use southstar_layout::BoxRef;
 use super::{Js, NsBrowser};
 
 unsafe extern "C" {
-    fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
-    fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
     fn g_utf8_prev_char(p: *const c_char) -> *const c_char;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_utf8_get_char(p: *const c_char) -> u32;
@@ -197,7 +195,7 @@ impl Js {
     }
 
     pub fn activate_summary(self, el: Node<'_>) -> bool {
-        unsafe { ns_js_activate_summary(self.raw(), el.as_ptr()) != 0 }
+        southstar_js_top_layer::activate_summary(self.page(), el)
     }
 
     pub fn form_reset(self, form: Node<'_>) {
@@ -237,7 +235,7 @@ impl Js {
     }
 
     pub fn process_close_request(self) -> bool {
-        unsafe { ns_js_process_close_request(self.raw()) != 0 }
+        southstar_js_top_layer::process_close_request(self.page())
     }
 
     pub fn sequential_focus_target<'a>(self, backward: bool) -> Option<Node<'a>> {

@@ -18,7 +18,6 @@ pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
 
 unsafe extern "Rust" {
@@ -119,7 +118,7 @@ pub(crate) fn token_list(scope: &mut Scope<'_>, this: &Value, attr: &'static CSt
 }
 
 pub(crate) fn details_toggle_open(js: Js, node: Element, open: bool) {
-    unsafe { ns_js_details_toggle_open(js.0, node.as_mut_ptr(), glib::boolean(open)) };
+    southstar_js_top_layer::details_toggle_open(js.0, node, open);
 }
 
 pub(crate) fn async_method(scope: &mut Scope<'_>) -> Value {

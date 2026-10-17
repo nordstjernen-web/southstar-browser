@@ -28,6 +28,7 @@ southstar-js-net = { path = "../js-net" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-window = { path = "../js-window" }
 southstar-url = { path = "../url" }
 

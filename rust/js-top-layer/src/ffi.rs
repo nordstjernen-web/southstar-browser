@@ -280,9 +280,54 @@ pub unsafe extern "C" fn ns_top_layer_forget_node(js: *const NsJs, n: *const NsN
     }
 }
 
+fn live(n: Node<'_>) -> Option<Element> {
+    n.downgrade().get()
+}
+
+fn page(js: *const NsJs) -> Option<Js> {
+    let js = Js::of(js);
+    (!js.is_null()).then_some(js)
+}
+
+pub fn clear_top_layer(js: *const NsJs) {
+    crate::clear(Js::of(js));
+}
+
+pub fn popover_light_dismiss(js: *const NsJs, target: Node<'_>, up: bool) {
+    if let (Some(js), Some(target)) = (page(js), live(target)) {
+        crate::popover::light_dismiss(js, target, up);
+    }
+}
+
+pub fn dialog_light_dismiss(js: *const NsJs, target: Node<'_>, up: bool) {
+    if let (Some(js), Some(target)) = (page(js), live(target)) {
+        crate::dialog::light_dismiss(js, target, up);
+    }
+}
+
+pub fn process_close_request(js: *const NsJs) -> bool {
+    page(js).is_some_and(|js| !js.halted() && crate::dialog::process_close_request(js))
+}
+
+pub fn details_toggle_open(js: *const NsJs, details: Node<'_>, open: bool) {
+    if let (Some(js), Some(details)) = (page(js), live(details)) {
+        crate::details::toggle_open(js, details, open);
+    }
+}
+
+pub fn activate_summary(js: *const NsJs, el: Node<'_>) -> bool {
+    page(js).is_some_and(|js| crate::details::activate_summary(js, live(el)))
+}
+
+pub fn flush_autofocus(js: *const NsJs) {
+    if let Some(js) = page(js) {
+        crate::focus::flush_autofocus(js);
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_top_layer_clear(js: *const NsJs) {
-    crate::clear(Js::of(js));
+    clear_top_layer(js);
 }
 
 #[unsafe(no_mangle)]
@@ -310,43 +355,6 @@ pub unsafe extern "C" fn ns_popover_attr_changed(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_popover_light_dismiss(
-    js: *const NsJs,
-    target: *const NsNode,
-    up: GBoolean,
-) {
-    let (js, Some(target)) = (Js::of(js), node(target)) else {
-        return;
-    };
-    if !js.is_null() {
-        crate::popover::light_dismiss(js, target, up != 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dialog_light_dismiss(
-    js: *const NsJs,
-    target: *const NsNode,
-    up: GBoolean,
-) {
-    let (js, Some(target)) = (Js::of(js), node(target)) else {
-        return;
-    };
-    if !js.is_null() {
-        crate::dialog::light_dismiss(js, target, up != 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_process_close_request(js: *const NsJs) -> GBoolean {
-    let js = Js::of(js);
-    if js.is_null() || js.halted() {
-        return glib::FALSE;
-    }
-    glib::boolean(crate::dialog::process_close_request(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_dialog_close(
     js: *const NsJs,
     dialog: *mut NsNode,
@@ -358,20 +366,6 @@ pub unsafe extern "C" fn ns_js_dialog_close(
     if !js.is_null() {
         let rv = text(return_value).map(CStr::to_owned);
         crate::dialog::close(js, dialog, rv.as_deref(), None);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_details_toggle_open(
-    js: *const NsJs,
-    details: *mut NsNode,
-    open: GBoolean,
-) {
-    let (js, Some(details)) = (Js::of(js), node(details)) else {
-        return;
-    };
-    if !js.is_null() {
-        crate::details::toggle_open(js, details, open != 0);
     }
 }
 
@@ -419,13 +413,5 @@ pub unsafe extern "C" fn ns_popover_target_activation(
     };
     if !js.is_null() {
         crate::invoker::popover_target_activation(js, el, node(event_target));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_flush_autofocus(js: *const NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::focus::flush_autofocus(js);
     }
 }

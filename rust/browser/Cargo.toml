@@ -32,6 +32,7 @@ southstar-js-forms = { path = "../js-forms" }
 southstar-js-input = { path = "../js-input" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-page = { path = "../js-page" }
 southstar-js-runtime = { path = "../js-runtime" }

@@ -21,6 +21,7 @@ southstar-js-images = { path = "../js-images" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-traversal = { path = "../js-traversal" }
 
 [lints]

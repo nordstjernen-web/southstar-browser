@@ -41,7 +41,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-    fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
 
@@ -317,7 +316,7 @@ impl Js {
     }
 
     pub fn details_toggle_open(self, details: Node, open: bool) {
-        unsafe { ns_js_details_toggle_open(self.raw(), details.as_mut_ptr(), glib::boolean(open)) };
+        southstar_js_top_layer::details_toggle_open(self.page(), details, open);
     }
 
     pub fn sequential_focus_target<'a>(self) -> Option<Node<'a>> {

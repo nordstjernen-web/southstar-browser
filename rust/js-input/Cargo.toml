@@ -16,6 +16,7 @@ southstar-js-focus = { path = "../js-focus" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-layout = { path = "../layout" }
 
 [lints]

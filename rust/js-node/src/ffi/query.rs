@@ -15,7 +15,6 @@ use crate::{Element, JsResult};
 
 unsafe extern "C" {
     fn ns_input_resanitize_value(el: *mut NsNode);
-    fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
@@ -87,7 +86,7 @@ pub(crate) fn input_resanitize_value(node: Element) {
 }
 
 pub(crate) fn details_toggle_open(js: Option<Js>, node: Element, open: bool) {
-    unsafe { ns_js_details_toggle_open(raw_js(js), node.as_mut_ptr(), glib::boolean(open)) };
+    southstar_js_top_layer::details_toggle_open(raw_js(js), node, open);
 }
 
 pub(crate) fn start_image_load(js: Option<Js>, node: Element, src: &CStr) {

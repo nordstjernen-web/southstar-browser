@@ -9,6 +9,11 @@ mod focus;
 pub mod invoker;
 pub mod popover;
 
+pub use ffi::{
+    activate_summary, clear_top_layer, details_toggle_open, dialog_light_dismiss, flush_autofocus,
+    popover_light_dismiss, process_close_request,
+};
+
 use core::ffi::CStr;
 use std::cell::RefCell;
 use std::collections::HashMap;

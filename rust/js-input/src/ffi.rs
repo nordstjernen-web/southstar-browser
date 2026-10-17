@@ -21,9 +21,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_popover_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
-    fn ns_js_dialog_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
-    fn ns_js_process_close_request(js: *mut NsJs) -> GBoolean;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_box_visual_border_box(
         b: *const NsBox,
@@ -154,10 +151,8 @@ impl Js {
     }
 
     pub fn light_dismiss(self, target: Element, up: bool) {
-        unsafe {
-            ns_js_popover_light_dismiss(self.ptr(), target.as_ptr(), glib::boolean(up));
-            ns_js_dialog_light_dismiss(self.ptr(), target.as_ptr(), glib::boolean(up));
-        }
+        southstar_js_top_layer::popover_light_dismiss(self.ptr(), target, up);
+        southstar_js_top_layer::dialog_light_dismiss(self.ptr(), target, up);
     }
 
     pub fn set_focus(self, el: Option<Element>) {
@@ -184,7 +179,7 @@ impl Js {
     }
 
     pub fn process_close_request(self) {
-        unsafe { ns_js_process_close_request(self.ptr()) };
+        southstar_js_top_layer::process_close_request(self.ptr());
     }
 }
 

@@ -117,7 +117,6 @@ pub(crate) enum ValueInstaller {
 
 unsafe extern "C" {
 
-    fn ns_top_layer_clear(js: *mut NsJs);
     fn ns_focus_reset(js: *mut NsJs);
     fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_services_reset(js: *mut NsJs);
@@ -246,7 +245,7 @@ impl Js {
     pub fn reset_page_state(self) {
         // SAFETY: a Js handle names the page's live script engine, which these resets accept.
         unsafe {
-            ns_top_layer_clear(self.0);
+            southstar_js_top_layer::clear_top_layer(self.0);
             ns_focus_reset(self.0);
         }
         southstar_js_mutation::forget_pending_change(self.0);
