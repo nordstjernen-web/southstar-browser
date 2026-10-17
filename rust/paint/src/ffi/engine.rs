@@ -190,14 +190,6 @@ unsafe extern "C" {
     fn ns_spell_available() -> GBoolean;
     fn ns_spell_word_ok(word: *const c_char, len: isize, lang: *const c_char) -> GBoolean;
     fn ns_js_image_for_node(js: *mut c_void, el: *const c_void) -> *const c_void;
-    fn ns_svg_render_node(
-        cr: *mut c_void,
-        svg: *const c_void,
-        w: c_double,
-        h: c_double,
-        styles: *mut GHashTable,
-        inherited: *const Style,
-    );
     fn ns_math_paint(
         cr: *mut c_void,
         math: *const c_void,
@@ -350,7 +342,14 @@ pub fn js_image_for_node(b: BoxRef<'_>) -> Option<ImageRef<'_>> {
 }
 
 pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
-    unsafe { ns_svg_render_node(cr.as_raw(), b.dom_ptr(), w, h, b.svg_styles(), b.style()) };
+    let Some(svg) = b.dom() else {
+        return;
+    };
+    // SAFETY: the paint pass holds cr live for the whole call.
+    let canvas = unsafe { southstar_svg::Canvas::from_raw(cr.as_raw()) };
+    // SAFETY: a box's SVG style table is null or a live table its layout owns.
+    let styles = unsafe { southstar_style::StyleTable::from_ptr(b.svg_styles()) };
+    southstar_svg::render_node(canvas, svg, w, h, styles, southstar_style::box_style(b));
 }
 
 pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {

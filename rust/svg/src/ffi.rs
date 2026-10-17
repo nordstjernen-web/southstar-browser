@@ -5,10 +5,8 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr, boolean};
-use southstar_layout::Style;
-use southstar_style::{StyleRef, StyleTable};
+use southstar_dom::Node;
+use southstar_glib::{GBoolean, GStr};
 use southstar_texture::TextureRef;
 
 pub const PANGO_SCALE: c_int = 1024;
@@ -70,14 +68,14 @@ struct CairoPath {
     num_data: c_int,
 }
 
-#[repr(C)]
+#[derive(Clone, Copy, Default)]
 pub struct SvgSize {
     pub width: f64,
     pub height: f64,
     pub ratio: f64,
-    pub has_width: GBoolean,
-    pub has_height: GBoolean,
-    pub has_ratio: GBoolean,
+    pub has_width: bool,
+    pub has_height: bool,
+    pub has_ratio: bool,
 }
 
 #[repr(C)]
@@ -457,6 +455,13 @@ impl Drop for OwnedCanvas {
 }
 
 impl Canvas {
+    /// # Safety
+    ///
+    /// `cr` is a live cairo context that outlives every use of the returned canvas.
+    pub unsafe fn from_raw(cr: *mut c_void) -> Canvas {
+        Canvas(cr)
+    }
+
     pub unsafe fn from_ptr(cr: *mut c_void) -> Canvas {
         Canvas(cr)
     }
@@ -678,68 +683,4 @@ pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>, descend: bool) -> Option
 
 pub fn navigator_languages() -> Vec<Vec<u8>> {
     southstar_netutil::effective_navigator_languages()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_document_root(doc: *const NsNode) -> *const NsNode {
-    Node::ptr_or_null(unsafe { Node::from_ptr(doc) }.and_then(crate::find_root))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize) {
-    let size = crate::intrinsic_size(unsafe { Node::from_ptr(svg) });
-    unsafe { out.write(size) };
-}
-
-unsafe fn inputs<'a>(
-    styles: *mut GHashTable,
-    inherited: *const Style,
-) -> (StyleTable, Option<StyleRef<'a>>) {
-    unsafe { (StyleTable::from_ptr(styles), StyleRef::from_ptr(inherited)) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_render_node(
-    cr: *mut c_void,
-    svg: *const NsNode,
-    width: f64,
-    height: f64,
-    styles: *mut GHashTable,
-    inherited: *const Style,
-) {
-    let Some(svg) = (unsafe { Node::from_ptr(svg) }) else {
-        return;
-    };
-    if cr.is_null() {
-        return;
-    }
-    let (styles, inherited) = unsafe { inputs(styles, inherited) };
-    crate::render_node(Canvas(cr), svg, width, height, styles, inherited);
-}
-
-unsafe fn input<'a>(data: *const u8, len: usize) -> &'a [u8] {
-    if data.is_null() {
-        &[]
-    } else {
-        unsafe { core::slice::from_raw_parts(data, len) }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_svg_render_bytes(
-    cr: *mut c_void,
-    data: *const u8,
-    len: usize,
-    width: f64,
-    height: f64,
-) -> GBoolean {
-    if cr.is_null() || data.is_null() {
-        return boolean(false);
-    }
-    boolean(crate::render_bytes(
-        Canvas(cr),
-        unsafe { input(data, len) },
-        width,
-        height,
-    ))
 }

@@ -17,28 +17,9 @@ use southstar_style::{StyleRef, StyleTable, ValueRef};
 
 use crate::{block, generated, media, state};
 
-#[repr(C)]
-#[derive(Default)]
-struct RawSvgSize {
-    width: f64,
-    height: f64,
-    ratio: f64,
-    has_width: GBoolean,
-    has_height: GBoolean,
-    has_ratio: GBoolean,
-}
-
-pub struct SvgSize {
-    pub width: f64,
-    pub height: f64,
-    pub ratio: f64,
-    pub has_width: bool,
-    pub has_height: bool,
-    pub has_ratio: bool,
-}
+pub use southstar_svg::SvgSize;
 
 unsafe extern "C" {
-    fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut RawSvgSize);
     fn g_utf8_get_char(p: *const c_char) -> u32;
     fn g_unichar_isalnum(c: u32) -> GBoolean;
 }
@@ -127,16 +108,7 @@ pub fn choose_img_url<'a>(n: Node<'a>) -> (*mut c_char, Option<Node<'a>>, f64) {
 }
 
 pub fn svg_intrinsic_size(n: Node<'_>) -> SvgSize {
-    let mut raw = RawSvgSize::default();
-    unsafe { ns_svg_intrinsic_size(n.as_ptr(), &mut raw) };
-    SvgSize {
-        width: raw.width,
-        height: raw.height,
-        ratio: raw.ratio,
-        has_width: raw.has_width != 0,
-        has_height: raw.has_height != 0,
-        has_ratio: raw.has_ratio != 0,
-    }
+    southstar_svg::intrinsic_size(Some(n))
 }
 
 pub fn set_bg_layers(m: MediaRef<'_>, layers: &[Option<&CStr>]) {

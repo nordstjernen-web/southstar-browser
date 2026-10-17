@@ -3024,6 +3024,7 @@ dependencies = [
  "southstar-numfmt",
  "southstar-paint",
  "southstar-style",
+ "southstar-svg",
  "southstar-url",
 ]
 
@@ -3171,6 +3172,7 @@ dependencies = [
  "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-style",
+ "southstar-svg",
 ]
 
 [[package]]
@@ -3277,6 +3279,7 @@ dependencies = [
  "southstar-numfmt",
  "southstar-selection",
  "southstar-style",
+ "southstar-svg",
  "southstar-texture",
 ]
 
@@ -3399,6 +3402,7 @@ dependencies = [
  "southstar-glib",
  "southstar-gtk-ffi",
  "southstar-history",
+ "southstar-html-parser",
  "southstar-http-cache",
  "southstar-i18n",
  "southstar-media-shm",
@@ -3407,6 +3411,7 @@ dependencies = [
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-sandbox",
+ "southstar-svg",
  "southstar-url",
  "southstar-watchdog",
 ]

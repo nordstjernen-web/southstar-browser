@@ -13,16 +13,15 @@ use std::ffi::CString;
 
 use core::ffi::CStr;
 
-pub use ffi::{Matrix, SvgGeometry};
+pub use ffi::{Canvas, Matrix, SvgGeometry, SvgSize};
 pub use measure::node_geometry;
 
 use ffi::{
-    Canvas, EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, OwnedCanvas,
-    PANGO_SCALE, Pattern, Segment, Surface, SvgSize, TextLayout,
+    EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, OwnedCanvas, PANGO_SCALE,
+    Pattern, Segment, Surface, TextLayout,
 };
 use parse::{eq_ci, is_ws};
 use southstar_dom::{Kind, Node, Tree, children};
-use southstar_glib::boolean;
 use southstar_style::{Prop, StyleRef, StyleTable, Value, parse_color};
 use southstar_texture::TextureRef;
 use state::{
@@ -1245,14 +1244,7 @@ pub fn find_root(doc: Node<'_>) -> Option<Node<'_>> {
 }
 
 pub fn intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
-    let mut out = SvgSize {
-        width: 0.0,
-        height: 0.0,
-        ratio: 0.0,
-        has_width: 0,
-        has_height: 0,
-        has_ratio: 0,
-    };
+    let mut out = SvgSize::default();
     let Some(svg) = svg else {
         return out;
     };
@@ -1285,9 +1277,9 @@ pub fn intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
         out.width = out.height * out.ratio;
         has_w = true;
     }
-    out.has_width = boolean(has_w);
-    out.has_height = boolean(has_h);
-    out.has_ratio = boolean(has_r);
+    out.has_width = has_w;
+    out.has_height = has_h;
+    out.has_ratio = has_r;
     out
 }
 
@@ -1316,6 +1308,10 @@ pub fn render_node(
     ctx.apply_node(&mut st, svg);
     ctx.render_children(svg, &st);
     cr.restore();
+}
+
+pub fn render_root(cr: Canvas, svg: Node<'_>, width: f64, height: f64) {
+    render_node(cr, svg, width, height, StyleTable::none(), None);
 }
 
 pub fn looks_like_svg(data: &[u8]) -> bool {
@@ -1355,17 +1351,17 @@ pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
     let doc = parse_svg(data)?;
     let root = find_root(doc.root())?;
     let size = intrinsic_size(Some(root));
-    let mut w = if size.has_width != 0 {
+    let mut w = if size.has_width {
         size.width
     } else {
         DEFAULT_DIM_PX
     };
-    let mut h = if size.has_height != 0 {
+    let mut h = if size.has_height {
         size.height
     } else {
         DEFAULT_DIM_PX
     };
-    if size.has_width == 0 && size.has_height == 0 && size.has_ratio != 0 && size.ratio > 0.0 {
+    if !size.has_width && !size.has_height && size.has_ratio && size.ratio > 0.0 {
         let k = cmin(DEFAULT_OBJECT_W / size.ratio, DEFAULT_OBJECT_H);
         w = size.ratio * k;
         h = k;

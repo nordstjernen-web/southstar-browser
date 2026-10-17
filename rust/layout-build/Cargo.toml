@@ -22,6 +22,7 @@ southstar-net = { path = "../net" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }
+southstar-svg = { path = "../svg" }
 southstar-url = { path = "../url" }
 
 [lints]
