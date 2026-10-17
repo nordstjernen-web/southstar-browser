@@ -129,6 +129,10 @@ fn urls_same_origin(a: &[u8], b: Option<&[u8]>) -> bool {
     if ffi::url_is_http_or_https(a) || ffi::url_is_http_or_https(b) {
         return ffi::url_same_origin(a, b);
     }
+    let is_file = |s: &[u8]| s.len() >= 5 && s[..5].eq_ignore_ascii_case(b"file:");
+    if is_file(a) || is_file(b) {
+        return false;
+    }
     let colon = |s: &[u8]| s.iter().position(|&c| c == b':');
     match (colon(a), colon(b)) {
         (Some(ca), Some(cb)) => ca == cb && a[..ca].eq_ignore_ascii_case(&b[..cb]),

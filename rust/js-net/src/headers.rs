@@ -158,16 +158,12 @@ pub(crate) fn cors_allows(
     resp_url: Option<&[u8]>,
     header: Option<&[u8]>,
 ) -> bool {
-    if let Some(resp) = resp_url {
-        if [&b"data:"[..], b"blob:", b"about:"]
+    if let Some(resp) = resp_url
+        && [&b"data:"[..], b"blob:", b"about:"]
             .iter()
             .any(|p| resp.starts_with(p))
-        {
-            return true;
-        }
-        if doc_url.is_some_and(|doc| doc.starts_with(b"file:")) && resp.starts_with(b"file:") {
-            return true;
-        }
+    {
+        return true;
     }
     if ffi::url_same_origin(doc_url, resp_url) {
         return true;
