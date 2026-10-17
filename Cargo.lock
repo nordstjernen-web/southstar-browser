@@ -3286,6 +3286,7 @@ dependencies = [
  "southstar-style",
  "southstar-svg",
  "southstar-texture",
+ "southstar-video",
 ]
 
 [[package]]

@@ -23,6 +23,7 @@ southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
 southstar-svg = { path = "../svg" }
 southstar-texture = { path = "../texture" }
+southstar-video = { path = "../video" }
 
 [features]
 ns-pango = []

@@ -13,6 +13,7 @@ use southstar_glib::{GBoolean, GHashTable};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::{StyleRef, Transform, ValueRef};
+use southstar_video::BoxVideo;
 
 use super::pango::{AttrList, Layout};
 use crate::util::Rgba;
@@ -201,23 +202,6 @@ unsafe extern "C" {
         b: c_double,
         a: c_double,
     );
-    fn ns_video_helper_composited(v: *const NsVideo) -> GBoolean;
-    fn ns_video_active_cue_text(v: *const NsVideo) -> *const c_char;
-    fn ns_video_note_paint_rect(
-        v: *const NsVideo,
-        x: c_double,
-        y: c_double,
-        w: c_double,
-        h: c_double,
-        fit: c_int,
-    );
-    fn ns_video_note_paint_clip(
-        v: *const NsVideo,
-        x: c_double,
-        y: c_double,
-        w: c_double,
-        h: c_double,
-    );
     fn g_get_monotonic_time() -> i64;
     fn g_unichar_isalpha(c: u32) -> GBoolean;
     fn g_utf8_get_char(p: *const c_char) -> u32;
@@ -247,10 +231,6 @@ impl Video<'_> {
         unsafe { v.cast::<NsVideo>().as_ref() }.map(Video)
     }
 
-    fn raw(self) -> *const NsVideo {
-        self.0
-    }
-
     pub fn playing(self) -> bool {
         self.0.playing != 0
     }
@@ -266,27 +246,14 @@ impl Video<'_> {
     pub fn poster_texture(self) -> Option<Texture> {
         unsafe { Texture::from_raw(self.0.poster_texture) }
     }
-
-    pub fn note_paint_rect(self, x: f64, y: f64, w: f64, h: f64, fit: i32) {
-        unsafe { ns_video_note_paint_rect(self.raw(), x, y, w, h, fit) };
-    }
-
-    pub fn note_paint_clip(self, x: f64, y: f64, w: f64, h: f64) {
-        unsafe { ns_video_note_paint_clip(self.raw(), x, y, w, h) };
-    }
 }
 
-fn video_ptr(v: Option<Video<'_>>) -> *const NsVideo {
-    v.map_or(ptr::null(), Video::raw)
+pub fn video_helper_composited(b: BoxRef<'_>) -> bool {
+    BoxVideo::of(b).is_some_and(BoxVideo::helper_composited)
 }
 
-pub fn video_helper_composited(v: Option<Video<'_>>) -> bool {
-    unsafe { ns_video_helper_composited(video_ptr(v)) != 0 }
-}
-
-pub fn video_active_cue_text(v: Option<Video<'_>>) -> Option<&CStr> {
-    let t = unsafe { ns_video_active_cue_text(video_ptr(v)) };
-    (!t.is_null()).then(|| unsafe { CStr::from_ptr(t) })
+pub fn video_active_cue_text(b: BoxRef<'_>) -> Option<Vec<u8>> {
+    BoxVideo::of(b)?.active_cue_text()
 }
 
 pub fn anim_color(b: BoxRef<'_>, which: AnimatedColor) -> Option<[u8; 4]> {
