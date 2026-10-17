@@ -290,9 +290,12 @@ def main():
 
 
 def annotate(failures):
-    text = "\n".join(failures)
-    escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-    print(f"::error title=unsafe-budget::{escaped[:60000]}")
+    budget_lines = [f for f in failures if "\n" not in f]
+    chunks = ["\n".join(budget_lines[i:i + 25]) for i in range(0, len(budget_lines), 25)]
+    chunks += [f for f in failures if "\n" in f]
+    for chunk in chunks[:10]:
+        escaped = chunk[:3000].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::error title=unsafe-budget::{escaped}", flush=True)
 
 
 if __name__ == "__main__":
