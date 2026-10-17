@@ -11,7 +11,9 @@ publish.workspace = true
 southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-collections = { path = "../js-collections" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-style = { path = "../style" }
 

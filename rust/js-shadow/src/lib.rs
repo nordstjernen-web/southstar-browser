@@ -6,6 +6,8 @@ mod ffi;
 pub mod root;
 pub mod slot;
 
+pub use slot::assigned_slot_node;
+
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::Value;
 
@@ -14,12 +16,12 @@ pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const SHADOW_ATTR: &core::ffi::CStr = c"data-nd-shadow-root";
 
-pub(crate) fn is_shadow_root(node: Option<Element>) -> bool {
-    node.is_some_and(|n| n.kind() == Kind::Element && n.attr(SHADOW_ATTR).is_some())
+pub fn is_shadow_root(node: Node<'_>) -> bool {
+    node.kind() == Kind::Element && node.attr(SHADOW_ATTR).is_some()
 }
 
-pub(crate) fn shadow_child(host: Element) -> Option<Element> {
-    southstar_dom::children(host).find(|&c| is_shadow_root(Some(c)))
+pub fn shadow_child(host: Element) -> Option<Element> {
+    southstar_dom::children(host).find(|&c| is_shadow_root(c))
 }
 
 pub(crate) fn is_closed(root: Element) -> bool {

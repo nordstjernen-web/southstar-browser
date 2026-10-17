@@ -26,7 +26,6 @@ unsafe extern "C" {
     fn ns_multipart_boundary() -> *mut c_char;
     fn ns_node_sandbox_blocks_forms(node: *const NsNode) -> GBoolean;
     fn ns_js_dialog_close(js: *mut NsJs, dialog: *mut NsNode, return_value: *const c_char);
-    fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -46,14 +45,6 @@ unsafe extern "C" {
         match_info: *mut *mut c_void,
     ) -> GBoolean;
     fn g_regex_unref(regex: *mut c_void);
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
 
     fn g_file_get_contents(
         filename: *const c_char,
@@ -331,15 +322,7 @@ impl Page {
 
     pub(crate) fn set_attr_recorded(page: Option<Page>, node: Element, name: &CStr, value: &[u8]) {
         let value = cstring(value);
-        unsafe {
-            ns_js_set_attr_recorded_len(
-                Page::raw(page),
-                mut_ptr(node),
-                name.as_ptr(),
-                value.as_ptr(),
-                -1,
-            )
-        };
+        southstar_js_mutation::set_attr_recorded(Page::raw(page), node, name, value.to_bytes());
     }
 
     pub(crate) fn set_attr_recorded_len(
@@ -348,21 +331,11 @@ impl Page {
         name: &CStr,
         value: &[u8],
     ) {
-        let mut owned = value.to_vec();
-        owned.push(0);
-        unsafe {
-            ns_js_set_attr_recorded_len(
-                Page::raw(page),
-                mut_ptr(node),
-                name.as_ptr(),
-                owned.as_ptr().cast(),
-                value.len() as isize,
-            )
-        };
+        southstar_js_mutation::set_attr_recorded(Page::raw(page), node, name, value);
     }
 
     pub(crate) fn remove_attr_recorded(page: Option<Page>, node: Element, name: &CStr) {
-        unsafe { ns_js_remove_attr_recorded(Page::raw(page), mut_ptr(node), name.as_ptr()) };
+        southstar_js_mutation::remove_attr_recorded(Page::raw(page), node, name);
     }
 
     pub(crate) fn has_transient_activation(self) -> bool {
@@ -392,7 +365,7 @@ impl Page {
     }
 
     pub(crate) fn clear_children(page: Option<Page>, node: Element) {
-        unsafe { ns_js_clear_children(Page::raw(page), mut_ptr(node)) };
+        southstar_js_mutation::clear_children(Page::raw(page), node);
     }
 
     pub(crate) fn dispatch_event(self, target: Element, kind: &CStr) -> bool {

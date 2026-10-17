@@ -36,7 +36,6 @@ unsafe extern "C" {
     fn ns_iframe_is_cross_origin(js: *mut NsJs, frame: *const NsNode) -> GBoolean;
     fn ns_window_named_suspend();
     fn ns_window_named_resume();
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
         js: *mut NsJs,
@@ -347,7 +346,7 @@ pub(crate) fn first_element(root: Element, tag: &CStr) -> Option<Element> {
 }
 
 pub(crate) fn is_shadow_root(n: Element) -> bool {
-    unsafe { ns_node_is_shadow_root(n.as_ptr()) != 0 }
+    southstar_js_shadow::is_shadow_root(n)
 }
 
 pub(crate) fn checkable_input_kind(el: Element) -> i32 {

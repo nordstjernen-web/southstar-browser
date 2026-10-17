@@ -254,8 +254,7 @@ pub fn nsr_qcache_put(
     page::qcache_put(js_of(scope), root as usize, kind, key, value);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_qcache_invalidate(js: *const NsJs) {
+pub fn qcache_invalidate(js: *const NsJs) {
     page::invalidate(Js::of(js));
 }
 

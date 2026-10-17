@@ -283,7 +283,7 @@ pub fn get_root_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     };
     if !composed_option(scope, args)?
         && let Some(root) =
-            southstar_dom::ancestors_and_self(node).find(|&a| crate::is_shadow_root(Some(a)))
+            southstar_dom::ancestors_and_self(node).find(|&a| crate::is_shadow_root(a))
     {
         return wrap_shadow_root(scope, root);
     }

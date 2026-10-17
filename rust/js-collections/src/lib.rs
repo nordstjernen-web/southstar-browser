@@ -9,6 +9,8 @@ mod nodelist;
 mod page;
 pub mod query;
 
+pub use ffi::qcache_invalidate;
+
 use core::ffi::{CStr, c_int};
 
 use southstar_dom::serialize::is_embedded_doc;

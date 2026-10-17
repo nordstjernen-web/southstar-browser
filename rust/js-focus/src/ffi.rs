@@ -39,7 +39,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_commit_change(js: *mut NsJs, el: *const NsNode);
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
@@ -143,7 +142,7 @@ impl Js {
     }
 
     pub fn commit_change(self, el: Element) {
-        unsafe { ns_js_commit_change(self.ptr(), el.as_ptr()) };
+        southstar_js_mutation::commit_change(self.ptr(), el);
     }
 
     pub fn log_line(self, line: &CStr) {

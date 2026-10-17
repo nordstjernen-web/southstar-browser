@@ -29,31 +29,11 @@ pub(crate) enum TargetMethod {
 }
 
 unsafe extern "C" {
-    fn ns_mark_scripts_already_started(root: *mut NsNode);
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
 }
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
@@ -84,7 +64,7 @@ pub(crate) fn name_error(scope: &mut Scope<'_>, error: NameError) -> Value {
 
 pub(crate) fn track_orphan(js: Option<Js>, node: Element) {
     if let Some(js) = js {
-        unsafe { ns_js_track_orphan(js.0, node.as_mut_ptr()) };
+        southstar_js_mutation::track_orphan(js.0, node);
     }
 }
 
@@ -103,16 +83,7 @@ pub(crate) fn record_removal(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            ptr::null_mut(),
-            node.as_mut_ptr(),
-            raw(previous),
-            raw(next),
-        )
-    };
+    southstar_js_mutation::record_child_change(js.0, parent, None, Some(node), previous, next);
 }
 
 pub(crate) fn ce_upgrade_element(js: Option<Js>, node: Element) {
@@ -238,10 +209,7 @@ pub(crate) fn set_url_component(href: &[u8], component: &CStr, value: &[u8]) -> 
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &[u8]) {
-    let value = cstring(value);
-    unsafe {
-        ns_js_set_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr(), value.as_ptr())
-    };
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, c_prefix(value));
 }
 
 pub(crate) fn reflect_href_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
@@ -290,7 +258,7 @@ pub(crate) fn parse_html_fragment(source: &[u8]) -> Tree {
 }
 
 pub(crate) fn mark_scripts_already_started(root: Element) {
-    unsafe { ns_mark_scripts_already_started(root.as_mut_ptr()) };
+    southstar_js_mutation::mark_scripts_already_started(root);
 }
 
 macro_rules! rust_methods {

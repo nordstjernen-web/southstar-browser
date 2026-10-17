@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
+use core::ffi::{CStr, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter, GPtrArray};
+use southstar_dom::{NsNode, Tree};
+use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -19,39 +19,8 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
-    fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
     fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_js_record_child_change_arrays(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut GPtrArray,
-        removed: *mut GPtrArray,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-    fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
-    fn ns_mark_scripts_already_started(root: *mut NsNode);
-    fn ns_node_is_shadow_root(node: *const NsNode) -> GBoolean;
     fn g_str_hash(v: *const c_void) -> c_uint;
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
@@ -68,10 +37,6 @@ unsafe extern "Rust" {
         this: &Value,
         value: &Value,
     ) -> Result<(), Value>;
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
@@ -135,13 +100,11 @@ pub(crate) fn resolve_against_page(js: Option<Js>, href: &CStr) -> Option<Vec<u8
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {
-    unsafe {
-        ns_js_set_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr(), value.as_ptr())
-    };
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, value.to_bytes());
 }
 
 pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
-    unsafe { ns_js_remove_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr()) };
+    southstar_js_mutation::remove_attr_recorded(raw_js(js), node, name);
 }
 
 pub(crate) fn set_node_value(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult<()> {
@@ -149,7 +112,7 @@ pub(crate) fn set_node_value(scope: &mut Scope<'_>, this: &Value, val: &Value) -
 }
 
 pub(crate) fn replace_all_recorded(js: Option<Js>, node: Element, added: Option<Element>) {
-    unsafe { ns_element_replace_all_recorded(raw_js(js), node.as_mut_ptr(), raw(added)) };
+    southstar_js_mutation::replace_all_recorded(raw_js(js), node, added);
 }
 
 pub(crate) fn script_needs_prepare(js: Js, node: Element) {
@@ -165,19 +128,19 @@ pub(crate) fn mark_mutated(js: Js) {
 }
 
 pub(crate) fn track_orphan(js: Js, node: Element) {
-    unsafe { ns_js_track_orphan(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::track_orphan(js.0, node);
 }
 
 pub(crate) fn unorphan(js: Js, node: Element) {
-    unsafe { ns_js_unorphan_node(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::unorphan_node(js.0, node);
 }
 
 pub(crate) fn orphan_node(js: Option<Js>, node: Element) {
-    unsafe { ns_js_orphan_node(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_mutation::orphan_node(raw_js(js), node);
 }
 
 pub(crate) fn clear_children_unrecorded(node: Element) {
-    unsafe { ns_js_clear_children(ptr::null_mut(), node.as_mut_ptr()) };
+    southstar_js_mutation::clear_children(ptr::null_mut(), node);
 }
 
 pub(crate) fn record_child_change(
@@ -187,24 +150,7 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            raw(added),
-            ptr::null_mut(),
-            raw(previous),
-            raw(next),
-        )
-    };
-}
-
-fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
-    let array = unsafe { glib::g_ptr_array_new() };
-    for node in nodes {
-        unsafe { glib::g_ptr_array_add(array, node.as_mut_ptr().cast()) };
-    }
-    array
+    southstar_js_mutation::record_child_change(js.0, parent, added, None, previous, next);
 }
 
 pub(crate) fn record_child_changes(
@@ -215,20 +161,7 @@ pub(crate) fn record_child_changes(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    let added = ptr_array(added);
-    let removed = ptr_array(removed);
-    unsafe {
-        ns_js_record_child_change_arrays(
-            js.0,
-            parent.as_mut_ptr(),
-            added,
-            removed,
-            raw(previous),
-            raw(next),
-        );
-        glib::g_ptr_array_free(added, glib::TRUE);
-        glib::g_ptr_array_free(removed, glib::TRUE);
-    }
+    southstar_js_mutation::record_child_changes(js.0, parent, added, removed, previous, next);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
@@ -248,20 +181,19 @@ pub(crate) fn in_template_content(node: Element) -> bool {
 }
 
 pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
-    unsafe { ns_insert_sibling_before(reference.as_mut_ptr(), node.as_mut_ptr()) };
+    reference.insert_before(node);
 }
 
 pub(crate) fn mark_scripts_already_started(root: Element) {
-    unsafe { ns_mark_scripts_already_started(root.as_mut_ptr()) };
+    southstar_js_mutation::mark_scripts_already_started(root);
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {
-    unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+    southstar_js_shadow::is_shadow_root(node)
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {
-    southstar_dom::serialize::is_embedded_doc(node)
-        || unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+    southstar_dom::serialize::is_embedded_doc(node) || southstar_js_shadow::is_shadow_root(node)
 }
 
 pub(crate) fn parse_fragment_for_tag(tag: &CStr, markup: &[u8], scripting: bool) -> Tree {

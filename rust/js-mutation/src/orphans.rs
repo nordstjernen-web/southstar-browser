@@ -2,13 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::{MAX_DEPTH, children};
+use southstar_dom::{MAX_DEPTH, Node, children};
 
 use crate::ffi::{self, Js};
 use crate::{Element, key, record, tree, with_page};
 use southstar_dom::WeakNode;
 
-pub(crate) fn track(js: Js, node: Element) {
+pub(crate) fn track(js: Js, node: Node<'_>) {
     with_page(js, |page| {
         if let Some(set) = page.orphans.as_mut() {
             set.insert(key(node));
@@ -105,17 +105,18 @@ pub(crate) fn replace_all(js: Option<Js>, parent: Element, added: Option<Element
         record::index_child_changes(Some(js), parent, &[], &[kid]);
         removed.push(kid);
     }
-    let added: Vec<Element> = added.into_iter().collect();
-    if let Some(&node) = added.first() {
+    if let Some(node) = added {
         parent.append(node);
-        record::index_child_changes(Some(js), parent, &added, &[]);
+        record::index_child_changes(Some(js), parent, added.as_slice(), &[]);
     }
-    ffi::mark_childlist_dirty(parent, added.first().copied());
+    ffi::mark_childlist_dirty(parent, added);
     ffi::emit_child_list(
-        js,
+        Some(js),
         parent,
-        (!added.is_empty()).then_some(&added[..]),
+        added.as_ref().map(core::slice::from_ref),
         &removed,
+        None,
+        None,
     );
 }
 

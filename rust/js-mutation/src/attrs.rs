@@ -11,7 +11,7 @@ use crate::Element;
 use crate::ffi::{self, Js};
 use crate::record;
 
-fn c_copy(bytes: &[u8]) -> CString {
+pub(crate) fn c_copy(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
 }
@@ -49,7 +49,7 @@ pub(crate) fn set_recorded_paint_only(js: Option<Js>, n: Element, name: &CStr, v
     }
 }
 
-pub(crate) struct QualifiedName<'a> {
+pub struct QualifiedName<'a> {
     pub namespace_uri: Option<&'a CStr>,
     pub prefix: Option<&'a CStr>,
     pub local_name: &'a CStr,

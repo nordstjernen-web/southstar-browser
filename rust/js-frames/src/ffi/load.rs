@@ -87,7 +87,6 @@ unsafe extern "C" {
     fn ns_script_type_is_module(node: *const NsNode) -> GBoolean;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
     fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
 }
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
@@ -478,7 +477,7 @@ pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
 pub(crate) fn orphan_document(js: Js, doc: Node<'_>) {
     doc.detach();
     api::unpin_subtree(js.ptr(), doc);
-    unsafe { ns_js_track_orphan(js.ptr(), doc.as_mut_ptr()) };
+    southstar_js_mutation::track_orphan(js.ptr(), doc);
 }
 
 pub(crate) fn sweep_orphans(js: Js) {

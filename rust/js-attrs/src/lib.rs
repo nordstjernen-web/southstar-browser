@@ -10,6 +10,8 @@ mod ffi;
 pub mod named_map;
 mod token_list;
 
+pub use ffi::detach_all;
+
 use std::ffi::CString;
 
 use southstar_dom::Node;

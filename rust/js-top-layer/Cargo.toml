@@ -13,7 +13,9 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-focus = { path = "../js-focus" }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-shadow = { path = "../js-shadow" }
 
 [lints]
 workspace = true

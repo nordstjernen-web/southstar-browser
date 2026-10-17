@@ -9,8 +9,7 @@ mod tables;
 
 use core::ffi::c_int;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
 use southstar_js_collections as collections;
 use southstar_js_dispatch as dispatch;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -40,10 +39,6 @@ pub(crate) enum Members {
     OptionsMethods = 12,
 }
 
-unsafe extern "C" {
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-}
-
 pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
     api::unwrap_element(value)
 }
@@ -53,7 +48,7 @@ pub(crate) fn live_collection_kind(value: &Value) -> c_int {
 }
 
 pub(crate) fn is_shadow_root(node: Node<'_>) -> bool {
-    unsafe { ns_node_is_shadow_root(node.as_ptr()) != glib::FALSE }
+    southstar_js_shadow::is_shadow_root(node)
 }
 
 pub(crate) fn install_members(scope: &mut Scope<'_>, proto: &Value, members: Members) {

@@ -3,10 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char};
-use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -26,19 +24,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_record_character_data(js: *mut NsJs, node: *mut NsNode, old_value: *const c_char);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
-    fn ns_qcache_invalidate(js: *const NsJs);
     fn g_utf8_strup(text: *const c_char, len: isize) -> *mut c_char;
     fn g_utf8_strdown(text: *const c_char, len: isize) -> *mut c_char;
     fn g_unichar_totitle(c: u32) -> u32;
@@ -52,10 +37,6 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -90,11 +71,11 @@ pub(crate) fn mark_mutated(js: Js) {
 }
 
 pub(crate) fn clear_children(js: Js, node: Element) {
-    unsafe { ns_js_clear_children(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::clear_children(js.0, node);
 }
 
 pub(crate) fn qcache_invalidate(js: Js) {
-    unsafe { ns_qcache_invalidate(js.0) };
+    southstar_js_collections::qcache_invalidate(js.0);
 }
 
 pub(crate) fn mark_restyle_dirty(node: Element) {
@@ -102,7 +83,7 @@ pub(crate) fn mark_restyle_dirty(node: Element) {
 }
 
 pub(crate) fn orphan_node(js: Js, node: Element) {
-    unsafe { ns_js_orphan_node(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::orphan_node(js.0, node);
 }
 
 pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
@@ -110,7 +91,7 @@ pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
         return;
     }
     let old = CString::new(old).unwrap_or_default();
-    unsafe { ns_js_record_character_data(js.0, node.as_mut_ptr(), old.as_ptr()) };
+    southstar_js_mutation::record_character_data(js.0, node, old.as_bytes());
 }
 
 pub(crate) fn record_child_change(
@@ -121,23 +102,13 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    if js.is_null() {
-        return;
+    if !js.is_null() {
+        southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next);
     }
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            raw(added),
-            raw(removed),
-            raw(previous),
-            raw(next),
-        )
-    };
 }
 
 pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
-    unsafe { ns_insert_sibling_before(reference.as_mut_ptr(), node.as_mut_ptr()) };
+    reference.insert_before(node);
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {

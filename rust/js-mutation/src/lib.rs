@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod api;
 mod attribute_maps;
 mod attrs;
 mod change;
@@ -19,6 +20,8 @@ use southstar_js_engine::Value;
 
 use crate::ffi::Js;
 
+pub use api::*;
+
 pub(crate) type Element = Node<'static>;
 
 #[derive(Default)]
@@ -32,7 +35,7 @@ thread_local! {
     static PAGES: RefCell<HashMap<Js, Page>> = RefCell::new(HashMap::new());
 }
 
-pub(crate) fn key(node: Element) -> WeakNode {
+pub(crate) fn key(node: Node<'_>) -> WeakNode {
     node.downgrade()
 }
 

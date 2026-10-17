@@ -12,12 +12,15 @@ southstar-css = { path = "../css" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-images = { path = "../js-images" }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-shadow = { path = "../js-shadow" }
 southstar-url = { path = "../url" }
 
 [lints]
