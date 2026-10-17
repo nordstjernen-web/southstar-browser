@@ -574,7 +574,6 @@ pub unsafe fn nsr_document_expose_legacy_named(
 }
 
 unsafe extern "C" {
-    fn ns_window_scroll_prop(ctx: ContextHandle, prop: *const c_char) -> f64;
     fn ns_js_queue_scrollend_document(js: *mut NsJs);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
@@ -593,7 +592,7 @@ pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
 }
 
 pub(crate) fn window_scroll_prop(scope: &mut Scope<'_>, prop: &CStr) -> f64 {
-    unsafe { ns_window_scroll_prop(scope.handle(), prop.as_ptr()) }
+    southstar_js_geometry::window_scroll_prop(scope, &prop.to_string_lossy())
 }
 
 pub(crate) fn queue_scrollend_document(js: Js) {

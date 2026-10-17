@@ -2,13 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
@@ -47,11 +47,6 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
-    fn ns_js_computed_text(
-        ctx: ContextHandle,
-        node: *const NsNode,
-        name: *const c_char,
-    ) -> *mut c_char;
 }
 
 unsafe extern "Rust" {
@@ -180,13 +175,9 @@ pub(crate) fn active_js() -> Option<Js> {
 }
 
 pub(crate) fn computed_text(scope: &mut Scope<'_>, node: Element, name: &CStr) -> Option<CString> {
-    let text = unsafe { ns_js_computed_text(scope.handle(), node.as_ptr(), name.as_ptr()) };
-    if text.is_null() {
-        return None;
-    }
-    let owned = unsafe { CStr::from_ptr(text) }.to_owned();
-    unsafe { southstar_glib::g_free(text.cast()) };
-    Some(owned)
+    let text = southstar_js_cssom::computed_text(scope, node, &name.to_string_lossy())?;
+    let end = text.find('\0').unwrap_or(text.len());
+    CString::new(&text[..end]).ok()
 }
 
 pub(crate) use southstar_layout::image_map_area;
@@ -236,67 +227,31 @@ pub(crate) fn ascii_strtod_prefix(text: &CStr) -> (f64, usize) {
     (v, used.min(text.to_bytes().len()))
 }
 
-fn write_rect(r: Rect, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64) {
-    unsafe {
-        *x = r.x;
-        *y = r.y;
-        *w = r.w;
-        *h = r.h;
-    }
+pub fn box_border_box(b: BoxRef<'_>) -> Rect {
+    crate::boxes::border_box(b)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_border_box(
-    b: *const NsBox,
-    x: *mut f64,
-    y: *mut f64,
-    w: *mut f64,
-    h: *mut f64,
-) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        write_rect(crate::boxes::border_box(b), x, y, w, h);
-    }
+pub fn box_visual_border_box(b: BoxRef<'_>) -> Rect {
+    crate::boxes::visual_border_box(b)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_visual_border_box(
-    b: *const NsBox,
-    x: *mut f64,
-    y: *mut f64,
-    w: *mut f64,
-    h: *mut f64,
-) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        write_rect(crate::boxes::visual_border_box(b), x, y, w, h);
-    }
+pub fn box_visual_padding_box(b: BoxRef<'_>) -> Rect {
+    crate::boxes::visual_padding_box(b)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_visual_padding_box(
-    b: *const NsBox,
-    x: *mut f64,
-    y: *mut f64,
-    w: *mut f64,
-    h: *mut f64,
-) {
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        write_rect(crate::boxes::visual_padding_box(b), x, y, w, h);
-    }
+pub fn find_box_by_dom<'a>(root: BoxRef<'a>, target: *const c_void) -> Option<BoxRef<'a>> {
+    (!target.is_null())
+        .then(|| crate::lookup::find_by_dom(root, target))
+        .flatten()
+}
+
+pub fn window_scroll_prop(scope: &mut Scope<'_>, prop: &str) -> f64 {
+    crate::boxes::window_scroll(scope, prop)
 }
 
 #[unsafe(no_mangle)]
 pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
     crate::boxes::box_for_this(scope, this).map_or(ptr::null(), BoxRef::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_scroll_prop(ctx: ContextHandle, prop: *const c_char) -> f64 {
-    if prop.is_null() {
-        return 0.0;
-    }
-    let prop = unsafe { CStr::from_ptr(prop) }.to_str().unwrap_or_default();
-    ctx.with(|scope| crate::boxes::window_scroll(scope, prop))
-        .unwrap_or(0.0)
 }
 
 macro_rules! natives {
@@ -396,10 +351,7 @@ pub unsafe extern "C" fn ns_box_find_by_dom(
     let Some(root) = (unsafe { BoxRef::from_ptr(root) }) else {
         return ptr::null();
     };
-    if target.is_null() {
-        return ptr::null();
-    }
-    crate::lookup::find_by_dom(root, target.cast()).map_or(ptr::null(), BoxRef::as_ptr)
+    find_box_by_dom(root, target.cast()).map_or(ptr::null(), BoxRef::as_ptr)
 }
 
 #[unsafe(no_mangle)]

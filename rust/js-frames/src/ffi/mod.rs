@@ -15,7 +15,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use self::imports::*;
 use crate::page::{self, Frame};
@@ -49,7 +49,6 @@ type JsResult = Result<Value, Value>;
 
 unsafe extern "C" {
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
 }
 
 #[derive(Clone, Copy)]
@@ -341,8 +340,8 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     unsafe { BoxRef::from_ptr(api::layout_root(js.ptr()).cast()) }
 }
 
-pub(crate) fn find_box(root: BoxRef<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+pub(crate) fn find_box<'a>(root: BoxRef<'a>, node: Node<'_>) -> Option<BoxRef<'a>> {
+    southstar_js_geometry::find_box_by_dom(root, node.as_ptr().cast())
 }
 
 pub(crate) fn viewport_height() -> f64 {

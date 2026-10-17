@@ -552,11 +552,8 @@ pub(crate) fn time_computed(text: &str) -> Option<String> {
     css_engine::time_list_serialize(until_nul(text), true).map(|text| lossy(&text))
 }
 
-pub(crate) fn computed_text_raw(js: Js, node: Node<'_>, name: &str) -> *mut c_char {
-    match computed::lookup(js, node, name) {
-        Some(text) => glib::strdup(text.as_bytes()),
-        None => core::ptr::null_mut(),
-    }
+pub fn computed_text(scope: &mut Scope<'_>, node: Node<'_>, name: &str) -> Option<String> {
+    computed::lookup(js_of(scope), node, name)
 }
 
 #[unsafe(no_mangle)]
@@ -580,7 +577,8 @@ pub unsafe extern "C" fn ns_js_computed_text(
     };
     let js = ctx.with(|scope| js_of(scope)).unwrap_or(Js(0));
     let name = unsafe { CStr::from_ptr(name) }.to_string_lossy();
-    computed_text_raw(js, node, &name)
+    computed::lookup(js, node, &name)
+        .map_or(core::ptr::null_mut(), |text| glib::strdup(text.as_bytes()))
 }
 
 #[unsafe(no_mangle)]

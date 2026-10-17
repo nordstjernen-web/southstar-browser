@@ -21,14 +21,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_box_visual_border_box(
-        b: *const NsBox,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    );
     fn g_file_get_contents(
         filename: *const c_char,
         contents: *mut *mut c_char,
@@ -207,14 +199,13 @@ pub(crate) fn is_focusable(el: Element) -> bool {
     southstar_js_focus::is_focusable(el)
 }
 
-pub(crate) fn find_box(root: BoxRef<'_>, node: Element) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+pub(crate) fn find_box<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<'a>> {
+    southstar_js_geometry::find_box_by_dom(root, node.as_ptr().cast())
 }
 
 pub(crate) fn visual_border_box(b: BoxRef<'_>) -> (f64, f64) {
-    let (mut x, mut y, mut w, mut h) = (0.0, 0.0, 0.0, 0.0);
-    unsafe { ns_box_visual_border_box(b.as_ptr(), &mut x, &mut y, &mut w, &mut h) };
-    (x, y)
+    let rect = southstar_js_geometry::box_visual_border_box(b);
+    (rect.x, rect.y)
 }
 
 pub(crate) struct FileBytes {

@@ -10,6 +10,8 @@ mod css;
 pub mod declaration;
 mod ffi;
 
+pub use ffi::computed_text;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

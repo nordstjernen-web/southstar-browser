@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::{CStr, c_char, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -33,32 +33,7 @@ impl Js {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct Rect {
-    pub x: f64,
-    pub y: f64,
-    pub w: f64,
-    pub h: f64,
-}
-
-unsafe extern "C" {
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_box_border_box(b: *const NsBox, x: *mut f64, y: *mut f64, w: *mut f64, h: *mut f64);
-    fn ns_box_visual_border_box(
-        b: *const NsBox,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    );
-    fn ns_box_visual_padding_box(
-        b: *const NsBox,
-        x: *mut f64,
-        y: *mut f64,
-        w: *mut f64,
-        h: *mut f64,
-    );
-}
+pub(crate) use southstar_js_geometry::Rect;
 
 unsafe extern "Rust" {
     safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
@@ -145,42 +120,14 @@ pub(crate) fn box_for(scope: &mut Scope<'_>, value: &Value) -> Option<BoxRef<'st
     unsafe { BoxRef::from_ptr(nsr_box_for_this(scope, value)) }
 }
 
-pub(crate) fn find_by_dom(root: BoxRef<'_>, node: usize) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node as *const NsNode)) }
+pub(crate) fn find_by_dom(root: BoxRef<'_>, node: usize) -> Option<BoxRef<'_>> {
+    southstar_js_geometry::find_box_by_dom(root, node as *const c_void)
 }
 
-type BoxGeometry = unsafe extern "C" fn(*const NsBox, *mut f64, *mut f64, *mut f64, *mut f64);
-
-fn geometry(b: BoxRef<'_>, f: BoxGeometry) -> Rect {
-    let mut rect = Rect {
-        x: 0.0,
-        y: 0.0,
-        w: 0.0,
-        h: 0.0,
-    };
-    unsafe {
-        f(
-            b.as_ptr(),
-            &mut rect.x,
-            &mut rect.y,
-            &mut rect.w,
-            &mut rect.h,
-        )
-    };
-    rect
-}
-
-pub(crate) fn border_box(b: BoxRef<'_>) -> Rect {
-    geometry(b, ns_box_border_box)
-}
-
-pub(crate) fn visual_border_box(b: BoxRef<'_>) -> Rect {
-    geometry(b, ns_box_visual_border_box)
-}
-
-pub(crate) fn visual_padding_box(b: BoxRef<'_>) -> Rect {
-    geometry(b, ns_box_visual_padding_box)
-}
+pub(crate) use southstar_js_geometry::{
+    box_border_box as border_box, box_visual_border_box as visual_border_box,
+    box_visual_padding_box as visual_padding_box,
+};
 
 pub(crate) fn style_keyword<'a>(b: BoxRef<'a>, property: &CStr) -> Option<&'a CStr> {
     let prop = southstar_css::Prop::from_name(property.to_bytes())?;

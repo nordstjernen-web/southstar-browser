@@ -11,6 +11,11 @@ pub mod scroll;
 pub mod svg;
 pub mod visibility;
 
+pub use ffi::{
+    box_border_box, box_visual_border_box, box_visual_padding_box, find_box_by_dom,
+    window_scroll_prop,
+};
+
 use southstar_dom::Node;
 use southstar_js_engine::Value;
 
@@ -18,7 +23,7 @@ pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Rect {
+pub struct Rect {
     pub x: f64,
     pub y: f64,
     pub w: f64,
