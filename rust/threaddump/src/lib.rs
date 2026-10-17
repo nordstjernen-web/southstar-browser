@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::install_signal;
+
 use std::io::Write;
 
 pub struct ThreadStat {

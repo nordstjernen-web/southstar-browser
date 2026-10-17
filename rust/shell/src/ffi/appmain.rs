@@ -87,7 +87,6 @@ unsafe extern "C" {
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
 
-    fn ns_thread_dump_install_signal(label: *const c_char);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_spell_init();
@@ -731,7 +730,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         setenv(c"NS_PRIVATE", c"1");
     }
     southstar_config::init();
-    unsafe { ns_thread_dump_install_signal(c"southstar".as_ptr()) };
+    southstar_threaddump::install_signal(Some(b"southstar"));
 
     let proc_mode = appmain::proc_mode_wanted(&args);
 

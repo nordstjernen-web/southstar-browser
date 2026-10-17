@@ -3355,6 +3355,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-net",
  "southstar-renderer-client",
+ "southstar-threaddump",
  "southstar-url",
 ]
 
@@ -3415,6 +3416,7 @@ dependencies = [
  "southstar-renderer-host",
  "southstar-sandbox",
  "southstar-svg",
+ "southstar-threaddump",
  "southstar-url",
  "southstar-watchdog",
 ]

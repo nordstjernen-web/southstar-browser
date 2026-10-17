@@ -16,7 +16,6 @@ use crate::frame::FrameMemory;
 unsafe extern "C" {
     fn g_getenv(variable: *const c_char) -> *const c_char;
     fn g_setenv(variable: *const c_char, value: *const c_char, overwrite: c_int) -> c_int;
-    fn ns_thread_dump_install_signal(label: *const c_char);
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
     #[cfg(feature = "sdl")]
@@ -74,7 +73,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
     if !sys::watch_parent() {
         return 0;
     }
-    unsafe { ns_thread_dump_install_signal(c"southstar-renderer".as_ptr()) };
+    southstar_threaddump::install_signal(Some(b"southstar-renderer"));
     let mode = args.get(3).copied();
     let shm = mode == Some(b"shm");
     let size = max_w as usize * max_h as usize * 4;
