@@ -166,6 +166,12 @@ unsafe extern "C" {
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 }
 
+#[cfg(windows)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetCurrentThreadStackLimits(low_limit: *mut usize, high_limit: *mut usize);
+}
+
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
     fn pthread_self() -> usize;
@@ -699,7 +705,11 @@ pub(crate) fn thread_stack_size() -> usize {
 
 #[cfg(windows)]
 pub(crate) fn thread_stack_size() -> usize {
-    1024 * 1024
+    let mut low = 0usize;
+    let mut high = 0usize;
+    // SAFETY: both arguments point to live, writable usize locals.
+    unsafe { GetCurrentThreadStackLimits(&raw mut low, &raw mut high) };
+    high.saturating_sub(low)
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
