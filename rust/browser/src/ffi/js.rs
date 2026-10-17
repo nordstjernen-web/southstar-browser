@@ -5,26 +5,16 @@
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr::{self, NonNull};
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_dom::Node;
+use southstar_glib::{GHashTable, GStr};
 use southstar_js_runtime::api::{self, NsJs};
 use southstar_layout::BoxRef;
 
 use super::engine::{Anim, Images};
-use super::glib::{GString, StrBufOwned};
+use super::glib::StrBufOwned;
 
 unsafe extern "C" {
     pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
-    fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
-    fn ns_js_dump_stats(js: *mut c_void, out: *mut GString);
-    fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
-    -> *mut c_char;
-    fn ns_js_dispatch_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -103,8 +93,9 @@ impl Js {
     }
 
     pub fn run_scripts_in_doc(self, doc: Option<Node<'_>>, base: Option<&CStr>) {
-        let base = base.map_or(ptr::null(), CStr::as_ptr);
-        unsafe { ns_js_run_scripts_in_doc(self.raw(), Node::ptr_or_null(doc).cast_mut(), base) };
+        if let Some(doc) = doc {
+            southstar_js_page::run_scripts_in_doc(self.page(), doc, base);
+        }
     }
 
     pub fn note_viewport_scroll(self, x: f64, y: f64) {
@@ -133,11 +124,12 @@ impl Js {
     }
 
     pub fn dump_stats(self, out: &StrBufOwned) {
-        unsafe { ns_js_dump_stats(self.raw(), out.raw()) };
+        out.append(southstar_js_page::dump_stats(self.page()).as_bytes());
     }
 
     pub fn eval(self, src: &CStr, origin: &CStr) -> Option<GStr> {
-        unsafe { GStr::take(ns_js_eval_source(self.raw(), src.as_ptr(), origin.as_ptr())) }
+        southstar_js_loader::eval_source(self.page(), src, Some(origin))
+            .and_then(|out| super::glib::gstr_from(&out))
     }
 
     pub fn fire_page_transition(self, kind: &CStr, persisted: bool) {
@@ -162,9 +154,7 @@ impl Js {
     }
 
     pub fn dispatch_event(self, target: Node<'_>, kind: &CStr) {
-        unsafe {
-            ns_js_dispatch_event(self.raw(), target.as_ptr(), kind.as_ptr(), ptr::null_mut())
-        };
+        southstar_js_dispatch::dispatch_event(self.page(), target, &kind.to_string_lossy());
     }
 
     pub fn dispatch_submit_event(self, form: Node<'_>, submitter: Node<'_>) -> bool {

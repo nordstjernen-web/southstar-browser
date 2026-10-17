@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod api;
 mod bootstrap;
 mod cloner;
 mod exposed;
@@ -18,3 +19,5 @@ mod sandbox;
 mod schedule;
 mod scripts;
 mod submit;
+
+pub use api::*;

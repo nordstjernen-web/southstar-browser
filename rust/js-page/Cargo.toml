@@ -15,12 +15,18 @@ southstar-glib = { path = "../glib" }
 southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
+southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
+southstar-js-interfaces = { path = "../js-interfaces" }
+southstar-js-lifecycle = { path = "../js-lifecycle" }
+southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-window = { path = "../js-window" }
 southstar-url = { path = "../url" }
 
 [lints]

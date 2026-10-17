@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{NsNode, Tree};
+use southstar_dom::Tree;
 use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -19,8 +19,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
-    fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
     fn g_str_hash(v: *const c_void) -> c_uint;
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
@@ -116,7 +114,7 @@ pub(crate) fn replace_all_recorded(js: Option<Js>, node: Element, added: Option<
 }
 
 pub(crate) fn script_needs_prepare(js: Js, node: Element) {
-    unsafe { ns_js_script_needs_prepare(js.0, node.as_mut_ptr()) };
+    southstar_js_loader::script_needs_prepare(js.0, node);
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
@@ -173,7 +171,7 @@ pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
-    unsafe { ns_js_run_inserted_scripts(js.0, root.as_mut_ptr()) };
+    southstar_js_loader::run_inserted_scripts(js.0, root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {

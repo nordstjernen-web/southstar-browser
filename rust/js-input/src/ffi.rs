@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::borrow::Cow;
-use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -22,26 +21,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_path_has_active_listener(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-    ) -> GBoolean;
-    fn ns_js_dispatch_key_event_full(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        key: *const c_char,
-        code: *const c_char,
-        key_code: c_int,
-        char_code: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_popover_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_dialog_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_process_close_request(js: *mut NsJs) -> GBoolean;
@@ -70,12 +49,6 @@ unsafe extern "C" {
 
 unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    unsafe fn nsr_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> (bool, bool);
 }
 
 fn live(n: Node<'_>) -> Option<Element> {
@@ -84,11 +57,6 @@ fn live(n: Node<'_>) -> Option<Element> {
 
 fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy())
-}
-
-fn with_c<R>(text: &str, f: impl FnOnce(*const c_char) -> R) -> R {
-    let owned = CString::new(text.replace('\0', " ")).unwrap_or_default();
-    f(owned.as_ptr())
 }
 
 impl Js {
@@ -117,7 +85,7 @@ impl Js {
     }
 
     pub fn realm_scope<R>(self, node: Element, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        unsafe { ns_js_node_realm_context(self.ptr(), node.as_ptr()) }
+        southstar_js_frames::node_realm_context(self.ptr(), node)
             .or(api::main_realm(self.ptr()))
             .or(self.ctx())
             .with(f)
@@ -157,14 +125,11 @@ impl Js {
     }
 
     pub fn path_has_active_listener(self, target: Element, kind: &str) -> bool {
-        with_c(kind, |kind| unsafe {
-            ns_js_path_has_active_listener(self.ptr(), target.as_ptr(), kind) != 0
-        })
+        southstar_js_dispatch::path_has_active_listener(self.ptr(), target, kind)
     }
 
     pub fn dispatch_built(self, target: Element, kind: &str, event: Value) -> (bool, bool) {
-        let kind = kind.replace('\0', " ");
-        unsafe { nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind, event) }
+        southstar_js_dispatch::dispatch_built_event(self.ptr(), target, kind, event)
     }
 
     pub fn dispatch_key(
@@ -175,26 +140,17 @@ impl Js {
         key_code: i32,
         shift: bool,
     ) -> bool {
-        let mut prevented: GBoolean = 0;
-        with_c(kind, |kind| {
-            with_c(key, |key| unsafe {
-                ns_js_dispatch_key_event_full(
-                    self.ptr(),
-                    target.as_ptr(),
-                    kind,
-                    key,
-                    c"".as_ptr(),
-                    key_code,
-                    0,
-                    glib::boolean(shift),
-                    glib::FALSE,
-                    glib::FALSE,
-                    glib::FALSE,
-                    &mut prevented,
-                )
-            })
-        });
-        prevented != 0
+        let press = southstar_js_dispatch::KeyPress {
+            key: Some(key),
+            code: Some(""),
+            key_code,
+            char_code: 0,
+            modifiers: southstar_js_dispatch::Modifiers {
+                shift,
+                ..Default::default()
+            },
+        };
+        southstar_js_dispatch::dispatch_key_event(self.ptr(), target, kind, &press).1
     }
 
     pub fn light_dismiss(self, target: Element, up: bool) {

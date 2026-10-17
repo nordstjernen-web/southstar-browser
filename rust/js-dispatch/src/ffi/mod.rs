@@ -31,11 +31,6 @@ pub(crate) struct CheckableState {
 const DLOG_ERROR: c_int = 2;
 
 unsafe extern "C" {
-    fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_frame_context(js: *mut NsJs, frame: *const NsNode) -> ContextHandle;
-    fn ns_iframe_is_cross_origin(js: *mut NsJs, frame: *const NsNode) -> GBoolean;
-    fn ns_window_named_suspend();
-    fn ns_window_named_resume();
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
         js: *mut NsJs,
@@ -125,19 +120,19 @@ impl Js {
     }
 
     pub fn realm_for_node(self, node: Element) -> ContextHandle {
-        unsafe { ns_js_realm_for_node(self.ptr(), node.as_ptr()) }
+        southstar_js_frames::node_realm_context(self.ptr(), node)
     }
 
     pub fn frame_context(self, frame: Element) -> ContextHandle {
-        unsafe { ns_js_frame_context(self.ptr(), frame.as_ptr()) }
+        southstar_js_frames::frame_context(self.ptr(), frame)
     }
 
     pub fn frame_realm_window(self, frame: Element) -> Value {
-        unsafe { imports::nsr_js_frame_realm_window(self.ptr(), frame.as_ptr()) }
+        southstar_js_frames::frame_realm_window(self.ptr(), frame).unwrap_or_else(Value::null)
     }
 
     pub fn iframe_is_cross_origin(self, frame: Element) -> bool {
-        unsafe { ns_iframe_is_cross_origin(self.ptr(), frame.as_ptr()) != 0 }
+        southstar_js_frames::iframe_is_cross_origin(self.ptr(), frame)
     }
 
     pub fn set_realm(self, ctx: ContextHandle, doc: Option<Element>) {
@@ -331,10 +326,7 @@ pub(crate) fn window_document_for(scope: &mut Scope<'_>, window: &Value) -> Opti
 }
 
 pub(crate) fn suspend_named<R>(f: impl FnOnce() -> R) -> R {
-    unsafe { ns_window_named_suspend() };
-    let result = f();
-    unsafe { ns_window_named_resume() };
-    result
+    southstar_js_window::with_named_access_suspended(f)
 }
 
 pub(crate) fn arm_invalidate(el: Element) {

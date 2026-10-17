@@ -13,8 +13,10 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-window = { path = "../js-window" }
 
 [lints]
 workspace = true

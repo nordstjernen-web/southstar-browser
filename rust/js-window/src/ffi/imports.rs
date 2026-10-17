@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::CStr;
-
 use southstar_dom::NsNode;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
@@ -27,18 +25,6 @@ unsafe extern "Rust" {
         kind: &str,
         target: *const NsNode,
     ) -> Value;
-    pub(crate) safe fn nsr_iframe_cross_origin_window(
-        scope: &mut Scope<'_>,
-        target: &Value,
-    ) -> Value;
-    pub(crate) unsafe fn nsr_window_frame_node(js: *mut NsJs, window: &Value) -> *mut NsNode;
-    pub(crate) unsafe fn nsr_window_child_frame_window(
-        scope: &mut Scope<'_>,
-        doc: *mut NsNode,
-        index: u32,
-        name: Option<&CStr>,
-        raw: bool,
-    ) -> Result<Value, Value>;
     pub(crate) safe fn nsr_port_transfer_prepare(
         scope: &mut Scope<'_>,
         transfer: &Value,

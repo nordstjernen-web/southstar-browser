@@ -2,18 +2,18 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::NsNode;
-use southstar_glib::{GArray, GBoolean};
+use southstar_glib::GBoolean;
+
+use southstar_js_loader::{Schedule, ScriptTasks};
 
 use crate::ffi::{self, Js, SOURCE_REMOVE};
 use crate::{Page, page, page_or_new};
 
-const SCRIPT_DEFERRED: c_int = 1;
-const SCRIPT_ASYNC: c_int = 2;
 const BUSY_RETRY_MS: c_uint = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,6 @@ enum Phase {
 
 pub(crate) struct Lifecycle {
     source: c_uint,
-    tasks: *mut GArray,
     doc: *mut NsNode,
     origin: Option<CString>,
     phase: Phase,
@@ -37,7 +36,6 @@ impl Default for Lifecycle {
     fn default() -> Lifecycle {
         Lifecycle {
             source: 0,
-            tasks: ptr::null_mut(),
             doc: ptr::null_mut(),
             origin: None,
             phase: Phase::Interactive,
@@ -47,15 +45,11 @@ impl Default for Lifecycle {
 }
 
 fn release(js: Js, page: &Page) {
-    let (source, tasks) = {
-        let mut lifecycle = page.lifecycle.borrow_mut();
-        let taken = core::mem::take(&mut *lifecycle);
-        (taken.source, taken.tasks)
-    };
+    let source = core::mem::take(&mut *page.lifecycle.borrow_mut()).source;
     if source != 0 {
         js.source_remove(source);
     }
-    ffi::array_free(tasks);
+    js.set_lifecycle_tasks(None);
 }
 
 pub(crate) fn clear(js: Js) {
@@ -68,26 +62,21 @@ pub(crate) fn teardown(js: Js, page: &Page) {
     release(js, page);
 }
 
-pub(crate) fn tasks(js: Js) -> *mut GArray {
-    page(js).map_or(ptr::null_mut(), |page| page.lifecycle.borrow().tasks)
-}
-
 pub(crate) fn start(
     js: Js,
     doc: *mut NsNode,
-    tasks: *mut GArray,
+    tasks: ScriptTasks,
     origin: Option<&CStr>,
     start_us: i64,
 ) {
     if js.is_null() {
-        ffi::array_free(tasks);
         return;
     }
     let page = page_or_new(js);
     release(js, &page);
+    js.set_lifecycle_tasks(Some(tasks));
     *page.lifecycle.borrow_mut() = Lifecycle {
         source: 0,
-        tasks,
         doc,
         origin: origin.map(CStr::to_owned),
         phase: Phase::Interactive,
@@ -142,16 +131,11 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
         return SOURCE_REMOVE;
     };
     page.lifecycle.borrow_mut().source = 0;
-    let (doc, tasks, origin, phase) = {
+    let (doc, origin, phase) = {
         let lifecycle = page.lifecycle.borrow();
-        (
-            lifecycle.doc,
-            lifecycle.tasks,
-            lifecycle.origin.clone(),
-            lifecycle.phase,
-        )
+        (lifecycle.doc, lifecycle.origin.clone(), lifecycle.phase)
     };
-    if js.halted() || doc.is_null() || tasks.is_null() {
+    if js.halted() || doc.is_null() || !js.has_lifecycle_tasks() {
         release(js, &page);
         return SOURCE_REMOVE;
     }
@@ -171,7 +155,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
             advance(js, &page, Phase::Deferred);
         }
         Phase::Deferred => {
-            if js.run_next_script_schedule(tasks, SCRIPT_DEFERRED, &origin) {
+            if js.run_next_script_schedule(Schedule::Deferred, &origin) {
                 schedule(js, &page);
                 return SOURCE_REMOVE;
             }
@@ -183,7 +167,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
             advance(js, &page, Phase::Async);
         }
         Phase::Async => {
-            if js.run_next_script_schedule(tasks, SCRIPT_ASYNC, &origin) {
+            if js.run_next_script_schedule(Schedule::Async, &origin) {
                 schedule(js, &page);
                 return SOURCE_REMOVE;
             }

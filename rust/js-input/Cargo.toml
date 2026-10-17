@@ -10,8 +10,10 @@ publish.workspace = true
 [dependencies]
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-focus = { path = "../js-focus" }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }

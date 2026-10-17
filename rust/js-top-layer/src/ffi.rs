@@ -18,16 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_fire_toggle_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        old_state: *const c_char,
-        new_state: *const c_char,
-        cancelable: GBoolean,
-        source: *const NsNode,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
 }
@@ -39,12 +29,6 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-    unsafe fn nsr_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> (bool, bool);
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
     safe fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value);
     safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
@@ -162,25 +146,26 @@ impl Js {
         cancelable: bool,
         source: Option<Element>,
     ) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_fire_toggle_event(
-                self.ptr(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                old_state.as_ptr(),
-                new_state.as_ptr(),
-                glib::boolean(cancelable),
-                Node::ptr_or_null(source),
-                &mut prevented,
-            )
+        let old_state = old_state.to_string_lossy();
+        let new_state = new_state.to_string_lossy();
+        let toggle = southstar_js_dispatch::Toggle {
+            old_state: Some(&old_state),
+            new_state: Some(&new_state),
+            cancelable,
+            source,
         };
-        prevented != 0
+        southstar_js_dispatch::dispatch_toggle_event(
+            self.ptr(),
+            target,
+            &kind.to_string_lossy(),
+            &toggle,
+        )
+        .1
     }
 
     pub fn dispatch_built(self, target: Element, kind: &CStr, event: Value) -> bool {
         let kind = kind.to_string_lossy();
-        unsafe { nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind, event) }.1
+        southstar_js_dispatch::dispatch_built_event(self.ptr(), target, &kind, event).1
     }
 
     pub fn timer_remove(self, id: i32) {

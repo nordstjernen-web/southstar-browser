@@ -258,23 +258,12 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
-    fn ns_js_report_error_event_in(
-        js: *mut c_void,
-        ctx: ContextHandle,
-        message: *const c_char,
-        filename: *const c_char,
-        lineno: c_int,
-        colno: c_int,
-    );
-    fn ns_js_link_interface_ctors(ctx: ContextHandle);
-    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
     fn ns_js_blob_url_lookup(
         js: *mut c_void,
         url: *const c_char,
         out_type: *mut *mut c_char,
     ) -> *mut GBytes;
     fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
-    fn ns_js_decode_data_url(url: *const c_char, out_len: *mut usize) -> *mut c_char;
     fn ns_js_net_sw_fetch_result(
         js: *mut c_void,
         id: core::ffi::c_uint,
@@ -541,18 +530,14 @@ pub(crate) fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> Str
 }
 
 pub(crate) fn report_error_event_in(js: Js, ctx: Ctx, report: &ErrorReport) {
-    let message = c_string(&report.message);
-    let filename = c_string(&report.filename);
-    unsafe {
-        ns_js_report_error_event_in(
-            js.ptr(),
-            ctx,
-            message.as_ptr(),
-            filename.as_ptr(),
-            report.lineno,
-            report.colno,
-        )
-    };
+    southstar_js_dispatch::report_error_event_in(
+        js.page(),
+        ctx,
+        Some(&report.message),
+        Some(&report.filename),
+        report.lineno,
+        report.colno,
+    );
 }
 
 pub(crate) fn dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, event: &Value) {
@@ -673,11 +658,11 @@ pub(crate) fn install_namespace_object(
 }
 
 pub(crate) fn link_interface_ctors(scope: &mut Scope<'_>) {
-    unsafe { ns_js_link_interface_ctors(scope.handle()) };
+    southstar_js_interfaces::link_interface_ctors(scope);
 }
 
 pub(crate) fn lock_global_prototypes(scope: &mut Scope<'_>) {
-    unsafe { ns_js_lock_global_prototypes(scope.handle()) };
+    southstar_js_interfaces::lock_global_prototypes(scope);
 }
 
 fn worker_fail_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {
@@ -711,15 +696,7 @@ pub(crate) fn doc_base_url(js: Js) -> Option<String> {
 }
 
 pub(crate) fn decode_data_url(url: &str) -> Option<Vec<u8>> {
-    let url = c_string(url);
-    let mut len = 0usize;
-    let data = unsafe { ns_js_decode_data_url(url.as_ptr(), &mut len) };
-    if data.is_null() {
-        return None;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }.to_vec();
-    unsafe { southstar_glib::g_free(data.cast()) };
-    Some(bytes)
+    southstar_js_loader::decode_data_url(&c_string(url))
 }
 
 pub(crate) fn csp_allows_worker(js: Js, url: &str) -> bool {

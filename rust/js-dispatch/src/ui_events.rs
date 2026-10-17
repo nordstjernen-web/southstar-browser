@@ -13,14 +13,15 @@ const READONLY: Attributes = Attributes {
     configurable: true,
 };
 
-pub(crate) struct Modifiers {
+#[derive(Clone, Copy, Default)]
+pub struct Modifiers {
     pub shift: bool,
     pub ctrl: bool,
     pub alt: bool,
     pub meta: bool,
 }
 
-pub(crate) struct KeyPress<'a> {
+pub struct KeyPress<'a> {
     pub key: Option<&'a str>,
     pub code: Option<&'a str>,
     pub key_code: i32,
@@ -116,7 +117,7 @@ pub(crate) fn input_event(
     crate::dispatch::dispatch_built(js, target, kind, event)
 }
 
-pub(crate) struct Toggle<'a> {
+pub struct Toggle<'a> {
     pub old_state: Option<&'a str>,
     pub new_state: Option<&'a str>,
     pub cancelable: bool,

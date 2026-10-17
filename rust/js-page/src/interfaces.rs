@@ -5,7 +5,7 @@
 use southstar_js_bind::{attach_prototype, bind_function, bind_int_constants, prototype_of};
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, HostProto, Installer, Native, ProtoTable, Shaper, ValueInstaller};
+use crate::ffi::{self, HostProto, Installer, Native, ProtoTable, ValueInstaller};
 
 const SHIM_CONSTRUCTORS: &[(&str, u32)] = &[
     ("XMLDocument", 0),
@@ -299,7 +299,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
     }
     link_xml_document(scope, global);
     ffi::install_on(scope, Installer::DomHierarchy, global);
-    ffi::shape(scope, Shaper::WebApiShapes);
+    southstar_js_interfaces::install_web_api_shapes(scope);
     bind_constructor(scope, global, "FontFace", 3, Native::FontFaceConstructor);
     for &(name, which) in HOST_PROTOS {
         link_host_proto(scope, global, name, which);

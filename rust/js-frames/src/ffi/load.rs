@@ -7,7 +7,7 @@ use core::ptr::NonNull;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::Value;
 use southstar_js_runtime::api::{self, ResourceInfo, Upload};
 
@@ -38,22 +38,10 @@ struct GByteArray {
     len: c_uint,
 }
 
-#[repr(C)]
-struct ScriptTask {
-    node: *mut NsNode,
-    schedule: c_int,
-}
-
-const SCRIPT_DEFERRED: c_int = 1;
-const SCRIPT_ASYNC: c_int = 2;
-
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut ResourceInfo);
     fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
-    fn ns_content_type_is_javascript(content_type: *const c_char) -> GBoolean;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
     fn ns_net_referer_for(
         url: *const c_char,
@@ -72,19 +60,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
-    fn ns_js_mark_scripts_already_started(node: *mut NsNode);
-    fn ns_js_collect_script_tasks(node: *mut NsNode, tasks: *mut GArray);
-    fn ns_js_run_parser_blocking_scripts(js: *mut NsJs, tasks: *mut GArray, origin: *const c_char);
-    fn ns_js_run_script_schedule(
-        js: *mut NsJs,
-        tasks: *mut GArray,
-        schedule: c_int,
-        origin: *const c_char,
-    );
-    fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
-    fn ns_script_type_supported(node: *const NsNode) -> GBoolean;
-    fn ns_script_skipped_by_nomodule(node: *const NsNode) -> GBoolean;
-    fn ns_script_type_is_module(node: *const NsNode) -> GBoolean;
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
     fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
 }
@@ -274,9 +249,7 @@ pub(crate) fn fetch_script(
 }
 
 pub(crate) fn element_perf_info(js: Js, element: Node<'_>) -> ResourceInfo {
-    let mut info = ResourceInfo::default();
-    unsafe { ns_js_element_perf_info(js.ptr(), element.as_ptr(), &mut info) };
-    info
+    southstar_js_loader::element_perf_info(js.ptr(), Some(element))
 }
 
 pub(crate) fn add_resource_timing(
@@ -306,7 +279,7 @@ pub(crate) fn header_is_nosniff(value: Option<&CStr>) -> bool {
 }
 
 pub(crate) fn content_type_is_javascript(content_type: Option<&CStr>) -> bool {
-    unsafe { ns_content_type_is_javascript(opt_ptr(content_type)) != 0 }
+    content_type.is_some_and(|ct| southstar_js_loader::content_type_is_javascript(ct.to_bytes()))
 }
 
 pub(crate) fn image_document(url: &CStr) -> Option<CString> {
@@ -367,68 +340,45 @@ pub(crate) fn fire_page_transition(js: Js, kind: &CStr) {
 }
 
 pub(crate) fn mark_scripts_already_started(root: Node<'_>) {
-    unsafe { ns_js_mark_scripts_already_started(root.as_mut_ptr()) };
-}
-
-struct Tasks(*mut GArray);
-
-impl Tasks {
-    fn collect(root: Node<'_>) -> Tasks {
-        let tasks = unsafe {
-            glib::g_array_new(glib::FALSE, glib::FALSE, size_of::<ScriptTask>() as c_uint)
-        };
-        unsafe { ns_js_collect_script_tasks(root.as_mut_ptr(), tasks) };
-        Tasks(tasks)
-    }
-
-    fn nodes(&self) -> Vec<Node<'static>> {
-        let array = unsafe { &*self.0 };
-        if array.data.is_null() {
-            return Vec::new();
-        }
-        let tasks = unsafe {
-            core::slice::from_raw_parts(array.data.cast::<ScriptTask>(), array.len as usize)
-        };
-        tasks
-            .iter()
-            .filter_map(|task| unsafe { Node::from_ptr(task.node) })
-            .collect()
-    }
-}
-
-impl Drop for Tasks {
-    fn drop(&mut self) {
-        unsafe { g_array_free(self.0, glib::TRUE) };
-    }
+    southstar_js_loader::mark_scripts_already_started(root);
 }
 
 pub(crate) fn script_tasks(root: Node<'_>) -> Vec<Node<'static>> {
-    Tasks::collect(root).nodes()
+    southstar_js_loader::collect_script_tasks(root).nodes()
 }
 
 pub(crate) fn run_page_realm_scripts(js: Js, root: Node<'_>, origin: &CStr) {
-    let tasks = Tasks::collect(root);
-    unsafe {
-        ns_js_run_parser_blocking_scripts(js.ptr(), tasks.0, origin.as_ptr());
-        ns_js_run_script_schedule(js.ptr(), tasks.0, SCRIPT_DEFERRED, origin.as_ptr());
-        ns_js_run_script_schedule(js.ptr(), tasks.0, SCRIPT_ASYNC, origin.as_ptr());
-    }
+    let tasks = southstar_js_loader::collect_script_tasks(root);
+    let origin = Some(origin);
+    southstar_js_loader::run_parser_blocking_scripts(js.ptr(), &tasks, origin);
+    southstar_js_loader::run_script_schedule(
+        js.ptr(),
+        &tasks,
+        southstar_js_loader::Schedule::Deferred,
+        origin,
+    );
+    southstar_js_loader::run_script_schedule(
+        js.ptr(),
+        &tasks,
+        southstar_js_loader::Schedule::Async,
+        origin,
+    );
 }
 
 pub(crate) fn schedule_pending_script_drain(js: Js) {
-    unsafe { ns_js_schedule_pending_script_drain(js.ptr()) };
+    southstar_js_loader::schedule_pending_script_drain(js.ptr());
 }
 
 pub(crate) fn script_type_supported(script: Node<'_>) -> bool {
-    unsafe { ns_script_type_supported(script.as_ptr()) != 0 }
+    southstar_js_loader::script_type_supported(script)
 }
 
 pub(crate) fn script_skipped_by_nomodule(script: Node<'_>) -> bool {
-    unsafe { ns_script_skipped_by_nomodule(script.as_ptr()) != 0 }
+    southstar_js_loader::script_skipped_by_nomodule(script)
 }
 
 pub(crate) fn script_type_is_module(script: Node<'_>) -> bool {
-    unsafe { ns_script_type_is_module(script.as_ptr()) != 0 }
+    southstar_js_loader::script_type_is_module(script)
 }
 
 pub(crate) fn deny_cookie(ctx: Ctx, doc: &Value) {

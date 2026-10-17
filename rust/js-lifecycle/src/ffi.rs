@@ -8,10 +8,12 @@ use std::ffi::CString;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
+
+use southstar_js_loader::{Schedule, ScriptTasks};
 
 use crate::{events, frames, lifecycle, scrollend};
 
@@ -120,7 +122,7 @@ impl Js {
     }
 
     pub fn promote_deferred_iframes(self) {
-        unsafe { ns_js_promote_deferred_iframes(self.0) };
+        southstar_js_frames::promote_deferred_iframes(self.0);
     }
 
     pub fn process_pending_iframes(self) {
@@ -138,17 +140,29 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
-        unsafe { nsr_js_dispatch_built_event(self.0, target, &kind.to_string_lossy(), event) };
+        if let Some(target) = node(target) {
+            southstar_js_dispatch::dispatch_built_event(
+                self.0,
+                target,
+                &kind.to_string_lossy(),
+                event,
+            );
+        }
     }
 
     pub fn dispatch_window_only(self, document: *const NsNode, kind: &CStr, event: Value) {
-        unsafe {
-            nsr_js_dispatch_window_only_event(self.0, document, &kind.to_string_lossy(), event)
-        };
+        southstar_js_dispatch::dispatch_window_only_event(
+            self.0,
+            node(document),
+            &kind.to_string_lossy(),
+            event,
+        );
     }
 
     pub fn dispatch(self, target: *const NsNode, kind: &CStr) {
-        unsafe { ns_js_dispatch_event(self.0, target, kind.as_ptr(), ptr::null_mut()) };
+        if let Some(target) = node(target) {
+            southstar_js_dispatch::dispatch_event(self.0, target, &kind.to_string_lossy());
+        }
     }
 
     pub fn fire_img_load_once(self, node: Node<'_>, failed: bool) {
@@ -179,21 +193,24 @@ impl Js {
         southstar_js_perf::mark_navigation(self.0, key);
     }
 
-    pub fn run_next_script_schedule(
-        self,
-        tasks: *mut GArray,
-        schedule: c_int,
-        origin: &CStr,
-    ) -> bool {
-        unsafe { ns_js_run_next_script_schedule(self.0, tasks, schedule, origin.as_ptr()) != 0 }
+    pub fn run_next_script_schedule(self, schedule: Schedule, origin: &CStr) -> bool {
+        southstar_js_loader::run_next_lifecycle_schedule(self.0, schedule, Some(origin))
+    }
+
+    pub fn set_lifecycle_tasks(self, tasks: Option<ScriptTasks>) {
+        southstar_js_loader::set_lifecycle_tasks(self.0, tasks);
+    }
+
+    pub fn has_lifecycle_tasks(self) -> bool {
+        southstar_js_loader::has_lifecycle_tasks(self.0)
     }
 
     pub fn drain_load_event_scripts(self) {
-        unsafe { ns_js_drain_load_event_scripts(self.0) };
+        southstar_js_loader::drain_load_event_scripts(self.0);
     }
 
     pub fn schedule_pending_script_drain(self) {
-        unsafe { ns_js_schedule_pending_script_drain(self.0) };
+        southstar_js_loader::schedule_pending_script_drain(self.0);
     }
 
     pub fn upgrade_custom_elements(self, root: *mut NsNode) {
@@ -209,22 +226,19 @@ impl Js {
     }
 
     pub fn fire_page_transition(self, kind: &CStr) {
-        unsafe { ns_js_fire_page_transition(self.0, kind.as_ptr(), glib::FALSE) };
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_window::fire_page_transition(self.0.cast(), kind, false) };
     }
 
     pub fn run_content_scripts(self, url: Option<&CStr>) {
-        unsafe {
-            ns_js_run_content_scripts(self.0, url.map_or(ptr::null(), CStr::as_ptr), glib::FALSE)
-        };
+        southstar_js_loader::run_content_scripts(self.0, url, false);
     }
 
     pub fn load_blocked(self) -> bool {
         southstar_js_images::image_loads_pending(self.0)
-            || unsafe {
-                ns_js_pending_iframe_count(self.0) > 0
-                    || ns_js_has_pending_script_roots(self.0) != 0
-                    || api::load_delayed(self.0)
-            }
+            || southstar_js_frames::pending_iframe_count(self.0) > 0
+            || southstar_js_loader::has_pending_script_roots(self.0)
+            || api::load_delayed(self.0)
     }
 
     pub fn has_pending_work(self) -> bool {
@@ -235,10 +249,10 @@ impl Js {
                 || ns_js_net_pending_xhrs(self.0) > 0
                 || ns_js_net_pending_sockets(self.0) > 0
                 || ns_js_filereader_pending(self.0) != 0
-                || ns_js_pending_iframe_count(self.0) > 0
+                || southstar_js_frames::pending_iframe_count(self.0) > 0
                 || ns_mutation_drain_pending(self.0) != 0
                 || api::observer_tick_pending(self.0)
-                || ns_js_async_scripts_pending(self.0) != 0
+                || southstar_js_loader::async_scripts_pending(self.0)
                 || southstar_js_custom_elements::has_pending(self.0)
                 || ns_workers_pending(self.0) != 0
         }
@@ -261,58 +275,24 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
-    fn ns_js_promote_deferred_iframes(js: *mut NsJs);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn g_get_monotonic_time() -> i64;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_js_run_next_script_schedule(
-        js: *mut NsJs,
-        tasks: *mut GArray,
-        schedule: c_int,
-        origin: *const c_char,
-    ) -> GBoolean;
-    fn ns_js_drain_load_event_scripts(js: *mut NsJs);
-    fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
-    fn ns_js_has_pending_script_roots(js: *const NsJs) -> GBoolean;
-    fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
-    fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
-    fn ns_js_profile_enabled() -> GBoolean;
-    fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
     fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
-    fn ns_js_async_scripts_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
 
 unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    unsafe fn nsr_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> (bool, bool);
-    unsafe fn nsr_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> bool;
 }
 
 pub(crate) type AnimEventCb = unsafe extern "C" fn(
@@ -332,17 +312,11 @@ pub(crate) fn in_blocking_fetch() -> bool {
 }
 
 pub(crate) fn profile_enabled() -> bool {
-    unsafe { ns_js_profile_enabled() != 0 }
+    southstar_js_loader::profile_enabled()
 }
 
 pub(crate) fn source_remove_default(id: c_uint) {
     unsafe { g_source_remove(id) };
-}
-
-pub(crate) fn array_free(tasks: *mut GArray) {
-    if !tasks.is_null() {
-        unsafe { g_array_free(tasks, glib::TRUE) };
-    }
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -458,11 +432,6 @@ pub unsafe fn needs_tick(js: *mut c_void) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_count(js: *const NsJs) -> c_uint {
-    frames::count(Js(js.cast_mut())) as c_uint
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_raf_set_host_driven(js: *mut NsJs) {
     frames::set_host_driven(Js(js));
 }
@@ -510,32 +479,28 @@ pub unsafe fn fire_media_load_events(js: *mut c_void, layout: Option<BoxRef<'_>>
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_lifecycle_clear(js: *mut NsJs) {
-    lifecycle::clear(Js(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_lifecycle_start(
-    js: *mut NsJs,
-    doc: *mut NsNode,
-    tasks: *mut GArray,
-    origin: *const c_char,
-    start_us: i64,
-) {
-    lifecycle::start(Js(js), doc, tasks, text(origin), start_us);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray {
-    lifecycle::tasks(Js(js.cast_mut()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_lifecycle_reset(js: *mut NsJs) {
-    crate::reset(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_lifecycle_teardown(js: *mut NsJs) {
     crate::teardown(Js(js));
+}
+
+pub fn raf_count(js: *const NsJs) -> usize {
+    frames::count(Js(js.cast_mut()))
+}
+
+pub fn clear_lifecycle(js: *const NsJs) {
+    lifecycle::clear(Js(js.cast_mut()));
+}
+
+pub fn reset_lifecycle(js: *const NsJs) {
+    crate::reset(Js(js.cast_mut()));
+}
+
+pub fn start_lifecycle(
+    js: *const NsJs,
+    doc: Node<'_>,
+    tasks: ScriptTasks,
+    origin: Option<&CStr>,
+    start_us: i64,
+) {
+    lifecycle::start(Js(js.cast_mut()), doc.as_mut_ptr(), tasks, origin, start_us);
 }

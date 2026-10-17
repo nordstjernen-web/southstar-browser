@@ -8,7 +8,7 @@ use southstar_js_bind::prototype_of;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::Element;
-use crate::ffi::{self, Js, Native, ProtoTable, Shaper, ValueInstaller};
+use crate::ffi::{self, Js, Native, ProtoTable, ValueInstaller};
 use crate::interfaces;
 
 const LOCATION_FORWARD: &str = "(function(){ var loc = location; var d = { configurable: true, enumerable: true,   get: function(){ return loc; },   set: function(v){ loc.href = v; } }; Object.defineProperty(globalThis, 'location', d); try { Object.defineProperty(document, 'location', d); } catch(e){}})();";
@@ -166,13 +166,13 @@ fn install_location(scope: &mut Scope<'_>, global: &Value, document: &Value, url
 fn finish_shapes(scope: &mut Scope<'_>) {
     let global = scope.global();
     ffi::install_on(scope, ffi::Installer::EventAttributeGetters, &global);
-    ffi::shape(scope, Shaper::NavigatorShape);
-    ffi::shape(scope, Shaper::PdfPlugins);
-    ffi::shape(scope, Shaper::LinkInterfaces);
-    ffi::shape(scope, Shaper::NameEngineMembers);
-    ffi::shape(scope, Shaper::ShapeWindowGlobal);
-    ffi::shape(scope, Shaper::LinkInterfaceConstructors);
-    ffi::shape(scope, Shaper::LockGlobalPrototypes);
+    southstar_js_interfaces::install_navigator_shape(scope);
+    southstar_js_interfaces::install_pdf_plugins(scope);
+    southstar_js_interfaces::link_interfaces(scope);
+    ffi::name_engine_members(scope);
+    southstar_js_interfaces::shape_window_global(scope);
+    southstar_js_interfaces::link_interface_ctors(scope);
+    southstar_js_interfaces::lock_global_prototypes(scope);
     let document = scope
         .get(&global, "document")
         .unwrap_or_else(|_| Value::undefined());
@@ -182,7 +182,6 @@ fn finish_shapes(scope: &mut Scope<'_>) {
         &document,
         core::ptr::null(),
     );
-    ffi::shape(scope, Shaper::NodeShapes);
-    ffi::shape(scope, Shaper::ElementShapes);
-    ffi::shape(scope, Shaper::BrandNodeClasses);
+    southstar_js_interfaces::install_node_shapes(scope);
+    southstar_js_interfaces::install_element_shapes(scope);
 }

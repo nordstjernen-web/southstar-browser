@@ -3,12 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use super::{Js, NsJs, imports, raw_js};
@@ -19,18 +18,6 @@ unsafe extern "C" {
     fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
     fn ns_input_resanitize_value(el: *mut NsNode);
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
-    fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
-    fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_body_forward_content_handler(
-        ctx: ContextHandle,
-        n: *const NsNode,
-        name: *const c_char,
-        code: *const c_char,
-    );
-}
-
-fn c_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(ptr::null(), CStr::as_ptr)
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
@@ -120,11 +107,11 @@ pub(crate) fn start_image_load(js: Option<Js>, node: Element, src: &CStr) {
 }
 
 pub(crate) fn schedule_iframe_load_full(js: Option<Js>, node: Element) {
-    unsafe { ns_js_schedule_iframe_load_full(raw_js(js), node.as_mut_ptr(), glib::TRUE) };
+    southstar_js_frames::schedule_iframe_load(raw_js(js), node, true);
 }
 
 pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
-    unsafe { ns_js_schedule_iframe_load(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_frames::schedule_iframe_load(raw_js(js), node, false);
 }
 
 pub(crate) fn img_src_layout_neutral(node: Element) -> bool {
@@ -137,9 +124,13 @@ pub(crate) fn body_forward_content_handler(
     name: &CStr,
     code: Option<&CStr>,
 ) {
-    unsafe {
-        ns_body_forward_content_handler(scope.handle(), node.as_ptr(), name.as_ptr(), c_ptr(code))
-    };
+    let code = code.map(CStr::to_string_lossy);
+    southstar_js_dispatch::forward_body_content_handler(
+        scope,
+        node,
+        &name.to_string_lossy(),
+        code.as_deref(),
+    );
 }
 
 pub(crate) fn attr_may_affect_style(node: Element, name: &CStr) -> bool {

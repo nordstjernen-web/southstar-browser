@@ -7,13 +7,11 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GArray, GBoolean};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
-use crate::{
-    Schedule, Task, blocking, compile, eval, fetch, hold, import_map, page, scan, schedule,
-};
+use crate::{blocking, compile, eval, hold, import_map, page, schedule};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
@@ -70,12 +68,6 @@ const _: () = assert!(
         && core::mem::offset_of!(NsResponse, response_end_ms) == 184
 );
 
-#[repr(C)]
-struct RawTask {
-    node: *mut NsNode,
-    schedule: c_int,
-}
-
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
 pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
 const FETCH_DEST_SCRIPT: c_int = 1;
@@ -105,10 +97,8 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_free(array: *mut GByteArray, free_segment: GBoolean) -> *mut u8;
-    fn g_array_remove_index(array: *mut GArray, index: c_uint) -> *mut GArray;
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray;
     fn ns_js_index_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -130,7 +120,6 @@ unsafe extern "C" {
     fn ns_response_free(resp: *mut NsResponse);
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
     fn g_source_remove(tag: c_uint) -> GBoolean;
-    fn g_array_append_vals(array: *mut GArray, data: *const c_void, len: c_uint) -> *mut GArray;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -481,19 +470,11 @@ impl Js {
     }
 
     pub(crate) fn remove_lifecycle_tasks(self, mut doomed: impl FnMut(Option<Node>) -> bool) {
-        let tasks = unsafe { ns_js_lifecycle_tasks(self.0) };
-        if tasks.is_null() {
-            return;
-        }
-        let mut i = 0u32;
-        while i < unsafe { (*tasks).len } {
-            let task = unsafe { &*(*tasks).data.cast::<RawTask>().add(i as usize) };
-            if doomed(node(task.node)) {
-                unsafe { g_array_remove_index(tasks, i) };
-            } else {
-                i += 1;
+        crate::page::with_existing(self, |page| {
+            if let Some(tasks) = page.lifecycle_tasks.as_mut() {
+                tasks.retain(|task| !doomed(Some(task.node)));
             }
-        }
+        });
     }
 
     pub(crate) fn with_blob<R>(self, url: &CStr, f: impl FnOnce(&[u8]) -> R) -> Option<R> {
@@ -616,167 +597,15 @@ unsafe extern "C" fn async_script_timer(data: *mut c_void) -> GBoolean {
     glib::FALSE
 }
 
-unsafe fn tasks_of<'a>(tasks: *const GArray) -> Vec<Task<'a>> {
-    if tasks.is_null() || unsafe { (*tasks).data.is_null() || (*tasks).len == 0 } {
-        return Vec::new();
-    }
-    let raw = unsafe {
-        core::slice::from_raw_parts((*tasks).data.cast::<RawTask>(), (*tasks).len as usize)
-    };
-    raw.iter()
-        .filter_map(|task| {
-            Some(Task {
-                node: node(task.node)?,
-                schedule: Schedule::from_raw(task.schedule)?,
-            })
-        })
-        .collect()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_script_type_is_module(n: *const NsNode) -> GBoolean {
-    glib::boolean(node(n).is_some_and(crate::type_is_module))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_script_type_supported(n: *const NsNode) -> GBoolean {
-    glib::boolean(node(n).is_some_and(crate::type_supported))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_script_skipped_by_nomodule(n: *const NsNode) -> GBoolean {
-    glib::boolean(node(n).is_some_and(crate::skipped_by_nomodule))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_content_type_is_javascript(ct: *const c_char) -> GBoolean {
-    let ct = unsafe { glib::bytes(ct) };
-    glib::boolean(ct.is_some_and(crate::content_type_is_javascript))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_mark_scripts_already_started(n: *mut NsNode) {
-    if let Some(n) = node(n) {
-        scan::mark_scripts_already_started(n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_collect_script_tasks(n: *mut NsNode, tasks: *mut GArray) {
-    let (Some(n), false) = (node(n), tasks.is_null()) else {
-        return;
-    };
-    for task in scan::collect_script_tasks(n) {
-        let raw = RawTask {
-            node: task.node.as_mut_ptr(),
-            schedule: task.schedule.raw(),
-        };
-        unsafe { g_array_append_vals(tasks, (&raw as *const RawTask).cast(), 1) };
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_register_import_maps(js: *mut NsJs, root: *mut NsNode) {
-    if let (false, Some(root)) = (js.is_null(), node(root)) {
-        import_map::register_in(Js(js), root);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_script_element(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    origin: *const c_char,
-) {
-    if let (false, Some(n)) = (js.is_null(), node(n)) {
-        fetch::run_script_element(Js(js), n, unsafe { cstr(origin) });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_parser_blocking_scripts(
-    js: *mut NsJs,
-    tasks: *mut GArray,
-    origin: *const c_char,
-) {
-    if js.is_null() || tasks.is_null() {
-        return;
-    }
-    let tasks = unsafe { tasks_of(tasks) };
-    hold::run_parser_blocking_scripts(Js(js), &tasks, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_script_schedule(
-    js: *mut NsJs,
-    tasks: *mut GArray,
-    which: c_int,
-    origin: *const c_char,
-) {
-    if js.is_null() || tasks.is_null() {
-        return;
-    }
-    let Some(which) = Schedule::from_raw(which) else {
-        return;
-    };
-    let tasks = unsafe { tasks_of(tasks) };
-    schedule::run_schedule(Js(js), &tasks, which, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_next_script_schedule(
-    js: *mut NsJs,
-    tasks: *mut GArray,
-    which: c_int,
-    origin: *const c_char,
-) -> GBoolean {
-    if js.is_null() || tasks.is_null() {
-        return glib::FALSE;
-    }
-    let Some(which) = Schedule::from_raw(which) else {
-        return glib::FALSE;
-    };
-    let tasks = unsafe { tasks_of(tasks) };
-    glib::boolean(schedule::run_next(Js(js), &tasks, which, unsafe {
-        cstr(origin)
-    }))
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_schedule_pending_script_drain(js: *mut NsJs) {
-    if !js.is_null() {
-        schedule::schedule_pending_drain(Js(js));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drain_load_event_scripts(js: *mut NsJs) {
-    if !js.is_null() {
-        schedule::drain_load_event_scripts(Js(js));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_has_pending_script_roots(js: *const NsJs) -> GBoolean {
-    glib::boolean(!js.is_null() && page::has_pending_roots(Js(js.cast_mut())))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_async_scripts_pending(js: *const NsJs) -> GBoolean {
-    glib::boolean(!js.is_null() && page::async_pending(Js(js.cast_mut())))
+    crate::schedule_pending_script_drain(js);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode) {
-    if let (false, Some(script)) = (js.is_null(), node(script)) {
-        schedule::script_needs_prepare(Js(js), script);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode) {
-    if let (false, Some(root)) = (js.is_null(), node(root)) {
-        schedule::run_inserted_scripts(Js(js), root);
+    if let Some(script) = node(script) {
+        crate::script_needs_prepare(js, script);
     }
 }
 
@@ -784,13 +613,6 @@ pub unsafe extern "C" fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut Ns
 pub unsafe extern "C" fn ns_parser_hold_forget(js: *mut NsJs, n: *const NsNode) {
     if !js.is_null() && !n.is_null() {
         hold::forget(Js(js), n as usize);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_cancel_async_scripts(js: *mut NsJs) {
-    if !js.is_null() {
-        page::cancel_async(Js(js));
     }
 }
 
@@ -809,11 +631,6 @@ unsafe fn bytes<'a>(p: *const c_char, len: usize) -> &'a [u8] {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_profile_enabled() -> GBoolean {
-    GBoolean::from(compile::profile_enabled())
-}
-
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
@@ -830,49 +647,13 @@ pub unsafe extern "C" fn ns_js_eval(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_decode_data_url(
-    url: *const c_char,
-    out_len: *mut usize,
-) -> *mut c_char {
-    let Some(body) = (unsafe { cstr(url) }).and_then(decode_data_url) else {
-        return ptr::null_mut();
-    };
-    if !out_len.is_null() {
-        unsafe { *out_len = body.len() };
-    }
-    glib::strdup(&body)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode) {
     if let (false, Some(root)) = (js.is_null(), node(root)) {
         eval::purge_subtree_script_refs(Js(js), root);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_content_scripts(
-    js: *mut NsJs,
-    url: *const c_char,
-    document_start: GBoolean,
-) {
-    eval::run_content_scripts(Js(js), unsafe { cstr(url) }, document_start != 0);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval_source(
-    js: *mut NsJs,
-    src: *const c_char,
-    origin: *const c_char,
-) -> *mut c_char {
-    let Some(src) = (unsafe { cstr(src) }).filter(|_| !js.is_null()) else {
-        return ptr::null_mut();
-    };
-    eval::eval_source(Js(js), src, unsafe { cstr(origin) })
-        .map_or(ptr::null_mut(), |out| glib::strdup(&out))
-}
-
-fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) {
+pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) {
     let frame = el.and_then(blocking::content_frame);
     let frame_ptr = Node::ptr_or_null(frame);
     let has_js = !js.is_null();

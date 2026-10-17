@@ -2,10 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_uint;
-
 use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -14,14 +11,6 @@ use crate::{Element, JsResult};
 #[repr(C)]
 pub(crate) struct NsJs {
     _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    fn ns_js_dispatch_path(
-        js: *mut NsJs,
-        len: *mut c_uint,
-        window: *mut GBoolean,
-    ) -> *const *const NsNode;
 }
 
 unsafe extern "Rust" {
@@ -75,22 +64,7 @@ pub(crate) fn submit_event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Val
 }
 
 pub(crate) fn dispatch_path(scope: &mut Scope<'_>) -> Option<(Vec<Element>, bool)> {
-    let js = js_of(scope);
-    if js.is_null() {
-        return None;
-    }
-    let mut len: c_uint = 0;
-    let mut window: GBoolean = 0;
-    let nodes = unsafe { ns_js_dispatch_path(js, &mut len, &mut window) };
-    if nodes.is_null() {
-        return None;
-    }
-    let nodes = unsafe { core::slice::from_raw_parts(nodes, len as usize) };
-    let nodes = nodes
-        .iter()
-        .filter_map(|&n| unsafe { Node::from_ptr(n) })
-        .collect();
-    Some((nodes, window != 0))
+    southstar_js_dispatch::current_dispatch_path(scope)
 }
 
 #[unsafe(no_mangle)]

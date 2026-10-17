@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod api;
 mod blocking;
 mod compile;
 mod eval;
@@ -19,6 +20,8 @@ use southstar_dom::Node;
 
 use crate::ffi::{Js, NsJs};
 
+pub use api::*;
+
 pub(crate) const ALREADY_STARTED: &CStr = c"data-nd-script-already-started";
 pub(crate) const EMPTY_SOURCE: &CStr = c"data-nd-script-empty-source";
 pub(crate) const MAX_SCRIPT_BYTES: usize = 32 * 1024 * 1024;
@@ -26,29 +29,10 @@ pub(crate) const FLAG_LINK_LOAD_FIRED: u32 = 1 << 8;
 pub(crate) const FLAG_NOT_PARSER_INSERTED: u32 = 1 << 13;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Schedule {
+pub enum Schedule {
     Blocking,
     Deferred,
     Async,
-}
-
-impl Schedule {
-    pub(crate) fn from_raw(raw: i32) -> Option<Schedule> {
-        match raw {
-            0 => Some(Schedule::Blocking),
-            1 => Some(Schedule::Deferred),
-            2 => Some(Schedule::Async),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn raw(self) -> i32 {
-        match self {
-            Schedule::Blocking => 0,
-            Schedule::Deferred => 1,
-            Schedule::Async => 2,
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -78,7 +62,7 @@ pub(crate) fn type_supported(n: Node) -> bool {
     }
 }
 
-pub(crate) fn content_type_is_javascript(ct: &[u8]) -> bool {
+pub fn content_type_is_javascript(ct: &[u8]) -> bool {
     const OK: [&[u8]; 10] = [
         b"text/javascript",
         b"application/javascript",

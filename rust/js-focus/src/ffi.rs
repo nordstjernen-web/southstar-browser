@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
@@ -38,7 +38,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
@@ -47,8 +46,6 @@ unsafe extern "C" {
     fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
     fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
-    fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
-    fn ns_js_anchor_fragment_navigate(js: *mut NsJs, abs_url: *const c_char) -> GBoolean;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -176,7 +173,7 @@ impl Js {
 
     pub fn in_document_realm(self, doc: Element, f: impl FnOnce()) {
         let realm = match doc.parent() {
-            Some(_) => unsafe { ns_js_node_realm_context(self.ptr(), doc.as_ptr()) },
+            Some(_) => southstar_js_frames::node_realm_context(self.ptr(), doc),
             None => {
                 let main = api::main_realm(self.ptr());
                 if main.is_null() {
@@ -243,9 +240,7 @@ impl Js {
     }
 
     pub fn eval_source(self, code: &[u8], origin: &CStr) {
-        let code = c_string(code);
-        let result = unsafe { ns_js_eval_source(self.ptr(), code.as_ptr(), origin.as_ptr()) };
-        unsafe { glib::g_free(result.cast()) };
+        let _ = southstar_js_loader::eval_source(self.ptr(), &c_string(code), Some(origin));
     }
 
     pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {
@@ -253,8 +248,7 @@ impl Js {
     }
 
     pub fn anchor_fragment_navigate(self, url: &[u8]) -> bool {
-        let url = c_string(url);
-        unsafe { ns_js_anchor_fragment_navigate(self.ptr(), url.as_ptr()) != 0 }
+        southstar_js_window::anchor_fragment_navigate(self.ptr(), url)
     }
 
     pub fn navigate(self, url: &[u8]) {

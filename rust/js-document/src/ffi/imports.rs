@@ -54,11 +54,6 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-    pub(crate) unsafe fn nsr_iframe_realm_window(
-        scope: &mut Scope<'_>,
-        element: &Value,
-        node: *mut NsNode,
-    ) -> Value;
     pub(crate) unsafe fn nsr_document_expose_legacy_named(
         scope: &mut Scope<'_>,
         root: *const NsNode,

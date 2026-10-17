@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+mod api;
 mod body_handlers;
 mod dispatch;
 mod errors;
@@ -18,6 +19,8 @@ use std::rc::Rc;
 use southstar_dom::{Kind, Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 
+pub use crate::api::*;
+
 use crate::errors::Rejection;
 use crate::ffi::Js;
 use crate::listeners::Listener;
@@ -29,8 +32,7 @@ pub(crate) const FLAG_FRAGMENT: u32 = 1 << 2;
 pub(crate) const FLAG_HAS_LISTENERS: u32 = 1 << 19;
 
 pub(crate) struct DispatchPath {
-    pub nodes: *const *const NsNode,
-    pub len: usize,
+    pub nodes: Rc<Vec<Element>>,
     pub window: bool,
 }
 
@@ -38,7 +40,7 @@ pub(crate) struct DispatchPath {
 pub(crate) struct Page {
     pub listeners: HashMap<usize, Vec<Rc<Listener>>>,
     pub paths: Vec<DispatchPath>,
-    pub spare_paths: Vec<Vec<*const NsNode>>,
+    pub spare_paths: Vec<Vec<Element>>,
     pub spare_flags: Vec<Vec<bool>>,
     pub spare_snapshots: Vec<Vec<Rc<Listener>>>,
     pub pending_rejections: HashMap<usize, Rejection>,
@@ -86,22 +88,6 @@ pub(crate) fn forget_node(js: Js, node: *const NsNode) {
     }
 }
 
-pub(crate) fn reset(js: Js) {
-    let (listeners, pending, reported) = with(js, |page| {
-        (
-            std::mem::take(&mut page.listeners),
-            std::mem::take(&mut page.pending_rejections),
-            std::mem::take(&mut page.reported_rejections),
-        )
-    });
-    for listener in listeners.values().flatten() {
-        listener.kill();
-    }
-    drop(listeners);
-    drop(pending);
-    drop(reported);
-}
-
 pub(crate) fn teardown_listeners(js: Js) {
     let listeners = with(js, |page| {
         page.spare_snapshots.clear();
@@ -116,10 +102,6 @@ pub(crate) fn teardown_listeners(js: Js) {
 pub(crate) fn teardown(js: Js) {
     let page = PAGES.with(|pages| pages.borrow_mut().remove(&js));
     drop(page);
-}
-
-pub(crate) fn listener_count(js: Js) -> usize {
-    peek(js, |page| page.listeners.values().map(Vec::len).sum())
 }
 
 pub(crate) fn is_named(node: Option<Element>, name: &[u8]) -> bool {

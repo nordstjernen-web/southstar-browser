@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 use southstar_dom::{Node, NsNode};
 
+use crate::Task;
 use crate::ffi::{self, Js};
 use crate::hold::Hold;
 
@@ -19,6 +20,7 @@ pub(crate) struct Page {
     pub module_load_count: u32,
     pub module_load_bytes: usize,
     pub module_load_capped: bool,
+    pub lifecycle_tasks: Option<Vec<Task<'static>>>,
 }
 
 thread_local! {

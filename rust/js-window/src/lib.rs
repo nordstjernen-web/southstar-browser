@@ -23,8 +23,8 @@ use southstar_js_engine::{NativeFn, Scope, Value};
 use crate::ffi::Js;
 
 pub use crate::ffi::{
-    dispatch_resize, fire_page_transition, note_viewport_scroll, reeval_media_queries,
-    sync_window_metrics,
+    anchor_fragment_navigate, clear_window_links, dispatch_resize, fire_page_transition,
+    note_viewport_scroll, reeval_media_queries, sync_window_metrics, with_named_access_suspended,
 };
 
 pub(crate) struct Entry {

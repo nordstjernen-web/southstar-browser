@@ -17,8 +17,8 @@ use southstar_js_runtime::api::{self, NsJs};
 
 pub(crate) use api::AdoptedProtos as DomProtos;
 pub use installers::{
-    brand_node_classes, document_install_funcs, host_class_proto, install_dom_members,
-    install_proto_table, link_interfaces, register_class,
+    document_install_funcs, host_class_proto, install_dom_members, install_proto_table,
+    link_interfaces, register_class,
 };
 
 #[repr(C)]
@@ -104,16 +104,6 @@ fn with_handle(ctx: ContextHandle, f: impl FnOnce(&mut Scope<'_>)) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_install_node_shapes(ctx: ContextHandle) {
-    with_handle(ctx, crate::install_node_shapes);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_install_element_shapes(ctx: ContextHandle) {
-    with_handle(ctx, crate::install_element_shapes);
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_install_pdf_plugins(ctx: ContextHandle) {
     with_handle(ctx, crate::install_pdf_plugins);
 }
@@ -126,31 +116,6 @@ pub extern "C" fn ns_js_link_interface_ctors(ctx: ContextHandle) {
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_js_lock_global_prototypes(ctx: ContextHandle) {
     with_handle(ctx, crate::lock_global_prototypes);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_shape_window_global(ctx: ContextHandle) {
-    with_handle(ctx, crate::shape_window_global);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_install_web_api_shapes(ctx: ContextHandle) {
-    with_handle(ctx, crate::install_web_api_shapes);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_install_navigator_shape(ctx: ContextHandle) {
-    with_handle(ctx, crate::install_navigator_shape);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_brand_node_classes(ctx: ContextHandle) {
-    brand_node_classes(ctx);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_link_interfaces(ctx: ContextHandle) {
-    with_handle(ctx, link_interfaces);
 }
 
 #[unsafe(no_mangle)]
