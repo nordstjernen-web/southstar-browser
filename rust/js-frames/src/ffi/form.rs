@@ -21,7 +21,6 @@ struct GString {
 unsafe extern "C" {
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn ns_form_set_submission_charset(charset: *const c_char);
     fn ns_form_collect_inputs(
         form: *const NsNode,
         n: *const NsNode,
@@ -41,8 +40,7 @@ pub(crate) fn urlencoded(
     // SAFETY: an empty initial string is permitted and the call returns a new GString.
     let query = unsafe { g_string_new(ptr::null()) };
     let mut first = glib::TRUE;
-    // SAFETY: the charset is a NUL-terminated string or null, and the setting is copied.
-    unsafe { ns_form_set_submission_charset(charset.map_or(ptr::null(), CStr::as_ptr)) };
+    southstar_net::set_submission_charset(charset.map(CStr::to_bytes));
     // SAFETY: the nodes are live, `query` is the GString created above and `first` outlives the call.
     unsafe {
         ns_form_collect_inputs(
@@ -54,8 +52,7 @@ pub(crate) fn urlencoded(
             Node::ptr_or_null(submitter),
         )
     };
-    // SAFETY: a null charset restores the default submission encoding.
-    unsafe { ns_form_set_submission_charset(ptr::null()) };
+    southstar_net::set_submission_charset(None);
     // SAFETY: `query` is the live GString created above.
     let string = unsafe { &*query };
     let bytes = if string.str.is_null() {

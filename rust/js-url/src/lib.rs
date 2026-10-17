@@ -18,6 +18,9 @@ use southstar_js_engine::{Attributes, RealmCache, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::{blob_url_lookup, filereader_pending};
+pub use crate::registry::Blob;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const ALL: Attributes = Attributes {

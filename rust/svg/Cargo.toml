@@ -12,6 +12,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-layout = { path = "../layout" }
+southstar-netutil = { path = "../netutil" }
 southstar-style = { path = "../style" }
 southstar-texture = { path = "../texture" }
 

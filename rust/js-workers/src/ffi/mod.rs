@@ -215,11 +215,6 @@ struct GMainLoop {
 }
 
 #[repr(C)]
-struct GBytes {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct GByteArray {
     data: *mut u8,
     len: core::ffi::c_uint,
@@ -256,25 +251,8 @@ unsafe extern "C" {
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
     fn g_get_monotonic_time() -> i64;
-    fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
-    fn ns_js_blob_url_lookup(
-        js: *mut c_void,
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-    ) -> *mut GBytes;
     fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
-    fn ns_js_net_sw_fetch_result(
-        js: *mut c_void,
-        id: core::ffi::c_uint,
-        outcome: c_int,
-        status: core::ffi::c_long,
-        content_type: *const c_char,
-        raw_headers: *const c_char,
-        body: *const u8,
-        body_len: usize,
-        error: *const c_char,
-    );
     fn ns_net_request_blocking(
         url: *const c_char,
         top_url: *const c_char,
@@ -678,17 +656,7 @@ pub(crate) fn queue_fail_job(scope: &mut Scope<'_>, object: &Value) {
 
 pub(crate) fn blob_url_lookup(js: Js, url: &str) -> Option<Vec<u8>> {
     let url = c_string(url);
-    let bytes = unsafe { ns_js_blob_url_lookup(js.ptr(), url.as_ptr(), core::ptr::null_mut()) };
-    if bytes.is_null() {
-        return None;
-    }
-    let mut len = 0usize;
-    let data = unsafe { g_bytes_get_data(bytes, &mut len) };
-    Some(if data.is_null() || len == 0 {
-        Vec::new()
-    } else {
-        unsafe { core::slice::from_raw_parts(data, len) }.to_vec()
-    })
+    southstar_js_url::blob_url_lookup(js.page(), url.to_bytes()).map(|(bytes, _)| bytes.to_vec())
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<String> {
@@ -704,27 +672,19 @@ pub(crate) fn csp_allows_worker(js: Js, url: &str) -> bool {
 }
 
 pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {
-    let raw_headers = result.raw_headers.as_deref().map(c_string);
-    let content_type = result.content_type.as_deref().map(c_string);
-    let error = result.error.as_deref().map(c_string);
-    let opt = |s: &Option<CString>| s.as_ref().map_or(core::ptr::null(), |s| s.as_ptr());
-    unsafe {
-        ns_js_net_sw_fetch_result(
-            js.ptr(),
-            result.id,
-            result.outcome,
-            result.status as core::ffi::c_long,
-            opt(&content_type),
-            opt(&raw_headers),
-            if result.body.is_empty() {
-                core::ptr::null()
-            } else {
-                result.body.as_ptr()
-            },
-            result.body.len(),
-            opt(&error),
-        )
-    };
+    let text = |s: &Option<String>| s.as_deref().map(|s| c_string(s).into_bytes());
+    southstar_js_net::service_worker_fetch_result(
+        js.page(),
+        result.id,
+        southstar_js_net::SwOutcome {
+            outcome: result.outcome,
+            status: i64::from(result.status),
+            content_type: text(&result.content_type),
+            raw_headers: text(&result.raw_headers),
+            body: &result.body,
+            error: text(&result.error),
+        },
+    );
 }
 
 pub(crate) fn worker_now_ms(js: Js) -> f64 {

@@ -28,9 +28,6 @@ use super::{downloads, taskmgr};
 use crate::window as rules;
 
 unsafe extern "C" {
-    fn ns_url_from_local_path(path: *const c_char) -> *mut c_char;
-    fn ns_address_is_search(s: *const c_char) -> GBoolean;
-    fn ns_search_url_for(query: *const c_char) -> *mut c_char;
     fn ns_browser_set_color_scheme(dark: c_int);
 }
 
@@ -770,15 +767,14 @@ pub fn normalize_url(input: &CStr) -> CString {
         return cstring(trimmed);
     }
     let trimmed = cstring(trimmed);
-    unsafe {
-        if let Some(local) = take_gstring(ns_url_from_local_path(trimmed.as_ptr())) {
-            return local;
-        }
-        if ns_address_is_search(trimmed.as_ptr()) != 0 {
-            return take_gstring(ns_search_url_for(trimmed.as_ptr())).unwrap_or_default();
-        }
+    let trimmed = trimmed.to_bytes();
+    if let Some(local) = southstar_netutil::url_from_local_path(trimmed) {
+        return cstring(local);
     }
-    cstring(rules::https_url(trimmed.to_bytes()))
+    if southstar_netutil::address_is_search(trimmed) {
+        return cstring(southstar_netutil::search_url_for(trimmed));
+    }
+    cstring(rules::https_url(trimmed))
 }
 
 fn address_display_url(url: Option<&CStr>) -> CString {

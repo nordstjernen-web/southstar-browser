@@ -17,8 +17,10 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-loader = { path = "../js-loader" }
+southstar-js-net = { path = "../js-net" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-url = { path = "../js-url" }
 southstar-js-window = { path = "../js-window" }
 southstar-layout = { path = "../layout" }
 

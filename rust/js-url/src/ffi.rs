@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -37,43 +36,10 @@ impl Js {
     }
 }
 
-#[repr(C)]
-pub(crate) struct GBytes {
-    _private: [u8; 0],
-}
-
-pub(crate) struct SharedBytes(*mut GBytes);
-
-unsafe impl Send for SharedBytes {}
-
-impl SharedBytes {
-    pub(crate) fn new(bytes: &[u8]) -> SharedBytes {
-        SharedBytes(unsafe { g_bytes_new(bytes.as_ptr().cast(), bytes.len()) })
-    }
-}
-
-impl Drop for SharedBytes {
-    fn drop(&mut self) {
-        unsafe { g_bytes_unref(self.0) };
-    }
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct Source(c_uint);
 
-type BlobResolver = Option<
-    unsafe extern "C" fn(
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-        user_data: *mut c_void,
-    ) -> *mut GBytes,
->;
-
 unsafe extern "C" {
-    fn ns_net_set_blob_resolver(resolver: BlobResolver, user_data: *mut c_void);
-    fn g_bytes_new(data: *const c_void, size: usize) -> *mut GBytes;
-    fn g_bytes_ref(bytes: *mut GBytes) -> *mut GBytes;
-    fn g_bytes_unref(bytes: *mut GBytes);
     fn g_uuid_string_random() -> *mut c_char;
 }
 
@@ -273,9 +239,8 @@ pub fn nsr_net_install_file_reader(scope: &mut Scope<'_>, global: &Value) {
     crate::file_reader::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean {
-    glib::boolean(crate::file_reader::pending(Js(js as usize)))
+pub fn filereader_pending(js: *const NsJs) -> bool {
+    crate::file_reader::pending(Js(js as usize))
 }
 
 #[unsafe(no_mangle)]
@@ -283,35 +248,10 @@ pub unsafe extern "C" fn ns_js_filereader_teardown(js: *mut NsJs) {
     crate::file_reader::teardown(Js(js as usize));
 }
 
-unsafe extern "C" fn resolve_blob(
-    url: *const c_char,
-    out_type: *mut *mut c_char,
-    _user_data: *mut c_void,
-) -> *mut GBytes {
-    if !out_type.is_null() {
-        unsafe { *out_type = ptr::null_mut() };
-    }
-    if url.is_null() {
-        return ptr::null_mut();
-    }
-    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
-    crate::registry::resolve(url, |entry| {
-        if !out_type.is_null() {
-            let kind = entry
-                .kind
-                .as_ref()
-                .map_or(ptr::null_mut(), |k| glib::strdup(k.as_bytes()));
-            unsafe { *out_type = kind };
-        }
-        unsafe { g_bytes_ref(entry.bytes.0) }
-    })
-    .unwrap_or(ptr::null_mut())
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_blob_registry_add(js: *mut NsJs) {
     if !js.is_null() && crate::registry::add_page(Js(js as usize)) {
-        unsafe { ns_net_set_blob_resolver(Some(resolve_blob), ptr::null_mut()) };
+        southstar_net::set_blob_resolver(crate::registry::resolve);
     }
 }
 
@@ -327,30 +267,11 @@ pub unsafe extern "C" fn ns_js_blob_urls_free(js: *mut NsJs) {
     crate::registry::free_page(Js(js as usize));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_blob_url_lookup(
-    js: *mut NsJs,
-    url: *const c_char,
-    out_type: *mut *mut c_char,
-) -> *mut GBytes {
-    if !out_type.is_null() {
-        unsafe { *out_type = ptr::null_mut() };
+pub fn blob_url_lookup(js: *const NsJs, url: &[u8]) -> Option<crate::registry::Blob> {
+    if js.is_null() {
+        return None;
     }
-    if js.is_null() || url.is_null() {
-        return ptr::null_mut();
-    }
-    let url = unsafe { CStr::from_ptr(url) }.to_bytes();
-    crate::registry::with_entry(Js(js as usize), url, |entry| {
-        if !out_type.is_null() {
-            let kind = entry
-                .kind
-                .as_ref()
-                .map_or(ptr::null_mut(), |k| k.as_ptr().cast_mut());
-            unsafe { *out_type = kind };
-        }
-        entry.bytes.0
-    })
-    .unwrap_or(ptr::null_mut())
+    crate::registry::lookup(Js(js as usize), url)
 }
 
 #[unsafe(no_mangle)]

@@ -245,10 +245,10 @@ impl Js {
         unsafe {
             ns_services_timers_pending(self.0, glib::FALSE) != 0
                 || frames::has_pending(self)
-                || ns_js_net_pending_fetches(self.0) > 0
-                || ns_js_net_pending_xhrs(self.0) > 0
-                || ns_js_net_pending_sockets(self.0) > 0
-                || ns_js_filereader_pending(self.0) != 0
+                || southstar_js_net::pending_fetch_count(self.0) > 0
+                || southstar_js_net::pending_xhr_count(self.0) > 0
+                || southstar_js_net::pending_socket_count(self.0) > 0
+                || southstar_js_url::filereader_pending(self.0)
                 || southstar_js_frames::pending_iframe_count(self.0) > 0
                 || ns_mutation_drain_pending(self.0) != 0
                 || api::observer_tick_pending(self.0)
@@ -283,10 +283,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
-    fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
-    fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }

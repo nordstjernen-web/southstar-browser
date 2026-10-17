@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-net = { path = "../net" }
 southstar-url = { path = "../url" }
 
 [lints]

@@ -21,8 +21,6 @@ unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
     pub fn ns_box_free(b: *mut NsBox);
-    fn ns_font_init();
-    fn ns_font_shutdown();
     fn ns_spell_init();
     fn ns_webgl_take_pending_origin() -> *mut c_char;
     fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
@@ -202,8 +200,8 @@ pub fn init_subsystems() {
     southstar_net::set_allow_file_urls(true);
     southstar_http_cache::init();
     southstar_history::init();
+    southstar_font::init();
     unsafe {
-        ns_font_init();
         ns_spell_init();
     }
     southstar_bytecode_cache::init();
@@ -217,9 +215,7 @@ pub fn sandbox(self_exe: Option<&CStr>) {
 
 pub fn shutdown() {
     southstar_bytecode_cache::shutdown();
-    unsafe {
-        ns_font_shutdown();
-    }
+    southstar_font::shutdown();
     southstar_history::shutdown();
     southstar_http_cache::shutdown();
     southstar_net::shutdown();

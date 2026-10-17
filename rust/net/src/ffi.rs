@@ -23,7 +23,7 @@ use southstar_glib::{self as glib, GBoolean, GError};
 
 use crate::budget::{Budgeted, Sink, exhausted_error};
 use crate::data_url::{self, Failure};
-use crate::{about, error_page, file, ftp, view_source};
+use crate::{about, file, ftp, view_source};
 
 pub use sys::utf8_collate;
 
@@ -112,15 +112,6 @@ fn replace(field: &mut *mut c_char, value: &[u8]) {
     *field = glib::strdup(value);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_build_error_page(
-    url: *const c_char,
-    status: c_long,
-    transport_error: *const c_char,
-) -> *mut c_char {
-    glib::strdup(&error_page::build(text(url), status, text(transport_error)))
-}
-
 struct VecSink(Vec<u8>);
 
 impl Sink for VecSink {
@@ -134,46 +125,6 @@ pub fn decode_data_url(url: &[u8], budget: u64) -> Option<Vec<u8>> {
     let mut budgeted = Budgeted::new(&mut sink, budget);
     data_url::decode(url, &mut budgeted)?.result.ok()?;
     Some(sink.0)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_data_url_decode(
-    url: *const c_char,
-    out: *mut GByteArray,
-    budget: u64,
-    out_content_type: *mut *mut c_char,
-    too_large: *mut GBoolean,
-) -> GBoolean {
-    unsafe {
-        if let Some(t) = too_large.as_mut() {
-            *t = 0;
-        }
-        if let Some(ct) = out_content_type.as_mut() {
-            *ct = ptr::null_mut();
-        }
-    }
-    let Some(url) = text(url).filter(|_| !out.is_null()) else {
-        return 0;
-    };
-    let mut sink = ByteArraySink(out);
-    let mut budgeted = Budgeted::new(&mut sink, budget);
-    let Some(decoded) = data_url::decode(url, &mut budgeted) else {
-        return 0;
-    };
-    unsafe {
-        if let Some(ct) = out_content_type.as_mut() {
-            *ct = glib::strdup(&decoded.content_type);
-        }
-    }
-    match decoded.result {
-        Ok(()) => 1,
-        Err(failure) => {
-            if let (Failure::TooLarge, Some(t)) = (failure, unsafe { too_large.as_mut() }) {
-                *t = 1;
-            }
-            0
-        }
-    }
 }
 
 #[unsafe(no_mangle)]

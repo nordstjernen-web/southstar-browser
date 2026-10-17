@@ -34,7 +34,6 @@ unsafe extern "C" {
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
     fn ns_js_clear_focused_node(js: *mut NsJs);
-    fn ns_net_http_date(date: *const c_char) -> i64;
     fn g_date_time_new_now_local() -> *mut c_void;
     fn g_date_time_format(datetime: *mut c_void, format: *const c_char) -> *mut c_char;
     fn g_date_time_unref(datetime: *mut c_void);
@@ -265,8 +264,7 @@ pub(crate) fn cookie_store_from_js(url: &[u8], cookie: &[u8]) {
 }
 
 pub(crate) fn http_date(date: &[u8]) -> i64 {
-    let date = c_bytes(date);
-    unsafe { ns_net_http_date(date.as_ptr()) }
+    southstar_net::http_date(crate::until_nul(date))
 }
 
 pub(crate) fn local_now_formatted(format: &CStr) -> Option<Vec<u8>> {

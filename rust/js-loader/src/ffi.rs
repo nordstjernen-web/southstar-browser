@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_long, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -21,56 +21,8 @@ struct NsWorkerHost {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct GBytes {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    tls_warning: *mut c_char,
-    remote_ip: *mut c_char,
-    next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-    security: c_int,
-    redirect_count: c_int,
-}
-
-const _: () = assert!(
-    core::mem::size_of::<NsResponse>() == 200
-        && core::mem::offset_of!(NsResponse, body) == 88
-        && core::mem::offset_of!(NsResponse, response_end_ms) == 184
-);
-
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
 pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
-const FETCH_DEST_SCRIPT: c_int = 1;
 
 unsafe extern "C" {
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
@@ -83,20 +35,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
     fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-    fn ns_js_blob_url_lookup(
-        js: *mut NsJs,
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-    ) -> *mut GBytes;
-    fn ns_data_url_decode(
-        url: *const c_char,
-        out: *mut GByteArray,
-        budget: u64,
-        out_content_type: *mut *mut c_char,
-        too_large: *mut GBoolean,
-    ) -> GBoolean;
-    fn g_byte_array_new() -> *mut GByteArray;
-    fn g_byte_array_free(array: *mut GByteArray, free_segment: GBoolean) -> *mut u8;
     fn ns_js_flush_document_write(js: *mut NsJs);
     fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_index_child_change(
@@ -115,10 +53,6 @@ unsafe extern "C" {
     );
     fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode);
     fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode);
-    fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
-    fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
-    fn ns_response_free(resp: *mut NsResponse);
-    fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
 }
@@ -194,19 +128,7 @@ pub(crate) fn url_is_http_or_https(url: &CStr) -> bool {
 }
 
 pub(crate) fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {
-    unsafe {
-        let body = g_byte_array_new();
-        let decoded = ns_data_url_decode(
-            url.as_ptr(),
-            body,
-            crate::MAX_SCRIPT_BYTES as u64,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        ) != 0;
-        let out = decoded.then(|| glib::slice((*body).data, (*body).len as usize).to_vec());
-        g_byte_array_free(body, glib::TRUE);
-        out
-    }
+    southstar_net::decode_data_url(url.to_bytes(), crate::MAX_SCRIPT_BYTES as u64)
 }
 
 pub(crate) fn sri_check(integrity: Option<&CStr>, body: &[u8]) -> bool {
@@ -217,38 +139,29 @@ pub(crate) fn source_remove(tag: u32) {
     unsafe { g_source_remove(tag) };
 }
 
-pub(crate) struct Response(*mut NsResponse);
+pub(crate) struct Response(southstar_net::Response);
 
 impl Response {
-    fn get(&self) -> &NsResponse {
-        unsafe { &*self.0 }
-    }
-
     pub(crate) fn status(&self) -> c_long {
-        self.get().status
+        self.0.status()
     }
 
     pub(crate) fn body(&self) -> Option<&[u8]> {
-        let body = self.get().body;
-        (!body.is_null()).then(|| unsafe { glib::slice((*body).data, (*body).len as usize) })
+        self.0.body()
     }
 
     pub(crate) fn error(&self) -> Option<&CStr> {
-        unsafe { cstr(self.get().error) }
+        self.0.error()
     }
 
     pub(crate) fn content_type(&self) -> Option<&CStr> {
-        unsafe { cstr(self.get().content_type) }
+        self.0.content_type()
     }
 
     pub(crate) fn nosniff(&self) -> bool {
-        unsafe { ns_net_header_is_nosniff(self.get().x_content_type_options) != 0 }
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        unsafe { ns_response_free(self.0) }
+        self.0
+            .x_content_type_options()
+            .is_some_and(|value| southstar_net::header_is_nosniff(value.to_bytes()))
     }
 }
 
@@ -478,18 +391,7 @@ impl Js {
     }
 
     pub(crate) fn with_blob<R>(self, url: &CStr, f: impl FnOnce(&[u8]) -> R) -> Option<R> {
-        let blob = unsafe { ns_js_blob_url_lookup(self.0, url.as_ptr(), ptr::null_mut()) };
-        if blob.is_null() {
-            return None;
-        }
-        let mut len = 0usize;
-        let data = unsafe { g_bytes_get_data(blob, &mut len) };
-        let bytes = if data.is_null() {
-            &[][..]
-        } else {
-            unsafe { glib::slice(data.cast(), len) }
-        };
-        Some(f(bytes))
+        southstar_js_url::blob_url_lookup(self.0, url.to_bytes()).map(|(bytes, _)| f(&bytes))
     }
 
     pub(crate) fn csp_allows(
@@ -553,9 +455,10 @@ impl Js {
             Vec::new()
         };
         let fetched = api::fetch_subresource(self.0, url, top_url, &headers, Some(initiator), info);
-        let resp = fetched.response.cast::<NsResponse>();
+        // SAFETY: fetch_subresource hands over a response the caller owns, or null.
+        let response = unsafe { southstar_net::Response::from_raw(fetched.response.cast()) };
         Fetched {
-            response: (!resp.is_null()).then(|| Response(resp)),
+            response: response.map(Response),
             error: fetched.error,
         }
     }
@@ -566,16 +469,7 @@ impl Js {
 }
 
 fn script_accept_headers() -> Vec<&'static CStr> {
-    let mut headers = Vec::new();
-    let mut at = unsafe { ns_net_accept_headers_for(FETCH_DEST_SCRIPT) };
-    if at.is_null() {
-        return headers;
-    }
-    while let Some(header) = unsafe { cstr(*at) } {
-        headers.push(header);
-        at = unsafe { at.add(1) };
-    }
-    headers
+    southstar_net::FetchDest::Script.accept_lines().to_vec()
 }
 
 pub(crate) struct FrameUrl(Option<api::UrlScope>);

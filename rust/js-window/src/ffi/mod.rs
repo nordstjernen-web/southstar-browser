@@ -605,11 +605,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_services_reeval_media_queries(js: *mut NsJs);
-    fn ns_cors_allows(
-        doc_url: *const c_char,
-        resp_url: *const c_char,
-        cors_header: *const c_char,
-    ) -> GBoolean;
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -676,11 +671,7 @@ pub(crate) fn url_same_origin(a: &[u8], b: &[u8]) -> bool {
 }
 
 pub(crate) fn cors_allows(doc_url: Option<&[u8]>, url: &[u8], allow: &[u8]) -> bool {
-    let doc_url = doc_url.map(c_string);
-    let url = c_string(url);
-    let allow = c_string(allow);
-    let doc_ptr = doc_url.as_ref().map_or(core::ptr::null(), |d| d.as_ptr());
-    unsafe { ns_cors_allows(doc_ptr, url.as_ptr(), allow.as_ptr()) != 0 }
+    southstar_js_net::cors_allows(doc_url, Some(url), Some(allow))
 }
 
 fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {

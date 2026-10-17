@@ -19,6 +19,13 @@ use southstar_js_engine::{RealmCache, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::fetch::SwOutcome;
+pub use crate::ffi::{
+    pending_fetch_count, pending_socket_count, pending_xhr_count, reset_page,
+    service_worker_fetch_result,
+};
+pub use crate::headers::cors_allows;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 #[derive(Default)]

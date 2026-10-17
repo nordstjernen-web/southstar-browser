@@ -148,7 +148,6 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn ns_es_close(es: *mut c_void);
     fn ns_es_free(es: *mut c_void);
-    fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
 }
 
 unsafe extern "C" {
@@ -158,7 +157,6 @@ unsafe extern "C" {
     fn g_cancellable_cancel(cancellable: *mut c_void);
     fn g_object_ref(object: *mut c_void) -> *mut c_void;
     fn g_object_unref(object: *mut c_void);
-    fn g_bytes_get_data(bytes: *mut c_void, size: *mut usize) -> *const u8;
     fn g_byte_array_sized_new(reserved: c_uint) -> *mut GByteArray;
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
@@ -178,11 +176,6 @@ unsafe extern "C" {
     fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
     fn ns_response_free(resp: *mut NsResponse);
 
-    fn ns_js_blob_url_lookup(
-        js: *mut NsJs,
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-    ) -> *mut c_void;
     fn ns_sw_controller_for(js: *mut NsJs, abs_url: *const c_char) -> *mut c_void;
     fn ns_sw_post_fetch_request(
         host: *mut c_void,
@@ -257,8 +250,7 @@ pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn hsts_should_upgrade(host: &[u8]) -> bool {
-    let host = cstring(host);
-    unsafe { ns_net_hsts_should_upgrade(host.as_ptr()) != 0 }
+    southstar_net::hsts_should_upgrade(cstring(host).to_bytes())
 }
 
 pub(crate) fn enter_handler_realm(
@@ -718,19 +710,8 @@ impl Js {
 
     pub fn blob_url(self, url: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
         let url = cstring(url);
-        let mut kind = ptr::null_mut();
-        let bytes = unsafe { ns_js_blob_url_lookup(self.ptr(), url.as_ptr(), &mut kind) };
-        if bytes.is_null() {
-            return None;
-        }
-        let mut len = 0usize;
-        let data = unsafe { g_bytes_get_data(bytes, &mut len) };
-        let data = if data.is_null() {
-            Vec::new()
-        } else {
-            unsafe { core::slice::from_raw_parts(data, len) }.to_vec()
-        };
-        Some((data, borrowed(kind)))
+        southstar_js_url::blob_url_lookup(self.ptr(), url.to_bytes())
+            .map(|(bytes, kind)| (bytes.to_vec(), kind))
     }
 
     pub fn service_worker_for(self, url: &[u8]) -> Option<ServiceWorker> {
@@ -1052,8 +1033,7 @@ pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value)
     crate::abort::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_reset(js: *mut NsJs) {
+pub fn reset_page(js: *mut NsJs) {
     crate::page_reset(Js::of_ptr(js));
 }
 
@@ -1062,63 +1042,20 @@ pub unsafe extern "C" fn ns_js_net_teardown(js: *mut NsJs) {
     crate::page_teardown(Js::of_ptr(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint {
-    crate::pending_fetches(Js::of_ptr(js)) as c_uint
+pub fn pending_fetch_count(js: *const NsJs) -> usize {
+    crate::pending_fetches(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint {
-    crate::pending_xhrs(Js::of_ptr(js)) as c_uint
+pub fn pending_xhr_count(js: *const NsJs) -> usize {
+    crate::pending_xhrs(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint {
-    crate::pending_sockets(Js::of_ptr(js)) as c_uint
+pub fn pending_socket_count(js: *const NsJs) -> usize {
+    crate::pending_sockets(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_sw_fetch_result(
-    js: *mut NsJs,
-    id: c_uint,
-    outcome: c_int,
-    status: c_long,
-    content_type: *const c_char,
-    raw_headers: *const c_char,
-    body: *const u8,
-    body_len: usize,
-    error: *const c_char,
-) {
-    let body = if body.is_null() || body_len == 0 {
-        &[][..]
-    } else {
-        unsafe { core::slice::from_raw_parts(body, body_len) }
-    };
-    crate::fetch::service_worker_result(
-        Js::of_ptr(js),
-        id,
-        crate::fetch::SwOutcome {
-            outcome,
-            status: long(status),
-            content_type: borrowed(content_type),
-            raw_headers: borrowed(raw_headers),
-            body,
-            error: borrowed(error),
-        },
-    );
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cors_allows(
-    doc_url: *const c_char,
-    resp_url: *const c_char,
-    cors_header: *const c_char,
-) -> GBoolean {
-    glib::boolean(crate::headers::cors_allows(
-        borrowed(doc_url).as_deref(),
-        borrowed(resp_url).as_deref(),
-        borrowed(cors_header).as_deref(),
-    ))
+pub fn service_worker_fetch_result(js: *const NsJs, id: u32, outcome: crate::fetch::SwOutcome<'_>) {
+    crate::fetch::service_worker_result(Js::of_ptr(js), id, outcome);
 }
 
 pub(crate) unsafe extern "C" fn on_beacon_done(

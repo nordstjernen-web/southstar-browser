@@ -2,16 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
-
-use southstar_glib::{self as glib, GBoolean};
-
 use crate::hsts;
 use crate::storage::{self};
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
-}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_cookies_clear() {
@@ -31,7 +23,6 @@ pub extern "C" fn ns_net_state_shutdown() {
     hsts::shutdown();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean {
-    glib::boolean(text(host).is_some_and(hsts::should_upgrade))
+pub fn hsts_should_upgrade(host: &[u8]) -> bool {
+    hsts::should_upgrade(host)
 }

@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use southstar_glib::{self as glib, GBoolean, GError};
@@ -36,13 +36,7 @@ type ThreadFunc = unsafe extern "C" fn(
     task_data: *mut c_void,
     cancellable: *mut c_void,
 );
-type BlobResolver = Option<
-    unsafe extern "C" fn(
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-        user_data: *mut c_void,
-    ) -> *mut c_void,
->;
+pub type BlobResolver = fn(url: &[u8]) -> Option<(Arc<[u8]>, Option<Vec<u8>>)>;
 
 unsafe extern "C" {
     fn g_task_new(
@@ -63,8 +57,6 @@ unsafe extern "C" {
     fn g_task_is_valid(result: *mut c_void, source_object: *mut c_void) -> GBoolean;
     fn g_task_propagate_pointer(task: *mut c_void, error: *mut *mut GError) -> *mut c_void;
     fn g_object_unref(object: *mut c_void);
-    fn g_bytes_get_data(bytes: *mut c_void, size: *mut usize) -> *const u8;
-    fn g_bytes_unref(bytes: *mut c_void);
     fn g_return_if_fail_warning(
         log_domain: *const c_char,
         pretty_function: *const c_char,
@@ -184,7 +176,7 @@ static THROTTLE: Mutex<Throttle> = Mutex::new(Throttle {
 });
 static IDLE: Condvar = Condvar::new();
 
-static BLOB_RESOLVER: Mutex<(BlobResolver, usize)> = Mutex::new((None, 0));
+static BLOB_RESOLVER: Mutex<Option<BlobResolver>> = Mutex::new(None);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -405,26 +397,22 @@ fn drain(timeout: Duration) -> bool {
     true
 }
 
-fn blob_response(url: *const c_char) -> Option<Response> {
-    let (resolver, user_data) = *lock(&BLOB_RESOLVER);
-    let resolve = resolver.filter(|_| text(url).is_some_and(|u| u.starts_with(b"blob:")))?;
-    let mut content_type: *mut c_char = ptr::null_mut();
-    let bytes = unsafe { resolve(url, &mut content_type, user_data as *mut c_void) };
+fn blob_response(url: &[u8]) -> Option<Response> {
+    let resolve = lock(&BLOB_RESOLVER).filter(|_| url.starts_with(b"blob:"))?;
     let mut resp = Response::new();
-    let r = resp.get();
-    r.final_url = unsafe { glib::g_strdup(url) };
-    if bytes.is_null() {
-        r.status = 404;
-        r.error = glib::strdup(b"blob URL not found");
-        unsafe { glib::g_free(content_type.cast()) };
-    } else {
-        let mut len = 0usize;
-        let data = unsafe { g_bytes_get_data(bytes, &mut len) };
-        resp.append(unsafe { glib::slice(data, len) });
-        let r = resp.get();
-        r.status = 200;
-        r.content_type = content_type;
-        unsafe { g_bytes_unref(bytes) };
+    resp.get().final_url = glib::strdup(url);
+    match resolve(url) {
+        Some((bytes, content_type)) => {
+            resp.append(&bytes);
+            let r = resp.get();
+            r.status = 200;
+            r.content_type = content_type.map_or(ptr::null_mut(), |ct| glib::strdup(&ct));
+        }
+        None => {
+            let r = resp.get();
+            r.status = 404;
+            r.error = glib::strdup(b"blob URL not found");
+        }
     }
     Some(resp)
 }
@@ -526,9 +514,8 @@ pub fn preconnect_async(url: &CStr) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_set_blob_resolver(resolver: BlobResolver, user_data: *mut c_void) {
-    *lock(&BLOB_RESOLVER) = (resolver, user_data as usize);
+pub fn set_blob_resolver(resolver: BlobResolver) {
+    *lock(&BLOB_RESOLVER) = Some(resolver);
 }
 
 #[unsafe(no_mangle)]
@@ -585,7 +572,7 @@ pub unsafe extern "C" fn ns_net_request_async(
         };
         return;
     };
-    if let Some(resp) = blob_response(url) {
+    if let Some(resp) = blob_response(url_bytes) {
         let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
         return_outcome(task.0, Ok(resp));
         return;

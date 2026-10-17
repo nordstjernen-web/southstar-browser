@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr, boolean, g_strfreev};
+use southstar_glib::{GBoolean, GHashTable, GStr, boolean};
 use southstar_layout::Style;
 use southstar_style::{StyleRef, StyleTable};
 use southstar_texture::TextureRef;
@@ -210,7 +210,6 @@ unsafe extern "C" {
     fn g_object_unref(object: *mut c_void);
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
-    fn ns_net_navigator_languages() -> *mut *mut c_char;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
 }
@@ -678,22 +677,7 @@ pub fn next_in_subtree<'a>(n: Node<'a>, root: Node<'a>, descend: bool) -> Option
 }
 
 pub fn navigator_languages() -> Vec<Vec<u8>> {
-    let list = unsafe { ns_net_navigator_languages() };
-    let mut out = Vec::new();
-    if list.is_null() {
-        return out;
-    }
-    let mut i = 0;
-    loop {
-        let p = unsafe { *list.add(i) };
-        if p.is_null() {
-            break;
-        }
-        out.push(unsafe { CStr::from_ptr(p) }.to_bytes().to_vec());
-        i += 1;
-    }
-    unsafe { g_strfreev(list) };
-    out
+    southstar_netutil::effective_navigator_languages()
 }
 
 #[unsafe(no_mangle)]

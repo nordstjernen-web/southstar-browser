@@ -9,7 +9,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_engine::Page;
-use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_layout::{BoxRef, NsBox};
 
 #[repr(C)]
@@ -22,22 +22,9 @@ pub struct GString {
 pub use southstar_engine::{CssCache, PrintSetup};
 
 unsafe extern "C" {
-    fn ns_build_error_page(
-        url: *const c_char,
-        status: c_long,
-        transport_error: *const c_char,
-    ) -> *mut c_char;
     fn ns_box_free(b: *mut NsBox);
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
-}
-
-fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-pub fn take_string(p: *mut c_char) -> Option<Vec<u8>> {
-    unsafe { GStr::take(p) }.map(|s| s.to_bytes().to_vec())
 }
 
 pub use southstar_net::ResponseTiming as Timing;
@@ -87,10 +74,11 @@ pub fn fetch(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
 }
 
 pub fn error_page(url: Option<&CStr>, status: c_long, transport_error: Option<&CStr>) -> Vec<u8> {
-    take_string(unsafe {
-        ns_build_error_page(ptr_or_null(url), status, ptr_or_null(transport_error))
-    })
-    .unwrap_or_default()
+    southstar_net::build_error_page(
+        url.map(CStr::to_bytes),
+        status,
+        transport_error.map(CStr::to_bytes),
+    )
 }
 
 pub fn image_document(url: Option<&CStr>) -> Vec<u8> {

@@ -13,12 +13,6 @@ use crate::Descriptors;
 const FETCH_DEST_FONT: c_int = 4;
 
 #[repr(C)]
-pub struct NsFontDescriptors {
-    weight: c_int,
-    slant: c_int,
-}
-
-#[repr(C)]
 struct GByteArray {
     data: *mut u8,
     len: c_uint,
@@ -34,7 +28,6 @@ struct NsResponse {
 
 type ReadyCallback =
     unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
-type IdleCallback = unsafe extern "C" fn(user_data: *mut c_void);
 
 unsafe extern "C" {
     fn ns_net_request_async(
@@ -123,14 +116,6 @@ pub fn register_font_oracle() {
     unsafe { ns_paint_register_font_oracle() };
 }
 
-pub fn resolve_url(base: Option<&CStr>, href: &CStr) -> Option<CString> {
-    match base {
-        Some(base) => southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
-            .and_then(|abs| CString::new(abs).ok()),
-        None => Some(href.to_owned()),
-    }
-}
-
 pub struct Cancellable(NonNull<c_void>);
 
 unsafe impl Send for Cancellable {}
@@ -158,31 +143,18 @@ impl Drop for Cancellable {
     }
 }
 
-pub struct IdleWaiter {
-    callback: IdleCallback,
-    user_data: *mut c_void,
-}
-
-unsafe impl Send for IdleWaiter {}
-
-impl PartialEq for IdleWaiter {
-    fn eq(&self, other: &Self) -> bool {
-        self.callback as usize == other.callback as usize && self.user_data == other.user_data
-    }
-}
-
-impl IdleWaiter {
-    pub fn call(&self) {
-        unsafe { (self.callback)(self.user_data) };
-    }
-}
-
-pub fn fetch(url: &CStr, base_url: Option<&CStr>, cancel: &Cancellable) {
-    let context = Box::into_raw(Box::new(url.to_owned()));
+pub fn fetch(url: &[u8], base_url: Option<&[u8]>, cancel: &Cancellable) {
+    let (Ok(url), Ok(base_url)) = (CString::new(url), base_url.map(CString::new).transpose())
+    else {
+        crate::fetched(url, None);
+        return;
+    };
+    let url_ptr = url.as_ptr();
+    let context = Box::into_raw(Box::new(url));
     unsafe {
         ns_net_request_async(
-            url.as_ptr(),
-            base_url.map_or(ptr::null(), CStr::as_ptr),
+            url_ptr,
+            base_url.as_deref().map_or(ptr::null(), CStr::as_ptr),
             c"GET".as_ptr(),
             ptr::null(),
             0,
@@ -208,7 +180,7 @@ unsafe extern "C" fn on_fetched(_source: *mut c_void, result: *mut c_void, user_
     let url = unsafe { Box::from_raw(user_data.cast::<CString>()) };
     let mut error = ptr::null_mut();
     let resp = unsafe { ns_net_fetch_finish(result, &mut error) };
-    crate::fetched(&url, unsafe { response_font_body(resp) });
+    crate::fetched(url.to_bytes(), unsafe { response_font_body(resp) });
     unsafe { ns_response_free(resp) };
     if !error.is_null() {
         unsafe { glib::g_error_free(error) };
@@ -639,80 +611,5 @@ fn refresh_pango_font_map() {
         {
             pango::pango_fc_font_map_config_changed(font_map);
         }
-    }
-}
-
-fn descriptors(d: NsFontDescriptors) -> Descriptors {
-    Descriptors {
-        weight: d.weight,
-        slant: d.slant,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_font_init() {
-    crate::init();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_font_shutdown() {
-    crate::shutdown();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_font_available() -> GBoolean {
-    glib::boolean(crate::available())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_font_generation() -> c_uint {
-    crate::generation()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_font_pending_count() -> c_uint {
-    crate::pending_count()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_font_family_loaded(family: *const c_char) -> GBoolean {
-    let family = unsafe { glib::bytes(family) };
-    glib::boolean(family.is_some_and(crate::family_loaded))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_font_request(
-    family: *const c_char,
-    src_url: *const c_char,
-    base_url: *const c_char,
-    d: NsFontDescriptors,
-) {
-    let cstr = |p: *const c_char| (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) });
-    crate::request(cstr(family), cstr(src_url), cstr(base_url), descriptors(d));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_font_add_idle_cb(
-    callback: Option<IdleCallback>,
-    user_data: *mut c_void,
-) {
-    if let Some(callback) = callback {
-        crate::add_idle_waiter(IdleWaiter {
-            callback,
-            user_data,
-        });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_font_remove_idle_cb(
-    callback: Option<IdleCallback>,
-    user_data: *mut c_void,
-) {
-    if let Some(callback) = callback {
-        crate::remove_idle_waiter(&IdleWaiter {
-            callback,
-            user_data,
-        });
     }
 }

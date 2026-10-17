@@ -1,13 +1,12 @@
-//! Southstar — the C ABI of form encoding: urlencoded pairs appended to a GString in the submission charset, multipart field quoting and boundaries.
+//! Southstar — form encoding over GLib: urlencoded pairs in the submission charset, and multipart boundaries.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_char;
 use core::ptr;
 
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::{self as glib, GError};
 
-use super::sinks::{GString, gstring_append};
 use crate::forms;
 
 unsafe extern "C" {
@@ -23,16 +22,13 @@ unsafe extern "C" {
     fn g_random_int() -> u32;
 }
 
-fn append(out: *mut GString, bytes: &[u8]) {
-    gstring_append(out, bytes);
-}
-
-fn converted(text: *const c_char) -> Option<Vec<u8>> {
+fn converted(text: &[u8]) -> Option<Vec<u8>> {
     let charset = std::ffi::CString::new(forms::submission_charset()?).ok()?;
+    // SAFETY: text is len readable bytes, charset and "UTF-8" are NUL-terminated and the out-parameters may be null.
     let out = unsafe {
         g_convert(
-            text,
-            -1,
+            text.as_ptr().cast(),
+            text.len() as isize,
             charset.as_ptr(),
             c"UTF-8".as_ptr(),
             ptr::null_mut(),
@@ -40,49 +36,35 @@ fn converted(text: *const c_char) -> Option<Vec<u8>> {
             ptr::null_mut(),
         )
     };
+    // SAFETY: g_convert returned null or a new NUL-terminated string the caller owns.
     unsafe { glib::GStr::take(out) }.map(|s| s.to_bytes().to_vec())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_set_submission_charset(charset: *const c_char) {
-    forms::set_submission_charset(unsafe { glib::bytes(charset) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_urlencoded_append(out: *mut GString, s: *const c_char) {
-    if out.is_null() || s.is_null() {
-        return;
+fn urlencoded_append(out: &mut Vec<u8>, text: &[u8]) {
+    match converted(text) {
+        Some(text) => forms::urlencode(out, &text),
+        None => forms::urlencode(out, text),
     }
-    let text =
-        converted(s).unwrap_or_else(|| unsafe { glib::bytes(s) }.unwrap_or_default().to_vec());
-    let mut encoded = Vec::with_capacity(text.len());
-    forms::urlencode(&mut encoded, &text);
-    append(out, &encoded);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_urlencoded_append_pair(
-    out: *mut GString,
-    first: *mut GBoolean,
-    name: *const c_char,
-    value: *const c_char,
+pub fn urlencoded_append_pair(
+    out: &mut Vec<u8>,
+    first: &mut bool,
+    name: &[u8],
+    value: Option<&[u8]>,
 ) {
-    if out.is_null() || first.is_null() || name.is_null() {
-        return;
+    if !*first {
+        out.push(b'&');
     }
-    unsafe {
-        if *first == 0 {
-            append(out, b"&");
-        }
-        *first = 0;
-        ns_form_urlencoded_append(out, name);
-        append(out, b"=");
-        ns_form_urlencoded_append(out, value);
+    *first = false;
+    urlencoded_append(out, name);
+    out.push(b'=');
+    if let Some(value) = value {
+        urlencoded_append(out, value);
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_multipart_boundary() -> *mut c_char {
+pub fn multipart_boundary() -> Vec<u8> {
     let mut words = [0u32; 4];
     let mut bytes = [0u8; 16];
     if southstar_sandbox::csprng_fill(&mut bytes) {
@@ -91,8 +73,9 @@ pub extern "C" fn ns_multipart_boundary() -> *mut c_char {
         }
     } else {
         for w in &mut words {
+            // SAFETY: g_random_int has no preconditions.
             *w = unsafe { g_random_int() };
         }
     }
-    glib::strdup(&forms::boundary(words))
+    forms::boundary(words)
 }

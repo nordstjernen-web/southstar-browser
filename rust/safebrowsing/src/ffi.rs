@@ -125,25 +125,3 @@ pub(crate) fn self_exe_dir() -> Option<CString> {
     let exe = unsafe { glib::g_file_read_link(c"/proc/self/exe".as_ptr(), ptr::null_mut()) };
     (!exe.is_null()).then(|| path_get_dirname(&unsafe { take(exe) }))
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_safebrowsing_blocked(host: *const c_char) -> glib::GBoolean {
-    glib::boolean(unsafe { glib::bytes(host) }.is_some_and(crate::blocked))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_safebrowsing_allow_host(host: *const c_char) {
-    if let Some(host) = unsafe { glib::bytes(host) } {
-        crate::allow_host(host);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_safebrowsing_interstitial(
-    url: *const c_char,
-    host: *const c_char,
-) -> *mut c_char {
-    let url = unsafe { borrow(url) };
-    let host = unsafe { borrow(host) };
-    glib::strdup(&crate::interstitial(url, host))
-}

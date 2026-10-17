@@ -54,7 +54,7 @@ pub(crate) struct Delivery {
     error: Option<Vec<u8>>,
 }
 
-pub(crate) struct SwOutcome<'a> {
+pub struct SwOutcome<'a> {
     pub outcome: i32,
     pub status: i64,
     pub content_type: Option<Vec<u8>>,

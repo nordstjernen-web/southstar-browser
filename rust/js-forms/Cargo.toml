@@ -18,6 +18,7 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-net = { path = "../net" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-url = { path = "../url" }
 

@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{self as dom, Node, NsNode};
@@ -12,7 +11,6 @@ use southstar_glib::{self as glib, GBoolean};
 use super::engine::{GString, with_gstring};
 
 unsafe extern "C" {
-    fn ns_form_set_submission_charset(charset: *const c_char);
     fn ns_form_collect_inputs(
         form: *const NsNode,
         n: *const NsNode,
@@ -62,7 +60,7 @@ pub fn set_attr(el: Node, name: &CStr, value: &CStr) {
 }
 
 pub fn set_submission_charset(charset: Option<&CStr>) {
-    unsafe { ns_form_set_submission_charset(charset.map_or(ptr::null(), CStr::as_ptr)) };
+    southstar_net::set_submission_charset(charset.map(CStr::to_bytes));
 }
 
 pub fn collect_inputs(form: Node, root: Node, submitter: Option<Node>) -> Vec<u8> {

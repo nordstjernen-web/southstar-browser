@@ -13,7 +13,7 @@ use southstar_js_runtime::api::{self, ResourceInfo, Upload};
 
 use super::ctx::Ctx;
 use super::imports::{nsr_realmdoc_deny_cookie, nsr_window_link_outward};
-use super::{Js, NsJs, c_string, opt_ptr, owned_text};
+use super::{Js, NsJs, c_string, owned_text};
 
 #[repr(C)]
 pub(crate) struct NsResponse {
@@ -41,13 +41,7 @@ struct GByteArray {
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_net_header_is_nosniff(value: *const c_char) -> GBoolean;
     fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
-    fn ns_net_referer_for(
-        url: *const c_char,
-        referrer_url: *const c_char,
-        policy: c_int,
-    ) -> *mut c_char;
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -173,7 +167,12 @@ pub(crate) fn referer_for(
     referrer_url: Option<&CStr>,
     policy: c_int,
 ) -> Option<CString> {
-    owned_text(unsafe { ns_net_referer_for(opt_ptr(url), opt_ptr(referrer_url), policy) })
+    southstar_net::referer_for(
+        url.map(CStr::to_bytes),
+        referrer_url.map(CStr::to_bytes),
+        policy,
+    )
+    .and_then(|referer| CString::new(referer).ok())
 }
 
 #[derive(Clone, Copy)]
@@ -275,7 +274,7 @@ pub(crate) fn add_resource_timing(
 }
 
 pub(crate) fn header_is_nosniff(value: Option<&CStr>) -> bool {
-    unsafe { ns_net_header_is_nosniff(opt_ptr(value)) != 0 }
+    value.is_some_and(|v| southstar_net::header_is_nosniff(v.to_bytes()))
 }
 
 pub(crate) fn content_type_is_javascript(content_type: Option<&CStr>) -> bool {

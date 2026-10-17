@@ -121,7 +121,6 @@ unsafe extern "C" {
     fn ns_focus_reset(js: *mut NsJs);
     fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_services_reset(js: *mut NsJs);
-    fn ns_js_net_reset(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
 
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
@@ -131,9 +130,6 @@ unsafe extern "C" {
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
 
     fn ns_services_timer_count(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -262,7 +258,7 @@ impl Js {
             ns_services_reset(self.0);
             southstar_js_lifecycle::reset_lifecycle(self.0);
             southstar_js_dispatch::reset(self.0);
-            ns_js_net_reset(self.0);
+            southstar_js_net::reset_page(self.0);
         }
         southstar_js_custom_elements::reset(self.0);
         southstar_css::clear_defined_elements();
@@ -386,16 +382,16 @@ impl Js {
     }
 
     pub fn event_loop_counts(self) -> [u32; 6] {
-        unsafe {
-            [
-                ns_services_timer_count(self.0),
-                southstar_js_lifecycle::raf_count(self.0) as u32,
-                ns_js_net_pending_fetches(self.0),
-                ns_js_net_pending_xhrs(self.0),
-                ns_js_net_pending_sockets(self.0),
-                southstar_js_dispatch::listener_count(self.0) as u32,
-            ]
-        }
+        let count = |n: usize| n as u32;
+        [
+            // SAFETY: a Js handle names the page's live script engine.
+            unsafe { ns_services_timer_count(self.0) },
+            count(southstar_js_lifecycle::raf_count(self.0)),
+            count(southstar_js_net::pending_fetch_count(self.0)),
+            count(southstar_js_net::pending_xhr_count(self.0)),
+            count(southstar_js_net::pending_socket_count(self.0)),
+            count(southstar_js_dispatch::listener_count(self.0)),
+        ]
     }
 }
 

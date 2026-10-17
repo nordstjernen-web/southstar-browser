@@ -91,7 +91,6 @@ unsafe extern "C" {
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
     fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
-    fn ns_font_init();
     fn ns_spell_init();
 }
 
@@ -602,8 +601,8 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
     }
     southstar_http_cache::init();
     southstar_history::init();
+    southstar_font::init();
     unsafe {
-        ns_font_init();
         ns_spell_init();
     }
     southstar_bytecode_cache::init();

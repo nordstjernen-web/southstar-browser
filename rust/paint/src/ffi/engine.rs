@@ -18,11 +18,6 @@ use crate::util::Rgba;
 
 pub use southstar_css::FontMetrics;
 
-unsafe extern "C" {
-    fn ns_font_family_loaded(family: *const c_char) -> GBoolean;
-    fn ns_font_generation() -> c_uint;
-}
-
 pub fn font_family_for_pango(family: Option<&CStr>) -> CString {
     southstar_style::font_family_for_pango(family.unwrap_or_default())
 }
@@ -66,11 +61,11 @@ pub fn css_unescape(text: &[u8]) -> Vec<u8> {
 }
 
 pub fn font_family_loaded(family: &CStr) -> bool {
-    unsafe { ns_font_family_loaded(family.as_ptr()) != 0 }
+    southstar_font::family_loaded(family.to_bytes())
 }
 
 pub fn font_generation() -> u32 {
-    unsafe { ns_font_generation() }
+    southstar_font::generation()
 }
 
 pub fn parse_int(text: &CStr, dflt: i32, min: i32, max: i32) -> i32 {

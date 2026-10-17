@@ -23,6 +23,7 @@ southstar-js-interfaces = { path = "../js-interfaces" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
+southstar-js-net = { path = "../js-net" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-shadow = { path = "../js-shadow" }
