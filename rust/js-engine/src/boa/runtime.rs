@@ -16,7 +16,7 @@ use boa_engine::job::{GenericJob, Job, JobExecutor, NativeAsyncJob, PromiseJob, 
 use boa_engine::module::{
     ModuleLoader, ModuleRequest, Referrer, SimpleModuleLoader, SyntheticModuleInitializer,
 };
-use boa_engine::object::builtins::JsPromise;
+use boa_engine::object::builtins::{JsFunction, JsPromise};
 use boa_engine::prelude::{Finalize, JsData, Trace};
 use boa_engine::realm::Realm;
 use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsString, JsValue, Module};
@@ -296,6 +296,10 @@ impl HostHooks for Hooks {
             &Value(reason),
             handled,
         );
+    }
+
+    fn has_source_text_available(&self, function: &JsFunction, _context: &mut Context) -> bool {
+        !super::access::is_engine_function(function)
     }
 }
 

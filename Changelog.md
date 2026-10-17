@@ -27,6 +27,13 @@ Southstar Browser 0.9.12-dev:
   dispatch, frames and realms, script collection and running, interface
   installation and page reset), shrinking the unsafe budget across the
   js-* crates.
+* Google Search results render again instead of the "unusual traffic"
+  reCAPTCHA page. `Function.prototype.toString` printed the JavaScript
+  source of engine-implemented web APIs (`document.createElement` showed
+  its polyfill body) since the move to Boa; Google's challenge script
+  treats non-native built-ins as tampering and its token was rejected.
+  Engine functions print as `function createElement() { [native code] }`
+  again, through the HostHasSourceTextAvailable hook.
 * Functions that sit beside a direct `eval`, or that were created by
   indirect-eval code, keep their local variables in registers: the scope
   analysis only makes the bindings of functions that actually contain the
