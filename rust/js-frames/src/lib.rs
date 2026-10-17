@@ -21,3 +21,4 @@ mod scripts;
 mod submit;
 
 pub use api::*;
+pub use ffi::install_runtime_hooks;

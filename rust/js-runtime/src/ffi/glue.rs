@@ -2,21 +2,24 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::cell::RefCell;
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
-use southstar_dom::NsNode;
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
+use southstar_dom::{Node, NsNode};
+
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 
 use super::imports;
 use super::state::MessageTask;
-use super::{GMainContext, Js, NsJs};
-use crate::api::ResourceInfo;
+use super::{GMainContext, Js};
+use crate::api::{self, ResourceInfo};
 
 pub type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-type ReadyFn = unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
+pub(crate) type Fetch = Result<southstar_net::Response, Vec<u8>>;
 
 #[repr(C)]
 pub(crate) struct GSource {
@@ -55,54 +58,6 @@ unsafe extern "C" {
     fn g_main_loop_run(lp: *mut GMainLoop);
     fn g_main_loop_quit(lp: *mut GMainLoop);
     fn g_main_loop_unref(lp: *mut GMainLoop);
-    fn g_error_free(error: *mut GError);
-
-    fn ns_net_request_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        headers: *const *const c_char,
-        cancellable: *mut c_void,
-        error: *mut *mut GError,
-    ) -> *mut Response;
-    fn ns_net_request_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        headers: *const *const c_char,
-        cancellable: *mut c_void,
-        callback: ReadyFn,
-        data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut Response;
-    fn ns_engine_in_blocking_fetch() -> GBoolean;
-    fn ns_storage_drain_deferred_events(js: *mut NsJs);
-    fn ns_js_report_pending_rejections(js: *mut NsJs);
-    fn ns_storage_schedule_flush(js: *mut NsJs);
-    fn ns_services_run_due_timers(js: *mut NsJs);
-    fn ns_intersection_observers_tick(js: *mut NsJs);
-    fn ns_resize_observers_tick(js: *mut NsJs);
-    fn ns_js_raf_set_host_driven(js: *mut NsJs);
-    fn ns_js_blob_registry_add(js: *mut NsJs);
-    fn ns_js_blob_registry_remove(js: *mut NsJs);
-    fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64);
-    fn ns_js_orphan_count(js: *mut NsJs) -> c_int;
-    fn ns_js_orphans_collect(js: *mut NsJs) -> *mut GPtrArray;
-    fn ns_js_purge_subtree_pending_iframes(js: *mut NsJs, root: *mut NsNode);
-    fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode);
-    fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut NsNode);
-    fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
-    fn ns_js_pending_iframe_first(js: *const NsJs) -> *mut NsNode;
-    fn ns_js_pending_iframe_remove_first(js: *mut NsJs);
-    fn ns_js_load_iframe_now(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_js_flush_document_write(js: *mut NsJs);
-    fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
 }
 
 fn context_of(js: Option<Js>) -> *mut GMainContext {
@@ -173,7 +128,7 @@ pub(crate) fn run_gc(js: Js) {
 }
 
 pub(crate) fn engine_in_blocking_fetch() -> bool {
-    unsafe { ns_engine_in_blocking_fetch() != 0 }
+    southstar_net::in_blocking_fetch()
 }
 
 pub(crate) fn exception_text(
@@ -208,19 +163,19 @@ pub(crate) fn log_line(js: Js, line: *const c_char) {
 }
 
 pub(crate) fn storage_drain_deferred_events(js: Js) {
-    unsafe { ns_storage_drain_deferred_events(js.ptr()) };
+    (api::storage_hooks().drain_deferred_events)(js.ptr());
 }
 
 pub(crate) fn report_pending_rejections(js: Js) {
-    unsafe { ns_js_report_pending_rejections(js.ptr()) };
+    (api::dispatch_hooks().report_pending_rejections)(js.ptr());
 }
 
 pub(crate) fn storage_schedule_flush(js: Js) {
-    unsafe { ns_storage_schedule_flush(js.ptr()) };
+    (api::storage_hooks().schedule_flush)(js.ptr());
 }
 
 pub(crate) fn run_due_timers(js: Js) {
-    unsafe { ns_services_run_due_timers(js.ptr()) };
+    (api::services_hooks().run_due_timers)(js.ptr());
 }
 
 pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: *const c_char) {
@@ -229,28 +184,26 @@ pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: *const c_char) 
 }
 
 pub(crate) fn observers_tick(js: Js) {
-    unsafe {
-        ns_intersection_observers_tick(js.ptr());
-        ns_resize_observers_tick(js.ptr());
-    }
+    let observers = api::observers_hooks();
+    (observers.intersection_tick)(js.ptr());
+    (observers.resize_tick)(js.ptr());
 }
 
 pub(crate) fn raf_set_host_driven(js: Js) {
-    unsafe { ns_js_raf_set_host_driven(js.ptr()) };
+    (api::lifecycle_hooks().raf_set_host_driven)(js.ptr());
 }
 
 pub(crate) fn blob_registry(js: Js, add: bool) {
-    unsafe {
-        if add {
-            ns_js_blob_registry_add(js.ptr());
-        } else {
-            ns_js_blob_registry_remove(js.ptr());
-        }
+    let url = api::url_hooks();
+    if add {
+        (url.blob_registry_add)(js.ptr());
+    } else {
+        (url.blob_registry_remove)(js.ptr());
     }
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
-    unsafe { ns_js_note_viewport_scroll(js.ptr(), x, y) };
+    (api::window_hooks().note_viewport_scroll)(js.ptr(), x, y);
 }
 
 pub(crate) fn set_active_modal(modal: *const NsNode) {
@@ -258,10 +211,8 @@ pub(crate) fn set_active_modal(modal: *const NsNode) {
 }
 
 pub(crate) fn finish_eval_depth(js: Js) {
-    unsafe {
-        ns_js_flush_document_write(js.ptr());
-        ns_js_schedule_pending_script_drain(js.ptr());
-    }
+    (api::document_hooks().flush_write)(js.ptr());
+    (api::loader_hooks().schedule_pending_script_drain)(js.ptr());
 }
 
 pub(crate) fn dispatch_window_only_event(
@@ -334,47 +285,35 @@ pub(crate) fn run_message_task(task: MessageTask) {
     let _ = ctx.with(|scope| drop(run(scope)));
 }
 
-pub(crate) fn orphan_count(js: Js) -> c_int {
-    unsafe { ns_js_orphan_count(js.ptr()) }
+pub(crate) fn orphan_count(js: Js) -> usize {
+    (api::mutation_hooks().orphan_count)(js.ptr())
 }
 
-pub(crate) fn collect_orphans(js: Js) -> Vec<*mut NsNode> {
-    let array = unsafe { ns_js_orphans_collect(js.ptr()) };
-    if array.is_null() {
-        return Vec::new();
-    }
-    let len = unsafe { (*array).len } as usize;
-    let nodes = (0..len)
-        .map(|i| unsafe { *(*array).pdata.add(i) }.cast::<NsNode>())
-        .collect();
-    unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    nodes
+pub(crate) fn collect_orphans(js: Js) -> Vec<Node<'static>> {
+    (api::mutation_hooks().collect_orphans)(js.ptr())
 }
 
-pub(crate) fn free_orphan_subtree(js: Js, root: *mut NsNode) {
-    super::record::purge_subtree_rafs(js.ptr(), root);
-    unsafe {
-        ns_js_purge_subtree_pending_iframes(js.ptr(), root);
-        ns_js_purge_subtree_script_refs(js.ptr(), root);
-        ns_js_purge_subtree_node_refs(js.ptr(), root);
-    }
-    if let Some(root) = super::record::node(root) {
-        root.free_tree();
-    }
+pub(crate) fn free_orphan_subtree(js: Js, root: Node<'static>) {
+    super::record::purge_subtree_rafs(js.ptr(), root.as_mut_ptr());
+    (api::frames_hooks().purge_subtree_pending)(js.ptr(), root);
+    (api::loader_hooks().purge_subtree_script_refs)(js.ptr(), root);
+    (api::mutation_hooks().purge_subtree_node_refs)(js.ptr(), root);
+    root.free_tree();
 }
 
-pub(crate) fn pending_iframe_count(js: Js) -> c_uint {
-    unsafe { ns_js_pending_iframe_count(js.ptr()) }
+pub(crate) fn pending_iframe_count(js: Js) -> u32 {
+    (api::frames_hooks().pending_count)(js.ptr())
 }
 
-pub(crate) fn pending_iframe_first(js: Js) -> *mut NsNode {
-    unsafe { ns_js_pending_iframe_first(js.ptr()) }
+pub(crate) fn pending_iframe_first(js: Js) -> Option<Node<'static>> {
+    (api::frames_hooks().pending_first)(js.ptr())
 }
 
-pub(crate) fn load_first_pending_iframe(js: Js, iframe: *mut NsNode) {
-    unsafe {
-        ns_js_pending_iframe_remove_first(js.ptr());
-        ns_js_load_iframe_now(js.ptr(), iframe);
+pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
+    let frames = api::frames_hooks();
+    (frames.pending_remove_first)(js.ptr());
+    if let Some(iframe) = iframe {
+        (frames.load_now)(js.ptr(), iframe);
     }
 }
 
@@ -387,114 +326,53 @@ pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
     false
 }
 
-struct PumpedFetch {
-    main_loop: *mut GMainLoop,
-    response: *mut Response,
-    error: *mut GError,
-    done: bool,
-}
+struct PumpedLoop(*mut GMainLoop);
 
-unsafe extern "C" fn pumped_fetch_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    data: *mut c_void,
-) {
-    let fetch = unsafe { &mut *data.cast::<PumpedFetch>() };
-    fetch.response = unsafe { ns_net_fetch_finish(result, &mut fetch.error) };
-    fetch.done = true;
-    if !fetch.main_loop.is_null() {
-        unsafe { g_main_loop_quit(fetch.main_loop) };
+impl PumpedLoop {
+    fn new() -> PumpedLoop {
+        // SAFETY: a null context selects the default one, and the new loop is owned by this value.
+        PumpedLoop(unsafe { g_main_loop_new(ptr::null_mut(), glib::FALSE) })
+    }
+
+    fn run(&self) {
+        // SAFETY: the loop is live until this value drops.
+        unsafe { g_main_loop_run(self.0) };
     }
 }
 
-pub(crate) struct RequestBody {
-    pub method: *const c_char,
-    pub data: *const c_void,
-    pub len: usize,
-    pub content_type: *const c_char,
+impl Drop for PumpedLoop {
+    fn drop(&mut self) {
+        // SAFETY: the loop was created by new and is released once, here.
+        unsafe { g_main_loop_unref(self.0) };
+    }
 }
 
-impl RequestBody {
-    pub(crate) const GET: RequestBody = RequestBody {
-        method: c"GET".as_ptr(),
-        data: ptr::null(),
-        len: 0,
-        content_type: ptr::null(),
-    };
-}
-
-pub(crate) unsafe fn fetch_resource(
-    js: Option<Js>,
-    url: *const c_char,
-    top_url: *const c_char,
-    headers: *const *const c_char,
-    body: &RequestBody,
-    error: *mut *mut GError,
-) -> *mut Response {
+pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'_>) -> Fetch {
     let js = match js {
         Some(js) if js.st().worker_host.get().is_null() => js,
-        _ => unsafe {
-            return ns_net_request_blocking(
-                url,
-                top_url,
-                body.method,
-                body.data,
-                body.len,
-                body.content_type,
-                headers,
-                ptr::null_mut(),
-                error,
-            );
-        },
+        _ => {
+            return southstar_net::request_blocking(req)
+                .map_err(|failure| failure.message().to_vec());
+        }
     };
-    let mut fetch = Box::new(PumpedFetch {
-        main_loop: unsafe { g_main_loop_new(ptr::null_mut(), glib::FALSE) },
-        response: ptr::null_mut(),
-        error: ptr::null_mut(),
-        done: false,
+    let main_loop = PumpedLoop::new();
+    let quit = main_loop.0;
+    let outcome: Rc<RefCell<Option<Fetch>>> = Rc::default();
+    let delivered = Rc::clone(&outcome);
+    southstar_net::request_with(req, None, move |result| {
+        *delivered.borrow_mut() = Some(result);
+        // SAFETY: the loop stays alive until the outcome it waits for has been delivered.
+        unsafe { g_main_loop_quit(quit) };
     });
-    let data: *mut PumpedFetch = &mut *fetch;
-    unsafe {
-        ns_net_request_async(
-            url,
-            top_url,
-            body.method,
-            body.data,
-            body.len,
-            body.content_type,
-            headers,
-            ptr::null_mut(),
-            pumped_fetch_done,
-            data.cast(),
-        )
-    };
     let state = js.st();
     let saved = state.in_pump.replace(true);
     let start = super::monotonic_us();
-    if !unsafe { (*data).done } {
-        unsafe { g_main_loop_run((*data).main_loop) };
+    if outcome.borrow().is_none() {
+        main_loop.run();
     }
     crate::budget::credit_pumped_time(js, start);
     state.in_pump.set(saved);
-    unsafe { g_main_loop_unref((*data).main_loop) };
-    let fetched_error = unsafe { (*data).error };
-    if !fetched_error.is_null() {
-        if error.is_null() {
-            unsafe { g_error_free(fetched_error) };
-        } else {
-            unsafe { *error = fetched_error };
-        }
-    }
-    unsafe { (*data).response }
-}
-
-pub(crate) fn take_error(error: *mut GError) -> Option<CString> {
-    // SAFETY: the error is null or one a GLib call just handed over, so it is live until it is freed below.
-    let message =
-        text(unsafe { error.as_ref() }?.message).map_or_else(CString::default, CStr::to_owned);
-    // SAFETY: the error is non-null, ours, and freed exactly once.
-    unsafe { g_error_free(error) };
-    Some(message)
+    outcome.take().unwrap_or_else(|| Err(Vec::new()))
 }
 
 pub(crate) fn add_resource_timing(

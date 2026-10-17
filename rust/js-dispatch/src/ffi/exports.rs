@@ -230,43 +230,6 @@ pub unsafe extern "C" fn ns_event_type_init_flags(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_report_pending_rejections(js: *mut NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::errors::report_pending_rejections(js);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_drop_pending_rejections(js: *mut NsJs) {
-    crate::drop_pending_rejections(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode) {
-    let js = Js::of(js);
-    if !js.is_null() && !node.is_null() {
-        crate::forget_node(js, node);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dispatch_teardown_listeners(js: *mut NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::teardown_listeners(js);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_dispatch_teardown(js: *mut NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::teardown(js);
-    }
-}
-
 pub(super) fn put_prevented(slot: *mut GBoolean, prevented: bool) {
     if let Some(slot) = unsafe { slot.as_mut() } {
         *slot = glib::boolean(prevented);
@@ -287,4 +250,42 @@ pub unsafe extern "C" fn ns_js_dispatch_resource_event(
         return glib::FALSE;
     }
     glib::boolean(crate::ui_events::resource_event(js, target, &kind))
+}
+
+fn report_pending_rejections(js: *const NsJs) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::errors::report_pending_rejections(js);
+    }
+}
+
+fn forget_node(js: *const NsJs, node: southstar_dom::Node<'_>) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::forget_node(js, node.as_ptr());
+    }
+}
+
+fn teardown_listeners(js: *const NsJs) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::teardown_listeners(js);
+    }
+}
+
+fn teardown(js: *const NsJs) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::teardown(js);
+    }
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_dispatch_hooks(southstar_js_runtime::api::DispatchHooks {
+        report_pending_rejections,
+        drop_pending_rejections: crate::drop_pending_rejections,
+        forget_node,
+        teardown_listeners,
+        teardown,
+    });
 }

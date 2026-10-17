@@ -107,6 +107,7 @@ pub fn link_interface_ctors(scope: &mut Scope<'_>) {
 }
 
 pub use chrome::install as install_window_chrome;
+pub use ffi::install_runtime_hooks;
 pub use ffi::link_interfaces;
 pub use global::{
     install_namespace_object, install_navigator_shape, install_web_api_shapes,

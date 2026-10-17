@@ -11,6 +11,7 @@ mod realm;
 pub mod view;
 pub mod write;
 
+pub use ffi::install_runtime_hooks;
 pub use ffi::{doc_base_url, seed_cookies_from_jar};
 
 use southstar_dom::{Kind, Node};

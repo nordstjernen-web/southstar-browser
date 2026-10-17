@@ -22,3 +22,5 @@ mod state;
 mod style;
 mod text;
 mod validate;
+
+pub use ffi::state::install_runtime_hooks;

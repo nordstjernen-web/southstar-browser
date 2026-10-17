@@ -118,11 +118,6 @@ pub fn doc_base_url(js: *const NsJs) -> Option<Vec<u8>> {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char {
-    glib_bytes(doc_base_url(js))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_node_document_base_url(
     js: *mut NsJs,
     node: *const NsNode,
@@ -502,14 +497,20 @@ pub fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, document: &Valu
     crate::realm::define_getter(scope, document, "doctype", crate::realm::get_doctype);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_flush_document_write(js: *mut NsJs) {
+fn flush_write(js: *const NsJs) {
     if !js.is_null() {
-        crate::write::flush(Js(js));
+        crate::write::flush(Js(js.cast_mut()));
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_document_write_teardown(js: *mut NsJs) {
-    crate::write::teardown(Js(js));
+fn write_teardown(js: *const NsJs) {
+    crate::write::teardown(Js(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_document_hooks(southstar_js_runtime::api::DocumentHooks {
+        base_url: doc_base_url,
+        flush_write,
+        write_teardown,
+    });
 }

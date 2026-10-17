@@ -267,13 +267,6 @@ pub(crate) fn is_submit_trigger(el: Element) -> bool {
     southstar_js_forms::is_submit_trigger(el)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_top_layer_forget_node(js: *const NsJs, n: *const NsNode) {
-    if let Some(n) = node(n) {
-        crate::forget_node(Js::of(js), n);
-    }
-}
-
 fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()
 }
@@ -320,11 +313,6 @@ pub fn flush_autofocus(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_top_layer_clear(js: *const NsJs) {
-    clear_top_layer(js);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_popover_removing(js: *const NsJs, el: *mut NsNode) {
     let (js, Some(el)) = (Js::of(js), node(el)) else {
         return;
@@ -332,20 +320,6 @@ pub unsafe extern "C" fn ns_js_popover_removing(js: *const NsJs, el: *mut NsNode
     if !js.is_null() && el.is_element() {
         crate::popover::removing_steps(js, el);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_popover_attr_changed(
-    js: *const NsJs,
-    el: *mut NsNode,
-    attr: *const c_char,
-    old_value: *const c_char,
-    new_value: *const c_char,
-) {
-    let (js, Some(el), Some(attr)) = (Js::of(js), node(el), text(attr)) else {
-        return;
-    };
-    crate::popover::attr_changed(js, el, attr.to_bytes(), text(old_value), text(new_value));
 }
 
 #[unsafe(no_mangle)]
@@ -408,4 +382,30 @@ pub unsafe extern "C" fn ns_popover_target_activation(
     if !js.is_null() {
         crate::invoker::popover_target_activation(js, el, node(event_target));
     }
+}
+
+fn forget_node(js: *const NsJs, n: Node<'_>) {
+    if let Some(n) = n.downgrade().get() {
+        crate::forget_node(Js::of(js), n);
+    }
+}
+
+fn popover_attr_changed(
+    js: *const NsJs,
+    el: Node<'_>,
+    attr: &CStr,
+    old_value: Option<&CStr>,
+    new_value: Option<&CStr>,
+) {
+    if let Some(el) = el.downgrade().get() {
+        crate::popover::attr_changed(Js::of(js), el, attr.to_bytes(), old_value, new_value);
+    }
+}
+
+pub fn install_runtime_hooks() {
+    api::set_top_layer_hooks(api::TopLayerHooks {
+        popover_attr_changed,
+        forget_node,
+        clear: clear_top_layer,
+    });
 }

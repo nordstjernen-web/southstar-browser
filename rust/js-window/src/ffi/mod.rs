@@ -168,11 +168,6 @@ pub fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value) -> Va
     message::make_post_message(scope, window)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_links_clear(js: *const NsJs, _destroy: GBoolean) {
-    clear_window_links(js);
-}
-
 pub fn clear_window_links(js: *const NsJs) {
     message::links_clear(Js::of(js));
 }
@@ -456,11 +451,6 @@ pub fn nsr_window_open_method(
     location::open(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_history_teardown(js: *const NsJs) {
-    crate::teardown(Js::of(js));
-}
-
 pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
     crate::documents::current_document_for(scope, window)
 }
@@ -542,11 +532,6 @@ fn sync_metrics(js: Js) {
 /// `js` is null or a live script engine.
 pub unsafe fn sync_window_metrics(js: *mut c_void) {
     sync_metrics(Js::of(js.cast()));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
-    sync_metrics(Js::of(js));
 }
 
 #[unsafe(no_mangle)]
@@ -676,11 +661,6 @@ pub unsafe fn note_viewport_scroll(js: *mut c_void, x: f64, y: f64) {
     page::note_viewport_scroll(Js::of(js.cast()), x, y);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64) {
-    page::note_viewport_scroll(Js::of(js), x, y);
-}
-
 /// # Safety
 ///
 /// `js` is null or a live script engine.
@@ -758,4 +738,25 @@ pub unsafe fn nsr_window_install_state(js: *const NsJs, scope: &mut Scope<'_>, g
 #[unsafe(no_mangle)]
 pub fn nsr_is_window_named(value: &Value) -> bool {
     value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
+}
+
+fn history_teardown(js: *const NsJs) {
+    crate::teardown(Js::of(js));
+}
+
+fn sync_page_metrics(js: *const NsJs) {
+    sync_metrics(Js::of(js));
+}
+
+fn note_page_scroll(js: *const NsJs, x: f64, y: f64) {
+    page::note_viewport_scroll(Js::of(js), x, y);
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_window_hooks(southstar_js_runtime::api::WindowHooks {
+        note_viewport_scroll: note_page_scroll,
+        sync_metrics: sync_page_metrics,
+        history_teardown,
+        links_clear: clear_window_links,
+    });
 }

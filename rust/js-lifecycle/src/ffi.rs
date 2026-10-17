@@ -403,18 +403,8 @@ pub unsafe fn needs_tick(js: *mut c_void) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_set_host_driven(js: *mut NsJs) {
-    frames::set_host_driven(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64 {
     frames::idle_frame_end(Js(js.cast_mut()), now, end)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode) {
-    frames::purge_frame(Js(js), frame);
 }
 
 #[unsafe(no_mangle)]
@@ -449,11 +439,6 @@ pub unsafe fn fire_media_load_events(js: *mut c_void, layout: Option<BoxRef<'_>>
     );
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_lifecycle_teardown(js: *mut NsJs) {
-    crate::teardown(Js(js));
-}
-
 pub fn raf_count(js: *const NsJs) -> usize {
     frames::count(Js(js.cast_mut()))
 }
@@ -474,4 +459,24 @@ pub fn start_lifecycle(
     start_us: i64,
 ) {
     lifecycle::start(Js(js.cast_mut()), doc.as_mut_ptr(), tasks, origin, start_us);
+}
+
+fn raf_set_host_driven(js: *const NsJs) {
+    frames::set_host_driven(Js(js.cast_mut()));
+}
+
+pub fn purge_frame_rafs(js: *const NsJs, frame: Node<'_>) {
+    frames::purge_frame(Js(js.cast_mut()), frame.as_ptr());
+}
+
+fn teardown(js: *const NsJs) {
+    crate::teardown(Js(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_lifecycle_hooks(api::LifecycleHooks {
+        raf_set_host_driven,
+        purge_frame_rafs,
+        teardown,
+    });
 }

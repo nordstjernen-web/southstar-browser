@@ -3,34 +3,19 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{Kind, Node, NsNode, WeakNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{self as glib};
 use southstar_js_engine::{
     Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
     Scope, Value,
 };
 
-use super::{Js, NsJs, imports};
+use super::{Js, imports};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
-
-unsafe extern "C" {
-    fn ns_realm_cloners_made(js: *const NsJs) -> GBoolean;
-    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> ContextHandle;
-    fn ns_mut_scrub_node(js: *const NsJs, node: *const NsNode);
-    fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode);
-    fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode);
-    fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode);
-    fn ns_focus_forget_node(js: *const NsJs, n: *const NsNode);
-    fn ns_js_forget_pending_change_for(js: *mut NsJs, el: *const NsNode);
-    fn ns_parser_hold_forget(js: *mut NsJs, n: *const NsNode);
-    fn ns_js_frames_forget_node(js: *mut NsJs, node: *const NsNode);
-    fn ns_top_layer_forget_node(js: *const NsJs, n: *const NsNode);
-    fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
-}
 
 pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new(
     c"Element",
@@ -209,8 +194,8 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
     let proto = unsafe { super::record::kind_proto_value(js_ptr, n.as_ptr()) };
     let proto = proto.unwrap_or_else(Value::undefined);
     let node_realm = match js {
-        Some(js) if unsafe { ns_realm_cloners_made(js.ptr()) } != 0 => {
-            let realm = unsafe { ns_js_node_realm_context(js.ptr().cast(), n.as_ptr()) };
+        Some(js) if (crate::api::frames_hooks().cloners_made)(js.ptr()) => {
+            let realm = (crate::api::frames_hooks().node_realm_context)(js.ptr(), n);
             if realm.is_null() {
                 let root = core::iter::successors(Some(n), |n| n.parent())
                     .last()
@@ -283,11 +268,9 @@ pub(crate) fn make_element(scope: &mut Scope<'_>, cnode: *const NsNode) -> Resul
 fn invalidate_wrapper(target: Node<'static>) {
     let n = target.as_mut_ptr();
     let js = super::record::active();
-    unsafe {
-        ns_mut_scrub_node(js, n);
-        ns_attr_detach_owner(js, n);
-        ns_attribute_map_release_owner(js, n);
-    }
+    (crate::api::observers_hooks().scrub_node)(js, target);
+    (crate::api::attrs_hooks().detach_owner)(js, target);
+    (crate::api::mutation_hooks().attribute_map_release_owner)(js, target);
     let wrapper = target.js_wrapper();
     if !wrapper.is_null() {
         target.set_js_wrapper(ptr::null_mut());
@@ -303,19 +286,17 @@ fn invalidate_wrapper(target: Node<'static>) {
         }
     }
     if !js.is_null() {
-        unsafe {
-            ns_js_unorphan_node(js, n);
-            (crate::api::images_hooks().forget_node)(js, target);
-            ns_focus_forget_node(js, n);
-            ns_js_forget_pending_change_for(js, n);
-            ns_parser_hold_forget(js, n);
-            ns_js_frames_forget_node(js, n);
-            ns_top_layer_forget_node(js, n);
-        }
+        (crate::api::mutation_hooks().unorphan_node)(js, target);
+        (crate::api::images_hooks().forget_node)(js, target);
+        (crate::api::focus_hooks().forget_node)(js, target);
+        (crate::api::mutation_hooks().forget_pending_change_for)(js, target);
+        (crate::api::loader_hooks().parser_hold_forget)(js, target);
+        (crate::api::frames_hooks().forget_node)(js, target);
+        (crate::api::top_layer_hooks().forget_node)(js, target);
     }
     target.set_js_invalidate(None);
     if !js.is_null() {
-        unsafe { ns_dispatch_forget_node(js, n) };
+        (crate::api::dispatch_hooks().forget_node)(js, target);
     }
 }
 

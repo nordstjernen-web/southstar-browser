@@ -9,6 +9,7 @@ pub mod selection;
 mod static_range;
 pub mod walker;
 
+pub use ffi::install_runtime_hooks;
 pub use ffi::iters_pre_remove;
 
 use southstar_dom::Node;

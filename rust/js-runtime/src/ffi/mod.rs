@@ -14,11 +14,11 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
 use crate::worker;
-use crate::{Element, interrupt, page, teardown};
+use crate::{Element, api, interrupt, page, teardown};
 use state::{DataFn, LogFn, NavigateFn, PageState};
 
 pub use record::NsJs;
@@ -112,54 +112,6 @@ const LOG_LEVEL_WARNING: c_int = 1 << 4;
 unsafe extern "C" {
     fn g_main_context_default() -> *mut GMainContext;
     fn g_source_remove(id: c_uint) -> GBoolean;
-    fn ns_js_mutation_init(js: *mut NsJs);
-    fn ns_storage_init(js: *mut NsJs);
-    fn ns_media_init(js: *mut NsJs);
-    fn ns_worker_log_cb(line: *const c_char, user_data: *mut c_void);
-
-    fn ns_worker_host_closing(host: *const WorkerHost) -> GBoolean;
-
-    fn ns_services_chrome_compat() -> GBoolean;
-    fn ns_js_sync_window_metrics(js: *const NsJs);
-    fn ns_worker_shape_global(ctx: ContextHandle, service_worker: GBoolean);
-
-    fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray;
-    fn ns_js_orphan_tracked(js: *mut NsJs, node: *const NsNode) -> GBoolean;
-    fn ns_js_mutation_teardown(js: *mut NsJs);
-
-    fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
-    fn ns_top_layer_clear(js: *mut NsJs);
-    fn ns_js_fonts_teardown(js: *mut NsJs);
-    fn ns_lifecycle_teardown(js: *mut NsJs);
-    fn ns_js_blob_registry_remove(js: *mut NsJs);
-    fn ns_storage_flush(js: *mut NsJs);
-    fn ns_js_forget_pending_change(js: *mut NsJs);
-    fn ns_document_write_teardown(js: *mut NsJs);
-    fn ns_workers_teardown(js: *mut NsJs);
-    fn ns_window_history_teardown(js: *mut NsJs);
-    fn ns_traversal_teardown(js: *mut NsJs);
-    fn ns_services_teardown(js: *mut NsJs);
-    fn ns_js_blob_urls_free(js: *mut NsJs);
-    fn ns_canvas_states_teardown(js: *mut NsJs);
-    fn ns_dispatch_teardown_listeners(js: *mut NsJs);
-    fn ns_js_net_teardown(js: *mut NsJs);
-    fn ns_js_loader_teardown(js: *mut NsJs);
-    fn ns_js_filereader_teardown(js: *mut NsJs);
-    fn ns_attr_detach_all(js: *mut NsJs);
-    fn ns_attribute_maps_teardown(js: *mut NsJs);
-    fn ns_storage_free_deferred_events(js: *mut NsJs);
-    fn ns_focus_teardown(js: *mut NsJs);
-    fn ns_js_input_teardown(js: *mut NsJs);
-    fn ns_observers_teardown(js: *mut NsJs);
-    fn ns_storage_teardown(js: *mut NsJs);
-    fn ns_media_teardown(js: *mut NsJs);
-    fn ns_collections_teardown(js: *mut NsJs);
-    fn ns_cssom_teardown(js: *mut NsJs);
-    fn ns_url_teardown(js: *mut NsJs);
-    fn ns_js_frames_teardown(js: *mut NsJs);
-    fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
-    fn ns_js_drop_pending_rejections(js: *mut NsJs);
-    fn ns_dispatch_teardown(js: *mut NsJs);
 
     fn g_get_monotonic_time() -> i64;
     fn g_get_real_time() -> i64;
@@ -323,11 +275,9 @@ impl Js {
     }
 
     pub fn init_page_states(self) {
-        unsafe {
-            ns_js_mutation_init(self.0);
-            ns_storage_init(self.0);
-            ns_media_init(self.0);
-        }
+        (api::mutation_hooks().init)(self.0);
+        (api::storage_hooks().init)(self.0);
+        (api::media_hooks().init)(self.0);
     }
 
     pub fn adopt_worker_host(self, setup: &WorkerSetup<'_>) {
@@ -338,7 +288,7 @@ impl Js {
         self.st().worker_host.set(setup.host);
         unsafe { record::set_partition_key(self.0, partition) };
         self.set_callbacks(Callbacks {
-            log: Some(ns_worker_log_cb),
+            log: Some(worker_log),
             log_data: setup.host.cast(),
             mutated: None,
             mutated_data: ptr::null_mut(),
@@ -358,7 +308,8 @@ impl Js {
 
     pub fn worker_closing(self) -> bool {
         let host = self.st().worker_host.get();
-        !host.is_null() && unsafe { ns_worker_host_closing(host) != 0 }
+        // SAFETY: a worker page's host stays alive for as long as the page, which is the host_closing hook's obligation.
+        !host.is_null() && unsafe { (api::workers_hooks().host_closing)(host.cast()) }
     }
 
     pub fn set_proto_document(self, proto: Value) {
@@ -378,7 +329,7 @@ impl Js {
     }
 
     pub fn sync_window_metrics(self) {
-        unsafe { ns_js_sync_window_metrics(self.0) };
+        (api::window_hooks().sync_metrics)(self.0);
     }
 
     pub fn install_window_state(self, scope: &mut Scope<'_>, global: &Value) {
@@ -391,7 +342,7 @@ impl Js {
     }
 
     pub fn eval_worker_polyfills(self) {
-        unsafe { record::eval_worker_polyfills(self.0) };
+        record::eval_worker_polyfills(self.0);
     }
 
     pub fn is_active(self) -> bool {
@@ -426,25 +377,16 @@ impl Js {
         (!doc.is_null()).then_some(doc.cast_const())
     }
 
-    pub fn orphans_snapshot(self) -> Option<Vec<Option<Element>>> {
-        let orphans = unsafe { ns_js_orphans_snapshot(self.0) };
-        if orphans.is_null() {
-            return None;
-        }
-        let len = unsafe { (*orphans).len } as usize;
-        let nodes = (0..len)
-            .map(|i| unsafe { Node::from_ptr((*(*orphans).pdata.add(i)).cast::<NsNode>()) })
-            .collect();
-        unsafe { glib::g_ptr_array_free(orphans, glib::TRUE) };
-        Some(nodes)
+    pub fn orphans_snapshot(self) -> Option<Vec<Element>> {
+        (api::mutation_hooks().orphans_snapshot)(self.0)
     }
 
     pub fn orphan_tracked(self, node: Element) -> bool {
-        unsafe { ns_js_orphan_tracked(self.0, node.as_ptr()) != 0 }
+        (api::mutation_hooks().orphan_tracked)(self.0, node)
     }
 
     pub fn teardown_mutation(self) {
-        unsafe { ns_js_mutation_teardown(self.0) };
+        (api::mutation_hooks().teardown)(self.0);
     }
 
     pub fn free_node(self, node: Element) {
@@ -456,14 +398,12 @@ impl Js {
     }
 
     pub fn teardown_document_states(self) {
-        unsafe {
-            ns_js_frames_clear_initial_blank(self.0);
-            ns_top_layer_clear(self.0);
-            ns_js_fonts_teardown(self.0);
-            ns_lifecycle_teardown(self.0);
-            ns_js_blob_registry_remove(self.0);
-            ns_storage_flush(self.0);
-        }
+        (api::frames_hooks().clear_initial_blank)(self.0);
+        (api::top_layer_hooks().clear)(self.0);
+        (api::fonts_hooks().teardown)(self.0);
+        (api::lifecycle_hooks().teardown)(self.0);
+        (api::url_hooks().blob_registry_remove)(self.0);
+        (api::storage_hooks().flush)(self.0);
     }
 
     pub fn free_page_strings(self) {
@@ -471,20 +411,18 @@ impl Js {
     }
 
     pub fn teardown_page_services(self) {
-        unsafe {
-            ns_js_forget_pending_change(self.0);
-            ns_document_write_teardown(self.0);
-            ns_workers_teardown(self.0);
-            ns_window_history_teardown(self.0);
-            self.perf_teardown();
-            ns_traversal_teardown(self.0);
-            ns_services_teardown(self.0);
-            ns_js_blob_urls_free(self.0);
-            ns_canvas_states_teardown(self.0);
-            (crate::api::images_hooks().teardown)(self.0);
-            ns_dispatch_teardown_listeners(self.0);
-            ns_js_net_teardown(self.0);
-        }
+        (api::mutation_hooks().forget_pending_change)(self.0);
+        (api::document_hooks().write_teardown)(self.0);
+        (api::workers_hooks().teardown)(self.0);
+        (api::window_hooks().history_teardown)(self.0);
+        self.perf_teardown();
+        (api::traversal_hooks().teardown)(self.0);
+        (api::services_hooks().teardown)(self.0);
+        (api::url_hooks().blob_urls_free)(self.0);
+        (api::canvas_hooks().teardown)(self.0);
+        (api::images_hooks().teardown)(self.0);
+        (api::dispatch_hooks().teardown_listeners)(self.0);
+        (api::net_hooks().teardown)(self.0);
     }
 
     pub fn stop_observer_tick(self) {
@@ -495,12 +433,10 @@ impl Js {
     }
 
     pub fn teardown_loaders_and_attributes(self) {
-        unsafe {
-            ns_js_loader_teardown(self.0);
-            ns_js_filereader_teardown(self.0);
-            ns_attr_detach_all(self.0);
-            ns_attribute_maps_teardown(self.0);
-        }
+        (api::loader_hooks().teardown)(self.0);
+        (api::url_hooks().file_reader_teardown)(self.0);
+        (api::attrs_hooks().detach_all)(self.0);
+        (api::mutation_hooks().attribute_maps_teardown)(self.0);
     }
 
     pub fn free_pinned_set(self) {
@@ -508,11 +444,9 @@ impl Js {
     }
 
     pub fn teardown_input_states(self) {
-        unsafe {
-            ns_storage_free_deferred_events(self.0);
-            ns_focus_teardown(self.0);
-            ns_js_input_teardown(self.0);
-        }
+        (api::storage_hooks().free_deferred_events)(self.0);
+        (api::focus_hooks().teardown)(self.0);
+        (api::input_hooks().teardown)(self.0);
     }
 
     pub fn free_realm_values(self) {
@@ -520,13 +454,12 @@ impl Js {
     }
 
     pub fn teardown_registries(self) {
-        unsafe {
-            ns_observers_teardown(self.0);
-            (crate::api::custom_elements_hooks().teardown)(self.0);
-            record::free_platform_globals(self.0);
-            ns_storage_teardown(self.0);
-            ns_media_teardown(self.0);
-        }
+        (api::observers_hooks().teardown)(self.0);
+        (api::custom_elements_hooks().teardown)(self.0);
+        // SAFETY: the page is live until free_engine, which runs after this teardown phase.
+        unsafe { record::free_platform_globals(self.0) };
+        (api::storage_hooks().teardown)(self.0);
+        (api::media_hooks().teardown)(self.0);
     }
 
     pub fn free_partition(self) {
@@ -534,19 +467,15 @@ impl Js {
     }
 
     pub fn teardown_style_states(self) {
-        unsafe {
-            ns_collections_teardown(self.0);
-            ns_cssom_teardown(self.0);
-            ns_url_teardown(self.0);
-        }
+        (api::collections_hooks().teardown)(self.0);
+        (api::cssom_hooks().teardown)(self.0);
+        (api::url_hooks().teardown)(self.0);
     }
 
     pub fn teardown_windows(self) {
         southstar_css::set_fullscreen_node(None);
-        unsafe {
-            ns_js_frames_teardown(self.0);
-            ns_window_links_clear(self.0, glib::TRUE);
-        }
+        (api::frames_hooks().teardown)(self.0);
+        (api::window_hooks().links_clear)(self.0);
         crate::scheduling::drop_message_tasks(self);
         (crate::api::perf_hooks().clear_frame_clocks)(self.0, true);
     }
@@ -556,10 +485,8 @@ impl Js {
     }
 
     pub fn teardown_dispatch(self) {
-        unsafe {
-            ns_js_drop_pending_rejections(self.0);
-            ns_dispatch_teardown(self.0);
-        }
+        (api::dispatch_hooks().drop_pending_rejections)(self.0);
+        (api::dispatch_hooks().teardown)(self.0);
     }
 
     pub fn free_engine(self) {
@@ -628,7 +555,7 @@ pub(crate) fn worker_navigator(scope: &mut Scope<'_>) -> Value {
 }
 
 pub(crate) fn chrome_compat() -> bool {
-    unsafe { ns_services_chrome_compat() != 0 }
+    (api::services_hooks().chrome_compat)()
 }
 
 pub(crate) fn supported_entry_types(scope: &mut Scope<'_>) -> Value {
@@ -657,7 +584,15 @@ pub(crate) fn install_worker_location(scope: &mut Scope<'_>, global: &Value, url
 }
 
 pub(crate) fn shape_worker_global(scope: &mut Scope<'_>, service_worker: bool) {
-    unsafe { ns_worker_shape_global(scope.handle(), GBoolean::from(service_worker)) };
+    (api::workers_hooks().shape_global)(scope, service_worker);
+}
+
+unsafe extern "C" fn worker_log(line: *const c_char, host: *mut c_void) {
+    let Some(line) = glue::text(line) else {
+        return;
+    };
+    // SAFETY: the log data of a worker page is its worker host, alive as long as the page.
+    unsafe { (api::workers_hooks().log_line)(host, line) };
 }
 
 pub(crate) fn worker_compile(

@@ -516,33 +516,34 @@ pub unsafe fn window_action_applied(js: *mut c_void) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_update_focus_visible(js: *const NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::focus::update_focus_visible(js);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_focused_node(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(focused_node(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_focus_forget_node(js: *const NsJs, n: *const NsNode) {
-    if let Some(n) = node(n) {
-        crate::forget_node(Js::of(js), n);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode) {
     if let Some(root) = node(root) {
         crate::forget_subtree(Js::of(js), root);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_focus_teardown(js: *const NsJs) {
+fn update_focus_visible(js: *const NsJs) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::focus::update_focus_visible(js);
+    }
+}
+
+fn forget_node(js: *const NsJs, n: Node<'_>) {
+    if let Some(n) = n.downgrade().get() {
+        crate::forget_node(Js::of(js), n);
+    }
+}
+
+fn teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_focus_hooks(api::FocusHooks {
+        focused_node,
+        update_focus_visible,
+        forget_node,
+        teardown,
+    });
 }

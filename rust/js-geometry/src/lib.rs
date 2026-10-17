@@ -11,6 +11,7 @@ pub mod scroll;
 pub mod svg;
 pub mod visibility;
 
+pub use ffi::install_runtime_hooks;
 pub use ffi::{
     box_border_box, box_visual_border_box, box_visual_padding_box, find_box_by_dom,
     window_scroll_prop,

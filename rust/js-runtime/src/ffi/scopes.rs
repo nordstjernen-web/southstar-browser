@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
 use southstar_dom::{Kind, Node, NsNode};
@@ -15,9 +15,6 @@ use crate::budget;
 const FRAME_URL_ATTR: &CStr = c"data-nd-frame-url";
 
 unsafe extern "C" {
-    fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode;
-    fn ns_js_frame_of_realm(js: *const c_void, realm: ContextHandle) -> *mut NsNode;
-    fn ns_js_node_realm_context(js: *const c_void, node: *const NsNode) -> ContextHandle;
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
 }
 
@@ -184,11 +181,20 @@ pub(crate) fn node_root(node: *const NsNode) -> *const NsNode {
 }
 
 pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> *mut NsNode {
-    unsafe { ns_js_frame_of_realm(js.ptr().cast(), realm) }
+    (crate::api::frames_hooks().frame_of_realm)(js.ptr(), realm)
+        .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn node_realm_context(js: Js, node: *const NsNode) -> ContextHandle {
-    unsafe { ns_js_node_realm_context(js.ptr().cast(), node) }
+    super::record::node(node).map_or(ContextHandle::NULL, |node| {
+        (crate::api::frames_hooks().node_realm_context)(js.ptr(), node)
+    })
+}
+
+fn iframe_document_node(frame: *const NsNode) -> *mut NsNode {
+    super::record::node(frame)
+        .and_then(crate::api::frames_hooks().document_node)
+        .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 fn save(js: Js, scope: &mut RealmScope) {
@@ -218,7 +224,7 @@ pub(crate) fn frame_scope_enter(
         state.top_url_slot.set(&mut scope.url);
     }
     js.set_ctx(realm);
-    let frame_doc = unsafe { ns_iframe_document_node(frame) };
+    let frame_doc = iframe_document_node(frame);
     if !frame_doc.is_null() {
         js.set_current_doc(frame_doc);
     }
@@ -506,7 +512,7 @@ pub(crate) fn raf_scope_begin(
     js.set_ctx(next_ctx);
     js.set_frame(frame);
     if !frame.is_null() {
-        let frame_doc = unsafe { ns_iframe_document_node(frame) };
+        let frame_doc = iframe_document_node(frame);
         if !frame_doc.is_null() {
             js.set_current_doc(frame_doc);
         }

@@ -59,10 +59,10 @@ pub(crate) fn process_pending_iframes(js: Js) {
     if state.iframe_load_depth.get() > 0 || state.eval_depth.get() > 0 {
         return;
     }
-    let mut loaded: HashSet<*mut NsNode> = HashSet::new();
+    let mut loaded: HashSet<*const NsNode> = HashSet::new();
     while !js.halted() && glue::pending_iframe_count(js) > 0 {
         let iframe = glue::pending_iframe_first(js);
-        if !loaded.insert(iframe) {
+        if !loaded.insert(Node::ptr_or_null(iframe)) {
             break;
         }
         glue::load_first_pending_iframe(js, iframe);

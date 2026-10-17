@@ -243,30 +243,6 @@ pub fn filereader_pending(js: *const NsJs) -> bool {
     crate::file_reader::pending(Js(js as usize))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_filereader_teardown(js: *mut NsJs) {
-    crate::file_reader::teardown(Js(js as usize));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_blob_registry_add(js: *mut NsJs) {
-    if !js.is_null() && crate::registry::add_page(Js(js as usize)) {
-        southstar_net::set_blob_resolver(crate::registry::resolve);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_blob_registry_remove(js: *mut NsJs) {
-    if !js.is_null() {
-        crate::registry::remove_page(Js(js as usize));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_blob_urls_free(js: *mut NsJs) {
-    crate::registry::free_page(Js(js as usize));
-}
-
 pub fn blob_url_lookup(js: *const NsJs, url: &[u8]) -> Option<crate::registry::Blob> {
     if js.is_null() {
         return None;
@@ -275,11 +251,40 @@ pub fn blob_url_lookup(js: *const NsJs, url: &[u8]) -> Option<crate::registry::B
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_teardown(js: *const c_void) {
+pub fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {
+    crate::blob::blob_bytes(scope, blob)
+}
+
+fn file_reader_teardown(js: *const NsJs) {
+    crate::file_reader::teardown(Js(js as usize));
+}
+
+fn blob_registry_add(js: *const NsJs) {
+    if !js.is_null() && crate::registry::add_page(Js(js as usize)) {
+        southstar_net::set_blob_resolver(crate::registry::resolve);
+    }
+}
+
+fn blob_registry_remove(js: *const NsJs) {
+    if !js.is_null() {
+        crate::registry::remove_page(Js(js as usize));
+    }
+}
+
+fn blob_urls_free(js: *const NsJs) {
+    crate::registry::free_page(Js(js as usize));
+}
+
+fn teardown(js: *const NsJs) {
     crate::teardown(Js(js as usize));
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {
-    crate::blob::blob_bytes(scope, blob)
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_url_hooks(southstar_js_runtime::api::UrlHooks {
+        blob_registry_add,
+        blob_registry_remove,
+        blob_urls_free,
+        file_reader_teardown,
+        teardown,
+    });
 }

@@ -354,11 +354,6 @@ pub fn nsr_js_input_install_wpt(scope: &mut Scope<'_>, global: &Value) {
     crate::wpt::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_input_teardown(js: *mut NsJs) {
-    crate::teardown(Js::of(js));
-}
-
 macro_rules! capture_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
@@ -379,4 +374,15 @@ capture_methods! {
     nsr_element_setPointerCapture => crate::capture::set,
     nsr_element_releasePointerCapture => crate::capture::release,
     nsr_element_hasPointerCapture => crate::capture::has,
+}
+
+fn teardown(js: *const NsJs) {
+    crate::teardown(Js::of(js));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_input_hooks(api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

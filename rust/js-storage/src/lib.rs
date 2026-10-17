@@ -9,6 +9,7 @@ mod ffi;
 mod store;
 
 pub use ffi::free_deferred_events;
+pub use ffi::install_runtime_hooks;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};

@@ -18,6 +18,7 @@ use southstar_js_engine::{Attributes, RealmCache, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{blob_url_lookup, filereader_pending};
 pub use crate::registry::Blob;
 

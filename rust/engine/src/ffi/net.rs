@@ -6,7 +6,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicI32, Ordering};
 
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
 pub use southstar_net::{NsResponse, Response};
@@ -63,8 +62,6 @@ unsafe extern "C" {
     fn g_ptr_array_new_with_free_func(free: glib::GDestroyNotify) -> *mut GPtrArray;
 }
 
-static BLOCKING_DEPTH: AtomicI32 = AtomicI32::new(0);
-
 pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
@@ -75,10 +72,6 @@ fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
 
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-pub fn in_blocking_fetch() -> bool {
-    BLOCKING_DEPTH.load(Ordering::Relaxed) > 0
 }
 
 pub struct NestedLoop(NonNull<GMainLoop>);
@@ -96,9 +89,8 @@ impl NestedLoop {
     }
 
     pub fn run_blocking(&self) {
-        BLOCKING_DEPTH.fetch_add(1, Ordering::Relaxed);
+        let _blocking = southstar_net::BlockingFetch::enter();
         unsafe { g_main_loop_run(self.0.as_ptr()) };
-        BLOCKING_DEPTH.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

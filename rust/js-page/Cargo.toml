@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-canvas = { path = "../canvas" }
 southstar-css = { path = "../css" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
@@ -15,16 +16,22 @@ southstar-glib = { path = "../glib" }
 southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-brand = { path = "../js-brand" }
+southstar-js-collections = { path = "../js-collections" }
+southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-focus = { path = "../js-focus" }
+southstar-js-fonts = { path = "../js-fonts" }
 southstar-js-frames = { path = "../js-frames" }
+southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-images = { path = "../js-images" }
+southstar-js-input = { path = "../js-input" }
 southstar-js-interfaces = { path = "../js-interfaces" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
+southstar-js-media = { path = "../js-media" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-observers = { path = "../js-observers" }
@@ -34,7 +41,10 @@ southstar-js-services = { path = "../js-services" }
 southstar-js-shadow = { path = "../js-shadow" }
 southstar-js-storage = { path = "../js-storage" }
 southstar-js-top-layer = { path = "../js-top-layer" }
+southstar-js-traversal = { path = "../js-traversal" }
+southstar-js-url = { path = "../js-url" }
 southstar-js-window = { path = "../js-window" }
+southstar-js-workers = { path = "../js-workers" }
 southstar-url = { path = "../url" }
 
 [lints]

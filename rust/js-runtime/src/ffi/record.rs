@@ -10,7 +10,7 @@ use std::ffi::CString;
 
 use southstar_csp::Csp;
 use southstar_dom::{Kind, Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{
     Attributes, ContextHandle, RuntimeHandle, RuntimeOptions, Scope, ScriptOptions, Value,
@@ -175,58 +175,6 @@ struct Record {
     runtime: *mut c_void,
 }
 
-unsafe extern "C" {
-    fn ns_storage_switch_session(
-        js: *mut NsJs,
-        old_partition: *const c_char,
-        new_partition: *const c_char,
-    );
-    fn ns_storage_load_local(js: *mut NsJs, url: *const c_char);
-    fn ns_js_set_attr_recorded_paint_only(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
-    fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
-    fn ns_js_scrub_iframe_globals(js: *mut NsJs, iframe: *const NsNode);
-    fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
-    fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode);
-    fn ns_box_lookup_forget(js: *mut NsJs);
-    fn ns_js_sync_window_metrics(js: *const NsJs);
-    fn ns_js_promote_deferred_iframes(js: *mut NsJs);
-    fn ns_intersection_observers_tick(js: *mut NsJs);
-    fn ns_resize_observers_tick(js: *mut NsJs);
-    fn ns_js_frame_context(js: *mut NsJs, frame: *const NsNode) -> ContextHandle;
-    fn ns_install_pdf_plugins(ctx: ContextHandle);
-    fn ns_js_link_interface_ctors(ctx: ContextHandle);
-    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
-    fn ns_attr_class_id() -> u32;
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
-    fn ns_js_update_focus_visible(js: *const NsJs);
-    fn ns_popover_attr_changed(
-        js: *const NsJs,
-        el: *mut NsNode,
-        attr: *const c_char,
-        old_value: *const c_char,
-        new_value: *const c_char,
-    );
-    fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode);
-    fn ns_js_eval(js: *mut NsJs, src: *const c_char, len: usize, origin: *const c_char);
-    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-}
-
 thread_local! {
     static ACTIVE: Cell<*mut NsJs> = const { Cell::new(ptr::null_mut()) };
 }
@@ -262,10 +210,6 @@ fn page_of(scope: &Scope<'_>) -> *mut NsJs {
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-fn opt_ptr(text: &Option<CString>) -> *const c_char {
-    text.as_ref().map_or(ptr::null(), |text| text.as_ptr())
 }
 
 pub(crate) fn alloc() -> *mut NsJs {
@@ -428,15 +372,13 @@ pub(crate) unsafe fn detach_wrapper(js: *mut NsJs, n: *mut NsNode, release: bool
     }
 }
 
-pub(crate) unsafe fn eval_worker_polyfills(js: *mut NsJs) {
-    unsafe {
-        ns_js_eval(
-            js,
-            POLYFILLS.as_ptr().cast(),
-            POLYFILLS.len() - 1,
-            c"<worker-polyfills>".as_ptr(),
-        )
-    };
+fn eval_bundled(js: *const NsJs, source: &str, origin: &CStr) {
+    let source = source.strip_suffix('\0').unwrap_or(source);
+    (crate::api::loader_hooks().eval)(js, source.as_bytes(), Some(origin));
+}
+
+pub(crate) fn eval_worker_polyfills(js: *mut NsJs) {
+    eval_bundled(js, POLYFILLS, c"<worker-polyfills>");
 }
 
 pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
@@ -557,8 +499,8 @@ fn partition_apply(js: *mut NsJs, new_url: *const c_char) {
             let value = (*rec(js)).cookie_value.clone().unwrap_or_default();
             buckets.insert(key, value);
         }
-        let old_key = opt_ptr(&(*rec(js)).partition_key);
-        ns_storage_switch_session(js, old_key, new_key.as_ptr());
+        let old_key = (*rec(js)).partition_key.as_deref();
+        (crate::api::storage_hooks().switch_session)(js, old_key, &new_key);
         (*rec(js)).cookie_value = (*rec(js))
             .cookie_buckets
             .as_ref()
@@ -690,9 +632,8 @@ pub(crate) fn storage_load_for(js: *const NsJs, new_url: Option<&CStr>) {
         return;
     }
     let js = js.cast_mut();
-    let new_url = new_url.map_or(ptr::null(), CStr::as_ptr);
-    partition_apply(js, new_url);
-    unsafe { ns_storage_load_local(js, new_url) };
+    partition_apply(js, new_url.map_or(ptr::null(), CStr::as_ptr));
+    (crate::api::storage_hooks().load_local)(js, new_url);
 }
 
 pub(crate) fn img_src_layout_neutral(n: Node<'_>) -> bool {
@@ -703,19 +644,17 @@ pub(crate) fn img_src_layout_neutral(n: Node<'_>) -> bool {
 
 pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
     let js = js.cast_mut();
-    let n = el.as_mut_ptr();
     let mut terminated = Vec::with_capacity(src.len() + 1);
     terminated.extend_from_slice(src);
     terminated.push(0);
-    let s = terminated.as_ptr().cast::<c_char>();
     let old = southstar_dom::attrs::find(el, c"src").and_then(southstar_dom::Attr::value_bytes);
     let changed = old != Some(src);
-    unsafe {
-        if changed && img_src_layout_neutral(el) {
-            ns_js_set_attr_recorded_paint_only(js, n, c"src".as_ptr(), s);
-        } else {
-            ns_js_set_attr_recorded_len(js, n, c"src".as_ptr(), s, src.len() as isize);
-        }
+    let mutation = crate::api::mutation_hooks();
+    if changed && img_src_layout_neutral(el) {
+        let value = CStr::from_bytes_until_nul(&terminated).unwrap_or(c"");
+        (mutation.set_attr_recorded_paint_only)(js, el, c"src", value);
+    } else {
+        (mutation.set_attr_recorded)(js, el, c"src", src);
     }
     let name = el.name().map(CStr::to_bytes);
     if changed && name == Some(b"img") {
@@ -724,7 +663,7 @@ pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
         (crate::api::images_hooks().start_image_load)(js, el, src);
     }
     if name == Some(b"iframe") {
-        unsafe { ns_js_schedule_iframe_load_full(js, n, glib::TRUE) };
+        (crate::api::frames_hooks().schedule_load)(js, el, true);
     }
 }
 
@@ -765,11 +704,8 @@ pub(crate) fn media_native_formats() -> u32 {
 }
 
 pub(crate) fn url_parses(js: *const NsJs, url: &CStr) -> bool {
-    let base = unsafe { GStr::take(ns_js_doc_base_url(js.cast_mut())) };
-    let base = base
-        .as_deref()
-        .map(CStr::to_bytes)
-        .filter(|base| !base.is_empty());
+    let base = (crate::api::document_hooks().base_url)(js);
+    let base = base.as_deref().filter(|base| !base.is_empty());
     southstar_url::bytes::resolve(base, url.to_bytes()).is_some()
 }
 
@@ -787,15 +723,12 @@ pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
     if js.is_null() {
         return;
     }
-    let js = js.cast_mut();
     let mut n = root;
     while !n.is_null() {
-        if node(n).is_some_and(|el| is_named(el, c"iframe")) {
-            unsafe {
-                ns_js_purge_frame_rafs(js, n);
-                ns_services_purge_frame_timers(js, n);
-                ns_js_scrub_iframe_globals(js, n);
-            }
+        if let Some(frame) = node(n).filter(|&el| is_named(el, c"iframe")) {
+            (crate::api::lifecycle_hooks().purge_frame_rafs)(js, frame);
+            (crate::api::services_hooks().purge_frame_timers)(js, frame);
+            (crate::api::frames_hooks().scrub_globals)(js, frame);
         }
         n = node(n)
             .and_then(|current| southstar_dom::index::next_in_subtree(current, node(root), true))
@@ -804,19 +737,17 @@ pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
 }
 
 pub(crate) fn insert_before_single(js: *const NsJs, child: Node<'_>, reference_node: Node<'_>) {
-    let js = js.cast_mut();
-    let newc = child.as_mut_ptr();
     if child == reference_node {
         return;
     }
     if child.parent().is_some() {
         if !js.is_null() {
-            unsafe { ns_node_iters_pre_remove(js, newc) };
+            (crate::api::traversal_hooks().pre_remove)(js, child);
         }
         child.detach();
     }
     if !js.is_null() {
-        unsafe { ns_js_unorphan_node(js, newc) };
+        (crate::api::mutation_hooks().unorphan_node)(js, child);
     }
     reference_node.insert_before(child);
 }
@@ -840,20 +771,19 @@ pub(crate) fn set_layout_root(js: *const NsJs, root: *const c_void) {
         return;
     }
     let js = js.cast_mut();
-    unsafe {
-        if (*rec(js)).layout_root != root {
-            ns_box_lookup_forget(js);
-        }
-        (*rec(js)).layout_root = root;
-        ns_js_sync_window_metrics(js);
-        if !root.is_null() {
-            ns_js_promote_deferred_iframes(js);
-            if super::glue::is_running_script(super::Js(js).ctx()) {
-                crate::api::observer_schedule_tick(js);
-            } else {
-                ns_intersection_observers_tick(js);
-                ns_resize_observers_tick(js);
-            }
+    // SAFETY: the page is live and not null, checked above.
+    if unsafe { (*rec(js)).layout_root } != root {
+        (crate::api::geometry_hooks().forget_box_lookup)(js);
+    }
+    // SAFETY: the page is live and not null, checked above.
+    unsafe { (*rec(js)).layout_root = root };
+    (crate::api::window_hooks().sync_metrics)(js);
+    if !root.is_null() {
+        (crate::api::frames_hooks().promote_deferred)(js);
+        if super::glue::is_running_script(super::Js(js).ctx()) {
+            crate::api::observer_schedule_tick(js);
+        } else {
+            super::glue::observers_tick(super::Js(js));
         }
     }
 }
@@ -901,17 +831,14 @@ pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {
     let Some(record) = record(js) else {
         return ContextHandle::NULL;
     };
-    let realm = if record.raf_frame_ctx.is_null() {
-        ContextHandle::NULL
-    } else {
-        unsafe { ns_js_frame_context(js.cast_mut(), record.raf_frame_ctx) }
-    };
+    let realm = node(record.raf_frame_ctx).map_or(ContextHandle::NULL, |frame| {
+        (crate::api::frames_hooks().frame_context)(js, frame)
+    });
     realm.or(record.ctx)
 }
 
 pub(crate) fn frame_url(js: super::Js, frame: *const NsNode) -> *const c_char {
-    // SAFETY: the page is live and the frame is null or one of its nodes, which is all ns_js_frame_url reads.
-    unsafe { ns_js_frame_url(js.ptr(), frame) }
+    (crate::api::frames_hooks().frame_url)(js.ptr(), node(frame))
 }
 
 pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
@@ -972,13 +899,13 @@ pub(crate) unsafe fn frame_realm_finish(
     frame_global: &Value,
     parent_global: &Value,
 ) {
-    let attr_class = unsafe {
-        ns_install_pdf_plugins(fctx);
-        adopt_frame_window_events(&*rec(js), fctx, frame_global);
-        ns_js_link_interface_ctors(fctx);
-        ns_js_lock_global_prototypes(fctx);
-        ns_attr_class_id()
-    };
+    let interfaces = crate::api::interfaces_hooks();
+    (interfaces.install_pdf_plugins)(fctx);
+    // SAFETY: the caller passes a live page.
+    adopt_frame_window_events(unsafe { &*rec(js) }, fctx, frame_global);
+    (interfaces.link_interface_ctors)(fctx);
+    (interfaces.lock_global_prototypes)(fctx);
+    let attr_class = (crate::api::attrs_hooks().class_id)();
     fctx.with(|scope| {
         southstar_js_brand::brand_node_interfaces(
             scope,
@@ -1036,9 +963,8 @@ pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<V
     let js = page_of(scope);
     let name = cstring(name);
     let element_node = southstar_dom::node::new_element(name.to_bytes());
-    let n = element_node.as_mut_ptr();
     super::wrapper::arm_js_invalidate(element_node);
-    unsafe { ns_js_track_orphan(js, n) };
+    (crate::api::mutation_hooks().track_orphan)(js, element_node);
     let element = super::wrapper::make(scope, element_node)?;
     tag_caller_document(scope, &element);
     Ok(element)
@@ -1051,20 +977,14 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    let js = js.cast_mut();
-    let n = el.as_mut_ptr();
-    let old_value = old.map_or(ptr::null(), CStr::as_ptr);
-    let new_value = new.map_or(ptr::null(), CStr::as_ptr);
     let live = || record(js).is_some_and(|js| !js.ctx.is_null() && js.halted == 0);
     let attr_bytes = attr_name.to_bytes();
     if live() {
-        unsafe {
-            if n.cast_const() == ns_js_focused_node(js) && attr_bytes.eq_ignore_ascii_case(b"type")
-            {
-                ns_js_update_focus_visible(js);
-            }
-            ns_popover_attr_changed(js, n, attr_name.as_ptr(), old_value, new_value);
+        let focus = crate::api::focus_hooks();
+        if (focus.focused_node)(js) == Some(el) && attr_bytes.eq_ignore_ascii_case(b"type") {
+            (focus.update_focus_visible)(js);
         }
+        (crate::api::top_layer_hooks().popover_attr_changed)(js, el, attr_name, old, new);
     }
     let is_plain_script =
         is_named(el, c"script") && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0;
@@ -1074,7 +994,7 @@ pub(crate) fn ce_attr_changed(
         && new.is_some()
         && is_plain_script
     {
-        unsafe { ns_js_script_needs_prepare(js, n) };
+        (crate::api::loader_hooks().script_needs_prepare)(js, el);
         return;
     }
     if !live() {
@@ -1216,21 +1136,8 @@ pub(crate) fn eval_polyfills(js: *const NsJs) {
     if js.is_null() {
         return;
     }
-    let js = js.cast_mut();
-    unsafe {
-        ns_js_eval(
-            js,
-            POLYFILLS.as_ptr().cast(),
-            POLYFILLS.len() - 1,
-            c"<polyfills>".as_ptr(),
-        );
-        ns_js_eval(
-            js,
-            STREAMING.as_ptr().cast(),
-            STREAMING.len() - 1,
-            c"<streaming>".as_ptr(),
-        );
-    }
+    eval_bundled(js, POLYFILLS, c"<polyfills>");
+    eval_bundled(js, STREAMING, c"<streaming>");
 }
 
 pub(crate) fn snapshot_platform_globals(js: *const NsJs) {

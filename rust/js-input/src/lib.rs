@@ -17,6 +17,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{
     DragData, dispatch_clipboard_event, dispatch_drag_event, dispatch_mouse_event,
 };

@@ -33,7 +33,6 @@ type GBoolean = c_int;
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
     fn g_get_monotonic_time() -> i64;
     fn ns_js_dispatch_resource_event(
@@ -60,7 +59,7 @@ pub(crate) fn in_pump(js: Js) -> bool {
 }
 
 pub(crate) fn in_blocking_fetch() -> bool {
-    unsafe { ns_engine_in_blocking_fetch() != 0 }
+    southstar_net::in_blocking_fetch()
 }
 
 pub(crate) fn doc_base(js: Js, el: Element) -> Option<CString> {

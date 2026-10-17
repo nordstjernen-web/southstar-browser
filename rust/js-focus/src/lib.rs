@@ -16,6 +16,7 @@ use southstar_js_engine::Value;
 
 use crate::ffi::Js;
 
+pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{
     activate_element, clear_focused_node, click_activation_target, focus_from_pointer, focused_doc,
     focused_node, has_activation_behavior, is_focusable, keyboard_activate, keyboard_activates,

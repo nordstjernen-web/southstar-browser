@@ -233,11 +233,6 @@ pub fn nsr_attr_to_js(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_attr_class_id() -> u32 {
-    crate::class::ATTR_CLASS.id()
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_attr_detach_matching(
     js: *mut NsJs,
     owner: *mut NsNode,
@@ -250,18 +245,28 @@ pub unsafe extern "C" fn ns_attr_detach_matching(
     attr::detach_matching(Js(js), owner, c_str(namespace_uri), local);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode) {
-    if let Some(owner) = unsafe { Node::from_ptr(owner) } {
-        attr::detach_owner(Js(js), owner);
-    }
-}
-
 pub fn detach_all(js: *mut NsJs) {
     attr::detach_all(Js(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_detach_all(js: *mut NsJs) {
-    detach_all(js);
+fn class_id() -> u32 {
+    crate::class::ATTR_CLASS.id()
+}
+
+fn detach_owner(js: *const NsJs, owner: Node<'_>) {
+    if let Some(owner) = owner.downgrade().get() {
+        attr::detach_owner(Js(js.cast_mut()), owner);
+    }
+}
+
+fn detach_page(js: *const NsJs) {
+    detach_all(js.cast_mut());
+}
+
+pub fn install_runtime_hooks() {
+    api::set_attrs_hooks(api::AttrsHooks {
+        class_id,
+        detach_owner,
+        detach_all: detach_page,
+    });
 }

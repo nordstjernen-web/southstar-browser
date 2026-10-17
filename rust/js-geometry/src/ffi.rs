@@ -32,7 +32,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_note_viewport_scroll(js: *mut NsJs, x: f64, y: f64);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -137,7 +136,7 @@ pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64) {
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
-    unsafe { ns_js_note_viewport_scroll(js.0, x, y) };
+    (api::window_hooks().note_viewport_scroll)(js.0, x, y);
 }
 
 pub(crate) fn request_repaint(js: Js) {
@@ -365,7 +364,10 @@ pub unsafe extern "C" fn ns_js_box_for_node(js: *mut NsJs, n: *const NsNode) -> 
     crate::lookup::find_by_dom(root, n.cast()).map_or(ptr::null(), BoxRef::as_ptr)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_box_lookup_forget(js: *mut NsJs) {
-    crate::lookup::forget(Js(js));
+fn forget_box_lookup(js: *const NsJs) {
+    crate::lookup::forget(Js(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_geometry_hooks(api::GeometryHooks { forget_box_lookup });
 }

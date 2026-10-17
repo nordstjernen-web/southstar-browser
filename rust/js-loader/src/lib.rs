@@ -21,6 +21,7 @@ use southstar_dom::Node;
 use crate::ffi::{Js, NsJs};
 
 pub use api::*;
+pub use ffi::install_runtime_hooks;
 
 pub(crate) const ALREADY_STARTED: &CStr = c"data-nd-script-already-started";
 pub(crate) const EMPTY_SOURCE: &CStr = c"data-nd-script-empty-source";

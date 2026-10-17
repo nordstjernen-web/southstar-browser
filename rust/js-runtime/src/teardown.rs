@@ -52,7 +52,7 @@ fn free_orphans(js: Js) {
         return;
     };
     let mut roots = Vec::new();
-    for node in orphans.into_iter().flatten() {
+    for node in orphans {
         js.detach_wrapper(node, false);
         if !owned_by_document(js, node) {
             roots.push(node);

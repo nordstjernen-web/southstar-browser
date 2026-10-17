@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -26,7 +26,6 @@ unsafe extern "C" {
         namespace_uri: *const c_char,
         local_name: *const c_char,
     );
-    fn ns_dispatch_forget_node(js: *mut NsJs, node: *const NsNode);
     fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
     fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode);
     fn ns_js_dispatch_event(
@@ -57,18 +56,6 @@ unsafe fn node(n: *const NsNode) -> Option<Element> {
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
-}
-
-fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
-    let array = unsafe { glib::g_ptr_array_new() };
-    for node in nodes {
-        unsafe { glib::g_ptr_array_add(array, node.as_mut_ptr().cast()) };
-    }
-    array
-}
-
-fn into_ptr_array(nodes: Option<Vec<Element>>) -> *mut GPtrArray {
-    nodes.map_or(ptr::null_mut(), |nodes| ptr_array(&nodes))
 }
 
 pub(crate) fn qcache_invalidate(js: Option<Js>) {
@@ -249,7 +236,7 @@ pub(crate) fn images_forget_node(js: Js, node: Element) {
 }
 
 pub(crate) fn dispatch_forget_node(js: Js, node: Element) {
-    unsafe { ns_dispatch_forget_node(js.0, node.as_ptr()) };
+    (api::dispatch_hooks().forget_node)(js.0, node);
 }
 
 pub(crate) fn purge_media_rafs(js: Js, root: Element) {
@@ -270,13 +257,6 @@ pub(crate) fn dispatch_event(js: Js, target: Element, kind: &CStr) {
 
 pub(crate) fn arm_js_invalidate(el: Element) {
     api::arm_js_invalidate(el);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_mutation_init(js: *mut NsJs) {
-    if let Some(js) = Js::of(js) {
-        crate::init(js);
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -344,84 +324,6 @@ pub unsafe extern "C" fn ns_js_set_attr_recorded(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_attr_recorded_paint_only(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    name: *const c_char,
-    value: *const c_char,
-) {
-    let (Some(n), Some(name)) = (unsafe { node(n) }, unsafe { c_str(name) }) else {
-        return;
-    };
-    let value = unsafe { c_str(value) }.unwrap_or(c"");
-    attrs::set_recorded_paint_only(Js::of(js), n, name, value);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_track_orphan(js: *mut NsJs, n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        crate::track_orphan(js, n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        crate::unorphan_node(js, n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphan_tracked(js: *mut NsJs, n: *const NsNode) -> GBoolean {
-    let tracked = match (Js::of(js), unsafe { node(n) }) {
-        (Some(js), Some(n)) => orphans::tracked(js, n),
-        _ => false,
-    };
-    glib::boolean(tracked)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphan_count(js: *mut NsJs) -> c_int {
-    Js::of(js).map_or(0, |js| orphans::count(js).min(c_int::MAX as usize) as c_int)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut NsNode) {
-    if let (Some(js), Some(root)) = (Js::of(js), unsafe { node(root) }) {
-        orphans::purge_node_refs(js, root);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphans_collect(js: *mut NsJs) -> *mut GPtrArray {
-    into_ptr_array(Js::of(js).and_then(orphans::collect_unreachable))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphans_snapshot(js: *mut NsJs) -> *mut GPtrArray {
-    into_ptr_array(Js::of(js).and_then(orphans::snapshot))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_mutation_teardown(js: *mut NsJs) {
-    if let Some(js) = Js::of(js) {
-        orphans::destroy(js);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_forget_pending_change(js: *mut NsJs) {
-    crate::forget_pending_change(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_forget_pending_change_for(js: *mut NsJs, el: *const NsNode) {
-    if let (Some(js), Some(el)) = (Js::of(js), unsafe { node(el) }) {
-        change::forget_node(js, el);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Option<Value> {
     match (Js::of(js), unsafe { node(owner) }) {
         (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
@@ -436,16 +338,109 @@ pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, ma
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode) {
-    if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
+fn element(node: Node<'_>) -> Option<Element> {
+    node.downgrade().get()
+}
+
+fn init(js: *const NsJs) {
+    if let Some(js) = Js::of(js.cast_mut()) {
+        crate::init(js);
+    }
+}
+
+fn teardown(js: *const NsJs) {
+    if let Some(js) = Js::of(js.cast_mut()) {
+        orphans::destroy(js);
+    }
+}
+
+fn orphan_count(js: *const NsJs) -> usize {
+    Js::of(js.cast_mut()).map_or(0, orphans::count)
+}
+
+fn collect_orphans(js: *const NsJs) -> Vec<Element> {
+    Js::of(js.cast_mut())
+        .and_then(orphans::collect_unreachable)
+        .unwrap_or_default()
+}
+
+fn orphans_snapshot(js: *const NsJs) -> Option<Vec<Element>> {
+    Js::of(js.cast_mut()).and_then(orphans::snapshot)
+}
+
+fn orphan_tracked(js: *const NsJs, node: Node<'_>) -> bool {
+    match (Js::of(js.cast_mut()), element(node)) {
+        (Some(js), Some(node)) => orphans::tracked(js, node),
+        _ => false,
+    }
+}
+
+fn track_orphan(js: *const NsJs, node: Node<'_>) {
+    crate::track_orphan(js.cast_mut(), node);
+}
+
+fn unorphan_node(js: *const NsJs, node: Node<'_>) {
+    if let Some(node) = element(node) {
+        crate::unorphan_node(js.cast_mut(), node);
+    }
+}
+
+fn purge_subtree_node_refs(js: *const NsJs, root: Node<'_>) {
+    if let (Some(js), Some(root)) = (Js::of(js.cast_mut()), element(root)) {
+        orphans::purge_node_refs(js, root);
+    }
+}
+
+fn forget_pending_change(js: *const NsJs) {
+    crate::forget_pending_change(js.cast_mut());
+}
+
+fn forget_pending_change_for(js: *const NsJs, el: Node<'_>) {
+    if let (Some(js), Some(el)) = (Js::of(js.cast_mut()), element(el)) {
+        change::forget_node(js, el);
+    }
+}
+
+fn attribute_map_release_owner(js: *const NsJs, owner: Node<'_>) {
+    if let (Some(js), Some(owner)) = (Js::of(js.cast_mut()), element(owner)) {
         attribute_maps::release_owner(js, owner);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attribute_maps_teardown(js: *mut NsJs) {
-    if let Some(js) = Js::of(js) {
+fn attribute_maps_teardown(js: *const NsJs) {
+    if let Some(js) = Js::of(js.cast_mut()) {
         attribute_maps::teardown(js);
     }
+}
+
+fn set_attr_recorded(js: *const NsJs, node: Node<'_>, name: &CStr, value: &[u8]) {
+    if let Some(node) = element(node) {
+        crate::set_attr_recorded(js.cast_mut(), node, name, value);
+    }
+}
+
+fn set_attr_recorded_paint_only(js: *const NsJs, node: Node<'_>, name: &CStr, value: &CStr) {
+    if let Some(node) = element(node) {
+        attrs::set_recorded_paint_only(Js::of(js.cast_mut()), node, name, value);
+    }
+}
+
+pub fn install_runtime_hooks() {
+    api::set_mutation_hooks(api::MutationHooks {
+        init,
+        teardown,
+        orphan_count,
+        collect_orphans,
+        orphans_snapshot,
+        orphan_tracked,
+        track_orphan,
+        unorphan_node,
+        purge_subtree_node_refs,
+        forget_pending_change,
+        forget_pending_change_for,
+        attribute_map_release_owner,
+        attribute_maps_teardown,
+        set_attr_recorded,
+        set_attr_recorded_paint_only,
+    });
 }

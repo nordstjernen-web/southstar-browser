@@ -235,28 +235,6 @@ pub fn reset_observers(js: *const NsJs) {
     crate::reset(Js::of(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mut_scrub_node(js: *const NsJs, node: *const NsNode) {
-    if !node.is_null() {
-        mutation::scrub_node(Js::of(js), node as usize);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_intersection_observers_tick(js: *const NsJs) {
-    intersection::tick(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_resize_observers_tick(js: *const NsJs) {
-    resize::tick(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_observers_teardown(js: *const NsJs) {
-    crate::teardown(Js::of(js));
-}
-
 macro_rules! nsr_natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
@@ -286,4 +264,29 @@ nsr_natives! {
     nsr_resize_observer_observe => resize::observe,
     nsr_resize_observer_unobserve => resize::unobserve,
     nsr_resize_observer_disconnect => resize::disconnect,
+}
+
+fn scrub_node(js: *const NsJs, node: Node<'_>) {
+    mutation::scrub_node(Js::of(js), node.as_ptr() as usize);
+}
+
+fn intersection_tick(js: *const NsJs) {
+    intersection::tick(Js::of(js));
+}
+
+fn resize_tick(js: *const NsJs) {
+    resize::tick(Js::of(js));
+}
+
+fn teardown(js: *const NsJs) {
+    crate::teardown(Js::of(js));
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_observers_hooks(southstar_js_runtime::api::ObserversHooks {
+        intersection_tick,
+        resize_tick,
+        scrub_node,
+        teardown,
+    });
 }

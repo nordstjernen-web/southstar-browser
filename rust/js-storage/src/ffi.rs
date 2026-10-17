@@ -365,66 +365,8 @@ fn load_local(page: &Rc<Page>, url: Option<String>) {
     page.storage.borrow_mut().adopt_origin(origin);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_init(js: *mut NsJs) {
-    crate::init(Js::from_ptr(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_teardown(js: *mut NsJs) {
-    crate::teardown(Js::from_ptr(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_flush(js: *mut NsJs) {
-    if let Some(page) = crate::page(Js::from_ptr(js)) {
-        flush(&page);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_schedule_flush(js: *mut NsJs) {
-    let js = Js::from_ptr(js);
-    if let Some(page) = crate::page(js) {
-        schedule_flush(js, &page);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_drain_deferred_events(js: *mut NsJs) {
-    events::drain(Js::from_ptr(js));
-}
-
 pub fn free_deferred_events(js: *const NsJs) {
     events::discard(Js::from_ptr(js.cast_mut()));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_free_deferred_events(js: *mut NsJs) {
-    free_deferred_events(js);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_switch_session(
-    js: *mut NsJs,
-    old_partition: *const c_char,
-    new_partition: *const c_char,
-) {
-    let Some(page) = crate::page(Js::from_ptr(js)) else {
-        return;
-    };
-    let old = owned(old_partition);
-    let new = owned(new_partition).unwrap_or_default();
-    page.storage
-        .borrow_mut()
-        .switch_session(old.as_deref(), &new);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_storage_load_local(js: *mut NsJs, url: *const c_char) {
-    if let Some(page) = crate::page(Js::from_ptr(js)) {
-        load_local(&page, owned(url));
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -442,4 +384,59 @@ pub fn nsr_storage_area_of(value: &Value) -> Option<i32> {
 #[unsafe(no_mangle)]
 pub fn nsr_storage_new(scope: &mut Scope<'_>, area: i32) -> Result<Value, Value> {
     class::new_storage(scope, area)
+}
+
+fn init(js: *const NsJs) {
+    crate::init(Js::from_ptr(js.cast_mut()));
+}
+
+fn teardown(js: *const NsJs) {
+    crate::teardown(Js::from_ptr(js.cast_mut()));
+}
+
+fn flush_page(js: *const NsJs) {
+    if let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) {
+        flush(&page);
+    }
+}
+
+fn schedule_page_flush(js: *const NsJs) {
+    let js = Js::from_ptr(js.cast_mut());
+    if let Some(page) = crate::page(js) {
+        schedule_flush(js, &page);
+    }
+}
+
+fn drain_deferred_events(js: *const NsJs) {
+    events::drain(Js::from_ptr(js.cast_mut()));
+}
+
+fn switch_session(js: *const NsJs, old_partition: Option<&CStr>, new_partition: &CStr) {
+    let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) else {
+        return;
+    };
+    let old = old_partition.map(|old| old.to_string_lossy().into_owned());
+    let new = new_partition.to_string_lossy();
+    page.storage
+        .borrow_mut()
+        .switch_session(old.as_deref(), &new);
+}
+
+fn load_page_local(js: *const NsJs, url: Option<&CStr>) {
+    if let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) {
+        load_local(&page, url.map(|url| url.to_string_lossy().into_owned()));
+    }
+}
+
+pub fn install_runtime_hooks() {
+    api::set_storage_hooks(api::StorageHooks {
+        init,
+        teardown,
+        flush: flush_page,
+        schedule_flush: schedule_page_flush,
+        drain_deferred_events,
+        free_deferred_events,
+        switch_session,
+        load_local: load_page_local,
+    });
 }

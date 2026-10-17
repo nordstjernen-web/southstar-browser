@@ -7,6 +7,8 @@ mod font_face;
 pub mod font_set;
 mod ready;
 
+pub use ffi::install_runtime_hooks;
+
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;

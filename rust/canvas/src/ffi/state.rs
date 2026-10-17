@@ -270,11 +270,6 @@ pub(crate) fn transfer_to_image_bitmap(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_canvas_states_teardown(js: *mut NsJs) {
-    crate::state::teardown(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_canvas_surface(js: *mut NsJs, el: *const NsNode) -> *mut c_void {
     canvas_surface(Js(js), Node(el))
 }
@@ -295,4 +290,15 @@ pub(crate) fn clear_patterns(st: &mut CanvasState) {
 pub(crate) fn set_font(st: &mut CanvasState, font: &[u8]) {
     unsafe { glib::g_free(st.font.cast()) };
     st.font = glib::strdup(font);
+}
+
+fn teardown(js: *const NsJs) {
+    crate::state::teardown(Js(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_canvas_hooks(southstar_js_runtime::api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

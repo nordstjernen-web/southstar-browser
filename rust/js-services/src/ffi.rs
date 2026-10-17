@@ -467,11 +467,6 @@ pub(crate) fn physical_memory_bytes() -> Option<u64> {
     None
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_services_chrome_compat() -> GBoolean {
-    glib::boolean(navigator::chrome_compat())
-}
-
 macro_rules! export_native {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
@@ -531,11 +526,6 @@ pub fn nsr_services_install_screen(scope: &mut Scope<'_>, global: &Value) {
     screen::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_run_due_timers(js: *const NsJs) {
-    timers::run_due(Js(js));
-}
-
 pub fn timers_pending(js: *const NsJs, include_idle: bool) -> bool {
     timers::pending(Js(js), include_idle)
 }
@@ -568,18 +558,6 @@ pub fn reset_page(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_purge_frame_timers(js: *const NsJs, frame: *const c_void) {
-    if let Some(frame) = unsafe { Node::from_ptr(frame.cast()) } {
-        purge_frame_timers(js, frame);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_teardown(js: *const NsJs) {
-    crate::teardown(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_services_window_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::window(scope)
 }
@@ -597,4 +575,21 @@ pub fn nsr_services_console_emit(
     args: &[Value],
 ) {
     console::emit(scope, Js(js), prefix, args);
+}
+
+fn run_due_timers(js: *const NsJs) {
+    timers::run_due(Js(js));
+}
+
+fn teardown(js: *const NsJs) {
+    crate::teardown(Js(js));
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_services_hooks(southstar_js_runtime::api::ServicesHooks {
+        chrome_compat: navigator::chrome_compat,
+        run_due_timers,
+        purge_frame_timers,
+        teardown,
+    });
 }

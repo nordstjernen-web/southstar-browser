@@ -9,6 +9,8 @@ mod scope;
 mod service;
 mod worker;
 
+pub use ffi::install_runtime_hooks;
+
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 pub(crate) type JsResult = Result<Value, Value>;

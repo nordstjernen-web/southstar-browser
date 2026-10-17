@@ -359,16 +359,6 @@ hook_setters! {
     ns_js_set_mse_bytes_cb: MseBytesFn => mse_bytes;
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_media_init(js: *mut NsJs) {
-    hooks::init(Js::from_ptr(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_media_teardown(js: *mut NsJs) {
-    hooks::teardown(Js::from_ptr(js));
-}
-
 pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {
     let js = Js::from_ptr(js.cast_mut());
     let Some(node) = node.downgrade().get() else {
@@ -388,4 +378,16 @@ pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {
 #[unsafe(no_mangle)]
 pub fn nsr_media_install_audio(scope: &mut Scope<'_>, global: &Value) {
     audio::install(scope, global);
+}
+
+fn init(js: *const NsJs) {
+    hooks::init(Js::from_ptr(js.cast_mut()));
+}
+
+fn teardown(js: *const NsJs) {
+    hooks::teardown(Js::from_ptr(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_media_hooks(api::PageStateHooks { init, teardown });
 }

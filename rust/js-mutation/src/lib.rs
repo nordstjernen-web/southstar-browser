@@ -21,6 +21,7 @@ use southstar_js_engine::Value;
 use crate::ffi::Js;
 
 pub use api::*;
+pub use ffi::install_runtime_hooks;
 
 pub(crate) type Element = Node<'static>;
 

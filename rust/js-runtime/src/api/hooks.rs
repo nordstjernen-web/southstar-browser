@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_void};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 
 use crate::ffi::state::PageState;
@@ -20,14 +20,6 @@ pub struct Selection {
     pub text: Option<CString>,
     pub rect: [f64; 4],
     pub has_range: bool,
-}
-
-unsafe extern "C" {
-    fn ns_js_frame_submit_form(
-        js: *mut NsJs,
-        form: *const NsNode,
-        submitter: *const NsNode,
-    ) -> GBoolean;
 }
 
 fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
@@ -150,11 +142,10 @@ pub fn flush_layout(js: *const NsJs) {
 }
 
 pub fn submit_form(js: *const NsJs, form: Node<'_>, submitter: Option<Node<'_>>) {
-    let submitter = Node::ptr_or_null(submitter);
-    // SAFETY: the page and the nodes are the ones this submission was called with.
-    if unsafe { ns_js_frame_submit_form(js.cast_mut(), form.as_ptr(), submitter) } != 0 {
+    if (super::frames_hooks().submit_form)(js, form, submitter) {
         return;
     }
+    let submitter = Node::ptr_or_null(submitter);
     state(js, (), |state| {
         if let Some((submit, data)) = state.form_submit.get() {
             unsafe { submit(form.as_ptr(), submitter, data) };

@@ -71,7 +71,13 @@ pub fn nsr_window_fontface_ctor(
     font_face::construct(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_fonts_teardown(js: *mut NsJs) {
-    ready::teardown(Js::from_ptr(js));
+fn teardown(js: *const NsJs) {
+    ready::teardown(Js::from_ptr(js.cast_mut()));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_fonts_hooks(api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

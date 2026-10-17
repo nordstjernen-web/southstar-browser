@@ -11,6 +11,7 @@ mod mse;
 pub mod support;
 pub mod tracks;
 
+pub use ffi::install_runtime_hooks;
 pub use ffi::video_event;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};

@@ -20,6 +20,7 @@ use southstar_dom::{Kind, Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 
 pub use crate::api::*;
+pub use ffi::exports::install_runtime_hooks;
 
 use crate::errors::Rejection;
 use crate::ffi::Js;

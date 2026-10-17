@@ -33,10 +33,6 @@ unsafe extern "C" {
         target: *const NsNode,
         ty: *const c_char,
     ) -> GBoolean;
-    fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
-    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-    fn ns_js_flush_document_write(js: *mut NsJs);
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_index_child_change(
         js: *mut NsJs,
         parent: *mut NsNode,
@@ -328,7 +324,7 @@ impl Js {
     }
 
     pub(crate) fn node_realm(self, n: Node) -> Option<Realm> {
-        unsafe { ns_js_node_realm_context(self.0, n.as_ptr()) }
+        (api::frames_hooks().node_realm_context)(self.0, n)
             .non_null()
             .map(Realm)
     }
@@ -356,7 +352,7 @@ impl Js {
     }
 
     pub(crate) fn flush_document_write(self) {
-        unsafe { ns_js_flush_document_write(self.0) }
+        (api::document_hooks().flush_write)(self.0);
     }
 
     pub(crate) fn report_uncaught(self, exception: &Value, origin: Option<&CStr>) {
@@ -454,10 +450,8 @@ impl Js {
             Vec::new()
         };
         let fetched = api::fetch_subresource(self.0, url, top_url, &headers, Some(initiator), info);
-        // SAFETY: fetch_subresource hands over a response the caller owns, or null.
-        let response = unsafe { southstar_net::Response::from_raw(fetched.response.cast()) };
         Fetched {
-            response: response.map(Response),
+            response: fetched.response.map(Response),
             error: fetched.error,
         }
     }
@@ -490,70 +484,50 @@ unsafe extern "C" fn async_script_timer(data: *mut c_void) -> GBoolean {
     glib::FALSE
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_schedule_pending_script_drain(js: *mut NsJs) {
-    crate::schedule_pending_script_drain(js);
+fn eval_source(js: *const NsJs, source: &[u8], origin: Option<&CStr>) {
+    eval::eval(Js(js.cast_mut()), source, origin);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_script_needs_prepare(js: *mut NsJs, script: *mut NsNode) {
-    if let Some(script) = node(script) {
-        crate::script_needs_prepare(js, script);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_parser_hold_forget(js: *mut NsJs, n: *const NsNode) {
-    if !js.is_null() && !n.is_null() {
-        hold::forget(Js(js), n as usize);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_loader_teardown(js: *mut NsJs) {
+fn parser_hold_forget(js: *const NsJs, n: Node<'_>) {
     if !js.is_null() {
-        page::teardown(Js(js));
+        hold::forget(Js(js.cast_mut()), n.as_ptr() as usize);
     }
 }
 
-unsafe fn bytes<'a>(p: *const c_char, len: usize) -> &'a [u8] {
-    if p.is_null() || len == 0 {
-        &[]
-    } else {
-        unsafe { core::slice::from_raw_parts(p.cast(), len) }
+fn teardown(js: *const NsJs) {
+    if !js.is_null() {
+        page::teardown(Js(js.cast_mut()));
     }
+}
+
+fn purge_subtree_script_refs(js: *const NsJs, root: Node<'_>) {
+    if !js.is_null() {
+        eval::purge_subtree_script_refs(Js(js.cast_mut()), root);
+    }
+}
+
+pub fn install_runtime_hooks() {
+    api::set_loader_hooks(api::LoaderHooks {
+        eval: eval_source,
+        script_needs_prepare: crate::script_needs_prepare,
+        schedule_pending_script_drain: crate::schedule_pending_script_drain,
+        purge_subtree_script_refs,
+        parser_hold_forget,
+        teardown,
+    });
 }
 
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_eval(
-    js: *mut NsJs,
-    src: *const c_char,
-    len: usize,
-    origin: *const c_char,
-) {
-    let src = unsafe { bytes(src, len) };
-    eval::eval(Js(js), src, unsafe { cstr(origin) });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_subtree_script_refs(js: *mut NsJs, root: *mut NsNode) {
-    if let (false, Some(root)) = (js.is_null(), node(root)) {
-        eval::purge_subtree_script_refs(Js(js), root);
-    }
-}
-
 pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) {
     let frame = el.and_then(blocking::content_frame);
     let frame_ptr = Node::ptr_or_null(frame);
     let has_js = !js.is_null();
-    let frame_ctx = if frame.is_some() && has_js {
-        unsafe { ns_js_frame_context(js, frame_ptr) }
-    } else {
-        ContextHandle::default()
+    let frame_ctx = match frame {
+        Some(frame) if has_js => (api::frames_hooks().frame_context)(js, frame),
+        _ => ContextHandle::default(),
     };
     info.timeline = if frame_ctx.is_null() {
         frame_ptr.cast()
@@ -561,7 +535,7 @@ pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut
         frame_ctx.as_ptr().cast_const().cast()
     };
     let frame_url = if frame.is_some() && has_js {
-        unsafe { ns_js_frame_url(js, frame_ptr) }
+        (api::frames_hooks().frame_url)(js, frame)
     } else {
         ptr::null()
     };

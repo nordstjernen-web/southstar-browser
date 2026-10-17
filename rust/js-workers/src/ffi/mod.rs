@@ -795,14 +795,6 @@ pub unsafe extern "C" fn ns_sw_post_fetch_request(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_host_closing(host: *const c_void) -> c_int {
-    match unsafe { host.cast::<Host>().as_ref() } {
-        Some(host) => c_int::from(host.closing()),
-        None => 0,
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_worker_host_base_url(host: *const c_void) -> *const c_char {
     match unsafe { host.cast::<Host>().as_ref() } {
         Some(host) => host.base_url.as_ptr(),
@@ -816,29 +808,6 @@ pub unsafe extern "C" fn ns_workers_pending(js: *mut c_void) -> c_int {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_workers_teardown(js: *mut c_void) {
-    worker::teardown(Js(js as usize));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_log_cb(line: *const c_char, user_data: *mut c_void) {
-    let Some(host) = host_from_ptr(user_data) else {
-        return;
-    };
-    let Some(line) = (unsafe { borrowed(line) }) else {
-        return;
-    };
-    invoke_default(move || {
-        if !host.owner_alive.load(std::sync::atomic::Ordering::SeqCst) {
-            return;
-        }
-        if let Some((js, _, _)) = worker::owner_of(&host) {
-            log_line(js, &line);
-        }
-    });
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_worker_install_console(scope: &mut Scope<'_>, global: &Value) {
     worker_scope::install_console(scope, global);
 }
@@ -849,11 +818,6 @@ pub fn nsr_sw_install_scope(scope: &mut Scope<'_>, global: &Value) {
         return;
     };
     service::install_scope(scope, global, &host);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_shape_global(ctx: ContextHandle, service_worker: c_int) {
-    ctx.with(|scope| worker_scope::shape_global(scope, service_worker != 0));
 }
 
 #[unsafe(no_mangle)]
@@ -876,4 +840,43 @@ pub fn nsr_worker_promise_rejection_tracker(
 #[unsafe(no_mangle)]
 pub fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
     worker::report_exception(Js(js as usize), exception)
+}
+
+/// # Safety
+///
+/// `host` is null or a live worker host.
+unsafe fn host_closing(host: *const c_void) -> bool {
+    // SAFETY: the caller passes null or a live worker host.
+    unsafe { host.cast::<Host>().as_ref() }.is_some_and(Host::closing)
+}
+
+/// # Safety
+///
+/// `host` is null or a live worker host.
+unsafe fn host_log_line(host: *mut c_void, line: &CStr) {
+    let Some(host) = host_from_ptr(host) else {
+        return;
+    };
+    let line = line.to_string_lossy().into_owned();
+    invoke_default(move || {
+        if !host.owner_alive.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        if let Some((js, _, _)) = worker::owner_of(&host) {
+            log_line(js, &line);
+        }
+    });
+}
+
+fn teardown(js: *const NsJs) {
+    worker::teardown(Js(js as usize));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_workers_hooks(api::WorkersHooks {
+        host_closing,
+        log_line: host_log_line,
+        shape_global: worker_scope::shape_global,
+        teardown,
+    });
 }

@@ -11,6 +11,7 @@ pub mod declaration;
 mod ffi;
 
 pub use ffi::computed_text;
+pub use ffi::install_runtime_hooks;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

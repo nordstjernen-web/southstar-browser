@@ -27,9 +27,9 @@ pub use css::{
 };
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
-    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, in_blocking_fetch,
-    monotonic_us, navigate_blocking, nosniff, preconnect, preload_clear, preload_request,
-    record_timing, url_is_http_or_https, url_origin, url_resolve,
+    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, monotonic_us,
+    navigate_blocking, nosniff, preconnect, preload_clear, preload_request, record_timing,
+    url_is_http_or_https, url_origin, url_resolve,
 };
 
 use crate::fetch;
@@ -376,11 +376,6 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
 fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_engine_in_blocking_fetch() -> GBoolean {
-    glib::boolean(in_blocking_fetch())
 }
 
 #[unsafe(no_mangle)]

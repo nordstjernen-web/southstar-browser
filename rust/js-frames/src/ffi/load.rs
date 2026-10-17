@@ -53,7 +53,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
-    fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
 }
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
@@ -231,7 +230,10 @@ pub(crate) fn fetch_resource(
         content_type: Some(c"application/x-www-form-urlencoded"),
     });
     let fetched = api::fetch_resource(js.ptr(), url, Some(top_url), &[header], upload);
-    (Response::take(fetched.response.cast()), fetched.error)
+    let response = fetched
+        .response
+        .map_or(core::ptr::null_mut(), southstar_net::Response::into_raw);
+    (Response::take(response.cast()), fetched.error)
 }
 
 pub(crate) fn fetch_script(
@@ -242,7 +244,10 @@ pub(crate) fn fetch_script(
 ) -> Option<Response> {
     let info = element_perf_info(js, script);
     let fetched = api::fetch_subresource(js.ptr(), url, Some(top_url), &[], Some(c"script"), &info);
-    Response::take(fetched.response.cast())
+    let response = fetched
+        .response
+        .map_or(core::ptr::null_mut(), southstar_net::Response::into_raw);
+    Response::take(response.cast())
 }
 
 pub(crate) fn element_perf_info(js: Js, element: Node<'_>) -> ResourceInfo {
@@ -413,7 +418,7 @@ pub(crate) fn evaluating<R>(
 }
 
 pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
-    unsafe { ns_js_purge_frame_rafs(js.ptr(), frame.as_ptr()) };
+    (api::lifecycle_hooks().purge_frame_rafs)(js.ptr(), frame);
     southstar_js_services::purge_frame_timers(js.ptr(), frame);
 }
 

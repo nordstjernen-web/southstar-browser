@@ -104,21 +104,6 @@ fn with_handle(ctx: ContextHandle, f: impl FnOnce(&mut Scope<'_>)) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_install_pdf_plugins(ctx: ContextHandle) {
-    with_handle(ctx, crate::install_pdf_plugins);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_link_interface_ctors(ctx: ContextHandle) {
-    with_handle(ctx, crate::link_interface_ctors);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_js_lock_global_prototypes(ctx: ContextHandle) {
-    with_handle(ctx, crate::lock_global_prototypes);
-}
-
-#[unsafe(no_mangle)]
 pub fn nsr_install_hasinstance(scope: &mut Scope<'_>, global: &Value) {
     crate::install_has_instance(scope, global);
 }
@@ -172,4 +157,24 @@ pub fn nsr_js_register_class(scope: &mut Scope<'_>, which: c_int) -> Value {
 #[unsafe(no_mangle)]
 pub fn nsr_js_install_proto_table(scope: &mut Scope<'_>, proto: &Value, table: c_int) {
     install_proto_table(scope, proto, table);
+}
+
+fn install_pdf_plugins(ctx: ContextHandle) {
+    with_handle(ctx, crate::install_pdf_plugins);
+}
+
+fn link_interface_ctors(ctx: ContextHandle) {
+    with_handle(ctx, crate::link_interface_ctors);
+}
+
+fn lock_global_prototypes(ctx: ContextHandle) {
+    with_handle(ctx, crate::lock_global_prototypes);
+}
+
+pub fn install_runtime_hooks() {
+    api::set_interfaces_hooks(api::InterfacesHooks {
+        install_pdf_plugins,
+        link_interface_ctors,
+        lock_global_prototypes,
+    });
 }

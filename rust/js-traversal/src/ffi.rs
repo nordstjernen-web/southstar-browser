@@ -4,7 +4,7 @@
 
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode, Tree};
+use southstar_dom::{Node, Tree};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -133,14 +133,19 @@ pub fn iters_pre_remove(js: *const NsJs, removed: Element) {
     crate::iterator::pre_remove(Js::of(js), removed);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_iters_pre_remove(js: *const NsJs, removed: *const NsNode) {
-    if let Some(removed) = unsafe { Node::from_ptr(removed) } {
+fn pre_remove(js: *const NsJs, removed: Node<'_>) {
+    if let Some(removed) = removed.downgrade().get() {
         iters_pre_remove(js, removed);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_traversal_teardown(js: *const NsJs) {
+fn teardown(js: *const NsJs) {
     crate::iterator::teardown(Js::of(js));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_traversal_hooks(api::TraversalHooks {
+        pre_remove,
+        teardown,
+    });
 }

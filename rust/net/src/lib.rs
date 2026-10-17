@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod about;
+mod blocking;
 mod budget;
 mod coalesce;
 mod cookies;
@@ -23,6 +24,7 @@ mod url;
 mod view_source;
 
 pub use about::{is_chrome_page, is_privileged_page};
+pub use blocking::{BlockingFetch, in_blocking_fetch};
 pub use cookies::{
     for_js as cookies_for_js, jar_version as cookie_jar_version,
     store_from_js as cookie_store_from_js,

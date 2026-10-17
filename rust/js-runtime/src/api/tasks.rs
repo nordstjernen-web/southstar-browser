@@ -7,9 +7,9 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, GError};
+use southstar_glib::GBoolean;
 
-use crate::ffi::glue::{self, RequestBody};
+use crate::ffi::glue;
 use crate::ffi::{self, Js, NsJs, record};
 use crate::{budget, orphans, scheduling, teardown};
 
@@ -53,7 +53,7 @@ pub struct Upload<'a> {
 }
 
 pub struct Fetched {
-    pub response: *mut Response,
+    pub response: Option<southstar_net::Response>,
     pub error: Option<CString>,
 }
 
@@ -208,38 +208,41 @@ pub fn frame_eval<R>(
     result
 }
 
-fn header_list(headers: &[&CStr]) -> Vec<*const c_char> {
-    headers
-        .iter()
-        .map(|header| header.as_ptr())
-        .chain([ptr::null()])
-        .collect()
-}
-
 fn fetch(
     js: Option<Js>,
     url: &CStr,
     top_url: Option<&CStr>,
     headers: &[&CStr],
-    body: &RequestBody,
+    upload: Option<Upload<'_>>,
 ) -> Fetched {
-    let headers = header_list(headers);
-    let top_url = top_url.map_or(ptr::null(), CStr::as_ptr);
-    let mut error: *mut GError = ptr::null_mut();
-    // SAFETY: the URLs and the header list are NUL-terminated and outlive the call, the header list ends in null, and the body's pointers describe the caller's live slice.
-    let response = unsafe {
-        glue::fetch_resource(
-            js,
-            url.as_ptr(),
-            top_url,
-            headers.as_ptr(),
-            body,
-            &mut error,
-        )
+    let headers: Vec<Vec<u8>> = headers
+        .iter()
+        .map(|header| header.to_bytes().to_vec())
+        .collect();
+    let req = southstar_net::FetchRequest {
+        url: url.to_bytes(),
+        top_url: top_url.map(CStr::to_bytes),
+        method: Some(
+            upload
+                .as_ref()
+                .map_or(&b"GET"[..], |upload| upload.method.to_bytes()),
+        ),
+        body: upload.as_ref().map(|upload| upload.body),
+        content_type: upload
+            .as_ref()
+            .and_then(|upload| upload.content_type)
+            .map(CStr::to_bytes),
+        headers: &headers,
     };
-    Fetched {
-        response,
-        error: glue::take_error(error),
+    match glue::fetch_resource(js, &req) {
+        Ok(response) => Fetched {
+            response: Some(response),
+            error: None,
+        },
+        Err(message) => Fetched {
+            response: None,
+            error: (!message.is_empty()).then(|| glue::c_line(&message)),
+        },
     }
 }
 
@@ -250,13 +253,7 @@ pub fn fetch_resource(
     headers: &[&CStr],
     upload: Option<Upload<'_>>,
 ) -> Fetched {
-    let body = upload.map_or(RequestBody::GET, |upload| RequestBody {
-        method: upload.method.as_ptr(),
-        data: upload.body.as_ptr().cast(),
-        len: upload.body.len(),
-        content_type: upload.content_type.map_or(ptr::null(), CStr::as_ptr),
-    });
-    fetch(Js::of(js), url, top_url, headers, &body)
+    fetch(Js::of(js), url, top_url, headers, upload)
 }
 
 pub fn fetch_subresource(
@@ -268,12 +265,15 @@ pub fn fetch_subresource(
     info: &ResourceInfo,
 ) -> Fetched {
     let start = ffi::monotonic_us();
-    let fetched = fetch(Js::of(js), url, top_url, headers, &RequestBody::GET);
+    let fetched = fetch(Js::of(js), url, top_url, headers, None);
     if let Some(js) = Js::of(js)
         && js.st().worker_host.get().is_null()
         && let Some(initiator) = initiator
     {
-        glue::add_resource_timing(js, info, url, initiator, start, fetched.response);
+        let response = fetched.response.as_ref().map_or(ptr::null(), |response| {
+            response.as_ptr().cast_const().cast()
+        });
+        glue::add_resource_timing(js, info, url, initiator, start, response);
     }
     fetched
 }

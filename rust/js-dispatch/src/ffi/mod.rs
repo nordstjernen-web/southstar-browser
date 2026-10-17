@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod exports;
+pub(crate) mod exports;
 mod imports;
 
 use core::ffi::{CStr, c_char, c_int};

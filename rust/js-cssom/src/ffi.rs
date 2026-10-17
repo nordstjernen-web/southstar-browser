@@ -581,7 +581,13 @@ pub unsafe extern "C" fn ns_js_computed_text(
         .map_or(core::ptr::null_mut(), |text| glib::strdup(text.as_bytes()))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cssom_teardown(js: *const NsJs) {
+fn teardown(js: *const southstar_js_runtime::api::NsJs) {
     crate::teardown(Js(js as usize));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_cssom_hooks(api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

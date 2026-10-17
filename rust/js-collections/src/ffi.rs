@@ -38,7 +38,6 @@ impl Js {
 const SYNTAX_ERR: i32 = 12;
 
 unsafe extern "C" {
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_form_listed_controls(form: *const NsNode, include_image: GBoolean, out: *mut GPtrArray);
     fn g_ptr_array_new() -> *mut GPtrArray;
 }
@@ -59,7 +58,7 @@ pub(crate) fn focused_node(js: Js) -> Option<Element> {
     if js.is_null() {
         return None;
     }
-    node(unsafe { ns_js_focused_node(js.ptr()) })
+    (api::focus_hooks().focused_node)(js.ptr())
 }
 
 pub(crate) fn current_url_fragment(js: Js) -> Option<Vec<u8>> {
@@ -258,7 +257,13 @@ pub fn qcache_invalidate(js: *const NsJs) {
     page::invalidate(Js::of(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_collections_teardown(js: *const NsJs) {
+fn teardown(js: *const NsJs) {
     page::teardown(Js::of(js));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_collections_hooks(api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

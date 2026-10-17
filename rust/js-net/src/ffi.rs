@@ -820,11 +820,6 @@ pub fn reset_page(js: *mut NsJs) {
     crate::page_reset(Js::of_ptr(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_teardown(js: *mut NsJs) {
-    crate::page_teardown(Js::of_ptr(js));
-}
-
 pub fn pending_fetch_count(js: *const NsJs) -> usize {
     crate::pending_fetches(Js::of_ptr(js))
 }
@@ -889,4 +884,15 @@ pub(crate) unsafe extern "C" fn on_abort_timeout(data: *mut c_void) -> GBoolean 
 pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::TimeoutTicket) {
     let data = Box::into_raw(Box::new(ticket)).cast();
     js.attach_timeout(ms, on_abort_timeout, data);
+}
+
+fn teardown(js: *const NsJs) {
+    crate::page_teardown(Js::of_ptr(js));
+}
+
+pub fn install_runtime_hooks() {
+    api::set_net_hooks(api::PageStateHooks {
+        init: |_| {},
+        teardown,
+    });
 }

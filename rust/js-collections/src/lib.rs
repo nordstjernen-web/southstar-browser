@@ -9,6 +9,7 @@ mod nodelist;
 mod page;
 pub mod query;
 
+pub use ffi::install_runtime_hooks;
 pub use ffi::qcache_invalidate;
 
 use core::ffi::{CStr, c_int};

@@ -2578,6 +2578,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-net",
  "southstar-url",
 ]
 
@@ -2786,6 +2787,7 @@ dependencies = [
 name = "southstar-js-page"
 version = "0.9.12-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-css",
  "southstar-debuglog",
  "southstar-dom",
@@ -2793,16 +2795,22 @@ dependencies = [
  "southstar-js-attrs",
  "southstar-js-bind",
  "southstar-js-brand",
+ "southstar-js-collections",
+ "southstar-js-cssom",
  "southstar-js-custom-elements",
  "southstar-js-dispatch",
  "southstar-js-document",
  "southstar-js-engine",
  "southstar-js-focus",
+ "southstar-js-fonts",
  "southstar-js-frames",
+ "southstar-js-geometry",
  "southstar-js-images",
+ "southstar-js-input",
  "southstar-js-interfaces",
  "southstar-js-lifecycle",
  "southstar-js-loader",
+ "southstar-js-media",
  "southstar-js-mutation",
  "southstar-js-net",
  "southstar-js-observers",
@@ -2812,7 +2820,10 @@ dependencies = [
  "southstar-js-shadow",
  "southstar-js-storage",
  "southstar-js-top-layer",
+ "southstar-js-traversal",
+ "southstar-js-url",
  "southstar-js-window",
+ "southstar-js-workers",
  "southstar-url",
 ]
 
@@ -2864,6 +2875,7 @@ dependencies = [
  "southstar-js-intl",
  "southstar-js-realm",
  "southstar-js-temporal",
+ "southstar-net",
  "southstar-url",
 ]
 

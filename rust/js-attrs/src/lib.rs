@@ -11,6 +11,7 @@ pub mod named_map;
 mod token_list;
 
 pub use ffi::detach_all;
+pub use ffi::install_runtime_hooks;
 
 use std::ffi::CString;
 
