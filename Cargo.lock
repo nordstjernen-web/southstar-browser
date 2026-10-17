@@ -3396,6 +3396,7 @@ name = "southstar-shell"
 version = "0.9.12-dev"
 dependencies = [
  "southstar-bookmarks",
+ "southstar-browser",
  "southstar-bytecode-cache",
  "southstar-config",
  "southstar-debuglog",
@@ -3405,6 +3406,7 @@ dependencies = [
  "southstar-font",
  "southstar-glib",
  "southstar-gtk-ffi",
+ "southstar-headless",
  "southstar-history",
  "southstar-html-parser",
  "southstar-http-cache",

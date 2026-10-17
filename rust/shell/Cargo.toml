@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 southstar-bookmarks = { path = "../bookmarks" }
+southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-debuglog = { path = "../debuglog" }
@@ -22,6 +23,7 @@ southstar-ffi = { path = "../southstar-ffi" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }
+southstar-headless = { path = "../headless" }
 southstar-history = { path = "../history" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-http-cache = { path = "../http-cache" }

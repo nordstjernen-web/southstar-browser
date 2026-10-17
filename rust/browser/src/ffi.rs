@@ -1019,9 +1019,13 @@ pub extern "C" fn ns_browser_set_next_user_activated(user_activated: c_int) {
     open::set_next_user_activated(user_activated != 0);
 }
 
+pub fn set_color_scheme(dark: bool) {
+    css_set_color_scheme(dark);
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_browser_set_color_scheme(dark: c_int) {
-    css_set_color_scheme(dark != 0);
+    set_color_scheme(dark != 0);
 }
 
 #[unsafe(no_mangle)]
