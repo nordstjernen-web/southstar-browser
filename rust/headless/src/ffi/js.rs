@@ -241,8 +241,7 @@ impl Js {
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_focus::focused_node(self.raw()) }
+        southstar_js_focus::focused_node(self.page())
     }
 
     pub fn set_focused_node(self, el: Node) {

@@ -31,9 +31,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
-    fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
-    fn ns_js_clear_focused_node(js: *mut NsJs);
     fn g_date_time_new_now_local() -> *mut c_void;
     fn g_date_time_format(datetime: *mut c_void, format: *const c_char) -> *mut c_char;
     fn g_date_time_unref(datetime: *mut c_void);
@@ -176,15 +173,15 @@ pub(crate) fn current_script(js: Js) -> Option<Element> {
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {
-    node_of(unsafe { ns_js_focused_node(js.0) })
+    southstar_js_focus::focused_node(js.0)
 }
 
 pub(crate) fn focused_doc(js: Js) -> Option<Element> {
-    node_of(unsafe { ns_js_focused_doc(js.0) })
+    southstar_js_focus::focused_doc(js.0)
 }
 
 pub(crate) fn clear_focused_node(js: Js) {
-    unsafe { ns_js_clear_focused_node(js.0) };
+    southstar_js_focus::clear_focused_node(js.0);
 }
 
 pub(crate) fn unorphan_node(js: Js, node: Element) {

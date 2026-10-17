@@ -17,7 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
 }
 
 unsafe extern "Rust" {
@@ -76,7 +75,7 @@ pub(crate) fn current_document(js: Js) -> Option<Element> {
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {
-    node_of(unsafe { ns_js_focused_node(js.0) })
+    southstar_js_focus::focused_node(js.0)
 }
 
 pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, Value); 2] {

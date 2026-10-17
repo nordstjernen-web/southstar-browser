@@ -161,8 +161,7 @@ impl Js {
     }
 
     pub fn focused_node(self) -> Option<Element> {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::focused_node(self.ptr().cast()) }
+        southstar_js_focus::focused_node(self.ptr())
     }
 
     pub fn sequential_focus_target(self, backward: bool) -> Option<Element> {

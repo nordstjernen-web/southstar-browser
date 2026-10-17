@@ -18,6 +18,7 @@ southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-focus = { path = "../js-focus" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-interfaces = { path = "../js-interfaces" }

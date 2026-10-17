@@ -87,8 +87,7 @@ impl Js {
     }
 
     pub fn focused(self) -> Option<Element> {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::focused_node(self.ptr().cast()) }
+        southstar_js_focus::focused_node(self.ptr())
     }
 
     pub fn set_focus(self, el: Option<Element>) {

@@ -46,7 +46,8 @@ fn dispatch_click(scope: &mut Scope<'_>, js: Js, el: Element) {
     if effectively_inert(el) || ffi::is_disabled_form_control(el) {
         return;
     }
-    let act = ffi::click_activation_target(el).filter(|&act| act == el || !effectively_inert(act));
+    let act = crate::activation::click_activation_target(el)
+        .filter(|&act| act == el || !effectively_inert(act));
     let kind = ffi::checkable_kind(act);
     let state = act
         .filter(|_| kind != 0)

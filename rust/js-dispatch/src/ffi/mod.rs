@@ -45,9 +45,6 @@ unsafe extern "C" {
         state: *const CheckableState,
         prevented: GBoolean,
     );
-    fn ns_click_activation_target(el: *const NsNode) -> *const NsNode;
-    fn ns_node_has_activation_behavior(el: *const NsNode) -> GBoolean;
-    fn ns_js_synthetic_activation(js: *mut NsJs, act: *const NsNode, target: *const NsNode);
 }
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
@@ -213,7 +210,7 @@ impl Js {
     }
 
     pub fn synthetic_activation(self, act: Element, target: Element) {
-        unsafe { ns_js_synthetic_activation(self.ptr(), act.as_ptr(), target.as_ptr()) };
+        southstar_js_focus::synthetic_activation(self.ptr(), act, target);
     }
 }
 
@@ -346,11 +343,11 @@ pub(crate) fn checkable_input_kind(el: Element) -> i32 {
 }
 
 pub(crate) fn click_activation_target(el: Element) -> Option<Element> {
-    node(unsafe { ns_click_activation_target(el.as_ptr()) })
+    southstar_js_focus::click_activation_target(el)
 }
 
 pub(crate) fn has_activation_behavior(el: Element) -> bool {
-    unsafe { ns_node_has_activation_behavior(el.as_ptr()) != 0 }
+    southstar_js_focus::has_activation_behavior(el)
 }
 
 pub(crate) fn is_host_caller(scope: &mut Scope<'_>) -> bool {

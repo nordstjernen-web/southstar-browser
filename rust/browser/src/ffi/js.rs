@@ -51,8 +51,7 @@ impl Js {
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_focus::focused_node(self.raw()) }
+        southstar_js_focus::focused_node(self.page())
     }
 
     pub fn fire_media_load_events(self, layout: BoxRef<'_>) {

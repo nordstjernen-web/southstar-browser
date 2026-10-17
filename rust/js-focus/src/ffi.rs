@@ -370,10 +370,6 @@ pub(crate) fn set_fullscreen_node(el: Option<Element>) {
     southstar_css::set_fullscreen_node(el);
 }
 
-pub(crate) fn click_activation_target(el: Element) -> Option<Element> {
-    crate::activation::click_activation_target(el)
-}
-
 pub(crate) fn is_disabled_form_control(el: Element) -> bool {
     api::is_disabled_form_control(el)
 }
@@ -484,11 +480,40 @@ pub unsafe fn focus_from_pointer(js: *mut c_void, target: Option<Node<'_>>) {
     }
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn focused_node(js: *mut c_void) -> Option<Element> {
-    crate::focused(Js::of(js.cast()))
+pub fn focused_node(js: *const NsJs) -> Option<Element> {
+    crate::focused(Js::of(js))
+}
+
+pub fn focused_doc(js: *const NsJs) -> Option<Element> {
+    crate::peek(Js::of(js), |page| page.focused_doc)
+}
+
+pub fn clear_focused_node(js: *const NsJs) {
+    let js = Js::of(js);
+    if !js.is_null() {
+        crate::with(js, |page| page.focused = None);
+    }
+}
+
+pub fn reset_focus(js: *const NsJs) {
+    crate::reset(Js::of(js));
+}
+
+pub fn synthetic_activation(js: *const NsJs, act: Node<'_>, target: Node<'_>) {
+    let (js, Some(act), Some(target)) = (Js::of(js), element(act), element(target)) else {
+        return;
+    };
+    if js.has_context() {
+        crate::click::synthetic_activation(js, act, target);
+    }
+}
+
+pub fn has_activation_behavior(el: Node<'_>) -> bool {
+    element(el).is_some_and(crate::activation::has_activation_behavior)
+}
+
+pub fn click_activation_target(el: Node<'_>) -> Option<Element> {
+    element(el).and_then(crate::activation::click_activation_target)
 }
 
 /// # Safety
@@ -544,20 +569,7 @@ pub unsafe extern "C" fn ns_js_update_focus_visible(js: *const NsJs) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_focused_node(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(crate::focused(Js::of(js)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode {
-    Node::ptr_or_null(crate::peek(Js::of(js), |page| page.focused_doc))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_clear_focused_node(js: *const NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::with(js, |page| page.focused = None);
-    }
+    Node::ptr_or_null(focused_node(js))
 }
 
 #[unsafe(no_mangle)]
@@ -575,35 +587,6 @@ pub unsafe extern "C" fn ns_focus_forget_subtree(js: *const NsJs, root: *const N
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_focus_reset(js: *const NsJs) {
-    crate::reset(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_focus_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_synthetic_activation(
-    js: *const NsJs,
-    act: *const NsNode,
-    target: *const NsNode,
-) {
-    let (js, Some(act), Some(target)) = (Js::of(js), node(act), node(target)) else {
-        return;
-    };
-    if js.has_context() {
-        crate::click::synthetic_activation(js, act, target);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_has_activation_behavior(el: *const NsNode) -> GBoolean {
-    glib::boolean(node(el).is_some_and(crate::activation::has_activation_behavior))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_click_activation_target(el: *const NsNode) -> *const NsNode {
-    Node::ptr_or_null(node(el).and_then(crate::activation::click_activation_target))
 }

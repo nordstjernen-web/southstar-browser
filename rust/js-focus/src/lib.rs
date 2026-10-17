@@ -17,9 +17,10 @@ use southstar_js_engine::Value;
 use crate::ffi::Js;
 
 pub use crate::ffi::{
-    activate_element, focus_from_pointer, focused_node, is_focusable, keyboard_activate,
-    keyboard_activates, note_pointer_input, sequential_focus_target, set_focus, set_focused_node,
-    tabindex, window_action_applied,
+    activate_element, clear_focused_node, click_activation_target, focus_from_pointer, focused_doc,
+    focused_node, has_activation_behavior, is_focusable, keyboard_activate, keyboard_activates,
+    note_pointer_input, reset_focus, sequential_focus_target, set_focus, set_focused_node,
+    synthetic_activation, tabindex, window_action_applied,
 };
 
 pub(crate) type Element = Node<'static>;
