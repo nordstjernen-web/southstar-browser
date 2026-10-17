@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::{GHashTable, GStr};
+use southstar_glib::GHashTable;
 use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 
 use super::glib::StrBufOwned;

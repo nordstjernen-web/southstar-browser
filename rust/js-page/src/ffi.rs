@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -237,14 +237,11 @@ impl Js {
         southstar_js_top_layer::clear_top_layer(self.0);
         southstar_js_focus::reset_focus(self.0);
         southstar_js_mutation::forget_pending_change(self.0);
-        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
-        unsafe {
-            southstar_js_storage::free_deferred_events(self.0);
-            southstar_js_services::reset_page(self.0);
-            southstar_js_lifecycle::reset_lifecycle(self.0);
-            southstar_js_dispatch::reset(self.0);
-            southstar_js_net::reset_page(self.0);
-        }
+        southstar_js_storage::free_deferred_events(self.0);
+        southstar_js_services::reset_page(self.0);
+        southstar_js_lifecycle::reset_lifecycle(self.0);
+        southstar_js_dispatch::reset(self.0);
+        southstar_js_net::reset_page(self.0);
         southstar_js_custom_elements::reset(self.0);
         southstar_css::clear_defined_elements();
         southstar_css::clear_registered_properties();

@@ -60,11 +60,6 @@ pub fn str_of(s: &Option<OwnedStr>) -> Option<&[u8]> {
 
 pub use southstar_texture::TextureRef as Texture;
 
-fn adopt(p: *mut c_void) -> Option<Texture> {
-    // SAFETY: p is null or a new texture reference the call that returned it handed over.
-    unsafe { Texture::from_raw(p.cast()) }
-}
-
 pub use crate::decode::{Player, probe_chunk_range};
 
 pub struct Cues(pub Vec<Cue>);

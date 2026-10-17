@@ -2,11 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib as glib;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -50,15 +49,6 @@ unsafe extern "Rust" {
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
-}
-
-fn owned_text(text: *mut c_char) -> Option<Vec<u8>> {
-    if text.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
-    unsafe { glib::g_free(text.cast()) };
-    Some(bytes)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {

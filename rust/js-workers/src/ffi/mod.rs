@@ -246,10 +246,6 @@ impl Js {
         self.0 == 0
     }
 
-    fn ptr(self) -> *mut c_void {
-        self.0 as *mut c_void
-    }
-
     fn page(self) -> *const NsJs {
         self.0 as *const NsJs
     }
