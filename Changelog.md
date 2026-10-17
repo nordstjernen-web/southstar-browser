@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Security: the address bar can no longer be made to show a URL other
+  than the page's. The shell read the renderer's replies by searching the
+  JSON text for the quoted key, so a page title or URL that spelled
+  `"url"` or `"security"` itself was taken for the member: a title ending
+  in `\"url` hid the real URL of a page reached by a redirect, and the
+  address bar kept showing the address that redirected there. The reader
+  now skips string values and takes a key only where it names a member.
+  Ported from Nordstjernen.
 * Security: the Landlock sandbox of the renderer and the shell no longer
   opens the whole home directory when `$XAUTHORITY` is `~/.Xauthority`,
   as LightDM sets it on X11 sessions (Linux Mint, Xubuntu). The sandbox

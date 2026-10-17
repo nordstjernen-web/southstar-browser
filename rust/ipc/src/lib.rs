@@ -3,6 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+#[cfg(test)]
+mod tests;
 
 use core::ffi::{c_int, c_long};
 use std::io;
@@ -418,19 +420,34 @@ pub fn json_escape(s: &[u8]) -> Vec<u8> {
     out
 }
 
+fn json_string_end(body: &[u8], quote: usize) -> usize {
+    let mut i = quote + 1;
+    while i < body.len() && body[i] != b'"' {
+        if body[i] == b'\\' {
+            i += 1;
+        }
+        i += 1;
+    }
+    (i + 1).min(body.len())
+}
+
+fn json_skip_space(body: &[u8], mut i: usize) -> usize {
+    while matches!(body.get(i), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+        i += 1;
+    }
+    i
+}
+
 pub fn json_value<'a>(body: &'a [u8], key: &[u8]) -> Option<&'a [u8]> {
     let mut from = 0;
     while let Some(offset) = body[from..].iter().position(|&b| b == b'"') {
         let quote = from + offset;
-        let name_end = quote + 1 + key.len();
-        if body.get(quote + 1..name_end) == Some(key) && body.get(name_end) == Some(&b'"') {
-            let mut value = name_end + 1;
-            while matches!(body.get(value), Some(b' ' | b':')) {
-                value += 1;
-            }
-            return Some(&body[value..]);
+        let end = json_string_end(body, quote);
+        let colon = json_skip_space(body, end);
+        if body.get(colon) == Some(&b':') && body.get(quote + 1..end - 1) == Some(key) {
+            return Some(&body[json_skip_space(body, colon + 1)..]);
         }
-        from = quote + 1;
+        from = end;
     }
     None
 }
