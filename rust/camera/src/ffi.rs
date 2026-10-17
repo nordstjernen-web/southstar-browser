@@ -1,22 +1,11 @@
-//! Southstar — the C ABI of the camera, and the V4L2 ioctls behind it.
+//! Southstar — the shared camera the page's capture streams use, and the V4L2 ioctls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
-use southstar_glib::{self as glib, GPtrArray};
-
-#[repr(C)]
-pub struct CameraInfo {
-    device: *mut c_char,
-    label: *mut c_char,
-}
-
-unsafe extern "C" {
-    fn g_ptr_array_new() -> *mut GPtrArray;
-}
+use southstar_js_runtime::api::NsJs;
+use southstar_texture::TextureRef;
 
 #[cfg(target_os = "linux")]
 mod v4l2 {
@@ -365,141 +354,127 @@ mod v4l2 {
 }
 
 #[cfg(target_os = "linux")]
-pub use v4l2::Camera;
+use v4l2::Camera;
 
 #[cfg(not(target_os = "linux"))]
-pub struct Camera {
-    _private: [u8; 0],
+enum Camera {}
+
+pub struct CameraDevice {
+    pub device: Vec<u8>,
+    pub label: Vec<u8>,
 }
 
 struct Active {
-    camera: *mut Camera,
+    camera: Option<Box<Camera>>,
     refs: i32,
 }
 
+// SAFETY: the camera is reached only through the ACTIVE mutex, so one thread uses it at a time.
 unsafe impl Send for Active {}
 
 static ACTIVE: Mutex<Active> = Mutex::new(Active {
-    camera: ptr::null_mut(),
+    camera: None,
     refs: 0,
 });
 
-fn active() -> std::sync::MutexGuard<'static, Active> {
+fn active() -> MutexGuard<'static, Active> {
     ACTIVE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_camera_info_free(info: *mut CameraInfo) {
-    if info.is_null() {
-        return;
-    }
-    unsafe {
-        glib::g_free((*info).device.cast());
-        glib::g_free((*info).label.cast());
-        glib::g_free(info.cast());
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_camera_take_pending_origin() -> *mut c_char {
-    crate::take_pending_origin().map_or(ptr::null_mut(), |origin| glib::strdup(&origin))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_camera_set_decision(origin: *const c_char, allow: c_int) {
-    if let Some(origin) = unsafe { glib::bytes(origin) } {
-        crate::set_decision(origin, allow != 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_camera_permission(js: *const c_void) -> c_int {
-    let url = southstar_js_runtime::api::current_url(js.cast());
+pub fn page_permission(js: *const NsJs) -> Option<bool> {
+    let url = southstar_js_runtime::api::current_url(js);
     let url = url.to_bytes();
-    crate::permission(Some(url), southstar_url::bytes::origin_from(url))
+    match crate::permission(Some(url), southstar_url::bytes::origin_from(url)) {
+        1 => Some(true),
+        0 => Some(false),
+        _ => None,
+    }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_camera_acquire() -> *mut Camera {
+pub fn acquire() -> bool {
     let mut state = active();
-    if state.camera.is_null() {
-        state.camera = unsafe { ns_camera_open(ptr::null()) };
+    if state.camera.is_none() {
+        state.camera = platform::open_default();
     }
-    if !state.camera.is_null() {
+    let opened = state.camera.is_some();
+    if opened {
         state.refs += 1;
     }
-    state.camera
+    opened
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_camera_release() {
+pub fn release() {
     let mut state = active();
     if state.refs > 0 {
         state.refs -= 1;
         if state.refs == 0 {
-            unsafe { ns_camera_close(state.camera) };
-            state.camera = ptr::null_mut();
+            state.camera = None;
         }
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_camera_active() -> *mut Camera {
-    active().camera
+pub fn is_active() -> bool {
+    active().camera.is_some()
+}
+
+pub fn active_device() -> Option<Vec<u8>> {
+    active().camera.as_deref().map(platform::device_name)
+}
+
+pub fn next_frame() -> Option<Option<TextureRef>> {
+    let mut state = active();
+    let camera = state.camera.as_deref_mut()?;
+    Some(platform::next_frame(camera))
+}
+
+pub fn devices() -> Vec<CameraDevice> {
+    platform::devices()
 }
 
 #[cfg(target_os = "linux")]
-mod linux {
-    use core::ffi::{c_char, c_int, c_void};
-    use core::ptr;
+mod platform {
+    use core::ffi::c_int;
 
-    use southstar_glib::{self as glib, GPtrArray};
     use southstar_texture::TextureRef;
 
+    use super::CameraDevice;
     use super::v4l2::{self, Camera, PIX_FMT_MJPEG, PIX_FMT_YUYV};
-    use super::{CameraInfo, g_ptr_array_new};
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_open(device: *const c_char) -> *mut Camera {
-        let path = unsafe { glib::bytes(device) }
-            .filter(|path| !path.is_empty())
-            .unwrap_or(b"/dev/video0");
-        Camera::open(path).map_or(ptr::null_mut(), Box::into_raw)
+    pub(super) fn open_default() -> Option<Box<Camera>> {
+        Camera::open(b"/dev/video0")
     }
 
-    fn yuyv_texture(width: i32, height: i32, data: &[u8]) -> *mut c_void {
+    pub(super) fn device_name(camera: &Camera) -> Vec<u8> {
+        camera.name.to_bytes().to_vec()
+    }
+
+    fn yuyv_texture(width: i32, height: i32, data: &[u8]) -> Option<TextureRef> {
         if width <= 0 || height <= 0 {
-            return ptr::null_mut();
+            return None;
         }
         let (width, height) = (width as usize, height as usize);
         let stride = width * 4;
         let mut bgra = vec![0u8; stride * height];
         crate::yuyv_to_bgra(data, width, height, width * 2, &mut bgra, stride);
         TextureRef::new(width as c_int, height as c_int, &bgra, stride)
-            .map_or(ptr::null_mut(), |texture| texture.into_raw().cast())
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_next_frame(camera: *mut Camera) -> *mut c_void {
-        let Some(camera) = (unsafe { camera.as_mut() }) else {
-            return ptr::null_mut();
-        };
-        let Some(frame) = camera.dequeue() else {
-            return ptr::null_mut();
-        };
-        let mut texture = ptr::null_mut();
+    pub(super) fn next_frame(camera: &mut Camera) -> Option<TextureRef> {
+        let frame = camera.dequeue()?;
         let mut size = None;
-        if camera.pixelformat == PIX_FMT_MJPEG {
+        let texture = if camera.pixelformat == PIX_FMT_MJPEG {
             let jpeg = frame.data.get(..frame.used).unwrap_or(frame.data);
-            if let Some((decoded, width, height)) = southstar_image::decode_bytes(jpeg) {
-                texture = decoded.into_raw().cast();
+            southstar_image::decode_bytes(jpeg).map(|(texture, width, height)| {
                 size = Some((width, height));
-            }
+                texture
+            })
         } else if camera.pixelformat == PIX_FMT_YUYV {
-            texture = yuyv_texture(camera.width, camera.height, frame.data);
-        }
+            yuyv_texture(camera.width, camera.height, frame.data)
+        } else {
+            None
+        };
         camera.requeue(frame);
         if let Some((width, height)) = size {
             camera.width = width;
@@ -508,74 +483,37 @@ mod linux {
         texture
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_device(camera: *const Camera) -> *const c_char {
-        unsafe { camera.as_ref() }.map_or(ptr::null(), |camera| camera.name.as_ptr())
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_close(camera: *mut Camera) {
-        if !camera.is_null() {
-            drop(unsafe { Box::from_raw(camera) });
-        }
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn ns_camera_enumerate() -> *mut GPtrArray {
-        let list = unsafe { g_ptr_array_new() };
-        for index in 0..64 {
-            let path = format!("/dev/video{index}").into_bytes();
-            if !v4l2::exists(&path) {
-                continue;
-            }
-            let Some(label) = v4l2::label(&path) else {
-                continue;
-            };
-            unsafe {
-                let info = glib::g_malloc0(core::mem::size_of::<CameraInfo>()).cast::<CameraInfo>();
-                (*info).device = glib::strdup(&path);
-                (*info).label = glib::strdup(&label);
-                glib::g_ptr_array_add(list, info.cast());
-            }
-        }
-        list
+    pub(super) fn devices() -> Vec<CameraDevice> {
+        (0..64)
+            .map(|index| format!("/dev/video{index}").into_bytes())
+            .filter(|path| v4l2::exists(path))
+            .filter_map(|device| {
+                let label = v4l2::label(&device)?;
+                Some(CameraDevice { device, label })
+            })
+            .collect()
     }
 }
 
 #[cfg(not(target_os = "linux"))]
-mod other {
-    use core::ffi::{c_char, c_void};
-    use core::ptr;
+mod platform {
+    use southstar_texture::TextureRef;
 
-    use southstar_glib::GPtrArray;
+    use super::{Camera, CameraDevice};
 
-    use super::{Camera, g_ptr_array_new};
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_open(_device: *const c_char) -> *mut Camera {
-        ptr::null_mut()
+    pub(super) fn open_default() -> Option<Box<Camera>> {
+        None
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_next_frame(_camera: *mut Camera) -> *mut c_void {
-        ptr::null_mut()
+    pub(super) fn device_name(camera: &Camera) -> Vec<u8> {
+        match *camera {}
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_device(_camera: *const Camera) -> *const c_char {
-        ptr::null()
+    pub(super) fn next_frame(camera: &mut Camera) -> Option<TextureRef> {
+        match *camera {}
     }
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn ns_camera_close(_camera: *mut Camera) {}
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn ns_camera_enumerate() -> *mut GPtrArray {
-        unsafe { g_ptr_array_new() }
+    pub(super) fn devices() -> Vec<CameraDevice> {
+        Vec::new()
     }
 }
-
-#[cfg(target_os = "linux")]
-use linux::{ns_camera_close, ns_camera_open};
-#[cfg(not(target_os = "linux"))]
-use other::{ns_camera_close, ns_camera_open};

@@ -1094,7 +1094,7 @@ impl Cache {
                 continue;
             }
             if v.is_camera.get() {
-                if let Some(Some(frame)) = ffi::camera_next_frame() {
+                if let Some(Some(frame)) = southstar_camera::next_frame() {
                     v.natural_width = frame.width();
                     v.natural_height = frame.height();
                     v.frame_texture = Some(frame);
@@ -1253,7 +1253,8 @@ impl Cache {
         }
         self.videos.iter().any(|(_, p)| {
             let v = p.get();
-            (v.is_camera.get() && ffi::camera_active()) || (v.player.is_some() && v.playing.get())
+            (v.is_camera.get() && southstar_camera::is_active())
+                || (v.player.is_some() && v.playing.get())
         })
     }
 

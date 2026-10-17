@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{acquire, fill_frequency, fill_time_domain, release};
+
 use core::f64::consts::PI;
 
 pub const RING: usize = 16384;

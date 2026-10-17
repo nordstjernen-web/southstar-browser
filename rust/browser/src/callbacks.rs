@@ -194,7 +194,7 @@ pub fn media_volume(b: &NsBrowser, node: *const c_void, volume: f64) {
 
 pub fn resolve_camera(b: Option<&NsBrowser>, origin: Option<&CStr>, allow: bool) {
     if let Some(origin) = origin {
-        ffi::camera_set_decision(origin, allow);
+        southstar_camera::set_decision(origin.to_bytes(), allow);
     }
     if let Some(js) = b.and_then(NsBrowser::js) {
         let src = if allow {

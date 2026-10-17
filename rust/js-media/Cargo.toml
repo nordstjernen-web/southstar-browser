@@ -14,6 +14,7 @@ southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-mic = { path = "../mic" }
 southstar-url = { path = "../url" }
 southstar-video = { path = "../video" }
 southstar-webaudio = { path = "../webaudio" }

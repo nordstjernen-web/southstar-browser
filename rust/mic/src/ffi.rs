@@ -1,8 +1,6 @@
-//! Southstar — the C ABI of microphone capture, over SDL2's audio capture device.
+//! Southstar — microphone capture over SDL2's audio capture device: acquiring, releasing and reading the captured signal.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-
-use core::ffi::c_int;
 
 #[cfg(feature = "sdl")]
 mod sdl {
@@ -162,25 +160,15 @@ mod sdl {
     pub(super) fn frequency(_out: &mut [u8]) {}
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_mic_acquire() -> c_int {
-    c_int::from(sdl::acquire())
+pub fn acquire() -> bool {
+    sdl::acquire()
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_mic_release() {
+pub fn release() {
     sdl::release();
 }
 
-unsafe fn out<'a>(out: *mut u8, n: c_int) -> Option<&'a mut [u8]> {
-    (!out.is_null() && n > 0).then(|| unsafe { core::slice::from_raw_parts_mut(out, n as usize) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mic_fill_time_domain(dst: *mut u8, n: c_int) {
-    let Some(dst) = (unsafe { out(dst, n) }) else {
-        return;
-    };
+pub fn fill_time_domain(dst: &mut [u8]) {
     if sdl::active() {
         sdl::time_domain(dst);
     } else {
@@ -188,11 +176,7 @@ pub unsafe extern "C" fn ns_mic_fill_time_domain(dst: *mut u8, n: c_int) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mic_fill_frequency(dst: *mut u8, n: c_int) {
-    let Some(dst) = (unsafe { out(dst, n) }) else {
-        return;
-    };
+pub fn fill_frequency(dst: &mut [u8]) {
     if sdl::active() {
         sdl::frequency(dst);
     } else {

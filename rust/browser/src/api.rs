@@ -181,7 +181,7 @@ impl Page {
     }
 
     pub fn take_pending_camera(&self) -> Option<Vec<u8>> {
-        text(ffi::camera_take_pending_origin().as_deref())
+        southstar_camera::take_pending_origin()
     }
 
     pub fn take_pending_download(&self) -> Option<Vec<u8>> {

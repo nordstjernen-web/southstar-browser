@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -77,11 +77,6 @@ unsafe extern "Rust" {
     safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
 }
 
-unsafe extern "C" {
-    fn ns_mic_fill_time_domain(out: *mut u8, n: c_int);
-    fn ns_mic_fill_frequency(out: *mut u8, n: c_int);
-}
-
 fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     &bytes[..end]
@@ -115,20 +110,6 @@ pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
 
 pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
     nsr_event_adopt_interface(scope, event, iface);
-}
-
-fn clamp_len(bytes: &[u8]) -> c_int {
-    c_int::try_from(bytes.len()).unwrap_or(c_int::MAX)
-}
-
-pub(crate) fn mic_time_domain(bytes: &mut [u8]) {
-    let n = clamp_len(bytes);
-    unsafe { ns_mic_fill_time_domain(bytes.as_mut_ptr(), n) };
-}
-
-pub(crate) fn mic_frequency(bytes: &mut [u8]) {
-    let n = clamp_len(bytes);
-    unsafe { ns_mic_fill_frequency(bytes.as_mut_ptr(), n) };
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {

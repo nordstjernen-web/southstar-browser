@@ -4,6 +4,10 @@
 
 mod ffi;
 
+pub use ffi::{
+    CameraDevice, acquire, active_device, devices, is_active, next_frame, page_permission, release,
+};
+
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 

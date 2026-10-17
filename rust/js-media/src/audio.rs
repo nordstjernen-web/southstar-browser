@@ -138,12 +138,12 @@ fn fill_bytes(scope: &mut Scope<'_>, this: &Value, args: &[Value], mic: fn(&mut 
 }
 
 fn byte_time_domain(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
-    fill_bytes(scope, this, args, ffi::mic_time_domain, 128);
+    fill_bytes(scope, this, args, southstar_mic::fill_time_domain, 128);
     Ok(Value::undefined())
 }
 
 fn byte_frequency(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
-    fill_bytes(scope, this, args, ffi::mic_frequency, 0);
+    fill_bytes(scope, this, args, southstar_mic::fill_frequency, 0);
     Ok(Value::undefined())
 }
 

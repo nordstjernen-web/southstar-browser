@@ -176,94 +176,10 @@ impl Js {
     pub fn key(self) -> usize {
         self.0 as usize
     }
-}
 
-#[repr(C)]
-struct CameraInfo {
-    device: *mut c_char,
-    label: *mut c_char,
-}
-
-pub(crate) struct CameraDevice {
-    pub device: Vec<u8>,
-    pub label: Vec<u8>,
-}
-
-pub(crate) enum Permission {
-    Granted,
-    Denied,
-    Pending,
-}
-
-unsafe extern "C" {
-    fn ns_camera_permission(js: *const NsJs) -> c_int;
-    fn ns_camera_acquire() -> *mut c_void;
-    fn ns_camera_release();
-    fn ns_camera_active() -> *mut c_void;
-    fn ns_camera_device(camera: *const c_void) -> *const c_char;
-    fn ns_camera_enumerate() -> *mut glib::GPtrArray;
-    fn ns_camera_info_free(info: *mut CameraInfo);
-    fn ns_mic_acquire() -> c_int;
-    fn ns_mic_release();
-}
-
-unsafe fn c_bytes(p: *const c_char) -> Vec<u8> {
-    if p.is_null() {
-        Vec::new()
-    } else {
-        unsafe { core::ffi::CStr::from_ptr(p) }.to_bytes().to_vec()
+    pub fn camera_permission(self) -> Option<bool> {
+        southstar_camera::page_permission(self.0)
     }
-}
-
-pub(crate) fn camera_permission(js: Js) -> Permission {
-    match unsafe { ns_camera_permission(js.0) } {
-        1 => Permission::Granted,
-        0 => Permission::Denied,
-        _ => Permission::Pending,
-    }
-}
-
-pub(crate) fn camera_acquire() {
-    unsafe { ns_camera_acquire() };
-}
-
-pub(crate) fn camera_release() {
-    unsafe { ns_camera_release() };
-}
-
-pub(crate) fn mic_acquire() {
-    unsafe { ns_mic_acquire() };
-}
-
-pub(crate) fn mic_release() {
-    unsafe { ns_mic_release() };
-}
-
-pub(crate) fn active_camera_device() -> Option<Vec<u8>> {
-    let camera = unsafe { ns_camera_active() };
-    if camera.is_null() {
-        return None;
-    }
-    let device = unsafe { ns_camera_device(camera) };
-    (!device.is_null()).then(|| unsafe { c_bytes(device) })
-}
-
-pub(crate) fn camera_devices() -> Vec<CameraDevice> {
-    let list = unsafe { ns_camera_enumerate() };
-    let len = unsafe { (*list).len } as usize;
-    let mut devices = Vec::with_capacity(len);
-    for index in 0..len {
-        let info = unsafe { *(*list).pdata.add(index) }.cast::<CameraInfo>();
-        unsafe {
-            devices.push(CameraDevice {
-                device: c_bytes((*info).device),
-                label: c_bytes((*info).label),
-            });
-            ns_camera_info_free(info);
-        }
-    }
-    unsafe { glib::g_ptr_array_free(list, glib::TRUE) };
-    devices
 }
 
 pub(crate) struct DisplayMetrics {

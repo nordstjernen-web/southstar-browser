@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 southstar-av = { path = "../av", optional = true }
+southstar-camera = { path = "../camera" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }

@@ -930,7 +930,8 @@ pub unsafe extern "C" fn ns_browser_resolve_webgl(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_browser_take_pending_camera(_b: *mut NsBrowser) -> *mut c_char {
-    take_or_null(camera_take_pending_origin())
+    southstar_camera::take_pending_origin()
+        .map_or(ptr::null_mut(), |origin| southstar_glib::strdup(&origin))
 }
 
 #[unsafe(no_mangle)]

@@ -242,8 +242,6 @@ impl Response {
 }
 
 unsafe extern "C" {
-    fn ns_camera_active() -> *mut c_void;
-    fn ns_camera_next_frame(camera: *mut c_void) -> *mut c_void;
     fn g_get_monotonic_time() -> i64;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_file_set_contents(
@@ -286,18 +284,6 @@ pub fn texture_from_bgra(width: i32, height: i32, pixels: &[u8], stride: usize) 
 
 pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {
     southstar_image::decode_bytes(bytes)
-}
-
-pub fn camera_active() -> bool {
-    !unsafe { ns_camera_active() }.is_null()
-}
-
-pub fn camera_next_frame() -> Option<Option<Texture>> {
-    let cam = unsafe { ns_camera_active() };
-    if cam.is_null() {
-        return None;
-    }
-    Some(adopt(unsafe { ns_camera_next_frame(cam) }))
 }
 
 pub fn write_stream_file(subdir: &CStr, prefix: u8, token: u32, data: &[u8]) -> Option<Vec<u8>> {
