@@ -21,6 +21,7 @@ southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-interfaces = { path = "../js-interfaces" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
+southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }

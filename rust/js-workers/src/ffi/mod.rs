@@ -264,7 +264,6 @@ unsafe extern "C" {
         out_type: *mut *mut c_char,
     ) -> *mut GBytes;
     fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
-    fn ns_js_decode_data_url(url: *const c_char, out_len: *mut usize) -> *mut c_char;
     fn ns_js_net_sw_fetch_result(
         js: *mut c_void,
         id: core::ffi::c_uint,
@@ -697,15 +696,7 @@ pub(crate) fn doc_base_url(js: Js) -> Option<String> {
 }
 
 pub(crate) fn decode_data_url(url: &str) -> Option<Vec<u8>> {
-    let url = c_string(url);
-    let mut len = 0usize;
-    let data = unsafe { ns_js_decode_data_url(url.as_ptr(), &mut len) };
-    if data.is_null() {
-        return None;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }.to_vec();
-    unsafe { southstar_glib::g_free(data.cast()) };
-    Some(bytes)
+    southstar_js_loader::decode_data_url(&c_string(url))
 }
 
 pub(crate) fn csp_allows_worker(js: Js, url: &str) -> bool {

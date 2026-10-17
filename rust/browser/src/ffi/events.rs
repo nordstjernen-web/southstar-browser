@@ -28,10 +28,6 @@ unsafe extern "C" {
     fn atoi(s: *const c_char) -> c_int;
 }
 
-fn opt(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 fn modifiers(mods: c_int) -> southstar_js_input::Modifiers {
     southstar_js_input::Modifiers {
         shift: mods & 1 != 0,

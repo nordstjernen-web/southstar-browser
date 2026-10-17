@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -19,10 +18,6 @@ unsafe extern "C" {
     fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
     fn ns_input_resanitize_value(el: *mut NsNode);
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
-}
-
-fn c_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(ptr::null(), CStr::as_ptr)
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {

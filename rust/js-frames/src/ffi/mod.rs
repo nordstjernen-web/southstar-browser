@@ -48,7 +48,6 @@ impl Js {
 type JsResult = Result<Value, Value>;
 
 unsafe extern "C" {
-    fn ns_js_run_script_element(js: *mut NsJs, node: *mut NsNode, origin: *const c_char);
     fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
 }
@@ -201,8 +200,7 @@ pub(crate) fn node_doc_base(js: Js, node: Node<'_>) -> Option<Vec<u8>> {
 
 pub(crate) fn run_script_element(js: Js, node: Node<'_>, origin: Option<&[u8]>) {
     let origin = origin.map(|origin| CString::new(origin).unwrap_or_default());
-    let origin_ptr = origin.as_ref().map_or(core::ptr::null(), |o| o.as_ptr());
-    unsafe { ns_js_run_script_element(js.ptr(), node.as_mut_ptr(), origin_ptr) };
+    southstar_js_loader::run_script_element(js.ptr(), node, origin.as_deref());
 }
 
 pub(crate) fn frame_node(frame: Frame) -> Option<Node<'static>> {

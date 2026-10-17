@@ -66,7 +66,11 @@ pub fn has_lifecycle_tasks(js: *const NsJs) -> bool {
     })
 }
 
-pub fn run_next_lifecycle_schedule(js: *const NsJs, which: Schedule, origin: Option<&CStr>) -> bool {
+pub fn run_next_lifecycle_schedule(
+    js: *const NsJs,
+    which: Schedule,
+    origin: Option<&CStr>,
+) -> bool {
     let Some(js) = live(js) else {
         return false;
     };
@@ -102,10 +106,6 @@ pub fn script_type_supported(script: Node<'_>) -> bool {
 
 pub fn script_skipped_by_nomodule(script: Node<'_>) -> bool {
     crate::skipped_by_nomodule(script)
-}
-
-pub fn content_type_is_javascript(content_type: &[u8]) -> bool {
-    crate::content_type_is_javascript(content_type)
 }
 
 pub fn schedule_pending_script_drain(js: *const NsJs) {

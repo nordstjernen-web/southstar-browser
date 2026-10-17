@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use southstar_dom::{Node, NsNode, WeakNode, ancestors_and_self};
-use southstar_glib::{GHashTable, GStr};
+use southstar_glib::GHashTable;
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::ffi::{
@@ -270,7 +270,7 @@ fn wpt_results_ready(js: Js) -> bool {
     ffi::eval_source(Some(js), WPT_POLL_JS, c"wpt-poll").is_some_and(|r| r.to_bytes() == b"1")
 }
 
-fn wpt_eval(js: Js, src: &CStr) -> Option<GStr> {
+fn wpt_eval(js: Js, src: &CStr) -> Option<CString> {
     let r = ffi::eval_source(Some(js), src, c"wpt-report");
     ffi::consume_mutated(Some(js));
     r

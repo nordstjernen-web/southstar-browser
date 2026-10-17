@@ -46,7 +46,6 @@ unsafe extern "C" {
     fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
     fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
-    fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -241,9 +240,7 @@ impl Js {
     }
 
     pub fn eval_source(self, code: &[u8], origin: &CStr) {
-        let code = c_string(code);
-        let result = unsafe { ns_js_eval_source(self.ptr(), code.as_ptr(), origin.as_ptr()) };
-        unsafe { glib::g_free(result.cast()) };
+        let _ = southstar_js_loader::eval_source(self.ptr(), &c_string(code), Some(origin));
     }
 
     pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {

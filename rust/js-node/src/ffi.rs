@@ -30,7 +30,6 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
 }
 
 fn raw(node: Option<Element>) -> *mut NsNode {
@@ -153,7 +152,7 @@ pub(crate) fn iters_pre_remove(js: Js, node: Element) {
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
-    unsafe { ns_js_run_inserted_scripts(js.0, root.as_mut_ptr()) };
+    southstar_js_loader::run_inserted_scripts(js.0, root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {

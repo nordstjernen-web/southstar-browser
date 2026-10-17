@@ -4,10 +4,11 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
+use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
@@ -40,8 +41,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-    fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
-    -> *mut c_char;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
@@ -165,8 +164,10 @@ pub fn consume_mutated(js: Option<Js>) -> bool {
     api::consume_mutated(js_raw(js).cast())
 }
 
-pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(ns_js_eval_source(js_raw(js), src.as_ptr(), origin.as_ptr())) }
+pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<CString> {
+    let mut out = southstar_js_loader::eval_source(js_raw(js).cast(), src, Some(origin))?;
+    out.truncate(out.iter().position(|&b| b == 0).unwrap_or(out.len()));
+    CString::new(out).ok()
 }
 
 pub fn note_pointer_input(js: Option<Js>, pointer: bool) {

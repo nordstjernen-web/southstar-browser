@@ -15,8 +15,6 @@ use super::glib::StrBufOwned;
 
 unsafe extern "C" {
     pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
-    fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
-    -> *mut c_char;
 }
 
 #[derive(Clone, Copy)]
@@ -130,7 +128,8 @@ impl Js {
     }
 
     pub fn eval(self, src: &CStr, origin: &CStr) -> Option<GStr> {
-        unsafe { GStr::take(ns_js_eval_source(self.raw(), src.as_ptr(), origin.as_ptr())) }
+        southstar_js_loader::eval_source(self.page(), src, Some(origin))
+            .and_then(|out| super::glib::gstr_from(&out))
     }
 
     pub fn fire_page_transition(self, kind: &CStr, persisted: bool) {

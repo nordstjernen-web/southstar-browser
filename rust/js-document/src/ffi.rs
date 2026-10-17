@@ -306,9 +306,7 @@ pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
     }
 }
 
-unsafe extern "C" {
-    fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-}
+unsafe extern "C" {}
 
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
     ("createElement", 1, imports::nsr_document_createElement),
@@ -405,7 +403,7 @@ pub(crate) fn pending_iframe_add(js: Js, frame: Element) {
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
-    unsafe { ns_js_run_inserted_scripts(js.0, root.as_mut_ptr()) };
+    southstar_js_loader::run_inserted_scripts(js.0, root);
 }
 
 pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
