@@ -602,11 +602,9 @@ impl BindingEscapeAnalyzer<'_> {
         contains_direct_eval: bool,
     ) -> ControlFlow<&'static str> {
         let direct_eval_old = self.direct_eval;
-        self.direct_eval = contains_direct_eval || self.direct_eval;
+        self.direct_eval = contains_direct_eval;
         if self.direct_eval {
             scopes.escape_all_bindings();
-        }
-        if contains_direct_eval {
             scopes.access_arguments_binding();
         }
         let mut scope = scopes.parameter_scope();

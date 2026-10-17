@@ -27,6 +27,12 @@ Southstar Browser 0.9.12-dev:
   dispatch, frames and realms, script collection and running, interface
   installation and page reset), shrinking the unsafe budget across the
   js-* crates.
+* Functions that sit beside a direct `eval`, or that were created by
+  indirect-eval code, keep their local variables in registers: the scope
+  analysis only makes the bindings of functions that actually contain the
+  `eval` reachable by name. Such code ran up to six times slower, and
+  Google's search challenge script (a bytecode VM delivered through
+  `(0,eval)`) took twice as long to produce its token.
 * CSS animations attached to a scroll or view timeline
   (`animation-timeline` other than `auto`) no longer play as if on the
   document timeline. With `animation-duration: auto` and
