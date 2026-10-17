@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_glib::{GHashTable, GStr};
 use southstar_js_runtime::api::{self, NsJs};
 use southstar_layout::BoxRef;
 
@@ -19,12 +19,6 @@ unsafe extern "C" {
     fn ns_js_dump_stats(js: *mut c_void, out: *mut GString);
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
-    fn ns_js_dispatch_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
 }
 
 #[derive(Clone, Copy)]
@@ -162,9 +156,7 @@ impl Js {
     }
 
     pub fn dispatch_event(self, target: Node<'_>, kind: &CStr) {
-        unsafe {
-            ns_js_dispatch_event(self.raw(), target.as_ptr(), kind.as_ptr(), ptr::null_mut())
-        };
+        southstar_js_dispatch::dispatch_event(self.page(), target, &kind.to_string_lossy());
     }
 
     pub fn dispatch_submit_event(self, form: Node<'_>, submitter: Node<'_>) -> bool {

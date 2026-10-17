@@ -6,37 +6,14 @@ use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GStr};
+use southstar_glib::{GBoolean, GStr};
 use southstar_layout::BoxRef;
 
 use super::{Js, NsBrowser};
 
 unsafe extern "C" {
-    fn ns_js_dispatch_key_event_full(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        key: *const c_char,
-        code: *const c_char,
-        key_code: c_int,
-        char_code: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_input_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        input_type: *const c_char,
-        data: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
-    fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
     fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
     fn ns_render_page_uses_hover() -> GBoolean;
     fn ns_render_page_uses_active() -> GBoolean;
@@ -53,10 +30,6 @@ unsafe extern "C" {
 
 fn opt(s: Option<&CStr>) -> *const c_char {
     s.map_or(ptr::null(), CStr::as_ptr)
-}
-
-fn flag(mods: c_int, bit: c_int) -> GBoolean {
-    glib::boolean(mods & bit != 0)
 }
 
 fn modifiers(mods: c_int) -> southstar_js_input::Modifiers {
@@ -108,24 +81,27 @@ impl Js {
         codes: (c_int, c_int),
         mods: c_int,
     ) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_key_event_full(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                key.as_ptr(),
-                code.as_ptr(),
-                codes.0,
-                codes.1,
-                flag(mods, 1),
-                flag(mods, 2),
-                flag(mods, 4),
-                flag(mods, 8),
-                &mut prevented,
-            )
+        let key = key.to_string_lossy();
+        let code = code.to_string_lossy();
+        let press = southstar_js_dispatch::KeyPress {
+            key: Some(&key),
+            code: Some(&code),
+            key_code: codes.0,
+            char_code: codes.1,
+            modifiers: southstar_js_dispatch::Modifiers {
+                shift: mods & 1 != 0,
+                ctrl: mods & 2 != 0,
+                alt: mods & 4 != 0,
+                meta: mods & 8 != 0,
+            },
         };
-        prevented != 0
+        let (_, prevented) = southstar_js_dispatch::dispatch_key_event(
+            self.page(),
+            target,
+            &kind.to_string_lossy(),
+            &press,
+        );
+        prevented
     }
 
     pub fn dispatch_input(
@@ -136,22 +112,15 @@ impl Js {
         data: Option<&CStr>,
         want_prevented: bool,
     ) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe {
-            ns_js_dispatch_input_event(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                input_type.as_ptr(),
-                opt(data),
-                if want_prevented {
-                    &mut prevented
-                } else {
-                    ptr::null_mut()
-                },
-            )
-        };
-        prevented != 0
+        let data = data.map(CStr::to_string_lossy);
+        let (_, prevented) = southstar_js_dispatch::dispatch_input_event(
+            self.page(),
+            target,
+            &kind.to_string_lossy(),
+            Some(&input_type.to_string_lossy()),
+            data.as_deref(),
+        );
+        want_prevented && prevented
     }
 
     pub fn dispatch_clipboard(self, target: Node<'_>, kind: &CStr, text: &CStr) -> bool {
@@ -289,7 +258,7 @@ impl Js {
     }
 
     pub fn node_has_click_handler(self, node: Node<'_>) -> bool {
-        unsafe { ns_js_node_has_click_handler(self.raw(), node.as_ptr()) != 0 }
+        southstar_js_dispatch::node_has_click_handler(self.page(), node)
     }
 
     pub fn eval_console(self, src: &CStr) -> Option<GStr> {

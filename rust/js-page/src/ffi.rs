@@ -152,13 +152,11 @@ unsafe extern "C" {
     fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_services_reset(js: *mut NsJs);
     fn ns_lifecycle_reset(js: *mut NsJs);
-    fn ns_dispatch_reset(js: *mut NsJs);
     fn ns_js_net_reset(js: *mut NsJs);
     fn ns_js_cancel_async_scripts(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
     fn ns_js_frames_reset(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
-    fn ns_js_drop_pending_rejections(js: *mut NsJs);
 
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
@@ -194,7 +192,6 @@ unsafe extern "C" {
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
-    fn ns_dispatch_listener_count(js: *const NsJs) -> c_uint;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_get_monotonic_time() -> i64;
 }
@@ -323,7 +320,7 @@ impl Js {
             ns_storage_free_deferred_events(self.0);
             ns_services_reset(self.0);
             ns_lifecycle_reset(self.0);
-            ns_dispatch_reset(self.0);
+            southstar_js_dispatch::reset(self.0);
             ns_js_net_reset(self.0);
         }
         southstar_js_custom_elements::reset(self.0);
@@ -351,7 +348,7 @@ impl Js {
             ns_window_links_clear(self.0, glib::FALSE);
             api::drop_message_tasks(self.0);
             southstar_js_perf::clear_frame_clocks(self.0, false);
-            ns_js_drop_pending_rejections(self.0);
+            southstar_js_dispatch::drop_pending_rejections(self.0);
         }
         api::free_frame_contexts(self.0);
     }
@@ -469,7 +466,7 @@ impl Js {
                 ns_js_net_pending_fetches(self.0),
                 ns_js_net_pending_xhrs(self.0),
                 ns_js_net_pending_sockets(self.0),
-                ns_dispatch_listener_count(self.0),
+                southstar_js_dispatch::listener_count(self.0) as u32,
             ]
         }
     }

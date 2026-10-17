@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -80,12 +80,6 @@ unsafe extern "Rust" {
 unsafe extern "C" {
     fn ns_mic_fill_time_domain(out: *mut u8, n: c_int);
     fn ns_mic_fill_frequency(out: *mut u8, n: c_int);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -150,8 +144,7 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, element: Element) -> Value {
 }
 
 pub(crate) fn dispatch(js: Js, element: Element, kind: &str) {
-    let kind = c_text(kind);
-    unsafe { ns_js_dispatch_event(js.ptr(), element.as_ptr(), kind.as_ptr(), ptr::null_mut()) };
+    southstar_js_dispatch::dispatch_event(js.ptr(), element, kind);
 }
 
 pub(crate) fn mark_mutated(js: Js) {

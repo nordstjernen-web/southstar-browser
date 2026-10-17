@@ -4,7 +4,7 @@
 
 use std::rc::Rc;
 
-use southstar_dom::{NsNode, ancestors_and_self};
+use southstar_dom::ancestors_and_self;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -105,7 +105,7 @@ pub(crate) fn dispatch_built(js: Js, target: Element, kind: &str, event: Value) 
     })
 }
 
-fn take_path(js: Js) -> (Vec<*const NsNode>, Vec<bool>) {
+fn take_path(js: Js) -> (Vec<Element>, Vec<bool>) {
     crate::with(js, |page| {
         (
             page.spare_paths.pop().unwrap_or_default(),
@@ -114,11 +114,14 @@ fn take_path(js: Js) -> (Vec<*const NsNode>, Vec<bool>) {
     })
 }
 
-fn return_path(js: Js, mut nodes: Vec<*const NsNode>, mut flags: Vec<bool>) {
-    nodes.clear();
+fn return_path(js: Js, nodes: Rc<Vec<Element>>, mut flags: Vec<bool>) {
     flags.clear();
+    let nodes = Rc::try_unwrap(nodes).ok().map(|mut nodes| {
+        nodes.clear();
+        nodes
+    });
     crate::with(js, |page| {
-        page.spare_paths.push(nodes);
+        page.spare_paths.extend(nodes);
         page.spare_flags.push(flags);
     });
 }
@@ -140,30 +143,23 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
     let (mut nodes, mut flags) = take_path(js);
     let mut cur = Some(target);
     while let Some(n) = cur {
-        nodes.push(n.as_ptr());
+        nodes.push(n);
         if is_document(n) {
             break;
         }
         cur = n.parent();
     }
-    flags.extend(
-        nodes
-            .iter()
-            .map(|&n| ffi::node(n).is_some_and(in_shadow_tree)),
-    );
+    flags.extend(nodes.iter().map(|&n| in_shadow_tree(n)));
     let path_len = nodes.len();
-    let mut window_in_path = nodes
-        .last()
-        .and_then(|&tail| ffi::node(tail))
-        .is_some_and(is_real_document);
+    let mut window_in_path = nodes.last().is_some_and(|&tail| is_real_document(tail));
+    let nodes = Rc::new(nodes);
     crate::with(js, |page| {
         page.paths.push(DispatchPath {
-            nodes: nodes.as_ptr(),
-            len: path_len,
+            nodes: Rc::clone(&nodes),
             window: window_in_path,
         })
     });
-    let node_at = |i: usize| ffi::node(nodes[i]);
+    let node_at = |i: usize| nodes.get(i).copied();
     let Some(bubbles) = js.scope(|scope| {
         set(scope, event, "_dispatching", Value::boolean(true));
         truthy(scope, event, "bubbles")

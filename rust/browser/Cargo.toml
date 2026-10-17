@@ -22,6 +22,7 @@ southstar-history = { path = "../history" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
+southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-input = { path = "../js-input" }

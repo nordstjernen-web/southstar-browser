@@ -258,14 +258,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
-    fn ns_js_report_error_event_in(
-        js: *mut c_void,
-        ctx: ContextHandle,
-        message: *const c_char,
-        filename: *const c_char,
-        lineno: c_int,
-        colno: c_int,
-    );
     fn ns_js_link_interface_ctors(ctx: ContextHandle);
     fn ns_js_lock_global_prototypes(ctx: ContextHandle);
     fn ns_js_blob_url_lookup(
@@ -541,18 +533,14 @@ pub(crate) fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> Str
 }
 
 pub(crate) fn report_error_event_in(js: Js, ctx: Ctx, report: &ErrorReport) {
-    let message = c_string(&report.message);
-    let filename = c_string(&report.filename);
-    unsafe {
-        ns_js_report_error_event_in(
-            js.ptr(),
-            ctx,
-            message.as_ptr(),
-            filename.as_ptr(),
-            report.lineno,
-            report.colno,
-        )
-    };
+    southstar_js_dispatch::report_error_event_in(
+        js.page(),
+        ctx,
+        Some(&report.message),
+        Some(&report.filename),
+        report.lineno,
+        report.colno,
+    );
 }
 
 pub(crate) fn dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, event: &Value) {

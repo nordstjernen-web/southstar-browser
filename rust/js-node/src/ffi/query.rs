@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use super::{Js, NsJs, imports, raw_js};
@@ -21,12 +21,6 @@ unsafe extern "C" {
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
     fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
-    fn ns_body_forward_content_handler(
-        ctx: ContextHandle,
-        n: *const NsNode,
-        name: *const c_char,
-        code: *const c_char,
-    );
 }
 
 fn c_ptr(text: Option<&CStr>) -> *const c_char {
@@ -137,9 +131,13 @@ pub(crate) fn body_forward_content_handler(
     name: &CStr,
     code: Option<&CStr>,
 ) {
-    unsafe {
-        ns_body_forward_content_handler(scope.handle(), node.as_ptr(), name.as_ptr(), c_ptr(code))
-    };
+    let code = code.map(CStr::to_string_lossy);
+    southstar_js_dispatch::forward_body_content_handler(
+        scope,
+        node,
+        &name.to_string_lossy(),
+        code.as_deref(),
+    );
 }
 
 pub(crate) fn attr_may_affect_style(node: Element, name: &CStr) -> bool {

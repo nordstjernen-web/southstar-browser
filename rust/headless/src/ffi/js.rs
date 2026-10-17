@@ -43,25 +43,6 @@ unsafe extern "C" {
     fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
-    fn ns_js_dispatch_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_dispatch_key_event(
-        js: *mut c_void,
-        target: *const NsNode,
-        kind: *const c_char,
-        key: *const c_char,
-        code: *const c_char,
-        key_code: c_int,
-        shift: GBoolean,
-        ctrl: GBoolean,
-        alt: GBoolean,
-        meta: GBoolean,
-        prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
     fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
@@ -272,15 +253,11 @@ impl Js {
     }
 
     pub fn dispatch(self, target: Node, kind: &CStr) {
-        unsafe {
-            ns_js_dispatch_event(self.raw(), target.as_ptr(), kind.as_ptr(), ptr::null_mut())
-        };
+        self.dispatch_checked(target, kind);
     }
 
     pub fn dispatch_checked(self, target: Node, kind: &CStr) -> bool {
-        let mut prevented: GBoolean = glib::FALSE;
-        unsafe { ns_js_dispatch_event(self.raw(), target.as_ptr(), kind.as_ptr(), &mut prevented) };
-        prevented != 0
+        southstar_js_dispatch::dispatch_event(self.page(), target, &kind.to_string_lossy()).1
     }
 
     pub fn submit_form(self, form: Node, submitter: Node) {
@@ -302,28 +279,21 @@ impl Js {
         key_code: c_int,
         check: bool,
     ) -> bool {
-        let mut prevented: GBoolean = glib::FALSE;
-        let out = if check {
-            &mut prevented as *mut GBoolean
-        } else {
-            ptr::null_mut()
+        let key = key.to_string_lossy();
+        let press = southstar_js_dispatch::KeyPress {
+            key: Some(&key),
+            code: Some(&key),
+            key_code,
+            char_code: 0,
+            modifiers: southstar_js_dispatch::Modifiers::default(),
         };
-        unsafe {
-            ns_js_dispatch_key_event(
-                self.raw(),
-                target.as_ptr(),
-                kind.as_ptr(),
-                key.as_ptr(),
-                key.as_ptr(),
-                key_code,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                glib::FALSE,
-                out,
-            )
-        };
-        prevented != 0
+        let (_, prevented) = southstar_js_dispatch::dispatch_key_event(
+            self.page(),
+            target,
+            &kind.to_string_lossy(),
+            &press,
+        );
+        check && prevented
     }
 
     pub fn dispatch_mouse(

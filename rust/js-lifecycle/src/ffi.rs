@@ -138,17 +138,29 @@ impl Js {
     }
 
     pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
-        unsafe { nsr_js_dispatch_built_event(self.0, target, &kind.to_string_lossy(), event) };
+        if let Some(target) = node(target) {
+            southstar_js_dispatch::dispatch_built_event(
+                self.0,
+                target,
+                &kind.to_string_lossy(),
+                event,
+            );
+        }
     }
 
     pub fn dispatch_window_only(self, document: *const NsNode, kind: &CStr, event: Value) {
-        unsafe {
-            nsr_js_dispatch_window_only_event(self.0, document, &kind.to_string_lossy(), event)
-        };
+        southstar_js_dispatch::dispatch_window_only_event(
+            self.0,
+            node(document),
+            &kind.to_string_lossy(),
+            event,
+        );
     }
 
     pub fn dispatch(self, target: *const NsNode, kind: &CStr) {
-        unsafe { ns_js_dispatch_event(self.0, target, kind.as_ptr(), ptr::null_mut()) };
+        if let Some(target) = node(target) {
+            southstar_js_dispatch::dispatch_event(self.0, target, &kind.to_string_lossy());
+        }
     }
 
     pub fn fire_img_load_once(self, node: Node<'_>, failed: bool) {
@@ -262,12 +274,6 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_promote_deferred_iframes(js: *mut NsJs);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
@@ -301,18 +307,6 @@ unsafe extern "C" {
 
 unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    unsafe fn nsr_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> (bool, bool);
-    unsafe fn nsr_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> bool;
 }
 
 pub(crate) type AnimEventCb = unsafe extern "C" fn(
