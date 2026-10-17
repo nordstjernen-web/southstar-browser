@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* A microtask checkpoint no longer runs inside another one. Native calls
+  that flush layout (for example `getAnimations()`) could drain the
+  microtask queue while a microtask was still on the stack, so a
+  scheduler that re-queues itself while it is busy (ChatGPT's) spun until
+  the 60-second script monitor halted the page, leaving it half rendered.
+  The nested checkpoint now returns at once, as the HTML Standard's
+  "performing a microtask checkpoint" flag requires.
 * Security: deeply nested script no longer crashes the tab. Boa checked
   the native-stack limit only when it called a function, so the parser
   and every recursion that does not pass through a call overflowed the
