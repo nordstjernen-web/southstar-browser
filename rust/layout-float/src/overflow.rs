@@ -6,7 +6,9 @@ use core::ffi::CStr;
 
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef};
-use southstar_layout_geom::{style_is_absolute_or_fixed, style_is_flex_container};
+use southstar_layout_geom::{
+    style_creates_fixed_cb, style_is_absolute_or_fixed, style_is_flex_container,
+};
 use southstar_style::{Display, PropId, StyleRef, display_of};
 
 use crate::ffi::{dom_of, overflow_axis_keyword, style_of};
@@ -221,7 +223,15 @@ fn box_clips_for_page_height(b: BoxRef<'_>) -> bool {
     box_clips_children(b)
 }
 
-fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64) {
+fn is_position_fixed(s: Option<StyleRef<'_>>) -> bool {
+    s.and_then(|s| keyword(s, PropId::Position)) == Some(b"fixed".as_slice())
+}
+
+fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64, inside_fixed_cb: bool) {
+    let style = style_of(b);
+    if !inside_fixed_cb && is_position_fixed(style) {
+        return;
+    }
     let bottom = b.y() + b.content_height();
     if bottom > *out {
         *out = bottom;
@@ -229,13 +239,14 @@ fn walk_max_bottom(b: BoxRef<'_>, out: &mut f64) {
     if box_clips_for_page_height(b) {
         return;
     }
+    let inside_fixed_cb = inside_fixed_cb || style_creates_fixed_cb(style);
     for c in southstar_layout::children(b) {
-        walk_max_bottom(c, out);
+        walk_max_bottom(c, out, inside_fixed_cb);
     }
 }
 
 pub fn max_bottom(root: BoxRef<'_>, seed: f64) -> f64 {
     let mut out = seed;
-    walk_max_bottom(root, &mut out);
+    walk_max_bottom(root, &mut out, false);
     out
 }

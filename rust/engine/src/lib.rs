@@ -42,7 +42,12 @@ pub fn png_size(root: BoxRef) -> (i32, i32) {
     if max_bottom > CAIRO_MAX as f64 {
         max_bottom = CAIRO_MAX as f64;
     }
-    let mut h = (max_bottom as i32).wrapping_add(32);
+    let viewport_h = southstar_css::viewport().1.min(CAIRO_MAX as f64);
+    let mut h = if max_bottom > viewport_h + 0.5 {
+        (max_bottom as i32).wrapping_add(32)
+    } else {
+        viewport_h as i32
+    };
     if h <= 0 {
         h = 768;
     }

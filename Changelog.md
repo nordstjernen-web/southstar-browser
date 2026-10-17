@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Fixed-position boxes no longer extend the document's height: the
+  scrollable page, `document.documentElement.scrollHeight` and headless
+  PNG dumps counted them, so YouTube's hidden guide drawer
+  (`top: -120px; bottom: -120px`) left a 120 px white strip below the
+  viewport. Headless PNG dumps are now at least one viewport tall, like
+  the window they stand in for.
 * MutationObserver records queued from a timer, idle or animation-frame
   callback are delivered again. Host microtasks ran in whatever realm the
   engine was left in after the callback, so the delivery job could not
