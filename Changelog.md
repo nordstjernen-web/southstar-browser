@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* MutationObserver records queued from a timer, idle or animation-frame
+  callback are delivered again. Host microtasks ran in whatever realm the
+  engine was left in after the callback, so the delivery job could not
+  find its page and stayed "scheduled" forever; every later mutation on
+  the page was then queued and never reported. Polymer's microtask queue
+  rides a MutationObserver, so YouTube's consent dialog never stamped its
+  text and buttons. Host jobs now run in the realm that queued them.
 * YouTube's home page renders instead of staying at grey placeholders.
   Its 10.8 MB application bundle spent the whole 60 s script limit in
   Boa's parser and bytecompiler, before any of it ran: every identifier

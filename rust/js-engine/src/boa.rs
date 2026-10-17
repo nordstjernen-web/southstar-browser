@@ -1178,11 +1178,15 @@ impl Scope<'_> {
     }
 
     pub fn enqueue_job(&mut self, job: Job) -> Result<(), Value> {
-        let native = PromiseJob::new(move |ctx| {
-            let _host = access::enter(ctx);
-            job(&mut Scope::of(ctx));
-            Ok(JsValue::undefined())
-        });
+        let realm = self.cx().realm().clone();
+        let native = PromiseJob::with_realm(
+            move |ctx| {
+                let _host = access::enter(ctx);
+                job(&mut Scope::of(ctx));
+                Ok(JsValue::undefined())
+            },
+            realm,
+        );
         self.cx().enqueue_job(native.into());
         Ok(())
     }
