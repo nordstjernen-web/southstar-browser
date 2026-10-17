@@ -41,7 +41,6 @@ struct GByteArray {
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn ns_response_free(resp: *mut NsResponse);
-    fn ns_xml_well_formed(input: *const c_char, len: isize, root_ns: *mut *mut c_char) -> GBoolean;
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -305,10 +304,8 @@ pub(crate) fn xml_parse(input: &[u8]) -> Option<Tree> {
 }
 
 pub(crate) fn xml_well_formed(input: &[u8]) -> (bool, Option<CString>) {
-    let mut root_ns: *mut c_char = core::ptr::null_mut();
-    let len = isize::try_from(input.len()).unwrap_or(isize::MAX);
-    let well_formed = unsafe { ns_xml_well_formed(input.as_ptr().cast(), len, &mut root_ns) != 0 };
-    (well_formed, owned_text(root_ns))
+    let (well_formed, root_ns) = southstar_html_parser::xml_well_formed(input);
+    (well_formed, root_ns.filter(|_| well_formed).map(c_string))
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Node<'static> {
