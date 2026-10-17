@@ -13,10 +13,11 @@ use crate::{Element, JsResult, form_owner, labels, named, type_is, type_of};
 const FLAG_FRAGMENT: u32 = 1 << 2;
 const FLAG_INPUT_INDETERMINATE: u32 = 1 << 18;
 
-pub(crate) struct ClickState {
-    pub(crate) checked: bool,
-    pub(crate) indeterminate: bool,
-    pub(crate) checked_radio: Option<Element>,
+#[derive(Default)]
+pub struct ClickState {
+    checked: bool,
+    indeterminate: bool,
+    checked_radio: Option<Element>,
 }
 
 pub(crate) fn kind(el: Element) -> i32 {

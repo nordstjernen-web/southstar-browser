@@ -15,6 +15,7 @@ use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use self::imports::*;
+use crate::checkable::ClickState;
 use crate::{Element, JsResult};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
@@ -58,13 +59,6 @@ unsafe extern "C" {
     ) -> *mut c_char;
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
     fn g_utf8_casefold(s: *const c_char, len: isize) -> *mut c_char;
-}
-
-#[repr(C)]
-pub struct NsCheckableClickState {
-    checked: GBoolean,
-    indeterminate: GBoolean,
-    checked_radio: *mut NsNode,
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
@@ -554,14 +548,56 @@ pub unsafe extern "C" fn ns_form_listed_controls(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean {
-    glib::boolean(node(el).is_some_and(crate::submit::is_submit_trigger))
+fn page_of(js: *mut NsJs) -> Option<Page> {
+    (!js.is_null()).then_some(Page(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_reset_trigger(el: *const NsNode) -> GBoolean {
-    glib::boolean(node(el).is_some_and(crate::submit::is_reset_trigger))
+pub fn is_submit_trigger(el: Node<'_>) -> bool {
+    live(el).is_some_and(crate::submit::is_submit_trigger)
+}
+
+pub fn is_reset_trigger(el: Node<'_>) -> bool {
+    live(el).is_some_and(crate::submit::is_reset_trigger)
+}
+
+pub fn resanitize_value(el: Node<'_>) {
+    if let Some(el) = live(el) {
+        crate::value::resanitize(el);
+    }
+}
+
+pub fn is_labelable(n: Node<'_>) -> bool {
+    live(n).is_some_and(crate::labels::is_labelable)
+}
+
+pub fn first_labelable_descendant(n: Node<'_>) -> Option<Element> {
+    live(n).and_then(|n| crate::labels::first_labelable_descendant(n, 0))
+}
+
+pub fn label_associated_control(label: Node<'_>) -> Option<Element> {
+    live(label).and_then(crate::labels::associated_control)
+}
+
+pub fn checkable_input_kind(el: Node<'_>) -> i32 {
+    live(el).map_or(0, crate::checkable::kind)
+}
+
+pub fn checkable_pre_click(js: *const NsJs, el: Node<'_>, kind: i32) -> ClickState {
+    live(el).map_or_else(ClickState::default, |el| {
+        crate::checkable::pre_click(page_of(js.cast_mut()), el, kind)
+    })
+}
+
+pub fn checkable_post_click(
+    js: *const NsJs,
+    el: Node<'_>,
+    kind: i32,
+    state: &ClickState,
+    prevented: bool,
+) {
+    if let Some(el) = live(el) {
+        crate::checkable::post_click(page_of(js.cast_mut()), el, kind, state, prevented);
+    }
 }
 
 /// # Safety
@@ -576,79 +612,6 @@ pub unsafe fn dispatch_submit_event(
         return (false, false);
     };
     page.dispatch_submit(form, submitter.and_then(live))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_input_resanitize_value(el: *mut NsNode) {
-    if let Some(el) = node(el) {
-        crate::value::resanitize(el);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean {
-    glib::boolean(node(n).is_some_and(crate::labels::is_labelable))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_first_labelable_descendant(
-    n: *const NsNode,
-    depth: c_int,
-) -> *const NsNode {
-    Node::ptr_or_null(node(n).and_then(|n| crate::labels::first_labelable_descendant(n, depth)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_label_associated_control(label: *const NsNode) -> *const NsNode {
-    Node::ptr_or_null(node(label).and_then(crate::labels::associated_control))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_checkable_input_kind(el: *const NsNode) -> c_int {
-    node(el).map_or(0, crate::checkable::kind)
-}
-
-fn page_of(js: *mut NsJs) -> Option<Page> {
-    (!js.is_null()).then_some(Page(js))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_checkable_pre_click(
-    js: *mut NsJs,
-    el: *mut NsNode,
-    kind: c_int,
-    state: *mut NsCheckableClickState,
-) {
-    let (Some(el), false) = (node(el), state.is_null()) else {
-        return;
-    };
-    let result = crate::checkable::pre_click(page_of(js), el, kind);
-    unsafe {
-        *state = NsCheckableClickState {
-            checked: glib::boolean(result.checked),
-            indeterminate: glib::boolean(result.indeterminate),
-            checked_radio: result.checked_radio.map_or(ptr::null_mut(), mut_ptr),
-        }
-    };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_checkable_post_click(
-    js: *mut NsJs,
-    el: *mut NsNode,
-    kind: c_int,
-    state: *const NsCheckableClickState,
-    prevented: GBoolean,
-) {
-    let (Some(el), Some(state)) = (node(el), unsafe { state.as_ref() }) else {
-        return;
-    };
-    let state = crate::checkable::ClickState {
-        checked: state.checked != 0,
-        indeterminate: state.indeterminate != 0,
-        checked_radio: node(state.checked_radio),
-    };
-    crate::checkable::post_click(page_of(js), el, kind, &state, prevented != 0);
 }
 
 /// # Safety

@@ -5,7 +5,6 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::NsNode;
 use southstar_dom::serialize::collect_text;
 use southstar_js_attrs as attrs;
 use southstar_js_collections as collections;
@@ -24,10 +23,6 @@ type JsResult<T = Value> = Result<T, Value>;
 
 const LIVE_DOC_TAG: c_int = 3;
 const LIVE_LINKS: c_int = 10;
-
-unsafe extern "C" {
-    fn ns_input_resanitize_value(el: *mut NsNode);
-}
 
 fn utf8_char_count(bytes: &[u8]) -> usize {
     bytes.iter().filter(|&&b| b & 0xc0 != 0x80).count()
@@ -65,7 +60,7 @@ pub(crate) fn element_get_access_key_label(scope: &mut Scope<'_>, this: &Value) 
 pub(crate) fn element_set_type(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
     let result = reflect::strings::reflect_set(scope, this, value, c"type");
     if let Some(node) = api::unwrap_element(this) {
-        unsafe { ns_input_resanitize_value(node.as_ptr().cast_mut()) };
+        southstar_js_forms::resanitize_value(node);
     }
     result
 }

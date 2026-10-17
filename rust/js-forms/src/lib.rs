@@ -16,9 +16,12 @@ pub mod submit;
 pub mod validity;
 pub mod value;
 
+pub use checkable::ClickState;
 pub use ffi::{
-    click_activate, dispatch_submit_event, select_choose_option, select_edge, select_step,
-    select_toggle_option, select_typeahead,
+    checkable_input_kind, checkable_post_click, checkable_pre_click, click_activate,
+    dispatch_submit_event, first_labelable_descendant, is_labelable, is_reset_trigger,
+    is_submit_trigger, label_associated_control, resanitize_value, select_choose_option,
+    select_edge, select_step, select_toggle_option, select_typeahead,
 };
 
 use core::ffi::CStr;

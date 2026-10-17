@@ -16,10 +16,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
-unsafe extern "C" {
-    fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-}
-
 unsafe extern "Rust" {
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
@@ -106,7 +102,7 @@ pub(crate) fn dom_exception(
 }
 
 pub(crate) fn is_submit_trigger(node: Element) -> bool {
-    unsafe { ns_node_is_submit_trigger(node.as_ptr()) != glib::FALSE }
+    southstar_js_forms::is_submit_trigger(node)
 }
 
 pub(crate) fn form_owner(node: Element) -> Option<Element> {

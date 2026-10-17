@@ -16,9 +16,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
-unsafe extern "C" {
-}
-
 unsafe extern "Rust" {
     safe fn nsr_document_element_from_point(
         scope: &mut Scope<'_>,

@@ -13,10 +13,6 @@ use southstar_js_runtime::api;
 use super::{Js, NsJs, imports, raw_js};
 use crate::{Element, JsResult};
 
-unsafe extern "C" {
-    fn ns_input_resanitize_value(el: *mut NsNode);
-}
-
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
     api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
 }
@@ -82,7 +78,7 @@ pub(crate) fn remove_attr_ns_recorded(
 }
 
 pub(crate) fn input_resanitize_value(node: Element) {
-    unsafe { ns_input_resanitize_value(node.as_mut_ptr()) };
+    southstar_js_forms::resanitize_value(node);
 }
 
 pub(crate) fn details_toggle_open(js: Option<Js>, node: Element, open: bool) {

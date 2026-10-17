@@ -6,12 +6,12 @@ mod exports;
 mod imports;
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::borrow::Cow;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
 
 use crate::{Element, get, set};
@@ -21,31 +21,7 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
-#[repr(C)]
-pub(crate) struct CheckableState {
-    checked: GBoolean,
-    indeterminate: GBoolean,
-    checked_radio: *mut NsNode,
-}
-
 const DLOG_ERROR: c_int = 2;
-
-unsafe extern "C" {
-    fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
-    fn ns_checkable_pre_click(
-        js: *mut NsJs,
-        el: *mut NsNode,
-        kind: c_int,
-        state: *mut CheckableState,
-    );
-    fn ns_checkable_post_click(
-        js: *mut NsJs,
-        el: *mut NsNode,
-        kind: c_int,
-        state: *const CheckableState,
-        prevented: GBoolean,
-    );
-}
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(ptr) }
@@ -177,32 +153,12 @@ impl Js {
         imports::nsr_worker_report_exception(self.ptr().cast(), exception)
     }
 
-    pub fn checkable_pre_click(self, el: Element, kind: i32) -> CheckableState {
-        let mut state = CheckableState {
-            checked: 0,
-            indeterminate: 0,
-            checked_radio: ptr::null_mut(),
-        };
-        unsafe { ns_checkable_pre_click(self.ptr(), el.as_mut_ptr(), kind, &mut state) };
-        state
+    pub fn checkable_pre_click(self, el: Element, kind: i32) -> ClickState {
+        southstar_js_forms::checkable_pre_click(self.ptr(), el, kind)
     }
 
-    pub fn checkable_post_click(
-        self,
-        el: Element,
-        kind: i32,
-        state: &CheckableState,
-        prevented: bool,
-    ) {
-        unsafe {
-            ns_checkable_post_click(
-                self.ptr(),
-                el.as_mut_ptr(),
-                kind,
-                state,
-                glib::boolean(prevented),
-            )
-        };
+    pub fn checkable_post_click(self, el: Element, kind: i32, state: &ClickState, prevented: bool) {
+        southstar_js_forms::checkable_post_click(self.ptr(), el, kind, state, prevented);
     }
 
     pub fn note_user_activation(self) {
@@ -339,7 +295,7 @@ pub(crate) fn is_shadow_root(n: Element) -> bool {
 }
 
 pub(crate) fn checkable_input_kind(el: Element) -> i32 {
-    unsafe { ns_checkable_input_kind(el.as_ptr()) }
+    southstar_js_forms::checkable_input_kind(el)
 }
 
 pub(crate) fn click_activation_target(el: Element) -> Option<Element> {

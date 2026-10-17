@@ -9,6 +9,7 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
+use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
@@ -17,13 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
-
-#[repr(C)]
-pub(crate) struct CheckableState {
-    checked: GBoolean,
-    indeterminate: GBoolean,
-    checked_radio: *mut NsNode,
-}
 
 unsafe extern "C" {
     fn ns_event_type_init_flags(
@@ -38,29 +32,11 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
-    fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
-    fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-    fn ns_node_is_reset_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_activate_summary(js: *const NsJs, el: *const NsNode) -> GBoolean;
     fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
     fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
-    fn ns_checkable_pre_click(
-        js: *mut NsJs,
-        el: *mut NsNode,
-        kind: c_int,
-        state: *mut CheckableState,
-    );
-    fn ns_checkable_post_click(
-        js: *mut NsJs,
-        el: *mut NsNode,
-        kind: c_int,
-        state: *const CheckableState,
-        prevented: GBoolean,
-    );
     fn ns_summary_toggle_target(el: *const NsNode) -> *mut NsNode;
     fn ns_node_is_button(el: *const NsNode) -> GBoolean;
 }
@@ -213,14 +189,8 @@ impl Js {
         .unwrap_or_else(Value::undefined)
     }
 
-    pub fn checkable_pre_click(self, el: Element, kind: i32) -> CheckableState {
-        let mut state = CheckableState {
-            checked: 0,
-            indeterminate: 0,
-            checked_radio: ptr::null_mut(),
-        };
-        unsafe { ns_checkable_pre_click(self.ptr(), el.as_mut_ptr(), kind, &mut state) };
-        state
+    pub fn checkable_pre_click(self, el: Element, kind: i32) -> ClickState {
+        southstar_js_forms::checkable_pre_click(self.ptr(), el, kind)
     }
 
     pub fn activate_summary(self, el: Element) {
@@ -255,22 +225,8 @@ impl Js {
         api::navigate(self.ptr(), &c_string(url), false);
     }
 
-    pub fn checkable_post_click(
-        self,
-        el: Element,
-        kind: i32,
-        state: &CheckableState,
-        prevented: bool,
-    ) {
-        unsafe {
-            ns_checkable_post_click(
-                self.ptr(),
-                el.as_mut_ptr(),
-                kind,
-                state,
-                glib::boolean(prevented),
-            )
-        };
+    pub fn checkable_post_click(self, el: Element, kind: i32, state: &ClickState, prevented: bool) {
+        southstar_js_forms::checkable_post_click(self.ptr(), el, kind, state, prevented);
     }
 }
 
@@ -334,19 +290,19 @@ pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Element) {
 }
 
 pub(crate) fn is_labelable(el: Element) -> bool {
-    unsafe { ns_js_node_is_labelable(el.as_ptr()) != 0 }
+    southstar_js_forms::is_labelable(el)
 }
 
 pub(crate) fn first_labelable_descendant(el: Element) -> Option<Element> {
-    node(unsafe { ns_js_first_labelable_descendant(el.as_ptr(), 0) })
+    southstar_js_forms::first_labelable_descendant(el)
 }
 
 pub(crate) fn is_submit_trigger(el: Element) -> bool {
-    unsafe { ns_node_is_submit_trigger(el.as_ptr()) != 0 }
+    southstar_js_forms::is_submit_trigger(el)
 }
 
 pub(crate) fn is_reset_trigger(el: Element) -> bool {
-    unsafe { ns_node_is_reset_trigger(el.as_ptr()) != 0 }
+    southstar_js_forms::is_reset_trigger(el)
 }
 
 pub(crate) fn anchor_resolved_href(js: Js, el: Element) -> Option<Vec<u8>> {
@@ -375,7 +331,7 @@ pub(crate) fn is_disabled_form_control(el: Element) -> bool {
 }
 
 pub(crate) fn checkable_kind(el: Option<Element>) -> i32 {
-    el.map_or(0, |el| unsafe { ns_checkable_input_kind(el.as_ptr()) })
+    el.map_or(0, southstar_js_forms::checkable_input_kind)
 }
 
 pub(crate) fn summary_toggle_target(el: Element) -> Option<Element> {

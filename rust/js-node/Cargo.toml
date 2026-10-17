@@ -16,6 +16,7 @@ southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-dom-factory = { path = "../js-dom-factory" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-forms = { path = "../js-forms" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-loader = { path = "../js-loader" }

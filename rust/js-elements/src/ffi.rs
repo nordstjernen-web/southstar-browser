@@ -20,11 +20,6 @@ pub(crate) struct Js(*mut NsJs);
 
 const LIVE_LABELS: c_int = 13;
 
-unsafe extern "C" {
-    fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
-    fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
-}
-
 unsafe extern "Rust" {
     safe fn nsr_make_live(
         scope: &mut Scope<'_>,
@@ -191,11 +186,11 @@ pub(crate) fn resolve_against_doc_base(
 }
 
 pub(crate) fn label_associated_control(label: Element) -> Option<Element> {
-    unsafe { Node::from_ptr(ns_label_associated_control(label.as_ptr())) }
+    southstar_js_forms::label_associated_control(label)
 }
 
 pub(crate) fn is_labelable(node: Option<Element>) -> bool {
-    unsafe { ns_js_node_is_labelable(Node::ptr_or_null(node)) != 0 }
+    node.is_some_and(southstar_js_forms::is_labelable)
 }
 
 pub(crate) fn enum_normalize(attr: &CStr, value: Option<&CStr>) -> &'static CStr {

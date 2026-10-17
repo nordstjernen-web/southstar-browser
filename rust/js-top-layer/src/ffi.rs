@@ -17,10 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
-unsafe extern "C" {
-    fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
-}
-
 unsafe extern "Rust" {
     safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
@@ -268,7 +264,7 @@ pub(crate) fn mark_attr_dirty(el: Element, name: &CStr, old_value: Option<&CStr>
 }
 
 pub(crate) fn is_submit_trigger(el: Element) -> bool {
-    unsafe { ns_node_is_submit_trigger(el.as_ptr()) != 0 }
+    southstar_js_forms::is_submit_trigger(el)
 }
 
 #[unsafe(no_mangle)]
