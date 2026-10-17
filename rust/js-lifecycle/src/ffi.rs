@@ -279,7 +279,6 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-    fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
@@ -293,9 +292,7 @@ pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-pub(crate) fn in_blocking_fetch() -> bool {
-    unsafe { ns_engine_in_blocking_fetch() != 0 }
-}
+pub(crate) use southstar_engine::in_blocking_fetch;
 
 pub(crate) fn profile_enabled() -> bool {
     southstar_js_loader::profile_enabled()

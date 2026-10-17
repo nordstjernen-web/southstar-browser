@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use std::ffi::CString;
@@ -90,7 +90,6 @@ unsafe extern "C" {
     fn ns_thread_dump_install_signal(label: *const c_char);
     fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
     fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
-    fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
     fn ns_spell_init();
 }
 
@@ -561,8 +560,7 @@ fn print_perf() {
         sum_ms,
         span_ms,
     } = southstar_net::perf_snapshot();
-    let (mut relayouts, mut layout_ms) = (0u64, 0f64);
-    unsafe { ns_engine_layout_perf(&mut relayouts, &mut layout_ms) };
+    let (relayouts, layout_ms) = southstar_engine::layout_perf();
     let mut line = format!(
         "[net perf] fetches={fetches} bytes={bytes} net_span={span_ms:.1}ms net_sum={sum_ms:.1}ms | relayouts={relayouts} layout={layout_ms:.1}ms"
     );

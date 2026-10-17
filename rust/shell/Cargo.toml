@@ -17,6 +17,7 @@ southstar-bytecode-cache = { path = "../bytecode-cache" }
 southstar-config = { path = "../config" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
+southstar-engine = { path = "../engine" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }

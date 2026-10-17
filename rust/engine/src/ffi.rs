@@ -379,29 +379,8 @@ fn profile_enabled() -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut f64) {
-    let (count, ms) = crate::styles::layout_perf();
-    unsafe {
-        if let Some(r) = relayouts.as_mut() {
-            *r = count;
-        }
-        if let Some(t) = total_ms.as_mut() {
-            *t = ms;
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ns_engine_in_blocking_fetch() -> GBoolean {
     glib::boolean(in_blocking_fetch())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char {
-    let Some(url) = c_str(url) else {
-        return ptr::null_mut();
-    };
-    fetch::linked_css_text(url.to_bytes()).map_or(ptr::null_mut(), |css| glib::strdup(&css))
 }
 
 #[unsafe(no_mangle)]

@@ -82,7 +82,6 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
@@ -99,15 +98,6 @@ fn lossy(text: &[u8]) -> String {
 pub(crate) fn c_string(text: &[u8]) -> CString {
     let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
     CString::new(&text[..end]).unwrap_or_default()
-}
-
-fn take_text(p: *mut c_char) -> Option<String> {
-    if p.is_null() {
-        return None;
-    }
-    let text = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
-    unsafe { glib::g_free(p.cast()) };
-    Some(text)
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
@@ -257,8 +247,7 @@ pub(crate) fn line_heights(style: Option<StyleRef<'_>>) -> (f64, f64) {
 }
 
 pub(crate) fn linked_css_text(url: &str) -> Option<String> {
-    let url = c_string(url.as_bytes());
-    take_text(unsafe { ns_engine_linked_css_text(url.as_ptr()) })
+    southstar_engine::linked_css_text(until_nul(url)).map(|css| lossy(&css))
 }
 
 pub(crate) fn prop_id(name: &str) -> Option<usize> {

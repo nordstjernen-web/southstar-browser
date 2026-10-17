@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-anim = { path = "../anim" }
 southstar-dom = { path = "../dom" }
+southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }

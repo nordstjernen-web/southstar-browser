@@ -2332,6 +2332,7 @@ dependencies = [
  "southstar-css-media",
  "southstar-css-prop-syntax",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
@@ -2629,6 +2630,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-image",
  "southstar-js-custom-elements",
@@ -3397,6 +3399,7 @@ dependencies = [
  "southstar-config",
  "southstar-debuglog",
  "southstar-dom",
+ "southstar-engine",
  "southstar-ffi",
  "southstar-font",
  "southstar-glib",
