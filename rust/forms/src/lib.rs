@@ -42,7 +42,7 @@ fn textarea_value(node: Node) -> CString {
     CString::new(controls::textarea_value(Some(node))).unwrap_or_default()
 }
 
-pub(crate) fn is_submit_trigger(node: Node) -> bool {
+pub fn is_submit_trigger(node: Node) -> bool {
     match node.element_name() {
         Some(b"button") => {
             let ty = node.attr(c"type");
@@ -53,15 +53,15 @@ pub(crate) fn is_submit_trigger(node: Node) -> bool {
     }
 }
 
-pub(crate) fn is_reset_trigger(node: Node) -> bool {
+pub fn is_reset_trigger(node: Node) -> bool {
     let Some(name) = node.element_name() else {
         return false;
     };
     type_is(node.attr(c"type"), "reset") && (name == b"button" || name == b"input")
 }
 
-fn belongs_to(form: Option<Node>, control: Node) -> bool {
-    form.is_some() && controls::form_owner(control) == form
+fn belongs_to(form: Node, control: Node) -> bool {
+    controls::form_owner(control) == Some(form)
 }
 
 fn option_disabled(option: Node) -> bool {
@@ -163,7 +163,7 @@ fn collect_control(
     }
 }
 
-fn submission_name<'a>(form: Option<Node>, node: Node<'a>) -> Option<&'a CStr> {
+fn submission_name<'a>(form: Node, node: Node<'a>) -> Option<&'a CStr> {
     if !belongs_to(form, node) {
         return None;
     }
@@ -171,14 +171,7 @@ fn submission_name<'a>(form: Option<Node>, node: Node<'a>) -> Option<&'a CStr> {
     (!controls::effectively_disabled(node)).then_some(name)
 }
 
-pub(crate) fn collect_inputs(
-    form: Option<Node>,
-    node: Option<Node>,
-    query: &mut Query,
-    submitter: Option<Node>,
-    depth: i32,
-) {
-    let Some(node) = node else { return };
+fn collect_into(form: Node, node: Node, query: &mut Query, submitter: Option<Node>, depth: i32) {
     if depth >= MAX_DEPTH {
         return;
     }
@@ -188,8 +181,14 @@ pub(crate) fn collect_inputs(
         collect_control(node, tag, name, query, submitter);
     }
     for child in children(node) {
-        collect_inputs(form, Some(child), query, submitter, depth + 1);
+        collect_into(form, child, query, submitter, depth + 1);
     }
+}
+
+pub fn urlencoded_inputs(form: Node, root: Node, submitter: Option<Node>) -> Vec<u8> {
+    let mut query = Query::new();
+    collect_into(form, root, &mut query, submitter, 0);
+    query.into_bytes()
 }
 
 fn pattern_matches(value: &CStr, pattern: Option<&CStr>) -> bool {
@@ -286,13 +285,12 @@ fn control_invalid(node: Node, tag: &[u8], doc: Option<Node>) -> bool {
     !value.is_empty() && !value_valid(node, is_input, ty, value)
 }
 
-pub(crate) fn first_invalid<'a>(
-    form: Option<Node<'a>>,
-    node: Option<Node<'a>>,
-    doc: Option<Node<'a>>,
+fn first_invalid_in<'a>(
+    form: Node<'a>,
+    node: Node<'a>,
+    doc: Node<'a>,
     depth: i32,
 ) -> Option<Node<'a>> {
-    let node = node?;
     if depth >= MAX_DEPTH {
         return None;
     }
@@ -300,9 +298,13 @@ pub(crate) fn first_invalid<'a>(
         && belongs_to(form, node)
         && !controls::effectively_disabled(node)
         && !controls::readonly_bars_validation(node)
-        && control_invalid(node, tag, doc)
+        && control_invalid(node, tag, Some(doc))
     {
         return Some(node);
     }
-    children(node).find_map(|child| first_invalid(form, Some(child), doc, depth + 1))
+    children(node).find_map(|child| first_invalid_in(form, child, doc, depth + 1))
+}
+
+pub fn first_invalid<'a>(form: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
+    first_invalid_in(form, root, root, 0)
 }

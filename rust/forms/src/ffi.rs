@@ -1,15 +1,13 @@
-//! Southstar — the C ABI of the form helpers, over the ns_node layout and the DOM's control functions.
+//! Southstar — the GLib UTF-8 and regex calls the form helpers make, and the urlencoded query they append to.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_long, c_uint, c_void};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError};
 
 unsafe extern "C" {
-    fn g_string_append_len(string: *mut c_void, val: *const c_char, len: isize) -> *mut c_void;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_regex_new(
         pattern: *const c_char,
@@ -32,6 +30,13 @@ pub struct Query {
 }
 
 impl Query {
+    pub fn new() -> Self {
+        Self {
+            encoded: Vec::new(),
+            first: true,
+        }
+    }
+
     pub fn append(&mut self, name: &CStr, value: Option<&CStr>) {
         southstar_net::urlencoded_append_pair(
             &mut self.encoded,
@@ -39,6 +44,10 @@ impl Query {
             name.to_bytes(),
             value.map(CStr::to_bytes),
         );
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.encoded
     }
 }
 
@@ -58,71 +67,4 @@ pub fn regex_matches(pattern: &CStr, value: &CStr) -> Option<bool> {
     let matched = unsafe { g_regex_match(regex, value.as_ptr(), 0, ptr::null_mut()) != 0 };
     unsafe { g_regex_unref(regex) };
     Some(matched)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_is_submit_trigger(n: *const NsNode) -> GBoolean {
-    let node = unsafe { Node::from_ptr(n) };
-    glib::boolean(node.is_some_and(crate::is_submit_trigger))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean {
-    let node = unsafe { Node::from_ptr(n) };
-    glib::boolean(node.is_some_and(crate::is_reset_trigger))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_collect_inputs(
-    form: *const NsNode,
-    n: *const NsNode,
-    _doc: *const NsNode,
-    query: *mut c_void,
-    first: *mut GBoolean,
-    submitter: *const NsNode,
-) {
-    if query.is_null() || first.is_null() {
-        return;
-    }
-    let mut collected = Query {
-        encoded: Vec::new(),
-        // SAFETY: first is non-null and the caller passes a live GBoolean.
-        first: unsafe { *first } != 0,
-    };
-    unsafe {
-        crate::collect_inputs(
-            Node::from_ptr(form),
-            Node::from_ptr(n),
-            &mut collected,
-            Node::from_ptr(submitter),
-            0,
-        )
-    };
-    // SAFETY: query is the caller's live GString and encoded holds len readable bytes.
-    unsafe {
-        g_string_append_len(
-            query,
-            collected.encoded.as_ptr().cast(),
-            collected.encoded.len() as isize,
-        )
-    };
-    // SAFETY: first is non-null and the caller passes a live, writable GBoolean.
-    unsafe { *first = glib::boolean(collected.first) };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_first_invalid(
-    form: *const NsNode,
-    n: *const NsNode,
-    doc: *const NsNode,
-) -> *const NsNode {
-    let invalid = unsafe {
-        crate::first_invalid(
-            Node::from_ptr(form),
-            Node::from_ptr(n),
-            Node::from_ptr(doc),
-            0,
-        )
-    };
-    Node::ptr_or_null(invalid)
 }

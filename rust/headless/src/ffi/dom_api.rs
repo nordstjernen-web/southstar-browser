@@ -5,26 +5,9 @@
 use core::ffi::{CStr, c_char, c_int, c_long};
 use std::ffi::CString;
 
-use southstar_dom::{self as dom, Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
-
-use super::engine::{GString, with_gstring};
+use southstar_dom::{self as dom, Node};
 
 unsafe extern "C" {
-    fn ns_form_collect_inputs(
-        form: *const NsNode,
-        n: *const NsNode,
-        doc: *const NsNode,
-        query: *mut GString,
-        first: *mut GBoolean,
-        submitter: *const NsNode,
-    );
-    fn ns_form_first_invalid(
-        form: *const NsNode,
-        n: *const NsNode,
-        doc: *const NsNode,
-    ) -> *const NsNode;
-    fn ns_form_is_submit_trigger(n: *const NsNode) -> GBoolean;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn atol(s: *const c_char) -> c_long;
     fn atoi(s: *const c_char) -> c_int;
@@ -63,20 +46,6 @@ pub fn set_submission_charset(charset: Option<&CStr>) {
     southstar_net::set_submission_charset(charset.map(CStr::to_bytes));
 }
 
-pub fn collect_inputs(form: Node, root: Node, submitter: Option<Node>) -> Vec<u8> {
-    let mut first: GBoolean = glib::TRUE;
-    with_gstring(|q| unsafe {
-        ns_form_collect_inputs(
-            form.as_ptr(),
-            root.as_ptr(),
-            root.as_ptr(),
-            q,
-            &mut first,
-            Node::ptr_or_null(submitter),
-        )
-    })
-}
-
 pub fn editable_value(n: Node) -> Vec<u8> {
     southstar_dom::controls::editable_value(n)
         .to_bytes()
@@ -107,16 +76,6 @@ pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
     southstar_dom::controls::form_owner(control)
 }
 
-pub fn first_invalid<'a>(form: Node<'a>, root: Node<'a>) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_form_first_invalid(
-            form.as_ptr(),
-            root.as_ptr(),
-            root.as_ptr(),
-        ))
-    }
-}
-
 pub fn is_named(n: Node, tag: &CStr) -> bool {
     n.element_name() == Some(tag.to_bytes())
 }
@@ -131,10 +90,6 @@ pub fn is_editable(n: Node) -> bool {
 
 pub fn flatten_editable(n: Node) {
     dom::controls::flatten_editable(n);
-}
-
-pub fn is_submit_trigger(n: Node) -> bool {
-    unsafe { ns_form_is_submit_trigger(n.as_ptr()) != 0 }
 }
 
 pub fn image_map_resolve(

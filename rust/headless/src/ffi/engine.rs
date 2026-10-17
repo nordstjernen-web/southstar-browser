@@ -9,22 +9,10 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_engine::Page;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GHashTable};
 use southstar_layout::{BoxPool, BoxRef, NsBox};
 
-#[repr(C)]
-pub struct GString {
-    str: *mut c_char,
-    len: usize,
-    allocated_len: usize,
-}
-
 pub use southstar_engine::{CssCache, PrintSetup};
-
-unsafe extern "C" {
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
-}
 
 pub use southstar_net::ResponseTiming as Timing;
 
@@ -133,25 +121,6 @@ impl Document {
 
 pub fn node_dump(node: Node) -> Vec<u8> {
     southstar_dom::serialize::dump(Some(node))
-}
-
-fn gstring_take(s: *mut GString) -> Vec<u8> {
-    let Some(g) = (unsafe { s.as_ref() }) else {
-        return Vec::new();
-    };
-    let bytes = if g.str.is_null() {
-        Vec::new()
-    } else {
-        unsafe { core::slice::from_raw_parts(g.str.cast::<u8>(), g.len) }.to_vec()
-    };
-    unsafe { g_string_free(s, glib::TRUE) };
-    bytes
-}
-
-pub fn with_gstring(fill: impl FnOnce(*mut GString)) -> Vec<u8> {
-    let s = unsafe { g_string_new(ptr::null()) };
-    fill(s);
-    gstring_take(s)
 }
 
 pub fn dump_text(root: Option<BoxRef<'_>>) -> Vec<u8> {

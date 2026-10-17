@@ -88,7 +88,7 @@ pub fn form_submit(nav: &NavCapture, form: Node, submitter: Option<Node>) {
         .unwrap_or_default();
     ffi::set_submission_charset(accept.or(doc_charset.as_deref()));
     let submitter = submitter.filter(|s| s.as_ptr() != form.as_ptr());
-    let query = ffi::collect_inputs(form, root, submitter);
+    let query = southstar_forms::urlencoded_inputs(form, root, submitter);
     ffi::set_submission_charset(None);
     nav.clear_post();
     if is_post {

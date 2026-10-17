@@ -16,6 +16,7 @@ southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
+southstar-forms = { path = "../forms" }
 southstar-engine = { path = "../engine" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }
@@ -46,6 +47,7 @@ southstar-render = { path = "../render" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-selection = { path = "../selection" }
+southstar-spellcheck = { path = "../spellcheck" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 southstar-video = { path = "../video" }

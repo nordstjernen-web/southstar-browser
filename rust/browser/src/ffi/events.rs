@@ -14,7 +14,6 @@ use super::{Js, NsBrowser};
 unsafe extern "C" {
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
-    fn ns_form_is_reset_trigger(n: *const NsNode) -> GBoolean;
     fn g_utf8_prev_char(p: *const c_char) -> *const c_char;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_utf8_get_char(p: *const c_char) -> u32;
@@ -336,10 +335,6 @@ pub fn option_label(option: Node<'_>) -> Option<GStr> {
 
 pub fn effectively_inert(el: Node<'_>) -> bool {
     southstar_dom::tree::effectively_inert(el)
-}
-
-pub fn form_is_reset_trigger(n: Node<'_>) -> bool {
-    unsafe { ns_form_is_reset_trigger(n.as_ptr()) != 0 }
 }
 
 pub use southstar_render::{page_uses_active, page_uses_hover};

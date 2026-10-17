@@ -195,7 +195,7 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
     let doc_charset = b.doc_charset.get();
     ffi::set_submission_charset(accept_charset.or(doc_charset.as_deref()));
     let body = StrBufOwned::new();
-    ffi::form_collect_inputs(form, doc, &body, clicked);
+    body.append(&southstar_forms::urlencoded_inputs(form, doc, clicked));
     ffi::set_submission_charset(None);
     if is_post {
         b.set_post(body, c"application/x-www-form-urlencoded");
@@ -225,7 +225,7 @@ pub fn submit_form(b: &NsBrowser, clicked: Option<Node<'_>>) {
     };
     let from_text = ffi::is_text_input(clicked);
     let from_form = ffi::is_named(clicked, c"form");
-    if !from_text && !from_form && !ffi::form_is_submit_trigger(clicked) {
+    if !from_text && !from_form && !southstar_forms::is_submit_trigger(clicked) {
         return;
     }
     let form = if from_form {
@@ -238,7 +238,7 @@ pub fn submit_form(b: &NsBrowser, clicked: Option<Node<'_>>) {
     };
     if form.attr(c"novalidate").is_none()
         && clicked.attr(c"formnovalidate").is_none()
-        && let Some(bad) = ffi::form_first_invalid(form, doc)
+        && let Some(bad) = southstar_forms::first_invalid(form, doc)
     {
         if let Some(js) = b.js() {
             js.dispatch_event(bad, c"invalid");

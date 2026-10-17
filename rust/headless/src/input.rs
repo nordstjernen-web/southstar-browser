@@ -107,7 +107,7 @@ pub fn submit_form_from(fc: &Ctx, nav: &NavCapture, trigger: Node) {
     let root = doc.unwrap_or(form);
     if form.attr(c"novalidate").is_none()
         && trigger.attr(c"formnovalidate").is_none()
-        && let Some(bad) = ffi::first_invalid(form, root)
+        && let Some(bad) = southstar_forms::first_invalid(form, root)
     {
         let name = bad.attr(c"name").filter(|n| !n.is_empty());
         let name = name.map_or(&b"(unnamed)"[..], CStr::to_bytes);
@@ -235,7 +235,8 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     {
         ffi::consume_mutated(Some(js));
     }
-    if let Some(trigger) = ancestors_and_self(dom).find(|n| ffi::is_submit_trigger(*n)) {
+    if let Some(trigger) = ancestors_and_self(dom).find(|n| southstar_forms::is_submit_trigger(*n))
+    {
         submit_form_from(fc, nav, trigger);
         return;
     }

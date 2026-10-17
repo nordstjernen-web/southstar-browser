@@ -598,9 +598,10 @@ fn activate(b: &NsBrowser, node: Node<'_>, x: c_int, y: c_int) {
     }
     if js.is_some_and(|js| js.activate_summary(node)) {
         note_mutation(b);
-    } else if !b.pending_nav.is_set() && ffi::form_is_submit_trigger(node) {
+    } else if !b.pending_nav.is_set() && southstar_forms::is_submit_trigger(node) {
         build::submit_form(b, Some(node));
-    } else if let (Some(js), Some(_), true) = (js, b.doc(), ffi::form_is_reset_trigger(node)) {
+    } else if let (Some(js), Some(_), true) = (js, b.doc(), southstar_forms::is_reset_trigger(node))
+    {
         if let Some(form) = ffi::form_owner(node) {
             js.form_reset(form);
             note_mutation(b);

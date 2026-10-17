@@ -4,27 +4,10 @@
 
 use core::ffi::CStr;
 
-use southstar_dom::{self as dom, Node, NsNode};
-use southstar_glib::{GBoolean, GStr};
+use southstar_dom::{self as dom, Node};
+use southstar_glib::GStr;
 
-use super::glib::{GString, StrBufOwned, gstr_from};
-
-unsafe extern "C" {
-    fn ns_form_first_invalid(
-        form: *const NsNode,
-        n: *const NsNode,
-        doc: *const NsNode,
-    ) -> *const NsNode;
-    fn ns_form_is_submit_trigger(n: *const NsNode) -> GBoolean;
-    fn ns_form_collect_inputs(
-        form: *const NsNode,
-        n: *const NsNode,
-        doc: *const NsNode,
-        query: *mut GString,
-        first: *mut GBoolean,
-        submitter: *const NsNode,
-    );
-}
+use super::glib::gstr_from;
 
 pub fn is_named(n: Node<'_>, tag: &CStr) -> bool {
     n.element_name() == Some(tag.to_bytes())
@@ -78,39 +61,6 @@ pub fn is_text_input(n: Node<'_>) -> bool {
 
 pub fn form_owner(control: Node<'_>) -> Option<Node<'_>> {
     southstar_dom::controls::form_owner(control)
-}
-
-pub fn form_first_invalid<'a>(form: Node<'a>, doc: Node<'a>) -> Option<Node<'a>> {
-    unsafe {
-        Node::from_ptr(ns_form_first_invalid(
-            form.as_ptr(),
-            doc.as_ptr(),
-            doc.as_ptr(),
-        ))
-    }
-}
-
-pub fn form_is_submit_trigger(n: Node<'_>) -> bool {
-    unsafe { ns_form_is_submit_trigger(n.as_ptr()) != 0 }
-}
-
-pub fn form_collect_inputs(
-    form: Node<'_>,
-    doc: Node<'_>,
-    out: &StrBufOwned,
-    submitter: Option<Node<'_>>,
-) {
-    let mut first: GBoolean = 1;
-    unsafe {
-        ns_form_collect_inputs(
-            form.as_ptr(),
-            doc.as_ptr(),
-            doc.as_ptr(),
-            out.raw(),
-            &mut first,
-            Node::ptr_or_null(submitter),
-        )
-    };
 }
 
 pub fn set_submission_charset(charset: Option<&CStr>) {
