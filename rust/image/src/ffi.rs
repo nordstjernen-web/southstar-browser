@@ -128,11 +128,12 @@ impl<'a> ImageRef<'a> {
         }
         let dup =
             |value: Option<&CStr>| value.map_or(ptr::null_mut(), |v| glib::strdup(v.to_bytes()));
-        // SAFETY: as above; the fields were null and now own fresh copies.
-        unsafe {
-            (*image).final_url = dup(final_url);
-            (*image).cors_allow_origin = dup(cors_allow_origin);
-        }
+        let final_url = dup(final_url);
+        let cors_allow_origin = dup(cors_allow_origin);
+        // SAFETY: as above; the field was null and now owns a fresh copy.
+        unsafe { (*image).final_url = final_url };
+        // SAFETY: as above; the field was null and now owns a fresh copy.
+        unsafe { (*image).cors_allow_origin = cors_allow_origin };
     }
 
     pub fn set_render_surface(self, surface: *mut c_void) {
@@ -276,15 +277,16 @@ unsafe extern "C" fn image_free(p: *mut c_void) {
     ] {
         gfree(s);
     }
-    unsafe {
-        if !img.render_surface.is_null() {
-            cairo_surface_destroy(img.render_surface);
-        }
-        if img.anim_frames.is_null() {
-            TextureRef::release(img.texture);
-        } else {
-            g_array_free(img.anim_frames, TRUE);
-        }
+    if !img.render_surface.is_null() {
+        // SAFETY: the image owns one reference to its render surface, released once here.
+        unsafe { cairo_surface_destroy(img.render_surface) };
+    }
+    if img.anim_frames.is_null() {
+        // SAFETY: the image owns its texture reference, released once here.
+        unsafe { TextureRef::release(img.texture) };
+    } else {
+        // SAFETY: the image owns its frame array, freed once here with its elements.
+        unsafe { g_array_free(img.anim_frames, TRUE) };
     }
     gfree(p);
 }

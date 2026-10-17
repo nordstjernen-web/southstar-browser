@@ -21,12 +21,18 @@ Southstar Browser 0.9.12-dev:
   (`gtk_native_get_surface: assertion 'GTK_IS_NATIVE (self)' failed`): the
   page's input-method context is attached to the page area only while the
   area is realized.
-* Internal: about 140 cross-crate `ns_*` C-ABI exports and some 190
-  `extern` declarations are replaced by ordinary Rust calls with typed
-  arguments (DOM change recording, shadow/reflect/traversal helpers, event
-  dispatch, frames and realms, script collection and running, interface
-  installation and page reset), shrinking the unsafe budget across the
-  js-* crates.
+* Internal: some 270 of the cross-crate `ns_*` C-ABI exports and about
+  500 `extern` declarations are replaced by ordinary Rust calls with typed
+  arguments across the js-* bindings, net and its clients (font, image,
+  WebSocket, EventSource, workers), layout, paint, animation, SVG, video,
+  forms, camera, microphone, spell checking and the headless/GTK hosts.
+  net gains a Rust request API (`FetchRequest`, closures for completion),
+  the blob registry holds `Arc<[u8]>` (fixing an unreferenced `GBytes`
+  returned after the registry lock was dropped), and duplicate copies of
+  the response struct are gone. Across the tree `unsafe` falls from 7692
+  to 6289, FFI imports from 3160 to 2668 and exports from 797 to 517.
+* The unsafe-budget check reports its failures as a GitHub annotation, so
+  they are readable without the job log.
 * CSS animations attached to a scroll or view timeline
   (`animation-timeline` other than `auto`) no longer play as if on the
   document timeline. With `animation-duration: auto` and

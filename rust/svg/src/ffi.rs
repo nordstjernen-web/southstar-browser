@@ -462,10 +462,6 @@ impl Canvas {
         Canvas(cr)
     }
 
-    pub unsafe fn from_ptr(cr: *mut c_void) -> Canvas {
-        Canvas(cr)
-    }
-
     pub fn save(self) {
         unsafe { cairo_save(self.0) };
     }

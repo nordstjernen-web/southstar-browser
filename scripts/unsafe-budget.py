@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -283,7 +284,15 @@ def main():
     print(", ".join(f"{m} {total(counts, m)}" for m in metrics))
     for failure in failures:
         print(failure if "\n" in failure else "unsafe-budget: " + failure, file=sys.stderr)
+    if failures and os.environ.get("GITHUB_ACTIONS") == "true":
+        annotate(failures)
     return 1 if failures else 0
+
+
+def annotate(failures):
+    text = "\n".join(failures)
+    escaped = text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::error title=unsafe-budget::{escaped[:60000]}")
 
 
 if __name__ == "__main__":

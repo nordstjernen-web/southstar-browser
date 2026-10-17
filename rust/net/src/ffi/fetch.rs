@@ -933,10 +933,8 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
 
 pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
     let navigation = request::is_navigation(f.headers);
-    if !navigation {
-        if southstar_extensions::should_block(Some(f.url), f.top_url) {
-            return Ok(Response::with_error(f.url, 0, b"blocked by extension"));
-        }
+    if !navigation && southstar_extensions::should_block(Some(f.url), f.top_url) {
+        return Ok(Response::with_error(f.url, 0, b"blocked by extension"));
     }
 
     let max_redirs =
