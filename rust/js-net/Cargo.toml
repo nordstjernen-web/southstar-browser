@@ -8,12 +8,16 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-eventsource = { path = "../eventsource" }
 southstar-glib = { path = "../glib" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-url = { path = "../js-url" }
+southstar-net = { path = "../net" }
 southstar-url = { path = "../url" }
+southstar-websocket = { path = "../websocket" }
 
 [lints]
 workspace = true

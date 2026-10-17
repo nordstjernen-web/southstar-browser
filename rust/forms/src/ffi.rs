@@ -9,12 +9,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GError};
 
 unsafe extern "C" {
-    fn ns_form_urlencoded_append_pair(
-        out: *mut c_void,
-        first: *mut GBoolean,
-        name: *const c_char,
-        value: *const c_char,
-    );
+    fn g_string_append_len(string: *mut c_void, val: *const c_char, len: isize) -> *mut c_void;
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_regex_new(
         pattern: *const c_char,
@@ -31,20 +26,19 @@ unsafe extern "C" {
     fn g_regex_unref(regex: *mut c_void);
 }
 
-fn opt_ptr(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 pub struct Query {
-    out: *mut c_void,
-    first: *mut GBoolean,
+    encoded: Vec<u8>,
+    first: bool,
 }
 
 impl Query {
     pub fn append(&mut self, name: &CStr, value: Option<&CStr>) {
-        unsafe {
-            ns_form_urlencoded_append_pair(self.out, self.first, name.as_ptr(), opt_ptr(value))
-        };
+        southstar_net::urlencoded_append_pair(
+            &mut self.encoded,
+            &mut self.first,
+            name.to_bytes(),
+            value.map(CStr::to_bytes),
+        );
     }
 }
 
@@ -87,16 +81,33 @@ pub unsafe extern "C" fn ns_form_collect_inputs(
     first: *mut GBoolean,
     submitter: *const NsNode,
 ) {
-    let mut query = Query { out: query, first };
+    if query.is_null() || first.is_null() {
+        return;
+    }
+    let mut collected = Query {
+        encoded: Vec::new(),
+        // SAFETY: first is non-null and the caller passes a live GBoolean.
+        first: unsafe { *first } != 0,
+    };
     unsafe {
         crate::collect_inputs(
             Node::from_ptr(form),
             Node::from_ptr(n),
-            &mut query,
+            &mut collected,
             Node::from_ptr(submitter),
             0,
         )
     };
+    // SAFETY: query is the caller's live GString and encoded holds len readable bytes.
+    unsafe {
+        g_string_append_len(
+            query,
+            collected.encoded.as_ptr().cast(),
+            collected.encoded.len() as isize,
+        )
+    };
+    // SAFETY: first is non-null and the caller passes a live, writable GBoolean.
+    unsafe { *first = glib::boolean(collected.first) };
 }
 
 #[unsafe(no_mangle)]

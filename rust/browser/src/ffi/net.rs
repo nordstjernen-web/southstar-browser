@@ -9,14 +9,11 @@ use std::ffi::CString;
 use southstar_dom::Tree;
 
 use super::glib::gstr_from;
-use southstar_glib::{self as glib, GBoolean, GError, GStr};
+use southstar_glib::{self as glib, GError, GStr};
 
 pub use southstar_js_runtime::api::NavigationTiming;
 
 unsafe extern "C" {
-    fn ns_safebrowsing_blocked(host: *const c_char) -> GBoolean;
-    fn ns_safebrowsing_allow_host(host: *const c_char);
-    fn ns_safebrowsing_interstitial(url: *const c_char, host: *const c_char) -> *mut c_char;
     fn ns_pdf_document_html(data: *const u8, len: usize, url: *const c_char) -> *mut c_char;
     fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_filename_to_uri(
@@ -175,15 +172,15 @@ pub fn https_first_upgrade(url: &CStr) -> Option<GStr> {
 }
 
 pub fn safebrowsing_blocked(host: &CStr) -> bool {
-    unsafe { ns_safebrowsing_blocked(host.as_ptr()) != 0 }
+    southstar_safebrowsing::blocked(host.to_bytes())
 }
 
 pub fn safebrowsing_allow_host(host: &CStr) {
-    unsafe { ns_safebrowsing_allow_host(host.as_ptr()) };
+    southstar_safebrowsing::allow_host(host.to_bytes());
 }
 
 pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<GStr> {
-    take(unsafe { ns_safebrowsing_interstitial(url.as_ptr(), host.as_ptr()) })
+    gstr_from(&southstar_safebrowsing::interstitial(Some(url), Some(host)))
 }
 
 pub struct ParsedDoc(pub(super) Option<Tree>);

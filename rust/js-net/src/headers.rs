@@ -153,11 +153,7 @@ pub(crate) fn raw_headers_have(raw: Option<&[u8]>, name: &[u8]) -> bool {
     })
 }
 
-pub(crate) fn cors_allows(
-    doc_url: Option<&[u8]>,
-    resp_url: Option<&[u8]>,
-    header: Option<&[u8]>,
-) -> bool {
+pub fn cors_allows(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>, header: Option<&[u8]>) -> bool {
     if let Some(resp) = resp_url
         && [&b"data:"[..], b"blob:", b"about:"]
             .iter()

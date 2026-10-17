@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{EventSource, Events};
+
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 

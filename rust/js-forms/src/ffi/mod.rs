@@ -23,7 +23,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Page(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_multipart_boundary() -> *mut c_char;
     fn ns_js_dialog_close(js: *mut NsJs, dialog: *mut NsNode, return_value: *const c_char);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
@@ -233,10 +232,7 @@ pub(crate) fn blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {
 }
 
 pub(crate) fn multipart_boundary() -> Vec<u8> {
-    let raw = unsafe { ns_multipart_boundary() };
-    let bytes = unsafe { glib::bytes(raw) }.unwrap_or_default().to_vec();
-    unsafe { glib::g_free(raw.cast()) };
-    bytes
+    southstar_net::multipart_boundary()
 }
 
 pub(crate) fn with_pattern_scope<R>(f: impl FnOnce(&mut Scope<'_>) -> Option<R>) -> Option<R> {

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
@@ -60,23 +60,9 @@ const _: () = assert!(
         && core::mem::offset_of!(RenderProfile, container_pass) == 64
 );
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct FontDescriptors {
-    weight: c_int,
-    slant: c_int,
-}
-
 unsafe extern "C" {
     fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn ns_font_available() -> GBoolean;
-    fn ns_font_request(
-        family: *const c_char,
-        src_url: *const c_char,
-        base_url: *const c_char,
-        descriptors: FontDescriptors,
-    );
     fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
     fn ns_layout_build(
         doc: *const NsNode,
@@ -197,7 +183,7 @@ fn collect_font_usage(root: Node<'_>, styles: StyleTable, families: &mut HashMap
 }
 
 fn request_fonts(c: &RenderCtx, styles: StyleTable) {
-    if unsafe { ns_font_available() } == 0 {
+    if !southstar_font::available() {
         return;
     }
     let mut families: HashMap<Vec<u8>, Usage> = HashMap::new();
@@ -233,11 +219,16 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
             {
                 continue;
             }
-            let descriptors = FontDescriptors {
+            let descriptors = southstar_font::Descriptors {
                 weight: face.weight,
                 slant: face.slant,
             };
-            unsafe { ns_font_request(family.as_ptr(), abs.as_ptr(), c.base_url, descriptors) };
+            southstar_font::request(
+                family.to_bytes(),
+                abs.to_bytes(),
+                text(c.base_url),
+                descriptors,
+            );
         }
     }
 }

@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_uint, c_void};
-
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -28,14 +26,6 @@ impl Js {
     }
 }
 
-type IdleCallback = unsafe extern "C" fn(user_data: *mut c_void);
-
-unsafe extern "C" {
-    fn ns_font_pending_count() -> c_uint;
-    fn ns_font_add_idle_cb(cb: Option<IdleCallback>, user_data: *mut c_void);
-    fn ns_font_remove_idle_cb(cb: Option<IdleCallback>, user_data: *mut c_void);
-}
-
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js::from_ptr(scope.context_opaque().cast())
 }
@@ -53,11 +43,11 @@ pub(crate) fn drain_microtasks(js: Js) {
 }
 
 pub(crate) fn pending_font_count() -> u32 {
-    unsafe { ns_font_pending_count() }
+    southstar_font::pending_count()
 }
 
-unsafe extern "C" fn fonts_idle(user_data: *mut c_void) {
-    let js = Js::from_ptr(user_data.cast());
+fn fonts_idle(data: usize) {
+    let js = Js(data);
     if js.is_null() || !ready::has_waiting(js) {
         return;
     }
@@ -65,11 +55,11 @@ unsafe extern "C" fn fonts_idle(user_data: *mut c_void) {
 }
 
 pub(crate) fn wait_for_fonts(js: Js) {
-    unsafe { ns_font_add_idle_cb(Some(fonts_idle), js.ptr().cast()) };
+    southstar_font::add_idle_waiter(fonts_idle, js.0);
 }
 
 pub(crate) fn stop_waiting_for_fonts(js: Js) {
-    unsafe { ns_font_remove_idle_cb(Some(fonts_idle), js.ptr().cast()) };
+    southstar_font::remove_idle_waiter(fonts_idle, js.0);
 }
 
 #[unsafe(no_mangle)]

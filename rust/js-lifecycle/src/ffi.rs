@@ -245,10 +245,10 @@ impl Js {
         unsafe {
             ns_services_timers_pending(self.0, glib::FALSE) != 0
                 || frames::has_pending(self)
-                || ns_js_net_pending_fetches(self.0) > 0
-                || ns_js_net_pending_xhrs(self.0) > 0
-                || ns_js_net_pending_sockets(self.0) > 0
-                || ns_js_filereader_pending(self.0) != 0
+                || southstar_js_net::pending_fetch_count(self.0) > 0
+                || southstar_js_net::pending_xhr_count(self.0) > 0
+                || southstar_js_net::pending_socket_count(self.0) > 0
+                || southstar_js_url::filereader_pending(self.0)
                 || southstar_js_frames::pending_iframe_count(self.0) > 0
                 || ns_mutation_drain_pending(self.0) != 0
                 || api::observer_tick_pending(self.0)
@@ -275,7 +275,6 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
-    fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
@@ -283,10 +282,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
-    fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
-    fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
-    fn ns_js_filereader_pending(js: *const NsJs) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
@@ -336,8 +331,9 @@ pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
 }
 
 pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
-    let mut failed = glib::FALSE;
-    (unsafe { ns_js_image_settled(image, &mut failed) } != 0).then_some(failed != 0)
+    // SAFETY: image is null or an image its page's cache still holds.
+    let image = unsafe { southstar_image::ImageRef::from_ptr(image) }?;
+    (image.loaded() || image.failed()).then_some(image.failed())
 }
 
 pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {

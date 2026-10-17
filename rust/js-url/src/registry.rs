@@ -3,14 +3,21 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::collections::HashMap;
-use std::ffi::CString;
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
-use crate::ffi::{Js, SharedBytes, cstring};
+use crate::ffi::{Js, cstring};
 
-pub(crate) struct Entry {
-    pub bytes: SharedBytes,
-    pub kind: Option<CString>,
+pub type Blob = (Arc<[u8]>, Option<Vec<u8>>);
+
+struct Entry {
+    bytes: Arc<[u8]>,
+    kind: Option<Vec<u8>>,
+}
+
+impl Entry {
+    fn blob(&self) -> Blob {
+        (self.bytes.clone(), self.kind.clone())
+    }
 }
 
 #[derive(Default)]
@@ -49,8 +56,10 @@ pub(crate) fn remove_page(js: Js) {
 
 pub(crate) fn put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
     let entry = Entry {
-        bytes: SharedBytes::new(bytes),
-        kind: kind.map(cstring).filter(|k| !k.is_empty()),
+        bytes: bytes.into(),
+        kind: kind
+            .map(|k| cstring(k).into_bytes())
+            .filter(|k| !k.is_empty()),
     };
     registry()
         .urls
@@ -70,16 +79,15 @@ pub(crate) fn free_page(js: Js) {
     drop(urls);
 }
 
-pub(crate) fn with_entry<R>(js: Js, url: &[u8], f: impl FnOnce(&Entry) -> R) -> Option<R> {
-    let registry = registry();
-    registry.urls.get(&js)?.get(url).map(f)
+pub(crate) fn lookup(js: Js, url: &[u8]) -> Option<Blob> {
+    registry().urls.get(&js)?.get(url).map(Entry::blob)
 }
 
-pub(crate) fn resolve<R>(url: &[u8], f: impl FnOnce(&Entry) -> R) -> Option<R> {
+pub(crate) fn resolve(url: &[u8]) -> Option<Blob> {
     let registry = registry();
     registry
         .pages
         .iter()
         .find_map(|js| registry.urls.get(js)?.get(url))
-        .map(f)
+        .map(Entry::blob)
 }

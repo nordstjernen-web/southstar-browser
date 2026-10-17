@@ -6,12 +6,12 @@ mod ffi;
 #[cfg(feature = "freetype")]
 mod sfnt;
 
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use ffi::{Cancellable, IdleWaiter};
+use southstar_net::{Cancellable, FetchDest, FetchRequest};
 
 #[derive(Clone, Copy)]
 pub struct Descriptors {
@@ -37,6 +37,17 @@ struct Loader {
     entries: HashMap<Vec<u8>, Entry>,
     pending: HashMap<Vec<u8>, Pending>,
     cache_dir: CString,
+}
+
+struct IdleWaiter {
+    callback: fn(usize),
+    data: usize,
+}
+
+impl PartialEq for IdleWaiter {
+    fn eq(&self, other: &Self) -> bool {
+        core::ptr::fn_addr_eq(self.callback, other.callback) && self.data == other.data
+    }
 }
 
 struct State {
@@ -114,16 +125,17 @@ pub fn family_loaded(family: &[u8]) -> bool {
     })
 }
 
-pub(crate) fn add_idle_waiter(waiter: IdleWaiter) {
+pub fn add_idle_waiter(callback: fn(usize), data: usize) {
     state()
         .idle_waiters
         .get_or_insert_with(Vec::new)
-        .push(waiter);
+        .push(IdleWaiter { callback, data });
 }
 
-pub(crate) fn remove_idle_waiter(waiter: &IdleWaiter) {
+pub fn remove_idle_waiter(callback: fn(usize), data: usize) {
+    let waiter = IdleWaiter { callback, data };
     if let Some(waiters) = state().idle_waiters.as_mut() {
-        waiters.retain(|w| w != waiter);
+        waiters.retain(|w| *w != waiter);
     }
 }
 
@@ -143,7 +155,7 @@ pub(crate) fn notify_idle() {
         state.idle_waiters.take().unwrap_or_default()
     };
     for waiter in &waiters {
-        waiter.call();
+        (waiter.callback)(waiter.data);
     }
 }
 
@@ -184,36 +196,28 @@ fn entry_key(family: &[u8], url: &[u8], descriptors: Descriptors) -> Vec<u8> {
     key
 }
 
-pub(crate) fn request(
-    family: Option<&CStr>,
-    src_url: Option<&CStr>,
-    base_url: Option<&CStr>,
-    descriptors: Descriptors,
-) {
+pub fn request(family: &[u8], src_url: &[u8], base_url: Option<&[u8]>, descriptors: Descriptors) {
     if !available() {
         return;
     }
     if state().loader.is_none() {
         init();
     }
-    let Some(family) = family.filter(|f| !f.is_empty()) else {
+    if family.is_empty() || src_url.is_empty() {
+        return;
+    }
+    let Some(url) = resolve_url(base_url, src_url) else {
         return;
     };
-    let Some(src_url) = src_url.filter(|s| !s.is_empty()) else {
-        return;
-    };
-    let Some(url) = ffi::resolve_url(base_url, src_url) else {
-        return;
-    };
-    let key = entry_key(family.to_bytes(), url.to_bytes(), descriptors);
+    let key = entry_key(family, &url, descriptors);
     let cancel = {
         let mut state = state();
         let Some(loader) = state.loader.as_mut() else {
             return;
         };
         let entry = loader.entries.entry(key.clone()).or_insert_with(|| Entry {
-            family: family.to_bytes().to_vec(),
-            url: url.to_bytes().to_vec(),
+            family: family.to_vec(),
+            url: url.clone(),
             descriptors,
             loaded: false,
             inflight: false,
@@ -239,7 +243,36 @@ pub(crate) fn request(
         loader.pending.insert(entry.url.clone(), pending);
         cancel
     };
-    ffi::fetch(&url, base_url, &cancel);
+    fetch(&url, base_url, &cancel);
+}
+
+fn fetch(url: &[u8], base_url: Option<&[u8]>, cancel: &Cancellable) {
+    let headers = FetchDest::Font.header_lines();
+    let request = FetchRequest {
+        url,
+        top_url: base_url,
+        method: Some(b"GET"),
+        headers: &headers,
+        ..FetchRequest::default()
+    };
+    let key = url.to_vec();
+    southstar_net::request_with(&request, Some(cancel), move |outcome| {
+        let body = outcome
+            .as_ref()
+            .ok()
+            .filter(|resp| resp.error().is_none() && resp.status() < 400)
+            .and_then(|resp| resp.body())
+            .filter(|body| !body.is_empty());
+        fetched(&key, body);
+        notify_idle();
+    });
+}
+
+fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
+    match base {
+        Some(base) => southstar_url::bytes::resolve(Some(base), href),
+        None => Some(href.to_vec()),
+    }
 }
 
 fn looks_like_font(data: &[u8]) -> bool {
@@ -343,11 +376,11 @@ fn install(keys: &[Vec<u8>], data: &[u8], forced_extension: Option<&[u8]>) {
     }
 }
 
-pub(crate) fn fetched(url: &CStr, body: Option<&[u8]>) {
+pub(crate) fn fetched(url: &[u8], body: Option<&[u8]>) {
     let keys = {
         let mut state = state();
         state.loader.as_mut().and_then(|loader| {
-            let keys = loader.pending.get(url.to_bytes())?.keys.clone();
+            let keys = loader.pending.get(url)?.keys.clone();
             for key in &keys {
                 if let Some(entry) = loader.entries.get_mut(key) {
                     entry.cancel = None;
@@ -369,6 +402,6 @@ pub(crate) fn fetched(url: &CStr, body: Option<&[u8]>) {
     let finished = state()
         .loader
         .as_mut()
-        .and_then(|loader| loader.pending.remove(url.to_bytes()));
+        .and_then(|loader| loader.pending.remove(url));
     drop(finished);
 }

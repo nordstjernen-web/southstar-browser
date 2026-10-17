@@ -1,32 +1,24 @@
-//! Southstar — the C ABI of the image cache and decode chain, over GLib, GTask, the network layer and the decoders.
+//! Southstar — the image cache and decode chain, over GLib, GTask, the network layer and the decoders.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::mem::size_of;
 use core::ptr;
 
 use southstar_glib::{self as glib, FALSE, GBoolean, GError, GHashTable, TRUE};
 
 use southstar_image_decoders::{self as decoders, Pixels};
+use southstar_net::Response;
 use southstar_texture::{Texture, TextureRef};
 
 use crate::RetryState;
 
 const CACHE_BUDGET_BYTES: i64 = 256 * 1024 * 1024;
-const FETCH_DEST_IMAGE: c_int = 3;
-const TEXTURE_BGRA_PREMULTIPLIED: c_int = 0;
-const TEXTURE_DEFAULT: c_int = 1;
 
 #[repr(C)]
 pub struct GArray {
     data: *mut c_char,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
     len: c_uint,
 }
 
@@ -128,6 +120,21 @@ impl<'a> ImageRef<'a> {
         self.raw().render_surface
     }
 
+    pub fn adopt_origin(self, final_url: Option<&CStr>, cors_allow_origin: Option<&CStr>) {
+        let image = self.0.as_ptr();
+        // SAFETY: the image is live while its cache holds it, and only the main thread touches it.
+        if !unsafe { (*image).final_url }.is_null() {
+            return;
+        }
+        let dup =
+            |value: Option<&CStr>| value.map_or(ptr::null_mut(), |v| glib::strdup(v.to_bytes()));
+        // SAFETY: as above; the fields were null and now own fresh copies.
+        unsafe {
+            (*image).final_url = dup(final_url);
+            (*image).cors_allow_origin = dup(cors_allow_origin);
+        }
+    }
+
     pub fn set_render_surface(self, surface: *mut c_void) {
         unsafe { (*self.0.as_ptr()).render_surface = surface };
     }
@@ -156,27 +163,7 @@ struct AnimFrame {
     delay_ms: c_int,
 }
 
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    _content_disposition: *mut c_char,
-    _csp_header: *mut c_char,
-    _xframe_options: *mut c_char,
-    _x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    _refresh: *mut c_char,
-    _content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    _tls_warning: *mut c_char,
-    _remote_ip: *mut c_char,
-    next_hop_protocol: *mut c_char,
-}
-
-type ReadyCallback = unsafe extern "C" fn(img: *mut NsImage, user_data: *mut c_void);
+pub type ImageReady = fn(image: ImageRef<'static>, data: usize);
 type AsyncCallback =
     unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
 type TaskThreadFunc = unsafe extern "C" fn(
@@ -189,22 +176,6 @@ type HashForeach =
     unsafe extern "C" fn(key: *mut c_void, value: *mut c_void, user_data: *mut c_void);
 
 unsafe extern "C" {
-    fn ns_net_request_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        callback: Option<AsyncCallback>,
-        user_data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
-    fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char;
-    fn ns_net_raw_header_values(raw: *const c_char, name: *const c_char) -> *mut c_char;
-    fn ns_response_free(resp: *mut NsResponse);
     fn cairo_surface_destroy(surface: *mut c_void);
     fn g_get_monotonic_time() -> i64;
     fn g_array_new(zero_terminated: GBoolean, clear: GBoolean, element_size: c_uint)
@@ -244,8 +215,8 @@ pub struct Cache {
 struct Pending {
     img: *mut NsImage,
     cache: *mut Cache,
-    cb: Option<ReadyCallback>,
-    user_data: *mut c_void,
+    cb: Option<ImageReady>,
+    data: usize,
     dead: bool,
 }
 
@@ -282,14 +253,6 @@ unsafe fn frames<'a, T>(array: *mut GArray) -> &'a mut [T] {
 
 fn gfree<T>(p: *mut T) {
     unsafe { glib::g_free(p.cast()) };
-}
-
-fn dup_or_null(s: *const c_char) -> *mut c_char {
-    if s.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { glib::g_strdup(s) }
-    }
 }
 
 unsafe extern "C" fn anim_frame_clear(data: *mut c_void) {
@@ -407,6 +370,10 @@ fn for_each_image<F: FnMut(*mut NsImage)>(table: *mut GHashTable, mut f: F) {
     unsafe { g_hash_table_foreach(table, Some(trampoline::<F>), (&raw mut f).cast()) };
 }
 
+fn image_ref(img: *mut NsImage) -> Option<ImageRef<'static>> {
+    ptr::NonNull::new(img).map(|p| ImageRef(p, core::marker::PhantomData))
+}
+
 fn lookup(cache: &Cache, url: *const c_char) -> *mut NsImage {
     unsafe { glib::g_hash_table_lookup(cache.by_url, url.cast()) }.cast()
 }
@@ -515,8 +482,8 @@ unsafe fn fire_pending(pending: *mut Pending) {
     }
     for p in fire {
         let pending = unsafe { Box::from_raw(p) };
-        if let Some(cb) = pending.cb {
-            unsafe { cb(img, pending.user_data) };
+        if let (Some(cb), Some(image)) = (pending.cb, image_ref(img)) {
+            cb(image, pending.data);
         }
     }
 }
@@ -525,27 +492,6 @@ unsafe fn fire_pending(pending: *mut Pending) {
 pub unsafe extern "C" fn ns_image_supports_mime(mime: *const c_char) -> GBoolean {
     let mime = unsafe { glib::bytes(mime) };
     glib::boolean(mime.is_some_and(crate::supports_mime))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_decode_bytes(
-    data: *const u8,
-    len: usize,
-    out_w: *mut c_int,
-    out_h: *mut c_int,
-) -> *mut Texture {
-    if data.is_null() {
-        return ptr::null_mut();
-    }
-    // SAFETY: data is non-null and the caller guarantees len readable bytes behind it.
-    let Some((texture, width, height)) = decode_bytes(unsafe { data_slice(data, len) }) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: the caller passes out_w as null or a writable c_int.
-    unsafe { store(out_w, width) };
-    // SAFETY: the caller passes out_h as null or a writable c_int.
-    unsafe { store(out_h, height) };
-    texture.into_raw()
 }
 
 pub fn decode_bytes(bytes: &[u8]) -> Option<(TextureRef, i32, i32)> {
@@ -590,16 +536,22 @@ fn decode_builtin(bytes: &[u8]) -> Option<decoders::Decoded> {
     None
 }
 
+pub struct BgraPixels {
+    pub pixels: Vec<u8>,
+    pub width: i32,
+    pub height: i32,
+    pub stride: usize,
+}
+
 struct Bgra {
-    pixels: *mut u8,
+    pixels: decoders::Buffer,
     width: c_int,
     height: c_int,
     stride: usize,
     buf_len: usize,
-    format: c_int,
 }
 
-fn texture_to_pixels(texture: TextureRef, w: c_int, h: c_int, format: c_int) -> Option<Bgra> {
+fn texture_to_pixels(texture: TextureRef, w: c_int, h: c_int) -> Option<Bgra> {
     let size = if w <= 0 || h <= 0 {
         None
     } else {
@@ -610,20 +562,13 @@ fn texture_to_pixels(texture: TextureRef, w: c_int, h: c_int, format: c_int) -> 
         let mut buffer = decoders::Buffer::try_new(buf_len)?;
         texture.download(&mut buffer, stride);
         Some(Bgra {
-            pixels: buffer.into_raw(),
+            pixels: buffer,
             width: w,
             height: h,
             stride,
             buf_len,
-            format,
         })
     })
-}
-
-unsafe fn store<T>(out: *mut T, value: T) {
-    if !out.is_null() {
-        unsafe { *out = value };
-    }
 }
 
 fn decode_to_bgra(bytes: &[u8]) -> Option<Bgra> {
@@ -645,20 +590,14 @@ fn decode_to_bgra(bytes: &[u8]) -> Option<Bgra> {
             height: still.height,
             stride: still.stride,
             buf_len: still.stride * still.height as usize,
-            format: TEXTURE_BGRA_PREMULTIPLIED,
-            pixels: still.buffer.into_raw(),
+            pixels: still.buffer,
         });
     }
     #[cfg(feature = "avif")]
     if decoders::avif_supports(bytes)
         && let Some(decoded) = decoders::decode_avif(bytes).and_then(Pixels::into_texture)
     {
-        let bgra = texture_to_pixels(
-            decoded.texture,
-            decoded.width,
-            decoded.height,
-            TEXTURE_BGRA_PREMULTIPLIED,
-        );
+        let bgra = texture_to_pixels(decoded.texture, decoded.width, decoded.height);
         if bgra.is_some() {
             return bgra;
         }
@@ -667,38 +606,20 @@ fn decode_to_bgra(bytes: &[u8]) -> Option<Bgra> {
         return None;
     }
     let (texture, w, h) = decode_bytes(bytes)?;
-    texture_to_pixels(texture, w, h, TEXTURE_DEFAULT)
+    texture_to_pixels(texture, w, h)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_decode_bytes_to_pixels(
-    data: *const u8,
-    len: usize,
-    out_w: *mut c_int,
-    out_h: *mut c_int,
-    out_stride: *mut usize,
-    out_buf_len: *mut usize,
-    out_format: *mut c_int,
-) -> *mut u8 {
-    if data.is_null() || len == 0 {
-        return ptr::null_mut();
+pub fn decode_bytes_to_pixels(bytes: &[u8]) -> Option<BgraPixels> {
+    if bytes.is_empty() {
+        return None;
     }
-    // SAFETY: data is non-null and the caller guarantees len readable bytes behind it.
-    let bytes = unsafe { data_slice(data, len) };
-    let Some(bgra) = decode_to_bgra(bytes) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: the caller passes out_w as null or a writable c_int.
-    unsafe { store(out_w, bgra.width) };
-    // SAFETY: the caller passes out_h as null or a writable c_int.
-    unsafe { store(out_h, bgra.height) };
-    // SAFETY: the caller passes out_stride as null or a writable usize.
-    unsafe { store(out_stride, bgra.stride) };
-    // SAFETY: the caller passes out_buf_len as null or a writable usize.
-    unsafe { store(out_buf_len, bgra.buf_len) };
-    // SAFETY: the caller passes out_format as null or a writable c_int.
-    unsafe { store(out_format, bgra.format) };
-    bgra.pixels
+    let bgra = decode_to_bgra(bytes)?;
+    Some(BgraPixels {
+        pixels: bgra.pixels.get(..bgra.buf_len)?.to_vec(),
+        width: bgra.width,
+        height: bgra.height,
+        stride: bgra.stride,
+    })
 }
 
 struct Anim {
@@ -890,106 +811,97 @@ unsafe extern "C" fn on_image_decoded(
     free_job(*job);
 }
 
-unsafe fn record_response(img: &mut NsImage, resp: &NsResponse) {
+fn record_response(img: &mut NsImage, resp: &Response) {
+    let dup = |value: Option<&CStr>| value.map_or(ptr::null_mut(), |v| glib::strdup(v.to_bytes()));
+    img.http_status = resp.status();
+    gfree(img.final_url);
+    img.final_url = dup(resp.final_url());
+    gfree(img.cors_allow_origin);
+    img.cors_allow_origin = dup(resp.cors_allow_origin());
+    gfree(img.next_hop_protocol);
+    img.next_hop_protocol = dup(resp.next_hop_protocol());
+    gfree(img.timing_allow_origin);
+    img.timing_allow_origin = resp
+        .raw_headers()
+        .and_then(|raw| southstar_net::raw_header_values(raw.to_bytes(), b"timing-allow-origin"))
+        .map_or(ptr::null_mut(), |values| glib::strdup(&values));
+    img.body_size = resp.body().map_or(0, |b| b.len() as i64);
+}
+
+unsafe fn finish_failed(pending: *mut Pending, message: &[u8]) {
     unsafe {
-        img.http_status = resp.status;
-        gfree(img.final_url);
-        img.final_url = dup_or_null(resp.final_url);
-        gfree(img.cors_allow_origin);
-        img.cors_allow_origin = dup_or_null(resp.cors_allow_origin);
-        gfree(img.next_hop_protocol);
-        img.next_hop_protocol = dup_or_null(resp.next_hop_protocol);
-        gfree(img.timing_allow_origin);
-        img.timing_allow_origin =
-            ns_net_raw_header_values(resp.raw_headers, c"timing-allow-origin".as_ptr());
-        img.body_size = resp.body.as_ref().map_or(0, |b| i64::from(b.len));
+        let img = &mut *(*pending).img;
+        let message = if message.is_empty() {
+            &b"fetch failed"[..]
+        } else {
+            message
+        };
+        set_error(img, glib::strdup(message));
+        if let (Some(cb), Some(image)) = ((*pending).cb, image_ref((*pending).img)) {
+            cb(image, (*pending).data);
+        }
+        let list = &mut (*(*pending).cache).pending;
+        if let Some(index) = list.iter().position(|&p| p == pending) {
+            list.swap_remove(index);
+        }
+        drop(Box::from_raw(pending));
     }
 }
 
-unsafe extern "C" fn on_image_fetched(
-    _source: *mut c_void,
-    result: *mut c_void,
-    user_data: *mut c_void,
-) {
-    let pending = user_data.cast::<Pending>();
-    let mut err: *mut GError = ptr::null_mut();
-    let resp = unsafe { ns_net_fetch_finish(result, &mut err) };
+unsafe fn decode_in_thread(pending: *mut Pending, body: &[u8], content_type: &[u8]) {
+    let job = Box::new(DecodeJob {
+        pending,
+        // SAFETY: body is a readable slice that GLib copies.
+        body: unsafe { g_bytes_new(body.as_ptr().cast(), body.len()) },
+        content_type: content_type.to_vec(),
+        body_len: body.len(),
+    });
+    let job = Box::into_raw(job).cast::<c_void>();
     unsafe {
-        if !(*pending).dead {
-            (*(*pending).img).response_us = monotonic_us();
-        }
+        let task = g_task_new(
+            ptr::null_mut(),
+            ptr::null_mut(),
+            Some(on_image_decoded),
+            job,
+        );
+        g_task_set_task_data(task, job, None);
+        g_task_run_in_thread(task, Some(decode_worker));
+        g_object_unref(task);
+    }
+}
+
+unsafe fn image_fetched(pending: *mut Pending, outcome: southstar_net::Outcome) {
+    unsafe {
         if (*pending).dead {
-            ns_response_free(resp);
-            if !err.is_null() {
-                glib::g_error_free(err);
-            }
             drop(Box::from_raw(pending));
             return;
         }
-        let img = &mut *(*pending).img;
-        let Some(response) = resp.as_ref() else {
-            let message = err.as_ref().map(|e| e.message).filter(|m| !m.is_null());
-            set_error(
-                img,
-                message.map_or_else(
-                    || glib::g_strdup(c"fetch failed".as_ptr()),
-                    |m| glib::g_strdup(m),
-                ),
-            );
-            if !err.is_null() {
-                glib::g_error_free(err);
-            }
-            if let Some(cb) = (*pending).cb {
-                cb((*pending).img, (*pending).user_data);
-            }
-            let list = &mut (*(*pending).cache).pending;
-            if let Some(index) = list.iter().position(|&p| p == pending) {
-                list.swap_remove(index);
-            }
-            drop(Box::from_raw(pending));
-            return;
+        (*(*pending).img).response_us = monotonic_us();
+        let response = match outcome {
+            Ok(response) => response,
+            Err(message) => return finish_failed(pending, &message),
         };
-        record_response(img, response);
-        let body = response.body.as_ref().filter(|b| b.len > 0);
-        if !response.error.is_null() {
-            set_error(img, glib::g_strdup(response.error));
-        } else if response.status >= 400 {
+        let img = &mut *(*pending).img;
+        record_response(img, &response);
+        let body = response.body().filter(|b| !b.is_empty());
+        if let Some(error) = response.error() {
+            set_error(img, glib::strdup(error.to_bytes()));
+        } else if response.status() >= 400 {
             set_error(
                 img,
-                glib::strdup(format!("HTTP {}", response.status).as_bytes()),
+                glib::strdup(format!("HTTP {}", response.status()).as_bytes()),
             );
         } else if let Some(body) = body {
-            let len = body.len as usize;
-            let content_type = glib::bytes(response.content_type);
+            let content_type = response.content_type().map(CStr::to_bytes);
             if southstar_config::get().is_some_and(|c| c.async_image_decode != 0) {
-                let job = Box::new(DecodeJob {
-                    pending,
-                    body: g_bytes_new(body.data.cast(), len),
-                    content_type: content_type.unwrap_or_default().to_vec(),
-                    body_len: len,
-                });
-                ns_response_free(resp);
-                let job = Box::into_raw(job).cast::<c_void>();
-                let task = g_task_new(
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    Some(on_image_decoded),
-                    job,
-                );
-                g_task_set_task_data(task, job, None);
-                g_task_run_in_thread(task, Some(decode_worker));
-                g_object_unref(task);
-                return;
+                return decode_in_thread(pending, body, content_type.unwrap_or_default());
             }
-            let decoded = decode_body(body.data, len);
-            apply_decoded_state(img, &decoded, content_type, len);
+            let decoded = decode_body(body.as_ptr(), body.len());
+            apply_decoded_state(img, &decoded, content_type, body.len());
         } else {
-            set_error(img, glib::g_strdup(c"empty response".as_ptr()));
+            set_error(img, glib::strdup(b"empty response"));
         }
-        if !err.is_null() {
-            glib::g_error_free(err);
-        }
-        ns_response_free(resp);
+        drop(response);
         cache_account((*pending).cache, (*pending).img);
         fire_pending(pending);
     }
@@ -1007,16 +919,16 @@ fn retry_state(img: &NsImage) -> RetryState {
 unsafe fn start_request(
     cache: *mut Cache,
     img: *mut NsImage,
-    url: *const c_char,
-    top_url: *const c_char,
-    cb: Option<ReadyCallback>,
-    user_data: *mut c_void,
+    url: &CStr,
+    top_url: Option<&CStr>,
+    cb: Option<ImageReady>,
+    data: usize,
 ) {
     let pending = Box::into_raw(Box::new(Pending {
         img,
         cache,
         cb,
-        user_data,
+        data,
         dead: false,
     }));
     unsafe {
@@ -1024,51 +936,48 @@ unsafe fn start_request(
         (*img).attempts += 1;
         (*img).request_us = monotonic_us();
         (*img).response_us = 0;
-        ns_net_request_async(
-            url,
-            top_url,
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            ns_net_accept_headers_for(FETCH_DEST_IMAGE),
-            ptr::null_mut(),
-            Some(on_image_fetched),
-            pending.cast(),
-        );
     }
+    let headers = southstar_net::FetchDest::Image.header_lines();
+    let request = southstar_net::FetchRequest {
+        url: url.to_bytes(),
+        top_url: top_url.map(CStr::to_bytes),
+        method: Some(b"GET"),
+        headers: &headers,
+        ..southstar_net::FetchRequest::default()
+    };
+    southstar_net::request_with(&request, None, move |outcome| {
+        // SAFETY: the pending request stays allocated until this completion, which reclaims it.
+        unsafe { image_fetched(pending, outcome) }
+    });
 }
 
 fn images_disabled() -> bool {
     southstar_config::get().is_some_and(|c| c.images_enabled == 0)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_get(
+unsafe fn cache_get(
     cache: *mut Cache,
-    url: *const c_char,
-    top_url: *const c_char,
-    cb: Option<ReadyCallback>,
-    user_data: *mut c_void,
+    url: &CStr,
+    top_url: Option<&CStr>,
+    cb: Option<ImageReady>,
+    data: usize,
 ) -> *mut NsImage {
-    if cache.is_null() || url.is_null() {
-        return ptr::null_mut();
-    }
     unsafe {
-        let cached = lookup(&*cache, url);
+        let cached = lookup(&*cache, url.as_ptr());
         if let Some(img) = cached.as_mut() {
             img.generation = (*cache).generation;
             if images_disabled() {
                 if let Some(cb) = cb
                     && (img.loaded != 0 || img.failed != 0)
+                    && let Some(image) = image_ref(cached)
                 {
-                    cb(cached, user_data);
+                    cb(image, data);
                 }
                 return cached;
             }
             if img.purged != 0 && !has_pending(&*cache, cached) {
                 img.purged = FALSE;
-                start_request(cache, cached, url, top_url, cb, user_data);
+                start_request(cache, cached, url, top_url, cb, data);
                 return cached;
             }
             if crate::should_retry(&retry_state(img), monotonic_us()) {
@@ -1077,27 +986,27 @@ pub unsafe extern "C" fn ns_image_cache_get(
                 img.failed_at_us = 0;
                 gfree(img.error);
                 img.error = ptr::null_mut();
-                start_request(cache, cached, url, top_url, cb, user_data);
+                start_request(cache, cached, url, top_url, cb, data);
                 return cached;
             }
             if img.loaded != 0 || img.failed != 0 {
-                if let Some(cb) = cb {
-                    cb(cached, user_data);
+                if let (Some(cb), Some(image)) = (cb, image_ref(cached)) {
+                    cb(image, data);
                 }
             } else if let Some(cb) = cb {
                 let duplicate = (*cache).pending.iter().any(|&p| {
                     let p = &*p;
                     !p.dead
                         && p.img == cached
-                        && p.cb.map(|f| f as usize) == Some(cb as usize)
-                        && p.user_data == user_data
+                        && p.cb.is_some_and(|f| ptr::fn_addr_eq(f, cb))
+                        && p.data == data
                 });
                 if !duplicate {
                     let pending = Box::into_raw(Box::new(Pending {
                         img: cached,
                         cache,
                         cb: Some(cb),
-                        user_data,
+                        data,
                         dead: false,
                     }));
                     (*cache).pending.push(pending);
@@ -1105,70 +1014,34 @@ pub unsafe extern "C" fn ns_image_cache_get(
             }
             return cached;
         }
-        let img = new_image(url);
-        insert(&*cache, url, img);
+        let img = new_image(url.as_ptr());
+        insert(&*cache, url.as_ptr(), img);
         if images_disabled() {
             (*img).failed = TRUE;
-            if let Some(cb) = cb {
-                cb(img, user_data);
+            if let (Some(cb), Some(image)) = (cb, image_ref(img)) {
+                cb(image, data);
             }
             return img;
         }
-        start_request(cache, img, url, top_url, cb, user_data);
+        start_request(cache, img, url, top_url, cb, data);
         img
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_cancel_cb(cache: *mut Cache, user_data: *mut c_void) {
-    let Some(cache) = (unsafe { cache.as_mut() }) else {
-        return;
-    };
-    for &p in &cache.pending {
-        let p = unsafe { &mut *p };
-        if p.user_data == user_data {
-            p.cb = None;
-            p.user_data = ptr::null_mut();
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_peek(
+unsafe fn insert_loaded(
     cache: *mut Cache,
     url: *const c_char,
-) -> *mut NsImage {
-    let Some(cache) = (unsafe { cache.as_mut() }) else {
-        return ptr::null_mut();
-    };
-    if url.is_null() {
-        return ptr::null_mut();
-    }
-    let img = lookup(cache, url);
-    if let Some(img) = unsafe { img.as_mut() } {
-        img.generation = cache.generation;
-    }
-    img
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_insert_loaded(
-    cache: *mut Cache,
-    url: *const c_char,
-    texture: *mut Texture,
+    texture: TextureRef,
     width: c_int,
     height: c_int,
 ) -> *mut NsImage {
-    if cache.is_null() || url.is_null() || texture.is_null() {
-        return ptr::null_mut();
-    }
     unsafe {
         let existing = lookup(&*cache, url);
         if !existing.is_null() {
             return existing;
         }
         let img = new_image(url);
-        (*img).texture = texture;
+        (*img).texture = texture.into_raw();
         (*img).natural_width = width;
         (*img).natural_height = height;
         (*img).loaded = TRUE;
@@ -1178,14 +1051,8 @@ pub unsafe extern "C" fn ns_image_cache_insert_loaded(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_insert_encoded(
-    cache: *mut Cache,
-    url: *const c_char,
-    data: *const u8,
-    len: usize,
-) -> *mut NsImage {
-    if cache.is_null() || url.is_null() || data.is_null() || len == 0 {
+unsafe fn insert_encoded(cache: *mut Cache, url: *const c_char, bytes: &[u8]) -> *mut NsImage {
+    if bytes.is_empty() {
         return ptr::null_mut();
     }
     unsafe {
@@ -1193,7 +1060,7 @@ pub unsafe extern "C" fn ns_image_cache_insert_encoded(
         if !existing.is_null() {
             return existing;
         }
-        let anim = pixel_frames_for(data_slice(data, len))
+        let anim = pixel_frames_for(bytes)
             .filter(|frames| frames.len() > 1)
             .and_then(anim_frames_from_pixels);
         if let Some(anim) = anim {
@@ -1212,27 +1079,70 @@ pub unsafe extern "C" fn ns_image_cache_insert_encoded(
             }
             g_array_free(anim.frames, TRUE);
         }
-        let (mut w, mut h) = (0, 0);
-        let tex = ns_image_decode_bytes(data, len, &mut w, &mut h);
-        if tex.is_null() {
-            return ptr::null_mut();
+        match decode_bytes(bytes) {
+            Some((texture, w, h)) => insert_loaded(cache, url, texture, w, h),
+            None => ptr::null_mut(),
         }
-        ns_image_cache_insert_loaded(cache, url, tex, w, h)
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_begin_generation(cache: *mut Cache) {
-    if let Some(cache) = unsafe { cache.as_mut() } {
+impl ImageCache {
+    /// # Safety
+    ///
+    /// `raw` is null or a pointer `raw()` returned for a cache that has not been freed.
+    pub unsafe fn from_raw(raw: *mut c_void) -> Option<ImageCache> {
+        ptr::NonNull::new(raw.cast()).map(ImageCache)
+    }
+
+    pub fn get(
+        self,
+        url: &CStr,
+        top_url: Option<&CStr>,
+        ready: Option<ImageReady>,
+        data: usize,
+    ) -> Option<ImageRef<'static>> {
+        // SAFETY: the cache is live for as long as its handle may be used.
+        image_ref(unsafe { cache_get(self.0.as_ptr(), url, top_url, ready, data) })
+    }
+
+    pub fn cancel_ready(self, data: usize) {
+        for &p in &self.cache().pending {
+            // SAFETY: a pending request stays allocated while it is listed in the cache.
+            let p = unsafe { &mut *p };
+            if p.data == data {
+                p.cb = None;
+                p.data = 0;
+            }
+        }
+    }
+
+    pub fn peek(self, url: &CStr) -> Option<ImageRef<'static>> {
+        let cache = self.cache();
+        let image = image_ref(lookup(cache, url.as_ptr()))?;
+        // SAFETY: the table owns the image until it is removed, which nothing does during the call.
+        unsafe { (*image.0.as_ptr()).generation = cache.generation };
+        Some(image)
+    }
+
+    pub fn insert_encoded(self, url: &CStr, bytes: &[u8]) -> Option<ImageRef<'static>> {
+        // SAFETY: the cache is live for as long as its handle may be used, and url is NUL-terminated.
+        image_ref(unsafe { insert_encoded(self.0.as_ptr(), url.as_ptr(), bytes) })
+    }
+
+    pub fn begin_generation(self) {
+        // SAFETY: the cache is live for as long as its handle may be used, and nothing else borrows it during the call.
+        let cache = unsafe { &mut *self.0.as_ptr() };
         cache.generation = cache.generation.wrapping_add(1);
     }
+
+    pub fn collect(self) {
+        // SAFETY: the cache is live for as long as its handle may be used, and nothing else borrows it during the call.
+        let cache = unsafe { &mut *self.0.as_ptr() };
+        collect(cache);
+    }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_cache_collect(cache: *mut Cache) {
-    let Some(cache) = (unsafe { cache.as_mut() }) else {
-        return;
-    };
+fn collect(cache: &mut Cache) {
     while cache.total_bytes > CACHE_BUDGET_BYTES {
         let mut victim: *mut NsImage = ptr::null_mut();
         let mut oldest = u64::MAX;
@@ -1255,18 +1165,4 @@ pub unsafe extern "C" fn ns_image_cache_collect(cache: *mut Cache) {
         };
         purge(cache, victim);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_settled(
-    img: *const c_void,
-    failed: *mut GBoolean,
-) -> GBoolean {
-    let Some(image) = (unsafe { ImageRef::from_ptr(img) }) else {
-        return FALSE;
-    };
-    if !failed.is_null() {
-        unsafe { *failed = glib::boolean(image.failed()) };
-    }
-    glib::boolean(image.loaded() || image.failed())
 }

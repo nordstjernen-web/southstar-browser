@@ -11,8 +11,10 @@ publish.workspace = true
 southstar-av = { path = "../av", optional = true }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-image = { path = "../image" }
 southstar-layout = { path = "../layout" }
 southstar-layout-query = { path = "../layout-query" }
+southstar-net = { path = "../net" }
 southstar-plmpeg = { path = "../plmpeg" }
 southstar-style = { path = "../style" }
 southstar-texture = { path = "../texture" }

@@ -1,43 +1,31 @@
-//! Southstar — the C ABI of EventSource, the transfer over rust/http and main-loop dispatch.
+//! Southstar — the EventSource connection: the transfer over rust/http and main-loop dispatch.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_uint, c_void};
-use std::ffi::CString;
+use core::ffi::{c_uint, c_void};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use southstar_glib::{self as glib, FALSE, GBoolean};
+use southstar_glib::{FALSE, GBoolean};
 use southstar_http::{Fetch, Handler};
 
 use crate::{Parser, Post, Shared};
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Callbacks {
-    on_open: Option<unsafe extern "C" fn(user_data: *mut c_void)>,
-    on_message: Option<
-        unsafe extern "C" fn(
-            event: *const c_char,
-            data: *const c_char,
-            last_id: *const c_char,
-            user_data: *mut c_void,
-        ),
-    >,
-    on_error: Option<unsafe extern "C" fn(fatal: GBoolean, user_data: *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(user_data: *mut c_void) -> GBoolean>,
+pub struct Events {
+    pub on_open: fn(data: usize),
+    pub on_message: fn(event: &[u8], text: &[u8], last_id: &[u8], data: usize),
+    pub on_error: fn(fatal: bool, data: usize),
+    pub busy: fn(data: usize) -> bool,
 }
 
 struct Source {
     shared: Shared,
-    callbacks: Callbacks,
-    user_data: *mut c_void,
+    events: Events,
+    data: usize,
 }
-
-unsafe impl Send for Source {}
-unsafe impl Sync for Source {}
 
 pub struct EventSource {
     source: Arc<Source>,
@@ -51,11 +39,6 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
 }
 
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 struct Dispatch {
     source: Arc<Source>,
     post: Post,
@@ -65,40 +48,23 @@ unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
     let dispatch = data.cast::<Dispatch>();
     let source = unsafe { &(*dispatch).source };
     let detached = source.shared.detached.load(Ordering::SeqCst);
-    let user_data = source.user_data;
-    if !detached
-        && let Some(busy) = source.callbacks.busy
-        && unsafe { busy(user_data) } != FALSE
-    {
+    let data_arg = source.data;
+    if !detached && (source.events.busy)(data_arg) {
         unsafe { g_timeout_add(4, dispatch_run, data) };
         return FALSE;
     }
     let dispatch = unsafe { Box::from_raw(dispatch) };
     if !detached {
-        let callbacks = dispatch.source.callbacks;
+        let events = dispatch.source.events;
         match &dispatch.post {
-            Post::Open => {
-                if let Some(on_open) = callbacks.on_open {
-                    unsafe { on_open(user_data) };
-                }
-            }
-            Post::Message(message) => {
-                if let Some(on_message) = callbacks.on_message {
-                    let (event, body, last_id) = (
-                        cstring(&message.event),
-                        cstring(&message.data),
-                        cstring(&message.last_id),
-                    );
-                    unsafe {
-                        on_message(event.as_ptr(), body.as_ptr(), last_id.as_ptr(), user_data)
-                    };
-                }
-            }
-            Post::Error { fatal } => {
-                if let Some(on_error) = callbacks.on_error {
-                    unsafe { on_error(glib::boolean(*fatal), user_data) };
-                }
-            }
+            Post::Open => (events.on_open)(data_arg),
+            Post::Message(message) => (events.on_message)(
+                until_nul(&message.event),
+                until_nul(&message.data),
+                until_nul(&message.last_id),
+                data_arg,
+            ),
+            Post::Error { fatal } => (events.on_error)(*fatal, data_arg),
         }
     }
     dispatch
@@ -225,62 +191,43 @@ fn worker(source: Arc<Source>) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_es_new(
-    url: *const c_char,
-    origin: *const c_char,
-    last_event_id: *const c_char,
-    cbs: *const Callbacks,
-    user_data: *mut c_void,
-) -> *mut EventSource {
-    let (url, origin, last_event_id) = unsafe {
-        (
-            glib::bytes(url).unwrap_or_default().to_vec(),
-            glib::bytes(origin).map(<[u8]>::to_vec),
-            glib::bytes(last_event_id).unwrap_or_default().to_vec(),
-        )
-    };
-    let callbacks = unsafe { cbs.as_ref() }.copied().unwrap_or(Callbacks {
-        on_open: None,
-        on_message: None,
-        on_error: None,
-        busy: None,
-    });
-    let source = Arc::new(Source {
-        shared: Shared::new(url, origin, last_event_id),
-        callbacks,
-        user_data,
-    });
-    let worker_source = Arc::clone(&source);
-    let thread = std::thread::Builder::new()
-        .name("nd-eventsource".into())
-        .spawn(move || worker(worker_source))
-        .ok();
-    Box::into_raw(Box::new(EventSource { source, thread }))
-}
+impl EventSource {
+    pub fn open(
+        url: &[u8],
+        origin: Option<&[u8]>,
+        last_event_id: &[u8],
+        events: Events,
+        data: usize,
+    ) -> EventSource {
+        let source = Arc::new(Source {
+            shared: Shared::new(
+                url.to_vec(),
+                origin.map(<[u8]>::to_vec),
+                last_event_id.to_vec(),
+            ),
+            events,
+            data,
+        });
+        let worker_source = Arc::clone(&source);
+        let thread = std::thread::Builder::new()
+            .name("nd-eventsource".into())
+            .spawn(move || worker(worker_source))
+            .ok();
+        EventSource { source, thread }
+    }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_es_close(es: *mut EventSource) {
-    if let Some(es) = unsafe { es.as_ref() } {
-        es.source
+    pub fn close(&self) {
+        self.source
             .shared
             .exit_requested
             .store(true, Ordering::SeqCst);
     }
-}
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_es_free(es: *mut EventSource) {
-    if es.is_null() {
-        return;
-    }
-    let mut es = unsafe { Box::from_raw(es) };
-    es.source.shared.detached.store(true, Ordering::SeqCst);
-    es.source
-        .shared
-        .exit_requested
-        .store(true, Ordering::SeqCst);
-    if let Some(thread) = es.thread.take() {
-        let _ = thread.join();
+    pub fn free(mut self) {
+        self.source.shared.detached.store(true, Ordering::SeqCst);
+        self.close();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
     }
 }

@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 southstar-image-decoders = { path = "../image-decoders" }
+southstar-net = { path = "../net" }
 southstar-svg = { path = "../svg" }
 southstar-texture = { path = "../texture" }
 

@@ -54,7 +54,7 @@ pub(crate) struct Delivery {
     error: Option<Vec<u8>>,
 }
 
-pub(crate) struct SwOutcome<'a> {
+pub struct SwOutcome<'a> {
     pub outcome: i32,
     pub status: i64,
     pub content_type: Option<Vec<u8>>,
@@ -491,13 +491,12 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         return Ok(promise);
     }
     let cancellable = crate::existing_page(js, |page| {
-        page.fetches
-            .get(&id)
-            .and_then(|s| s.cancellable.as_ref().map(Cancellable::share))
+        page.fetches.get(&id).and_then(|s| s.cancellable.clone())
     })
     .flatten();
-    let ticket = Box::into_raw(Box::new(Ticket { js, id }));
-    request.send(cancellable.as_ref(), ffi::on_fetch_done, ticket.cast());
+    request.send(cancellable.as_ref(), move |resp, error| {
+        done(Ticket { js, id }, resp, error);
+    });
     Ok(promise)
 }
 
@@ -741,7 +740,7 @@ pub(crate) fn service_worker_result(js: Js, id: u32, result: SwOutcome<'_>) {
     let taken = crate::existing_page(js, |page| {
         let state = page.fetches.get_mut(&id)?;
         let fallback = state.fallback.take()?;
-        let cancellable = state.cancellable.as_ref().map(Cancellable::share);
+        let cancellable = state.cancellable.clone();
         Some((fallback, cancellable))
     })
     .flatten();
@@ -799,8 +798,9 @@ pub(crate) fn service_worker_result(js: Js, id: u32, result: SwOutcome<'_>) {
             );
         }
         _ => {
-            let ticket = Box::into_raw(Box::new(Ticket { js, id }));
-            fallback.send(cancellable.as_ref(), ffi::on_fetch_done, ticket.cast());
+            fallback.send(cancellable.as_ref(), move |resp, error| {
+                done(Ticket { js, id }, resp, error);
+            });
         }
     }
 }

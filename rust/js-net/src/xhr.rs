@@ -436,8 +436,9 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             content_type: effective_content_type.as_deref().map(cstring),
             headers: lines.iter().map(|h| cstring(h)).collect::<Vec<CString>>(),
         };
-        let ticket = Box::into_raw(Box::new(Ticket { js, id }));
-        request.send(None, ffi::on_xhr_done, ticket.cast());
+        request.send(None, move |resp, error| {
+            done(Ticket { js, id }, resp, error.is_some());
+        });
     }
     if bool_prop(scope, this, "_sync") {
         pump_until_done(scope, js, this);

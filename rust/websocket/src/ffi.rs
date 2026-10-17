@@ -1,16 +1,14 @@
-//! Southstar — the C ABI of WebSocket, the connection over rust/http's HTTP/1.1 upgrade and main-loop dispatch.
+//! Southstar — the WebSocket connection over rust/http's HTTP/1.1 upgrade and main-loop dispatch.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
-use std::ffi::CString;
+use core::ffi::{c_int, c_uint, c_void};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use southstar_glib::{self as glib, FALSE, GBoolean};
+use southstar_glib::{FALSE, GBoolean};
 
 use southstar_http::{Received, Request, Upgraded};
 
@@ -20,25 +18,21 @@ use crate::{
     ws_to_http,
 };
 
-#[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Callbacks {
-    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
-    on_text: Option<unsafe extern "C" fn(*const c_char, usize, *mut c_void)>,
-    on_binary: Option<unsafe extern "C" fn(*const u8, usize, *mut c_void)>,
-    on_close: Option<unsafe extern "C" fn(c_int, *const c_char, GBoolean, *mut c_void)>,
-    on_error: Option<unsafe extern "C" fn(*const c_char, *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
+pub struct Events {
+    pub on_open: fn(data: usize),
+    pub on_text: fn(text: &[u8], data: usize),
+    pub on_binary: fn(bytes: &[u8], data: usize),
+    pub on_close: fn(code: i32, reason: &[u8], clean: bool, data: usize),
+    pub on_error: fn(message: &[u8], data: usize),
+    pub busy: fn(data: usize) -> bool,
 }
 
 struct Socket {
     shared: Shared,
-    callbacks: Callbacks,
-    user_data: *mut c_void,
+    events: Events,
+    data: usize,
 }
-
-unsafe impl Send for Socket {}
-unsafe impl Sync for Socket {}
 
 pub struct WebSocket {
     socket: Arc<Socket>,
@@ -56,10 +50,6 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
 }
 
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(crate::until_nul(bytes)).unwrap_or_default()
-}
-
 struct Dispatch {
     socket: Arc<Socket>,
     post: Post,
@@ -69,59 +59,24 @@ unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
     let dispatch = data.cast::<Dispatch>();
     let socket = unsafe { &(*dispatch).socket };
     let detached = socket.shared.detached.load(Ordering::SeqCst);
-    let user_data = socket.user_data;
-    if !detached
-        && let Some(busy) = socket.callbacks.busy
-        && unsafe { busy(user_data) } != FALSE
-    {
+    let data_arg = socket.data;
+    if !detached && (socket.events.busy)(data_arg) {
         unsafe { g_timeout_add(4, dispatch_run, data) };
         return FALSE;
     }
     let dispatch = unsafe { Box::from_raw(dispatch) };
     if !detached {
-        let callbacks = dispatch.socket.callbacks;
+        let events = dispatch.socket.events;
         match &dispatch.post {
-            Post::Open => {
-                if let Some(on_open) = callbacks.on_open {
-                    unsafe { on_open(user_data) };
-                }
-            }
-            Post::Message { text: true, data } => {
-                if let Some(on_text) = callbacks.on_text {
-                    let text = if data.is_empty() {
-                        c"".as_ptr()
-                    } else {
-                        data.as_ptr().cast()
-                    };
-                    unsafe { on_text(text, data.len(), user_data) };
-                }
-            }
-            Post::Message { text: false, data } => {
-                if let Some(on_binary) = callbacks.on_binary {
-                    let bytes = if data.is_empty() {
-                        c"".as_ptr().cast()
-                    } else {
-                        data.as_ptr()
-                    };
-                    unsafe { on_binary(bytes, data.len(), user_data) };
-                }
-            }
+            Post::Open => (events.on_open)(data_arg),
+            Post::Message { text: true, data } => (events.on_text)(data, data_arg),
+            Post::Message { text: false, data } => (events.on_binary)(data, data_arg),
             Post::Close {
                 code,
                 reason,
                 clean,
-            } => {
-                if let Some(on_close) = callbacks.on_close {
-                    let reason = cstring(reason);
-                    unsafe { on_close(*code, reason.as_ptr(), glib::boolean(*clean), user_data) };
-                }
-            }
-            Post::Error(message) => {
-                if let Some(on_error) = callbacks.on_error {
-                    let message = cstring(message);
-                    unsafe { on_error(message.as_ptr(), user_data) };
-                }
-            }
+            } => (events.on_close)(*code, crate::until_nul(reason), *clean, data_arg),
+            Post::Error(message) => (events.on_error)(crate::until_nul(message), data_arg),
         }
     }
     dispatch
@@ -371,110 +326,56 @@ fn worker(socket: Arc<Socket>) {
     post_close(&socket, close_code, &reason, clean_close);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_new(
-    url: *const c_char,
-    origin: *const c_char,
-    protocols: *const *const c_char,
-    cbs: *const Callbacks,
-    user_data: *mut c_void,
-) -> *mut WebSocket {
-    let Some(url) = (unsafe { glib::bytes(url) }) else {
-        return ptr::null_mut();
-    };
-    let mut list = Vec::new();
-    if !protocols.is_null() {
-        let mut i = 0;
-        loop {
-            let protocol = unsafe { *protocols.add(i) };
-            if protocol.is_null() {
-                break;
-            }
-            list.push(unsafe { CStr::from_ptr(protocol) }.to_bytes().to_vec());
-            i += 1;
+impl WebSocket {
+    pub fn open(
+        url: &[u8],
+        origin: Option<&[u8]>,
+        protocols: Vec<Vec<u8>>,
+        events: Events,
+        data: usize,
+    ) -> WebSocket {
+        let socket = Arc::new(Socket {
+            shared: Shared::new(url.to_vec(), origin.map(<[u8]>::to_vec), protocols),
+            events,
+            data,
+        });
+        let worker_socket = Arc::clone(&socket);
+        let thread = std::thread::Builder::new()
+            .name("nd-ws".into())
+            .spawn(move || worker(worker_socket))
+            .ok();
+        WebSocket { socket, thread }
+    }
+
+    pub fn send_text(&self, text: &[u8]) -> bool {
+        self.socket.shared.enqueue(Out::Text(text.to_vec()))
+    }
+
+    pub fn send_binary(&self, bytes: &[u8]) -> bool {
+        self.socket.shared.enqueue(Out::Binary(bytes.to_vec()))
+    }
+
+    pub fn close(&self, code: i32, reason: Option<&[u8]>) {
+        self.socket.shared.close(code, reason);
+    }
+
+    pub fn state(&self) -> i32 {
+        self.socket.shared.state()
+    }
+
+    pub fn protocol(&self) -> Vec<u8> {
+        self.socket
+            .shared
+            .protocol
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn free(mut self) {
+        self.socket.shared.request_exit();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
         }
-    }
-    let callbacks = unsafe { cbs.as_ref() }.copied().unwrap_or(Callbacks {
-        on_open: None,
-        on_text: None,
-        on_binary: None,
-        on_close: None,
-        on_error: None,
-        busy: None,
-    });
-    let origin = unsafe { glib::bytes(origin) }.map(<[u8]>::to_vec);
-    let socket = Arc::new(Socket {
-        shared: Shared::new(url.to_vec(), origin, list),
-        callbacks,
-        user_data,
-    });
-    let worker_socket = Arc::clone(&socket);
-    let thread = std::thread::Builder::new()
-        .name("nd-ws".into())
-        .spawn(move || worker(worker_socket))
-        .ok();
-    Box::into_raw(Box::new(WebSocket { socket, thread }))
-}
-
-unsafe fn shared<'a>(ws: *mut WebSocket) -> Option<&'a Shared> {
-    unsafe { ws.as_ref() }.map(|ws| &ws.socket.shared)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_send_text(
-    ws: *mut WebSocket,
-    text: *const c_char,
-    len: usize,
-) -> GBoolean {
-    let Some(shared) = (unsafe { shared(ws) }) else {
-        return FALSE;
-    };
-    let data = unsafe { glib::slice(text.cast(), len) }.to_vec();
-    glib::boolean(shared.enqueue(Out::Text(data)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_send_binary(
-    ws: *mut WebSocket,
-    data: *const u8,
-    len: usize,
-) -> GBoolean {
-    let Some(shared) = (unsafe { shared(ws) }) else {
-        return FALSE;
-    };
-    let data = unsafe { glib::slice(data, len) }.to_vec();
-    glib::boolean(shared.enqueue(Out::Binary(data)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_close(ws: *mut WebSocket, code: c_int, reason: *const c_char) {
-    if let Some(shared) = unsafe { shared(ws) } {
-        shared.close(code, unsafe { glib::bytes(reason) });
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_state_get(ws: *mut WebSocket) -> c_int {
-    unsafe { shared(ws) }.map_or(STATE_CLOSED, Shared::state)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_protocol(ws: *mut WebSocket) -> *mut c_char {
-    let Some(shared) = (unsafe { shared(ws) }) else {
-        return core::ptr::null_mut();
-    };
-    let protocol = shared.protocol.lock().unwrap_or_else(|e| e.into_inner());
-    glib::strdup(&protocol)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ws_free(ws: *mut WebSocket) {
-    if ws.is_null() {
-        return;
-    }
-    let mut ws = unsafe { Box::from_raw(ws) };
-    ws.socket.shared.request_exit();
-    if let Some(thread) = ws.thread.take() {
-        let _ = thread.join();
     }
 }

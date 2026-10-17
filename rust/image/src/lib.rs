@@ -4,7 +4,7 @@
 
 mod ffi;
 
-pub use ffi::{ImageCache, ImageRef, decode_bytes};
+pub use ffi::{BgraPixels, ImageCache, ImageReady, ImageRef, decode_bytes, decode_bytes_to_pixels};
 
 use core::ffi::c_long;
 

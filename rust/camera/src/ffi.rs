@@ -461,15 +461,6 @@ mod linux {
     use super::v4l2::{self, Camera, PIX_FMT_MJPEG, PIX_FMT_YUYV};
     use super::{CameraInfo, g_ptr_array_new};
 
-    unsafe extern "C" {
-        fn ns_image_decode_bytes(
-            data: *const u8,
-            len: usize,
-            width: *mut c_int,
-            height: *mut c_int,
-        ) -> *mut c_void;
-    }
-
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn ns_camera_open(device: *const c_char) -> *mut Camera {
         let path = unsafe { glib::bytes(device) }
@@ -501,11 +492,9 @@ mod linux {
         let mut texture = ptr::null_mut();
         let mut size = None;
         if camera.pixelformat == PIX_FMT_MJPEG {
-            let (mut width, mut height) = (0, 0);
-            texture = unsafe {
-                ns_image_decode_bytes(frame.data.as_ptr(), frame.used, &mut width, &mut height)
-            };
-            if !texture.is_null() {
+            let jpeg = frame.data.get(..frame.used).unwrap_or(frame.data);
+            if let Some((decoded, width, height)) = southstar_image::decode_bytes(jpeg) {
+                texture = decoded.into_raw().cast();
                 size = Some((width, height));
             }
         } else if camera.pixelformat == PIX_FMT_YUYV {

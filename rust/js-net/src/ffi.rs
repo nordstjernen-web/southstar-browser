@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
@@ -55,134 +55,17 @@ impl Realm {
     }
 }
 
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-pub(crate) struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    tls_warning: *mut c_char,
-    remote_ip: *mut c_char,
-    next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-    security: c_int,
-    redirect_count: c_int,
-}
-
-const _: () = assert!(
-    core::mem::size_of::<NsResponse>() == 200
-        && core::mem::offset_of!(NsResponse, body) == 88
-        && core::mem::offset_of!(NsResponse, response_end_ms) == 184
-);
-
 pub(crate) const HO_ABORT_CONTROLLER: HostKind = HostKind::AbortController;
 pub(crate) const HO_ABORT_SIGNAL: HostKind = HostKind::AbortSignal;
 pub(crate) const HO_XHR: HostKind = HostKind::Xhr;
 pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-type GAsyncReadyCallback =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, data: *mut c_void);
-
-#[repr(C)]
-struct WsCallbacks {
-    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
-    on_text: Option<unsafe extern "C" fn(*const c_char, usize, *mut c_void)>,
-    on_binary: Option<unsafe extern "C" fn(*const u8, usize, *mut c_void)>,
-    on_close: Option<unsafe extern "C" fn(c_int, *const c_char, GBoolean, *mut c_void)>,
-    on_error: Option<unsafe extern "C" fn(*const c_char, *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
-}
-
-#[repr(C)]
-struct EsCallbacks {
-    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
-    on_message:
-        Option<unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *mut c_void)>,
-    on_error: Option<unsafe extern "C" fn(GBoolean, *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
-}
-
-unsafe extern "C" {
-    fn ns_ws_new(
-        url: *const c_char,
-        origin: *const c_char,
-        protocols: *const *const c_char,
-        cbs: *const WsCallbacks,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn ns_ws_send_text(ws: *mut c_void, text: *const c_char, len: usize) -> GBoolean;
-    fn ns_ws_send_binary(ws: *mut c_void, data: *const u8, len: usize) -> GBoolean;
-    fn ns_ws_close(ws: *mut c_void, code: c_int, reason: *const c_char);
-    fn ns_ws_state_get(ws: *mut c_void) -> c_int;
-    fn ns_ws_protocol(ws: *mut c_void) -> *mut c_char;
-    fn ns_ws_free(ws: *mut c_void);
-    fn ns_es_new(
-        url: *const c_char,
-        origin: *const c_char,
-        last_event_id: *const c_char,
-        cbs: *const EsCallbacks,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn ns_es_close(es: *mut c_void);
-    fn ns_es_free(es: *mut c_void);
-    fn ns_net_hsts_should_upgrade(host: *const c_char) -> GBoolean;
-}
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
-    fn g_cancellable_new() -> *mut c_void;
-    fn g_cancellable_cancel(cancellable: *mut c_void);
-    fn g_object_ref(object: *mut c_void) -> *mut c_void;
-    fn g_object_unref(object: *mut c_void);
-    fn g_bytes_get_data(bytes: *mut c_void, size: *mut usize) -> *const u8;
-    fn g_byte_array_sized_new(reserved: c_uint) -> *mut GByteArray;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
 
-    fn ns_net_request_async(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        callback: GAsyncReadyCallback,
-        user_data: *mut c_void,
-    );
-    fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse;
-    fn ns_response_free(resp: *mut NsResponse);
-
-    fn ns_js_blob_url_lookup(
-        js: *mut NsJs,
-        url: *const c_char,
-        out_type: *mut *mut c_char,
-    ) -> *mut c_void;
     fn ns_sw_controller_for(js: *mut NsJs, abs_url: *const c_char) -> *mut c_void;
     fn ns_sw_post_fetch_request(
         host: *mut c_void,
@@ -202,23 +85,6 @@ fn long(value: c_long) -> i64 {
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
-}
-
-fn opt_ptr(text: Option<&CString>) -> *const c_char {
-    text.map_or(ptr::null(), |t| t.as_ptr())
-}
-
-unsafe fn take_gstr(raw: *mut c_char) -> Option<Vec<u8>> {
-    if raw.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec();
-    unsafe { glib::g_free(raw.cast()) };
-    Some(bytes)
-}
-
-fn borrowed(raw: *const c_char) -> Option<Vec<u8>> {
-    (!raw.is_null()).then(|| unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec())
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -257,8 +123,7 @@ pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn hsts_should_upgrade(host: &[u8]) -> bool {
-    let host = cstring(host);
-    unsafe { ns_net_hsts_should_upgrade(host.as_ptr()) != 0 }
+    southstar_net::hsts_should_upgrade(cstring(host).to_bytes())
 }
 
 pub(crate) fn enter_handler_realm(
@@ -342,81 +207,52 @@ pub(crate) fn install_neighbours(scope: &mut Scope<'_>, global: &Value) {
 
 pub(crate) enum Transport {
     None,
-    WebSocket(*mut c_void),
-    EventSource(*mut c_void),
+    WebSocket(southstar_websocket::WebSocket),
+    EventSource(southstar_eventsource::EventSource),
 }
 
-unsafe fn socket_ref(data: *mut c_void) -> Rc<crate::socket::Socket> {
-    let ptr = data.cast_const().cast::<crate::socket::Socket>();
-    unsafe {
-        Rc::increment_strong_count(ptr);
-        Rc::from_raw(ptr)
-    }
+fn socket_ref(data: usize) -> Rc<crate::socket::Socket> {
+    let ptr = data as *const crate::socket::Socket;
+    // SAFETY: data is the address of a socket whose Rc the transport's owner keeps alive until the transport is freed.
+    unsafe { Rc::increment_strong_count(ptr) };
+    // SAFETY: the count was raised above, so this Rc owns one reference.
+    unsafe { Rc::from_raw(ptr) }
 }
 
-unsafe fn text_arg<'a>(text: *const c_char) -> &'a [u8] {
-    unsafe { glib::bytes(text) }.unwrap_or_default()
+fn socket_busy(data: usize) -> bool {
+    socket_ref(data).js.in_pump()
 }
 
-unsafe extern "C" fn socket_busy(data: *mut c_void) -> GBoolean {
-    let socket = unsafe { socket_ref(data) };
-    glib::boolean(socket.js.in_pump())
+fn socket_on_open(data: usize) {
+    crate::socket::on_open(&socket_ref(data));
 }
 
-unsafe extern "C" fn socket_on_open(data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_open(&socket);
+fn ws_on_text(text: &[u8], data: usize) {
+    crate::socket::on_text(&socket_ref(data), text);
 }
 
-unsafe extern "C" fn ws_on_text(text: *const c_char, len: usize, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    let text = if text.is_null() {
-        &[][..]
-    } else {
-        unsafe { glib::slice(text.cast(), len) }
-    };
-    crate::socket::on_text(&socket, text);
+fn ws_on_binary(bytes: &[u8], data: usize) {
+    crate::socket::on_binary(&socket_ref(data), bytes);
 }
 
-unsafe extern "C" fn ws_on_binary(bytes: *const u8, len: usize, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    let bytes = if bytes.is_null() {
-        &[][..]
-    } else {
-        unsafe { glib::slice(bytes, len) }
-    };
-    crate::socket::on_binary(&socket, bytes);
+fn ws_on_close(code: i32, reason: &[u8], clean: bool, data: usize) {
+    crate::socket::on_close(&socket_ref(data), code, reason, clean);
 }
 
-unsafe extern "C" fn ws_on_close(
-    code: c_int,
-    reason: *const c_char,
-    clean: GBoolean,
-    data: *mut c_void,
-) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_close(&socket, code, unsafe { text_arg(reason) }, clean != 0);
+fn ws_on_error(message: &[u8], data: usize) {
+    crate::socket::on_error(&socket_ref(data), message);
 }
 
-unsafe extern "C" fn ws_on_error(message: *const c_char, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_error(&socket, unsafe { text_arg(message) });
+fn es_on_message(event: &[u8], text: &[u8], last_id: &[u8], data: usize) {
+    crate::socket::on_event_message(&socket_ref(data), event, text, last_id);
 }
 
-unsafe extern "C" fn es_on_message(
-    event: *const c_char,
-    text: *const c_char,
-    last_id: *const c_char,
-    data: *mut c_void,
-) {
-    let socket = unsafe { socket_ref(data) };
-    let (event, text, last_id) = unsafe { (text_arg(event), text_arg(text), text_arg(last_id)) };
-    crate::socket::on_event_message(&socket, event, text, last_id);
+fn es_on_error(fatal: bool, data: usize) {
+    crate::socket::on_event_error(&socket_ref(data), fatal);
 }
 
-unsafe extern "C" fn es_on_error(fatal: GBoolean, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_event_error(&socket, fatal != 0);
+fn socket_addr(socket: &Rc<crate::socket::Socket>) -> usize {
+    Rc::as_ptr(socket) as usize
 }
 
 impl Transport {
@@ -430,37 +266,26 @@ impl Transport {
         protocols: Option<&[Vec<u8>]>,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
-        let url = cstring(url);
-        let origin = cstring(origin);
-        let list: Option<Vec<CString>> = protocols.map(|p| p.iter().map(|p| cstring(p)).collect());
-        let pointers: Option<Vec<*const c_char>> = list.as_ref().map(|list| {
-            list.iter()
-                .map(|p| p.as_ptr())
-                .chain(core::iter::once(ptr::null()))
-                .collect()
-        });
-        let callbacks = WsCallbacks {
-            on_open: Some(socket_on_open),
-            on_text: Some(ws_on_text),
-            on_binary: Some(ws_on_binary),
-            on_close: Some(ws_on_close),
-            on_error: Some(ws_on_error),
-            busy: Some(socket_busy),
+        let events = southstar_websocket::Events {
+            on_open: socket_on_open,
+            on_text: ws_on_text,
+            on_binary: ws_on_binary,
+            on_close: ws_on_close,
+            on_error: ws_on_error,
+            busy: socket_busy,
         };
-        let ws = unsafe {
-            ns_ws_new(
-                url.as_ptr(),
-                origin.as_ptr(),
-                pointers.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
-                &callbacks,
-                Rc::as_ptr(socket).cast_mut().cast(),
-            )
-        };
-        if ws.is_null() {
-            Transport::None
-        } else {
-            Transport::WebSocket(ws)
-        }
+        let protocols = protocols
+            .unwrap_or_default()
+            .iter()
+            .map(|p| crate::until_nul(p.clone()))
+            .collect();
+        Transport::WebSocket(southstar_websocket::WebSocket::open(
+            crate::until_nul(url.to_vec()).as_slice(),
+            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            protocols,
+            events,
+            socket_addr(socket),
+        ))
     }
 
     pub fn event_source(
@@ -468,28 +293,19 @@ impl Transport {
         origin: &[u8],
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
-        let url = cstring(url);
-        let origin = cstring(origin);
-        let callbacks = EsCallbacks {
-            on_open: Some(socket_on_open),
-            on_message: Some(es_on_message),
-            on_error: Some(es_on_error),
-            busy: Some(socket_busy),
+        let events = southstar_eventsource::Events {
+            on_open: socket_on_open,
+            on_message: es_on_message,
+            on_error: es_on_error,
+            busy: socket_busy,
         };
-        let es = unsafe {
-            ns_es_new(
-                url.as_ptr(),
-                origin.as_ptr(),
-                ptr::null(),
-                &callbacks,
-                Rc::as_ptr(socket).cast_mut().cast(),
-            )
-        };
-        if es.is_null() {
-            Transport::None
-        } else {
-            Transport::EventSource(es)
-        }
+        Transport::EventSource(southstar_eventsource::EventSource::open(
+            crate::until_nul(url.to_vec()).as_slice(),
+            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            b"",
+            events,
+            socket_addr(socket),
+        ))
     }
 
     pub fn is_none(&self) -> bool {
@@ -498,47 +314,45 @@ impl Transport {
 
     pub fn ws_state(&self) -> i32 {
         match self {
-            Transport::WebSocket(ws) => unsafe { ns_ws_state_get(*ws) },
+            Transport::WebSocket(ws) => ws.state(),
             _ => 3,
         }
     }
 
     pub fn protocol(&self) -> Vec<u8> {
         match self {
-            Transport::WebSocket(ws) => {
-                unsafe { take_gstr(ns_ws_protocol(*ws)) }.unwrap_or_default()
-            }
+            Transport::WebSocket(ws) => crate::until_nul(ws.protocol()),
             _ => Vec::new(),
         }
     }
 
     pub fn send_text(&self, text: &[u8]) {
         if let Transport::WebSocket(ws) = self {
-            unsafe { ns_ws_send_text(*ws, text.as_ptr().cast(), text.len()) };
+            ws.send_text(text);
         }
     }
 
     pub fn send_binary(&self, bytes: &[u8]) {
         if let Transport::WebSocket(ws) = self {
-            unsafe { ns_ws_send_binary(*ws, bytes.as_ptr(), bytes.len()) };
+            ws.send_binary(bytes);
         }
     }
 
     pub fn close(&self, code: i32, reason: Option<&[u8]>) {
         match self {
             Transport::WebSocket(ws) => {
-                let reason = reason.map(cstring);
-                unsafe { ns_ws_close(*ws, code, opt_ptr(reason.as_ref())) };
+                let reason = reason.map(|r| crate::until_nul(r.to_vec()));
+                ws.close(code, reason.as_deref());
             }
-            Transport::EventSource(es) => unsafe { ns_es_close(*es) },
+            Transport::EventSource(es) => es.close(),
             Transport::None => {}
         }
     }
 
     pub fn free(&mut self) {
         match core::mem::replace(self, Transport::None) {
-            Transport::WebSocket(ws) => unsafe { ns_ws_free(ws) },
-            Transport::EventSource(es) => unsafe { ns_es_free(es) },
+            Transport::WebSocket(ws) => ws.free(),
+            Transport::EventSource(es) => es.free(),
             Transport::None => {}
         }
     }
@@ -700,7 +514,10 @@ impl Js {
                 &url,
                 Some(timing.initiator),
                 span,
-                resp.0.cast(),
+                resp.0
+                    .as_ref()
+                    .map_or(ptr::null_mut(), southstar_net::Response::as_ptr)
+                    .cast(),
             )
         };
     }
@@ -718,19 +535,8 @@ impl Js {
 
     pub fn blob_url(self, url: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
         let url = cstring(url);
-        let mut kind = ptr::null_mut();
-        let bytes = unsafe { ns_js_blob_url_lookup(self.ptr(), url.as_ptr(), &mut kind) };
-        if bytes.is_null() {
-            return None;
-        }
-        let mut len = 0usize;
-        let data = unsafe { g_bytes_get_data(bytes, &mut len) };
-        let data = if data.is_null() {
-            Vec::new()
-        } else {
-            unsafe { core::slice::from_raw_parts(data, len) }.to_vec()
-        };
-        Some((data, borrowed(kind)))
+        southstar_js_url::blob_url_lookup(self.ptr(), url.to_bytes())
+            .map(|(bytes, kind)| (bytes.to_vec(), kind))
     }
 
     pub fn service_worker_for(self, url: &[u8]) -> Option<ServiceWorker> {
@@ -783,27 +589,7 @@ impl ServiceWorker {
     }
 }
 
-pub(crate) struct Cancellable(*mut c_void);
-
-impl Cancellable {
-    pub fn new() -> Cancellable {
-        Cancellable(unsafe { g_cancellable_new() })
-    }
-
-    pub fn cancel(&self) {
-        unsafe { g_cancellable_cancel(self.0) };
-    }
-
-    pub fn share(&self) -> Cancellable {
-        Cancellable(unsafe { g_object_ref(self.0) })
-    }
-}
-
-impl Drop for Cancellable {
-    fn drop(&mut self) {
-        unsafe { g_object_unref(self.0) };
-    }
-}
+pub(crate) use southstar_net::Cancellable;
 
 pub(crate) struct Request {
     pub url: CString,
@@ -827,167 +613,145 @@ impl Request {
     pub fn send(
         &self,
         cancellable: Option<&Cancellable>,
-        callback: GAsyncReadyCallback,
-        data: *mut c_void,
+        done: impl FnOnce(Response, Option<Vec<u8>>) + 'static,
     ) {
-        let headers = self.header_pointers();
-        let body = if self.has_body {
-            self.body.as_ptr().cast()
-        } else {
-            ptr::null()
+        let headers: Vec<Vec<u8>> = self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
+        let request = southstar_net::FetchRequest {
+            url: self.url.to_bytes(),
+            top_url: self.top.as_deref().map(CStr::to_bytes),
+            method: Some(self.method.to_bytes()),
+            body: self.has_body.then_some(self.body.as_slice()),
+            content_type: self.content_type.as_deref().map(CStr::to_bytes),
+            headers: &headers,
         };
-        unsafe {
-            ns_net_request_async(
-                self.url.as_ptr(),
-                opt_ptr(self.top.as_ref()),
-                self.method.as_ptr(),
-                body,
-                self.body.len(),
-                opt_ptr(self.content_type.as_ref()),
-                headers.as_ptr(),
-                cancellable.map_or(ptr::null_mut(), |c| c.0),
-                callback,
-                data,
-            )
-        };
+        southstar_net::request_with(&request, cancellable, move |outcome| match outcome {
+            Ok(resp) => done(Response(Some(resp)), None),
+            Err(message) => done(Response(None), Some(message)),
+        });
     }
 }
 
-pub(crate) struct Response(*mut NsResponse);
+pub(crate) struct Response(Option<southstar_net::Response>);
+
+fn text_of(value: Option<&CStr>) -> Option<Vec<u8>> {
+    value.map(|v| v.to_bytes().to_vec())
+}
 
 impl Response {
-    pub unsafe fn finish(result: *mut c_void) -> (Response, Option<Vec<u8>>) {
-        let mut error: *mut GError = ptr::null_mut();
-        let resp = unsafe { ns_net_fetch_finish(result, &mut error) };
-        let message = unsafe { error.as_ref() }.map(|e| borrowed(e.message).unwrap_or_default());
-        if !error.is_null() {
-            unsafe { glib::g_error_free(error) };
-        }
-        (Response(resp), message)
-    }
-
     pub fn synthesized() -> Response {
-        Response(unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast())
+        Response(Some(southstar_net::Response::new()))
     }
 
     pub fn is_null(&self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
-    fn get(&self) -> Option<&NsResponse> {
-        unsafe { self.0.as_ref() }
-    }
-
-    fn get_mut(&mut self) -> Option<&mut NsResponse> {
-        unsafe { self.0.as_mut() }
+    fn get(&self) -> Option<&southstar_net::Response> {
+        self.0.as_ref()
     }
 
     pub fn status(&self) -> i64 {
-        self.get().map_or(0, |r| long(r.status))
+        self.get().map_or(0, |r| long(r.status()))
     }
 
     pub fn error(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.error))
+        self.get().and_then(|r| text_of(r.error()))
     }
 
     pub fn final_url(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.final_url))
+        self.get().and_then(|r| text_of(r.final_url()))
     }
 
     pub fn content_type(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.content_type))
+        self.get().and_then(|r| text_of(r.content_type()))
     }
 
     pub fn cors_allow_origin(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.cors_allow_origin))
+        self.get().and_then(|r| text_of(r.cors_allow_origin()))
     }
 
     pub fn raw_headers(&self) -> Option<Vec<u8>> {
-        self.get().and_then(|r| borrowed(r.raw_headers))
+        self.get().and_then(|r| text_of(r.raw_headers()))
     }
 
     pub fn redirect_count(&self) -> i32 {
-        self.get().map_or(0, |r| r.redirect_count)
+        self.get()
+            .map_or(0, southstar_net::Response::redirect_count)
     }
 
     pub fn known_headers(&self) -> [(&'static [u8], Option<Vec<u8>>); 5] {
-        let field = |f: fn(&NsResponse) -> *mut c_char| self.get().and_then(|r| borrowed(f(r)));
+        let field = |f: fn(&southstar_net::Response) -> Option<&CStr>| {
+            self.get().and_then(|r| text_of(f(r)))
+        };
         [
-            (b"content-type", field(|r| r.content_type)),
-            (b"content-disposition", field(|r| r.content_disposition)),
-            (b"content-security-policy", field(|r| r.csp_header)),
-            (b"x-frame-options", field(|r| r.xframe_options)),
+            (
+                b"content-type",
+                field(southstar_net::Response::content_type),
+            ),
+            (
+                b"content-disposition",
+                field(southstar_net::Response::content_disposition),
+            ),
+            (
+                b"content-security-policy",
+                field(southstar_net::Response::csp_header),
+            ),
+            (
+                b"x-frame-options",
+                field(southstar_net::Response::xframe_options),
+            ),
             (
                 b"access-control-allow-origin",
-                field(|r| r.cors_allow_origin),
+                field(southstar_net::Response::cors_allow_origin),
             ),
         ]
     }
 
     pub fn body(&self) -> &[u8] {
-        let Some(body) = self.get().and_then(|r| unsafe { r.body.as_ref() }) else {
-            return &[];
-        };
-        if body.data.is_null() || body.len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(body.data, body.len as usize) }
+        self.get()
+            .and_then(southstar_net::Response::body)
+            .unwrap_or_default()
     }
 
     pub fn set_error(&mut self, message: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            if !r.error.is_null() {
-                unsafe { glib::g_free(r.error.cast()) };
-            }
-            r.error = glib::strdup(message);
+        if let Some(r) = self.0.as_mut() {
+            r.set_error(message);
         }
     }
 
     pub fn set_status(&mut self, status: i64) {
-        if let Some(r) = self.get_mut() {
-            r.status = status as c_long;
+        if let Some(r) = self.0.as_mut() {
+            r.set_status(status as c_long);
         }
     }
 
     pub fn set_final_url(&mut self, url: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.final_url = glib::strdup(url);
+        if let Some(r) = self.0.as_mut() {
+            r.set_final_url(&cstring(url));
         }
     }
 
     pub fn set_content_type(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.content_type = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_content_type(&cstring(value));
         }
     }
 
     pub fn set_cors_allow_origin(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.cors_allow_origin = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_cors_allow_origin(value);
         }
     }
 
     pub fn set_raw_headers(&mut self, value: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            r.raw_headers = glib::strdup(value);
+        if let Some(r) = self.0.as_mut() {
+            r.set_raw_headers(value);
         }
     }
 
     pub fn set_body(&mut self, bytes: &[u8]) {
-        if let Some(r) = self.get_mut() {
-            let array = unsafe { g_byte_array_sized_new(bytes.len() as c_uint) };
-            if !bytes.is_empty() {
-                unsafe { g_byte_array_append(array, bytes.as_ptr(), bytes.len() as c_uint) };
-            }
-            r.body = array;
-        }
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe { ns_response_free(self.0) };
+        if let Some(r) = self.0.as_mut() {
+            r.set_body(bytes);
         }
     }
 }
@@ -1052,8 +816,7 @@ pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value)
     crate::abort::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_reset(js: *mut NsJs) {
+pub fn reset_page(js: *mut NsJs) {
     crate::page_reset(Js::of_ptr(js));
 }
 
@@ -1062,81 +825,20 @@ pub unsafe extern "C" fn ns_js_net_teardown(js: *mut NsJs) {
     crate::page_teardown(Js::of_ptr(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint {
-    crate::pending_fetches(Js::of_ptr(js)) as c_uint
+pub fn pending_fetch_count(js: *const NsJs) -> usize {
+    crate::pending_fetches(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint {
-    crate::pending_xhrs(Js::of_ptr(js)) as c_uint
+pub fn pending_xhr_count(js: *const NsJs) -> usize {
+    crate::pending_xhrs(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint {
-    crate::pending_sockets(Js::of_ptr(js)) as c_uint
+pub fn pending_socket_count(js: *const NsJs) -> usize {
+    crate::pending_sockets(Js::of_ptr(js))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_net_sw_fetch_result(
-    js: *mut NsJs,
-    id: c_uint,
-    outcome: c_int,
-    status: c_long,
-    content_type: *const c_char,
-    raw_headers: *const c_char,
-    body: *const u8,
-    body_len: usize,
-    error: *const c_char,
-) {
-    let body = if body.is_null() || body_len == 0 {
-        &[][..]
-    } else {
-        unsafe { core::slice::from_raw_parts(body, body_len) }
-    };
-    crate::fetch::service_worker_result(
-        Js::of_ptr(js),
-        id,
-        crate::fetch::SwOutcome {
-            outcome,
-            status: long(status),
-            content_type: borrowed(content_type),
-            raw_headers: borrowed(raw_headers),
-            body,
-            error: borrowed(error),
-        },
-    );
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_cors_allows(
-    doc_url: *const c_char,
-    resp_url: *const c_char,
-    cors_header: *const c_char,
-) -> GBoolean {
-    glib::boolean(crate::headers::cors_allows(
-        borrowed(doc_url).as_deref(),
-        borrowed(resp_url).as_deref(),
-        borrowed(cors_header).as_deref(),
-    ))
-}
-
-pub(crate) unsafe extern "C" fn on_beacon_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    _data: *mut c_void,
-) {
-    drop(unsafe { Response::finish(result) });
-}
-
-pub(crate) unsafe extern "C" fn on_fetch_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    data: *mut c_void,
-) {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::fetch::Ticket>()) };
-    let (resp, error) = unsafe { Response::finish(result) };
-    crate::fetch::done(*ticket, resp, error);
+pub fn service_worker_fetch_result(js: *const NsJs, id: u32, outcome: crate::fetch::SwOutcome<'_>) {
+    crate::fetch::service_worker_result(Js::of_ptr(js), id, outcome);
 }
 
 pub(crate) unsafe extern "C" fn on_fetch_idle(data: *mut c_void) -> GBoolean {
@@ -1152,16 +854,6 @@ pub(crate) fn schedule_fetch_idle(js: Js, delivery: crate::fetch::Delivery, retr
     } else {
         js.attach_idle(on_fetch_idle, data);
     }
-}
-
-pub(crate) unsafe extern "C" fn on_xhr_done(
-    _source: *mut c_void,
-    result: *mut c_void,
-    data: *mut c_void,
-) {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::xhr::Ticket>()) };
-    let (resp, error) = unsafe { Response::finish(result) };
-    crate::xhr::done(*ticket, resp, error.is_some());
 }
 
 unsafe extern "C" fn on_xhr_idle(data: *mut c_void) -> GBoolean {

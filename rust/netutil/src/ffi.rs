@@ -135,53 +135,21 @@ fn default_accept_language() -> &'static CStr {
     })
 }
 
-fn effective_accept_language() -> *const c_char {
-    let configured = southstar_config::get()
-        .map(|c| c.accept_language)
-        .filter(|&p| unsafe { glib::bytes(p) }.is_some_and(|v| !v.is_empty()));
-    configured.map_or(default_accept_language().as_ptr(), |p| p.cast_const())
+pub fn effective_accept_language() -> Vec<u8> {
+    southstar_config::get()
+        .and_then(|c| unsafe { glib::bytes(c.accept_language) })
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| default_accept_language().to_bytes())
+        .to_vec()
+}
+
+pub fn effective_navigator_languages() -> Vec<Vec<u8>> {
+    crate::navigator_languages(&effective_accept_language())
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_default_accept_language() -> *const c_char {
     default_accept_language().as_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_effective_accept_language() -> *const c_char {
-    effective_accept_language()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_navigator_languages() -> *mut *mut c_char {
-    let accept = unsafe { glib::bytes(effective_accept_language()) }.unwrap_or_default();
-    let langs = crate::navigator_languages(accept);
-    unsafe {
-        let out =
-            glib::g_malloc0((langs.len() + 1) * size_of::<*mut c_char>()).cast::<*mut c_char>();
-        for (i, lang) in langs.iter().enumerate() {
-            *out.add(i) = glib::strdup(lang);
-        }
-        out
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_address_is_search(s: *const c_char) -> GBoolean {
-    let s = unsafe { glib::bytes(s) }.unwrap_or_default();
-    glib::boolean(crate::address_is_search(s))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_search_url_for(query: *const c_char) -> *mut c_char {
-    let query = unsafe { glib::bytes(query) }.unwrap_or_default();
-    glib::strdup(&crate::search_url_for(query))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_url_from_local_path(path: *const c_char) -> *mut c_char {
-    let path = unsafe { glib::bytes(path) }.unwrap_or_default();
-    crate::url_from_local_path(path).map_or(ptr::null_mut(), |uri| glib::strdup(&uri))
 }
 
 #[unsafe(no_mangle)]

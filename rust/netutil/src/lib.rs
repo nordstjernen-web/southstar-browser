@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{effective_accept_language, effective_navigator_languages};
+
 use std::collections::HashSet;
 
 const DEFAULT_SEARCH_ENGINE: &[u8] = b"https://duckduckgo.com/?q=%s";

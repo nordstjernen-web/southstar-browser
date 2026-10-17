@@ -43,40 +43,83 @@ unsafe extern "C" {
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
     fn ns_ext_should_block(url: *const c_char, top_url: *const c_char) -> GBoolean;
-    fn ns_net_effective_accept_language() -> *const c_char;
 }
 
-struct AcceptLines([*const c_char; 3]);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FetchDest {
+    Script,
+    Style,
+    Image,
+    Font,
+}
 
-unsafe impl Sync for AcceptLines {}
+impl FetchDest {
+    fn from_raw(dest: c_int) -> Option<FetchDest> {
+        match dest {
+            FETCH_DEST_SCRIPT => Some(FetchDest::Script),
+            FETCH_DEST_STYLE => Some(FetchDest::Style),
+            FETCH_DEST_IMAGE => Some(FetchDest::Image),
+            FETCH_DEST_FONT => Some(FetchDest::Font),
+            _ => None,
+        }
+    }
 
-static SCRIPT_ACCEPT: AcceptLines = AcceptLines([
-    c"Accept: text/javascript, application/javascript, application/ecmascript, application/x-javascript, */*;q=0.8".as_ptr(),
-    c"X-ND-Fetch-Dest: script".as_ptr(),
-    ptr::null(),
-]);
-static STYLE_ACCEPT: AcceptLines = AcceptLines([
-    c"Accept: text/css,*/*;q=0.1".as_ptr(),
-    c"X-ND-Fetch-Dest: style".as_ptr(),
-    ptr::null(),
-]);
+    pub fn accept_lines(self) -> &'static [&'static CStr] {
+        match self {
+            FetchDest::Script => &SCRIPT_LINES,
+            FetchDest::Style => &STYLE_LINES,
+            FetchDest::Image => &IMAGE_LINES,
+            FetchDest::Font => &FONT_LINES,
+        }
+    }
+
+    pub fn header_lines(self) -> Vec<Vec<u8>> {
+        self.accept_lines()
+            .iter()
+            .map(|line| line.to_bytes().to_vec())
+            .collect()
+    }
+
+    fn raw_accept_lines(self) -> &'static AcceptLines {
+        match self {
+            FetchDest::Script => &SCRIPT_ACCEPT,
+            FetchDest::Style => &STYLE_ACCEPT,
+            FetchDest::Image => &IMAGE_ACCEPT,
+            FetchDest::Font => &FONT_ACCEPT,
+        }
+    }
+}
+
+const SCRIPT_LINES: [&CStr; 2] = [
+    c"Accept: text/javascript, application/javascript, application/ecmascript, application/x-javascript, */*;q=0.8",
+    c"X-ND-Fetch-Dest: script",
+];
+const STYLE_LINES: [&CStr; 2] = [c"Accept: text/css,*/*;q=0.1", c"X-ND-Fetch-Dest: style"];
 #[cfg(all(feature = "avif", not(windows)))]
 const IMAGE_ACCEPT_TYPES: &CStr =
     c"Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
 #[cfg(not(all(feature = "avif", not(windows))))]
 const IMAGE_ACCEPT_TYPES: &CStr = c"Accept: image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+const IMAGE_LINES: [&CStr; 2] = [IMAGE_ACCEPT_TYPES, c"X-ND-Fetch-Dest: image"];
+const FONT_LINES: [&CStr; 2] = [
+    c"Accept: font/woff2,font/woff,application/font-woff,application/octet-stream;q=0.8,*/*;q=0.5",
+    c"X-ND-Fetch-Dest: font",
+];
 
-static IMAGE_ACCEPT: AcceptLines = AcceptLines([
-    IMAGE_ACCEPT_TYPES.as_ptr(),
-    c"X-ND-Fetch-Dest: image".as_ptr(),
-    ptr::null(),
-]);
-static FONT_ACCEPT: AcceptLines = AcceptLines([
-    c"Accept: font/woff2,font/woff,application/font-woff,application/octet-stream;q=0.8,*/*;q=0.5"
-        .as_ptr(),
-    c"X-ND-Fetch-Dest: font".as_ptr(),
-    ptr::null(),
-]);
+struct AcceptLines([*const c_char; 3]);
+
+unsafe impl Sync for AcceptLines {}
+
+impl AcceptLines {
+    const fn of(lines: &[&CStr; 2]) -> AcceptLines {
+        AcceptLines([lines[0].as_ptr(), lines[1].as_ptr(), ptr::null()])
+    }
+}
+
+static SCRIPT_ACCEPT: AcceptLines = AcceptLines::of(&SCRIPT_LINES);
+static STYLE_ACCEPT: AcceptLines = AcceptLines::of(&STYLE_LINES);
+static IMAGE_ACCEPT: AcceptLines = AcceptLines::of(&IMAGE_LINES);
+static FONT_ACCEPT: AcceptLines = AcceptLines::of(&FONT_LINES);
 
 #[derive(Clone)]
 pub enum Failure {
@@ -96,12 +139,12 @@ impl Failure {
         }
     }
 
-    pub fn set(&self, error: *mut *mut GError) {
+    pub(crate) fn set(&self, error: *mut *mut GError) {
         let (domain, code, message) = self.parts();
         unsafe { g_set_error_literal(error, domain, code, message.as_ptr()) };
     }
 
-    pub fn into_error(self) -> *mut GError {
+    pub(crate) fn into_error(self) -> *mut GError {
         let (domain, code, message) = self.parts();
         unsafe { g_error_new_literal(domain, code, message.as_ptr()) }
     }
@@ -133,8 +176,14 @@ pub struct Response(NonNull<NsResponse>);
 
 unsafe impl Send for Response {}
 
+impl Default for Response {
+    fn default() -> Response {
+        Response::new()
+    }
+}
+
 impl Response {
-    pub(crate) fn new() -> Response {
+    pub fn new() -> Response {
         let raw =
             unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast::<NsResponse>();
         let resp = Response(NonNull::new(raw).expect("g_malloc0 aborts on failure"));
@@ -221,6 +270,38 @@ impl Response {
 
     pub fn raw_headers(&self) -> Option<&CStr> {
         c_str(self.view().raw_headers)
+    }
+
+    pub fn next_hop_protocol(&self) -> Option<&CStr> {
+        c_str(self.view().next_hop_protocol)
+    }
+
+    pub fn content_disposition(&self) -> Option<&CStr> {
+        c_str(self.view().content_disposition)
+    }
+
+    pub fn xframe_options(&self) -> Option<&CStr> {
+        c_str(self.view().xframe_options)
+    }
+
+    pub fn redirect_count(&self) -> c_int {
+        self.view().redirect_count
+    }
+
+    pub fn set_status(&mut self, status: c_long) {
+        self.get().status = status;
+    }
+
+    pub fn set_error(&mut self, message: &[u8]) {
+        replace(&mut self.get().error, Some(message));
+    }
+
+    pub fn set_cors_allow_origin(&mut self, value: &[u8]) {
+        replace(&mut self.get().cors_allow_origin, Some(value));
+    }
+
+    pub fn set_raw_headers(&mut self, value: &[u8]) {
+        replace(&mut self.get().raw_headers, Some(value));
     }
 
     pub fn remote_ip(&self) -> Option<&CStr> {
@@ -375,9 +456,7 @@ fn monotonic_us() -> i64 {
 }
 
 fn accept_language() -> Vec<u8> {
-    text(unsafe { ns_net_effective_accept_language() })
-        .unwrap_or_default()
-        .to_vec()
+    southstar_netutil::effective_accept_language()
 }
 
 fn user_agent(cfg: Option<&southstar_config::NsConfig>) -> Vec<u8> {
@@ -514,7 +593,7 @@ fn shape_headers(
         }
         if url::has_client_hints(ua) {
             lines.push(request::CLIENT_HINTS_BRANDS.to_vec());
-            let mobile = super::url::ns_net_is_mobile_mode() != 0;
+            let mobile = super::url::is_mobile_mode();
             lines.push(format!("Sec-CH-UA-Mobile: ?{}", u8::from(mobile)).into_bytes());
             let platform = without_nul(url::HINT_PLATFORM);
             lines.push([b"Sec-CH-UA-Platform: \"", platform, b"\""].concat());
@@ -949,14 +1028,7 @@ pub unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char {
-    let lines = match dest {
-        FETCH_DEST_SCRIPT => &SCRIPT_ACCEPT,
-        FETCH_DEST_STYLE => &STYLE_ACCEPT,
-        FETCH_DEST_IMAGE => &IMAGE_ACCEPT,
-        FETCH_DEST_FONT => &FONT_ACCEPT,
-        _ => return ptr::null(),
-    };
-    lines.0.as_ptr()
+    FetchDest::from_raw(dest).map_or(ptr::null(), |dest| dest.raw_accept_lines().0.as_ptr())
 }
 
 pub fn request_key(
@@ -974,6 +1046,5 @@ pub fn request_key(
 }
 
 pub fn accept_header_lines(dest: c_int) -> Vec<Vec<u8>> {
-    // SAFETY: the Accept lines of a destination are a static NULL-terminated array of C strings, or null.
-    unsafe { header_lines(ns_net_accept_headers_for(dest)) }
+    FetchDest::from_raw(dest).map_or_else(Vec::new, FetchDest::header_lines)
 }

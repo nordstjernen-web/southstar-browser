@@ -280,12 +280,6 @@ pub(crate) enum CMethod {
 }
 
 unsafe extern "C" {
-    fn ns_net_navigator_languages() -> *mut *mut c_char;
-    fn ns_net_navigator_platform() -> *const c_char;
-    fn ns_net_ua_hint_platform() -> *const c_char;
-    fn ns_net_is_mobile_mode() -> GBoolean;
-    fn ns_user_agent_for_mode(compat_mode: *const c_char) -> *const c_char;
-    fn ns_user_agent_has_client_hints(user_agent: *const c_char) -> GBoolean;
     fn g_get_num_processors() -> c_uint;
 }
 
@@ -423,12 +417,6 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque().cast())
 }
 
-pub(crate) fn text(p: *const c_char) -> String {
-    unsafe { glib::bytes(p) }
-        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
-        .unwrap_or_default()
-}
-
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
     api::bind_event_target_listeners(scope, object);
 }
@@ -469,34 +457,22 @@ pub(crate) fn selection_command(js: Js, cmd: &core::ffi::CStr) -> bool {
 }
 
 pub(crate) fn languages() -> Vec<String> {
-    let list = unsafe { ns_net_navigator_languages() };
-    let mut out = Vec::new();
-    if list.is_null() {
-        return out;
-    }
-    let mut index = 0;
-    loop {
-        let item = unsafe { *list.add(index) };
-        if item.is_null() {
-            break;
-        }
-        out.push(text(item));
-        index += 1;
-    }
-    unsafe { glib::g_strfreev(list) };
-    out
+    southstar_netutil::effective_navigator_languages()
+        .into_iter()
+        .map(|lang| String::from_utf8_lossy(&lang).into_owned())
+        .collect()
 }
 
 pub(crate) fn navigator_platform() -> String {
-    text(unsafe { ns_net_navigator_platform() })
+    southstar_net::navigator_platform().to_owned()
 }
 
 pub(crate) fn hint_platform() -> String {
-    text(unsafe { ns_net_ua_hint_platform() })
+    southstar_net::ua_hint_platform().to_owned()
 }
 
 pub(crate) fn mobile_mode() -> bool {
-    unsafe { ns_net_is_mobile_mode() != 0 }
+    southstar_net::is_mobile_mode()
 }
 
 pub(crate) struct UserAgentConfig {
@@ -528,15 +504,11 @@ pub(crate) fn user_agent_config() -> UserAgentConfig {
 }
 
 pub(crate) fn user_agent_for_mode(compat_mode: Option<&str>) -> String {
-    let mode = compat_mode.and_then(|mode| CString::new(mode).ok());
-    text(unsafe { ns_user_agent_for_mode(mode.as_ref().map_or(core::ptr::null(), |m| m.as_ptr())) })
+    southstar_net::user_agent_for_mode(compat_mode.map(str::as_bytes)).to_owned()
 }
 
 pub(crate) fn has_client_hints(user_agent: &str) -> bool {
-    let Ok(user_agent) = CString::new(user_agent) else {
-        return false;
-    };
-    unsafe { ns_user_agent_has_client_hints(user_agent.as_ptr()) != 0 }
+    southstar_net::has_client_hints(user_agent.as_bytes())
 }
 
 pub(crate) fn processor_count() -> u32 {
