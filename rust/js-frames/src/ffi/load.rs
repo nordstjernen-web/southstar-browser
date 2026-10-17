@@ -54,7 +54,6 @@ unsafe extern "C" {
     ) -> GBoolean;
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
     fn ns_js_purge_frame_rafs(js: *mut NsJs, frame: *const NsNode);
-    fn ns_services_purge_frame_timers(js: *mut NsJs, frame: *const NsNode);
 }
 
 unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
@@ -414,10 +413,8 @@ pub(crate) fn evaluating<R>(
 }
 
 pub(crate) fn purge_frame_callbacks(js: Js, frame: Node<'_>) {
-    unsafe {
-        ns_js_purge_frame_rafs(js.ptr(), frame.as_ptr());
-        ns_services_purge_frame_timers(js.ptr(), frame.as_ptr());
-    }
+    unsafe { ns_js_purge_frame_rafs(js.ptr(), frame.as_ptr()) };
+    southstar_js_services::purge_frame_timers(js.ptr(), frame);
 }
 
 pub(crate) fn orphan_document(js: Js, doc: Node<'_>) {

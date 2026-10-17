@@ -17,6 +17,7 @@ southstar-js-frames = { path = "../js-frames" }
 southstar-js-net = { path = "../js-net" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime" }
+southstar-js-services = { path = "../js-services" }
 southstar-layout-hit = { path = "../layout-hit" }
 southstar-url = { path = "../url" }
 

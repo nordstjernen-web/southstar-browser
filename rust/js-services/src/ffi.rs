@@ -10,7 +10,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api::{self, TimerGate};
 
-use crate::screen::{self, Metrics};
+use crate::screen;
 use crate::{
     caches, camera, clipboard_item, commands, console, media, navigator, rtc, timers, window,
 };
@@ -536,70 +536,42 @@ pub unsafe extern "C" fn ns_services_run_due_timers(js: *const NsJs) {
     timers::run_due(Js(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_timers_pending(
-    js: *const NsJs,
-    include_idle: GBoolean,
-) -> GBoolean {
-    glib::boolean(timers::pending(Js(js), include_idle != 0))
+pub fn timers_pending(js: *const NsJs, include_idle: bool) -> bool {
+    timers::pending(Js(js), include_idle)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_timer_count(js: *const NsJs) -> c_uint {
-    timers::count(Js(js)) as c_uint
+pub fn timer_count(js: *const NsJs) -> u32 {
+    timers::count(Js(js)) as u32
+}
+
+pub fn purge_frame_timers(js: *const NsJs, frame: Node<'_>) {
+    if let Some(frame) = frame.downgrade().get() {
+        timers::purge_frame(Js(js), Frame(Some(frame)));
+    }
+}
+
+pub fn timer_remove(js: *const NsJs, id: i32) {
+    timers::remove(Js(js), id);
+}
+
+pub fn screen_size() -> (i32, i32) {
+    let metrics = screen::metrics();
+    (metrics.width, metrics.height)
+}
+
+pub fn reeval_media_queries(js: *const NsJs) {
+    media::reevaluate(Js(js));
+}
+
+pub fn reset_page(js: *const NsJs) {
+    crate::reset(Js(js));
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_services_purge_frame_timers(js: *const NsJs, frame: *const c_void) {
     if let Some(frame) = unsafe { Node::from_ptr(frame.cast()) } {
-        timers::purge_frame(Js(js), Frame(Some(frame)));
+        purge_frame_timers(js, frame);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_timer_remove(js: *const NsJs, id: c_int) {
-    timers::remove(Js(js), id);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_screen_metrics(
-    width: *mut c_int,
-    height: *mut c_int,
-    avail_width: *mut c_int,
-    avail_height: *mut c_int,
-    avail_left: *mut c_int,
-    avail_top: *mut c_int,
-) {
-    let Metrics {
-        width: w,
-        height: h,
-        avail_width: aw,
-        avail_height: ah,
-        avail_left: al,
-        avail_top: at,
-    } = screen::metrics();
-    for (out, value) in [
-        (width, w),
-        (height, h),
-        (avail_width, aw),
-        (avail_height, ah),
-        (avail_left, al),
-        (avail_top, at),
-    ] {
-        if !out.is_null() {
-            unsafe { *out = value };
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_reeval_media_queries(js: *const NsJs) {
-    media::reevaluate(Js(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_services_reset(js: *const NsJs) {
-    crate::reset(Js(js));
 }
 
 #[unsafe(no_mangle)]

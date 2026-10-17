@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -18,7 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
 }
 
@@ -169,7 +168,7 @@ impl Js {
     }
 
     pub fn timer_remove(self, id: i32) {
-        unsafe { ns_services_timer_remove(self.ptr(), id) };
+        southstar_js_services::timer_remove(self.ptr(), id);
     }
 
     pub fn consume_user_activation(self) {

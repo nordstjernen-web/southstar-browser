@@ -243,7 +243,7 @@ impl Js {
 
     pub fn has_pending_work(self) -> bool {
         unsafe {
-            ns_services_timers_pending(self.0, glib::FALSE) != 0
+            southstar_js_services::timers_pending(self.0, false)
                 || frames::has_pending(self)
                 || southstar_js_net::pending_fetch_count(self.0) > 0
                 || southstar_js_net::pending_xhr_count(self.0) > 0
@@ -260,10 +260,8 @@ impl Js {
 
     pub fn needs_tick(self) -> bool {
         self.has_pending_work()
-            || unsafe {
-                ns_services_timers_pending(self.0, glib::TRUE) != 0
-                    || api::message_tasks_pending(self.0)
-            }
+            || southstar_js_services::timers_pending(self.0, true)
+            || api::message_tasks_pending(self.0)
             || southstar_js_images::image_loads_pending(self.0)
     }
 }
@@ -278,7 +276,6 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-    fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }

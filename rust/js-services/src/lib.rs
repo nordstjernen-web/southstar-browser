@@ -15,6 +15,11 @@ mod screen;
 pub mod timers;
 mod window;
 
+pub use ffi::{
+    purge_frame_timers, reeval_media_queries, reset_page, screen_size, timer_count, timer_remove,
+    timers_pending,
+};
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;

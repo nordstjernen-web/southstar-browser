@@ -119,14 +119,12 @@ unsafe extern "C" {
 
     fn ns_focus_reset(js: *mut NsJs);
     fn ns_storage_free_deferred_events(js: *mut NsJs);
-    fn ns_services_reset(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
 
     fn ns_js_name_engine_members(ctx: ContextHandle);
 
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
 
-    fn ns_services_timer_count(js: *const NsJs) -> c_uint;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -252,7 +250,7 @@ impl Js {
         // SAFETY: a Js handle names the page's live script engine, which these resets accept.
         unsafe {
             ns_storage_free_deferred_events(self.0);
-            ns_services_reset(self.0);
+            southstar_js_services::reset_page(self.0);
             southstar_js_lifecycle::reset_lifecycle(self.0);
             southstar_js_dispatch::reset(self.0);
             southstar_js_net::reset_page(self.0);
@@ -381,8 +379,7 @@ impl Js {
     pub fn event_loop_counts(self) -> [u32; 6] {
         let count = |n: usize| n as u32;
         [
-            // SAFETY: a Js handle names the page's live script engine.
-            unsafe { ns_services_timer_count(self.0) },
+            southstar_js_services::timer_count(self.0),
             count(southstar_js_lifecycle::raf_count(self.0)),
             count(southstar_js_net::pending_fetch_count(self.0)),
             count(southstar_js_net::pending_xhr_count(self.0)),

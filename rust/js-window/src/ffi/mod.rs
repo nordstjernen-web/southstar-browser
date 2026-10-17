@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -461,17 +461,6 @@ pub unsafe extern "C" fn ns_window_history_teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));
 }
 
-unsafe extern "C" {
-    fn ns_services_screen_metrics(
-        width: *mut c_int,
-        height: *mut c_int,
-        avail_width: *mut c_int,
-        avail_height: *mut c_int,
-        avail_left: *mut c_int,
-        avail_top: *mut c_int,
-    );
-}
-
 pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
     crate::documents::current_document_for(scope, window)
 }
@@ -526,18 +515,7 @@ pub(crate) fn device_pixel_ratio() -> f64 {
 }
 
 pub(crate) fn screen_size() -> (i32, i32) {
-    let (mut width, mut height) = (0, 0);
-    unsafe {
-        ns_services_screen_metrics(
-            &mut width,
-            &mut height,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    };
-    (width, height)
+    southstar_js_services::screen_size()
 }
 
 #[unsafe(no_mangle)]
@@ -604,7 +582,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_services_reeval_media_queries(js: *mut NsJs);
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -659,7 +636,7 @@ pub(crate) fn schedule_observer_tick(js: Js) {
 }
 
 pub(crate) fn reeval_services_media_queries(js: Js) {
-    unsafe { ns_services_reeval_media_queries(js.ptr()) };
+    southstar_js_services::reeval_media_queries(js.ptr());
 }
 
 pub(crate) fn url_is_http_or_https(url: &[u8]) -> bool {
