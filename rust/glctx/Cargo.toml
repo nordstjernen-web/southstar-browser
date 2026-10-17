@@ -7,9 +7,6 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
-[dependencies]
-southstar-glib = { path = "../glib" }
-
 [features]
 egl = []
 

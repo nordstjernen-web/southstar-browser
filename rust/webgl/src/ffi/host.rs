@@ -17,10 +17,6 @@ use southstar_js_runtime::api::{self, NsJs};
 use crate::context::WebGl;
 
 unsafe extern "C" {
-    fn ns_gl_context_create() -> *mut c_void;
-    fn ns_gl_context_make_current(c: *mut c_void) -> c_int;
-    fn ns_gl_context_release(c: *mut c_void);
-    fn ns_gl_context_destroy(c: *mut c_void);
     fn cairo_image_surface_create(format: c_int, w: c_int, h: c_int) -> *mut c_void;
     fn cairo_surface_status(s: *mut c_void) -> c_int;
     fn cairo_surface_destroy(s: *mut c_void);
@@ -34,27 +30,7 @@ unsafe extern "C" {
 const CAIRO_FORMAT_ARGB32: c_int = 0;
 const CAIRO_STATUS_SUCCESS: c_int = 0;
 
-pub(crate) struct GlContext(NonNull<c_void>);
-
-impl GlContext {
-    pub(crate) fn create() -> Option<GlContext> {
-        NonNull::new(unsafe { ns_gl_context_create() }).map(GlContext)
-    }
-
-    pub(crate) fn make_current(&self) -> bool {
-        unsafe { ns_gl_context_make_current(self.0.as_ptr()) != 0 }
-    }
-
-    pub(crate) fn release(&self) {
-        unsafe { ns_gl_context_release(self.0.as_ptr()) };
-    }
-}
-
-impl Drop for GlContext {
-    fn drop(&mut self) {
-        unsafe { ns_gl_context_destroy(self.0.as_ptr()) };
-    }
-}
+pub(crate) use southstar_glctx::GlContext;
 
 pub(crate) struct Surface(NonNull<c_void>);
 

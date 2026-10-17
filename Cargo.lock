@@ -2098,9 +2098,6 @@ dependencies = [
 [[package]]
 name = "southstar-glctx"
 version = "0.9.12-dev"
-dependencies = [
- "southstar-glib",
-]
 
 [[package]]
 name = "southstar-glib"
@@ -3508,6 +3505,7 @@ dependencies = [
  "southstar-canvas",
  "southstar-config",
  "southstar-dom",
+ "southstar-glctx",
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
