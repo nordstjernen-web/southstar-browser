@@ -421,6 +421,21 @@ pub(crate) fn named_declaration_valid(name: &str, value: &str) -> bool {
     css_engine::named_declaration_valid(until_nul(name), until_nul(value))
 }
 
+pub(crate) fn keyword_shorthand_parts(name: &str) -> Option<Vec<&'static str>> {
+    let parts = css_engine::keyword_shorthand_parts(name.as_bytes())?;
+    Some(
+        parts
+            .iter()
+            .filter_map(|p| p.c_name().to_str().ok())
+            .collect(),
+    )
+}
+
+pub(crate) fn keyword_shorthand_compose(name: &str, values: &[String]) -> Option<String> {
+    let values: Vec<&[u8]> = values.iter().map(|v| v.as_bytes()).collect();
+    css_engine::keyword_shorthand_compose(name.as_bytes(), &values).map(|v| lossy(&v))
+}
+
 pub(crate) fn specified_canonical(prop: &str, value: &str) -> Option<String> {
     css_engine::specified_canonical(Some(until_nul(prop)), until_nul(value))
         .map(|text| lossy(&text))

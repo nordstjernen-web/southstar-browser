@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 282] = [
+const INITIALS: [(&[u8], &CStr); 281] = [
     (b"padding-top", c"0px"),
     (b"scroll-margin-top", c"0px"),
     (b"scroll-margin-right", c"0px"),
@@ -67,7 +67,6 @@ const INITIALS: [(&[u8], &CStr); 282] = [
     (b"font-weight", c"400"),
     (b"font-stretch", c"normal"),
     (b"font-kerning", c"auto"),
-    (b"font-synthesis", c"weight style small-caps position"),
     (b"font-size-adjust", c"none"),
     (b"font-variant-caps", c"normal"),
     (b"font-variant-numeric", c"normal"),
@@ -290,5 +289,8 @@ const INITIALS: [(&[u8], &CStr); 282] = [
 ];
 
 pub fn initial_value(name: &[u8]) -> Option<&'static CStr> {
+    if let Some(initial) = crate::defs::initial(name) {
+        return Some(initial);
+    }
     INITIALS.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
 }

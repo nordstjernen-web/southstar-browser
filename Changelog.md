@@ -3,6 +3,25 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Sixty-one more CSS properties parse, cascade and show up in
+  `getComputedStyle`. Before, the parser dropped them, so `CSS.supports()`
+  and `@supports` said no. They include `text-underline-offset`,
+  `text-decoration-thickness`, `touch-action`, `color-scheme`, `zoom`,
+  `resize`, `scroll-behavior`, the `font-synthesis-*` and `text-emphasis-*`
+  longhands, `line-break`, `print-color-adjust`, `flood-color`,
+  `marker-*`, `margin-trim` and `field-sizing`. Each one is a row in a
+  table (`rust/css/src/defs.rs`) giving its kind, whether it inherits, its
+  initial value and its value grammar. Keyword values are checked against
+  that grammar by the new `rust/css-grammar` crate, which also orders them
+  canonically for `element.style`. `white-space` is now a shorthand for
+  `white-space-collapse` and `text-wrap-mode`, and the cascade works out
+  the old `white-space` keyword that layout reads from those two. Before,
+  `text-wrap` was mapped onto `white-space`, so
+  `white-space: pre; text-wrap: wrap` lost the preserved spaces.
+  `text-wrap`, `font-synthesis`, `text-emphasis` and
+  `-webkit-text-stroke` are shorthands too. CSS-wide keywords and
+  `currentcolor` work for all of them. Keyword-only properties no longer
+  interpolate as numbers. Ported from Nordstjernen.
 * Fixed-position boxes no longer extend the document's height: the
   scrollable page, `document.documentElement.scrollHeight` and headless
   PNG dumps counted them, so YouTube's hidden guide drawer

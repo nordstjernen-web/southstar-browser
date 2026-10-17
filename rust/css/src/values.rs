@@ -9,6 +9,7 @@ use crate::calc::Calc;
 use southstar_css_color::{Color, HueMethod, Interpolation, Space};
 
 use crate::color::{self, parse_color};
+use crate::defs;
 use crate::display;
 use crate::ffi;
 use crate::font;
@@ -23,7 +24,7 @@ use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
 use crate::scan::split_ws_limit;
 use crate::shadow::{self, Shadow, ShadowList};
-use crate::shorthand::border_radius_canonical;
+use crate::shorthand::{self, border_radius_canonical};
 use crate::text::split_top_level_commas;
 use crate::time;
 use crate::transform::{
@@ -639,7 +640,18 @@ pub(crate) fn resolve_font_units(value: &mut Value, font_px: f64, root_px: f64) 
     changed || rest
 }
 
+fn keyword_starts_numeric(kw: &[u8]) -> bool {
+    kw.first()
+        .is_some_and(|c| c.is_ascii_digit() || matches!(c, b'-' | b'+' | b'.'))
+}
+
 pub(crate) fn interpolate_prop(prop: Option<Prop>, a: &Value, b: &Value, t: f64) -> Option<Value> {
+    if let (Some(prop), Body::Keyword(ka), Body::Keyword(kb)) = (prop, &a.body, &b.body)
+        && crate::defs::keywords_only(prop)
+        && !(keyword_starts_numeric(ka) && keyword_starts_numeric(kb))
+    {
+        return None;
+    }
     let mut value = interpolate(a, b, t)?;
     let Some(prop) = prop else {
         return Some(value);
@@ -650,7 +662,10 @@ pub(crate) fn interpolate_prop(prop: Option<Prop>, a: &Value, b: &Value, t: f64)
             Prop::BorderImageSlice | Prop::BorderImageWidth | Prop::BorderImageOutset
         );
     match &mut value.body {
-        Body::Length(n, _) if prop == Prop::Opacity => *n = n.clamp(0.0, 1.0),
+        Body::Length(n, _) if matches!(prop, Prop::Opacity | Prop::FloodOpacity) => {
+            *n = n.clamp(0.0, 1.0);
+        }
+        Body::Length(n, _) if prop == Prop::Zoom => *n = n.max(0.0),
         Body::Length(n, _) if nonnegative => *n = n.max(0.0),
         Body::Keyword(text) if nonnegative => *text = negatives_to_zero(text),
         _ => {}
@@ -758,7 +773,7 @@ const COLOR_PROPS: [&[u8]; 23] = [
     b"border-inline-end-color",
 ];
 
-const KEYWORD_CANONICAL_PROPS: [&[u8]; 31] = [
+const KEYWORD_CANONICAL_PROPS: [&[u8]; 30] = [
     b"vertical-align",
     b"baseline-shift",
     b"clip-path",
@@ -776,7 +791,6 @@ const KEYWORD_CANONICAL_PROPS: [&[u8]; 31] = [
     b"text-autospace",
     b"white-space",
     b"font-variant",
-    b"font-synthesis",
     b"font-size-adjust",
     b"animation-range-start",
     b"animation-range-end",
@@ -820,6 +834,18 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
         && let Some(text) = display::canonical(value)
     {
         return Some(text);
+    }
+    if let Some(text) = shorthand::keyword_shorthand_specified(prop, value) {
+        return Some(text);
+    }
+    if let Some(def) = Prop::from_name(prop).and_then(defs::of) {
+        let text = match def.kind {
+            defs::Kind::Color => color_canonical(value),
+            _ => defs::keywords_specified(def, value),
+        };
+        if text.is_some() {
+            return text;
+        }
     }
     if prop == b"font-feature-settings" {
         return font::feature_settings_canonical(value, false);

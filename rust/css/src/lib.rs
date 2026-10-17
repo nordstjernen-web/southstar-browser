@@ -15,6 +15,7 @@ mod content;
 mod counter;
 mod custom_props;
 mod declarations;
+mod defs;
 mod display;
 mod element_state;
 mod ffi;
@@ -58,6 +59,9 @@ mod transform;
 mod units;
 mod values;
 mod vars;
+
+#[cfg(test)]
+mod tests;
 
 pub use animation::{
     Entry as AnimationEntry, range_serialize as animation_range_serialize,
@@ -123,6 +127,7 @@ pub use restyle::{
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
+pub use shorthand::{keyword_shorthand_compose, keyword_shorthand_parts};
 pub use style_query::{
     alignment_base, dimension_px, overflow_keyword, text_orientation, used_column_count,
     writing_mode_of,

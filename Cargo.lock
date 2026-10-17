@@ -1849,6 +1849,7 @@ name = "southstar-css"
 version = "0.9.12-dev"
 dependencies = [
  "southstar-css-color",
+ "southstar-css-grammar",
  "southstar-css-media",
  "southstar-css-prop-syntax",
  "southstar-css-syntax",
@@ -1865,6 +1866,14 @@ name = "southstar-css-color"
 version = "0.9.12-dev"
 dependencies = [
  "southstar-css-syntax",
+]
+
+[[package]]
+name = "southstar-css-grammar"
+version = "0.9.12-dev"
+dependencies = [
+ "southstar-css-syntax",
+ "southstar-numfmt",
 ]
 
 [[package]]

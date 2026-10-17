@@ -11,7 +11,7 @@ const ORIGIN_PRESENTATIONAL: i32 = 1;
 const ORIGIN_AUTHOR: i32 = 2;
 const LAYER_NONE: i32 = i32::MAX;
 
-pub(crate) const CURRENTCOLOR_PROPS: [Prop; 13] = [
+pub(crate) const CURRENTCOLOR_PROPS: [Prop; 18] = [
     Prop::BackgroundColor,
     Prop::BorderTopColor,
     Prop::BorderRightColor,
@@ -25,6 +25,11 @@ pub(crate) const CURRENTCOLOR_PROPS: [Prop; 13] = [
     Prop::Fill,
     Prop::Stroke,
     Prop::StopColor,
+    Prop::TextEmphasisColor,
+    Prop::WebkitTextStrokeColor,
+    Prop::FloodColor,
+    Prop::LightingColor,
+    Prop::WebkitTapHighlightColor,
 ];
 
 pub fn currentcolor_bit(prop: Prop) -> Option<u32> {

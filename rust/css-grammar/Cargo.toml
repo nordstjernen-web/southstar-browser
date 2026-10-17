@@ -1,0 +1,15 @@
+[package]
+name = "southstar-css-grammar"
+description = "Matches keyword-shaped CSS values against a compact value grammar and serializes them canonically"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+southstar-css-syntax = { path = "../css-syntax" }
+southstar-numfmt = { path = "../numfmt" }
+
+[lints]
+workspace = true

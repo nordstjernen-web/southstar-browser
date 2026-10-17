@@ -14,6 +14,7 @@ use crate::color;
 use crate::container;
 use crate::content::content_canonical;
 use crate::counter::{self, CounterProp};
+use crate::defs;
 use crate::display;
 use crate::ffi;
 use crate::font;
@@ -745,7 +746,7 @@ fn color_value(t: &[u8]) -> Option<Value> {
     }
 }
 
-fn color_prop(prop: Prop, t: &[u8]) -> Option<Value> {
+pub(crate) fn color_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     if let Some(value) = color_value(t) {
         return Some(value);
     }
@@ -1596,37 +1597,6 @@ fn white_space(t: &[u8]) -> Option<Value> {
     Some(Value::keyword(legacy.to_vec()))
 }
 
-fn font_synthesis(t: &[u8]) -> Option<Value> {
-    let words = split_gspace_words(t);
-    if words.len() == 1 && eq(words[0], b"none") {
-        return Some(Value::keyword(b"none".to_vec()));
-    }
-    const ORDER: [&[u8]; 5] = [
-        b"weight",
-        b"style",
-        b"oblique-only",
-        b"small-caps",
-        b"position",
-    ];
-    let mut seen = [false; 5];
-    for w in &words {
-        let i = ORDER.iter().position(|o| eq(o, w))?;
-        if seen[i] {
-            return None;
-        }
-        seen[i] = true;
-    }
-    if words.is_empty() || (seen[1] && seen[2]) {
-        return None;
-    }
-    let canonical: Vec<&[u8]> = ORDER
-        .iter()
-        .zip(seen)
-        .filter_map(|(o, on)| on.then_some(*o))
-        .collect();
-    Some(Value::keyword(canonical.join(&b' ')))
-}
-
 fn font_size_adjust(t: &[u8]) -> Option<Value> {
     let words = split_gspace_words(t);
     const BASES: [&[u8]; 5] = [
@@ -1758,6 +1728,9 @@ fn longhand(prop: Prop) -> Option<Longhand> {
 
 fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     use Prop as P;
+    if let Some(def) = defs::of(prop) {
+        return defs::parse(def, t);
+    }
     match prop {
         P::Display => keyword_text(display::normalize(t)),
         P::Position => {
@@ -2075,7 +2048,6 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::ContainerName => keyword_text(container::name_canonical(t)),
         P::FontStretch => font_stretch(t),
         P::FontKerning => keyword_in(t, &[b"auto", b"normal", b"none"]),
-        P::FontSynthesis => font_synthesis(t),
         P::FontSizeAdjust => font_size_adjust(t),
         P::FontVariantCaps => font_variant_longhand(t, 4..=4),
         P::FontVariantNumeric => font_variant_longhand(t, 12..=16),

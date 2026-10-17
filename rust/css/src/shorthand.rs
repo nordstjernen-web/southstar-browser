@@ -1,15 +1,17 @@
-//! Southstar — expanding one declaration into the longhand declarations css.c stores: `all`, the border, outline, background, mask, position, grid, gap, place, columns, text-decoration, font, flex, list-style, border-radius, inset, margin and padding shorthands, and the legacy and logical aliases.
+//! Southstar — expanding one declaration into the longhand declarations css.c stores: `all`, the border, outline, background, mask, position, grid, gap, place, columns, text-decoration, font, flex, list-style, border-radius, inset, margin and padding shorthands, the white-space, text-wrap, text-emphasis, -webkit-text-stroke and font-synthesis keyword shorthands, and the legacy and logical aliases.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use crate::animation::{self, Longhand};
 use crate::border_image;
 use crate::color::{self, parse_color};
+use crate::defs;
 use crate::ffi;
 use crate::font;
 use crate::gradient::text_starts_gradient;
 use crate::grid;
 use crate::image::{image_value_canonical, text_starts_image_set};
+use crate::initial;
 use crate::inline;
 use crate::math::math_canonical;
 use crate::position;
@@ -22,6 +24,8 @@ use crate::property::{
 use crate::scan::{scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range};
 use crate::text::{add_leading_zeros, split_top_level_commas};
 use crate::units::{EM, NUMBER, PERCENT, PX};
+use crate::values;
+use southstar_css_grammar::has_keyword;
 
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Slot {
@@ -400,7 +404,11 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
             text,
             [Prop::Top, Prop::Right, Prop::Bottom, Prop::Left],
         ),
-        b"text-wrap" | b"text-wrap-mode" => text_wrap(&mut out, text),
+        b"white-space"
+        | b"text-wrap"
+        | b"text-emphasis"
+        | b"-webkit-text-stroke"
+        | b"font-synthesis" => keyword_shorthand(&mut out, name, text),
         b"margin" => box_quad(
             &mut out,
             text,
@@ -1834,14 +1842,213 @@ fn box_quad(out: &mut Out, text: &[u8], props: [Prop; 4]) {
     }
 }
 
-fn text_wrap(out: &mut Out, text: &[u8]) {
-    let kw = lower(text);
-    let mapped: &[u8] = match strip(&kw) {
-        b"nowrap" => b"nowrap",
-        b"wrap" | b"balance" | b"pretty" | b"stable" => b"normal",
-        _ => return,
+const KEYWORD_SHORTHANDS: [(&[u8], &[Prop]); 5] = [
+    (
+        b"text-emphasis",
+        &[Prop::TextEmphasisStyle, Prop::TextEmphasisColor],
+    ),
+    (b"text-wrap", &[Prop::TextWrapMode, Prop::TextWrapStyle]),
+    (
+        b"white-space",
+        &[Prop::WhiteSpaceCollapse, Prop::TextWrapMode],
+    ),
+    (
+        b"-webkit-text-stroke",
+        &[Prop::WebkitTextStrokeWidth, Prop::WebkitTextStrokeColor],
+    ),
+    (
+        b"font-synthesis",
+        &[
+            Prop::FontSynthesisWeight,
+            Prop::FontSynthesisStyle,
+            Prop::FontSynthesisSmallCaps,
+            Prop::FontSynthesisPosition,
+        ],
+    ),
+];
+
+const WHITE_SPACE_LEGACY: [(&[u8], &[u8], &[u8]); 6] = [
+    (b"normal", b"collapse", b"wrap"),
+    (b"pre", b"preserve", b"nowrap"),
+    (b"nowrap", b"collapse", b"nowrap"),
+    (b"pre-wrap", b"preserve", b"wrap"),
+    (b"break-spaces", b"break-spaces", b"wrap"),
+    (b"pre-line", b"preserve-breaks", b"wrap"),
+];
+
+const FONT_SYNTHESIS_WORDS: [&str; 4] = ["weight", "style", "small-caps", "position"];
+
+const KEYWORD_SHORTHAND_TOKENS_MAX: usize = 32;
+
+pub fn keyword_shorthand_parts(name: &[u8]) -> Option<&'static [Prop]> {
+    KEYWORD_SHORTHANDS
+        .iter()
+        .find(|(n, _)| eq(name, n))
+        .map(|(_, parts)| *parts)
+}
+
+fn initial_text(prop: Prop) -> Vec<u8> {
+    initial::initial_value(prop.name())
+        .map_or_else(|| b"initial".to_vec(), |t| t.to_bytes().to_vec())
+}
+
+fn font_synthesis_values(text: &[u8]) -> Option<Vec<Vec<u8>>> {
+    let canon = defs::grammar_canonical(
+        "none | [weight] [style oblique-only] [small-caps] [position]",
+        text,
+    )?;
+    let mut values: Vec<Vec<u8>> = FONT_SYNTHESIS_WORDS
+        .iter()
+        .map(|word| {
+            let listed = has_keyword(&canon, word);
+            (if listed { &b"auto"[..] } else { b"none" }).to_vec()
+        })
+        .collect();
+    if has_keyword(&canon, "oblique-only") {
+        values[1] = b"oblique-only".to_vec();
+    }
+    Some(values)
+}
+
+fn keyword_shorthand_values(name: &[u8], text: &[u8]) -> Option<Vec<Vec<u8>>> {
+    let parts = keyword_shorthand_parts(name)?;
+    let text = strip(text);
+    let white_space = eq(name, b"white-space");
+    if white_space
+        && let Some(&(_, collapse, mode)) = WHITE_SPACE_LEGACY.iter().find(|(kw, ..)| eq(text, kw))
+    {
+        return Some(vec![collapse.to_vec(), mode.to_vec()]);
+    }
+    if eq(name, b"font-synthesis") {
+        return font_synthesis_values(text);
+    }
+    let tokens = split_ws_paren(text, KEYWORD_SHORTHAND_TOKENS_MAX);
+    if tokens.is_empty() || tokens.len() >= KEYWORD_SHORTHAND_TOKENS_MAX {
+        return None;
+    }
+    let mut texts: Vec<Option<Vec<u8>>> = vec![None; parts.len()];
+    let mut last = None;
+    for tok in tokens {
+        if wide_keyword(tok).is_some() {
+            return None;
+        }
+        if white_space && word_is_one_of(tok, "discard-before discard-after discard-inner") {
+            continue;
+        }
+        let joined = |k: usize| match &texts[k] {
+            Some(prev) => [&prev[..], b" ", tok].concat(),
+            None => tok.to_vec(),
+        };
+        let k = (0..parts.len()).find(|&k| {
+            (texts[k].is_none() || last == Some(k)) && parse(parts[k], &joined(k)).is_some()
+        })?;
+        texts[k] = Some(joined(k));
+        last = Some(k);
+    }
+    parts
+        .iter()
+        .zip(texts)
+        .map(|(&prop, text)| {
+            let text = text.unwrap_or_else(|| initial_text(prop));
+            parse(prop, &text).is_some().then_some(text)
+        })
+        .collect()
+}
+
+fn keyword_shorthand(out: &mut Out, name: &[u8], text: &[u8]) {
+    let Some(parts) = keyword_shorthand_parts(name) else {
+        return;
     };
-    out.emit(Prop::WhiteSpace, mapped);
+    if let Some(wide) = wide_keyword(text) {
+        out.shared(parts, wide);
+        return;
+    }
+    let Some(values) = keyword_shorthand_values(name, text) else {
+        return;
+    };
+    let parsed: Option<Vec<Value>> = parts
+        .iter()
+        .zip(&values)
+        .map(|(&prop, text)| parse(prop, text))
+        .collect();
+    for (&prop, value) in parts.iter().zip(parsed.into_iter().flatten()) {
+        out.push(prop, value);
+    }
+}
+
+fn white_space_compose(collapse: &[u8], mode: &[u8]) -> Vec<u8> {
+    if let Some(&(keyword, ..)) = WHITE_SPACE_LEGACY
+        .iter()
+        .find(|(_, c, m)| *c == collapse && *m == mode)
+    {
+        return keyword.to_vec();
+    }
+    if mode == b"wrap" {
+        return collapse.to_vec();
+    }
+    if collapse == b"collapse" {
+        return mode.to_vec();
+    }
+    [collapse, b" ", mode].concat()
+}
+
+fn font_synthesis_compose(values: &[&[u8]]) -> Vec<u8> {
+    let words: Vec<&[u8]> = values
+        .iter()
+        .zip(FONT_SYNTHESIS_WORDS)
+        .filter(|(value, _)| !value.is_empty() && **value != b"none")
+        .map(|(value, word)| {
+            if *value == b"oblique-only" {
+                *value
+            } else {
+                word.as_bytes()
+            }
+        })
+        .collect();
+    if words.is_empty() {
+        b"none".to_vec()
+    } else {
+        words.join(&b' ')
+    }
+}
+
+pub fn keyword_shorthand_compose(name: &[u8], values: &[&[u8]]) -> Option<Vec<u8>> {
+    let parts = keyword_shorthand_parts(name)?;
+    if values.len() != parts.len() {
+        return None;
+    }
+    Some(match name.to_ascii_lowercase().as_slice() {
+        b"white-space" => white_space_compose(values[0], values[1]),
+        b"font-synthesis" => font_synthesis_compose(values),
+        b"text-wrap" if values[1] == b"auto" => values[0].to_vec(),
+        b"text-wrap" if values[0] == b"wrap" => values[1].to_vec(),
+        _ => [values[0], b" ", values[1]].concat(),
+    })
+}
+
+pub(crate) fn keyword_shorthand_specified(name: &[u8], text: &[u8]) -> Option<Vec<u8>> {
+    let parts = keyword_shorthand_parts(name)?;
+    if contains(text, b"var(") {
+        return None;
+    }
+    let text = strip(text);
+    if let Some(wide) = wide_keyword(text) {
+        return Some(values::serialize(&wide, false));
+    }
+    let values = keyword_shorthand_values(name, text)?;
+    let canonical: Vec<Vec<u8>> = parts
+        .iter()
+        .zip(&values)
+        .map(|(&prop, text)| {
+            let value = parse(prop, text)?;
+            Some(
+                values::specified_canonical(Some(prop.name()), text)
+                    .unwrap_or_else(|| values::serialize(&value, false)),
+            )
+        })
+        .collect::<Option<_>>()?;
+    let refs: Vec<&[u8]> = canonical.iter().map(Vec::as_slice).collect();
+    keyword_shorthand_compose(name, &refs)
 }
 
 fn container(out: &mut Out, text: &[u8]) {

@@ -26,6 +26,7 @@ use crate::initial;
 use crate::prop::Prop;
 use crate::property;
 use crate::property::{Body, Value};
+use crate::style_query;
 
 #[repr(C)]
 pub(super) struct RawMatch {
@@ -328,6 +329,50 @@ fn out_of_flow(out: &Out<'_>) -> bool {
         || out.keyword(Prop::Float).is_some_and(|k| k != b"none")
 }
 
+fn legacy_white_space(collapse: &[u8], nowrap: bool) -> &'static [u8] {
+    match collapse {
+        b"preserve" | b"preserve-spaces" | b"break-spaces" if nowrap => b"pre",
+        b"preserve" | b"preserve-spaces" => b"pre-wrap",
+        b"break-spaces" => b"break-spaces",
+        b"preserve-breaks" => b"pre-line",
+        _ if nowrap => b"nowrap",
+        _ => b"normal",
+    }
+}
+
+fn derive_white_space(out: &mut Out<'_>) {
+    let collapse = out.keyword(Prop::WhiteSpaceCollapse).unwrap_or(b"collapse");
+    let nowrap = out.keyword(Prop::TextWrapMode) == Some(b"nowrap");
+    let legacy = legacy_white_space(collapse, nowrap);
+    if out.keyword(Prop::WhiteSpace) == Some(legacy) {
+        return;
+    }
+    let value = if legacy == b"normal" {
+        initial_value_of(Prop::WhiteSpace.id())
+    } else {
+        new_keyword(legacy)
+    };
+    out.replace(Prop::WhiteSpace.id(), value);
+}
+
+fn resolve_emphasis_style(out: &mut Out<'_>) {
+    let fill: &[u8] = match out.keyword(Prop::TextEmphasisStyle) {
+        Some(b"filled") => b"",
+        Some(b"open") => b"open ",
+        _ => return,
+    };
+    let horizontal = style_query::writing_mode_of(out.style.keyword(Prop::WritingMode)) == 0;
+    let shape: &[u8] = if horizontal { b"circle" } else { b"sesame" };
+    let value = new_keyword(&[fill, shape].concat());
+    out.replace(Prop::TextEmphasisStyle.id(), value);
+}
+
+fn resolve_text_size_adjust(out: &mut Out<'_>) {
+    if out.keyword(Prop::TextSizeAdjust) == Some(b"none") {
+        out.replace(Prop::TextSizeAdjust.id(), new_keyword(b"100%"));
+    }
+}
+
 fn fix_display(out: &mut Out<'_>, layout_parent: Option<&RawStyle>, is_root: bool) {
     let specified = out
         .keyword(Prop::Display)
@@ -365,6 +410,9 @@ pub(super) fn cascade_apply(
     normalize_overflow(&mut out);
     resolve_wide_keywords(&mut out, parent);
     resolve_color_keywords(&mut out, parent);
+    derive_white_space(&mut out);
+    resolve_emphasis_style(&mut out);
+    resolve_text_size_adjust(&mut out);
     fix_display(&mut out, parents.layout, is_root);
     let parent_view = parent.map(StyleView);
     computed_units::resolve(&mut ComputedStyle(out.style), parent_view.as_ref(), root_px);
