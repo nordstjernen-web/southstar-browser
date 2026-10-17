@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* YouTube's home page renders instead of staying at grey placeholders.
+  Its 10.8 MB application bundle spent the whole 60 s script limit in
+  Boa's parser and bytecompiler, before any of it ran: every identifier
+  was resolved by a linear search of each enclosing scope's bindings,
+  and the bundle's wrapper function declares thousands of names. Scopes
+  now index their bindings by name; loading the bundle alone went from
+  over 90 s to about 13 s.
 * Windows: the JavaScript native-stack limit is sized from the thread's
   real stack (`GetCurrentThreadStackLimits`) instead of a fixed 1 MiB, so
   workers on their 8 MiB threads no longer stop at 768 KiB. Large worker
