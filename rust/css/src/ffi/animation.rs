@@ -29,6 +29,7 @@ pub(crate) struct RawEntry {
     paused: GBoolean,
     duration_auto: GBoolean,
     allow_discrete: GBoolean,
+    document_timeline: GBoolean,
 }
 
 #[repr(C)]
@@ -53,6 +54,7 @@ const _: () = assert!(
         && core::mem::offset_of!(RawEntry, timing) == 32
         && core::mem::offset_of!(RawEntry, iterations) == 88
         && core::mem::offset_of!(RawEntry, allow_discrete) == 112
+        && core::mem::offset_of!(RawEntry, document_timeline) == 116
         && core::mem::size_of::<RawList>() == 968
 );
 
@@ -75,6 +77,7 @@ const ZERO_ENTRY: RawEntry = RawEntry {
     paused: 0,
     duration_auto: 0,
     allow_discrete: 0,
+    document_timeline: 1,
 };
 
 impl RawList {
@@ -113,6 +116,7 @@ impl RawEntry {
             paused: glib::boolean(e.paused),
             duration_auto: glib::boolean(e.duration_auto),
             allow_discrete: glib::boolean(e.allow_discrete),
+            document_timeline: glib::boolean(e.document_timeline),
         }
     }
 
@@ -130,6 +134,7 @@ impl RawEntry {
             paused: self.paused != 0,
             duration_auto: self.duration_auto != 0,
             allow_discrete: self.allow_discrete != 0,
+            document_timeline: self.document_timeline != 0,
         }
     }
 }

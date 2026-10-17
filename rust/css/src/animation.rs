@@ -133,6 +133,7 @@ pub struct Entry {
     pub paused: bool,
     pub duration_auto: bool,
     pub allow_discrete: bool,
+    pub document_timeline: bool,
 }
 
 impl Entry {
@@ -150,6 +151,7 @@ impl Entry {
             paused: false,
             duration_auto,
             allow_discrete: false,
+            document_timeline: true,
         }
     }
 }
@@ -487,6 +489,7 @@ fn apply_longhand(out: &mut [Entry], value: Option<&[u8]>, prop: Longhand) {
             }
             Longhand::AnimationPlayState => e.paused = eq(item, b"paused"),
             Longhand::TransitionBehavior => e.allow_discrete = eq(item, b"allow-discrete"),
+            Longhand::AnimationTimeline => e.document_timeline = eq(item, b"auto"),
             _ => {}
         }
     }
@@ -527,6 +530,10 @@ fn build_list<'a>(
     }
     for &prop in &list_props(is_animation)[1..] {
         apply_longhand(&mut out, value_of(prop), prop);
+    }
+    if is_animation {
+        let timeline = Longhand::AnimationTimeline;
+        apply_longhand(&mut out, value_of(timeline), timeline);
     }
     out
 }

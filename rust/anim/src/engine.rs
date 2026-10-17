@@ -1429,7 +1429,8 @@ impl Anim {
             }
             let r = &mut s.runs[i];
             let Some(name) = e.name().filter(|name| {
-                e.duration_ms().partial_cmp(&0.0) != Some(Ordering::Less)
+                e.document_timeline()
+                    && e.duration_ms().partial_cmp(&0.0) != Some(Ordering::Less)
                     && self.shared.keyframes.contains_key(*name)
             }) else {
                 if r.name.is_some() {

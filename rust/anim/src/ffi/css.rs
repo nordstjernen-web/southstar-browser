@@ -262,6 +262,10 @@ impl<'a> Entry<'a> {
     pub fn allow_discrete(self) -> bool {
         self.0.allow_discrete
     }
+
+    pub fn document_timeline(self) -> bool {
+        self.0.document_timeline
+    }
 }
 
 pub struct AnimList(Vec<AnimationEntry>);
