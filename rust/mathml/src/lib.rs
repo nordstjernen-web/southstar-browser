@@ -679,7 +679,7 @@ fn render(
     render_seq(canvas, node, fpx, depth, x, by)
 }
 
-pub(crate) fn measure(math: Option<Node>, font_px: f64) -> (f64, f64, f64) {
+pub fn measure(math: Option<Node>, font_px: f64) -> (f64, f64, f64) {
     let e = render(None, math, font_px, 0, 0.0, 0.0);
     (e.width, e.ascent, e.descent)
 }

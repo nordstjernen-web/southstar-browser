@@ -3002,6 +3002,7 @@ dependencies = [
  "southstar-layout-sizing",
  "southstar-layout-table",
  "southstar-layout-tree",
+ "southstar-mathml",
  "southstar-style",
 ]
 
@@ -3120,6 +3121,7 @@ dependencies = [
  "southstar-layout-geom",
  "southstar-layout-sizing",
  "southstar-layout-tree",
+ "southstar-mathml",
  "southstar-paint",
  "southstar-style",
 ]

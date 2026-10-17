@@ -165,22 +165,6 @@ pub fn is_single_letter(text: &CStr) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_math_measure(
-    math: *const NsNode,
-    font_px: f64,
-    out_w: *mut f64,
-    out_ascent: *mut f64,
-    out_descent: *mut f64,
-) {
-    let (width, ascent, descent) = crate::measure(unsafe { Node::from_ptr(math) }, font_px);
-    for (out, value) in [(out_w, width), (out_ascent, ascent), (out_descent, descent)] {
-        if !out.is_null() {
-            unsafe { *out = value };
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn ns_math_paint(
     cr: *mut c_void,

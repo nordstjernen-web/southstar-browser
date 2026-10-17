@@ -70,7 +70,7 @@ pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const St
         BoxKind::Table => layout_table(b, parent_content_width, inherited),
         BoxKind::Math => {
             let font_px = length_or(style_of(b).and_then(|s| s.get(PropId::FontSize)), 16.0);
-            let (w, asc, desc) = math_measure(b.dom_ptr(), font_px);
+            let (w, asc, desc) = math_measure(b.dom(), font_px);
             b.set_content_width(w);
             b.set_content_height(asc + desc);
         }

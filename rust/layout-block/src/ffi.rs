@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, boolean};
@@ -10,10 +10,6 @@ use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_style::StyleRef;
 
 use crate::fieldset;
-
-unsafe extern "C" {
-    fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
-}
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
@@ -136,11 +132,7 @@ pub fn layout_grid(b: BoxRef<'_>, cb: &ContentBox, cursor_y: &mut f64) {
         southstar_layout_grid::layout_grid(b, cb.cw, cb.inner_x, cb.inner_y, cb.child_inherited);
 }
 
-pub fn math_measure(dom: *const c_void, font_px: f64) -> (f64, f64, f64) {
-    let (mut w, mut a, mut d) = (0.0, 0.0, 0.0);
-    unsafe { ns_math_measure(dom, font_px, &mut w, &mut a, &mut d) };
-    (w, a, d)
-}
+pub use southstar_mathml::measure as math_measure;
 
 pub fn set_container_dims(inline_px: f64, block_px: f64) {
     southstar_css::set_container_unit_dims(inline_px, block_px);
