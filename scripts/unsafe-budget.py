@@ -188,7 +188,7 @@ def format_budget(counts):
 
 def baseline_budget(ref):
     result = subprocess.run(["git", "show", f"{ref}:rust/unsafe-budget.tsv"],
-                            cwd=ROOT, capture_output=True, text=True)
+                            cwd=ROOT, capture_output=True, encoding="utf-8", errors="replace")
     return parse_budget(result.stdout) if result.returncode == 0 else None
 
 
