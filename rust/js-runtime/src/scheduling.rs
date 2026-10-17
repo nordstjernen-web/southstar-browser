@@ -23,8 +23,11 @@ pub(crate) fn add_depth(cell: &core::cell::Cell<c_int>, delta: c_int) -> c_int {
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
-    let saved = budget::push(js);
     let state = js.st();
+    if state.performing_microtask_checkpoint.replace(true) {
+        return;
+    }
+    let saved = budget::push(js);
     let mut failure: Option<(ContextHandle, Value)> = None;
     add_depth(&state.callback_depth, 1);
     loop {
@@ -60,6 +63,7 @@ pub(crate) fn drain_microtasks(js: Js) {
         glue::log_line(js, line.as_ptr());
     }
     budget::pop(js, saved);
+    state.performing_microtask_checkpoint.set(false);
     glue::storage_drain_deferred_events(js);
     if state.callback_depth.get() == 0 {
         glue::report_pending_rejections(js);

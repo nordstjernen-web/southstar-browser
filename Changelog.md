@@ -3,6 +3,26 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* CSS animations attached to a scroll or view timeline
+  (`animation-timeline` other than `auto`) no longer play as if on the
+  document timeline. With `animation-duration: auto` and
+  `animation-fill-mode: both` they jumped straight to their last keyframe:
+  ChatGPT's sidebar, whose grid column is a scroll-driven animation from
+  260px to 52px, was collapsed to its 52px rail. Such animations now stay
+  inactive, as an inactive timeline leaves them, until scroll-driven
+  timelines are implemented; `animation-timeline: none` is inactive too.
+* A stretched grid item's height is definite for its children: an item
+  that `align-self: stretch` grows to fill its row is laid out again at
+  that height when a child asked for it, so `height: 100%` inside it
+  fills the row instead of collapsing to content. ChatGPT's centered
+  home composer sat at the top of the page because of this.
+* A microtask checkpoint no longer runs inside another one. Native calls
+  that flush layout (for example `getAnimations()`) could drain the
+  microtask queue while a microtask was still on the stack, so a
+  scheduler that re-queues itself while it is busy (ChatGPT's) spun until
+  the 60-second script monitor halted the page, leaving it half rendered.
+  The nested checkpoint now returns at once, as the HTML Standard's
+  "performing a microtask checkpoint" flag requires.
 * Security: deeply nested script no longer crashes the tab. Boa checked
   the native-stack limit only when it called a function, so the parser
   and every recursion that does not pass through a call overflowed the
