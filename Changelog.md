@@ -8,8 +8,10 @@ Southstar Browser 0.9.12-dev:
   Boa's parser and bytecompiler, before any of it ran: every identifier
   was resolved by a linear search of each enclosing scope's bindings,
   and the bundle's wrapper function declares thousands of names. Scopes
-  now index their bindings by name; loading the bundle alone went from
-  over 90 s to about 13 s.
+  now index their bindings by name, and the parser no longer copies the
+  whole subtree of every parenthesized expression and var-scoped
+  declaration; loading the bundle alone went from over 90 s to about
+  13 s.
 * Windows: the JavaScript native-stack limit is sized from the thread's
   real stack (`GetCurrentThreadStackLimits`) instead of a fixed 1 MiB, so
   workers on their 8 MiB threads no longer stop at 768 KiB. Large worker

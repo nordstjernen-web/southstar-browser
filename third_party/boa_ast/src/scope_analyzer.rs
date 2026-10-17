@@ -2579,7 +2579,7 @@ pub(crate) fn eval_declaration_instantiation_scope(
         };
 
         // a.i. For each String vn of the BoundNames of d, do
-        for name in bound_names(&declaration) {
+        for name in bound_names(declaration) {
             // 1. If declaredFunctionNames does not contain vn, then
             if !declared_function_names.contains(&name) {
                 // a. If varEnv is a Global Environment Record, then
