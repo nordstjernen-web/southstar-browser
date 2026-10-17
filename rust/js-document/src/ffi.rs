@@ -54,8 +54,6 @@ unsafe extern "C" {
         value: *const c_char,
         len: isize,
     );
-    fn ns_net_cookies_for_js(url: *const c_char) -> *mut c_char;
-    fn ns_net_cookie_store_from_js(url: *const c_char, cookie: *const c_char);
     fn ns_net_http_date(date: *const c_char) -> i64;
     fn g_date_time_new_now_local() -> *mut c_void;
     fn g_date_time_format(datetime: *mut c_void, format: *const c_char) -> *mut c_char;
@@ -162,6 +160,14 @@ pub(crate) fn cookie_value(js: Js) -> Option<Vec<u8>> {
 
 pub(crate) fn set_cookie_value(js: Js, value: &[u8]) {
     api::set_cookie_value(js.0, Some(&c_bytes(value)));
+}
+
+pub(crate) fn cookie_version(js: Js) -> u64 {
+    api::cookie_version(js.0)
+}
+
+pub(crate) fn set_cookie_version(js: Js, version: u64) {
+    api::set_cookie_version(js.0, version);
 }
 
 pub(crate) fn partition_key(js: Js) -> Option<Vec<u8>> {
@@ -286,14 +292,15 @@ pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
 }
 
 pub(crate) fn cookies_for_js(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c_bytes(url);
-    take_glib_string(unsafe { ns_net_cookies_for_js(url.as_ptr()) })
+    southstar_net::cookies_for_js(url)
+}
+
+pub(crate) fn cookie_jar_version(url: &[u8]) -> Option<u64> {
+    southstar_net::cookie_jar_version(url)
 }
 
 pub(crate) fn cookie_store_from_js(url: &[u8], cookie: &[u8]) {
-    let url = c_bytes(url);
-    let cookie = c_bytes(cookie);
-    unsafe { ns_net_cookie_store_from_js(url.as_ptr(), cookie.as_ptr()) };
+    southstar_net::cookie_store_from_js(url, cookie);
 }
 
 pub(crate) fn http_date(date: &[u8]) -> i64 {

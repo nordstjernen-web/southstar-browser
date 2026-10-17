@@ -388,11 +388,16 @@ Network cookies live in a per-site, Netscape-format cookie jar on disk
 network stack, honouring `HttpOnly`,
 `Secure`, `SameSite`, `Path`, `Domain`, and expiry. At navigation the
 non-`HttpOnly` cookies for the document's origin are read back out of
-the jar (`ns_net_cookies_for_js`) and seeded into `document.cookie`,
-and the `document.cookie` setter writes back into that same per-site
-jar (`ns_net_cookie_store_from_js`) — so a cookie set from JS is sent
-on the next request, and a cookie set over the network is visible to a
-later `document.cookie` read. `HttpOnly` cookies are written to the jar
+the jar (`southstar_net::cookies_for_js`) and seeded into
+`document.cookie`, and the `document.cookie` setter writes back into that
+same per-site jar (`southstar_net::cookie_store_from_js`) — so a cookie set
+from JS is sent on the next request. A `document.cookie` read re-reads the
+jar whenever `southstar_net::cookie_jar_version` says it changed, so a
+cookie set or deleted over the network, by this page or another tab, is
+visible to the next read. Writes to a jar are serialised by a process-wide
+lock and an exclusive lock on `cookies/.lock`, so concurrent responses and
+renderer processes cannot overwrite each other's cookies. `HttpOnly`
+cookies are written to the jar
 with a `#HttpOnly_` line prefix that the JS read path skips, so they
 stay invisible to script.
 

@@ -167,7 +167,21 @@ pub fn get_cookie(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult 
     if js.is_null() || ffi::is_realm_document(scope, this) {
         return Ok(scope.string(""));
     }
+    refresh_from_jar(js);
     Ok(scope.string_from_bytes(&ffi::cookie_value(js).unwrap_or_default()))
+}
+
+fn refresh_from_jar(js: Js) {
+    let Some(url) = ffi::current_url(js) else {
+        return;
+    };
+    let Some(version) = ffi::cookie_jar_version(&url) else {
+        return;
+    };
+    if version != ffi::cookie_version(js) {
+        ffi::set_cookie_value(js, &ffi::cookies_for_js(&url).unwrap_or_default());
+        ffi::set_cookie_version(js, version);
+    }
 }
 
 pub fn set_cookie(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
@@ -205,6 +219,9 @@ pub fn set_cookie(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
     ffi::set_cookie_value(js, &jar);
     if let Some(url) = ffi::current_url(js) {
         ffi::cookie_store_from_js(&url, cookie);
+        if let Some(version) = ffi::cookie_jar_version(&url) {
+            ffi::set_cookie_version(js, version);
+        }
         let visible = ffi::cookies_for_js(&url).unwrap_or_default();
         ffi::set_cookie_value(js, &visible);
     }
@@ -215,6 +232,9 @@ pub(crate) fn seed_from_jar(js: Js) {
     let Some(url) = ffi::current_url(js) else {
         return;
     };
+    if let Some(version) = ffi::cookie_jar_version(&url) {
+        ffi::set_cookie_version(js, version);
+    }
     let Some(jar) = ffi::cookies_for_js(&url).filter(|jar| !jar.is_empty()) else {
         return;
     };

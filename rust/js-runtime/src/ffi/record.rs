@@ -157,6 +157,7 @@ struct Record {
     layout_root: *const c_void,
     pinned_wrappers_set: *mut GHashTable,
     cookie_value: Option<CString>,
+    cookie_version: Cell<u64>,
     cookie_buckets: Option<HashMap<CString, CString>>,
     partition_key: Option<CString>,
     opaque_counter: u64,
@@ -281,6 +282,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         layout_root: ptr::null(),
         pinned_wrappers_set: ptr::null_mut(),
         cookie_value: None,
+        cookie_version: Cell::new(0),
         cookie_buckets: None,
         partition_key: None,
         opaque_counter: 0,
@@ -442,6 +444,7 @@ pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
     unsafe {
         (*rec(js)).csp = None;
         (*rec(js)).cookie_value = None;
+        (*rec(js)).cookie_version.set(0);
         glib::g_free((*rec(js)).current_url.cast());
         (*rec(js)).current_url = ptr::null_mut();
     }
@@ -561,6 +564,7 @@ fn partition_apply(js: *mut NsJs, new_url: *const c_char) {
             .cookie_buckets
             .as_ref()
             .and_then(|buckets| buckets.get(&new_key).cloned());
+        (*rec(js)).cookie_version.set(0);
         (*rec(js)).partition_key = Some(new_key);
     }
 }
@@ -1303,6 +1307,16 @@ pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
     }
     let value = value.map(|value| cstring(value.to_bytes()));
     unsafe { (*rec(js)).cookie_value = value };
+}
+
+pub(crate) fn cookie_version(js: *const NsJs) -> u64 {
+    record(js).map_or(0, |js| js.cookie_version.get())
+}
+
+pub(crate) fn set_cookie_version(js: *const NsJs, version: u64) {
+    if let Some(js) = record(js) {
+        js.cookie_version.set(version);
+    }
 }
 
 pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {

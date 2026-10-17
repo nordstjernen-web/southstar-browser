@@ -125,6 +125,10 @@ pub fn cookie_jar_path(top_origin: Option<&[u8]>, js: bool) -> Option<Vec<u8>> {
     Some(join(&dir, &[short, suffix].concat()))
 }
 
+pub fn lock_cookie_jars() -> Option<std::fs::File> {
+    sys::lock_exclusive(&join(&cookie_dir()?, b".lock"))
+}
+
 pub fn clear_cookies() {
     if let Some(dir) = cookie_dir() {
         sys::empty_dir(&dir);
