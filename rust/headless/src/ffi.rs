@@ -11,7 +11,7 @@ mod stdio;
 mod util;
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};

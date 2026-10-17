@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -330,10 +330,6 @@ pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {
 
 pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(node) }
-}
-
-pub(crate) fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
 
 pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
