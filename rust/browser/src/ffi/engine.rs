@@ -5,8 +5,8 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_dom::Node;
+use southstar_glib::{GHashTable, GStr};
 use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 
 use super::glib::StrBufOwned;
@@ -18,8 +18,6 @@ pub use southstar_image::ImageCache as Images;
 pub use southstar_video::VideoCache as Videos;
 
 unsafe extern "C" {
-    fn ns_layout_set_open_select(select: *const NsNode);
-    fn ns_layout_set_datalist_open(open: GBoolean);
     fn ns_spell_init();
     fn ns_webgl_take_pending_origin() -> *mut c_char;
     fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
@@ -80,7 +78,7 @@ impl NsBrowser {
     }
 
     pub fn set_open_select_for_layout(&self) {
-        unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
+        southstar_layout_build::set_open_select(self.open_select.get());
     }
 }
 
@@ -167,7 +165,7 @@ pub fn style_keyword_raw<'a>(style: *const Style, prop: c_int) -> Option<&'a CSt
 }
 
 pub fn layout_set_datalist_open(open: bool) {
-    unsafe { ns_layout_set_datalist_open(southstar_glib::boolean(open)) };
+    southstar_layout_build::set_datalist_open(open);
 }
 
 pub fn inline_rect_y(layout: BoxRef<'_>, target: Node<'_>) -> Option<f64> {

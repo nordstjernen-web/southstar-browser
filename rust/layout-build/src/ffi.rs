@@ -262,15 +262,11 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
     b.as_mut_ptr()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_set_open_select(select: *const NsNode) {
-    state::set_open_select(select);
+pub fn set_open_select(select: Option<Node<'_>>) {
+    state::set_open_select(Node::ptr_or_null(select));
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_layout_set_datalist_open(open: GBoolean) {
-    state::set_datalist_open(open != 0);
-}
+pub use state::set_datalist_open;
 
 pub use block::flat_parent;
 pub use media::image_dimension_attr;

@@ -63,7 +63,6 @@ const _: () = assert!(
 );
 
 unsafe extern "C" {
-    fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -139,12 +138,14 @@ fn add_pseudo(
     let Some(pseudo) = pseudo else {
         return;
     };
-    let content = pseudo
+    let text = pseudo
         .value(&CONTENT)
-        .map_or(ptr::null(), |v| v.as_ptr().cast());
-    let text = unsafe { GStr::take(ns_layout_pseudo_content_text(content, host.as_ptr())) };
-    if let Some(text) = text.as_deref().filter(|t| !t.is_empty()) {
-        add_styled(Some(pseudo), text.to_bytes(), families);
+        .and_then(|v| v.keyword_text())
+        .and_then(|raw| {
+            southstar_layout_content::pseudo::resolve_content(raw.to_bytes(), Some(host))
+        });
+    if let Some(text) = text.filter(|t| !t.is_empty()) {
+        add_styled(Some(pseudo), &text, families);
     }
 }
 
@@ -549,14 +550,12 @@ fn relayout(
     styles
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_render_page_uses_hover() -> GBoolean {
-    glib::boolean(USES_HOVER.load(Ordering::Relaxed))
+pub fn page_uses_hover() -> bool {
+    USES_HOVER.load(Ordering::Relaxed)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_render_page_uses_active() -> GBoolean {
-    glib::boolean(USES_ACTIVE.load(Ordering::Relaxed))
+pub fn page_uses_active() -> bool {
+    USES_ACTIVE.load(Ordering::Relaxed)
 }
 
 pub fn page_rule() -> Option<PageRule> {

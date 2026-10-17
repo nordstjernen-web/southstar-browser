@@ -15,6 +15,7 @@ southstar-dom = { path = "../dom" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
+southstar-layout-content = { path = "../layout-content" }
 southstar-layout-position = { path = "../layout-position" }
 southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }

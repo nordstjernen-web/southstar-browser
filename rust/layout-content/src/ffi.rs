@@ -3,17 +3,16 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
 use std::sync::OnceLock;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, g_free, strdup};
+use southstar_glib::{GBoolean, g_free};
 use southstar_layout::{BoxRef, InlineAttr, Style};
 use southstar_paint::ffi as paint;
 use southstar_paint::ffi::pango::{Context, Layout};
-use southstar_style::{NsCssValue, StyleRef, ValueRef};
+use southstar_style::StyleRef;
 
-use crate::{controls, pseudo};
+use crate::controls;
 
 unsafe extern "C" {
     fn g_utf8_strup(s: *const c_char, len: isize) -> *mut c_char;
@@ -108,14 +107,6 @@ fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
 }
 
-fn value<'a>(v: *const NsCssValue) -> Option<ValueRef<'a>> {
-    unsafe { ValueRef::from_ptr(v) }
-}
-
-fn dup_or_null(bytes: Option<Vec<u8>>) -> *mut c_char {
-    bytes.map_or(ptr::null_mut(), |b| strdup(&b))
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_control_css_extra_w(dom: *const NsNode, s: *const Style) -> f64 {
     controls::css_extra(node(dom), style(s), false)
@@ -123,16 +114,4 @@ pub unsafe extern "C" fn ns_control_css_extra_w(dom: *const NsNode, s: *const St
 
 pub fn inline_attr_control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {
     controls::inline_attr_control_width(r, style(r.style()), node(r.dom_ptr().cast()), Some(b))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_pseudo_content_text(
-    content: *const NsCssValue,
-    host: *const NsNode,
-) -> *mut c_char {
-    dup_or_null(
-        value(content)
-            .and_then(ValueRef::keyword_text)
-            .and_then(|raw| pseudo::resolve_content(raw.to_bytes(), node(host))),
-    )
 }
