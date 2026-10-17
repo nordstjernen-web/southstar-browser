@@ -14,6 +14,7 @@ southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }
+southstar-layout-query = { path = "../layout-query" }
 southstar-mat4 = { path = "../mat4" }
 southstar-style = { path = "../style" }
 southstar-svg = { path = "../svg" }

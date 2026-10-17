@@ -7,7 +7,7 @@ use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, GHashTable, GStr};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 
 use super::glib::StrBufOwned;
 use super::{Js, NsBrowser};
@@ -20,7 +20,6 @@ pub use southstar_video::VideoCache as Videos;
 unsafe extern "C" {
     fn ns_layout_set_open_select(select: *const NsNode);
     fn ns_layout_set_datalist_open(open: GBoolean);
-    pub fn ns_box_free(b: *mut NsBox);
     fn ns_spell_init();
     fn ns_webgl_take_pending_origin() -> *mut c_char;
     fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
@@ -86,7 +85,8 @@ impl NsBrowser {
 }
 
 pub unsafe fn box_free(b: *mut NsBox) {
-    unsafe { ns_box_free(b) };
+    // SAFETY: the caller hands over null or a layout tree it owns and no longer reads.
+    BoxPool::free_tree(unsafe { BoxRef::from_ptr(b) });
 }
 
 pub use southstar_engine::in_blocking_fetch as engine_in_blocking_fetch;

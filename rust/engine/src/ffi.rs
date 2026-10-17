@@ -7,7 +7,7 @@ mod images;
 mod net;
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -86,7 +86,6 @@ unsafe extern "C" {
     fn cairo_create(surface: *mut CairoSurface) -> *mut Cairo;
     fn cairo_destroy(cr: *mut Cairo);
     fn cairo_show_page(cr: *mut Cairo);
-    fn ns_box_kind_name(kind: c_uint) -> *const c_char;
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
@@ -265,7 +264,7 @@ impl Out {
     }
 
     pub fn box_line(&mut self, b: BoxRef) {
-        let name = unsafe { ns_box_kind_name(b.kind_raw()) };
+        let name = southstar_layout_query::kind_name(b.kind_raw()).as_ptr();
         unsafe {
             g_string_append_printf(
                 self.0.as_ptr(),

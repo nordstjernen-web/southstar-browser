@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_void};
 use std::sync::OnceLock;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
 
 pub use southstar_style::StyleTable as Styles;
@@ -100,15 +100,6 @@ pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {
     southstar_dom::controls::parse_int(s, dflt, min_v, max_v)
-}
-
-fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_free(b: *mut NsBox) {
-    BoxPool::free_tree(box_ref(b));
 }
 
 pub fn dom_ptr_of(n: Node<'_>) -> *const c_void {

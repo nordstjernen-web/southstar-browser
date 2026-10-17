@@ -8,17 +8,15 @@ use std::ffi::CString;
 
 use southstar_css::OwnedSheet;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GHashTable};
 use southstar_js_runtime::api;
-use southstar_layout::NsBox;
+use southstar_layout::{BoxPool, BoxRef, NsBox};
 
 use super::net::Bytes;
 
 pub use southstar_render::{RenderCtx, RenderProfile};
 
 unsafe extern "C" {
-    fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
-    fn ns_box_free(b: *mut NsBox);
     fn g_printerr(format: *const c_char, ...);
 }
 
@@ -83,13 +81,12 @@ pub fn media_viewport_pop() {
 }
 
 pub fn layout_frame_viewport_raw(frame: usize) -> Option<(f64, f64)> {
-    let (mut w, mut h) = (0.0, 0.0);
-    let ok = unsafe { ns_layout_frame_viewport(frame as *const NsNode, &mut w, &mut h) };
-    (ok != 0).then_some((w, h))
+    // SAFETY: frame is the address of a node of this thread's store, and from_ptr returns None once that node is freed.
+    unsafe { Node::from_ptr(frame as *const NsNode) }.and_then(layout_frame_viewport)
 }
 
 pub fn layout_frame_viewport(frame: Node) -> Option<(f64, f64)> {
-    layout_frame_viewport_raw(frame.as_ptr() as usize)
+    southstar_layout_query::frame_viewport(frame)
 }
 
 pub struct Relayout<'a> {
@@ -229,7 +226,7 @@ pub fn discard_layout(js: *mut c_void, styles: *mut GHashTable, out_layout: *mut
     }
     unsafe {
         if !out_layout.is_null() && !(*out_layout).is_null() {
-            ns_box_free(*out_layout);
+            BoxPool::free_tree(BoxRef::from_ptr(*out_layout));
             *out_layout = ptr::null_mut();
         }
         if !styles.is_null() {

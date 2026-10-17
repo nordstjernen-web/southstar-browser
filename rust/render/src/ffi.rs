@@ -12,7 +12,7 @@ use southstar_anim::AnimHandle;
 use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef, NsBox};
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
@@ -73,7 +73,6 @@ unsafe extern "C" {
         images: *mut c_void,
         base_url: *const c_char,
     ) -> *mut NsBox;
-    fn ns_box_free(b: *mut NsBox);
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -519,7 +518,7 @@ fn relayout(
             p.layout2_us += t7 - t6;
         }
         unsafe {
-            ns_box_free(layout);
+            BoxPool::free_tree(BoxRef::from_ptr(layout));
             glib::g_hash_table_destroy(styles);
         }
         layout = layout2;
