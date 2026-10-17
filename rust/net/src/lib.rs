@@ -28,6 +28,7 @@ pub use cookies::{
     store_from_js as cookie_store_from_js,
 };
 pub use error_page::build as build_error_page;
+pub use ffi::fetch::Failure;
 pub use ffi::fetch::{
     FetchDest, Response, Timing as ResponseTiming, accept_header_lines,
     ns_net_accept_headers_for as accept_headers_for, request_key,
@@ -36,9 +37,9 @@ pub use ffi::forms::{multipart_boundary, urlencoded_append_pair};
 pub use ffi::netlog::set_log_fetches;
 pub use ffi::proxy::{http_proxy, https_proxy, no_proxy, proxy_override, set_proxy_override};
 pub use ffi::queue::{
-    BlobResolver, ReadyCallback, fetch_blocking, idle, ns_net_fetch_finish as fetch_finish,
-    ns_net_request_async as request_async, preconnect_async, preload_clear, preload_expect,
-    set_blob_resolver, shutdown,
+    BlobResolver, Cancellable, FetchRequest, Outcome, ReadyCallback, fetch_blocking, idle,
+    ns_net_fetch_finish as fetch_finish, ns_net_request_async as request_async, preconnect_async,
+    preload_clear, preload_expect, request_blocking, request_with, set_blob_resolver, shutdown,
 };
 pub use ffi::storage::hsts_should_upgrade;
 pub use ffi::transport::{ca_bundle_path, init};

@@ -4,7 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -13,21 +13,7 @@ use southstar_glib::{self as glib, GBoolean, GHashTable};
 
 use super::net::{self, Dest, NestedLoop, Response};
 
-#[repr(C)]
-struct NsImagePrefix {
-    _url: *mut c_char,
-    final_url: *mut c_char,
-    cors_allow_origin: *mut c_char,
-}
-
 unsafe extern "C" {
-    fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
-    fn ns_image_cache_insert_encoded(
-        cache: *mut c_void,
-        url: *const c_char,
-        data: *const u8,
-        len: usize,
-    ) -> *mut c_void;
     fn g_hash_table_new_full(
         hash: unsafe extern "C" fn(*const c_void) -> c_uint,
         equal: unsafe extern "C" fn(*const c_void, *const c_void) -> GBoolean,
@@ -39,34 +25,26 @@ unsafe extern "C" {
 pub use southstar_layout_query::collect_images;
 
 #[derive(Clone, Copy)]
-pub struct ImageCache(NonNull<c_void>);
+pub struct ImageCache(southstar_image::ImageCache);
 
 impl ImageCache {
     pub fn of(cache: southstar_image::ImageCache) -> ImageCache {
-        ImageCache(NonNull::new(cache.raw()).expect("image cache handle"))
+        ImageCache(cache)
     }
 
     pub fn peek(self, url: &CStr) -> bool {
-        !unsafe { ns_image_cache_peek(self.0.as_ptr(), url.as_ptr()) }.is_null()
+        self.0.peek(url).is_some()
     }
 
-    fn store(self, url: *const c_char, resp: &Response) {
+    fn store(self, url: &CStr, resp: &Response) {
         let Some(body) = resp.body().filter(|b| !b.is_empty()) else {
             return;
         };
         if resp.error().is_some() {
             return;
         }
-        let img = unsafe {
-            ns_image_cache_insert_encoded(self.0.as_ptr(), url, body.as_ptr(), body.len())
-        };
-        let Some(img) = (unsafe { img.cast::<NsImagePrefix>().as_mut() }) else {
-            return;
-        };
-        if img.final_url.is_null() {
-            let text = |value: Option<&CStr>| value.map_or(ptr::null(), CStr::as_ptr);
-            img.final_url = unsafe { glib::g_strdup(text(resp.final_url())) };
-            img.cors_allow_origin = unsafe { glib::g_strdup(text(resp.cors_allow_origin())) };
+        if let Some(image) = self.0.insert_encoded(url, body) {
+            image.adopt_origin(resp.final_url(), resp.cors_allow_origin());
         }
     }
 }
@@ -144,7 +122,8 @@ unsafe extern "C" fn on_image_fetched(_src: *mut c_void, result: *mut c_void, ud
     let item = unsafe { Box::from_raw(ud.cast::<BlockingItem>()) };
     let st = unsafe { &*item.state };
     if let Some(resp) = unsafe { net::finish(result) } {
-        st.cache.store(item.abs, &resp);
+        // SAFETY: abs is the item's own g_strdup'd URL, freed only after this call.
+        st.cache.store(unsafe { CStr::from_ptr(item.abs) }, &resp);
     }
     st.pending.set(st.pending.get() - 1);
     if st.pending.get() == 0 {
@@ -210,7 +189,8 @@ unsafe extern "C" fn on_session_image_fetched(
     if let Some(resp) = unsafe { net::finish(result) }
         && !s.dead.get()
     {
-        s.cache.store(item.abs, &resp);
+        // SAFETY: abs is the item's own g_strdup'd URL, freed only after this call.
+        s.cache.store(unsafe { CStr::from_ptr(item.abs) }, &resp);
     }
     if s.outstanding.get() > 0 {
         s.outstanding.set(s.outstanding.get() - 1);

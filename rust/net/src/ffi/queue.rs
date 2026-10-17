@@ -57,6 +57,9 @@ unsafe extern "C" {
     fn g_task_is_valid(result: *mut c_void, source_object: *mut c_void) -> GBoolean;
     fn g_task_propagate_pointer(task: *mut c_void, error: *mut *mut GError) -> *mut c_void;
     fn g_object_unref(object: *mut c_void);
+    fn g_object_ref(object: *mut c_void) -> *mut c_void;
+    fn g_cancellable_new() -> *mut c_void;
+    fn g_cancellable_cancel(cancellable: *mut c_void);
     fn g_return_if_fail_warning(
         log_domain: *const c_char,
         pretty_function: *const c_char,
@@ -417,18 +420,170 @@ fn blob_response(url: &[u8]) -> Option<Response> {
     Some(resp)
 }
 
-fn coalescing_key(
-    url: &[u8],
-    top_url: Option<&[u8]>,
-    method: Option<&[u8]>,
-    headers: &[Vec<u8>],
-    cancellable: *mut c_void,
-    body: *const c_void,
-) -> Option<Vec<u8>> {
-    if !cancellable.is_null() || !body.is_null() {
+fn coalescing_key(req: &FetchRequest<'_>, cancellable: *mut c_void) -> Option<Vec<u8>> {
+    if !cancellable.is_null() || req.body.is_some() {
         return None;
     }
-    fetch::request_key(url, top_url, method, headers)
+    fetch::request_key(req.url, req.top_url, req.method, req.headers)
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct FetchRequest<'a> {
+    pub url: &'a [u8],
+    pub top_url: Option<&'a [u8]>,
+    pub method: Option<&'a [u8]>,
+    pub body: Option<&'a [u8]>,
+    pub content_type: Option<&'a [u8]>,
+    pub headers: &'a [Vec<u8>],
+}
+
+pub struct Cancellable(ptr::NonNull<c_void>);
+
+impl Cancellable {
+    pub fn new() -> Cancellable {
+        // SAFETY: g_cancellable_new has no preconditions and never returns null.
+        let raw = unsafe { g_cancellable_new() };
+        Cancellable(ptr::NonNull::new(raw).expect("g_cancellable_new"))
+    }
+
+    pub fn cancel(&self) {
+        // SAFETY: the handle holds a reference to a live GCancellable.
+        unsafe { g_cancellable_cancel(self.0.as_ptr()) };
+    }
+
+    fn as_ptr(&self) -> *mut c_void {
+        self.0.as_ptr()
+    }
+}
+
+impl Default for Cancellable {
+    fn default() -> Cancellable {
+        Cancellable::new()
+    }
+}
+
+impl Clone for Cancellable {
+    fn clone(&self) -> Cancellable {
+        // SAFETY: the handle holds a reference to a live GCancellable, and the copy owns a new one.
+        unsafe { g_object_ref(self.0.as_ptr()) };
+        Cancellable(self.0)
+    }
+}
+
+impl Drop for Cancellable {
+    fn drop(&mut self) {
+        // SAFETY: the handle owns one reference, given up here.
+        unsafe { g_object_unref(self.0.as_ptr()) };
+    }
+}
+
+// SAFETY: GCancellable is thread-safe and its reference count is atomic.
+unsafe impl Send for Cancellable {}
+
+pub type Outcome = Result<Response, Vec<u8>>;
+
+type Done = Box<dyn FnOnce(Outcome)>;
+
+unsafe extern "C" fn request_done(_source: *mut c_void, result: *mut c_void, data: *mut c_void) {
+    // SAFETY: data is the boxed callback request_with leaked for this request, reclaimed once.
+    let done = unsafe { Box::from_raw(data.cast::<Done>()) };
+    let mut error: *mut GError = ptr::null_mut();
+    // SAFETY: result is the GAsyncResult of a request task, and error is a null local slot.
+    let resp = unsafe { ns_net_fetch_finish(result, &mut error) };
+    // SAFETY: the error, if any, is the GError the finish call handed over.
+    let message = unsafe { error.as_ref() }
+        .map(|e| text(e.message).unwrap_or_default().to_vec())
+        .unwrap_or_default();
+    if !error.is_null() {
+        // SAFETY: the error is owned here and freed once.
+        unsafe { glib::g_error_free(error) };
+    }
+    // SAFETY: a finished request's response is new and owned by nobody else.
+    let outcome = unsafe { Response::from_raw(resp) }.ok_or(message);
+    (*done)(outcome);
+}
+
+pub fn request_with(
+    req: &FetchRequest<'_>,
+    cancellable: Option<&Cancellable>,
+    done: impl FnOnce(Outcome) + 'static,
+) {
+    let done: Box<Done> = Box::new(Box::new(done));
+    submit_request(
+        req,
+        cancellable.map_or(ptr::null_mut(), Cancellable::as_ptr),
+        Some(request_done),
+        Box::into_raw(done).cast(),
+    );
+}
+
+fn submit_request(
+    req: &FetchRequest<'_>,
+    cancellable: *mut c_void,
+    callback: ReadyCallback,
+    user_data: *mut c_void,
+) {
+    if let Some(resp) = blob_response(req.url) {
+        let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
+        return_outcome(task.0, Ok(resp));
+        return;
+    }
+    let key = coalescing_key(req, cancellable);
+    if let Some(key) = &key {
+        match join_async(key, callback, user_data) {
+            Claim::Preloaded(resp) => {
+                let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
+                return_outcome(task.0, Ok(resp));
+                return;
+            }
+            Claim::Joined => return,
+            Claim::Lead => {}
+        }
+    }
+    let ctx = Box::new(FetchCtx {
+        url: req.url.to_vec(),
+        host: url::host_from(req.url),
+        top_url: req.top_url.map(<[u8]>::to_vec),
+        method: req.method.filter(|m| !m.is_empty()).map(<[u8]>::to_vec),
+        content_type: req
+            .content_type
+            .filter(|ct| !ct.is_empty())
+            .map(<[u8]>::to_vec),
+        body: req.body.filter(|b| !b.is_empty()).map(<[u8]>::to_vec),
+        headers: req.headers.to_vec(),
+        coalesce_key: key,
+    });
+    let task = Task::new(cancellable, callback, user_data).tagged(
+        ns_net_request_async as *const c_void,
+        c"ns_net_request_async",
+    );
+    // SAFETY: the task is live, and it takes ownership of the context and frees it with fetch_ctx_free.
+    unsafe { g_task_set_task_data(task.0, Box::into_raw(ctx).cast(), Some(fetch_ctx_free)) };
+    submit(task);
+}
+
+pub fn request_blocking(req: &FetchRequest<'_>) -> Result<Response, Failure> {
+    blocking(req, ptr::null_mut())
+}
+
+fn blocking(req: &FetchRequest<'_>, cancellable: *mut c_void) -> Result<Response, Failure> {
+    let key = coalescing_key(req, cancellable);
+    if let Some(shared) = key.as_deref().and_then(join_blocking) {
+        return shared;
+    }
+    let outcome = fetch::fetch(&Fetch {
+        url: req.url,
+        top_url: req.top_url,
+        method: req.method,
+        body: req.body,
+        content_type: req.content_type,
+        headers: req.headers,
+        cancellable,
+    });
+    if let Some(key) = &key {
+        deliver(key, outcome.as_ref());
+    }
+    outcome
 }
 
 pub fn idle() -> bool {
@@ -572,52 +727,20 @@ pub unsafe extern "C" fn ns_net_request_async(
         };
         return;
     };
-    if let Some(resp) = blob_response(url_bytes) {
-        let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
-        return_outcome(task.0, Ok(resp));
-        return;
-    }
-
+    // SAFETY: the caller passes extra_headers as null or a NULL-terminated array of C strings.
     let headers = unsafe { fetch::header_lines(extra_headers) };
-    let key = coalescing_key(
-        url_bytes,
-        text(top_url),
-        text(method),
-        &headers,
-        cancellable,
+    let body = (!body.is_null() && body_len > 0)
+        // SAFETY: a non-null body holds body_len readable bytes.
+        .then(|| unsafe { glib::slice(body.cast(), body_len) });
+    let req = FetchRequest {
+        url: url_bytes,
+        top_url: text(top_url),
+        method: text(method),
         body,
-    );
-    if let Some(key) = &key {
-        match join_async(key, callback, user_data) {
-            Claim::Preloaded(resp) => {
-                let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
-                return_outcome(task.0, Ok(resp));
-                return;
-            }
-            Claim::Joined => return,
-            Claim::Lead => {}
-        }
-    }
-
-    let ctx = Box::new(FetchCtx {
-        url: url_bytes.to_vec(),
-        host: url::host_from(url_bytes),
-        top_url: text(top_url).map(<[u8]>::to_vec),
-        method: text(method).filter(|m| !m.is_empty()).map(<[u8]>::to_vec),
-        content_type: text(content_type)
-            .filter(|ct| !ct.is_empty())
-            .map(<[u8]>::to_vec),
-        body: (!body.is_null() && body_len > 0)
-            .then(|| unsafe { glib::slice(body.cast(), body_len) }.to_vec()),
-        headers,
-        coalesce_key: key,
-    });
-    let task = Task::new(cancellable, callback, user_data).tagged(
-        ns_net_request_async as *const c_void,
-        c"ns_net_request_async",
-    );
-    unsafe { g_task_set_task_data(task.0, Box::into_raw(ctx).cast(), Some(fetch_ctx_free)) };
-    submit(task);
+        content_type: text(content_type),
+        headers: &headers,
+    };
+    submit_request(&req, cancellable, callback, user_data);
 }
 
 #[unsafe(no_mangle)]
@@ -636,34 +759,18 @@ pub unsafe extern "C" fn ns_net_request_blocking(
     let Some(url) = text(url) else {
         return ptr::null_mut();
     };
+    // SAFETY: the caller passes extra_headers as null or a NULL-terminated array of C strings.
     let headers = unsafe { fetch::header_lines(extra_headers) };
-    let key = coalescing_key(
+    let req = FetchRequest {
         url,
-        text(top_url),
-        text(method),
-        &headers,
-        cancellable,
-        body,
-    );
-    let outcome = match key.as_deref().and_then(join_blocking) {
-        Some(shared) => shared,
-        None => {
-            let outcome = fetch::fetch(&Fetch {
-                url,
-                top_url: text(top_url),
-                method: text(method),
-                body: (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), body_len) }),
-                content_type: text(content_type),
-                headers: &headers,
-                cancellable,
-            });
-            if let Some(key) = &key {
-                deliver(key, outcome.as_ref());
-            }
-            outcome
-        }
+        top_url: text(top_url),
+        method: text(method),
+        // SAFETY: a non-null body holds body_len readable bytes.
+        body: (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), body_len) }),
+        content_type: text(content_type),
+        headers: &headers,
     };
-    match outcome {
+    match blocking(&req, cancellable) {
         Ok(resp) => resp.into_raw(),
         Err(failure) => {
             failure.set(error);
@@ -673,27 +780,12 @@ pub unsafe extern "C" fn ns_net_request_blocking(
 }
 
 pub fn fetch_blocking(url: &CStr) -> Option<Response> {
-    let mut error: *mut GError = ptr::null_mut();
-    // SAFETY: url is NUL-terminated, the other arguments are null or empty and error is a writable local.
-    let resp = unsafe {
-        ns_net_request_blocking(
-            url.as_ptr(),
-            ptr::null(),
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            ptr::null(),
-            ptr::null_mut(),
-            &mut error,
-        )
-    };
-    if !error.is_null() {
-        // SAFETY: ns_net_request_blocking handed this error over to the caller.
-        unsafe { glib::g_error_free(error) };
-    }
-    // SAFETY: the response, if any, is new and owned by nobody else.
-    unsafe { Response::from_raw(resp) }
+    request_blocking(&FetchRequest {
+        url: url.to_bytes(),
+        method: Some(b"GET"),
+        ..FetchRequest::default()
+    })
+    .ok()
 }
 
 /// # Safety

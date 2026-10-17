@@ -8,7 +8,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
-use southstar_image::ImageRef;
+use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
 use southstar_js_runtime::api::{self, ResourceInfo as PerfInfo};
 use southstar_layout::{BoxRef, NsBox};
@@ -30,7 +30,6 @@ impl Js {
 pub(crate) struct Realm(ContextHandle);
 
 type GBoolean = c_int;
-type ImageReadyFn = unsafe extern "C" fn(img: *mut c_void, user_data: *mut c_void);
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
@@ -43,15 +42,6 @@ unsafe extern "C" {
         kind: *const c_char,
     ) -> GBoolean;
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_image_cache_get(
-        cache: *mut c_void,
-        url: *const c_char,
-        top_url: *const c_char,
-        cb: ImageReadyFn,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
-    fn ns_image_cache_cancel_cb(cache: *mut c_void, user_data: *mut c_void);
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
@@ -95,16 +85,21 @@ pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
     Some(CString::new(resolved).unwrap_or_default())
 }
 
-fn image_cache(js: Js) -> *mut c_void {
-    api::image_cache(js.0)
+fn image_cache(js: Js) -> Option<ImageCache> {
+    // SAFETY: the page's image cache pointer is null or its live cache.
+    unsafe { ImageCache::from_raw(api::image_cache(js.0)) }
 }
 
 pub(crate) fn has_image_cache(js: Js) -> bool {
-    !image_cache(js).is_null()
+    image_cache(js).is_some()
 }
 
 fn load_ptr(load: &Load) -> *mut c_void {
     ptr::from_ref(load).cast_mut().cast()
+}
+
+fn load_addr(load: &Load) -> usize {
+    load_ptr(load) as usize
 }
 
 pub(crate) fn cache_get(
@@ -113,26 +108,16 @@ pub(crate) fn cache_get(
     top_url: &CStr,
     load: &Rc<Load>,
 ) -> Option<ImageRef<'static>> {
-    let raw = unsafe {
-        ns_image_cache_get(
-            image_cache(js),
-            url.as_ptr(),
-            top_url.as_ptr(),
-            on_image_ready,
-            load_ptr(load),
-        )
-    };
-    unsafe { ImageRef::from_ptr(raw) }
+    image_cache(js)?.get(url, Some(top_url), Some(on_image_ready), load_addr(load))
 }
 
 pub(crate) fn cache_peek(js: Js, url: &CStr) -> Option<ImageRef<'static>> {
-    unsafe { ImageRef::from_ptr(ns_image_cache_peek(image_cache(js), url.as_ptr())) }
+    image_cache(js)?.peek(url)
 }
 
 pub(crate) fn cancel_image_cb(js: Js, load: &Load) {
-    let cache = image_cache(js);
-    if !cache.is_null() {
-        unsafe { ns_image_cache_cancel_cb(cache, load_ptr(load)) };
+    if let Some(cache) = image_cache(js) {
+        cache.cancel_ready(load_addr(load));
     }
 }
 
@@ -235,9 +220,10 @@ unsafe fn retain(data: *mut c_void) -> Option<Rc<Load>> {
     }
 }
 
-unsafe extern "C" fn on_image_ready(img: *mut c_void, user_data: *mut c_void) {
-    if let Some(load) = unsafe { retain(user_data) } {
-        crate::on_image_ready(load, unsafe { ImageRef::from_ptr(img) });
+fn on_image_ready(img: ImageRef<'static>, load: usize) {
+    // SAFETY: load is the address of a Load whose Rc keeps it alive until its callback is cancelled.
+    if let Some(load) = unsafe { retain(load as *mut c_void) } {
+        crate::on_image_ready(load, Some(img));
     }
 }
 

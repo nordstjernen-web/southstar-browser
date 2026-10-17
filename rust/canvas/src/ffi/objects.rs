@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_void};
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -25,15 +25,6 @@ pub struct NsNode {
 }
 
 unsafe extern "C" {
-    fn ns_image_decode_bytes_to_pixels(
-        data: *const u8,
-        len: usize,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-        out_stride: *mut usize,
-        out_buf_len: *mut usize,
-        out_format: *mut c_int,
-    ) -> *mut u8;
     fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_computed_text(
         ctx: ContextHandle,
@@ -70,28 +61,12 @@ pub(crate) struct Decoded {
 }
 
 pub(crate) fn decode_image(bytes: &[u8]) -> Option<Decoded> {
-    let (mut w, mut h, mut stride, mut buf_len, mut format) = (0, 0, 0usize, 0usize, 0);
-    let pixels = unsafe {
-        ns_image_decode_bytes_to_pixels(
-            bytes.as_ptr(),
-            bytes.len(),
-            &mut w,
-            &mut h,
-            &mut stride,
-            &mut buf_len,
-            &mut format,
-        )
-    };
-    if pixels.is_null() {
-        return None;
-    }
-    let copy = unsafe { core::slice::from_raw_parts(pixels, buf_len) }.to_vec();
-    unsafe { glib::g_free(pixels.cast()) };
+    let decoded = southstar_image::decode_bytes_to_pixels(bytes)?;
     Some(Decoded {
-        pixels: copy,
-        width: w,
-        height: h,
-        stride,
+        pixels: decoded.pixels,
+        width: decoded.width,
+        height: decoded.height,
+        stride: decoded.stride,
     })
 }
 

@@ -276,12 +276,6 @@ type ReadyCallback =
 unsafe extern "C" {
     fn ns_camera_active() -> *mut c_void;
     fn ns_camera_next_frame(camera: *mut c_void) -> *mut c_void;
-    fn ns_image_decode_bytes(
-        data: *const u8,
-        len: usize,
-        out_w: *mut c_int,
-        out_h: *mut c_int,
-    ) -> *mut c_void;
     fn ns_net_fetch_async(
         url: *const c_char,
         top_url: *const c_char,
@@ -332,10 +326,7 @@ pub fn texture_from_bgra(width: i32, height: i32, pixels: &[u8], stride: usize) 
 }
 
 pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {
-    let mut w = 0;
-    let mut h = 0;
-    let tex = unsafe { ns_image_decode_bytes(bytes.as_ptr(), bytes.len(), &mut w, &mut h) };
-    adopt(tex).map(|t| (t, w, h))
+    southstar_image::decode_bytes(bytes)
 }
 
 pub fn camera_active() -> bool {

@@ -275,7 +275,6 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
-    fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
@@ -332,8 +331,9 @@ pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
 }
 
 pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
-    let mut failed = glib::FALSE;
-    (unsafe { ns_js_image_settled(image, &mut failed) } != 0).then_some(failed != 0)
+    // SAFETY: image is null or an image its page's cache still holds.
+    let image = unsafe { southstar_image::ImageRef::from_ptr(image) }?;
+    (image.loaded() || image.failed()).then_some(image.failed())
 }
 
 pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {

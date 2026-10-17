@@ -132,12 +132,12 @@ impl Failure {
         }
     }
 
-    pub fn set(&self, error: *mut *mut GError) {
+    pub(crate) fn set(&self, error: *mut *mut GError) {
         let (domain, code, message) = self.parts();
         unsafe { g_set_error_literal(error, domain, code, message.as_ptr()) };
     }
 
-    pub fn into_error(self) -> *mut GError {
+    pub(crate) fn into_error(self) -> *mut GError {
         let (domain, code, message) = self.parts();
         unsafe { g_error_new_literal(domain, code, message.as_ptr()) }
     }
@@ -257,6 +257,10 @@ impl Response {
 
     pub fn raw_headers(&self) -> Option<&CStr> {
         c_str(self.view().raw_headers)
+    }
+
+    pub fn next_hop_protocol(&self) -> Option<&CStr> {
+        c_str(self.view().next_hop_protocol)
     }
 
     pub fn remote_ip(&self) -> Option<&CStr> {

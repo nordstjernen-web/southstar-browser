@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -37,15 +38,6 @@ pub struct SvgSize {
 }
 
 unsafe extern "C" {
-    fn ns_image_cache_peek(cache: *mut c_void, url: *const c_char) -> *mut c_void;
-    fn ns_image_cache_insert_encoded(
-        cache: *mut c_void,
-        url: *const c_char,
-        data: *const u8,
-        len: usize,
-    ) -> *mut c_void;
-    fn ns_image_cache_begin_generation(cache: *mut c_void);
-    fn ns_image_cache_collect(cache: *mut c_void);
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut RawSvgSize);
     fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
     fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
@@ -107,20 +99,33 @@ pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
         .and_then(|abs| CString::new(abs).ok())
 }
 
+fn image_cache(cache: *mut c_void) -> Option<ImageCache> {
+    // SAFETY: the build input's image cache is null or the page's live cache.
+    unsafe { ImageCache::from_raw(cache) }
+}
+
+fn image_ptr(image: Option<ImageRef<'_>>) -> *mut c_void {
+    image.map_or(ptr::null_mut(), |image| image.as_ptr().cast_mut())
+}
+
 pub fn image_cache_peek(cache: *mut c_void, url: &CStr) -> *mut c_void {
-    unsafe { ns_image_cache_peek(cache, url.as_ptr()) }
+    image_ptr(image_cache(cache).and_then(|cache| cache.peek(url)))
 }
 
 pub fn image_cache_insert_encoded(cache: *mut c_void, key: &CStr, bytes: &[u8]) -> *mut c_void {
-    unsafe { ns_image_cache_insert_encoded(cache, key.as_ptr(), bytes.as_ptr(), bytes.len()) }
+    image_ptr(image_cache(cache).and_then(|cache| cache.insert_encoded(key, bytes)))
 }
 
 pub fn image_cache_begin_generation(cache: *mut c_void) {
-    unsafe { ns_image_cache_begin_generation(cache) };
+    if let Some(cache) = image_cache(cache) {
+        cache.begin_generation();
+    }
 }
 
 pub fn image_cache_collect(cache: *mut c_void) {
-    unsafe { ns_image_cache_collect(cache) };
+    if let Some(cache) = image_cache(cache) {
+        cache.collect();
+    }
 }
 
 pub fn data_url_decode(url: &CStr, budget: u64) -> Option<Vec<u8>> {
