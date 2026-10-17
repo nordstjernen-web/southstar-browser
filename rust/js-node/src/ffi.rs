@@ -4,8 +4,6 @@
 
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GPtrArray};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -20,21 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
-
-unsafe extern "C" {
-    fn ns_mut_record_emit_child_list_arrays(
-        js: *mut NsJs,
-        target: *mut NsNode,
-        added: *mut GPtrArray,
-        removed: *mut GPtrArray,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
@@ -94,23 +77,6 @@ pub(crate) fn index_child_change(
     southstar_js_mutation::index_child_change(js.0, parent, added, removed);
 }
 
-fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
-    if nodes.is_empty() {
-        return ptr::null_mut();
-    }
-    let array = unsafe { glib::g_ptr_array_new() };
-    for node in nodes {
-        unsafe { glib::g_ptr_array_add(array, node.as_mut_ptr().cast()) };
-    }
-    array
-}
-
-fn free_ptr_array(array: *mut GPtrArray) {
-    if !array.is_null() {
-        unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    }
-}
-
 pub(crate) fn emit_child_list(
     js: Js,
     target: Element,
@@ -119,20 +85,7 @@ pub(crate) fn emit_child_list(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    let added = ptr_array(added);
-    let removed = ptr_array(removed);
-    unsafe {
-        ns_mut_record_emit_child_list_arrays(
-            js.0,
-            target.as_mut_ptr(),
-            added,
-            removed,
-            raw(previous),
-            raw(next),
-        )
-    };
-    free_ptr_array(added);
-    free_ptr_array(removed);
+    southstar_js_observers::record_child_list(js.0, target, added, removed, previous, next);
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {

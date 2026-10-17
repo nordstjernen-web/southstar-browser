@@ -2,11 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GPtrArray};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
@@ -134,70 +133,106 @@ pub(crate) fn style_keyword<'a>(b: BoxRef<'a>, property: &CStr) -> Option<&'a CS
     southstar_style::box_style(b)?.keyword_of(prop)
 }
 
-unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    if p.is_null() {
-        None
-    } else {
-        Some(unsafe { CStr::from_ptr(p) }.to_bytes())
-    }
+fn address(node: Option<Node<'_>>) -> usize {
+    Node::ptr_or_null(node) as usize
 }
 
-unsafe fn nodes(array: *const GPtrArray) -> Option<Vec<usize>> {
-    let array = unsafe { array.as_ref() }?;
-    if array.len == 0 {
-        return None;
-    }
-    Some(
-        (0..array.len as usize)
-            .map(|i| unsafe { *array.pdata.add(i) } as usize)
-            .collect(),
-    )
+fn addresses(nodes: &[Node<'_>]) -> Option<Vec<usize>> {
+    (!nodes.is_empty()).then(|| nodes.iter().map(|&n| address(Some(n))).collect())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mut_record_emit(
+fn emit(js: *const NsJs, emit: &Emit<'_>) {
+    mutation::emit(Js::of(js), emit);
+}
+
+pub fn record_attributes(
     js: *const NsJs,
-    kind: *const c_char,
-    target: *const NsNode,
-    added: *const NsNode,
-    removed: *const NsNode,
-    previous_sibling: *const NsNode,
-    next_sibling: *const NsNode,
-    attr_name: *const c_char,
-    attr_namespace: *const c_char,
-    old_value: *const c_char,
+    target: Node<'_>,
+    name: Option<&[u8]>,
+    namespace: Option<&[u8]>,
+    old_value: Option<&[u8]>,
 ) {
-    let emit = Emit {
-        kind: unsafe { bytes(kind) },
-        target: target as usize,
-        added: (!added.is_null()).then(|| vec![added as usize]),
-        removed: (!removed.is_null()).then(|| vec![removed as usize]),
-        previous_sibling: previous_sibling as usize,
-        next_sibling: next_sibling as usize,
-        attribute_name: unsafe { bytes(attr_name) },
-        attribute_namespace: unsafe { bytes(attr_namespace) },
-        old_value: unsafe { bytes(old_value) },
-    };
-    mutation::emit(Js::of(js), &emit);
+    emit(
+        js,
+        &Emit {
+            kind: Some(b"attributes"),
+            target: address(Some(target)),
+            added: None,
+            removed: None,
+            previous_sibling: 0,
+            next_sibling: 0,
+            attribute_name: name,
+            attribute_namespace: namespace,
+            old_value,
+        },
+    );
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mut_record_emit_child_list_arrays(
+pub fn record_character_data(js: *const NsJs, target: Node<'_>, old_value: Option<&[u8]>) {
+    emit(
+        js,
+        &Emit {
+            kind: Some(b"characterData"),
+            target: address(Some(target)),
+            added: None,
+            removed: None,
+            previous_sibling: 0,
+            next_sibling: 0,
+            attribute_name: None,
+            attribute_namespace: None,
+            old_value,
+        },
+    );
+}
+
+pub fn record_child(
     js: *const NsJs,
-    target: *const NsNode,
-    added: *const GPtrArray,
-    removed: *const GPtrArray,
-    previous_sibling: *const NsNode,
-    next_sibling: *const NsNode,
+    target: Node<'_>,
+    added: Option<Node<'_>>,
+    removed: Option<Node<'_>>,
+    previous_sibling: Option<Node<'_>>,
+    next_sibling: Option<Node<'_>>,
+) {
+    emit(
+        js,
+        &Emit {
+            kind: Some(b"childList"),
+            target: address(Some(target)),
+            added: added.map(|n| vec![address(Some(n))]),
+            removed: removed.map(|n| vec![address(Some(n))]),
+            previous_sibling: address(previous_sibling),
+            next_sibling: address(next_sibling),
+            attribute_name: None,
+            attribute_namespace: None,
+            old_value: None,
+        },
+    );
+}
+
+pub fn record_child_list(
+    js: *const NsJs,
+    target: Node<'_>,
+    added: &[Node<'_>],
+    removed: &[Node<'_>],
+    previous_sibling: Option<Node<'_>>,
+    next_sibling: Option<Node<'_>>,
 ) {
     mutation::emit_child_list(
         Js::of(js),
-        target as usize,
-        unsafe { nodes(added) },
-        unsafe { nodes(removed) },
-        previous_sibling as usize,
-        next_sibling as usize,
+        address(Some(target)),
+        addresses(added),
+        addresses(removed),
+        address(previous_sibling),
+        address(next_sibling),
     );
+}
+
+pub fn mutation_drain_pending(js: *const NsJs) -> bool {
+    page(Js::of(js)).is_some_and(|page| page.drain_scheduled.get())
+}
+
+pub fn reset_observers(js: *const NsJs) {
+    crate::reset(Js::of(js));
 }
 
 #[unsafe(no_mangle)]
@@ -208,11 +243,6 @@ pub unsafe extern "C" fn ns_mut_scrub_node(js: *const NsJs, node: *const NsNode)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean {
-    southstar_glib::boolean(page(Js::of(js)).is_some_and(|page| page.drain_scheduled.get()))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_intersection_observers_tick(js: *const NsJs) {
     intersection::tick(Js::of(js));
 }
@@ -220,11 +250,6 @@ pub unsafe extern "C" fn ns_intersection_observers_tick(js: *const NsJs) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_resize_observers_tick(js: *const NsJs) {
     resize::tick(Js::of(js));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_observers_reset(js: *const NsJs) {
-    crate::reset(Js::of(js));
 }
 
 #[unsafe(no_mangle)]

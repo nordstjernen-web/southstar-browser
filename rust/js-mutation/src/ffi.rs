@@ -20,26 +20,6 @@ pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_mut_record_emit(
-        js: *mut NsJs,
-        kind: *const c_char,
-        target: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-        attr_name: *const c_char,
-        attr_namespace: *const c_char,
-        old_value: *const c_char,
-    );
-    fn ns_mut_record_emit_child_list_arrays(
-        js: *mut NsJs,
-        target: *mut NsNode,
-        added: *mut GPtrArray,
-        removed: *mut GPtrArray,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
     fn ns_attr_detach_matching(
         js: *mut NsJs,
         owner: *mut NsNode,
@@ -67,10 +47,6 @@ fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
 }
 
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
 fn c_ptr(text: Option<&CStr>) -> *const c_char {
     text.map_or(ptr::null(), CStr::as_ptr)
 }
@@ -89,12 +65,6 @@ fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
         unsafe { glib::g_ptr_array_add(array, node.as_mut_ptr().cast()) };
     }
     array
-}
-
-fn free_ptr_array(array: *mut GPtrArray) {
-    if !array.is_null() {
-        unsafe { glib::g_ptr_array_free(array, glib::TRUE) };
-    }
 }
 
 fn into_ptr_array(nodes: Option<Vec<Element>>) -> *mut GPtrArray {
@@ -156,37 +126,21 @@ pub(crate) fn emit_attributes(
     namespace_uri: Option<&CStr>,
     old: Option<&CStr>,
 ) {
-    unsafe {
-        ns_mut_record_emit(
+    if let Some(target) = target {
+        southstar_js_observers::record_attributes(
             raw_js(js),
-            c"attributes".as_ptr(),
-            raw(target),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            c_ptr(name),
-            c_ptr(namespace_uri),
-            c_ptr(old),
-        )
-    };
+            target,
+            name.map(CStr::to_bytes),
+            namespace_uri.map(CStr::to_bytes),
+            old.map(CStr::to_bytes),
+        );
+    }
 }
 
 pub(crate) fn emit_character_data(js: Option<Js>, target: Option<Element>, old: Option<&CStr>) {
-    unsafe {
-        ns_mut_record_emit(
-            raw_js(js),
-            c"characterData".as_ptr(),
-            raw(target),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null(),
-            ptr::null(),
-            c_ptr(old),
-        )
-    };
+    if let Some(target) = target {
+        southstar_js_observers::record_character_data(raw_js(js), target, old.map(CStr::to_bytes));
+    }
 }
 
 pub(crate) fn emit_child(
@@ -197,21 +151,7 @@ pub(crate) fn emit_child(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    // SAFETY: every node pointer is null or a live node, and the kind is a NUL-terminated literal.
-    unsafe {
-        ns_mut_record_emit(
-            raw_js(js),
-            c"childList".as_ptr(),
-            target.as_mut_ptr(),
-            raw(added),
-            raw(removed),
-            raw(previous),
-            raw(next),
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-        )
-    };
+    southstar_js_observers::record_child(raw_js(js), target, added, removed, previous, next);
 }
 
 pub(crate) fn emit_child_list(
@@ -222,21 +162,14 @@ pub(crate) fn emit_child_list(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    let added = added.map_or(ptr::null_mut(), ptr_array);
-    let removed = ptr_array(removed);
-    // SAFETY: the arrays are null or freshly built arrays of live nodes, and the siblings are null or live.
-    unsafe {
-        ns_mut_record_emit_child_list_arrays(
-            raw_js(js),
-            target.as_mut_ptr(),
-            added,
-            removed,
-            raw(previous),
-            raw(next),
-        )
-    };
-    free_ptr_array(added);
-    free_ptr_array(removed);
+    southstar_js_observers::record_child_list(
+        raw_js(js),
+        target,
+        added.unwrap_or_default(),
+        removed,
+        previous,
+        next,
+    );
 }
 
 pub(crate) fn ce_attr_changed(

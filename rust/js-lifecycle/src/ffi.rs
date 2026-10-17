@@ -250,7 +250,7 @@ impl Js {
                 || southstar_js_net::pending_socket_count(self.0) > 0
                 || southstar_js_url::filereader_pending(self.0)
                 || southstar_js_frames::pending_iframe_count(self.0) > 0
-                || ns_mutation_drain_pending(self.0) != 0
+                || southstar_js_observers::mutation_drain_pending(self.0)
                 || api::observer_tick_pending(self.0)
                 || southstar_js_loader::async_scripts_pending(self.0)
                 || southstar_js_custom_elements::has_pending(self.0)
@@ -276,7 +276,6 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-    fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
 

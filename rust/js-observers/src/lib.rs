@@ -7,6 +7,11 @@ mod intersection;
 mod mutation;
 mod resize;
 
+pub use ffi::{
+    mutation_drain_pending, record_attributes, record_character_data, record_child,
+    record_child_list, reset_observers,
+};
+
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};

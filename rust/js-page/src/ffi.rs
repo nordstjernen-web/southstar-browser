@@ -116,9 +116,6 @@ pub(crate) enum ValueInstaller {
 }
 
 unsafe extern "C" {
-
-    fn ns_observers_reset(js: *mut NsJs);
-
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
 
     fn g_get_monotonic_time() -> i64;
@@ -255,8 +252,7 @@ impl Js {
         southstar_js_attrs::detach_all(self.0);
         southstar_js_mutation::attribute_maps_release_all(self.0);
         api::release_pinned_wrappers(self.0);
-        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
-        unsafe { ns_observers_reset(self.0) };
+        southstar_js_observers::reset_observers(self.0);
         southstar_js_perf::reset_observers(self.0);
     }
 
