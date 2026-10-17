@@ -20,6 +20,7 @@ southstar-layout-geom = { path = "../layout-geom" }
 southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-selection = { path = "../selection" }
+southstar-spellcheck = { path = "../spellcheck" }
 southstar-style = { path = "../style" }
 southstar-svg = { path = "../svg" }
 southstar-texture = { path = "../texture" }

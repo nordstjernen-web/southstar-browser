@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{available, init, word_ok};
+
 pub fn normalize_lang(raw: &[u8]) -> Option<Vec<u8>> {
     let end = raw
         .iter()

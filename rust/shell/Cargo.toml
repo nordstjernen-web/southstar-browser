@@ -34,6 +34,7 @@ southstar-netutil = { path = "../netutil" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-sandbox = { path = "../sandbox" }
+southstar-spellcheck = { path = "../spellcheck" }
 southstar-svg = { path = "../svg" }
 southstar-threaddump = { path = "../threaddump" }
 southstar-url = { path = "../url" }

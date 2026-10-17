@@ -1,9 +1,6 @@
-//! Southstar — the C ABI of spell checking, and the Enchant calls behind it.
+//! Southstar — spell checking's entry points and the Enchant calls behind them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-
-use core::ffi::c_char;
-use southstar_glib::{self as glib, GBoolean, TRUE};
 
 #[cfg(feature = "enchant")]
 mod enchant {
@@ -160,30 +157,14 @@ mod enchant {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_spell_init() {
+pub fn init() {
     enchant::init();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_spell_available() -> GBoolean {
-    glib::boolean(enchant::available())
+pub fn available() -> bool {
+    enchant::available()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_spell_word_ok(
-    word: *const c_char,
-    len: isize,
-    lang: *const c_char,
-) -> GBoolean {
-    if word.is_null() {
-        return TRUE;
-    }
-    let word = if len < 0 {
-        unsafe { glib::bytes(word) }.unwrap_or_default()
-    } else {
-        unsafe { glib::slice(word.cast(), len as usize) }
-    };
-    let lang = unsafe { glib::bytes(lang) };
-    glib::boolean(enchant::word_ok(word, lang))
+pub fn word_ok(word: &[u8], lang: Option<&[u8]>) -> bool {
+    enchant::word_ok(word, lang)
 }

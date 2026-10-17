@@ -70,7 +70,6 @@ unsafe extern "C" {
     fn g_printerr(format: *const c_char, ...);
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
-    fn ns_spell_init();
 }
 
 #[cfg(feature = "ns-pango")]
@@ -576,9 +575,7 @@ fn run_headless(opts: &HeadlessOpts<'_>) -> c_int {
     southstar_http_cache::init();
     southstar_history::init();
     southstar_font::init();
-    unsafe {
-        ns_spell_init();
-    }
+    southstar_spellcheck::init();
     southstar_bytecode_cache::init();
     let file_url = opts.url.and_then(file_url_for);
     let rc = southstar_headless::run(Some(&HeadlessOpts {

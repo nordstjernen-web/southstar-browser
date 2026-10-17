@@ -18,7 +18,6 @@ pub use southstar_image::ImageCache as Images;
 pub use southstar_video::VideoCache as Videos;
 
 unsafe extern "C" {
-    fn ns_spell_init();
     fn ns_camera_take_pending_origin() -> *mut c_char;
     fn ns_camera_set_decision(origin: *const c_char, allow: c_int);
 }
@@ -197,9 +196,7 @@ pub fn init_subsystems() {
     southstar_http_cache::init();
     southstar_history::init();
     southstar_font::init();
-    unsafe {
-        ns_spell_init();
-    }
+    southstar_spellcheck::init();
     southstar_bytecode_cache::init();
 }
 

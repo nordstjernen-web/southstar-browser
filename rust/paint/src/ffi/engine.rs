@@ -188,8 +188,6 @@ unsafe extern "C" {
     fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
-    fn ns_spell_available() -> GBoolean;
-    fn ns_spell_word_ok(word: *const c_char, len: isize, lang: *const c_char) -> GBoolean;
     fn ns_js_image_for_node(js: *mut c_void, el: *const c_void) -> *const c_void;
     fn ns_math_paint(
         cr: *mut c_void,
@@ -289,11 +287,11 @@ pub fn vertical_stack_text(text: &CStr) -> CString {
 }
 
 pub fn spell_available() -> bool {
-    unsafe { ns_spell_available() != 0 }
+    southstar_spellcheck::available()
 }
 
 pub fn spell_word_ok(word: &[u8]) -> bool {
-    unsafe { ns_spell_word_ok(word.as_ptr().cast(), word.len() as isize, ptr::null()) != 0 }
+    southstar_spellcheck::word_ok(word, None)
 }
 
 pub fn node_spellcheck_host(n: Node<'_>) -> bool {
