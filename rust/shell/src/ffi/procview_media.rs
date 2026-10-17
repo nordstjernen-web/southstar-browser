@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::Ordering;
 use std::ffi::CString;
@@ -131,7 +131,7 @@ unsafe extern "C" {
 
 #[cfg(target_os = "linux")]
 unsafe extern "C" {
-    fn sysconf(name: c_int) -> c_long;
+    fn sysconf(name: c_int) -> core::ffi::c_long;
 }
 
 #[cfg(windows)]

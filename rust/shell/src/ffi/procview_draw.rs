@@ -838,6 +838,7 @@ unsafe extern "C" fn on_device_scale_changed(
 
 unsafe extern "C" fn on_area_realize(area: *mut GtkWidget, data: *mut c_void) {
     let v = data.cast::<NsProcView>();
+    set_im_client(v, area);
     let native = unsafe { gtk::gtk_widget_get_native(area) };
     let surface = if native.is_null() {
         ptr::null_mut()
@@ -862,8 +863,17 @@ unsafe extern "C" fn on_area_realize(area: *mut GtkWidget, data: *mut c_void) {
     );
 }
 
+fn set_im_client(v: *mut NsProcView, area: *mut GtkWidget) {
+    let im = view(v).im;
+    if !im.is_null() {
+        // SAFETY: `im` is the view's live GtkIMContext, owned until the view is freed.
+        unsafe { gtk::gtk_im_context_set_client_widget(im.cast(), area) };
+    }
+}
+
 unsafe extern "C" fn on_area_unrealize(_area: *mut GtkWidget, data: *mut c_void) {
     let v = data.cast::<NsProcView>();
+    set_im_client(v, ptr::null_mut());
     let state = view(v);
     if !state.scale_surface.is_null() && state.surface_scale_handler != 0 {
         unsafe {

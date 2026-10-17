@@ -780,7 +780,6 @@ pub(super) fn ns_pv_input_install_keys(v: *mut NsProcView) {
     let im = unsafe { gtk::gtk_im_multicontext_new() };
     let state = view(v);
     state.im = im.cast();
-    unsafe { gtk::gtk_im_context_set_client_widget(im, state.area) };
     connect(im.cast(), c"commit", on_im_commit as *const (), v);
     unsafe { gtk::gtk_event_controller_key_set_im_context(key, im) };
     add_controller(v, key.cast());

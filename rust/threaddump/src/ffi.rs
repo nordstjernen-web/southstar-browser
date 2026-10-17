@@ -147,6 +147,7 @@ pub(crate) fn list_threads(_pid: i32, out: &mut Vec<u8>) {
     out.extend_from_slice(b"  (thread dump not supported on this platform)\n");
 }
 
+#[cfg(unix)]
 fn to_stderr(pid: i32, label: Option<&[u8]>) {
     let mut stderr = std::io::stderr().lock();
     let _ = stderr.write_all(&crate::dump_text(pid, label));
