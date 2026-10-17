@@ -12,7 +12,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
@@ -83,8 +83,6 @@ unsafe extern "C" {
     );
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
-    fn ns_paint_normal_line_height_px(style: *const Style) -> f64;
-    fn ns_paint_css_line_height_px(style: *const Style) -> f64;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
@@ -253,13 +251,10 @@ pub(crate) fn input_is_one_line_text(node: Node<'_>) -> bool {
 }
 
 pub(crate) fn line_heights(style: Option<StyleRef<'_>>) -> (f64, f64) {
-    let p = style.map_or(core::ptr::null(), StyleRef::as_ptr);
-    unsafe {
-        (
-            ns_paint_normal_line_height_px(p),
-            ns_paint_css_line_height_px(p),
-        )
-    }
+    (
+        southstar_paint::normal_line_height_px(style),
+        southstar_paint::css_line_height_px(style),
+    )
 }
 
 pub(crate) fn linked_css_text(url: &str) -> Option<String> {

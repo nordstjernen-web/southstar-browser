@@ -74,8 +74,6 @@ unsafe extern "C" {
         base_url: *const c_char,
     ) -> *mut NsBox;
     fn ns_box_free(b: *mut NsBox);
-    fn ns_paint_list_ordinals_begin();
-    fn ns_paint_list_ordinals_end();
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -398,9 +396,9 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
 }
 
 fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
-    unsafe {
-        ns_paint_list_ordinals_begin();
-        let layout = ns_layout_build(
+    southstar_paint::list_ordinals_begin();
+    let layout = unsafe {
+        ns_layout_build(
             c.doc,
             styles,
             viewport_width,
@@ -409,10 +407,10 @@ fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> 
             c.sel_anchor_byte,
             c.images,
             c.base_url,
-        );
-        ns_paint_list_ordinals_end();
-        layout
-    }
+        )
+    };
+    southstar_paint::list_ordinals_end();
+    layout
 }
 
 fn record_page_state(c: &RenderCtx) {

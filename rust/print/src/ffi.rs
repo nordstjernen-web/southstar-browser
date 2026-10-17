@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use southstar_cairo::ContextRef;
 use southstar_css::PageRule;
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 
 const A4_WIDTH: f64 = 210.0 * 96.0 / 25.4;
 const A4_HEIGHT: f64 = 297.0 * 96.0 / 25.4;
@@ -31,10 +31,6 @@ pub enum BreakProp {
     Inside,
 }
 
-unsafe extern "C" {
-    fn ns_paint_css_line_height_px(style: *const Style) -> f64;
-}
-
 fn break_props() -> &'static [c_int; 3] {
     static PROPS: OnceLock<[c_int; 3]> = OnceLock::new();
     PROPS.get_or_init(|| {
@@ -52,11 +48,7 @@ pub fn break_keyword(b: BoxRef<'_>, prop: BreakProp) -> Option<&CStr> {
 }
 
 pub fn line_height_px(b: BoxRef<'_>) -> f64 {
-    let style = b.style();
-    if style.is_null() {
-        return 0.0;
-    }
-    unsafe { ns_paint_css_line_height_px(style) }
+    southstar_style::box_style(b).map_or(0.0, |s| southstar_paint::css_line_height_px(Some(s)))
 }
 
 impl PrintSetup {

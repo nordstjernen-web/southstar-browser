@@ -28,8 +28,6 @@ unsafe extern "C" {
     fn cairo_stroke(cr: *mut c_void);
     fn cairo_set_line_width(cr: *mut c_void, width: f64);
     fn cairo_set_source_rgba(cr: *mut c_void, red: f64, green: f64, blue: f64, alpha: f64);
-    fn ns_paint_text_context() -> *mut c_void;
-    fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_new")]
     fn pango_layout_new(context: *mut c_void) -> *mut c_void;
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_new")]
@@ -111,14 +109,13 @@ pub struct Token(*mut c_void);
 impl Token {
     pub fn new(text: &CStr, fpx: f64, italic: bool) -> Token {
         let size = if fpx < 1.0 { 1.0 } else { fpx };
+        let context = southstar_paint::text_context().raw();
+        let font_size = f64::from(southstar_paint::pango_font_size(size));
         unsafe {
-            let layout = pango_layout_new(ns_paint_text_context());
+            let layout = pango_layout_new(context);
             let desc = pango_font_description_new();
             pango_font_description_set_family(desc, c"serif".as_ptr());
-            pango_font_description_set_absolute_size(
-                desc,
-                f64::from(ns_paint_pango_font_size(size)),
-            );
+            pango_font_description_set_absolute_size(desc, font_size);
             pango_font_description_set_style(
                 desc,
                 if italic {

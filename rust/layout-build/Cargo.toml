@@ -20,6 +20,7 @@ southstar-layout-query = { path = "../layout-query" }
 southstar-layout-tree = { path = "../layout-tree" }
 southstar-net = { path = "../net" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 

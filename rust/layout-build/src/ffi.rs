@@ -39,14 +39,6 @@ pub struct SvgSize {
 
 unsafe extern "C" {
     fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut RawSvgSize);
-    fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox);
-    fn ns_paint_li_is_inside(s: *const Style) -> GBoolean;
-    fn ns_paint_li_marker_text(
-        li: *const NsNode,
-        s: *const Style,
-        out: *mut c_char,
-        out_sz: usize,
-    ) -> GBoolean;
     fn g_utf8_get_char(p: *const c_char) -> u32;
     fn g_unichar_isalnum(c: u32) -> GBoolean;
 }
@@ -65,10 +57,6 @@ pub fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
 
 pub fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
-}
-
-fn style_ptr(s: Option<StyleRef<'_>>) -> *const Style {
-    s.map_or(ptr::null(), StyleRef::as_ptr)
 }
 
 pub fn viewport_w() -> f64 {
@@ -191,9 +179,7 @@ pub fn build_anonymous_table(
     southstar_layout_tree::build_anonymous_table(Some(start), end, st)
 }
 
-pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
-    unsafe { ns_paint_sync_inline_atomic_offsets(root.as_mut_ptr()) };
-}
+pub use southstar_paint::sync_inline_atomic_offsets;
 
 pub use southstar_layout_query::compute_paint_bounds;
 
@@ -202,17 +188,7 @@ pub fn record_frame_viewports(root: *mut NsBox) {
 }
 
 pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
-    let sp = style_ptr(s);
-    if unsafe { ns_paint_li_is_inside(sp) } == 0 {
-        return None;
-    }
-    let mut marker = [0 as c_char; 64];
-    let ok = unsafe { ns_paint_li_marker_text(li.as_ptr(), sp, marker.as_mut_ptr(), 64) };
-    (ok != 0).then(|| {
-        unsafe { CStr::from_ptr(marker.as_ptr()) }
-            .to_bytes()
-            .to_vec()
-    })
+    southstar_paint::inside_list_marker(li, s, 64)
 }
 
 pub fn utf8_get_char(s: &[u8], at: usize) -> u32 {

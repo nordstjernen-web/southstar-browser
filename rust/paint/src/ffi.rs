@@ -8,13 +8,12 @@ pub mod pango;
 use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
 use core::mem::ManuallyDrop;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, boolean};
+use southstar_glib::GBoolean;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::StyleRef;
 
 use self::pango::{AttrList, Layout, RawAttribute};
-use crate::{inline, marker, text, three_d};
+use crate::{inline, text};
 
 fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
@@ -125,41 +124,6 @@ pub unsafe extern "C" fn ns_paint_start_align_overflow(l: *mut c_void) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_li_is_inside(s: *const Style) -> GBoolean {
-    boolean(marker::li_is_inside(style(s)))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_paint_list_ordinals_begin() {
-    marker::ordinals_begin();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_paint_list_ordinals_end() {
-    marker::ordinals_end();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_li_marker_text(
-    li: *const NsNode,
-    s: *const Style,
-    out: *mut c_char,
-    out_sz: usize,
-) -> GBoolean {
-    let Some(text) = marker::li_marker_text(unsafe { Node::from_ptr(li) }, style(s), out_sz) else {
-        return 0;
-    };
-    if out.is_null() {
-        return 0;
-    }
-    unsafe {
-        core::ptr::copy_nonoverlapping(text.as_ptr(), out.cast::<u8>(), text.len());
-        *out.add(text.len()) = 0;
-    }
-    1
-}
-
 fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(b) }
 }
@@ -179,13 +143,6 @@ pub unsafe extern "C" fn ns_paint_build_inline_layout(
     box_ref(b)
         .and_then(inline::build_inline_layout)
         .map_or(core::ptr::null_mut(), Layout::into_raw)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_sync_inline_atomic_offsets(root: *mut NsBox) {
-    if let Some(root) = box_ref(root) {
-        inline::sync_inline_atomic_offsets(root);
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -246,18 +203,4 @@ pub unsafe extern "C" fn ns_paint_inline_range_extents(
         }
     }
     1
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_3d_registered(b: *const NsBox) -> GBoolean {
-    boolean(box_ref(b).is_some_and(three_d::registered))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_paint_3d_pick(
-    root3d: *const NsBox,
-    x: c_double,
-    y: c_double,
-) -> *const NsBox {
-    box_ref(root3d).map_or(core::ptr::null(), |root| three_d::pick(root, x, y))
 }

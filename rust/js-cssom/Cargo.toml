@@ -19,6 +19,7 @@ southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }
 southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-paint = { path = "../paint" }
 southstar-selector-text = { path = "../selector-text" }
 southstar-style = { path = "../style" }
 
