@@ -108,6 +108,8 @@ fn bound_function_exotic_call(
     argument_count: usize,
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
+    context.check_native_stack()?;
+
     let bound_function = obj.downcast_ref::<BoundFunction>().js_expect(
         "bound function exotic method should only be callable from bound function objects",
     )?;
@@ -151,6 +153,8 @@ fn bound_function_exotic_construct(
     argument_count: usize,
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
+    context.check_native_stack()?;
+
     let new_target = context.vm.stack.pop();
 
     debug_assert!(new_target.is_object(), "new.target should be an object");

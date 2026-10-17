@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Security: deeply nested script no longer crashes the tab. Boa checked
+  the native-stack limit only when it called a function, so the parser
+  and every recursion that does not pass through a call overflowed the
+  renderer's 8 MiB stack and killed the process: about 330 nested array
+  literals or parentheses, 150 nested functions, a 24,000-term `+` chain,
+  `JSON.stringify` of 8,000 nested arrays, or a property read through a
+  40,000-object prototype chain or 26,000 nested proxies was enough. The
+  parser, `JSON.stringify` and the reviver of `JSON.parse`,
+  `Array.prototype.flat`, prototype-chain property lookups, proxies and
+  bound functions now stop at the same limit as calls and throw a
+  catchable `RangeError` ("Maximum call stack size exceeded").
 * Security: the address bar can no longer be made to show a URL other
   than the page's. The shell read the renderer's replies by searching the
   JSON text for the quoted key, so a page title or URL that spelled

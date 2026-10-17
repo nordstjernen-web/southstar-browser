@@ -1401,6 +1401,9 @@ impl JsNativeError {
 impl From<boa_parser::Error> for JsNativeError {
     #[cfg_attr(feature = "native-backtrace", track_caller)]
     fn from(err: boa_parser::Error) -> Self {
+        if matches!(err, boa_parser::Error::StackExhausted) {
+            return Self::range().with_message(err.to_string());
+        }
         Self::syntax().with_message(err.to_string())
     }
 }

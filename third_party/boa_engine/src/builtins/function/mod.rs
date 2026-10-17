@@ -534,14 +534,16 @@ impl BuiltInFunctionObject {
             .collect::<Vec<_>>();
             let mut parser = Parser::new(Source::from_utf16(&parameters));
             parser.set_identifier(context.next_parser_identifier());
+            parser.set_native_stack_floor(context.vm.native_stack_floor);
 
             // 17. Let parameters be ParseText(StringToCodePoints(P), parameterSym).
             // 18. If parameters is a List of errors, throw a SyntaxError exception.
             let parameters = parser
                 .parse_formal_parameters(context.interner_mut(), generator, r#async)
-                .map_err(|e| {
-                    JsNativeError::syntax()
-                        .with_message(format!("failed to parse function parameters: {e}"))
+                .map_err(|e| match e {
+                    boa_parser::Error::StackExhausted => JsNativeError::from(e),
+                    _ => JsNativeError::syntax()
+                        .with_message(format!("failed to parse function parameters: {e}")),
                 })?;
 
             // It is a Syntax Error if FormalParameters Contains YieldExpression is true.
@@ -583,14 +585,16 @@ impl BuiltInFunctionObject {
             // 20. If body is a List of errors, throw a SyntaxError exception.
             let mut parser = Parser::new(Source::from_utf16(&body_parse));
             parser.set_identifier(context.next_parser_identifier());
+            parser.set_native_stack_floor(context.vm.native_stack_floor);
 
             // 19. Let body be ParseText(StringToCodePoints(bodyParseString), bodySym).
             // 20. If body is a List of errors, throw a SyntaxError exception.
             let body = parser
                 .parse_function_body(context.interner_mut(), generator, r#async)
-                .map_err(|e| {
-                    JsNativeError::syntax()
-                        .with_message(format!("failed to parse function body: {e}"))
+                .map_err(|e| match e {
+                    boa_parser::Error::StackExhausted => JsNativeError::from(e),
+                    _ => JsNativeError::syntax()
+                        .with_message(format!("failed to parse function body: {e}")),
                 })?;
 
             // It is a Syntax Error if AllPrivateIdentifiersValid of StatementList with argument « »

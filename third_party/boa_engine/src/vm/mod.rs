@@ -1087,6 +1087,16 @@ impl Context {
         Ok(())
     }
 
+    /// Throws the stack-exhausted `RangeError` once the native stack has reached the limit
+    /// set with [`Context::set_native_stack_limit`]; for recursion that does not pass through
+    /// calls, such as walking nested data or a prototype chain.
+    pub(crate) fn check_native_stack(&self) -> JsResult<()> {
+        if self.vm.native_stack_floor != 0 && native_stack_address() < self.vm.native_stack_floor {
+            return Err(stack_exhausted());
+        }
+        Ok(())
+    }
+
     /// Checks if we haven't exceeded the defined runtime limits.
     pub(crate) fn check_runtime_limits(&mut self) -> JsResult<()> {
         self.check_interrupt()?;
@@ -1103,9 +1113,7 @@ impl Context {
             return Err(stack_exhausted());
         }
         // Must throw before the native stack, which host calls grow, overflows.
-        if self.vm.native_stack_floor != 0 && native_stack_address() < self.vm.native_stack_floor {
-            return Err(stack_exhausted());
-        }
+        self.check_native_stack()?;
         // Must throw if the stack size exceeds the defined maximum length.
         if self.vm.runtime_limits.stack_size_limit() <= self.vm.stack.stack.len() {
             return Err(RuntimeLimitError::StackSize.into());

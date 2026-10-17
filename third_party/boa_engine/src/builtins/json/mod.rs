@@ -261,6 +261,7 @@ impl Json {
         let source = Source::from_bytes(&script_string);
         let mut parser = Parser::new(source);
         parser.set_json_parse();
+        parser.set_native_stack_floor(context.vm.native_stack_floor);
 
         // Use parse_script_with_source to get SourceText for span-based source extraction
         let (script, source_text) =
@@ -370,6 +371,8 @@ impl Json {
         source_node: Option<&JsonNode>,
         context: &mut Context,
     ) -> JsResult<JsValue> {
+        context.check_native_stack()?;
+
         // 1. Let val be ? Get(holder, name).
         let val = holder.get(name.clone(), context)?;
 
@@ -771,6 +774,8 @@ impl Json {
         holder: &JsObject,
         context: &mut Context,
     ) -> JsResult<Option<JsString>> {
+        context.check_native_stack()?;
+
         // 1. Let value be ? Get(holder, key).
         let mut value = holder.get(key.clone(), context)?;
 

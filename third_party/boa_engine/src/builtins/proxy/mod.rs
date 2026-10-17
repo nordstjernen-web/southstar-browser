@@ -259,6 +259,8 @@ pub(crate) fn proxy_exotic_get_prototype_of(
     obj: &JsObject,
     context: &mut Context,
 ) -> JsResult<JsPrototype> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -320,6 +322,8 @@ pub(crate) fn proxy_exotic_set_prototype_of(
     val: JsPrototype,
     context: &mut Context,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -379,6 +383,8 @@ pub(crate) fn proxy_exotic_set_prototype_of(
 ///
 /// [spec]: https://tc39.es/ecma262/#sec-proxy-object-internal-methods-and-internal-slots-isextensible
 pub(crate) fn proxy_exotic_is_extensible(obj: &JsObject, context: &mut Context) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -424,6 +430,8 @@ pub(crate) fn proxy_exotic_prevent_extensions(
     obj: &JsObject,
     context: &mut Context,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -469,6 +477,8 @@ pub(crate) fn proxy_exotic_get_own_property(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<Option<PropertyDescriptor>> {
+    context.check_native_stack()?;
+
     context.slot().attributes |= SlotAttributes::NOT_CACHEABLE;
 
     // 1. Let handler be O.[[ProxyHandler]].
@@ -594,6 +604,8 @@ pub(crate) fn proxy_exotic_define_own_property(
     desc: PropertyDescriptor,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     context.slot().attributes |= SlotAttributes::NOT_CACHEABLE;
 
     // 1. Let handler be O.[[ProxyHandler]].
@@ -706,6 +718,8 @@ pub(crate) fn proxy_exotic_has_property(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     context.slot().attributes |= SlotAttributes::NOT_CACHEABLE;
 
     // 1. Let handler be O.[[ProxyHandler]].
@@ -777,6 +791,8 @@ pub(crate) fn proxy_exotic_try_get(
     receiver: JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<Option<JsValue>> {
+    context.check_native_stack()?;
+
     // Note: For now, this just calls the normal methods. Could be optimized further.
     if proxy_exotic_has_property(obj, key, context)? {
         Ok(Some(proxy_exotic_get(obj, key, receiver, context)?))
@@ -797,6 +813,8 @@ pub(crate) fn proxy_exotic_get(
     receiver: JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<JsValue> {
+    context.check_native_stack()?;
+
     // Proxy object can't be cached.
     context.slot().attributes |= SlotAttributes::NOT_CACHEABLE;
 
@@ -868,6 +886,8 @@ pub(crate) fn proxy_exotic_set(
     receiver: JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     context.slot().attributes |= SlotAttributes::NOT_CACHEABLE;
 
     // 1. Let handler be O.[[ProxyHandler]].
@@ -950,6 +970,8 @@ pub(crate) fn proxy_exotic_delete(
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<bool> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -1015,6 +1037,8 @@ pub(crate) fn proxy_exotic_own_property_keys(
     obj: &JsObject,
     context: &mut Context,
 ) -> JsResult<Vec<PropertyKey>> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -1149,6 +1173,8 @@ fn proxy_exotic_call(
     argument_count: usize,
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.
@@ -1197,6 +1223,8 @@ fn proxy_exotic_construct(
     argument_count: usize,
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
+    context.check_native_stack()?;
+
     // 1. Let handler be O.[[ProxyHandler]].
     // 2. If handler is null, throw a TypeError exception.
     // 3. Assert: Type(handler) is Object.

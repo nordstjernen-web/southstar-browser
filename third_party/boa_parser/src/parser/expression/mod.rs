@@ -90,10 +90,13 @@ macro_rules! expression {
                     return Ok(lhs);
                 };
 
+                let mut nesting = 0;
                 while let Some(tok) = cursor.peek(0, interner)? {
                     match *tok.kind() {
                         TokenKind::Punctuator(op) if $( op == $op )||* => {
                             cursor.advance(interner);
+                            cursor.enter_loop_nesting()?;
+                            nesting += 1;
                             lhs = Binary::new(
                                 op.as_binary_op().expect("Could not get binary operation."),
                                 lhs,
@@ -103,6 +106,7 @@ macro_rules! expression {
                         _ => break
                     }
                 }
+                cursor.leave_loop_nesting(nesting);
 
                 Ok(lhs.into())
             }
@@ -150,22 +154,25 @@ where
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
         let mut lhs = AssignmentExpression::new(self.allow_in, self.allow_yield, self.allow_await)
             .parse(cursor, interner)?;
+        let mut nesting = 0;
         while let Some(tok) = cursor.peek(0, interner)? {
             match *tok.kind() {
                 TokenKind::Punctuator(Punctuator::Comma) => {
                     if cursor.peek(1, interner).or_abrupt()?.kind()
                         == &TokenKind::Punctuator(Punctuator::CloseParen)
                     {
-                        return Ok(lhs);
+                        break;
                     }
 
                     if cursor.peek(1, interner).or_abrupt()?.kind()
                         == &TokenKind::Punctuator(Punctuator::Spread)
                     {
-                        return Ok(lhs);
+                        break;
                     }
 
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
 
                     lhs = Binary::new(
                         Punctuator::Comma
@@ -184,6 +191,7 @@ where
                 _ => break,
             }
         }
+        cursor.leave_loop_nesting(nesting);
 
         Ok(lhs)
     }
@@ -255,6 +263,7 @@ where
     type Output = FormalParameterListOrExpression;
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
+        cursor.check_native_stack()?;
         let current_node =
             BitwiseORExpression::new(self.allow_in, self.allow_yield, self.allow_await)
                 .parse(cursor, interner)?;
@@ -263,6 +272,7 @@ where
         };
 
         let mut previous = self.previous;
+        let mut nesting = 0;
 
         while let Some(tok) = cursor.peek(0, interner)? {
             match tok.kind() {
@@ -276,6 +286,8 @@ where
                         ));
                     }
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     previous = PreviousExpr::Logical;
                     let rhs =
                         BitwiseORExpression::new(self.allow_in, self.allow_yield, self.allow_await)
@@ -295,6 +307,8 @@ where
                         ));
                     }
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     previous = PreviousExpr::Logical;
                     let rhs = Self::with_previous(
                         self.allow_in,
@@ -317,6 +331,8 @@ where
                         ));
                     }
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     previous = PreviousExpr::Coalesce;
                     let rhs =
                         BitwiseORExpression::new(self.allow_in, self.allow_yield, self.allow_await)
@@ -329,6 +345,7 @@ where
                 _ => break,
             }
         }
+        cursor.leave_loop_nesting(nesting);
         Ok(current_node.into())
     }
 }
@@ -570,6 +587,7 @@ where
             return Ok(lhs);
         };
 
+        let mut nesting = 0;
         while let Some(tok) = cursor.peek(0, interner)? {
             match *tok.kind() {
                 TokenKind::Punctuator(op)
@@ -579,6 +597,8 @@ where
                         || op == Punctuator::GreaterThanOrEq =>
                 {
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     lhs = Binary::new(
                         op.as_binary_op().expect("Could not get binary operation."),
                         lhs,
@@ -599,6 +619,8 @@ where
                         || (op == Keyword::In && self.allow_in == AllowIn(true)) =>
                 {
                     cursor.advance(interner);
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     lhs = Binary::new(
                         op.as_binary_op().expect("Could not get binary operation."),
                         lhs,
@@ -611,6 +633,7 @@ where
                 _ => break,
             }
         }
+        cursor.leave_loop_nesting(nesting);
 
         Ok(lhs.into())
     }
