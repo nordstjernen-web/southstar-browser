@@ -20,6 +20,7 @@ southstar-layout-inline = { path = "../layout-inline" }
 southstar-layout-sizing = { path = "../layout-sizing" }
 southstar-layout-table = { path = "../layout-table" }
 southstar-layout-tree = { path = "../layout-tree" }
+southstar-mathml = { path = "../mathml" }
 southstar-style = { path = "../style" }
 
 [lints]

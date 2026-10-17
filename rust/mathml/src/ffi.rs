@@ -28,8 +28,6 @@ unsafe extern "C" {
     fn cairo_stroke(cr: *mut c_void);
     fn cairo_set_line_width(cr: *mut c_void, width: f64);
     fn cairo_set_source_rgba(cr: *mut c_void, red: f64, green: f64, blue: f64, alpha: f64);
-    fn ns_paint_text_context() -> *mut c_void;
-    fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_new")]
     fn pango_layout_new(context: *mut c_void) -> *mut c_void;
     #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_new")]
@@ -111,14 +109,13 @@ pub struct Token(*mut c_void);
 impl Token {
     pub fn new(text: &CStr, fpx: f64, italic: bool) -> Token {
         let size = if fpx < 1.0 { 1.0 } else { fpx };
+        let context = southstar_paint::text_context().raw();
+        let font_size = f64::from(southstar_paint::pango_font_size(size));
         unsafe {
-            let layout = pango_layout_new(ns_paint_text_context());
+            let layout = pango_layout_new(context);
             let desc = pango_font_description_new();
             pango_font_description_set_family(desc, c"serif".as_ptr());
-            pango_font_description_set_absolute_size(
-                desc,
-                f64::from(ns_paint_pango_font_size(size)),
-            );
+            pango_font_description_set_absolute_size(desc, font_size);
             pango_font_description_set_style(
                 desc,
                 if italic {
@@ -164,22 +161,6 @@ pub fn is_single_letter(text: &CStr) -> bool {
     unsafe {
         g_utf8_strlen(text.as_ptr(), -1) == 1
             && g_unichar_isalpha(g_utf8_get_char(text.as_ptr())) != 0
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_math_measure(
-    math: *const NsNode,
-    font_px: f64,
-    out_w: *mut f64,
-    out_ascent: *mut f64,
-    out_descent: *mut f64,
-) {
-    let (width, ascent, descent) = crate::measure(unsafe { Node::from_ptr(math) }, font_px);
-    for (out, value) in [(out_w, width), (out_ascent, ascent), (out_descent, descent)] {
-        if !out.is_null() {
-            unsafe { *out = value };
-        }
     }
 }
 

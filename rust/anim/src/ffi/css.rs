@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr::{self, NonNull};
 
 pub use southstar_css::Keyframes;
@@ -19,16 +19,16 @@ use crate::timing::Timing;
 
 pub const PROP_COUNT: usize = southstar_style::PROP_COUNT;
 
-unsafe extern "C" {
-    fn g_intern_string(s: *const c_char) -> *const c_char;
-}
-
 #[derive(Clone)]
 pub struct Val(OwnedValue);
 
 impl Val {
     pub fn retain(v: Borrowed) -> Option<Val> {
         v.get().map(|v| Val(OwnedValue::retain(v)))
+    }
+
+    pub fn into_owned(self) -> OwnedValue {
+        self.0
     }
 
     pub fn placeholder() -> Val {
@@ -68,10 +68,6 @@ impl Borrowed {
         self.0.is_null()
     }
 
-    pub fn as_ptr(self) -> *const NsCssValue {
-        self.0
-    }
-
     fn get(self) -> Option<&'static NsCssValue> {
         // SAFETY: a Borrowed is null or a value a style, a declaration block or a Val keeps alive while the engine reads it.
         unsafe { self.0.as_ref() }
@@ -104,9 +100,9 @@ impl Borrowed {
         self.get()?.color_rgba()
     }
 
-    pub fn transform(self) -> Option<*const c_void> {
+    pub fn transform(self) -> Option<southstar_style::Transform> {
         let transform = self.get()?.transform()?;
-        (transform.n_ops != 0).then_some(ptr::from_ref(transform).cast())
+        (transform.n_ops != 0).then_some(*transform)
     }
 }
 
@@ -132,11 +128,6 @@ pub fn prop_inherits(prop: i32) -> bool {
 
 pub fn reduced_motion() -> bool {
     southstar_css_media::prefers_reduced_motion()
-}
-
-pub fn intern(name: &CStr) -> *const c_char {
-    // SAFETY: name is NUL-terminated, and g_intern_string copies it into a table that lives for the process.
-    unsafe { g_intern_string(name.as_ptr()) }
 }
 
 pub fn initial_value(prop: i32) -> Option<Val> {
@@ -183,11 +174,7 @@ impl Decls {
     }
 }
 
-pub fn sheet_keyframes(sheet: *const c_void) -> Vec<(Vec<u8>, Keyframes)> {
-    // SAFETY: the embedder hands over null or a live style sheet made by rust/css.
-    let Some(sheet) = (unsafe { Sheet::from_ptr(sheet) }) else {
-        return Vec::new();
-    };
+pub fn sheet_keyframes(sheet: &Sheet) -> Vec<(Vec<u8>, Keyframes)> {
     sheet
         .keyframes()
         .map(|kf| (kf.name().to_vec(), kf))
@@ -388,11 +375,7 @@ impl NodePtr {
         self.0 as usize
     }
 
-    pub fn as_ptr(self) -> *const NsNode {
-        self.0
-    }
-
-    fn node(self) -> Option<Node<'static>> {
+    pub fn node(self) -> Option<Node<'static>> {
         // SAFETY: a NodePtr is made from a node of this thread's store, and `from_ptr` returns None once that node is freed.
         unsafe { Node::from_ptr(self.0) }
     }

@@ -1,14 +1,12 @@
-//! Southstar — the resolved-tracks entry point getComputedStyle calls, and the style and box helpers grid layout borrows from the other layout crates.
+//! Southstar — the style and box helpers grid layout borrows from the other layout crates.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_uint};
 
 use southstar_glib::{self as glib, GArray, GBoolean};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 use southstar_style::StyleRef;
-
-use crate::abs;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -59,18 +57,4 @@ pub(crate) fn track_edges<'a>(a: *mut GArray) -> Option<&'a [TrackEdges]> {
         return Some(&[]);
     }
     Some(unsafe { core::slice::from_raw_parts(a.data.cast::<TrackEdges>(), a.len as usize) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_grid_resolved_tracks(
-    b: *const NsBox,
-    columns: GBoolean,
-) -> *mut c_char {
-    let Some(b) = (unsafe { BoxRef::from_ptr(b) }) else {
-        return core::ptr::null_mut();
-    };
-    match abs::resolved_tracks(b, columns != 0) {
-        Some(text) => glib::strdup(&text),
-        None => core::ptr::null_mut(),
-    }
 }

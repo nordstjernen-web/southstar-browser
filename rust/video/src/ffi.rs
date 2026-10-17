@@ -420,10 +420,6 @@ fn flush_js(cache: *mut Cache) {
     }
 }
 
-fn video_mut<'a>(v: *mut NsVideo) -> Option<&'a mut NsVideo> {
-    unsafe { v.as_mut() }
-}
-
 fn video_ref<'a>(v: *const NsVideo) -> Option<&'a NsVideo> {
     unsafe { v.as_ref() }
 }
@@ -593,6 +589,26 @@ impl BoxVideo {
         self.with(|v| v.is_camera.get())
     }
 
+    pub fn note_paint_rect(self, x: f64, y: f64, w: f64, h: f64, fit: i32) {
+        self.with(|v| v.note_paint_rect(x, y, w, h, fit));
+    }
+
+    pub fn note_paint_clip(self, x: f64, y: f64, w: f64, h: f64) {
+        self.with(|v| v.note_paint_clip(x, y, w, h));
+    }
+
+    pub fn helper_composited(self) -> bool {
+        self.with(|v| crate::helper_composited(v))
+    }
+
+    pub fn active_cue_text(self) -> Option<Vec<u8>> {
+        self.with(|v| {
+            let cues = v.cues.as_ref()?;
+            let cue = southstar_webvtt::active(&cues.0, v.cur_time)?;
+            Some(cue.text.to_bytes().to_vec())
+        })
+    }
+
     pub fn has_player(self) -> bool {
         self.with(|v| v.player.is_some())
     }
@@ -665,43 +681,6 @@ pub unsafe extern "C" fn ns_video_poster_texture(
     }
     v.and_then(|v| v.poster_texture.as_ref())
         .map_or(ptr::null_mut(), |t| t.as_ptr().cast())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_note_paint_rect(
-    v: *mut NsVideo,
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-    fit: c_int,
-) {
-    if let Some(v) = video_mut(v) {
-        v.note_paint_rect(x, y, w, h, fit);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_note_paint_clip(v: *mut NsVideo, x: f64, y: f64, w: f64, h: f64) {
-    if let Some(v) = video_mut(v) {
-        v.note_paint_clip(x, y, w, h);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_helper_composited(v: *const NsVideo) -> GBoolean {
-    glib::boolean(video_ref(v).is_some_and(crate::helper_composited))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_active_cue_text(v: *const NsVideo) -> *const c_char {
-    let Some(v) = video_ref(v) else {
-        return ptr::null();
-    };
-    v.cues
-        .as_ref()
-        .and_then(|cues| southstar_webvtt::active(&cues.0, v.cur_time))
-        .map_or(ptr::null(), |c| c.text.as_ptr())
 }
 
 #[unsafe(no_mangle)]

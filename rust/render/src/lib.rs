@@ -7,4 +7,5 @@ mod fonts;
 
 pub use ffi::{
     RenderCtx, RenderProfile, ns_render_relayout, ns_render_relayout_profile, page_rule,
+    page_uses_active, page_uses_hover,
 };

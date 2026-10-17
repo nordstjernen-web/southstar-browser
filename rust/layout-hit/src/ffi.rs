@@ -22,14 +22,6 @@ struct CairoMatrix {
 }
 
 unsafe extern "C" {
-    fn ns_paint_3d_registered(b: *const NsBox) -> GBoolean;
-    fn ns_paint_3d_pick(root3d: *const NsBox, x: f64, y: f64) -> *const NsBox;
-    fn ns_paint_inline_xy_to_byte(
-        b: *const NsBox,
-        rel_x: f64,
-        rel_y: f64,
-        out_byte: *mut usize,
-    ) -> GBoolean;
     fn cairo_matrix_invert(m: *mut CairoMatrix) -> c_int;
 }
 
@@ -85,19 +77,9 @@ pub use southstar_layout_position::sticky_offset;
 
 pub use southstar_layout::image_map_area;
 
-pub fn paint_3d_registered(b: BoxRef<'_>) -> bool {
-    unsafe { ns_paint_3d_registered(b.as_ptr()) != 0 }
-}
-
-pub fn paint_3d_pick<'a>(b: BoxRef<'a>, x: f64, y: f64) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(ns_paint_3d_pick(b.as_ptr(), x, y)) }
-}
-
-pub fn inline_xy_to_byte(b: BoxRef<'_>, rel_x: f64, rel_y: f64) -> Option<usize> {
-    let mut byte = 0;
-    (unsafe { ns_paint_inline_xy_to_byte(b.as_ptr(), rel_x, rel_y, &mut byte) } != 0)
-        .then_some(byte)
-}
+pub use southstar_paint::{
+    inline_xy_to_byte, pick_3d as paint_3d_pick, registered_3d as paint_3d_registered,
+};
 
 pub fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
     // SAFETY: `p` is null or a NUL-terminated string the box tree owns for as long as its boxes are borrowed.
@@ -116,40 +98,12 @@ fn box_out(b: Option<BoxRef<'_>>) -> *const NsBox {
     b.map_or(ptr::null(), BoxRef::as_ptr)
 }
 
-fn store(out: *mut f64, v: f64) {
-    if let Some(out) = unsafe { out.as_mut() } {
-        *out = v;
-    }
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_is_fixed(b: *const NsBox) -> GBoolean {
     boolean(entry(b).is_some_and(crate::geometry::is_fixed))
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_offset(b: *const NsBox, dx: *mut f64, dy: *mut f64) {
-    let (x, y) = entry(b).map_or((0.0, 0.0), crate::geometry::hit_offset);
-    store(dx, x);
-    store(dy, y);
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox {
     box_out(entry(root).and_then(|root| crate::tree::hit_test(root, x, y)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_test_local(
-    root: *const NsBox,
-    x: f64,
-    y: f64,
-    local_x: *mut f64,
-    local_y: *mut f64,
-) -> *const NsBox {
-    let hit = entry(root).and_then(|root| crate::tree::hit_test(root, x, y));
-    let (lx, ly) = crate::tree::last_local();
-    store(local_x, lx);
-    store(local_y, ly);
-    box_out(hit)
 }

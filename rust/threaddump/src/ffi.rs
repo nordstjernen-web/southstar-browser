@@ -1,17 +1,12 @@
-//! Southstar — the C ABI of thread dumps, and the platform calls behind it.
+//! Southstar — installing the thread-dump signal, and the platform calls behind thread dumps.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use std::io::Write;
-
-unsafe extern "C" {
-    fn malloc(size: usize) -> *mut c_void;
-}
-
 #[cfg(target_os = "linux")]
 pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
+    use core::ffi::c_int;
+    use std::io::Write;
+
     unsafe extern "C" {
         fn sysconf(name: c_int) -> core::ffi::c_long;
     }
@@ -53,6 +48,9 @@ pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
 
 #[cfg(windows)]
 pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
+    use core::ffi::{c_int, c_void};
+    use std::io::Write;
+
     #[repr(C)]
     struct ThreadEntry32 {
         size: u32,
@@ -148,32 +146,10 @@ pub(crate) fn list_threads(_pid: i32, out: &mut Vec<u8>) {
 }
 
 #[cfg(unix)]
-fn to_stderr(pid: i32, label: Option<&[u8]>) {
-    let mut stderr = std::io::stderr().lock();
-    let _ = stderr.write_all(&crate::dump_text(pid, label));
-    let _ = stderr.flush();
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_thread_dump_text(pid: c_int, label: *const c_char) -> *mut c_char {
-    let label = (!label.is_null()).then(|| unsafe { CStr::from_ptr(label) }.to_bytes());
-    let text = crate::dump_text(pid, label);
-    let out = unsafe { malloc(text.len() + 1) }.cast::<u8>();
-    if out.is_null() {
-        return ptr::null_mut();
-    }
-    unsafe {
-        ptr::copy_nonoverlapping(text.as_ptr(), out, text.len());
-        *out.add(text.len()) = 0;
-    }
-    out.cast()
-}
-
-#[cfg(unix)]
 mod signal {
     use core::ffi::{c_int, c_void};
     use std::fs::File;
-    use std::io::{ErrorKind, Read};
+    use std::io::{ErrorKind, Read, Write};
     use std::os::fd::FromRawFd;
     use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -226,12 +202,18 @@ mod signal {
         unsafe { *errno = saved };
     }
 
+    fn to_stderr(pid: i32, label: Option<&[u8]>) {
+        let mut stderr = std::io::stderr().lock();
+        let _ = stderr.write_all(&crate::dump_text(pid, label));
+        let _ = stderr.flush();
+    }
+
     fn dispatch(mut pipe: File, label: Option<Vec<u8>>) {
         let mut byte = [0u8; 1];
         loop {
             match pipe.read(&mut byte) {
                 Ok(0) => break,
-                Ok(_) => super::to_stderr(std::process::id() as i32, label.as_deref()),
+                Ok(_) => to_stderr(std::process::id() as i32, label.as_deref()),
                 Err(error) if error.kind() == ErrorKind::Interrupted => {}
                 Err(_) => break,
             }
@@ -262,13 +244,9 @@ mod signal {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_thread_dump_install_signal(label: *const c_char) {
+pub fn install_signal(label: Option<&[u8]>) {
     #[cfg(unix)]
-    {
-        let label = (!label.is_null()).then(|| unsafe { CStr::from_ptr(label) }.to_bytes());
-        signal::install(label);
-    }
+    signal::install(label);
     #[cfg(not(unix))]
     let _ = label;
 }

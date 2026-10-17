@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_double, c_int, c_uint, c_void};
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -10,37 +10,12 @@ use std::sync::{Mutex, OnceLock};
 
 use southstar_dom::{Node, NsNode};
 use southstar_gtk_ffi::{
-    self as gtk, Cairo, GObject, GObjectClass, GdkPaintable, GdkPaintableFlags,
-    GdkPaintableInterface, GdkRgba, GtkButton, GtkEntry, GtkImage, GtkMenuButton, GtkSnapshot,
+    self as gtk, GObject, GObjectClass, GdkPaintable, GdkPaintableFlags, GdkPaintableInterface,
+    GdkRgba, GtkButton, GtkEntry, GtkImage, GtkMenuButton, GtkSnapshot,
     GtkSymbolicPaintableInterface, GtkWidget,
 };
 
 use crate::icons;
-
-#[repr(C)]
-#[derive(Default)]
-struct SvgSize {
-    width: c_double,
-    height: c_double,
-    ratio: c_double,
-    has_width: c_int,
-    has_height: c_int,
-    has_ratio: c_int,
-}
-
-unsafe extern "C" {
-    fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode;
-    fn ns_svg_document_root(doc: *const NsNode) -> *const NsNode;
-    fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize);
-    fn ns_svg_render_node(
-        cr: *mut Cairo,
-        svg: *const NsNode,
-        width: c_double,
-        height: c_double,
-        styles: *mut c_void,
-        inherited: *const c_void,
-    );
-}
 
 #[repr(C)]
 struct NsIcon {
@@ -133,12 +108,15 @@ unsafe fn draw(
     }
     let bounds = gtk::GrapheneRect::new(0.0, 0.0, width as f32, height as f32);
     unsafe {
-        let root = (*icon).root;
+        let Some(root) = Node::from_ptr((*icon).root) else {
+            return;
+        };
         let cr = gtk::gtk_snapshot_append_cairo(snapshot, &bounds);
+        let canvas = southstar_svg::Canvas::from_raw(cr.cast());
         match color {
             Some(color) => {
                 gtk::cairo_push_group(cr);
-                ns_svg_render_node(cr, root, width, height, ptr::null_mut(), ptr::null());
+                southstar_svg::render_root(canvas, root, width, height);
                 let shape = gtk::cairo_pop_group(cr);
                 gtk::cairo_set_source_rgba(
                     cr,
@@ -150,7 +128,7 @@ unsafe fn draw(
                 gtk::cairo_mask(cr, shape);
                 gtk::cairo_pattern_destroy(shape);
             }
-            None => ns_svg_render_node(cr, root, width, height, ptr::null_mut(), ptr::null()),
+            None => southstar_svg::render_root(canvas, root, width, height),
         }
         gtk::cairo_destroy(cr);
     }
@@ -203,27 +181,26 @@ unsafe fn icon_from_resource(name: &[u8]) -> *mut NsIcon {
         }
         let mut len = 0usize;
         let data = gtk::g_bytes_get_data(bytes, &mut len);
-        let doc = ns_html_parse(data.cast(), len as isize);
-        gtk::g_bytes_unref(bytes);
-        let root = if doc.is_null() {
-            ptr::null()
+        let tree = if data.is_null() {
+            None
         } else {
-            ns_svg_document_root(doc)
+            let input = core::slice::from_raw_parts(data.cast::<u8>(), len);
+            Some(southstar_html_parser::parse_document(input, true))
         };
-        if root.is_null() {
-            if let Some(doc) = Node::from_ptr(doc) {
-                doc.free_tree();
-            }
+        gtk::g_bytes_unref(bytes);
+        let Some(tree) = tree else {
             return ptr::null_mut();
-        }
+        };
+        let Some(root) = southstar_svg::find_root(tree.root()) else {
+            return ptr::null_mut();
+        };
+        let size = southstar_svg::intrinsic_size(Some(root));
         let icon = gtk::g_object_new(icon_type(), ptr::null()).cast::<NsIcon>();
-        (*icon).doc = doc;
-        (*icon).root = root;
+        (*icon).root = root.as_ptr();
+        (*icon).doc = tree.into_raw();
         (*icon).symbolic = c_int::from(icons::is_symbolic(name));
-        let mut size = SvgSize::default();
-        ns_svg_intrinsic_size(root, &mut size);
-        (*icon).width = icons::intrinsic_px(size.has_width != 0, size.width);
-        (*icon).height = icons::intrinsic_px(size.has_height != 0, size.height);
+        (*icon).width = icons::intrinsic_px(size.has_width, size.width);
+        (*icon).height = icons::intrinsic_px(size.has_height, size.height);
         icon
     }
 }

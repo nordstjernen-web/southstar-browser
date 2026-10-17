@@ -15,9 +15,7 @@ use southstar_style::StyleRef;
 
 use crate::attrs;
 
-unsafe extern "C" {
-    fn ns_math_measure(math: *const c_void, font_px: f64, w: *mut f64, a: *mut f64, d: *mut f64);
-}
+unsafe extern "C" {}
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
 
@@ -121,10 +119,8 @@ pub(crate) fn measure_atomics_end(saved: Option<Box<SavedGeometry<'_>>>) {
     }
 }
 
-pub(crate) fn math_ascent(dom: *const c_void, font_px: f64) -> f64 {
-    let (mut w, mut a, mut d) = (0.0, 0.0, 0.0);
-    unsafe { ns_math_measure(dom, font_px, &mut w, &mut a, &mut d) };
-    a
+pub(crate) fn math_ascent(math: Option<Node<'_>>, font_px: f64) -> f64 {
+    southstar_mathml::measure(math, font_px).1
 }
 
 pub(crate) fn is_one_line_text_input(dom: *const c_void) -> bool {

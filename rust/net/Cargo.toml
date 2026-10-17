@@ -12,6 +12,7 @@ southstar-about-style = { path = "../about-style" }
 southstar-config = { path = "../config" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-digest = { path = "../digest" }
+southstar-extensions = { path = "../extensions" }
 southstar-glib = { path = "../glib" }
 southstar-history = { path = "../history" }
 southstar-html-util = { path = "../html-util" }

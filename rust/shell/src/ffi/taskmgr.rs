@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_int, c_long, c_void};
 use core::ptr;
 
 use southstar_gtk_ffi::{self as gtk, GBoolean, GtkWidget};
@@ -13,11 +13,6 @@ use super::gtk::{
 };
 use super::view::{self, View};
 use crate::taskmgr::{self, CpuHistory};
-
-unsafe extern "C" {
-    fn ns_thread_dump_text(pid: c_int, label: *const c_char) -> *mut c_char;
-    fn free(p: *mut c_void);
-}
 
 const WINDOW_KEY: &CStr = c"ns-task-manager";
 const PID_KEY: &CStr = c"ns-pid";
@@ -317,17 +312,13 @@ unsafe extern "C" fn on_thread_dump(_button: *mut GtkWidget, data: *mut c_void) 
             if pid > 0 {
                 let name = borrowed(gtk::g_object_get_data(r.cast(), NAME_KEY.as_ptr()).cast())
                     .unwrap_or(c"process");
-                let text = ns_thread_dump_text(pid, name.as_ptr());
-                if !text.is_null() {
-                    let bytes = CStr::from_ptr(text).to_bytes();
-                    southstar_glib::stderr_write(bytes);
-                    if dumped > 0 {
-                        out.push(b'\n');
-                    }
-                    out.extend_from_slice(bytes);
-                    free(text.cast());
-                    dumped += 1;
+                let bytes = southstar_threaddump::dump_text(pid, Some(name.to_bytes()));
+                southstar_glib::stderr_write(&bytes);
+                if dumped > 0 {
+                    out.push(b'\n');
                 }
+                out.extend_from_slice(&bytes);
+                dumped += 1;
             }
             r = gtk::gtk_widget_get_next_sibling(r);
         }

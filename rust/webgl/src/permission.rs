@@ -21,11 +21,11 @@ fn decisions() -> MutexGuard<'static, Decisions> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-pub(crate) fn take_pending_origin() -> Option<Vec<u8>> {
+pub fn take_pending_origin() -> Option<Vec<u8>> {
     decisions().pending.take()
 }
 
-pub(crate) fn set_decision(origin: &[u8], allow: bool) {
+pub fn set_decision(origin: &[u8], allow: bool) {
     if origin.is_empty() {
         return;
     }

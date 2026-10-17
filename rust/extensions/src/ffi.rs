@@ -216,13 +216,3 @@ pub(crate) fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     let host = cstring(host);
     unsafe { glib::bytes(psl_registrable_domain(psl, host.as_ptr())) }.map(<[u8]>::to_vec)
 }
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_ext_should_block(
-    url: *const c_char,
-    initiator: *const c_char,
-) -> GBoolean {
-    let url = unsafe { glib::bytes(url) };
-    let initiator = unsafe { glib::bytes(initiator) };
-    glib::boolean(crate::should_block(url, initiator))
-}

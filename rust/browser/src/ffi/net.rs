@@ -14,7 +14,6 @@ use southstar_glib::{self as glib, GError, GStr};
 pub use southstar_js_runtime::api::NavigationTiming;
 
 unsafe extern "C" {
-    fn ns_pdf_document_html(data: *const u8, len: usize, url: *const c_char) -> *mut c_char;
     fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_filename_to_uri(
         filename: *const c_char,
@@ -120,10 +119,8 @@ impl Response {
         decoded
     }
 
-    pub fn pdf_document(&self, url: &CStr) -> Option<GStr> {
-        let body = self.body();
-        // SAFETY: body is len readable bytes and url a NUL-terminated string, both live for the call.
-        take(unsafe { ns_pdf_document_html(body.as_ptr(), body.len(), url.as_ptr()) })
+    pub fn pdf_document(&self, url: &CStr) -> Vec<u8> {
+        southstar_pdf::document_html(self.body(), Some(url.to_bytes()))
     }
 
     pub fn set_body(&mut self, bytes: &[u8]) {

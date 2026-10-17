@@ -5,9 +5,9 @@
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{GBoolean, GHashTable, GStr};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_dom::Node;
+use southstar_glib::{GHashTable, GStr};
+use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 
 use super::glib::StrBufOwned;
 use super::{Js, NsBrowser};
@@ -18,12 +18,7 @@ pub use southstar_image::ImageCache as Images;
 pub use southstar_video::VideoCache as Videos;
 
 unsafe extern "C" {
-    fn ns_layout_set_open_select(select: *const NsNode);
-    fn ns_layout_set_datalist_open(open: GBoolean);
-    pub fn ns_box_free(b: *mut NsBox);
     fn ns_spell_init();
-    fn ns_webgl_take_pending_origin() -> *mut c_char;
-    fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
     fn ns_camera_take_pending_origin() -> *mut c_char;
     fn ns_camera_set_decision(origin: *const c_char, allow: c_int);
 }
@@ -81,12 +76,13 @@ impl NsBrowser {
     }
 
     pub fn set_open_select_for_layout(&self) {
-        unsafe { ns_layout_set_open_select(Node::ptr_or_null(self.open_select.get())) };
+        southstar_layout_build::set_open_select(self.open_select.get());
     }
 }
 
 pub unsafe fn box_free(b: *mut NsBox) {
-    unsafe { ns_box_free(b) };
+    // SAFETY: the caller hands over null or a layout tree it owns and no longer reads.
+    BoxPool::free_tree(unsafe { BoxRef::from_ptr(b) });
 }
 
 pub use southstar_engine::in_blocking_fetch as engine_in_blocking_fetch;
@@ -167,7 +163,7 @@ pub fn style_keyword_raw<'a>(style: *const Style, prop: c_int) -> Option<&'a CSt
 }
 
 pub fn layout_set_datalist_open(open: bool) {
-    unsafe { ns_layout_set_datalist_open(southstar_glib::boolean(open)) };
+    southstar_layout_build::set_datalist_open(open);
 }
 
 pub fn inline_rect_y(layout: BoxRef<'_>, target: Node<'_>) -> Option<f64> {
@@ -222,16 +218,10 @@ pub fn shutdown() {
     southstar_config::shutdown();
 }
 
-pub fn webgl_take_pending_origin() -> Option<GStr> {
-    // SAFETY: the call has no preconditions and returns a newly allocated string or null.
-    let origin = unsafe { ns_webgl_take_pending_origin() };
-    // SAFETY: the string is g_malloc'd and owned by nothing else.
-    unsafe { GStr::take(origin) }
-}
+pub use southstar_webgl::take_pending_origin as webgl_take_pending_origin;
 
 pub fn webgl_set_decision(origin: &CStr, allow: bool) {
-    // SAFETY: `origin` is NUL-terminated for the call.
-    unsafe { ns_webgl_set_decision(origin.as_ptr(), c_int::from(allow)) };
+    southstar_webgl::set_decision(origin.to_bytes(), allow);
 }
 
 pub fn camera_take_pending_origin() -> Option<GStr> {

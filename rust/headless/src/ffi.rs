@@ -11,7 +11,7 @@ mod stdio;
 mod util;
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};
@@ -50,25 +50,6 @@ pub use util::{
 };
 
 use crate::inproc::{Settle, WptWait};
-use crate::{Dump, Opts};
-
-#[repr(C)]
-pub struct NsHeadlessOpts {
-    url: *const c_char,
-    dump: c_uint,
-    out_path: *const c_char,
-    viewport_width: c_int,
-    viewport_height: c_int,
-    settle_ms: c_int,
-    time_ms: c_int,
-    debug_levels: c_uint,
-    actions: *const c_char,
-    eval: *const c_char,
-    inspect: *const c_char,
-    inspect_at: *const c_char,
-    wpt: GBoolean,
-    wpt_timeout_ms: c_int,
-}
 
 #[repr(C)]
 struct GMainLoop {
@@ -111,10 +92,6 @@ pub fn console_setup() {
 
 #[cfg(not(windows))]
 pub fn console_setup() {}
-
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
 
 pub fn node_from_ptr<'a>(p: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(p) }
@@ -217,47 +194,4 @@ pub fn run_wpt_wait(timeout_ms: c_int, wait: &WptWait) -> bool {
         g_main_loop_unref(main_loop.as_ptr());
     }
     poll.done.get()
-}
-
-fn dump_kind(raw: c_uint) -> Dump {
-    match raw {
-        0 => Dump::Text,
-        1 => Dump::Dom,
-        2 => Dump::Layout,
-        3 => Dump::Png,
-        4 => Dump::Pdf,
-        5 => Dump::Print,
-        6 => Dump::None,
-        _ => Dump::Unknown,
-    }
-}
-
-unsafe fn opts<'a>(raw: *const NsHeadlessOpts) -> Option<Opts<'a>> {
-    let o = unsafe { raw.as_ref() }?;
-    Some(Opts {
-        url: c_str(o.url),
-        dump: dump_kind(o.dump),
-        out_path: c_str(o.out_path),
-        viewport_width: o.viewport_width,
-        viewport_height: o.viewport_height,
-        settle_ms: o.settle_ms,
-        time_ms: o.time_ms,
-        debug_levels: o.debug_levels,
-        actions: c_str(o.actions),
-        eval: c_str(o.eval),
-        inspect: c_str(o.inspect),
-        inspect_at: c_str(o.inspect_at),
-        wpt: o.wpt != 0,
-        wpt_timeout_ms: o.wpt_timeout_ms,
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_headless_debug_mask(spec: *const c_char) -> c_uint {
-    crate::debug_mask(c_str(spec))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_headless_run(raw: *const NsHeadlessOpts) -> c_int {
-    crate::run(unsafe { opts(raw) }.as_ref())
 }

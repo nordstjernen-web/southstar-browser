@@ -12,8 +12,8 @@ mod text;
 mod tracks;
 
 pub use abs::{
-    Area, containing_block as abs_containing_block, static_align_offset as abs_static_align_offset,
-    static_position as abs_static_position,
+    Area, containing_block as abs_containing_block, resolved_tracks as grid_resolved_tracks,
+    static_align_offset as abs_static_align_offset, static_position as abs_static_position,
 };
 pub use intrinsic::{
     column_flow_width as grid_column_flow_width, flows_by_column as grid_flows_by_column,

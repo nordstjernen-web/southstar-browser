@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::GlContext;
+
 pub mod egl {
     pub const NONE: i32 = 0x3038;
     pub const TRUE: i32 = 1;

@@ -42,7 +42,6 @@ unsafe extern "C" {
     -> *mut GByteArray;
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
-    fn ns_ext_should_block(url: *const c_char, top_url: *const c_char) -> GBoolean;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -935,9 +934,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
 pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
     let navigation = request::is_navigation(f.headers);
     if !navigation {
-        let url = cstr(f.url);
-        let top = opt_cstr(f.top_url);
-        if unsafe { ns_ext_should_block(url.as_ptr(), opt_ptr(&top)) } != 0 {
+        if southstar_extensions::should_block(Some(f.url), f.top_url) {
             return Ok(Response::with_error(f.url, 0, b"blocked by extension"));
         }
     }

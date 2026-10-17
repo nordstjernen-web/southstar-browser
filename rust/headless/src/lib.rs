@@ -11,8 +11,6 @@ mod text;
 
 use core::ffi::CStr;
 
-pub use ffi::NsHeadlessOpts;
-
 const DLOG_LEVELS: core::ops::RangeInclusive<u32> = 0..=5;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -25,6 +23,21 @@ pub enum Dump {
     Print,
     None,
     Unknown,
+}
+
+impl Dump {
+    pub fn from_index(index: u32) -> Dump {
+        match index {
+            0 => Dump::Text,
+            1 => Dump::Dom,
+            2 => Dump::Layout,
+            3 => Dump::Png,
+            4 => Dump::Pdf,
+            5 => Dump::Print,
+            6 => Dump::None,
+            _ => Dump::Unknown,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

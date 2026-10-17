@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::c_char;
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -189,14 +189,3 @@ mod poppler {
 
 #[cfg(feature = "poppler")]
 pub(crate) use poppler::Document;
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_pdf_document_html(
-    data: *const u8,
-    len: usize,
-    url: *const c_char,
-) -> *mut c_char {
-    let url = (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) }.to_bytes());
-    let data = unsafe { glib::slice(data, len) };
-    glib::strdup(&crate::document_html(data, url))
-}

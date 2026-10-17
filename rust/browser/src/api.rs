@@ -177,7 +177,7 @@ impl Page {
     }
 
     pub fn take_pending_webgl(&self) -> Option<Vec<u8>> {
-        text(ffi::webgl_take_pending_origin().as_deref())
+        ffi::webgl_take_pending_origin()
     }
 
     pub fn take_pending_camera(&self) -> Option<Vec<u8>> {

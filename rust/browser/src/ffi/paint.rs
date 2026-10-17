@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 
 use southstar_cairo::ContextRef;
 use southstar_engine::Sheet;
@@ -21,16 +21,7 @@ const STATUS_SUCCESS: c_int = 0;
 const ANTIALIAS_FAST: c_int = 4;
 pub const VP_STICKY: c_int = 2;
 
-#[repr(C)]
-#[derive(Default)]
-pub struct StickyY {
-    pub has_top: GBoolean,
-    pub has_bottom: GBoolean,
-    pub top_start: f64,
-    pub top_cap: f64,
-    pub bottom_start: f64,
-    pub bottom_cap: f64,
-}
+pub use southstar_layout_position::StickyY;
 
 #[repr(C)]
 #[derive(Default)]
@@ -70,16 +61,6 @@ unsafe extern "C" {
     fn cairo_clip(cr: *mut c_void);
     fn cairo_scale(cr: *mut c_void, sx: f64, sy: f64);
     fn cairo_translate(cr: *mut c_void, tx: f64, ty: f64);
-    fn ns_box_sticky_y_model(b: *const NsBox, viewport_h: f64, out: *mut StickyY) -> GBoolean;
-    fn ns_box_sticky_offset(
-        b: *const NsBox,
-        x0: f64,
-        y0: f64,
-        x1: f64,
-        y1: f64,
-        dx: *mut f64,
-        dy: *mut f64,
-    );
 }
 
 pub struct Surface(NonNull<c_void>);
@@ -453,14 +434,12 @@ pub fn subtree_extent_y(b: BoxRef<'_>, out: &mut VpLayerInfo) -> bool {
 }
 
 pub fn sticky_y_model(b: BoxRef<'_>, viewport_h: f64, out: &mut VpLayerInfo) -> bool {
-    unsafe { ns_box_sticky_y_model(b.as_ptr(), viewport_h, &mut out.sticky) != 0 }
+    let (model, ok) = southstar_layout_position::sticky_y_model(b, viewport_h);
+    out.sticky = model;
+    ok
 }
 
-pub fn sticky_offset(b: BoxRef<'_>, x0: f64, y0: f64, x1: f64, y1: f64) -> (f64, f64) {
-    let (mut dx, mut dy) = (0.0, 0.0);
-    unsafe { ns_box_sticky_offset(b.as_ptr(), x0, y0, x1, y1, &mut dx, &mut dy) };
-    (dx, dy)
-}
+pub use southstar_layout_position::sticky_offset;
 
 pub fn scroll_snap_viewport(
     layout: BoxRef<'_>,

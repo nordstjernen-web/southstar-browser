@@ -3,39 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use core::ptr;
 use std::sync::OnceLock;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
+use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, MediaRef, Style};
 use southstar_style::StyleRef;
-
-unsafe extern "C" {
-    fn ns_svg_intrinsic_size(svg: *const NsNode, out: *mut SvgSize);
-}
-
-#[repr(C)]
-#[derive(Default)]
-pub struct SvgSize {
-    pub width: f64,
-    pub height: f64,
-    pub ratio: f64,
-    has_width: GBoolean,
-    has_height: GBoolean,
-    has_ratio: GBoolean,
-}
-
-impl SvgSize {
-    pub fn has_width(&self) -> bool {
-        self.has_width != 0
-    }
-
-    pub fn has_ratio(&self) -> bool {
-        self.has_ratio != 0
-    }
-}
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
@@ -103,11 +76,7 @@ pub fn grid_column_flow_width(b: BoxRef<'_>, child_style: *const Style, min: boo
     (measures().grid_column_flow_width)(b, child_style, min)
 }
 
-pub fn svg_intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
-    let mut size = SvgSize::default();
-    unsafe { ns_svg_intrinsic_size(svg.map_or(ptr::null(), Node::as_ptr), &mut size) };
-    size
-}
+pub use southstar_svg::intrinsic_size as svg_intrinsic_size;
 
 pub fn container_w() -> f64 {
     southstar_css::container_unit_dims().0

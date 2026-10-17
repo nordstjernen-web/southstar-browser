@@ -38,12 +38,6 @@ pub unsafe extern "C" fn ns_html_parse_with_scripting(
     parse_document(bytes, scripting != 0).into_raw()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_html_parse(input: *const c_char, len: isize) -> *mut NsNode {
-    // SAFETY: the caller's guarantees are passed on unchanged.
-    unsafe { ns_html_parse_with_scripting(input, len, glib::TRUE) }
-}
-
 fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
     // SAFETY: the C callers pass null or a NUL-terminated string that outlives the call.
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
@@ -84,26 +78,4 @@ pub unsafe extern "C" fn ns_html_parse_fragment_in_context(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_html_convert_declarative_shadow(root: *mut NsNode) {
     crate::convert_declarative_shadow(unsafe { Node::from_ptr(root) }, 0);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_xml_well_formed(
-    input: *const c_char,
-    len: isize,
-    out_root_ns: *mut *mut c_char,
-) -> GBoolean {
-    if !out_root_ns.is_null() {
-        unsafe { *out_root_ns = ptr::null_mut() };
-    }
-    if input.is_null() {
-        return glib::FALSE;
-    }
-    let (ok, root_ns) = crate::xml_well_formed(unsafe { input_bytes(input, len) });
-    if ok
-        && !out_root_ns.is_null()
-        && let Some(ns) = root_ns
-    {
-        unsafe { *out_root_ns = glib::strdup(&ns) };
-    }
-    glib::boolean(ok)
 }

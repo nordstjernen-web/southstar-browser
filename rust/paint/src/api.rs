@@ -7,12 +7,15 @@ use core::ptr;
 
 use southstar_anim::AnimHandle;
 use southstar_cairo::ContextRef;
+use southstar_dom::Node;
 use southstar_layout::{BoxRef, NsBox};
 use southstar_selection::NsSelection;
+use southstar_style::StyleRef;
 
 use crate::document::{self, DocLayers, LayerPlan};
+use crate::ffi::pango::Context;
 use crate::walk::VpCapture;
-use crate::{state, three_d};
+use crate::{inline, marker, state, text, three_d};
 
 fn selection_ptr(sel: Option<&NsSelection>) -> *const c_void {
     sel.map_or(ptr::null(), |s| ptr::from_ref(s).cast())
@@ -79,7 +82,7 @@ pub fn set_caret_visible(visible: bool) {
 }
 
 pub fn set_anim(anim: Option<AnimHandle>) {
-    state::set_anim(anim.map_or(ptr::null_mut(), AnimHandle::raw));
+    state::set_anim(anim);
 }
 
 /// # Safety
@@ -150,4 +153,56 @@ impl VpCapture {
         // SAFETY: captures are recorded by the planner from boxes of the tree the plan was made over, which the page keeps until it plans again.
         unsafe { BoxRef::from_ptr(self.b) }
     }
+}
+
+pub fn text_context() -> Context {
+    text::context()
+}
+
+pub fn pango_font_size(size_px: f64) -> i32 {
+    text::pango_font_size(size_px)
+}
+
+pub fn css_line_height_px(s: Option<StyleRef<'_>>) -> f64 {
+    text::css_line_height_px(s)
+}
+
+pub fn normal_line_height_px(s: Option<StyleRef<'_>>) -> f64 {
+    text::normal_line_height_px(s)
+}
+
+pub fn list_ordinals_begin() {
+    marker::ordinals_begin();
+}
+
+pub fn list_ordinals_end() {
+    marker::ordinals_end();
+}
+
+pub fn inside_list_marker(
+    li: Node<'_>,
+    s: Option<StyleRef<'_>>,
+    max_len: usize,
+) -> Option<Vec<u8>> {
+    if !marker::li_is_inside(s) {
+        return None;
+    }
+    marker::li_marker_text(Some(li), s, max_len)
+}
+
+pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
+    inline::sync_inline_atomic_offsets(root);
+}
+
+pub fn inline_xy_to_byte(b: BoxRef<'_>, rel_x: f64, rel_y: f64) -> Option<usize> {
+    inline::inline_xy_to_byte(b, rel_x, rel_y)
+}
+
+pub fn registered_3d(b: BoxRef<'_>) -> bool {
+    three_d::registered(b)
+}
+
+pub fn pick_3d<'a>(root3d: BoxRef<'a>, x: f64, y: f64) -> Option<BoxRef<'a>> {
+    // SAFETY: pick returns null or a box of root3d's tree, which the caller's borrow keeps alive.
+    unsafe { BoxRef::from_ptr(three_d::pick(root3d, x, y)) }
 }

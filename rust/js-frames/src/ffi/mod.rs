@@ -306,15 +306,6 @@ pub(crate) fn append_child(parent: Node<'_>, child: Node<'_>) {
     parent.append(child);
 }
 
-fn owned_text(text: *mut c_char) -> Option<CString> {
-    if text.is_null() {
-        return None;
-    }
-    let owned = unsafe { CStr::from_ptr(text) }.to_owned();
-    unsafe { glib::g_free(text.cast()) };
-    Some(owned)
-}
-
 pub(crate) fn set_attr(node: Node<'_>, name: &CStr, value: Option<&CStr>) {
     southstar_dom::attrs::set_attribute(node, name, value.map(CStr::to_bytes));
 }

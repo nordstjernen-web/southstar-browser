@@ -12,3 +12,5 @@ mod methods;
 mod methods2;
 mod permission;
 mod tables;
+
+pub use permission::{set_decision, take_pending_origin};

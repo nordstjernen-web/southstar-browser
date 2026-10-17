@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use std::ffi::CString;
@@ -12,25 +12,9 @@ use southstar_glib::{GBoolean, GError, GStr, g_free, g_getenv, g_path_get_dirnam
 
 use super::app::{ns_procapp_run, ns_procapp_set_window_size};
 use super::procview_worker::ns_proc_renderer_path;
-use crate::appmain::{self, Action, Gsk, Options};
+use southstar_headless::{Dump, Opts as HeadlessOpts};
 
-#[repr(C)]
-struct HeadlessOpts {
-    url: *const c_char,
-    dump: c_uint,
-    out_path: *const c_char,
-    viewport_width: c_int,
-    viewport_height: c_int,
-    settle_ms: c_int,
-    time_ms: c_int,
-    debug_levels: c_uint,
-    actions: *const c_char,
-    eval: *const c_char,
-    inspect: *const c_char,
-    inspect_at: *const c_char,
-    wpt: GBoolean,
-    wpt_timeout_ms: c_int,
-}
+use crate::appmain::{self, Action, Gsk, Options};
 
 #[repr(C)]
 struct GLogField {
@@ -86,11 +70,6 @@ unsafe extern "C" {
     fn g_printerr(format: *const c_char, ...);
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
-
-    fn ns_thread_dump_install_signal(label: *const c_char);
-    fn ns_headless_debug_mask(spec: *const c_char) -> c_uint;
-    fn ns_headless_run(opts: *const HeadlessOpts) -> c_int;
-    fn ns_engine_layout_perf(relayouts: *mut u64, total_ms: *mut c_double);
     fn ns_spell_init();
 }
 
@@ -550,10 +529,6 @@ fn file_url_for(target: &CStr) -> Option<GStr> {
     }
 }
 
-fn opt_ptr(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 fn print_perf() {
     let southstar_net::PerfSnapshot {
         fetches,
@@ -561,8 +536,7 @@ fn print_perf() {
         sum_ms,
         span_ms,
     } = southstar_net::perf_snapshot();
-    let (mut relayouts, mut layout_ms) = (0u64, 0f64);
-    unsafe { ns_engine_layout_perf(&mut relayouts, &mut layout_ms) };
+    let (relayouts, layout_ms) = southstar_engine::layout_perf();
     let mut line = format!(
         "[net perf] fetches={fetches} bytes={bytes} net_span={span_ms:.1}ms net_sum={sum_ms:.1}ms | relayouts={relayouts} layout={layout_ms:.1}ms"
     );
@@ -591,7 +565,7 @@ fn print_perf() {
     printerr(&line);
 }
 
-fn run_headless(opts: &mut HeadlessOpts) -> c_int {
+fn run_headless(opts: &HeadlessOpts<'_>) -> c_int {
     setenv_unless_set(c"NS_WEBGL_ALLOW", c"1");
     let log_net = opts.debug_levels & (1 << appmain::DLOG_NET) != 0;
     southstar_net::init();
@@ -606,15 +580,11 @@ fn run_headless(opts: &mut HeadlessOpts) -> c_int {
         ns_spell_init();
     }
     southstar_bytecode_cache::init();
-    let file_url = if opts.url.is_null() {
-        None
-    } else {
-        file_url_for(unsafe { CStr::from_ptr(opts.url) })
-    };
-    if let Some(url) = &file_url {
-        opts.url = url.as_ptr();
-    }
-    let rc = unsafe { ns_headless_run(opts) };
+    let file_url = opts.url.and_then(file_url_for);
+    let rc = southstar_headless::run(Some(&HeadlessOpts {
+        url: file_url.as_deref().or(opts.url),
+        ..*opts
+    }));
     if log_net {
         print_perf();
     }
@@ -673,23 +643,21 @@ fn print_config() {
     write_stdout(&southstar_config::dump());
 }
 
-fn headless_opts(o: &Options<'_>) -> HeadlessOpts {
+fn headless_opts<'a>(o: &Options<'a>) -> HeadlessOpts<'a> {
     HeadlessOpts {
-        url: opt_ptr(o.url),
-        dump: o.dump,
-        out_path: opt_ptr(o.out_path),
+        url: o.url,
+        dump: Dump::from_index(o.dump),
+        out_path: o.out_path,
         viewport_width: o.viewport_width,
         viewport_height: o.viewport_height,
         settle_ms: o.settle_ms,
         time_ms: o.time_ms,
-        debug_levels: o
-            .debug
-            .map_or(0, |spec| unsafe { ns_headless_debug_mask(spec.as_ptr()) }),
-        actions: opt_ptr(o.script),
-        eval: opt_ptr(o.eval),
-        inspect: opt_ptr(o.inspect),
-        inspect_at: opt_ptr(o.inspect_at),
-        wpt: GBoolean::from(o.wpt),
+        debug_levels: southstar_headless::debug_mask(o.debug),
+        actions: o.script,
+        eval: o.eval,
+        inspect: o.inspect,
+        inspect_at: o.inspect_at,
+        wpt: o.wpt,
         wpt_timeout_ms: o.wpt_timeout_ms,
     }
 }
@@ -733,7 +701,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         setenv(c"NS_PRIVATE", c"1");
     }
     southstar_config::init();
-    unsafe { ns_thread_dump_install_signal(c"southstar".as_ptr()) };
+    southstar_threaddump::install_signal(Some(b"southstar"));
 
     let proc_mode = appmain::proc_mode_wanted(&args);
 
@@ -843,8 +811,8 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
             .gsk_renderer_override
             .or_else(|| config_text(|c| c.gsk_renderer)),
     );
-    let mut opts = headless_opts(&options);
-    let headless_rc = run_headless(&mut opts);
+    let opts = headless_opts(&options);
+    let headless_rc = run_headless(&opts);
     if !southstar_net::idle() {
         unsafe {
             fflush(ptr::null_mut());

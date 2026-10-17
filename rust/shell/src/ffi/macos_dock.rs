@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::transmute;
 use core::ptr;
 
-use southstar_gtk_ffi::{self as gtk, CAIRO_FORMAT_ARGB32, CairoSurface, GBoolean};
+use southstar_gtk_ffi::{self as gtk, CAIRO_FORMAT_ARGB32, CairoSurface};
 
 use super::gtk::{borrowed, build_filename};
 
@@ -18,13 +18,6 @@ type Id = *mut c_void;
 type Sel = *const c_void;
 
 unsafe extern "C" {
-    fn ns_svg_render_bytes(
-        cr: *mut gtk::Cairo,
-        data: *const u8,
-        len: usize,
-        width: f64,
-        height: f64,
-    ) -> GBoolean;
     fn g_get_tmp_dir() -> *const c_char;
     fn cairo_surface_write_to_png(surface: *mut CairoSurface, filename: *const c_char) -> c_int;
 }
@@ -92,13 +85,13 @@ fn render_icon_png() -> Option<std::ffi::CString> {
         let mut len = 0usize;
         let data = gtk::g_bytes_get_data(bytes, &mut len);
         let cr = gtk::cairo_create(surf);
-        let rendered = ns_svg_render_bytes(
-            cr,
-            data.cast(),
-            len,
-            f64::from(DOCK_ICON_DIM),
-            f64::from(DOCK_ICON_DIM),
-        ) != 0;
+        let rendered = !data.is_null()
+            && southstar_svg::render_bytes(
+                southstar_svg::Canvas::from_raw(cr.cast()),
+                core::slice::from_raw_parts(data.cast::<u8>(), len),
+                f64::from(DOCK_ICON_DIM),
+                f64::from(DOCK_ICON_DIM),
+            );
         gtk::cairo_destroy(cr);
         gtk::g_bytes_unref(bytes);
         if !rendered {

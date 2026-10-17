@@ -10,7 +10,7 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_engine::Page;
 use southstar_glib::{self as glib, GBoolean, GHashTable};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef, NsBox};
 
 #[repr(C)]
 pub struct GString {
@@ -22,7 +22,6 @@ pub struct GString {
 pub use southstar_engine::{CssCache, PrintSetup};
 
 unsafe extern "C" {
-    fn ns_box_free(b: *mut NsBox);
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
 }
@@ -281,7 +280,7 @@ pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
 pub fn free_layout(layout: *mut NsBox) {
     southstar_paint::invalidate_3d();
     // SAFETY: the run passes its own layout tree, which nothing reads after this.
-    unsafe { ns_box_free(layout) };
+    BoxPool::free_tree(unsafe { BoxRef::from_ptr(layout) });
 }
 
 pub fn fetch_images(root: Option<BoxRef<'_>>, base: Option<&CStr>, cache: Option<ImageCache>) {

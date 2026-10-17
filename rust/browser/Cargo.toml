@@ -23,28 +23,33 @@ southstar-history = { path = "../history" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
 southstar-http-cache = { path = "../http-cache" }
+southstar-image = { path = "../image" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-input = { path = "../js-input" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-loader = { path = "../js-loader" }
-southstar-js-window = { path = "../js-window" }
-southstar-image = { path = "../image" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-page = { path = "../js-page" }
 southstar-js-runtime = { path = "../js-runtime" }
+southstar-js-window = { path = "../js-window" }
 southstar-layout = { path = "../layout" }
+southstar-layout-build = { path = "../layout-build" }
 southstar-layout-hit = { path = "../layout-hit" }
+southstar-layout-position = { path = "../layout-position" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-net = { path = "../net" }
 southstar-paint = { path = "../paint" }
+southstar-pdf = { path = "../pdf" }
+southstar-render = { path = "../render" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }
 southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 southstar-video = { path = "../video" }
+southstar-webgl = { path = "../webgl" }
 
 [lints]
 workspace = true

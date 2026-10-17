@@ -17,6 +17,7 @@ southstar-layout-geom = { path = "../layout-geom" }
 southstar-layout-inline = { path = "../layout-inline" }
 southstar-layout-position = { path = "../layout-position" }
 southstar-mat4 = { path = "../mat4" }
+southstar-paint = { path = "../paint" }
 southstar-style = { path = "../style" }
 
 [lints]

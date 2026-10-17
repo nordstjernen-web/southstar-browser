@@ -10,7 +10,8 @@ mod srcset;
 
 pub use ffi::{
     BoxKind, BoxPool, BoxRef, Edges, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef, NsBox,
-    NsBoxMedia, Style, TableColHint, choose_img, image_map_area, inline_kind, link_clear_fn,
+    NsBoxMedia, Style, TableColHint, choose_img, image_map_area, img_chosen_density,
+    img_chosen_url, inline_kind, link_clear_fn,
 };
 pub use image_source::Chosen;
 

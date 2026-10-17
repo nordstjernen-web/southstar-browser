@@ -11,7 +11,7 @@ use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_style::{PropId as P, ValueRef, layer, layer_count};
 
-use crate::ffi::engine::{self, Video};
+use crate::ffi::engine;
 use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
@@ -196,10 +196,7 @@ fn layers_box_bg_fixed(b: BoxRef<'_>) -> bool {
 }
 
 fn layers_box_video_composited(b: BoxRef<'_>) -> bool {
-    b.kind() == BoxKind::Video
-        && b.media()
-            .and_then(|m| unsafe { Video::from_ptr(m.video()) })
-            .is_some_and(|v| engine::video_helper_composited(Some(v)))
+    b.kind() == BoxKind::Video && engine::video_helper_composited(b)
 }
 
 fn layers_vp_kind(b: BoxRef<'_>) -> i32 {

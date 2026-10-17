@@ -19,6 +19,6 @@ pub use build::{BuildInput, layout_build};
 pub use ffi::{
     abs_build_box, abs_pending_clear, abs_pending_entry, abs_pending_len, abs_static_run,
     abs_static_target, box_is_abs_placeholder, flat_parent, image_dimension_attr,
-    record_abs_static,
+    record_abs_static, set_datalist_open, set_open_select,
 };
 pub use passes::{Passes, install as install_passes};

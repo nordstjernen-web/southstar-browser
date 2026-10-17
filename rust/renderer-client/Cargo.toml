@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-glib = { path = "../glib" }
 southstar-ipc = { path = "../ipc" }
+southstar-print = { path = "../print" }
 
 [lints]
 workspace = true

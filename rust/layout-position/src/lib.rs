@@ -8,4 +8,6 @@ mod relative;
 mod static_pos;
 mod sticky;
 
-pub use sticky::offset as sticky_offset;
+pub use ffi::layout_build;
+pub use southstar_layout_build::BuildInput;
+pub use sticky::{StickyY, offset as sticky_offset, y_model as sticky_y_model};

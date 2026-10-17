@@ -8,10 +8,12 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
+use southstar_anim::AnimHandle;
 use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout_position::BuildInput;
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
@@ -28,7 +30,7 @@ pub struct RenderCtx<'a> {
     pub zoom: f64,
     pub images: *mut c_void,
     pub base_url: *const c_char,
-    pub anim: *mut c_void,
+    pub anim: Option<AnimHandle>,
     pub js: *mut c_void,
     pub focused_input: *const NsNode,
     pub hover_node: *const NsNode,
@@ -61,22 +63,6 @@ const _: () = assert!(
 );
 
 unsafe extern "C" {
-    fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
-    fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
-    fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
-    fn ns_layout_build(
-        doc: *const NsNode,
-        styles: *mut GHashTable,
-        viewport_width: f64,
-        focused_input: *const NsNode,
-        focused_caret_byte: usize,
-        focused_sel_anchor_byte: usize,
-        images: *mut c_void,
-        base_url: *const c_char,
-    ) -> *mut NsBox;
-    fn ns_box_free(b: *mut NsBox);
-    fn ns_paint_list_ordinals_begin();
-    fn ns_paint_list_ordinals_end();
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -152,12 +138,14 @@ fn add_pseudo(
     let Some(pseudo) = pseudo else {
         return;
     };
-    let content = pseudo
+    let text = pseudo
         .value(&CONTENT)
-        .map_or(ptr::null(), |v| v.as_ptr().cast());
-    let text = unsafe { GStr::take(ns_layout_pseudo_content_text(content, host.as_ptr())) };
-    if let Some(text) = text.as_deref().filter(|t| !t.is_empty()) {
-        add_styled(Some(pseudo), text.to_bytes(), families);
+        .and_then(|v| v.keyword_text())
+        .and_then(|raw| {
+            southstar_layout_content::pseudo::resolve_content(raw.to_bytes(), Some(host))
+        });
+    if let Some(text) = text.filter(|t| !t.is_empty()) {
+        add_styled(Some(pseudo), &text, families);
     }
 }
 
@@ -234,14 +222,14 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
 }
 
 fn feed_animations(c: &RenderCtx, styles: *mut GHashTable) {
-    if c.anim.is_null() {
+    let Some(anim) = c.anim else {
         return;
-    }
+    };
     for sheet in c.style_sheets() {
-        // SAFETY: anim is the render context's live animation engine, and the sheet outlives the call.
-        unsafe { ns_anim_load_from_stylesheet(c.anim, sheet.as_ptr()) };
+        anim.load_keyframes(sheet);
     }
-    unsafe { ns_anim_observe_all(c.anim, styles, now_us()) };
+    // SAFETY: styles is the style table this relayout just computed for the page the engine animates.
+    unsafe { anim.observe_all(styles, now_us()) };
 }
 
 fn apply_zoom(c: &RenderCtx, styles: *mut GHashTable) {
@@ -399,21 +387,21 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
 }
 
 fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
-    unsafe {
-        ns_paint_list_ordinals_begin();
-        let layout = ns_layout_build(
-            c.doc,
-            styles,
-            viewport_width,
-            c.focused_input,
-            c.caret_byte,
-            c.sel_anchor_byte,
-            c.images,
-            c.base_url,
-        );
-        ns_paint_list_ordinals_end();
-        layout
-    }
+    southstar_paint::list_ordinals_begin();
+    let layout = southstar_layout_position::layout_build(BuildInput {
+        doc: c.doc(),
+        // SAFETY: styles is the style table this relayout computed for the context's document.
+        styles: unsafe { StyleTable::from_ptr(styles) },
+        viewport_width,
+        // SAFETY: the focused input is null or a live node of the context's document.
+        focused_input: unsafe { Node::from_ptr(c.focused_input) },
+        caret_byte: c.caret_byte,
+        anchor_byte: c.sel_anchor_byte,
+        image_cache: c.images,
+        base_url: c.base_url,
+    });
+    southstar_paint::list_ordinals_end();
+    layout
 }
 
 fn record_page_state(c: &RenderCtx) {
@@ -522,7 +510,7 @@ fn relayout(
             p.layout2_us += t7 - t6;
         }
         unsafe {
-            ns_box_free(layout);
+            BoxPool::free_tree(BoxRef::from_ptr(layout));
             glib::g_hash_table_destroy(styles);
         }
         layout = layout2;
@@ -562,14 +550,12 @@ fn relayout(
     styles
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_render_page_uses_hover() -> GBoolean {
-    glib::boolean(USES_HOVER.load(Ordering::Relaxed))
+pub fn page_uses_hover() -> bool {
+    USES_HOVER.load(Ordering::Relaxed)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_render_page_uses_active() -> GBoolean {
-    glib::boolean(USES_ACTIVE.load(Ordering::Relaxed))
+pub fn page_uses_active() -> bool {
+    USES_ACTIVE.load(Ordering::Relaxed)
 }
 
 pub fn page_rule() -> Option<PageRule> {

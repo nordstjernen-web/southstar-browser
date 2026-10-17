@@ -195,7 +195,7 @@ pub(crate) fn apply_atomic_shapes(list: &AttrList, b: BoxRef<'_>) {
             top = -(ab.margin().top + baseline);
         }
         if ab.kind() == BoxKind::Math {
-            let ma = ffi::math_ascent(ab.dom_ptr(), fs);
+            let ma = ffi::math_ascent(ab.dom(), fs);
             top = -(ab.margin().top + ab.border().top + ab.padding().top + ma);
         }
         if let Some(va) = vertical_align(ab) {

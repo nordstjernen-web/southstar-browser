@@ -6,7 +6,8 @@ mod fetch;
 mod ffi;
 mod styles;
 
-pub use fetch::linked_css_known;
+pub use fetch::{linked_css_known, linked_css_text};
+pub use styles::layout_perf;
 
 use southstar_layout::{BoxKind, BoxRef};
 

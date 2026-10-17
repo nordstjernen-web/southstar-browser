@@ -34,6 +34,12 @@ pub fn hit_test(root: BoxRef<'_>, x: f64, y: f64) -> Option<BoxRef<'_>> {
     tree::hit_test(root, x, y)
 }
 
+pub fn hit_test_local(root: BoxRef<'_>, x: f64, y: f64) -> Option<(BoxRef<'_>, f64, f64)> {
+    let hit = tree::hit_test(root, x, y)?;
+    let (local_x, local_y) = tree::last_local();
+    Some((hit, local_x, local_y))
+}
+
 pub fn hit_node(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     walks::hit_node(root, x, y)
 }

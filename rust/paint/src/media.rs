@@ -11,6 +11,7 @@ use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
+use southstar_video::BoxVideo;
 
 use crate::clip_shape::clip_to_shape;
 use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
@@ -394,7 +395,10 @@ fn paint_video_caption(cr: ContextRef, b: BoxRef<'_>, cue: &[u8]) {
     cr.restore();
 }
 
-fn paint_video_note_rects(cr: ContextRef, b: BoxRef<'_>, v: Video<'_>, fit_mode: i32) {
+fn paint_video_note_rects(cr: ContextRef, b: BoxRef<'_>, fit_mode: i32) {
+    let Some(v) = BoxVideo::of(b) else {
+        return;
+    };
     let (dx0, dy0) = cr.user_to_device(b.x(), b.y());
     let (dx1, dy1) = cr.user_to_device(b.x() + b.content_width(), b.y() + b.content_height());
     v.note_paint_rect(dx0, dy0, dx1 - dx0, dy1 - dy0, fit_mode);
@@ -507,7 +511,7 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
     }
     let v = video_of(b);
     let tex = v.and_then(|v| v.frame_texture().or_else(|| v.poster_texture()));
-    if let Some(v) = v {
+    if v.is_some() {
         let fit = match get(style_of(b), P::ObjectFit) {
             Some(fv) if fv.kind() == Kind::Keyword => fv.keyword_text().map(CStr::to_bytes),
             _ => Some(&b"contain"[..]),
@@ -520,7 +524,7 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
             _ => 1,
         };
         if crate::walk::layers_mode() == crate::walk::LAYERS_OFF {
-            paint_video_note_rects(cr, b, v, fit_mode);
+            paint_video_note_rects(cr, b, fit_mode);
         }
     }
     let loaded = |raw: *mut c_void| {
@@ -530,7 +534,7 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
     if !bg_painted && let Some(images) = b.media().and_then(|m| m.bg_layer_images()) {
         bg_painted = images.into_iter().any(loaded);
     }
-    let punched = engine::video_helper_composited(v);
+    let punched = engine::video_helper_composited(b);
     if let Some(v) = v {
         debug_composite(v, punched, tex.is_some(), b);
     }
@@ -557,10 +561,10 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
         }
     }
     cr.restore();
-    if let Some(cue) = engine::video_active_cue_text(v).filter(|c| !c.is_empty())
+    if let Some(cue) = engine::video_active_cue_text(b).filter(|c| !c.is_empty())
         && b.content_width() > 24.0
         && b.content_height() > 24.0
     {
-        paint_video_caption(cr, b, cue.to_bytes());
+        paint_video_caption(cr, b, &cue);
     }
 }

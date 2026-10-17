@@ -1,41 +1,26 @@
-//! Southstar — the C ABI of the offscreen GL context, over WGL, CGL or EGL through libepoxy.
+//! Southstar — the offscreen GL context, over WGL, CGL or EGL through libepoxy.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_glib::{FALSE, GBoolean, TRUE};
-
 pub struct GlContext(backend::Context);
 
-fn boolean(value: bool) -> GBoolean {
-    if value { TRUE } else { FALSE }
-}
+impl GlContext {
+    pub fn create() -> Option<GlContext> {
+        backend::create().map(GlContext)
+    }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_gl_context_create() -> *mut GlContext {
-    backend::create().map_or(core::ptr::null_mut(), |context| {
-        Box::into_raw(Box::new(GlContext(context)))
-    })
-}
+    pub fn make_current(&self) -> bool {
+        backend::make_current(&self.0)
+    }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_gl_context_make_current(c: *mut GlContext) -> GBoolean {
-    match unsafe { c.as_ref() } {
-        Some(context) => boolean(backend::make_current(&context.0)),
-        None => FALSE,
+    pub fn release(&self) {
+        backend::release(&self.0);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_gl_context_release(c: *mut GlContext) {
-    if let Some(context) = unsafe { c.as_ref() } {
-        backend::release(&context.0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_gl_context_destroy(c: *mut GlContext) {
-    if !c.is_null() {
-        backend::destroy(unsafe { Box::from_raw(c) }.0);
+impl Drop for GlContext {
+    fn drop(&mut self) {
+        backend::destroy(&self.0);
     }
 }
 
@@ -253,8 +238,8 @@ mod backend {
         }
     }
 
-    pub fn destroy(c: Context) {
-        release(&c);
+    pub fn destroy(c: &Context) {
+        release(c);
         unsafe {
             epoxy_wglDeleteContext(c.rc);
             ReleaseDC(c.window, c.dc);
@@ -358,7 +343,7 @@ mod backend {
         }
     }
 
-    pub fn destroy(c: Context) {
+    pub fn destroy(c: &Context) {
         unsafe {
             if CGLGetCurrentContext() == c.ctx {
                 if c.default_vao != 0 {
@@ -541,7 +526,7 @@ mod backend {
         }
     }
 
-    pub fn destroy(c: Context) {
+    pub fn destroy(c: &Context) {
         unsafe {
             epoxy_eglMakeCurrent(c.display, ptr::null_mut(), ptr::null_mut(), ptr::null_mut());
             if !c.surface.is_null() {
@@ -570,7 +555,7 @@ mod backend {
         match *c {}
     }
 
-    pub fn destroy(c: Context) {
-        match c {}
+    pub fn destroy(c: &Context) {
+        match *c {}
     }
 }

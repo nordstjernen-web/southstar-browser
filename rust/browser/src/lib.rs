@@ -16,3 +16,5 @@ mod query;
 mod render;
 mod scroll;
 mod settle;
+
+pub use ffi::set_color_scheme;

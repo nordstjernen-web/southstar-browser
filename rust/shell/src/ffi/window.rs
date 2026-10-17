@@ -27,10 +27,6 @@ use super::view::{self, View};
 use super::{downloads, taskmgr};
 use crate::window as rules;
 
-unsafe extern "C" {
-    fn ns_browser_set_color_scheme(dark: c_int);
-}
-
 const WINDOW_KEY: &CStr = c"ns-procwindow";
 const PW_KEY: &CStr = c"ns-pw";
 const PAGE_KEY: &CStr = c"ns-page";
@@ -316,7 +312,7 @@ impl ProcWindow {
                 return;
             }
             gtk::g_setenv(c"NS_COLOR_SCHEME".as_ptr(), want.as_ptr(), 1);
-            ns_browser_set_color_scheme(c_int::from(dark));
+            southstar_browser::set_color_scheme(dark);
             for v in view::views(self.notebook()) {
                 v.set_color_scheme(dark);
                 if v.url().is_some_and(|u| !u.is_empty()) {

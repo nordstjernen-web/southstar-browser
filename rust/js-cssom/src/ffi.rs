@@ -2,16 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
+use southstar_anim::AnimHandle;
 use southstar_css::{self as css_engine, Prop};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
@@ -58,51 +59,6 @@ pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
     lossy(&css_engine::timing_serialize(Some(&entry.timing)))
 }
 
-#[repr(C)]
-pub(crate) struct AnimInfo {
-    pub node: *const NsNode,
-    pub prop: c_int,
-    pub run: c_int,
-    pub name: *const c_char,
-    pub fill: *const c_char,
-    pub direction: *const c_char,
-    pub easing: [c_char; 96],
-    pub current_ms: f64,
-    pub duration_ms: f64,
-    pub delay_ms: f64,
-    pub iterations: f64,
-    pub active: GBoolean,
-    pub paused: GBoolean,
-    pub pending: GBoolean,
-    pub finished: GBoolean,
-    pub generation: c_uint,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<AnimInfo>() == 192
-        && core::mem::offset_of!(AnimInfo, current_ms) == 136
-        && core::mem::offset_of!(AnimInfo, generation) == 184
-);
-
-#[repr(C)]
-struct AnimScriptTiming {
-    duration_ms: f64,
-    delay_ms: f64,
-    iterations: f64,
-    direction: *const c_char,
-    fill: *const c_char,
-    easing: *const c_char,
-}
-
-type AnimVisitCb = unsafe extern "C" fn(info: *const AnimInfo, user: *mut c_void);
-type KeyframeCb = unsafe extern "C" fn(
-    offset: f64,
-    easing: *const c_char,
-    decls: Option<&css_engine::Declarations>,
-    user: *mut c_void,
-);
-
 unsafe extern "Rust" {
     safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
     safe fn nsr_port_add_event_listener(
@@ -126,44 +82,6 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
-    fn ns_paint_normal_line_height_px(style: *const Style) -> f64;
-    fn ns_paint_css_line_height_px(style: *const Style) -> f64;
-    fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
-
-    fn ns_anim_visit(a: *mut c_void, node: *const NsNode, cb: AnimVisitCb, user: *mut c_void);
-    fn ns_anim_info_for(
-        a: *mut c_void,
-        node: *const NsNode,
-        prop: c_int,
-        out: *mut AnimInfo,
-    ) -> GBoolean;
-    fn ns_anim_keyframes_visit(
-        a: *mut c_void,
-        node: *const NsNode,
-        prop: c_int,
-        cb: KeyframeCb,
-        user: *mut c_void,
-    );
-    fn ns_anim_seek(a: *mut c_void, node: *const NsNode, prop: c_int, ms: f64) -> GBoolean;
-    fn ns_anim_base_value(a: *mut c_void, node: *const NsNode, prop: c_int) -> *const NsCssValue;
-    fn ns_anim_control(
-        a: *mut c_void,
-        node: *const NsNode,
-        prop: c_int,
-        op: *const c_char,
-    ) -> GBoolean;
-    #[allow(clippy::too_many_arguments)]
-    fn ns_anim_script_start(
-        a: *mut c_void,
-        node: *const NsNode,
-        stop_css: *const *const c_char,
-        stop_pct: *const f64,
-        n_stops: c_int,
-        t: *const AnimScriptTiming,
-        out_prop: *mut c_int,
-        out_generation: *mut c_uint,
-    ) -> GBoolean;
 
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
@@ -180,20 +98,6 @@ fn lossy(text: &[u8]) -> String {
 pub(crate) fn c_string(text: &[u8]) -> CString {
     let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
     CString::new(&text[..end]).unwrap_or_default()
-}
-
-fn opt_ptr(text: &Option<CString>) -> *const c_char {
-    text.as_ref()
-        .map_or(core::ptr::null(), |text| text.as_ptr())
-}
-
-fn take_text(p: *mut c_char) -> Option<String> {
-    if p.is_null() {
-        return None;
-    }
-    let text = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
-    unsafe { glib::g_free(p.cast()) };
-    Some(text)
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
@@ -275,12 +179,12 @@ pub(crate) fn mark_mutated(js: Js) {
     }
 }
 
-pub(crate) fn anim(js: Js) -> Option<*mut c_void> {
+pub(crate) fn anim(js: Js) -> Option<AnimHandle> {
     if js.is_null() {
         return None;
     }
-    let a = api::anim(js.page());
-    (!a.is_null()).then_some(a)
+    // SAFETY: the page's animation slot holds null or the live engine the browser handed it, which outlives the page's script.
+    unsafe { AnimHandle::from_raw(api::anim(js.page())) }
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8]) {
@@ -328,7 +232,7 @@ pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool 
 }
 
 pub(crate) fn grid_resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<String> {
-    take_text(unsafe { ns_layout_grid_resolved_tracks(b.as_ptr(), glib::boolean(columns)) })
+    southstar_layout_grid::grid_resolved_tracks(b, columns).map(|text| lossy(&text))
 }
 
 pub(crate) fn input_is_one_line_text(node: Node<'_>) -> bool {
@@ -336,18 +240,14 @@ pub(crate) fn input_is_one_line_text(node: Node<'_>) -> bool {
 }
 
 pub(crate) fn line_heights(style: Option<StyleRef<'_>>) -> (f64, f64) {
-    let p = style.map_or(core::ptr::null(), StyleRef::as_ptr);
-    unsafe {
-        (
-            ns_paint_normal_line_height_px(p),
-            ns_paint_css_line_height_px(p),
-        )
-    }
+    (
+        southstar_paint::normal_line_height_px(style),
+        southstar_paint::css_line_height_px(style),
+    )
 }
 
 pub(crate) fn linked_css_text(url: &str) -> Option<String> {
-    let url = c_string(url.as_bytes());
-    take_text(unsafe { ns_engine_linked_css_text(url.as_ptr()) })
+    southstar_engine::linked_css_text(until_nul(url)).map(|css| lossy(&css))
 }
 
 pub(crate) fn prop_id(name: &str) -> Option<usize> {
@@ -376,6 +276,10 @@ fn text_until_nul(text: &[u8]) -> String {
 
 pub(crate) fn serialize(v: ValueRef<'_>) -> Option<String> {
     Some(text_until_nul(&css_engine::value_serialize(v.data())))
+}
+
+pub(crate) fn serialize_value(v: &NsCssValue) -> String {
+    text_until_nul(&css_engine::value_serialize(v))
 }
 
 pub(crate) fn serialize_raw(v: *const NsCssValue) -> Option<String> {
@@ -646,195 +550,6 @@ pub(crate) fn animation_range_serialize(start: Option<&str>, end: Option<&str>) 
 
 pub(crate) fn time_computed(text: &str) -> Option<String> {
     css_engine::time_list_serialize(until_nul(text), true).map(|text| lossy(&text))
-}
-
-pub(crate) struct AnimRecord {
-    pub node: *const NsNode,
-    pub prop: c_int,
-    pub run: c_int,
-    pub name: Option<String>,
-    pub fill: String,
-    pub direction: String,
-    pub easing: String,
-    pub current_ms: f64,
-    pub duration_ms: f64,
-    pub delay_ms: f64,
-    pub iterations: f64,
-    pub active: bool,
-    pub paused: bool,
-    pub pending: bool,
-    pub finished: bool,
-    pub generation: u32,
-}
-
-fn optional_text(p: *const c_char) -> Option<String> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
-}
-
-impl AnimRecord {
-    fn of(info: &AnimInfo) -> AnimRecord {
-        let easing = unsafe { CStr::from_ptr(info.easing.as_ptr()) }
-            .to_string_lossy()
-            .into_owned();
-        AnimRecord {
-            node: info.node,
-            prop: info.prop,
-            run: info.run,
-            name: optional_text(info.name),
-            fill: optional_text(info.fill).unwrap_or_else(|| "none".into()),
-            direction: optional_text(info.direction).unwrap_or_else(|| "normal".into()),
-            easing,
-            current_ms: info.current_ms,
-            duration_ms: info.duration_ms,
-            delay_ms: info.delay_ms,
-            iterations: info.iterations,
-            active: info.active != 0,
-            paused: info.paused != 0,
-            pending: info.pending != 0,
-            finished: info.finished != 0,
-            generation: info.generation,
-        }
-    }
-}
-
-unsafe extern "C" fn collect_info(info: *const AnimInfo, user: *mut c_void) {
-    let records = unsafe { &mut *user.cast::<Vec<AnimRecord>>() };
-    if let Some(info) = unsafe { info.as_ref() } {
-        records.push(AnimRecord::of(info));
-    }
-}
-
-pub(crate) fn anim_visit(a: *mut c_void, node: Option<Node<'_>>) -> Vec<AnimRecord> {
-    let mut records: Vec<AnimRecord> = Vec::new();
-    unsafe {
-        ns_anim_visit(
-            a,
-            Node::ptr_or_null(node),
-            collect_info,
-            (&mut records as *mut Vec<AnimRecord>).cast(),
-        )
-    };
-    records
-}
-
-pub(crate) fn anim_info_for(a: *mut c_void, node: Node<'_>, prop: i32) -> Option<AnimRecord> {
-    let mut info: AnimInfo = unsafe { core::mem::zeroed() };
-    let found = unsafe { ns_anim_info_for(a, node.as_ptr(), prop, &mut info) } != 0;
-    found.then(|| AnimRecord::of(&info))
-}
-
-pub(crate) struct Keyframe {
-    pub offset: f64,
-    pub easing: Option<String>,
-    pub decls: Vec<(c_int, *const NsCssValue)>,
-}
-
-unsafe extern "C" fn collect_keyframe(
-    offset: f64,
-    easing: *const c_char,
-    decls: Option<&css_engine::Declarations>,
-    user: *mut c_void,
-) {
-    let frames = unsafe { &mut *user.cast::<Vec<Keyframe>>() };
-    let decls = decls.map_or_else(Vec::new, |decls| {
-        decls
-            .iter()
-            .map(|d| (d.prop(), core::ptr::from_ref(d.value())))
-            .collect()
-    });
-    frames.push(Keyframe {
-        offset,
-        easing: optional_text(easing),
-        decls,
-    });
-}
-
-pub(crate) fn anim_keyframes(
-    a: *mut c_void,
-    node: Node<'_>,
-    prop: i32,
-    f: impl FnOnce(&[Keyframe]),
-) {
-    let mut frames: Vec<Keyframe> = Vec::new();
-    unsafe {
-        ns_anim_keyframes_visit(
-            a,
-            node.as_ptr(),
-            prop,
-            collect_keyframe,
-            (&mut frames as *mut Vec<Keyframe>).cast(),
-        )
-    };
-    f(&frames);
-}
-
-pub(crate) fn anim_seek(a: *mut c_void, node: Node<'_>, prop: i32, ms: f64) -> bool {
-    unsafe { ns_anim_seek(a, node.as_ptr(), prop, ms) != 0 }
-}
-
-pub(crate) fn anim_control(a: *mut c_void, node: Node<'_>, prop: i32, op: &str) -> bool {
-    let op = c_string(op.as_bytes());
-    unsafe { ns_anim_control(a, node.as_ptr(), prop, op.as_ptr()) != 0 }
-}
-
-pub(crate) fn anim_base_value(a: *mut c_void, node: Node<'_>, prop: usize) -> *const NsCssValue {
-    unsafe { ns_anim_base_value(a, node.as_ptr(), prop as c_int) }
-}
-
-pub(crate) struct ScriptTiming {
-    pub duration_ms: f64,
-    pub delay_ms: f64,
-    pub iterations: f64,
-    pub direction: Option<String>,
-    pub fill: Option<String>,
-    pub easing: Option<String>,
-}
-
-pub(crate) fn anim_script_start(
-    a: *mut c_void,
-    node: Node<'_>,
-    stops: &[(Option<String>, f64)],
-    timing: &ScriptTiming,
-) -> Option<(i32, u32)> {
-    let css: Vec<Option<CString>> = stops
-        .iter()
-        .map(|(c, _)| c.as_ref().map(|c| c_string(c.as_bytes())))
-        .collect();
-    let css_ptrs: Vec<*const c_char> = css.iter().map(opt_ptr).collect();
-    let pct: Vec<f64> = stops.iter().map(|(_, p)| *p).collect();
-    let direction = timing.direction.as_ref().map(|d| c_string(d.as_bytes()));
-    let fill = timing.fill.as_ref().map(|f| c_string(f.as_bytes()));
-    let easing = timing.easing.as_ref().map(|e| c_string(e.as_bytes()));
-    let t = AnimScriptTiming {
-        duration_ms: timing.duration_ms,
-        delay_ms: timing.delay_ms,
-        iterations: timing.iterations,
-        direction: opt_ptr(&direction),
-        fill: opt_ptr(&fill),
-        easing: opt_ptr(&easing),
-    };
-    let (mut prop, mut generation): (c_int, c_uint) = (0, 0);
-    let ok = unsafe {
-        ns_anim_script_start(
-            a,
-            node.as_ptr(),
-            if css_ptrs.is_empty() {
-                core::ptr::null()
-            } else {
-                css_ptrs.as_ptr()
-            },
-            if pct.is_empty() {
-                core::ptr::null()
-            } else {
-                pct.as_ptr()
-            },
-            stops.len() as c_int,
-            &t,
-            &mut prop,
-            &mut generation,
-        )
-    } != 0;
-    ok.then_some((prop, generation))
 }
 
 pub(crate) fn computed_text_raw(js: Js, node: Node<'_>, name: &str) -> *mut c_char {

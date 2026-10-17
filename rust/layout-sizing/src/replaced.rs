@@ -157,7 +157,7 @@ pub fn layout_image(b: BoxRef<'_>, parent_content_width: f64) {
     };
     if b.kind() == BoxKind::Svg && dom_of(b).is_some() {
         let svg_size = svg_intrinsic_size(dom_of(b));
-        if svg_size.has_ratio() && svg_size.ratio > 0.0 {
+        if svg_size.has_ratio && svg_size.ratio > 0.0 {
             intrinsic_ratio = svg_size.ratio;
         }
     }
@@ -399,7 +399,7 @@ fn ratio_only_replaced_width(b: BoxRef<'_>, max_content: bool) -> f64 {
     let h = replaced_height_for_width(b);
     if h > 0.0 {
         let size = svg_intrinsic_size(dom_of(b));
-        if size.has_ratio() && size.ratio > 0.0 {
+        if size.has_ratio && size.ratio > 0.0 {
             return h * size.ratio;
         }
     }
@@ -425,10 +425,10 @@ fn loaded_image_auto_width(b: BoxRef<'_>, natural: (i32, i32), density: f64) -> 
 fn svg_auto_width(b: BoxRef<'_>) -> f64 {
     let size = svg_intrinsic_size(dom_of(b));
     let h = replaced_height_for_width(b);
-    if h > 0.0 && size.has_ratio() && size.ratio > 0.0 {
+    if h > 0.0 && size.has_ratio && size.ratio > 0.0 {
         return h * size.ratio;
     }
-    if size.has_width() && size.width > 0.0 {
+    if size.has_width && size.width > 0.0 {
         size.width
     } else {
         300.0

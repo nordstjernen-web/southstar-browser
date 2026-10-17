@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int};
+use core::ffi::c_int;
 
 use southstar_glib::GBoolean;
 use southstar_style::{TimingFunction, timing_linear_eval, timing_parse, timing_serialize};
@@ -48,8 +48,8 @@ impl Timing {
         }
     }
 
-    pub fn parse_into(&mut self, text: &CStr) -> bool {
-        let Some(t) = timing_parse(text.to_bytes()) else {
+    pub fn parse_into(&mut self, text: &[u8]) -> bool {
+        let Some(t) = timing_parse(text) else {
             return false;
         };
         *self = Timing::of(&t);

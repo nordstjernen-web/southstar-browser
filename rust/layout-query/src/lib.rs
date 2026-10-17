@@ -12,7 +12,7 @@ use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
 
-pub use collect::record_frame_viewports;
+pub use collect::{frame_viewport, kind_name, record_frame_viewports};
 pub use extent::{Extent, compute_paint_bounds};
 
 pub fn count_matches(root: BoxRef<'_>, needle: &[u8], case_sensitive: bool) -> u32 {
@@ -69,6 +69,10 @@ pub fn scroll_snap_from(scroller: BoxRef<'_>, prev_x: f64, prev_y: f64) {
     if let Some((x, y)) = snap::solve(scroller, kind, &port) {
         scroller.set_scroll(x.unwrap_or(port.cur_x), y.unwrap_or(port.cur_y));
     }
+}
+
+pub fn scroll_snap(scroller: BoxRef<'_>) {
+    scroll_snap_from(scroller, scroller.scroll_x(), scroller.scroll_y());
 }
 
 pub struct SnapViewport {

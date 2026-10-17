@@ -14,6 +14,7 @@ southstar-image = { path = "../image" }
 southstar-ipc = { path = "../ipc" }
 southstar-net = { path = "../net" }
 southstar-renderer-client = { path = "../renderer-client" }
+southstar-threaddump = { path = "../threaddump" }
 southstar-url = { path = "../url" }
 
 [features]

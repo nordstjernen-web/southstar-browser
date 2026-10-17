@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -276,11 +276,9 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
-    fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-    fn ns_engine_in_blocking_fetch() -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_mutation_drain_pending(js: *const NsJs) -> GBoolean;
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
@@ -290,21 +288,11 @@ unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
 }
 
-pub(crate) type AnimEventCb = unsafe extern "C" fn(
-    node: *const NsNode,
-    kind: *const c_char,
-    name: *const c_char,
-    elapsed_ms: f64,
-    user: *mut c_void,
-);
-
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-pub(crate) fn in_blocking_fetch() -> bool {
-    unsafe { ns_engine_in_blocking_fetch() != 0 }
-}
+pub(crate) use southstar_engine::in_blocking_fetch;
 
 pub(crate) fn profile_enabled() -> bool {
     southstar_js_loader::profile_enabled()
@@ -340,16 +328,8 @@ pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {
     unsafe { ns_js_video_take_load_events(video) != 0 }
 }
 
-pub(crate) fn drain_anim_events(js: Js, anim: *mut c_void, cb: AnimEventCb) {
-    unsafe { ns_anim_drain_events(anim, Some(cb), js.0.cast()) };
-}
-
 pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {
     unsafe { Node::from_ptr(node) }
-}
-
-pub(crate) fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
 
 pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
@@ -461,7 +441,7 @@ pub unsafe extern "C" fn ns_js_queue_scrollend_document(js: *mut NsJs) {
 ///
 /// `js` is null or a live script engine.
 pub unsafe fn dispatch_anim_events(js: *mut c_void, anim: AnimHandle) {
-    events::dispatch_anim_events(Js::from_data(js), anim.raw());
+    events::dispatch_anim_events(Js::from_data(js), anim);
 }
 
 /// # Safety

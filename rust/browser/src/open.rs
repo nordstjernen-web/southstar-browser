@@ -102,8 +102,7 @@ fn prepare_document_response(resp: &mut Response) {
     let html = if starts_ci(ct, b"image/") {
         Some(southstar_html_util::image_document(final_url.to_bytes()))
     } else if is_pdf(ct) {
-        resp.pdf_document(&final_url)
-            .map(|html| html.to_bytes().to_vec())
+        Some(resp.pdf_document(&final_url))
     } else if is_json(ct) {
         let decoded = resp.decoded_text();
         southstar_html_util::json_document(url, &decoded)

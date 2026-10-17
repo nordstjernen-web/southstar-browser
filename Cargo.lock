@@ -1765,16 +1765,21 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-window",
  "southstar-layout",
+ "southstar-layout-build",
  "southstar-layout-hit",
+ "southstar-layout-position",
  "southstar-layout-query",
  "southstar-net",
  "southstar-paint",
+ "southstar-pdf",
+ "southstar-render",
  "southstar-safebrowsing",
  "southstar-sandbox",
  "southstar-selection",
  "southstar-style",
  "southstar-url",
  "southstar-video",
+ "southstar-webgl",
 ]
 
 [[package]]
@@ -2098,9 +2103,6 @@ dependencies = [
 [[package]]
 name = "southstar-glctx"
 version = "0.9.12-dev"
-dependencies = [
- "southstar-glib",
-]
 
 [[package]]
 name = "southstar-glib"
@@ -2327,16 +2329,20 @@ dependencies = [
 name = "southstar-js-cssom"
 version = "0.9.12-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-prop-syntax",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-layout-grid",
  "southstar-mat4",
  "southstar-numfmt",
+ "southstar-paint",
  "southstar-selector-text",
  "southstar-style",
 ]
@@ -2416,6 +2422,7 @@ dependencies = [
  "southstar-js-reflect",
  "southstar-js-runtime",
  "southstar-js-shadow",
+ "southstar-layout",
  "southstar-url",
 ]
 
@@ -2517,6 +2524,8 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-layout-hit",
+ "southstar-layout-query",
  "southstar-mat4",
  "southstar-style",
  "southstar-svg",
@@ -2623,6 +2632,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-anim",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-image",
  "southstar-js-custom-elements",
@@ -2996,6 +3006,7 @@ dependencies = [
  "southstar-layout-sizing",
  "southstar-layout-table",
  "southstar-layout-tree",
+ "southstar-mathml",
  "southstar-style",
 ]
 
@@ -3015,7 +3026,9 @@ dependencies = [
  "southstar-layout-tree",
  "southstar-net",
  "southstar-numfmt",
+ "southstar-paint",
  "southstar-style",
+ "southstar-svg",
  "southstar-url",
 ]
 
@@ -3095,6 +3108,7 @@ dependencies = [
  "southstar-layout-inline",
  "southstar-layout-position",
  "southstar-mat4",
+ "southstar-paint",
  "southstar-style",
 ]
 
@@ -3112,6 +3126,7 @@ dependencies = [
  "southstar-layout-geom",
  "southstar-layout-sizing",
  "southstar-layout-tree",
+ "southstar-mathml",
  "southstar-paint",
  "southstar-style",
 ]
@@ -3161,6 +3176,7 @@ dependencies = [
  "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-style",
+ "southstar-svg",
 ]
 
 [[package]]
@@ -3196,6 +3212,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-dom",
  "southstar-glib",
+ "southstar-paint",
 ]
 
 [[package]]
@@ -3218,6 +3235,7 @@ dependencies = [
  "southstar-config",
  "southstar-debuglog",
  "southstar-digest",
+ "southstar-extensions",
  "southstar-glib",
  "southstar-history",
  "southstar-html-util",
@@ -3266,7 +3284,9 @@ dependencies = [
  "southstar-numfmt",
  "southstar-selection",
  "southstar-style",
+ "southstar-svg",
  "southstar-texture",
+ "southstar-video",
 ]
 
 [[package]]
@@ -3307,12 +3327,16 @@ dependencies = [
 name = "southstar-render"
 version = "0.9.12-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",
  "southstar-font",
  "southstar-glib",
  "southstar-layout",
+ "southstar-layout-content",
+ "southstar-layout-position",
+ "southstar-paint",
  "southstar-style",
  "southstar-url",
 ]
@@ -3323,6 +3347,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-ipc",
+ "southstar-print",
 ]
 
 [[package]]
@@ -3335,6 +3360,7 @@ dependencies = [
  "southstar-ipc",
  "southstar-net",
  "southstar-renderer-client",
+ "southstar-threaddump",
  "southstar-url",
 ]
 
@@ -3375,15 +3401,19 @@ name = "southstar-shell"
 version = "0.9.12-dev"
 dependencies = [
  "southstar-bookmarks",
+ "southstar-browser",
  "southstar-bytecode-cache",
  "southstar-config",
  "southstar-debuglog",
  "southstar-dom",
+ "southstar-engine",
  "southstar-ffi",
  "southstar-font",
  "southstar-glib",
  "southstar-gtk-ffi",
+ "southstar-headless",
  "southstar-history",
+ "southstar-html-parser",
  "southstar-http-cache",
  "southstar-i18n",
  "southstar-media-shm",
@@ -3392,6 +3422,8 @@ dependencies = [
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-sandbox",
+ "southstar-svg",
+ "southstar-threaddump",
  "southstar-url",
  "southstar-watchdog",
 ]
@@ -3508,6 +3540,7 @@ dependencies = [
  "southstar-canvas",
  "southstar-config",
  "southstar-dom",
+ "southstar-glctx",
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
