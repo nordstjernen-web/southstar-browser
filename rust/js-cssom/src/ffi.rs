@@ -9,7 +9,7 @@ use southstar_anim::AnimHandle;
 use southstar_css::{self as css_engine, Prop};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
@@ -82,7 +82,6 @@ unsafe extern "C" {
         value: *const c_char,
     );
     fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
-    fn ns_layout_grid_resolved_tracks(b: *const NsBox, columns: GBoolean) -> *mut c_char;
     fn ns_engine_linked_css_text(url: *const c_char) -> *mut c_char;
 
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
@@ -243,7 +242,7 @@ pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool 
 }
 
 pub(crate) fn grid_resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<String> {
-    take_text(unsafe { ns_layout_grid_resolved_tracks(b.as_ptr(), glib::boolean(columns)) })
+    southstar_layout_grid::grid_resolved_tracks(b, columns).map(|text| lossy(&text))
 }
 
 pub(crate) fn input_is_one_line_text(node: Node<'_>) -> bool {

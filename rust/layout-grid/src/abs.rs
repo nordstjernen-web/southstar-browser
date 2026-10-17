@@ -200,7 +200,7 @@ fn append_line_names(s: &mut Vec<u8>, tk: Option<&GridTracks>, line: i32) {
     }
 }
 
-pub(crate) fn resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<Vec<u8>> {
+pub fn resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<Vec<u8>> {
     let tr = ffi::track_edges(b.grid_tracks(columns))?;
     let mut tv = template(style_of(b), columns).and_then(ValueRef::tracks);
     if tv.is_some_and(|t| t.subgrid != 0) {

@@ -2336,6 +2336,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-layout",
+ "southstar-layout-grid",
  "southstar-mat4",
  "southstar-numfmt",
  "southstar-paint",
