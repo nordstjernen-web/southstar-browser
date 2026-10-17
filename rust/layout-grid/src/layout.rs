@@ -148,6 +148,19 @@ fn stretched_item_max_height(c: BoxRef<'_>) -> f64 {
     }
 }
 
+fn relayout_stretched(c: BoxRef<'_>, h: f64, child_inherited: *const Style) {
+    if c.first_child().is_none() || !c.definite_height_read() || c.definite_height() > 0.0 {
+        return;
+    }
+    c.set_definite_height(h);
+    let (sx, sy) = (c.x(), c.y());
+    ffi::layout_child(c, c.last_layout_width(), child_inherited);
+    if c.x() != sx || c.y() != sy {
+        ffi::shift(c, sx - c.x(), sy - c.y());
+    }
+    c.set_content_height(h);
+}
+
 fn outer_height(c: BoxRef<'_>) -> f64 {
     let (m, p, b) = (c.margin(), c.padding(), c.border());
     c.content_height() + p.top + p.bottom + b.top + b.bottom + m.top + m.bottom
@@ -889,6 +902,7 @@ pub fn layout_grid(
             k += 1;
         }
         c.set_cb_height_override(area_h);
+        c.set_definite_height(0.0);
         ffi::layout_child(c, item_w + m.left + m.right, child_inherited);
         PENDING_COLS.set(None);
         PENDING_ROWS.set(None);
@@ -1233,6 +1247,7 @@ pub fn layout_grid(
                     h = max_h;
                     c.set_content_height(h);
                 }
+                relayout_stretched(c, h, child_inherited);
             }
         } else if free_h > 0.5 {
             match a_eff {

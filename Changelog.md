@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* A stretched grid item's height is definite for its children: an item
+  that `align-self: stretch` grows to fill its row is laid out again at
+  that height when a child asked for it, so `height: 100%` inside it
+  fills the row instead of collapsing to content. ChatGPT's centered
+  home composer sat at the top of the page because of this.
 * A microtask checkpoint no longer runs inside another one. Native calls
   that flush layout (for example `getAnimations()`) could drain the
   microtask queue while a microtask was still on the stack, so a
