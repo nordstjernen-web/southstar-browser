@@ -21,6 +21,19 @@ Southstar Browser 0.9.12-dev:
   (`gtk_native_get_surface: assertion 'GTK_IS_NATIVE (self)' failed`): the
   page's input-method context is attached to the page area only while the
   area is realized.
+* Google Search results render again instead of the "unusual traffic"
+  reCAPTCHA page. `Function.prototype.toString` printed the JavaScript
+  source of engine-implemented web APIs (`document.createElement` showed
+  its polyfill body) since the move to Boa; Google's challenge script
+  treats non-native built-ins as tampering and its token was rejected.
+  Engine functions print as `function createElement() { [native code] }`
+  again, through the HostHasSourceTextAvailable hook.
+* Functions that sit beside a direct `eval`, or that were created by
+  indirect-eval code, keep their local variables in registers: the scope
+  analysis only makes the bindings of functions that actually contain the
+  `eval` reachable by name. Such code ran up to six times slower, and
+  Google's search challenge script (a bytecode VM delivered through
+  `(0,eval)`) took twice as long to produce its token.
 * Internal: some 270 of the cross-crate `ns_*` C-ABI exports and about
   500 `extern` declarations are replaced by ordinary Rust calls with typed
   arguments across the js-* bindings, net and its clients (font, image,

@@ -929,8 +929,15 @@ impl BuiltInFunctionObject {
             return Ok(js_string!("function () { [native code] }").into());
         };
 
-        let code = function.codeblock();
-        if let Some(code_points) = code.source_info().text_spanned().to_code_points() {
+        let code = function.codeblock().clone();
+        drop(function);
+        let source_available = context.host_hooks().has_source_text_available(
+            &JsFunction::from_object_unchecked(object.clone()),
+            context,
+        );
+        if source_available
+            && let Some(code_points) = code.source_info().text_spanned().to_code_points()
+        {
             return Ok(JsString::from(code_points).into());
         }
 
