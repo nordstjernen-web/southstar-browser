@@ -11,6 +11,8 @@ mod mse;
 pub mod support;
 pub mod tracks;
 
+pub use ffi::video_event;
+
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;

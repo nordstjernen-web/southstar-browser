@@ -13,7 +13,6 @@ use southstar_js_runtime::api::{self, NavigationTiming};
 use super::glib::{
     g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
 };
-use super::js::ns_js_video_event;
 use super::{Js, NsBrowser, Session, Videos, browser_for, c_str, monotonic_us, source_remove};
 use crate::{build, callbacks, images, page, scroll, settle};
 
@@ -243,9 +242,10 @@ unsafe extern "C" fn on_window_action(action: *const c_char, ud: *mut c_void) {
 }
 
 fn video_event(ud: *mut c_void, node: *const c_void, kind: &CStr, value: f64) {
-    if let Some(js) = browser_for(ud).and_then(NsBrowser::js) {
-        // SAFETY: the page's script engine is live while it is in the page's slot, and `kind` is NUL-terminated for the call.
-        unsafe { ns_js_video_event(js.raw(), node, kind.as_ptr(), value) };
+    // SAFETY: the video cache reports events with the pointer of the live media element that owns the video.
+    let node = unsafe { Node::from_ptr(node.cast()) };
+    if let (Some(js), Some(node)) = (browser_for(ud).and_then(NsBrowser::js), node) {
+        southstar_js_media::video_event(js.page(), node, kind, value);
     }
 }
 

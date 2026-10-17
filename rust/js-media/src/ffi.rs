@@ -369,25 +369,19 @@ pub unsafe extern "C" fn ns_media_teardown(js: *mut NsJs) {
     hooks::teardown(Js::from_ptr(js));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_video_event(
-    js: *mut NsJs,
-    node: *const c_void,
-    kind: *const c_char,
-    value: f64,
-) {
-    let js = Js::from_ptr(js);
-    if js.is_null() || kind.is_null() {
-        return;
-    }
-    let Some(node) = (unsafe { Node::from_ptr(node.cast()) }) else {
+pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {
+    let js = Js::from_ptr(js.cast_mut());
+    let Some(node) = node.downgrade().get() else {
         return;
     };
+    if js.is_null() {
+        return;
+    }
     let handle = api::main_context(js.ptr());
     if handle.is_null() {
         return;
     }
-    let kind = unsafe { CStr::from_ptr(kind) }.to_string_lossy();
+    let kind = kind.to_string_lossy();
     handle.with(|scope| element::video_event(scope, js, node, &kind, value));
 }
 

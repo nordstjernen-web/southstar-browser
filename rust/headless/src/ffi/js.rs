@@ -41,7 +41,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-    fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
 }
 
 unsafe extern "C" fn on_log(line: *const c_char, _ud: *mut c_void) {
@@ -346,13 +345,14 @@ impl Js {
 
 pub fn bind_video_events(cache: Option<VideoCache>, js: Option<Js>) {
     if let Some(cache) = cache {
-        let js = js_raw(js);
-        cache.set_js_sink(Some(Rc::new(move |node, kind, value| {
-            if !js.is_null() {
-                // SAFETY: the run's script engine outlives the cache's callbacks, and `kind` is NUL-terminated for the call.
-                unsafe { ns_js_video_event(js, node, kind.as_ptr(), value) };
-            }
-        })));
+        cache.set_js_sink(js.map(|js| -> southstar_video::JsSink {
+            Rc::new(move |node, kind, value| {
+                // SAFETY: the video cache reports events with the pointer of the live media element that owns the video.
+                if let Some(node) = unsafe { Node::from_ptr(node.cast()) } {
+                    southstar_js_media::video_event(js.page(), node, kind, value);
+                }
+            })
+        }));
     }
 }
 

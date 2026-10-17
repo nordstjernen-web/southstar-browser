@@ -13,10 +13,6 @@ use southstar_layout::BoxRef;
 use super::engine::{Anim, Images};
 use super::glib::StrBufOwned;
 
-unsafe extern "C" {
-    pub fn ns_js_video_event(js: *mut c_void, node: *const c_void, kind: *const c_char, value: f64);
-}
-
 #[derive(Clone, Copy)]
 pub struct Js(NonNull<c_void>);
 
