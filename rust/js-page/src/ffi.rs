@@ -16,11 +16,6 @@ use crate::{Element, run, stats};
 pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[repr(C)]
-pub(crate) struct GString {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct NsResponse {
     _private: [u8; 0],
 }
@@ -117,21 +112,6 @@ pub(crate) enum Installer {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum Shaper {
-    WebApiShapes,
-    NavigatorShape,
-    PdfPlugins,
-    LinkInterfaces,
-    NameEngineMembers,
-    ShapeWindowGlobal,
-    LinkInterfaceConstructors,
-    LockGlobalPrototypes,
-    NodeShapes,
-    ElementShapes,
-    BrandNodeClasses,
-}
-
-#[derive(Clone, Copy)]
 pub(crate) enum ValueInstaller {
     DoctypeGetter,
     DocumentFunctions,
@@ -142,8 +122,6 @@ pub(crate) enum ValueInstaller {
 }
 
 unsafe extern "C" {
-    fn ns_js_brand_node_classes(ctx: ContextHandle);
-    fn ns_js_link_interfaces(ctx: ContextHandle);
     fn ns_js_profile_enabled() -> GBoolean;
     fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
 
@@ -151,25 +129,14 @@ unsafe extern "C" {
     fn ns_focus_reset(js: *mut NsJs);
     fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_services_reset(js: *mut NsJs);
-    fn ns_lifecycle_reset(js: *mut NsJs);
     fn ns_js_net_reset(js: *mut NsJs);
     fn ns_js_cancel_async_scripts(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
-    fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
 
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
 
-    fn ns_install_web_api_shapes(ctx: ContextHandle);
-    fn ns_install_navigator_shape(ctx: ContextHandle);
-    fn ns_install_pdf_plugins(ctx: ContextHandle);
     fn ns_js_name_engine_members(ctx: ContextHandle);
-    fn ns_js_shape_window_global(ctx: ContextHandle);
-    fn ns_js_link_interface_ctors(ctx: ContextHandle);
-    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
-    fn ns_install_node_shapes(ctx: ContextHandle);
-    fn ns_install_element_shapes(ctx: ContextHandle);
 
-    fn ns_js_lifecycle_clear(js: *mut NsJs);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut api::ResourceInfo);
@@ -185,11 +152,9 @@ unsafe extern "C" {
     );
 
     fn ns_services_timer_count(js: *const NsJs) -> c_uint;
-    fn ns_js_raf_count(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_sockets(js: *const NsJs) -> c_uint;
-    fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -316,7 +281,7 @@ impl Js {
         unsafe {
             ns_storage_free_deferred_events(self.0);
             ns_services_reset(self.0);
-            ns_lifecycle_reset(self.0);
+            southstar_js_lifecycle::reset_lifecycle(self.0);
             southstar_js_dispatch::reset(self.0);
             ns_js_net_reset(self.0);
         }
@@ -340,13 +305,11 @@ impl Js {
     }
 
     pub fn reset_frames_and_tasks(self) {
-        unsafe {
-            southstar_js_frames::reset_frames(self.0);
-            ns_window_links_clear(self.0, glib::FALSE);
-            api::drop_message_tasks(self.0);
-            southstar_js_perf::clear_frame_clocks(self.0, false);
-            southstar_js_dispatch::drop_pending_rejections(self.0);
-        }
+        southstar_js_frames::reset_frames(self.0);
+        southstar_js_window::clear_window_links(self.0);
+        api::drop_message_tasks(self.0);
+        southstar_js_perf::clear_frame_clocks(self.0, false);
+        southstar_js_dispatch::drop_pending_rejections(self.0);
         api::free_frame_contexts(self.0);
     }
 
@@ -376,7 +339,7 @@ impl Js {
     }
 
     pub fn clear_lifecycle(self) {
-        unsafe { ns_js_lifecycle_clear(self.0) };
+        southstar_js_lifecycle::clear_lifecycle(self.0);
         api::set_ready_state(self.0, 0);
         api::clear_doc_ready_states(self.0);
         southstar_js_frames::clear_initial_blank_frames(self.0);
@@ -459,7 +422,7 @@ impl Js {
         unsafe {
             [
                 ns_services_timer_count(self.0),
-                ns_js_raf_count(self.0),
+                southstar_js_lifecycle::raf_count(self.0) as u32,
                 ns_js_net_pending_fetches(self.0),
                 ns_js_net_pending_xhrs(self.0),
                 ns_js_net_pending_sockets(self.0),
@@ -561,23 +524,8 @@ pub(crate) fn install_value(
     }
 }
 
-pub(crate) fn shape(scope: &mut Scope<'_>, shaper: Shaper) {
-    let ctx = scope.handle();
-    unsafe {
-        match shaper {
-            Shaper::WebApiShapes => ns_install_web_api_shapes(ctx),
-            Shaper::NavigatorShape => ns_install_navigator_shape(ctx),
-            Shaper::PdfPlugins => ns_install_pdf_plugins(ctx),
-            Shaper::LinkInterfaces => ns_js_link_interfaces(ctx),
-            Shaper::NameEngineMembers => ns_js_name_engine_members(ctx),
-            Shaper::ShapeWindowGlobal => ns_js_shape_window_global(ctx),
-            Shaper::LinkInterfaceConstructors => ns_js_link_interface_ctors(ctx),
-            Shaper::LockGlobalPrototypes => ns_js_lock_global_prototypes(ctx),
-            Shaper::NodeShapes => ns_install_node_shapes(ctx),
-            Shaper::ElementShapes => ns_install_element_shapes(ctx),
-            Shaper::BrandNodeClasses => ns_js_brand_node_classes(ctx),
-        }
-    }
+pub(crate) fn name_engine_members(scope: &mut Scope<'_>) {
+    unsafe { ns_js_name_engine_members(scope.handle()) };
 }
 
 pub(crate) fn memory_usage(scope: &mut Scope<'_>) -> MemoryUsage {
@@ -588,27 +536,15 @@ unsafe fn c_text<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_run_scripts_in_doc(
-    js: *mut NsJs,
-    doc: *mut NsNode,
-    base_url: *const c_char,
-) {
-    let Some(doc) = (unsafe { Node::from_ptr(doc) }) else {
-        return;
-    };
-    if js.is_null() {
-        return;
+pub fn run_scripts_in_doc(js: *const NsJs, doc: Node<'_>, base_url: Option<&CStr>) {
+    if let (false, Some(doc)) = (js.is_null(), doc.downgrade().get()) {
+        run::run_scripts_in_doc(Js(js.cast_mut()), doc, base_url);
     }
-    let base_url = unsafe { c_text(base_url) }.map(CStr::to_owned);
-    run::run_scripts_in_doc(Js(js), doc, base_url.as_deref());
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dump_stats(js: *mut NsJs, out: *mut GString) {
-    if js.is_null() || out.is_null() {
-        return;
+pub fn dump_stats(js: *const NsJs) -> String {
+    if js.is_null() {
+        return String::new();
     }
-    let text = stats::dump(Js(js));
-    unsafe { g_string_append_len(out, text.as_ptr().cast(), text.len() as isize) };
+    stats::dump(Js(js.cast_mut()))
 }

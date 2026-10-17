@@ -14,6 +14,8 @@ use southstar_dom::Node;
 
 pub(crate) type Element = Node<'static>;
 
+pub use ffi::{dump_stats, run_scripts_in_doc};
+
 pub fn install_runtime_hooks() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {

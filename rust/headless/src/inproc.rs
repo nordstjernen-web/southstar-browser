@@ -707,7 +707,7 @@ pub fn run_one(
             js.set_early_inject_src(CStr::from_bytes_with_nul(WPT_HOOK.as_bytes()).unwrap_or(c""));
         }
         if scripting {
-            js.run_scripts_in_doc(doc.as_ptr(), final_url.as_deref());
+            js.run_scripts_in_doc(doc.node(), final_url.as_deref());
         }
     }
 

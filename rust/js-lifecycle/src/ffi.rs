@@ -221,7 +221,8 @@ impl Js {
     }
 
     pub fn fire_page_transition(self, kind: &CStr) {
-        unsafe { ns_js_fire_page_transition(self.0, kind.as_ptr(), glib::FALSE) };
+        // SAFETY: a Js value names the page's live script engine.
+        unsafe { southstar_js_window::fire_page_transition(self.0.cast(), kind, false) };
     }
 
     pub fn run_content_scripts(self, url: Option<&CStr>) {
@@ -287,7 +288,6 @@ unsafe extern "C" {
     fn ns_js_drain_load_event_scripts(js: *mut NsJs);
     fn ns_js_schedule_pending_script_drain(js: *mut NsJs);
     fn ns_js_has_pending_script_roots(js: *const NsJs) -> GBoolean;
-    fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_js_profile_enabled() -> GBoolean;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
@@ -447,11 +447,6 @@ pub unsafe fn needs_tick(js: *mut c_void) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_raf_count(js: *const NsJs) -> c_uint {
-    frames::count(Js(js.cast_mut())) as c_uint
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_raf_set_host_driven(js: *mut NsJs) {
     frames::set_host_driven(Js(js));
 }
@@ -499,11 +494,6 @@ pub unsafe fn fire_media_load_events(js: *mut c_void, layout: Option<BoxRef<'_>>
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_lifecycle_clear(js: *mut NsJs) {
-    lifecycle::clear(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_lifecycle_start(
     js: *mut NsJs,
     doc: *mut NsNode,
@@ -520,11 +510,18 @@ pub unsafe extern "C" fn ns_js_lifecycle_tasks(js: *const NsJs) -> *mut GArray {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_lifecycle_reset(js: *mut NsJs) {
-    crate::reset(Js(js));
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_lifecycle_teardown(js: *mut NsJs) {
     crate::teardown(Js(js));
+}
+
+pub fn raf_count(js: *const NsJs) -> usize {
+    frames::count(Js(js.cast_mut()))
+}
+
+pub fn clear_lifecycle(js: *const NsJs) {
+    lifecycle::clear(Js(js.cast_mut()));
+}
+
+pub fn reset_lifecycle(js: *const NsJs) {
+    crate::reset(Js(js.cast_mut()));
 }

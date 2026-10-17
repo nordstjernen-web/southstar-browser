@@ -258,8 +258,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const u8;
 
-    fn ns_js_link_interface_ctors(ctx: ContextHandle);
-    fn ns_js_lock_global_prototypes(ctx: ContextHandle);
     fn ns_js_blob_url_lookup(
         js: *mut c_void,
         url: *const c_char,
@@ -661,11 +659,11 @@ pub(crate) fn install_namespace_object(
 }
 
 pub(crate) fn link_interface_ctors(scope: &mut Scope<'_>) {
-    unsafe { ns_js_link_interface_ctors(scope.handle()) };
+    southstar_js_interfaces::link_interface_ctors(scope);
 }
 
 pub(crate) fn lock_global_prototypes(scope: &mut Scope<'_>) {
-    unsafe { ns_js_lock_global_prototypes(scope.handle()) };
+    southstar_js_interfaces::lock_global_prototypes(scope);
 }
 
 fn worker_fail_job(scope: &mut Scope<'_>, args: &[Value]) -> JsResult {

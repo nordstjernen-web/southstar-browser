@@ -2356,6 +2356,7 @@ dependencies = [
  "southstar-js-frames",
  "southstar-js-runtime",
  "southstar-js-shadow",
+ "southstar-js-window",
 ]
 
 [[package]]
@@ -2441,6 +2442,7 @@ dependencies = [
  "southstar-js-mutation",
  "southstar-js-frames",
  "southstar-js-runtime",
+ "southstar-js-window",
 ]
 
 [[package]]
@@ -2615,6 +2617,7 @@ dependencies = [
  "southstar-js-loader",
  "southstar-js-perf",
  "southstar-js-runtime",
+ "southstar-js-window",
  "southstar-layout",
 ]
 
@@ -2728,6 +2731,9 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-js-shadow",
+ "southstar-js-interfaces",
+ "southstar-js-lifecycle",
+ "southstar-js-window",
  "southstar-url",
 ]
 
@@ -2910,6 +2916,7 @@ dependencies = [
  "southstar-js-clone",
  "southstar-js-dispatch",
  "southstar-js-engine",
+ "southstar-js-interfaces",
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-url",

@@ -31,8 +31,6 @@ pub(crate) struct CheckableState {
 const DLOG_ERROR: c_int = 2;
 
 unsafe extern "C" {
-    fn ns_window_named_suspend();
-    fn ns_window_named_resume();
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
         js: *mut NsJs,
@@ -328,10 +326,7 @@ pub(crate) fn window_document_for(scope: &mut Scope<'_>, window: &Value) -> Opti
 }
 
 pub(crate) fn suspend_named<R>(f: impl FnOnce() -> R) -> R {
-    unsafe { ns_window_named_suspend() };
-    let result = f();
-    unsafe { ns_window_named_resume() };
-    result
+    southstar_js_window::with_named_access_suspended(f)
 }
 
 pub(crate) fn arm_invalidate(el: Element) {

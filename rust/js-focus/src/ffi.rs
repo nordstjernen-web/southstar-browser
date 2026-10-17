@@ -47,7 +47,6 @@ unsafe extern "C" {
     fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
     fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
     fn ns_js_eval_source(js: *mut NsJs, src: *const c_char, origin: *const c_char) -> *mut c_char;
-    fn ns_js_anchor_fragment_navigate(js: *mut NsJs, abs_url: *const c_char) -> GBoolean;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn ns_checkable_input_kind(el: *const NsNode) -> c_int;
     fn ns_checkable_pre_click(
@@ -252,8 +251,7 @@ impl Js {
     }
 
     pub fn anchor_fragment_navigate(self, url: &[u8]) -> bool {
-        let url = c_string(url);
-        unsafe { ns_js_anchor_fragment_navigate(self.ptr(), url.as_ptr()) != 0 }
+        southstar_js_window::anchor_fragment_navigate(self.ptr(), url)
     }
 
     pub fn navigate(self, url: &[u8]) {

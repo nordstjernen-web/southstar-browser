@@ -8,7 +8,7 @@ use southstar_js_attrs as attrs;
 use southstar_js_bind::bind_native;
 use southstar_js_collections as collections;
 use southstar_js_cssom as cssom;
-use southstar_js_engine::{ContextHandle, NativeFn, Prop, Scope, Value};
+use southstar_js_engine::{NativeFn, Prop, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_storage as storage;
 use southstar_js_window as window;
@@ -145,8 +145,6 @@ pub fn host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
         _ => Value::undefined(),
     }
 }
-
-pub fn brand_node_classes(_ctx: ContextHandle) {}
 
 pub fn link_interfaces(scope: &mut Scope<'_>) {
     let _ = scope.eval_native_script(crate::sources::INTERFACE_LINKS, "<interface-links>");

@@ -170,7 +170,22 @@ pub fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value) -> Va
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_links_clear(js: *const NsJs, _destroy: GBoolean) {
+    clear_window_links(js);
+}
+
+pub fn clear_window_links(js: *const NsJs) {
     message::links_clear(Js::of(js));
+}
+
+pub fn with_named_access_suspended<R>(f: impl FnOnce() -> R) -> R {
+    named::suspend();
+    let result = f();
+    named::resume();
+    result
+}
+
+pub fn anchor_fragment_navigate(js: *const NsJs, abs_url: &[u8]) -> bool {
+    page::anchor_fragment_navigate(Js::of(js), abs_url)
 }
 
 #[unsafe(no_mangle)]
@@ -557,16 +572,6 @@ pub unsafe extern "C" fn ns_js_sync_window_metrics(js: *const NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ns_window_named_suspend() {
-    named::suspend();
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_window_named_resume() {
-    named::resume();
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_window_child_frame(
     doc: *const NsNode,
     index: u32,
@@ -695,17 +700,6 @@ fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {
 
 fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_anchor_fragment_navigate(
-    js: *mut NsJs,
-    abs_url: *const c_char,
-) -> GBoolean {
-    let Some(abs_url) = opt_bytes(abs_url) else {
-        return 0;
-    };
-    southstar_glib::boolean(page::anchor_fragment_navigate(Js::of(js), abs_url))
 }
 
 /// # Safety

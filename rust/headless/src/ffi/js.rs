@@ -40,7 +40,6 @@ unsafe extern "C" {
     fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
     fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
     fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-    fn ns_js_run_scripts_in_doc(js: *mut c_void, doc: *mut NsNode, base_url: *const c_char);
     fn ns_js_eval_source(js: *mut c_void, src: *const c_char, origin: *const c_char)
     -> *mut c_char;
     fn ns_js_details_toggle_open(js: *mut c_void, details: *mut NsNode, open: GBoolean);
@@ -237,9 +236,8 @@ impl Js {
         api::set_early_inject_src(self.page(), Some(src));
     }
 
-    pub fn run_scripts_in_doc(self, doc: *mut NsNode, base_url: Option<&CStr>) {
-        let base = base_url.map_or(ptr::null(), CStr::as_ptr);
-        unsafe { ns_js_run_scripts_in_doc(self.raw(), doc, base) };
+    pub fn run_scripts_in_doc(self, doc: Node, base_url: Option<&CStr>) {
+        southstar_js_page::run_scripts_in_doc(self.page(), doc, base_url);
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
