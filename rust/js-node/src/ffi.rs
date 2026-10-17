@@ -22,22 +22,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_js_index_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-    );
     fn ns_mut_record_emit_child_list_arrays(
         js: *mut NsJs,
         target: *mut NsNode,
@@ -46,9 +30,7 @@ unsafe extern "C" {
         previous_sibling: *mut NsNode,
         next_sibling: *mut NsNode,
     );
-    fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
-    fn ns_insert_sibling_before(reference: *mut NsNode, node: *mut NsNode);
 }
 
 fn raw(node: Option<Element>) -> *mut NsNode {
@@ -86,11 +68,11 @@ pub(crate) fn mark_mutated(js: Js) {
 }
 
 pub(crate) fn orphan(js: Js, node: Element) {
-    unsafe { ns_js_track_orphan(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::track_orphan(js.0, node);
 }
 
 pub(crate) fn unorphan(js: Js, node: Element) {
-    unsafe { ns_js_unorphan_node(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::unorphan_node(js.0, node);
 }
 
 pub(crate) fn record_child_change(
@@ -101,16 +83,7 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            raw(added),
-            raw(removed),
-            raw(previous),
-            raw(next),
-        )
-    };
+    southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next);
 }
 
 pub(crate) fn index_child_change(
@@ -119,7 +92,7 @@ pub(crate) fn index_child_change(
     added: Option<Element>,
     removed: Option<Element>,
 ) {
-    unsafe { ns_js_index_child_change(js.0, parent.as_mut_ptr(), raw(added), raw(removed)) };
+    southstar_js_mutation::index_child_change(js.0, parent, added, removed);
 }
 
 fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
@@ -176,7 +149,7 @@ pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
 }
 
 pub(crate) fn iters_pre_remove(js: Js, node: Element) {
-    unsafe { ns_node_iters_pre_remove(js.0, node.as_mut_ptr()) };
+    southstar_js_traversal::iters_pre_remove(js.0, node);
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
@@ -188,7 +161,7 @@ pub(crate) fn in_template_content(node: Element) -> bool {
 }
 
 pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
-    unsafe { ns_insert_sibling_before(reference.as_mut_ptr(), node.as_mut_ptr()) };
+    reference.insert_before(node);
 }
 
 pub(crate) fn insert_before_single(js: Option<Js>, node: Element, reference: Element) {

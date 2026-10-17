@@ -28,6 +28,7 @@ southstar-js-input = { path = "../js-input" }
 southstar-js-lifecycle = { path = "../js-lifecycle" }
 southstar-js-window = { path = "../js-window" }
 southstar-image = { path = "../image" }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-page = { path = "../js-page" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }

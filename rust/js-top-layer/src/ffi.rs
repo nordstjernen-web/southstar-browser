@@ -18,14 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
     fn ns_js_fire_toggle_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -37,7 +29,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_services_timer_remove(js: *mut NsJs, id: c_int);
-    fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
 }
 
@@ -155,22 +146,11 @@ impl Js {
     }
 
     pub fn set_attr_recorded(self, el: Element, name: &CStr, value: &[u8]) {
-        let mut terminated = Vec::with_capacity(value.len() + 1);
-        terminated.extend_from_slice(value);
-        terminated.push(0);
-        unsafe {
-            ns_js_set_attr_recorded_len(
-                self.ptr(),
-                el.as_mut_ptr(),
-                name.as_ptr(),
-                terminated.as_ptr().cast(),
-                value.len() as isize,
-            )
-        };
+        southstar_js_mutation::set_attr_recorded(self.ptr(), el, name, value);
     }
 
     pub fn remove_attr_recorded(self, el: Element, name: &CStr) {
-        unsafe { ns_js_remove_attr_recorded(self.ptr(), el.as_mut_ptr(), name.as_ptr()) };
+        southstar_js_mutation::remove_attr_recorded(self.ptr(), el, name);
     }
 
     pub fn fire_toggle(
@@ -297,7 +277,7 @@ pub(crate) fn tabindex(el: Element) -> Option<i32> {
 }
 
 pub(crate) fn assigned_slot(n: Element) -> Option<Element> {
-    node(unsafe { ns_node_assigned_slot_node(n.as_ptr()) })
+    southstar_js_shadow::assigned_slot_node(n)
 }
 
 pub(crate) fn mark_attr_dirty(el: Element, name: &CStr, old_value: Option<&CStr>) {

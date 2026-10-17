@@ -183,10 +183,10 @@ pub fn set_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
         ),
         None => (None, name.clone()),
     };
-    let qname = ffi::NsAttrName {
-        namespace: namespace.as_deref(),
+    let qname = ffi::QualifiedName {
+        namespace_uri: namespace.as_deref(),
         prefix: prefix.as_deref(),
-        local: &local,
+        local_name: &local,
         name: &name,
     };
     ffi::set_attr_ns_recorded(ffi::js_of(scope), node, qname, &value);

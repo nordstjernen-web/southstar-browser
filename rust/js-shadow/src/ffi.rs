@@ -17,7 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
 }
 
@@ -36,10 +35,6 @@ unsafe extern "Rust" {
 
 fn node_of(raw: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(raw) }
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
@@ -65,7 +60,7 @@ pub(crate) fn custom_element_class(_scope: &mut Scope<'_>, js: Js, node: Element
 
 pub(crate) fn clear_children(js: Option<Js>, node: Element) {
     let js = js.map_or(ptr::null_mut(), |js| js.0);
-    unsafe { ns_js_clear_children(js, node.as_mut_ptr()) };
+    southstar_js_mutation::clear_children(js, node);
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
@@ -99,17 +94,7 @@ pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, V
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean {
-    GBoolean::from(crate::is_shadow_root(node_of(n)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_find_shadow_child(host: *const NsNode) -> *mut NsNode {
-    raw(node_of(host).and_then(crate::shadow_child))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode {
-    raw(node_of(n).and_then(crate::slot::assigned_slot_node))
+    GBoolean::from(node_of(n).is_some_and(crate::is_shadow_root))
 }
 
 #[unsafe(no_mangle)]

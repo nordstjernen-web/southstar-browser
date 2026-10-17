@@ -11,9 +11,13 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
+southstar-js-collections = { path = "../js-collections" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-images = { path = "../js-images" }
+southstar-js-mutation = { path = "../js-mutation" }
+southstar-js-reflect = { path = "../js-reflect" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-shadow = { path = "../js-shadow" }
 southstar-url = { path = "../url" }
 
 [lints]

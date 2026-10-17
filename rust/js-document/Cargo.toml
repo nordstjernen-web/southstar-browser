@@ -14,7 +14,9 @@ southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-traversal = { path = "../js-traversal" }
 southstar-net = { path = "../net" }
 southstar-url = { path = "../url" }
 

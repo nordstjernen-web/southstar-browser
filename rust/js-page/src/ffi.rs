@@ -149,17 +149,13 @@ unsafe extern "C" {
 
     fn ns_top_layer_clear(js: *mut NsJs);
     fn ns_focus_reset(js: *mut NsJs);
-    fn ns_js_forget_pending_change(js: *mut NsJs);
     fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_services_reset(js: *mut NsJs);
     fn ns_lifecycle_reset(js: *mut NsJs);
     fn ns_dispatch_reset(js: *mut NsJs);
     fn ns_js_net_reset(js: *mut NsJs);
     fn ns_js_cancel_async_scripts(js: *mut NsJs);
-    fn ns_attr_detach_all(js: *mut NsJs);
-    fn ns_attribute_maps_release_all(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
-    fn ns_js_orphans_take_all(js: *mut NsJs) -> *mut GPtrArray;
     fn ns_js_frames_reset(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
     fn ns_js_drop_pending_rejections(js: *mut NsJs);
@@ -192,7 +188,6 @@ unsafe extern "C" {
         origin: *const c_char,
         start_us: i64,
     );
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
 
     fn ns_services_timer_count(js: *const NsJs) -> c_uint;
     fn ns_js_raf_count(js: *const NsJs) -> c_uint;
@@ -317,40 +312,37 @@ impl Js {
     }
 
     pub fn reset_page_state(self) {
+        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
         unsafe {
             ns_top_layer_clear(self.0);
             ns_focus_reset(self.0);
-            ns_js_forget_pending_change(self.0);
+        }
+        southstar_js_mutation::forget_pending_change(self.0);
+        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
+        unsafe {
             ns_storage_free_deferred_events(self.0);
             ns_services_reset(self.0);
             ns_lifecycle_reset(self.0);
             ns_dispatch_reset(self.0);
             ns_js_net_reset(self.0);
-            southstar_js_custom_elements::reset(self.0);
-            southstar_css::clear_defined_elements();
-            southstar_css::clear_registered_properties();
-            ns_js_cancel_async_scripts(self.0);
-            ns_attr_detach_all(self.0);
-            ns_attribute_maps_release_all(self.0);
-            api::release_pinned_wrappers(self.0);
-            ns_observers_reset(self.0);
         }
+        southstar_js_custom_elements::reset(self.0);
+        southstar_css::clear_defined_elements();
+        southstar_css::clear_registered_properties();
+        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
+        unsafe { ns_js_cancel_async_scripts(self.0) };
+        southstar_js_attrs::detach_all(self.0);
+        southstar_js_mutation::attribute_maps_release_all(self.0);
+        api::release_pinned_wrappers(self.0);
+        // SAFETY: a Js handle names the page's live script engine, which these resets accept.
+        unsafe { ns_observers_reset(self.0) };
         southstar_js_perf::reset_observers(self.0);
     }
 
     pub fn free_orphans(self) {
-        let orphans = unsafe { ns_js_orphans_take_all(self.0) };
-        if orphans.is_null() {
-            return;
+        for node in southstar_js_mutation::orphans_take_all(self.0) {
+            node.free_tree();
         }
-        let len = unsafe { (*orphans).len } as usize;
-        for i in 0..len {
-            // SAFETY: the taken array holds `len` orphaned nodes of this thread's store.
-            if let Some(node) = unsafe { Node::from_ptr((*(*orphans).pdata.add(i)).cast()) } {
-                node.free_tree();
-            }
-        }
-        unsafe { glib::g_ptr_array_free(orphans, glib::TRUE) };
     }
 
     pub fn reset_frames_and_tasks(self) {
@@ -514,8 +506,7 @@ pub(crate) fn url_origin(url: &CStr) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {
-    southstar_dom::serialize::is_embedded_doc(node)
-        || unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+    southstar_dom::serialize::is_embedded_doc(node) || southstar_js_shadow::is_shadow_root(node)
 }
 
 pub(crate) fn native(scope: &mut Scope<'_>, name: &str, arity: u32, native: Native) -> Value {

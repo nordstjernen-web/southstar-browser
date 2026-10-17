@@ -34,7 +34,7 @@ pub(crate) fn name_is_any_of(node: Element, tags: &[&[u8]]) -> bool {
         .is_some_and(|name| tags.iter().any(|tag| name.eq_ignore_ascii_case(tag)))
 }
 
-pub(crate) fn is_custom_element(node: Element) -> bool {
+pub fn is_custom_element(node: Element) -> bool {
     node.kind() == Kind::Element
         && node
             .name()
@@ -48,7 +48,7 @@ pub(crate) fn keyword_match(keywords: &[&'static CStr], value: &[u8]) -> Option<
         .find(|kw| kw.to_bytes().eq_ignore_ascii_case(value))
 }
 
-pub(crate) fn normalize(attr: &[u8], value: Option<&[u8]>) -> Option<&'static CStr> {
+pub fn normalize(attr: &[u8], value: Option<&[u8]>) -> Option<&'static CStr> {
     let def: &Keywords = tables::NORMALIZED
         .iter()
         .find(|d| d.attr.to_bytes().eq_ignore_ascii_case(attr))?;

@@ -21,43 +21,12 @@ pub(crate) struct Js(*mut NsJs);
 const LIVE_LABELS: c_int = 13;
 
 unsafe extern "C" {
-    fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_qcache_invalidate(js: *const NsJs);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
     fn ns_img_chosen_url(n: *const NsNode) -> *mut c_char;
     fn ns_img_chosen_density(n: *const NsNode) -> f64;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
-    fn ns_enum_normalize(attr: *const c_char, v: *const c_char) -> *const c_char;
-    fn ns_node_is_custom_element(n: *const NsNode) -> GBoolean;
-    fn ns_int_attr_index(attr: *const c_char) -> c_int;
-    fn ns_js_record_character_data(js: *mut NsJs, node: *mut NsNode, old_value: *const c_char);
     fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_element_find_shadow_child(host: *const NsNode) -> *mut NsNode;
-    fn ns_node_assigned_slot_node(n: *const NsNode) -> *mut NsNode;
 }
 
 unsafe extern "Rust" {
@@ -86,10 +55,6 @@ unsafe extern "Rust" {
         value: &Value,
         magic: i32,
     ) -> JsResult<()>;
-}
-
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
@@ -127,11 +92,11 @@ pub(crate) fn mark_mutated(js: Js) {
 }
 
 pub(crate) fn orphan(js: Option<Js>, node: Element) {
-    unsafe { ns_js_orphan_node(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_mutation::orphan_node(raw_js(js), node);
 }
 
 pub(crate) fn qcache_invalidate(js: Js) {
-    unsafe { ns_qcache_invalidate(js.0) };
+    southstar_js_collections::qcache_invalidate(js.0);
 }
 
 pub(crate) fn record_child_change(
@@ -142,16 +107,12 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            raw(parent),
-            raw(added),
-            raw(removed),
-            raw(previous),
-            raw(next),
-        )
-    };
+    match parent {
+        Some(parent) => {
+            southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next)
+        }
+        None => qcache_invalidate(js),
+    }
 }
 
 pub(crate) fn insert_before_single(js: Option<Js>, node: Element, reference: Element) {
@@ -159,28 +120,15 @@ pub(crate) fn insert_before_single(js: Option<Js>, node: Element, reference: Ele
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {
-    unsafe {
-        ns_js_set_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr(), value.as_ptr())
-    };
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, value.to_bytes());
 }
 
 pub(crate) fn set_attr_recorded_bytes(js: Option<Js>, node: Element, name: &CStr, value: &[u8]) {
-    let mut terminated = Vec::with_capacity(value.len() + 1);
-    terminated.extend_from_slice(value);
-    terminated.push(0);
-    unsafe {
-        ns_js_set_attr_recorded_len(
-            raw_js(js),
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            terminated.as_ptr().cast(),
-            value.len() as isize,
-        )
-    };
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, value);
 }
 
 pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
-    unsafe { ns_js_remove_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr()) };
+    southstar_js_mutation::remove_attr_recorded(raw_js(js), node, name);
 }
 
 pub(crate) fn form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult {
@@ -192,9 +140,7 @@ pub(crate) fn replace_text(node: Element, text: &[u8]) {
 }
 
 pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
-    let mut old = old.to_vec();
-    old.push(0);
-    unsafe { ns_js_record_character_data(js.0, node.as_mut_ptr(), old.as_ptr().cast()) };
+    southstar_js_mutation::record_character_data(js.0, node, old);
 }
 
 pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
@@ -210,15 +156,15 @@ pub(crate) fn resolve_against_document_base(js: Option<Js>, href: &CStr) -> Opti
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {
-    unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+    southstar_js_shadow::is_shadow_root(node)
 }
 
 pub(crate) fn has_shadow_child(host: Element) -> bool {
-    !unsafe { ns_element_find_shadow_child(host.as_ptr()) }.is_null()
+    southstar_js_shadow::shadow_child(host).is_some()
 }
 
 pub(crate) fn has_assigned_slot(node: Element) -> bool {
-    !unsafe { ns_node_assigned_slot_node(node.as_ptr()) }.is_null()
+    southstar_js_shadow::assigned_slot_node(node).is_some()
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
@@ -261,17 +207,11 @@ pub(crate) fn is_labelable(node: Option<Element>) -> bool {
 }
 
 pub(crate) fn enum_normalize(attr: &CStr, value: Option<&CStr>) -> &'static CStr {
-    let value = value.map_or(ptr::null(), CStr::as_ptr);
-    let normalized = unsafe { ns_enum_normalize(attr.as_ptr(), value) };
-    if normalized.is_null() {
-        c""
-    } else {
-        unsafe { CStr::from_ptr(normalized) }
-    }
+    southstar_js_reflect::normalize(attr.to_bytes(), value.map(CStr::to_bytes)).unwrap_or_default()
 }
 
 pub(crate) fn is_custom_element(node: Option<Element>) -> bool {
-    unsafe { ns_node_is_custom_element(Node::ptr_or_null(node)) != 0 }
+    node.is_some_and(southstar_js_reflect::is_custom_element)
 }
 
 pub(crate) fn reflect_str_set(
@@ -284,7 +224,11 @@ pub(crate) fn reflect_str_set(
 }
 
 pub(crate) fn int_attr_get(scope: &mut Scope<'_>, this: &Value, attr: &CStr) -> JsResult {
-    nsr_element_int_attr_getter(scope, this, unsafe { ns_int_attr_index(attr.as_ptr()) })
+    nsr_element_int_attr_getter(
+        scope,
+        this,
+        southstar_js_reflect::numeric::int_attr_index(attr.to_bytes()),
+    )
 }
 
 pub(crate) fn int_attr_set(
@@ -293,7 +237,7 @@ pub(crate) fn int_attr_set(
     value: &Value,
     attr: &CStr,
 ) -> JsResult {
-    let index = unsafe { ns_int_attr_index(attr.as_ptr()) };
+    let index = southstar_js_reflect::numeric::int_attr_index(attr.to_bytes());
     nsr_element_int_attr_setter(scope, this, value, index).map(|()| Value::undefined())
 }
 

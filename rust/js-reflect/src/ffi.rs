@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_char, c_void};
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_js_runtime::api;
@@ -18,20 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
@@ -73,26 +58,15 @@ pub(crate) fn attr_c(node: Element, name: &CStr) -> Option<&'static CStr> {
 }
 
 pub(crate) fn set_attr_len(js: Js, node: Element, name: &CStr, value: &[u8]) {
-    if value.is_empty() {
-        return set_attr(js, node, name, c"");
-    }
-    unsafe {
-        ns_js_set_attr_recorded_len(
-            js.0,
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            value.as_ptr().cast(),
-            value.len() as isize,
-        )
-    };
+    southstar_js_mutation::set_attr_recorded(js.0, node, name, value);
 }
 
 pub(crate) fn set_attr(js: Js, node: Element, name: &CStr, value: &CStr) {
-    unsafe { ns_js_set_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    set_attr_len(js, node, name, value.to_bytes());
 }
 
 pub(crate) fn remove_attr(js: Js, node: Element, name: &CStr) {
-    unsafe { ns_js_remove_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr()) };
+    southstar_js_mutation::remove_attr_recorded(js.0, node, name);
 }
 
 pub(crate) fn set_src(js: Js, node: Element, value: &JsText) {
@@ -240,27 +214,4 @@ pub fn nsr_element_reflect_str_set(
     attr: &CStr,
 ) -> JsResult<()> {
     strings::reflect_set(scope, this, value, attr)
-}
-
-pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_enum_normalize(attr: *const c_char, v: *const c_char) -> *const c_char {
-    let Some(attr) = c_str(attr) else {
-        return ptr::null();
-    };
-    crate::normalize(attr.to_bytes(), c_str(v).map(CStr::to_bytes))
-        .map_or(ptr::null(), CStr::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_custom_element(n: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { Node::from_ptr(n) }.is_some_and(crate::is_custom_element))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_int_attr_index(attr: *const c_char) -> c_int {
-    c_str(attr).map_or(-1, |attr| numeric::int_attr_index(attr.to_bytes()))
 }

@@ -19,6 +19,7 @@ southstar-xml = { path = "../xml" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-layout = { path = "../layout" }

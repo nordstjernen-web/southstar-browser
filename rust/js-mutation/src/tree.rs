@@ -1,4 +1,4 @@
-//! Southstar — unrecorded tree edits: freeing an element's children, sibling insertion and marking parsed scripts as already started.
+//! Southstar — unrecorded tree edits: freeing an element's children and marking parsed scripts as already started.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -17,10 +17,6 @@ pub(crate) fn clear_children(parent: Element) {
         }
         kid.free_tree();
     }
-}
-
-pub(crate) fn insert_sibling_before(reference: Element, node: Element) {
-    reference.insert_before(node);
 }
 
 pub(crate) fn mark_scripts_already_started(root: Element, depth: i32) {

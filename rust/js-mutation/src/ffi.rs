@@ -11,7 +11,7 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::attrs::QualifiedName;
-use crate::{Element, attribute_maps, attrs, change, orphans, record, tree};
+use crate::{Element, attribute_maps, attrs, change, orphans};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
 
@@ -19,7 +19,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_qcache_invalidate(js: *mut NsJs);
     fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
     fn ns_mut_record_emit(
         js: *mut NsJs,
@@ -59,7 +58,7 @@ unsafe extern "C" {
 }
 
 impl Js {
-    fn of(js: *mut NsJs) -> Option<Js> {
+    pub(crate) fn of(js: *mut NsJs) -> Option<Js> {
         (!js.is_null()).then_some(Js(js))
     }
 }
@@ -84,16 +83,6 @@ unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
 }
 
-unsafe fn nodes(array: *const GPtrArray) -> Vec<Element> {
-    if array.is_null() {
-        return Vec::new();
-    }
-    let array = unsafe { &*array };
-    (0..array.len as usize)
-        .filter_map(|i| unsafe { node((*array.pdata.add(i)).cast()) })
-        .collect()
-}
-
 fn ptr_array(nodes: &[Element]) -> *mut GPtrArray {
     let array = unsafe { glib::g_ptr_array_new() };
     for node in nodes {
@@ -113,7 +102,7 @@ fn into_ptr_array(nodes: Option<Vec<Element>>) -> *mut GPtrArray {
 }
 
 pub(crate) fn qcache_invalidate(js: Option<Js>) {
-    unsafe { ns_qcache_invalidate(raw_js(js)) };
+    southstar_js_collections::qcache_invalidate(raw_js(js));
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {
@@ -200,22 +189,50 @@ pub(crate) fn emit_character_data(js: Option<Js>, target: Option<Element>, old: 
     };
 }
 
+pub(crate) fn emit_child(
+    js: Option<Js>,
+    target: Element,
+    added: Option<Element>,
+    removed: Option<Element>,
+    previous: Option<Element>,
+    next: Option<Element>,
+) {
+    // SAFETY: every node pointer is null or a live node, and the kind is a NUL-terminated literal.
+    unsafe {
+        ns_mut_record_emit(
+            raw_js(js),
+            c"childList".as_ptr(),
+            target.as_mut_ptr(),
+            raw(added),
+            raw(removed),
+            raw(previous),
+            raw(next),
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+        )
+    };
+}
+
 pub(crate) fn emit_child_list(
-    js: Js,
+    js: Option<Js>,
     target: Element,
     added: Option<&[Element]>,
     removed: &[Element],
+    previous: Option<Element>,
+    next: Option<Element>,
 ) {
     let added = added.map_or(ptr::null_mut(), ptr_array);
     let removed = ptr_array(removed);
+    // SAFETY: the arrays are null or freshly built arrays of live nodes, and the siblings are null or live.
     unsafe {
         ns_mut_record_emit_child_list_arrays(
-            js.0,
+            raw_js(js),
             target.as_mut_ptr(),
             added,
             removed,
-            ptr::null_mut(),
-            ptr::null_mut(),
+            raw(previous),
+            raw(next),
         )
     };
     free_ptr_array(added);
@@ -336,12 +353,12 @@ pub unsafe extern "C" fn ns_js_index_child_change(
     added: *mut NsNode,
     removed: *mut NsNode,
 ) {
-    let Some(parent) = (unsafe { node(parent) }) else {
-        return qcache_invalidate(Js::of(js));
-    };
-    let added: Vec<Element> = unsafe { node(added) }.into_iter().collect();
-    let removed: Vec<Element> = unsafe { node(removed) }.into_iter().collect();
-    record::index_child_changes(Js::of(js), parent, &added, &removed);
+    // SAFETY: the caller passes null or live nodes of this thread's store.
+    let nodes = unsafe { (node(parent), node(added), node(removed)) };
+    match nodes {
+        (Some(parent), added, removed) => crate::index_child_change(js, parent, added, removed),
+        (None, ..) => qcache_invalidate(Js::of(js)),
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -353,81 +370,15 @@ pub unsafe extern "C" fn ns_js_record_child_change(
     previous_sibling: *mut NsNode,
     next_sibling: *mut NsNode,
 ) {
-    unsafe {
-        ns_js_index_child_change(js, parent, added, removed);
-        if let Some(parent) = node(parent) {
-            mark_childlist_dirty(parent, node(added));
-        }
-        ns_mut_record_emit(
-            js,
-            c"childList".as_ptr(),
-            parent,
-            added,
-            removed,
-            previous_sibling,
-            next_sibling,
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-        );
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_record_child_change_arrays(
-    js: *mut NsJs,
-    parent: *mut NsNode,
-    added: *mut GPtrArray,
-    removed: *mut GPtrArray,
-    previous_sibling: *mut NsNode,
-    next_sibling: *mut NsNode,
-) {
-    let added_nodes = unsafe { nodes(added) };
-    let removed_nodes = unsafe { nodes(removed) };
+    // SAFETY: the caller passes null or live nodes of this thread's store.
+    let (added, removed) = unsafe { (node(added), node(removed)) };
+    // SAFETY: as above.
+    let (previous, next) = unsafe { (node(previous_sibling), node(next_sibling)) };
+    // SAFETY: as above.
     match unsafe { node(parent) } {
-        Some(p) => record::index_child_changes(Js::of(js), p, &added_nodes, &removed_nodes),
+        Some(parent) => crate::record_child_change(js, parent, added, removed, previous, next),
         None => qcache_invalidate(Js::of(js)),
     }
-    unsafe {
-        if let Some(parent) = node(parent) {
-            mark_childlist_dirty(parent, added_nodes.first().copied());
-        }
-        ns_mut_record_emit_child_list_arrays(
-            js,
-            parent,
-            added,
-            removed,
-            previous_sibling,
-            next_sibling,
-        );
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_record_attr_change(
-    js: *mut NsJs,
-    target: *mut NsNode,
-    name: *const c_char,
-    old_value: *const c_char,
-) {
-    unsafe {
-        record::attribute_changed(
-            Js::of(js),
-            node(target),
-            c_str(name),
-            None,
-            c_str(old_value),
-        )
-    };
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_record_character_data(
-    js: *mut NsJs,
-    target: *mut NsNode,
-    old_value: *const c_char,
-) {
-    unsafe { record::character_data_changed(Js::of(js), node(target), c_str(old_value)) };
 }
 
 #[unsafe(no_mangle)]
@@ -446,7 +397,7 @@ pub unsafe extern "C" fn ns_js_set_attr_recorded_len(
         (false, Ok(len)) => unsafe { glib::slice(value.cast(), len) },
         (false, Err(_)) => unsafe { CStr::from_ptr(value) }.to_bytes(),
     };
-    attrs::set_recorded(Js::of(js), n, name, value);
+    crate::set_attr_recorded(js, n, name, value);
 }
 
 #[unsafe(no_mangle)]
@@ -474,63 +425,16 @@ pub unsafe extern "C" fn ns_js_set_attr_recorded_paint_only(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_attr_ns_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    namespace_uri: *const c_char,
-    prefix: *const c_char,
-    local_name: *const c_char,
-    name: *const c_char,
-    value: *const c_char,
-) {
-    let parts = unsafe { (node(n), c_str(local_name), c_str(name)) };
-    let (Some(n), Some(local_name), Some(name)) = parts else {
-        return;
-    };
-    let qname = QualifiedName {
-        namespace_uri: unsafe { c_str(namespace_uri) },
-        prefix: unsafe { c_str(prefix) },
-        local_name,
-        name,
-    };
-    let value = unsafe { c_str(value) }.unwrap_or(c"");
-    attrs::set_ns_recorded(Js::of(js), n, &qname, value);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_remove_attr_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    name: *const c_char,
-) {
-    if let (Some(n), Some(name)) = (unsafe { node(n) }, unsafe { c_str(name) }) {
-        attrs::remove_recorded(Js::of(js), n, name);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_remove_attr_ns_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    namespace_uri: *const c_char,
-    local_name: *const c_char,
-) {
-    if let (Some(n), Some(local_name)) = (unsafe { node(n) }, unsafe { c_str(local_name) }) {
-        attrs::remove_ns_recorded(Js::of(js), n, unsafe { c_str(namespace_uri) }, local_name);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_track_orphan(js: *mut NsJs, n: *mut NsNode) {
-    if let (Some(js), Some(n)) = (Js::of(js), unsafe { node(n) }) {
-        orphans::track(js, n);
+    if let Some(n) = unsafe { node(n) } {
+        crate::track_orphan(js, n);
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_unorphan_node(js: *mut NsJs, n: *mut NsNode) {
-    if let (Some(js), Some(n)) = (Js::of(js), unsafe { node(n) }) {
-        orphans::untrack(js, n);
+    if let Some(n) = unsafe { node(n) } {
+        crate::unorphan_node(js, n);
     }
 }
 
@@ -549,38 +453,6 @@ pub unsafe extern "C" fn ns_js_orphan_count(js: *mut NsJs) -> c_int {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphan_node(js: *mut NsJs, n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        orphans::orphan(Js::of(js), n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_clear_children(js: *mut NsJs, n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        orphans::clear_children(Js::of(js), n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphan_children(js: *mut NsJs, n: *mut NsNode) {
-    if let Some(n) = unsafe { node(n) } {
-        orphans::orphan_children(Js::of(js), n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_replace_all_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    added: *mut NsNode,
-) {
-    if let Some(n) = unsafe { node(n) } {
-        orphans::replace_all(Js::of(js), n, unsafe { node(added) });
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut NsNode) {
     if let (Some(js), Some(root)) = (Js::of(js), unsafe { node(root) }) {
         orphans::purge_node_refs(js, root);
@@ -590,11 +462,6 @@ pub unsafe extern "C" fn ns_js_purge_subtree_node_refs(js: *mut NsJs, root: *mut
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_orphans_collect(js: *mut NsJs) -> *mut GPtrArray {
     into_ptr_array(Js::of(js).and_then(orphans::collect_unreachable))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_orphans_take_all(js: *mut NsJs) -> *mut GPtrArray {
-    into_ptr_array(Js::of(js).map(orphans::take_all))
 }
 
 #[unsafe(no_mangle)]
@@ -610,48 +477,14 @@ pub unsafe extern "C" fn ns_js_mutation_teardown(js: *mut NsJs) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_insert_sibling_before(reference: *mut NsNode, n: *mut NsNode) {
-    if let (Some(reference), Some(n)) = (unsafe { node(reference) }, unsafe { node(n) }) {
-        tree::insert_sibling_before(reference, n);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_mark_scripts_already_started(root: *mut NsNode) {
-    if let Some(root) = unsafe { node(root) } {
-        tree::mark_scripts_already_started(root, 0);
-    }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_forget_pending_change(js: *mut NsJs) {
-    if let Some(js) = Js::of(js) {
-        change::forget(js);
-    }
+    crate::forget_pending_change(js);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_forget_pending_change_for(js: *mut NsJs, el: *const NsNode) {
     if let (Some(js), Some(el)) = (Js::of(js), unsafe { node(el) }) {
         change::forget_node(js, el);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_note_user_edit(
-    js: *mut NsJs,
-    el: *const NsNode,
-    value_before: *const c_char,
-) {
-    if let (Some(js), Some(el)) = (Js::of(js), unsafe { node(el) }) {
-        change::note_user_edit(js, el, unsafe { c_str(value_before) }.unwrap_or(c""));
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_commit_change(js: *mut NsJs, el: *const NsNode) {
-    if let (Some(js), Some(el)) = (Js::of(js), unsafe { node(el) }) {
-        change::commit(js, el);
     }
 }
 
@@ -674,13 +507,6 @@ pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, ma
 pub unsafe extern "C" fn ns_attribute_map_release_owner(js: *mut NsJs, owner: *const NsNode) {
     if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
         attribute_maps::release_owner(js, owner);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attribute_maps_release_all(js: *mut NsJs) {
-    if let Some(js) = Js::of(js) {
-        attribute_maps::release_all(js);
     }
 }
 

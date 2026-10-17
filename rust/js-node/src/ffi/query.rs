@@ -17,28 +17,6 @@ use crate::{Element, JsResult};
 unsafe extern "C" {
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, n: *mut NsNode, name: *const c_char);
-    fn ns_js_set_attr_ns_recorded(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        namespace_uri: *const c_char,
-        prefix: *const c_char,
-        local_name: *const c_char,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_remove_attr_ns_recorded(
-        js: *mut NsJs,
-        n: *mut NsNode,
-        namespace_uri: *const c_char,
-        local_name: *const c_char,
-    );
     fn ns_input_resanitize_value(el: *mut NsNode);
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
     fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
@@ -48,12 +26,6 @@ unsafe extern "C" {
         n: *const NsNode,
         name: *const c_char,
         code: *const c_char,
-    );
-    fn ns_js_record_attr_change(
-        js: *mut NsJs,
-        target: *mut NsNode,
-        name: *const c_char,
-        old_value: *const c_char,
     );
 }
 
@@ -108,39 +80,22 @@ pub(crate) fn validate_attr_ns(
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &CStr) {
-    unsafe {
-        ns_js_set_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr(), value.as_ptr())
-    };
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, value.to_bytes());
 }
 
 pub(crate) fn remove_attr_recorded(js: Option<Js>, node: Element, name: &CStr) {
-    unsafe { ns_js_remove_attr_recorded(raw_js(js), node.as_mut_ptr(), name.as_ptr()) };
+    southstar_js_mutation::remove_attr_recorded(raw_js(js), node, name);
 }
 
-pub(crate) struct NsAttrName<'a> {
-    pub(crate) namespace: Option<&'a CStr>,
-    pub(crate) prefix: Option<&'a CStr>,
-    pub(crate) local: &'a CStr,
-    pub(crate) name: &'a CStr,
-}
+pub(crate) use southstar_js_mutation::QualifiedName;
 
 pub(crate) fn set_attr_ns_recorded(
     js: Option<Js>,
     node: Element,
-    qname: NsAttrName<'_>,
+    qname: QualifiedName<'_>,
     value: &CStr,
 ) {
-    unsafe {
-        ns_js_set_attr_ns_recorded(
-            raw_js(js),
-            node.as_mut_ptr(),
-            c_ptr(qname.namespace),
-            c_ptr(qname.prefix),
-            qname.local.as_ptr(),
-            qname.name.as_ptr(),
-            value.as_ptr(),
-        )
-    };
+    southstar_js_mutation::set_attr_ns_recorded(raw_js(js), node, &qname, value);
 }
 
 pub(crate) fn remove_attr_ns_recorded(
@@ -149,14 +104,7 @@ pub(crate) fn remove_attr_ns_recorded(
     namespace: Option<&CStr>,
     local: &CStr,
 ) {
-    unsafe {
-        ns_js_remove_attr_ns_recorded(
-            raw_js(js),
-            node.as_mut_ptr(),
-            c_ptr(namespace),
-            local.as_ptr(),
-        )
-    };
+    southstar_js_mutation::remove_attr_ns_recorded(raw_js(js), node, namespace, local);
 }
 
 pub(crate) fn input_resanitize_value(node: Element) {
@@ -203,7 +151,7 @@ pub(crate) fn request_repaint(js: Js) {
 }
 
 pub(crate) fn record_attr_change(js: Js, node: Element, name: &CStr, old: Option<&CStr>) {
-    unsafe { ns_js_record_attr_change(js.0, node.as_mut_ptr(), name.as_ptr(), c_ptr(old)) };
+    southstar_js_mutation::record_attr_change(js.0, node, name, old);
 }
 
 pub(crate) fn ce_attr_changed(

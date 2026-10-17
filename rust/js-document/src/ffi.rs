@@ -35,25 +35,6 @@ unsafe extern "C" {
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
     fn ns_js_clear_focused_node(js: *mut NsJs);
-    fn ns_js_unorphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_orphan_node(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_node_iters_pre_remove(js: *mut NsJs, removed: *mut NsNode);
-    fn ns_element_replace_all_recorded(js: *mut NsJs, node: *mut NsNode, added: *mut NsNode);
-    fn ns_js_set_attr_recorded_len(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-        len: isize,
-    );
     fn ns_net_http_date(date: *const c_char) -> i64;
     fn g_date_time_new_now_local() -> *mut c_void;
     fn g_date_time_format(datetime: *mut c_void, format: *const c_char) -> *mut c_char;
@@ -205,11 +186,11 @@ pub(crate) fn clear_focused_node(js: Js) {
 }
 
 pub(crate) fn unorphan_node(js: Js, node: Element) {
-    unsafe { ns_js_unorphan_node(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::unorphan_node(js.0, node);
 }
 
 pub(crate) fn orphan_node(js: Js, node: Element) {
-    unsafe { ns_js_orphan_node(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::orphan_node(js.0, node);
 }
 
 pub(crate) fn mark_mutated(js: Js) {
@@ -224,20 +205,11 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    unsafe {
-        ns_js_record_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            raw(added),
-            raw(removed),
-            raw(previous),
-            raw(next),
-        )
-    };
+    southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next);
 }
 
 pub(crate) fn iters_pre_remove(js: Js, node: Element) {
-    unsafe { ns_node_iters_pre_remove(js.0, node.as_mut_ptr()) };
+    southstar_js_traversal::iters_pre_remove(js.0, node);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, node: Element) {
@@ -249,21 +221,11 @@ pub(crate) fn insert_before_single(js: Js, node: Element, reference: Element) {
 }
 
 pub(crate) fn replace_all_recorded(js: Js, node: Element, added: Option<Element>) {
-    unsafe { ns_element_replace_all_recorded(js.0, node.as_mut_ptr(), raw(added)) };
+    southstar_js_mutation::replace_all_recorded(js.0, node, added);
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &CStr, value: &[u8]) {
-    let mut terminated = value.to_vec();
-    terminated.push(0);
-    unsafe {
-        ns_js_set_attr_recorded_len(
-            js.0,
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            terminated.as_ptr().cast(),
-            value.len() as isize,
-        )
-    };
+    southstar_js_mutation::set_attr_recorded(js.0, node, name, value);
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
@@ -346,14 +308,6 @@ pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
 }
 
 unsafe extern "C" {
-    fn ns_js_orphan_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_clear_children(js: *mut NsJs, node: *mut NsNode);
-    fn ns_js_index_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-    );
     fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
 }
@@ -433,11 +387,11 @@ pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) 
 }
 
 pub(crate) fn orphan_children(js: Js, node: Element) {
-    unsafe { ns_js_orphan_children(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::orphan_children(js.0, node);
 }
 
 pub(crate) fn clear_children(js: Js, node: Element) {
-    unsafe { ns_js_clear_children(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::clear_children(js.0, node);
 }
 
 pub(crate) fn ignore_destructive_writes(js: Js) -> bool {
@@ -445,14 +399,7 @@ pub(crate) fn ignore_destructive_writes(js: Js) -> bool {
 }
 
 pub(crate) fn index_child_change(js: Js, parent: Element, added: Element) {
-    unsafe {
-        ns_js_index_child_change(
-            js.0,
-            parent.as_mut_ptr(),
-            added.as_mut_ptr(),
-            ptr::null_mut(),
-        )
-    };
+    southstar_js_mutation::index_child_change(js.0, parent, Some(added), None);
 }
 
 pub(crate) fn pending_iframe_add(js: Js, frame: Element) {

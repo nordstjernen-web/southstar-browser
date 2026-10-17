@@ -31,10 +31,6 @@ pub(crate) struct SelectionState {
     pub rect: [f64; 4],
 }
 
-unsafe extern "C" {
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
-}
-
 unsafe extern "Rust" {
     safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
 }
@@ -73,7 +69,7 @@ pub(crate) fn selection_state(js: Js) -> SelectionState {
 }
 
 pub(crate) fn track_orphan(js: Js, node: Element) {
-    unsafe { ns_js_track_orphan(js.ptr(), node.as_mut_ptr()) }
+    southstar_js_mutation::track_orphan(js.ptr(), node);
 }
 
 pub(crate) fn parse_html(source: &[u8]) -> Tree {
@@ -133,10 +129,14 @@ pub fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, proto: &Value) {
     crate::walker::install_proto(scope, proto);
 }
 
+pub fn iters_pre_remove(js: *const NsJs, removed: Element) {
+    crate::iterator::pre_remove(Js::of(js), removed);
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_node_iters_pre_remove(js: *const NsJs, removed: *const NsNode) {
     if let Some(removed) = unsafe { Node::from_ptr(removed) } {
-        crate::iterator::pre_remove(Js::of(js), removed);
+        iters_pre_remove(js, removed);
     }
 }
 

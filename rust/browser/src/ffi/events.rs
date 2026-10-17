@@ -34,8 +34,6 @@ unsafe extern "C" {
         data: *const c_char,
         prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_note_user_edit(js: *mut c_void, el: *const NsNode, value_before: *const c_char);
-    fn ns_js_commit_change(js: *mut c_void, el: *const NsNode);
     fn ns_js_activate_summary(js: *mut c_void, el: *const NsNode) -> GBoolean;
     fn ns_js_process_close_request(js: *mut c_void) -> GBoolean;
     fn ns_js_node_has_click_handler(js: *mut c_void, target: *const NsNode) -> GBoolean;
@@ -220,11 +218,15 @@ impl Js {
     }
 
     pub fn note_user_edit(self, el: Node<'_>, value_before: Option<&CStr>) {
-        unsafe { ns_js_note_user_edit(self.raw(), el.as_ptr(), opt(value_before)) };
+        southstar_js_mutation::note_user_edit(
+            self.raw().cast(),
+            el,
+            value_before.unwrap_or_default(),
+        );
     }
 
     pub fn commit_change(self, el: Node<'_>) {
-        unsafe { ns_js_commit_change(self.raw(), el.as_ptr()) };
+        southstar_js_mutation::commit_change(self.raw().cast(), el);
     }
 
     pub fn click_activate(self, node: Node<'_>) -> bool {

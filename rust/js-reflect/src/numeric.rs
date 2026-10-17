@@ -45,7 +45,7 @@ pub(crate) fn parse_int(s: &[u8]) -> Option<i64> {
     Some(sign * v)
 }
 
-pub(crate) fn int_attr_index(attr: &[u8]) -> c_int {
+pub fn int_attr_index(attr: &[u8]) -> c_int {
     tables::INT_ATTRS
         .iter()
         .position(|d| d.attr.to_bytes() == attr)

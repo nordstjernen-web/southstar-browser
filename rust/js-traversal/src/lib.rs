@@ -9,6 +9,8 @@ pub mod selection;
 mod static_range;
 pub mod walker;
 
+pub use ffi::iters_pre_remove;
+
 use southstar_dom::Node;
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};

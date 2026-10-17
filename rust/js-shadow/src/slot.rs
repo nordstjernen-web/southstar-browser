@@ -18,7 +18,7 @@ fn name_of(node: Element, attr: &core::ffi::CStr) -> &'static [u8] {
 }
 
 fn enclosing_root(slot: Element) -> Option<Element> {
-    southstar_dom::ancestors_and_self(slot).find(|&n| is_shadow_root(Some(n)))
+    southstar_dom::ancestors_and_self(slot).find(|&n| is_shadow_root(n))
 }
 
 fn find_host(slot: Element) -> Option<Element> {
@@ -33,7 +33,7 @@ fn first_named(root: Element, name: &[u8], depth: i32) -> Option<Element> {
         return Some(root);
     }
     southstar_dom::children(root)
-        .filter(|&c| !is_shadow_root(Some(c)))
+        .filter(|&c| !is_shadow_root(c))
         .find_map(|c| first_named(c, name, depth + 1))
 }
 
@@ -49,7 +49,7 @@ fn collect_direct(nodes: &mut Vec<Element>, slot: Element, elements_only: bool) 
         return;
     }
     for child in southstar_dom::children(host) {
-        if is_shadow_root(Some(child)) {
+        if is_shadow_root(child) {
             continue;
         }
         let assigned = match child.kind() {
@@ -121,7 +121,7 @@ pub fn assigned_elements(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     assigned(scope, this, args, true)
 }
 
-pub(crate) fn assigned_slot_node(node: Element) -> Option<Element> {
+pub fn assigned_slot_node(node: Element) -> Option<Element> {
     let root = crate::shadow_child(node.parent()?)?;
     let wanted = if node.kind() == Kind::Element {
         name_of(node, c"slot")

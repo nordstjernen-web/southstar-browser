@@ -29,38 +29,11 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_set_attr_ns_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        namespace_uri: *const c_char,
-        prefix: *const c_char,
-        local_name: *const c_char,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_js_remove_attr_recorded(js: *mut NsJs, node: *mut NsNode, name: *const c_char);
-    fn ns_js_remove_attr_ns_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        namespace_uri: *const c_char,
-        local_name: *const c_char,
-    );
     fn ns_valid_element_local_name(name: *const c_char) -> GBoolean;
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
 }
 
 const LIVE_ATTRIBUTES: i32 = 12;
-
-fn opt_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(ptr::null(), CStr::as_ptr)
-}
 
 fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
     (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
@@ -83,44 +56,22 @@ pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, messag
     imports::nsr_dom_exception(scope, name.as_bytes(), code, message.to_bytes())
 }
 
-pub(crate) fn set_attr(js: Js, node: Element, name: &CStr, value: &CStr) {
-    unsafe { ns_js_set_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
-}
+pub(crate) use southstar_js_mutation::QualifiedName;
 
-pub(crate) struct QualifiedName<'a> {
-    pub namespace_uri: Option<&'a CStr>,
-    pub prefix: Option<&'a CStr>,
-    pub local_name: &'a CStr,
-    pub name: &'a CStr,
+pub(crate) fn set_attr(js: Js, node: Element, name: &CStr, value: &CStr) {
+    southstar_js_mutation::set_attr_recorded(js.0, node, name, value.to_bytes());
 }
 
 pub(crate) fn set_attr_ns(js: Js, node: Element, qname: &QualifiedName<'_>, value: &CStr) {
-    unsafe {
-        ns_js_set_attr_ns_recorded(
-            js.0,
-            node.as_mut_ptr(),
-            opt_ptr(qname.namespace_uri),
-            opt_ptr(qname.prefix),
-            qname.local_name.as_ptr(),
-            qname.name.as_ptr(),
-            value.as_ptr(),
-        )
-    };
+    southstar_js_mutation::set_attr_ns_recorded(js.0, node, qname, value);
 }
 
 pub(crate) fn remove_attr(js: Js, node: Element, name: &CStr) {
-    unsafe { ns_js_remove_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr()) };
+    southstar_js_mutation::remove_attr_recorded(js.0, node, name);
 }
 
 pub(crate) fn remove_attr_ns(js: Js, node: Element, namespace_uri: Option<&CStr>, local: &CStr) {
-    unsafe {
-        ns_js_remove_attr_ns_recorded(
-            js.0,
-            node.as_mut_ptr(),
-            opt_ptr(namespace_uri),
-            local.as_ptr(),
-        )
-    };
+    southstar_js_mutation::remove_attr_ns_recorded(js.0, node, namespace_uri, local);
 }
 
 pub(crate) fn token_list_node(value: &Value) -> (Option<Element>, &'static CStr) {
@@ -190,7 +141,7 @@ pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
 
 pub(crate) fn new_text(js: Js, text: &[u8]) -> Element {
     let node = southstar_dom::node::new_text(southstar_dom::Kind::Text, text);
-    unsafe { ns_js_track_orphan(js.0, node.as_mut_ptr()) };
+    southstar_js_mutation::track_orphan(js.0, node);
     node
 }
 
@@ -320,7 +271,11 @@ pub unsafe extern "C" fn ns_attr_detach_owner(js: *mut NsJs, owner: *mut NsNode)
     }
 }
 
+pub fn detach_all(js: *mut NsJs) {
+    attr::detach_all(Js(js));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_attr_detach_all(js: *mut NsJs) {
-    attr::detach_all(Js(js));
+    detach_all(js);
 }
