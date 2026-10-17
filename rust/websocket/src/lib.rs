@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::{Events, WebSocket};
+
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Condvar, Mutex};

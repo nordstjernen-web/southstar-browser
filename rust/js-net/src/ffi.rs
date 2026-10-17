@@ -62,50 +62,6 @@ pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
 
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
-#[repr(C)]
-struct WsCallbacks {
-    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
-    on_text: Option<unsafe extern "C" fn(*const c_char, usize, *mut c_void)>,
-    on_binary: Option<unsafe extern "C" fn(*const u8, usize, *mut c_void)>,
-    on_close: Option<unsafe extern "C" fn(c_int, *const c_char, GBoolean, *mut c_void)>,
-    on_error: Option<unsafe extern "C" fn(*const c_char, *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
-}
-
-#[repr(C)]
-struct EsCallbacks {
-    on_open: Option<unsafe extern "C" fn(*mut c_void)>,
-    on_message:
-        Option<unsafe extern "C" fn(*const c_char, *const c_char, *const c_char, *mut c_void)>,
-    on_error: Option<unsafe extern "C" fn(GBoolean, *mut c_void)>,
-    busy: Option<unsafe extern "C" fn(*mut c_void) -> GBoolean>,
-}
-
-unsafe extern "C" {
-    fn ns_ws_new(
-        url: *const c_char,
-        origin: *const c_char,
-        protocols: *const *const c_char,
-        cbs: *const WsCallbacks,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn ns_ws_send_text(ws: *mut c_void, text: *const c_char, len: usize) -> GBoolean;
-    fn ns_ws_send_binary(ws: *mut c_void, data: *const u8, len: usize) -> GBoolean;
-    fn ns_ws_close(ws: *mut c_void, code: c_int, reason: *const c_char);
-    fn ns_ws_state_get(ws: *mut c_void) -> c_int;
-    fn ns_ws_protocol(ws: *mut c_void) -> *mut c_char;
-    fn ns_ws_free(ws: *mut c_void);
-    fn ns_es_new(
-        url: *const c_char,
-        origin: *const c_char,
-        last_event_id: *const c_char,
-        cbs: *const EsCallbacks,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn ns_es_close(es: *mut c_void);
-    fn ns_es_free(es: *mut c_void);
-}
-
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
@@ -129,19 +85,6 @@ fn long(value: c_long) -> i64 {
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
-}
-
-fn opt_ptr(text: Option<&CString>) -> *const c_char {
-    text.map_or(ptr::null(), |t| t.as_ptr())
-}
-
-unsafe fn take_gstr(raw: *mut c_char) -> Option<Vec<u8>> {
-    if raw.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(raw) }.to_bytes().to_vec();
-    unsafe { glib::g_free(raw.cast()) };
-    Some(bytes)
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -264,81 +207,52 @@ pub(crate) fn install_neighbours(scope: &mut Scope<'_>, global: &Value) {
 
 pub(crate) enum Transport {
     None,
-    WebSocket(*mut c_void),
-    EventSource(*mut c_void),
+    WebSocket(southstar_websocket::WebSocket),
+    EventSource(southstar_eventsource::EventSource),
 }
 
-unsafe fn socket_ref(data: *mut c_void) -> Rc<crate::socket::Socket> {
-    let ptr = data.cast_const().cast::<crate::socket::Socket>();
-    unsafe {
-        Rc::increment_strong_count(ptr);
-        Rc::from_raw(ptr)
-    }
+fn socket_ref(data: usize) -> Rc<crate::socket::Socket> {
+    let ptr = data as *const crate::socket::Socket;
+    // SAFETY: data is the address of a socket whose Rc the transport's owner keeps alive until the transport is freed.
+    unsafe { Rc::increment_strong_count(ptr) };
+    // SAFETY: the count was raised above, so this Rc owns one reference.
+    unsafe { Rc::from_raw(ptr) }
 }
 
-unsafe fn text_arg<'a>(text: *const c_char) -> &'a [u8] {
-    unsafe { glib::bytes(text) }.unwrap_or_default()
+fn socket_busy(data: usize) -> bool {
+    socket_ref(data).js.in_pump()
 }
 
-unsafe extern "C" fn socket_busy(data: *mut c_void) -> GBoolean {
-    let socket = unsafe { socket_ref(data) };
-    glib::boolean(socket.js.in_pump())
+fn socket_on_open(data: usize) {
+    crate::socket::on_open(&socket_ref(data));
 }
 
-unsafe extern "C" fn socket_on_open(data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_open(&socket);
+fn ws_on_text(text: &[u8], data: usize) {
+    crate::socket::on_text(&socket_ref(data), text);
 }
 
-unsafe extern "C" fn ws_on_text(text: *const c_char, len: usize, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    let text = if text.is_null() {
-        &[][..]
-    } else {
-        unsafe { glib::slice(text.cast(), len) }
-    };
-    crate::socket::on_text(&socket, text);
+fn ws_on_binary(bytes: &[u8], data: usize) {
+    crate::socket::on_binary(&socket_ref(data), bytes);
 }
 
-unsafe extern "C" fn ws_on_binary(bytes: *const u8, len: usize, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    let bytes = if bytes.is_null() {
-        &[][..]
-    } else {
-        unsafe { glib::slice(bytes, len) }
-    };
-    crate::socket::on_binary(&socket, bytes);
+fn ws_on_close(code: i32, reason: &[u8], clean: bool, data: usize) {
+    crate::socket::on_close(&socket_ref(data), code, reason, clean);
 }
 
-unsafe extern "C" fn ws_on_close(
-    code: c_int,
-    reason: *const c_char,
-    clean: GBoolean,
-    data: *mut c_void,
-) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_close(&socket, code, unsafe { text_arg(reason) }, clean != 0);
+fn ws_on_error(message: &[u8], data: usize) {
+    crate::socket::on_error(&socket_ref(data), message);
 }
 
-unsafe extern "C" fn ws_on_error(message: *const c_char, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_error(&socket, unsafe { text_arg(message) });
+fn es_on_message(event: &[u8], text: &[u8], last_id: &[u8], data: usize) {
+    crate::socket::on_event_message(&socket_ref(data), event, text, last_id);
 }
 
-unsafe extern "C" fn es_on_message(
-    event: *const c_char,
-    text: *const c_char,
-    last_id: *const c_char,
-    data: *mut c_void,
-) {
-    let socket = unsafe { socket_ref(data) };
-    let (event, text, last_id) = unsafe { (text_arg(event), text_arg(text), text_arg(last_id)) };
-    crate::socket::on_event_message(&socket, event, text, last_id);
+fn es_on_error(fatal: bool, data: usize) {
+    crate::socket::on_event_error(&socket_ref(data), fatal);
 }
 
-unsafe extern "C" fn es_on_error(fatal: GBoolean, data: *mut c_void) {
-    let socket = unsafe { socket_ref(data) };
-    crate::socket::on_event_error(&socket, fatal != 0);
+fn socket_addr(socket: &Rc<crate::socket::Socket>) -> usize {
+    Rc::as_ptr(socket) as usize
 }
 
 impl Transport {
@@ -352,37 +266,26 @@ impl Transport {
         protocols: Option<&[Vec<u8>]>,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
-        let url = cstring(url);
-        let origin = cstring(origin);
-        let list: Option<Vec<CString>> = protocols.map(|p| p.iter().map(|p| cstring(p)).collect());
-        let pointers: Option<Vec<*const c_char>> = list.as_ref().map(|list| {
-            list.iter()
-                .map(|p| p.as_ptr())
-                .chain(core::iter::once(ptr::null()))
-                .collect()
-        });
-        let callbacks = WsCallbacks {
-            on_open: Some(socket_on_open),
-            on_text: Some(ws_on_text),
-            on_binary: Some(ws_on_binary),
-            on_close: Some(ws_on_close),
-            on_error: Some(ws_on_error),
-            busy: Some(socket_busy),
+        let events = southstar_websocket::Events {
+            on_open: socket_on_open,
+            on_text: ws_on_text,
+            on_binary: ws_on_binary,
+            on_close: ws_on_close,
+            on_error: ws_on_error,
+            busy: socket_busy,
         };
-        let ws = unsafe {
-            ns_ws_new(
-                url.as_ptr(),
-                origin.as_ptr(),
-                pointers.as_ref().map_or(ptr::null(), |p| p.as_ptr()),
-                &callbacks,
-                Rc::as_ptr(socket).cast_mut().cast(),
-            )
-        };
-        if ws.is_null() {
-            Transport::None
-        } else {
-            Transport::WebSocket(ws)
-        }
+        let protocols = protocols
+            .unwrap_or_default()
+            .iter()
+            .map(|p| crate::until_nul(p.clone()))
+            .collect();
+        Transport::WebSocket(southstar_websocket::WebSocket::open(
+            crate::until_nul(url.to_vec()).as_slice(),
+            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            protocols,
+            events,
+            socket_addr(socket),
+        ))
     }
 
     pub fn event_source(
@@ -390,28 +293,19 @@ impl Transport {
         origin: &[u8],
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
-        let url = cstring(url);
-        let origin = cstring(origin);
-        let callbacks = EsCallbacks {
-            on_open: Some(socket_on_open),
-            on_message: Some(es_on_message),
-            on_error: Some(es_on_error),
-            busy: Some(socket_busy),
+        let events = southstar_eventsource::Events {
+            on_open: socket_on_open,
+            on_message: es_on_message,
+            on_error: es_on_error,
+            busy: socket_busy,
         };
-        let es = unsafe {
-            ns_es_new(
-                url.as_ptr(),
-                origin.as_ptr(),
-                ptr::null(),
-                &callbacks,
-                Rc::as_ptr(socket).cast_mut().cast(),
-            )
-        };
-        if es.is_null() {
-            Transport::None
-        } else {
-            Transport::EventSource(es)
-        }
+        Transport::EventSource(southstar_eventsource::EventSource::open(
+            crate::until_nul(url.to_vec()).as_slice(),
+            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            b"",
+            events,
+            socket_addr(socket),
+        ))
     }
 
     pub fn is_none(&self) -> bool {
@@ -420,47 +314,45 @@ impl Transport {
 
     pub fn ws_state(&self) -> i32 {
         match self {
-            Transport::WebSocket(ws) => unsafe { ns_ws_state_get(*ws) },
+            Transport::WebSocket(ws) => ws.state(),
             _ => 3,
         }
     }
 
     pub fn protocol(&self) -> Vec<u8> {
         match self {
-            Transport::WebSocket(ws) => {
-                unsafe { take_gstr(ns_ws_protocol(*ws)) }.unwrap_or_default()
-            }
+            Transport::WebSocket(ws) => crate::until_nul(ws.protocol()),
             _ => Vec::new(),
         }
     }
 
     pub fn send_text(&self, text: &[u8]) {
         if let Transport::WebSocket(ws) = self {
-            unsafe { ns_ws_send_text(*ws, text.as_ptr().cast(), text.len()) };
+            ws.send_text(text);
         }
     }
 
     pub fn send_binary(&self, bytes: &[u8]) {
         if let Transport::WebSocket(ws) = self {
-            unsafe { ns_ws_send_binary(*ws, bytes.as_ptr(), bytes.len()) };
+            ws.send_binary(bytes);
         }
     }
 
     pub fn close(&self, code: i32, reason: Option<&[u8]>) {
         match self {
             Transport::WebSocket(ws) => {
-                let reason = reason.map(cstring);
-                unsafe { ns_ws_close(*ws, code, opt_ptr(reason.as_ref())) };
+                let reason = reason.map(|r| crate::until_nul(r.to_vec()));
+                ws.close(code, reason.as_deref());
             }
-            Transport::EventSource(es) => unsafe { ns_es_close(*es) },
+            Transport::EventSource(es) => es.close(),
             Transport::None => {}
         }
     }
 
     pub fn free(&mut self) {
         match core::mem::replace(self, Transport::None) {
-            Transport::WebSocket(ws) => unsafe { ns_ws_free(ws) },
-            Transport::EventSource(es) => unsafe { ns_es_free(es) },
+            Transport::WebSocket(ws) => ws.free(),
+            Transport::EventSource(es) => es.free(),
             Transport::None => {}
         }
     }
