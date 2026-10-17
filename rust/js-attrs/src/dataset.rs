@@ -59,7 +59,7 @@ fn prop_to_attr(prop: &[u8]) -> Result<CString, Invalid> {
         }
     }
     let attr = c_string(&out);
-    if ffi::valid_element_local_name(&attr) {
+    if southstar_js_dom_factory::valid_element_local_name(attr.to_bytes()) {
         Ok(attr)
     } else {
         Err(Invalid::Character)

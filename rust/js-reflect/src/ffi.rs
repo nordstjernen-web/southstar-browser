@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::CStr;
 
 use southstar_dom::NsNode;
 use southstar_glib::{self as glib, GBoolean};
@@ -17,7 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
@@ -82,15 +81,9 @@ pub(crate) fn current_url(js: Js) -> Vec<u8> {
 }
 
 pub(crate) fn resolved_url(scope: &mut Scope<'_>, js: Js, href: &'static [u8]) -> Value {
-    let base = unsafe { ns_js_doc_base_url(js.0) };
-    let mut resolved = None;
-    if !base.is_null() {
-        let base_url = unsafe { CStr::from_ptr(base) }.to_bytes();
-        if !base_url.is_empty() {
-            resolved = southstar_url::bytes::resolve(Some(base_url), c_prefix(href));
-        }
-    }
-    unsafe { glib::g_free(base.cast::<c_void>()) };
+    let resolved = southstar_js_document::doc_base_url(js.0)
+        .filter(|base| !base.is_empty())
+        .and_then(|base| southstar_url::bytes::resolve(Some(&base), c_prefix(href)));
     match resolved {
         Some(url) => scope.string_from_bytes(&url),
         None => scope.string_from_bytes(c_prefix(href)),

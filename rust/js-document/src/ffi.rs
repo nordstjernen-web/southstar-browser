@@ -116,9 +116,13 @@ fn glib_bytes(bytes: Option<Vec<u8>>) -> *mut c_char {
     bytes.map_or(ptr::null_mut(), |bytes| glib::strdup(&bytes))
 }
 
+pub fn doc_base_url(js: *const NsJs) -> Option<Vec<u8>> {
+    crate::base_url::page_base_url(Js(js.cast_mut()))
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char {
-    glib_bytes(crate::base_url::page_base_url(Js(js)))
+    glib_bytes(doc_base_url(js))
 }
 
 #[unsafe(no_mangle)]
@@ -297,10 +301,9 @@ rust_methods! {
     nsr_document_ctor => crate::realm::document_ctor,
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
+pub fn seed_cookies_from_jar(js: *const NsJs) {
     if !js.is_null() {
-        crate::cookie::seed_from_jar(Js(js));
+        crate::cookie::seed_from_jar(Js(js.cast_mut()));
     }
 }
 

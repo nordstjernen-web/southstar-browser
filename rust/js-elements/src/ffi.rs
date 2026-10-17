@@ -23,7 +23,6 @@ const LIVE_LABELS: c_int = 13;
 unsafe extern "C" {
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
 }
 
 unsafe extern "Rust" {
@@ -145,7 +144,7 @@ pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn resolve_against_document_base(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
-    let base = owned_text(unsafe { ns_js_doc_base_url(raw_js(js)) })?;
+    let base = southstar_js_document::doc_base_url(raw_js(js))?;
     if base.is_empty() {
         return None;
     }

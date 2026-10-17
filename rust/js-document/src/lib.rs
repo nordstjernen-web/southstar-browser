@@ -11,6 +11,8 @@ mod realm;
 pub mod view;
 pub mod write;
 
+pub use ffi::{doc_base_url, seed_cookies_from_jar};
+
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
 

@@ -123,8 +123,6 @@ unsafe extern "C" {
     fn ns_services_reset(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
 
-    fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
-
     fn ns_js_name_engine_members(ctx: ContextHandle);
 
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
@@ -242,7 +240,7 @@ impl Js {
 
     pub fn load_storage_and_cookies(self) {
         api::storage_load_for(self.0, Some(&api::current_url(self.0)));
-        unsafe { ns_js_seed_cookies_from_jar(self.0) };
+        southstar_js_document::seed_cookies_from_jar(self.0);
     }
 
     pub fn reset_page_state(self) {

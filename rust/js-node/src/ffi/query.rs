@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -14,8 +14,6 @@ use super::{Js, NsJs, imports, raw_js};
 use crate::{Element, JsResult};
 
 unsafe extern "C" {
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-    fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
     fn ns_input_resanitize_value(el: *mut NsNode);
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
 }
@@ -37,13 +35,7 @@ pub(crate) fn doc_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
-    let base = unsafe { ns_js_doc_base_url(js.0) };
-    if base.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(base) }.to_bytes().to_vec();
-    unsafe { glib::g_free(base.cast()) };
-    Some(bytes)
+    southstar_js_document::doc_base_url(js.0)
 }
 
 pub(crate) fn reflect_str_get(scope: &mut Scope<'_>, this: &Value, attr: &CStr) -> JsResult {
@@ -52,10 +44,6 @@ pub(crate) fn reflect_str_get(scope: &mut Scope<'_>, this: &Value, attr: &CStr) 
 
 pub(crate) fn make_live(scope: &mut Scope<'_>, owner: &Value, kind: c_int) -> JsResult {
     Ok(imports::nsr_make_live(scope, owner, kind, None, None))
-}
-
-pub(crate) fn valid_attr_name(name: &CStr) -> bool {
-    unsafe { ns_valid_attr_name(name.as_ptr()) != 0 }
 }
 
 pub(crate) fn validate_attr_ns(

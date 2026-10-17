@@ -10,7 +10,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use southstar_dom::{AttrView, Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -28,10 +27,7 @@ impl Js {
     }
 }
 
-unsafe extern "C" {
-    fn ns_valid_element_local_name(name: *const c_char) -> GBoolean;
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-}
+unsafe extern "C" {}
 
 const LIVE_ATTRIBUTES: i32 = 12;
 
@@ -125,18 +121,8 @@ pub(crate) fn named_map_owner(value: &Value) -> Option<Element> {
     unsafe { Node::from_ptr(imports::nsr_live_owner_node(value)) }
 }
 
-pub(crate) fn valid_element_local_name(name: &CStr) -> bool {
-    unsafe { ns_valid_element_local_name(name.as_ptr()) != 0 }
-}
-
 pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
-    let url = unsafe { ns_js_doc_base_url(js.0) };
-    if url.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(url) }.to_bytes().to_vec();
-    unsafe { glib::g_free(url.cast()) };
-    Some(bytes)
+    southstar_js_document::doc_base_url(js.0)
 }
 
 pub(crate) fn new_text(js: Js, text: &[u8]) -> Element {

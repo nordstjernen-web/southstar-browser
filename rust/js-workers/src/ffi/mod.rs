@@ -236,9 +236,6 @@ unsafe extern "C" {
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
     fn g_get_monotonic_time() -> i64;
-
-    fn ns_js_doc_base_url(js: *mut c_void) -> *mut c_char;
-
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -297,14 +294,6 @@ unsafe fn borrowed(p: *const c_char) -> Option<String> {
     } else {
         Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
     }
-}
-
-unsafe fn taken(p: *mut c_char) -> Option<String> {
-    let text = unsafe { borrowed(p) };
-    if !p.is_null() {
-        unsafe { southstar_glib::g_free(p.cast()) };
-    }
-    text
 }
 
 pub(crate) struct MainContext(usize);
@@ -633,7 +622,8 @@ pub(crate) fn blob_url_lookup(js: Js, url: &str) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<String> {
-    unsafe { taken(ns_js_doc_base_url(js.ptr())) }
+    southstar_js_document::doc_base_url(js.page())
+        .map(|url| String::from_utf8_lossy(&url).into_owned())
 }
 
 pub(crate) fn decode_data_url(url: &str) -> Option<Vec<u8>> {

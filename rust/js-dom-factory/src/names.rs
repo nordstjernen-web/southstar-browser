@@ -28,7 +28,7 @@ fn no_forbidden(s: &[u8]) -> bool {
     decoded(&s[ascii..]).is_some_and(|rest| !rest.chars().any(|c| forbidden(c as u32)))
 }
 
-pub(crate) fn valid_element_local_name(s: &[u8]) -> bool {
+pub fn valid_element_local_name(s: &[u8]) -> bool {
     let Some(&first_byte) = s.first() else {
         return false;
     };
@@ -48,7 +48,7 @@ pub(crate) fn valid_element_local_name(s: &[u8]) -> bool {
     chars.all(|c| !c.is_ascii() || c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | ':' | '_'))
 }
 
-pub(crate) fn valid_attr_name(s: &[u8]) -> bool {
+pub fn valid_attr_name(s: &[u8]) -> bool {
     if s.is_empty() {
         return false;
     }

@@ -16,6 +16,7 @@ southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
+southstar-js-document = { path = "../js-document" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }

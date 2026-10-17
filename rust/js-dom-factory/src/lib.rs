@@ -11,6 +11,8 @@ pub mod implementation;
 mod names;
 pub mod namespaces;
 
+pub use names::{valid_attr_name, valid_element_local_name};
+
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Attributes, Scope, Value};
 

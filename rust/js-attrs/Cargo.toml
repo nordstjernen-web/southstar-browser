@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-document = { path = "../js-document" }
+southstar-js-dom-factory = { path = "../js-dom-factory" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }

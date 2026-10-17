@@ -4,12 +4,12 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{AttrView, Node, NsNode, Tree};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -28,9 +28,7 @@ pub(crate) enum TargetMethod {
     DispatchEvent,
 }
 
-unsafe extern "C" {
-    fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
-}
+unsafe extern "C" {}
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
@@ -169,18 +167,8 @@ pub(crate) fn synth_xml_document(scope: &mut Scope<'_>) -> Value {
     imports::nsr_make_synth_xml_document(scope)
 }
 
-fn take_gstring(p: *mut c_char) -> Option<Vec<u8>> {
-    if p.is_null() {
-        return None;
-    }
-    let out = unsafe { CStr::from_ptr(p) }.to_bytes().to_vec();
-    unsafe { glib::g_free(p.cast::<c_void>()) };
-    Some(out)
-}
-
 pub(crate) fn doc_base_url(js: Option<Js>) -> Option<Vec<u8>> {
-    let js = js?;
-    take_gstring(unsafe { ns_js_doc_base_url(js.0) })
+    southstar_js_document::doc_base_url(js?.0)
 }
 
 pub(crate) fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
@@ -331,18 +319,4 @@ pub unsafe extern "C" fn ns_element_anchor_resolved_href(
     unsafe { Node::from_ptr(node) }
         .and_then(|node| hyperlink::resolved_href(node, js))
         .map_or(ptr::null_mut(), |href| glib::strdup(&href))
-}
-
-fn c_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_valid_element_local_name(s: *const c_char) -> GBoolean {
-    glib::boolean(c_bytes(s).is_some_and(names::valid_element_local_name))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_valid_attr_name(s: *const c_char) -> GBoolean {
-    glib::boolean(c_bytes(s).is_some_and(names::valid_attr_name))
 }

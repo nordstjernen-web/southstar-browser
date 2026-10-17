@@ -281,7 +281,9 @@ fn checked_name<'a>(
     raw: &'a CStr,
     message: &str,
 ) -> JsResult<&'a CStr> {
-    if bytes.len() != raw.to_bytes().len() || !ffi::valid_attr_name(raw) {
+    if bytes.len() != raw.to_bytes().len()
+        || !southstar_js_dom_factory::valid_attr_name(raw.to_bytes())
+    {
         return Err(invalid_character(scope, message));
     }
     Ok(raw)
