@@ -79,7 +79,7 @@ pub fn set_caret_visible(visible: bool) {
 }
 
 pub fn set_anim(anim: Option<AnimHandle>) {
-    state::set_anim(anim.map_or(ptr::null_mut(), AnimHandle::raw));
+    state::set_anim(anim);
 }
 
 /// # Safety

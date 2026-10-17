@@ -2,10 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_anim::{AnimInfo, AnimTiming};
 use southstar_js_engine::{Scope, Value};
-use southstar_style::{PropId, ValueRef};
+use southstar_style::PropId;
 
-use crate::ffi::{self, AnimRecord, ScriptTiming};
+use crate::ffi;
 
 const BAD_PROP: i32 = -2;
 
@@ -52,7 +53,7 @@ fn set_text(scope: &mut Scope<'_>, object: &Value, key: &str, value: &str) -> Re
     scope.set(object, key, value)
 }
 
-fn info_to_js(scope: &mut Scope<'_>, info: &AnimRecord) -> Result<Value, Value> {
+fn info_to_js(scope: &mut Scope<'_>, info: &AnimInfo) -> Result<Value, Value> {
     let o = scope.new_object();
     set_number(scope, &o, "currentMs", info.current_ms)?;
     set_number(scope, &o, "durationMs", info.duration_ms)?;
@@ -64,8 +65,8 @@ fn info_to_js(scope: &mut Scope<'_>, info: &AnimRecord) -> Result<Value, Value> 
     scope.set(&o, "finished", Value::boolean(info.finished))?;
     scope.set(&o, "generation", Value::int(info.generation as i32))?;
     scope.set(&o, "run", Value::int(info.run))?;
-    set_text(scope, &o, "fill", &info.fill)?;
-    set_text(scope, &o, "direction", &info.direction)?;
+    set_text(scope, &o, "fill", info.fill)?;
+    set_text(scope, &o, "direction", info.direction)?;
     set_text(scope, &o, "easing", &info.easing)?;
     let name = match &info.name {
         Some(name) => scope.string(name),
@@ -92,9 +93,9 @@ pub(crate) fn list(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
     if filter.is_some() && node.is_none() {
         return Ok(arr);
     }
-    for (i, info) in ffi::anim_visit(anim, node).iter().enumerate() {
+    for (i, info) in anim.visit(node).iter().enumerate() {
         let o = info_to_js(scope, info)?;
-        let el = ffi::make_element(scope, info.node);
+        let el = ffi::make_element(scope, info.node.as_ptr());
         scope.set(&o, "el", el)?;
         scope.set_index(&arr, i as u32, o)?;
     }
@@ -112,7 +113,7 @@ pub(crate) fn query(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Res
         return Ok(Value::null());
     };
     ffi::flush_style(js);
-    match ffi::anim_info_for(anim, node, prop) {
+    match anim.info_for(node, prop) {
         Some(info) => info_to_js(scope, &info),
         None => Ok(Value::null()),
     }
@@ -131,7 +132,7 @@ pub(crate) fn seek(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
     let Ok(ms) = scope.to_number(ms) else {
         return Ok(Value::boolean(false));
     };
-    let ok = ffi::anim_seek(anim, node, prop, ms);
+    let ok = anim.seek(node, prop, ms);
     if ok {
         ffi::mark_mutated(js);
     }
@@ -153,7 +154,7 @@ pub(crate) fn control(
     let (Some(node), true, Some(op)) = (node, prop != BAD_PROP, op) else {
         return Ok(Value::boolean(false));
     };
-    let ok = ffi::anim_control(anim, node, prop, &op);
+    let ok = anim.control(node, prop, op.as_bytes());
     if ok {
         ffi::mark_mutated(js);
     }
@@ -176,52 +177,44 @@ pub(crate) fn keyframes(
         return Ok(arr);
     };
     ffi::flush_style(js);
-    let run_easing =
-        ffi::anim_info_for(anim, node, prop).map_or_else(|| "ease".to_string(), |i| i.easing);
-    let mut result = Ok(());
-    ffi::anim_keyframes(anim, node, prop, |frames| {
-        result = frames.iter().enumerate().try_for_each(|(i, frame)| {
-            let run = scope.string(&run_easing);
-            let o = scope.new_object();
-            let props = scope.new_object();
-            let mut composite = "auto".to_string();
-            let mut count = 0;
-            for &(prop, value) in &frame.decls {
-                let Some(name) = usize::try_from(prop).ok().and_then(ffi::prop_name) else {
-                    continue;
-                };
-                let Some(value_ref) = (unsafe { ValueRef::from_ptr(value) }) else {
-                    continue;
-                };
-                if prop == PropId::AnimationComposition as i32
-                    && let Some(kw) = value_ref.keyword_text()
-                {
-                    composite = kw.to_string_lossy().into_owned();
-                    continue;
-                }
-                if name.starts_with("animation") || name.starts_with("transition") {
-                    continue;
-                }
-                if let Some(text) = ffi::serialize(value_ref).filter(|t| !t.is_empty()) {
-                    set_text(scope, &props, name, &text)?;
-                    count += 1;
-                }
+    let run_easing = anim
+        .info_for(node, prop)
+        .map_or_else(|| "ease".to_string(), |i| i.easing);
+    for (i, frame) in anim.keyframes(node, prop).iter().enumerate() {
+        let run = scope.string(&run_easing);
+        let o = scope.new_object();
+        let props = scope.new_object();
+        let mut composite = "auto".to_string();
+        let mut count = 0;
+        for decl in frame.decls.iter().flat_map(|decls| decls.iter()) {
+            let (prop, value) = (decl.prop(), decl.value());
+            let Some(name) = usize::try_from(prop).ok().and_then(ffi::prop_name) else {
+                continue;
+            };
+            if prop == PropId::AnimationComposition as i32
+                && let Some(kw) = value.keyword()
+            {
+                composite = kw.to_string_lossy().into_owned();
+                continue;
             }
-            set_number(scope, &o, "offset", frame.offset)?;
-            set_text(
-                scope,
-                &o,
-                "easing",
-                frame.easing.as_deref().unwrap_or("linear"),
-            )?;
-            set_text(scope, &o, "composite", &composite)?;
-            scope.set(&o, "count", Value::int(count))?;
-            scope.set(&o, "props", props)?;
-            scope.set(&o, "runEasing", run)?;
-            scope.set_index(&arr, i as u32, o)
-        });
-    });
-    result.map(|()| arr)
+            if name.starts_with("animation") || name.starts_with("transition") {
+                continue;
+            }
+            let text = ffi::serialize_value(value);
+            if !text.is_empty() {
+                set_text(scope, &props, name, &text)?;
+                count += 1;
+            }
+        }
+        set_number(scope, &o, "offset", frame.offset)?;
+        set_text(scope, &o, "easing", &frame.easing)?;
+        set_text(scope, &o, "composite", &composite)?;
+        scope.set(&o, "count", Value::int(count))?;
+        scope.set(&o, "props", props)?;
+        scope.set(&o, "runEasing", run)?;
+        scope.set_index(&arr, i as u32, o)?;
+    }
+    Ok(arr)
 }
 
 pub(crate) fn base_value(
@@ -242,16 +235,14 @@ pub(crate) fn base_value(
         return Ok(Value::null());
     };
     ffi::flush_style(js);
-    let value = ffi::anim_base_value(anim, node, prop);
-    if value.is_null() {
+    let Some(value) = anim.base_value(node, prop as i32) else {
         let initial = ffi::prop_name(prop).and_then(ffi::initial_value);
         return Ok(match initial {
             Some(initial) => scope.string(initial),
             None => Value::null(),
         });
-    }
-    let text = ffi::serialize_raw(value).unwrap_or_default();
-    Ok(scope.string(&text))
+    };
+    Ok(scope.string(&ffi::serialize_value(&value)))
 }
 
 fn number_or(scope: &mut Scope<'_>, value: &Value, fallback: f64) -> f64 {
@@ -300,15 +291,22 @@ pub(crate) fn animate(
     let fill = scope.get(timing, "fill")?;
     let easing = scope.get(timing, "easing")?;
     let iterations = number_or(scope, &iterations, 1.0);
-    let t = ScriptTiming {
+    let direction = string_option(scope, &direction);
+    let fill = string_option(scope, &fill);
+    let easing = string_option(scope, &easing);
+    let t = AnimTiming {
         duration_ms: number_or(scope, &duration, 0.0),
         delay_ms: number_or(scope, &delay, 0.0),
         iterations: if iterations.is_nan() { 1.0 } else { iterations },
-        direction: string_option(scope, &direction),
-        fill: string_option(scope, &fill),
-        easing: string_option(scope, &easing),
+        direction: direction.as_deref(),
+        fill: fill.as_deref(),
+        easing: easing.as_deref(),
     };
-    let Some((prop, generation)) = ffi::anim_script_start(anim, node, &list, &t) else {
+    let stops: Vec<(Option<&str>, f64)> = list
+        .iter()
+        .map(|(css, offset)| (css.as_deref(), *offset))
+        .collect();
+    let Some((prop, generation)) = anim.script_start(node, &stops, &t) else {
         return Ok(Value::null());
     };
     ffi::mark_mutated(js);

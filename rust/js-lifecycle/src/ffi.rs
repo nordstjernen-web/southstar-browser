@@ -276,7 +276,6 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
-    fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
@@ -289,14 +288,6 @@ unsafe extern "C" {
 unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
 }
-
-pub(crate) type AnimEventCb = unsafe extern "C" fn(
-    node: *const NsNode,
-    kind: *const c_char,
-    name: *const c_char,
-    elapsed_ms: f64,
-    user: *mut c_void,
-);
 
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
@@ -338,10 +329,6 @@ pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
 
 pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {
     unsafe { ns_js_video_take_load_events(video) != 0 }
-}
-
-pub(crate) fn drain_anim_events(js: Js, anim: *mut c_void, cb: AnimEventCb) {
-    unsafe { ns_anim_drain_events(anim, Some(cb), js.0.cast()) };
 }
 
 pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {
@@ -461,7 +448,7 @@ pub unsafe extern "C" fn ns_js_queue_scrollend_document(js: *mut NsJs) {
 ///
 /// `js` is null or a live script engine.
 pub unsafe fn dispatch_anim_events(js: *mut c_void, anim: AnimHandle) {
-    events::dispatch_anim_events(Js::from_data(js), anim.raw());
+    events::dispatch_anim_events(Js::from_data(js), anim);
 }
 
 /// # Safety

@@ -8,6 +8,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};
 
+use southstar_anim::AnimHandle;
 use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
@@ -28,7 +29,7 @@ pub struct RenderCtx<'a> {
     pub zoom: f64,
     pub images: *mut c_void,
     pub base_url: *const c_char,
-    pub anim: *mut c_void,
+    pub anim: Option<AnimHandle>,
     pub js: *mut c_void,
     pub focused_input: *const NsNode,
     pub hover_node: *const NsNode,
@@ -61,8 +62,6 @@ const _: () = assert!(
 );
 
 unsafe extern "C" {
-    fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
-    fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
     fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
     fn ns_layout_build(
         doc: *const NsNode,
@@ -234,14 +233,14 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
 }
 
 fn feed_animations(c: &RenderCtx, styles: *mut GHashTable) {
-    if c.anim.is_null() {
+    let Some(anim) = c.anim else {
         return;
-    }
+    };
     for sheet in c.style_sheets() {
-        // SAFETY: anim is the render context's live animation engine, and the sheet outlives the call.
-        unsafe { ns_anim_load_from_stylesheet(c.anim, sheet.as_ptr()) };
+        anim.load_keyframes(sheet);
     }
-    unsafe { ns_anim_observe_all(c.anim, styles, now_us()) };
+    // SAFETY: styles is the style table this relayout just computed for the page the engine animates.
+    unsafe { anim.observe_all(styles, now_us()) };
 }
 
 fn apply_zoom(c: &RenderCtx, styles: *mut GHashTable) {

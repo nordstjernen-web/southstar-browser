@@ -18,7 +18,6 @@ pub use southstar_render::{RenderCtx, RenderProfile};
 
 unsafe extern "C" {
     fn ns_layout_frame_viewport(frame: *const NsNode, w: *mut f64, h: *mut f64) -> GBoolean;
-    fn ns_anim_load_from_stylesheet(anim: *mut c_void, sheet: *const c_void);
     fn ns_box_free(b: *mut NsBox);
     fn g_printerr(format: *const c_char, ...);
 }
@@ -99,7 +98,7 @@ pub struct Relayout<'a> {
     pub viewport_width: c_int,
     pub viewport_height: f64,
     pub images: *mut c_void,
-    pub anim: *mut c_void,
+    pub anim: Option<southstar_anim::AnimHandle>,
     pub js: *mut c_void,
     pub focused: *const NsNode,
     pub hover: *const NsNode,
@@ -129,10 +128,9 @@ impl Drop for CssScope {
     }
 }
 
-pub fn load_into_anim(anim: *mut c_void, sheets: &SheetList) {
+pub fn load_into_anim(anim: southstar_anim::AnimHandle, sheets: &SheetList) {
     for sheet in &sheets.sheets {
-        // SAFETY: anim is the embedder's animation engine, and the sheet stays alive for the call.
-        unsafe { ns_anim_load_from_stylesheet(anim, sheet.as_ptr()) };
+        anim.load_keyframes(sheet);
     }
 }
 

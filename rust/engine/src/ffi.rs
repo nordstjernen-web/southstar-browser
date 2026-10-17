@@ -87,7 +87,6 @@ unsafe extern "C" {
     fn cairo_destroy(cr: *mut Cairo);
     fn cairo_show_page(cr: *mut Cairo);
     fn ns_box_kind_name(kind: c_uint) -> *const c_char;
-    fn ns_anim_observe_all(anim: *mut c_void, styles: *mut GHashTable, now_us: i64);
     fn g_string_new(init: *const c_char) -> *mut GString;
     fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
     fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
@@ -301,7 +300,7 @@ pub fn compute_cascade(page: &Page<'_>) -> *mut GHashTable {
 
 pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
     let sheets = crate::styles::collect_stylesheets(page.doc, page.base, page.css_cache);
-    css::load_into_anim(anim.raw(), &sheets);
+    css::load_into_anim(anim, &sheets);
     drop(sheets);
 }
 
@@ -309,8 +308,8 @@ pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
 ///
 /// `styles` is null or a live style table of the page the engine animates.
 pub unsafe fn anim_observe(anim: AnimHandle, styles: *mut GHashTable, now_us: i64) {
-    // SAFETY: the handle keeps the engine alive and the caller vouches for the style table.
-    unsafe { ns_anim_observe_all(anim.raw(), styles, now_us) };
+    // SAFETY: the caller vouches for the style table.
+    unsafe { anim.observe_all(styles, now_us) };
 }
 
 pub struct Relayout<'a> {
@@ -341,7 +340,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
         images: req
             .images
             .map_or(ptr::null_mut(), southstar_image::ImageCache::raw),
-        anim: req.anim.map_or(ptr::null_mut(), AnimHandle::raw),
+        anim: req.anim,
         js,
         focused: Node::ptr_or_null(req.focused),
         hover: Node::ptr_or_null(req.hover),

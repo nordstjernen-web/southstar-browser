@@ -192,7 +192,7 @@ impl KfStop {
             .value(props::known().animation_timing_function)
             .keyword()?;
         let mut timing = Timing::default();
-        timing.parse_into(keyword).then_some(timing)
+        timing.parse_into(keyword.to_bytes()).then_some(timing)
     }
 }
 
@@ -1134,8 +1134,8 @@ fn run_info(node: NodePtr, r: &Run, now_us: i64) -> Info {
     }
 }
 
-pub fn direction_from_name(d: Option<&CStr>) -> i32 {
-    match d.map(CStr::to_bytes) {
+pub fn direction_from_name(d: Option<&[u8]>) -> i32 {
+    match d {
         Some(b"reverse") => DIR_REVERSE,
         Some(b"alternate") => DIR_ALTERNATE,
         Some(b"alternate-reverse") => DIR_ALTERNATE_REVERSE,
@@ -1143,8 +1143,8 @@ pub fn direction_from_name(d: Option<&CStr>) -> i32 {
     }
 }
 
-pub fn fill_from_name(f: Option<&CStr>) -> i32 {
-    match f.map(CStr::to_bytes) {
+pub fn fill_from_name(f: Option<&[u8]>) -> i32 {
+    match f {
         Some(b"forwards") => FILL_FORWARDS,
         Some(b"backwards") => FILL_BACKWARDS,
         Some(b"both") => FILL_BOTH,
@@ -1156,9 +1156,9 @@ pub struct ScriptTiming<'a> {
     pub duration_ms: f64,
     pub delay_ms: f64,
     pub iterations: f64,
-    pub direction: Option<&'a CStr>,
-    pub fill: Option<&'a CStr>,
-    pub easing: Option<&'a CStr>,
+    pub direction: Option<&'a str>,
+    pub fill: Option<&'a str>,
+    pub easing: Option<&'a str>,
 }
 
 pub struct KeyframeCopy {
@@ -1207,7 +1207,7 @@ impl Anim {
         core::mem::take(&mut self.shared.events)
     }
 
-    pub fn load_keyframes(&mut self, sheet: *const core::ffi::c_void) {
+    pub fn load_keyframes(&mut self, sheet: &southstar_css::Sheet) {
         for (name, kf) in css::sheet_keyframes(sheet) {
             self.shared.keyframes.insert(name, kf);
         }
@@ -1728,7 +1728,7 @@ impl Anim {
             .map(|o| gclamp(o, 0.0, 1.0))
     }
 
-    pub fn transform(&self, node: NodePtr) -> Option<*const core::ffi::c_void> {
+    pub fn transform(&self, node: NodePtr) -> Option<southstar_style::Transform> {
         self.prop_value(node, props::known().transform).transform()
     }
 
@@ -1780,7 +1780,7 @@ impl Anim {
     pub fn script_start(
         &mut self,
         node: NodePtr,
-        stops: &[(Option<&CStr>, f64)],
+        stops: &[(Option<&str>, f64)],
         t: &ScriptTiming<'_>,
     ) -> Option<(i32, u32)> {
         if self.shared.active_count >= MAX_ACTIVE {
@@ -1811,7 +1811,7 @@ impl Anim {
                 .iter()
                 .map(|&(css_text, pct)| KfStop {
                     pct: pct * 100.0,
-                    decls: Decls::parse(css_text.map(CStr::to_bytes)),
+                    decls: Decls::parse(css_text.map(str::as_bytes)),
                 })
                 .collect(),
         );
@@ -1823,11 +1823,11 @@ impl Anim {
         } else {
             t.iterations
         };
-        r.direction = direction_from_name(t.direction);
-        r.fill = fill_from_name(t.fill);
+        r.direction = direction_from_name(t.direction.map(str::as_bytes));
+        r.fill = fill_from_name(t.fill.map(str::as_bytes));
         r.timing = Timing::linear();
         if let Some(easing) = t.easing {
-            r.timing.parse_into(easing);
+            r.timing.parse_into(easing.as_bytes());
         }
         r.active = true;
         r.paused = false;

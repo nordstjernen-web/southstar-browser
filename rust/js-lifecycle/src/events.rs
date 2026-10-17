@@ -2,8 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::CStr;
 
+use southstar_anim::{AnimEvent, AnimHandle};
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::{BoxRef, NsBox};
@@ -48,7 +49,7 @@ fn atoi(text: &[u8]) -> i32 {
     }
 }
 
-fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], name: Option<&CStr>) {
+fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], name: &[u8]) {
     let global = scope.global();
     let Ok(hook) = scope.get(&global, "__ns_anim_script_event") else {
         return;
@@ -57,7 +58,7 @@ fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], na
         return;
     }
     let element = ffi::make_element(scope, node);
-    let index = Value::int(name.map_or(-1, |name| atoi(name.to_bytes())));
+    let index = Value::int(atoi(name));
     let phase = scope.string(&String::from_utf8_lossy(&kind[4..]));
     let _ = scope.call(&hook, &Value::undefined(), &[element, index, phase]);
 }
@@ -67,7 +68,7 @@ fn animation_event(
     node: *const NsNode,
     event_kind: &CStr,
     base_kind: &[u8],
-    name: Option<&CStr>,
+    name: &[u8],
     elapsed_ms: f64,
 ) -> Value {
     let event = ffi::make_event(scope, event_kind, node);
@@ -76,8 +77,7 @@ fn animation_event(
     let _ = scope.set(&event, "elapsedTime", Value::number(elapsed_ms / 1000.0));
     let empty = scope.string("");
     let _ = scope.set(&event, "pseudoElement", empty);
-    let name =
-        scope.string(&name.map_or_else(String::new, |name| name.to_string_lossy().into_owned()));
+    let name = scope.string(&String::from_utf8_lossy(name));
     let key = if base_kind.first() == Some(&b'a') {
         "animationName"
     } else {
@@ -87,22 +87,15 @@ fn animation_event(
     event
 }
 
-unsafe extern "C" fn anim_event(
-    node: *const NsNode,
-    kind: *const c_char,
-    name: *const c_char,
-    elapsed_ms: f64,
-    user: *mut c_void,
-) {
-    let js = Js::from_data(user);
+fn anim_event(js: Js, event: &AnimEvent) {
     let ctx = js.ctx();
-    if js.is_null() || ctx.is_null() || node.is_null() || js.halted() {
+    if js.is_null() || ctx.is_null() || js.halted() {
         return;
     }
-    let Some(kind) = ffi::text(kind) else {
-        return;
-    };
-    let name = ffi::text(name);
+    let node = event.node.as_ptr();
+    let kind = event.kind;
+    let name = event.name.as_slice();
+    let elapsed_ms = event.elapsed_ms;
     let kind_bytes = kind.to_bytes();
     if kind_bytes.starts_with(b"__ns") {
         ctx.with(|scope| script_event_hook(scope, node, kind_bytes, name));
@@ -128,11 +121,13 @@ unsafe extern "C" fn anim_event(
     js.dispatch_built(node, legacy, event);
 }
 
-pub(crate) fn dispatch_anim_events(js: Js, anim: *mut c_void) {
-    if js.is_null() || anim.is_null() || js.halted() || js.in_pump() {
+pub(crate) fn dispatch_anim_events(js: Js, anim: AnimHandle) {
+    if js.is_null() || js.halted() || js.in_pump() {
         return;
     }
-    ffi::drain_anim_events(js, anim, anim_event);
+    for event in anim.take_events() {
+        anim_event(js, &event);
+    }
 }
 
 #[derive(Default)]

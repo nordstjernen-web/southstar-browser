@@ -2324,6 +2324,7 @@ dependencies = [
 name = "southstar-js-cssom"
 version = "0.9.12-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-prop-syntax",
@@ -3304,6 +3305,7 @@ dependencies = [
 name = "southstar-render"
 version = "0.9.12-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",

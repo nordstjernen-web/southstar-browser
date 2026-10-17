@@ -6,10 +6,11 @@ use core::cell::Cell;
 use core::ffi::c_void;
 use core::ptr;
 
+use southstar_anim::AnimHandle;
 use southstar_layout::NsBox;
 
 struct PaintState {
-    anim: Cell<*mut c_void>,
+    anim: Cell<Option<AnimHandle>>,
     js: Cell<*mut c_void>,
     search_case_sensitive: Cell<bool>,
     search_active: Cell<*const NsBox>,
@@ -21,7 +22,7 @@ struct PaintState {
 impl PaintState {
     fn new() -> PaintState {
         PaintState {
-            anim: Cell::new(ptr::null_mut()),
+            anim: Cell::new(None),
             js: Cell::new(ptr::null_mut()),
             search_case_sensitive: Cell::new(false),
             search_active: Cell::new(ptr::null()),
@@ -36,11 +37,11 @@ thread_local! {
     static STATE: PaintState = PaintState::new();
 }
 
-pub fn anim() -> *mut c_void {
+pub fn anim() -> Option<AnimHandle> {
     STATE.with(|s| s.anim.get())
 }
 
-pub fn set_anim(anim: *mut c_void) {
+pub fn set_anim(anim: Option<AnimHandle>) {
     STATE.with(|s| s.anim.set(anim));
 }
 

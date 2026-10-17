@@ -8,4 +8,5 @@ mod handle;
 mod props;
 mod timing;
 
-pub use handle::AnimHandle;
+pub use engine::ScriptTiming as AnimTiming;
+pub use handle::{AnimEvent, AnimHandle, AnimInfo, AnimKeyframe, AnimatedColor};

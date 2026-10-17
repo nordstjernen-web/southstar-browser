@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_anim::AnimatedColor;
 use southstar_cairo::{ContextRef, Surface, SurfaceRef};
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, GHashTable};
@@ -175,12 +176,6 @@ const _: () = assert!(
 pub struct Video<'a>(&'a NsVideo);
 
 unsafe extern "C" {
-    fn ns_anim_get_color(
-        anim: *mut c_void,
-        dom: *const c_void,
-        which: c_int,
-        out: *mut u8,
-    ) -> GBoolean;
     fn ns_box_fieldset_legend_gap(
         b: *const NsBox,
         inset: *mut c_double,
@@ -302,14 +297,8 @@ pub fn video_active_cue_text(v: Option<Video<'_>>) -> Option<&CStr> {
     (!t.is_null()).then(|| unsafe { CStr::from_ptr(t) })
 }
 
-pub fn anim_color(b: BoxRef<'_>, which: i32) -> Option<[u8; 4]> {
-    let anim = crate::state::anim();
-    let dom = b.dom_ptr();
-    if anim.is_null() || dom.is_null() {
-        return None;
-    }
-    let mut c = [0u8; 4];
-    (unsafe { ns_anim_get_color(anim, dom, which, c.as_mut_ptr()) } != 0).then_some(c)
+pub fn anim_color(b: BoxRef<'_>, which: AnimatedColor) -> Option<[u8; 4]> {
+    crate::state::anim()?.color(b.dom()?, which)
 }
 
 pub fn border_image_source(s: StyleRef<'_>) -> Option<ValueRef<'_>> {
@@ -369,8 +358,6 @@ pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c
 }
 
 unsafe extern "C" {
-    fn ns_anim_get_opacity(anim: *mut c_void, dom: *const c_void, out: *mut c_double) -> GBoolean;
-    fn ns_anim_get_transform(anim: *mut c_void, dom: *const c_void) -> *const Transform;
     fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
     fn ns_box_in_scroller(b: *const NsBox) -> GBoolean;
     fn ns_box_sticky_offset(
@@ -388,22 +375,14 @@ unsafe extern "C" {
 }
 
 pub fn anim_opacity(b: BoxRef<'_>) -> Option<f64> {
-    let anim = crate::state::anim();
-    if anim.is_null() {
-        return None;
-    }
-    let mut o = 0.0;
-    (unsafe { ns_anim_get_opacity(anim, b.dom_ptr(), &mut o) } != 0).then_some(o)
+    crate::state::anim()?.opacity(b.dom()?)
 }
 
 pub fn effective_transform(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Transform {
-    let anim = crate::state::anim();
-    let anim_tf = if anim.is_null() {
-        None
-    } else {
-        unsafe { ns_anim_get_transform(anim, b.dom_ptr()).as_ref() }
-    };
-    southstar_style::effective_transform(s, anim_tf)
+    let anim_tf = crate::state::anim()
+        .zip(b.dom())
+        .and_then(|(anim, dom)| anim.transform(dom));
+    southstar_style::effective_transform(s, anim_tf.as_ref())
 }
 
 pub fn box_is_fixed(b: BoxRef<'_>) -> bool {

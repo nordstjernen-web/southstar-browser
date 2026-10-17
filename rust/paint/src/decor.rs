@@ -4,6 +4,7 @@
 
 use core::f64::consts::PI;
 
+use southstar_anim::AnimatedColor;
 use southstar_cairo::{
     Content, Context, ContextRef, Extend, FillRule, Filter, Format, Matrix, Pattern, Surface,
     SurfaceRef,
@@ -23,12 +24,12 @@ use crate::util::{
     cmax, cmin, get, keyword, keyword_is, length_or, rgba_of, style_of,
 };
 
-pub const ANIM_TARGET_COLOR: i32 = 4;
-pub const ANIM_TARGET_BG_COLOR: i32 = 5;
+pub const ANIM_TARGET_COLOR: AnimatedColor = AnimatedColor::Color;
+pub const ANIM_TARGET_BG_COLOR: AnimatedColor = AnimatedColor::BackgroundColor;
 
 pub fn rgba_anim(
     b: Option<BoxRef<'_>>,
-    which: i32,
+    which: AnimatedColor,
     v: Option<ValueRef<'_>>,
     fallback: Rgba,
 ) -> Rgba {
