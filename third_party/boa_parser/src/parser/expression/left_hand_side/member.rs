@@ -61,6 +61,7 @@ where
     type Output = FormalParameterListOrExpression;
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
+        cursor.check_native_stack()?;
         cursor.set_goal(InputElement::RegExp);
 
         let token = cursor.peek(0, interner).or_abrupt()?;
@@ -245,9 +246,12 @@ where
 
         cursor.set_goal(InputElement::TemplateTail);
 
+        let mut nesting = 0;
         while let Some(tok) = cursor.peek(0, interner)? {
             match tok.kind() {
                 TokenKind::Punctuator(Punctuator::Dot) => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     cursor
                         .next(interner)?
                         .expect("dot punctuator token disappeared"); // We move the parser forward.
@@ -297,6 +301,8 @@ where
                     lhs = ast::Expression::PropertyAccess(access);
                 }
                 TokenKind::Punctuator(Punctuator::OpenBracket) => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     cursor
                         .next(interner)?
                         .expect("open bracket punctuator token disappeared"); // We move the parser forward.
@@ -307,18 +313,18 @@ where
                         ast::Expression::PropertyAccess(SimplePropertyAccess::new(lhs, idx).into());
                 }
                 TokenKind::TemplateNoSubstitution { .. } | TokenKind::TemplateMiddle { .. } => {
-                    lhs = TaggedTemplateLiteral::new(
-                        self.allow_yield,
-                        self.allow_await,
-                        tok.start_group(),
-                        lhs,
-                    )
-                    .parse(cursor, interner)?
-                    .into();
+                    let start = tok.start_group();
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
+                    lhs =
+                        TaggedTemplateLiteral::new(self.allow_yield, self.allow_await, start, lhs)
+                            .parse(cursor, interner)?
+                            .into();
                 }
                 _ => break,
             }
         }
+        cursor.leave_loop_nesting(nesting);
 
         Ok(lhs.into())
     }

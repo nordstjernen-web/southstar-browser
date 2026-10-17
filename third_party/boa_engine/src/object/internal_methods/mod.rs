@@ -690,6 +690,10 @@ pub(crate) fn ordinary_has_property(
         context.slot().set_not_cacheable_if_already_prototype();
         context.slot().attributes |= SlotAttributes::PROTOTYPE;
 
+        if parent.is_some() {
+            context.check_native_stack()?;
+        }
+
         parent
             // 5. If parent is not null, then
             // a. Return ? parent.[[HasProperty]](P).
@@ -719,6 +723,8 @@ pub(crate) fn ordinary_get(
             if let Some(parent) = obj.__get_prototype_of__(context)? {
                 context.slot().set_not_cacheable_if_already_prototype();
                 context.slot().attributes |= SlotAttributes::PROTOTYPE;
+
+                context.check_native_stack()?;
 
                 // c. Return ? parent.[[Get]](P, Receiver).
                 parent.__get__(key, receiver, context)
@@ -772,6 +778,8 @@ pub(crate) fn ordinary_try_get(
             if let Some(parent) = obj.__get_prototype_of__(context)? {
                 context.slot().set_not_cacheable_if_already_prototype();
                 context.slot().attributes |= SlotAttributes::PROTOTYPE;
+
+                context.check_native_stack()?;
 
                 // c. Return ? parent.[[Get]](P, Receiver).
                 parent.__try_get__(key, receiver, context)
@@ -833,6 +841,8 @@ pub(crate) fn ordinary_set(
     else if let Some(parent) = obj.__get_prototype_of__(context)? {
         context.slot().set_not_cacheable_if_already_prototype();
         context.slot().attributes |= SlotAttributes::PROTOTYPE;
+
+        context.check_native_stack()?;
 
         // i. Return ? parent.[[Set]](P, V, Receiver).
         return parent.__set__(key, value, receiver, context);

@@ -3,6 +3,32 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Security: deeply nested script no longer crashes the tab. Boa checked
+  the native-stack limit only when it called a function, so the parser
+  and every recursion that does not pass through a call overflowed the
+  renderer's 8 MiB stack and killed the process: about 330 nested array
+  literals or parentheses, 150 nested functions, a 24,000-term `+` chain,
+  `JSON.stringify` of 8,000 nested arrays, or a property read through a
+  40,000-object prototype chain or 26,000 nested proxies was enough. The
+  parser, `JSON.stringify` and the reviver of `JSON.parse`,
+  `Array.prototype.flat`, prototype-chain property lookups, proxies and
+  bound functions now stop at the same limit as calls and throw a
+  catchable `RangeError` ("Maximum call stack size exceeded").
+* Security: the address bar can no longer be made to show a URL other
+  than the page's. The shell read the renderer's replies by searching the
+  JSON text for the quoted key, so a page title or URL that spelled
+  `"url"` or `"security"` itself was taken for the member: a title ending
+  in `\"url` hid the real URL of a page reached by a redirect, and the
+  address bar kept showing the address that redirected there. The reader
+  now skips string values and takes a key only where it names a member.
+  Ported from Nordstjernen.
+* Security: the Landlock sandbox of the renderer and the shell no longer
+  opens the whole home directory when `$XAUTHORITY` is `~/.Xauthority`,
+  as LightDM sets it on X11 sessions (Linux Mint, Xubuntu). The sandbox
+  granted read access to the directory holding that file, which was then
+  `$HOME`, so `~/.ssh`, `~/.aws` and every other file there were readable
+  from the renderer that runs page content. It now grants read access to
+  the `$XAUTHORITY` file alone. Ported from Northstar.
 * Security: a local HTML file can no longer read other local files. Every
   `file:` document is now an opaque origin: `fetch()` and
   `XMLHttpRequest` from a `file:` page treated every other `file:` URL as

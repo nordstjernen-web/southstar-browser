@@ -90,6 +90,7 @@ where
     type Output = Expression;
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Expression> {
+        cursor.check_native_stack()?;
         cursor.set_goal(InputElement::RegExp);
 
         let mut async_call_head = false;

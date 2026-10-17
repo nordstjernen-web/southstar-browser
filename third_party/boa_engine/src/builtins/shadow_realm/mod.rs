@@ -239,6 +239,7 @@ fn perform_shadow_realm_eval(
     let source_text = source_text.to_vec();
     let mut parser = Parser::new(Source::from_utf16(&source_text));
     parser.set_identifier(context.next_parser_identifier());
+    parser.set_native_stack_floor(context.vm.native_stack_floor);
     let (body, source) = parser.parse_eval(false, context.interner_mut())?;
 
     //     e. If body Contains NewTarget is true, throw a SyntaxError exception.

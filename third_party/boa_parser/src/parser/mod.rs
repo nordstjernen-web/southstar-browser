@@ -313,6 +313,16 @@ impl<R> Parser<'_, R> {
     {
         self.cursor.set_identifier(identifier);
     }
+
+    /// Makes parsing fail with [`Error::StackExhausted`] instead of overflowing the native
+    /// stack: once parsing, or the nesting it builds, would take the stack below `floor`, an
+    /// address in the current thread's stack. `0` removes the limit.
+    pub fn set_native_stack_floor(&mut self, floor: usize)
+    where
+        R: ReadChar,
+    {
+        self.cursor.set_native_stack_floor(floor);
+    }
 }
 
 /// Parses a full script.

@@ -103,6 +103,10 @@ pub enum Error {
         err: &'static str,
     },
 
+    /// When parsing would grow the native stack past the limit set with
+    /// [`Parser::set_native_stack_floor`](crate::Parser::set_native_stack_floor).
+    StackExhausted,
+
     /// Catch all General Error
     General {
         /// The error message.
@@ -241,6 +245,7 @@ impl fmt::Display for Error {
                 span.start().column_number()
             ),
             Self::AbruptEnd => f.write_str("abrupt end"),
+            Self::StackExhausted => f.write_str("Maximum call stack size exceeded"),
             Self::General { message, position } => write!(
                 f,
                 "{message} at line {}, col {}",

@@ -118,16 +118,21 @@ where
 
     fn parse(self, cursor: &mut Cursor<R>, interner: &mut Interner) -> ParseResult<Self::Output> {
         let mut lhs = self.call;
+        let mut nesting = 0;
 
         while let Some(token) = cursor.peek(0, interner)?.cloned() {
             let lhs_span_start = lhs.span().start();
             match token.kind() {
                 TokenKind::Punctuator(Punctuator::OpenParen) => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     let (args, args_span) = Arguments::new(self.allow_yield, self.allow_await)
                         .parse(cursor, interner)?;
                     lhs = Call::new(lhs, args, args_span).into();
                 }
                 TokenKind::Punctuator(Punctuator::Dot) => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     cursor.advance(interner);
 
                     let token = cursor.next(interner).or_abrupt()?;
@@ -173,6 +178,8 @@ where
                     lhs = ast::Expression::PropertyAccess(access);
                 }
                 TokenKind::Punctuator(Punctuator::OpenBracket) => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     cursor.advance(interner);
                     let idx = Expression::new(true, self.allow_yield, self.allow_await)
                         .parse(cursor, interner)?;
@@ -181,6 +188,8 @@ where
                         ast::Expression::PropertyAccess(SimplePropertyAccess::new(lhs, idx).into());
                 }
                 TokenKind::TemplateNoSubstitution { .. } | TokenKind::TemplateMiddle { .. } => {
+                    cursor.enter_loop_nesting()?;
+                    nesting += 1;
                     lhs = TaggedTemplateLiteral::new(
                         self.allow_yield,
                         self.allow_await,
@@ -193,6 +202,7 @@ where
                 _ => break,
             }
         }
+        cursor.leave_loop_nesting(nesting);
 
         Ok(lhs)
     }

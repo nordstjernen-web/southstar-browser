@@ -314,7 +314,7 @@ mod linux {
             rules.allow(fs_read | landlock::WRITE_FILE, b"/dev/snd");
         }
         if let Some(xauth) = getenv(c"XAUTHORITY").filter(|xauth| !xauth.is_empty()) {
-            rules.allow(fs_read, &dirname(xauth));
+            rules.allow(landlock::READ_FILE, xauth);
         }
         for name in [c"CURL_CA_BUNDLE", c"SSL_CERT_FILE"] {
             if let Some(bundle) =

@@ -11,6 +11,17 @@ use boa_ast::{LinearPosition, Position, PositionGroup, Punctuator, Spanned};
 use boa_interner::Interner;
 use buffered_lexer::BufferedLexer;
 
+/// The native stack that later passes over the syntax tree (scope analysis, early errors,
+/// compilation, drop) are reserved for each level of nesting the parser builds in a loop.
+const LOOP_NESTING_STACK: usize = 512;
+
+/// An address in the current native stack frame.
+#[inline(never)]
+fn native_stack_address() -> usize {
+    let marker = 0u8;
+    std::hint::black_box(std::ptr::addr_of!(marker)) as usize
+}
+
 /// The result of a peek for a semicolon.
 #[derive(Debug)]
 pub(super) enum SemicolonResult<'s> {
@@ -40,6 +51,12 @@ pub(super) struct Cursor<R> {
 
     /// The end of the closing parenthesis of the last argument list that had a trailing comma.
     arguments_trailing_comma: Option<Position>,
+
+    /// The native stack address below which parsing fails, or `0` for no limit.
+    native_stack_floor: usize,
+
+    /// The native stack reserved for the nesting built so far by loops rather than recursion.
+    loop_nesting_reserve: usize,
 }
 
 impl<R> Cursor<R>
@@ -55,7 +72,39 @@ where
             identifier: 0,
             tagged_templates_count: 0,
             arguments_trailing_comma: None,
+            native_stack_floor: 0,
+            loop_nesting_reserve: 0,
         }
+    }
+
+    /// Sets the native stack address below which parsing fails; `0` removes the limit.
+    pub(super) fn set_native_stack_floor(&mut self, floor: usize) {
+        self.native_stack_floor = floor;
+    }
+
+    /// Fails with [`Error::StackExhausted`] once the native stack, together with the stack
+    /// reserved for nesting built by loops, has reached the floor.
+    pub(super) fn check_native_stack(&self) -> ParseResult<()> {
+        if self.native_stack_floor != 0
+            && native_stack_address().saturating_sub(self.loop_nesting_reserve)
+                < self.native_stack_floor
+        {
+            return Err(Error::StackExhausted);
+        }
+        Ok(())
+    }
+
+    /// Reserves native stack for one more level of nesting built by a loop, and checks it.
+    pub(super) fn enter_loop_nesting(&mut self) -> ParseResult<()> {
+        self.loop_nesting_reserve += LOOP_NESTING_STACK;
+        self.check_native_stack()
+    }
+
+    /// Releases the stack reserved by `levels` calls of [`Self::enter_loop_nesting`].
+    pub(super) fn leave_loop_nesting(&mut self, levels: usize) {
+        self.loop_nesting_reserve = self
+            .loop_nesting_reserve
+            .saturating_sub(levels * LOOP_NESTING_STACK);
     }
 
     /// Records that the argument list closed at `close_end` ended with a trailing comma.

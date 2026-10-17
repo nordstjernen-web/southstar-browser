@@ -297,6 +297,7 @@ impl Module {
 
         let mut parser = Parser::new(src);
         parser.set_identifier(context.next_parser_identifier());
+        parser.set_native_stack_floor(context.vm.native_stack_floor);
         let (module, source) =
             parser.parse_module_with_source(realm.scope(), context.interner_mut())?;
 
