@@ -57,6 +57,14 @@ Southstar Browser 0.9.12-dev:
   returned after the registry lock was dropped), and duplicate copies of
   the response struct are gone. Across the tree `unsafe` falls from 7692
   to 6289, FFI imports from 3160 to 2668 and exports from 797 to 517.
+* Internal: js-runtime no longer calls up into the binding crates through
+  C-ABI symbols. Each provider (frames, mutation, storage, loader,
+  dispatch, URL, focus, observers, services, window, workers and others)
+  registers a table of typed Rust function pointers at startup, and an
+  unregistered table answers like the old empty state. js-runtime's
+  fetches go through net's Rust request API and own their `Response`.
+  This removes about 115 more `extern` declarations and 107 exports;
+  `unsafe` across the tree is now 5979.
 * The unsafe-budget check reports its failures as a GitHub annotation, so
   they are readable without the job log.
 * CSS animations attached to a scroll or view timeline
