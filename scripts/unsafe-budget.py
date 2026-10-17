@@ -258,7 +258,7 @@ def main():
     parser.add_argument("--summary", metavar="FILE", help="append a markdown table of the changed crates to FILE")
     args = parser.parse_args()
 
-    budget = parse_budget(BUDGET.read_text()) if BUDGET.exists() else {}
+    budget = parse_budget(BUDGET.read_text(encoding="utf-8")) if BUDGET.exists() else {}
     counts = measure()
     metrics = METRICS if args.clippy else SOURCE_METRICS
     failures = run_clippy(counts) if args.clippy else []
@@ -270,7 +270,7 @@ def main():
         if failures:
             print("\n\n".join(failures), file=sys.stderr)
             return 1
-        BUDGET.write_text(format_budget(counts))
+        BUDGET.write_text(format_budget(counts), encoding="utf-8", newline="\n")
         print(f"wrote {BUDGET.relative_to(ROOT)}: " + ", ".join(f"{m} {total(counts, m)}" for m in metrics))
         return 0
 

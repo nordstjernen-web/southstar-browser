@@ -1,4 +1,4 @@
-# Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
+# Southstar â€” per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
 anim	23	1	0	0	7	0	0
