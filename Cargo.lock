@@ -1771,6 +1771,7 @@ dependencies = [
  "southstar-layout-query",
  "southstar-net",
  "southstar-paint",
+ "southstar-pdf",
  "southstar-render",
  "southstar-safebrowsing",
  "southstar-sandbox",
@@ -1778,6 +1779,7 @@ dependencies = [
  "southstar-style",
  "southstar-url",
  "southstar-video",
+ "southstar-webgl",
 ]
 
 [[package]]
@@ -3233,6 +3235,7 @@ dependencies = [
  "southstar-config",
  "southstar-debuglog",
  "southstar-digest",
+ "southstar-extensions",
  "southstar-glib",
  "southstar-history",
  "southstar-html-util",
@@ -3343,6 +3346,7 @@ version = "0.9.12-dev"
 dependencies = [
  "southstar-glib",
  "southstar-ipc",
+ "southstar-print",
 ]
 
 [[package]]

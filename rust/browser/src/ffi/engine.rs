@@ -19,8 +19,6 @@ pub use southstar_video::VideoCache as Videos;
 
 unsafe extern "C" {
     fn ns_spell_init();
-    fn ns_webgl_take_pending_origin() -> *mut c_char;
-    fn ns_webgl_set_decision(origin: *const c_char, allow: c_int);
     fn ns_camera_take_pending_origin() -> *mut c_char;
     fn ns_camera_set_decision(origin: *const c_char, allow: c_int);
 }
@@ -220,16 +218,10 @@ pub fn shutdown() {
     southstar_config::shutdown();
 }
 
-pub fn webgl_take_pending_origin() -> Option<GStr> {
-    // SAFETY: the call has no preconditions and returns a newly allocated string or null.
-    let origin = unsafe { ns_webgl_take_pending_origin() };
-    // SAFETY: the string is g_malloc'd and owned by nothing else.
-    unsafe { GStr::take(origin) }
-}
+pub use southstar_webgl::take_pending_origin as webgl_take_pending_origin;
 
 pub fn webgl_set_decision(origin: &CStr, allow: bool) {
-    // SAFETY: `origin` is NUL-terminated for the call.
-    unsafe { ns_webgl_set_decision(origin.as_ptr(), c_int::from(allow)) };
+    southstar_webgl::set_decision(origin.to_bytes(), allow);
 }
 
 pub fn camera_take_pending_origin() -> Option<GStr> {

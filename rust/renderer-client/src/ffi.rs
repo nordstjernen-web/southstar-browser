@@ -12,16 +12,7 @@ use southstar_glib::{self as glib, GPtrArray};
 use crate::client::Renderer;
 use crate::os;
 
-#[repr(C)]
-#[derive(Clone, Copy, Default)]
-pub struct PrintSetup {
-    pub width: f64,
-    pub height: f64,
-    pub margin_top: f64,
-    pub margin_right: f64,
-    pub margin_bottom: f64,
-    pub margin_left: f64,
-}
+pub use southstar_print::PrintSetup;
 
 pub struct PrintedPages {
     pub sheets: NonNull<GPtrArray>,
@@ -45,7 +36,6 @@ unsafe extern "C" {
     fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     fn g_ptr_array_free(array: *mut GPtrArray, free_segment: c_int) -> *mut *mut c_void;
     fn g_remove(filename: *const c_char) -> c_int;
-    fn ns_print_setup_default(setup: *mut PrintSetup);
     fn cairo_image_surface_create_from_png(filename: *const c_char) -> *mut CairoSurface;
     fn cairo_surface_status(surface: *mut CairoSurface) -> c_int;
     fn cairo_surface_destroy(surface: *mut CairoSurface);
@@ -90,8 +80,7 @@ pub fn print(r: &mut Renderer, setup: &mut PrintSetup) -> Option<PrintedPages> {
     }
     let prefix = print_prefix();
     let reply = r.print_request(&prefix)?;
-    // SAFETY: setup is a valid, exclusively borrowed PrintSetup.
-    unsafe { ns_print_setup_default(setup) };
+    *setup = PrintSetup::a4();
     let fields = [
         (&mut setup.width, reply.width),
         (&mut setup.height, reply.height),

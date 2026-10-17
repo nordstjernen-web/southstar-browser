@@ -82,12 +82,6 @@ impl PrintSetup {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_print_setup_default(setup: *mut PrintSetup) {
-    // SAFETY: the caller passes a writable PrintSetup.
-    unsafe { *setup = PrintSetup::a4() };
-}
-
 pub fn draw_page(
     cr: ContextRef,
     root: BoxRef<'_>,

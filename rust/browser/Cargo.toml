@@ -41,6 +41,7 @@ southstar-layout-position = { path = "../layout-position" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-net = { path = "../net" }
 southstar-paint = { path = "../paint" }
+southstar-pdf = { path = "../pdf" }
 southstar-render = { path = "../render" }
 southstar-safebrowsing = { path = "../safebrowsing" }
 southstar-sandbox = { path = "../sandbox" }
@@ -48,6 +49,7 @@ southstar-selection = { path = "../selection" }
 southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 southstar-video = { path = "../video" }
+southstar-webgl = { path = "../webgl" }
 
 [lints]
 workspace = true

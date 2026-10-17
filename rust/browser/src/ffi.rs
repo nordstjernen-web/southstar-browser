@@ -894,7 +894,7 @@ pub unsafe extern "C" fn ns_browser_take_pending_scroll_y(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ns_browser_take_pending_webgl(_b: *mut NsBrowser) -> *mut c_char {
-    take_or_null(webgl_take_pending_origin())
+    webgl_take_pending_origin().map_or(ptr::null_mut(), |origin| southstar_glib::strdup(&origin))
 }
 
 #[unsafe(no_mangle)]

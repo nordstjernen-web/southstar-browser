@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -10,7 +10,6 @@ use std::rc::{Rc, Weak};
 
 use southstar_canvas::host as canvas;
 use southstar_dom::{Node, NsNode};
-use southstar_glib as glib;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api::{self, NsJs};
 
@@ -246,18 +245,4 @@ pub unsafe extern "C" fn ns_webgl_canvas_surface(canvas: *const NsNode) -> *mut 
         return ptr::null_mut();
     };
     gl.canvas_surface()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_webgl_take_pending_origin() -> *mut c_char {
-    crate::permission::take_pending_origin().map_or(ptr::null_mut(), |origin| glib::strdup(&origin))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgl_set_decision(origin: *const c_char, allow: c_int) {
-    if origin.is_null() {
-        return;
-    }
-    let origin = unsafe { CStr::from_ptr(origin) }.to_bytes();
-    crate::permission::set_decision(origin, allow != 0);
 }
