@@ -188,7 +188,6 @@ unsafe extern "C" {
     fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
     fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
-    fn ns_js_image_for_node(js: *mut c_void, el: *const c_void) -> *const c_void;
     fn ns_math_paint(
         cr: *mut c_void,
         math: *const c_void,
@@ -303,7 +302,7 @@ pub fn js_image_for_node(b: BoxRef<'_>) -> Option<ImageRef<'_>> {
     if js.is_null() {
         return None;
     }
-    unsafe { ImageRef::from_ptr(ns_js_image_for_node(js, b.dom_ptr())) }
+    southstar_js_images::image_for_node(js.cast(), b.dom()?)
 }
 
 pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {

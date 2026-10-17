@@ -395,9 +395,13 @@ pub unsafe extern "C" fn ns_storage_drain_deferred_events(js: *mut NsJs) {
     events::drain(Js::from_ptr(js));
 }
 
+pub fn free_deferred_events(js: *const NsJs) {
+    events::discard(Js::from_ptr(js.cast_mut()));
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_storage_free_deferred_events(js: *mut NsJs) {
-    events::discard(Js::from_ptr(js));
+    free_deferred_events(js);
 }
 
 #[unsafe(no_mangle)]

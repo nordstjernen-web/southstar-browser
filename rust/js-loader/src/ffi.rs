@@ -52,7 +52,6 @@ unsafe extern "C" {
         next_sibling: *mut NsNode,
     );
     fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode);
-    fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode);
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
 }
@@ -246,7 +245,7 @@ impl Js {
     }
 
     pub(crate) fn rescan_images(self, root: Node) {
-        unsafe { ns_js_rescan_pending_images(self.0, root.as_mut_ptr()) }
+        southstar_js_images::rescan_pending_images(self.0, Some(root));
     }
 
     pub(crate) fn attach_drain_timer(self) -> u32 {

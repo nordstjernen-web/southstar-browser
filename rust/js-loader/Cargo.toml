@@ -16,6 +16,7 @@ southstar-extensions = { path = "../extensions", default-features = false }
 southstar-glib = { path = "../glib" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-images = { path = "../js-images" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-url = { path = "../js-url" }
 southstar-net = { path = "../net" }

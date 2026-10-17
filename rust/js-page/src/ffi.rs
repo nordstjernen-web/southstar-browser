@@ -117,10 +117,8 @@ pub(crate) enum ValueInstaller {
 
 unsafe extern "C" {
 
-    fn ns_storage_free_deferred_events(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
 
-    fn ns_js_name_engine_members(ctx: ContextHandle);
 
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
 
@@ -248,7 +246,7 @@ impl Js {
         southstar_js_mutation::forget_pending_change(self.0);
         // SAFETY: a Js handle names the page's live script engine, which these resets accept.
         unsafe {
-            ns_storage_free_deferred_events(self.0);
+            southstar_js_storage::free_deferred_events(self.0);
             southstar_js_services::reset_page(self.0);
             southstar_js_lifecycle::reset_lifecycle(self.0);
             southstar_js_dispatch::reset(self.0);
@@ -481,7 +479,7 @@ pub(crate) fn install_value(
 }
 
 pub(crate) fn name_engine_members(scope: &mut Scope<'_>) {
-    unsafe { ns_js_name_engine_members(scope.handle()) };
+    southstar_js_brand::name_engine_members(scope);
 }
 
 pub(crate) fn memory_usage(scope: &mut Scope<'_>) -> MemoryUsage {

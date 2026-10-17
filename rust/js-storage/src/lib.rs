@@ -8,6 +8,8 @@ mod events;
 mod ffi;
 mod store;
 
+pub use ffi::free_deferred_events;
+
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;

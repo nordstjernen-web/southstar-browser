@@ -292,18 +292,6 @@ fn teardown(js: *const NsJs) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_image_for_node(js: *mut NsJs, el: *const NsNode) -> *const c_void {
-    unsafe { Node::from_ptr(el) }
-        .and_then(|el| image_for_node(js, el))
-        .map_or(ptr::null(), ImageRef::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_rescan_pending_images(js: *mut NsJs, root: *mut NsNode) {
-    rescan_pending_images(js, unsafe { Node::from_ptr(root) });
-}
-
 pub fn install_runtime_hooks() {
     api::set_images_hooks(api::ImagesHooks {
         start_image_load,

@@ -15,6 +15,7 @@ southstar-dom = { path = "../dom" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
+southstar-js-images = { path = "../js-images" }
 southstar-layout = { path = "../layout" }
 southstar-layout-geom = { path = "../layout-geom" }
 southstar-mat4 = { path = "../mat4" }

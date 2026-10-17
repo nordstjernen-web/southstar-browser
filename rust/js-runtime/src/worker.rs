@@ -193,7 +193,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     js.eval_worker_polyfills();
     let current_global = scope.global();
     ffi::imports::nsr_install_event_attribute_getters(scope, &current_global);
-    ffi::imports::nsr_name_engine_members(scope);
+    southstar_js_brand::name_engine_members(scope);
     ffi::imports::nsr_crypto_install_worker(scope, &global);
     ffi::install_webgl(scope, &global);
     ffi::install_canvas(scope, &global, false);

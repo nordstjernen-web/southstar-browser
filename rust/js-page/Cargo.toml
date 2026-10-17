@@ -14,6 +14,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
+southstar-js-brand = { path = "../js-brand" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
@@ -30,6 +31,7 @@ southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-services = { path = "../js-services" }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-storage = { path = "../js-storage" }
 southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-window = { path = "../js-window" }
 southstar-url = { path = "../url" }

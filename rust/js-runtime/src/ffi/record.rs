@@ -211,7 +211,6 @@ unsafe extern "C" {
     fn ns_install_pdf_plugins(ctx: ContextHandle);
     fn ns_js_link_interface_ctors(ctx: ContextHandle);
     fn ns_js_lock_global_prototypes(ctx: ContextHandle);
-    fn ns_js_brand_node_interfaces(ctx: ContextHandle, element_cid: u32, attr_cid: u32);
     fn ns_attr_class_id() -> u32;
     fn ns_js_track_orphan(js: *mut NsJs, node: *mut NsNode);
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
@@ -973,13 +972,20 @@ pub(crate) unsafe fn frame_realm_finish(
     frame_global: &Value,
     parent_global: &Value,
 ) {
-    unsafe {
+    let attr_class = unsafe {
         ns_install_pdf_plugins(fctx);
         adopt_frame_window_events(&*rec(js), fctx, frame_global);
         ns_js_link_interface_ctors(fctx);
         ns_js_lock_global_prototypes(fctx);
-        ns_js_brand_node_interfaces(fctx, super::wrapper::ELEMENT_CLASS.id(), ns_attr_class_id());
-    }
+        ns_attr_class_id()
+    };
+    fctx.with(|scope| {
+        southstar_js_brand::brand_node_interfaces(
+            scope,
+            super::wrapper::ELEMENT_CLASS.id(),
+            attr_class,
+        )
+    });
     fctx.with(|scope| {
         let include_memory = scope
             .get(parent_global, "performance")

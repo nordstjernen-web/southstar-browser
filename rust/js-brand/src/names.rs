@@ -46,6 +46,6 @@ const MEMBER_NAMES_SRC: &str = concat!(
     "})(globalThis)",
 );
 
-pub(crate) fn name_engine_members(scope: &mut Scope<'_>) {
+pub fn name_engine_members(scope: &mut Scope<'_>) {
     let _ = scope.eval_native_script(MEMBER_NAMES_SRC, "<member-names>");
 }
