@@ -13,6 +13,7 @@ use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
 use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout_position::BuildInput;
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
@@ -63,16 +64,6 @@ const _: () = assert!(
 
 unsafe extern "C" {
     fn ns_layout_pseudo_content_text(content: *const c_void, host: *const NsNode) -> *mut c_char;
-    fn ns_layout_build(
-        doc: *const NsNode,
-        styles: *mut GHashTable,
-        viewport_width: f64,
-        focused_input: *const NsNode,
-        focused_caret_byte: usize,
-        focused_sel_anchor_byte: usize,
-        images: *mut c_void,
-        base_url: *const c_char,
-    ) -> *mut NsBox;
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -396,18 +387,18 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
 
 fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
     southstar_paint::list_ordinals_begin();
-    let layout = unsafe {
-        ns_layout_build(
-            c.doc,
-            styles,
-            viewport_width,
-            c.focused_input,
-            c.caret_byte,
-            c.sel_anchor_byte,
-            c.images,
-            c.base_url,
-        )
-    };
+    let layout = southstar_layout_position::layout_build(BuildInput {
+        doc: c.doc(),
+        // SAFETY: styles is the style table this relayout computed for the context's document.
+        styles: unsafe { StyleTable::from_ptr(styles) },
+        viewport_width,
+        // SAFETY: the focused input is null or a live node of the context's document.
+        focused_input: unsafe { Node::from_ptr(c.focused_input) },
+        caret_byte: c.caret_byte,
+        anchor_byte: c.sel_anchor_byte,
+        image_cache: c.images,
+        base_url: c.base_url,
+    });
     southstar_paint::list_ordinals_end();
     layout
 }

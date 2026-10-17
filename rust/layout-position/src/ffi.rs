@@ -2,18 +2,18 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::CStr;
 use std::sync::Once;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_dom::Node;
+use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::dispatch::Dispatch;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_layout_build::{BuildInput, Passes};
 use southstar_layout_sizing::Measures;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
-use crate::sticky::{self, StickyY};
+use crate::sticky;
 use crate::{abs, relative};
 
 #[derive(Clone, Copy)]
@@ -159,34 +159,9 @@ fn install_layout_hooks() {
     });
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_layout_build(
-    doc: *const NsNode,
-    table: *mut GHashTable,
-    viewport_width: f64,
-    focused_input: *const NsNode,
-    focused_caret_byte: usize,
-    focused_sel_anchor_byte: usize,
-    image_cache: *mut c_void,
-    base_url: *const c_char,
-) -> *mut NsBox {
+pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
     install_layout_hooks();
-    // SAFETY: the caller passes the document as null or a live node of this thread's DOM.
-    let doc = unsafe { Node::from_ptr(doc) };
-    // SAFETY: the caller passes the computed-style table of that document, or null.
-    let styles = unsafe { StyleTable::from_ptr(table) };
-    // SAFETY: the focused input is null or a live node of the same document.
-    let focused_input = unsafe { Node::from_ptr(focused_input) };
-    southstar_layout_build::layout_build(BuildInput {
-        doc,
-        styles,
-        viewport_width,
-        focused_input,
-        caret_byte: focused_caret_byte,
-        anchor_byte: focused_sel_anchor_byte,
-        image_cache,
-        base_url,
-    })
+    southstar_layout_build::layout_build(input)
 }
 
 #[unsafe(no_mangle)]
@@ -212,18 +187,4 @@ pub unsafe extern "C" fn ns_box_sticky_offset(
 pub unsafe extern "C" fn ns_box_in_scroller(b: *const NsBox) -> GBoolean {
     let b = unsafe { BoxRef::from_ptr(b) };
     glib::boolean(b.and_then(sticky::scrollport_for).is_some())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_sticky_y_model(
-    b: *const NsBox,
-    viewport_h: f64,
-    out: *mut StickyY,
-) -> GBoolean {
-    let (model, ok) = match unsafe { BoxRef::from_ptr(b) } {
-        Some(b) => sticky::y_model(b, viewport_h),
-        None => (StickyY::default(), false),
-    };
-    unsafe { *out = model };
-    glib::boolean(ok)
 }

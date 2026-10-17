@@ -13,12 +13,12 @@ use crate::relative::length_is_auto;
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct StickyY {
-    has_top: GBoolean,
-    has_bottom: GBoolean,
-    top_start: f64,
-    top_cap: f64,
-    bottom_start: f64,
-    bottom_cap: f64,
+    pub has_top: GBoolean,
+    pub has_bottom: GBoolean,
+    pub top_start: f64,
+    pub top_cap: f64,
+    pub bottom_start: f64,
+    pub bottom_cap: f64,
 }
 
 fn is_sticky(b: BoxRef<'_>) -> bool {

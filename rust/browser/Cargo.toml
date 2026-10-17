@@ -36,6 +36,7 @@ southstar-js-page = { path = "../js-page" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
 southstar-layout-hit = { path = "../layout-hit" }
+southstar-layout-position = { path = "../layout-position" }
 southstar-layout-query = { path = "../layout-query" }
 southstar-net = { path = "../net" }
 southstar-paint = { path = "../paint" }
