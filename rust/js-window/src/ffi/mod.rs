@@ -32,15 +32,9 @@ impl Realm {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Frame(usize);
+pub(crate) struct Frame(Node<'static>);
 
 pub(crate) struct UrlToken(Option<api::UrlScope>);
-
-unsafe extern "C" {
-    fn ns_iframe_origin_is_opaque(frame: *mut NsNode) -> GBoolean;
-    fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char;
-    fn ns_js_frame_context(js: *const NsJs, frame: *const NsNode) -> ContextHandle;
-}
 
 pub(crate) fn main_realm(js: Js) -> Option<Realm> {
     if js.is_null() {
@@ -57,15 +51,11 @@ pub(crate) fn current_realm(js: Js) -> Option<Realm> {
 }
 
 pub(crate) fn frame_node(js: Js, window: &Value) -> Option<Frame> {
-    if js.is_null() || !window.is_object() {
-        return None;
-    }
-    let node = unsafe { imports::nsr_window_frame_node(js.ptr(), window) };
-    (!node.is_null()).then_some(Frame(node as usize))
+    southstar_js_frames::frame_of_window(js.ptr(), window).map(Frame)
 }
 
 pub(crate) fn frame_origin_is_opaque(frame: Frame) -> bool {
-    unsafe { ns_iframe_origin_is_opaque(frame.0 as *mut NsNode) != 0 }
+    southstar_js_frames::iframe_origin_is_opaque(frame.0)
 }
 
 pub(crate) fn document_origin(js: Js) -> Option<Vec<u8>> {
@@ -73,12 +63,11 @@ pub(crate) fn document_origin(js: Js) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn frame_url(js: Js, frame: Frame) -> Option<Vec<u8>> {
-    let url = unsafe { ns_js_frame_url(js.ptr(), frame.0 as *const NsNode) };
-    (!url.is_null()).then(|| unsafe { borrowed(url) })
+    southstar_js_frames::frame_url(js.ptr(), frame.0)
 }
 
 pub(crate) fn frame_realm(js: Js, frame: Frame) -> Option<Realm> {
-    Realm::from_handle(unsafe { ns_js_frame_context(js.ptr(), frame.0 as *const NsNode) })
+    Realm::from_handle(southstar_js_frames::frame_context(js.ptr(), frame.0))
 }
 
 pub(crate) fn structured_clone_transfer(
@@ -155,7 +144,7 @@ pub(crate) fn port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new
 }
 
 pub(crate) fn cross_origin_window(scope: &mut Scope<'_>, window: &Value) -> Value {
-    imports::nsr_iframe_cross_origin_window(scope, window)
+    southstar_js_frames::iframe_cross_origin_window(scope, window)
 }
 
 fn deliver_task(scope: &mut Scope<'_>, args: &[Value]) -> Result<Value, Value> {
@@ -215,7 +204,6 @@ pub(crate) struct UrlOrigin {
 }
 
 unsafe extern "C" {
-    fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode;
     fn g_utf8_casefold(text: *const c_char, len: isize) -> *mut c_char;
 }
 
@@ -397,7 +385,7 @@ pub(crate) fn iframe_document(js: Js) -> Option<Node<'static>> {
 }
 
 pub(crate) fn frame_document(frame: Option<Node<'static>>) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(ns_iframe_document_node(Node::ptr_or_null(frame))) }
+    frame.and_then(southstar_js_frames::iframe_document_node)
 }
 
 pub(crate) fn ce_main_document(js: Js) -> Option<Node<'static>> {
@@ -498,7 +486,7 @@ pub(crate) fn child_frame_window(
     index: u32,
     name: Option<&CStr>,
 ) -> Value {
-    unsafe { imports::nsr_window_child_frame_window(scope, doc.as_mut_ptr(), index, name, false) }
+    southstar_js_frames::child_frame_window(scope, Some(doc), index, name, false)
         .unwrap_or_else(|_| Value::undefined())
 }
 
@@ -617,7 +605,6 @@ unsafe extern "C" {
         resp_url: *const c_char,
         cors_header: *const c_char,
     ) -> GBoolean;
-    fn ns_js_frame_of_realm(js: *const NsJs, realm: ContextHandle) -> *mut NsNode;
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -695,7 +682,7 @@ fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {
     let caller = ctx
         .with(|scope| scope.caller_handle())
         .unwrap_or(ContextHandle::NULL);
-    let frame = unsafe { Node::from_ptr(ns_js_frame_of_realm(js.ptr(), caller)) };
+    let frame = southstar_js_frames::frame_of_realm(js.ptr(), caller);
     if let Some(url) = frame.and_then(|frame| frame.attr(c"data-nd-frame-url"))
         && !url.is_empty()
     {

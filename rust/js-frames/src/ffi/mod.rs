@@ -19,7 +19,7 @@ use southstar_layout::{BoxRef, NsBox};
 
 use self::imports::*;
 use crate::page::{self, Frame};
-use crate::{cloner, globals, origin, owner, queue, realm, sandbox, schedule};
+use crate::{cloner, globals, origin, owner, queue, realm, sandbox};
 use ctx::{Ctx, PropertyKey};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
@@ -28,7 +28,7 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
+    pub(crate) fn of(js: *const NsJs) -> Js {
         Js(js as usize)
     }
 
@@ -410,48 +410,6 @@ pub(crate) fn realm_clone_function(ctx: Ctx) -> Value {
 }
 
 #[unsafe(no_mangle)]
-pub fn nsr_iframe_cross_origin_window(scope: &mut Scope<'_>, target: &Value) -> Value {
-    realm::cross_origin_window(scope_ctx(scope), target.clone())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_iframe_realm_window(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    node: *mut NsNode,
-) -> Value {
-    match unsafe { Node::from_ptr(node) } {
-        Some(node) => realm::realm_window(scope_ctx(scope), this, node),
-        None => Value::null(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_window_frame_node(js: *mut NsJs, window: &Value) -> *mut NsNode {
-    let js = Js::of(js);
-    if js.is_null() || !window.is_object() {
-        return core::ptr::null_mut();
-    }
-    let found = page::realms(js)
-        .into_iter()
-        .find(|(_, realm)| realm.global().same_object(window))
-        .map(|(frame, _)| frame);
-    frame_ptr(found)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_window_child_frame_window(
-    scope: &mut Scope<'_>,
-    doc: *mut NsNode,
-    index: u32,
-    name: Option<&CStr>,
-    raw: bool,
-) -> JsResult {
-    let doc = unsafe { Node::from_ptr(doc) };
-    owner::child_frame_window(scope, doc, index, name, raw)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_realm_cloners_made(js: *const NsJs) -> GBoolean {
     let js = Js::of(js);
     glib::boolean(!js.is_null() && page::peek(js, |page| page.cloners_made).unwrap_or(false))
@@ -462,13 +420,9 @@ pub unsafe extern "C" fn ns_js_frame_context(
     js: *const NsJs,
     frame: *const NsNode,
 ) -> ContextHandle {
-    let js = Js::of(js);
-    if js.is_null() || frame.is_null() {
-        return ContextHandle::NULL;
-    }
-    page::frame_entry(js, frame_key(frame), |entry| entry.realm)
-        .flatten()
-        .map_or(ContextHandle::NULL, Ctx::handle)
+    // SAFETY: the caller passes a live frame node or null.
+    unsafe { Node::from_ptr(frame) }
+        .map_or(ContextHandle::NULL, |frame| crate::frame_context(js, frame))
 }
 
 #[unsafe(no_mangle)]
@@ -476,13 +430,7 @@ pub unsafe extern "C" fn ns_js_frame_of_realm(
     js: *const NsJs,
     realm: ContextHandle,
 ) -> *mut NsNode {
-    let (js, Some(realm)) = (Js::of(js), Ctx::from_handle(realm)) else {
-        return core::ptr::null_mut();
-    };
-    if js.is_null() {
-        return core::ptr::null_mut();
-    }
-    frame_ptr(page::frame_of_realm(js, realm))
+    crate::frame_of_realm(js, realm).map_or(core::ptr::null_mut(), Node::as_mut_ptr)
 }
 
 #[unsafe(no_mangle)]
@@ -490,14 +438,10 @@ pub unsafe extern "C" fn ns_js_node_realm_context(
     js: *const NsJs,
     node: *const NsNode,
 ) -> ContextHandle {
-    let js = Js::of(js);
-    let Some(node) = (unsafe { Node::from_ptr(node) }) else {
-        return ContextHandle::NULL;
-    };
-    if js.is_null() {
-        return ContextHandle::NULL;
-    }
-    realm::node_realm(js, node).map_or(ContextHandle::NULL, Ctx::handle)
+    // SAFETY: the caller passes a live node or null.
+    unsafe { Node::from_ptr(node) }.map_or(ContextHandle::NULL, |node| {
+        crate::node_realm_context(js, node)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -508,39 +452,17 @@ pub unsafe extern "C" fn ns_js_realm_for_node(
     unsafe { ns_js_node_realm_context(js, node) }
 }
 
-fn borrowed_text(text: Option<*const c_char>) -> *const c_char {
-    text.unwrap_or(core::ptr::null())
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_frame_url(js: *const NsJs, frame: *const NsNode) -> *const c_char {
     let js = Js::of(js);
     if js.is_null() {
         return core::ptr::null();
     }
-    borrowed_text(
-        page::frame_entry(js, frame_key(frame), |entry| {
-            entry.url.as_ref().map(|url| url.as_ptr())
-        })
-        .flatten(),
-    )
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frame_referrer_for(
-    js: *const NsJs,
-    frame: *const NsNode,
-) -> *const c_char {
-    let js = Js::of(js);
-    if js.is_null() {
-        return core::ptr::null();
-    }
-    borrowed_text(
-        page::frame_entry(js, frame_key(frame), |entry| {
-            entry.referrer.as_ref().map(|referrer| referrer.as_ptr())
-        })
-        .flatten(),
-    )
+    page::frame_entry(js, frame_key(frame), |entry| {
+        entry.url.as_ref().map(|url| url.as_ptr())
+    })
+    .flatten()
+    .unwrap_or(core::ptr::null())
 }
 
 #[unsafe(no_mangle)]
@@ -559,16 +481,7 @@ pub unsafe extern "C" fn ns_js_frames_forget_node(js: *mut NsJs, node: *const Ns
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_frames_clear_initial_blank(js: *mut NsJs) {
-    page::peek_mut(Js::of(js), |page| page.initial_blank.clear());
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_frames_reset(js: *mut NsJs) {
-    let js = Js::of(js);
-    let frames = page::peek_mut(js, |page| core::mem::take(&mut page.frames));
-    drop(frames);
-    let cloners = cloner::clear(js);
-    drop(cloners);
+    crate::clear_initial_blank_frames(js);
 }
 
 #[unsafe(no_mangle)]
@@ -586,31 +499,8 @@ pub unsafe extern "C" fn ns_iframe_effective_sandbox(node: *const NsNode) -> c_u
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_iframe_origin_is_opaque(frame: *mut NsNode) -> GBoolean {
-    glib::boolean(unsafe { Node::from_ptr(frame) }.is_some_and(sandbox::origin_is_opaque))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_sandbox_blocks_forms(node: *const NsNode) -> GBoolean {
-    glib::boolean(unsafe { Node::from_ptr(node) }.is_some_and(sandbox::blocks_forms))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint {
-    let js = Js::of(js);
-    if js.is_null() {
-        return 0;
-    }
-    queue::pending_count(js) as c_uint
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean {
-    let js = Js::of(js);
-    if js.is_null() || frame.is_null() {
-        return glib::FALSE;
-    }
-    glib::boolean(queue::add_pending(js, frame_key(frame)))
+    crate::pending_iframe_count(js) as c_uint
 }
 
 #[unsafe(no_mangle)]
@@ -632,10 +522,7 @@ pub unsafe extern "C" fn ns_js_pending_iframe_remove_first(js: *mut NsJs) {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_promote_deferred_iframes(js: *mut NsJs) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        queue::promote_deferred(js);
-    }
+    crate::promote_deferred_iframes(js);
 }
 
 #[unsafe(no_mangle)]
@@ -648,8 +535,9 @@ pub unsafe extern "C" fn ns_js_purge_subtree_pending_iframes(js: *mut NsJs, root
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_iframe_document_node(iframe: *const NsNode) -> *mut NsNode {
+    // SAFETY: the caller passes a live iframe node or null.
     unsafe { Node::from_ptr(iframe) }
-        .and_then(owner::document_node)
+        .and_then(crate::iframe_document_node)
         .map_or(core::ptr::null_mut(), Node::as_mut_ptr)
 }
 
@@ -659,32 +547,18 @@ pub unsafe extern "C" fn ns_js_schedule_iframe_load_full(
     iframe: *mut NsNode,
     force: GBoolean,
 ) {
+    // SAFETY: the caller passes a live iframe node or null.
     if let Some(iframe) = unsafe { Node::from_ptr(iframe) } {
-        schedule::schedule(Js::of(js), iframe, force != 0);
+        crate::schedule_iframe_load(js, iframe, force != 0);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode) {
-    unsafe { ns_js_schedule_iframe_load_full(js, iframe, glib::FALSE) };
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode) {
+    // SAFETY: the caller passes a live root node or null.
     if let Some(root) = unsafe { Node::from_ptr(root) } {
-        schedule::schedule_static(Js::of(js), root, 0);
+        crate::schedule_static_iframes(js, root);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_iframe_is_cross_origin(
-    js: *mut NsJs,
-    iframe: *const NsNode,
-) -> GBoolean {
-    let Some(iframe) = (unsafe { Node::from_ptr(iframe) }) else {
-        return glib::FALSE;
-    };
-    glib::boolean(origin::is_cross_origin(Js::of(js), iframe))
 }
 
 #[unsafe(no_mangle)]

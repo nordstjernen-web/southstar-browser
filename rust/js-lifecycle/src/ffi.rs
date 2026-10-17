@@ -120,7 +120,7 @@ impl Js {
     }
 
     pub fn promote_deferred_iframes(self) {
-        unsafe { ns_js_promote_deferred_iframes(self.0) };
+        southstar_js_frames::promote_deferred_iframes(self.0);
     }
 
     pub fn process_pending_iframes(self) {
@@ -232,11 +232,8 @@ impl Js {
 
     pub fn load_blocked(self) -> bool {
         southstar_js_images::image_loads_pending(self.0)
-            || unsafe {
-                ns_js_pending_iframe_count(self.0) > 0
-                    || ns_js_has_pending_script_roots(self.0) != 0
-                    || api::load_delayed(self.0)
-            }
+            || southstar_js_frames::pending_iframe_count(self.0) > 0
+            || unsafe { ns_js_has_pending_script_roots(self.0) != 0 || api::load_delayed(self.0) }
     }
 
     pub fn has_pending_work(self) -> bool {
@@ -247,7 +244,7 @@ impl Js {
                 || ns_js_net_pending_xhrs(self.0) > 0
                 || ns_js_net_pending_sockets(self.0) > 0
                 || ns_js_filereader_pending(self.0) != 0
-                || ns_js_pending_iframe_count(self.0) > 0
+                || southstar_js_frames::pending_iframe_count(self.0) > 0
                 || ns_mutation_drain_pending(self.0) != 0
                 || api::observer_tick_pending(self.0)
                 || ns_js_async_scripts_pending(self.0) != 0
@@ -273,7 +270,6 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
     fn ns_js_flush_autofocus(js: *mut NsJs);
-    fn ns_js_promote_deferred_iframes(js: *mut NsJs);
     fn ns_js_image_settled(image: *const c_void, failed: *mut GBoolean) -> GBoolean;
     fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn ns_anim_drain_events(anim: *mut c_void, cb: Option<AnimEventCb>, user: *mut c_void);
@@ -294,7 +290,6 @@ unsafe extern "C" {
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
     fn ns_js_profile_enabled() -> GBoolean;
-    fn ns_js_pending_iframe_count(js: *const NsJs) -> c_uint;
     fn ns_services_timers_pending(js: *const NsJs, include_idle: GBoolean) -> GBoolean;
     fn ns_js_net_pending_fetches(js: *const NsJs) -> c_uint;
     fn ns_js_net_pending_xhrs(js: *const NsJs) -> c_uint;

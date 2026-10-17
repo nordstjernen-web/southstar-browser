@@ -13,6 +13,7 @@ southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout-hit = { path = "../layout-hit" }

@@ -14,6 +14,7 @@ southstar-glib = { path = "../glib" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-frames = { path = "../js-frames" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }

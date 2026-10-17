@@ -25,7 +25,6 @@ unsafe extern "C" {
     fn ns_img_chosen_density(n: *const NsNode) -> f64;
     fn ns_label_associated_control(label: *const NsNode) -> *const NsNode;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
-    fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
     fn ns_js_doc_base_url(js: *mut NsJs) -> *mut c_char;
 }
 
@@ -144,7 +143,7 @@ pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
 }
 
 pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
-    unsafe { ns_js_schedule_iframe_load(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_frames::schedule_iframe_load(raw_js(js), node, false);
 }
 
 pub(crate) fn resolve_against_document_base(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {

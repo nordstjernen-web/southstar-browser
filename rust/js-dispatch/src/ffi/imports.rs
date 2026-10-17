@@ -45,7 +45,6 @@ unsafe extern "Rust" {
         scope: &mut Scope<'_>,
         window: &Value,
     ) -> *mut NsNode;
-    pub(crate) unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> Value;
     pub(crate) safe fn nsr_services_console_emit(
         js: *const NsJs,
         scope: &mut Scope<'_>,

@@ -8,7 +8,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
@@ -38,7 +38,6 @@ unsafe extern "C" {
         kind: *const c_char,
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_node_is_labelable(n: *const NsNode) -> GBoolean;
     fn ns_js_first_labelable_descendant(n: *const NsNode, depth: c_int) -> *const NsNode;
     fn ns_node_is_submit_trigger(el: *const NsNode) -> GBoolean;
@@ -176,7 +175,7 @@ impl Js {
 
     pub fn in_document_realm(self, doc: Element, f: impl FnOnce()) {
         let realm = match doc.parent() {
-            Some(_) => unsafe { ns_js_node_realm_context(self.ptr(), doc.as_ptr()) },
+            Some(_) => southstar_js_frames::node_realm_context(self.ptr(), doc),
             None => {
                 let main = api::main_realm(self.ptr());
                 if main.is_null() {

@@ -155,7 +155,6 @@ unsafe extern "C" {
     fn ns_js_net_reset(js: *mut NsJs);
     fn ns_js_cancel_async_scripts(js: *mut NsJs);
     fn ns_observers_reset(js: *mut NsJs);
-    fn ns_js_frames_reset(js: *mut NsJs);
     fn ns_window_links_clear(js: *mut NsJs, destroy: GBoolean);
 
     fn ns_js_seed_cookies_from_jar(js: *mut NsJs);
@@ -171,9 +170,7 @@ unsafe extern "C" {
     fn ns_install_element_shapes(ctx: ContextHandle);
 
     fn ns_js_lifecycle_clear(js: *mut NsJs);
-    fn ns_js_frames_clear_initial_blank(js: *mut NsJs);
     fn ns_js_run_content_scripts(js: *mut NsJs, url: *const c_char, document_start: GBoolean);
-    fn ns_js_schedule_static_iframes(js: *mut NsJs, n: *mut NsNode);
     fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
     fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut api::ResourceInfo);
     fn ns_js_register_import_maps(js: *mut NsJs, root: *mut NsNode);
@@ -344,7 +341,7 @@ impl Js {
 
     pub fn reset_frames_and_tasks(self) {
         unsafe {
-            ns_js_frames_reset(self.0);
+            southstar_js_frames::reset_frames(self.0);
             ns_window_links_clear(self.0, glib::FALSE);
             api::drop_message_tasks(self.0);
             southstar_js_perf::clear_frame_clocks(self.0, false);
@@ -382,7 +379,7 @@ impl Js {
         unsafe { ns_js_lifecycle_clear(self.0) };
         api::set_ready_state(self.0, 0);
         api::clear_doc_ready_states(self.0);
-        unsafe { ns_js_frames_clear_initial_blank(self.0) };
+        southstar_js_frames::clear_initial_blank_frames(self.0);
         southstar_js_perf::mark_navigation(self.0, "domLoading");
     }
 
@@ -391,7 +388,7 @@ impl Js {
     }
 
     pub fn schedule_static_iframes(self, doc: Element) {
-        unsafe { ns_js_schedule_static_iframes(self.0, doc.as_mut_ptr()) };
+        southstar_js_frames::schedule_static_iframes(self.0, doc);
     }
 
     pub fn record_stylesheet_timings(self, doc: Element, base_url: Option<&CStr>) {

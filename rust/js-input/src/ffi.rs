@@ -21,7 +21,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_js_node_realm_context(js: *const NsJs, node: *const NsNode) -> ContextHandle;
     fn ns_js_popover_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_dialog_light_dismiss(js: *mut NsJs, target: *const NsNode, up: GBoolean);
     fn ns_js_process_close_request(js: *mut NsJs) -> GBoolean;
@@ -86,7 +85,7 @@ impl Js {
     }
 
     pub fn realm_scope<R>(self, node: Element, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-        unsafe { ns_js_node_realm_context(self.ptr(), node.as_ptr()) }
+        southstar_js_frames::node_realm_context(self.ptr(), node)
             .or(api::main_realm(self.ptr()))
             .or(self.ctx())
             .with(f)

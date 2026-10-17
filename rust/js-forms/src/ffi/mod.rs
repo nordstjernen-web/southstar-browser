@@ -24,7 +24,6 @@ pub(crate) struct Page(*mut NsJs);
 
 unsafe extern "C" {
     fn ns_multipart_boundary() -> *mut c_char;
-    fn ns_node_sandbox_blocks_forms(node: *const NsNode) -> GBoolean;
     fn ns_js_dialog_close(js: *mut NsJs, dialog: *mut NsNode, return_value: *const c_char);
     fn ns_js_dispatch_event(
         js: *mut NsJs,
@@ -265,7 +264,7 @@ pub(crate) fn url_is_valid_absolute(url: &[u8]) -> bool {
 }
 
 pub(crate) fn sandbox_blocks_forms(node: Element) -> bool {
-    unsafe { ns_node_sandbox_blocks_forms(node.as_ptr()) != 0 }
+    southstar_js_frames::sandbox_blocks_forms(node)
 }
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &[u8]) {

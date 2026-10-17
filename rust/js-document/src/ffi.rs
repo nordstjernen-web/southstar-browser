@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -31,7 +31,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_frame_referrer_for(js: *const NsJs, frame: *const NsNode) -> *const c_char;
     fn ns_js_focused_node(js: *const NsJs) -> *const NsNode;
     fn ns_js_focused_doc(js: *const NsJs) -> *const NsNode;
     fn ns_js_clear_focused_node(js: *mut NsJs);
@@ -111,7 +110,7 @@ pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) 
 }
 
 pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame: Element) -> Value {
-    unsafe { imports::nsr_iframe_realm_window(scope, element, frame.as_mut_ptr()) }
+    southstar_js_frames::iframe_realm_window(scope, element, frame)
 }
 
 fn glib_bytes(bytes: Option<Vec<u8>>) -> *mut c_char {
@@ -156,7 +155,7 @@ pub(crate) fn partition_key(js: Js) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn frame_referrer(js: Js, frame: Element) -> Option<Vec<u8>> {
-    borrowed_text(unsafe { ns_js_frame_referrer_for(js.0, frame.as_ptr()) })
+    southstar_js_frames::frame_referrer(js.0, frame)
 }
 
 pub(crate) fn ready_state(js: Js, doc: Option<Element>) -> i32 {
@@ -308,7 +307,6 @@ pub unsafe extern "C" fn ns_js_seed_cookies_from_jar(js: *mut NsJs) {
 }
 
 unsafe extern "C" {
-    fn ns_js_pending_iframe_add(js: *mut NsJs, frame: *mut NsNode) -> GBoolean;
     fn ns_js_run_inserted_scripts(js: *mut NsJs, root: *mut NsNode);
 }
 
@@ -403,7 +401,7 @@ pub(crate) fn index_child_change(js: Js, parent: Element, added: Element) {
 }
 
 pub(crate) fn pending_iframe_add(js: Js, frame: Element) {
-    unsafe { ns_js_pending_iframe_add(js.0, frame.as_mut_ptr()) };
+    southstar_js_frames::add_pending_iframe(js.0, frame);
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {

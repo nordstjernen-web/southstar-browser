@@ -19,8 +19,6 @@ unsafe extern "C" {
     fn ns_valid_attr_name(s: *const c_char) -> GBoolean;
     fn ns_input_resanitize_value(el: *mut NsNode);
     fn ns_js_details_toggle_open(js: *mut NsJs, details: *mut NsNode, open: GBoolean);
-    fn ns_js_schedule_iframe_load_full(js: *mut NsJs, iframe: *mut NsNode, force: GBoolean);
-    fn ns_js_schedule_iframe_load(js: *mut NsJs, iframe: *mut NsNode);
 }
 
 fn c_ptr(text: Option<&CStr>) -> *const c_char {
@@ -114,11 +112,11 @@ pub(crate) fn start_image_load(js: Option<Js>, node: Element, src: &CStr) {
 }
 
 pub(crate) fn schedule_iframe_load_full(js: Option<Js>, node: Element) {
-    unsafe { ns_js_schedule_iframe_load_full(raw_js(js), node.as_mut_ptr(), glib::TRUE) };
+    southstar_js_frames::schedule_iframe_load(raw_js(js), node, true);
 }
 
 pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
-    unsafe { ns_js_schedule_iframe_load(raw_js(js), node.as_mut_ptr()) };
+    southstar_js_frames::schedule_iframe_load(raw_js(js), node, false);
 }
 
 pub(crate) fn img_src_layout_neutral(node: Element) -> bool {
