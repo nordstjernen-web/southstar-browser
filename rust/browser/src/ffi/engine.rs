@@ -195,8 +195,15 @@ pub fn init_subsystems() {
     southstar_bytecode_cache::init();
 }
 
+fn webgpu_allowed() -> bool {
+    std::env::var_os("NS_WEBGPU_ALLOW").is_some_and(|v| v.as_encoded_bytes().first() == Some(&b'1'))
+}
+
 pub fn sandbox(self_exe: Option<&CStr>) {
     southstar_sandbox::win32_mitigations_init(false);
+    if southstar_config::webgl_enabled() || webgpu_allowed() {
+        southstar_sandbox::allow_gpu_devices();
+    }
     southstar_sandbox::sandbox_init(self_exe);
     southstar_sandbox::seccomp_init();
 }

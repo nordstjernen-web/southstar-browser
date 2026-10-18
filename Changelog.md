@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Linux: WebGL and WebGPU render on the GPU again inside the sandboxed
+  renderer. Its Landlock ruleset let it read `/dev/dri` but not open the
+  render nodes read-write, so Mesa printed "Permission denied" for every
+  `/dev/dri` node and WebGL fell back to software rendering. The renderer
+  now opens `/dev/dri` and `/dev/nvidia*` read-write while WebGL is
+  enabled or WebGPU is turned on with `--enable-webgpu`; with WebGL off in
+  Settings and WebGPU not turned on it still gets no access. Backported
+  from Nordstjernen.
 * Linux: the browser starts again on NVIDIA's proprietary driver under
   X11. The UI shell's Landlock sandbox let it read `/dev/dri` but not open
   the render nodes read-write, and gave no access to `/dev/nvidia*` at all,

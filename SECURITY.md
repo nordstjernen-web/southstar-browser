@@ -106,8 +106,12 @@ socket, so it normally needs no `/dev/shm` name at all.
   itself, and the XDG config, data and cache directories (`~/.config`,
   `~/.local/share`, `~/.cache`). Read+write access to
   `~/.config/southstar`, `~/.local/share/southstar`,
-  `~/.cache/southstar`. The rest of `$HOME` — `~/.ssh`, `~/.aws`,
-  `~/.netrc`, shell history — is **not** reachable, also when
+  `~/.cache/southstar`. While WebGL is enabled or WebGPU was turned on
+  with `--enable-webgpu`, also read+write on the GPU device nodes
+  `/dev/dri` and `/dev/nvidia*`, which the driver behind those APIs opens
+  to render on the GPU; with WebGL off in Settings and WebGPU not turned
+  on, the renderer gets no access to them. The rest of `$HOME` — `~/.ssh`,
+  `~/.aws`, `~/.netrc`, shell history — is **not** reachable, also when
   `$XAUTHORITY` is `~/.Xauthority`; other applications' state kept under
   the XDG directories (other browsers' profiles among it) is readable.
   No directory the renderer can write to is also executable.
