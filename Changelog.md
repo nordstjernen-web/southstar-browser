@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.1-dev:
+======
+
 Southstar Browser 1.0.0:
 ======
 * Rust 1.91 is now the minimum again (it was 1.99), so Southstar builds
