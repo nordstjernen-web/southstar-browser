@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Rust 1.91 is now the minimum again (it was 1.99), so Southstar builds
+  with the distributions' own compilers: Ubuntu 24.04's `rustc-1.91` and
+  `cargo-1.91` packages, and the Rust 1.96 and 1.97 that Debian forky and
+  sid ship. `rust-toolchain.toml` pins 1.91.0, so CI keeps the code within
+  that version. One `Box::new_zeroed` call, the only newer API in use, became
+  `Box::new(MaybeUninit::zeroed())`. The code needed no other change apart
+  from lint fixes for clippy 1.91.
+* Distribution packages are optimized. Debian, Fedora and openSUSE build
+  with meson's `plain` build type, which compiled the Rust code with cargo's
+  unoptimized `dev` profile. `plain` now selects the `release` profile.
+* Releases add `.deb` packages for Debian forky and Debian sid, next to
+  Ubuntu 24.04, Ubuntu 26.04 and Debian 13. Southstar's FFmpeg calls, struct
+  fields and constants are all present in FFmpeg 9, the version forky and
+  sid ship.
 * Debian packaging: the source package now builds without network access
   from a `vendor/` component tarball of the crates.io dependencies
   (`debian/README.source` shows how to make it). The description says Rust,

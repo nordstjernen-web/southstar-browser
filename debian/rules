@@ -9,6 +9,13 @@ include /usr/share/dpkg/pkg-info.mk
 # build is reproducible.
 BUILD_DATE := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%d)
 
+# Ubuntu ships newer compilers as versioned packages (rustc-1.91, cargo-1.91)
+# under /usr/lib/rust-1.NN/bin; use the newest one installed.
+RUST_VERSIONED_BIN := $(lastword $(shell ls -d /usr/lib/rust-1.*/bin 2>/dev/null | sort -V))
+ifneq ($(RUST_VERSIONED_BIN),)
+export PATH := $(RUST_VERSIONED_BIN):$(PATH)
+endif
+
 # An archive build has no network, so cargo reads the crates from the vendor/
 # component tarball (see debian/README.source) instead of crates.io.
 ifneq ($(wildcard vendor/.),)

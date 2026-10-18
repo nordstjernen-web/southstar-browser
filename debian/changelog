@@ -24,5 +24,12 @@ southstar (0.9.12-1) UNRELEASED; urgency=medium
     wgpu-native headers and the Unicode-3.0 URL tables.
   * debian/watch: track tags through the GitHub API.
   * Add debian/upstream/metadata and debian/README.source.
+  * Build with Rust 1.91, the new minimum: Build-Depends accept Ubuntu
+    24.04's versioned cargo-1.91 and rustc-1.91, and debian/rules puts the
+    newest /usr/lib/rust-1.NN/bin first on PATH. Debian forky and sid build
+    with their packaged cargo and rustc.
+  * The Rust code is now built with cargo's release profile; meson mapped
+    the plain build type dh_auto_configure passes to the unoptimized dev
+    profile.
 
  -- Andreas Røsdal <andreas.rosdal@gmail.com>  Sun, 18 Oct 2026 14:37:52 +0200
