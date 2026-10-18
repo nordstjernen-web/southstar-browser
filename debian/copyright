@@ -10,9 +10,15 @@ Comment:
  in Debian's main component. The NSL-1.0 alternative is documented below for
  completeness; it is not DFSG-free on its own.
  .
- The vendored Boa fork and the libraries ported from single-file C
- decoders (pl_mpeg, minimp3) carry their own free
- licenses, reproduced from THIRD-PARTY-LICENSES.md below.
+ The vendored Boa fork, the pl_mpeg port, the wgpu-native headers and the
+ Unicode-derived URL tables carry their own free licenses, reproduced from
+ THIRD-PARTY-LICENSES.md below. rust/minimp3 is a Rust port of minimp3, which
+ its authors dedicated to the public domain (CC0-1.0).
+ .
+ The crates.io dependencies are not in the upstream tree; an archive build
+ takes them from the vendor/ component tarball described in
+ debian/README.source, where each crate carries its own license file. The
+ licenses deny.toml allows for them are listed in THIRD-PARTY-LICENSES.md.
 
 Files: *
 Copyright: 2026 Andreas Røsdal
@@ -21,6 +27,25 @@ License: GPL-3+ or NSL-1.0
 Files: rust/plmpeg/*
 Copyright: 2019 Dominic Szablewski
 License: Expat
+
+Files: third_party/boa_ast/*
+       third_party/boa_engine/*
+       third_party/boa_gc/*
+       third_party/boa_parser/*
+Copyright: The Boa developers
+License: Unlicense or Expat
+
+Files: third_party/wgpu-native/include/webgpu/webgpu.h
+Copyright: 2019-2023 WebGPU-Native developers
+License: BSD-3-Clause
+
+Files: third_party/wgpu-native/include/webgpu/wgpu.h
+Copyright: The wgpu-native developers
+License: Expat or Apache-2.0
+
+Files: rust/url/src/tables.rs
+Copyright: 1991-2026 Unicode, Inc.
+License: Unicode-3.0
 
 License: NSL-1.0
  Nordstjernen Source License v1.0. The full text is shipped as
@@ -77,3 +102,83 @@ License: Expat
  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  DEALINGS IN THE SOFTWARE.
+
+License: Unlicense
+ This is free and unencumbered software released into the public domain.
+ .
+ Anyone is free to copy, modify, publish, use, compile, sell, or distribute
+ this software, either in source code form or as a compiled binary, for any
+ purpose, commercial or non-commercial, and by any means.
+ .
+ In jurisdictions that recognize copyright laws, the author or authors of
+ this software dedicate any and all copyright interest in the software to the
+ public domain. We make this dedication for the benefit of the public at
+ large and to the detriment of our heirs and successors. We intend this
+ dedication to be an overt act of relinquishment in perpetuity of all present
+ and future rights to this software under copyright law.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ .
+ For more information, please refer to <https://unlicense.org>
+
+License: BSD-3-Clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are met:
+ .
+ 1. Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+ .
+ 2. Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+ .
+ 3. Neither the name of the copyright holder nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGE.
+
+License: Unicode-3.0
+ UNICODE LICENSE V3
+ .
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of data files and any associated documentation (the "Data Files") or
+ software and any associated documentation (the "Software") to deal in the
+ Data Files or Software without restriction, including without limitation the
+ rights to use, copy, modify, merge, publish, distribute, and/or sell copies
+ of the Data Files or Software, and to permit persons to whom the Data Files
+ or Software are furnished to do so, provided that either (a) this copyright
+ and permission notice appear with all copies of the Data Files or Software,
+ or (b) this copyright and permission notice appear in associated
+ Documentation.
+ .
+ THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+ KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+ THIRD PARTY RIGHTS.
+ .
+ IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE
+ LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES, OR
+ ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+ IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+ .
+ Except as contained in this notice, the name of a copyright holder shall not
+ be used in advertising or otherwise to promote the sale, use or other
+ dealings in these Data Files or Software without prior written authorization
+ of the copyright holder.

@@ -1,0 +1,29 @@
+Southstar for Debian: the crates.io dependencies
+=================================================
+
+Southstar is a Cargo workspace whose Cargo.lock pins its crates.io
+dependencies (rustls, ring, wasmi, png, ...). They are not part of the
+upstream tree, and an sbuild/pbuilder chroot has no network, so a source
+package carries them as a second orig tarball that unpacks into vendor/:
+
+    cargo vendor --locked vendor
+    tar -cJf ../southstar_<version>.orig-vendor.tar.xz vendor
+
+dpkg-source unpacks the component next to debian/, and debian/rules then
+points cargo at it (CARGO_HOME=debian/cargo-home with a source replacement for
+crates-io, CARGO_NET_OFFLINE=true). Without vendor/ the build fetches the
+crates from crates.io, which works for a binary build on a networked machine:
+
+    dpkg-buildpackage -b -uc -us
+
+Regenerate the component whenever Cargo.lock changes. debian/rules only
+looks for a vendor/ directory, so it works unchanged if the crates are ever
+committed to the tree instead (decision D4 in docs/rust-port.md).
+
+Rust 1.99 or newer is required (rust-toolchain.toml). Where the
+distribution's rustc and cargo are older, install the toolchain with rustup
+and build with dpkg-buildpackage -d, which skips the Build-Depends check for
+cargo and rustc. meson checks their version from the build directory, outside
+the reach of rust-toolchain.toml, so select the toolchain explicitly:
+
+    RUSTUP_TOOLCHAIN=1.99.0 dpkg-buildpackage -d -b -uc -us

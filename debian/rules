@@ -2,10 +2,46 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
+include /usr/share/dpkg/architecture.mk
+include /usr/share/dpkg/pkg-info.mk
+
+# The About dialog shows the build date; take it from the changelog so the
+# build is reproducible.
+BUILD_DATE := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%d)
+
+# An archive build has no network, so cargo reads the crates from the vendor/
+# component tarball (see debian/README.source) instead of crates.io.
+ifneq ($(wildcard vendor/.),)
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+export CARGO_NET_OFFLINE = true
+endif
+
 %:
 	dh $@
 
 # Source builds run in a network-isolated chroot (sbuild/pbuilder), where the
-# ns-pango subproject cannot be cloned, so shape text through the system Pango.
+# ns-pango subproject cannot be cloned, so shape text through the system Pango;
+# wgpu-native is not packaged, so WebGPU is left out. AVIF and the audio
+# helper are required explicitly so a missing build dependency fails the build
+# instead of silently dropping a feature.
 override_dh_auto_configure:
-	dh_auto_configure -- -Dns-pango=disabled -Dwebgpu=disabled
+ifneq ($(wildcard vendor/.),)
+	mkdir -p $(CARGO_HOME)
+	printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "%s"\n' \
+		'$(CURDIR)/vendor' > $(CARGO_HOME)/config.toml
+endif
+	dh_auto_configure -- \
+		-Dns-pango=disabled \
+		-Dwebgpu=disabled \
+		-Davif=enabled \
+		-Daudio=enabled \
+		-Dbuild_date=$(BUILD_DATE)
+
+# libsouthstar.so and its header are the embedding API for other applications.
+# Nothing in this package links them and the library carries no SONAME
+# version, so they are not shipped.
+override_dh_auto_install:
+	dh_auto_install
+	rm -f debian/southstar/usr/lib/$(DEB_HOST_MULTIARCH)/libsouthstar.so
+	rm -rf debian/southstar/usr/include
+	find debian/southstar/usr/lib -type d -empty -delete
