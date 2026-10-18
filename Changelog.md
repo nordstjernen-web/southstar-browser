@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 0.9.12-dev:
+Southstar Browser 1.0.0:
 ======
 * Debian packaging: the source package now builds without network access
   from a `vendor/` component tarball of the crates.io dependencies

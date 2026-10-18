@@ -1,8 +1,8 @@
-southstar (0.9.12-1) UNRELEASED; urgency=medium
+southstar (1.0.0-1) UNRELEASED; urgency=medium
 
-  * Initial Debian packaging of Southstar 0.9.12. The 1.0.22-1 and 1.0.23-1
+  * Initial Debian packaging of Southstar 1.0.0. The 1.0.22-1 and 1.0.23-1
     entries this tree carried were Nordstjernen's, inherited when Southstar
-    was split off; Southstar releases are numbered 0.9.x.
+    was split off; Southstar numbers its own releases.
   * debian/control:
     - Describe the Rust implementation and its rustls HTTP client.
     - Add the version floors meson enforces (GTK >= 4.14, FFmpeg >= 6.0)
