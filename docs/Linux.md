@@ -35,10 +35,18 @@ On Alpine (musl libc):
 The brotli and zstd packages are optional: without them the HTTP client
 simply does not advertise `br` / `zstd` content encodings.
 
-Rust 1.99 or newer is required. Rolling distributions ship it; on Ubuntu
-24.04 (whose newest packaged compiler is `rustc-1.91`), Debian 13 and other
-stable releases install it with [rustup](https://rustup.rs), which reads
-`rust-toolchain.toml` and selects 1.99.0.
+Rust 1.91 or newer is required. Debian forky and sid and the rolling
+distributions ship it. On Ubuntu 24.04 install the versioned packages and put
+them first on `PATH`:
+
+```sh
+sudo apt install rustc-1.91 cargo-1.91
+export PATH=/usr/lib/rust-1.91/bin:$PATH
+```
+
+Debian 13 and other stable releases install it with
+[rustup](https://rustup.rs), which reads `rust-toolchain.toml` and selects
+1.91.0.
 
 Alpine builds against musl rather than glibc, so the resulting binary
 is not interchangeable with the glibc portable zip — run a musl build

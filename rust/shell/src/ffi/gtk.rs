@@ -11,12 +11,14 @@ use southstar_gtk_ffi::{self as gtk, GCallback, GtkWidget};
 unsafe extern "C" {}
 
 macro_rules! handler {
-    ($f:expr) => {
+    ($f:expr) => {{
         #[allow(unused_unsafe)]
-        unsafe {
+        // SAFETY: `$f` is an `extern "C"` function; GLib casts the callback back to the signal's signature before calling it.
+        let callback = unsafe {
             core::mem::transmute::<*const (), southstar_gtk_ffi::GCallback>($f as *const ())
-        }
-    };
+        };
+        callback
+    }};
 }
 
 pub(crate) use handler;

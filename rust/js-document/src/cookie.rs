@@ -122,7 +122,7 @@ fn prefix_ok(name: &[u8], attrs: &Attrs, is_https: bool) -> bool {
     {
         return false;
     }
-    !(attrs.samesite_none && !attrs.secure)
+    !attrs.samesite_none || attrs.secure
 }
 
 fn remove_named(jar: &mut Vec<u8>, name: &[u8]) {

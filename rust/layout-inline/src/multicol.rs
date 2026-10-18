@@ -31,7 +31,7 @@ fn keyword_is(v: Option<ValueRef<'_>>, kw: &core::ffi::CStr) -> bool {
 }
 
 pub fn can_fragment(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
-    if b.kind() != BoxKind::Inline || !b.text().is_some_and(|t| !t.is_empty()) {
+    if b.kind() != BoxKind::Inline || b.text().is_none_or(|t| t.is_empty()) {
         return false;
     }
     if b.inline_atomics().is_some_and(|a| !a.is_empty()) {
@@ -60,7 +60,7 @@ fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: *const Style) -> L
     let layout = ffi::new_layout(ps);
     layout.set_width((content_width * pango::SCALE_F) as i32);
     layout.set_wrap(ffi::wrap_mode_for(ps));
-    if !b.inline_atomics().is_some_and(|a| !a.is_empty()) {
+    if b.inline_atomics().is_none_or(|a| a.is_empty()) {
         ffi::apply_css_line_spacing(&layout, ps);
     }
     let text = b.text().unwrap_or(c"");

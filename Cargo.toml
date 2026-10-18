@@ -6,7 +6,7 @@ exclude = ["third_party"]
 [workspace.package]
 version = "0.9.12-dev"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.91"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 publish = false
 

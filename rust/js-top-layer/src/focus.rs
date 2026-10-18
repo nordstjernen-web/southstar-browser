@@ -51,7 +51,7 @@ pub(crate) fn autofocus_delegate(root: Element, depth: i32) -> Option<Element> {
 }
 
 fn is_sequentially_focusable(n: Element) -> bool {
-    ffi::is_focusable(n) && !effectively_inert(n) && !ffi::tabindex(n).is_some_and(|ti| ti < 0)
+    ffi::is_focusable(n) && !effectively_inert(n) && ffi::tabindex(n).is_none_or(|ti| ti >= 0)
 }
 
 fn first_sequentially_focusable(root: Element, depth: i32) -> Option<Element> {

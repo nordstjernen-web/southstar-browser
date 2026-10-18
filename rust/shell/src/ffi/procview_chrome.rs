@@ -424,14 +424,8 @@ pub(super) fn ns_popover_menu_fit(popover: *mut GtkWidget) {
     {
         return;
     }
-    unsafe {
-        connect(
-            popover,
-            c"map",
-            handler!(on_popover_menu_mapped),
-            ptr::null_mut(),
-        )
-    };
+    let on_mapped = handler!(on_popover_menu_mapped);
+    unsafe { connect(popover, c"map", on_mapped, ptr::null_mut()) };
 }
 
 fn menu_section(menu: *mut c_void, items: &[(&CStr, &CStr)]) {

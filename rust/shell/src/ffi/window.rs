@@ -350,7 +350,7 @@ impl ProcWindow {
         let saved = self.current_page_bookmarked();
         unsafe {
             toggle_css_class(entry, c"ns-bookmarked", saved);
-            if !url.is_some_and(|u| !u.is_empty()) {
+            if url.is_none_or(|u| u.is_empty()) {
                 southstar_gtk_ffi::gtk_entry_set_icon_from_icon_name(
                     entry.cast(),
                     gtk::ENTRY_ICON_SECONDARY,
