@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 0.9.12-dev:
 ======
+* Debian packaging: the source package now builds without network access
+  from a `vendor/` component tarball of the crates.io dependencies
+  (`debian/README.source` shows how to make it). The description says Rust,
+  not C. Build dependencies follow the current build: the GTK and FFmpeg
+  version floors, python3, freetype, and poppler for the PDF viewer.
+  `ca-certificates` is now a dependency, since rustls reads the system CA
+  bundle. The build date comes from the changelog, so builds are
+  reproducible. The unversioned embedding library is no longer shipped, and
+  `debian/copyright` lists the Boa fork, the wgpu-native headers and the
+  Unicode tables. The changelog drops two entries that were Nordstjernen's
+  and starts at 0.9.12-1.
 * Sixty-one more CSS properties parse, cascade and show up in
   `getComputedStyle`. Before, the parser dropped them, so `CSS.supports()`
   and `@supports` said no. They include `text-underline-offset`,

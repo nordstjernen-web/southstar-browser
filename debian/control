@@ -7,9 +7,11 @@ Build-Depends:
  meson (>= 1.0),
  ninja-build,
  pkg-config,
+ python3,
  cargo (>= 1.99),
  rustc (>= 1.99),
- libgtk-4-dev,
+ libglib2.0-dev,
+ libgtk-4-dev (>= 4.14),
  libepoxy-dev,
  libssl-dev,
  zlib1g-dev,
@@ -21,16 +23,18 @@ Build-Depends:
  libseccomp-dev [linux-any],
  libwebp-dev,
  libavif-dev,
- libavformat-dev,
- libavcodec-dev,
- libavutil-dev,
- libswscale-dev,
- libswresample-dev,
+ libavformat-dev (>= 7:6.0),
+ libavcodec-dev (>= 7:6.0),
+ libavutil-dev (>= 7:6.0),
+ libswscale-dev (>= 7:6.0),
+ libswresample-dev (>= 7:6.0),
  libsdl2-dev,
  libenchant-2-dev,
  libpango1.0-dev,
  libfontconfig-dev,
-Standards-Version: 4.7.0
+ libfreetype-dev,
+ libpoppler-glib-dev,
+Standards-Version: 4.7.2
 Homepage: https://github.com/nordstjernen-web/southstar-browser
 Vcs-Browser: https://github.com/nordstjernen-web/southstar-browser
 Vcs-Git: https://github.com/nordstjernen-web/southstar-browser.git
@@ -39,21 +43,24 @@ Rules-Requires-Root: no
 Package: southstar
 Architecture: any
 Depends:
+ ca-certificates,
  ${shlibs:Depends},
  ${misc:Depends},
 Recommends:
- mpv | ffmpeg,
- hunspell-en-us,
+ hunspell-en-us | hunspell-dictionary,
 Description: small, hand-written web browser
- Southstar is a clean-room web browser written from scratch in C, with a
+ Southstar is a clean-room web browser written from scratch in Rust, with a
  GTK 4 user interface and its own HTTP client. It is built to be small,
  secure, and readable by a single person end to end.
  .
   * A from-scratch HTML5, CSS, and JavaScript engine — no forked browser engine.
+  * Memory-safe networking: an in-tree HTTP/1.1 and HTTP/2 client over
+    rustls, with post-quantum key exchange.
   * Each tab's engine runs in its own sandboxed process (seccomp + Landlock on
     Linux) behind an IPC and shared-memory framebuffer boundary.
   * No JIT, which keeps the JavaScript attack surface small.
   * WebGL 1/2 over OpenGL ES, switchable off in Settings.
+  * Inline MPEG-1, MP3 and WebM (VP8/VP9, Opus/Vorbis) playback.
   * No telemetry: it does not phone home and does not track the user.
  .
  Southstar is dual-licensed under the GNU General Public License version 3

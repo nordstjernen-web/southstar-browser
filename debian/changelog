@@ -1,11 +1,28 @@
-southstar (1.0.23-1) unstable; urgency=medium
+southstar (0.9.12-1) UNRELEASED; urgency=medium
 
-  * New upstream release 1.0.23.
+  * Initial Debian packaging of Southstar 0.9.12. The 1.0.22-1 and 1.0.23-1
+    entries this tree carried were Nordstjernen's, inherited when Southstar
+    was split off; Southstar releases are numbered 0.9.x.
+  * debian/control:
+    - Describe the Rust implementation and its rustls HTTP client.
+    - Add the version floors meson enforces (GTK >= 4.14, FFmpeg >= 6.0)
+      and build-depend on python3, libglib2.0-dev, libfreetype-dev and
+      libpoppler-glib-dev (PDF viewer).
+    - Depend on ca-certificates: rustls reads the system CA bundle and has
+      no built-in roots.
+    - Drop the mpv | ffmpeg recommendation; the browser does not launch an
+      external player.
+    - Bump Standards-Version to 4.7.2.
+  * debian/rules:
+    - Build offline from a vendor/ component tarball of the crates.io
+      dependencies when one is present (see debian/README.source).
+    - Pass a build date derived from SOURCE_DATE_EPOCH for reproducible
+      builds, and require AVIF and the audio helper explicitly.
+    - Do not ship the unversioned libsouthstar.so embedding library and its
+      header; nothing in the package uses them.
+  * debian/copyright: document the Boa fork (Unlicense or Expat), the
+    wgpu-native headers and the Unicode-3.0 URL tables.
+  * debian/watch: track tags through the GitHub API.
+  * Add debian/upstream/metadata and debian/README.source.
 
- -- Andreas Røsdal <andreas.rosdal@gmail.com>  Sat, 08 Aug 2026 19:55:00 +0200
-
-southstar (1.0.22-1) unstable; urgency=medium
-
-  * Initial Debian packaging of Southstar 1.0.22, targeted at non-free.
-
- -- Andreas Røsdal <andreas.rosdal@gmail.com>  Fri, 31 Jul 2026 19:46:34 +0200
+ -- Andreas Røsdal <andreas.rosdal@gmail.com>  Sun, 18 Oct 2026 14:37:52 +0200
