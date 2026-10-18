@@ -265,7 +265,7 @@ struct Candidate {
 }
 
 fn is_candidate(c: Element) -> bool {
-    is_focusable(c) && !tabindex(c).is_some_and(|ti| ti < 0)
+    is_focusable(c) && tabindex(c).is_none_or(|ti| ti >= 0)
 }
 
 fn collect_candidates(root: Element, out: &mut Vec<Candidate>, depth: i32) {

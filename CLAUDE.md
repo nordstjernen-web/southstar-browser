@@ -171,9 +171,11 @@ directory under `rust/`). meson builds it: `rust/meson.build` runs
 `scripts/cargo-build.py`, which builds the static libraries the executables
 link (`rust/static` with everything in `rust/southstar-ffi`, plus the shell,
 helper and launcher libraries) and hands ninja cargo's dependency file, so
-Rust rebuilds only when Rust changes. Rust 1.99 or newer is required;
-`rust-toolchain.toml` pins 1.99.0 for rustup users, so local builds and CI
-compile with the minimum supported version.
+Rust rebuilds only when Rust changes. Rust 1.91 or newer is required (the
+compiler Ubuntu 24.04 packages as `rustc-1.91`; Debian forky and sid ship
+newer); `rust-toolchain.toml` pins 1.91.0 for rustup users, so local builds
+and CI compile with the minimum supported version. Don't use a standard
+library API or language feature stabilized after 1.91.
 
 - The crates mirror the C files they were ported from, and many still reach
   each other through the port's scaffolding: `ns_*`/`nsr_*` exports
@@ -437,10 +439,11 @@ sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel
 
 (`ffmpeg-devel` comes from Packman.)
 
-Rust must be 1.99 or newer. Rolling distributions ship it; elsewhere,
-Ubuntu 24.04 (whose newest packaged compiler is `rustc-1.91`) and Debian 13
-included, install it with rustup, which reads `rust-toolchain.toml` and
-selects 1.99.0.
+Rust must be 1.91 or newer. Debian forky and sid and the rolling
+distributions ship it; Ubuntu 24.04 packages it as `rustc-1.91` and
+`cargo-1.91` (`sudo apt install rustc-1.91 cargo-1.91`, then put
+`/usr/lib/rust-1.91/bin` first on `PATH`). Elsewhere, Debian 13 included,
+install it with rustup, which reads `rust-toolchain.toml` and selects 1.91.0.
 
 `libseccomp` is required on Linux — `meson setup` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.

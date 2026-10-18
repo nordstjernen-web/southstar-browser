@@ -8,20 +8,19 @@ pub mod layout;
 pub use ffi::*;
 pub use layout::Field;
 
-const LAYOUT: &str = match option_env!("NS_AV_LAYOUT") {
-    Some(layout) => layout,
-    None => "",
+const LAYOUT: Option<&str> = match option_env!("NS_AV_LAYOUT") {
+    Some(text) if !text.is_empty() => Some(text),
+    _ => None,
 };
 
 pub const fn available() -> bool {
-    !LAYOUT.is_empty()
+    LAYOUT.is_some()
 }
 
 const fn value(key: &str) -> i64 {
-    if available() {
-        layout::lookup(LAYOUT, key)
-    } else {
-        0
+    match LAYOUT {
+        Some(text) => layout::lookup(text, key),
+        None => 0,
     }
 }
 

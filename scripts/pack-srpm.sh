@@ -57,8 +57,8 @@ BuildRequires:  meson >= 1.0
 BuildRequires:  ninja-build
 BuildRequires:  cmake
 BuildRequires:  pkgconf-pkg-config
-BuildRequires:  cargo >= 1.99
-BuildRequires:  rust >= 1.99
+BuildRequires:  cargo >= 1.91
+BuildRequires:  rust >= 1.91
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libcrypto)

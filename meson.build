@@ -78,6 +78,9 @@ add_project_link_arguments(
 
 ns_buildtype = get_option('buildtype')
 ns_is_release = (ns_buildtype == 'release' or ns_buildtype == 'minsize')
+# Distribution packages build with buildtype=plain and supply their own C flags;
+# cargo has no such flags to take, so they get the optimized release profile.
+ns_rust_release = ns_is_release or ns_buildtype == 'plain'
 # Every build profile gets -O3 (via default_options optimization=3) plus
 # dead-section pruning. Southstar leans on the optimizer to inline the
 # box-layout loops; -O2 left ~30% on the table for JS-heavy pages. The -O level is

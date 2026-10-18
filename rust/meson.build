@@ -1,5 +1,5 @@
-cargo = find_program('cargo', version: '>=1.99')
-rustc = find_program('rustc', version: '>=1.99')
+cargo = find_program('cargo', version: '>=1.91')
+rustc = find_program('rustc', version: '>=1.91')
 cargo_build_py = files('../scripts/cargo-build.py')
 cargo_python = import('python').find_installation()
 
@@ -203,7 +203,7 @@ southstar_rust_lib = custom_target(
   command: [
     cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
     meson.current_build_dir() / 'cargo-target',
-    ns_is_release ? 'release' : 'dev',
+    ns_rust_release ? 'release' : 'dev',
     'southstar-static', '@OUTPUT@', '@DEPFILE@',
   ] + southstar_rust_features,
   env: southstar_rust_env,
@@ -225,7 +225,7 @@ if have_gtk
     command: [
       cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
       meson.current_build_dir() / 'cargo-target',
-      ns_is_release ? 'release' : 'dev',
+      ns_rust_release ? 'release' : 'dev',
       'southstar-shell', '@OUTPUT@', '@DEPFILE@',
     ] + southstar_rust_features,
     env: southstar_rust_env,
@@ -249,7 +249,7 @@ if host_machine.system() == 'windows'
     command: [
       cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
       meson.current_build_dir() / 'cargo-target',
-      ns_is_release ? 'release' : 'dev',
+      ns_rust_release ? 'release' : 'dev',
       'southstar-launcher', '@OUTPUT@', '@DEPFILE@',
     ],
     env: southstar_rust_env,
@@ -267,7 +267,7 @@ southstar_helper_rust_lib = custom_target(
   command: [
     cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
     meson.current_build_dir() / 'cargo-target',
-    ns_is_release ? 'release' : 'dev',
+    ns_rust_release ? 'release' : 'dev',
     'southstar-helper-ffi', '@OUTPUT@', '@DEPFILE@',
   ] + southstar_helper_rust_features,
   env: southstar_rust_env,
@@ -290,7 +290,7 @@ if have_libav
     command: [
       cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
       meson.current_build_dir() / 'cargo-target',
-      ns_is_release ? 'release' : 'dev',
+      ns_rust_release ? 'release' : 'dev',
       'southstar-video-helper', '@OUTPUT@', '@DEPFILE@',
     ] + southstar_helper_rust_features,
     env: southstar_rust_env,
@@ -321,7 +321,7 @@ if rust_sdl2.found()
     command: [
       cargo_python, cargo_build_py, 'build', cargo, meson.project_source_root(),
       meson.current_build_dir() / 'cargo-target',
-      ns_is_release ? 'release' : 'dev',
+      ns_rust_release ? 'release' : 'dev',
       'southstar-audio-helper', '@OUTPUT@', '@DEPFILE@',
     ] + southstar_audio_rust_features,
     env: southstar_rust_env,

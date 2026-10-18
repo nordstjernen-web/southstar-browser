@@ -689,7 +689,7 @@ pub fn layout_grid(
     let mut any_auto_content = false;
     for t in 0..n_cols {
         let tk = &cols.tracks[t as usize];
-        if !is_intrinsic(tk.kind) && !(tk.has_min != 0 && is_intrinsic(tk.min_kind)) {
+        if !(is_intrinsic(tk.kind) || (tk.has_min != 0 && is_intrinsic(tk.min_kind))) {
             continue;
         }
         for it in &items {

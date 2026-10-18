@@ -28,8 +28,10 @@ jobs:
 
     # A .deb depends on the SONAME-numbered FFmpeg packages of the release it
     # was built on (libavcodec60 on Ubuntu 24.04, libavcodec61 on Debian 13,
-    # …), so each supported release gets its own package, built and verified
-    # against that release's own archive.
+    # libavcodec63 on forky and sid, …), so each supported release gets its own
+    # package, built and verified against that release's own archive. deb_tag
+    # names the package: sid's os-release carries no version and the testing
+    # codename, so it cannot tell forky and sid apart.
     strategy:
       fail-fast: false
       matrix:
@@ -38,15 +40,28 @@ jobs:
             image: ubuntu:24.04
             distro: ubuntu
             slug: ubuntu-24.04
+            deb_tag: ubuntu24.04
           - name: Ubuntu 26.04
             image: ubuntu:26.04
             distro: ubuntu
             slug: ubuntu-26.04
+            deb_tag: ubuntu26.04
           - name: Debian 13
             image: debian:trixie
             distro: debian
             slug: debian-13
+            deb_tag: debian13
             portable_zip: true
+          - name: Debian forky
+            image: debian:forky
+            distro: debian
+            slug: debian-forky
+            deb_tag: debianforky
+          - name: Debian sid
+            image: debian:sid
+            distro: debian
+            slug: debian-sid
+            deb_tag: debiansid
 
     steps:
       - name: Install git
@@ -62,6 +77,8 @@ jobs:
       # Installs the build dependencies, builds, packs the zip and the .deb,
       # then installs the .deb in this container and runs it headless.
       - name: Build, package and verify
+        env:
+          DEB_DISTRO_TAG: ${{ matrix.deb_tag }}
         run: bash scripts/nightly-distro-build.sh ${{ matrix.distro }}
 
       # A tag that predates per-release file names packs every job's .deb as
@@ -69,8 +86,9 @@ jobs:
       # on, the way scripts/pack-deb.sh names it now, so the jobs' packages
       # don't overwrite each other on the release.
       - name: Name the package for its distro release
+        env:
+          tag: ${{ matrix.deb_tag }}
         run: |
-          tag=$(. /etc/os-release && printf '%s%s' "$ID" "$VERSION_ID")
           for deb in dist/*.deb; do
             case "$deb" in
               *"_${tag}_"*) ;;

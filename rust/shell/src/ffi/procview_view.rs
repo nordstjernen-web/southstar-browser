@@ -232,13 +232,9 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
     ns_pv_input_install_secondary(v);
     ns_pv_install_scroll(v);
     ns_pv_input_install_keys(v);
+    let on_destroy = handler!(on_area_destroy);
     unsafe {
-        connect(
-            view(v).area,
-            c"destroy",
-            handler!(on_area_destroy),
-            v.cast(),
-        );
+        connect(view(v).area, c"destroy", on_destroy, v.cast());
     }
     view(v).thread = start_worker(v);
     v

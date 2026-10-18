@@ -474,7 +474,7 @@ fn build_table_row<'a>(tr: Node<'_>, styles: Styles) -> BoxRef<'a> {
 }
 
 fn until<'a>(start: Option<Node<'a>>, end: Option<Node<'a>>) -> impl Iterator<Item = Node<'a>> {
-    siblings_from(start).take_while(move |c| !end.is_some_and(|e| e.as_ptr() == c.as_ptr()))
+    siblings_from(start).take_while(move |c| end.is_none_or(|e| e.as_ptr() != c.as_ptr()))
 }
 
 fn build_row_from_cell_run<'a>(

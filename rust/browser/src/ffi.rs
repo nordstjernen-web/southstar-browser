@@ -13,7 +13,7 @@ mod trampolines;
 
 use core::cell::{Cell, RefCell, RefMut};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::mem::offset_of;
+use core::mem::{MaybeUninit, offset_of};
 use core::ptr;
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -233,7 +233,7 @@ const NODE_FIELDS: [usize; 6] = [
 
 impl NsBrowser {
     fn allocate() -> Page {
-        let mut slot = Box::<NsBrowser>::new_zeroed();
+        let mut slot = Box::new(MaybeUninit::<NsBrowser>::zeroed());
         let raw = slot.as_mut_ptr();
         for offset in TEXT_FIELDS {
             let field = raw.wrapping_byte_add(offset).cast::<Text>();

@@ -279,8 +279,8 @@ pub(crate) fn cardinal(locale: &str, o: &Operands) -> &'static str {
             {
                 "zero"
             } else if (m10 == Some(1) && m100 != Some(11))
-                || (o.visible == 2 && f10 == 1 && f100 != 11)
                 || (o.visible != 2 && f10 == 1)
+                || (f10 == 1 && f100 != 11)
             {
                 "one"
             } else {

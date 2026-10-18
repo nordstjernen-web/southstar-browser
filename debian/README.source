@@ -20,10 +20,14 @@ Regenerate the component whenever Cargo.lock changes. debian/rules only
 looks for a vendor/ directory, so it works unchanged if the crates are ever
 committed to the tree instead (decision D4 in docs/rust-port.md).
 
-Rust 1.99 or newer is required (rust-toolchain.toml). Where the
-distribution's rustc and cargo are older, install the toolchain with rustup
-and build with dpkg-buildpackage -d, which skips the Build-Depends check for
-cargo and rustc. meson checks their version from the build directory, outside
-the reach of rust-toolchain.toml, so select the toolchain explicitly:
+Rust 1.91 or newer is required. Debian forky and sid package it (rustc and
+cargo 1.96 and 1.97). Ubuntu 24.04 ships it as the versioned rustc-1.91 and
+cargo-1.91 packages, which Build-Depends accepts as alternatives and
+debian/rules puts first on PATH. sbuild considers only the first alternative
+unless told otherwise, so build for Ubuntu with --resolve-alternatives:
 
-    RUSTUP_TOOLCHAIN=1.99.0 dpkg-buildpackage -d -b -uc -us
+    sbuild --resolve-alternatives -d noble
+
+With a rustup toolchain instead, build with dpkg-buildpackage -d, which skips
+the Build-Depends check for cargo and rustc; rust-toolchain.toml selects
+1.91.0 inside the tree.
