@@ -672,6 +672,7 @@ fn sandbox_proc_mode(single_process: bool) {
     {
         southstar_sandbox::add_exec_dir(rdir.to_bytes());
     }
+    southstar_sandbox::allow_gpu_devices();
     southstar_sandbox::sandbox_init(self_exe_str());
 }
 

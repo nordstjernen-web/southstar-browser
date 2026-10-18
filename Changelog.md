@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Linux: the browser starts again on NVIDIA's proprietary driver under
+  X11. The UI shell's Landlock sandbox let it read `/dev/dri` but not open
+  the render nodes read-write, and gave no access to `/dev/nvidia*` at all,
+  so GTK's OpenGL and Vulkan drivers were refused the GPU ("Permission
+  denied" on `/dev/dri/renderD128`) and the window died with an X
+  `BadDrawable` error; the watchdog restarted it until it gave up. The
+  shell now opens those device nodes; the renderer's sandbox is unchanged.
+  Backported from Nordstjernen.
 
 Southstar Browser 1.0.0:
 ======

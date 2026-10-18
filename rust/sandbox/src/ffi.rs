@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use southstar_glib as glib;
 
@@ -56,6 +57,7 @@ fn getenv(name: &CStr) -> Option<&'static [u8]> {
 
 static WRITABLE_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static EXEC_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
+static GPU_DEVICES_ALLOWED: AtomicBool = AtomicBool::new(false);
 
 fn remember(list: &Mutex<Vec<CString>>, dir: &[u8]) {
     if !dir.is_empty()
@@ -76,6 +78,15 @@ pub fn add_writable_dir(dir: &[u8]) {
 
 pub fn add_exec_dir(dir: &[u8]) {
     remember(&EXEC_DIRS, dir);
+}
+
+pub fn allow_gpu_devices() {
+    GPU_DEVICES_ALLOWED.store(true, Ordering::Relaxed);
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn gpu_devices_allowed() -> bool {
+    GPU_DEVICES_ALLOWED.load(Ordering::Relaxed)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -144,7 +155,7 @@ fn dirname(path: &[u8]) -> Vec<u8> {
 mod linux {
     use super::{
         EXEC_DIRS, WRITABLE_DIRS, build_filename, dirname, download_dir, file_test, getenv,
-        glib_dir, info, own_dir, remembered, strerror,
+        glib_dir, gpu_devices_allowed, info, own_dir, remembered, strerror,
     };
     use crate::landlock::{self, Access};
     use core::ffi::{c_char, c_int, c_long, c_void};
@@ -252,6 +263,26 @@ mod linux {
         }
     }
 
+    fn allow_gpu_device_nodes(rules: &Ruleset, fs_read: u64) {
+        rules.allow(fs_read | landlock::WRITE_FILE, b"/dev/dri");
+        let Ok(entries) = std::fs::read_dir("/dev") else {
+            return;
+        };
+        let fs_dev = landlock::READ_FILE | landlock::WRITE_FILE;
+        for entry in entries.flatten() {
+            if !entry.file_name().as_bytes().starts_with(b"nvidia") {
+                continue;
+            }
+            let path = entry.path();
+            let access = if path.is_dir() {
+                fs_read | landlock::WRITE_FILE
+            } else {
+                fs_dev
+            };
+            rules.allow(access, path.as_os_str().as_bytes());
+        }
+    }
+
     pub(super) fn sandbox_init(self_exe: Option<&[u8]>) {
         if getenv(c"NS_NO_SANDBOX").is_some() {
             return;
@@ -309,6 +340,9 @@ mod linux {
             if file_test(device.as_bytes(), glib::FILE_TEST_EXISTS) {
                 rules.allow(fs_dev, device.as_bytes());
             }
+        }
+        if gpu_devices_allowed() {
+            allow_gpu_device_nodes(&rules, fs_read);
         }
         if file_test(b"/dev/snd", glib::FILE_TEST_IS_DIR) {
             rules.allow(fs_read | landlock::WRITE_FILE, b"/dev/snd");
