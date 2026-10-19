@@ -175,8 +175,6 @@ const SOUTHSTAR_HEAD: &str = concat!(
 const SOUTHSTAR_BODY: &str = concat!(
     ".wrap{max-width:760px;margin:0 auto;padding:28px 24px 48px}\n",
     ".top{margin-bottom:22px}\n",
-    ".splash{display:block;width:100%;height:auto;border-radius:var(--radius);",
-    "border:1px solid var(--line);box-shadow:var(--shadow)}\n",
     ".head{display:flex;align-items:center;gap:18px;margin:28px 4px 26px}\n",
     ".mark-img{display:block;width:64px;height:64px;border-radius:17px;",
     "box-shadow:0 8px 24px rgba(20,40,110,.25)}\n",
@@ -213,7 +211,6 @@ const SOUTHSTAR_BODY: &str = concat!(
     "<body><main class=\"wrap\">",
     "<div class=\"top\"><a class=\"crumb\" href=\"about:start\">",
     "\u{2190} New Tab</a></div>",
-    "__ND_SPLASH__",
     "<div class=\"head\">__ND_LOGO_MARK__<div>",
     "<h1>Southstar<span class=\"ver\">",
 );

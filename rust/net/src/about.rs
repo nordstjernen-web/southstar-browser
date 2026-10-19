@@ -68,7 +68,6 @@ const TAGLINES: [&str; 5] = [
 ];
 
 const LOGO_GIF: &[u8] = include_bytes!("../../../data/icons/hicolor/scalable/apps/southstar.gif");
-const SPLASH_GIF: &[u8] = include_bytes!("../../../data/about-splash.gif");
 
 const LOGO_PATHS: [&str; 4] = [
     "share/icons/hicolor/scalable/apps/southstar.gif",
@@ -187,19 +186,6 @@ fn logo_markup() -> Vec<u8> {
     .concat()
 }
 
-fn splash_markup() -> Vec<u8> {
-    static SPLASH: OnceLock<Vec<u8>> = OnceLock::new();
-    let encoded = SPLASH.get_or_init(|| southstar_digest::base64(SPLASH_GIF).into_bytes());
-    [
-        &b"<img class=\"splash\" src=\"data:image/gif;base64,"[..],
-        encoded,
-        b"\" alt=\"Southstar ",
-        templates::VERSION.as_bytes(),
-        b" splash\">",
-    ]
-    .concat()
-}
-
 fn document_page(doc: &Document) -> Vec<u8> {
     let paths = [
         format!("southstar/{}", doc.file),
@@ -296,8 +282,7 @@ fn southstar_page() -> Vec<u8> {
         b"__ND_LOGO_MARK__",
         &logo_markup(),
     );
-    let page = substitute(&page, b"__ND_DIAG__", &diagnostics::html());
-    substitute(&page, b"__ND_SPLASH__", &splash_markup())
+    substitute(&page, b"__ND_DIAG__", &diagnostics::html())
 }
 
 fn is_post(method: Option<&[u8]>) -> bool {

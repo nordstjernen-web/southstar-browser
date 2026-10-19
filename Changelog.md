@@ -26,6 +26,11 @@ Southstar Browser 1.0.1-dev:
   internet-browser` picks which one the name starts; the Alpine package
   creates the link when the name is free; the Windows installer adds it
   as an App Paths alias and the MSIX package as an app execution alias.
+* The animated cartoon splash is gone from `about:southstar`, which now
+  opens on the logo and version. `data/about-splash.gif` is no longer
+  embedded in the binary, and `scripts/gen-splash.py` and
+  `scripts/gen-splash.sh`, which drew it, are removed with the still
+  `data/about-splash-1.0.30.png` they wrote.
 
 Southstar Browser 1.0.0:
 ======
