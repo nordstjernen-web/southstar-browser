@@ -19,6 +19,13 @@ Southstar Browser 1.0.1-dev:
   `BadDrawable` error; the watchdog restarted it until it gave up. The
   shell now opens those device nodes; the renderer's sandbox is unchanged.
   Backported from Nordstjernen.
+* `internet-browser` is a second name for the browser. `meson install`
+  links it to `southstar` in the binary directory; the `.deb` and `.rpm`
+  packages register it with `update-alternatives`, so Southstar installs
+  beside Nordstjernen and Northstar and `update-alternatives --config
+  internet-browser` picks which one the name starts; the Alpine package
+  creates the link when the name is free; the Windows installer adds it
+  as an App Paths alias and the MSIX package as an app execution alias.
 
 Southstar Browser 1.0.0:
 ======

@@ -49,6 +49,7 @@ endif
 # version, so they are not shipped.
 override_dh_auto_install:
 	dh_auto_install
+	rm debian/southstar/usr/bin/internet-browser
 	rm -f debian/southstar/usr/lib/$(DEB_HOST_MULTIARCH)/libsouthstar.so
 	rm -rf debian/southstar/usr/include
 	find debian/southstar/usr/lib -type d -empty -delete

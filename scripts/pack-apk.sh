@@ -69,6 +69,20 @@ if ldd "$STAGE/southstar-renderer" 2>/dev/null | grep -q 'libavformat'; then
     WEBM_DEP=" ffmpeg-libs"
 fi
 
+cat > "$BUILDTOP/southstar.post-install" <<'EOF'
+#!/bin/sh
+[ -e /usr/bin/internet-browser ] || \
+    ln -sf southstar /usr/bin/internet-browser
+exit 0
+EOF
+cat > "$BUILDTOP/southstar.pre-deinstall" <<'EOF'
+#!/bin/sh
+if [ "$(readlink /usr/bin/internet-browser)" = southstar ]; then
+    rm -f /usr/bin/internet-browser
+fi
+exit 0
+EOF
+
 cat > "$BUILDTOP/APKBUILD" <<APKBUILD_EOF
 # Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
 pkgname=southstar
@@ -81,6 +95,7 @@ license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 depends="gtk4.0 libepoxy zlib brotli-libs zstd-libs uchardet sqlite-libs ca-certificates fontconfig font-dejavu poppler-glib libavif libwebp libseccomp libpsl libcrypto3${AUDIO_DEP}${WEBM_DEP}"
 options="!check !tracedeps !strip"
 source=""
+install="southstar.post-install southstar.pre-deinstall"
 
 build() {
 	return 0
