@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Rust dependencies updated to their latest Rust 1.91 compatible
+  releases, among them rustls-webpki 0.103.16, ml-kem 0.3.3 (now on
+  sha3 0.12), libc 0.2.191, cc 1.9.0, syn 3.0.9 and serde_json 1.0.154.
 * Linux: WebGL and WebGPU render on the GPU again inside the sandboxed
   renderer. Its Landlock ruleset let it read `/dev/dri` but not open the
   render nodes read-write, so Mesa printed "Permission denied" for every
