@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: Content-Security-Policy is enforced in more places.
+  `eval`, `new Function`, string `ShadowRealm.prototype.evaluate` and the
+  other string-compiling functions now throw `EvalError` unless the page's
+  `script-src` (or `default-src`) allows `'unsafe-eval'`; they were never
+  checked. A `<script src>` that redirects is checked again at its final
+  URL, for both the policy and mixed content. Keywords such as `'SELF'`,
+  `'Unsafe-Inline'` and `'NONCE-…'` match whatever their case (nonce and
+  hash values stay case-sensitive), a source with an empty host such as
+  `https://` no longer matches, and `https://*` matches any host.
+* Security: `navigator.serviceWorker.register` now requires a secure
+  context (HTTPS or a local address) for both the page and the script, and
+  refuses a scope outside the script's directory, as the Service Workers
+  standard does without a `Service-Worker-Allowed` header.
 * Privacy: in private browsing the JavaScript bytecode cache no longer
   looks on disk at all. It already wrote nothing there, but a lookup read
   cached entries from earlier sessions and created their directories.

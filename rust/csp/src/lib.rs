@@ -49,6 +49,8 @@ const SCHEME_SOURCES: [&[u8]; 6] = [b"https:", b"http:", b"wss:", b"ws:", b"data
 const NETWORK_SCHEMES: [&[u8]; 5] = [b"http:", b"https:", b"ws:", b"wss:", b"ftp:"];
 const STRICT_DYNAMIC: &[u8] = b"'strict-dynamic'";
 const UNSAFE_INLINE: &[u8] = b"'unsafe-inline'";
+const UNSAFE_EVAL: &[u8] = b"'unsafe-eval'";
+const CASE_SENSITIVE_KEYWORDS: [&[u8]; 4] = [NONCE_PREFIX, b"'sha256-", b"'sha384-", b"'sha512-"];
 const NONCE_PREFIX: &[u8] = b"'nonce-";
 
 #[derive(Default)]
@@ -153,7 +155,11 @@ fn path_matches(source_path: Option<&[u8]>, resource_path: &[u8]) -> bool {
 }
 
 fn host_matches(source_host: &[u8], hostname: &[u8]) -> bool {
-    if source_host.starts_with(b"*.") {
+    if source_host.is_empty() {
+        false
+    } else if source_host == b"*" {
+        true
+    } else if source_host.starts_with(b"*.") {
         let suffix = &source_host[1..];
         hostname.len() > suffix.len()
             && hostname[hostname.len() - suffix.len()..].eq_ignore_ascii_case(suffix)
@@ -237,6 +243,19 @@ fn source_matches(source: &[u8], resource_url: &CStr, document_url: Option<&CStr
     path_matches(path_at.map(|path| &host_source[path..]), &parts.pathname)
 }
 
+fn normalized_source(token: &[u8]) -> Vec<u8> {
+    let mut source = token.to_vec();
+    if !token.starts_with(b"'") {
+        return source;
+    }
+    let keyword_len = CASE_SENSITIVE_KEYWORDS
+        .iter()
+        .find(|prefix| starts_with_ignore_case(token, prefix))
+        .map_or(token.len(), |prefix| prefix.len());
+    source[..keyword_len].make_ascii_lowercase();
+    source
+}
+
 fn has_token(list: &[Vec<u8>], token: &[u8]) -> bool {
     list.iter().any(|source| source == token)
 }
@@ -306,7 +325,7 @@ impl Policy {
                 tokens
                     .map(<[u8]>::trim_ascii)
                     .filter(|token| !token.is_empty())
-                    .map(<[u8]>::to_vec)
+                    .map(normalized_source)
                     .collect(),
             );
         }
@@ -409,6 +428,11 @@ impl Policy {
         self.inline_script_sources()
             .is_none_or(inline_fallback_allows)
     }
+
+    fn eval_allowed(&self) -> bool {
+        self.inline_script_sources()
+            .is_none_or(|list| has_token(list, UNSAFE_EVAL))
+    }
 }
 
 impl Csp {
@@ -450,5 +474,9 @@ impl Csp {
         self.policies
             .iter()
             .all(Policy::inline_event_handler_allowed)
+    }
+
+    pub fn eval_allowed(&self) -> bool {
+        self.policies.iter().all(Policy::eval_allowed)
     }
 }
