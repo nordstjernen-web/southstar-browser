@@ -20,6 +20,8 @@ pub mod gravity;
 pub mod language;
 pub mod matrix;
 pub mod metrics;
+#[cfg(feature = "rust-shaper")]
+pub mod rust_shaper;
 pub mod script;
 pub mod tabs;
 pub mod types;
