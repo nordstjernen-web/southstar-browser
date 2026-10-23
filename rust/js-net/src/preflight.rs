@@ -61,7 +61,7 @@ pub(crate) fn needed(
     }
     header_names.sort();
     header_names.dedup();
-    let simple_method = SIMPLE_METHODS.iter().any(|m| method == *m);
+    let simple_method = SIMPLE_METHODS.contains(&method);
     (!simple_method || !header_names.is_empty()).then(|| Preflight {
         method: method.to_vec(),
         header_names,
@@ -131,7 +131,7 @@ impl Preflight {
         }
         let raw = resp.raw_headers().unwrap_or_default();
         let methods = header_value(&raw, b"access-control-allow-methods");
-        let method_ok = SIMPLE_METHODS.iter().any(|m| self.method == *m)
+        let method_ok = SIMPLE_METHODS.contains(&self.method.as_slice())
             || listed(&methods, &self.method, true);
         let allowed_headers = header_value(&raw, b"access-control-allow-headers");
         method_ok
