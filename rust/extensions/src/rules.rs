@@ -219,19 +219,23 @@ pub(crate) fn strip_port(host: &[u8]) -> &[u8] {
 
 fn wildcard(pattern: &[u8], text: &[u8]) -> bool {
     let (mut p, mut s) = (0, 0);
-    while p < pattern.len() {
-        if pattern[p] == b'*' {
+    let mut resume: Option<(usize, usize)> = None;
+    while s < text.len() {
+        if pattern.get(p) == Some(&b'*') {
             p += 1;
-            return p == pattern.len()
-                || (s..text.len()).any(|at| wildcard(&pattern[p..], &text[at..]));
-        }
-        if text.get(s) != Some(&pattern[p]) {
+            resume = Some((p, s));
+        } else if pattern.get(p) == Some(&text[s]) {
+            p += 1;
+            s += 1;
+        } else if let Some((star_p, star_s)) = resume {
+            p = star_p;
+            s = star_s + 1;
+            resume = Some((star_p, s));
+        } else {
             return false;
         }
-        p += 1;
-        s += 1;
     }
-    s == text.len()
+    pattern[p.min(pattern.len())..].iter().all(|&c| c == b'*')
 }
 
 fn generic_scheme(scheme: &[u8]) -> bool {
@@ -271,45 +275,43 @@ fn is_separator(c: u8) -> bool {
     !(c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.' | b'%'))
 }
 
+fn token_matches(token: u8, c: u8) -> bool {
+    if token == b'^' {
+        is_separator(c)
+    } else {
+        token == c
+    }
+}
+
 fn match_here(pattern: &[u8], text: &[u8], end_anchor: bool) -> bool {
     let (mut p, mut s) = (0, 0);
-    while p < pattern.len() {
-        match pattern[p] {
-            b'*' => {
+    let mut resume: Option<(usize, usize)> = None;
+    while s < text.len() {
+        if p == pattern.len() && !end_anchor {
+            return true;
+        }
+        match pattern.get(p) {
+            Some(b'*') => {
                 p += 1;
-                if p == pattern.len() {
-                    return true;
-                }
-                loop {
-                    if match_here(&pattern[p..], &text[s..], end_anchor) {
-                        return true;
-                    }
-                    if s == text.len() {
-                        return false;
-                    }
-                    s += 1;
-                }
+                resume = Some((p, s));
             }
-            b'^' => {
-                if s == text.len() {
-                    p += 1;
-                } else if is_separator(text[s]) {
-                    p += 1;
-                    s += 1;
-                } else {
-                    return false;
-                }
-            }
-            c => {
-                if text.get(s) != Some(&c) {
-                    return false;
-                }
+            Some(&token) if token_matches(token, text[s]) => {
                 p += 1;
                 s += 1;
             }
+            _ => match resume {
+                Some((star_p, star_s)) => {
+                    p = star_p;
+                    s = star_s + 1;
+                    resume = Some((star_p, s));
+                }
+                None => return false,
+            },
         }
     }
-    !end_anchor || s == text.len()
+    pattern[p.min(pattern.len())..]
+        .iter()
+        .all(|&c| c == b'*' || c == b'^')
 }
 
 fn url_filter_match(filter: &[u8], url: &[u8], case_sensitive: bool) -> bool {
@@ -526,7 +528,7 @@ fn parse_cosmetic(line: &[u8], at: usize, cosmetic: &mut Vec<CosmeticRule>) {
     while let Some(rest) = selector.strip_prefix(b" ") {
         selector = rest;
     }
-    if selector.is_empty() || selector.contains(&b'{') {
+    if selector.is_empty() || selector.iter().any(|c| b"{}".contains(c)) {
         return;
     }
     if selector.starts_with(b"+js") || selector.starts_with(b"script:") {

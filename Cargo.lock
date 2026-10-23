@@ -2462,6 +2462,7 @@ version = "1.0.1-dev"
 dependencies = [
  "boa_engine",
  "boa_gc",
+ "serde_json",
 ]
 
 [[package]]

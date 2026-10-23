@@ -25,8 +25,8 @@ delete G.__nd_ext_manifest;delete G.__nd_ext_base;\
 delete G.__nd_ext_sread;delete G.__nd_ext_swrite;\
 delete G.__nd_ext_platform;delete G.__nd_ext_uilang;\
 function area(id,name){\
-function rd(){try{return JSON.parse(SR(id,name))||{};}catch(e){return{};}}\
-function wr(o){return SW(id,name,JSON.stringify(o));}\
+function rd(){try{return SR(id,name)||{};}catch(e){return{};}}\
+function wr(o){return SW(id,name,o);}\
 return {get:function(keys){return new Promise(function(res){var a=rd(),o={};\
 if(keys==null)o=a;\
 else if(typeof keys==='string'){if(keys in a)o[keys]=a[keys];}\
@@ -40,7 +40,7 @@ remove:function(keys){return new Promise(function(res){var a=rd();\
 clear:function(){return new Promise(function(res){wr({});res();});}};}\
 function make_api(id){\
 var man=null;\
-function getManifest(){if(man===null){try{man=JSON.parse(M(id));}catch(e){man={};}}return man;}\
+function getManifest(){if(man===null){try{man=M(id)||{};}catch(e){man={};}}return man;}\
 function getURL(p){var b=B(id);p=String(p==null?'':p);\
 if(p.charAt(0)==='/')p=p.slice(1);return b?('file://'+b+'/'+p):p;}\
 var listeners=[];\
@@ -157,13 +157,15 @@ fn safe_path(base_dir: &[u8], relative: &[u8]) -> Option<Vec<u8>> {
     if relative.is_empty() {
         return None;
     }
-    let base = ffi::canonicalize(base_dir);
-    let path = ffi::canonicalize(&ffi::build_filename(&[base_dir, relative]));
-    let inside = path.starts_with(&base)
-        && path
-            .get(base.len())
-            .is_none_or(|&c| c == ffi::DIR_SEPARATOR);
-    inside.then_some(path)
+    let base = real_path(base_dir)?;
+    let path = real_path(&ffi::build_filename(&[base_dir, relative]))?;
+    path.starts_with(&base)
+        .then(|| path.into_os_string().into_encoded_bytes())
+}
+
+fn real_path(path: &[u8]) -> Option<std::path::PathBuf> {
+    let path = std::str::from_utf8(path).ok()?;
+    std::fs::canonicalize(path).ok()
 }
 
 fn read_files(scope: &mut Scope<'_>, base_dir: &[u8], entry: &Value, key: &str) -> Option<Vec<u8>> {
@@ -444,10 +446,10 @@ fn native_manifest(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
         return Ok(scope.string("{}"));
     };
     let id = c_string(scope, id)?;
-    let text = registry()
-        .lookup(&id)
-        .map_or(&b"{}"[..], |extension| until_nul(&extension.manifest));
-    Ok(scope.string_from_bytes(text))
+    let text = registry().lookup(&id).map_or(b"{}".to_vec(), |extension| {
+        until_nul(&extension.manifest).to_vec()
+    });
+    json_object(scope, &text)
 }
 
 fn native_base(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value, Value> {
@@ -472,10 +474,14 @@ fn native_storage_read(
     let id = c_string(scope, id)?;
     let area = c_string(scope, area)?;
     let data = storage_path(&id, &area).and_then(|path| ffi::read_file(&path));
-    Ok(match data {
-        Some(data) => scope.string_from_bytes(until_nul(&data)),
-        None => scope.string("{}"),
-    })
+    json_object(scope, data.as_deref().map_or(&b"{}"[..], until_nul))
+}
+
+fn json_object(scope: &mut Scope<'_>, text: &[u8]) -> Result<Value, Value> {
+    match scope.json_parse_pristine(text) {
+        Ok(value) if value.is_object() => Ok(value),
+        _ => Ok(scope.new_object()),
+    }
 }
 
 fn native_storage_write(
@@ -488,7 +494,7 @@ fn native_storage_write(
     };
     let id = c_string(scope, id)?;
     let area = c_string(scope, area)?;
-    let json = c_string(scope, json)?;
+    let json = scope.json_stringify_pristine(json)?;
     let written =
         storage_path(&id, &area).is_some_and(|path| ffi::write_private_file(&path, &json));
     Ok(Value::boolean(written))

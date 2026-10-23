@@ -9,10 +9,6 @@ use std::ffi::CString;
 use southstar_glib::{self as glib, GBoolean};
 
 #[cfg(windows)]
-pub(crate) const DIR_SEPARATOR: u8 = b'\\';
-#[cfg(not(windows))]
-pub(crate) const DIR_SEPARATOR: u8 = b'/';
-#[cfg(windows)]
 pub(crate) const SEARCHPATH_SEPARATOR: u8 = b';';
 #[cfg(not(windows))]
 pub(crate) const SEARCHPATH_SEPARATOR: u8 = b':';
@@ -35,7 +31,6 @@ struct PslContext {
 }
 
 unsafe extern "C" {
-    fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
     fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
@@ -107,11 +102,6 @@ pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
     let mut pointers: Vec<*mut c_char> = owned.iter().map(|p| p.as_ptr().cast_mut()).collect();
     pointers.push(ptr::null_mut());
     take_string(unsafe { glib::g_build_filenamev(pointers.as_mut_ptr()) })
-}
-
-pub(crate) fn canonicalize(path: &[u8]) -> Vec<u8> {
-    let path = cstring(path);
-    take_string(unsafe { g_canonicalize_filename(path.as_ptr(), ptr::null()) })
 }
 
 pub(crate) fn basename(path: &[u8]) -> Vec<u8> {
