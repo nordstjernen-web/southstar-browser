@@ -4,4 +4,7 @@
 
 pub(crate) mod fribidi;
 pub(crate) mod glib;
+pub(crate) mod glib_decompose;
+pub(crate) mod glib_lang;
+pub(crate) mod harfbuzz_strings;
 pub(crate) mod thai;
