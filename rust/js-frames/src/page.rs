@@ -21,12 +21,20 @@ pub(crate) struct Navigation {
 }
 
 #[derive(Default)]
+pub(crate) enum FramePolicy {
+    #[default]
+    Inherit,
+    Own(Option<Vec<u8>>),
+}
+
+#[derive(Default)]
 pub(crate) struct FrameEntry {
     pub realm: Option<Ctx>,
     pub window: Option<Value>,
     pub url: Option<CString>,
     pub referrer: Option<CString>,
     pub navigation: Option<Navigation>,
+    pub policy: FramePolicy,
 }
 
 impl FrameEntry {
@@ -36,6 +44,7 @@ impl FrameEntry {
             && self.url.is_none()
             && self.referrer.is_none()
             && self.navigation.is_none()
+            && matches!(self.policy, FramePolicy::Inherit)
     }
 }
 

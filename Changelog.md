@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: classic scripts in an `<iframe>` now obey the frame's
+  Content-Security-Policy and Subresource Integrity. They ran without either
+  check: the framed document's own `script-src` and an `integrity`
+  attribute on its `<script src>` were ignored. A frame loaded over the
+  network follows the policy of its response; `srcdoc`, `about:`, `data:`
+  and `blob:` frames inherit their embedder's.
 * Hardening: a web font whose table directory names the same table twice
   is now refused when its SFNT is rebuilt from FreeType. FreeType looks
   tables up by tag, so the copy read the first table's bytes for every
