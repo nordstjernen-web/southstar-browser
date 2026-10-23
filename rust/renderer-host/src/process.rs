@@ -73,7 +73,6 @@ pub fn run(args: &[&[u8]]) -> c_int {
     if !sys::watch_parent() {
         return 0;
     }
-    southstar_threaddump::install_signal(Some(b"southstar-renderer"));
     let mode = args.get(3).copied();
     let shm = mode == Some(b"shm");
     let size = max_w as usize * max_h as usize * 4;
@@ -94,6 +93,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
     }
     let self_exe = engine::cstring(args[0]);
     engine::sandbox(Some(&self_exe));
+    southstar_threaddump::install_signal(Some(b"southstar-renderer"));
     let bufsz = (size + 65536).min(0x7fff_ffff) as c_int;
     set_bufsize(channel.ctrl_r, bufsz);
     set_bufsize(channel.ctrl_w, bufsz);
