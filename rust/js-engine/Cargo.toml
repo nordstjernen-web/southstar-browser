@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 boa_engine = { version = "0.22", features = ["annex-b", "experimental"] }
 boa_gc = "0.22"
+serde_json = "1"
 
 [features]
 boa-intl = ["boa_engine/intl_bundled"]

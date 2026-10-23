@@ -445,6 +445,22 @@ impl Scope<'_> {
         self.call(&parse, &json, &[text])
     }
 
+    pub fn json_parse_pristine(&mut self, text: &[u8]) -> Result<Value, Value> {
+        let json: serde_json::Value = match serde_json::from_slice(text) {
+            Ok(json) => json,
+            Err(error) => return Err(self.syntax_error(&error.to_string())),
+        };
+        JsValue::from_json(&json, self.cx())
+            .map(Value)
+            .map_err(|e| self.error(e))
+    }
+
+    pub fn json_stringify_pristine(&mut self, value: &Value) -> Result<Vec<u8>, Value> {
+        let json = value.0.to_json(self.cx()).map_err(|e| self.error(e))?;
+        serde_json::to_vec(&json.unwrap_or(serde_json::Value::Null))
+            .map_err(|error| self.type_error(&error.to_string()))
+    }
+
     pub fn bigint64(&mut self, number: i64) -> Value {
         Value(JsBigInt::from(number).into())
     }

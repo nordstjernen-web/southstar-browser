@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: WebExtension fixes. A file an extension names (content
+  script, stylesheet, rules) is resolved with its symbolic links, so a link
+  inside the extension directory can no longer read a file elsewhere.
+  `chrome.storage` and `runtime.getManifest()` in content scripts no longer
+  go through the page's `JSON.parse` and `JSON.stringify`, which a page
+  could replace to forge or corrupt an extension's storage. Cosmetic filter
+  selectors containing `}` are refused, so a filter list cannot inject
+  whole CSS rules. URL patterns with many `*` no longer take exponential
+  time to match.
 * Security: a camera permission given to a document with an opaque origin
   (a sandboxed frame, a `data:` URL) no longer applies to every other such
   document; the decision is remembered for that document's URL instead of
