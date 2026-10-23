@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use std::ffi::CString;
 
 use southstar_dom::MAX_DEPTH;
 
@@ -42,16 +41,6 @@ pub(crate) fn run_scripts_in_doc(js: Js, doc: Element, base_url: Option<&CStr>) 
 }
 
 fn run_early_injected(js: Js) {
-    if let Some(path) = std::env::var_os("NS_EARLY_JS_FILE").filter(|path| !path.is_empty())
-        && let Ok(mut bytes) = std::fs::read(path)
-    {
-        if let Some(end) = bytes.iter().position(|&b| b == 0) {
-            bytes.truncate(end);
-        }
-        if let Ok(source) = CString::new(bytes) {
-            js.eval_source(&source, c"early-inject");
-        }
-    }
     if let Some(source) = js.early_inject_src().filter(|src| !src.is_empty()) {
         js.eval_source(&source, c"early-inject");
     }

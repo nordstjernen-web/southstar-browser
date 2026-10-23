@@ -55,6 +55,16 @@ fn getenv(name: &CStr) -> Option<&'static [u8]> {
     unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }
 }
 
+fn env_flag(name: &CStr) -> bool {
+    getenv(name).is_some_and(|value| {
+        let value = value.trim_ascii();
+        !value.is_empty()
+            && ![&b"0"[..], b"false", b"no", b"off"]
+                .iter()
+                .any(|off| value.eq_ignore_ascii_case(off))
+    })
+}
+
 static WRITABLE_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static EXEC_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static GPU_DEVICES_ALLOWED: AtomicBool = AtomicBool::new(false);
@@ -154,8 +164,8 @@ fn dirname(path: &[u8]) -> Vec<u8> {
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{
-        EXEC_DIRS, WRITABLE_DIRS, build_filename, dirname, download_dir, file_test, getenv,
-        glib_dir, gpu_devices_allowed, info, own_dir, remembered, strerror,
+        EXEC_DIRS, WRITABLE_DIRS, build_filename, dirname, download_dir, env_flag, file_test,
+        getenv, glib_dir, gpu_devices_allowed, info, own_dir, remembered, strerror,
     };
     use crate::landlock::{self, Access};
     use core::ffi::{c_char, c_int, c_long, c_void};
@@ -203,8 +213,7 @@ mod linux {
     }
 
     pub(super) fn require_or_die(what: &str) {
-        let required = getenv(c"NS_REQUIRE_SANDBOX");
-        if required.is_none_or(|value| value.is_empty() || value == b"0") {
+        if !env_flag(c"NS_REQUIRE_SANDBOX") {
             return;
         }
         let message = format!(
@@ -284,7 +293,7 @@ mod linux {
     }
 
     pub(super) fn sandbox_init(self_exe: Option<&[u8]>) {
-        if getenv(c"NS_NO_SANDBOX").is_some() {
+        if env_flag(c"NS_NO_SANDBOX") {
             return;
         }
         let abi = create_ruleset(None, LANDLOCK_CREATE_RULESET_VERSION);
@@ -593,7 +602,7 @@ mod seccomp {
 #[cfg(target_os = "macos")]
 mod macos {
     use super::{
-        WRITABLE_DIRS, download_dir, getenv, glib_dir, info, own_dir, remembered, warning,
+        WRITABLE_DIRS, download_dir, env_flag, glib_dir, info, own_dir, remembered, warning,
     };
     use core::ffi::{CStr, c_char, c_int, c_void};
     use core::ptr;
@@ -631,7 +640,7 @@ mod macos {
     }
 
     pub(super) fn sandbox_init_profile() {
-        if getenv(c"NS_NO_SANDBOX").is_some() {
+        if env_flag(c"NS_NO_SANDBOX") {
             return;
         }
         let mut profile = crate::SEATBELT_HEAD.to_vec();
@@ -1166,7 +1175,7 @@ pub fn refuse_root() -> bool {
         if !root {
             return true;
         }
-        if getenv(c"NS_ALLOW_ROOT").is_some() {
+        if env_flag(c"NS_ALLOW_ROOT") {
             warning("southstar: running as root because NS_ALLOW_ROOT is set");
             return true;
         }
@@ -1179,7 +1188,7 @@ pub fn refuse_root() -> bool {
         if !windows::is_elevated() {
             return true;
         }
-        if getenv(c"NS_ALLOW_ROOT").is_some() {
+        if env_flag(c"NS_ALLOW_ROOT") {
             warning("southstar: running as Administrator because NS_ALLOW_ROOT is set");
             return true;
         }
@@ -1216,7 +1225,7 @@ pub fn sandbox_init(self_exe: Option<&CStr>) {
 pub fn seccomp_init() {
     #[cfg(target_os = "linux")]
     {
-        let disabled = getenv(c"NS_NO_SANDBOX").is_some() || getenv(c"NS_NO_SECCOMP").is_some();
+        let disabled = env_flag(c"NS_NO_SANDBOX") || env_flag(c"NS_NO_SECCOMP");
         #[cfg(feature = "seccomp")]
         if !disabled {
             seccomp::init();
@@ -1229,7 +1238,7 @@ pub fn seccomp_init() {
 pub fn win32_mitigations_init(allow_child_processes: bool) {
     #[cfg(windows)]
     {
-        if getenv(c"NS_NO_WIN32_MITIGATIONS").is_some() {
+        if env_flag(c"NS_NO_WIN32_MITIGATIONS") {
             return;
         }
         windows::mitigations_init(allow_child_processes);
