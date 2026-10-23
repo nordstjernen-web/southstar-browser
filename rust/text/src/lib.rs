@@ -6,6 +6,7 @@
 
 pub mod attrs;
 pub mod bidi;
+pub mod breaks;
 pub mod coverage;
 pub mod emoji;
 #[allow(unsafe_code)]
@@ -19,5 +20,6 @@ pub mod script;
 pub mod tabs;
 pub mod types;
 pub mod unicode;
+pub mod utils;
 
 pub use types::*;

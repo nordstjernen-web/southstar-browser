@@ -184,3 +184,173 @@ impl Script {
     pub const TAI_YO: Script = Script(174);
     pub const BERIA_ERFE: Script = Script(175);
 }
+
+impl Script {
+    pub fn for_char(ch: u32) -> Script {
+        crate::unicode::script(ch)
+    }
+
+    pub fn is_real(self) -> bool {
+        self > Script::INHERITED && self != Script::UNKNOWN
+    }
+}
+
+const PAREN_STACK_DEPTH: usize = 128;
+
+const PAIRED_CHARS: [u32; 116] = [
+    0x0028, 0x0029, 0x003c, 0x003e, 0x005b, 0x005d, 0x007b, 0x007d, 0x00ab, 0x00bb, 0x0f3a, 0x0f3b,
+    0x0f3c, 0x0f3d, 0x169b, 0x169c, 0x2018, 0x2019, 0x201c, 0x201d, 0x2039, 0x203a, 0x2045, 0x2046,
+    0x207d, 0x207e, 0x208d, 0x208e, 0x27e6, 0x27e7, 0x27e8, 0x27e9, 0x27ea, 0x27eb, 0x27ec, 0x27ed,
+    0x27ee, 0x27ef, 0x2983, 0x2984, 0x2985, 0x2986, 0x2987, 0x2988, 0x2989, 0x298a, 0x298b, 0x298c,
+    0x298d, 0x298e, 0x298f, 0x2990, 0x2991, 0x2992, 0x2993, 0x2994, 0x2995, 0x2996, 0x2997, 0x2998,
+    0x29fc, 0x29fd, 0x2e02, 0x2e03, 0x2e04, 0x2e05, 0x2e09, 0x2e0a, 0x2e0c, 0x2e0d, 0x2e1c, 0x2e1d,
+    0x2e20, 0x2e21, 0x2e22, 0x2e23, 0x2e24, 0x2e25, 0x2e26, 0x2e27, 0x2e28, 0x2e29, 0x3008, 0x3009,
+    0x300a, 0x300b, 0x300c, 0x300d, 0x300e, 0x300f, 0x3010, 0x3011, 0x3014, 0x3015, 0x3016, 0x3017,
+    0x3018, 0x3019, 0x301a, 0x301b, 0xfe59, 0xfe5a, 0xfe5b, 0xfe5c, 0xfe5d, 0xfe5e, 0xff08, 0xff09,
+    0xff3b, 0xff3d, 0xff5b, 0xff5d, 0xff5f, 0xff60, 0xff62, 0xff63,
+];
+
+fn pair_index(ch: u32) -> Option<usize> {
+    PAIRED_CHARS.binary_search(&ch).ok()
+}
+
+fn is_cluster_extender(ch: u32) -> bool {
+    use crate::unicode::UnicodeType;
+    let category = crate::unicode::unichar_type(ch);
+    (category >= UnicodeType::SpacingMark && category <= UnicodeType::NonSpacingMark)
+        || (0x200C..=0x200D).contains(&ch)
+        || (0xFF9E..=0xFF9F).contains(&ch)
+        || (0x1F3FB..=0x1F3FF).contains(&ch)
+        || (0xE0020..=0xE007F).contains(&ch)
+}
+
+fn same_script(script1: Script, script2: Script, ch: u32) -> bool {
+    !script1.is_real() || !script2.is_real() || script1 == script2 || is_cluster_extender(ch)
+}
+
+#[derive(Clone, Copy)]
+struct ParenStackEntry {
+    pair_index: usize,
+    script_code: Script,
+}
+
+#[derive(Clone)]
+pub struct ScriptIter<'a> {
+    text: &'a str,
+    script_start: usize,
+    script_end: usize,
+    script_code: Script,
+    paren_stack: [ParenStackEntry; PAREN_STACK_DEPTH],
+    paren_sp: isize,
+    exhausted: bool,
+}
+
+impl<'a> ScriptIter<'a> {
+    pub fn new(text: &'a str) -> ScriptIter<'a> {
+        let mut iter = ScriptIter {
+            text,
+            script_start: 0,
+            script_end: 0,
+            script_code: Script::COMMON,
+            paren_stack: [ParenStackEntry {
+                pair_index: 0,
+                script_code: Script::COMMON,
+            }; PAREN_STACK_DEPTH],
+            paren_sp: -1,
+            exhausted: false,
+        };
+        iter.next_range();
+        iter
+    }
+
+    pub fn range(&self) -> (usize, usize, Script) {
+        (self.script_start, self.script_end, self.script_code)
+    }
+
+    fn stack_slot(&mut self, sp: isize) -> &mut ParenStackEntry {
+        &mut self.paren_stack[sp.unsigned_abs()]
+    }
+
+    pub fn next_range(&mut self) -> bool {
+        if self.script_end == self.text.len() {
+            return false;
+        }
+
+        let mut start_sp = self.paren_sp;
+        self.script_code = Script::COMMON;
+        self.script_start = self.script_end;
+
+        let text = self.text;
+        for (offset, character) in text[self.script_end..].char_indices() {
+            self.script_end = self.script_start + offset;
+            let ch = u32::from(character);
+            let mut sc = Script::for_char(ch);
+            let pair = if sc != Script::COMMON {
+                None
+            } else {
+                pair_index(ch)
+            };
+
+            if let Some(pair) = pair {
+                if pair & 1 == 0 {
+                    self.paren_sp += 1;
+                    if self.paren_sp >= PAREN_STACK_DEPTH as isize {
+                        self.paren_sp = 0;
+                    }
+                    let script_code = self.script_code;
+                    let sp = self.paren_sp;
+                    *self.stack_slot(sp) = ParenStackEntry {
+                        pair_index: pair,
+                        script_code,
+                    };
+                } else if self.paren_sp >= 0 {
+                    let opening = pair & !1;
+                    while self.paren_sp >= 0
+                        && self.paren_stack[self.paren_sp.unsigned_abs()].pair_index != opening
+                    {
+                        self.paren_sp -= 1;
+                    }
+                    if self.paren_sp < start_sp {
+                        start_sp = self.paren_sp;
+                    }
+                    if self.paren_sp >= 0 {
+                        sc = self.paren_stack[self.paren_sp.unsigned_abs()].script_code;
+                    }
+                }
+            }
+
+            if same_script(self.script_code, sc, ch) {
+                if !self.script_code.is_real() && sc.is_real() {
+                    self.script_code = sc;
+                    while start_sp < self.paren_sp {
+                        start_sp += 1;
+                        self.stack_slot(start_sp).script_code = sc;
+                    }
+                }
+                if pair.is_some_and(|p| p & 1 == 1) && self.paren_sp >= 0 {
+                    self.paren_sp -= 1;
+                    if self.paren_sp < start_sp {
+                        start_sp = self.paren_sp;
+                    }
+                }
+            } else {
+                return true;
+            }
+        }
+        self.script_end = self.text.len();
+        true
+    }
+}
+
+impl Iterator for ScriptIter<'_> {
+    type Item = (usize, usize, Script);
+
+    fn next(&mut self) -> Option<(usize, usize, Script)> {
+        if self.exhausted {
+            return None;
+        }
+        let range = self.range();
+        self.exhausted = !self.next_range();
+        Some(range)
+    }
+}
