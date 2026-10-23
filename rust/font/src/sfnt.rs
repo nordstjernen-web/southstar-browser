@@ -58,6 +58,9 @@ pub(crate) fn from_face(face: &Face) -> Option<(Vec<u8>, bool)> {
     let mut cff = false;
     for index in 0..count as c_uint {
         let (tag, len) = face.table_info(index)?;
+        if tables.iter().any(|table: &Table| table.tag == tag) {
+            return None;
+        }
         cff |= tag == CFF_TAG;
         tables.push(Table {
             tag,
@@ -81,7 +84,8 @@ pub(crate) fn from_face(face: &Face) -> Option<(Vec<u8>, bool)> {
     put_be16(&mut buf, 8, entry_selector as u16);
     put_be16(&mut buf, 10, range_shift);
     for (index, table) in tables.iter().enumerate() {
-        if !face.load_table(table.tag, &mut buf[table.offset..], table.len) {
+        let end = table.offset + table.len as usize;
+        if !face.load_table(table.tag, &mut buf[table.offset..end], table.len) {
             return None;
         }
         let sum = checksum(&buf[table.offset..table.offset + padded(table.len)]);
