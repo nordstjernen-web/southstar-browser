@@ -447,7 +447,8 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                     &lines,
                 )
             })
-            .flatten();
+            .flatten()
+            .filter(|preflight| !preflight.cached(request.url.as_bytes(), page.as_deref()));
         match preflight {
             None => request.send(None, move |resp, error| {
                 done(Ticket { js, id }, resp, error.is_some());
@@ -455,7 +456,7 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             Some(preflight) => {
                 let check = preflight.request(&request.url, request.top.as_ref());
                 check.send(None, move |resp, _error| {
-                    if preflight.passed(&resp, page.as_deref()) {
+                    if preflight.passed(&resp, page.as_deref(), request.url.as_bytes()) {
                         request.send(None, move |resp, error| {
                             done(Ticket { js, id }, resp, error.is_some());
                         });
