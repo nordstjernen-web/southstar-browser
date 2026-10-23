@@ -2,6 +2,7 @@
 //! Copyright 1999 Red Hat Software; 2006 Behdad Esfahbod; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
+#[cfg(feature = "thai")]
 use crate::ffi::thai;
 use crate::script::Script;
 use crate::types::LogAttr;
@@ -113,6 +114,10 @@ fn break_indic(text: &str, script: Script, attrs: &mut [LogAttr]) {
     }
 }
 
+#[cfg(not(feature = "thai"))]
+fn break_thai(_text: &str, _attrs: &mut [LogAttr]) {}
+
+#[cfg(feature = "thai")]
 fn break_thai(text: &str, attrs: &mut [LogAttr]) {
     let mut tis_text: Vec<u8> = text
         .chars()

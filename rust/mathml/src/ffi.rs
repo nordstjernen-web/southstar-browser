@@ -1,24 +1,15 @@
-//! Southstar — the C ABI of MathML layout, over Cairo, ns-pango token layouts and GLib's Unicode tables.
+//! Southstar — the C ABI of MathML layout, over Cairo, southstar-text token layouts and GLib's Unicode tables.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
-use core::ptr;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
+use southstar_paint::text_layout::{self, FontDescription, Layout};
+use southstar_text::font::CairoContext;
 
 pub const PANGO_SCALE: f64 = 1024.0;
-const PANGO_STYLE_NORMAL: c_int = 0;
-const PANGO_STYLE_ITALIC: c_int = 2;
-
-#[repr(C)]
-struct PangoRectangle {
-    x: c_int,
-    y: c_int,
-    width: c_int,
-    height: c_int,
-}
 
 unsafe extern "C" {
     fn cairo_save(cr: *mut c_void);
@@ -28,45 +19,6 @@ unsafe extern "C" {
     fn cairo_stroke(cr: *mut c_void);
     fn cairo_set_line_width(cr: *mut c_void, width: f64);
     fn cairo_set_source_rgba(cr: *mut c_void, red: f64, green: f64, blue: f64, alpha: f64);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_new")]
-    fn pango_layout_new(context: *mut c_void) -> *mut c_void;
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_new")]
-    fn pango_font_description_new() -> *mut c_void;
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_family"
-    )]
-    fn pango_font_description_set_family(desc: *mut c_void, family: *const c_char);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_absolute_size"
-    )]
-    fn pango_font_description_set_absolute_size(desc: *mut c_void, size: f64);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_style"
-    )]
-    fn pango_font_description_set_style(desc: *mut c_void, style: c_int);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_layout_set_font_description"
-    )]
-    fn pango_layout_set_font_description(layout: *mut c_void, desc: *const c_void);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_free")]
-    fn pango_font_description_free(desc: *mut c_void);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_set_text")]
-    fn pango_layout_set_text(layout: *mut c_void, text: *const c_char, length: c_int);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_get_baseline")]
-    fn pango_layout_get_baseline(layout: *mut c_void) -> c_int;
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_get_extents")]
-    fn pango_layout_get_extents(
-        layout: *mut c_void,
-        ink: *mut PangoRectangle,
-        logical: *mut PangoRectangle,
-    );
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_cairo_show_layout")]
-    fn pango_cairo_show_layout(cr: *mut c_void, layout: *mut c_void);
-    fn g_object_unref(object: *mut c_void);
     fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_utf8_get_char(p: *const c_char) -> u32;
     fn g_unichar_isalpha(c: u32) -> GBoolean;
@@ -104,56 +56,39 @@ impl Canvas {
     }
 }
 
-pub struct Token(*mut c_void);
+pub struct Token(Layout);
 
 impl Token {
     pub fn new(text: &CStr, fpx: f64, italic: bool) -> Token {
         let size = if fpx < 1.0 { 1.0 } else { fpx };
-        let context = southstar_paint::text_context().raw();
-        let font_size = f64::from(southstar_paint::pango_font_size(size));
-        unsafe {
-            let layout = pango_layout_new(context);
-            let desc = pango_font_description_new();
-            pango_font_description_set_family(desc, c"serif".as_ptr());
-            pango_font_description_set_absolute_size(desc, font_size);
-            pango_font_description_set_style(
-                desc,
-                if italic {
-                    PANGO_STYLE_ITALIC
-                } else {
-                    PANGO_STYLE_NORMAL
-                },
-            );
-            pango_layout_set_font_description(layout, desc);
-            pango_font_description_free(desc);
-            pango_layout_set_text(layout, text.as_ptr(), -1);
-            Token(layout)
-        }
+        let layout = Layout::new(southstar_paint::text_context());
+        let mut desc = FontDescription::new();
+        desc.set_family(c"serif");
+        desc.set_absolute_size(f64::from(southstar_paint::pango_font_size(size)));
+        desc.set_style(if italic {
+            text_layout::STYLE_ITALIC
+        } else {
+            text_layout::STYLE_NORMAL
+        });
+        layout.set_font_description(&desc);
+        layout.set_text(text);
+        Token(layout)
     }
 
     pub fn baseline(&self) -> c_int {
-        unsafe { pango_layout_get_baseline(self.0) }
+        self.0.baseline()
     }
 
     pub fn logical_size(&self) -> (c_int, c_int) {
-        let mut logical = PangoRectangle {
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-        };
-        unsafe { pango_layout_get_extents(self.0, ptr::null_mut(), &mut logical) };
+        let logical = self.0.logical_extents();
         (logical.width, logical.height)
     }
 
     pub fn show(&self, canvas: &Canvas) {
-        unsafe { pango_cairo_show_layout(canvas.0, self.0) };
-    }
-}
-
-impl Drop for Token {
-    fn drop(&mut self) {
-        unsafe { g_object_unref(self.0) };
+        // SAFETY: a Canvas wraps the live cairo_t ns_math_paint was handed.
+        if let Some(cr) = unsafe { CairoContext::from_raw(canvas.0) } {
+            self.0.show_on(&cr);
+        }
     }
 }
 

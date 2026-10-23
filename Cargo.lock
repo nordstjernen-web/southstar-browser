@@ -1865,6 +1865,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
+ "southstar-text",
  "southstar-texture",
 ]
 
@@ -2119,6 +2120,7 @@ dependencies = [
  "southstar-selection",
  "southstar-spellcheck",
  "southstar-svg",
+ "southstar-text",
  "southstar-texture",
  "southstar-threaddump",
  "southstar-video",
@@ -2139,6 +2141,7 @@ dependencies = [
  "southstar-digest",
  "southstar-glib",
  "southstar-net",
+ "southstar-text",
  "southstar-url",
  "southstar-woff2",
 ]
@@ -2700,6 +2703,7 @@ dependencies = [
  "southstar-i18n",
  "southstar-intl-core",
  "southstar-js-engine",
+ "southstar-text",
 ]
 
 [[package]]
@@ -3332,6 +3336,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-paint",
+ "southstar-text",
 ]
 
 [[package]]
@@ -3406,6 +3411,7 @@ dependencies = [
  "southstar-spellcheck",
  "southstar-style",
  "southstar-svg",
+ "southstar-text",
  "southstar-texture",
  "southstar-video",
 ]
@@ -3545,6 +3551,7 @@ dependencies = [
  "southstar-sandbox",
  "southstar-spellcheck",
  "southstar-svg",
+ "southstar-text",
  "southstar-threaddump",
  "southstar-url",
  "southstar-watchdog",
@@ -3591,6 +3598,7 @@ dependencies = [
  "southstar-layout",
  "southstar-netutil",
  "southstar-style",
+ "southstar-text",
  "southstar-texture",
 ]
 

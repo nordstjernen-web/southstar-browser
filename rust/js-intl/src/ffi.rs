@@ -1,20 +1,17 @@
-//! Southstar — the GLib, C library and Pango calls behind Intl.
+//! Southstar — the GLib, C library and southstar-text calls behind Intl.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib as glib;
+use southstar_text::LogAttr;
+use southstar_text::breaks::get_log_attrs;
+use southstar_text::language::Language;
 
 #[repr(C)]
 struct GTimeZone {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct PangoLanguage {
     _private: [u8; 0],
 }
 
@@ -47,17 +44,6 @@ unsafe extern "C" {
     fn g_time_zone_new_local() -> *mut GTimeZone;
     fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
     fn g_time_zone_unref(tz: *mut GTimeZone);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_language_from_string")]
-    fn pango_language_from_string(language: *const c_char) -> *mut PangoLanguage;
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_get_log_attrs")]
-    fn pango_get_log_attrs(
-        text: *const c_char,
-        length: c_int,
-        level: c_int,
-        language: *mut PangoLanguage,
-        attrs: *mut u32,
-        attrs_len: c_int,
-    );
 }
 
 #[cfg(not(windows))]
@@ -136,53 +122,32 @@ pub(crate) fn language_names() -> Vec<Vec<u8>> {
     names
 }
 
-const CURSOR_POSITION: u32 = 4;
-const SENTENCE_BOUNDARY: u32 = 7;
-const WORD_BOUNDARY: u32 = 12;
-
-fn flag(attr: u32, bit: u32) -> bool {
-    if cfg!(target_endian = "big") {
-        attr & (1 << (31 - bit)) != 0
-    } else {
-        attr & (1 << bit) != 0
-    }
-}
-
-pub(crate) struct LogAttrs(Vec<u32>);
+pub(crate) struct LogAttrs(Vec<LogAttr>);
 
 impl LogAttrs {
     pub(crate) fn cursor_position(&self, at: usize) -> bool {
-        flag(self.0[at], CURSOR_POSITION)
+        self.0[at].is_cursor_position()
     }
 
     pub(crate) fn word_boundary(&self, at: usize) -> bool {
-        flag(self.0[at], WORD_BOUNDARY)
+        self.0[at].is_word_boundary()
     }
 
     pub(crate) fn sentence_boundary(&self, at: usize) -> bool {
-        flag(self.0[at], SENTENCE_BOUNDARY)
+        self.0[at].is_sentence_boundary()
     }
 }
 
-pub(crate) fn pango_language(locale: &[u8]) -> Option<CString> {
+pub(crate) fn text_language(locale: &[u8]) -> Option<CString> {
     (!locale.is_empty()).then(|| cstring(locale))
 }
 
 pub(crate) fn log_attrs(text: &CStr, chars: usize, language: Option<&CString>) -> LogAttrs {
-    let language = language.map_or(ptr::null_mut(), |tag| unsafe {
-        pango_language_from_string(tag.as_ptr())
-    });
-    let mut attrs = vec![0u32; chars + 1];
-    unsafe {
-        pango_get_log_attrs(
-            text.as_ptr(),
-            text.to_bytes().len() as c_int,
-            -1,
-            language,
-            attrs.as_mut_ptr(),
-            (chars + 1) as c_int,
-        )
-    };
+    let language = language.map(|tag| Language::from_string(&tag.to_string_lossy()));
+    let text = text.to_string_lossy();
+    let mut attrs = vec![LogAttr::default(); text.chars().count() + 1];
+    get_log_attrs(&text, language.map(Language::as_str), &mut attrs);
+    attrs.resize(chars + 1, LogAttr::default());
     LogAttrs(attrs)
 }
 

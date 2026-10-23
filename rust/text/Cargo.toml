@@ -9,6 +9,7 @@ publish.workspace = true
 
 [features]
 rust-shaper = ["dep:harfrust", "dep:read-fonts"]
+thai = []
 
 [dependencies]
 harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }

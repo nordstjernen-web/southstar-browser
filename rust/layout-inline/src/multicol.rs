@@ -4,7 +4,7 @@
 
 use southstar_layout::{BoxKind, BoxPool, BoxRef, Style, children, inline_kind};
 use southstar_layout_tree::{append_child, clone_range};
-use southstar_paint::ffi::pango::{self, AttrList, Layout};
+use southstar_paint::text_layout::{self, AttrList, Layout};
 use southstar_style::{PropId, ValueRef};
 
 use crate::{attrs, ffi};
@@ -58,7 +58,7 @@ pub fn can_fragment(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
 
 fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: *const Style) -> Layout {
     let layout = ffi::new_layout(ps);
-    layout.set_width((content_width * pango::SCALE_F) as i32);
+    layout.set_width((content_width * text_layout::SCALE_F) as i32);
     layout.set_wrap(ffi::wrap_mode_for(ps));
     if b.inline_atomics().is_none_or(|a| a.is_empty()) {
         ffi::apply_css_line_spacing(&layout, ps);
@@ -162,7 +162,7 @@ pub fn run_break_before(run: BoxRef<'_>, band_height: f64) -> usize {
     let mut iter = layout.iter();
     loop {
         let logical = iter.line_logical_extents();
-        if f64::from(logical.y) / pango::SCALE_F >= band_height - 0.5 {
+        if f64::from(logical.y) / text_layout::SCALE_F >= band_height - 0.5 {
             return iter.index() as usize;
         }
         if !iter.next_line() {

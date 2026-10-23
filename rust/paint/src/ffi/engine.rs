@@ -15,7 +15,7 @@ use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_style::{StyleRef, Transform, ValueRef};
 use southstar_video::BoxVideo;
 
-use super::pango::{AttrList, Layout};
+use crate::text_layout::{AttrList, Layout};
 use crate::util::Rgba;
 
 pub use southstar_css::FontMetrics;
@@ -185,8 +185,8 @@ unsafe extern "C" {
         y0: *mut c_double,
         y1: *mut c_double,
     ) -> GBoolean;
-    fn ns_inline_apply_atomic_shapes(attrs: *mut c_void, b: *const NsBox);
-    fn ns_inline_layout_set_attrs(layout: *mut c_void, attrs: *mut c_void, b: *const NsBox);
+    fn ns_inline_apply_atomic_shapes(attrs: *const c_void, b: *const NsBox);
+    fn ns_inline_layout_set_attrs(layout: *const c_void, attrs: *const c_void, b: *const NsBox);
     fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
     fn ns_math_paint(
         cr: *mut c_void,
@@ -270,11 +270,17 @@ pub fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64, f64)> {
 }
 
 pub fn inline_apply_atomic_shapes(attrs: &AttrList, b: BoxRef<'_>) {
-    unsafe { ns_inline_apply_atomic_shapes(attrs.raw(), b.as_ptr()) };
+    unsafe { ns_inline_apply_atomic_shapes(ptr::from_ref(attrs).cast(), b.as_ptr()) };
 }
 
 pub fn inline_layout_set_attrs(layout: &Layout, attrs: &AttrList, b: BoxRef<'_>) {
-    unsafe { ns_inline_layout_set_attrs(layout.raw(), attrs.raw(), b.as_ptr()) };
+    unsafe {
+        ns_inline_layout_set_attrs(
+            ptr::from_ref(layout).cast(),
+            ptr::from_ref(attrs).cast(),
+            b.as_ptr(),
+        )
+    };
 }
 
 pub fn control_css_extra_w(r: &InlineAttr, s: StyleRef<'_>) -> f64 {

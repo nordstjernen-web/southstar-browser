@@ -1,6 +1,6 @@
 [package]
 name = "southstar-mathml"
-description = "Minimalist MathML presentation layout and paint, measured with Pango and drawn with Cairo"
+description = "Minimalist MathML presentation layout and paint, measured with southstar-text and drawn with Cairo"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,9 +11,7 @@ publish.workspace = true
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-paint = { path = "../paint" }
-
-[features]
-ns-pango = []
+southstar-text = { path = "../text" }
 
 [lints]
 workspace = true
