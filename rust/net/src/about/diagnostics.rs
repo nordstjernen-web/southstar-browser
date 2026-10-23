@@ -104,7 +104,7 @@ pub fn html() -> Vec<u8> {
         "GLib",
         Some(format!("{major}.{minor}.{micro}").as_bytes()),
     );
-    kv(&mut s, "Pango", v.pango.as_deref());
+    kv(&mut s, "Text layout", Some(b"rust/text (in-tree)"));
     kv(&mut s, "Cairo", v.cairo.as_deref());
     kv(&mut s, "SQLite", v.sqlite.as_deref());
     let webp = format!(

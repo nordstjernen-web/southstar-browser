@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Text layout is now Rust: `rust/text` (`southstar-text`) is a port of
+  web-text-lib, the Pango fork the browser used, covering attributes, line
+  breaking, bidi, itemization, the fontconfig/FreeType/cairo font stack,
+  HarfBuzz shaping with the shape and item caches, paragraph layout with
+  ellipsizing and justification, and cairo rendering. Each part was checked
+  against the C library on large randomized corpora, and pages render
+  pixel-identically. `third_party/web-text-lib`, the `ns-pango` option, the
+  system-Pango fallback and the `ns_pango_*` FFI in nine crates are gone;
+  callers use the Rust API. The crate is LGPL-2.0-or-later, as a
+  translation of Pango. HarfBuzz, FriBiDi, fontconfig, FreeType and cairo
+  are now direct build dependencies, and libthai an optional one.
+* `-Drust-shaper=true` shapes text with HarfRust, the HarfBuzz project's
+  pure-Rust port (step 1 of `docs/pure-rust-text.md`); it adds the
+  `harfrust`, `read-fonts` and `font-types` crates. Off by default;
+  `NS_TEXT_SHAPER=harfbuzz` switches back at runtime.
 * `docs/pure-rust-text.md` describes a possible later step for the text
   stack: replacing HarfBuzz, FreeType, FriBiDi and GLib's Unicode data under
   text layout with Rust crates, so web fonts are parsed by memory-safe code.

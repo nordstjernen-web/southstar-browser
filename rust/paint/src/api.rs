@@ -13,7 +13,7 @@ use southstar_selection::NsSelection;
 use southstar_style::StyleRef;
 
 use crate::document::{self, DocLayers, LayerPlan};
-use crate::ffi::pango::Context;
+use crate::text_layout::{AttrList, Attribute, Context, Layout};
 use crate::walk::VpCapture;
 use crate::{inline, marker, state, text, three_d};
 
@@ -161,6 +161,48 @@ pub fn text_context() -> Context {
 
 pub fn pango_font_size(size_px: f64) -> i32 {
     text::pango_font_size(size_px)
+}
+
+pub fn wrap_mode_for(s: Option<StyleRef<'_>>) -> i32 {
+    text::wrap_mode_for(s)
+}
+
+pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
+    text::apply_inline_font(layout, s);
+}
+
+pub fn apply_css_line_spacing(layout: &Layout, s: Option<StyleRef<'_>>) {
+    text::apply_css_line_spacing(Some(layout), s);
+}
+
+pub fn apply_i18n(layout: &Layout, attrs: &AttrList, b: BoxRef<'_>) {
+    text::apply_i18n(Some(layout), Some(attrs), Some(b));
+}
+
+pub fn apply_font_features(attrs: &AttrList, s: Option<StyleRef<'_>>) {
+    if let Some(s) = s {
+        text::apply_font_features(attrs, s, 0, u32::MAX);
+    }
+}
+
+pub fn start_align_overflow(layout: &Layout) {
+    text::start_align_overflow(layout);
+}
+
+pub fn font_features_attr(
+    kerning: i32,
+    ligatures: Option<&CStr>,
+    settings: Option<&CStr>,
+) -> Option<Attribute> {
+    text::font_features_attr(kerning, ligatures, settings)
+}
+
+pub fn font_variations_attr(settings: Option<&CStr>) -> Option<Attribute> {
+    text::font_variations_attr(settings)
+}
+
+pub fn build_inline_layout(b: BoxRef<'_>) -> Option<Layout> {
+    inline::build_inline_layout(b)
 }
 
 pub fn css_line_height_px(s: Option<StyleRef<'_>>) -> f64 {

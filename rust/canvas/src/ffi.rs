@@ -13,9 +13,9 @@ mod draw;
 mod exports;
 mod imports;
 mod objects;
-pub(crate) mod pango;
 mod source;
 pub(crate) mod state;
+pub(crate) mod text_layout;
 
 pub(crate) use draw::{ctx_state, mark_mutated};
 pub(crate) use source::drawimage_source;

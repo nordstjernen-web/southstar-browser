@@ -29,7 +29,10 @@ makedepends="
 	ffmpeg-dev
 	poppler-dev
 	fontconfig-dev
-	pango-dev
+	harfbuzz-dev
+	fribidi-dev
+	freetype-dev
+	libthai-dev
 	sdl2-dev
 	"
 source="$pkgname-$pkgver.tar.gz::https://github.com/nordstjernen-web/southstar-browser/archive/refs/tags/$pkgver.tar.gz"
@@ -39,8 +42,7 @@ builddir="$srcdir/southstar-browser-$pkgver"
 options="!check"
 
 build() {
-	# Shape text through the system Pango the distribution already ships.
-	abuild-meson -Dns-pango=disabled -Dwebgpu=disabled . output
+	abuild-meson -Dwebgpu=disabled . output
 	meson compile -C output
 }
 

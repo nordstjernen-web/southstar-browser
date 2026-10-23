@@ -26,7 +26,6 @@ endif
 %:
 	dh $@
 
-# Shape text through the system Pango the distribution already ships;
 # wgpu-native is not packaged, so WebGPU is left out. AVIF and the audio
 # helper are required explicitly so a missing build dependency fails the build
 # instead of silently dropping a feature.
@@ -37,7 +36,6 @@ ifneq ($(wildcard vendor/.),)
 		'$(CURDIR)/vendor' > $(CARGO_HOME)/config.toml
 endif
 	dh_auto_configure -- \
-		-Dns-pango=disabled \
 		-Dwebgpu=disabled \
 		-Davif=enabled \
 		-Daudio=enabled \

@@ -22,7 +22,7 @@ install_apt() {
         libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl2-dev
     apt-get install -y --no-install-recommends \
         libpoppler-glib-dev \
-        libfontconfig-dev libpango1.0-dev libavif-dev || true
+        libfontconfig-dev libharfbuzz-dev libfribidi-dev libfreetype-dev libthai-dev libavif-dev || true
     # FFmpeg libav* backs the inline WebM path (VP9/VP8 video + Opus/Vorbis
     # audio). meson requires it on Linux, so this is not optional — its own
     # line to keep the failure legible when a mirror is missing the packages.
@@ -78,7 +78,7 @@ install_zypper() {
         || echo "nightly-distro-build(opensuse): SDL2 unavailable; audio helper skipped" >&2
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
         libpoppler-glib-devel \
-        fontconfig-devel pango-devel libavif-devel || true
+        fontconfig-devel harfbuzz-devel fribidi-devel freetype-devel libthai-devel libavif-devel || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). meson requires it on
     # Linux, so a failure here is fatal; if the default repos come up short,
     # the container needs Packman enabled.
@@ -94,7 +94,7 @@ install_apk() {
         libseccomp-dev libwebp-dev sdl2-dev rust cargo
     apk add --no-cache \
         poppler-dev \
-        fontconfig-dev pango-dev libavif-dev || true
+        fontconfig-dev harfbuzz-dev fribidi-dev freetype-dev libthai-dev libavif-dev || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). ffmpeg-dev provides
     # all of libavformat/libavcodec/libavutil/libswscale/libswresample, and
     # meson requires them on Linux.

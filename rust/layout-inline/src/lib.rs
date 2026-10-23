@@ -1,4 +1,4 @@
-//! Southstar — inline layout ported from layout.c: line boxes over ns-pango, line-height struts, atomic inlines, text alignment, vertical text, the measurement cache, inline intrinsic widths and the form control a point in a run falls on.
+//! Southstar — inline layout ported from layout.c: line boxes over southstar-text, line-height struts, atomic inlines, text alignment, vertical text, the measurement cache, inline intrinsic widths and the form control a point in a run falls on.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

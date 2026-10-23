@@ -112,6 +112,7 @@ pub use southstar_sandbox;
 pub use southstar_selection;
 pub use southstar_spellcheck;
 pub use southstar_svg;
+pub use southstar_text;
 pub use southstar_texture;
 pub use southstar_threaddump;
 pub use southstar_video;

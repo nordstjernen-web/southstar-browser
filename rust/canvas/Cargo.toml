@@ -18,10 +18,10 @@ southstar-js-images = { path = "../js-images" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
+southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
 
 [features]
-ns-pango = []
 webgpu = []
 
 [lints]

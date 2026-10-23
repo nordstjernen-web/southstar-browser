@@ -8,7 +8,7 @@ use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::keyword_is;
 use southstar_layout_geom::{node_is_form_hit_target, style_blocks_hit_testing, text_indent_px};
-use southstar_paint::ffi::pango::{
+use southstar_paint::text_layout::{
     ALIGN_CENTER, ALIGN_LEFT, ALIGN_RIGHT, AttrList, DIRECTION_RTL, ELLIPSIZE_END, SCALE,
 };
 use southstar_style::{PropId, StyleRef};

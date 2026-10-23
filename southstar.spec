@@ -47,9 +47,10 @@ BuildRequires:  pkgconfig(sdl2)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(uchardet)
 BuildRequires:  pkgconfig(fontconfig)
-BuildRequires:  pkgconfig(pango)
-BuildRequires:  pkgconfig(pangocairo)
-BuildRequires:  pkgconfig(pangoft2)
+BuildRequires:  pkgconfig(harfbuzz)
+BuildRequires:  pkgconfig(fribidi)
+BuildRequires:  pkgconfig(freetype2)
+BuildRequires:  pkgconfig(cairo-ft)
 Requires:       hicolor-icon-theme
 Recommends:     mpv
 Recommends:     myspell-en_US
@@ -88,7 +89,6 @@ test -f meson.build
 %endif
 %meson \
     -Dwebgpu=disabled \
-    -Dns-pango=disabled \
     %{?extra_meson}
 %meson_build
 

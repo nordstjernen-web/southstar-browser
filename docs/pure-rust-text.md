@@ -1,15 +1,21 @@
 # Pure-Rust shaping and fonts
 
-Status: proposal. Nothing here is implemented yet.
+Status: step 1 (shaping) is implemented as an option: `-Drust-shaper=true`
+(cargo feature `rust-shaper` on `southstar-text`) shapes with HarfRust, and
+`NS_TEXT_SHAPER=harfbuzz` switches back at runtime. On Windows it matched
+HarfBuzz exactly in 97% of a 22,000-case corpus, with no glyph or cluster
+differences; the rest are small positioning differences in fallback spaces,
+variable fonts, fallback mark placement and vertical origins. The other
+steps are not started.
 
 This note describes a possible later step for Southstar's text stack:
 replacing the C libraries under text layout — HarfBuzz, FreeType,
 fontconfig, FriBiDi — with Rust crates, so that untrusted font files and
 page text are handled by memory-safe code all the way down.
 
-It follows the port of web-text-lib (the Pango fork in
-`third_party/web-text-lib`) to the Rust crate `rust/text`. That port is
-faithful: it keeps Pango's algorithms and keeps calling the same C
+It follows the port of web-text-lib (the Pango fork Southstar used to
+build from `third_party/web-text-lib`) to the Rust crate `rust/text`. That
+port, now done, is faithful: it keeps Pango's algorithms and keeps calling the same C
 libraries, so pages render the same. This proposal changes what sits
 underneath.
 

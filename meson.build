@@ -110,9 +110,9 @@ message('southstar build profile: ' +
         (ns_is_release ? 'release (LTO + stripped + hardened)'
                        : 'development (debug symbols + frame pointer + hardened)'))
 
-# The engine uses no GTK widgets: it links the GLib/cairo/pango graphics stack
+# The engine uses no GTK widgets: it links the GLib/cairo graphics stack
 # directly, and GdkTexture is replaced by the ns_texture abstraction
-# (src/texture.c). The engine paints with Cairo/Pango and wraps decoded images in the
+# (src/texture.c). The engine paints with Cairo and southstar-text and wraps decoded images in the
 # ns_texture abstraction (no GdkTexture), so the graphics stack is declared
 # directly rather than pulled in transitively through gtk4. The toolkit
 # (gtk4/epoxy) stays out of the shared engine deps and is added only to the
@@ -121,23 +121,18 @@ message('southstar build profile: ' +
 # renderer-only build that needs no GTK 4 at all.
 gtk_feature = get_option('gtk')
 gtk4_min = host_machine.system() == 'windows' ? '>=4.22.1' : '>=4.14'
-use_ns_pango = get_option('ns-pango').allowed()
 
-# web-text-lib enforces the text-stack floors from inside its meson.build, where a
-# too-old library surfaces as a bare version mismatch and only the first of
-# several is reported. Checking every hard floor here first names them all.
-ns_dependency_floors = []
-if use_ns_pango
-  ns_dependency_floors += [
-    ['glib-2.0', '>=2.80'],
-    ['gobject-2.0', '>=2.80'],
-    ['gio-2.0', '>=2.80'],
-    ['cairo', '>=1.18'],
-    ['harfbuzz', '>=8.3'],
-    ['fribidi', '>=1.0.6'],
-    ['fontconfig', '>=2.15'],
-  ]
-endif
+# Checking every hard floor up front names all the libraries that are too old,
+# rather than stopping at the first bare version mismatch.
+ns_dependency_floors = [
+  ['glib-2.0', '>=2.80'],
+  ['gobject-2.0', '>=2.80'],
+  ['gio-2.0', '>=2.80'],
+  ['cairo', '>=1.18'],
+  ['harfbuzz', '>=8.3'],
+  ['fribidi', '>=1.0.6'],
+  ['fontconfig', '>=2.15'],
+]
 if gtk_feature.enabled()
   ns_dependency_floors += [['gtk4', gtk4_min]]
 endif
@@ -150,15 +145,10 @@ foreach floor : ns_dependency_floors
   endif
 endforeach
 if ns_unmet_floors.length() > 0
-  ns_floor_hint = ''
-  if use_ns_pango
-    ns_floor_hint = (' -Dns-pango=disabled drops the text-stack floors by ' +
-                     'shaping through the system Pango.')
-  endif
   error('Southstar needs newer system libraries than this machine has:\n' +
         '\n'.join(ns_unmet_floors) + '\n' +
         'Ubuntu 24.04, Debian 13 and Fedora 40 are the oldest releases of ' +
-        'their distributions that ship all of them.' + ns_floor_hint)
+        'their distributions that ship all of them.')
 endif
 
 glib       = dependency('glib-2.0')
@@ -166,19 +156,14 @@ gobject    = dependency('gobject-2.0')
 gio        = dependency('gio-2.0')
 cairo      = dependency('cairo')
 
-# Text is shaped through web-text-lib (third_party/web-text-lib), a Pango fork
-# built in-tree that caches finished glyph strings across layouts; every symbol
-# in it is renamed, because GTK loads the system Pango into the same process.
-# -Dns-pango=disabled links the system Pango instead, and the Rust crates link
-# its stock symbol names (feature ns-pango off).
-# The library is built just before the Rust workspace, after every
-# add_project_arguments call, since meson forbids those once a target exists.
-if use_ns_pango
-  add_project_arguments('-DNS_USE_NS_PANGO=1', language: 'c')
-else
-  pango      = dependency('pango')
-  pangocairo = dependency('pangocairo')
-endif
+# Text is laid out by the in-tree Rust crate rust/text (southstar-text), which
+# shapes with HarfBuzz, resolves bidi with FriBiDi, finds fonts with fontconfig
+# and draws through cairo's FreeType backend. libthai, when present, adds
+# dictionary-based Thai word breaking.
+harfbuzz   = dependency('harfbuzz', version: '>=8.3')
+fribidi    = dependency('fribidi', version: '>=1.0.6')
+cairo_ft   = dependency('cairo-ft', version: '>=1.18')
+libthai    = dependency('libthai', version: '>=0.1.9', required: false)
 
 # libepoxy is the GL/EGL dispatch layer for WebGL. It lives in the shared
 # engine deps (not the GTK shell) because WebGL renders to an offscreen
@@ -288,22 +273,12 @@ if have_poppler
   add_project_arguments('-DNS_HAVE_POPPLER=1', language: 'c')
 endif
 
-libfontconfig = dependency('fontconfig', required: false)
+libfontconfig = dependency('fontconfig', version: '>=2.15')
 have_fontconfig = libfontconfig.found()
 if have_fontconfig
   add_project_arguments('-DNS_HAVE_FONTCONFIG=1', language: 'c')
 endif
-if use_ns_pango
-  have_pangoft2 = true
-else
-  libpangoft2 = dependency('pangoft2', required: false)
-  have_pangoft2 = libpangoft2.found()
-endif
-if have_pangoft2
-  add_project_arguments('-DNS_HAVE_PANGOFT2=1', language: 'c')
-endif
-
-libfreetype = dependency('freetype2', required: false)
+libfreetype = dependency('freetype2')
 have_freetype = libfreetype.found()
 if have_freetype
   add_project_arguments('-DNS_HAVE_FREETYPE=1', language: 'c')
@@ -507,15 +482,10 @@ install_data(
 )
 
 summary({'WebAssembly (wasmi)': have_wasm}, section: 'Features')
+summary({'Pure-Rust shaper (HarfRust)': get_option('rust-shaper')}, section: 'Features')
 summary({'AVIF images (libavif)': have_avif}, section: 'Features')
 summary({'GTK 4 shell': have_gtk}, section: 'Shells')
-
-if use_ns_pango
-  subdir('third_party/web-text-lib')
-  pango       = web_text_dep
-  pangocairo  = web_text_cairo_dep
-  libpangoft2 = web_text_fc_dep
-endif
+summary({'Thai word breaking (libthai)': libthai.found()}, section: 'Features')
 
 subdir('rust')
 subdir('src')

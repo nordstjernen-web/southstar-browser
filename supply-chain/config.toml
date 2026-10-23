@@ -207,6 +207,10 @@ criteria = "safe-to-deploy"
 version = "0.1.7"
 criteria = "safe-to-deploy"
 
+[[exemptions.font-types]]
+version = "0.12.7"
+criteria = "safe-to-deploy"
+
 [[exemptions.futures-concurrency]]
 version = "7.7.1"
 criteria = "safe-to-deploy"
@@ -229,6 +233,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.gif]]
 version = "0.14.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.harfrust]]
+version = "0.15.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.hashbrown]]
@@ -477,6 +485,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
 version = "6.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.read-fonts]]
+version = "0.46.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]

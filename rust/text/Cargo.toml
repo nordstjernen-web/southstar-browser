@@ -1,0 +1,19 @@
+[package]
+name = "southstar-text"
+description = "Text layout in Rust, ported from web-text-lib (a Pango fork): attributes, line breaking, itemization, fontconfig fonts, HarfBuzz shaping, paragraph layout and cairo rendering"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "LGPL-2.0-or-later"
+publish.workspace = true
+
+[features]
+rust-shaper = ["dep:harfrust", "dep:read-fonts"]
+thai = []
+
+[dependencies]
+harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }
+read-fonts = { version = "0.46", optional = true, default-features = false, features = ["std"] }
+
+[lints]
+workspace = true

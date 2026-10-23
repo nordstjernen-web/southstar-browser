@@ -38,8 +38,6 @@ unsafe extern "C" {
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
     fn ns_net_cookies_clear();
     fn ns_net_site_storage_clear();
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_version_string")]
-    fn pango_version_string() -> *const c_char;
     fn cairo_version_string() -> *const c_char;
     fn sqlite3_libversion() -> *const c_char;
     fn WebPGetDecoderVersion() -> c_int;
@@ -225,7 +223,6 @@ pub fn clear_browsing_data() {
 pub struct Versions {
     pub js_engine: Option<Vec<u8>>,
     pub glib: [u32; 3],
-    pub pango: Option<Vec<u8>>,
     pub cairo: Option<Vec<u8>>,
     pub sqlite: Option<Vec<u8>>,
     pub webp: i32,
@@ -249,7 +246,6 @@ pub fn versions() -> Versions {
         Versions {
             js_engine: Some(southstar_js_engine::engine_version().into_bytes()),
             glib: [glib_major_version, glib_minor_version, glib_micro_version],
-            pango: borrowed(pango_version_string()),
             cairo: borrowed(cairo_version_string()),
             sqlite: borrowed(sqlite3_libversion()),
             webp: WebPGetDecoderVersion(),

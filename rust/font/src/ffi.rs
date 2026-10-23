@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the web font loader, over the network layer, GLib, FreeType, fontconfig and Pango.
+//! Southstar — the C ABI of the web font loader, over the network layer, GLib, FreeType, fontconfig and southstar-text.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -277,29 +277,6 @@ mod fontconfig {
     }
 }
 
-#[cfg(feature = "pangofc")]
-mod pango {
-    use core::ffi::c_void;
-
-    use southstar_glib::GBoolean;
-
-    unsafe extern "C" {
-        #[cfg_attr(
-            feature = "ns-pango",
-            link_name = "ns_pango_cairo_font_map_get_default"
-        )]
-        pub fn pango_cairo_font_map_get_default() -> *mut c_void;
-        #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_fc_font_map_get_type")]
-        pub fn pango_fc_font_map_get_type() -> usize;
-        #[cfg_attr(
-            feature = "ns-pango",
-            link_name = "ns_pango_fc_font_map_config_changed"
-        )]
-        pub fn pango_fc_font_map_config_changed(fontmap: *mut c_void);
-        pub fn g_type_check_instance_is_a(instance: *mut c_void, iface_type: usize) -> GBoolean;
-    }
-}
-
 #[cfg(feature = "fontconfig")]
 struct Pattern(NonNull<c_void>);
 
@@ -451,7 +428,7 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
         FcConfigAppFontAddFile(ptr::null_mut(), path.as_ptr());
         let app_fonts = FcConfigGetFonts(ptr::null_mut(), SET_APPLICATION);
         if app_fonts.is_null() {
-            return refresh_pango_font_map();
+            return refresh_text_font_map();
         }
         for &pattern in font_set_patterns(app_fonts).iter().skip(first_added) {
             if family_is(pattern, family) {
@@ -490,21 +467,13 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
             FcFontSetDestroy(faces);
         }
     }
-    refresh_pango_font_map();
+    refresh_text_font_map();
 }
 
 #[cfg(not(feature = "fontconfig"))]
 pub fn install_font_file(_path: &CStr, _family: &[u8], _descriptors: Descriptors) {}
 
 #[cfg(feature = "fontconfig")]
-fn refresh_pango_font_map() {
-    #[cfg(feature = "pangofc")]
-    unsafe {
-        let font_map = pango::pango_cairo_font_map_get_default();
-        if !font_map.is_null()
-            && pango::g_type_check_instance_is_a(font_map, pango::pango_fc_font_map_get_type()) != 0
-        {
-            pango::pango_fc_font_map_config_changed(font_map);
-        }
-    }
+fn refresh_text_font_map() {
+    southstar_text::fontmap::FontMap::default_for_thread().config_changed();
 }

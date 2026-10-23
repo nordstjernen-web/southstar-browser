@@ -16,12 +16,12 @@ use southstar_video::BoxVideo;
 use crate::clip_shape::clip_to_shape;
 use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
 use crate::ffi::engine::{self, Texture, Video};
-use crate::ffi::pango::{self, FontDescription};
 use crate::filter::{
     TextureFit, apply_image_filter, filter_has_bitmap_effect, paint_texture_drop_shadows,
 };
 use crate::radii::{CornerRadii, box_border_radii, rounded_rect_path};
 use crate::text;
+use crate::text_layout::{self, FontDescription};
 use crate::util::{Rgba, UNIT_PERCENT, cmin, get, length_or, style_of};
 
 pub struct TextureSurfaces {
@@ -338,8 +338,8 @@ pub fn paint_image(cr: ContextRef, b: BoxRef<'_>) {
         if let Some(alt) = alt.filter(|_| b.content_width() > 24.0 && b.content_height() > 16.0) {
             let layout = text::create_layout();
             layout.set_text(alt);
-            layout.set_width(((b.content_width() - 8.0) * pango::SCALE_F) as i32);
-            layout.set_ellipsize(pango::ELLIPSIZE_END);
+            layout.set_width(((b.content_width() - 8.0) * text_layout::SCALE_F) as i32);
+            layout.set_ellipsize(text_layout::ELLIPSIZE_END);
             let (_, ph) = layout.pixel_size();
             cr.set_source_rgb(0.3, 0.3, 0.3);
             cr.move_to(cx + 4.0, cy + (b.content_height() - f64::from(ph)) / 2.0);
@@ -355,16 +355,16 @@ fn paint_video_caption(cr: ContextRef, b: BoxRef<'_>, cue: &[u8]) {
         return;
     }
     let fs = ((b.content_height() * 0.07 + 0.5) as i32).clamp(11, 26);
-    let fd = FontDescription::from_string(c"sans");
+    let mut fd = FontDescription::from_string(c"sans");
     fd.set_absolute_size(f64::from(text::pango_font_size(f64::from(fs) * 4.0 / 3.0)));
-    fd.set_weight(pango::WEIGHT_MEDIUM);
+    fd.set_weight(text_layout::WEIGHT_MEDIUM);
     let pad = 3.0;
     let gap = 1.0;
     let mut total = 0.0;
     let mut lays = Vec::with_capacity(lines.len());
     for (i, line) in lines.iter().enumerate() {
         let layout = text::create_layout();
-        layout.set_font_description(fd.as_ref());
+        layout.set_font_description(&fd);
         let text = if line.is_empty() { &b" "[..] } else { line };
         let c =
             CString::new(text.split(|&c| c == 0).next().unwrap_or_default()).unwrap_or_default();
@@ -455,9 +455,9 @@ fn paint_audio_control(cr: ContextRef, b: BoxRef<'_>) {
     let mut text_w = 0.0;
     if !dtext.is_empty() {
         let layout = text::create_layout();
-        let fd = FontDescription::from_string(c"sans");
+        let mut fd = FontDescription::from_string(c"sans");
         fd.set_absolute_size(f64::from(text::pango_font_size(12.0)));
-        layout.set_font_description(fd.as_ref());
+        layout.set_font_description(&fd);
         layout.set_text_bytes(dtext.as_bytes());
         let (tw, th) = layout.pixel_size();
         text_w = f64::from(tw) + 10.0;

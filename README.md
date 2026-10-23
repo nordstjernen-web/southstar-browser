@@ -78,11 +78,15 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   covers the modern cascade and CSSOM, Media Queries Level 4, container
   queries and units, flex, grid, transforms, gradients, animations and
   vertical writing modes.
-- **Text layout** — text is shaped with **web-text-lib**, a Pango fork
-  built in-tree from `third_party/web-text-lib` that caches finished glyph
-  strings and font metrics across layouts, so measuring and painting a run reach HarfBuzz once
-  instead of three times. `-Dns-pango=disabled` links the system Pango
-  instead.
+- **Text layout in Rust** — `rust/text` is a Rust port of Pango (by way of
+  web-text-lib, the Pango fork Southstar used before): attribute lists, line
+  breaking, bidi itemization, fontconfig font selection, HarfBuzz shaping,
+  paragraph layout with justification and ellipsizing, and cairo rendering,
+  pixel-identical to the C library it replaced. It caches finished glyph
+  strings and font metrics across layouts, so measuring and painting a run
+  reach HarfBuzz once instead of three times. `-Drust-shaper=true` shapes
+  with HarfRust, the pure-Rust port of HarfBuzz, instead (experimental; see
+  [docs/pure-rust-text.md](docs/pure-rust-text.md)).
 - **JavaScript** on the Boa interpreter, with modern ECMAScript through
   ES2026 (iterator helpers, explicit resource management with `using`,
   `Temporal`, `Intl`) — DOM, Shadow DOM, observer APIs,
@@ -184,16 +188,21 @@ Southstar is an independent engine — no upstream browser code.
 [ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
-(MP3, ported to Rust). The text-shaping Pango fork, web-text-lib, is built
-in-tree from `third_party/web-text-lib`, so setup needs no network;
-`-Dns-pango=disabled` links the system Pango instead.
+(MP3, ported to Rust). Text layout is `rust/text`, a Rust port of Pango, so
+setup needs no network and no Pango;
+[HarfRust](https://github.com/harfbuzz/harfrust) can replace HarfBuzz with
+`-Drust-shaper=true`.
 
 **Required system libraries:**
 
 | Library | Min version | Role |
 |---------|-------------|------|
 | GTK 4 | **≥ 4.22.1 on Windows** (MSYS2 stock), ≥ 4.14 elsewhere (≥ 4.22 preferred) | UI toolkit, GSK renderer |
-| GLib / GModule, Pango | (ship with GTK) | core types, dynamic module loading, text shaping |
+| GLib / GModule | ≥ 2.80 | core types, Unicode data, dynamic module loading |
+| cairo (with FreeType and fontconfig) | ≥ 1.18 | 2D rendering, glyph drawing |
+| HarfBuzz | ≥ 8.3 | text shaping (unless `-Drust-shaper=true`) |
+| FriBiDi | ≥ 1.0.6 | bidirectional text |
+| fontconfig, FreeType | fontconfig ≥ 2.15 | font matching and font files |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
 | OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
 | zlib | — | gzip/deflate content decoding |
@@ -207,8 +216,8 @@ in-tree from `third_party/web-text-lib`, so setup needs no network;
 **Optional**, auto-detected or build-time-selected:
 [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
-PDF), libavif (AVIF images), Enchant (spell checking), fontconfig / pangoft2
-(extra font backends), libbrotlidec and libzstd (`br` and `zstd` content
+PDF), libavif (AVIF images), Enchant (spell checking), libthai (Thai word
+breaking), libbrotlidec and libzstd (`br` and `zstd` content
 decoding), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
 WebGPU).
 
