@@ -313,7 +313,7 @@ pub(crate) struct RawHbBuffer {
 }
 
 #[repr(C)]
-struct RawHbFontFuncs {
+pub(crate) struct RawHbFontFuncs {
     _private: [u8; 0],
 }
 

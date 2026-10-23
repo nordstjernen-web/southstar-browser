@@ -73,6 +73,15 @@ impl FontCoverage {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct HbFontSetup {
+    pub x_scale: i32,
+    pub y_scale: i32,
+    pub point_size: f32,
+    pub slant: f32,
+    pub embolden: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct HexBoxInfo {
     pub font: Font,
@@ -535,7 +544,17 @@ impl Font {
         self.0.hb_font.get_or_init(|| self.create_hb_font())
     }
 
-    fn create_hb_font(&self) -> HbFont {
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn face_index(&self) -> i32 {
+        self.pattern().get_integer(FC_INDEX, 0).unwrap_or(0)
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn pattern_variations(&self) -> Option<String> {
+        self.pattern().get_string(FC_FONT_VARIATIONS, 0)
+    }
+
+    pub(crate) fn hb_font_setup(&self) -> HbFontSetup {
         let key = &self.0.key;
         let pattern = &key.pattern;
         let embolden = if pattern.get_bool(FC_EMBOLDEN, 0) == Some(true) {
@@ -568,16 +587,27 @@ impl Font {
         });
         let x_scale = 1. / x_scale_inv;
         let y_scale = 1. / y_scale_inv;
+        HbFontSetup {
+            x_scale: c_double_to_int(pixel_size * f64::from(SCALE) * x_scale),
+            y_scale: c_double_to_int(pixel_size * f64::from(SCALE) * y_scale),
+            point_size: point_size as f32,
+            slant: slant as f32,
+            embolden: embolden as f32,
+        }
+    }
+
+    fn create_hb_font(&self) -> HbFont {
+        let key = &self.0.key;
+        let pattern = &key.pattern;
+        let setup = self.hb_font_setup();
+        let point_size = setup.point_size;
 
         let hb_face = self.hb_face();
         let mut hb_font = HbFontBuilder::new(&hb_face);
-        hb_font.set_scale(
-            c_double_to_int(pixel_size * f64::from(SCALE) * x_scale),
-            c_double_to_int(pixel_size * f64::from(SCALE) * y_scale),
-        );
-        hb_font.set_ptem(point_size as f32);
-        hb_font.set_synthetic_slant(slant as f32);
-        hb_font.set_synthetic_bold(embolden as f32, embolden as f32, false);
+        hb_font.set_scale(setup.x_scale, setup.y_scale);
+        hb_font.set_ptem(setup.point_size);
+        hb_font.set_synthetic_slant(setup.slant);
+        hb_font.set_synthetic_bold(setup.embolden, setup.embolden, false);
 
         let n_axes = hb_face.axis_count();
         if n_axes != 0 {
@@ -588,7 +618,7 @@ impl Font {
                 if let Some(coord) = coords.get_mut(slot) {
                     *coord = axis.default_value;
                     if axis.tag == harfbuzz::tag(b"opsz") {
-                        *coord = point_size as f32;
+                        *coord = point_size;
                     }
                 }
             }

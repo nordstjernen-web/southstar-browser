@@ -10,5 +10,7 @@ pub(crate) mod glib_case;
 pub(crate) mod glib_decompose;
 pub(crate) mod glib_lang;
 pub(crate) mod harfbuzz;
+#[cfg(all(test, feature = "rust-shaper"))]
+pub(crate) mod harfbuzz_shape_test;
 pub(crate) mod harfbuzz_strings;
 pub(crate) mod thai;

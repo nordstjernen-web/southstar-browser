@@ -28,6 +28,8 @@ pub mod layout;
 pub mod matrix;
 pub mod metrics;
 pub mod render;
+#[cfg(feature = "rust-shaper")]
+pub mod rust_shaper;
 pub mod script;
 pub mod shape;
 pub mod shape_cache;
