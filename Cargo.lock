@@ -2193,6 +2193,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html5",
+ "southstar-xml",
 ]
 
 [[package]]

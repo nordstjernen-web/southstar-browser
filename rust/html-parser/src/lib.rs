@@ -417,6 +417,8 @@ pub fn xml_well_formed(input: &[u8]) -> (bool, Option<Vec<u8>>) {
                 skip_until(input, q + 3, b"-->")
             } else if rest.starts_with(b"![CDATA[") {
                 skip_until(input, q + 8, b"]]>")
+            } else if rest.len() >= 8 && rest[..8].eq_ignore_ascii_case(b"!DOCTYPE") {
+                southstar_xml::doctype_end(input, q + 8).map(|e| e + 1)
             } else {
                 input[q..]
                     .iter()

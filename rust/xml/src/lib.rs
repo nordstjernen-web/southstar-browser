@@ -300,17 +300,7 @@ impl<D: Dom> Parser<'_, D> {
             if self.remaining() >= 9
                 && self.input[self.p..self.p + 9].eq_ignore_ascii_case(b"<!DOCTYPE")
             {
-                let mut e = self.p + 9;
-                let mut bracket = 0;
-                while e < self.input.len() {
-                    match self.input[e] {
-                        b'[' => bracket += 1,
-                        b']' if bracket > 0 => bracket -= 1,
-                        b'>' if bracket == 0 => break,
-                        _ => {}
-                    }
-                    e += 1;
-                }
+                let e = doctype_end(self.input, self.p + 9).unwrap_or(self.input.len());
                 let start = (self.p + 9..e)
                     .find(|&at| !is_space(self.input[at]))
                     .unwrap_or(e);
@@ -554,6 +544,34 @@ fn line_and_column(input: &[u8], offset: usize) -> (i32, i32) {
         }
     }
     (line, column)
+}
+
+pub fn doctype_end(input: &[u8], from: usize) -> Option<usize> {
+    let mut bracket = 0usize;
+    let mut quote = 0u8;
+    let mut e = from;
+    while e < input.len() {
+        let c = input[e];
+        if quote != 0 {
+            if c == quote {
+                quote = 0;
+            }
+        } else if bracket > 0 && input[e..].starts_with(b"<!--") {
+            let close = input[e + 4..].windows(3).position(|w| w == b"-->")?;
+            e += 4 + close + 3;
+            continue;
+        } else {
+            match c {
+                b'"' | b'\'' => quote = c,
+                b'[' => bracket += 1,
+                b']' if bracket > 0 => bracket -= 1,
+                b'>' if bracket == 0 => return Some(e),
+                _ => {}
+            }
+        }
+        e += 1;
+    }
+    None
 }
 
 pub fn parse<D: Dom>(dom: &mut D, input: &[u8]) -> Result<D::Node, (i32, i32)> {

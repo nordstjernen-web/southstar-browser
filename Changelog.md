@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* XML: the parser and the XHTML well-formedness check now agree on where a
+  `<!DOCTYPE>` ends. The check stopped at the first `>` and the parser
+  ignored quotes, so an internal subset with `>` or `]` inside a quoted
+  entity value or a comment was read differently by the two; both now use
+  one scanner that honours quotes, brackets and comments.
 * Security: `NS_NO_SANDBOX=0`, `NS_NO_SECCOMP=0` and the other `NS_NO_…`,
   `NS_ALLOW_ROOT`, `NS_NO_WIN32_MITIGATIONS` and `NS_PRIVATE` switches no
   longer take effect when set to `0`, `false`, `no`, `off` or nothing; any
