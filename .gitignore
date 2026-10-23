@@ -45,7 +45,6 @@ compile_commands.json
 
 # Meson auto-downloaded subprojects (wrap files only are committed).
 /subprojects/packagecache/
-/subprojects/ns-pango/
 
 # CMake (in case)
 CMakeCache.txt

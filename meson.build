@@ -123,7 +123,7 @@ gtk_feature = get_option('gtk')
 gtk4_min = host_machine.system() == 'windows' ? '>=4.22.1' : '>=4.14'
 use_ns_pango = get_option('ns-pango').allowed()
 
-# ns-pango enforces the text-stack floors from inside the subproject, where a
+# web-text-lib enforces the text-stack floors from inside its meson.build, where a
 # too-old library surfaces as a bare version mismatch and only the first of
 # several is reported. Checking every hard floor here first names them all.
 ns_dependency_floors = []
@@ -166,32 +166,14 @@ gobject    = dependency('gobject-2.0')
 gio        = dependency('gio-2.0')
 cairo      = dependency('cairo')
 
-# Text is shaped through ns-pango, a Pango fork that caches finished glyph
-# strings across layouts; every symbol in it is renamed, because GTK loads the
-# system Pango into the same process. -Dns-pango=disabled links the system
-# Pango instead, and the Rust crates link its stock symbol names (feature ns-pango off).
+# Text is shaped through web-text-lib (third_party/web-text-lib), a Pango fork
+# built in-tree that caches finished glyph strings across layouts; every symbol
+# in it is renamed, because GTK loads the system Pango into the same process.
+# -Dns-pango=disabled links the system Pango instead, and the Rust crates link
+# its stock symbol names (feature ns-pango off).
+# The library is built just before the Rust workspace, after every
+# add_project_arguments call, since meson forbids those once a target exists.
 if use_ns_pango
-  ns_pango_debug = ns_is_release ? 'false' : 'true'
-  ns_pango_ndebug = ns_is_release ? 'true' : 'false'
-  ns_pango_sp = subproject('ns-pango',
-    default_options: [
-      'default_library=static',
-      'c_std=gnu17',
-      'optimization=3',
-      'debug=' + ns_pango_debug,
-      'b_ndebug=' + ns_pango_ndebug,
-      'fontconfig=enabled',
-      'freetype=enabled',
-      'introspection=disabled',
-      'sysprof=disabled',
-      'libthai=auto',
-      'build-testsuite=false',
-      'nordstjernen=true',
-      'warning_level=0',
-      'werror=false',
-    ])
-  pango      = ns_pango_sp.get_variable('libpango_dep')
-  pangocairo = ns_pango_sp.get_variable('libpangocairo_dep')
   add_project_arguments('-DNS_USE_NS_PANGO=1', language: 'c')
 else
   pango      = dependency('pango')
@@ -312,7 +294,6 @@ if have_fontconfig
   add_project_arguments('-DNS_HAVE_FONTCONFIG=1', language: 'c')
 endif
 if use_ns_pango
-  libpangoft2 = ns_pango_sp.get_variable('libpangoft2_dep')
   have_pangoft2 = true
 else
   libpangoft2 = dependency('pangoft2', required: false)
@@ -528,6 +509,13 @@ install_data(
 summary({'WebAssembly (wasmi)': have_wasm}, section: 'Features')
 summary({'AVIF images (libavif)': have_avif}, section: 'Features')
 summary({'GTK 4 shell': have_gtk}, section: 'Shells')
+
+if use_ns_pango
+  subdir('third_party/web-text-lib')
+  pango       = web_text_dep
+  pangocairo  = web_text_cairo_dep
+  libpangoft2 = web_text_fc_dep
+endif
 
 subdir('rust')
 subdir('src')

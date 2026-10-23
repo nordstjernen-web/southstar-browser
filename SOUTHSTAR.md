@@ -63,7 +63,7 @@ the engine is built around, so it is never made a hard or default dependency.
 A usable HTML5 + modern-CSS + modern-JavaScript browser. `rust/html5` parses
 to a DOM (`rust/dom`); the engine does the CSS cascade and selectors,
 block/inline/flex/grid/table/multicol/float/positioned layout, and Cairo +
-Pango paint (text shaped through the `ns-pango` fork; gradients incl.
+Pango paint (text shaped through the in-tree `web-text-lib` Pango fork; gradients incl.
 `repeating-*` and gradient masks, filters, transforms, transitions /
 `@keyframes`). JavaScript runs on Boa and passes all of test262 (52,133 of
 52,133 outside `test/staging`), including ES2025/ES2026 and late-stage
