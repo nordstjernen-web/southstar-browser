@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: the XML parser (XHTML documents, `DOMParser` with an XML
+  type) no longer copies attributes named `data-nd-*` from the markup.
+  Those names hold the engine's internal element state, such as the path
+  of the file picked in an `<input type="file">`, and the HTML parser and
+  the DOM APIs already refused them; through XML a page could plant a file
+  path and read the file back from `input.files`.
 * Rust dependencies updated to their latest Rust 1.91 compatible
   releases, among them rustls-webpki 0.103.16, ml-kem 0.3.3 (now on
   sha3 0.12), libc 0.2.191, cc 1.9.0, syn 3.0.9 and serde_json 1.0.154.
