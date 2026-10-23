@@ -549,7 +549,8 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     let origin = page_origin(js)
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
-    let transport = Transport::event_source(&target, &origin, &socket);
+    let allow_url = js.connect_check(page.as_deref());
+    let transport = Transport::event_source(&target, &origin, allow_url, &socket);
     if transport.is_none() {
         socket.pin.borrow_mut().take();
         return Err(scope.type_error("EventSource: failed to start"));

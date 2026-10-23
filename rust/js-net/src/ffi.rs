@@ -291,6 +291,7 @@ impl Transport {
     pub fn event_source(
         url: &[u8],
         origin: &[u8],
+        allow_url: southstar_eventsource::UrlCheck,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
         let events = southstar_eventsource::Events {
@@ -304,6 +305,7 @@ impl Transport {
             Some(crate::until_nul(origin.to_vec()).as_slice()),
             b"",
             events,
+            allow_url,
             socket_addr(socket),
         ))
     }
@@ -463,6 +465,22 @@ impl Js {
 
     pub fn credit_pumped_time(self, start_us: i64) {
         api::credit_pumped_time(self.ptr(), start_us);
+    }
+
+    pub fn connect_check(self, page: Option<&[u8]>) -> southstar_eventsource::UrlCheck {
+        let csp = api::with_page_csp(self.ptr(), |csp| csp.cloned());
+        let page = page.map(cstring);
+        Box::new(move |url| {
+            csp.as_ref().is_none_or(|csp| {
+                csp.allows(
+                    southstar_csp::CONNECT,
+                    &cstring(url),
+                    page.as_deref(),
+                    None,
+                    true,
+                )
+            })
+        })
     }
 
     pub fn csp_allows_connect(self, url: &[u8], page: Option<&[u8]>) -> bool {

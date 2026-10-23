@@ -2748,6 +2748,7 @@ dependencies = [
 name = "southstar-js-net"
 version = "1.0.1-dev"
 dependencies = [
+ "southstar-csp",
  "southstar-eventsource",
  "southstar-glib",
  "southstar-js-bind",

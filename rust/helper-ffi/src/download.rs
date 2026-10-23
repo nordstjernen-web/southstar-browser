@@ -124,6 +124,7 @@ pub fn to_file(url: &[u8], path: &str, max: u64) -> bool {
         connect_timeout: Duration::from_secs(30),
         max_redirects: 8,
         https_only_redirects: url.starts_with(b"https://"),
+        allow_redirect: &|_| true,
         route: &route,
     };
     let mut sink = Sink {

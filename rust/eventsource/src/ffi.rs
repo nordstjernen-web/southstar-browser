@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{c_uint, c_void};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -12,6 +13,8 @@ use southstar_glib::{FALSE, GBoolean};
 use southstar_http::{Fetch, Handler};
 
 use crate::{Parser, Post, Shared};
+
+pub type UrlCheck = Box<dyn Fn(&[u8]) -> bool + Send + Sync>;
 
 #[derive(Clone, Copy)]
 pub struct Events {
@@ -24,6 +27,7 @@ pub struct Events {
 struct Source {
     shared: Shared,
     events: Events,
+    allow_url: UrlCheck,
     data: usize,
 }
 
@@ -136,6 +140,7 @@ fn connect_once(source: &Arc<Source>) -> bool {
         parser: Parser::new(),
     };
     let shared = &source.shared;
+    let blocked = Cell::new(false);
     let mut headers = vec![
         b"Accept: text/event-stream".to_vec(),
         b"Cache-Control: no-cache".to_vec(),
@@ -157,10 +162,15 @@ fn connect_once(source: &Arc<Source>) -> bool {
         connect_timeout: Duration::from_secs(30),
         max_redirects: 50,
         https_only_redirects: shared.url.starts_with(b"https://"),
+        allow_redirect: &|next| {
+            let allowed = (source.allow_url)(next);
+            blocked.set(!allowed);
+            allowed
+        },
         route: &southstar_net::route::route,
     };
     southstar_http::fetch(&request, &mut transfer);
-    !transfer.parser.fatal
+    !transfer.parser.fatal && !blocked.get()
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -197,6 +207,7 @@ impl EventSource {
         origin: Option<&[u8]>,
         last_event_id: &[u8],
         events: Events,
+        allow_url: UrlCheck,
         data: usize,
     ) -> EventSource {
         let source = Arc::new(Source {
@@ -206,6 +217,7 @@ impl EventSource {
                 last_event_id.to_vec(),
             ),
             events,
+            allow_url,
             data,
         });
         let worker_source = Arc::clone(&source);
