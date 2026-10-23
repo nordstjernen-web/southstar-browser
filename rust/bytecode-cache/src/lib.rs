@@ -103,10 +103,15 @@ pub fn shutdown() {
     cache.dir = None;
 }
 
-fn disk_path_for(key: &str) -> Option<PathBuf> {
+fn disk_path_for(key: &str, create: bool) -> Option<PathBuf> {
+    if southstar_config::private_mode() {
+        return None;
+    }
     let base = lock().dir.clone()?;
     let dir = base.join(&key[..2]);
-    ffi::create_private_dir(&dir);
+    if create {
+        ffi::create_private_dir(&dir);
+    }
     Some(dir.join(&key[2..]))
 }
 
@@ -118,7 +123,7 @@ fn header() -> [u8; HEADER_LEN] {
 }
 
 fn read_disk(key: &str) -> Option<Vec<u8>> {
-    let path = disk_path_for(key)?;
+    let path = disk_path_for(key, false)?;
     let size = fs::metadata(&path).ok()?.len();
     if size < HEADER_LEN as u64 || size > (VALUE_CAP_BYTES + HEADER_LEN) as u64 {
         return None;
@@ -136,7 +141,7 @@ fn write_file(path: &Path, bytecode: &[u8]) -> bool {
 }
 
 fn write_disk(key: &str, bytecode: &[u8]) {
-    let Some(path) = disk_path_for(key) else {
+    let Some(path) = disk_path_for(key, true) else {
         return;
     };
     let mut tmp = path.clone().into_os_string();
@@ -190,7 +195,5 @@ pub fn put(src: &[u8], bytecode: &[u8]) {
         }
         cache.insert(&key, bytecode);
     }
-    if !southstar_config::private_mode() {
-        write_disk(&key, bytecode);
-    }
+    write_disk(&key, bytecode);
 }

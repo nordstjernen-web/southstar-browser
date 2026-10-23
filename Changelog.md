@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Privacy: in private browsing the JavaScript bytecode cache no longer
+  looks on disk at all. It already wrote nothing there, but a lookup read
+  cached entries from earlier sessions and created their directories.
 * Security: a page can no longer read another origin's stylesheet, or any
   other response it links as one. The engine's private `__ns_linked_css`
   function, which returned the raw bytes of any `<link rel=stylesheet>`
