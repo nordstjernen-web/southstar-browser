@@ -77,6 +77,13 @@ impl PropertyKey {
         })
     }
 
+    pub fn has_prefix(&self, prefix: &[u8]) -> bool {
+        match &self.0 {
+            BoaKey::String(text) => text.starts_with(boa_engine::string::JsStr::latin1(prefix)),
+            _ => false,
+        }
+    }
+
     pub fn array_index(&self, _scope: &mut Scope<'_>) -> Option<u32> {
         match &self.0 {
             BoaKey::Index(index) => Some(index.get()),
@@ -121,6 +128,15 @@ impl PropertyDefinition {
             has_set: descriptor.set().is_some(),
             descriptor: descriptor.clone(),
         }
+    }
+
+    pub fn is_value_only(&self) -> bool {
+        self.has_value
+            && !self.has_get
+            && !self.has_set
+            && self.descriptor.writable().is_none()
+            && self.descriptor.enumerable().is_none()
+            && self.descriptor.configurable().is_none()
     }
 
     pub fn throws(&self) -> bool {

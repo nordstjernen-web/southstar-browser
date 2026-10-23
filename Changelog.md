@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: page scripts can no longer read or plant the engine's own
+  `__nd…` properties on elements. An `<iframe>` element carried its frame's
+  document and window as `__ndRealmDoc` and `__ndRealmWindow`, so a page
+  could reach into a cross-origin frame around the `contentWindow` and
+  `contentDocument` checks; the engine hid those names under QuickJS, but
+  the hook did nothing under Boa. Element wrappers now keep such properties
+  in a store only engine code sees, and a page's own `__nd…` expandos stay
+  separate from it.
 * Security: the XML parser (XHTML documents, `DOMParser` with an XML
   type) no longer copies attributes named `data-nd-*` from the markup.
   Those names hold the engine's internal element state, such as the path
