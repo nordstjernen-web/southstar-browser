@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* CORS preflight answers are cached per page origin and URL for the
+  server's `Access-Control-Max-Age` (5 seconds when absent, at most two
+  hours), so repeated non-simple `fetch()` or `XMLHttpRequest` calls to the
+  same endpoint no longer send an `OPTIONS` request each time. A request
+  needing a method or header the cached answer did not allow is preflighted
+  again.
 * Security (Linux): the renderer gets its own, narrower Landlock ruleset.
   It used to share the shell's, which gave it read and write access to the
   whole runtime directory (`/run/user/$UID`, home of the D-Bus and

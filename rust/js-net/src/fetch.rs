@@ -499,7 +499,8 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         && !ffi::url_same_origin(top.as_deref(), Some(&send_url));
     let preflight = cross_origin
         .then(|| crate::preflight::needed(&use_method, content_type.as_deref(), &extras))
-        .flatten();
+        .flatten()
+        .filter(|preflight| no_cors || !preflight.cached(request.url.as_bytes(), top.as_deref()));
     let Some(preflight) = preflight else {
         request.send(cancellable.as_ref(), move |resp, error| {
             done(Ticket { js, id }, resp, error);
@@ -514,7 +515,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     let check = preflight.request(&request.url, request.top.as_ref());
     check.send(cancellable.clone().as_ref(), move |resp, _error| {
-        if preflight.passed(&resp, top.as_deref()) {
+        if preflight.passed(&resp, top.as_deref(), request.url.as_bytes()) {
             request.send(cancellable.as_ref(), move |resp, error| {
                 done(Ticket { js, id }, resp, error);
             });
