@@ -220,3 +220,20 @@ fn http2_connection_errors() {
             .is_err()
     );
 }
+
+#[test]
+fn request_head_drops_header_lines_that_would_split() {
+    let head = h1::request_head(
+        b"GET",
+        b"/",
+        b"example.com",
+        &[(b"User-Agent", b"ua\r\nX-Injected: 1"), (b"Accept", b"*/*")],
+        &[b"Last-Event-ID: 1\nX-Injected: 2", b"X-Fine: 3"],
+        0,
+        true,
+    );
+    let text = String::from_utf8(head).expect("ascii");
+    assert!(!text.contains("X-Injected"));
+    assert!(text.contains("Accept: */*\r\n"));
+    assert!(text.contains("X-Fine: 3\r\n"));
+}

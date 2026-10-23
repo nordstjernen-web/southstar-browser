@@ -2,6 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+fn on_one_line(text: &[u8]) -> bool {
+    !text.iter().any(|&c| matches!(c, b'\r' | b'\n' | 0))
+}
+
 pub fn request_head(
     method: &[u8],
     path: &[u8],
@@ -18,13 +22,16 @@ pub fn request_head(
     out.extend_from_slice(b" HTTP/1.1\r\nHost: ");
     out.extend_from_slice(authority);
     out.extend_from_slice(b"\r\n");
-    for (name, value) in fields {
+    for (name, value) in fields
+        .iter()
+        .filter(|(name, value)| on_one_line(name) && on_one_line(value))
+    {
         out.extend_from_slice(name);
         out.extend_from_slice(b": ");
         out.extend_from_slice(value);
         out.extend_from_slice(b"\r\n");
     }
-    for line in extra_lines {
+    for line in extra_lines.iter().filter(|line| on_one_line(line)) {
         out.extend_from_slice(line);
         out.extend_from_slice(b"\r\n");
     }
