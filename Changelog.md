@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: `ctutils` is updated to 0.4.4 for RUSTSEC-2026-0385 (its
+  constant-time mask helpers could compile to branches on secret values).
+  It reaches Southstar through the post-quantum key exchange's `ml-kem`.
 * Security (Linux): the thread that answers SIGQUIT with a thread dump now
   starts after the sandbox is in place, in the UI shell and in the
   renderer. Landlock confines only the thread that applies it and threads
