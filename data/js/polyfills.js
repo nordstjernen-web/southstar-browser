@@ -10671,12 +10671,20 @@
                     try { return node.textContent || ''; } catch (e) { return ''; }
                 }
                 if (typeof global.__ns_linked_css !== 'function') return '';
-                try { return global.__ns_linked_css(node.href || '') || ''; }
+                try {
+                    var text = global.__ns_linked_css(node.href || '');
+                    return text === null ? null : text || '';
+                }
                 catch (e) { return ''; }
             }
 
             function ensure() {
                 var txt = sourceText();
+                if (txt === null) {
+                    throw new DOMException(
+                        'Cannot access rules of a cross-origin stylesheet',
+                        'SecurityError');
+                }
                 if (rules !== null && txt === lastText) return;
                 lastText = txt;
                 rules = parseRuleList(txt, sheet, null);

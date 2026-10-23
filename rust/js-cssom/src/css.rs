@@ -313,11 +313,16 @@ fn anb_canonical(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result
 }
 
 fn linked_css_text(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Value, Value> {
-    let text = args
-        .first()
-        .and_then(|u| optional_string(scope, u))
-        .and_then(|u| ffi::linked_css_text(&u))
-        .unwrap_or_default();
+    if !ffi::host_caller(scope) {
+        return Ok(scope.string(""));
+    }
+    let Some(url) = args.first().and_then(|u| optional_string(scope, u)) else {
+        return Ok(scope.string(""));
+    };
+    if !ffi::same_origin_as_document(scope, &url) {
+        return Ok(Value::null());
+    }
+    let text = ffi::linked_css_text(&url).unwrap_or_default();
     Ok(scope.string(&text))
 }
 

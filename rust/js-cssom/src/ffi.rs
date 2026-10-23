@@ -132,6 +132,10 @@ pub(crate) fn host_access(scope: &mut Scope<'_>) -> bool {
     scope.is_host_access()
 }
 
+pub(crate) fn host_caller(scope: &mut Scope<'_>) -> bool {
+    scope.is_host_caller()
+}
+
 pub(crate) fn style_table(js: Js) -> StyleTable {
     if js.is_null() {
         return StyleTable::none();
@@ -244,6 +248,15 @@ pub(crate) fn line_heights(style: Option<StyleRef<'_>>) -> (f64, f64) {
         southstar_paint::normal_line_height_px(style),
         southstar_paint::css_line_height_px(style),
     )
+}
+
+pub(crate) fn same_origin_as_document(scope: &Scope<'_>, url: &str) -> bool {
+    let js = js_of(scope).page();
+    api::document_origin(js)
+        .or_else(|| api::page_url(js))
+        .is_some_and(|document| {
+            southstar_url::bytes::same_origin(document.as_bytes(), until_nul(url))
+        })
 }
 
 pub(crate) fn linked_css_text(url: &str) -> Option<String> {

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: a page can no longer read another origin's stylesheet, or any
+  other response it links as one. The engine's private `__ns_linked_css`
+  function, which returned the raw bytes of any `<link rel=stylesheet>`
+  fetched in the process, was callable by page script; it now answers only
+  engine code, and `sheet.cssRules` of a stylesheet from another origin
+  throws `SecurityError` as in other browsers. In quirks mode a
+  cross-origin stylesheet must now be served as `text/css`, so an HTML or
+  JSON response can no longer be loaded as CSS.
 * Security: classic scripts in an `<iframe>` now obey the frame's
   Content-Security-Policy and Subresource Integrity. They ran without either
   check: the framed document's own `script-src` and an `integrity`

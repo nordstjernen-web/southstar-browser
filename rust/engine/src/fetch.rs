@@ -105,7 +105,12 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
     }
     let start_us = ffi::monotonic_us();
     let resp = ffi::fetch_blocking_with_headers(f.url, f.top_url, Dest::Style);
-    let enforce_mime = f.strict_mime || resp.as_ref().is_some_and(ffi::nosniff);
+    let cross_origin = resp.as_ref().is_some_and(|r| {
+        let fetched = r.final_url().unwrap_or(f.url).to_bytes();
+        f.top_url
+            .is_some_and(|top| !southstar_url::bytes::same_origin(top.to_bytes(), fetched))
+    });
+    let enforce_mime = f.strict_mime || cross_origin || resp.as_ref().is_some_and(ffi::nosniff);
     let mime_ok = !enforce_mime
         || resp
             .as_ref()
