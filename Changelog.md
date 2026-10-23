@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Hardening: a web font whose table directory names the same table twice
+  is now refused when its SFNT is rebuilt from FreeType. FreeType looks
+  tables up by tag, so the copy read the first table's bytes for every
+  duplicate; the copy already stopped at each table's own length, and now
+  writes into a slice exactly that long.
 * Security: a navigation a page starts to another origin now tells the
   server who started it. The renderer dropped the page's URL on
   cross-origin navigations, so a form a hostile page submitted to another
