@@ -66,6 +66,9 @@ impl Dom for DomBuilder {
         qualified: &[u8],
         value: &[u8],
     ) {
+        if attrs::is_internal(until_nul(local)) || attrs::is_internal(until_nul(qualified)) {
+            return;
+        }
         let (namespace, prefix) = (namespace.map(c_string), prefix.map(c_string));
         let (local, qualified, value) = (c_string(local), c_string(qualified), c_string(value));
         let qname = NsName {
