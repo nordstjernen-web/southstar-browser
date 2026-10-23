@@ -12,7 +12,7 @@ use crate::ffi::{self, Js};
 use crate::globals;
 use crate::origin::{self, opaque_by_sandbox};
 use crate::owner;
-use crate::page;
+use crate::page::{self, FramePolicy};
 use crate::realm::frame_of;
 use crate::sandbox;
 use crate::schedule;
@@ -677,6 +677,17 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
         decoded,
         resp,
     } = fetched;
+    let local_scheme = abs_url.as_deref().is_some_and(|url| {
+        let url = url.to_bytes();
+        url.starts_with(b"data:") || url.starts_with(b"blob:") || url.starts_with(b"about:")
+    });
+    let policy = match &resp {
+        Some(resp) if !local_scheme => {
+            FramePolicy::Own(non_empty(resp.csp_header()).map(|header| header.to_bytes().to_vec()))
+        }
+        _ => FramePolicy::Inherit,
+    };
+    page::update_frame(js, frame_of(iframe), |entry| entry.policy = policy);
     let content_type = resp.as_ref().and_then(Response::content_type);
 
     if iframe.element_name() == Some(b"object") {

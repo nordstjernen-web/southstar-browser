@@ -188,6 +188,23 @@ pub(crate) fn page_csp_allows(js: Js, kind: FrameKind, url: &CStr, page: &CStr) 
     })
 }
 
+pub(crate) fn page_csp_allows_script(
+    js: Js,
+    url: &CStr,
+    document: &CStr,
+    nonce: Option<&[u8]>,
+) -> bool {
+    api::with_page_csp(js.ptr(), |csp| {
+        csp.is_none_or(|csp| csp.allows(southstar_csp::SCRIPT, url, Some(document), nonce, true))
+    })
+}
+
+pub(crate) fn page_csp_allows_inline_script(js: Js, text: &[u8], nonce: Option<&[u8]>) -> bool {
+    api::with_page_csp(js.ptr(), |csp| {
+        csp.is_none_or(|csp| csp.inline_script_allowed(text, nonce))
+    })
+}
+
 pub(crate) fn csp_header_allows_framing(header: &CStr, embedder: &CStr, framed: &CStr) -> bool {
     southstar_csp::Csp::parse(header.to_bytes()).is_none_or(|csp| {
         csp.allows(

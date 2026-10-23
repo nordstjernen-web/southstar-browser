@@ -2542,6 +2542,7 @@ dependencies = [
  "southstar-js-services",
  "southstar-layout",
  "southstar-net",
+ "southstar-sandbox",
  "southstar-url",
  "southstar-xml",
 ]

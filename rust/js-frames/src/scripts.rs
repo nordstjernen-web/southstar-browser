@@ -4,6 +4,7 @@
 
 use std::ffi::CStr;
 
+use southstar_csp::Csp;
 use southstar_dom::{Kind, MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};
 
@@ -12,7 +13,7 @@ use crate::ffi::ctx::Ctx;
 use crate::ffi::load;
 use crate::ffi::{self, Js};
 use crate::origin::{self, CROSS_ORIGIN};
-use crate::page;
+use crate::page::{self, FramePolicy};
 use crate::realm::{self, FrameRealm, frame_of};
 use crate::restore;
 
@@ -20,6 +21,70 @@ const ALREADY_STARTED: &CStr = c"data-nd-script-already-started";
 const EXPOSE_SCAN_CAP: usize = 131072;
 const WRAPPER_HEAD: &str =
     "(function(window,self,globalThis,top,parent,document,location,history){\nwith(window){\n";
+
+enum ScriptPolicy {
+    Page,
+    Own(Option<Csp>),
+}
+
+impl ScriptPolicy {
+    fn allows_url(&self, js: Js, url: &CStr, document: &CStr, nonce: Option<&[u8]>) -> bool {
+        match self {
+            ScriptPolicy::Page => load::page_csp_allows_script(js, url, document, nonce),
+            ScriptPolicy::Own(csp) => csp.as_ref().is_none_or(|csp| {
+                csp.allows(southstar_csp::SCRIPT, url, Some(document), nonce, true)
+            }),
+        }
+    }
+
+    fn allows_inline(&self, js: Js, text: &[u8], nonce: Option<&[u8]>) -> bool {
+        match self {
+            ScriptPolicy::Page => load::page_csp_allows_inline_script(js, text, nonce),
+            ScriptPolicy::Own(csp) => csp
+                .as_ref()
+                .is_none_or(|csp| csp.inline_script_allowed(text, nonce)),
+        }
+    }
+}
+
+fn embedding_frame(iframe: Node<'_>) -> Option<Node<'_>> {
+    let mut node = iframe.parent();
+    while let Some(holder) = node {
+        if holder.kind() == Kind::Document {
+            return holder.parent();
+        }
+        node = holder.parent();
+    }
+    None
+}
+
+fn script_policy(js: Js, iframe: Option<Node<'_>>) -> ScriptPolicy {
+    let mut frame = iframe;
+    for _ in 0..MAX_DEPTH {
+        let Some(node) = frame else {
+            return ScriptPolicy::Page;
+        };
+        let own = page::frame_entry(js, frame_of(node), |entry| match &entry.policy {
+            FramePolicy::Own(header) => Some(header.clone()),
+            FramePolicy::Inherit => None,
+        })
+        .flatten();
+        if let Some(header) = own {
+            return ScriptPolicy::Own(header.as_deref().and_then(Csp::parse));
+        }
+        frame = embedding_frame(node);
+    }
+    ScriptPolicy::Page
+}
+
+fn log_blocked(js: Js, what: &[u8], url: &[u8], reason: &[u8]) {
+    if load::log_enabled(js) {
+        load::log_line(
+            js,
+            &[b"Blocked ", what, b" ", url, b" in a frame by ", reason].concat(),
+        );
+    }
+}
 
 struct ClassicSource {
     text: Vec<u8>,
@@ -51,10 +116,27 @@ fn add_classic(
     });
 }
 
-fn fetch_external(js: Js, script: Node<'static>, src: &CStr, origin: &CStr, out: &mut Collected) {
+fn fetch_external(
+    js: Js,
+    script: Node<'static>,
+    src: &CStr,
+    origin: &CStr,
+    policy: &ScriptPolicy,
+    out: &mut Collected,
+) {
     let Some(abs_url) = ffi::resolve_url(origin, src) else {
         return;
     };
+    let nonce = script.attr(c"nonce").map(CStr::to_bytes);
+    if !policy.allows_url(js, &abs_url, origin, nonce) {
+        log_blocked(
+            js,
+            b"script",
+            abs_url.to_bytes(),
+            b"Content-Security-Policy script-src",
+        );
+        return;
+    }
     let Some(resp) = load::fetch_script(js, script, &abs_url, origin) else {
         return;
     };
@@ -67,6 +149,11 @@ fn fetch_external(js: Js, script: Node<'static>, src: &CStr, origin: &CStr, out:
     if nosniff_blocked || resp.error().is_some() || !ok_status {
         return;
     }
+    let integrity = script.attr(c"integrity").map_or(&b""[..], CStr::to_bytes);
+    if !southstar_sandbox::sri_check(integrity, Some(body)) {
+        log_blocked(js, b"script", abs_url.to_bytes(), b"Subresource Integrity");
+        return;
+    }
     if body.len() <= EXPOSE_SCAN_CAP {
         out.exposed.scan(body);
     }
@@ -75,25 +162,40 @@ fn fetch_external(js: Js, script: Node<'static>, src: &CStr, origin: &CStr, out:
     out.concat.extend_from_slice(b"\n;\n");
 }
 
-fn collect_inline(script: Node<'static>, origin: &CStr, out: &mut Collected) {
+fn collect_inline(
+    js: Js,
+    script: Node<'static>,
+    origin: &CStr,
+    policy: &ScriptPolicy,
+    out: &mut Collected,
+) {
     let mut source = Vec::new();
     for child in southstar_dom::children(script) {
         if child.kind() != Kind::Text {
             continue;
         }
-        let Some(text) = child.text() else {
-            continue;
-        };
-        let text = text.to_bytes();
-        out.exposed.scan(text);
-        source.extend_from_slice(text);
-        out.concat.extend_from_slice(text);
+        if let Some(text) = child.text() {
+            source.extend_from_slice(text.to_bytes());
+        }
     }
+    let nonce = script.attr(c"nonce").map(CStr::to_bytes);
+    if !policy.allows_inline(js, &source, nonce) {
+        log_blocked(
+            js,
+            b"inline script",
+            origin.to_bytes(),
+            b"Content-Security-Policy script-src",
+        );
+        return;
+    }
+    out.exposed.scan(&source);
+    out.concat.extend_from_slice(&source);
     add_classic(&mut out.classic, &source, Some(origin.to_bytes()), script);
     out.concat.extend_from_slice(b"\n;\n");
 }
 
-fn collect(js: Js, content_root: Node<'_>, origin: &CStr) -> Collected {
+fn collect(js: Js, content_root: Node<'_>, origin: &CStr, iframe: Option<Node<'_>>) -> Collected {
+    let policy = script_policy(js, iframe);
     let mut out = Collected {
         classic: Vec::new(),
         modules: Vec::new(),
@@ -116,9 +218,9 @@ fn collect(js: Js, content_root: Node<'_>, origin: &CStr) -> Collected {
         match script.attr(c"src").filter(|src| !src.is_empty()) {
             Some(src) => {
                 let src = src.to_owned();
-                fetch_external(js, script, &src, origin, &mut out);
+                fetch_external(js, script, &src, origin, &policy, &mut out);
             }
-            None => collect_inline(script, origin, &mut out),
+            None => collect_inline(js, script, origin, &policy, &mut out),
         }
     }
     out
@@ -330,7 +432,7 @@ pub(crate) fn run(
     let proto_snapshot = restore::proto_snapshot(ffi::current_realm(js));
     restore::clear_global_zone(ffi::current_realm(js));
     restore::restore_globals(ffi::current_realm(js));
-    let collected = collect(js, content_root, origin);
+    let collected = collect(js, content_root, origin, iframe);
 
     let has_handlers = has_inline_handlers(content_root, 0);
     let initial_blank = iframe.and_then(|iframe| {
