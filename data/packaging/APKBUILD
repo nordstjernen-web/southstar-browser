@@ -39,8 +39,7 @@ builddir="$srcdir/southstar-browser-$pkgver"
 options="!check"
 
 build() {
-	# abuild's build() runs without network, so the ns-pango subproject cannot
-	# be cloned: shape text through the system Pango instead.
+	# Shape text through the system Pango the distribution already ships.
 	abuild-meson -Dns-pango=disabled -Dwebgpu=disabled . output
 	meson compile -C output
 }

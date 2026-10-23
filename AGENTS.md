@@ -225,11 +225,11 @@ library API or language feature stabilized after 1.91.
 - `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on the same
   engine layer.
 
-### Text layout: ns-pango
+### Text layout: web-text-lib
 
-Desktop builds shape text through
-[ns-pango](https://github.com/nordstjernen-web/ns-pango), a fork of Pango
-pinned as a meson subproject (`subprojects/ns-pango.wrap`). Pango keeps no
+Desktop builds shape text through web-text-lib, a fork of Pango built
+in-tree from `third_party/web-text-lib` (taken from Nordstjernen Sol's
+`src/web-text-lib`; it replaced the `ns-pango` subproject). Pango keeps no
 cache that outlives a `PangoLayout`, so the same bytes reached HarfBuzz once
 to measure a run and again to paint it, and a table cell was shaped for
 `min-content`, for `max-content` and again to lay out. The fork caches

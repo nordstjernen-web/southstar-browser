@@ -1,7 +1,7 @@
 # Third-party software notices
 
 Southstar links to (and in some cases statically includes) the
-following open-source libraries. One of them, ns-pango, is a **modified**
+following open-source libraries. One of them, web-text-lib, is a **modified**
 LGPL library; its source and our relink offer are described in its entry
 below. Their copyright notices and license
 texts are reproduced below. For libraries shipped dynamically in the
@@ -134,11 +134,12 @@ warranty. See <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 ---
 
-### ns-pango — GNU LGPL 2.1 or later (modified Pango, statically linked)
+### web-text-lib — GNU LGPL 2 or later (modified Pango, statically linked)
 
 > Text itemization, shaping and line breaking, with a cache of shaped runs
-> that Pango itself does not keep.
-> <https://github.com/nordstjernen-web/ns-pango>
+> that Pango itself does not keep. Built from `third_party/web-text-lib`,
+> taken from Nordstjernen Sol's `src/web-text-lib`.
+> <https://github.com/nordstjernen-web/nordstjernen-sol-browser/tree/main/src/web-text-lib>
 >
 > Copyright the GNU Project and contributors, and Northstar contributors
 > for the modifications.
@@ -149,19 +150,20 @@ symbol so it can share a process with the system Pango that GTK loads, and
 removes the backends and tooling a browser does not use. It remains
 licensed under the GNU Lesser General Public License version 2.1 or, at
 your option, any later version, and its complete corresponding source --
-including every modification -- is published at the URL above. The full
-license text is available at:
+including every modification -- is in `third_party/web-text-lib` and at
+the URL above. The full license text is in `third_party/web-text-lib/COPYING`
+and at:
 
   <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>
 
-Unlike the other LGPL libraries listed here, ns-pango is linked
+Unlike the other LGPL libraries listed here, web-text-lib is linked
 **statically** into the Southstar executables. Per
-LGPL section 6(a), you are entitled to modify ns-pango and relink
+LGPL section 6(a), you are entitled to modify web-text-lib and relink
 Southstar against your modified copy: write to the address in
 `README.md` and we will supply the Southstar object files, together with
 any data and utility programs needed, so that you can produce a modified
 executable. Builds configured with `-Dns-pango=disabled` do not include
-ns-pango; they link the system Pango dynamically instead.
+web-text-lib; they link the system Pango dynamically instead.
 
 ### Unicode Character Database — Unicode License v3
 

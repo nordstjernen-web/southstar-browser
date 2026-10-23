@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Text layout now builds in-tree: web-text-lib, the trimmed Pango fork from
+  Nordstjernen Sol, lives in `third_party/web-text-lib` and replaces the
+  `ns-pango` subproject, so `meson setup` no longer clones anything and the
+  BSD workflows no longer fetch it by hand. Three functions Southstar calls
+  that the trim had dropped (`attr_scale_new`, `attr_list_to_string`,
+  `get_log_attrs`) are restored.
 * The browser's second command name is now `internet-browser-southstar`
   instead of `internet-browser`, which Nordstjernen and Northstar also
   install. `meson install`, the `.deb`, `.rpm` and Alpine packages, the

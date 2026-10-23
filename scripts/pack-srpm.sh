@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build a source RPM (.src.rpm) of Southstar. The one subproject wrap —
-# ns-pango, cloned with git — is switched off in the spec, so
-# `rpmbuild --rebuild` resolves offline against the system Pango.
+# Build a source RPM (.src.rpm) of Southstar. The spec shapes text through
+# the system Pango, so `rpmbuild --rebuild` resolves against the
+# distribution's packages.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -94,8 +94,8 @@ engine is used. SVG images are rendered in-engine.
 %setup -q -n ${SLUG}
 
 %build
-# A rebuild has no network: the vendored subprojects are in the tarball and
-# ns-pango, the one git wrap, gives way to the system Pango.
+# A rebuild has no network: the vendored subprojects are in the tarball, and
+# text is shaped through the system Pango.
 meson setup builddir \\
     --prefix=%{_prefix} \\
     --libdir=%{_libdir} \\

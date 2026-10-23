@@ -26,8 +26,7 @@ endif
 %:
 	dh $@
 
-# Source builds run in a network-isolated chroot (sbuild/pbuilder), where the
-# ns-pango subproject cannot be cloned, so shape text through the system Pango;
+# Shape text through the system Pango the distribution already ships;
 # wgpu-native is not packaged, so WebGPU is left out. AVIF and the audio
 # helper are required explicitly so a missing build dependency fails the build
 # instead of silently dropping a feature.

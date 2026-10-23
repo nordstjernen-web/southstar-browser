@@ -78,9 +78,9 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   covers the modern cascade and CSSOM, Media Queries Level 4, container
   queries and units, flex, grid, transforms, gradients, animations and
   vertical writing modes.
-- **Text layout** — text is shaped with **ns-pango**, a Pango fork
-  pinned as a meson subproject that caches finished glyph strings and font
-  metrics across layouts, so measuring and painting a run reach HarfBuzz once
+- **Text layout** — text is shaped with **web-text-lib**, a Pango fork
+  built in-tree from `third_party/web-text-lib` that caches finished glyph
+  strings and font metrics across layouts, so measuring and painting a run reach HarfBuzz once
   instead of three times. `-Dns-pango=disabled` links the system Pango
   instead.
 - **JavaScript** on the Boa interpreter, with modern ECMAScript through
@@ -184,9 +184,9 @@ Southstar is an independent engine — no upstream browser code.
 [ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
-(MP3, ported to Rust). The only setup-time download is
-[ns-pango](https://github.com/nordstjernen-web/ns-pango), the text-shaping
-fork; `-Dns-pango=disabled` links the system Pango and needs no network.
+(MP3, ported to Rust). The text-shaping Pango fork, web-text-lib, is built
+in-tree from `third_party/web-text-lib`, so setup needs no network;
+`-Dns-pango=disabled` links the system Pango instead.
 
 **Required system libraries:**
 
