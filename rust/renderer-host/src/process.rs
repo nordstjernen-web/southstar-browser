@@ -84,8 +84,13 @@ pub fn run(args: &[&[u8]]) -> c_int {
     let Some(channel) = channel else {
         return 2;
     };
-    if args[3..].iter().any(|a| *a == b"private") {
-        unsafe { g_setenv(c"NS_PRIVATE".as_ptr(), c"1".as_ptr(), 1) };
+    let private = args[3..].iter().any(|a| *a == b"private");
+    let settings = [
+        (c"GIO_USE_VFS", c"local", true),
+        (c"NS_PRIVATE", c"1", private),
+    ];
+    for (name, value, _) in settings.iter().filter(|(_, _, wanted)| *wanted) {
+        unsafe { g_setenv(name.as_ptr(), value.as_ptr(), 1) };
     }
     engine::init();
     if let Some(scheme) = env(c"NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {

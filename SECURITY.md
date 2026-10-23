@@ -106,7 +106,13 @@ socket, so it normally needs no `/dev/shm` name at all.
   itself, and the XDG config, data and cache directories (`~/.config`,
   `~/.local/share`, `~/.cache`). Read+write access to
   `~/.config/southstar`, `~/.local/share/southstar`,
-  `~/.cache/southstar`. While WebGL is enabled or WebGPU was turned on
+  `~/.cache/southstar`, and `southstar/` inside the GLib runtime
+  directory (`$XDG_RUNTIME_DIR/southstar`), where the renderer writes
+  page exports and print sheets for the shell. The renderer gets nothing
+  else in the runtime directory — not the D-Bus and systemd sockets there —
+  no `$XAUTHORITY`, no `/dev/snd` (audio plays in the separate helper) and
+  no Downloads directory; those rules belong to the shell's wider ruleset
+  only. While WebGL is enabled or WebGPU was turned on
   with `--enable-webgpu`, also read+write on the GPU device nodes
   `/dev/dri` and `/dev/nvidia*`, which the driver behind those APIs opens
   to render on the GPU; with WebGL off in Settings and WebGPU not turned
@@ -125,7 +131,15 @@ socket, so it normally needs no `/dev/shm` name at all.
   `keyctl`, `mount`, `unshare`, `userfaultfd`, the `io_uring_*` family,
   `perf_event_open`, `kexec_load`, and the module syscalls are likewise
   absent from the allow-list. TSYNC propagates the filter to every
-  thread.
+  thread. The renderer also gets an argument filter: `mmap` and
+  `mprotect` (and `pkey_mprotect`) fail when asked for memory that is
+  writable and executable at once, so W^X is enforced by the kernel
+  rather than only by having no JIT; and `socket(AF_UNIX, …)` fails,
+  because Landlock does not govern connecting to a Unix socket by path, so
+  this is what keeps a compromised renderer off the user's D-Bus session
+  bus and `systemd --user`. Mapping a writable file or `memfd` read+exec
+  is still possible (GPU drivers load code that way, lazily, when WebGL
+  first runs), so this narrows rather than closes code injection.
 - **Media decoding.** Southstar decodes a fixed, in-tree set of media
   rather than shelling out to an external player: MPEG-1 (`rust/plmpeg`) and
   MP3 (`rust/minimp3`) always, plus WebM/VP9/VP8 video and Opus/Vorbis audio
