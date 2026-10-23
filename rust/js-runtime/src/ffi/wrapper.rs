@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
 use core::ptr;
 
@@ -10,31 +10,43 @@ use southstar_dom::{Kind, Node, NsNode, WeakNode};
 use southstar_glib::{self as glib};
 use southstar_js_engine::{
     Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
-    Scope, Value,
+    Scope, SetFlags, Trace, Value,
 };
 
 use super::{Js, imports};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 
+const ENGINE_KEY_PREFIX: &[u8] = b"__nd";
+
 pub(crate) static ELEMENT_CLASS: HostClass = HostClass::new(
     c"Element",
     ClassHooks {
-        get_own_property: Some(named_get_own),
-        delete: Some(named_delete),
-        define_own_property: Some(named_define),
+        get_own_property: Some(element_get_own),
+        delete: Some(element_delete),
+        define_own_property: Some(element_define),
         ..ClassHooks::NONE
     },
 );
 
 pub(crate) struct ElementData {
     node: Cell<Option<WeakNode>>,
+    engine_state: RefCell<Option<Value>>,
+}
+
+impl Trace for ElementData {
+    fn trace(&self, visit: &mut dyn FnMut(&Value)) {
+        if let Some(state) = self.engine_state.borrow().as_ref() {
+            visit(state);
+        }
+    }
 }
 
 impl ElementData {
     fn new(node: Option<Node<'_>>) -> ElementData {
         ElementData {
             node: Cell::new(node.map(Node::downgrade)),
+            engine_state: RefCell::new(None),
         }
     }
 
@@ -92,6 +104,79 @@ fn is_array_index(name: &[u8]) -> bool {
 
 fn reserved(name: &[u8]) -> bool {
     name.is_empty() || name.starts_with(b"_ns_") || name.starts_with(b"__")
+}
+
+fn engine_state(scope: &mut Scope<'_>, obj: &Value, create: bool) -> Option<Value> {
+    let existing = obj
+        .with_instance(&ELEMENT_CLASS, |data: &ElementData| {
+            data.engine_state.borrow().clone()
+        })
+        .flatten();
+    if existing.is_some() || !create {
+        return existing;
+    }
+    let state = scope.new_object_with_proto(&Value::null());
+    obj.with_instance(&ELEMENT_CLASS, |data: &ElementData| {
+        data.engine_state.replace(Some(state.clone()));
+    })?;
+    Some(state)
+}
+
+fn host_engine_key(scope: &mut Scope<'_>, key: &PropertyKey) -> Option<bool> {
+    key.has_prefix(ENGINE_KEY_PREFIX)
+        .then(|| scope.is_host_access())
+}
+
+fn element_get_own(
+    scope: &mut Scope<'_>,
+    obj: &Value,
+    key: &PropertyKey,
+) -> Result<Option<OwnProperty>, Value> {
+    match host_engine_key(scope, key) {
+        Some(true) => {
+            let own = match engine_state(scope, obj, false) {
+                Some(state) => scope.own_property_of(&state, key)?,
+                None => None,
+            };
+            Ok(Some(own.unwrap_or_else(|| {
+                OwnProperty::data(Value::undefined(), true, false, true)
+            })))
+        }
+        Some(false) => Ok(None),
+        None => named_get_own(scope, obj, key),
+    }
+}
+
+fn element_define(
+    scope: &mut Scope<'_>,
+    obj: &Value,
+    key: &PropertyKey,
+    definition: &PropertyDefinition,
+) -> Result<bool, Value> {
+    match host_engine_key(scope, key) {
+        Some(true) => {
+            let Some(state) = engine_state(scope, obj, true) else {
+                return Ok(false);
+            };
+            if definition.is_value_only() && scope.own_property_of(&state, key)?.is_none() {
+                return scope.set_with_receiver(&state, key, &definition.value, &state, SetFlags);
+            }
+            scope.define_forward(&state, key, definition)
+        }
+        Some(false) => scope.define_ordinary(obj, key, definition),
+        None => named_define(scope, obj, key, definition),
+    }
+}
+
+fn element_delete(scope: &mut Scope<'_>, obj: &Value, key: &PropertyKey) -> Result<bool, Value> {
+    match host_engine_key(scope, key) {
+        Some(true) => match engine_state(scope, obj, false) {
+            Some(state) => scope.delete_key_of(&state, key),
+            None => Ok(true),
+        },
+        Some(false) => Ok(true),
+        None => named_delete(scope, obj, key),
+    }
 }
 
 fn named_get_own(
@@ -232,7 +317,7 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     if !wrapper.is_null() {
         return Ok(scope.object_from_identity(wrapper));
     }
-    let obj = scope.new_instance_with(&ELEMENT_CLASS, None, ElementData::new(Some(n)))?;
+    let obj = scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(Some(n)))?;
     n.set_js_wrapper(obj.object_identity());
     n.set_js_invalidate(Some(invalidate_wrapper));
     let proto = kind_proto(scope, js, n);
@@ -308,5 +393,5 @@ pub(crate) fn arm_js_invalidate(target: Node<'_>) {
 
 pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
     let current_doc = unsafe { *page.st().slots.current_doc };
-    scope.new_instance_with(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))
+    scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))
 }
