@@ -494,8 +494,35 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         page.fetches.get(&id).and_then(|s| s.cancellable.clone())
     })
     .flatten();
-    request.send(cancellable.as_ref(), move |resp, error| {
-        done(Ticket { js, id }, resp, error);
+    let cross_origin = (crate::ascii_starts_with(&send_url, b"http://")
+        || crate::ascii_starts_with(&send_url, b"https://"))
+        && !ffi::url_same_origin(top.as_deref(), Some(&send_url));
+    let preflight = cross_origin
+        .then(|| crate::preflight::needed(&use_method, content_type.as_deref(), &extras))
+        .flatten();
+    let Some(preflight) = preflight else {
+        request.send(cancellable.as_ref(), move |resp, error| {
+            done(Ticket { js, id }, resp, error);
+        });
+        return Ok(promise);
+    };
+    if no_cors {
+        let mut resp = Response::synthesized();
+        resp.set_error(b"no-cors requests may only use simple methods and headers");
+        done(Ticket { js, id }, resp, None);
+        return Ok(promise);
+    }
+    let check = preflight.request(&request.url, request.top.as_ref());
+    check.send(cancellable.clone().as_ref(), move |resp, _error| {
+        if preflight.passed(&resp, top.as_deref()) {
+            request.send(cancellable.as_ref(), move |resp, error| {
+                done(Ticket { js, id }, resp, error);
+            });
+        } else {
+            let mut failed = Response::synthesized();
+            failed.set_error(b"CORS preflight did not allow the request");
+            done(Ticket { js, id }, failed, None);
+        }
     });
     Ok(promise)
 }

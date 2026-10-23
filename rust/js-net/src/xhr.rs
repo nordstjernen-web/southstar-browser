@@ -436,9 +436,35 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             content_type: effective_content_type.as_deref().map(cstring),
             headers: lines.iter().map(|h| cstring(h)).collect::<Vec<CString>>(),
         };
-        request.send(None, move |resp, error| {
-            done(Ticket { js, id }, resp, error.is_some());
-        });
+        let cross_origin = (crate::ascii_starts_with(&resolved, b"http://")
+            || crate::ascii_starts_with(&resolved, b"https://"))
+            && !ffi::url_same_origin(page.as_deref(), Some(&resolved));
+        let preflight = cross_origin
+            .then(|| {
+                crate::preflight::needed(
+                    method.as_deref().unwrap_or(b"GET"),
+                    effective_content_type.as_deref(),
+                    &lines,
+                )
+            })
+            .flatten();
+        match preflight {
+            None => request.send(None, move |resp, error| {
+                done(Ticket { js, id }, resp, error.is_some());
+            }),
+            Some(preflight) => {
+                let check = preflight.request(&request.url, request.top.as_ref());
+                check.send(None, move |resp, _error| {
+                    if preflight.passed(&resp, page.as_deref()) {
+                        request.send(None, move |resp, error| {
+                            done(Ticket { js, id }, resp, error.is_some());
+                        });
+                    } else {
+                        done(Ticket { js, id }, Response::synthesized(), true);
+                    }
+                });
+            }
+        }
     }
     if bool_prop(scope, this, "_sync") {
         pump_until_done(scope, js, this);
