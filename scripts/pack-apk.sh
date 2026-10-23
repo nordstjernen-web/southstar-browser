@@ -71,14 +71,17 @@ fi
 
 cat > "$BUILDTOP/southstar.post-install" <<'EOF'
 #!/bin/sh
-[ -e /usr/bin/internet-browser ] || \
-    ln -sf southstar /usr/bin/internet-browser
+if [ "$(readlink /usr/bin/internet-browser)" = southstar ]; then
+    rm -f /usr/bin/internet-browser
+fi
+[ -e /usr/bin/internet-browser-southstar ] || \
+    ln -sf southstar /usr/bin/internet-browser-southstar
 exit 0
 EOF
 cat > "$BUILDTOP/southstar.pre-deinstall" <<'EOF'
 #!/bin/sh
-if [ "$(readlink /usr/bin/internet-browser)" = southstar ]; then
-    rm -f /usr/bin/internet-browser
+if [ "$(readlink /usr/bin/internet-browser-southstar)" = southstar ]; then
+    rm -f /usr/bin/internet-browser-southstar
 fi
 exit 0
 EOF

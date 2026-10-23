@@ -33,7 +33,7 @@ executable(
 
 if host_machine.system() != 'windows'
   install_symlink(
-    'internet-browser',
+    'internet-browser-southstar',
     pointing_to: 'southstar',
     install_dir: get_option('bindir'),
   )

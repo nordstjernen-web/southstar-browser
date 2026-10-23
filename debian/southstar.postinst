@@ -2,7 +2,8 @@
 set -e
 
 if [ "$1" = configure ]; then
-    update-alternatives --install /usr/bin/internet-browser internet-browser \
+    update-alternatives --remove internet-browser /usr/bin/southstar 2>/dev/null || true
+    update-alternatives --install /usr/bin/internet-browser-southstar internet-browser-southstar \
         /usr/bin/southstar 40
 fi
 
