@@ -186,6 +186,7 @@ pub struct Fetch<'a> {
     pub connect_timeout: Duration,
     pub max_redirects: u32,
     pub https_only_redirects: bool,
+    pub allow_redirect: &'a dyn Fn(&[u8]) -> bool,
     pub route: &'a dyn Fn(&[u8], &str) -> Route,
 }
 
@@ -281,7 +282,8 @@ pub fn fetch(f: &Fetch, handler: &mut dyn Handler) -> (Outcome, Vec<u8>) {
         let Some(next) = next else {
             return (outcome, url);
         };
-        let allowed = parse_target(&next).is_some_and(|t| t.https || !f.https_only_redirects);
+        let allowed = parse_target(&next).is_some_and(|t| t.https || !f.https_only_redirects)
+            && (f.allow_redirect)(&next);
         if !allowed {
             return (outcome, url);
         }

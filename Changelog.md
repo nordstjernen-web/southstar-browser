@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: an `EventSource` stream now checks every redirect against the
+  page's Content-Security-Policy `connect-src`, as it already checked the
+  first URL. A redirect to a URL the policy does not allow is not followed
+  and closes the stream for good. Before, any redirect was followed, so a
+  same-origin endpoint could forward the connection anywhere.
 * Security: `ctutils` is updated to 0.4.4 for RUSTSEC-2026-0385 (its
   constant-time mask helpers could compile to branches on secret values).
   It reaches Southstar through the post-quantum key exchange's `ml-kem`.

@@ -53,11 +53,12 @@ const UNSAFE_EVAL: &[u8] = b"'unsafe-eval'";
 const CASE_SENSITIVE_KEYWORDS: [&[u8]; 4] = [NONCE_PREFIX, b"'sha256-", b"'sha384-", b"'sha512-"];
 const NONCE_PREFIX: &[u8] = b"'nonce-";
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Policy {
     directives: [Option<Vec<Vec<u8>>>; KIND_COUNT],
 }
 
+#[derive(Clone)]
 pub struct Csp {
     policies: Vec<Policy>,
 }
