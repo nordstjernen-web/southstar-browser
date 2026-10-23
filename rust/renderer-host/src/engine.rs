@@ -7,8 +7,8 @@ use std::ffi::CString;
 
 pub use southstar_browser::api::{
     LayerPlan, LayerTarget, Page, Post, PrintPages, PrintSetup, TileTarget, VpLayerInfo, init,
-    print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_referrer,
-    set_next_user_activated, shutdown,
+    print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_initiator,
+    set_next_referrer, set_next_user_activated, shutdown,
 };
 
 #[repr(C)]

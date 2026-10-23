@@ -75,6 +75,25 @@ pub fn is_navigation(headers: &[Vec<u8>]) -> bool {
     find_header(headers, b"X-ND-Navigate:").is_some()
 }
 
+pub fn navigation_initiator(headers: &[Vec<u8>]) -> Option<&[u8]> {
+    const PREFIX: &[u8] = b"X-ND-Initiator:";
+    find_header(headers, PREFIX)
+        .map(|h| skip_blanks(&h[PREFIX.len()..]))
+        .filter(|initiator| !initiator.is_empty())
+}
+
+pub fn site_initiator<'a>(
+    is_navigation: bool,
+    headers: &'a [Vec<u8>],
+    top_url: Option<&'a [u8]>,
+) -> Option<&'a [u8]> {
+    if is_navigation {
+        navigation_initiator(headers)
+    } else {
+        top_url
+    }
+}
+
 pub fn has_user_activation(headers: &[Vec<u8>]) -> bool {
     find_header(headers, b"X-ND-User-Activated:").is_some()
 }

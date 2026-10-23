@@ -134,6 +134,7 @@ pub struct Request<'a> {
     pub content_type: *const c_char,
     pub navigation: bool,
     pub user_activated: bool,
+    pub initiator: Option<&'a CStr>,
     pub headers: *const *const c_char,
 }
 
@@ -144,16 +145,24 @@ pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> *mut NsR
         resp: ptr::null_mut(),
         error: ptr::null_mut(),
     };
-    let navigate = [
-        c"X-ND-Navigate: 1".as_ptr(),
-        c"X-ND-User-Activated: 1".as_ptr(),
-        ptr::null(),
-    ];
-    let redirect = [c"X-ND-Navigate: 1".as_ptr(), ptr::null()];
-    let headers = match (r.navigation, r.user_activated) {
-        (true, true) => navigate.as_ptr(),
-        (true, false) => redirect.as_ptr(),
-        _ => r.headers,
+    let initiator = r
+        .initiator
+        .filter(|initiator| !initiator.is_empty())
+        .and_then(|initiator| {
+            CString::new([&b"X-ND-Initiator: "[..], initiator.to_bytes()].concat()).ok()
+        });
+    let mut navigate = vec![c"X-ND-Navigate: 1".as_ptr()];
+    if r.user_activated {
+        navigate.push(c"X-ND-User-Activated: 1".as_ptr());
+    }
+    if let Some(initiator) = &initiator {
+        navigate.push(initiator.as_ptr());
+    }
+    navigate.push(ptr::null());
+    let headers = if r.navigation {
+        navigate.as_ptr()
+    } else {
+        r.headers
     };
     unsafe {
         southstar_net::request_async(
@@ -195,6 +204,7 @@ pub fn fetch_blocking_with_headers(
         content_type: ptr::null(),
         navigation: false,
         user_activated: false,
+        initiator: None,
         headers: accept_headers(dest),
     };
     unsafe { Response::from_raw(request_blocking(&r, ptr::null_mut())) }
@@ -218,6 +228,7 @@ fn take_error(error: *mut GError) -> Option<Vec<u8>> {
 pub fn navigate_blocking(
     url: &CStr,
     top_url: Option<&CStr>,
+    initiator: Option<&CStr>,
     user_activated: bool,
     post: Option<&Post<'_>>,
 ) -> Result<Response, Option<Vec<u8>>> {
@@ -230,6 +241,7 @@ pub fn navigate_blocking(
         content_type: post.map_or(ptr::null(), |p| ptr_or_null(p.content_type)),
         navigation: true,
         user_activated,
+        initiator,
         headers: ptr::null(),
     };
     let mut error = ptr::null_mut();
@@ -250,6 +262,7 @@ pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
         content_type: ptr::null(),
         navigation: false,
         user_activated: false,
+        initiator: None,
         headers: ptr::null(),
     };
     // SAFETY: the request's strings outlive the blocking call, and a null error slot is allowed.

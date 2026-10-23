@@ -20,10 +20,17 @@ const SEC_PLAIN: c_int = 3;
 const HTML_UTF8: &CStr = c"text/html; charset=utf-8";
 
 static PENDING_REFERRER: Mutex<Option<CString>> = Mutex::new(None);
+static PENDING_INITIATOR: Mutex<Option<CString>> = Mutex::new(None);
 static PENDING_USER_ACTIVATED: AtomicI32 = AtomicI32::new(-1);
 
 pub fn set_next_referrer(url: Option<&CStr>) {
     if let Ok(mut pending) = PENDING_REFERRER.lock() {
+        *pending = url.filter(|u| !u.is_empty()).map(CStr::to_owned);
+    }
+}
+
+pub fn set_next_initiator(url: Option<&CStr>) {
+    if let Ok(mut pending) = PENDING_INITIATOR.lock() {
         *pending = url.filter(|u| !u.is_empty()).map(CStr::to_owned);
     }
 }
@@ -202,6 +209,7 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
         return None;
     }
     let referrer = PENDING_REFERRER.lock().ok().and_then(|mut p| p.take());
+    let initiator = PENDING_INITIATOR.lock().ok().and_then(|mut p| p.take());
     let pending_user_activated = PENDING_USER_ACTIVATED.swap(-1, Ordering::Relaxed);
 
     if url.to_bytes().starts_with(UNSAFE_CONTINUE_SCHEME) {
@@ -248,7 +256,13 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
     };
     let mut resp = None;
     if let Some(https_url) = &https_url {
-        let upgraded = Response::navigate(https_url, referrer.as_deref(), user_activated, None);
+        let upgraded = Response::navigate(
+            https_url,
+            referrer.as_deref(),
+            initiator.as_deref(),
+            user_activated,
+            None,
+        );
         if let Some(r) = upgraded.filter(|r| r.error().is_none() && r.has_body()) {
             fetch_url = https_url;
             resp = Some(r);
@@ -256,7 +270,13 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
     }
     let mut resp = match resp {
         Some(r) => Some(r),
-        None => Response::navigate(fetch_url, referrer.as_deref(), user_activated, post),
+        None => Response::navigate(
+            fetch_url,
+            referrer.as_deref(),
+            initiator.as_deref(),
+            user_activated,
+            post,
+        ),
     };
     if let Some(r) = resp.as_mut()
         && post.is_none()

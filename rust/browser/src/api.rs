@@ -66,6 +66,10 @@ pub fn set_next_referrer(url: Option<&CStr>) {
     open::set_next_referrer(url);
 }
 
+pub fn set_next_initiator(url: Option<&CStr>) {
+    open::set_next_initiator(url);
+}
+
 pub fn set_next_user_activated(user_activated: bool) {
     open::set_next_user_activated(user_activated);
 }

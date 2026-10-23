@@ -46,6 +46,7 @@ pub struct Session<F> {
     frame_h: c_int,
     frame_scale: f64,
     post: Option<StashedPost>,
+    page_nav: Option<Vec<u8>>,
     tiles: Tiles,
 }
 
@@ -189,6 +190,7 @@ impl<F: Framebuffer> Session<F> {
             frame_h: 0,
             frame_scale: 1.0,
             post: None,
+            page_nav: None,
             tiles: Tiles::new(),
         }
     }
@@ -234,6 +236,9 @@ impl<F: Framebuffer> Session<F> {
         let Some(cur) = self.cur.as_ref() else {
             return;
         };
+        if let Some(href) = href.filter(|h| !h.is_empty()) {
+            self.page_nav = Some(href.to_vec());
+        }
         let Some(post) = cur.take_post() else {
             return;
         };
@@ -545,10 +550,15 @@ impl<F: Framebuffer> Session<F> {
             (Some(url), true) => self.bfcache_take(url),
             _ => None,
         };
-        let referrer = if history {
-            None
-        } else {
+        let page_nav = self.page_nav.take();
+        let page_initiated = !history
+            && url
+                .as_ref()
+                .is_some_and(|url| page_nav.as_deref() == Some(url.to_bytes()));
+        let referrer = if page_initiated {
             self.cur.as_ref().and_then(Page::url)
+        } else {
+            None
         };
         if let Some(cur) = self.cur.take() {
             self.bfcache_park_or_close(cur);
@@ -558,6 +568,7 @@ impl<F: Framebuffer> Session<F> {
             if engine::same_origin(&referrer, url) {
                 engine::set_next_referrer(Some(&referrer));
             }
+            engine::set_next_initiator(Some(&referrer));
         }
         engine::set_next_user_activated(user_activated);
         self.frame_valid = false;
