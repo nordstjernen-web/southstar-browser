@@ -14,6 +14,7 @@ southstar-html-parser = { path = "../html-parser" }
 southstar-layout = { path = "../layout" }
 southstar-netutil = { path = "../netutil" }
 southstar-style = { path = "../style" }
+southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
 
 [lints]

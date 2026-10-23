@@ -312,7 +312,7 @@ fn restore_strut_lines(layout: &Layout, list: &AttrList, b: BoxRef<'_>, strut_px
         return;
     }
     let kind = strut_kinds(b, n, strut_px);
-    if layout.text().is_none_or(CStr::is_empty) {
+    if layout.text().is_empty() {
         layout.set_text(text);
     }
     let mut with_struts: Option<AttrList> = None;
@@ -419,6 +419,9 @@ pub(crate) fn set_attrs(layout: &Layout, list: Option<&AttrList>, b: Option<BoxR
         stretched = true;
     }
     if stretched {
+        if let Some(list) = list {
+            layout.set_attributes(list);
+        }
         layout.context_changed();
     }
     if has_shorter && let (Some(list), Some(strut)) = (list, strut_px) {

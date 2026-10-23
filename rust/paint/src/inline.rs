@@ -18,7 +18,6 @@ use crate::decor::{
     style_has_inline_box_paint, style_side_visible,
 };
 use crate::ffi::engine::{self, FontMetrics};
-use crate::text_layout::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
 use crate::radii::{CornerRadii, rounded_rect_path};
 use crate::state;
 use crate::text::{
@@ -27,6 +26,7 @@ use crate::text::{
     font_variations_attr, inline_y_offset_for_layout, is_nowrap, pango_font_size,
     start_align_overflow, stretch_from_css, weight_from_css, wrap_mode_for,
 };
+use crate::text_layout::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
 use crate::util::{
     Rgba, UNIT_CAP, UNIT_CH, UNIT_CQH, UNIT_CQMAX, UNIT_CQMIN, UNIT_CQW, UNIT_EM, UNIT_EX, UNIT_IC,
     UNIT_LH, UNIT_NUMBER, UNIT_PERCENT, UNIT_PX, UNIT_RCAP, UNIT_RCH, UNIT_REM, UNIT_REX, UNIT_RIC,
@@ -167,7 +167,11 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
         );
     }
     if fl.get(P::FontStyle).is_some_and(ValueRef::font_slanted) {
-        attrs.insert_range(Some(Attribute::style(text_layout::STYLE_ITALIC)), start_u, len);
+        attrs.insert_range(
+            Some(Attribute::style(text_layout::STYLE_ITALIC)),
+            start_u,
+            len,
+        );
     }
     if let Some(ff) = fl
         .get(P::FontFamily)

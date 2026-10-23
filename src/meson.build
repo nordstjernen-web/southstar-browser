@@ -16,8 +16,6 @@ southstar_c_deps = [
   gobject,
   gio,
   cairo,
-  pango,
-  pangocairo,
   epoxy,
   gmodule,
   libcrypto,
@@ -49,9 +47,6 @@ if have_fontconfig
   southstar_c_deps += [libfontconfig]
 endif
 
-if have_pangoft2
-  southstar_c_deps += [libpangoft2]
-endif
 
 if have_freetype
   southstar_c_deps += [libfreetype]

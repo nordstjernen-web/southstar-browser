@@ -10,9 +10,9 @@ use std::sync::{Arc, MutexGuard, PoisonError};
 
 use southstar_cairo::ContextRef;
 use southstar_text::attrs::{self as text_attrs, AttrType};
-use southstar_text::font::{Antialias, FontOptions, HintMetrics, SubpixelOrder};
 #[cfg(target_os = "macos")]
 use southstar_text::font::HintStyle;
+use southstar_text::font::{Antialias, CairoContext, FontOptions, HintMetrics, SubpixelOrder};
 use southstar_text::fontmap::FontMap as TextFontMap;
 use southstar_text::layout::{self as text_layout, SharedContext};
 use southstar_text::{
@@ -35,6 +35,7 @@ pub const WEIGHT_BOLD: c_int = 700;
 pub const WEIGHT_ULTRABOLD: c_int = 800;
 pub const WEIGHT_HEAVY: c_int = 900;
 
+pub const STYLE_NORMAL: c_int = Style::Normal as c_int;
 pub const STYLE_OBLIQUE: c_int = Style::Oblique as c_int;
 pub const STYLE_ITALIC: c_int = Style::Italic as c_int;
 pub const VARIANT_SMALL_CAPS: c_int = Variant::SmallCaps as c_int;
@@ -149,9 +150,7 @@ impl FontDescription {
 
     pub fn from_string(text: &CStr) -> FontDescription {
         FontDescription(
-            southstar_text::font_description::FontDescription::from_string(&utf8(
-                text.to_bytes(),
-            )),
+            southstar_text::font_description::FontDescription::from_string(&utf8(text.to_bytes())),
         )
     }
 
@@ -460,6 +459,14 @@ impl Layout {
     pub fn show(&self, cr: ContextRef) {
         render::show_layout(cr, &mut self.get());
     }
+
+    pub fn show_on(&self, cr: &CairoContext) {
+        southstar_text::render::show_layout(cr, &mut self.get());
+    }
+
+    pub fn path_on(&self, cr: &CairoContext) {
+        southstar_text::render::layout_path(cr, &mut self.get());
+    }
 }
 
 pub fn extents_to_pixels(rect: &mut Rectangle) {
@@ -481,7 +488,11 @@ pub struct Run {
 
 impl Line<'_> {
     fn with<R: Default>(self, f: impl FnOnce(text_layout::LineRef<'_>) -> R) -> R {
-        self.layout.get().line(self.index).map(f).unwrap_or_default()
+        self.layout
+            .get()
+            .line(self.index)
+            .map(f)
+            .unwrap_or_default()
     }
 
     pub fn start_index(self) -> c_int {

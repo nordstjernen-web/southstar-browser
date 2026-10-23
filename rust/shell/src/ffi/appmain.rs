@@ -72,28 +72,6 @@ unsafe extern "C" {
     fn _exit(status: c_int) -> !;
 }
 
-#[cfg(feature = "ns-pango")]
-unsafe extern "C" {
-    fn ns_pango_cache_get_stats(
-        hits: *mut u64,
-        misses: *mut u64,
-        skipped: *mut u64,
-        entries: *mut u64,
-    );
-    fn ns_pango_break_cache_stats(
-        hits: *mut u64,
-        misses: *mut u64,
-        skipped: *mut u64,
-        entries: *mut u64,
-    );
-    fn ns_pango_item_cache_stats(
-        hits: *mut u64,
-        misses: *mut u64,
-        skipped: *mut u64,
-        entries: *mut u64,
-    );
-}
-
 static SELF_EXE: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
 
 fn self_exe() -> *const c_char {
@@ -358,8 +336,6 @@ mod win32 {
             }
         }
         setenv_unless_set(c"PANGOCAIRO_BACKEND", c"fc");
-        #[cfg(feature = "ns-pango")]
-        setenv_unless_set(c"NS_PANGOCAIRO_BACKEND", c"fc");
         unsafe { FcInit() };
     }
 
@@ -539,24 +515,17 @@ fn print_perf() {
     let mut line = format!(
         "[net perf] fetches={fetches} bytes={bytes} net_span={span_ms:.1}ms net_sum={sum_ms:.1}ms | relayouts={relayouts} layout={layout_ms:.1}ms"
     );
-    #[cfg(feature = "ns-pango")]
     {
-        let mut shape = [0u64; 4];
-        let mut brk = [0u64; 4];
-        let mut item = [0u64; 4];
-        unsafe {
-            ns_pango_cache_get_stats(&mut shape[0], &mut shape[1], &mut shape[2], &mut shape[3]);
-            ns_pango_break_cache_stats(&mut brk[0], &mut brk[1], &mut brk[2], &mut brk[3]);
-            ns_pango_item_cache_stats(&mut item[0], &mut item[1], &mut item[2], &mut item[3]);
-        }
-        for (name, s) in [
+        let shape = southstar_text::shape_cache::shape_cache_stats();
+        let brk = southstar_text::breaks::break_cache_stats();
+        let item = southstar_text::item_cache::item_cache_stats();
+        for (name, (hits, misses, skipped, entries)) in [
             ("shape_cache", shape),
             ("break_cache", brk),
             ("item_cache", item),
         ] {
             line.push_str(&format!(
-                " | {name} hits={} misses={} skipped={} entries={}",
-                s[0], s[1], s[2], s[3]
+                " | {name} hits={hits} misses={misses} skipped={skipped} entries={entries}"
             ));
         }
     }

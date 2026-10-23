@@ -744,7 +744,11 @@ pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
         let n = 32;
         let mut tabs = TabArray::new(n, true);
         for i in 0..n {
-            tabs.set_tab(i, text_layout::TAB_LEFT, (f64::from(i + 1) * tab_w + 0.5) as i32);
+            tabs.set_tab(
+                i,
+                text_layout::TAB_LEFT,
+                (f64::from(i + 1) * tab_w + 0.5) as i32,
+            );
         }
         layout.set_tabs(&tabs);
     }

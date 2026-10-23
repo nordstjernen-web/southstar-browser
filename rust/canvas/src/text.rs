@@ -1,12 +1,12 @@
-//! Southstar — the 2D context's fillText, strokeText and measureText, laid out with ns-pango in the context's font, alignment, baseline and direction.
+//! Southstar — the 2D context's fillText, strokeText and measureText, laid out with southstar-text in the context's font, alignment, baseline and direction.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::cairo::Context;
-use crate::ffi::pango::{FontDescription, Layout, PANGO_SCALE};
 use crate::ffi::state::CanvasState;
+use crate::ffi::text_layout::{FontDescription, Layout, PANGO_SCALE};
 
 type Result = core::result::Result<Value, Value>;
 

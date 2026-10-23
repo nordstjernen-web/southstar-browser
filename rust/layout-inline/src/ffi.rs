@@ -2,20 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_layout_sizing::SavedGeometry;
-use southstar_paint::ffi as paint;
-use southstar_paint::text_layout::{AttrList, Attribute, Context, Layout};
+use southstar_paint::text_layout::{AttrList, Attribute, Layout};
 use southstar_style::StyleRef;
 
 use crate::attrs;
-
-unsafe extern "C" {}
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
 
@@ -28,8 +24,8 @@ pub(crate) fn node<'a>(dom: *const c_void) -> Option<Node<'a>> {
 }
 
 pub(crate) fn new_layout(parent_style: *const Style) -> Layout {
-    let layout = Layout::new(unsafe { Context::from_raw(paint::ns_paint_text_context()) });
-    unsafe { paint::ns_paint_apply_inline_font(layout.raw(), parent_style) };
+    let layout = Layout::new(southstar_paint::text_context());
+    southstar_paint::apply_inline_font(&layout, style(parent_style));
     layout
 }
 
@@ -38,62 +34,47 @@ pub(crate) fn style_text_indent(s: *const Style, basis: f64) -> f64 {
 }
 
 pub(crate) fn paint_inline_layout(run: BoxRef<'_>) -> Option<Layout> {
-    let raw = unsafe { paint::ns_paint_build_inline_layout(ptr::null_mut(), run.as_ptr()) };
-    (!raw.is_null()).then(|| unsafe { Layout::from_owned(raw) })
+    southstar_paint::build_inline_layout(run)
 }
 
 pub(crate) fn wrap_mode_for(s: *const Style) -> c_int {
-    unsafe { paint::ns_paint_wrap_mode_for(s) }
+    southstar_paint::wrap_mode_for(style(s))
 }
 
 pub(crate) fn apply_css_line_spacing(layout: &Layout, s: *const Style) {
-    unsafe { paint::ns_paint_apply_css_line_spacing(layout.raw(), s) };
+    southstar_paint::apply_css_line_spacing(layout, style(s));
 }
 
 pub(crate) fn apply_i18n(layout: &Layout, attrs: &AttrList, b: BoxRef<'_>) {
-    unsafe { paint::ns_paint_apply_i18n(layout.raw(), attrs.raw(), b.as_ptr()) };
+    southstar_paint::apply_i18n(layout, attrs, b);
 }
 
 pub(crate) fn apply_font_features(attrs: &AttrList, s: *const Style) {
-    unsafe { paint::ns_paint_apply_font_features(attrs.raw(), s, 0, u32::MAX) };
+    southstar_paint::apply_font_features(attrs, style(s));
 }
 
 pub(crate) fn start_align_overflow(layout: &Layout) {
-    unsafe { paint::ns_paint_start_align_overflow(layout.raw()) };
+    southstar_paint::start_align_overflow(layout);
 }
 
 pub(crate) fn css_line_height_px(s: *const Style) -> f64 {
-    unsafe { paint::ns_paint_css_line_height_px(s) }
+    southstar_paint::css_line_height_px(style(s))
 }
 
 pub(crate) fn normal_line_height_px(s: *const Style) -> f64 {
-    unsafe { paint::ns_paint_normal_line_height_px(s) }
+    southstar_paint::normal_line_height_px(style(s))
 }
 
 pub(crate) fn pango_font_size(size_px: f64) -> c_int {
-    paint::ns_paint_pango_font_size(size_px)
-}
-
-fn c_ptr(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
+    southstar_paint::pango_font_size(size_px)
 }
 
 pub(crate) fn font_features_attr(r: &InlineAttr) -> Option<Attribute> {
-    unsafe {
-        Attribute::from_raw(paint::ns_paint_font_features_attr_from_values(
-            r.font_kerning,
-            c_ptr(r.font_ligatures()),
-            c_ptr(r.font_features()),
-        ))
-    }
+    southstar_paint::font_features_attr(r.font_kerning, r.font_ligatures(), r.font_features())
 }
 
 pub(crate) fn font_variations_attr(r: &InlineAttr) -> Option<Attribute> {
-    unsafe {
-        Attribute::from_raw(paint::ns_paint_font_variations_attr_from_values(c_ptr(
-            r.font_variations(),
-        )))
-    }
+    southstar_paint::font_variations_attr(r.font_variations())
 }
 
 pub(crate) use southstar_layout::dispatch::{layout_box, shift_box_tree as shift};
@@ -140,24 +121,27 @@ pub(crate) fn vertical_stack_text(text: &CStr) -> CString {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_apply_atomic_shapes(list: *mut c_void, b: *const NsBox) {
-    if list.is_null() {
+pub unsafe extern "C" fn ns_inline_apply_atomic_shapes(list: *const c_void, b: *const NsBox) {
+    // SAFETY: paint passes null or a pointer to an AttrList it borrows for the call.
+    let Some(list) = (unsafe { list.cast::<AttrList>().as_ref() }) else {
         return;
-    }
+    };
     if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        attrs::apply_atomic_shapes(&*unsafe { AttrList::borrowed(list) }, b);
+        attrs::apply_atomic_shapes(list, b);
     }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_inline_layout_set_attrs(
-    layout: *mut c_void,
-    list: *mut c_void,
+    layout: *const c_void,
+    list: *const c_void,
     b: *const NsBox,
 ) {
-    let Some(layout) = (unsafe { Layout::borrowed(layout) }) else {
+    // SAFETY: paint passes null or a pointer to a Layout it borrows for the call.
+    let Some(layout) = (unsafe { layout.cast::<Layout>().as_ref() }) else {
         return;
     };
-    let list = (!list.is_null()).then(|| unsafe { AttrList::borrowed(list) });
-    attrs::set_attrs(&layout, list.as_deref(), unsafe { BoxRef::from_ptr(b) });
+    // SAFETY: paint passes null or a pointer to an AttrList it borrows for the call.
+    let list = unsafe { list.cast::<AttrList>().as_ref() };
+    attrs::set_attrs(layout, list, unsafe { BoxRef::from_ptr(b) });
 }

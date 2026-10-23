@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
 
-use southstar_paint::text_layout::{self, FontDescRef, FontDescription, Layout, Rectangle};
+use southstar_paint::text_layout::{self, FontDescription, Layout, Rectangle};
 
 const CACHE_MAX: usize = 32768;
 
@@ -57,29 +57,29 @@ struct Cache {
     scratch: Vec<u8>,
 }
 
-fn fonts_equal(a: Option<&FontDescription>, b: Option<FontDescRef>) -> bool {
+fn fonts_equal(a: Option<&FontDescription>, b: Option<&FontDescription>) -> bool {
     match (a, b) {
-        (Some(a), Some(b)) => a.as_ref().equal(b),
+        (Some(a), Some(b)) => a.equal(b),
         (None, None) => true,
         _ => false,
     }
 }
 
 impl Cache {
-    fn lookup(&self, hash: u32, font: Option<FontDescRef>) -> Option<Measure> {
+    fn lookup(&self, hash: u32, font: Option<&FontDescription>) -> Option<Measure> {
         self.buckets.get(&hash)?.iter().find_map(|e| {
             (*e.data == *self.scratch && fonts_equal(e.font.as_ref(), font)).then_some(e.measure)
         })
     }
 
-    fn insert(&mut self, hash: u32, font: Option<FontDescRef>, measure: Measure) {
+    fn insert(&mut self, hash: u32, font: Option<FontDescription>, measure: Measure) {
         if self.len >= CACHE_MAX {
             self.buckets.clear();
             self.len = 0;
         }
         let entry = Entry {
             data: self.scratch.as_slice().into(),
-            font: font.map(FontDescRef::copy_owned),
+            font,
             measure,
         };
         self.buckets.entry(hash).or_default().push(entry);
@@ -91,12 +91,12 @@ thread_local! {
     static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
 }
 
-fn build_key(layout: &Layout, buf: &mut Vec<u8>) -> Option<(u32, Option<FontDescRef>)> {
+fn build_key(layout: &Layout, buf: &mut Vec<u8>) -> Option<(u32, Option<FontDescription>)> {
     if layout.has_tabs() {
         return None;
     }
     let attr_str = layout.attributes_string();
-    let attr_bytes = attr_str.as_deref().map_or(&[][..], |s| s.to_bytes());
+    let attr_bytes = attr_str.as_deref().map_or(&[][..], str::as_bytes);
     if attr_bytes.windows(6).any(|w| w == b" shape") {
         return None;
     }
@@ -116,15 +116,13 @@ fn build_key(layout: &Layout, buf: &mut Vec<u8>) -> Option<(u32, Option<FontDesc
     buf.extend_from_slice(&flags.to_ne_bytes());
     buf.extend_from_slice(&(attr_bytes.len() as u32).to_ne_bytes());
     buf.extend_from_slice(attr_bytes);
-    if let Some(text) = layout.text() {
-        buf.extend_from_slice(text.to_bytes());
-    }
+    buf.extend_from_slice(layout.text().as_bytes());
     let mut h: u32 = 2166136261;
     for &b in buf.iter() {
         h = (h ^ u32::from(b)).wrapping_mul(16777619);
     }
     let font = layout.font_description();
-    if let Some(fd) = font {
+    if let Some(fd) = font.as_ref() {
         h ^= fd.hash_value().wrapping_mul(0x9e3779b1);
     }
     Some((h, font))
@@ -136,8 +134,8 @@ pub(crate) fn measure(layout: &Layout) -> Measure {
         let mut scratch = core::mem::take(&mut cache.scratch);
         let key = build_key(layout, &mut scratch);
         cache.scratch = scratch;
-        if let Some((hash, font)) = key
-            && let Some(hit) = cache.lookup(hash, font)
+        if let Some((hash, font)) = &key
+            && let Some(hit) = cache.lookup(*hash, font.as_ref())
         {
             return hit;
         }

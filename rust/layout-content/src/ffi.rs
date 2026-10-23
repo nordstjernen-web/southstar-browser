@@ -8,8 +8,7 @@ use std::sync::OnceLock;
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, g_free};
 use southstar_layout::{BoxRef, InlineAttr, Style};
-use southstar_paint::ffi as paint;
-use southstar_paint::text_layout::{Context, Layout};
+use southstar_paint::text_layout::{self, Layout};
 use southstar_style::StyleRef;
 
 use crate::controls;
@@ -85,17 +84,14 @@ pub fn unichar_title_utf8(c: u32) -> Vec<u8> {
 }
 
 pub fn char_cell_px(s: *const Style) -> f64 {
-    let layout = Layout::new(unsafe { Context::from_raw(paint::ns_paint_text_context()) });
-    unsafe { paint::ns_paint_apply_inline_font(layout.raw(), s) };
+    let layout = Layout::new(southstar_paint::text_context());
+    southstar_paint::apply_inline_font(&layout, style(s));
     let ctx = layout.context();
     let fd = layout
         .font_description()
         .unwrap_or_else(|| ctx.font_description());
-    if fd.raw().is_null() {
-        return 0.0;
-    }
-    ctx.metrics(fd).map_or(0.0, |fm| {
-        f64::from(fm.approximate_char_width()) / f64::from(paint::text_layout::SCALE)
+    ctx.metrics(&fd).map_or(0.0, |fm| {
+        f64::from(fm.approximate_char_width()) / text_layout::SCALE_F
     })
 }
 

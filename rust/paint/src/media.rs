@@ -16,12 +16,12 @@ use southstar_video::BoxVideo;
 use crate::clip_shape::clip_to_shape;
 use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
 use crate::ffi::engine::{self, Texture, Video};
-use crate::text_layout::{self, FontDescription};
 use crate::filter::{
     TextureFit, apply_image_filter, filter_has_bitmap_effect, paint_texture_drop_shadows,
 };
 use crate::radii::{CornerRadii, box_border_radii, rounded_rect_path};
 use crate::text;
+use crate::text_layout::{self, FontDescription};
 use crate::util::{Rgba, UNIT_PERCENT, cmin, get, length_or, style_of};
 
 pub struct TextureSurfaces {

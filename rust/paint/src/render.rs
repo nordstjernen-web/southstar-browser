@@ -7,23 +7,34 @@ use core::ops::Range;
 
 use southstar_cairo::ContextRef;
 use southstar_text::SCALE_F;
-use southstar_text::font::Font;
+use southstar_text::font::{CairoContext, Font};
 use southstar_text::glyph::{GlyphInfo, GlyphString};
 use southstar_text::layout::{Layout, LineRef};
+use southstar_text::render;
 
-pub fn show_layout(_cr: ContextRef, _layout: &mut Layout) {}
+fn text_cairo(cr: ContextRef) -> Option<CairoContext> {
+    // SAFETY: a ContextRef always wraps a live cairo_t; CairoContext takes its own reference.
+    unsafe { CairoContext::from_raw(cr.as_raw()) }
+}
 
-pub fn show_layout_line(_cr: ContextRef, _line: LineRef<'_>) {}
+pub fn show_layout(cr: ContextRef, layout: &mut Layout) {
+    if let Some(cr) = text_cairo(cr) {
+        render::show_layout(&cr, layout);
+    }
+}
 
-fn glyph_string_path(_cr: ContextRef, _font: Option<&Font>, _glyphs: &GlyphString) {}
+pub fn show_layout_line(cr: ContextRef, line: LineRef<'_>) {
+    if let Some(cr) = text_cairo(cr) {
+        render::show_layout_line(&cr, line);
+    }
+}
 
-fn glyph_path(cr: ContextRef, font: Option<&Font>, info: &GlyphInfo, x: f64, baseline: f64) {
+fn glyph_path(cr: &CairoContext, font: Option<&Font>, info: &GlyphInfo) {
     let one = GlyphString {
-        glyphs: vec![info.clone()],
+        glyphs: vec![*info],
         log_clusters: vec![0],
     };
-    cr.move_to(x, baseline);
-    glyph_string_path(cr, font, &one);
+    render::glyph_string_path(cr, font, &one);
 }
 
 pub fn line_range_path(
@@ -33,6 +44,9 @@ pub fn line_range_path(
     baseline: f64,
     range: Range<c_int>,
 ) {
+    let Some(text_cr) = text_cairo(cr) else {
+        return;
+    };
     let mut run_x = x;
     for run in &line.runs {
         let item = &run.item;
@@ -42,12 +56,13 @@ pub fn line_range_path(
         let font = item.analysis.font.as_ref();
         if item_range.start >= range.start && item_range.end <= range.end {
             cr.move_to(start_x, baseline);
-            glyph_string_path(cr, font, glyphs);
+            render::glyph_string_path(&text_cr, font, glyphs);
         } else if item_range.start < range.end && item_range.end > range.start {
             let mut glyph_x = start_x;
             for (info, cluster) in glyphs.glyphs.iter().zip(&glyphs.log_clusters) {
                 if range.contains(&(item.offset + cluster)) {
-                    glyph_path(cr, font, info, glyph_x, baseline);
+                    cr.move_to(glyph_x, baseline);
+                    glyph_path(&text_cr, font, info);
                 }
                 glyph_x += f64::from(info.geometry.width) / SCALE_F;
             }

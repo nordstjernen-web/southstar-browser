@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
 southstar-net = { path = "../net" }
+southstar-text = { path = "../text" }
 southstar-url = { path = "../url" }
 southstar-woff2 = { path = "../woff2", optional = true }
 

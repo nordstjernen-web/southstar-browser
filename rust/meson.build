@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, cairo, libpsl, pango, epoxy]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, glib, cairo, cairo_ft, harfbuzz, fribidi, libfontconfig, libfreetype, libpsl, epoxy]
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif
@@ -124,8 +124,9 @@ if have_avif
   endforeach
   southstar_rust_env += {'NS_AVIF_LAYOUT': ','.join(avif_layout)}
 endif
-if use_ns_pango
-  southstar_rust_features += ['ns-pango']
+if libthai.found()
+  southstar_rust_features += ['thai']
+  southstar_rust_link_deps += [libthai]
 endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']
@@ -146,10 +147,6 @@ endif
 if have_freetype
   southstar_rust_features += ['freetype']
   southstar_rust_link_deps += [libfreetype]
-endif
-if have_pangoft2
-  southstar_rust_features += ['pangoft2']
-  southstar_rust_link_deps += [libpangoft2]
 endif
 if have_avif
   southstar_rust_features += ['avif']

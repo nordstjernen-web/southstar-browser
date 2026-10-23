@@ -77,9 +77,9 @@ BuildRequires:  pkgconfig(libavutil) >= 58
 BuildRequires:  pkgconfig(libswresample) >= 4
 BuildRequires:  pkgconfig(libswscale) >= 7
 BuildRequires:  pkgconfig(fontconfig)
-BuildRequires:  pkgconfig(pango)
-BuildRequires:  pkgconfig(pangocairo)
-BuildRequires:  pkgconfig(pangoft2)
+BuildRequires:  pkgconfig(harfbuzz)
+BuildRequires:  pkgconfig(fribidi)
+BuildRequires:  pkgconfig(freetype2)
 
 Requires:       gtk4
 Requires:       uchardet
@@ -94,15 +94,13 @@ engine is used. SVG images are rendered in-engine.
 %setup -q -n ${SLUG}
 
 %build
-# A rebuild has no network: the vendored subprojects are in the tarball, and
-# text is shaped through the system Pango.
+# A rebuild has no network: the vendored subprojects are in the tarball.
 meson setup builddir \\
     --prefix=%{_prefix} \\
     --libdir=%{_libdir} \\
     --buildtype=release \\
     -Db_lto=true \\
     -Db_ndebug=true \\
-    -Dns-pango=disabled \\
     -Dwebgpu=disabled \\
     --wrap-mode=nodownload
 meson compile -C builddir

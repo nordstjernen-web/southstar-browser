@@ -23,12 +23,12 @@ mod util;
 mod walk;
 
 pub use api::{
-    canvas_color, css_line_height_px, doc_layers, inline_xy_to_byte, inside_list_marker,
-    invalidate_3d, list_ordinals_begin, list_ordinals_end, normal_line_height_px, paint,
-    pango_font_size, pick_3d, plan_layers, registered_3d, set_anim, set_caret_visible, set_js,
-    apply_css_line_spacing, apply_font_features, apply_i18n, apply_inline_font, build_inline_layout,
-    font_features_attr, font_variations_attr, start_align_overflow, wrap_mode_for,
-    set_search, sync_inline_atomic_offsets, text_context, vp_layer,
+    apply_css_line_spacing, apply_font_features, apply_i18n, apply_inline_font,
+    build_inline_layout, canvas_color, css_line_height_px, doc_layers, font_features_attr,
+    font_variations_attr, inline_xy_to_byte, inside_list_marker, invalidate_3d,
+    list_ordinals_begin, list_ordinals_end, normal_line_height_px, paint, pango_font_size, pick_3d,
+    plan_layers, registered_3d, set_anim, set_caret_visible, set_js, set_search,
+    start_align_overflow, sync_inline_atomic_offsets, text_context, vp_layer, wrap_mode_for,
 };
 pub use document::LayerPlan;
 pub use walk::VpCapture;

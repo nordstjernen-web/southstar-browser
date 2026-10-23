@@ -1,16 +1,21 @@
-//! Southstar — Cairo, ns-pango, GLib and DOM calls behind SVG rendering, and its C ABI.
+//! Southstar — Cairo, southstar-text, GLib and DOM calls behind SVG rendering, and its C ABI.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::RefCell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 
 use southstar_dom::Node;
 use southstar_glib::{GBoolean, GStr};
+use southstar_text::font::CairoContext;
+use southstar_text::font_description::FontDescription;
+use southstar_text::fontmap::FontMap;
+use southstar_text::layout::{Layout, shared_context};
+use southstar_text::{Style, Weight};
 use southstar_texture::TextureRef;
 
 pub const PANGO_SCALE: c_int = 1024;
-const PANGO_STYLE_ITALIC: c_int = 2;
 const CAIRO_STATUS_SUCCESS: c_int = 0;
 pub const FORMAT_ARGB32: c_int = 0;
 pub const FORMAT_A8: c_int = 2;
@@ -165,47 +170,6 @@ unsafe extern "C" {
     fn cairo_matrix_multiply(r: *mut Matrix, a: *const Matrix, b: *const Matrix);
     fn cairo_matrix_invert(m: *mut Matrix) -> c_int;
     fn cairo_matrix_transform_point(m: *const Matrix, x: *mut f64, y: *mut f64);
-
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_cairo_create_layout")]
-    fn pango_cairo_create_layout(cr: *mut c_void) -> *mut c_void;
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_cairo_layout_path")]
-    fn pango_cairo_layout_path(cr: *mut c_void, layout: *mut c_void);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_new")]
-    fn pango_font_description_new() -> *mut c_void;
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_family"
-    )]
-    fn pango_font_description_set_family(desc: *mut c_void, family: *const c_char);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_absolute_size"
-    )]
-    fn pango_font_description_set_absolute_size(desc: *mut c_void, size: f64);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_weight"
-    )]
-    fn pango_font_description_set_weight(desc: *mut c_void, weight: c_int);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_font_description_set_style"
-    )]
-    fn pango_font_description_set_style(desc: *mut c_void, style: c_int);
-    #[cfg_attr(
-        feature = "ns-pango",
-        link_name = "ns_pango_layout_set_font_description"
-    )]
-    fn pango_layout_set_font_description(layout: *mut c_void, desc: *const c_void);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_font_description_free")]
-    fn pango_font_description_free(desc: *mut c_void);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_set_text")]
-    fn pango_layout_set_text(layout: *mut c_void, text: *const c_char, length: c_int);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_get_pixel_size")]
-    fn pango_layout_get_pixel_size(layout: *mut c_void, w: *mut c_int, h: *mut c_int);
-    #[cfg_attr(feature = "ns-pango", link_name = "ns_pango_layout_get_baseline")]
-    fn pango_layout_get_baseline(layout: *mut c_void) -> c_int;
-    fn g_object_unref(object: *mut c_void);
 
     fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
@@ -418,13 +382,7 @@ impl Drop for Pattern {
     }
 }
 
-pub struct TextLayout(*mut c_void);
-
-impl Drop for TextLayout {
-    fn drop(&mut self) {
-        unsafe { g_object_unref(self.0) };
-    }
-}
+pub struct TextLayout(RefCell<Layout>);
 
 pub struct Font<'a> {
     pub family: Option<&'a CStr>,
@@ -628,42 +586,46 @@ impl Canvas {
         (x, y)
     }
 
+    fn text_cairo(self) -> Option<CairoContext> {
+        // SAFETY: a Canvas wraps the live cairo_t SVG rendering draws on.
+        unsafe { CairoContext::from_raw(self.0) }
+    }
+
     pub fn text_layout(self, text: &[u8], font: &Font<'_>) -> TextLayout {
-        unsafe {
-            let layout = TextLayout(pango_cairo_create_layout(self.0));
-            let desc = pango_font_description_new();
-            let family = font.family.map(southstar_style::font_family_for_pango);
-            let family = family.as_deref().unwrap_or(c"sans-serif");
-            pango_font_description_set_family(desc, family.as_ptr());
-            pango_font_description_set_absolute_size(
-                desc,
-                f64::from(ns_paint_pango_font_size(font.size)),
-            );
-            pango_font_description_set_weight(desc, font.weight);
-            if font.italic {
-                pango_font_description_set_style(desc, PANGO_STYLE_ITALIC);
-            }
-            pango_layout_set_font_description(layout.0, desc);
-            pango_font_description_free(desc);
-            pango_layout_set_text(layout.0, text.as_ptr().cast(), text.len() as c_int);
-            layout
+        let context = match self.text_cairo() {
+            Some(cr) => southstar_text::context::Context::create_for_cairo(&cr),
+            None => FontMap::default_for_thread().create_context(),
+        };
+        let mut layout = Layout::new(&shared_context(context));
+        let mut desc = FontDescription::new();
+        let family = font.family.map(southstar_style::font_family_for_pango);
+        let family = family.as_deref().unwrap_or(c"sans-serif");
+        desc.set_family(Some(&family.to_string_lossy()));
+        // SAFETY: ns_paint_pango_font_size is a pure conversion exported by the paint crate.
+        desc.set_absolute_size(f64::from(unsafe { ns_paint_pango_font_size(font.size) }));
+        desc.set_weight(Weight(font.weight));
+        if font.italic {
+            desc.set_style(Style::Italic);
         }
+        layout.set_font_description(Some(&desc));
+        layout.set_text(&String::from_utf8_lossy(text));
+        TextLayout(RefCell::new(layout))
     }
 
     pub fn layout_path(self, layout: &TextLayout) {
-        unsafe { pango_cairo_layout_path(self.0, layout.0) };
+        if let Some(cr) = self.text_cairo() {
+            southstar_text::render::layout_path(&cr, &mut layout.0.borrow_mut());
+        }
     }
 }
 
 impl TextLayout {
     pub fn pixel_size(&self) -> (i32, i32) {
-        let (mut w, mut h) = (0, 0);
-        unsafe { pango_layout_get_pixel_size(self.0, &mut w, &mut h) };
-        (w, h)
+        self.0.borrow_mut().pixel_size()
     }
 
     pub fn baseline(&self) -> i32 {
-        unsafe { pango_layout_get_baseline(self.0) }
+        self.0.borrow_mut().baseline()
     }
 }
 

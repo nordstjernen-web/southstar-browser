@@ -1,4 +1,4 @@
-//! Southstar — Intl.Segmenter: grapheme, word and sentence segments from Pango's Unicode text segmentation.
+//! Southstar — Intl.Segmenter: grapheme, word and sentence segments from southstar-text's Unicode text segmentation.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -38,7 +38,7 @@ impl Segmentation {
         let count = text.chars().count();
         if count > 0 {
             let without_nul: Vec<u8> = text.bytes().map(|c| c.max(1)).collect();
-            let language = ffi::pango_language(service::language_of(&segmenter.locale).as_bytes());
+            let language = ffi::text_language(service::language_of(&segmenter.locale).as_bytes());
             let attrs = ffi::log_attrs(&ffi::c_text(&without_nul), count, language.as_ref());
             let (mut unit, mut byte) = (0, 0);
             for (index, c) in text.chars().enumerate() {
