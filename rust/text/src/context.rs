@@ -5,6 +5,7 @@
 use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::font::{CairoContext, Font, FontOptions, null_font_metrics, utf8_strwidth};
 use crate::font_description::FontDescription;
@@ -17,6 +18,12 @@ use crate::metrics::FontMetrics;
 use crate::types::{Direction, Gravity, GravityHint, SCALE, Stretch, Style, Variant, Weight};
 
 const METRICS_CACHE_MAX_ENTRIES: usize = 512;
+
+static NEXT_STATE_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_state_id() -> u64 {
+    NEXT_STATE_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SampleWidths {
@@ -70,6 +77,7 @@ struct CairoInfo {
 #[derive(Clone)]
 pub struct Context {
     serial: u32,
+    state_id: u64,
     fontmap_serial: u32,
     set_language: Option<Language>,
     language: Language,
@@ -116,6 +124,7 @@ impl Context {
         font_desc.set_size(12 * SCALE);
         Context {
             serial: 1,
+            state_id: next_state_id(),
             fontmap_serial: 0,
             set_language: None,
             language: Language::default_language(),
@@ -148,6 +157,7 @@ impl Context {
         if self.serial == 0 {
             self.serial = 1;
         }
+        self.state_id = next_state_id();
         self.metrics = None;
         self.metrics_cache.clear();
     }
@@ -173,6 +183,11 @@ impl Context {
     pub fn serial(&mut self) -> u32 {
         self.check_fontmap_changed();
         self.serial
+    }
+
+    pub fn state_id(&mut self) -> u64 {
+        self.check_fontmap_changed();
+        self.state_id
     }
 
     fn update_resolved_gravity(&mut self) {

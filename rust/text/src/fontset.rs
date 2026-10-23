@@ -2,7 +2,7 @@
 //! Copyright 2001 Red Hat Software, 2003 Keith Packard; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use crate::ffi::fontconfig::{FontSet, Pattern};
@@ -88,6 +88,7 @@ struct FontsetInner {
     key: FontsetKey,
     patterns: Arc<Patterns>,
     state: Mutex<FontsetState>,
+    char_fonts: Mutex<HashMap<u32, (Option<Font>, i32)>>,
 }
 
 #[derive(Default)]
@@ -114,6 +115,7 @@ impl Fontset {
             key,
             patterns,
             state: Mutex::new(FontsetState::default()),
+            char_fonts: Mutex::new(HashMap::new()),
         }))
     }
 
@@ -130,6 +132,21 @@ impl Fontset {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn char_fonts(&self) -> MutexGuard<'_, HashMap<u32, (Option<Font>, i32)>> {
+        self.0
+            .char_fonts
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub(crate) fn cached_char_font(&self, wc: u32) -> Option<(Option<Font>, i32)> {
+        self.char_fonts().get(&wc).cloned()
+    }
+
+    pub(crate) fn cache_char_font(&self, wc: u32, font: Option<Font>, position: i32) {
+        self.char_fonts().insert(wc, (font, position));
     }
 
     pub fn language(&self) -> Option<Language> {
