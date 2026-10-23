@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Packaging: `scripts/pack-appimage.sh` downloads linuxdeploy, its GTK
+  plugin, appimagetool and the AppImage runtime from fixed releases and a
+  fixed commit and checks each against a SHA-256 checksum before running
+  it, on x86_64 and aarch64. It fetched the moving `continuous` builds and
+  the plugin's `master` branch and ran them unchecked.
 * Security: Content-Security-Policy is enforced in more places.
   `eval`, `new Function`, string `ShadowRealm.prototype.evaluate` and the
   other string-compiling functions now throw `EvalError` unless the page's
