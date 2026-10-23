@@ -1,4 +1,4 @@
-//! Southstar — inline text: building the Pango layout of a run from its style and inline attributes, painting it with decorations, shadows, selection, find highlights, carets, form controls and inline boxes, and the geometry queries hit testing and script make of it.
+//! Southstar — inline text: building the text layout of a run from its style and inline attributes, painting it with decorations, shadows, selection, find highlights, carets, form controls and inline boxes, and the geometry queries hit testing and script make of it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

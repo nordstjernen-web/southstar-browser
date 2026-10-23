@@ -28,6 +28,5 @@ southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
 southstar-video = { path = "../video" }
 
-
 [lints]
 workspace = true

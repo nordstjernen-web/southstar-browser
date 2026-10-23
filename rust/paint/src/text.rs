@@ -1,4 +1,4 @@
-//! Southstar — page text setup: the shared Pango context, fonts from computed styles, line heights, OpenType features and variations, language and direction, alignment, and the font oracle the style engine measures with.
+//! Southstar — page text setup: the shared text context, fonts from computed styles, line heights, OpenType features and variations, language and direction, alignment, and the font oracle the style engine measures with.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
