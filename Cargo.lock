@@ -2367,6 +2367,7 @@ dependencies = [
  "southstar-paint",
  "southstar-selector-text",
  "southstar-style",
+ "southstar-url",
 ]
 
 [[package]]
