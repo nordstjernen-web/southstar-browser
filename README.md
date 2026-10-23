@@ -119,8 +119,10 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   text get a red wavy underline, honouring the `spellcheck` attribute.
 - **Safe browsing** — a top-level navigation's host is checked against a local
   SHA-256 blocklist before it is fetched, entirely on-device; a match shows a
-  full-page warning. Overridable via
-  `~/.config/southstar/safebrowsing.list`.
+  full-page warning. The list shipped in `data/safebrowsing.list` holds only
+  test entries and nothing updates it, so it protects against nothing until
+  you supply your own in `~/.config/southstar/safebrowsing.list` (or point
+  `NS_SAFEBROWSING_LIST` at one).
 - **Process-per-tab** — each tab's engine runs in its own sandboxed
   `southstar-renderer` process; the GTK app is a thin shell that blits the
   renderer's shared-memory framebuffer and forwards input over an IPC control
