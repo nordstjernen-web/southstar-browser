@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security (Linux): the thread that answers SIGQUIT with a thread dump now
+  starts after the sandbox is in place, in the UI shell and in the
+  renderer. Landlock confines only the thread that applies it and threads
+  started later, so the dump thread ran unconfined for the life of the
+  process. When the download directory is the home directory itself the
+  sandbox no longer opens the whole home directory for writing; downloads
+  need a directory below it.
 * Security: cross-origin `fetch()` and `XMLHttpRequest` requests that are
   not CORS-simple (a method other than GET, HEAD or POST, a header outside
   the safelist, or a `Content-Type` other than form, multipart or plain

@@ -699,7 +699,6 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         setenv(c"NS_PRIVATE", c"1");
     }
     southstar_config::init();
-    southstar_threaddump::install_signal(Some(b"southstar"));
 
     let proc_mode = appmain::proc_mode_wanted(&args);
 
@@ -744,6 +743,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         southstar_sandbox::sandbox_init(self_exe_str());
         southstar_sandbox::seccomp_init();
     }
+    southstar_threaddump::install_signal(Some(b"southstar"));
     unsafe {
         southstar_debuglog::init();
         g_log_set_writer_func(log_writer, ptr::null_mut(), None);

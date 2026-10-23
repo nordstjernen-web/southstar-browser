@@ -397,6 +397,9 @@ mod linux {
         };
         if let (Some(downloads), Some(home)) = (&downloads, &home)
             && downloads.starts_with(home)
+            && downloads
+                .get(home.len()..)
+                .is_some_and(|rest| rest.first() == Some(&b'/') && rest.iter().any(|&c| c != b'/'))
         {
             super::mkdir_with_parents(downloads);
             if file_test(downloads, glib::FILE_TEST_IS_DIR) {
