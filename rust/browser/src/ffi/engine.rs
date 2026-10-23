@@ -201,6 +201,7 @@ fn webgpu_allowed() -> bool {
 
 pub fn sandbox(self_exe: Option<&CStr>) {
     southstar_sandbox::win32_mitigations_init(false);
+    southstar_sandbox::confine_as_renderer();
     if southstar_config::webgl_enabled() || webgpu_allowed() {
         southstar_sandbox::allow_gpu_devices();
     }

@@ -45,11 +45,18 @@ pub fn set_print(print: Option<PrintFn>) {
     *PRINT.lock().unwrap_or_else(|e| e.into_inner()) = print;
 }
 
-fn print_prefix() -> Vec<u8> {
+pub fn exchange_dir() -> Vec<u8> {
     // SAFETY: g_get_user_runtime_dir takes no arguments and returns a string GLib owns.
     let dir = unsafe { g_get_user_runtime_dir() };
     // SAFETY: dir is a NUL-terminated string GLib keeps for the life of the process.
-    let mut prefix = unsafe { glib::bytes(dir) }.unwrap_or_default().to_vec();
+    let mut path = unsafe { glib::bytes(dir) }.unwrap_or_default().to_vec();
+    path.extend_from_slice(b"/southstar");
+    let _ = std::fs::create_dir_all(String::from_utf8_lossy(&path).as_ref());
+    path
+}
+
+fn print_prefix() -> Vec<u8> {
+    let mut prefix = exchange_dir();
     // SAFETY: g_get_monotonic_time takes no arguments and only reads the clock.
     let now = unsafe { g_get_monotonic_time() };
     prefix.extend_from_slice(

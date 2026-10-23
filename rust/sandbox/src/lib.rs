@@ -5,8 +5,9 @@
 mod ffi;
 
 pub use ffi::{
-    add_exec_dir, add_writable_dir, allow_gpu_devices, csprng_fill, harden_allocator,
-    mark_download_origin, refuse_root, sandbox_init, seccomp_init, win32_mitigations_init,
+    add_exec_dir, add_writable_dir, allow_gpu_devices, confine_as_renderer, csprng_fill,
+    harden_allocator, mark_download_origin, refuse_root, sandbox_init, seccomp_init,
+    win32_mitigations_init,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -284,7 +285,6 @@ pub const SECCOMP_ALLOWED: &[&str] = &[
     "mbind",
     "membarrier",
     "memfd_create",
-    "memfd_secret",
     "mincore",
     "mkdir",
     "mkdirat",
@@ -335,7 +335,6 @@ pub const SECCOMP_ALLOWED: &[&str] = &[
     "recvmmsg",
     "recvmmsg_time64",
     "recvmsg",
-    "remap_file_pages",
     "rename",
     "renameat",
     "renameat2",

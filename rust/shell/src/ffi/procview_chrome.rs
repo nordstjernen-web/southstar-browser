@@ -47,7 +47,6 @@ static EXPORT_COUNTER: AtomicI32 = AtomicI32::new(0);
 unsafe extern "C" {
     fn g_malloc0(n_bytes: usize) -> *mut c_void;
     fn g_simple_action_group_new() -> *mut c_void;
-    fn g_get_user_runtime_dir() -> *const c_char;
     fn g_strescape(source: *const c_char, exceptions: *const c_char) -> *mut c_char;
 }
 
@@ -233,8 +232,9 @@ unsafe extern "C" fn on_save_dialog_done(src: *mut c_void, res: *mut c_void, ud:
                     if ctx.pdf { "pdf" } else { "png" }
                 ));
                 let req = new_req(REQ_EXPORT);
+                let exchange = cstring(southstar_renderer_client::exchange_dir());
                 let mut parts = [
-                    g_get_user_runtime_dir().cast_mut(),
+                    exchange.as_ptr().cast_mut(),
                     base.as_ptr().cast_mut(),
                     ptr::null_mut(),
                 ];

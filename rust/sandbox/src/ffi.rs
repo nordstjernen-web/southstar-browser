@@ -68,6 +68,7 @@ fn env_flag(name: &CStr) -> bool {
 static WRITABLE_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static EXEC_DIRS: Mutex<Vec<CString>> = Mutex::new(Vec::new());
 static GPU_DEVICES_ALLOWED: AtomicBool = AtomicBool::new(false);
+static RENDERER: AtomicBool = AtomicBool::new(false);
 
 fn remember(list: &Mutex<Vec<CString>>, dir: &[u8]) {
     if !dir.is_empty()
@@ -97,6 +98,15 @@ pub fn allow_gpu_devices() {
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn gpu_devices_allowed() -> bool {
     GPU_DEVICES_ALLOWED.load(Ordering::Relaxed)
+}
+
+pub fn confine_as_renderer() {
+    RENDERER.store(true, Ordering::Relaxed);
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn is_renderer() -> bool {
+    RENDERER.load(Ordering::Relaxed)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -165,7 +175,7 @@ fn dirname(path: &[u8]) -> Vec<u8> {
 mod linux {
     use super::{
         EXEC_DIRS, WRITABLE_DIRS, build_filename, dirname, download_dir, env_flag, file_test,
-        getenv, glib_dir, gpu_devices_allowed, info, own_dir, remembered, strerror,
+        getenv, glib_dir, gpu_devices_allowed, info, is_renderer, own_dir, remembered, strerror,
     };
     use crate::landlock::{self, Access};
     use core::ffi::{c_char, c_int, c_long, c_void};
@@ -353,10 +363,11 @@ mod linux {
         if gpu_devices_allowed() {
             allow_gpu_device_nodes(&rules, fs_read);
         }
-        if file_test(b"/dev/snd", glib::FILE_TEST_IS_DIR) {
+        let renderer = is_renderer();
+        if !renderer && file_test(b"/dev/snd", glib::FILE_TEST_IS_DIR) {
             rules.allow(fs_read | landlock::WRITE_FILE, b"/dev/snd");
         }
-        if let Some(xauth) = getenv(c"XAUTHORITY").filter(|xauth| !xauth.is_empty()) {
+        if let Some(xauth) = getenv(c"XAUTHORITY").filter(|xauth| !renderer && !xauth.is_empty()) {
             rules.allow(landlock::READ_FILE, xauth);
         }
         for name in [c"CURL_CA_BUNDLE", c"SSL_CERT_FILE"] {
@@ -380,7 +391,11 @@ mod linux {
             rules.allow(fs_read, dir);
         }
         if let Some(runtime) = glib_dir(super::g_get_user_runtime_dir) {
-            rules.allow(fs_rw, &runtime);
+            if renderer {
+                rules.allow(fs_rw, &own_dir(&runtime, &[b"southstar"]));
+            } else {
+                rules.allow(fs_rw, &runtime);
+            }
         }
         for base in [&config, &data, &cache].into_iter().flatten() {
             rules.allow(fs_rw, &own_dir(base, &[b"southstar"]));
@@ -395,7 +410,7 @@ mod linux {
                 .as_deref()
                 .map(|home| build_filename(&[home, b"Downloads"])),
         };
-        if let (Some(downloads), Some(home)) = (&downloads, &home)
+        if let (false, Some(downloads), Some(home)) = (renderer, &downloads, &home)
             && downloads.starts_with(home)
             && downloads
                 .get(home.len()..)
@@ -482,7 +497,7 @@ mod linux {
 #[cfg(all(target_os = "linux", feature = "seccomp"))]
 mod seccomp {
     use super::linux::{PR_SET_NO_NEW_PRIVS, errno, prctl, require_or_die};
-    use super::{info, strerror, warning};
+    use super::{info, is_renderer, strerror, warning};
     use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
     use std::ffi::CString;
 
@@ -493,6 +508,64 @@ mod seccomp {
     const NR_SCMP_ERROR: c_int = -1;
     const TIOCSTI: u64 = 0x5412;
     const TIOCLINUX: u64 = 0x541C;
+    const PROT_WRITE_EXEC: u64 = 0x2 | 0x4;
+    const AF_UNIX: u64 = 1;
+    const WHOLE_ARG: u64 = 0xFFFF_FFFF;
+
+    struct Deny {
+        syscall: &'static str,
+        arg: c_uint,
+        mask: u64,
+        value: u64,
+    }
+
+    const TTY_INJECTION: [Deny; 2] = [
+        Deny {
+            syscall: "ioctl",
+            arg: 1,
+            mask: WHOLE_ARG,
+            value: TIOCSTI,
+        },
+        Deny {
+            syscall: "ioctl",
+            arg: 1,
+            mask: WHOLE_ARG,
+            value: TIOCLINUX,
+        },
+    ];
+
+    const RENDERER_ONLY: [Deny; 5] = [
+        Deny {
+            syscall: "mmap",
+            arg: 2,
+            mask: PROT_WRITE_EXEC,
+            value: PROT_WRITE_EXEC,
+        },
+        Deny {
+            syscall: "mmap2",
+            arg: 2,
+            mask: PROT_WRITE_EXEC,
+            value: PROT_WRITE_EXEC,
+        },
+        Deny {
+            syscall: "mprotect",
+            arg: 2,
+            mask: PROT_WRITE_EXEC,
+            value: PROT_WRITE_EXEC,
+        },
+        Deny {
+            syscall: "pkey_mprotect",
+            arg: 2,
+            mask: PROT_WRITE_EXEC,
+            value: PROT_WRITE_EXEC,
+        },
+        Deny {
+            syscall: "socket",
+            arg: 0,
+            mask: WHOLE_ARG,
+            value: AF_UNIX,
+        },
+    ];
 
     #[repr(C)]
     struct ArgCmp {
@@ -522,26 +595,29 @@ mod seccomp {
         unsafe { seccomp_syscall_resolve_name(name.as_ptr()) }
     }
 
-    fn deny_tty_injection() -> c_int {
+    fn deny_matching<'a>(rules: impl IntoIterator<Item = &'a Deny>) -> c_int {
         const ENOMEM: c_int = 12;
         let ctx = unsafe { seccomp_init(SCMP_ACT_ALLOW) };
         if ctx.is_null() {
             return -ENOMEM;
         }
         unsafe { seccomp_attr_set(ctx, SCMP_FLTATR_CTL_TSYNC, 1) };
-        let ioctl = resolve("ioctl");
         let mut rc = 0;
-        for request in [TIOCSTI, TIOCLINUX] {
+        for rule in rules {
             if rc != 0 {
                 break;
             }
+            let nr = resolve(rule.syscall);
+            if nr == NR_SCMP_ERROR {
+                continue;
+            }
             let compare = ArgCmp {
-                arg: 1,
+                arg: rule.arg,
                 op: SCMP_CMP_MASKED_EQ,
-                datum_a: 0xFFFF_FFFF,
-                datum_b: request,
+                datum_a: rule.mask,
+                datum_b: rule.value,
             };
-            rc = unsafe { seccomp_rule_add_array(ctx, SCMP_ACT_ERRNO_EPERM, ioctl, 1, &compare) };
+            rc = unsafe { seccomp_rule_add_array(ctx, SCMP_ACT_ERRNO_EPERM, nr, 1, &compare) };
         }
         if rc == 0 {
             rc = unsafe { seccomp_load(ctx) };
@@ -568,13 +644,14 @@ mod seccomp {
             require_or_die("seccomp prerequisite (no_new_privs) failed");
             return;
         }
-        let tty_rc = deny_tty_injection();
-        if tty_rc != 0 {
+        let renderer_rules: &[Deny] = if is_renderer() { &RENDERER_ONLY } else { &[] };
+        let deny_rc = deny_matching(TTY_INJECTION.iter().chain(renderer_rules));
+        if deny_rc != 0 {
             warning(&format!(
-                "seccomp: terminal-injection filter failed to load: {}",
-                strerror(-tty_rc)
+                "seccomp: argument filter failed to load: {}",
+                strerror(-deny_rc)
             ));
-            require_or_die("seccomp terminal-injection filter failed to load");
+            require_or_die("seccomp argument filter failed to load");
         }
         let ctx = unsafe { seccomp_init(SCMP_ACT_ERRNO_EPERM) };
         if ctx.is_null() {

@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security (Linux): the renderer gets its own, narrower Landlock ruleset.
+  It used to share the shell's, which gave it read and write access to the
+  whole runtime directory (`/run/user/$UID`, home of the D-Bus and
+  `systemd --user` sockets), the X authority file, `/dev/snd` and the
+  Downloads directory. It now gets only `$XDG_RUNTIME_DIR/southstar`, where
+  page exports and print sheets are exchanged with the shell. The
+  renderer's seccomp filter also refuses memory mapped writable and
+  executable at once (kernel-enforced W^X) and new Unix-domain sockets, so
+  a compromised renderer cannot reach the session bus to start programs.
+  `memfd_secret` and `remap_file_pages` are off the syscall allow-list.
 * Security: an `EventSource` stream now checks every redirect against the
   page's Content-Security-Policy `connect-src`, as it already checked the
   first URL. A redirect to a URL the policy does not allow is not followed
