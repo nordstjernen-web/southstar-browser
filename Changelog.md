@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* `main` is branch-protected: every change lands through a pull request.
+  CLAUDE.md and AGENTS.md say so instead of telling agents to push to
+  `origin/main`.
 * Text layout now builds in-tree: web-text-lib, the trimmed Pango fork from
   Nordstjernen Sol, lives in `third_party/web-text-lib` and replaces the
   `ns-pango` subproject, so `meson setup` no longer clones anything and the
