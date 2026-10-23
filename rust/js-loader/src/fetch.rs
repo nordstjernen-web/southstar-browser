@@ -98,6 +98,27 @@ fn run_external(
     }
     let info = js.element_perf_info(n);
     let fetched = js.fetch(&abs_url, origin, true, c"script", &info);
+    let redirected = fetched
+        .response
+        .as_ref()
+        .and_then(ffi::Response::final_url)
+        .filter(|url| *url != abs_url.as_c_str())
+        .map(CStr::to_owned);
+    if let Some(final_url) = &redirected {
+        let mixed = origin.is_some_and(|origin| starts_with(origin, b"https://"))
+            && starts_with(final_url, b"http://");
+        if mixed || !js.csp_allows(CSP_SCRIPT, final_url, origin, nonce, parser_inserted) {
+            js.log(&line(&[
+                b"CSP blocked: script ",
+                abs_url.to_bytes(),
+                b" redirected to ",
+                final_url.to_bytes(),
+            ]));
+            drop(fetched);
+            js.dispatch_resource_event(n, c"error");
+            return;
+        }
+    }
     if let Some(resp) = &fetched.response
         && resp.nosniff()
         && !resp

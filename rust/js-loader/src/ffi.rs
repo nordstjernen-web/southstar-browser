@@ -153,6 +153,10 @@ impl Response {
         self.0.content_type()
     }
 
+    pub(crate) fn final_url(&self) -> Option<&CStr> {
+        self.0.final_url().filter(|url| !url.is_empty())
+    }
+
     pub(crate) fn nosniff(&self) -> bool {
         self.0
             .x_content_type_options()

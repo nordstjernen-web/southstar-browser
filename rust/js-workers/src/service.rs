@@ -138,6 +138,33 @@ fn resolved_true(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsRes
     resolved(scope, Value::boolean(true))
 }
 
+fn potentially_trustworthy(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("wss://") {
+        return true;
+    }
+    let Some(rest) = lower.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = authority.rsplit('@').next().unwrap_or("");
+    let host = if host.starts_with('[') {
+        host.split(']').next().map_or("", |h| &h[1..])
+    } else {
+        host.split(':').next().unwrap_or("")
+    };
+    host == "localhost"
+        || host.ends_with(".localhost")
+        || host == "::1"
+        || host.split('.').next() == Some("127") && host.split('.').count() == 4
+}
+
+fn path_of(url: &str) -> &str {
+    let after_scheme = url.find("://").map_or(url, |at| &url[at + 3..]);
+    let path = after_scheme.find('/').map_or("/", |at| &after_scheme[at..]);
+    path.split(['?', '#']).next().unwrap_or(path)
+}
+
 fn default_scope(url: &str) -> String {
     match url.rfind('/') {
         Some(slash) => url[..=slash].to_owned(),
@@ -185,7 +212,22 @@ pub(crate) fn register(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
             scope_url = ffi::url_resolve(Some(current.as_deref().unwrap_or(&url)), &requested);
         }
     }
-    let scope_url = scope_url.unwrap_or_else(|| default_scope(&url));
+    if !current.as_deref().is_some_and(potentially_trustworthy) || !potentially_trustworthy(&url) {
+        return rejected(
+            scope,
+            "SecurityError",
+            "service workers need a secure context",
+        );
+    }
+    let max_scope = default_scope(&url);
+    let scope_url = scope_url.unwrap_or_else(|| max_scope.clone());
+    if !path_of(&scope_url).starts_with(path_of(&max_scope)) {
+        return rejected(
+            scope,
+            "SecurityError",
+            "scope is not under the script's directory",
+        );
+    }
     if !ffi::url_same_origin(&url, &scope_url) {
         return rejected(
             scope,

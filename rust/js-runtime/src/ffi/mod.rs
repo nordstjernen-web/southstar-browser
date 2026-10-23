@@ -508,11 +508,20 @@ fn compile_strings_allowed(
     caller: ContextHandle,
     callee: ContextHandle,
 ) -> bool {
-    if caller == callee {
+    let Some(js) = Js::of_scope(scope) else {
         return true;
+    };
+    if caller != callee
+        && !(crate::api::frames_hooks().realms_same_origin)(js.ptr(), caller, callee)
+    {
+        return false;
     }
-    Js::of_scope(scope)
-        .is_none_or(|js| (crate::api::frames_hooks().realms_same_origin)(js.ptr(), caller, callee))
+    let main = js.main_realm();
+    (caller != main && callee != main)
+        || scope.is_host_access()
+        || record::with_page_csp(js.ptr(), |csp| {
+            csp.is_none_or(southstar_csp::Csp::eval_allowed)
+        })
 }
 
 fn engine_name(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {

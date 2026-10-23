@@ -113,3 +113,30 @@ fn frame_ancestors_and_empty_headers() {
     assert!(!allows(&policy, FRAME_ANCESTORS, "https://evil.test/"));
     assert!(Csp::parse(b"  ,  ").is_none());
 }
+
+#[test]
+fn keywords_match_without_regard_to_case() {
+    let policy = csp("script-src 'SELF'; img-src 'NONE'");
+    assert!(allows(&policy, SCRIPT, "https://example.com/a.js"));
+    assert!(!allows(&policy, IMG, "https://example.com/a.png"));
+    let inline = csp("script-src 'Unsafe-Inline'");
+    assert!(inline.inline_script_allowed(b"x()", None));
+    let nonce = csp("script-src 'NONCE-AbC'");
+    assert!(nonce.inline_script_allowed(b"x()", Some(b"AbC")));
+    assert!(!nonce.inline_script_allowed(b"x()", Some(b"abc")));
+}
+
+#[test]
+fn a_source_with_an_empty_host_matches_nothing() {
+    let policy = csp("img-src https://");
+    assert!(!allows(&policy, IMG, "https://example.com/a.png"));
+}
+
+#[test]
+fn eval_needs_unsafe_eval() {
+    assert!(csp("img-src 'self'").eval_allowed());
+    assert!(!csp("default-src 'self'").eval_allowed());
+    assert!(!csp("script-src 'self' 'unsafe-inline'").eval_allowed());
+    assert!(csp("script-src 'self' 'UNSAFE-EVAL'").eval_allowed());
+    assert!(csp("default-src 'none'; script-src 'unsafe-eval'").eval_allowed());
+}

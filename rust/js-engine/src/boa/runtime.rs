@@ -325,7 +325,7 @@ impl HostHooks for Hooks {
             return Ok(());
         }
         Err(JsNativeError::eval()
-            .with_message("Refused to evaluate a string as JavaScript in another origin's realm")
+            .with_message("Refused to evaluate a string as JavaScript")
             .into())
     }
 
