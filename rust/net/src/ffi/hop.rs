@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use southstar_glib::{self as glib, GBoolean};
 use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
+use southstar_netstore::cookies::Context;
 
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
 use super::transport::{ca_bundle_path, ns_net_aborting, ns_net_ec_curves};
@@ -33,6 +34,7 @@ pub struct HopReq<'a> {
     pub no_proxy: Option<&'a [u8]>,
     pub cookie_jar_path: Option<&'a [u8]>,
     pub cookie_js_path: Option<&'a [u8]>,
+    pub cookie_context: Context,
     pub request_ftp: bool,
 }
 
@@ -95,6 +97,7 @@ impl HopOut {
 struct Sinks<'a> {
     url: &'a [u8],
     jar: Option<&'a [u8]>,
+    context: Context,
     wctx: &'a mut NsWriteCtx,
     hctx: &'a mut NsHeaderCtx,
     cancellable: *mut c_void,
@@ -116,7 +119,7 @@ impl Handler for Sinks<'_> {
         if name.eq_ignore_ascii_case(b"set-cookie")
             && let Some(jar) = self.jar
         {
-            cookies::store_in(self.url, value, jar);
+            cookies::store_in(self.url, value, jar, self.context);
         }
         if name.eq_ignore_ascii_case(b"strict-transport-security") && self.sts.is_none() {
             self.sts = Some(value.to_vec());
@@ -163,6 +166,7 @@ pub fn transport(
         let mut sinks = Sinks {
             url: url_bytes,
             jar: None,
+            context: hop.cookie_context,
             wctx,
             hctx,
             cancellable,
@@ -215,7 +219,7 @@ pub fn transport(
     ];
     let cookie = jars[0]
         .as_ref()
-        .and_then(|_| cookies::collect_in(url_bytes, &jars));
+        .and_then(|_| cookies::collect_in(url_bytes, &jars, hop.cookie_context));
     let insecure_opt_in =
         southstar_config::get().is_some_and(|c| c.tls_allow_insecure_override != 0);
     let pinned = url::host_from(url_bytes).is_some_and(|h| hsts::should_upgrade(&h));
@@ -244,6 +248,7 @@ pub fn transport(
     let mut sinks = Sinks {
         url: url_bytes,
         jar: hop.cookie_jar_path,
+        context: hop.cookie_context,
         wctx,
         hctx,
         cancellable,

@@ -4,7 +4,7 @@
 
 use southstar_url::bytes::parts;
 
-use crate::cookies::{self, Cookie};
+use crate::cookies::{self, Context, Cookie, SameSite};
 use crate::hsts::{self, Policy, Scope};
 use crate::{http_date, strtoll};
 
@@ -32,7 +32,7 @@ fn store_all(target: &str, set_cookies: &[&str]) -> Vec<u8> {
 
 fn header(jar: &[u8], url: &str, include_httponly: bool) -> Option<String> {
     let url = parts(url.as_bytes()).expect("url parses");
-    cookies::header(&url, [jar], include_httponly, NOW)
+    cookies::header(&url, [jar], include_httponly, Context::SameSite, NOW)
         .map(|h| String::from_utf8(h).expect("utf-8"))
 }
 
@@ -295,4 +295,54 @@ fn hsts_record_rewrites_the_list() {
     );
     assert_eq!(removed, b"other.test \"20300101 00:00:00\"\n");
     assert_eq!(hsts::expiry_text(951_782_400), b"\"20000229 00:00:00\"");
+}
+
+fn header_in(jar: &[u8], url: &str, context: Context) -> Option<String> {
+    let url = parts(url.as_bytes()).expect("url parses");
+    cookies::header(&url, [jar], true, context, NOW).map(|h| String::from_utf8(h).expect("utf-8"))
+}
+
+#[test]
+fn same_site_limits_cross_site_requests() {
+    let target = "https://example.com/";
+    let jar = store_all(
+        target,
+        &[
+            "plain=1",
+            "lax=2; SameSite=Lax",
+            "strict=3; SameSite=strict",
+            "none=4; SameSite=None; Secure",
+            "odd=5; SameSite=bogus",
+        ],
+    );
+    assert_eq!(
+        header_in(&jar, target, Context::SameSite).as_deref(),
+        Some("plain=1; lax=2; strict=3; none=4; odd=5")
+    );
+    assert_eq!(
+        header_in(&jar, target, Context::TopLevelSafeNavigation).as_deref(),
+        Some("plain=1; lax=2; none=4; odd=5")
+    );
+    assert_eq!(
+        header_in(&jar, target, Context::CrossSite).as_deref(),
+        Some("none=4")
+    );
+    let legacy = b"example.com\tFALSE\t/\tFALSE\t0\told\t1\n";
+    assert_eq!(header_in(legacy, target, Context::CrossSite), None);
+    assert_eq!(
+        header_in(legacy, target, Context::TopLevelSafeNavigation).as_deref(),
+        Some("old=1")
+    );
+}
+
+#[test]
+fn same_site_none_needs_secure_and_cross_site_responses_set_only_none() {
+    assert!(set("https://example.com/", "a=1; SameSite=None").is_none());
+    let none = set("https://example.com/", "a=1; SameSite=None; Secure").expect("valid");
+    assert_eq!(none.attributes.same_site, SameSite::None);
+    let lax = set("https://example.com/", "a=1").expect("valid");
+    assert_eq!(lax.attributes.same_site, SameSite::Lax);
+    assert!(cookies::settable_in(&none, Context::CrossSite));
+    assert!(!cookies::settable_in(&lax, Context::CrossSite));
+    assert!(cookies::settable_in(&lax, Context::TopLevelSafeNavigation));
 }

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: cookies honour `SameSite`. The jar records each cookie's
+  `SameSite` value and a cookie without one counts as `Lax`. A navigation a
+  page on another site starts sends `Lax` and `None` cookies only when it is
+  a top-level GET, and `Strict` ones never; other cross-site requests send
+  only `None` cookies. A cross-site response cannot set a `Lax` or `Strict`
+  cookie, and `SameSite=None` needs `Secure`. Before, a form a hostile page
+  posted to another site carried that site's login cookies (cross-site
+  request forgery). Cookies stored by earlier versions count as `Lax`.
 * CORS preflight answers are cached per page origin and URL for the
   server's `Access-Control-Max-Age` (5 seconds when absent, at most two
   hours), so repeated non-simple `fetch()` or `XMLHttpRequest` calls to the
