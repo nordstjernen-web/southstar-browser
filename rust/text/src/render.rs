@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
 mod glyphs;
+mod layout_entry;
 
 use crate::attrs::{AttrValue, ShapeAttr};
 use crate::font::{CairoContext, Font, metrics_of};
@@ -13,6 +14,7 @@ use crate::metrics::FontMetrics;
 use crate::types::{Color, Overline, Rectangle, RenderPart, SCALE, Underline, units_round};
 
 pub use glyphs::draw_error_underline_path;
+pub use layout_entry::{layout_line_path, layout_path, show_layout, show_layout_line};
 
 #[cfg(test)]
 #[path = "tests/render.rs"]

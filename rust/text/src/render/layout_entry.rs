@@ -4,17 +4,17 @@
 
 use super::{CairoRenderer, render_component};
 use crate::font::CairoContext;
-use crate::layout::{Layout, LayoutLine};
+use crate::layout::{Layout, LineRef};
 
 impl CairoRenderer<'_> {
-    pub fn draw_layout(&mut self, layout: &Layout, x: i32, y: i32) {
+    pub fn draw_layout(&mut self, layout: &mut Layout, x: i32, y: i32) {
         self.activate();
 
         let mut iter = layout.iter();
         loop {
             let (_, logical_rect) = iter.line_extents();
             let baseline = iter.baseline();
-            self.draw_layout_line(layout, iter.line(), x + logical_rect.x, y + baseline);
+            self.draw_layout_line(iter.line(), x + logical_rect.x, y + baseline);
             if !iter.next_line() {
                 break;
             }
@@ -23,38 +23,37 @@ impl CairoRenderer<'_> {
         self.deactivate();
     }
 
-    pub fn draw_layout_line(&mut self, layout: &Layout, line: &LayoutLine, x: i32, y: i32) {
-        self.draw_line(&line.runs, Some(layout.text()), x, y, || {
-            line.extents(layout).1
-        });
+    pub fn draw_layout_line(&mut self, line: LineRef<'_>, x: i32, y: i32) {
+        let text = line.layout().text();
+        self.draw_line(&line.runs, Some(text), x, y, || line.extents().1);
     }
 }
 
-fn do_layout_line(cr: &CairoContext, layout: &Layout, line: &LayoutLine, do_path: bool) {
+fn do_layout_line(cr: &CairoContext, line: LineRef<'_>, do_path: bool) {
     let mut renderer = CairoRenderer::at_current_point(cr, do_path);
-    renderer.draw_layout_line(layout, line, 0, 0);
+    renderer.draw_layout_line(line, 0, 0);
     renderer.restore_current_point();
 }
 
-fn do_layout(cr: &CairoContext, layout: &Layout, do_path: bool, components: u32) {
+fn do_layout(cr: &CairoContext, layout: &mut Layout, do_path: bool, components: u32) {
     let mut renderer = CairoRenderer::at_current_point(cr, do_path);
     renderer.set_components(components);
     renderer.draw_layout(layout, 0, 0);
     renderer.restore_current_point();
 }
 
-pub fn show_layout_line(cr: &CairoContext, layout: &Layout, line: &LayoutLine) {
-    do_layout_line(cr, layout, line, false);
+pub fn show_layout_line(cr: &CairoContext, line: LineRef<'_>) {
+    do_layout_line(cr, line, false);
 }
 
-pub fn layout_line_path(cr: &CairoContext, layout: &Layout, line: &LayoutLine) {
-    do_layout_line(cr, layout, line, true);
+pub fn layout_line_path(cr: &CairoContext, line: LineRef<'_>) {
+    do_layout_line(cr, line, true);
 }
 
-pub fn show_layout(cr: &CairoContext, layout: &Layout) {
+pub fn show_layout(cr: &CairoContext, layout: &mut Layout) {
     do_layout(cr, layout, false, render_component::ALL);
 }
 
-pub fn layout_path(cr: &CairoContext, layout: &Layout) {
+pub fn layout_path(cr: &CairoContext, layout: &mut Layout) {
     do_layout(cr, layout, true, render_component::ALL);
 }
