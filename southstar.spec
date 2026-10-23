@@ -95,8 +95,8 @@ test -f meson.build
 %install
 %meson_install
 mkdir -p %{buildroot}%{_sysconfdir}/alternatives
-ln -sf %{_sysconfdir}/alternatives/internet-browser %{buildroot}%{_bindir}/internet-browser
-touch %{buildroot}%{_sysconfdir}/alternatives/internet-browser
+ln -sf %{_sysconfdir}/alternatives/internet-browser-southstar %{buildroot}%{_bindir}/internet-browser-southstar
+touch %{buildroot}%{_sysconfdir}/alternatives/internet-browser-southstar
 
 # The GTK browser statically compiles the engine; the embedding shared
 # library and its development header are only needed by external embedders,
@@ -109,12 +109,13 @@ rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 %suse_update_desktop_file org.southstar.WebBrowser
 
 %post
-%{_sbindir}/update-alternatives --install %{_bindir}/internet-browser \
-    internet-browser %{_bindir}/southstar 40
+%{_sbindir}/update-alternatives --remove internet-browser %{_bindir}/southstar >/dev/null 2>&1 || :
+%{_sbindir}/update-alternatives --install %{_bindir}/internet-browser-southstar \
+    internet-browser-southstar %{_bindir}/southstar 40
 
 %postun
 if [ ! -f %{_bindir}/southstar ]; then
-    %{_sbindir}/update-alternatives --remove internet-browser %{_bindir}/southstar
+    %{_sbindir}/update-alternatives --remove internet-browser-southstar %{_bindir}/southstar
 fi
 
 %files
@@ -122,8 +123,8 @@ fi
 %license %{_datadir}/southstar/License.md
 %license %{_datadir}/southstar/COPYING
 %{_bindir}/southstar
-%{_bindir}/internet-browser
-%ghost %{_sysconfdir}/alternatives/internet-browser
+%{_bindir}/internet-browser-southstar
+%ghost %{_sysconfdir}/alternatives/internet-browser-southstar
 %{_bindir}/southstar-renderer
 %{_bindir}/southstar-audio
 %{_bindir}/southstar-video

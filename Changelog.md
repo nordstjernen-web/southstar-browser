@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* The browser's second command name is now `internet-browser-southstar`
+  instead of `internet-browser`, which Nordstjernen and Northstar also
+  install. `meson install`, the `.deb`, `.rpm` and Alpine packages, the
+  Windows installer (App Paths) and the MSIX package (execution alias) all
+  use the new name. Upgrading a package removes the old `internet-browser`
+  alternative, link or App Paths key when it pointed at Southstar.
 * Security: cookies honour `SameSite`. The jar records each cookie's
   `SameSite` value and a cookie without one counts as `Lax`. A navigation a
   page on another site starts sends `Lax` and `None` cookies only when it is

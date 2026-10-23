@@ -110,7 +110,7 @@ meson compile -C builddir
 %install
 rm -rf %{buildroot}
 DESTDIR=%{buildroot} meson install --no-rebuild -C builddir
-rm %{buildroot}%{_bindir}/internet-browser
+rm %{buildroot}%{_bindir}/internet-browser-southstar
 
 # The browser statically compiles the engine; the embedding shared library
 # and its header serve external embedders only.
@@ -140,13 +140,14 @@ if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q %{_datadir}/applications || :
 fi
 if command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --install %{_bindir}/internet-browser internet-browser \\
+    update-alternatives --remove internet-browser %{_bindir}/southstar >/dev/null 2>&1 || :
+    update-alternatives --install %{_bindir}/internet-browser-southstar internet-browser-southstar \\
         %{_bindir}/southstar 40 || :
 fi
 
 %postun
 if [ "\$1" = 0 ] && command -v update-alternatives >/dev/null 2>&1; then
-    update-alternatives --remove internet-browser %{_bindir}/southstar || :
+    update-alternatives --remove internet-browser-southstar %{_bindir}/southstar || :
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q -t %{_datadir}/icons/hicolor || :

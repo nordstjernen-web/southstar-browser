@@ -159,18 +159,17 @@ instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).
 
-### The `internet-browser` command
+### The `internet-browser-southstar` command
 
-`meson install` puts `internet-browser` beside `southstar` in the binary
-directory, a symbolic link to it, so `internet-browser https://example.com`
-starts Southstar. Nordstjernen and Northstar install the same name, so the
-command opens whichever of the browsers is installed. The `.deb` and `.rpm`
-packages register it with `update-alternatives` instead of shipping the
-link, so the browsers install side by side and
-`sudo update-alternatives --config internet-browser` chooses the one it
-runs. The Alpine package creates the link when no other browser holds
-the name. On Windows the installer registers `internet-browser` as an App
-Paths alias (the Run dialog and `start internet-browser` find it) and the
+`meson install` puts `internet-browser-southstar` beside `southstar` in the binary
+directory, a symbolic link to it, so `internet-browser-southstar
+https://example.com` starts Southstar. The name is Southstar's own, so it
+never starts Nordstjernen or Northstar installed beside it. The `.deb` and
+`.rpm` packages register it with `update-alternatives` instead of shipping
+the link, and drop the shared `internet-browser` alternative earlier
+versions registered. The Alpine package creates the link when the name is
+free. On Windows the installer registers `internet-browser-southstar` as an App
+Paths alias (the Run dialog and `start internet-browser-southstar` find it) and the
 MSIX package declares it as an app execution alias.
 
 ## Dependencies

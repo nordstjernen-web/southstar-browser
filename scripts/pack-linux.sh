@@ -221,7 +221,7 @@ ${WEBGPU_RUN_NOTE}
 ## Install on user path
 
     install -Dm755 southstar ~/.local/bin/southstar
-    ln -sf southstar ~/.local/bin/internet-browser
+    ln -sf southstar ~/.local/bin/internet-browser-southstar
     install -Dm644 data/icons/hicolor/scalable/apps/southstar.svg \\
         ~/.local/share/icons/hicolor/scalable/apps/southstar.svg
 

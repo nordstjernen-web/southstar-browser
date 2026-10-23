@@ -27,7 +27,8 @@ SetCompressor /SOLID lzma
 !define APP_SMIKEY "Software\Clients\StartMenuInternet\Southstar"
 !define APP_PROGID "SouthstarHTML"
 !define APP_CLASSKEY "Software\Classes\${APP_PROGID}"
-!define APP_PATHKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\internet-browser.exe"
+!define APP_PATHKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\internet-browser-southstar.exe"
+!define OLD_PATHKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\internet-browser.exe"
 
 Name "${APP_NAME} ${VERSION}"
 OutFile "${OUTFILE}"
@@ -123,6 +124,9 @@ Section "Southstar (required)" SecMain
 
   WriteRegStr HKCU "${APP_PATHKEY}" ""     "$INSTDIR\southstar.exe"
   WriteRegStr HKCU "${APP_PATHKEY}" "Path" "$INSTDIR"
+  ReadRegStr $0 HKCU "${OLD_PATHKEY}" ""
+  StrCmp $0 "$INSTDIR\southstar.exe" 0 +2
+    DeleteRegKey HKCU "${OLD_PATHKEY}"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
 SectionEnd

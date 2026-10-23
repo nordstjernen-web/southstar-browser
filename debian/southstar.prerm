@@ -2,7 +2,7 @@
 set -e
 
 if [ "$1" = remove ] || [ "$1" = deconfigure ]; then
-    update-alternatives --remove internet-browser /usr/bin/southstar
+    update-alternatives --remove internet-browser-southstar /usr/bin/southstar
 fi
 
 #DEBHELPER#
