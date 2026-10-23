@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: a setting's text can no longer carry a line break into
+  `southstar.conf`, where it would have become a separate `key = value`
+  line on the next start, and the HTTP/1.1 request writer drops any header
+  line containing CR, LF or NUL rather than sending it, so no caller can
+  inject extra headers.
 * Security: `fetch()` and `XMLHttpRequest` no longer show a response's
   `Set-Cookie` and `Set-Cookie2` headers to script, which exposed
   `HttpOnly` cookies of same-origin responses. A `BroadcastChannel`

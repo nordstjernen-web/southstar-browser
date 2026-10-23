@@ -362,12 +362,20 @@ fn parse_number(value: &[u8], default: i32) -> i32 {
     })
 }
 
+fn single_line(value: &[u8]) -> Vec<u8> {
+    value
+        .iter()
+        .copied()
+        .filter(|c| !matches!(c, b'\r' | b'\n' | 0))
+        .collect()
+}
+
 fn apply_pair(config: &mut NsConfig, key: &[u8], value: &[u8]) {
     let Some(field) = FIELDS.iter().find(|field| field.key.as_bytes() == key) else {
         return;
     };
     match config.slot(field.key) {
-        Some(Slot::Text(p)) => ffi::set_text(p, value),
+        Some(Slot::Text(p)) => ffi::set_text(p, &single_line(value)),
         Some(Slot::Number(n)) => {
             *n = match field.kind {
                 Kind::Bool => parse_choice(value, &BOOL_NAMES, *n),
@@ -485,7 +493,7 @@ fn serialize(config: &mut NsConfig) -> Vec<u8> {
     let mut out = b"# southstar configuration\n".to_vec();
     for field in &FIELDS {
         let value = match field.kind {
-            Kind::Text => config.text(field.key).unwrap_or_default(),
+            Kind::Text => single_line(&config.text(field.key).unwrap_or_default()),
             Kind::Bool => flag_name(config.number(field.key)).into(),
             Kind::Int => config.number(field.key).to_string().into_bytes(),
             Kind::Referer => referer_policy_name(config.number(field.key)).into(),
