@@ -295,6 +295,17 @@ fn add_transformed_text(
     end: i64,
     transform: TextTransform,
 ) {
+    for_each_transformed_char(request, end, transform, |ch, cluster| {
+        buffer.add(ch, cluster)
+    });
+}
+
+fn for_each_transformed_char(
+    request: &ShapeRequest<'_>,
+    end: i64,
+    transform: TextTransform,
+    mut add: impl FnMut(u32, u32),
+) {
     let paragraph = request.paragraph;
     let end = usize::try_from(end).unwrap_or(0);
     let mut p = request.item_offset;
@@ -330,10 +341,10 @@ fn add_transformed_text(
                     if mapped_char == '\0' {
                         break;
                     }
-                    buffer.add(u32::from(mapped_char), p as u32);
+                    add(u32::from(mapped_char), p as u32);
                 }
             }
-            None => buffer.add(ch, p as u32),
+            None => add(ch, p as u32),
         }
 
         p = next_char(paragraph, p);
@@ -482,6 +493,145 @@ fn hb_shape(
     release_buffer(buffer);
 }
 
+#[cfg(not(feature = "rust-shaper"))]
+fn rust_shape(_: &ShapeRequest<'_>, _: &mut GlyphString, _: Option<&mut CutSafety<'_>>) -> bool {
+    false
+}
+
+#[cfg(feature = "rust-shaper")]
+fn rust_shaper_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var("NS_TEXT_SHAPER").map_or(true, |v| v != "harfbuzz"))
+}
+
+#[cfg(feature = "rust-shaper")]
+fn rust_shape(
+    request: &ShapeRequest<'_>,
+    glyphs: &mut GlyphString,
+    cuts: Option<&mut CutSafety<'_>>,
+) -> bool {
+    use crate::rust_shaper::{self, ShapeDirection, buffer_flags, glyph_flags};
+
+    if !rust_shaper_enabled() {
+        return false;
+    }
+    let analysis = request.analysis;
+    let Some(font) = analysis.font.as_ref() else {
+        return false;
+    };
+    let Ok(paragraph) = core::str::from_utf8(request.paragraph) else {
+        return false;
+    };
+    let Some(face) = rust_shaper::shaper_face(font) else {
+        return false;
+    };
+    let item_offset = request.item_offset;
+    let shape_show_flags = find_show_flags(analysis);
+    let transform = find_text_transform(analysis);
+
+    let mut direction = if analysis.gravity.is_vertical() {
+        ShapeDirection::TopToBottom
+    } else {
+        ShapeDirection::LeftToRight
+    };
+    if analysis.level & 1 != 0 {
+        direction = direction.reverse();
+    }
+    if analysis.gravity.is_improper() {
+        direction = direction.reverse();
+    }
+
+    let mut flags = buffer_flags::BEGINNING_OF_TEXT | buffer_flags::END_OF_TEXT;
+    if shape_show_flags & show_flags::IGNORABLES != 0 {
+        flags |= buffer_flags::PRESERVE_DEFAULT_IGNORABLES;
+    }
+    if cuts.is_some() {
+        flags |= buffer_flags::PRODUCE_UNSAFE_TO_CONCAT;
+    }
+
+    let mut item_length = request.item_length;
+    let mut hyphen = None;
+    if analysis.flags & analysis_flags::NEED_HYPHEN != 0 {
+        let p = item_offset + request.item_length;
+        let last_char_len = p - prev_char(request.paragraph, p);
+        let hyphen_index = (item_offset + item_length - last_char_len) as u32;
+        if log_attr_at(request.log_attrs, request.num_chars)
+            .is_some_and(LogAttr::break_removes_preceding)
+        {
+            item_length -= last_char_len;
+        }
+        if face.nominal_glyph(0x2010).is_some() {
+            hyphen = Some((0x2010, hyphen_index));
+        } else if face.nominal_glyph(u32::from('-')).is_some() {
+            hyphen = Some((u32::from('-'), hyphen_index));
+        }
+    }
+    let item_end = item_offset + item_length;
+    if !paragraph.is_char_boundary(item_offset) || !paragraph.is_char_boundary(item_end) {
+        return false;
+    }
+
+    let mut transformed = Vec::new();
+    if transform != TextTransform::None {
+        for_each_transformed_char(request, item_end as i64, transform, |ch, cluster| {
+            transformed.push((ch, cluster));
+        });
+    }
+
+    let mut features: Vec<Feature> = Vec::with_capacity(MAX_FEATURES);
+    analysis.collect_features(&mut features, MAX_FEATURES);
+
+    let shape_request = rust_shaper::ShapeRequest {
+        paragraph,
+        item_start: item_offset,
+        item_end,
+        transformed: (transform != TextTransform::None).then_some(transformed.as_slice()),
+        hyphen,
+        direction,
+        script: analysis.script,
+        language: analysis.language.map(Language::as_str),
+        flags,
+        show_flags: shape_show_flags,
+        features: &features,
+    };
+    let Some(mut shaped) = rust_shaper::shape(font, &shape_request) else {
+        return false;
+    };
+    if analysis.gravity.is_improper() {
+        shaped.reverse();
+    }
+
+    glyphs.set_size(shaped.len());
+    let font_is_color = face.has_color();
+    let vertical = analysis.gravity.is_vertical();
+    let mut last_cluster = -1;
+    let mut cuts = cuts;
+    for (i, shaped_glyph) in shaped.iter().enumerate() {
+        let cluster = shaped_glyph.cluster.wrapping_sub(item_offset as u32) as i32;
+        glyphs.log_clusters[i] = cluster;
+        let info = &mut glyphs.glyphs[i];
+        info.glyph = shaped_glyph.glyph;
+        info.attr.is_cluster_start = cluster != last_cluster;
+        info.attr.is_color = font_is_color && face.glyph_has_color(shaped_glyph.glyph);
+        if let Some(cuts) = cuts.as_deref_mut()
+            && shaped_glyph.flags & glyph_flags::UNSAFE_TO_CONCAT != 0
+        {
+            cuts.mark_unsafe(cluster);
+        }
+        last_cluster = cluster;
+        if vertical {
+            info.geometry.width = shaped_glyph.y_advance.wrapping_neg();
+            info.geometry.x_offset = shaped_glyph.y_offset.wrapping_neg();
+            info.geometry.y_offset = shaped_glyph.x_offset.wrapping_neg();
+        } else {
+            info.geometry.width = shaped_glyph.x_advance;
+            info.geometry.x_offset = shaped_glyph.x_offset;
+            info.geometry.y_offset = shaped_glyph.y_offset.wrapping_neg();
+        }
+    }
+    true
+}
+
 fn fallback_shape(text: &[u8], analysis: &Analysis, glyphs: &mut GlyphString) {
     let n_chars = pango_utf8_strlen(text, text.len()) as usize;
     glyphs.set_size(n_chars);
@@ -528,7 +678,7 @@ fn shape_internal_uncached(
     glyphs.set_size(0);
 
     let mut cuts = cuts;
-    if analysis.font.is_some() {
+    if analysis.font.is_some() && !rust_shape(request, glyphs, cuts.as_deref_mut()) {
         hb_shape(request, glyphs, cuts.as_deref_mut());
     }
 
