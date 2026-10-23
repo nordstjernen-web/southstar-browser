@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: cross-origin `fetch()` and `XMLHttpRequest` requests that are
+  not CORS-simple (a method other than GET, HEAD or POST, a header outside
+  the safelist, or a `Content-Type` other than form, multipart or plain
+  text) now send an `OPTIONS` preflight first and go out only if the
+  server's `Access-Control-Allow-Origin`, `-Allow-Methods` and
+  `-Allow-Headers` permit them. They used to be sent straight away, so the
+  server acted on a cross-site PUT or DELETE before any CORS check; a
+  `no-cors` fetch that would need a preflight is refused.
 * Security: WebExtension fixes. A file an extension names (content
   script, stylesheet, rules) is resolved with its symbolic links, so a link
   inside the extension directory can no longer read a file elsewhere.

@@ -8,6 +8,7 @@ mod body;
 mod fetch;
 mod ffi;
 mod headers;
+mod preflight;
 mod socket;
 mod xhr;
 
