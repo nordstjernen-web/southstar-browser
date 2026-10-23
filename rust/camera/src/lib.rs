@@ -49,11 +49,6 @@ pub fn set_decision(origin: &[u8], allow: bool) {
     }
 }
 
-fn allowed_by_environment() -> bool {
-    std::env::var_os("NS_CAMERA_ALLOW")
-        .is_some_and(|value| value.as_encoded_bytes().first() == Some(&b'1'))
-}
-
 pub fn permission(url: Option<&[u8]>, origin: Option<Vec<u8>>) -> i32 {
     let origin = origin
         .filter(|origin| !origin.is_empty())
@@ -68,10 +63,6 @@ pub fn permission(url: Option<&[u8]>, origin: Option<Vec<u8>>) -> i32 {
             DENIED => 0,
             _ => -1,
         };
-    }
-    if allowed_by_environment() {
-        state.decisions.insert(origin, ALLOWED);
-        return 1;
     }
     state.decisions.insert(origin.clone(), ASKED);
     state.pending = Some(origin);

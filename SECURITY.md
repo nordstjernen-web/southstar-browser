@@ -146,7 +146,9 @@ socket, so it normally needs no `/dev/shm` name at all.
   scraping, hardcoded hostnames, or private-API spoofing.
 
 Both layers can be disabled for debugging with `NS_NO_SANDBOX=1` /
-`NS_NO_SECCOMP=1`. Don't use those in normal operation. By default the
+`NS_NO_SECCOMP=1`. Don't use those in normal operation. These switches,
+`NS_ALLOW_ROOT` and `NS_REQUIRE_SANDBOX` count as set only for a value
+other than empty, `0`, `false`, `no` or `off`. By default the
 sandbox is best-effort: on a kernel without Landlock or seccomp the
 renderer logs a warning and continues **unconfined**. Set
 `NS_REQUIRE_SANDBOX=1` to make that fail-closed — a renderer (or media

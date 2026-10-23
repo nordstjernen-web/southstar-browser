@@ -421,9 +421,17 @@ fn apply_file(config: &mut NsConfig, contents: &[u8]) {
     }
 }
 
+pub fn env_flag_on(value: &[u8]) -> bool {
+    let value = value.trim_ascii();
+    !value.is_empty()
+        && ![&b"0"[..], b"false", b"no", b"off"]
+            .iter()
+            .any(|off| value.eq_ignore_ascii_case(off))
+}
+
 fn apply_env(config: &mut NsConfig, env: impl Fn(&str) -> Option<Vec<u8>>) {
     for (name, key) in DISABLE_ENV {
-        if env(name).is_some() {
+        if env(name).is_some_and(|value| env_flag_on(&value)) {
             apply_pair(config, key.as_bytes(), b"false");
         }
     }
@@ -432,7 +440,7 @@ fn apply_env(config: &mut NsConfig, env: impl Fn(&str) -> Option<Vec<u8>>) {
             apply_pair(config, key.as_bytes(), &value);
         }
     }
-    if env("NS_PRIVATE").is_some() {
+    if env("NS_PRIVATE").is_some_and(|value| env_flag_on(&value)) {
         config.private_mode = 1;
     }
 }

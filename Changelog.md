@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: `NS_NO_SANDBOX=0`, `NS_NO_SECCOMP=0` and the other `NS_NO_…`,
+  `NS_ALLOW_ROOT`, `NS_NO_WIN32_MITIGATIONS` and `NS_PRIVATE` switches no
+  longer take effect when set to `0`, `false`, `no`, `off` or nothing; any
+  value used to count, so a wrapper that set `NS_NO_SANDBOX=0` to keep the
+  sandbox on turned it off. The undocumented `NS_EARLY_JS_FILE`, which ran
+  a local file as script in every page, and `NS_CAMERA_ALLOW`, which
+  granted every site the camera without asking, are removed.
 * Security: a setting's text can no longer carry a line break into
   `southstar.conf`, where it would have become a separate `key = value`
   line on the next start, and the HTTP/1.1 request writer drops any header
