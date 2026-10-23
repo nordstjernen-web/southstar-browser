@@ -544,7 +544,7 @@ pub(crate) fn final_url_connect_blocked(js: Js, final_url: Option<&[u8]>) -> boo
 
 fn add_raw_headers(scope: &mut Scope<'_>, init: &Value, raw: &[u8]) {
     for (name, value) in headers::raw_header_lines(raw) {
-        if name.is_empty() {
+        if name.is_empty() || headers::is_forbidden_response_header(name) {
             continue;
         }
         let name = String::from_utf8_lossy(&name.to_ascii_lowercase()).into_owned();

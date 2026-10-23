@@ -137,6 +137,25 @@ pub(crate) fn raw_header_lines(raw: &[u8]) -> impl Iterator<Item = (&[u8], &[u8]
     })
 }
 
+pub(crate) fn is_forbidden_response_header(name: &[u8]) -> bool {
+    let name = name.trim_ascii();
+    name.eq_ignore_ascii_case(b"set-cookie") || name.eq_ignore_ascii_case(b"set-cookie2")
+}
+
+pub(crate) fn without_forbidden_response_headers(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(raw.len());
+    for line in raw.split_inclusive(|&b| b == b'\n') {
+        let name = line
+            .iter()
+            .position(|&b| b == b':')
+            .map(|colon| &line[..colon]);
+        if !name.is_some_and(is_forbidden_response_header) {
+            out.extend_from_slice(line);
+        }
+    }
+    out
+}
+
 pub(crate) fn raw_headers_have(raw: Option<&[u8]>, name: &[u8]) -> bool {
     let Some(raw) = raw else {
         return false;

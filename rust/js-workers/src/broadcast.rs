@@ -51,6 +51,8 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     };
     let name = get(scope, this, "name");
     let name = crate::text(scope, &name);
+    let origin = get(scope, this, "_origin");
+    let origin = crate::text(scope, &origin);
     let registry = registry(scope);
     for i in 0..length(scope, &registry) {
         let channel = get_index(scope, &registry, i);
@@ -60,7 +62,12 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
         let closed = flag(scope, &channel, "_closed");
         let channel_name = get(scope, &channel, "name");
         let channel_name = crate::text(scope, &channel_name);
-        let same = name.is_some() && name == channel_name;
+        let channel_origin = get(scope, &channel, "_origin");
+        let channel_origin = crate::text(scope, &channel_origin);
+        let same = name.is_some()
+            && name == channel_name
+            && origin.as_deref().is_some_and(|o| o != "null")
+            && origin == channel_origin;
         if !closed && same {
             ffi::queue_delivery(scope, &[channel, data.clone()]);
         }

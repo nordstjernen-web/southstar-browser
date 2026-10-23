@@ -671,7 +671,7 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
     let all = if !allow {
         Vec::new()
     } else if let (true, Some(raw)) = (same_origin, raw.as_deref()) {
-        let mut all = raw.to_vec();
+        let mut all = headers::without_forbidden_response_headers(raw);
         all.extend_from_slice(&serialize_known(resp, Some(raw)));
         all
     } else {

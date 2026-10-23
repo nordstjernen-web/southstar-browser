@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: `fetch()` and `XMLHttpRequest` no longer show a response's
+  `Set-Cookie` and `Set-Cookie2` headers to script, which exposed
+  `HttpOnly` cookies of same-origin responses. A `BroadcastChannel`
+  message reaches only channels of the sender's origin, and channels of
+  opaque-origin documents reach none.
 * Packaging: `scripts/pack-appimage.sh` downloads linuxdeploy, its GTK
   plugin, appimagetool and the AppImage runtime from fixed releases and a
   fixed commit and checks each against a SHA-256 checksum before running
