@@ -128,6 +128,9 @@ if libthai.found()
   southstar_rust_features += ['thai']
   southstar_rust_link_deps += [libthai]
 endif
+if get_option('rust-shaper')
+  southstar_rust_features += ['rust-shaper']
+endif
 if have_egl and host_machine.system() not in ['darwin', 'windows']
   southstar_rust_features += ['egl']
 endif

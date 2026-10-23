@@ -1,7 +1,7 @@
 # Third-party software notices
 
 Southstar links to (and in some cases statically includes) the
-following open-source libraries. One of them, web-text-lib, is a **modified**
+following open-source libraries. One of them, `rust/text`, is a **translation**
 LGPL library; its source and our relink offer are described in its entry
 below. Their copyright notices and license
 texts are reproduced below. For libraries shipped dynamically in the
@@ -134,36 +134,30 @@ warranty. See <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 ---
 
-### web-text-lib — GNU LGPL 2 or later (modified Pango, statically linked)
+### rust/text (southstar-text) — GNU LGPL 2 or later (Pango translated to Rust, statically linked)
 
-> Text itemization, shaping and line breaking, with a cache of shaped runs
-> that Pango itself does not keep. Built from `third_party/web-text-lib`,
-> taken from Nordstjernen Sol's `src/web-text-lib`.
-> <https://github.com/nordstjernen-web/nordstjernen-sol-browser/tree/main/src/web-text-lib>
+> Text attributes, line breaking, itemization, font selection, shaping,
+> paragraph layout and cairo rendering. A Rust translation of web-text-lib,
+> Nordstjernen Sol's trimmed fork of [Pango](https://gitlab.gnome.org/GNOME/pango)
+> 1.58, which Southstar built from `third_party/web-text-lib` before this port.
 >
-> Copyright the GNU Project and contributors, and Northstar contributors
-> for the modifications.
+> Copyright the Pango authors (Red Hat Software, Owen Taylor, Behdad
+> Esfahbod and contributors), Northstar contributors for the fork, and
+> Andreas Røsdal for the translation.
 
-**This is a modified copy of Pango.** It adds a process-wide cache of
-shaped glyph strings and of context font metrics, renames every exported
-symbol so it can share a process with the system Pango that GTK loads, and
-removes the backends and tooling a browser does not use. It remains
-licensed under the GNU Lesser General Public License version 2.1 or, at
-your option, any later version, and its complete corresponding source --
-including every modification -- is in `third_party/web-text-lib` and at
-the URL above. The full license text is in `third_party/web-text-lib/COPYING`
-and at:
+**This is a derivative of Pango.** Translating Pango's C into Rust keeps it
+a derivative work, so `rust/text` is licensed under the GNU Library General
+Public License version 2 or, at your option, any later version — not under
+Southstar's own licence. Its complete source is in `rust/text` in this
+repository. The full license text is at:
 
-  <https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html>
+  <https://www.gnu.org/licenses/old-licenses/lgpl-2.0.html>
 
-Unlike the other LGPL libraries listed here, web-text-lib is linked
-**statically** into the Southstar executables. Per
-LGPL section 6(a), you are entitled to modify web-text-lib and relink
-Southstar against your modified copy: write to the address in
-`README.md` and we will supply the Southstar object files, together with
-any data and utility programs needed, so that you can produce a modified
-executable. Builds configured with `-Dns-pango=disabled` do not include
-web-text-lib; they link the system Pango dynamically instead.
+`rust/text` is linked **statically** into the Southstar executables. Per
+the LGPL, you are entitled to modify it and relink Southstar against your
+modified copy: the whole of Southstar's source is public, so rebuilding
+from the source tree with your changes to `rust/text` produces such an
+executable.
 
 ### Unicode Character Database — Unicode License v3
 

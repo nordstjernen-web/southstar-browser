@@ -2,6 +2,8 @@ option('build_date', type: 'string', value: '',
        description: 'Build date stamp shown in the About dialog (defaults to the configure-time date).')
 option('gtk', type: 'feature', value: 'auto',
        description: 'Build the GTK 4 desktop shell (on by default when GTK 4 is present). Disable for a renderer-only build that needs no GTK 4 toolkit at all.')
+option('rust-shaper', type: 'boolean', value: false,
+       description: 'Shape text with HarfRust, the pure-Rust port of HarfBuzz, instead of the system HarfBuzz (experimental; NS_TEXT_SHAPER=harfbuzz switches back at runtime). See docs/pure-rust-text.md.')
 option('wasm', type: 'feature', value: 'auto',
        description: 'Build the WebAssembly JS API over the pure-Rust wasmi interpreter (on by default; disable to drop the rust/js-wasm crate and wasmi).')
 option('avif', type: 'feature', value: 'auto',

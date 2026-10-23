@@ -225,35 +225,36 @@ library API or language feature stabilized after 1.91.
 - `southstar-jsshell` (`rust/jsshell`) runs scripts and test262 on the same
   engine layer.
 
-### Text layout: web-text-lib
+### Text layout: `rust/text`
 
-Desktop builds shape text through web-text-lib, a fork of Pango built
-in-tree from `third_party/web-text-lib` (taken from Nordstjernen Sol's
-`src/web-text-lib`; it replaced the `ns-pango` subproject). Pango keeps no
-cache that outlives a `PangoLayout`, so the same bytes reached HarfBuzz once
-to measure a run and again to paint it, and a table cell was shaped for
-`min-content`, for `max-content` and again to lay out. The fork caches
-finished glyph strings process-wide and caches
-`pango_context_get_metrics` per font description.
+Text is laid out by `rust/text` (`southstar-text`), a Rust port of
+web-text-lib, the Pango fork Southstar used to build from
+`third_party/web-text-lib`. It keeps Pango's structure and results: attribute
+lists, line breaking (UAX #14 plus the Thai, Arabic and Indic tailorings),
+itemization, a fontconfig font map with FreeType/cairo fonts, HarfBuzz
+shaping, paragraph layout with ellipsizing and justification, and a cairo
+renderer. The port was checked against the C library case by case and is
+pixel-identical on the render tests. There is no GObject: `Layout`, `Font`,
+`FontMap` and `Context` are plain Rust types, so nothing collides with the
+system Pango that GTK loads, and the crate is LGPL-2.0-or-later because it is
+a translation of LGPL code.
 
-Three rules when touching text code:
+The C libraries underneath stay: HarfBuzz, FreeType, fontconfig, FriBiDi,
+cairo, GLib's Unicode data and, when found, libthai (cargo feature `thai`).
+Their FFI lives only in `rust/text/src/ffi/`. Pango keeps no cache that
+outlives a layout, so the crate caches finished glyph strings process-wide
+(the shape cache), itemizations (the item cache), break results and
+`Context::metrics` per font description.
 
-- **The engine spells the API renamed** -- `ns_pango_*`, `NsPango*`,
-  `NS_PANGO_*`, `NS_TYPE_PANGO_*`: each `extern` declaration of a Pango
-  function carries `#[cfg_attr(feature = "ns-pango", link_name =
-  "ns_pango_…")]` over its stock name. The renaming is not cosmetic: GTK
-  loads the system Pango into the same process, and GObject aborts when a
-  second library registers a type name it already holds.
-- **`-Dns-pango=disabled` links the system Pango.** meson leaves the crates'
-  `ns-pango` cargo feature off, so the declarations link the stock names.
-  Anything the fork adds and stock Pango lacks -- `ns_pango_cache_*` -- must
-  sit behind `#[cfg(feature = "ns-pango")]`.
 - **A run is cached only when its shaping cannot depend on the text around
   it**, because HarfBuzz receives the paragraph as context.
   `NS_PANGO_SHAPE_CACHE=verify` shapes both ways and warns on any
   difference; run it over the affected pages after touching the cache key.
-  `NS_PANGO_SHAPE_CACHE=0` disables the cache and `--debug=net` reports
-  hits, misses and skips.
+  `NS_PANGO_SHAPE_CACHE=0` disables the caches.
+- **`-Drust-shaper=true` shapes with HarfRust**, the HarfBuzz project's pure-Rust
+  port (cargo feature `rust-shaper`, off by default; `docs/pure-rust-text.md`
+  has the plan). `NS_TEXT_SHAPER=harfbuzz` switches back at runtime for
+  comparisons. HarfBuzz stays the fallback when a font file can't be read.
 
 ### HTML parser: `rust/html5`
 
@@ -402,6 +403,7 @@ System packages required on Debian/Ubuntu:
 sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
     libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libharfbuzz-dev libfribidi-dev libfontconfig-dev libfreetype-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
@@ -424,6 +426,7 @@ On Fedora/RHEL:
 ```sh
 sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel \
     openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel \
+    harfbuzz-devel fribidi-devel fontconfig-devel freetype-devel \
     libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
 ```
 
@@ -434,6 +437,7 @@ On openSUSE:
 ```sh
 sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel \
     libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel \
+    harfbuzz-devel fribidi-devel fontconfig-devel freetype2-devel \
     libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
 ```
 

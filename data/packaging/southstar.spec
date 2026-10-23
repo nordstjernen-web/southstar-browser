@@ -38,9 +38,10 @@ BuildRequires:  pkgconfig(libavutil) >= 58
 BuildRequires:  pkgconfig(libswresample) >= 4
 BuildRequires:  pkgconfig(libswscale) >= 7
 BuildRequires:  pkgconfig(fontconfig)
-BuildRequires:  pkgconfig(pango)
-BuildRequires:  pkgconfig(pangocairo)
-BuildRequires:  pkgconfig(pangoft2)
+BuildRequires:  pkgconfig(harfbuzz)
+BuildRequires:  pkgconfig(fribidi)
+BuildRequires:  pkgconfig(freetype2)
+BuildRequires:  pkgconfig(cairo-ft)
 
 Recommends:     mpv
 
@@ -60,10 +61,8 @@ applications. It does not phone home and does not telemeter the user.
 %autosetup -n %{name}-%{version}
 
 %build
-# Shape text through the system Pango the distribution already ships.
 # wgpu-native is not packaged.
 %meson \
-    -Dns-pango=disabled \
     -Dwebgpu=disabled
 %meson_build
 
