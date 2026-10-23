@@ -1,0 +1,11 @@
+[package]
+name = "southstar-text"
+description = "Text layout in Rust, ported from web-text-lib (a Pango fork): attributes, line breaking, itemization, fontconfig fonts, HarfBuzz shaping, paragraph layout and cairo rendering"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "LGPL-2.0-or-later"
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -3559,6 +3559,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-text"
+version = "1.0.1-dev"
+
+[[package]]
 name = "southstar-texture"
 version = "1.0.1-dev"
 dependencies = [
