@@ -787,6 +787,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         no_proxy: text(ns_net_configured_no_proxy()),
         cookie_jar_path: cookie_jar.as_deref(),
         cookie_js_path: js_jar.as_deref(),
+        cookie_context: request::cookie_context(is_navigation, f.method, initiator, &url),
         request_ftp,
     };
 

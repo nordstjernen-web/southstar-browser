@@ -6,7 +6,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 
-use southstar_netstore::cookies::{self as rules, Cookie};
+use southstar_netstore::cookies::{self as rules, Context, Cookie};
 
 use crate::ffi::sys;
 use crate::{storage, url};
@@ -34,7 +34,7 @@ pub fn collect(target: &[u8], include_httponly: bool) -> Option<Vec<u8>> {
         storage::cookie_jar_path(Some(&site), false),
         storage::cookie_jar_path(Some(&site), true),
     ];
-    collect_from(&parts, &jars, include_httponly)
+    collect_from(&parts, &jars, include_httponly, Context::SameSite)
 }
 
 pub fn for_js(target: &[u8]) -> Option<Vec<u8>> {
@@ -53,15 +53,16 @@ pub fn jar_version(target: &[u8]) -> Option<u64> {
     Some(hasher.finish())
 }
 
-pub fn collect_in(target: &[u8], jars: &[Option<Vec<u8>>]) -> Option<Vec<u8>> {
+pub fn collect_in(target: &[u8], jars: &[Option<Vec<u8>>], context: Context) -> Option<Vec<u8>> {
     let parts = url::parts(target).filter(|p| !p.hostname.is_empty())?;
-    collect_from(&parts, jars, true)
+    collect_from(&parts, jars, true, context)
 }
 
 fn collect_from(
     parts: &url::Parts,
     jars: &[Option<Vec<u8>>],
     include_httponly: bool,
+    context: Context,
 ) -> Option<Vec<u8>> {
     let now = sys::now_seconds();
     let contents: Vec<Vec<u8>> = jars.iter().flatten().filter_map(|j| read_jar(j)).collect();
@@ -69,6 +70,7 @@ fn collect_from(
         parts,
         contents.iter().map(Vec::as_slice),
         include_httponly,
+        context,
         now,
     )
 }
@@ -93,8 +95,8 @@ pub fn store_from_js(target: &[u8], cookie: &[u8]) {
     store(target, cookie, false);
 }
 
-pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8]) {
-    if let Some((c, site)) = parse(target, cookie) {
+pub fn store_in(target: &[u8], cookie: &[u8], jar: &[u8], context: Context) {
+    if let Some((c, site)) = parse(target, cookie).filter(|(c, _)| rules::settable_in(c, context)) {
         write_cookie(jar, true, &c, &site);
     }
 }

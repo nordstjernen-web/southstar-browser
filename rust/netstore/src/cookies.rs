@@ -15,8 +15,58 @@ fn chomp(s: &[u8]) -> &[u8] {
     &s[..s.iter().rposition(|&c| !is_space(c)).map_or(0, |i| i + 1)]
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum SameSite {
+    None,
+    #[default]
+    Lax,
+    Strict,
+}
+
+impl SameSite {
+    fn parse(value: &[u8]) -> Option<SameSite> {
+        [
+            (&b"none"[..], SameSite::None),
+            (b"lax", SameSite::Lax),
+            (b"strict", SameSite::Strict),
+        ]
+        .into_iter()
+        .find(|(name, _)| value.eq_ignore_ascii_case(name))
+        .map(|(_, same_site)| same_site)
+    }
+
+    fn name(self) -> &'static [u8] {
+        match self {
+            SameSite::None => b"None",
+            SameSite::Lax => b"Lax",
+            SameSite::Strict => b"Strict",
+        }
+    }
+
+    fn of_line(f: &[&[u8]]) -> SameSite {
+        f.get(7)
+            .and_then(|field| SameSite::parse(field))
+            .unwrap_or_default()
+    }
+
+    fn allowed_in(self, context: Context) -> bool {
+        match context {
+            Context::SameSite => true,
+            Context::TopLevelSafeNavigation => self != SameSite::Strict,
+            Context::CrossSite => self == SameSite::None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Context {
+    SameSite,
+    TopLevelSafeNavigation,
+    CrossSite,
+}
+
 fn fields(line: &[u8]) -> Vec<&[u8]> {
-    line.splitn(7, |&c| c == b'\t').collect()
+    line.splitn(8, |&c| c == b'\t').collect()
 }
 
 fn expiry_of(field: &[u8]) -> i64 {
@@ -49,6 +99,7 @@ pub fn header<'a>(
     url: &Parts,
     jars: impl IntoIterator<Item = &'a [u8]>,
     include_httponly: bool,
+    context: Context,
     now: i64,
 ) -> Option<Vec<u8>> {
     let host = &url.hostname;
@@ -81,7 +132,8 @@ pub fn header<'a>(
             let matched = domain_matches(host, f[0])
                 && path_matches(path, f[2])
                 && (!secure || is_https)
-                && (expiry == 0 || expiry >= now);
+                && (expiry == 0 || expiry >= now)
+                && SameSite::of_line(&f).allowed_in(context);
             if matched && !f[5].is_empty() {
                 if !values.contains_key(f[5]) {
                     order.push(f[5].to_vec());
@@ -152,6 +204,7 @@ pub struct Attributes {
     pub has_expiry: bool,
     pub expired: bool,
     pub expiry: i64,
+    pub same_site: SameSite,
 }
 
 fn parse_attributes(attrs: &[u8], now: i64) -> Attributes {
@@ -195,6 +248,8 @@ fn parse_attributes(attrs: &[u8], now: i64) -> Attributes {
             a.domain = Some(v.to_vec());
         } else if let (true, Some(v)) = (named(b"path"), value) {
             a.path = Some(v.to_vec());
+        } else if let (true, Some(v)) = (named(b"samesite"), value) {
+            a.same_site = SameSite::parse(v).unwrap_or_default();
         }
         match end {
             Some(end) => p = end + 1,
@@ -245,7 +300,7 @@ pub fn parse(
     }
     let a = semi.map_or_else(Attributes::default, |s| parse_attributes(&cookie[s..], now));
     let is_https = url.protocol.eq_ignore_ascii_case(b"https:");
-    if a.secure && !is_https {
+    if a.secure && !is_https || a.same_site == SameSite::None && !a.secure {
         return None;
     }
     if has_prefix_ignore_case(name, b"__Secure-") && !(a.secure && is_https) {
@@ -362,7 +417,13 @@ pub fn store(jar: Option<&[u8]>, cookie: &Cookie, from_http: bool) -> Vec<u8> {
         out.extend_from_slice(name);
         out.push(b'\t');
         out.extend_from_slice(value);
+        out.push(b'\t');
+        out.extend_from_slice(a.same_site.name());
         out.push(b'\n');
     }
     out
+}
+
+pub fn settable_in(cookie: &Cookie, context: Context) -> bool {
+    context != Context::CrossSite || cookie.attributes.same_site == SameSite::None
 }

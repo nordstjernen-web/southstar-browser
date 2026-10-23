@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_netstore::cookies::Context;
+
 use crate::url;
 
 pub const MAX_REDIRECTS: i64 = 10;
@@ -91,6 +93,24 @@ pub fn site_initiator<'a>(
         navigation_initiator(headers)
     } else {
         top_url
+    }
+}
+
+pub fn cookie_context(
+    is_navigation: bool,
+    method: Option<&[u8]>,
+    initiator: Option<&[u8]>,
+    url: &[u8],
+) -> Context {
+    match initiator {
+        Some(initiator) if !url::is_same_site(initiator, url) => {
+            if is_navigation && (is_simple_get(method) || is_method(method, b"HEAD")) {
+                Context::TopLevelSafeNavigation
+            } else {
+                Context::CrossSite
+            }
+        }
+        _ => Context::SameSite,
     }
 }
 
