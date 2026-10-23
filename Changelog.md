@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* `docs/pure-rust-text.md` describes a possible later step for the text
+  stack: replacing HarfBuzz, FreeType, FriBiDi and GLib's Unicode data under
+  text layout with Rust crates, so web fonts are parsed by memory-safe code.
+* `main` is branch-protected: every change lands through a pull request.
+  CLAUDE.md and AGENTS.md say so instead of telling agents to push to
+  `origin/main`.
 * Text layout now builds in-tree: web-text-lib, the trimmed Pango fork from
   Nordstjernen Sol, lives in `third_party/web-text-lib` and replaces the
   `ns-pango` subproject, so `meson setup` no longer clones anything and the

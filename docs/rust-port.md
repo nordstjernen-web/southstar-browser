@@ -1162,7 +1162,7 @@ the existing ones, not a test suite.
 |---|---|---|
 | GTK 4 | hand-written `rust/gtk-ffi` (shell only; planned as `gtk4-rs`) | — |
 | Cairo | hand-written FFI (planned as `cairo-sys-rs`) | `tiny-skia` or a GPU rasterizer, after a display list exists |
-| ns-pango | hand-written FFI over the renamed API | `rustybuzz` + `swash` (a text-stack redesign) |
+| ns-pango | hand-written FFI over the renamed API | pure-Rust shaping and fonts (a text-stack redesign, see `docs/pure-rust-text.md`) |
 | libcurl | replaced by `rust/http` (done) | — |
 | libnghttp2, ngtcp2, nghttp3, gnutls | replaced by `rust/http`'s own HTTP/2; HTTP/3 dropped (D7, done) | — |
 | OpenSSL (TLS, WebCrypto) | hand-written FFI (`rust/webcrypto`) | TLS replaced by rustls over ring (done); WebCrypto stays on libcrypto |

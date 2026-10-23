@@ -132,8 +132,10 @@ This repo is driven by Codex in long uninterrupted sessions.
 - **Don't summarize after every step.** One-line status is enough.
 - **Don't pause for path/file/branch confirmation when context is
   unambiguous.** Grep, pick, proceed.
-- **Commit and push aggressively.** Small commits, push to
-  `origin/main` as soon as a logical unit lands.
+- **Commit and push aggressively, through pull requests.** `main` is
+  branch-protected: nothing is pushed to it directly. Put each logical unit
+  on a branch, push it, open a PR with `gh pr create` and merge it with
+  `gh pr merge` once CI passes. No review approval is required.
 - **Run for hours.** Diagnose, fix, retry. Only stop on genuine
   external blockers. When stopping: one line on what's blocked.
 - **Never ask the user to run the build.** Run it yourself.
@@ -489,7 +491,7 @@ A change is done when:
 1. It compiles cleanly (no new warnings), and `cargo fmt --check` and
    `python3 scripts/unsafe-budget.py --clippy` are clean.
 2. The browser launches and the affected UI path works manually.
-3. The change is committed and pushed to `origin/main`.
+3. The change is committed and merged to `main` through a pull request.
 
 Unit tests (`scripts/rust-tests.sh`) cover the parsers; otherwise verify
 behavior by running the browser. Don't add a `tests/` directory or
