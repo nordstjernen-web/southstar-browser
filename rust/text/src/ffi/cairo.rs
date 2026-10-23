@@ -71,11 +71,18 @@ pub struct FontExtents {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
-struct CairoGlyph {
-    index: c_ulong,
-    x: c_double,
-    y: c_double,
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CairoGlyph {
+    pub index: c_ulong,
+    pub x: c_double,
+    pub y: c_double,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextCluster {
+    pub num_bytes: c_int,
+    pub num_glyphs: c_int,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -766,5 +773,193 @@ impl CairoContext {
         // SAFETY: the target is live and options are freshly created and exclusively ours.
         unsafe { cairo_surface_get_font_options(target, options.raw()) };
         options
+    }
+}
+
+const PATTERN_TYPE_SOLID: c_int = 0;
+const LINE_CAP_BUTT: c_int = 0;
+const LINE_JOIN_MITER: c_int = 0;
+const TEXT_CLUSTER_FLAG_BACKWARD: c_int = 1;
+
+#[link(name = "cairo")]
+unsafe extern "C" {
+    fn cairo_show_glyphs(cr: *mut RawCairo, glyphs: *const CairoGlyph, num_glyphs: c_int);
+    fn cairo_show_text_glyphs(
+        cr: *mut RawCairo,
+        utf8: *const c_char,
+        utf8_len: c_int,
+        glyphs: *const CairoGlyph,
+        num_glyphs: c_int,
+        clusters: *const TextCluster,
+        num_clusters: c_int,
+        cluster_flags: c_int,
+    );
+    fn cairo_show_text(cr: *mut RawCairo, utf8: *const c_char);
+    fn cairo_set_source_rgba(
+        cr: *mut RawCairo,
+        red: c_double,
+        green: c_double,
+        blue: c_double,
+        alpha: c_double,
+    );
+    fn cairo_get_source(cr: *mut RawCairo) -> *mut c_void;
+    fn cairo_pattern_get_type(pattern: *mut c_void) -> c_int;
+    fn cairo_pattern_get_rgba(
+        pattern: *mut c_void,
+        red: *mut c_double,
+        green: *mut c_double,
+        blue: *mut c_double,
+        alpha: *mut c_double,
+    ) -> c_int;
+    fn cairo_set_line_width(cr: *mut RawCairo, width: c_double);
+    fn cairo_set_line_join(cr: *mut RawCairo, join: c_int);
+    fn cairo_set_line_cap(cr: *mut RawCairo, cap: c_int);
+    fn cairo_set_miter_limit(cr: *mut RawCairo, limit: c_double);
+    fn cairo_stroke(cr: *mut RawCairo);
+    fn cairo_rel_line_to(cr: *mut RawCairo, dx: c_double, dy: c_double);
+    fn cairo_new_path(cr: *mut RawCairo);
+    fn cairo_translate(cr: *mut RawCairo, tx: c_double, ty: c_double);
+    fn cairo_user_to_device_distance(cr: *mut RawCairo, dx: *mut c_double, dy: *mut c_double);
+    fn cairo_has_current_point(cr: *mut RawCairo) -> c_int;
+    fn cairo_get_current_point(cr: *mut RawCairo, x: *mut c_double, y: *mut c_double);
+    fn cairo_surface_has_show_text_glyphs(surface: *mut RawSurface) -> c_int;
+}
+
+fn glyph_count(glyphs: &[CairoGlyph]) -> c_int {
+    c_int::try_from(glyphs.len()).unwrap_or(c_int::MAX)
+}
+
+impl CairoContext {
+    pub fn show_glyphs(&self, glyphs: &[CairoGlyph]) {
+        // SAFETY: the context is live and the count never exceeds the slice length.
+        unsafe { cairo_show_glyphs(self.raw(), glyphs.as_ptr(), glyph_count(glyphs)) };
+    }
+
+    pub fn glyphs_path(&self, glyphs: &[CairoGlyph]) {
+        // SAFETY: the context is live and the count never exceeds the slice length.
+        unsafe { cairo_glyph_path(self.raw(), glyphs.as_ptr(), glyph_count(glyphs)) };
+    }
+
+    pub fn show_text_glyphs(
+        &self,
+        text: &[u8],
+        glyphs: &[CairoGlyph],
+        clusters: &[TextCluster],
+        backward: bool,
+    ) {
+        let text_len = c_int::try_from(text.len()).unwrap_or(c_int::MAX);
+        let num_clusters = c_int::try_from(clusters.len()).unwrap_or(c_int::MAX);
+        let flags = if backward {
+            TEXT_CLUSTER_FLAG_BACKWARD
+        } else {
+            0
+        };
+        // SAFETY: the context is live and every pointer comes with the length of its slice.
+        unsafe {
+            cairo_show_text_glyphs(
+                self.raw(),
+                text.as_ptr().cast(),
+                text_len,
+                glyphs.as_ptr(),
+                glyph_count(glyphs),
+                clusters.as_ptr(),
+                num_clusters,
+                flags,
+            )
+        };
+    }
+
+    pub fn show_text(&self, text: &CStr) {
+        // SAFETY: the context is live and text is NUL-terminated.
+        unsafe { cairo_show_text(self.raw(), text.as_ptr()) };
+    }
+
+    pub fn set_source_rgba(&self, red: f64, green: f64, blue: f64, alpha: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_set_source_rgba(self.raw(), red, green, blue, alpha) };
+    }
+
+    pub fn solid_source_rgba(&self) -> Option<(f64, f64, f64, f64)> {
+        // SAFETY: the context is live; the source pattern stays owned by it.
+        let pattern = unsafe { cairo_get_source(self.raw()) };
+        if pattern.is_null() {
+            return None;
+        }
+        // SAFETY: pattern is the context's live source pattern.
+        if unsafe { cairo_pattern_get_type(pattern) } != PATTERN_TYPE_SOLID {
+            return None;
+        }
+        let mut rgba = (0.0, 0.0, 0.0, 0.0);
+        // SAFETY: pattern is a live solid pattern and the four outputs are writable locals.
+        unsafe {
+            cairo_pattern_get_rgba(pattern, &mut rgba.0, &mut rgba.1, &mut rgba.2, &mut rgba.3)
+        };
+        Some(rgba)
+    }
+
+    pub fn set_line_width(&self, width: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_set_line_width(self.raw(), width) };
+    }
+
+    pub fn set_line_join_miter(&self) {
+        // SAFETY: the context is live.
+        unsafe { cairo_set_line_join(self.raw(), LINE_JOIN_MITER) };
+    }
+
+    pub fn set_line_cap_butt(&self) {
+        // SAFETY: the context is live.
+        unsafe { cairo_set_line_cap(self.raw(), LINE_CAP_BUTT) };
+    }
+
+    pub fn set_miter_limit(&self, limit: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_set_miter_limit(self.raw(), limit) };
+    }
+
+    pub fn stroke(&self) {
+        // SAFETY: the context is live.
+        unsafe { cairo_stroke(self.raw()) };
+    }
+
+    pub fn rel_line_to(&self, dx: f64, dy: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_rel_line_to(self.raw(), dx, dy) };
+    }
+
+    pub fn new_path(&self) {
+        // SAFETY: the context is live.
+        unsafe { cairo_new_path(self.raw()) };
+    }
+
+    pub fn translate(&self, tx: f64, ty: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_translate(self.raw(), tx, ty) };
+    }
+
+    pub fn user_to_device_distance(&self, dx: f64, dy: f64) -> (f64, f64) {
+        let mut distance = (dx, dy);
+        // SAFETY: the context is live and both outputs are writable locals.
+        unsafe { cairo_user_to_device_distance(self.raw(), &mut distance.0, &mut distance.1) };
+        distance
+    }
+
+    pub fn has_current_point(&self) -> bool {
+        // SAFETY: the context is live.
+        unsafe { cairo_has_current_point(self.raw()) != 0 }
+    }
+
+    pub fn current_point(&self) -> (f64, f64) {
+        let mut point = (0.0, 0.0);
+        // SAFETY: the context is live and both outputs are writable locals.
+        unsafe { cairo_get_current_point(self.raw(), &mut point.0, &mut point.1) };
+        point
+    }
+
+    pub fn target_has_show_text_glyphs(&self) -> bool {
+        // SAFETY: the context is live; the target stays owned by it.
+        let target = unsafe { cairo_get_target(self.raw()) };
+        // SAFETY: target is the context's live surface.
+        unsafe { cairo_surface_has_show_text_glyphs(target) != 0 }
     }
 }

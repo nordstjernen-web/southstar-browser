@@ -27,6 +27,7 @@ pub mod language;
 pub mod layout;
 pub mod matrix;
 pub mod metrics;
+pub mod render;
 pub mod script;
 pub mod shape;
 pub mod shape_cache;
