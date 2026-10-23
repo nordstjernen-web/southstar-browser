@@ -52,7 +52,7 @@ pub fn navigate(
         body,
         content_type: Some(content_type),
     });
-    southstar_engine::navigate_blocking(url, top_url, user_activated, post.as_ref())
+    southstar_engine::navigate_blocking(url, top_url, top_url, user_activated, post.as_ref())
         .map(take_response)
 }
 

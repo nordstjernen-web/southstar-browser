@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: a navigation a page starts to another origin now tells the
+  server who started it. The renderer dropped the page's URL on
+  cross-origin navigations, so a form a hostile page submitted to another
+  site went out as if the user had typed it: `Sec-Fetch-Site: none` and,
+  for a POST, an `Origin` header naming the target site itself, which
+  defeated servers' Origin and Fetch Metadata checks against cross-site
+  request forgery. Page-started navigations now carry their initiator, so
+  they send `Sec-Fetch-Site: cross-site` (or `same-site`) and the
+  initiator's `Origin` on POST; only navigations from the address bar,
+  bookmarks and history count as browser-initiated. Navigations no longer
+  send `Origin` on GET, and a typed same-origin URL no longer sends the
+  previous page as `Referer`.
 * Security: a script in a cross-origin or sandboxed `<iframe>` can no
   longer run code in its parent page through the parent's `Function` or
   `eval`. Frame realms still share some objects with the page realm, and

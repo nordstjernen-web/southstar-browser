@@ -579,7 +579,8 @@ fn shape_headers(
         }
     }
     if request_http {
-        let site = request::fetch_site(f.top_url, url);
+        let initiator = request::site_initiator(is_navigation, f.headers, f.top_url);
+        let site = request::fetch_site(initiator, url);
         lines.push(format!("Sec-Fetch-Site: {site}").into_bytes());
         let mode = request::fetch_mode(navigates, destination, f.method);
         lines.push(format!("Sec-Fetch-Mode: {mode}").into_bytes());
@@ -670,7 +671,15 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let vary_accept = [b"Accept: ", request::requested_accept(f.headers)].concat();
     let vary_language = [b"Accept-Language: ", &language[..]].concat();
     let vary_agent = [b"User-Agent: ", &ua[..]].concat();
-    let request_origin = request::request_origin(&url, f.top_url, top_origin.as_deref(), f.method);
+    let initiator = request::site_initiator(is_navigation, f.headers, f.top_url);
+    let initiator_origin = if is_navigation {
+        initiator.and_then(url::origin_from)
+    } else {
+        top_origin.clone()
+    };
+    let origin_top = if is_navigation { None } else { f.top_url };
+    let request_origin =
+        request::request_origin(&url, origin_top, initiator_origin.as_deref(), f.method);
     let vary_origin = [b"Origin: ", request_origin].concat();
     let cache_headers: [&[u8]; 4] = [&vary_accept, &vary_language, &vary_agent, &vary_origin];
 

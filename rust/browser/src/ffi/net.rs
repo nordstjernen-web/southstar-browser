@@ -34,10 +34,11 @@ impl Response {
     pub fn navigate(
         url: &CStr,
         referrer: Option<&CStr>,
+        initiator: Option<&CStr>,
         user_activated: bool,
         post: Option<&Post<'_>>,
     ) -> Option<Response> {
-        southstar_engine::navigate_blocking(url, referrer, user_activated, post)
+        southstar_engine::navigate_blocking(url, referrer, initiator, user_activated, post)
             .ok()
             .map(Response)
     }
