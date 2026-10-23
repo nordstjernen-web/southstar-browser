@@ -45,6 +45,7 @@ pub struct FramesHooks {
     pub node_realm_context: fn(*const NsJs, Node<'_>) -> ContextHandle,
     pub cloners_made: fn(*const NsJs) -> bool,
     pub forget_node: fn(*const NsJs, Node<'_>),
+    pub realms_same_origin: fn(*const NsJs, ContextHandle, ContextHandle) -> bool,
 }
 
 impl FramesHooks {
@@ -67,6 +68,7 @@ impl FramesHooks {
         node_realm_context: |_, _| ContextHandle::NULL,
         cloners_made: |_| false,
         forget_node: |_, _| {},
+        realms_same_origin: |_, _, _| true,
     };
 }
 

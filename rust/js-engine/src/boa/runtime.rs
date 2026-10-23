@@ -267,6 +267,12 @@ struct Hooks {
     runtime: Cell<*const BoaRuntime>,
 }
 
+impl Hooks {
+    fn runtime(&self) -> Option<&BoaRuntime> {
+        unsafe { self.runtime.get().as_ref() }
+    }
+}
+
 impl HostHooks for Hooks {
     fn promise_rejection_tracker(
         &self,
@@ -274,7 +280,7 @@ impl HostHooks for Hooks {
         operation: OperationType,
         context: &mut Context,
     ) {
-        let Some(runtime) = (unsafe { self.runtime.get().as_ref() }) else {
+        let Some(runtime) = self.runtime() else {
             return;
         };
         let Some(tracker) = runtime.options.rejection_tracker else {
@@ -296,6 +302,31 @@ impl HostHooks for Hooks {
             &Value(reason),
             handled,
         );
+    }
+
+    fn ensure_can_compile_strings(
+        &self,
+        realm: Realm,
+        _parameters: &[JsString],
+        _body: &JsString,
+        _direct: bool,
+        context: &mut Context,
+    ) -> JsResult<()> {
+        let Some(runtime) = self.runtime() else {
+            return Ok(());
+        };
+        let Some(check) = runtime.options.compile_strings else {
+            return Ok(());
+        };
+        let caller = context.script_realm().clone();
+        let caller = handle_of_realm(context, &caller);
+        let callee = handle_of_realm(context, &realm);
+        if check(&mut Scope::of(context), caller, callee) {
+            return Ok(());
+        }
+        Err(JsNativeError::eval()
+            .with_message("Refused to evaluate a string as JavaScript in another origin's realm")
+            .into())
     }
 
     fn has_source_text_available(&self, function: &JsFunction, _context: &mut Context) -> bool {

@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: a script in a cross-origin or sandboxed `<iframe>` can no
+  longer run code in its parent page through the parent's `Function` or
+  `eval`. Frame realms still share some objects with the page realm, and
+  `location.constructor.constructor` or `Blob.constructor` in a frame was
+  the parent's `Function`, so `Function("return parent.document")()` ran in
+  the parent with its privileges. The engine now implements
+  HostEnsureCanCompileStrings and refuses to compile a string in a realm
+  whose origin differs from that of the script asking for it, with an
+  `EvalError`; same-origin frames and `ShadowRealm` are unaffected.
 * Security: page scripts can no longer read or plant the engine's own
   `__nd…` properties on elements. An `<iframe>` element carried its frame's
   document and window as `__ndRealmDoc` and `__ndRealmWindow`, so a page

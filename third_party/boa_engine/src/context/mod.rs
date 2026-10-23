@@ -478,6 +478,16 @@ impl Context {
         self.vm.native_caller_realm.as_ref()
     }
 
+    /// Returns the realm of the script code that is running: inside a chain of native calls, the
+    /// realm of the script frame that called the first of them, which the calls do not change.
+    #[must_use]
+    pub fn script_realm(&self) -> &Realm {
+        match &self.vm.native_script_realm {
+            Some((depth, realm)) if *depth == self.vm.frames.len() => realm,
+            _ => self.realm(),
+        }
+    }
+
     /// Returns the source path of the code running in the call frame at `index`.
     #[must_use]
     pub fn frame_source_path(&self, index: usize) -> Option<crate::vm::SourcePath> {

@@ -344,6 +344,20 @@ impl NativeFunction {
     }
 }
 
+/// Records `caller` as the script realm when this native call is the first of its chain, i.e.
+/// no native call is running at the current frame depth, and returns the previous record.
+fn enter_script_realm(context: &mut Context, caller: &Realm) -> Option<(usize, Realm)> {
+    let depth = context.vm.frames.len();
+    let previous = context.vm.native_script_realm.clone();
+    if previous
+        .as_ref()
+        .is_none_or(|(recorded, _)| *recorded != depth)
+    {
+        context.vm.native_script_realm = Some((depth, caller.clone()));
+    }
+    previous
+}
+
 /// Call this object.
 ///
 /// # Panics
@@ -391,6 +405,7 @@ pub(crate) fn native_function_call(
     context.vm.native_active_function = Some(this_function_object);
     let previous_caller_realm =
         std::mem::replace(&mut context.vm.native_caller_realm, Some(realm.clone()));
+    let previous_script_realm = enter_script_realm(context, &realm);
 
     let receiver = if constructor.is_some() {
         this.clone()
@@ -407,6 +422,7 @@ pub(crate) fn native_function_call(
     .map_err(|err| err.inject_realm(context.realm().clone()));
     context.vm.native_constructor_receiver = previous_receiver;
     context.vm.native_caller_realm = previous_caller_realm;
+    context.vm.native_script_realm = previous_script_realm;
 
     context.vm.native_active_function = None;
     context.swap_realm(&mut realm);
@@ -456,6 +472,7 @@ fn native_function_construct(
 
     context.swap_realm(&mut realm);
     context.vm.native_active_function = Some(this_function_object);
+    let previous_script_realm = enter_script_realm(context, &realm);
 
     let new_target = context.vm.stack.pop();
     let args = context
@@ -471,6 +488,7 @@ fn native_function_construct(
     );
     let result = function.call(&new_target, &args, context);
     context.vm.native_constructor_receiver = previous_receiver;
+    context.vm.native_script_realm = previous_script_realm;
     let result = result
         .map_err(|err| err.inject_realm(context.realm().clone()))
         .and_then(|v| match v.variant() {

@@ -15,8 +15,8 @@ mod realm_cache;
 mod table;
 
 pub use handles::{
-    ContextHandle, InterruptFn, JobOutcome, MemoryUsage, ModuleLoadFn, ModuleNormalizeFn,
-    RejectionTrackerFn, RuntimeHandle, RuntimeOptions,
+    CompileStringsFn, ContextHandle, InterruptFn, JobOutcome, MemoryUsage, ModuleLoadFn,
+    ModuleNormalizeFn, RejectionTrackerFn, RuntimeHandle, RuntimeOptions,
 };
 pub use realm_cache::RealmCache;
 pub use table::{
