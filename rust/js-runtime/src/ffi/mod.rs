@@ -247,6 +247,7 @@ impl Js {
             interrupt: Some(interrupt_handler),
             interrupt_opaque: self.0.cast(),
             rejection_tracker: Some(tracker),
+            compile_strings: Some(compile_strings_allowed),
             module_normalize: Some(imports::nsr_js_module_normalize),
             module_load: Some(imports::nsr_js_module_load),
             ..RuntimeOptions::default()
@@ -500,6 +501,18 @@ impl Js {
 
 fn interrupt_handler(opaque: *mut c_void) -> bool {
     Js::of(opaque.cast()).is_some_and(interrupt::should_interrupt)
+}
+
+fn compile_strings_allowed(
+    scope: &mut Scope<'_>,
+    caller: ContextHandle,
+    callee: ContextHandle,
+) -> bool {
+    if caller == callee {
+        return true;
+    }
+    Js::of_scope(scope)
+        .is_none_or(|js| (crate::api::frames_hooks().realms_same_origin)(js.ptr(), caller, callee))
 }
 
 fn engine_name(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {

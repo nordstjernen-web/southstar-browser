@@ -7,8 +7,9 @@ use std::ffi::{CStr, CString};
 
 use southstar_dom::{Kind, Node};
 
-use crate::ffi::Js;
+use crate::ffi::ctx::Ctx;
 use crate::ffi::load;
+use crate::ffi::{self, Js};
 use crate::page;
 use crate::realm::frame_of;
 use crate::sandbox;
@@ -42,6 +43,56 @@ pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
         .or_else(|| load::document_origin(js))
         .or_else(|| load::page_url(js));
     embedder.is_none_or(|embedder| !load::same_origin(frame_url, &embedder))
+}
+
+enum RealmOrigin {
+    Unrelated,
+    Opaque,
+    Tuple(CString),
+}
+
+fn embedder_origin(js: Js, iframe: Node<'_>) -> RealmOrigin {
+    let embedder = load::node_frame_url(iframe)
+        .or_else(|| load::document_origin(js))
+        .or_else(|| load::page_url(js));
+    match load::origin_from(embedder.as_deref()) {
+        Some(origin) => RealmOrigin::Tuple(origin),
+        None => RealmOrigin::Opaque,
+    }
+}
+
+fn realm_origin(js: Js, realm: Ctx) -> RealmOrigin {
+    if realm == ffi::main_realm(js) {
+        let page = load::document_origin(js).or_else(|| load::page_url(js));
+        return match load::origin_from(page.as_deref()) {
+            Some(origin) => RealmOrigin::Tuple(origin),
+            None => RealmOrigin::Opaque,
+        };
+    }
+    let Some(iframe) = page::frame_of_realm(js, realm).and_then(ffi::frame_node) else {
+        return RealmOrigin::Unrelated;
+    };
+    if opaque_by_sandbox(sandbox::effective(iframe)) {
+        return RealmOrigin::Opaque;
+    }
+    match iframe
+        .attr(c"data-nd-frame-url")
+        .filter(|url| !url.is_empty() && !url.to_bytes().starts_with(b"about:"))
+    {
+        Some(url) => match load::origin_from(Some(url)) {
+            Some(origin) => RealmOrigin::Tuple(origin),
+            None => RealmOrigin::Opaque,
+        },
+        None => embedder_origin(js, iframe),
+    }
+}
+
+pub(crate) fn realms_same_origin(js: Js, a: Ctx, b: Ctx) -> bool {
+    match (realm_origin(js, a), realm_origin(js, b)) {
+        (RealmOrigin::Unrelated, _) | (_, RealmOrigin::Unrelated) => true,
+        (RealmOrigin::Tuple(a), RealmOrigin::Tuple(b)) => load::same_origin(&a, &b),
+        _ => false,
+    }
 }
 
 fn holder_url(js: Js, iframe: Node<'_>) -> Option<CString> {

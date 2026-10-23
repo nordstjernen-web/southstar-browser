@@ -72,6 +72,9 @@ pub type InterruptFn = fn(opaque: *mut c_void) -> bool;
 pub type RejectionTrackerFn =
     for<'a> fn(scope: &mut Scope<'a>, promise: &Value, reason: &Value, handled: bool);
 
+pub type CompileStringsFn =
+    for<'a> fn(scope: &mut Scope<'a>, caller: ContextHandle, callee: ContextHandle) -> bool;
+
 pub type ModuleNormalizeFn =
     for<'a> fn(scope: &mut Scope<'a>, base: &str, name: &str) -> Result<String, Value>;
 
@@ -85,6 +88,7 @@ pub struct RuntimeOptions {
     pub interrupt: Option<InterruptFn>,
     pub interrupt_opaque: *mut c_void,
     pub rejection_tracker: Option<RejectionTrackerFn>,
+    pub compile_strings: Option<CompileStringsFn>,
     pub module_normalize: Option<ModuleNormalizeFn>,
     pub module_load: Option<ModuleLoadFn>,
     pub can_block: bool,
@@ -99,6 +103,7 @@ impl Default for RuntimeOptions {
             interrupt: None,
             interrupt_opaque: ptr::null_mut(),
             rejection_tracker: None,
+            compile_strings: None,
             module_normalize: None,
             module_load: None,
             can_block: false,

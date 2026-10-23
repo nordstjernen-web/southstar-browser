@@ -94,6 +94,10 @@ pub struct Vm {
     /// switched to the function's own realm.
     pub(crate) native_caller_realm: Option<Realm>,
 
+    /// The realm of the script frame that called the outermost native function of the running
+    /// chain of native calls, with the frame depth it was recorded at.
+    pub(crate) native_script_realm: Option<(usize, Realm)>,
+
     /// The `this` value a native constructor received when it was called
     /// without `new`; native constructors are invoked with `undefined`.
     pub(crate) native_constructor_receiver: JsValue,
@@ -440,6 +444,7 @@ impl Vm {
             runtime_limits: RuntimeLimits::default(),
             native_active_function: None,
             native_caller_realm: None,
+            native_script_realm: None,
             native_constructor_receiver: JsValue::undefined(),
             host_call_depth: 0,
             shadow_stack: ShadowStack::default(),

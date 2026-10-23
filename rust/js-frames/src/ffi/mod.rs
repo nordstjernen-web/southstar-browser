@@ -420,6 +420,14 @@ fn frame_url(js: *const NsJs, frame: Option<Node<'_>>) -> *const c_char {
     .unwrap_or(core::ptr::null())
 }
 
+fn realms_same_origin(js: *const NsJs, a: ContextHandle, b: ContextHandle) -> bool {
+    let js = Js::of(js);
+    match (Ctx::from_handle(a), Ctx::from_handle(b)) {
+        (Some(a), Some(b)) if !js.is_null() => crate::origin::realms_same_origin(js, a, b),
+        _ => true,
+    }
+}
+
 fn forget_node(js: *const NsJs, node: Node<'_>) {
     let js = Js::of(js);
     if js.is_null() {
@@ -499,6 +507,7 @@ pub fn install_runtime_hooks() {
         node_realm_context: crate::node_realm_context,
         cloners_made,
         forget_node,
+        realms_same_origin,
     });
 }
 
