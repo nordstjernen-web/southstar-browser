@@ -7,11 +7,15 @@
 pub mod attrs;
 pub mod bidi;
 pub mod breaks;
+pub mod context;
 pub mod coverage;
 pub mod emoji;
 #[allow(unsafe_code)]
 mod ffi;
+pub mod font;
 pub mod font_description;
+pub mod fontmap;
+pub mod fontset;
 pub mod gravity;
 pub mod language;
 pub mod matrix;
