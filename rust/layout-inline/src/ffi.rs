@@ -10,7 +10,7 @@ use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
 use southstar_layout_sizing::SavedGeometry;
 use southstar_paint::ffi as paint;
-use southstar_paint::ffi::pango::{AttrList, Attribute, Context, Layout};
+use southstar_paint::text_layout::{AttrList, Attribute, Context, Layout};
 use southstar_style::StyleRef;
 
 use crate::attrs;

@@ -2083,6 +2083,7 @@ dependencies = [
  "southstar-selection",
  "southstar-spellcheck",
  "southstar-svg",
+ "southstar-text",
  "southstar-texture",
  "southstar-threaddump",
  "southstar-video",
@@ -3370,6 +3371,7 @@ dependencies = [
  "southstar-spellcheck",
  "southstar-style",
  "southstar-svg",
+ "southstar-text",
  "southstar-texture",
  "southstar-video",
 ]

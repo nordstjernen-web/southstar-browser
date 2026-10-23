@@ -1,6 +1,6 @@
 [package]
 name = "southstar-paint"
-description = "Painting the layout box tree with cairo and ns-pango: the walk with stacking, clips, transforms and 3D, box decorations, replaced content, masks, inline text, list markers, page text setup and the viewport layer planner"
+description = "Painting the layout box tree with cairo and southstar-text: the walk with stacking, clips, transforms and 3D, box decorations, replaced content, masks, inline text, list markers, page text setup and the viewport layer planner"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -24,11 +24,10 @@ southstar-selection = { path = "../selection" }
 southstar-spellcheck = { path = "../spellcheck" }
 southstar-style = { path = "../style" }
 southstar-svg = { path = "../svg" }
+southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
 southstar-video = { path = "../video" }
 
-[features]
-ns-pango = []
 
 [lints]
 workspace = true

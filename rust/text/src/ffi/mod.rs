@@ -11,4 +11,5 @@ pub(crate) mod glib_decompose;
 pub(crate) mod glib_lang;
 pub(crate) mod harfbuzz;
 pub(crate) mod harfbuzz_strings;
+#[cfg(feature = "thai")]
 pub(crate) mod thai;

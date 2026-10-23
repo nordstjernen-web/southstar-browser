@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 
 use southstar_layout::{BoxRef, Style, inline_kind as k};
-use southstar_paint::ffi::pango;
+use southstar_paint::text_layout;
 use southstar_style::{PropId, StyleRef};
 
 use crate::attrs::px_length;
@@ -14,7 +14,7 @@ use crate::layout::{
 };
 use crate::{ffi, measure};
 
-const SCALE: f64 = pango::SCALE_F;
+const SCALE: f64 = text_layout::SCALE_F;
 
 fn affects_measure(kind: u32) -> bool {
     matches!(
@@ -187,7 +187,7 @@ pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     }
     let layout = ffi::new_layout(ps);
     layout.set_width(1);
-    layout.set_wrap(pango::WRAP_WORD);
+    layout.set_wrap(text_layout::WRAP_WORD);
     let saved = ffi::measure_atomics_begin(b, ps, false);
     layout.set_text(text);
     shaping_attrs(&layout, b, ps, text.to_bytes());

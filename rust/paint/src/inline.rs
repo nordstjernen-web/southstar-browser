@@ -18,7 +18,7 @@ use crate::decor::{
     style_has_inline_box_paint, style_side_visible,
 };
 use crate::ffi::engine::{self, FontMetrics};
-use crate::ffi::pango::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
+use crate::text_layout::{self, AttrList, Attribute, Layout, Line, Rectangle, SCALE_F};
 use crate::radii::{CornerRadii, rounded_rect_path};
 use crate::state;
 use crate::text::{
@@ -34,7 +34,7 @@ use crate::util::{
     length_or, rgba_of, style_keyword, style_of,
 };
 
-const S: f64 = pango::SCALE_F;
+const S: f64 = text_layout::SCALE_F;
 
 fn c16(v: u8) -> u16 {
     u16::from(v) * 0x101
@@ -167,7 +167,7 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
         );
     }
     if fl.get(P::FontStyle).is_some_and(ValueRef::font_slanted) {
-        attrs.insert_range(Some(Attribute::style(pango::STYLE_ITALIC)), start_u, len);
+        attrs.insert_range(Some(Attribute::style(text_layout::STYLE_ITALIC)), start_u, len);
     }
     if let Some(ff) = fl
         .get(P::FontFamily)
@@ -183,7 +183,7 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
         .is_some_and(|kw| has_small_caps(kw.to_bytes()))
     {
         attrs.insert_range(
-            Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            Some(Attribute::variant(text_layout::VARIANT_SMALL_CAPS)),
             start_u,
             len,
         );
@@ -207,7 +207,7 @@ fn apply_first_line_attrs(attrs: &AttrList, fl: StyleRef<'_>, start: u32, end: u
         let has = |needle: &[u8]| kw.windows(needle.len()).any(|w| w == needle);
         if !invisible && has(b"underline") && !has(b"none") {
             attrs.insert_range(
-                Some(Attribute::underline(pango::UNDERLINE_SINGLE)),
+                Some(Attribute::underline(text_layout::UNDERLINE_SINGLE)),
                 start_u,
                 len,
             );
@@ -443,7 +443,7 @@ fn spell_underline_range(attrs: &AttrList, t: &CStr, rstart: usize, rend: usize)
         let blen = q - start;
         if alpha >= 2 && !engine::spell_word_ok(&bytes[start..q]) {
             attrs.insert(
-                Attribute::underline(pango::UNDERLINE_ERROR),
+                Attribute::underline(text_layout::UNDERLINE_ERROR),
                 start as u32,
                 (start + blen) as u32,
             );
@@ -500,7 +500,8 @@ fn paint_spell_underlines(attrs: &AttrList, b: BoxRef<'_>) {
 pub fn drop_box_cache(b: BoxRef<'_>) {
     let layout = b.paint_layout();
     if !layout.is_null() {
-        drop(unsafe { Layout::from_owned(layout) });
+        // SAFETY: a box's paint layout is a handle inline_layout stored with Layout::into_raw.
+        drop(unsafe { Layout::from_raw(layout) });
         b.set_paint_layout(core::ptr::null_mut());
     }
 }
@@ -530,11 +531,11 @@ fn base_layout(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<(Layout, AttrLi
         layout.set_indent((ti * S) as i32);
     }
     if keyword_is(get(s, P::TextOverflow), c"ellipsis") {
-        layout.set_ellipsize(pango::ELLIPSIZE_END);
+        layout.set_ellipsize(text_layout::ELLIPSIZE_END);
     }
     if let Some(lc) = line_clamp(s) {
         layout.set_height(-(lc as i32));
-        layout.set_ellipsize(pango::ELLIPSIZE_END);
+        layout.set_ellipsize(text_layout::ELLIPSIZE_END);
     }
     layout.set_text(text);
     let attrs = AttrList::new();
@@ -588,14 +589,14 @@ fn paint_inline_make_layout(
     for r in b.attrs().iter().rev() {
         let mut a = None;
         match r.kind {
-            k::BOLD => a = Some(Attribute::weight(pango::WEIGHT_BOLD)),
+            k::BOLD => a = Some(Attribute::weight(text_layout::WEIGHT_BOLD)),
             k::FONT_WEIGHT => a = Some(Attribute::weight(weight_from_css(r.font_weight))),
             k::FONT_STRETCH => a = Some(Attribute::stretch(stretch_from_css(r.font_stretch))),
             k::FONT_FEATURES => {
                 a = font_features_attr(r.font_kerning, r.font_ligatures(), r.font_features())
             }
             k::FONT_VARIATIONS => a = font_variations_attr(r.font_variations()),
-            k::ITALIC => a = Some(Attribute::style(pango::STYLE_ITALIC)),
+            k::ITALIC => a = Some(Attribute::style(text_layout::STYLE_ITALIC)),
             k::MONOSPACE => a = Some(Attribute::family(c"monospace")),
             k::UNDERLINE | k::OVERLINE | k::STRIKETHROUGH => 'deco: {
                 if underline_dash_style(r, s).is_some() {
@@ -607,10 +608,10 @@ fn paint_inline_make_layout(
                 }
                 match r.kind {
                     k::UNDERLINE => {
-                        let mut ul = pango::UNDERLINE_SINGLE;
+                        let mut ul = text_layout::UNDERLINE_SINGLE;
                         match decoration_style_of(r, s) {
-                            Some(b"double") => ul = pango::UNDERLINE_DOUBLE,
-                            Some(b"wavy") => ul = pango::UNDERLINE_ERROR,
+                            Some(b"double") => ul = text_layout::UNDERLINE_DOUBLE,
+                            Some(b"wavy") => ul = text_layout::UNDERLINE_ERROR,
                             _ => {}
                         }
                         a = Some(Attribute::underline(ul));
@@ -623,7 +624,7 @@ fn paint_inline_make_layout(
                         }
                     }
                     k::OVERLINE => {
-                        a = Some(Attribute::overline(pango::OVERLINE_SINGLE));
+                        a = Some(Attribute::overline(text_layout::OVERLINE_SINGLE));
                         if let Some(c) = cv {
                             attrs.insert_range(
                                 Some(Attribute::overline_color(c16(c[0]), c16(c[1]), c16(c[2]))),
@@ -685,7 +686,7 @@ fn paint_inline_make_layout(
                 attrs.insert_range(Some(Attribute::rise(-3000)), r.start, r.len);
                 a = Some(Attribute::scale(0.75));
             }
-            k::SMALL_CAPS => a = Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::SMALL_CAPS => a = Some(Attribute::variant(text_layout::VARIANT_SMALL_CAPS)),
             k::NO_WRAP => a = Some(Attribute::allow_breaks(false)),
             k::SELECTION => {
                 attrs.insert_range(
@@ -750,19 +751,19 @@ pub fn build_inline_layout(b: BoxRef<'_>) -> Option<Layout> {
     let (layout, attrs) = base_layout(b, s)?;
     for r in b.attrs().iter().rev() {
         let a = match r.kind {
-            k::BOLD => Some(Attribute::weight(pango::WEIGHT_BOLD)),
+            k::BOLD => Some(Attribute::weight(text_layout::WEIGHT_BOLD)),
             k::FONT_WEIGHT => Some(Attribute::weight(weight_from_css(r.font_weight))),
             k::FONT_STRETCH => Some(Attribute::stretch(stretch_from_css(r.font_stretch))),
             k::FONT_FEATURES => {
                 font_features_attr(r.font_kerning, r.font_ligatures(), r.font_features())
             }
             k::FONT_VARIATIONS => font_variations_attr(r.font_variations()),
-            k::ITALIC => Some(Attribute::style(pango::STYLE_ITALIC)),
+            k::ITALIC => Some(Attribute::style(text_layout::STYLE_ITALIC)),
             k::MONOSPACE => Some(Attribute::family(c"monospace")),
             k::FONT_SIZE => Some(Attribute::size_absolute(pango_font_size(r.font_size_px))),
             k::FONT_FAMILY => family_attr(r.family()),
             k::SUPERSCRIPT | k::SUBSCRIPT => Some(Attribute::scale(0.75)),
-            k::SMALL_CAPS => Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::SMALL_CAPS => Some(Attribute::variant(text_layout::VARIANT_SMALL_CAPS)),
             k::NO_WRAP => Some(Attribute::allow_breaks(false)),
             k::SPACER => Some(Attribute::shape((r.box_w * S) as i32)),
             _ => None,
@@ -1370,7 +1371,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
                 let fd = layout
                     .font_description()
                     .unwrap_or_else(|| pctx.font_description());
-                let aw = pctx.metrics(fd).map_or(0, |m| m.approximate_char_width());
+                let aw = pctx.metrics(&fd).map_or(0, |m| m.approximate_char_width());
                 let cell = f64::from(aw) / S;
                 let want_w = cell * f64::from(n) + 20.0;
                 let cur_w = x1 - x0;
@@ -1756,7 +1757,7 @@ fn paint_vertical(
         };
         layout.clear_attributes();
         layout.set_width(-1);
-        layout.set_alignment(pango::ALIGN_CENTER);
+        layout.set_alignment(text_layout::ALIGN_CENTER);
         layout.set_text(&stacked);
         drop(stacked);
         cr.save();
@@ -1811,7 +1812,8 @@ fn inline_layout(
 ) -> Option<Layout> {
     let cacheable = highlight.is_none_or(CStr::is_empty);
     let cached = if cacheable {
-        unsafe { Layout::from_borrowed(b.paint_layout()) }
+        // SAFETY: a box's paint layout is null or a handle inline_layout stored with Layout::into_raw.
+        unsafe { Layout::clone_from_raw(b.paint_layout()) }
     } else {
         None
     };
@@ -1820,7 +1822,7 @@ fn inline_layout(
         None => paint_inline_make_layout(b, s, highlight)?,
     };
     if cacheable && b.paint_layout().is_null() {
-        b.set_paint_layout(layout.new_ref());
+        b.set_paint_layout(layout.clone().into_raw());
     }
     Some(layout)
 }
@@ -1976,7 +1978,8 @@ pub fn inline_word_range(b: BoxRef<'_>, byte: usize) -> Option<(usize, usize)> {
     let byte = byte.min(tlen);
     let layout = build_inline_layout(b)?;
     let attrs = layout.log_attrs();
-    let ltext = layout.text()?.to_bytes();
+    let ltext = layout.text();
+    let ltext = ltext.as_bytes();
     let n = attrs.len() as i64;
     if n <= 1 || ltext.len() != tlen {
         return None;

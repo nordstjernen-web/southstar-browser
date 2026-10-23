@@ -1,16 +1,16 @@
-//! Southstar — the ns-pango attributes an inline run is shaped with: spacing, inline font runs, atomic inline shapes, line-height struts and stretched text inputs.
+//! Southstar — the southstar-text attributes an inline run is shaped with: spacing, inline font runs, atomic inline shapes, line-height struts and stretched text inputs.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
 
 use southstar_layout::{BoxKind, BoxRef, InlineAttr, inline_kind as k};
-use southstar_paint::ffi::pango::{self, AttrList, Attribute, Layout, Rectangle};
+use southstar_paint::text_layout::{self, AttrList, Attribute, Layout, Rectangle};
 use southstar_style::{PropId, StyleRef, ValueRef, font_family_for_pango};
 
 use crate::ffi;
 
-const SCALE: f64 = pango::SCALE_F;
+const SCALE: f64 = text_layout::SCALE_F;
 const UNIT_PX: u32 = 0;
 
 const STRUT_ROOT: u8 = 0;
@@ -65,15 +65,15 @@ pub(crate) fn apply_spacing(list: &AttrList, style: Option<StyleRef<'_>>, text: 
 
 fn weight_from_css(weight: i32) -> i32 {
     match weight {
-        ..=100 => pango::WEIGHT_THIN,
-        101..=200 => pango::WEIGHT_ULTRALIGHT,
-        201..=300 => pango::WEIGHT_LIGHT,
-        301..=400 => pango::WEIGHT_NORMAL,
-        401..=500 => pango::WEIGHT_MEDIUM,
-        501..=600 => pango::WEIGHT_SEMIBOLD,
-        601..=700 => pango::WEIGHT_BOLD,
-        701..=800 => pango::WEIGHT_ULTRABOLD,
-        801..=900 => pango::WEIGHT_HEAVY,
+        ..=100 => text_layout::WEIGHT_THIN,
+        101..=200 => text_layout::WEIGHT_ULTRALIGHT,
+        201..=300 => text_layout::WEIGHT_LIGHT,
+        301..=400 => text_layout::WEIGHT_NORMAL,
+        401..=500 => text_layout::WEIGHT_MEDIUM,
+        501..=600 => text_layout::WEIGHT_SEMIBOLD,
+        601..=700 => text_layout::WEIGHT_BOLD,
+        701..=800 => text_layout::WEIGHT_ULTRABOLD,
+        801..=900 => text_layout::WEIGHT_HEAVY,
         _ => weight,
     }
 }
@@ -93,12 +93,12 @@ pub(crate) fn is_textarea(r: &InlineAttr) -> bool {
 pub(crate) fn apply_layout_attrs(list: &AttrList, b: BoxRef<'_>) {
     for r in b.attrs().iter().rev() {
         let a = match r.kind {
-            k::BOLD => Some(Attribute::weight(pango::WEIGHT_BOLD)),
+            k::BOLD => Some(Attribute::weight(text_layout::WEIGHT_BOLD)),
             k::FONT_WEIGHT => Some(Attribute::weight(weight_from_css(r.font_weight))),
             k::FONT_STRETCH => Some(Attribute::stretch(stretch_from_css(r.font_stretch))),
             k::FONT_FEATURES => ffi::font_features_attr(r),
             k::FONT_VARIATIONS => ffi::font_variations_attr(r),
-            k::ITALIC => Some(Attribute::style(pango::STYLE_ITALIC)),
+            k::ITALIC => Some(Attribute::style(text_layout::STYLE_ITALIC)),
             k::MONOSPACE => Some(Attribute::family(c"monospace")),
             k::INPUT_FIELD | k::INPUT_FIELD_FOCUSED | k::BUTTON => {
                 if !is_textarea(r) {
@@ -121,7 +121,7 @@ pub(crate) fn apply_layout_attrs(list: &AttrList, b: BoxRef<'_>) {
                 insert(list, Some(Attribute::rise(-3000)), r.start, r.len);
                 Some(Attribute::scale(0.75))
             }
-            k::SMALL_CAPS => Some(Attribute::variant(pango::VARIANT_SMALL_CAPS)),
+            k::SMALL_CAPS => Some(Attribute::variant(text_layout::VARIANT_SMALL_CAPS)),
             k::NO_WRAP => Some(Attribute::allow_breaks(false)),
             k::SPACER => Some(Attribute::shape_rect(Rectangle {
                 x: 0,

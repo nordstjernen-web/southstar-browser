@@ -16,8 +16,5 @@ southstar-netutil = { path = "../netutil" }
 southstar-style = { path = "../style" }
 southstar-texture = { path = "../texture" }
 
-[features]
-ns-pango = []
-
 [lints]
 workspace = true

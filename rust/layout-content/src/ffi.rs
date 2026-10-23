@@ -1,4 +1,4 @@
-//! Southstar — the generated-content and form-control entry points layout.c calls, and the layout.c, css, glib and pango calls they make back, behind safe wrappers.
+//! Southstar — the generated-content and form-control entry points layout.c calls, and the layout.c, css, glib and text-layout calls they make back, behind safe wrappers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,7 +9,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_glib::{GBoolean, g_free};
 use southstar_layout::{BoxRef, InlineAttr, Style};
 use southstar_paint::ffi as paint;
-use southstar_paint::ffi::pango::{Context, Layout};
+use southstar_paint::text_layout::{Context, Layout};
 use southstar_style::StyleRef;
 
 use crate::controls;
@@ -95,7 +95,7 @@ pub fn char_cell_px(s: *const Style) -> f64 {
         return 0.0;
     }
     ctx.metrics(fd).map_or(0.0, |fm| {
-        f64::from(fm.approximate_char_width()) / f64::from(paint::pango::SCALE)
+        f64::from(fm.approximate_char_width()) / f64::from(paint::text_layout::SCALE)
     })
 }
 

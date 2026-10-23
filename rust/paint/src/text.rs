@@ -12,7 +12,7 @@ use southstar_layout::{BoxRef, inline_kind};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 
 use crate::ffi::engine::{self, FontMetrics};
-use crate::ffi::pango::{
+use crate::text_layout::{
     self, AttrList, Attribute, Context, FontDescription, FontMap, Layout, TabArray,
 };
 use crate::util::{
@@ -46,7 +46,7 @@ struct MetricsKey {
 }
 
 pub fn context() -> Context {
-    TEXT_CONTEXT.with(|c| *c)
+    TEXT_CONTEXT.with(Context::clone)
 }
 
 pub fn create_layout() -> Layout {
@@ -55,15 +55,15 @@ pub fn create_layout() -> Layout {
 
 pub fn weight_from_css(weight: i32) -> i32 {
     match weight {
-        w if w <= 100 => pango::WEIGHT_THIN,
-        w if w <= 200 => pango::WEIGHT_ULTRALIGHT,
-        w if w <= 300 => pango::WEIGHT_LIGHT,
-        w if w <= 400 => pango::WEIGHT_NORMAL,
-        w if w <= 500 => pango::WEIGHT_MEDIUM,
-        w if w <= 600 => pango::WEIGHT_SEMIBOLD,
-        w if w <= 700 => pango::WEIGHT_BOLD,
-        w if w <= 800 => pango::WEIGHT_ULTRABOLD,
-        w if w <= 900 => pango::WEIGHT_HEAVY,
+        w if w <= 100 => text_layout::WEIGHT_THIN,
+        w if w <= 200 => text_layout::WEIGHT_ULTRALIGHT,
+        w if w <= 300 => text_layout::WEIGHT_LIGHT,
+        w if w <= 400 => text_layout::WEIGHT_NORMAL,
+        w if w <= 500 => text_layout::WEIGHT_MEDIUM,
+        w if w <= 600 => text_layout::WEIGHT_SEMIBOLD,
+        w if w <= 700 => text_layout::WEIGHT_BOLD,
+        w if w <= 800 => text_layout::WEIGHT_ULTRABOLD,
+        w if w <= 900 => text_layout::WEIGHT_HEAVY,
         w => w,
     }
 }
@@ -73,7 +73,7 @@ pub fn pango_font_size(size_px: f64) -> i32 {
         return 0;
     }
     let size_px = if size_px > 65535.0 { 65535.0 } else { size_px };
-    (size_px * pango::SCALE_F) as i32
+    (size_px * text_layout::SCALE_F) as i32
 }
 
 pub fn stretch_from_css(rank: i32) -> i32 {
@@ -83,17 +83,17 @@ pub fn stretch_from_css(rank: i32) -> i32 {
 pub fn wrap_mode_for(style: Option<StyleRef<'_>>) -> i32 {
     if let Some(s) = style {
         match keyword(s.get(P::WordBreak)).map(CStr::to_bytes) {
-            Some(b"break-all") => return pango::WRAP_CHAR,
-            Some(b"keep-all") => return pango::WRAP_WORD,
+            Some(b"break-all") => return text_layout::WRAP_CHAR,
+            Some(b"keep-all") => return text_layout::WRAP_WORD,
             _ => {}
         }
         match keyword(s.get(P::OverflowWrap)).map(CStr::to_bytes) {
-            Some(b"normal") => return pango::WRAP_WORD,
-            Some(b"break-word" | b"anywhere") => return pango::WRAP_WORD_CHAR,
+            Some(b"normal") => return text_layout::WRAP_WORD,
+            Some(b"break-word" | b"anywhere") => return text_layout::WRAP_WORD_CHAR,
             _ => {}
         }
     }
-    pango::WRAP_WORD
+    text_layout::WRAP_WORD
 }
 
 pub fn is_nowrap(style: Option<StyleRef<'_>>) -> bool {
@@ -265,27 +265,27 @@ pub fn apply_i18n(layout: Option<&Layout>, attrs: Option<&AttrList>, b: Option<B
         attrs.insert(Attribute::language(lang), 0, u32::MAX);
     }
     let dir = dn.and_then(|n| nearest_node_attr(n, c"dir"));
-    let mut bd = pango::DIRECTION_NEUTRAL;
+    let mut bd = text_layout::DIRECTION_NEUTRAL;
     if let Some(dir) = dir {
         if dir.to_bytes().eq_ignore_ascii_case(b"rtl") {
-            bd = pango::DIRECTION_RTL;
+            bd = text_layout::DIRECTION_RTL;
         } else if dir.to_bytes().eq_ignore_ascii_case(b"ltr") {
-            bd = pango::DIRECTION_LTR;
+            bd = text_layout::DIRECTION_LTR;
         } else if dir.to_bytes().eq_ignore_ascii_case(b"auto") {
-            bd = pango::DIRECTION_WEAK_LTR;
+            bd = text_layout::DIRECTION_WEAK_LTR;
         }
     }
-    if bd == pango::DIRECTION_NEUTRAL && keyword_is(get(st, P::Direction), c"rtl") {
-        bd = pango::DIRECTION_RTL;
+    if bd == text_layout::DIRECTION_NEUTRAL && keyword_is(get(st, P::Direction), c"rtl") {
+        bd = text_layout::DIRECTION_RTL;
     }
     let Some(layout) = layout else {
         return;
     };
-    layout.set_auto_dir(bd == pango::DIRECTION_WEAK_LTR);
+    layout.set_auto_dir(bd == text_layout::DIRECTION_WEAK_LTR);
     layout
         .context()
-        .set_base_dir(if bd == pango::DIRECTION_NEUTRAL {
-            pango::DIRECTION_LTR
+        .set_base_dir(if bd == text_layout::DIRECTION_NEUTRAL {
+            text_layout::DIRECTION_LTR
         } else {
             bd
         });
@@ -492,7 +492,7 @@ pub fn font_features_attr(
 
 pub fn font_variations_attr(settings: Option<&CStr>) -> Option<Attribute> {
     let variations = CString::new(variations_from_css(settings)?).ok()?;
-    let desc = FontDescription::new();
+    let mut desc = FontDescription::new();
     desc.set_variations(&variations);
     Some(Attribute::font_desc(&desc))
 }
@@ -526,7 +526,7 @@ pub fn font_available(family: Option<&CStr>) -> bool {
         return true;
     };
     let map = FontMap::default_map();
-    let serial = map.map_or(0, FontMap::serial);
+    let serial = map.as_ref().map_or(0, FontMap::serial);
     let lower = family.to_bytes().to_ascii_lowercase();
     let has = FONT_FAMILIES.with(|cache| {
         let mut cache = cache.borrow_mut();
@@ -572,13 +572,12 @@ fn font_vertical_metrics(
     family: Option<&CStr>,
     out: &mut FontMetrics,
 ) {
-    let Some(fm) = ctx.metrics(fd.as_ref()) else {
+    let Some(fm) = ctx.metrics(fd) else {
         return;
     };
-    let raw_ascent = f64::from(fm.ascent()) / pango::SCALE_F;
-    let raw_descent = f64::from(fm.descent()) / pango::SCALE_F;
-    let height = f64::from(fm.height()) / pango::SCALE_F;
-    drop(fm);
+    let raw_ascent = f64::from(fm.ascent()) / text_layout::SCALE_F;
+    let raw_descent = f64::from(fm.descent()) / text_layout::SCALE_F;
+    let height = f64::from(fm.height()) / text_layout::SCALE_F;
     let mut ascent = raw_ascent.round();
     let descent = raw_descent.round();
     let gap = if height > raw_ascent + raw_descent {
@@ -606,7 +605,7 @@ fn font_metrics_measure(
     out: &mut FontMetrics,
 ) {
     let l = create_layout();
-    let fd = FontDescription::new();
+    let mut fd = FontDescription::new();
     let pango_family = family.map(|f| engine::font_family_for_pango(Some(f)));
     if let Some(pf) = pango_family.as_deref().filter(|f| !f.is_empty()) {
         fd.set_family(pf);
@@ -615,10 +614,10 @@ fn font_metrics_measure(
         fd.set_weight(weight);
     }
     if italic {
-        fd.set_style(pango::STYLE_ITALIC);
+        fd.set_style(text_layout::STYLE_ITALIC);
     }
     fd.set_absolute_size(f64::from(pango_font_size(size_px)));
-    l.set_font_description(fd.as_ref());
+    l.set_font_description(&fd);
     font_vertical_metrics(l.context(), &fd, pango_family.as_deref(), out);
     drop(pango_family);
 
@@ -654,7 +653,7 @@ pub fn font_metrics(
     if size_px <= 0.0 {
         return;
     }
-    let serial = pango::font_map_serial();
+    let serial = text_layout::font_map_serial();
     let key = MetricsKey {
         family: family.map(|f| f.to_bytes().to_vec()),
         size_bits: size_px.to_bits(),
@@ -686,12 +685,12 @@ pub fn font_metrics(
 }
 
 pub fn font_generation() -> u64 {
-    let serial = pango::font_map_serial();
+    let serial = text_layout::font_map_serial();
     (u64::from(serial) << 32) | u64::from(engine::font_generation())
 }
 
 pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
-    let desc = FontDescription::new();
+    let mut desc = FontDescription::new();
     let font_size = length_or(get(s, P::FontSize), 16.0);
     let fam = get(s, P::FontFamily);
     let family = match fam {
@@ -711,16 +710,16 @@ pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
         P::FontStretch,
     ))));
     if keyword_is(get(s, P::FontStyle), c"italic") {
-        desc.set_style(pango::STYLE_ITALIC);
+        desc.set_style(text_layout::STYLE_ITALIC);
     } else if keyword_is(get(s, P::FontStyle), c"oblique") {
-        desc.set_style(pango::STYLE_OBLIQUE);
+        desc.set_style(text_layout::STYLE_OBLIQUE);
     }
     if let Some(variations) = variations_from_css(style_keyword(s, P::FontVariationSettings))
         .and_then(|v| CString::new(v).ok())
     {
         desc.set_variations(&variations);
     }
-    layout.set_font_description(desc.as_ref());
+    layout.set_font_description(&desc);
     drop(desc);
 
     let Some((tab_v, tab_unit)) = get(s, P::TabSize).and_then(ValueRef::length) else {
@@ -732,20 +731,20 @@ pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
     let tab_w = if tab_unit == UNIT_NUMBER {
         let probe = Layout::new(layout.context());
         if let Some(desc) = layout.font_description() {
-            probe.set_font_description(desc);
+            probe.set_font_description(&desc);
         }
         probe.set_text_bytes(b" ");
         let (sw, _) = probe.size();
         drop(probe);
-        tab_v * (f64::from(sw) / pango::SCALE_F)
+        tab_v * (f64::from(sw) / text_layout::SCALE_F)
     } else {
         tab_v
     };
     if tab_w > 0.0 {
         let n = 32;
-        let tabs = TabArray::new(n, true);
+        let mut tabs = TabArray::new(n, true);
         for i in 0..n {
-            tabs.set_tab(i, pango::TAB_LEFT, (f64::from(i + 1) * tab_w + 0.5) as i32);
+            tabs.set_tab(i, text_layout::TAB_LEFT, (f64::from(i + 1) * tab_w + 0.5) as i32);
         }
         layout.set_tabs(&tabs);
     }
@@ -753,19 +752,19 @@ pub fn apply_inline_font(layout: &Layout, s: Option<StyleRef<'_>>) {
 
 pub fn apply_text_align(layout: &Layout, s: Option<StyleRef<'_>>) {
     let ta = get(s, P::TextAlign);
-    let rtl = layout.context().base_dir() == pango::DIRECTION_RTL;
+    let rtl = layout.context().base_dir() == text_layout::DIRECTION_RTL;
     if keyword_is(ta, c"center") {
-        layout.set_alignment(pango::ALIGN_CENTER);
+        layout.set_alignment(text_layout::ALIGN_CENTER);
     } else if keyword_is(ta, c"right")
         || (keyword_is(ta, c"end") && !rtl)
         || (keyword_is(ta, c"start") && rtl)
         || (ta.is_none() && rtl)
     {
-        layout.set_alignment(pango::ALIGN_RIGHT);
+        layout.set_alignment(text_layout::ALIGN_RIGHT);
     } else if keyword_is(ta, c"justify") {
         layout.set_justify(true);
     } else {
-        layout.set_alignment(pango::ALIGN_LEFT);
+        layout.set_alignment(text_layout::ALIGN_LEFT);
     }
 }
 
@@ -774,11 +773,11 @@ pub fn start_align_overflow(layout: &Layout) {
     if width < 0 {
         return;
     }
-    let rtl = layout.context().base_dir() == pango::DIRECTION_RTL;
+    let rtl = layout.context().base_dir() == text_layout::DIRECTION_RTL;
     let start = if rtl {
-        pango::ALIGN_RIGHT
+        text_layout::ALIGN_RIGHT
     } else {
-        pango::ALIGN_LEFT
+        text_layout::ALIGN_LEFT
     };
     if layout.alignment() == start {
         return;
@@ -803,12 +802,12 @@ pub fn apply_nowrap_align_width(layout: &Layout, b: BoxRef<'_>) {
     if layout.width() >= 0 {
         return;
     }
-    if layout.alignment() == pango::ALIGN_LEFT {
+    if layout.alignment() == text_layout::ALIGN_LEFT {
         return;
     }
     let (pw, _) = layout.pixel_size();
     if f64::from(pw) <= b.content_width() {
-        layout.set_width((b.content_width() * pango::SCALE_F) as i32);
+        layout.set_width((b.content_width() * text_layout::SCALE_F) as i32);
     }
 }
 
@@ -823,7 +822,7 @@ fn inline_has_form_controls(b: BoxRef<'_>) -> bool {
 
 pub fn inline_y_offset_for_layout(b: BoxRef<'_>, layout: &Layout) -> f64 {
     let (_, ph) = layout.size();
-    let mut y_offset = (b.content_height() - f64::from(ph) / pango::SCALE_F) * 0.5;
+    let mut y_offset = (b.content_height() - f64::from(ph) / text_layout::SCALE_F) * 0.5;
     if inline_has_form_controls(b) {
         y_offset = 0.0;
     }

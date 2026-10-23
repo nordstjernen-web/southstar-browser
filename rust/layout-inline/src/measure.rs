@@ -1,4 +1,4 @@
-//! Southstar — measuring a laid-out ns-pango paragraph, with a per-thread cache keyed by the layout's settings, attributes, text and font.
+//! Southstar — measuring a laid-out southstar-text paragraph, with a per-thread cache keyed by the layout's settings, attributes, text and font.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::HashMap;
 
-use southstar_paint::ffi::pango::{self, FontDescRef, FontDescription, Layout, Rectangle};
+use southstar_paint::text_layout::{self, FontDescRef, FontDescription, Layout, Rectangle};
 
 const CACHE_MAX: usize = 32768;
 
@@ -20,7 +20,7 @@ pub(crate) struct Measure {
 impl Measure {
     pub fn pixel_logical(self) -> Rectangle {
         let mut r = self.logical;
-        pango::extents_to_pixels(&mut r);
+        text_layout::extents_to_pixels(&mut r);
         r
     }
 }

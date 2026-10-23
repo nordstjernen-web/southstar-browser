@@ -13,8 +13,5 @@ southstar-i18n = { path = "../i18n" }
 southstar-intl-core = { path = "../intl-core" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 
-[features]
-ns-pango = []
-
 [lints]
 workspace = true

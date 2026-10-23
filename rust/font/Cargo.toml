@@ -17,8 +17,6 @@ southstar-woff2 = { path = "../woff2", optional = true }
 [features]
 fontconfig = []
 freetype = []
-pangofc = []
-ns-pango = []
 woff2 = ["dep:southstar-woff2"]
 
 [lints]

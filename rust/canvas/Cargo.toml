@@ -21,7 +21,6 @@ southstar-numfmt = { path = "../numfmt" }
 southstar-texture = { path = "../texture" }
 
 [features]
-ns-pango = []
 webgpu = []
 
 [lints]

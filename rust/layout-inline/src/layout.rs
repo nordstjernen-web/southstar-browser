@@ -3,14 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::{BoxRef, InlineAtomic, Style, inline_kind as k};
-use southstar_paint::ffi::pango::{self, AttrList, Layout};
+use southstar_paint::text_layout::{self, AttrList, Layout};
 use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::attrs::{self, font_size};
 use crate::ffi;
 use crate::measure;
 
-const SCALE: f64 = pango::SCALE_F;
+const SCALE: f64 = text_layout::SCALE_F;
 
 pub(crate) fn atomic_at(b: BoxRef<'_>, i: usize) -> Option<&InlineAtomic> {
     b.inline_atomics()?.get(i)
@@ -114,16 +114,16 @@ pub(crate) fn measure_cacheable(b: BoxRef<'_>) -> bool {
 fn apply_text_align(layout: &Layout, s: Option<StyleRef<'_>>) {
     let ta = s.and_then(|s| s.get(PropId::TextAlign));
     let is = |kw: &core::ffi::CStr| ta.is_some_and(|v| v.is_keyword(kw));
-    let rtl = layout.context().base_dir() == pango::DIRECTION_RTL;
+    let rtl = layout.context().base_dir() == text_layout::DIRECTION_RTL;
     if is(c"center") {
-        layout.set_alignment(pango::ALIGN_CENTER);
+        layout.set_alignment(text_layout::ALIGN_CENTER);
     } else if is(c"right") || (is(c"end") && !rtl) || (is(c"start") && rtl) || (ta.is_none() && rtl)
     {
-        layout.set_alignment(pango::ALIGN_RIGHT);
+        layout.set_alignment(text_layout::ALIGN_RIGHT);
     } else if is(c"justify") {
         layout.set_justify(true);
     } else {
-        layout.set_alignment(pango::ALIGN_LEFT);
+        layout.set_alignment(text_layout::ALIGN_LEFT);
     }
 }
 
@@ -144,7 +144,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
     let layout = ffi::new_layout(ps);
     if ffi::text_orientation(ps) == 1 {
         layout.set_width(-1);
-        layout.set_alignment(pango::ALIGN_CENTER);
+        layout.set_alignment(text_layout::ALIGN_CENTER);
         layout.set_text(&ffi::vertical_stack_text(text));
         let (pw, ph) = layout.pixel_size();
         (f64::from(pw), f64::from(ph))
@@ -219,7 +219,7 @@ fn place_atomics(
     };
     let line_count = line_heights.len();
     layout.set_text(text);
-    if layout.width() < 0 && layout.alignment() != pango::ALIGN_LEFT {
+    if layout.width() < 0 && layout.alignment() != text_layout::ALIGN_LEFT {
         let (pw, _) = layout.pixel_size();
         if f64::from(pw) <= content_width {
             layout.set_width((content_width * SCALE) as i32);
@@ -328,14 +328,14 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
         layout.set_indent((ti * SCALE) as i32);
     }
     if ellip {
-        layout.set_ellipsize(pango::ELLIPSIZE_END);
+        layout.set_ellipsize(text_layout::ELLIPSIZE_END);
     }
     if let Some(lc) = style.and_then(|s| s.get(PropId::LineClamp))
         && let Some((v, _)) = lc.length()
         && v >= 1.0
     {
         layout.set_height(-(v as i32));
-        layout.set_ellipsize(pango::ELLIPSIZE_END);
+        layout.set_ellipsize(text_layout::ELLIPSIZE_END);
     }
     shaping_attrs(&layout, b, ps, text.to_bytes());
 

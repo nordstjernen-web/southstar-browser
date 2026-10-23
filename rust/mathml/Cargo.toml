@@ -12,8 +12,5 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-paint = { path = "../paint" }
 
-[features]
-ns-pango = []
-
 [lints]
 workspace = true
