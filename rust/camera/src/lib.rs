@@ -51,7 +51,7 @@ pub fn set_decision(origin: &[u8], allow: bool) {
 
 pub fn permission(url: Option<&[u8]>, origin: Option<Vec<u8>>) -> i32 {
     let origin = origin
-        .filter(|origin| !origin.is_empty())
+        .filter(|origin| !origin.is_empty() && origin.as_slice() != b"null")
         .unwrap_or_else(|| match url {
             Some(url) if !url.is_empty() => url.to_vec(),
             _ => b"this page".to_vec(),

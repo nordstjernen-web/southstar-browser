@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.1-dev:
 ======
+* Security: a camera permission given to a document with an opaque origin
+  (a sandboxed frame, a `data:` URL) no longer applies to every other such
+  document; the decision is remembered for that document's URL instead of
+  the shared origin `null`.
 * XML: the parser and the XHTML well-formedness check now agree on where a
   `<!DOCTYPE>` ends. The check stopped at the first `>` and the parser
   ignored quotes, so an internal subset with `>` or `]` inside a quoted
