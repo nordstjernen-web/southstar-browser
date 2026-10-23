@@ -232,6 +232,7 @@ c_enum!(WrapMode {
     Word = 0,
     Char = 1,
     WordChar = 2,
+    None = 3,
 });
 
 c_enum!(EllipsizeMode {

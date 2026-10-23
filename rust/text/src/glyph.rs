@@ -295,7 +295,7 @@ impl GlyphString {
         };
 
         let rtl = analysis.level & 1 != 0;
-        let info = &self.glyphs[glyph_pos as usize];
+        let info = self.glyphs.get(usize::try_from(glyph_pos).ok()?)?;
         let direction = if rtl {
             DIRECTION_RIGHT_TO_LEFT
         } else {

@@ -9,6 +9,7 @@ pub mod bidi;
 pub mod breaks;
 pub mod context;
 pub mod coverage;
+mod ellipsize;
 pub mod emoji;
 #[allow(unsafe_code)]
 mod ffi;
@@ -23,6 +24,7 @@ pub mod item;
 pub mod item_cache;
 pub mod itemize;
 pub mod language;
+pub mod layout;
 pub mod matrix;
 pub mod metrics;
 pub mod script;
