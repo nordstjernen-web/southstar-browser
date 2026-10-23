@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.1-dev:
+Southstar Browser 1.0.1:
 ======
 * Text layout is now Rust: `rust/text` (`southstar-text`) is a port of
   web-text-lib, the Pango fork the browser used, covering attributes, line

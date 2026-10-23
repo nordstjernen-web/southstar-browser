@@ -31,7 +31,7 @@ Supported platforms:
 * macOS
 * FreeBSD and NetBSD
 
-**Version:** 1.0.0.
+**Version:** 1.0.1.
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 
