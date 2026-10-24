@@ -136,12 +136,12 @@ const MAX_CACHED_PLANS: usize = 64;
 pub struct ShaperFace {
     font: harfrust::Font,
     default_instance: Option<harfrust::Font>,
-    x_scale: i32,
-    y_scale: i32,
+    pub(crate) x_scale: i32,
+    pub(crate) y_scale: i32,
     point_size: f32,
     slant_xy: f32,
     x_strength: i32,
-    y_strength: i32,
+    pub(crate) y_strength: i32,
     num_glyphs: u32,
     plans: Mutex<Vec<Arc<ShapePlan>>>,
 }

@@ -767,3 +767,155 @@ fn normalizes_variations_like_harfbuzz() {
         assert_eq!(ours, theirs, "{description}");
     }
 }
+
+fn table_tag(name: &[u8; 4]) -> u32 {
+    u32::from_be_bytes(*name)
+}
+
+#[test]
+fn answers_table_queries_like_harfbuzz() {
+    let map = FontMap::new();
+    let context = map.create_context();
+    let metrics: Vec<u32> = [
+        b"hasc", b"hdsc", b"hlgp", b"xhgt", b"cpht", b"sbxs", b"sbys", b"sbxo", b"sbyo", b"spxs",
+        b"spys", b"spxo", b"spyo", b"strs", b"stro", b"unds", b"undo", b"hcla", b"hcld", b"zzzz",
+    ]
+    .into_iter()
+    .map(table_tag)
+    .collect();
+    let probes: [(&[u8; 4], Option<&str>, &[&[u8; 4]]); 12] = [
+        (b"Latn", None, &[b"smcp"]),
+        (b"Latn", Some("tr"), &[b"smcp", b"c2sc"]),
+        (b"Latn", Some("en"), &[b"liga"]),
+        (b"Latn", None, &[]),
+        (b"Arab", Some("ar"), &[b"init", b"medi"]),
+        (b"Arab", Some("fa"), &[b"smcp"]),
+        (b"Deva", Some("hi"), &[b"half"]),
+        (b"Hani", Some("ja"), &[b"vert"]),
+        (b"Hani", Some("zh-tw"), &[b"pcap"]),
+        (b"Grek", None, &[b"smcp", b"c2sc"]),
+        (b"Cyrl", Some("sr"), &[b"locl"]),
+        (b"Zyyy", None, &[b"unic"]),
+    ];
+    let mut faces = Vec::new();
+    for family in map.list_families() {
+        for face in family.list_faces() {
+            faces.push(face.describe().to_string());
+        }
+    }
+    faces.extend(
+        [
+            "Bahnschrift 12 @wght=300,wdth=80",
+            "Segoe UI Variable Display 15 @wght=650",
+            "Arial Bold Italic 9",
+            "Gabriola 31",
+            "Sitka Small 14 @opsz=11",
+        ]
+        .map(String::from),
+    );
+    let (mut fonts, mut glyphs, mut carets) = (0, 0, 0);
+    let mut mismatches = Vec::new();
+    for base in faces {
+        for size in [" 13", " 7.5", " 41"] {
+            let description = if base.chars().any(|c| c.is_ascii_digit()) {
+                base.clone()
+            } else {
+                format!("{base}{size}")
+            };
+            let Some(font) = load(&context, &description) else {
+                continue;
+            };
+            let Some(face) = shaper_face(&font) else {
+                continue;
+            };
+            let hb_font = font.hb_font();
+            fonts += 1;
+            let mut check = |what: String, ours: String, theirs: String| {
+                if ours != theirs && mismatches.len() < 400 {
+                    mismatches.push(format!(
+                        "{description}: {what}: ours {ours} harfbuzz {theirs}"
+                    ));
+                }
+            };
+            for &metric in &metrics {
+                check(
+                    format!("metric {:?}", metric.to_be_bytes().map(char::from)),
+                    format!("{:?}", face.ot_metric(metric)),
+                    format!("{:?}", hb_font.ot_metrics_position(metric)),
+                );
+            }
+            let (ours, theirs) = (face.h_extents(), hb_font.h_extents());
+            check(
+                "h extents".into(),
+                format!("{} {} {}", ours.ascender, ours.descender, ours.line_gap),
+                format!(
+                    "{} {} {}",
+                    theirs.ascender, theirs.descender, theirs.line_gap
+                ),
+            );
+            let (ours, theirs) = (face.extents_ltr(), hb_font.extents_ltr());
+            check(
+                "ltr extents".into(),
+                format!("{} {} {}", ours.ascender, ours.descender, ours.line_gap),
+                format!(
+                    "{} {} {}",
+                    theirs.ascender, theirs.descender, theirs.line_gap
+                ),
+            );
+            check(
+                "y scale".into(),
+                face.y_scale.to_string(),
+                hb_font.y_scale().to_string(),
+            );
+            for (script, language, features) in &probes {
+                let wanted: Vec<u32> = features.iter().map(|f| table_tag(f)).collect();
+                check(
+                    format!(
+                        "gsub {:?} {language:?} {:?}",
+                        script.map(char::from),
+                        wanted
+                    ),
+                    face.gsub_features_supported(table_tag(script), *language, &wanted)
+                        .to_string(),
+                    hb_font
+                        .gsub_features_supported(table_tag(script), *language, &wanted)
+                        .to_string(),
+                );
+            }
+            if size != " 13" {
+                continue;
+            }
+            for glyph in 0..face.num_glyphs() {
+                glyphs += 1;
+                check(
+                    format!("class of glyph {glyph}"),
+                    face.glyph_class(glyph).to_string(),
+                    hb_font.glyph_class(glyph).to_string(),
+                );
+                for direction in [4, 5, 6] {
+                    for start in 0..3 {
+                        let ours = face.ligature_caret(direction & !1 == 4, glyph, start);
+                        let theirs = hb_font.ligature_caret(direction, glyph, start);
+                        if theirs.0 != 0 {
+                            carets += 1;
+                        }
+                        check(
+                            format!("caret of glyph {glyph} dir {direction} from {start}"),
+                            format!("{ours:?}"),
+                            format!("{theirs:?}"),
+                        );
+                    }
+                }
+            }
+            if base.chars().any(|c| c.is_ascii_digit()) {
+                break;
+            }
+        }
+    }
+    eprintln!("compared {fonts} fonts, {glyphs} glyphs, {carets} caret queries");
+    for line in &mismatches {
+        eprintln!("{line}");
+    }
+    assert!(fonts > 0 || load(&context, "Sans 12").is_none());
+    assert!(mismatches.is_empty(), "{} mismatches", mismatches.len());
+}

@@ -133,6 +133,8 @@ pub(crate) struct FontInner {
     face_data: OnceLock<Option<Arc<FaceData>>>,
     scaled_font: OnceLock<Option<ScaledFont>>,
     hb_font: OnceLock<HbFont>,
+    #[cfg(feature = "rust-shaper")]
+    rust_face: OnceLock<Option<Arc<crate::rust_shaper::ShaperFace>>>,
     hex_box_info: OnceLock<Option<HexBoxInfo>>,
     hex_box_scaled_font: Mutex<Option<ScaledFont>>,
     hex_box_glyphs: Mutex<HexBoxGlyphs>,
@@ -385,6 +387,8 @@ impl Font {
             face_data: OnceLock::new(),
             scaled_font: OnceLock::new(),
             hb_font: OnceLock::new(),
+            #[cfg(feature = "rust-shaper")]
+            rust_face: OnceLock::new(),
             hex_box_info: OnceLock::new(),
             hex_box_scaled_font: Mutex::new(None),
             hex_box_glyphs: Mutex::new(HexBoxGlyphs::default()),
@@ -540,6 +544,11 @@ impl Font {
         HbFace::from_file(&file, index)
     }
 
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn rust_face_slot(&self) -> &OnceLock<Option<Arc<crate::rust_shaper::ShaperFace>>> {
+        &self.0.rust_face
+    }
+
     pub fn hb_font(&self) -> &HbFont {
         self.0.hb_font.get_or_init(|| self.create_hb_font())
     }
@@ -646,9 +655,7 @@ impl Font {
     }
 
     pub fn get_glyph(&self, wc: u32) -> Glyph {
-        let mut glyph = get_unknown_glyph(wc);
-        self.hb_font().nominal_glyph_into(wc, &mut glyph);
-        glyph
+        self.nominal_glyph(wc).unwrap_or(0)
     }
 
     pub fn scaled_font(&self) -> Option<&ScaledFont> {
@@ -680,8 +687,7 @@ impl Font {
     }
 
     fn face_metrics(&self) -> FontMetrics {
-        let hb_font = self.hb_font();
-        let extents = hb_font.extents_ltr();
+        let extents = self.extents_ltr();
         let mut metrics = FontMetrics::new();
         let transform = self
             .pattern()
@@ -701,7 +707,7 @@ impl Font {
                 metrics.height = extents.ascender - extents.descender + extents.line_gap;
             }
         }
-        let position = |tag| hb_font.ot_metrics_position(tag).filter(|&p| p != 0);
+        let position = |tag| self.ot_metric(tag).filter(|&p| p != 0);
         metrics.underline_thickness = position(METRICS_UNDERLINE_SIZE).unwrap_or(SCALE);
         metrics.underline_position = position(METRICS_UNDERLINE_OFFSET).unwrap_or(-SCALE);
         metrics.strikethrough_thickness = position(METRICS_STRIKEOUT_SIZE).unwrap_or(SCALE);
@@ -828,7 +834,7 @@ impl Font {
     }
 
     fn compute_font_extents(&self) -> Rectangle {
-        let extents = self.hb_font().h_extents();
+        let extents = self.h_extents();
         let is_hinted = self.0.is_hinted;
         let mut font_extents = Rectangle {
             x: 0,
@@ -1373,9 +1379,8 @@ impl crate::ffi::cairo::UserFontHandler for HexBoxRenderer {
 
     fn unicode_to_glyph(&self, unicode: u64) -> Option<u64> {
         let font = self.font.upgrade().map(Font)?;
-        let mut glyph: u32 = 0;
         let codepoint = unicode as u32;
-        if font.hb_font().nominal_glyph_into(codepoint, &mut glyph) {
+        if let Some(glyph) = font.nominal_glyph(codepoint) {
             return Some(u64::from(glyph));
         }
         if unicode == 0x20 {

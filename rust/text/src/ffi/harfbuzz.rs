@@ -58,6 +58,18 @@ pub(crate) struct FontExtents {
     reserved: [i32; 9],
 }
 
+impl FontExtents {
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn new(ascender: i32, descender: i32, line_gap: i32) -> FontExtents {
+        FontExtents {
+            ascender,
+            descender,
+            line_gap,
+            reserved: [0; 9],
+        }
+    }
+}
+
 const DIRECTION_LTR: c_int = 4;
 
 pub(crate) const fn tag(bytes: &[u8; 4]) -> u32 {
