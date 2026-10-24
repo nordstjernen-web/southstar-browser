@@ -48,7 +48,6 @@ BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(uchardet)
 BuildRequires:  pkgconfig(fontconfig)
 BuildRequires:  pkgconfig(harfbuzz)
-BuildRequires:  pkgconfig(fribidi)
 BuildRequires:  pkgconfig(freetype2)
 BuildRequires:  pkgconfig(cairo-ft)
 Requires:       hicolor-icon-theme

@@ -153,7 +153,7 @@ elements are defined in terms of [§15 Rendering](#15-rendering) UA CSS.
 | Dedicated inline handling | `q` `sub` `sup` `br` `wbr` | ✅ explicit in `src/layout.c` |
 | Ruby annotations | `ruby rt rp` | 🟡 parsed; rendered inline without ruby positioning |
 | `data` / `time` | | ✅ reflected `data.value` and `time.dateTime` |
-| `bdi` / `bdo` | | ✅ both wrap their content in Unicode bidi formatting controls at layout time (`src/layout.c`), so fribidi/Pango lay them out per UAX#9. `bdo` (UA rule `unicode-bidi: bidi-override`) emits the override pair (LRO/RLO … PDF) keyed on the resolved direction, forcing the run's direction. `bdi` (UA rule `unicode-bidi: isolate`, defaulting to `dir=auto`) emits an isolate (LRI/RLI, or **FSI** for the auto/plaintext case … PDI), so its content's directionality cannot reorder the surrounding text and vice-versa. The general `unicode-bidi` values `isolate`, `isolate-override`, and `plaintext` are honoured the same way |
+| `bdi` / `bdo` | | ✅ both wrap their content in Unicode bidi formatting controls at layout time (`src/layout.c`), so the text layout (`rust/text` over `rust/bidi`) lays them out per UAX#9. `bdo` (UA rule `unicode-bidi: bidi-override`) emits the override pair (LRO/RLO … PDF) keyed on the resolved direction, forcing the run's direction. `bdi` (UA rule `unicode-bidi: isolate`, defaulting to `dir=auto`) emits an isolate (LRI/RLI, or **FSI** for the auto/plaintext case … PDI), so its content's directionality cannot reorder the surrounding text and vice-versa. The general `unicode-bidi` values `isolate`, `isolate-override`, and `plaintext` are honoured the same way |
 
 The UA stylesheet defines the heading scale, list markers, default
 margins/padding, form-control baselines, and sets non-rendered
@@ -665,7 +665,7 @@ CSS support (abridged):
   formatting controls around the element's content (override LRO/RLO…PDF
   for `bidi-override`; isolates LRI/RLI/FSI…PDI for `isolate`/`plaintext`,
   combined for `isolate-override`; UA rules give `bdo` override and `bdi`
-  isolate) so fribidi performs real UAX#9 isolation/override. The residual
+  isolate) so `rust/bidi` performs real UAX#9 isolation/override. The residual
   gap is exposing the computed *used* direction of `dir=auto` elements to
   `:dir()`.
 - 🟡 Writing modes: `writing-mode` and `text-orientation` are parsed and inherited

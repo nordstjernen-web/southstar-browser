@@ -2,56 +2,9 @@
 //! Copyright 2002, 2008 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
-use crate::ffi::fribidi;
+use southstar_bidi::{BidiClass, ParagraphDirection, bracket, class, resolve_paragraph};
+
 use crate::types::Direction;
-
-const MASK_RTL: u32 = 0x0000_0001;
-const MASK_ARABIC: u32 = 0x0000_0002;
-const MASK_STRONG: u32 = 0x0000_0010;
-const MASK_WEAK: u32 = 0x0000_0020;
-const MASK_NEUTRAL: u32 = 0x0000_0040;
-const MASK_LETTER: u32 = 0x0000_0100;
-const MASK_NUMBER: u32 = 0x0000_0200;
-const MASK_EXPLICIT: u32 = 0x0000_1000;
-const MASK_ISOLATE: u32 = 0x0000_8000;
-
-const TYPE_ON: u32 = MASK_NEUTRAL;
-const TYPE_RLE: u32 = MASK_STRONG | MASK_EXPLICIT | MASK_RTL;
-
-const PAR_LTR: u32 = MASK_STRONG | MASK_LETTER;
-const PAR_RTL: u32 = MASK_STRONG | MASK_LETTER | MASK_RTL;
-const PAR_WLTR: u32 = MASK_WEAK;
-const PAR_WRTL: u32 = MASK_WEAK | MASK_RTL;
-
-const NO_BRACKET: u32 = 0;
-
-fn is_rtl(bidi_type: u32) -> bool {
-    bidi_type & MASK_RTL != 0
-}
-
-fn is_strong(bidi_type: u32) -> bool {
-    bidi_type & MASK_STRONG != 0
-}
-
-fn is_weak(bidi_type: u32) -> bool {
-    bidi_type & MASK_WEAK != 0
-}
-
-fn is_letter(bidi_type: u32) -> bool {
-    bidi_type & MASK_LETTER != 0
-}
-
-fn is_number(bidi_type: u32) -> bool {
-    bidi_type & MASK_NUMBER != 0
-}
-
-fn is_arabic(bidi_type: u32) -> bool {
-    bidi_type & MASK_ARABIC != 0
-}
-
-fn is_isolate(bidi_type: u32) -> bool {
-    bidi_type & MASK_ISOLATE != 0
-}
 
 pub fn log2vis_fill_embedding_levels(
     text: &str,
@@ -59,58 +12,65 @@ pub fn log2vis_fill_embedding_levels(
     base_dir: &mut Direction,
 ) {
     let n_chars = embedding_levels.len();
-    let mut fribidi_base_dir = match *base_dir {
-        Direction::Ltr | Direction::TtbRtl => PAR_LTR,
-        Direction::Rtl | Direction::TtbLtr => PAR_RTL,
-        Direction::WeakRtl => PAR_WRTL,
-        Direction::WeakLtr | Direction::Neutral => PAR_WLTR,
+    let direction = match *base_dir {
+        Direction::Ltr | Direction::TtbRtl => ParagraphDirection::Ltr,
+        Direction::Rtl | Direction::TtbLtr => ParagraphDirection::Rtl,
+        Direction::WeakRtl => ParagraphDirection::WeakRtl,
+        Direction::WeakLtr | Direction::Neutral => ParagraphDirection::WeakLtr,
     };
 
-    let mut bidi_types = vec![0u32; n_chars];
-    let mut bracket_types = vec![NO_BRACKET; n_chars];
-    let mut ored_types = 0u32;
-    let mut anded_strongs = TYPE_RLE;
+    let mut classes = Vec::with_capacity(n_chars);
+    let mut brackets = Vec::with_capacity(n_chars);
+    let mut any_isolate = false;
+    let mut any_rtl = false;
+    let mut any_number = false;
+    let mut any_letter = false;
+    let mut all_strong_rtl = true;
 
-    for (i, character) in text.chars().take(n_chars).enumerate() {
+    for character in text.chars().take(n_chars) {
         let ch = u32::from(character);
-        let char_type = fribidi::bidi_type(ch);
-        bidi_types[i] = char_type;
-        ored_types |= char_type;
-        if is_strong(char_type) {
-            anded_strongs &= char_type;
-        }
-        if char_type == TYPE_ON {
-            bracket_types[i] = fribidi::bracket(ch);
+        let char_class = class(ch);
+        classes.push(char_class);
+        brackets.push(if char_class == BidiClass::ON {
+            bracket(ch)
+        } else {
+            None
+        });
+        any_isolate |= char_class.is_isolate_control();
+        any_rtl |= char_class.is_rtl()
+            || matches!(
+                char_class,
+                BidiClass::AN | BidiClass::RLE | BidiClass::RLO | BidiClass::RLI
+            );
+        any_number |= char_class.is_number();
+        any_letter |= char_class.is_strong();
+        if char_class.is_strong() || char_class.is_embedding_or_override() {
+            all_strong_rtl &=
+                char_class.is_rtl() || matches!(char_class, BidiClass::RLE | BidiClass::RLO);
         }
     }
+    classes.resize(n_chars, BidiClass::ON);
+    brackets.resize(n_chars, None);
 
-    if !is_isolate(ored_types)
-        && !is_rtl(ored_types)
-        && !is_arabic(ored_types)
-        && (!is_rtl(fribidi_base_dir) || (is_weak(fribidi_base_dir) && is_letter(ored_types)))
-    {
-        fribidi_base_dir = PAR_LTR;
+    let weak = matches!(
+        direction,
+        ParagraphDirection::WeakLtr | ParagraphDirection::WeakRtl
+    );
+    let rtl = matches!(
+        direction,
+        ParagraphDirection::Rtl | ParagraphDirection::WeakRtl
+    );
+    let base_level = if !any_isolate && !any_rtl && (!rtl || (weak && any_letter)) {
         embedding_levels.fill(0);
-    } else if !is_isolate(ored_types)
-        && !is_number(ored_types)
-        && is_rtl(anded_strongs)
-        && (is_rtl(fribidi_base_dir) || (is_weak(fribidi_base_dir) && is_letter(ored_types)))
-    {
-        fribidi_base_dir = PAR_RTL;
+        0
+    } else if !any_isolate && !any_number && all_strong_rtl && (rtl || (weak && any_letter)) {
         embedding_levels.fill(1);
+        1
     } else {
-        let max_level = fribidi::par_embedding_levels(
-            &bidi_types,
-            &bracket_types,
-            &mut fribidi_base_dir,
-            embedding_levels,
-        );
-        if max_level == 0 {
-            embedding_levels.fill(0);
-        }
-    }
+        resolve_paragraph(&classes, &brackets, direction, embedding_levels).base_level
+    };
 
-    *base_dir = if fribidi_base_dir == PAR_LTR {
+    *base_dir = if base_level == 0 {
         Direction::Ltr
     } else {
         Direction::Rtl
@@ -118,10 +78,10 @@ pub fn log2vis_fill_embedding_levels(
 }
 
 pub fn unichar_direction(ch: u32) -> Direction {
-    let char_type = fribidi::bidi_type(ch);
-    if !is_strong(char_type) {
+    let char_class = class(ch);
+    if !char_class.is_strong() && !char_class.is_embedding_or_override() {
         Direction::Neutral
-    } else if is_rtl(char_type) {
+    } else if char_class.is_rtl() || matches!(char_class, BidiClass::RLE | BidiClass::RLO) {
         Direction::Rtl
     } else {
         Direction::Ltr

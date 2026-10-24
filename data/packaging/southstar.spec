@@ -39,7 +39,6 @@ BuildRequires:  pkgconfig(libswresample) >= 4
 BuildRequires:  pkgconfig(libswscale) >= 7
 BuildRequires:  pkgconfig(fontconfig)
 BuildRequires:  pkgconfig(harfbuzz)
-BuildRequires:  pkgconfig(fribidi)
 BuildRequires:  pkgconfig(freetype2)
 BuildRequires:  pkgconfig(cairo-ft)
 

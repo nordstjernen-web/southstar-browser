@@ -30,7 +30,6 @@ makedepends="
 	poppler-dev
 	fontconfig-dev
 	harfbuzz-dev
-	fribidi-dev
 	freetype-dev
 	libthai-dev
 	sdl2-dev
