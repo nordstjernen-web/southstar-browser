@@ -1,4 +1,4 @@
-//! Southstar unicode — case mapping: simple per-character mappings and the full mappings of SpecialCasing.txt for strings.
+//! Southstar unicode — case mapping: simple per-character mappings, the full mappings of SpecialCasing.txt for strings and case folding.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -144,6 +144,25 @@ pub fn lower_string(text: &str) -> String {
                 }
             }
             _ => out.push(character),
+        }
+    }
+    out
+}
+
+pub fn fold_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for character in text.chars() {
+        let ch = u32::from(character);
+        match tables::FOLD_KEYS.binary_search(&ch) {
+            Ok(index) => {
+                let packed = tables::FOLD_VALUES[index];
+                let start = (packed >> 8) as usize;
+                let len = (packed & 0xff) as usize;
+                tables::FOLD_POOL[start..start + len]
+                    .iter()
+                    .for_each(|&c| push(&mut out, c));
+            }
+            Err(_) => push(&mut out, to_lower(ch)),
         }
     }
     out

@@ -17,8 +17,6 @@ unsafe extern "C" {
     fn g_utf8_get_char(p: *const c_char) -> u32;
     fn g_utf8_validate(s: *const c_char, max_len: isize, end: *mut *const c_char) -> GBoolean;
     fn g_utf8_offset_to_pointer(s: *const c_char, offset: c_long) -> *const c_char;
-    fn g_unichar_iscntrl(c: u32) -> GBoolean;
-    fn g_unichar_isprint(c: u32) -> GBoolean;
     fn strtol(s: *const c_char, end: *mut *mut c_char, base: c_int) -> c_long;
     fn atoi(s: *const c_char) -> c_int;
 }
@@ -391,11 +389,11 @@ pub fn utf8_offset(s: &CStr, chars: c_long) -> usize {
 }
 
 pub fn unichar_iscntrl(c: u32) -> bool {
-    unsafe { g_unichar_iscntrl(c) != 0 }
+    southstar_unicode::is_control(c)
 }
 
 pub fn unichar_isprint(c: u32) -> bool {
-    unsafe { g_unichar_isprint(c) != 0 }
+    southstar_unicode::is_print(c)
 }
 
 pub fn parse_long(s: &CStr) -> Option<c_long> {

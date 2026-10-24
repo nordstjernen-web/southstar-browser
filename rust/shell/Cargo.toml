@@ -12,6 +12,7 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
+southstar-unicode = { path = "../unicode" }
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }

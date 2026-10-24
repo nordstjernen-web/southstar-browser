@@ -44,7 +44,6 @@ unsafe extern "C" {
     fn g_async_queue_push(queue: *mut c_void, data: *mut c_void);
     fn g_malloc0(n_bytes: usize) -> *mut c_void;
     fn g_slist_free(list: *mut GSList);
-    fn g_unichar_iscntrl(c: u32) -> GBoolean;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -592,7 +591,7 @@ unsafe extern "C" fn on_drag_end(_gesture: *mut GtkGesture, _ox: f64, _oy: f64, 
 }
 
 fn is_cntrl(c: u32) -> bool {
-    unsafe { g_unichar_iscntrl(c) != 0 }
+    southstar_unicode::is_control(c)
 }
 
 unsafe extern "C" fn on_key(

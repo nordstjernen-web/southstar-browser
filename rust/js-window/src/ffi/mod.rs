@@ -213,9 +213,7 @@ pub(crate) struct UrlOrigin {
     pub port: Vec<u8>,
 }
 
-unsafe extern "C" {
-    fn g_utf8_casefold(text: *const c_char, len: isize) -> *mut c_char;
-}
+unsafe extern "C" {}
 
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(bytes).unwrap_or_default()
@@ -404,8 +402,7 @@ pub(crate) fn ce_main_document(js: Js) -> Option<Node<'static>> {
 
 pub(crate) fn casefold(text: &[u8]) -> Vec<u8> {
     let text = c_string(text);
-    let folded = unsafe { g_utf8_casefold(text.as_ptr(), -1) };
-    unsafe { taken(folded) }.unwrap_or_default()
+    southstar_unicode::fold_string(&text.to_string_lossy()).into_bytes()
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {

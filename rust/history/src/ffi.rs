@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 
 #[repr(C)]
 struct GDateTime {
@@ -29,7 +29,6 @@ unsafe extern "C" {
     fn g_markup_escape_text(text: *const c_char, length: isize) -> *mut c_char;
     fn g_utf8_make_valid(text: *const c_char, length: isize) -> *mut c_char;
     fn g_utf8_get_char_validated(p: *const c_char, max_len: isize) -> u32;
-    fn g_unichar_isalnum(c: u32) -> GBoolean;
     fn g_unichar_to_utf8(c: u32, outbuf: *mut c_char) -> c_int;
     fn g_uri_parse(uri_string: *const c_char, flags: c_int, error: *mut *mut c_void) -> *mut GUri;
     fn g_uri_get_host(uri: *mut GUri) -> *const c_char;
@@ -105,7 +104,7 @@ pub(crate) fn first_char(text: &[u8]) -> Option<u32> {
 }
 
 pub(crate) fn unichar_isalnum(c: u32) -> bool {
-    unsafe { g_unichar_isalnum(c) != glib::FALSE }
+    southstar_unicode::is_alnum(c)
 }
 
 pub(crate) fn unichar_to_utf8(c: u32) -> Vec<u8> {

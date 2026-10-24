@@ -3,8 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use crate::{
-    Category, category, combining_class, decompose, is_space, is_wide, is_zero_width, lower_string,
-    script, script_tag, to_lower, to_title, to_upper, upper_string,
+    Category, category, combining_class, decompose, fold_string, is_alpha, is_control, is_print,
+    is_space, is_wide, is_zero_width, lower_string, script, script_tag, to_lower, to_title,
+    to_upper, upper_string,
 };
 
 #[test]
@@ -56,4 +57,19 @@ fn case_mappings() {
     assert_eq!(upper_string("straße"), "STRASSE");
     assert_eq!(lower_string("ΣΑΣ"), "σας");
     assert_eq!(lower_string("\u{130}"), "i\u{307}");
+    assert_eq!(fold_string("Straße µ ﬁ ΣΑΣ"), "strasse μ fi σασ");
+    assert_eq!(
+        upper_string("\u{3ac}\u{345}\u{301}"),
+        "\u{386}\u{301}\u{399}"
+    );
+}
+
+#[test]
+fn classes_of_characters() {
+    assert!(is_alpha(u32::from('é')));
+    assert!(!is_alpha(u32::from('1')));
+    assert!(is_control(0x07));
+    assert!(!is_print(0x200b));
+    assert!(is_print(u32::from(' ')));
+    assert!(!is_print(0x0378));
 }

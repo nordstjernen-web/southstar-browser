@@ -21,7 +21,6 @@ pub use southstar_svg::SvgSize;
 
 unsafe extern "C" {
     fn g_utf8_get_char(p: *const c_char) -> u32;
-    fn g_unichar_isalnum(c: u32) -> GBoolean;
 }
 
 pub fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
@@ -172,7 +171,7 @@ pub fn utf8_get_char(s: &[u8], at: usize) -> u32 {
 }
 
 pub fn unichar_isalnum(c: u32) -> bool {
-    unsafe { g_unichar_isalnum(c) != 0 }
+    southstar_unicode::is_alnum(c)
 }
 
 pub struct RawLink {

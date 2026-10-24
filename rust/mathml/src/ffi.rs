@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_int, c_void};
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
 use southstar_paint::text_layout::{self, FontDescription, Layout};
 use southstar_text::font::CairoContext;
 
@@ -19,9 +18,6 @@ unsafe extern "C" {
     fn cairo_stroke(cr: *mut c_void);
     fn cairo_set_line_width(cr: *mut c_void, width: f64);
     fn cairo_set_source_rgba(cr: *mut c_void, red: f64, green: f64, blue: f64, alpha: f64);
-    fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-    fn g_unichar_isalpha(c: u32) -> GBoolean;
 }
 
 pub struct Canvas(*mut c_void);
@@ -93,10 +89,12 @@ impl Token {
 }
 
 pub fn is_single_letter(text: &CStr) -> bool {
-    unsafe {
-        g_utf8_strlen(text.as_ptr(), -1) == 1
-            && g_unichar_isalpha(g_utf8_get_char(text.as_ptr())) != 0
-    }
+    let text = text.to_string_lossy();
+    let mut chars = text.chars();
+    matches!(
+        (chars.next(), chars.next()),
+        (Some(letter), None) if southstar_unicode::is_alpha(u32::from(letter))
+    )
 }
 
 #[unsafe(no_mangle)]

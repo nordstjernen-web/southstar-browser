@@ -128,7 +128,7 @@ Verification:
   ignores embeddings after a mid-text paragraph separator, and its tables
   stop at Unicode 16. Characters removed by X9 take the level of the
   character before them, as FriBiDi does, so itemization is unchanged.
-- **Rendering.** The 57 render-test fixtures, a bidi stress page and nine
+- **Rendering.** The 53 render-test fixtures, a bidi stress page and nine
   Hebrew, Arabic, Persian, Urdu and English Wikipedia articles render
   pixel-identically with FriBiDi and with `rust/bidi`, apart from content
   that also differs between two runs of the same binary.
@@ -152,8 +152,11 @@ used those languages. Moving to Unicode 18 changes the line break class of
 soft hyphen (BA to HH) and of figure and en dashes (HH to BA), so it should
 land together with the UAX #14 rules of that version.
 
-Text-related GLib calls remain in other crates (`text-transform` in layout,
-editing, MathML) and can move to `rust/unicode` the same way.
+The other crates that called GLib's Unicode functions (`text-transform` in
+layout and `innerText`, case folding for `<select>` and `window.find()`,
+`:dir()`, MathML, history search and the shell's input filter) use
+`rust/unicode` too, which added CaseFolding.txt and the alphabetic, control
+and printable tests, each checked against GLib over every code point.
 
 ## Decision
 

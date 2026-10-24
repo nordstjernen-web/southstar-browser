@@ -10,7 +10,7 @@ mod tables;
 #[cfg(test)]
 mod tests;
 
-pub use case::{lower_string, to_lower, to_title, to_upper, upper_string};
+pub use case::{fold_string, lower_string, to_lower, to_title, to_upper, upper_string};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -176,6 +176,21 @@ pub fn is_mark(ch: u32) -> bool {
 
 pub fn is_lower(ch: u32) -> bool {
     category(ch) == Category::LowercaseLetter
+}
+
+pub fn is_alpha(ch: u32) -> bool {
+    category(ch).is_letter()
+}
+
+pub fn is_control(ch: u32) -> bool {
+    category(ch) == Category::Control
+}
+
+pub fn is_print(ch: u32) -> bool {
+    !matches!(
+        category(ch),
+        Category::Control | Category::Format | Category::Unassigned | Category::Surrogate
+    )
 }
 
 pub fn is_alnum(ch: u32) -> bool {

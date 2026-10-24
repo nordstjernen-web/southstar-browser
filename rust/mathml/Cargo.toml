@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-unicode = { path = "../unicode" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-paint = { path = "../paint" }
