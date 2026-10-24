@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* The MSIX package carries the Partner Center identity exactly: publisher
+  display name Nordstjernen and the reserved app name Southstar Web
+  Browser, so `scripts/pack-msix.sh` builds a Store-submittable package
+  without overrides.
 
 Southstar Browser 1.0.1:
 ======
