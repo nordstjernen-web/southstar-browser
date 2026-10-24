@@ -44,7 +44,7 @@ jobs:
             gcc g++ pkg-config \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
-            libharfbuzz-dev libfribidi-dev libfontconfig-dev libfreetype-dev libthai-dev \
+            libharfbuzz-dev libfontconfig-dev libfreetype-dev libthai-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 
@@ -76,6 +76,14 @@ jobs:
             baseline=(--baseline "$BASE_SHA")
           fi
           python3 scripts/unsafe-budget.py --clippy "${baseline[@]}" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Fetch the Unicode bidi conformance tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/ucd"
+          for f in BidiTest.txt BidiCharacterTest.txt; do
+            curl -sSfL --retry 3 -o "$RUNNER_TEMP/ucd/$f" "https://www.unicode.org/Public/18.0.0/ucd/$f"
+          done
+          echo "SOUTHSTAR_UCD_DIR=$RUNNER_TEMP/ucd" >> "$GITHUB_ENV"
 
       - name: cargo test
         run: ./scripts/rust-tests.sh
@@ -130,7 +138,7 @@ jobs:
             ccache gcc g++ make cmake pkg-config meson ninja-build \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
-            libharfbuzz-dev libfribidi-dev libfontconfig-dev libfreetype-dev libthai-dev \
+            libharfbuzz-dev libfontconfig-dev libfreetype-dev libthai-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 

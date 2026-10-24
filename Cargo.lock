@@ -1767,6 +1767,10 @@ name = "southstar-av"
 version = "1.0.2-dev"
 
 [[package]]
+name = "southstar-bidi"
+version = "1.0.2-dev"
+
+[[package]]
 name = "southstar-bookmarks"
 version = "1.0.2-dev"
 dependencies = [
@@ -3608,6 +3612,7 @@ version = "1.0.2-dev"
 dependencies = [
  "harfrust",
  "read-fonts",
+ "southstar-bidi",
 ]
 
 [[package]]

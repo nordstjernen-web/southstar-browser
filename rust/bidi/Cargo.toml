@@ -1,0 +1,11 @@
+[package]
+name = "southstar-bidi"
+description = "The Unicode Bidirectional Algorithm (UAX #9): bidi classes, paired brackets, mirrored glyphs and a paragraph's embedding levels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

@@ -31,7 +31,6 @@ Build-Depends:
  libsdl2-dev,
  libenchant-2-dev,
  libharfbuzz-dev,
- libfribidi-dev,
  libthai-dev,
  libfontconfig-dev,
  libfreetype-dev,

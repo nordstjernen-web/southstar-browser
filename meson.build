@@ -130,7 +130,6 @@ ns_dependency_floors = [
   ['gio-2.0', '>=2.80'],
   ['cairo', '>=1.18'],
   ['harfbuzz', '>=8.3'],
-  ['fribidi', '>=1.0.6'],
   ['fontconfig', '>=2.15'],
 ]
 if gtk_feature.enabled()
@@ -157,11 +156,10 @@ gio        = dependency('gio-2.0')
 cairo      = dependency('cairo')
 
 # Text is laid out by the in-tree Rust crate rust/text (southstar-text), which
-# shapes with HarfBuzz, resolves bidi with FriBiDi, finds fonts with fontconfig
-# and draws through cairo's FreeType backend. libthai, when present, adds
+# shapes with HarfBuzz, resolves bidi with the in-tree rust/bidi, finds fonts
+# with fontconfig and draws through cairo's FreeType backend. libthai, when present, adds
 # dictionary-based Thai word breaking.
 harfbuzz   = dependency('harfbuzz', version: '>=8.3')
-fribidi    = dependency('fribidi', version: '>=1.0.6')
 cairo_ft   = dependency('cairo-ft', version: '>=1.18')
 libthai    = dependency('libthai', version: '>=0.1.9', required: false)
 

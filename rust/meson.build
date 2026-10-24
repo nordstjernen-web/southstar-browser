@@ -9,7 +9,7 @@ rust_native_libs = run_command(
 ).stdout().strip().split('\n')
 
 southstar_rust_features = []
-southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, glib, cairo, cairo_ft, harfbuzz, fribidi, libfontconfig, libfreetype, libpsl, epoxy]
+southstar_rust_link_deps = [sqlite3, libcrypto, libwebp, libwebpdemux, libuchardet, glib, cairo, cairo_ft, harfbuzz, libfontconfig, libfreetype, libpsl, epoxy]
 if host_machine.system() != 'windows'
   southstar_rust_link_deps += [meson.get_compiler('c').find_library('rt', required: false)]
 endif

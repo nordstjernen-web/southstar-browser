@@ -201,7 +201,6 @@ setup needs no network and no Pango;
 | GLib / GModule | ≥ 2.80 | core types, Unicode data, dynamic module loading |
 | cairo (with FreeType and fontconfig) | ≥ 1.18 | 2D rendering, glyph drawing |
 | HarfBuzz | ≥ 8.3 | text shaping (unless `-Drust-shaper=true`) |
-| FriBiDi | ≥ 1.0.6 | bidirectional text |
 | fontconfig, FreeType | fontconfig ≥ 2.15 | font matching and font files |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
 | OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |

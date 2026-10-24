@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Bidirectional text is resolved in Rust: the new `rust/bidi`
+  (`southstar-bidi`, no unsafe code, no dependencies) implements the Unicode
+  Bidirectional Algorithm (UAX #9) from the specification and replaces
+  FriBiDi, which is no longer a build dependency. Its Bidi_Class, paired
+  bracket and mirroring tables are generated from Unicode 18.0 by
+  `scripts/gen-bidi-tables.py`. It passes all 770,241 BidiTest.txt and
+  91,707 BidiCharacterTest.txt cases, and agreed with Unicode's C reference
+  implementation on 5,000,000 random paragraphs. FriBiDi 1.0.16 disagreed
+  with the reference on 36,075 of those, about half of them in bracket
+  pairs; it also pairs compatibility brackets such as U+FF08 with ASCII
+  ones, ignores embeddings after a mid-text paragraph separator, and its
+  tables stop at Unicode 16. Render tests and RTL Wikipedia articles render
+  pixel-identically. Step 4 of `docs/pure-rust-text.md`, bidi half.
 * The README screenshot shows the current build rendering a Wikipedia
   article.
 * The MSIX package carries the Partner Center identity exactly: publisher
