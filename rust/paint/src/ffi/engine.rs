@@ -200,7 +200,6 @@ unsafe extern "C" {
         a: c_double,
     );
     fn g_get_monotonic_time() -> i64;
-    fn g_unichar_isalpha(c: u32) -> GBoolean;
     fn g_utf8_get_char(p: *const c_char) -> u32;
 }
 
@@ -395,7 +394,7 @@ pub fn monotonic_time() -> i64 {
 }
 
 pub fn unichar_isalpha(c: u32) -> bool {
-    unsafe { g_unichar_isalpha(c) != 0 }
+    southstar_unicode::is_alpha(c)
 }
 
 pub fn utf8_get_char(text: &CStr, pos: usize) -> u32 {

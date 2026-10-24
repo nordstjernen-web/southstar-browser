@@ -11,8 +11,6 @@ use southstar_glib::GBoolean;
 const RTL_SCRIPTS: [c_int; 7] = [19, 2, 34, 37, 66, 90, 95];
 
 unsafe extern "C" {
-    fn g_unichar_get_script(c: u32) -> c_int;
-    fn g_unichar_isalpha(c: u32) -> GBoolean;
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_uint,
@@ -38,11 +36,11 @@ fn nul_free_or_empty(text: &[u8]) -> &[u8] {
 }
 
 pub(crate) fn unichar_is_rtl_script(c: u32) -> bool {
-    RTL_SCRIPTS.contains(&unsafe { g_unichar_get_script(c) })
+    RTL_SCRIPTS.contains(&c_int::from(southstar_unicode::script(c)))
 }
 
 pub(crate) fn unichar_is_alpha(c: u32) -> bool {
-    unsafe { g_unichar_isalpha(c) != 0 }
+    southstar_unicode::is_alpha(c)
 }
 
 pub(crate) fn url_resolve(base: &[u8], href: &[u8]) -> Option<Vec<u8>> {

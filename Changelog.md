@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* The rest of the browser's Unicode lookups moved from GLib to
+  `rust/unicode` as well: CSS `text-transform` (`uppercase`, `lowercase`,
+  `capitalize`) in layout and in `innerText`, the case-insensitive
+  matching of `<select>` type-ahead and `window.find()`, `:dir()` script
+  detection, MathML's single-letter test, and the character-class tests in
+  key input, editing, history, layout, paint and the shell.
+  `rust/unicode` gained full case folding (CaseFolding.txt) and the
+  alphabetic, control and printable tests, each identical to GLib's over
+  every code point; whole-string upper, lower and fold also matched GLib on
+  300,000 random strings each. `text-transform` and JavaScript-visible
+  case conversion no longer depend on the operating-system locale. Eleven
+  crates drop 37 unsafe blocks and 31 GLib imports between them.
 * Text layout no longer reads Unicode data from GLib: the new
   `rust/unicode` (`southstar-unicode`, no unsafe code, no dependencies)
   holds the general category, line break class, script, East Asian width,

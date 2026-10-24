@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_style::StyleTable;
@@ -23,12 +22,7 @@ impl Js {
     }
 }
 
-unsafe extern "C" {
-    fn g_utf8_strup(text: *const c_char, len: isize) -> *mut c_char;
-    fn g_utf8_strdown(text: *const c_char, len: isize) -> *mut c_char;
-    fn g_unichar_totitle(c: u32) -> u32;
-    fn g_unichar_isspace(c: u32) -> GBoolean;
-}
+unsafe extern "C" {}
 
 unsafe extern "Rust" {
     safe fn nsr_dom_exception(
@@ -123,27 +117,18 @@ pub(crate) fn replace_text(node: Element, text: &[u8]) {
     node.set_text(text);
 }
 
-fn take_glib_string(text: *mut c_char) -> Vec<u8> {
-    if text.is_null() {
-        return Vec::new();
-    }
-    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
-    unsafe { glib::g_free(text.cast()) };
-    bytes
-}
-
 pub(crate) fn utf8_upper(text: &CStr) -> Vec<u8> {
-    take_glib_string(unsafe { g_utf8_strup(text.as_ptr(), -1) })
+    southstar_unicode::upper_string(&text.to_string_lossy()).into_bytes()
 }
 
 pub(crate) fn utf8_lower(text: &CStr) -> Vec<u8> {
-    take_glib_string(unsafe { g_utf8_strdown(text.as_ptr(), -1) })
+    southstar_unicode::lower_string(&text.to_string_lossy()).into_bytes()
 }
 
 pub(crate) fn unichar_to_title(c: char) -> char {
-    char::from_u32(unsafe { g_unichar_totitle(c as u32) }).unwrap_or(c)
+    char::from_u32(southstar_unicode::to_title(u32::from(c))).unwrap_or(c)
 }
 
 pub(crate) fn unichar_is_space(c: char) -> bool {
-    unsafe { g_unichar_isspace(c as u32) != 0 }
+    southstar_unicode::is_space(u32::from(c))
 }

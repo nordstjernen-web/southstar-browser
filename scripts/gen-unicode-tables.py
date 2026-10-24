@@ -5,10 +5,12 @@ Usage: gen-unicode-tables.py UCD_DIR [OUT]
 
 UCD_DIR is one Unicode version laid out as on unicode.org's
 Public/<version>/ucd/: UnicodeData.txt, LineBreak.txt, Scripts.txt,
-EastAsianWidth.txt, SpecialCasing.txt and PropertyValueAliases.txt. The
+EastAsianWidth.txt, SpecialCasing.txt, CaseFolding.txt and
+PropertyValueAliases.txt. The
 tables are the properties text layout reads: general category, line break
 class, script, East Asian width, canonical combining class, the simple and
-special case mappings and the canonical decompositions. Scripts keep the
+special case mappings, the full case folding and the canonical
+decompositions. Scripts keep the
 numbering of GLib's GUnicodeScript, which the layout code stores, and new
 scripts are appended after it. The output is run through rustfmt when it is
 on the PATH.
@@ -199,6 +201,14 @@ def case_tables(rows):
     return upper, lower, title, special
 
 
+def folding_table():
+    out = {}
+    for lo, _, fields in records(ucd_file('CaseFolding.txt')):
+        if fields[0] in ('C', 'F'):
+            out[lo] = [int(x, 16) for x in fields[1].split()]
+    return out
+
+
 def decomposition_table(rows):
     out = {}
     for cp, f in rows.items():
@@ -279,6 +289,16 @@ def main():
     out.append(array('SPECIAL_VALUES', '[u32; 3]', index,
                      lambda e: '[%s]' % ', '.join(hexa(x) for x in e)))
     out.append(array('SPECIAL_POOL', 'u32', pool, hexa))
+    folding = folding_table()
+    keys = sorted(folding)
+    pool = []
+    index = []
+    for k in keys:
+        index.append(len(pool) << 8 | len(folding[k]))
+        pool.extend(folding[k])
+    out.append(array('FOLD_KEYS', 'u32', keys, hexa))
+    out.append(array('FOLD_VALUES', 'u32', index, hexa))
+    out.append(array('FOLD_POOL', 'u32', pool, hexa))
     keys = sorted(decomposition)
     out.append(array('DECOMPOSITION_KEYS', 'u32', keys, hexa))
     out.append(array('DECOMPOSITION_VALUES', '(u32, u32)',

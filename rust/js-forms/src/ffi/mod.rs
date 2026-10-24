@@ -58,7 +58,6 @@ unsafe extern "C" {
         result_uncertain: *mut GBoolean,
     ) -> *mut c_char;
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
-    fn g_utf8_casefold(s: *const c_char, len: isize) -> *mut c_char;
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
@@ -113,10 +112,7 @@ pub(crate) fn parse_color(text: &[u8]) -> Option<(u8, u8, u8, u8)> {
 
 pub(crate) fn utf8_casefold(text: &[u8]) -> Vec<u8> {
     let text = cstring(text);
-    let folded = unsafe { g_utf8_casefold(text.as_ptr(), -1) };
-    let bytes = unsafe { glib::bytes(folded) }.unwrap_or_default().to_vec();
-    unsafe { glib::g_free(folded.cast()) };
-    bytes
+    southstar_unicode::fold_string(&text.to_string_lossy()).into_bytes()
 }
 
 pub(crate) fn node_remove(node: Element) {

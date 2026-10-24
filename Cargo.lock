@@ -1825,6 +1825,7 @@ dependencies = [
  "southstar-selection",
  "southstar-spellcheck",
  "southstar-style",
+ "southstar-unicode",
  "southstar-url",
  "southstar-video",
  "southstar-webgl",
@@ -1902,6 +1903,7 @@ dependencies = [
  "southstar-mat4",
  "southstar-numfmt",
  "southstar-selector-text",
+ "southstar-unicode",
  "southstar-url",
 ]
 
@@ -2227,6 +2229,7 @@ dependencies = [
  "southstar-about-style",
  "southstar-glib",
  "southstar-sqlite",
+ "southstar-unicode",
 ]
 
 [[package]]
@@ -2562,6 +2565,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-net",
  "southstar-numfmt",
+ "southstar-unicode",
  "southstar-url",
 ]
 
@@ -3004,6 +3008,7 @@ dependencies = [
  "southstar-js-mutation",
  "southstar-js-runtime",
  "southstar-style",
+ "southstar-unicode",
 ]
 
 [[package]]
@@ -3071,6 +3076,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-services",
  "southstar-layout-hit",
+ "southstar-unicode",
  "southstar-url",
 ]
 
@@ -3156,6 +3162,7 @@ dependencies = [
  "southstar-paint",
  "southstar-style",
  "southstar-svg",
+ "southstar-unicode",
  "southstar-url",
 ]
 
@@ -3171,6 +3178,7 @@ dependencies = [
  "southstar-layout-geom",
  "southstar-paint",
  "southstar-style",
+ "southstar-unicode",
 ]
 
 [[package]]
@@ -3341,6 +3349,7 @@ dependencies = [
  "southstar-glib",
  "southstar-paint",
  "southstar-text",
+ "southstar-unicode",
 ]
 
 [[package]]
@@ -3417,6 +3426,7 @@ dependencies = [
  "southstar-svg",
  "southstar-text",
  "southstar-texture",
+ "southstar-unicode",
  "southstar-video",
 ]
 
@@ -3557,6 +3567,7 @@ dependencies = [
  "southstar-svg",
  "southstar-text",
  "southstar-threaddump",
+ "southstar-unicode",
  "southstar-url",
  "southstar-watchdog",
 ]
