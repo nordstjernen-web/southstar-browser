@@ -1,8 +1,7 @@
-//! Southstar text — Unicode character properties from GLib's database, with GLib's numeric category and line break codes.
+//! Southstar text — Unicode character properties from rust/unicode, with GLib's numeric category and line break codes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
-use crate::ffi::glib;
 use crate::script::Script;
 
 #[repr(i32)]
@@ -196,51 +195,51 @@ impl BreakType {
 }
 
 pub fn unichar_type(ch: u32) -> UnicodeType {
-    UnicodeType::from_i32(glib::unichar_type(ch)).unwrap_or(UnicodeType::Unassigned)
+    UnicodeType::from_i32(southstar_unicode::category(ch) as i32).unwrap_or(UnicodeType::Unassigned)
 }
 
 pub fn break_type(ch: u32) -> BreakType {
-    BreakType::from_i32(glib::unichar_break_type(ch)).unwrap_or(BreakType::Unknown)
+    BreakType::from_i32(i32::from(southstar_unicode::line_break(ch))).unwrap_or(BreakType::Unknown)
 }
 
 pub fn script(ch: u32) -> Script {
-    Script(glib::unichar_get_script(ch))
+    Script(i32::from(southstar_unicode::script(ch)))
 }
 
 pub fn mirror_char(ch: u32) -> Option<u32> {
-    glib::unichar_get_mirror_char(ch)
+    southstar_bidi::mirror(ch)
 }
 
 pub fn is_zero_width(ch: u32) -> bool {
-    glib::unichar_iszerowidth(ch)
+    southstar_unicode::is_zero_width(ch)
 }
 
 pub fn is_space(ch: u32) -> bool {
-    glib::unichar_isspace(ch)
+    southstar_unicode::is_space(ch)
 }
 
 pub fn is_mark(ch: u32) -> bool {
-    glib::unichar_ismark(ch)
+    southstar_unicode::is_mark(ch)
 }
 
 pub fn is_wide(ch: u32) -> bool {
-    glib::unichar_iswide(ch)
+    southstar_unicode::is_wide(ch)
 }
 
 pub fn combining_class(ch: u32) -> i32 {
-    glib::unichar_combining_class(ch)
+    i32::from(southstar_unicode::combining_class(ch))
 }
 
 pub fn to_lower(ch: u32) -> u32 {
-    glib::unichar_tolower(ch)
+    southstar_unicode::to_lower(ch)
 }
 
 pub fn to_upper(ch: u32) -> u32 {
-    glib::unichar_toupper(ch)
+    southstar_unicode::to_upper(ch)
 }
 
 pub fn to_title(ch: u32) -> u32 {
-    glib::unichar_totitle(ch)
+    southstar_unicode::to_title(ch)
 }
 
 pub fn char_at(text: &str, index: usize) -> u32 {

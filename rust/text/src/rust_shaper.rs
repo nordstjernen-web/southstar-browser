@@ -670,33 +670,10 @@ fn sbix_png_has_data(
     false
 }
 
-const ISO15924_TAGS: [[u8; 4]; 176] = [
-    *b"Zyyy", *b"Zinh", *b"Arab", *b"Armn", *b"Beng", *b"Bopo", *b"Cher", *b"Copt", *b"Cyrl",
-    *b"Dsrt", *b"Deva", *b"Ethi", *b"Geor", *b"Goth", *b"Grek", *b"Gujr", *b"Guru", *b"Hani",
-    *b"Hang", *b"Hebr", *b"Hira", *b"Knda", *b"Kana", *b"Khmr", *b"Laoo", *b"Latn", *b"Mlym",
-    *b"Mong", *b"Mymr", *b"Ogam", *b"Ital", *b"Orya", *b"Runr", *b"Sinh", *b"Syrc", *b"Taml",
-    *b"Telu", *b"Thaa", *b"Thai", *b"Tibt", *b"Cans", *b"Yiii", *b"Tglg", *b"Hano", *b"Buhd",
-    *b"Tagb", *b"Brai", *b"Cprt", *b"Limb", *b"Osma", *b"Shaw", *b"Linb", *b"Tale", *b"Ugar",
-    *b"Talu", *b"Bugi", *b"Glag", *b"Tfng", *b"Sylo", *b"Xpeo", *b"Khar", *b"Zzzz", *b"Bali",
-    *b"Xsux", *b"Phnx", *b"Phag", *b"Nkoo", *b"Kali", *b"Lepc", *b"Rjng", *b"Sund", *b"Saur",
-    *b"Cham", *b"Olck", *b"Vaii", *b"Cari", *b"Lyci", *b"Lydi", *b"Avst", *b"Bamu", *b"Egyp",
-    *b"Armi", *b"Phli", *b"Prti", *b"Java", *b"Kthi", *b"Lisu", *b"Mtei", *b"Sarb", *b"Orkh",
-    *b"Samr", *b"Lana", *b"Tavt", *b"Batk", *b"Brah", *b"Mand", *b"Cakm", *b"Merc", *b"Mero",
-    *b"Plrd", *b"Shrd", *b"Sora", *b"Takr", *b"Bass", *b"Aghb", *b"Dupl", *b"Elba", *b"Gran",
-    *b"Khoj", *b"Sind", *b"Lina", *b"Mahj", *b"Mani", *b"Mend", *b"Modi", *b"Mroo", *b"Nbat",
-    *b"Narb", *b"Perm", *b"Hmng", *b"Palm", *b"Pauc", *b"Phlp", *b"Sidd", *b"Tirh", *b"Wara",
-    *b"Ahom", *b"Hluw", *b"Hatr", *b"Mult", *b"Hung", *b"Sgnw", *b"Adlm", *b"Bhks", *b"Marc",
-    *b"Newa", *b"Osge", *b"Tang", *b"Gonm", *b"Nshu", *b"Soyo", *b"Zanb", *b"Dogr", *b"Gong",
-    *b"Rohg", *b"Maka", *b"Medf", *b"Sogo", *b"Sogd", *b"Elym", *b"Nand", *b"Hmnp", *b"Wcho",
-    *b"Chrs", *b"Diak", *b"Kits", *b"Yezi", *b"Cpmn", *b"Ougr", *b"Tnsa", *b"Toto", *b"Vith",
-    *b"Zmth", *b"Kawi", *b"Nagm", *b"Todr", *b"Gara", *b"Tutg", *b"Sunu", *b"Gukh", *b"Krai",
-    *b"Onao", *b"Sidt", *b"Tols", *b"Tayo", *b"Berf",
-];
-
 pub fn script_to_iso15924(script: Script) -> u32 {
-    match usize::try_from(script.0) {
+    match u8::try_from(script.0) {
         Err(_) => 0,
-        Ok(index) => u32::from_be_bytes(*ISO15924_TAGS.get(index).unwrap_or(b"Zzzz")),
+        Ok(index) => southstar_unicode::script_tag(index),
     }
 }
 

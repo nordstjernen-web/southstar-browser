@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Text layout no longer reads Unicode data from GLib: the new
+  `rust/unicode` (`southstar-unicode`, no unsafe code, no dependencies)
+  holds the general category, line break class, script, East Asian width,
+  combining class, case mappings (with SpecialCasing.txt) and canonical
+  decompositions, generated from the UCD by `scripts/gen-unicode-tables.py`,
+  and `rust/text` drops 19 GLib imports. The tables are Unicode 17.0, the
+  version of GLib 2.88: checked over all 1,114,112 code points, every
+  function `rust/text` uses gives exactly GLib's answer, except line break
+  classes of unassigned code points past U+33500, where the UCD default now
+  applies. Layout no longer depends on the system GLib's Unicode version
+  (Ubuntu 24.04 ships 15.1), and `text-transform` no longer follows the
+  operating-system locale, which uppercased `i` to `İ` on Turkish and
+  Azerbaijani systems whatever the page's language. Unicode 18 waits for
+  the matching UAX #14 rule changes (soft hyphen and dashes change class).
 * Bidirectional text is resolved in Rust: the new `rust/bidi`
   (`southstar-bidi`, no unsafe code, no dependencies) implements the Unicode
   Bidirectional Algorithm (UAX #9) from the specification and replaces

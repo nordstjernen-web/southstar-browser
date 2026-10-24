@@ -9,7 +9,6 @@ use crate::attrs::{
 use crate::bidi::log2vis_fill_embedding_levels;
 use crate::context::Context;
 use crate::emoji::EmojiIter;
-use crate::ffi::glib_case::{unichar_islower, unicode_script_to_iso15924};
 use crate::ffi::harfbuzz::{
     METRICS_CAP_HEIGHT, METRICS_SUBSCRIPT_EM_Y_SIZE, METRICS_SUPERSCRIPT_EM_Y_SIZE,
     METRICS_X_HEIGHT, tag,
@@ -920,7 +919,7 @@ fn variant_supported(item: &Item, variant: Variant) -> bool {
     let Some(font) = item.analysis.font.as_ref() else {
         return true;
     };
-    let script_tag = unicode_script_to_iso15924(i32::from(item.analysis.script.0 as u8));
+    let script_tag = southstar_unicode::script_tag(item.analysis.script.0 as u8);
     font.hb_font().gsub_features_supported(
         script_tag,
         item.analysis.language.map(Language::as_str),
@@ -1010,7 +1009,7 @@ fn split_item_for_variant(
         while p < end
             && (item_transform == TextTransform::Lowercase
                 || consider_as_space(wc)
-                || (unichar_islower(wc)
+                || (southstar_unicode::is_lower(wc)
                     && !(item_transform == TextTransform::Uppercase
                         || (item_transform == TextTransform::Capitalize && is_word_start))))
         {
@@ -1036,7 +1035,7 @@ fn split_item_for_variant(
         while p < end
             && (item_transform == TextTransform::Uppercase
                 || consider_as_space(wc)
-                || !(item_transform == TextTransform::Lowercase || unichar_islower(wc))
+                || !(item_transform == TextTransform::Lowercase || southstar_unicode::is_lower(wc))
                 || (item_transform == TextTransform::Capitalize && is_word_start))
         {
             p = next_char(bytes, p);

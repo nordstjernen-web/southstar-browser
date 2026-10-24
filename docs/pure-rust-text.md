@@ -54,10 +54,10 @@ crate still needs the usual `cargo vet` record and a reason in its commit.
 | WOFF2 | existing `rust/font` decoder plus a Brotli decoder | Already Rust except Brotli. |
 | System fonts | fontconfig (keep) or `fontique` | Enumeration and fallback have no parsing risk worth the churn; fontconfig can stay on Linux/BSD. |
 
-Unicode property data (line break classes, scripts, general category)
-currently comes from GLib. It can move to generated tables in the style of
+Unicode property data (line break classes, scripts, general category) came
+from GLib. It now comes from `rust/unicode`, generated tables in the style of
 `rust/url/src/tables.rs` (from the Unicode Character Database), which also
-removes the dependency on the system GLib's Unicode version.
+removed the dependency on the system GLib's Unicode version.
 
 ## Shape of the change
 
@@ -76,8 +76,8 @@ behind those seams, one at a time:
 3. **Color glyphs.** COLR v0/v1 and bitmap emoji through `skrifa`, painted
    with cairo. Needed before FreeType can leave the renderer.
 4. **Bidi and Unicode data.** In-tree UAX #9 and generated property tables,
-   verified against FriBiDi and GLib. Bidi is done; the GLib property
-   tables (general category, line break class, script, case) remain.
+   verified against FriBiDi and GLib. Done: `rust/bidi` and
+   `rust/unicode` (see "Bidi" and "Unicode properties" below).
 5. **Web fonts first, system fonts later.** Untrusted `@font-face` fonts can
    switch to the Rust path before system fonts do, since they carry the
    risk; system fonts keep the C path until the Rust one matches it.
@@ -133,9 +133,30 @@ Verification:
   pixel-identically with FriBiDi and with `rust/bidi`, apart from content
   that also differs between two runs of the same binary.
 
+## Unicode properties
+
+`rust/unicode` (`southstar-unicode`) replaced GLib's Unicode database under
+text layout: general category, line break class, script (in GLib's
+GUnicodeScript numbering, which `Script` stores, with newer scripts
+appended), East Asian width, zero width, combining class, simple and
+special case mappings, and single-step canonical decomposition. The tables
+come from the UCD through `scripts/gen-unicode-tables.py`.
+
+They are generated from Unicode 17.0, the version GLib 2.88 carries, and an
+exhaustive comparison against GLib (every code point, every function
+`rust/text` calls) differs only in line break classes of unassigned code
+points from U+33500 to U+3FFFD, where GLib's table ends and the UCD's `ID`
+default now applies. Case conversion of strings ignores the process
+locale; GLib applied Turkic and Lithuanian rules when the operating system
+used those languages. Moving to Unicode 18 changes the line break class of
+soft hyphen (BA to HH) and of figure and en dashes (HH to BA), so it should
+land together with the UAX #14 rules of that version.
+
+Text-related GLib calls remain in other crates (`text-transform` in layout,
+editing, MathML) and can move to `rust/unicode` the same way.
+
 ## Decision
 
-Step 1 is available behind `-Drust-shaper=true`, and the bidi half of
-step 4 is done. Next in order of risk removed per unit of work: the GLib
-property tables (the rest of step 4), then `skrifa` for metrics and
-outlines of web fonts (steps 2 and 5).
+Step 1 is available behind `-Drust-shaper=true`, and step 4 is done. Next,
+in order of risk removed per unit of work: `skrifa` for metrics and
+outlines of web fonts (steps 2 and 5), then color glyphs (step 3).
