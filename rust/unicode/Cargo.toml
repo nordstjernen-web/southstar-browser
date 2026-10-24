@@ -1,0 +1,11 @@
+[package]
+name = "southstar-unicode"
+description = "Unicode character properties for text layout: general category, line break class, script, East Asian width, combining class, case mapping and decomposition"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

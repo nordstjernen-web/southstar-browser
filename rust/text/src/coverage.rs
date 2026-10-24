@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 
-use crate::ffi::glib_decompose::unichar_decompose;
 use crate::types::CoverageLevel;
 
 const PAGE_BITS: u32 = 512;
@@ -98,7 +97,7 @@ impl Coverage {
     }
 
     fn decomposition_covered(&mut self, ch: u32) -> bool {
-        let Some((first, second)) = unichar_decompose(ch) else {
+        let Some((first, second)) = southstar_unicode::decompose(ch) else {
             return false;
         };
         self.get(first as i32) == CoverageLevel::Exact

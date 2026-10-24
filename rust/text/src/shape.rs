@@ -7,9 +7,6 @@ use std::collections::HashMap;
 
 use crate::attrs::AttrValue;
 use crate::context::{Context, LayoutHooks, SampleItem, SampleWidths, set_layout_hooks};
-use crate::ffi::glib_case::{
-    unichar_isalnum, unicode_script_to_iso15924, utf8_strdown, utf8_strup,
-};
 use crate::ffi::harfbuzz::{
     BUFFER_FLAG_BOT, BUFFER_FLAG_EOT, BUFFER_FLAG_PRESERVE_DEFAULT_IGNORABLES,
     BUFFER_FLAG_PRODUCE_UNSAFE_TO_CONCAT, DIRECTION_LEFT_TO_RIGHT, DIRECTION_TOP_TO_BOTTOM,
@@ -318,13 +315,13 @@ fn for_each_transformed_char(
 
         match transform {
             TextTransform::Lowercase => {
-                if unichar_isalnum(ch) {
-                    mapped = Some(utf8_strdown(single));
+                if southstar_unicode::is_alnum(ch) {
+                    mapped = Some(southstar_unicode::lower_string(single));
                 }
             }
             TextTransform::Uppercase => {
-                if unichar_isalnum(ch) {
-                    mapped = Some(utf8_strup(single));
+                if southstar_unicode::is_alnum(ch) {
+                    mapped = Some(southstar_unicode::upper_string(single));
                 }
             }
             TextTransform::Capitalize => {
@@ -397,9 +394,7 @@ fn hb_shape(
     }
 
     buffer.set_direction(direction);
-    buffer.set_script(unicode_script_to_iso15924(i32::from(
-        analysis.script.0 as u8,
-    )));
+    buffer.set_script(southstar_unicode::script_tag(analysis.script.0 as u8));
     buffer.set_language(analysis.language.map(Language::as_str));
     buffer.set_cluster_level_monotone_characters();
     buffer.set_flags(buffer_flags);
