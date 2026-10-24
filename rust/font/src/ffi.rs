@@ -1,11 +1,9 @@
-//! Southstar — the C ABI of the web font loader, over the network layer, GLib, FreeType, fontconfig and southstar-text.
+//! Southstar — the C ABI of the web font loader, over the network layer, GLib, fontconfig and southstar-text.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-#[cfg(feature = "freetype")]
-use core::ffi::c_long;
 use core::ffi::{CStr, c_char, c_int};
-#[cfg(any(feature = "freetype", feature = "fontconfig"))]
+#[cfg(feature = "fontconfig")]
 use core::ffi::{c_uint, c_void};
 use core::ptr;
 #[cfg(feature = "fontconfig")]
@@ -82,107 +80,6 @@ pub fn write_file(path: &CStr, data: &[u8]) -> bool {
 
 pub fn register_font_oracle() {
     unsafe { ns_paint_register_font_oracle() };
-}
-
-#[cfg(feature = "freetype")]
-mod freetype {
-    use core::ffi::{c_int, c_long, c_uint, c_ulong, c_void};
-
-    pub type Error = c_int;
-
-    unsafe extern "C" {
-        pub fn FT_Init_FreeType(library: *mut *mut c_void) -> Error;
-        pub fn FT_Done_FreeType(library: *mut c_void) -> Error;
-        pub fn FT_New_Memory_Face(
-            library: *mut c_void,
-            file_base: *const u8,
-            file_size: c_long,
-            face_index: c_long,
-            face: *mut *mut c_void,
-        ) -> Error;
-        pub fn FT_Done_Face(face: *mut c_void) -> Error;
-        pub fn FT_Sfnt_Table_Info(
-            face: *mut c_void,
-            table_index: c_uint,
-            tag: *mut c_ulong,
-            length: *mut c_ulong,
-        ) -> Error;
-        pub fn FT_Load_Sfnt_Table(
-            face: *mut c_void,
-            tag: c_ulong,
-            offset: c_long,
-            buffer: *mut u8,
-            length: *mut c_ulong,
-        ) -> Error;
-    }
-}
-
-#[cfg(feature = "freetype")]
-pub struct Face<'a> {
-    library: *mut c_void,
-    face: *mut c_void,
-    data: core::marker::PhantomData<&'a [u8]>,
-}
-
-#[cfg(feature = "freetype")]
-impl<'a> Face<'a> {
-    pub fn open(data: &'a [u8]) -> Option<Self> {
-        let mut library = ptr::null_mut();
-        if unsafe { freetype::FT_Init_FreeType(&mut library) } != 0 {
-            return None;
-        }
-        let mut face = ptr::null_mut();
-        if unsafe {
-            freetype::FT_New_Memory_Face(library, data.as_ptr(), data.len() as c_long, 0, &mut face)
-        } != 0
-        {
-            unsafe { freetype::FT_Done_FreeType(library) };
-            return None;
-        }
-        Some(Face {
-            library,
-            face,
-            data: core::marker::PhantomData,
-        })
-    }
-
-    pub fn table_count(&self) -> Option<core::ffi::c_ulong> {
-        let mut count = 0;
-        let error =
-            unsafe { freetype::FT_Sfnt_Table_Info(self.face, 0, ptr::null_mut(), &mut count) };
-        (error == 0).then_some(count)
-    }
-
-    pub fn table_info(&self, index: c_uint) -> Option<(core::ffi::c_ulong, core::ffi::c_ulong)> {
-        let (mut tag, mut len) = (0, 0);
-        let error = unsafe { freetype::FT_Sfnt_Table_Info(self.face, index, &mut tag, &mut len) };
-        (error == 0).then_some((tag, len))
-    }
-
-    pub fn load_table(
-        &self,
-        tag: core::ffi::c_ulong,
-        buffer: &mut [u8],
-        len: core::ffi::c_ulong,
-    ) -> bool {
-        if buffer.len() < len as usize {
-            return false;
-        }
-        let mut length = len;
-        unsafe {
-            freetype::FT_Load_Sfnt_Table(self.face, tag, 0, buffer.as_mut_ptr(), &mut length) == 0
-        }
-    }
-}
-
-#[cfg(feature = "freetype")]
-impl Drop for Face<'_> {
-    fn drop(&mut self) {
-        unsafe {
-            freetype::FT_Done_Face(self.face);
-            freetype::FT_Done_FreeType(self.library);
-        }
-    }
 }
 
 #[cfg(feature = "fontconfig")]

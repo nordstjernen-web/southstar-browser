@@ -3733,6 +3733,7 @@ version = "1.0.2-dev"
 name = "southstar-woff2"
 version = "1.0.2-dev"
 dependencies = [
+ "miniz_oxide 0.9.1",
  "southstar-glib",
 ]
 

@@ -1,8 +1,14 @@
-//! Southstar — WOFF2 web font decoding: the Brotli stream and the glyf/loca and hmtx transforms.
+//! Southstar — WOFF and WOFF2 web font decoding: the Brotli stream, the glyf/loca and hmtx transforms and WOFF 1.0's zlib tables.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+mod woff1;
+
+#[cfg(test)]
+mod tests;
+
+pub use woff1::{is_woff, woff_to_sfnt};
 
 const MAX_OUTPUT: usize = 64 * 1024 * 1024;
 const MAX_TABLES: u16 = 1024;

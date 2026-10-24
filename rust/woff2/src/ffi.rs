@@ -6,6 +6,7 @@ use core::ffi::c_int;
 
 const BROTLI_DECODER_RESULT_SUCCESS: c_int = 1;
 
+#[link(name = "brotlidec")]
 unsafe extern "C" {
     fn BrotliDecoderDecompress(
         encoded_size: usize,

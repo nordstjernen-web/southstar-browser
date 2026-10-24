@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Web fonts' WOFF and WOFF2 containers are decoded in Rust only:
+  `rust/woff2` gains a WOFF 1.0 decoder (zlib through `miniz_oxide`, already
+  a dependency), and FreeType no longer opens downloaded fonts to read their
+  tables. The WOFF output is byte-identical to the old FreeType path on 597
+  fonts; the WOFF2 output matches fontTools' decoder glyph for glyph on 358
+  Google Fonts files, which render pixel-identically. The old path wrote
+  `loca` tables that pointed past the end of `glyf` for almost every WOFF2
+  font. The `freetype` cargo feature, which only gated that reader, is gone.
 * The rest of the browser's Unicode lookups moved from GLib to
   `rust/unicode` as well: CSS `text-transform` (`uppercase`, `lowercase`,
   `capitalize`) in layout and in `innerText`, the case-insensitive

@@ -51,7 +51,7 @@ crate still needs the usual `cargo vet` record and a reason in its commit.
 | Shaping | `harfrust` (the HarfBuzz project's Rust port) or `rustybuzz` | Both are ports of HarfBuzz's shaper. HarfRust sits on `read-fonts`, so one parser serves shaping and outlines. |
 | Rasterization | cairo (draw `skrifa` outlines as paths) or `swash`'s scaler / `zeno` | Keeping cairo for painting limits the change to outline extraction; color glyphs need COLR v0/v1 and bitmap (CBDT/sbix) handling. |
 | Bidi | in-tree `rust/bidi` (done) | `unicode-bidi` comes from the Servo project and is excluded by D1, so it is an in-tree implementation written from UAX #9 and tested against Unicode's reference implementation and FriBiDi. |
-| WOFF2 | existing `rust/font` decoder plus a Brotli decoder | Already Rust except Brotli. |
+| WOFF, WOFF2 | `rust/woff2` (done) | WOFF 1.0 is decoded in Rust (zlib through `miniz_oxide`), WOFF2 in Rust except the Brotli stream (libbrotlidec). FreeType no longer reads the containers. |
 | System fonts | fontconfig (keep) or `fontique` | Enumeration and fallback have no parsing risk worth the churn; fontconfig can stay on Linux/BSD. |
 
 Unicode property data (line break classes, scripts, general category) came
@@ -157,6 +157,31 @@ layout and `innerText`, case folding for `<select>` and `window.find()`,
 `:dir()`, MathML, history search and the shell's input filter) use
 `rust/unicode` too, which added CaseFolding.txt and the alphabetic, control
 and printable tests, each checked against GLib over every code point.
+
+## Web fonts
+
+Untrusted `@font-face` bytes reached C in four places: FreeType read the WOFF
+and WOFF2 containers in `rust/font`, `FcConfigAppFontAddFile` and
+`FcFreeTypeQueryAll` parsed the font to index it, and cairo-ft (FreeType)
+and HarfBuzz parse it again to draw and shape it. The order of work:
+
+1. **Containers (done).** WOFF 1.0 is decoded by `rust/woff2` and WOFF2 only
+   by the Rust decoder. Over 487 WOFF files made from the Windows fonts and
+   110 WOFF files from Google Fonts the SFNT output is byte-identical to the
+   FreeType path; over 358 WOFF2 files from Google Fonts every glyph
+   (outline, on-curve flags, bounding box, overlap bit, instructions,
+   components) and every other table matches fontTools' decoder, and 120 of
+   those fonts render pixel-identically in the browser. The FreeType path
+   produced `loca` tables pointing past the end of `glyf` in 355 of the 358
+   (it truncated FreeType's own reconstruction to the original table
+   length); FreeType tolerated it.
+2. **Index.** Build the fontconfig patterns in Rust from `read-fonts`
+   (charset from `cmap`, languages through `FcLangGetCharSet`) instead of
+   `FcConfigAppFontAddFile` and `FcFreeTypeQueryAll`, checked field by field
+   against fontconfig's own patterns.
+3. **Draw.** Web fonts get a Rust backend in `rust/text`: `skrifa` metrics and
+   outlines drawn through a cairo user font (the hex-box path already uses
+   one) and HarfRust shaping, first behind a switch for old/new screenshots.
 
 ## Decision
 
