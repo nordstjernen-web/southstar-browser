@@ -3,8 +3,8 @@ Southstar Browser
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
 and JavaScript standards. It is the next step for
-[Nordstjernen](https://github.com/nordstjernen-web/nordstjernen-browser)
-(Northstar), **rewritten in Rust**.
+[Nordstjernen Sol](https://github.com/nordstjernen-web/nordstjernen-sol-browser),
+**rewritten in Rust**.
 
 The rewrite started from a working browser rather than an empty repository:
 the Nordstjernen C codebase, its full history included, renamed to Southstar
@@ -30,6 +30,9 @@ Supported platforms:
 * Windows
 * macOS
 * FreeBSD and NetBSD
+
+CI builds Linux, FreeBSD and NetBSD on every push; the Windows, macOS and
+musl workflows run only when started by hand.
 
 **Version:** 1.0.1.
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
@@ -240,10 +243,11 @@ agreement. Bundled third-party components keep their own licenses
 
 ## Related projects
 
-- [nordstjernen-browser](https://github.com/nordstjernen-web/nordstjernen-browser)
+- [Nordstjernen Sol](https://github.com/nordstjernen-web/nordstjernen-sol-browser)
   — the C browser Southstar starts from.
-- [northstar-browser](https://github.com/nordstjernen-web/northstar-browser)
-  — the GPL-licensed sibling project.
+- [Nordstjernen Web Browser](https://github.com/nordstjernen-web/northstar-web-browser)
+  (formerly Northstar) — the GPL-licensed minimalist sibling, one process
+  and no tabs.
 
 # Development team
 Southstar is developed by a team located in Norway, Poland and Spain.
