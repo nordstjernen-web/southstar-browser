@@ -907,6 +907,9 @@ pub fn mark_restyle_dirty(node: Node<'_>) {
 }
 
 pub fn mark_childlist_dirty(parent: Node<'_>, added: Option<Node<'_>>) {
+    if !southstar_dom::tree::is_connected(parent) {
+        return;
+    }
     with_state(|s| s.mark_childlist(parent, added));
 }
 

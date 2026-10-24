@@ -5,7 +5,8 @@
 use core::cell::Cell;
 use core::ptr;
 
-use crate::{MAX_DEPTH, Node, NsNode, WeakNode, ancestors_and_self, children};
+use crate::node::FLAG_FRAGMENT;
+use crate::{Kind, MAX_DEPTH, Node, NsNode, WeakNode, ancestors_and_self, children};
 
 thread_local! {
     static ACTIVE_MODAL: Cell<Option<WeakNode>> = const { Cell::new(None) };
@@ -22,6 +23,11 @@ pub fn root(node: Node<'_>) -> Node<'_> {
         root = parent;
     }
     root
+}
+
+pub fn is_connected(node: Node<'_>) -> bool {
+    let root = root(node);
+    root.kind() == Kind::Document && root.flags() & FLAG_FRAGMENT == 0
 }
 
 pub fn contains(ancestor: *const NsNode, node: Node) -> bool {

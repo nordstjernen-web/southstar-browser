@@ -14,7 +14,7 @@ pub const KIND_ELEMENT: c_uint = 2;
 pub const KIND_TEXT: c_uint = 3;
 pub const KIND_COMMENT: c_uint = 4;
 
-const FLAG_FRAGMENT: u32 = 1 << 2;
+pub(crate) const FLAG_FRAGMENT: u32 = 1 << 2;
 const FLAG_TEMPLATE_CONTENT: u32 = 1 << 4;
 const FLAG_SVG_NS: u32 = 1 << 7;
 const FLAG_FOREIGN_NS: u32 = 1 << 9;
