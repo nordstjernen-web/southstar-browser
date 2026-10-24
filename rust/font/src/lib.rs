@@ -3,8 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
-#[cfg(feature = "freetype")]
-mod sfnt;
 
 use core::ffi::c_int;
 use std::collections::HashMap;
@@ -322,15 +320,16 @@ fn sfnt_extension(cff: bool) -> &'static [u8] {
 }
 
 fn convert(data: &[u8]) -> Option<(Vec<u8>, &'static [u8])> {
-    #[cfg(feature = "freetype")]
-    if (data.starts_with(b"wOFF") || data.starts_with(b"wOF2"))
-        && let Some((bytes, cff)) = ffi::Face::open(data).and_then(|face| sfnt::from_face(&face))
-    {
-        return Some((bytes, sfnt_extension(cff)));
-    }
     #[cfg(feature = "woff2")]
-    if let Some(sfnt) = southstar_woff2::to_sfnt(data) {
-        return Some((sfnt.bytes, sfnt_extension(sfnt.cff)));
+    {
+        let sfnt = if southstar_woff2::is_woff(data) {
+            southstar_woff2::woff_to_sfnt(data)
+        } else {
+            southstar_woff2::to_sfnt(data)
+        };
+        if let Some(sfnt) = sfnt {
+            return Some((sfnt.bytes, sfnt_extension(sfnt.cff)));
+        }
     }
     let _ = (data, sfnt_extension);
     None
