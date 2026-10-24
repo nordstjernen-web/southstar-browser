@@ -14,7 +14,7 @@ C went, the QuickJS-ng engine included. All of Southstar's own code is now
 Rust; C remains only in the system libraries it links (GTK, Cairo, Pango,
 OpenSSL, FFmpeg, SDL2, …).
 
-![Southstar Browser showing its start page](docs/screenshot.png)
+![Southstar Browser showing a Wikipedia article](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
