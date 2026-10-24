@@ -11,6 +11,9 @@ pub mod context;
 pub mod coverage;
 mod ellipsize;
 pub mod emoji;
+mod engine;
+
+pub use engine::WEB_FONT_OBJECT;
 #[allow(unsafe_code)]
 mod ffi;
 pub mod font;
@@ -30,6 +33,8 @@ pub mod metrics;
 pub mod render;
 #[cfg(feature = "rust-shaper")]
 pub mod rust_shaper;
+#[cfg(feature = "rust-shaper")]
+mod rust_tables;
 pub mod script;
 pub mod shape;
 pub mod shape_cache;

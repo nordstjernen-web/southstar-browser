@@ -242,14 +242,9 @@ fn find_hyphen_width(item: &Item) -> i32 {
     let Some(font) = item.analysis.font.as_ref() else {
         return 0;
     };
-    let hb_font = font.hb_font();
-    let mut glyph = 0u32;
-    if hb_font.nominal_glyph_into(0x2010, &mut glyph)
-        || hb_font.nominal_glyph_into(u32::from('-'), &mut glyph)
-    {
-        return hb_font.glyph_h_advance(glyph);
-    }
-    0
+    font.nominal_glyph(0x2010)
+        .or_else(|| font.nominal_glyph(u32::from('-')))
+        .map_or(0, |glyph| font.glyph_h_advance(glyph))
 }
 
 fn shape_shape(text: &str, offset: i32, n_chars: i32, width: i32, glyphs: &mut GlyphString) {
@@ -1441,9 +1436,7 @@ impl Breaker<'_> {
                             let mut subscript_x_offset = 0;
                             let mut subscript_y_offset = 0;
                             if let Some(font) = prev.and_then(|prev| prev.analysis.font.as_ref()) {
-                                let hb_font = font.hb_font();
-                                let position =
-                                    |name: &[u8; 4]| hb_font.ot_metrics_position(tag(name));
+                                let position = |name: &[u8; 4]| font.ot_metric(tag(name));
                                 if let Some(p) = position(b"spyo") {
                                     superscript_y_offset = p;
                                 }

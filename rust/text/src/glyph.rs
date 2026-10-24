@@ -273,7 +273,6 @@ impl GlyphString {
         end_xpos: i32,
     ) -> Option<i32> {
         let font = analysis.font.as_ref()?;
-        let hb_font = font.hb_font();
 
         let glyph_pos = if start_glyph_pos == end_glyph_pos {
             start_glyph_pos
@@ -281,7 +280,7 @@ impl GlyphString {
             let mut glyph_pos = -1;
             for i in start_glyph_pos..=end_glyph_pos {
                 let glyph = self.glyphs[i as usize].glyph;
-                if hb_font.glyph_class(glyph) != OT_LAYOUT_GLYPH_CLASS_MARK {
+                if font.glyph_class(glyph) != OT_LAYOUT_GLYPH_CLASS_MARK {
                     if glyph_pos != -1 {
                         return None;
                     }
@@ -302,7 +301,7 @@ impl GlyphString {
             DIRECTION_LEFT_TO_RIGHT
         };
         let (num_carets, caret_count, caret) =
-            hb_font.ligature_caret(direction, info.glyph, (cluster_offset - 1) as u32);
+            font.ligature_caret(direction, info.glyph, (cluster_offset - 1) as u32);
         if caret_count == 0 || num_carets == 0 {
             return None;
         }

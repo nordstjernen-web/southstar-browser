@@ -803,15 +803,13 @@ impl<'a, 'i, 'l> ItemizeState<'a, 'i, 'l> {
 }
 
 fn hb_scale_ratio(font: &Font, metrics_tag: u32) -> Option<f64> {
-    let hb_font = font.hb_font();
-    let size = hb_font.ot_metrics_position(metrics_tag)?;
-    Some(f64::from(size) / f64::from(hb_font.y_scale()))
+    let size = font.ot_metric(metrics_tag)?;
+    Some(f64::from(size) / f64::from(font.y_scale()))
 }
 
 fn small_caps_ratio(font: &Font) -> Option<f64> {
-    let hb_font = font.hb_font();
-    let cap_height = hb_font.ot_metrics_position(METRICS_CAP_HEIGHT)?;
-    let x_height = hb_font.ot_metrics_position(METRICS_X_HEIGHT)?;
+    let cap_height = font.ot_metric(METRICS_CAP_HEIGHT)?;
+    let x_height = font.ot_metric(METRICS_X_HEIGHT)?;
     Some(f64::from(x_height) / f64::from(cap_height))
 }
 
@@ -920,7 +918,7 @@ fn variant_supported(item: &Item, variant: Variant) -> bool {
         return true;
     };
     let script_tag = southstar_unicode::script_tag(item.analysis.script.0 as u8);
-    font.hb_font().gsub_features_supported(
+    font.gsub_features_supported(
         script_tag,
         item.analysis.language.map(Language::as_str),
         features,
