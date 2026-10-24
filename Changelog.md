@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* The README screenshot shows the current build rendering a Wikipedia
+  article.
 * The MSIX package carries the Partner Center identity exactly: publisher
   display name Nordstjernen and the reserved app name Southstar Web
   Browser, so `scripts/pack-msix.sh` builds a Store-submittable package
