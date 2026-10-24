@@ -223,23 +223,6 @@ fn c_text(bytes: &[u8]) -> &[u8] {
     if bytes.contains(&0) { &[] } else { bytes }
 }
 
-unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
-    if p.is_null() {
-        Vec::new()
-    } else {
-        unsafe { CStr::from_ptr(p) }.to_bytes().to_vec()
-    }
-}
-
-unsafe fn taken(p: *mut c_char) -> Option<Vec<u8>> {
-    if p.is_null() {
-        return None;
-    }
-    let bytes = unsafe { borrowed(p) };
-    unsafe { southstar_glib::g_free(p.cast()) };
-    Some(bytes)
-}
-
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque() as usize)
 }

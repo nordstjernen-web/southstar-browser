@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_style::StyleTable;

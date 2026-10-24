@@ -9,7 +9,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{
-    GBoolean, GPtrArray, g_array_append_vals, g_free, g_ptr_array_add, g_ptr_array_new,
+    GPtrArray, g_array_append_vals, g_free, g_ptr_array_add, g_ptr_array_new,
     g_ptr_array_new_with_free_func, strdup,
 };
 use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
