@@ -26,6 +26,10 @@ On openSUSE:
         libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
         libwebp-devel libSDL2-devel
 
+On Arch Linux (see [Arch.md](Arch.md) for the package):
+
+    sudo pacman -S --needed base-devel meson rust python gtk4 libepoxy openssl         zlib brotli zstd uchardet libpsl sqlite libseccomp libwebp sdl2 ffmpeg
+
 On Alpine (musl libc):
 
     sudo apk add build-base linux-headers pkgconf meson ninja cargo rust gtk4.0-dev \

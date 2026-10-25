@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Packaging: an Arch Linux package, `southstar-browser`, in
+  `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
+  in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and
+  passes namcap.
 * Web fonts' WOFF and WOFF2 containers are decoded in Rust only:
   `rust/woff2` gains a WOFF 1.0 decoder (zlib through `miniz_oxide`, already
   a dependency), and FreeType no longer opens downloaded fonts to read their
