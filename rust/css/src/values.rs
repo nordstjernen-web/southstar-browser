@@ -13,6 +13,7 @@ use crate::defs;
 use crate::display;
 use crate::ffi;
 use crate::font;
+use crate::gaps;
 use crate::gradient;
 use crate::grid::{
     Areas, LineName, TRACK_AUTO, TRACK_FR, TRACK_MAX_CONTENT, TRACK_MIN_CONTENT, TRACK_PERCENT,
@@ -36,7 +37,7 @@ fn g(v: f64) -> Vec<u8> {
     southstar_numfmt::g(v).into_bytes()
 }
 
-fn g_unit(v: f64, unit: u32) -> Vec<u8> {
+pub(crate) fn g_unit(v: f64, unit: u32) -> Vec<u8> {
     let mut out = g(v);
     out.extend_from_slice(units::unit_suffix(unit).to_bytes());
     out
@@ -814,7 +815,7 @@ fn parsed_text(prop: Option<Prop>, value: &[u8]) -> Option<Vec<u8>> {
     property::parse_for(Some(prop?), value).map(|v| serialize(&v, false))
 }
 
-fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
     let text = c_text(value);
     if text_is_ident(value) {
         let known = parse_color(&text).is_some() || value.eq_ignore_ascii_case(b"currentcolor");
@@ -830,6 +831,9 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
     let Some(prop) = prop else {
         return math_canonical(&c_text(value));
     };
+    if let Some(text) = gaps::specified(prop, value) {
+        return Some(text);
+    }
     if prop == b"display"
         && let Some(text) = display::canonical(value)
     {

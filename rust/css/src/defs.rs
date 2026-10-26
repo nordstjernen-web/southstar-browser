@@ -27,7 +27,7 @@ pub(crate) struct Def {
     pub(crate) grammar: &'static str,
 }
 
-pub(crate) const DEFS: [Def; 61] = [
+pub(crate) const DEFS: [Def; 74] = [
     Def {
         prop: Prop::TextUnderlineOffset,
         kind: Kind::Length,
@@ -454,6 +454,97 @@ pub(crate) const DEFS: [Def; 61] = [
         inherited: false,
         initial: c"normal",
         grammar: "normal",
+    },
+    Def {
+        prop: Prop::ColumnRuleBreak,
+        kind: Kind::Keywords,
+        inherited: false,
+        initial: c"normal",
+        grammar: "none | normal | intersection",
+    },
+    Def {
+        prop: Prop::RowRuleBreak,
+        kind: Kind::Keywords,
+        inherited: false,
+        initial: c"normal",
+        grammar: "none | normal | intersection",
+    },
+    Def {
+        prop: Prop::ColumnRuleVisibilityItems,
+        kind: Kind::Keywords,
+        inherited: false,
+        initial: c"normal",
+        grammar: "all | around | between | normal",
+    },
+    Def {
+        prop: Prop::RowRuleVisibilityItems,
+        kind: Kind::Keywords,
+        inherited: false,
+        initial: c"normal",
+        grammar: "all | around | between | normal",
+    },
+    Def {
+        prop: Prop::RuleOverlap,
+        kind: Kind::Keywords,
+        inherited: false,
+        initial: c"row-over-column",
+        grammar: "row-over-column | column-over-row",
+    },
+    Def {
+        prop: Prop::ColumnRuleInsetCapStart,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::ColumnRuleInsetCapEnd,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::ColumnRuleInsetJunctionStart,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::ColumnRuleInsetJunctionEnd,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::RowRuleInsetCapStart,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::RowRuleInsetCapEnd,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::RowRuleInsetJunctionStart,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
+    },
+    Def {
+        prop: Prop::RowRuleInsetJunctionEnd,
+        kind: Kind::Length,
+        inherited: false,
+        initial: c"0px",
+        grammar: "overlap-join | <length-percentage>",
     },
 ];
 

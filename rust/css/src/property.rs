@@ -18,6 +18,7 @@ use crate::defs;
 use crate::display;
 use crate::ffi;
 use crate::font;
+use crate::gaps;
 use crate::gradient::{self, Gradient};
 use crate::grid::{self, Areas, Tracks};
 use crate::image;
@@ -467,6 +468,7 @@ pub(crate) fn requires_nonnegative(prop: Prop) -> bool {
             | Prop::ColumnWidth
             | Prop::ColumnHeight
             | Prop::ColumnRuleWidth
+            | Prop::RowRuleWidth
     )
 }
 
@@ -533,6 +535,7 @@ fn is_border_width(prop: Prop) -> bool {
             | Prop::BorderLeftWidth
             | Prop::OutlineWidth
             | Prop::ColumnRuleWidth
+            | Prop::RowRuleWidth
     )
 }
 
@@ -1761,7 +1764,8 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         | P::BorderRightStyle
         | P::BorderBottomStyle
         | P::BorderLeftStyle
-        | P::ColumnRuleStyle => keyword_choice(
+        | P::ColumnRuleStyle
+        | P::RowRuleStyle => keyword_choice(
             t,
             "none hidden dotted dashed solid double groove ridge inset outset",
         ),
@@ -1850,6 +1854,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         | P::OutlineColor
         | P::TextDecorationColor
         | P::ColumnRuleColor
+        | P::RowRuleColor
         | P::CaretColor
         | P::StopColor
         | P::WebkitTextFillColor
@@ -1934,7 +1939,8 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         | P::ScrollMarginRight
         | P::ScrollMarginBottom
         | P::ScrollMarginLeft
-        | P::ColumnRuleWidth => length_prop(prop, t),
+        | P::ColumnRuleWidth
+        | P::RowRuleWidth => length_prop(prop, t),
         P::Order
         | P::ZIndex
         | P::ColumnCount
@@ -2157,6 +2163,12 @@ pub(crate) fn parse(prop: Prop, text: &[u8]) -> Option<Value> {
     let mut t = trim_range(text, start, text.len());
     if let Some(v) = wide_keyword(t) {
         return Some(v);
+    }
+    if let Some(part) = gaps::part_of(prop) {
+        let canonical = gaps::longhand_canonical(part, t)?;
+        if gaps::is_list(&canonical) {
+            return Some(Value::keyword(canonical));
+        }
     }
     if bg_layered(prop) && has_top_level_comma(t) {
         return layer_list(prop, t);

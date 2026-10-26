@@ -188,3 +188,119 @@ fn table_properties_carry_their_inheritance() {
     assert_eq!(named(b"text-wrap-mode").as_deref(), Some("text-wrap-mode"));
     assert_eq!(named(b"overflow-block").as_deref(), Some("overflow-y"));
 }
+
+fn composed(name: &str, longhands: &[(&str, &str)]) -> Option<String> {
+    crate::gaps::shorthand_compose(name.as_bytes(), &mut |prop| {
+        longhands
+            .iter()
+            .find(|(p, _)| p.as_bytes() == prop)
+            .map(|(_, v)| v.as_bytes().to_vec())
+    })
+    .flatten()
+    .map(|v| text(&v))
+}
+
+#[test]
+fn gap_rule_lists_keep_repeat_and_canonical_items() {
+    assert_eq!(
+        specified("column-rule-width", "0, repeat(calc(5 + 3), THIN, 2PX)").as_deref(),
+        Some("0px, repeat(8, thin, 2px)")
+    );
+    assert_eq!(
+        specified("row-rule-style", "repeat(auto, dotted), ridge").as_deref(),
+        Some("repeat(auto, dotted), ridge")
+    );
+    assert_eq!(specified("column-rule-width", "30%"), None);
+    assert_eq!(specified("column-rule-width", "repeat(2, -20px)"), None);
+    assert_eq!(
+        specified("row-rule-color", "repeat(auto, red), repeat(auto, blue)"),
+        None
+    );
+    assert_eq!(specified("column-rule-style", "repeat(0, solid)"), None);
+}
+
+#[test]
+fn gap_rule_shorthand_fills_each_longhand_list() {
+    assert_eq!(
+        longhands(
+            "column-rule",
+            "repeat(3, lime 16px, dashed purple, 10px dotted)"
+        ),
+        pairs(&[
+            ("column-rule-width", "repeat(3, 16px, medium, 10px)"),
+            ("column-rule-style", "repeat(3, none, dashed, dotted)"),
+            ("column-rule-color", "repeat(3, lime, purple, currentcolor)"),
+        ])
+    );
+    assert_eq!(longhands("rule", "red 5px solid red"), pairs(&[]));
+    assert_eq!(
+        longhands("rule-break", "intersection"),
+        pairs(&[
+            ("column-rule-break", "intersection"),
+            ("row-rule-break", "intersection"),
+        ])
+    );
+}
+
+#[test]
+fn gap_rule_shorthand_serializes_only_matching_shapes() {
+    let rule = [
+        ("column-rule-width", "repeat(auto, 5px)"),
+        ("column-rule-style", "repeat(auto, solid)"),
+        ("column-rule-color", "repeat(auto, red)"),
+    ];
+    assert_eq!(
+        composed("column-rule", &rule).as_deref(),
+        Some("repeat(auto, 5px solid red)")
+    );
+    let defaults = [
+        ("column-rule-width", "medium"),
+        ("column-rule-style", "none"),
+        ("column-rule-color", "currentcolor"),
+    ];
+    assert_eq!(
+        composed("column-rule", &defaults).as_deref(),
+        Some("medium")
+    );
+    let mismatched = [
+        ("column-rule-width", "15px, 25px"),
+        ("column-rule-style", "solid"),
+        ("column-rule-color", "green"),
+    ];
+    assert_eq!(composed("column-rule", &mismatched).as_deref(), Some(""));
+}
+
+#[test]
+fn gap_rule_inset_shorthands_expand_and_collapse() {
+    assert_eq!(
+        longhands("column-rule-inset", "10px / 20px 30px"),
+        pairs(&[
+            ("column-rule-inset-cap-start", "10px"),
+            ("column-rule-inset-cap-end", "10px"),
+            ("column-rule-inset-junction-start", "20px"),
+            ("column-rule-inset-junction-end", "30px"),
+        ])
+    );
+    assert_eq!(
+        longhands("row-rule-inset", "overlap-join 10px 20px"),
+        pairs(&[])
+    );
+    let insets = [
+        ("column-rule-inset-cap-start", "10px"),
+        ("column-rule-inset-cap-end", "20px"),
+        ("column-rule-inset-junction-start", "10px"),
+        ("column-rule-inset-junction-end", "20px"),
+    ];
+    assert_eq!(
+        composed("column-rule-inset", &insets).as_deref(),
+        Some("10px 20px / 10px 20px")
+    );
+    assert_eq!(
+        composed("column-rule-inset-start", &insets).as_deref(),
+        Some("10px")
+    );
+    assert_eq!(
+        composed("column-rule-inset-cap", &insets).as_deref(),
+        Some("10px 20px")
+    );
+}

@@ -129,6 +129,7 @@ carry forward from the 1.0.21 pass.
 | `column-width` / `columns` shorthand | ✅ | used column count derived per spec (`floor((avail+gap)/(width+gap))`); verified on `<ol>`/`<ul>` reference lists |
 | `column-gap` | ✅ | |
 | `column-rule` (`-width`/`-style`/`-color`) | ✅ | divider painted between filled columns (`rust/paint`) |
+| Gap decorations (CSS Gaps 1): `row-rule-*`, `rule`, `rule-*`, `*-rule-break`, `*-rule-visibility-items`, `rule-overlap`, the `*-rule-inset-*` family | 🟡 | parsed, serialized and computed (`rust/css/src/gaps.rs`), including value lists with `repeat()` / `repeat(auto, …)` and the bidirectional shorthands; only a single-valued `column-rule` in multicol is painted |
 | Fragmenting a single inline/text run across columns | ✅ | plain inline text runs are split by wrapped line into balanced column fragments; links and text-style ranges are preserved |
 
 ## Tables (Tables 3)

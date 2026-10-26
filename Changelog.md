@@ -66,6 +66,20 @@ Southstar Browser 1.0.2-dev:
   closepath command without reading input, so painting looped forever and
   the geometry methods grew memory until the process died. They now stop
   at the stray number, as the canvas `Path2D` parser already did.
+* CSS gap decorations (CSS Gaps 1) are parsed, serialized and computed:
+  the `row-rule-width`/`-style`/`-color` longhands next to the column ones,
+  value lists with `repeat(N, …)` and one `repeat(auto, …)` in all six,
+  `column-rule-break`/`row-rule-break`, `*-rule-visibility-items`,
+  `rule-overlap` and the eight `*-rule-inset-cap-*`/`-junction-*`
+  longhands, plus the `rule`, `row-rule`, `rule-width`/`-style`/`-color`,
+  `rule-break`, `rule-visibility-items` and `*-rule-inset[-cap|-junction|
+  -start|-end]` shorthands, which serialize back from their longhands only
+  when the lists line up. `column-rule-width` no longer accepts
+  percentages and computes as specified whatever the rule style (initial
+  `3px`), negative `calc()` widths clamp to `0px`, and `column-rule`
+  omits its initial parts. WPT `css/css-gaps/parsing` goes from 354 to
+  1750 of 1750 subtests, `css/css-multicol/parsing` gains 7, with no
+  regressions over the 2571 CSS test files.
 * Packaging: an Arch Linux package, `southstar-browser`, in
   `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
   in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and

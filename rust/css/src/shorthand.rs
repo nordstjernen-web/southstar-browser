@@ -8,6 +8,7 @@ use crate::color::{self, parse_color};
 use crate::defs;
 use crate::ffi;
 use crate::font;
+use crate::gaps;
 use crate::gradient::text_starts_gradient;
 use crate::grid;
 use crate::image::{image_value_canonical, text_starts_image_set};
@@ -288,6 +289,12 @@ pub(crate) fn slot_value(decls: &[Decl], mut index: usize) -> &Value {
 
 pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
     let mut out = Out::default();
+    if !contains(text, b"var(")
+        && let Some(pairs) = gaps::expand(name, text)
+    {
+        gap_longhands(&mut out, &pairs);
+        return out.0;
+    }
     match name {
         b"all" => all(&mut out, text),
         b"border-image" | b"-webkit-border-image" => border_image_shorthand(&mut out, text),
@@ -468,6 +475,22 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
         }
     }
     out.0
+}
+
+fn gap_longhands(out: &mut Out, pairs: &[(Prop, Vec<u8>)]) {
+    let parsed: Option<Vec<(Prop, Value)>> = pairs
+        .iter()
+        .map(|(prop, text)| {
+            let mut value = parse(*prop, text)?;
+            if matches!(value.body, Body::Calc(_)) {
+                value.specified = Some(text.clone());
+            }
+            Some((*prop, value))
+        })
+        .collect();
+    for (prop, value) in parsed.into_iter().flatten() {
+        out.push(prop, value);
+    }
 }
 
 fn all(out: &mut Out, text: &[u8]) {
