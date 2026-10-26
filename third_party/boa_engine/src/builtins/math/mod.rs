@@ -140,7 +140,7 @@ impl Math {
             // 2. If n is NaN, n > 1𝔽, or n < -1𝔽, return NaN.
             // 3. If n is 1𝔽, return +0𝔽.
             // 4. Return an implementation-approximated value representing the result of the inverse cosine of ℝ(n).
-            .acos()
+            .portable_acos()
             .into())
     }
 
@@ -160,7 +160,7 @@ impl Math {
         // 2. If n is NaN or n is +∞𝔽, return n.
         // 3. If n is 1𝔽, return +0𝔽.
         // 5. Return an implementation-approximated value representing the result of the inverse hyperbolic cosine of ℝ(n).
-        Ok(acosh(n).into())
+        Ok(libm::acosh(n).into())
     }
 
     /// Get the arcsine of a number.
@@ -179,7 +179,7 @@ impl Math {
             // 2. If n is NaN, n is +0𝔽, or n is -0𝔽, return n.
             // 3. If n > 1𝔽 or n < -1𝔽, return NaN.
             // 4. Return an implementation-approximated value representing the result of the inverse sine of ℝ(n).
-            .asin()
+            .portable_asin()
             .into())
     }
 
@@ -197,7 +197,7 @@ impl Math {
 
         // 2. If n is NaN, n is +0𝔽, n is -0𝔽, n is +∞𝔽, or n is -∞𝔽, return n.
         // 3. Return an implementation-approximated value representing the result of the inverse hyperbolic sine of ℝ(n).
-        Ok(asinh(n).into())
+        Ok(libm::asinh(n).into())
     }
 
     /// Get the arctangent of a number.
@@ -217,7 +217,7 @@ impl Math {
             // 3. If n is +∞𝔽, return an implementation-approximated value representing π / 2.
             // 4. If n is -∞𝔽, return an implementation-approximated value representing -π / 2.
             // 5. Return an implementation-approximated value representing the result of the inverse tangent of ℝ(n).
-            .atan()
+            .portable_atan()
             .into())
     }
 
@@ -238,7 +238,7 @@ impl Math {
         // 4. If n is 1𝔽, return +∞𝔽.
         // 5. If n is -1𝔽, return -∞𝔽.
         // 6. Return an implementation-approximated value representing the result of the inverse hyperbolic tangent of ℝ(n).
-        Ok(atanh(n).into())
+        Ok(libm::atanh(n).into())
     }
 
     /// Get the four quadrant arctangent of the quotient y / x.
@@ -281,7 +281,7 @@ impl Math {
         // c. If nx is +0𝔽 or nx is -0𝔽, return an implementation-approximated value representing -π / 2.
         // 11. Assert: nx is finite and is neither +0𝔽 nor -0𝔽.
         // 12. Return an implementation-approximated value representing the result of the inverse tangent of the quotient ℝ(ny) / ℝ(nx).
-        Ok(y.atan2(x).into())
+        Ok(libm::atan2(y, x).into())
     }
 
     /// Get the cubic root of a number.
@@ -299,7 +299,7 @@ impl Math {
             .to_number(context)?
             // 2. If n is NaN, n is +0𝔽, n is -0𝔽, n is +∞𝔽, or n is -∞𝔽, return n.
             // 3. Return an implementation-approximated value representing the result of the cube root of ℝ(n).
-            .cbrt()
+            .portable_cbrt()
             .into())
     }
 
@@ -359,7 +359,7 @@ impl Math {
             // 2. If n is NaN, n is +∞𝔽, or n is -∞𝔽, return NaN.
             // 3. If n is +0𝔽 or n is -0𝔽, return 1𝔽.
             // 4. Return an implementation-approximated value representing the result of the cosine of ℝ(n).
-            .cos()
+            .portable_cos()
             .into())
     }
 
@@ -380,7 +380,7 @@ impl Math {
             // 3. If n is +∞𝔽 or n is -∞𝔽, return +∞𝔽.
             // 4. If n is +0𝔽 or n is -0𝔽, return 1𝔽.
             // 5. Return an implementation-approximated value representing the result of the hyperbolic cosine of ℝ(n).
-            .cosh()
+            .portable_cosh()
             .into())
     }
 
@@ -423,7 +423,7 @@ impl Math {
             // 2. If n is NaN, n is +0𝔽, n is -0𝔽, or n is +∞𝔽, return n.
             // 3. If n is -∞𝔽, return -1𝔽.
             // 4. Return an implementation-approximated value representing the result of subtracting 1 from the exponential function of ℝ(n).
-            .exp_m1()
+            .portable_expm1()
             .into())
     }
 
@@ -569,7 +569,7 @@ impl Math {
             // 4. If n is +0𝔽 or n is -0𝔽, return -∞𝔽.
             // 5. If n < +0𝔽, return NaN.
             // 6. Return an implementation-approximated value representing the result of the natural logarithm of ℝ(n).
-            .ln()
+            .portable_log()
             .into())
     }
 
@@ -590,7 +590,7 @@ impl Math {
             // 3. If n is -1𝔽, return -∞𝔽.
             // 4. If n < -1𝔽, return NaN.
             // 5. Return an implementation-approximated value representing the result of the natural logarithm of 1 + ℝ(n).
-            .ln_1p()
+            .portable_log1p()
             .into())
     }
 
@@ -612,7 +612,7 @@ impl Math {
             // 4. If n is +0𝔽 or n is -0𝔽, return -∞𝔽.
             // 5. If n < +0𝔽, return NaN.
             // 6. Return an implementation-approximated value representing the result of the base 10 logarithm of ℝ(n).
-            .log10()
+            .portable_log10()
             .into())
     }
 
@@ -634,7 +634,7 @@ impl Math {
             // 4. If n is +0𝔽 or n is -0𝔽, return -∞𝔽.
             // 5. If n < +0𝔽, return NaN.
             // 6. Return an implementation-approximated value representing the result of the base 2 logarithm of ℝ(n).
-            .log2()
+            .portable_log2()
             .into())
     }
 
@@ -842,7 +842,7 @@ impl Math {
             // 2. If n is NaN, n is +0𝔽, or n is -0𝔽, return n.
             // 3. If n is +∞𝔽 or n is -∞𝔽, return NaN.
             // 4. Return an implementation-approximated value representing the result of the sine of ℝ(n).
-            .sin()
+            .portable_sin()
             .into())
     }
 
@@ -861,7 +861,7 @@ impl Math {
             .to_number(context)?
             // 2. If n is NaN, n is +0𝔽, n is -0𝔽, n is +∞𝔽, or n is -∞𝔽, return n.
             // 3. Return an implementation-approximated value representing the result of the hyperbolic sine of ℝ(n).
-            .sinh()
+            .portable_sinh()
             .into())
     }
 
@@ -901,7 +901,7 @@ impl Math {
             // 2. If n is NaN, n is +0𝔽, or n is -0𝔽, return n.
             // 3. If n is +∞𝔽, or n is -∞𝔽, return NaN.
             // 4. Return an implementation-approximated value representing the result of the tangent of ℝ(n).
-            .tan()
+            .portable_tan()
             .into())
     }
 
@@ -922,7 +922,7 @@ impl Math {
             // 3. If n is +∞𝔽, return 1𝔽.
             // 4. If n is -∞𝔽, return -1𝔽.
             // 5. Return an implementation-approximated value representing the result of the hyperbolic tangent of ℝ(n).
-            .tanh()
+            .portable_tanh()
             .into())
     }
 
@@ -1046,51 +1046,73 @@ impl Math {
     }
 }
 
-// The inverse hyperbolic functions of musl's libm (MIT licensed), which stay within 2 ulp where
-// the formulas of Rust's standard library lose most of their precision near 1.
-
-fn biased_exponent(x: f64) -> u64 {
-    (x.to_bits() >> 52) & 0x7ff
+/// The transcendental functions come from the `libm` crate, a port of musl's (itself derived from
+/// fdlibm, as the other engines' are), instead of the C runtime, whose results differ between
+/// platforms and lose precision on some (MinGW's `log1p`, `expm1` and hyperbolic functions).
+/// `exp` stays the standard library's, which gives `Math.exp(1) === Math.E` where `libm` is an
+/// ulp off.
+trait PortableMath {
+    fn portable_acos(self) -> f64;
+    fn portable_asin(self) -> f64;
+    fn portable_atan(self) -> f64;
+    fn portable_cbrt(self) -> f64;
+    fn portable_cos(self) -> f64;
+    fn portable_cosh(self) -> f64;
+    fn portable_expm1(self) -> f64;
+    fn portable_log(self) -> f64;
+    fn portable_log1p(self) -> f64;
+    fn portable_log10(self) -> f64;
+    fn portable_log2(self) -> f64;
+    fn portable_sin(self) -> f64;
+    fn portable_sinh(self) -> f64;
+    fn portable_tan(self) -> f64;
+    fn portable_tanh(self) -> f64;
 }
 
-fn acosh(x: f64) -> f64 {
-    let e = biased_exponent(x);
-    if e < 0x3ff + 1 {
-        let t = x - 1.0;
-        (t + (t * t + 2.0 * t).sqrt()).ln_1p()
-    } else if e < 0x3ff + 26 {
-        (2.0 * x - 1.0 / (x + (x * x - 1.0).sqrt())).ln()
-    } else {
-        x.ln() + std::f64::consts::LN_2
+impl PortableMath for f64 {
+    fn portable_acos(self) -> f64 {
+        libm::acos(self)
     }
-}
-
-fn asinh(x: f64) -> f64 {
-    let e = biased_exponent(x);
-    let a = x.abs();
-    let y = if e >= 0x3ff + 26 {
-        a.ln() + std::f64::consts::LN_2
-    } else if e >= 0x3ff + 1 {
-        (2.0 * a + 1.0 / ((a * a + 1.0).sqrt() + a)).ln()
-    } else if e >= 0x3ff - 26 {
-        (a + a * a / ((a * a + 1.0).sqrt() + 1.0)).ln_1p()
-    } else {
-        a
-    };
-    y.copysign(x)
-}
-
-fn atanh(x: f64) -> f64 {
-    let e = biased_exponent(x);
-    let a = x.abs();
-    let y = if e < 0x3ff - 1 {
-        if e < 0x3ff - 32 {
-            a
-        } else {
-            0.5 * (2.0 * a + 2.0 * a * a / (1.0 - a)).ln_1p()
-        }
-    } else {
-        0.5 * (2.0 * (a / (1.0 - a))).ln_1p()
-    };
-    y.copysign(x)
+    fn portable_asin(self) -> f64 {
+        libm::asin(self)
+    }
+    fn portable_atan(self) -> f64 {
+        libm::atan(self)
+    }
+    fn portable_cbrt(self) -> f64 {
+        libm::cbrt(self)
+    }
+    fn portable_cos(self) -> f64 {
+        libm::cos(self)
+    }
+    fn portable_cosh(self) -> f64 {
+        libm::cosh(self)
+    }
+    fn portable_expm1(self) -> f64 {
+        libm::expm1(self)
+    }
+    fn portable_log(self) -> f64 {
+        libm::log(self)
+    }
+    fn portable_log1p(self) -> f64 {
+        libm::log1p(self)
+    }
+    fn portable_log10(self) -> f64 {
+        libm::log10(self)
+    }
+    fn portable_log2(self) -> f64 {
+        libm::log2(self)
+    }
+    fn portable_sin(self) -> f64 {
+        libm::sin(self)
+    }
+    fn portable_sinh(self) -> f64 {
+        libm::sinh(self)
+    }
+    fn portable_tan(self) -> f64 {
+        libm::tan(self)
+    }
+    fn portable_tanh(self) -> f64 {
+        libm::tanh(self)
+    }
 }

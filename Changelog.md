@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `Math`'s transcendental functions (`sin`, `cos`, `tan`, their
+  inverses and hyperbolic forms, `log`, `log1p`, `log10`, `log2`, `expm1`,
+  `cbrt`, `atan2`) come from the `libm` crate, a Rust port of musl's
+  fdlibm-derived library that was already in the dependency tree, instead
+  of the C runtime. Results are now the same on Windows, Linux and macOS,
+  and MinGW's less precise `log1p`, `expm1` and hyperbolic functions are no
+  longer used on Windows.
 * JavaScript: `Array.prototype.push` and `pop` append to and remove from a
   plain array's element storage directly instead of running the generic
   property `Set`, `Get` and `Delete` steps: a push loop runs 27% faster
