@@ -9,6 +9,13 @@ Southstar Browser 1.0.2-dev:
   memory before the 1 MiB response-header limit was checked. HTTP/2
   response fields containing CR, LF or NUL are now a protocol error
   (RFC 9113 section 8.2.1) instead of being passed on inside header lines.
+* Security: the renderer's Landlock ruleset no longer grants read access
+  to the whole of `~/.config`, `~/.local/share` and `~/.cache`, where other
+  programs keep tokens, browser profiles and keyrings. The renderer now
+  reads only the subdirectories it uses there (fontconfig, fonts, the MIME
+  database, icon themes, spell-checking dictionaries and GPU shader
+  caches) besides its own `southstar` directories. Other sandboxed
+  processes keep the wider rules.
 * Packaging: an Arch Linux package, `southstar-browser`, in
   `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
   in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and
