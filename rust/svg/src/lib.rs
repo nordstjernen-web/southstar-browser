@@ -39,6 +39,8 @@ const DEFAULT_DIM_PX: f64 = 512.0;
 const DEFAULT_OBJECT_W: f64 = 300.0;
 const DEFAULT_OBJECT_H: f64 = 150.0;
 const MAX_HREF_CHAIN: usize = 16;
+const MAX_NESTED_MASKS: usize = 8;
+const MAX_MASK_PIXELS: f64 = 256.0 * 1024.0 * 1024.0;
 
 static SVG_X: Prop = Prop::new(c"x");
 static SVG_Y: Prop = Prop::new(c"y");
@@ -59,6 +61,8 @@ pub struct Ctx<'a> {
     use_depth: i32,
     nesting: i32,
     nodes: i32,
+    masks: Vec<Node<'a>>,
+    mask_pixels: f64,
     vw: f64,
     vh: f64,
 }
@@ -331,6 +335,8 @@ impl<'a> Ctx<'a> {
             use_depth: 0,
             nesting: 0,
             nodes: 0,
+            masks: Vec::new(),
+            mask_pixels: 0.0,
             vw,
             vh,
         }
@@ -822,11 +828,23 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    fn mask_surface(&mut self, n: Node<'a>, st: &State) -> Option<Surface> {
-        let mask = self.url_target(n, c"mask", b"mask")?;
-        if self.depth >= MAX_DEPTH {
-            return None;
+    fn mask_surface(&mut self, n: Node<'a>, st: &State) -> Result<Option<Surface>, ()> {
+        let Some(mask) = self.url_target(n, c"mask", b"mask") else {
+            return Ok(None);
+        };
+        if self.depth >= MAX_DEPTH
+            || self.masks.len() >= MAX_NESTED_MASKS
+            || self.masks.iter().any(|m| m.as_ptr() == mask.as_ptr())
+        {
+            return Err(());
         }
+        self.masks.push(mask);
+        let surface = self.render_mask(mask, st);
+        self.masks.pop();
+        surface.map(Some).ok_or(())
+    }
+
+    fn render_mask(&mut self, mask: Node<'a>, st: &State) -> Option<Surface> {
         let (ox, oy) = self.cr.target_device_offset();
         let (cx1, cy1, cx2, cy2) = self.cr.clip_extents();
         let ctm = self.cr.matrix();
@@ -834,9 +852,11 @@ impl<'a> Ctx<'a> {
         let (cx2, cy2) = ctm.transform_point(cx2, cy2);
         let w = (cmax(cx1, cx2) + ox).ceil() as i32;
         let h = (cmax(cy1, cy2) + oy).ceil() as i32;
-        if w <= 0 || h <= 0 || f64::from(w) * f64::from(h) > MAX_PIXELS {
+        let pixels = f64::from(w) * f64::from(h);
+        if w <= 0 || h <= 0 || pixels > MAX_PIXELS || self.mask_pixels + pixels > MAX_MASK_PIXELS {
             return None;
         }
+        self.mask_pixels += pixels;
         let mut rgb = Surface::image(FORMAT_ARGB32, w, h)?;
         {
             let mcr = OwnedCanvas::on(&rgb);
@@ -1173,7 +1193,10 @@ impl<'a> Ctx<'a> {
         let cr = self.cr;
         cr.save();
         self.apply_transform_attr(n);
-        let mask = self.mask_surface(n, &st);
+        let Ok(mask) = self.mask_surface(n, &st) else {
+            cr.restore();
+            return;
+        };
         let grouped = opacity < 1.0 || mask.is_some();
         if grouped {
             cr.push_group();

@@ -38,6 +38,14 @@ Southstar Browser 1.0.2-dev:
   and checked to be the same file it inspected), at most 256 MiB, whose
   PNG header declares at most 16384 pixels a side, and decodes it from
   memory; at most 1000 sheets and 2^30 pixels in all are loaded.
+* Security: an SVG mask that refers back to itself no longer stalls image
+  decoding. A mask whose content carries `mask="url(#same)"` used to
+  recurse 24 levels deep, rendering a full-size mask surface at every
+  level and multiplying with each self-referencing child; a two-rectangle
+  file kept the decoder busy indefinitely. A mask already being rendered,
+  more than 8 nested masks, or masks totalling more than 256 megapixels in
+  one render now make the masked element render nothing, as the SVG
+  specification asks for reference cycles.
 * JavaScript: property access is faster. Inline cache hits compare
   shapes without creating new references to them, and typed arrays no
   longer convert every named property (`length`, `subarray`, ...) to a
