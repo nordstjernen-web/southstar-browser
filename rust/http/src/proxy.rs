@@ -114,6 +114,30 @@ pub fn parse(spec: &[u8]) -> Option<Proxy> {
     })
 }
 
+pub type EnvLookup<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
+
+const ENV_PROXY_VARS: [&str; 3] = ["https_proxy", "http_proxy", "all_proxy"];
+
+pub fn env_valid(lookup: EnvLookup) -> bool {
+    ENV_PROXY_VARS
+        .iter()
+        .filter_map(|name| lookup(name))
+        .all(|spec| parse(&spec).is_some())
+}
+
+pub fn from_env(url: &[u8], host: &str, lookup: EnvLookup) -> Option<Proxy> {
+    let no_proxy = lookup("no_proxy").unwrap_or_default();
+    if bypassed(&no_proxy, host) {
+        return None;
+    }
+    let secure = url.starts_with(b"https://").then(|| lookup("https_proxy"));
+    let spec = secure
+        .flatten()
+        .or_else(|| lookup("http_proxy"))
+        .or_else(|| lookup("all_proxy"))?;
+    parse(&spec)
+}
+
 pub fn bypassed(no_proxy: &[u8], host: &str) -> bool {
     let host = host
         .trim_start_matches('[')

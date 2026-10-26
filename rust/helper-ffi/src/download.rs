@@ -97,7 +97,16 @@ fn ca_bundle() -> Option<Vec<u8>> {
         .map(String::into_bytes)
 }
 
+fn env_value(name: &str) -> Option<Vec<u8>> {
+    std::env::var_os(name)
+        .map(|v| v.as_encoded_bytes().to_vec())
+        .filter(|v| !v.trim_ascii().is_empty())
+}
+
 pub fn to_file(url: &[u8], path: &str, max: u64) -> bool {
+    if !url.starts_with(b"data:") && !southstar_http::env_proxies_valid(&env_value) {
+        return false;
+    }
     let Ok(mut file) = File::create(path) else {
         return false;
     };
@@ -106,12 +115,12 @@ pub fn to_file(url: &[u8], path: &str, max: u64) -> bool {
             .filter(|d| d.len() as u64 <= max)
             .is_some_and(|d| file.write_all(&d).is_ok());
     }
-    let route = |_: &[u8], _: &str| Route {
+    let route = |target: &[u8], host: &str| Route {
         tls: TlsSettings {
             ca_bundle: ca_bundle(),
             curves: b"X25519:P-256:P-384".to_vec(),
         },
-        proxy: None,
+        proxy: southstar_http::env_proxy(target, host, &env_value),
         allow_insecure: false,
     };
     let request = Fetch {

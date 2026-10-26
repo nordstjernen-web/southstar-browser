@@ -43,6 +43,9 @@ pub fn init() {
 }
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
-pub use proxy::{Proxy, bypassed as proxy_bypassed, parse as parse_proxy};
+pub use proxy::{
+    EnvLookup, Proxy, bypassed as proxy_bypassed, env_valid as env_proxies_valid,
+    from_env as env_proxy, parse as parse_proxy,
+};
 pub use tls::{Settings as TlsSettings, preload_trust_roots};
 pub use transfer::Handler;
