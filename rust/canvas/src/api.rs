@@ -859,11 +859,16 @@ pub(crate) fn imagedata_wrap(
     obj
 }
 
+pub(crate) const IMAGEDATA_MAX_BYTES: usize = 1 << 30;
+
 pub(crate) fn clamped_array(
     realm: &mut Scope<'_>,
     rgba: Option<&[u8]>,
     n: usize,
 ) -> Result<Value, Value> {
+    if n > IMAGEDATA_MAX_BYTES {
+        return Err(realm.range_error(IMAGEDATA_RANGE));
+    }
     let buffer = match rgba {
         Some(bytes) => realm.new_array_buffer(bytes)?,
         None => {
