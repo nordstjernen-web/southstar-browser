@@ -369,10 +369,7 @@ pub(crate) fn native_function_call(
     argument_count: usize,
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
-    let args = context
-        .vm
-        .stack
-        .calling_convention_pop_arguments(argument_count);
+    let args = context.vm.pop_native_arguments(argument_count);
     let _func = context.vm.stack.pop();
     let this = context.vm.stack.pop();
 
@@ -428,6 +425,7 @@ pub(crate) fn native_function_call(
     context.swap_realm(&mut realm);
 
     context.vm.shadow_stack.pop();
+    context.vm.recycle_native_arguments(args);
 
     context.vm.stack.push(result?);
 
@@ -475,10 +473,7 @@ fn native_function_construct(
     let previous_script_realm = enter_script_realm(context, &realm);
 
     let new_target = context.vm.stack.pop();
-    let args = context
-        .vm
-        .stack
-        .calling_convention_pop_arguments(argument_count);
+    let args = context.vm.pop_native_arguments(argument_count);
     let _func = context.vm.stack.pop();
     let _this = context.vm.stack.pop();
 
@@ -518,6 +513,7 @@ fn native_function_construct(
     context.swap_realm(&mut realm);
 
     context.vm.shadow_stack.pop();
+    context.vm.recycle_native_arguments(args);
 
     context.vm.stack.push(result?);
 

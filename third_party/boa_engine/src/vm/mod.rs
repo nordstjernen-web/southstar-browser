@@ -102,6 +102,9 @@ pub struct Vm {
     /// without `new`; native constructors are invoked with `undefined`.
     pub(crate) native_constructor_receiver: JsValue,
 
+    /// Empty argument vectors of finished native calls, reused by the next ones.
+    argument_buffers: Vec<Vec<JsValue>>,
+
     /// Number of nested host calls that re-enter the VM via `Context::run()`.
     ///
     /// This is incremented by high-level host entry points such as
@@ -427,6 +430,25 @@ impl ActiveRunnable {
 }
 
 impl Vm {
+    /// Pops the `argument_count` arguments of a native call off the stack into a vector, reusing
+    /// one that [`Vm::recycle_native_arguments`] returned instead of allocating.
+    pub(crate) fn pop_native_arguments(&mut self, argument_count: usize) -> Vec<JsValue> {
+        let mut arguments = self.argument_buffers.pop().unwrap_or_default();
+        let index = self.stack.stack.len() - argument_count;
+        arguments.extend(self.stack.stack.drain(index..));
+        arguments
+    }
+
+    /// Takes back a vector from [`Vm::pop_native_arguments`] once the call is over.
+    pub(crate) fn recycle_native_arguments(&mut self, mut arguments: Vec<JsValue>) {
+        const MAX_BUFFERS: usize = 16;
+        const MAX_CAPACITY: usize = 64;
+        arguments.clear();
+        if self.argument_buffers.len() < MAX_BUFFERS && arguments.capacity() <= MAX_CAPACITY {
+            self.argument_buffers.push(arguments);
+        }
+    }
+
     /// Creates a new virtual machine.
     pub(crate) fn new(realm: Realm) -> Self {
         let mut frames = Vec::with_capacity(16);
@@ -446,6 +468,7 @@ impl Vm {
             native_caller_realm: None,
             native_script_realm: None,
             native_constructor_receiver: JsValue::undefined(),
+            argument_buffers: Vec::new(),
             host_call_depth: 0,
             shadow_stack: ShadowStack::default(),
             interrupt_handler: None,
