@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: calls to built-in functions no longer allocate a vector for
+  their arguments, and reading a variable captured by a closure skips the
+  generic environment search when no `with` or `eval` is involved: a loop
+  of `Math.max`/`charCodeAt` calls runs 37% faster and a loop reading
+  closure variables almost four times faster.
 * `docs/wpt-scores.md` has a re-clustered Top 10 list from the 2026-10-26
   Windows compliance slice.
 * JavaScript: `Math`'s transcendental functions (`sin`, `cos`, `tan`, their

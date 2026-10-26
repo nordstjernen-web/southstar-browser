@@ -2,6 +2,7 @@ use boa_ast::scope::{BindingLocator, BindingLocatorScope};
 
 use crate::{
     Context, JsResult, JsValue,
+    environments::Environment,
     error::JsNativeError,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
@@ -24,6 +25,10 @@ impl GetName {
         (value, index): (RegisterOperand, IndexOperand),
         context: &mut Context,
     ) -> JsResult<()> {
+        if let Some(result) = get_declarative_binding(index, context) {
+            context.vm.set_register(value.into(), result);
+            return Ok(());
+        }
         let mut binding_locator =
             context.vm.frame().code_block.bindings[usize::from(index)].clone();
         context.find_runtime_binding(&mut binding_locator)?;
@@ -34,6 +39,31 @@ impl GetName {
         context.vm.set_register(value.into(), result);
         Ok(())
     }
+}
+
+/// The value of the binding at `index` when it lives in a declarative environment that no `with`
+/// object or direct `eval` can shadow or delete (the case in which `find_runtime_binding` keeps
+/// the compiled locator), read without copying the locator or walking the environments twice.
+/// `None` sends the caller down the full lookup, which also reports uninitialized bindings.
+fn get_declarative_binding(index: IndexOperand, context: &Context) -> Option<JsValue> {
+    let frame = context.vm.frame();
+    let locator = &frame.code_block.bindings[usize::from(index)];
+    let BindingLocatorScope::Stack(environment) = locator.scope() else {
+        return None;
+    };
+    let tip = frame
+        .environments
+        .current_declarative_ref(frame.realm.environment())?;
+    if tip.with() || tip.poisoned() {
+        return None;
+    }
+    let Environment::Declarative(env) = frame.environments.get(environment as usize)? else {
+        return None;
+    };
+    if env.is_deleted_binding(locator.binding_index()) {
+        return None;
+    }
+    env.get(locator.binding_index())
 }
 
 impl Operation for GetName {
