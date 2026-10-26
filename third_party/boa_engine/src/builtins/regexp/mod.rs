@@ -15,7 +15,9 @@ use crate::{
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     error::JsNativeError,
     js_string,
-    object::{CONSTRUCTOR, JsObject, internal_methods::get_prototype_from_constructor},
+    object::{
+        CONSTRUCTOR, IndexedProperties, JsObject, internal_methods::get_prototype_from_constructor,
+    },
     property::Attribute,
     realm::Realm,
     string::{CodePoint, CommonJsStringBuilder, JsStrVariant, StaticJsStrings},
@@ -26,7 +28,9 @@ use boa_gc::{Finalize, Trace};
 use boa_macros::{js_str, utf16};
 use boa_parser::lexer::regex::RegExpFlags;
 use regress::{Flags, Range, Regex};
+use std::rc::Rc;
 use std::str::FromStr;
+use thin_vec::ThinVec;
 
 use super::{BuiltInBuilder, BuiltInConstructor, IntrinsicObject};
 
@@ -40,8 +44,8 @@ mod tests;
 // Safety: `RegExp` does not contain any objects which needs to be traced, so this is safe.
 #[boa_gc(unsafe_empty_trace)]
 pub struct RegExp {
-    /// Regex matcher.
-    matcher: Regex,
+    /// Regex matcher, shared by the copies `RegExpBuiltinExec` takes of this record.
+    matcher: Rc<Regex>,
     flags: RegExpFlags,
     original_source: JsString,
     original_flags: JsString,
@@ -63,11 +67,14 @@ pub struct RegExp {
 #[derive(Debug, Clone, Trace, Finalize)]
 pub(crate) struct LegacyRegExpStatics {
     input: JsString,
-    last_match: JsString,
-    last_paren: JsString,
-    left_context: JsString,
-    right_context: JsString,
-    parens: Vec<JsString>,
+    /// The string the last match ran on; the other values are slices of it, made when read.
+    matched: JsString,
+    #[unsafe_ignore_trace]
+    start: usize,
+    #[unsafe_ignore_trace]
+    end: usize,
+    #[unsafe_ignore_trace]
+    captures: Vec<Option<Range>>,
 }
 
 #[cfg(feature = "annex-b")]
@@ -75,11 +82,31 @@ impl Default for LegacyRegExpStatics {
     fn default() -> Self {
         Self {
             input: js_string!(),
-            last_match: js_string!(),
-            last_paren: js_string!(),
-            left_context: js_string!(),
-            right_context: js_string!(),
-            parens: vec![js_string!(); 9],
+            matched: js_string!(),
+            start: 0,
+            end: 0,
+            captures: Vec::new(),
+        }
+    }
+}
+
+#[cfg(feature = "annex-b")]
+impl LegacyRegExpStatics {
+    fn capture(&self, capture: Option<&Option<Range>>) -> JsString {
+        capture
+            .cloned()
+            .flatten()
+            .map_or_else(|| js_string!(), |range| self.matched.get_expect(range))
+    }
+
+    fn value(&self, slot: LegacySlot) -> JsString {
+        match slot {
+            LegacySlot::Input => self.input.clone(),
+            LegacySlot::LastMatch => self.matched.get_expect(self.start..self.end),
+            LegacySlot::LastParen => self.capture(self.captures.last()),
+            LegacySlot::LeftContext => self.matched.get_expect(..self.start),
+            LegacySlot::RightContext => self.matched.get_expect(self.end..),
+            LegacySlot::Paren(index) => self.capture(self.captures.get(index)),
         }
     }
 }
@@ -541,7 +568,7 @@ impl RegExp {
         // 20. Set obj.[[RegExpRecord]] to rer.
         // 21. Set obj.[[RegExpMatcher]] to CompilePattern of parseResult with argument rer.
         Ok(RegExp {
-            matcher,
+            matcher: Rc::new(matcher),
             flags,
             original_source: p,
             original_flags: f,
@@ -1307,12 +1334,22 @@ impl RegExp {
         // 13.b. Let inputIndex be the index into input of the character that was obtained from element lastIndex of S.
         // 13.c. Let r be matcher(input, inputIndex).
         let r: Option<regress::Match> = match (full_unicode, input.as_str().variant()) {
-            (true | false, JsStrVariant::Latin1(_)) => {
-                // TODO: Currently regress does not support latin1 encoding.
-                let input = input.to_vec();
+            (true | false, JsStrVariant::Latin1(bytes)) => {
+                if let Some(text) = bytes
+                    .is_ascii()
+                    .then(|| std::str::from_utf8(bytes).ok())
+                    .flatten()
+                {
+                    // ASCII text is its own UTF-8 encoding, with one byte per code unit, so the
+                    // UTF-8 matcher sees the same characters at the same indices without a copy.
+                    matcher.find_from(text, last_index as usize).next()
+                } else {
+                    // NOTE: regress does not support latin1 encoding.
+                    let input = input.to_vec();
 
-                // NOTE: We can use the faster ucs2 variant since there will never be two byte unicode.
-                matcher.find_from_ucs2(&input, last_index as usize).next()
+                    // NOTE: We can use the faster ucs2 variant since there will never be two byte unicode.
+                    matcher.find_from_ucs2(&input, last_index as usize).next()
+                }
             }
             (true, JsStrVariant::Utf16(input)) => {
                 matcher.find_from_utf16(input, last_index as usize).next()
@@ -1379,36 +1416,38 @@ impl RegExp {
         // 19. Assert: n < 232 - 1.
         debug_assert!(n < (1u64 << 32) - 1);
 
-        // 20. Let A be ! ArrayCreate(n + 1).
-        // 21. Assert: The mathematical value of A's "length" property is n + 1.
-        let a = Array::array_create(n + 1, None, context)?;
+        // NOTE: A is created below, once its elements and its "groups" value are known, from a
+        //       template holding "length", "index", "input" and "groups" in the order steps 20 to
+        //       32 define them; nothing observable runs in between.
 
-        // 22. Perform ! CreateDataPropertyOrThrow(A, "index", 𝔽(lastIndex)).
-        a.create_data_property_or_throw(js_string!("index"), last_index, context)?;
+        // NOTE: The indices list is only observable through the "indices" property, so it is
+        //       built only when hasIndices is true.
+        let indices = if has_indices {
+            // 24. Let match be the Match Record { [[StartIndex]]: lastIndex, [[EndIndex]]: e }.
+            // Immediately convert it to an array according to 22.2.7.7 GetMatchIndexPair(S, match)
+            // 1. Assert: match.[[StartIndex]] ≤ match.[[EndIndex]] ≤ the length of S.
+            // 2. Return CreateArrayFromList(« 𝔽(match.[[StartIndex]]), 𝔽(match.[[EndIndex]]) »).
+            let match_record = Array::create_array_from_list(
+                [match_value.start().into(), match_value.end().into()],
+                context,
+            );
 
-        // 23. Perform ! CreateDataPropertyOrThrow(A, "input", S).
-        a.create_data_property_or_throw(js_string!("input"), input.clone(), context)?;
+            // 25. Let indices be a new empty List.
+            let indices = Array::array_create(n + 1, None, context)?;
 
-        // 24. Let match be the Match Record { [[StartIndex]]: lastIndex, [[EndIndex]]: e }.
-        // Immediately convert it to an array according to 22.2.7.7 GetMatchIndexPair(S, match)
-        // 1. Assert: match.[[StartIndex]] ≤ match.[[EndIndex]] ≤ the length of S.
-        // 2. Return CreateArrayFromList(« 𝔽(match.[[StartIndex]]), 𝔽(match.[[EndIndex]]) »).
-        let match_record = Array::create_array_from_list(
-            [match_value.start().into(), match_value.end().into()],
-            context,
-        );
-
-        // 25. Let indices be a new empty List.
-        let indices = Array::array_create(n + 1, None, context)?;
-
-        // 27. Append match to indices.
-        indices.create_data_property_or_throw(0, match_record, context)?;
+            // 27. Append match to indices.
+            indices.create_data_property_or_throw(0, match_record, context)?;
+            Some(indices)
+        } else {
+            None
+        };
 
         // 28. Let matchedSubstr be GetMatchString(S, match).
         let matched_substr = input.get_expect((last_index as usize)..(e));
 
         // 29. Perform ! CreateDataPropertyOrThrow(A, "0", matchedSubstr).
-        a.create_data_property_or_throw(0, matched_substr, context)?;
+        let mut elements = ThinVec::with_capacity(n as usize + 1);
+        elements.push(matched_substr.into());
 
         let named_groups = match_value
             .named_groups()
@@ -1481,10 +1520,9 @@ impl RegExp {
 
         // 22.2.7.8 MakeMatchIndicesIndexPairArray ( S, indices, groupNames, hasGroups )
         // 8. Perform ! CreateDataPropertyOrThrow(A, "groups", groups).
-        indices.create_data_property_or_throw(js_string!("groups"), group_names, context)?;
-
-        // 32. Perform ! CreateDataPropertyOrThrow(A, "groups", groups).
-        a.create_data_property_or_throw(js_string!("groups"), groups, context)?;
+        if let Some(indices) = &indices {
+            indices.create_data_property_or_throw(js_string!("groups"), group_names, context)?;
+        }
 
         // 27. For each integer i such that i ≥ 1 and i ≤ n, in ascending order, do
         for i in 1..=n {
@@ -1499,10 +1537,10 @@ impl RegExp {
             });
 
             // e. Perform ! CreateDataPropertyOrThrow(A, ! ToString(𝔽(i)), capturedValue).
-            a.create_data_property_or_throw(i, captured_value.clone(), context)?;
+            elements.push(captured_value);
 
             // 22.2.7.8 MakeMatchIndicesIndexPairArray ( S, indices, groupNames, hasGroups )
-            if has_indices {
+            if let Some(indices) = &indices {
                 // b. If matchIndices is not undefined, then
                 // i. Let matchIndexPair be GetMatchIndexPair(S, matchIndices).
                 // c. Else,
@@ -1517,10 +1555,30 @@ impl RegExp {
             }
         }
 
+        // 20. Let A be ! ArrayCreate(n + 1).
+        // 21. Assert: The mathematical value of A's "length" property is n + 1.
+        // 22. Perform ! CreateDataPropertyOrThrow(A, "index", 𝔽(lastIndex)).
+        // 23. Perform ! CreateDataPropertyOrThrow(A, "input", S).
+        // 32. Perform ! CreateDataPropertyOrThrow(A, "groups", groups).
+        let a = context
+            .intrinsics()
+            .templates()
+            .regexp_match()
+            .create_with_indexed_properties(
+                Array,
+                vec![
+                    JsValue::new(n + 1),
+                    JsValue::new(last_index),
+                    input.clone().into(),
+                    groups,
+                ],
+                IndexedProperties::from_dense_js_value(elements),
+            );
+
         // 34. If hasIndices is true, then
         // a. Let indicesArray be MakeMatchIndicesIndexPairArray(S, indices, groupNames, hasGroups).
         // b. Perform ! CreateDataPropertyOrThrow(A, "indices", indicesArray).
-        if has_indices {
+        if let Some(indices) = indices {
             a.create_data_property_or_throw(js_string!("indices"), indices, context)?;
         }
 
@@ -2311,25 +2369,14 @@ impl RegExp {
         // i. If the value of R's [[LegacyFeaturesEnabled]] internal slot is true, then
         if rx.legacy_features {
             // 1. Perform UpdateLegacyRegExpStaticProperties(%RegExp%, S, lastIndex, e, capturedValues).
-            let captured: Vec<JsString> = match_value
-                .captures
-                .iter()
-                .map(|capture| {
-                    capture
-                        .clone()
-                        .map_or_else(|| js_string!(), |range| input.get_expect(range))
-                })
-                .collect();
-            *statics = Some(LegacyRegExpStatics {
-                input: input.clone(),
-                last_match: input.get_expect(start..end),
-                last_paren: captured.last().cloned().unwrap_or_default(),
-                left_context: input.get_expect(..start),
-                right_context: input.get_expect(end..),
-                parens: (0..9)
-                    .map(|i| captured.get(i).cloned().unwrap_or_default())
-                    .collect(),
-            });
+            // NOTE: The captured values are kept as ranges of S and sliced when read.
+            let statics = statics.get_or_insert_with(LegacyRegExpStatics::default);
+            statics.input = input.clone();
+            statics.matched = input.clone();
+            statics.start = start;
+            statics.end = end;
+            statics.captures.clear();
+            statics.captures.extend_from_slice(&match_value.captures);
         } else {
             // ii. Else, perform InvalidateLegacyRegExpStaticProperties(%RegExp%).
             *statics = None;
@@ -2370,15 +2417,7 @@ impl RegExp {
                 )
                 .into());
         };
-        let value = match slot {
-            LegacySlot::Input => &statics.input,
-            LegacySlot::LastMatch => &statics.last_match,
-            LegacySlot::LastParen => &statics.last_paren,
-            LegacySlot::LeftContext => &statics.left_context,
-            LegacySlot::RightContext => &statics.right_context,
-            LegacySlot::Paren(index) => &statics.parens[index],
-        };
-        Ok(value.clone().into())
+        Ok(statics.value(slot).into())
     }
 
     /// `set RegExp.input`: `SetLegacyRegExpStaticProperty(%RegExp%, this value, [[RegExpInput]], val)`.
