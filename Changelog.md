@@ -48,6 +48,22 @@ Southstar Browser 1.0.2-dev:
   `math-shift` and `math-style` are parsed and computed, and
   `animation-composition` computes to `replace` when unset instead of an
   empty string.
+* Security: WebGL validates more of what it hands the GL driver. The
+  single-value getters (`getTexParameter`, `getProgramParameter`,
+  `getShaderParameter`, `getVertexAttrib`, `getQuery*`, `getSamplerParameter`,
+  `getIndexedParameter`, `getFramebufferAttachmentParameter`,
+  `getActiveUniformBlockParameter`) read into a 16-slot buffer, because a
+  desktop driver answers `TEXTURE_BORDER_COLOR` or `TEXTURE_SWIZZLE_RGBA`
+  with four values and overran the single integer on the stack.
+  `enable`/`disable`/`isEnabled` accept only WebGL's capabilities,
+  `createShader` only vertex and fragment shaders, and `bindBuffer`,
+  `bindBufferBase` and `bindBufferRange` only WebGL's buffer targets.
+  `copyBufferSubData` and `bindBufferRange` check offsets and sizes against
+  the buffers' tracked sizes, draws require every active uniform block to
+  be backed by enough bound buffer, typed-array pixel transfers are refused
+  while a pixel pack or unpack buffer is bound, and WebGL 2 enables
+  `PRIMITIVE_RESTART_FIXED_INDEX` and skips restart indices in the
+  vertex-range check only while GL actually treats them as restarts.
 * JavaScript: `JSON.parse` reads the string with a JSON parser of its own
   (`builtins/json/parse.rs` in the Boa fork) that builds the values
   directly. It used to validate the text with `serde_json`, then parse and

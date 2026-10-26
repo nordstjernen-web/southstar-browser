@@ -331,6 +331,9 @@ impl State {
         if vertex_last < 0 {
             return true;
         }
+        if version >= 2 && !limits::uniform_blocks_bound(|buffer| self.buffer_size(buffer)) {
+            return false;
+        }
         let used = limits::program_attrib_mask();
         for i in 0..64u32 {
             if used & (1u64 << i) == 0 {
@@ -422,7 +425,7 @@ impl State {
             offset as usize,
             count as usize,
             limits::index_bytes(kind),
-            version,
+            version >= 2 && gl::is_enabled(PRIMITIVE_RESTART_FIXED_INDEX) != 0,
         ) else {
             return false;
         };
@@ -484,6 +487,14 @@ impl WebGl {
         gl::viewport(0, 0, w, h);
         gl::clear_color(0.0, 0.0, 0.0, 0.0);
         gl::clear(COLOR_BUFFER_BIT);
+        if version >= 2 {
+            gl::enable(PRIMITIVE_RESTART_FIXED_INDEX);
+            for _ in 0..8 {
+                if gl::get_error() == NO_ERROR {
+                    break;
+                }
+            }
+        }
         Some(g)
     }
 

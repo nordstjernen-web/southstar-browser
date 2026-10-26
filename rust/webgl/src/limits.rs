@@ -229,7 +229,7 @@ pub(crate) fn elem_max_index(
     offset: usize,
     count: usize,
     isz: usize,
-    version: i32,
+    skip_restart: bool,
 ) -> Option<u64> {
     if count == 0 || isz == 0 {
         return None;
@@ -243,7 +243,6 @@ pub(crate) fn elem_max_index(
         2 => 0xFFFF,
         _ => 0xFFFF_FFFF,
     };
-    let skip_restart = version >= 2;
     let indices = &data[offset..span];
     let max = indices
         .chunks_exact(isz)
@@ -277,6 +276,62 @@ pub(crate) fn param_cap(pname: u32) -> i32 {
         MAX_UNIFORM_BLOCK_SIZE => 16384,
         _ => 0,
     }
+}
+
+pub(crate) fn buffer_target_ok(version: i32, target: u32) -> bool {
+    match target {
+        ARRAY_BUFFER | ELEMENT_ARRAY_BUFFER => true,
+        COPY_READ_BUFFER
+        | COPY_WRITE_BUFFER
+        | PIXEL_PACK_BUFFER
+        | PIXEL_UNPACK_BUFFER
+        | TRANSFORM_FEEDBACK_BUFFER
+        | UNIFORM_BUFFER => version >= 2,
+        _ => false,
+    }
+}
+
+pub(crate) fn range_ok(offset: i32, size: i32, buffer_size: usize) -> bool {
+    offset >= 0
+        && size >= 0
+        && (offset as u64)
+            .checked_add(size as u64)
+            .is_some_and(|end| end <= buffer_size as u64)
+}
+
+pub(crate) fn transfer_buffer_bound(version: i32, binding: u32) -> bool {
+    version >= 2 && gl::get_integer(binding) != 0
+}
+
+pub(crate) fn uniform_blocks_bound(buffer_size: impl Fn(u32) -> usize) -> bool {
+    let program = gl::get_integer(CURRENT_PROGRAM);
+    if program <= 0 {
+        return true;
+    }
+    let program = program as u32;
+    let blocks = gl::get_programiv(program, ACTIVE_UNIFORM_BLOCKS).clamp(0, 64) as u32;
+    (0..blocks).all(|block| {
+        let mut binding = [0i32; 16];
+        let mut need = [0i32; 16];
+        gl::get_active_uniform_block(program, block, UNIFORM_BLOCK_BINDING, &mut binding);
+        gl::get_active_uniform_block(program, block, UNIFORM_BLOCK_DATA_SIZE, &mut need);
+        let binding = binding[0].max(0) as u32;
+        let buffer = gl::get_integer_indexed(UNIFORM_BUFFER_BINDING, binding);
+        if buffer <= 0 {
+            return false;
+        }
+        let total = buffer_size(buffer as u32) as u64;
+        let start = gl::get_integer64_indexed(UNIFORM_BUFFER_START, binding).max(0) as u64;
+        let size = gl::get_integer64_indexed(UNIFORM_BUFFER_SIZE, binding).max(0) as u64;
+        let available = if size == 0 {
+            total.saturating_sub(start)
+        } else if start.saturating_add(size) <= total {
+            size
+        } else {
+            0
+        };
+        start <= total && available >= need[0].max(0) as u64
+    })
 }
 
 pub(crate) fn buffer_binding_query(target: u32) -> u32 {

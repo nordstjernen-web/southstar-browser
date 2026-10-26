@@ -104,8 +104,6 @@ simple! {
     clear_stencil(|s, a| gl::clear_stencil(int(s, a, 0)));
     viewport(|s, a| gl::viewport(int(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3)));
     scissor(|s, a| gl::scissor(int(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3)));
-    enable(|s, a| gl::enable(uint(s, a, 0)));
-    disable(|s, a| gl::disable(uint(s, a, 0)));
     depth_func(|s, a| gl::depth_func(uint(s, a, 0)));
     depth_mask(|s, a| gl::depth_mask(u8::from(boolean(s, a, 0))));
     depth_range(|s, a| gl::depth_rangef(float(s, a, 0), float(s, a, 1)));
@@ -176,9 +174,50 @@ pub(crate) fn clear(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     undefined()
 }
 
+fn capability_ok(version: i32, cap: u32) -> bool {
+    matches!(
+        cap,
+        BLEND
+            | CULL_FACE
+            | DEPTH_TEST
+            | DITHER
+            | POLYGON_OFFSET_FILL
+            | SAMPLE_ALPHA_TO_COVERAGE
+            | SAMPLE_COVERAGE
+            | SCISSOR_TEST
+            | STENCIL_TEST
+    ) || (version >= 2 && cap == RASTERIZER_DISCARD)
+}
+
+fn set_capability(s: &mut Scope<'_>, this: &Value, a: &[Value], on: bool) -> JsResult {
+    let g = current(s, this)?;
+    let cap = uint(s, a, 0);
+    if !capability_ok(g.version, cap) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+    } else if on {
+        gl::enable(cap);
+    } else {
+        gl::disable(cap);
+    }
+    undefined()
+}
+
+pub(crate) fn enable(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    set_capability(s, this, a, true)
+}
+
+pub(crate) fn disable(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    set_capability(s, this, a, false)
+}
+
 pub(crate) fn is_enabled(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
-    let _g = current(s, this)?;
-    Ok(Value::boolean(gl::is_enabled(uint(s, a, 0)) != 0))
+    let g = current(s, this)?;
+    let cap = uint(s, a, 0);
+    if !capability_ok(g.version, cap) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return Ok(Value::boolean(false));
+    }
+    Ok(Value::boolean(gl::is_enabled(cap) != 0))
 }
 
 pub(crate) fn pixel_storei(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
@@ -381,7 +420,12 @@ pub(crate) fn get_extension(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
 
 pub(crate) fn create_shader(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
-    let shader = gl::create_shader(uint(s, a, 0));
+    let kind = uint(s, a, 0);
+    if kind != VERTEX_SHADER && kind != FRAGMENT_SHADER {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return Ok(Value::null());
+    }
+    let shader = gl::create_shader(kind);
     Ok(wrap(s, &g, shader, KIND_SHADER))
 }
 
@@ -581,8 +625,12 @@ pub(crate) fn delete_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
 }
 
 pub(crate) fn bind_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
-    let _g = current(s, this)?;
+    let g = current(s, this)?;
     let target = uint(s, a, 0);
+    if !limits::buffer_target_ok(g.version, target) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return undefined();
+    }
     gl::bind_buffer(target, name(a, 1));
     undefined()
 }
@@ -1083,7 +1131,9 @@ fn upload_source(
     pixel: (u32, u32),
     upload: impl FnOnce((i32, i32), &[u8]),
 ) -> Result<(), Value> {
-    if pixel.1 != UNSIGNED_BYTE {
+    if pixel.1 != UNSIGNED_BYTE
+        || limits::transfer_buffer_bound(g.version, PIXEL_UNPACK_BUFFER_BINDING)
+    {
         return Ok(());
     }
     let (flip_y, premultiply) = {
@@ -1108,6 +1158,9 @@ struct Upload<'a> {
 }
 
 fn upload_view(s: &mut Scope<'_>, source: &Value, up: Upload<'_>) {
+    if limits::transfer_buffer_bound(up.version, PIXEL_UNPACK_BUFFER_BINDING) {
+        return;
+    }
     let has_source = !source.is_null() && !source.is_undefined();
     let need = limits::transfer_bytes(
         up.version,
@@ -1282,6 +1335,10 @@ pub(crate) fn read_pixels(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
     let format = uint(s, a, 4);
     let kind = uint(s, a, 5);
     if a.len() < 7 || !a[6].is_object() {
+        return undefined();
+    }
+    if limits::transfer_buffer_bound(g.version, PIXEL_PACK_BUFFER_BINDING) {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
         return undefined();
     }
     with_view(s, &a[6], |out| {
