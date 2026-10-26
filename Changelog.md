@@ -38,6 +38,12 @@ Southstar Browser 1.0.2-dev:
   nothing read them, so these requests connected directly and revealed the
   user's address even with a proxy or Tor configured. A proxy setting that
   does not parse now fails the download instead of going direct.
+* Security: SVG path data with a number after `Z`/`z` (`d="M0 0Z1"`) no
+  longer hangs the renderer. Both path parsers, the one that paints SVG
+  and the one behind `getTotalLength()`/`getPointAtLength()`, re-ran the
+  closepath command without reading input, so painting looped forever and
+  the geometry methods grew memory until the process died. They now stop
+  at the stray number, as the canvas `Path2D` parser already did.
 * Packaging: an Arch Linux package, `southstar-browser`, in
   `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
   in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and

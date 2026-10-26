@@ -363,6 +363,8 @@ fn flatten_path(d: Option<&CStr>) -> Vec<Pt> {
             cmd = b'L';
         } else if cmd == b'm' {
             cmd = b'l';
+        } else if matches!(cmd, 0 | b'Z' | b'z') {
+            break;
         }
         let rel = cmd.is_ascii_lowercase();
         let c = cmd.to_ascii_uppercase();
