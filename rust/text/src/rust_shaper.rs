@@ -164,7 +164,7 @@ fn varied_advance_units(default: F48Dot16, varied: F48Dot16) -> i32 {
     ((default.to_bits() >> 16) + rounded_delta) as i32
 }
 
-fn file_blob(path: &str) -> Option<Blob> {
+pub(crate) fn file_blob(path: &str) -> Option<Blob> {
     static FILES: OnceLock<Mutex<HashMap<String, Option<Blob>>>> = OnceLock::new();
     let files = FILES.get_or_init(Default::default);
     if let Some(blob) = lock(files).get(path) {

@@ -135,6 +135,8 @@ pub(crate) struct FontInner {
     hb_font: OnceLock<HbFont>,
     #[cfg(feature = "rust-shaper")]
     rust_face: OnceLock<Option<Arc<crate::rust_shaper::ShaperFace>>>,
+    #[cfg(feature = "rust-shaper")]
+    glyph_source: OnceLock<Option<Arc<crate::rust_glyphs::GlyphSource>>>,
     hex_box_info: OnceLock<Option<HexBoxInfo>>,
     hex_box_scaled_font: Mutex<Option<ScaledFont>>,
     hex_box_glyphs: Mutex<HexBoxGlyphs>,
@@ -389,6 +391,8 @@ impl Font {
             hb_font: OnceLock::new(),
             #[cfg(feature = "rust-shaper")]
             rust_face: OnceLock::new(),
+            #[cfg(feature = "rust-shaper")]
+            glyph_source: OnceLock::new(),
             hex_box_info: OnceLock::new(),
             hex_box_scaled_font: Mutex::new(None),
             hex_box_glyphs: Mutex::new(HexBoxGlyphs::default()),
@@ -549,6 +553,23 @@ impl Font {
         &self.0.rust_face
     }
 
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn glyph_source_slot(
+        &self,
+    ) -> &OnceLock<Option<Arc<crate::rust_glyphs::GlyphSource>>> {
+        &self.0.glyph_source
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn font_matrix(&self) -> &CairoMatrix {
+        &self.0.font_matrix
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn cairo_ctm(&self) -> &CairoMatrix {
+        &self.0.ctm
+    }
+
     pub fn hb_font(&self) -> &HbFont {
         self.0.hb_font.get_or_init(|| self.create_hb_font())
     }
@@ -662,6 +683,15 @@ impl Font {
         self.0
             .scaled_font
             .get_or_init(|| {
+                #[cfg(feature = "rust-shaper")]
+                if let Some(source) = self.glyph_source() {
+                    return crate::rust_glyphs::scaled_font(
+                        source,
+                        &self.0.font_matrix,
+                        &self.0.ctm,
+                        &self.0.options,
+                    );
+                }
                 ScaledFont::for_pattern(
                     self.pattern(),
                     &self.0.font_matrix,
@@ -873,10 +903,7 @@ impl Font {
     }
 
     fn compute_glyph_extents(&self, glyph: Glyph) -> GlyphExtentsEntry {
-        let extents = self
-            .scaled_font()
-            .map(|font| font.glyph_extents(glyph))
-            .unwrap_or_default();
+        let extents = self.user_glyph_extents(glyph);
         let width = if self.0.gravity.is_vertical() {
             units_from_double(extents.y_advance)
         } else {
@@ -892,6 +919,16 @@ impl Font {
                 height: units_from_double(extents.height),
             },
         }
+    }
+
+    fn user_glyph_extents(&self, glyph: Glyph) -> TextExtents {
+        #[cfg(feature = "rust-shaper")]
+        if let Some(source) = self.glyph_source() {
+            return crate::rust_glyphs::user_extents(source, glyph, &self.0.font_matrix);
+        }
+        self.scaled_font()
+            .map(|font| font.glyph_extents(glyph))
+            .unwrap_or_default()
     }
 
     pub fn glyph_extents(&self, glyph: Glyph) -> (Rectangle, Rectangle) {

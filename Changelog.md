@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Rust-backed fonts (`-Drust-shaper=true`, `NS_RUST_FONTS`) are drawn from
+  `skrifa` outlines through a cairo user font instead of cairo-ft and
+  FreeType: hinting chosen from the cairo options and fontconfig pattern the
+  way cairo-ft chooses it (slight hinting of TrueType runs the automatic
+  hinter, as FreeType's light mode does), a port of FreeType's synthetic
+  emboldening, and glyph extents computed as cairo-ft reports them (96% of
+  901,896 glyph extents identical, the rest about one font unit off). Web
+  fonts loaded through `@font-face` now carry the `southstarwebfont` marker,
+  so `NS_RUST_FONTS=web` puts exactly them on the Rust path. New dependency:
+  `skrifa` 0.49 (fontations, MIT/Apache-2.0), on the same `read-fonts` as
+  HarfRust.
 * JavaScript: property access is faster. Inline cache hits compare
   shapes without creating new references to them, and typed arrays no
   longer convert every named property (`length`, `subarray`, ...) to a

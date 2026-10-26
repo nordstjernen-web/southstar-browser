@@ -1,13 +1,17 @@
 # Pure-Rust shaping and fonts
 
-Status: step 1 (shaping) is implemented as an option: `-Drust-shaper=true`
-(cargo feature `rust-shaper` on `southstar-text`) shapes with HarfRust, and
-`NS_TEXT_SHAPER=harfbuzz` switches back at runtime. On Windows it matched
-HarfBuzz exactly in 97% of a 22,000-case corpus, with no glyph or cluster
-differences; the rest are small positioning differences in fallback spaces,
-variable fonts, fallback mark placement and vertical origins. The bidi half
-of step 4 is done: `rust/bidi` replaced FriBiDi (see "Bidi" below). The
-other steps are not started.
+Status: in a `-Drust-shaper=true` build (cargo feature `rust-shaper` on
+`southstar-text`) a font can take the Rust path, chosen by
+`NS_RUST_FONTS=off|web|all` (`web` = fonts loaded through `@font-face`;
+`NS_TEXT_SHAPER=harfbuzz` means off). A Rust-backed font is shaped by HarfRust,
+answers layout's table queries (glyph classes, ligature carets, OpenType
+metrics, font extents, GSUB feature support) from `read-fonts` exactly as
+HarfBuzz 14.2 does, and is drawn from `skrifa` outlines through a cairo user
+font (see "Drawing" below), so neither FreeType nor HarfBuzz reads it at render
+time. HarfRust matched HarfBuzz exactly in 97% of a 22,000-case corpus, with
+no glyph or cluster differences. Step 4 is done: `rust/bidi` replaced
+FriBiDi and `rust/unicode` GLib's Unicode data. Color glyphs and indexing
+web fonts without FreeType are not done yet.
 
 This note describes a possible later step for Southstar's text stack:
 replacing the C libraries under text layout — HarfBuzz, FreeType,
@@ -182,6 +186,32 @@ and HarfBuzz parse it again to draw and shape it. The order of work:
 3. **Draw.** Web fonts get a Rust backend in `rust/text`: `skrifa` metrics and
    outlines drawn through a cairo user font (the hex-box path already uses
    one) and HarfRust shaping, first behind a switch for old/new screenshots.
+
+## Drawing
+
+`rust/text/src/rust_glyphs.rs` loads a Rust-backed font's outlines with
+`skrifa` the way cairo-ft loads them through FreeType, and cairo paints them as
+paths through a user font:
+
+- Hinting follows the cairo font options and the fontconfig pattern
+  (`hinting`, `hintstyle`, `antialias`, `autohint`) as cairo-ft merges them.
+  Slight hinting of TrueType outlines uses the automatic hinter, as FreeType's
+  light mode does; CFF uses its own hinter, and fonts without hints the
+  automatic one.
+- Synthetic bold (`embolden`) is a port of `FT_Outline_EmboldenXY` with
+  FreeType's strength (ppem × 2730 / 1024 / 64 pixels) and metric adjustments.
+- With metrics hinting off, as the browser lays out, glyph extents are those
+  cairo-ft reports: the control box of the outline at the em size, grid-fitted
+  when hinting is on, and the linear advance. Over every installed face at
+  three sizes (901,896 glyphs) 96.1% of the extents equal cairo-ft's exactly;
+  the rest differ by about one font unit, apart from color glyphs.
+- Subpixel positioning is cairo's own (four phases), the same as for cairo-ft
+  glyphs; rasterization is cairo's, so edges differ from FreeType's by a few
+  levels of coverage.
+
+On the render tests with every font on the Rust path the pixel differences
+are anti-aliasing only; on a page of Google web fonts, GOV.UK and MDN they
+are under 0.3% of the pixels and invisible at normal size.
 
 ## Decision
 

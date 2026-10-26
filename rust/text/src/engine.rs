@@ -5,8 +5,16 @@
 #[cfg(feature = "rust-shaper")]
 use std::sync::Arc;
 
+#[cfg(feature = "rust-shaper")]
+use crate::ffi::cairo::{Antialias, CairoMatrix, FontOptions, HintStyle};
+#[cfg(feature = "rust-shaper")]
+use crate::ffi::fontconfig::{
+    FC_ANTIALIAS, FC_AUTOHINT, FC_EMBOLDEN, FC_HINT_FULL, FC_HINT_STYLE, FC_HINTING,
+};
 use crate::ffi::harfbuzz::FontExtents;
 use crate::font::Font;
+#[cfg(feature = "rust-shaper")]
+use crate::rust_glyphs::{GlyphSettings, GlyphSource, HintMode};
 #[cfg(feature = "rust-shaper")]
 use crate::rust_shaper::ShaperFace;
 use crate::types::Glyph;
@@ -56,6 +64,70 @@ impl Font {
         self.rust_face_slot()
             .get_or_init(|| crate::rust_shaper::shaper_face(self))
             .as_ref()
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn glyph_source(&self) -> Option<&Arc<GlyphSource>> {
+        let face = self.rust_face()?;
+        self.glyph_source_slot()
+            .get_or_init(|| {
+                let blob = crate::rust_shaper::file_blob(&self.file()?)?;
+                let index = (self.face_index() as u32) & 0xFFFF;
+                let coords = face.font().normalized_coords().to_vec();
+                GlyphSource::new(blob, index, coords, self.glyph_settings()).map(Arc::new)
+            })
+            .as_ref()
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    fn glyph_settings(&self) -> GlyphSettings {
+        let combined = CairoMatrix::multiply(self.font_matrix(), self.cairo_ctm());
+        let x_scale = combined.xx.hypot(combined.yx);
+        let determinant = (combined.xx * combined.yy - combined.xy * combined.yx).abs();
+        let ppem = if x_scale > 0. {
+            determinant / x_scale
+        } else {
+            0.
+        };
+        let pattern = self.pattern();
+        let options = self.font_options();
+        let antialias = pattern.get_bool(FC_ANTIALIAS, 0).unwrap_or(true)
+            && options.is_none_or(|options| options.antialias() != Antialias::None as i32);
+        let pattern_style = if !pattern.get_bool(FC_ANTIALIAS, 0).unwrap_or(true) {
+            HintStyle::Default
+        } else if !pattern.get_bool(FC_HINTING, 0).unwrap_or(true) {
+            HintStyle::None
+        } else {
+            match pattern
+                .get_integer(FC_HINT_STYLE, 0)
+                .unwrap_or(FC_HINT_FULL)
+            {
+                0 => HintStyle::None,
+                1 => HintStyle::Slight,
+                2 => HintStyle::Medium,
+                _ => HintStyle::Full,
+            }
+        };
+        let mut style = options.map_or(HintStyle::Default as i32, FontOptions::hint_style);
+        if style == HintStyle::Default as i32 {
+            style = pattern_style as i32;
+        }
+        if pattern_style == HintStyle::None {
+            style = HintStyle::None as i32;
+        }
+        let hinting = match (antialias, style) {
+            (_, s) if s == HintStyle::None as i32 => HintMode::None,
+            (false, _) => HintMode::Mono,
+            (true, s) if s == HintStyle::Slight as i32 => HintMode::Light,
+            _ => HintMode::Normal,
+        };
+        GlyphSettings {
+            ppem: ppem as f32,
+            hinting,
+            force_autohint: pattern.get_bool(FC_AUTOHINT, 0).unwrap_or(false),
+            embolden: pattern.get_bool(FC_EMBOLDEN, 0).unwrap_or(false),
+            hint_metrics: options.is_none_or(|options| !options.hint_metrics_off()),
+        }
     }
 
     pub(crate) fn nominal_glyph(&self, ch: u32) -> Option<Glyph> {

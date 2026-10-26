@@ -95,6 +95,16 @@ pub(crate) const FC_FONT_WRAPPER: &CStr = c"fontwrapper";
 pub(crate) const FC_PRGNAME: &CStr = c"prgname";
 pub(crate) const FC_FONT_FEATURES: &CStr = c"fontfeatures";
 pub(crate) const FC_FONT_VARIATIONS: &CStr = c"fontvariations";
+#[cfg(feature = "rust-shaper")]
+pub(crate) const FC_ANTIALIAS: &CStr = c"antialias";
+#[cfg(feature = "rust-shaper")]
+pub(crate) const FC_HINTING: &CStr = c"hinting";
+#[cfg(feature = "rust-shaper")]
+pub(crate) const FC_HINT_STYLE: &CStr = c"hintstyle";
+#[cfg(feature = "rust-shaper")]
+pub(crate) const FC_AUTOHINT: &CStr = c"autohint";
+#[cfg(feature = "rust-shaper")]
+pub(crate) const FC_HINT_FULL: i32 = 3;
 pub(crate) const PANGO_FC_GRAVITY: &CStr = c"pangogravity";
 pub(crate) const PANGO_FC_VERSION: &CStr = c"pangoversion";
 

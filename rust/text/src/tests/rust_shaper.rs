@@ -925,3 +925,90 @@ fn answers_table_queries_like_harfbuzz() {
     assert!(fonts > 0 || load(&context, "Sans 12").is_none());
     assert!(mismatches.is_empty(), "{} mismatches", mismatches.len());
 }
+
+#[test]
+fn extents_like_cairo_ft() {
+    use crate::ffi::cairo::{Antialias, FontOptions, HintMetrics, ScaledFont};
+    let map = FontMap::new();
+    let mut faces = Vec::new();
+    for family in map.list_families() {
+        for face in family.list_faces() {
+            faces.push(face.describe().to_string());
+        }
+    }
+    let mut browser_options = FontOptions::new();
+    browser_options.set_antialias(Antialias::Gray);
+    browser_options.set_hint_metrics(HintMetrics::Off);
+    for hint_metrics_off in [true, false] {
+        let (mut glyphs, mut exact, mut max_diff) = (0, 0, 0f64);
+        let mut worst = String::new();
+        let mut per_field = [0usize; 5];
+        let mut samples = Vec::new();
+        let mut context = map.create_context();
+        if hint_metrics_off {
+            context.set_font_options(Some(&browser_options));
+        }
+        for base in &faces {
+            for size in [" 13", " 41", " 9.5"] {
+                let description = format!("{base}{size}");
+                let Some(font) = load(&context, &description) else {
+                    continue;
+                };
+                let Some(source) = font.glyph_source() else {
+                    continue;
+                };
+                let options = font.font_options().cloned().unwrap_or_default();
+                let Some(native) = ScaledFont::for_pattern(
+                    font.pattern(),
+                    font.font_matrix(),
+                    font.cairo_ctm(),
+                    &options,
+                ) else {
+                    continue;
+                };
+                let count = shaper_face(&font)
+                    .map_or(0, |face| face.num_glyphs())
+                    .min(300);
+                for glyph in 0..count {
+                    let ours = crate::rust_glyphs::user_extents(source, glyph, font.font_matrix());
+                    let theirs = native.glyph_extents(glyph);
+                    glyphs += 1;
+                    let fields = [
+                        (ours.x_bearing, theirs.x_bearing),
+                        (ours.y_bearing, theirs.y_bearing),
+                        (ours.width, theirs.width),
+                        (ours.height, theirs.height),
+                        (ours.x_advance, theirs.x_advance),
+                    ];
+                    let mut same = true;
+                    for (index, (a, b)) in fields.iter().enumerate() {
+                        let diff = (a - b).abs();
+                        if diff > 1e-6 {
+                            same = false;
+                            per_field[index] += 1;
+                        }
+                        if diff > max_diff {
+                            max_diff = diff;
+                            worst = format!(
+                                "{description} glyph {glyph} field {index}: ours {ours:?} cairo {theirs:?} off={hint_metrics_off}"
+                            );
+                        }
+                    }
+                    if same {
+                        exact += 1;
+                    } else if samples.len() < 12 {
+                        samples.push(format!(
+                            "{description} glyph {glyph} off={hint_metrics_off}: ours {ours:?} cairo {theirs:?}"
+                        ));
+                    }
+                }
+            }
+        }
+        for line in &samples {
+            eprintln!("{line}");
+        }
+        eprintln!(
+            "hint metrics off={hint_metrics_off}: {glyphs} glyphs, {exact} exact, per field {per_field:?}, max diff {max_diff}: {worst}"
+        );
+    }
+}
