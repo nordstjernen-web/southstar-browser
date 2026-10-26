@@ -13,6 +13,7 @@ use crate::counter;
 use crate::declarations::{self, Collected};
 use crate::ffi::{self, SheetDecl};
 use crate::font;
+use crate::gaps;
 use crate::gradient::text_starts_gradient;
 use crate::grid;
 use crate::image::{self, text_starts_image_set};
@@ -805,6 +806,22 @@ fn memo_keep(style: &[u8], prop: &[u8], value: Option<Vec<u8>>) -> Option<Vec<u8
     value
 }
 
+fn gap_shorthand_value(style: &[u8], prop: &[u8]) -> Option<Option<Vec<u8>>> {
+    let mut importance = None;
+    let mut mixed = false;
+    let composed = gaps::shorthand_compose(prop, &mut |name| {
+        let value = get(style, name)?;
+        let (plain, important) = strip_important(&value);
+        mixed |= *importance.get_or_insert(important) != important;
+        Some(plain.to_vec())
+    })?;
+    Some(
+        composed
+            .filter(|text| !text.is_empty() && !mixed)
+            .map(|text| with_important(text, importance == Some(true))),
+    )
+}
+
 pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
     if let Some(hit) = memo_get(style, prop) {
         return hit;
@@ -812,6 +829,9 @@ pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
     let keep = |value: Option<Vec<u8>>| memo_keep(style, prop, value);
     if eq(prop, b"all") {
         return keep(all_value_for(style, None));
+    }
+    if let Some(text) = gap_shorthand_value(style, prop) {
+        return keep(text);
     }
     if quad_ids(prop).is_some() {
         return keep(quad_value(style, prop).map(|(text, _)| text));

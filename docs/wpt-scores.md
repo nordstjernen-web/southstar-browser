@@ -206,6 +206,21 @@ python.org), auto margins on replaced flex items (go.dev), quadratic
 limit (bbc.com), small-caps synthesis, and clip-path shapes drawn against
 the border box with all their arguments.
 
+## Windows compliance slice — 2026-10-26
+
+Same runner and settings as the 2026-10-14 slice, against upstream WPT
+`672f0e8c`, over every `css/*/parsing` directory plus `css/cssom`,
+`css/selectors`, `css/css-cascade`, `css/css-variables`, `css/css-values`,
+`css/css-conditional`, `css/css-properties-values-api` and
+`css/css-nesting` (2571 files). Each change is gated by running the same
+list with the binary before and after it and diffing the passing subtests
+per file.
+
+| Change | Area | Before → after |
+|--------|------|----------------|
+| Gap decorations: `row-rule-*`, rule lists with `repeat()`, `rule-*`, `*-rule-inset-*` | `css/css-gaps/parsing` | 354 → 1750/1750 |
+| | `css/css-multicol/parsing` | +7 |
+
 ## Top 10 improvements — 2026-10-14
 
 Re-clustered from the 2026-10-14 Windows slice. The 2026-07-13 list's

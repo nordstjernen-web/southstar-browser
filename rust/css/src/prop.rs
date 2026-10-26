@@ -345,10 +345,26 @@ pub enum Prop {
     OffsetRotate,
     OffsetAnchor,
     OffsetPosition,
+    RowRuleWidth,
+    RowRuleStyle,
+    RowRuleColor,
+    ColumnRuleBreak,
+    RowRuleBreak,
+    ColumnRuleVisibilityItems,
+    RowRuleVisibilityItems,
+    RuleOverlap,
+    ColumnRuleInsetCapStart,
+    ColumnRuleInsetCapEnd,
+    ColumnRuleInsetJunctionStart,
+    ColumnRuleInsetJunctionEnd,
+    RowRuleInsetCapStart,
+    RowRuleInsetCapEnd,
+    RowRuleInsetJunctionStart,
+    RowRuleInsetJunctionEnd,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 337] = [
+    pub(crate) const ALL: [Prop; 353] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -686,6 +702,22 @@ impl Prop {
         Prop::OffsetRotate,
         Prop::OffsetAnchor,
         Prop::OffsetPosition,
+        Prop::RowRuleWidth,
+        Prop::RowRuleStyle,
+        Prop::RowRuleColor,
+        Prop::ColumnRuleBreak,
+        Prop::RowRuleBreak,
+        Prop::ColumnRuleVisibilityItems,
+        Prop::RowRuleVisibilityItems,
+        Prop::RuleOverlap,
+        Prop::ColumnRuleInsetCapStart,
+        Prop::ColumnRuleInsetCapEnd,
+        Prop::ColumnRuleInsetJunctionStart,
+        Prop::ColumnRuleInsetJunctionEnd,
+        Prop::RowRuleInsetCapStart,
+        Prop::RowRuleInsetCapEnd,
+        Prop::RowRuleInsetJunctionStart,
+        Prop::RowRuleInsetJunctionEnd,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1121,6 +1153,22 @@ impl Prop {
             Prop::OffsetRotate => c"offset-rotate",
             Prop::OffsetAnchor => c"offset-anchor",
             Prop::OffsetPosition => c"offset-position",
+            Prop::RowRuleWidth => c"row-rule-width",
+            Prop::RowRuleStyle => c"row-rule-style",
+            Prop::RowRuleColor => c"row-rule-color",
+            Prop::ColumnRuleBreak => c"column-rule-break",
+            Prop::RowRuleBreak => c"row-rule-break",
+            Prop::ColumnRuleVisibilityItems => c"column-rule-visibility-items",
+            Prop::RowRuleVisibilityItems => c"row-rule-visibility-items",
+            Prop::RuleOverlap => c"rule-overlap",
+            Prop::ColumnRuleInsetCapStart => c"column-rule-inset-cap-start",
+            Prop::ColumnRuleInsetCapEnd => c"column-rule-inset-cap-end",
+            Prop::ColumnRuleInsetJunctionStart => c"column-rule-inset-junction-start",
+            Prop::ColumnRuleInsetJunctionEnd => c"column-rule-inset-junction-end",
+            Prop::RowRuleInsetCapStart => c"row-rule-inset-cap-start",
+            Prop::RowRuleInsetCapEnd => c"row-rule-inset-cap-end",
+            Prop::RowRuleInsetJunctionStart => c"row-rule-inset-junction-start",
+            Prop::RowRuleInsetJunctionEnd => c"row-rule-inset-junction-end",
         }
     }
 }

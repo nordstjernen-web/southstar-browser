@@ -38,10 +38,20 @@ const CURRENTCOLOR_INITIAL: &[&str] = &[
     "border-inline-end-color",
     "outline-color",
     "column-rule-color",
+    "row-rule-color",
     "text-decoration-color",
     "text-emphasis-color",
     "-webkit-text-fill-color",
     "-webkit-text-stroke-color",
+];
+
+const GAP_LISTS: [PropId; 6] = [
+    PropId::ColumnRuleWidth,
+    PropId::ColumnRuleStyle,
+    PropId::ColumnRuleColor,
+    PropId::RowRuleWidth,
+    PropId::RowRuleStyle,
+    PropId::RowRuleColor,
 ];
 
 pub(crate) const COMPUTED_PROPS: &[&str] = &[
@@ -1139,7 +1149,41 @@ fn font_shorthand(js: Js, n: Node<'_>) -> String {
     out
 }
 
+fn gap_shorthand(js: Js, n: Node<'_>, name: &str) -> Option<String> {
+    let composed = southstar_css::gap_shorthand_compose(name.as_bytes(), &mut |longhand| {
+        lookup(js, n, core::str::from_utf8(longhand).ok()?).map(String::into_bytes)
+    })?;
+    Some(composed.map_or_else(String::new, |text| {
+        String::from_utf8_lossy(&text).into_owned()
+    }))
+}
+
+fn gap_longhand(js: Js, n: Node<'_>, id: usize, name: &str) -> Option<String> {
+    let value = ffi::style_of(js, n).and_then(|s| s.value_at(id))?;
+    if value.kind() == Kind::Keyword
+        && let Some(text) = keyword_of(Some(value))
+    {
+        let current = lookup(js, n, "color").unwrap_or_default();
+        let resolved = southstar_css::gap_list_computed(
+            name.as_bytes(),
+            text.as_bytes(),
+            font_px(js, n),
+            current.as_bytes(),
+        )?;
+        return Some(String::from_utf8_lossy(&resolved).into_owned());
+    }
+    let text = ffi::serialize(value)?;
+    Some(if name.ends_with("-width") && text.starts_with('-') {
+        "0px".into()
+    } else {
+        text
+    })
+}
+
 fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
+    if let Some(text) = gap_shorthand(js, n, name) {
+        return Some(Some(text));
+    }
     let sides = |prefix: &str, suffix: &str| {
         ["top", "right", "bottom", "left"].map(|side| format!("{prefix}{side}{suffix}"))
     };
@@ -1608,6 +1652,12 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             return Some(r);
         }
         return Some("none".into());
+    }
+    if let Some(id) = pid.filter(|_| GAP_LISTS.iter().any(|&p| is(p)))
+        && ffi::has_style_table(js)
+        && let Some(text) = gap_longhand(js, n, id, name)
+    {
+        return Some(text);
     }
     if CURRENTCOLOR_INITIAL.contains(&name) && ffi::has_style_table(js) {
         let own = pid

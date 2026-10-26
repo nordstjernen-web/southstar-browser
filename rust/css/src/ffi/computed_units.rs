@@ -39,10 +39,10 @@ pub struct RawStyle {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(
-    size_of::<RawStyle>() == 2816
-        && offset_of!(RawStyle, pseudo_styles) == 2704
-        && offset_of!(RawStyle, share_id) == 2792
-        && offset_of!(RawStyle, vars) == 2808
+    size_of::<RawStyle>() == 2944
+        && offset_of!(RawStyle, pseudo_styles) == 2832
+        && offset_of!(RawStyle, share_id) == 2920
+        && offset_of!(RawStyle, vars) == 2936
 );
 
 /// # Safety

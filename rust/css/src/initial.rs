@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 281] = [
+const INITIALS: [(&[u8], &CStr); 283] = [
     (b"padding-top", c"0px"),
     (b"scroll-margin-top", c"0px"),
     (b"scroll-margin-right", c"0px"),
@@ -261,7 +261,9 @@ const INITIALS: [(&[u8], &CStr); 281] = [
     (b"transition-duration", c"0s"),
     (b"backface-visibility", c"visible"),
     (b"column-rule-style", c"none"),
-    (b"column-rule-width", c"0px"),
+    (b"column-rule-width", c"3px"),
+    (b"row-rule-style", c"none"),
+    (b"row-rule-width", c"3px"),
     (b"line-clamp", c"none"),
     (b"-webkit-box-orient", c"horizontal"),
     (b"mask-clip", c"border-box"),

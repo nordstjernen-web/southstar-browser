@@ -21,6 +21,7 @@ mod element_state;
 mod ffi;
 mod fixups;
 mod font;
+mod gaps;
 mod gather;
 mod gradient;
 mod grid;
@@ -101,6 +102,7 @@ pub use font::{
     family_for_pango as font_family_for_pango, shorthand_canonical as font_shorthand_canonical,
     stretch_rank as font_stretch_rank, weight_number as font_weight_number,
 };
+pub use gaps::{list_computed as gap_list_computed, shorthand_compose as gap_shorthand_compose};
 pub use gradient::{
     Gradient, Stop as GradientStop, angle as gradient_angle, radii as gradient_radii,
 };
