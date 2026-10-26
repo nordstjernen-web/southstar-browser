@@ -108,6 +108,7 @@ dependencies = [
  "indexmap",
  "intrusive-collections",
  "itertools",
+ "libm",
  "num-bigint",
  "num-integer",
  "num-traits",
