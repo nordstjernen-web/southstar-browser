@@ -139,6 +139,8 @@ mod fontconfig {
             value: *mut *const c_char,
         ) -> c_int;
         pub fn FcPatternDel(pattern: *mut c_void, object: *const c_char) -> c_int;
+        pub fn FcPatternAddBool(pattern: *mut c_void, object: *const c_char, value: c_int)
+        -> c_int;
         pub fn FcPatternAddDouble(
             pattern: *mut c_void,
             object: *const c_char,
@@ -319,6 +321,7 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
     let Ok(css_family) = CString::new(family) else {
         return;
     };
+    let web_font_object = southstar_text::WEB_FONT_OBJECT;
     unsafe {
         let before = FcConfigGetFonts(ptr::null_mut(), SET_APPLICATION);
         let first_added = before.as_ref().map_or(0, |set| set.nfont.max(0) as usize);
@@ -328,6 +331,7 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
             return refresh_text_font_map();
         }
         for &pattern in font_set_patterns(app_fonts).iter().skip(first_added) {
+            FcPatternAddBool(pattern, web_font_object.as_ptr(), 1);
             if family_is(pattern, family) {
                 apply_descriptors(pattern, descriptors);
             }
@@ -355,6 +359,7 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
                 FcPatternDel(pattern, c"family".as_ptr());
                 FcPatternDel(pattern, c"familylang".as_ptr());
                 FcPatternAddString(pattern, c"family".as_ptr(), css_family.as_ptr());
+                FcPatternAddBool(pattern, web_font_object.as_ptr(), 1);
                 apply_descriptors(pattern, descriptors);
                 if FcFontSetAdd(app_fonts, pattern) == 0 {
                     FcPatternDestroy(pattern);

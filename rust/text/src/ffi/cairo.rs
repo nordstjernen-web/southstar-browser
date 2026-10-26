@@ -142,6 +142,12 @@ type UnicodeToGlyphFunc = unsafe extern "C" fn(
     glyph_index: *mut c_ulong,
 ) -> c_int;
 
+type InitFunc = unsafe extern "C" fn(
+    scaled_font: *mut RawScaledFont,
+    cr: *mut RawCairo,
+    extents: *mut FontExtents,
+) -> c_int;
+
 type DestroyFunc = unsafe extern "C" fn(data: *mut c_void);
 
 #[link(name = "cairo")]
@@ -198,6 +204,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn cairo_user_font_face_create() -> *mut RawFontFace;
     fn cairo_user_font_face_set_render_glyph_func(face: *mut RawFontFace, func: RenderGlyphFunc);
+    fn cairo_user_font_face_set_init_func(face: *mut RawFontFace, func: InitFunc);
     fn cairo_user_font_face_set_unicode_to_glyph_func(
         face: *mut RawFontFace,
         func: UnicodeToGlyphFunc,
@@ -243,6 +250,15 @@ unsafe extern "C" {
     fn cairo_new_sub_path(cr: *mut RawCairo);
     fn cairo_move_to(cr: *mut RawCairo, x: c_double, y: c_double);
     fn cairo_line_to(cr: *mut RawCairo, x: c_double, y: c_double);
+    fn cairo_curve_to(
+        cr: *mut RawCairo,
+        x1: c_double,
+        y1: c_double,
+        x2: c_double,
+        y2: c_double,
+        x3: c_double,
+        y3: c_double,
+    );
     fn cairo_close_path(cr: *mut RawCairo);
     fn cairo_arc(
         cr: *mut RawCairo,
@@ -504,6 +520,8 @@ impl ScaledFont {
         // SAFETY: face is a live user font face that is not yet immutable.
         unsafe { cairo_user_font_face_set_render_glyph_func(face, render_glyph_trampoline) };
         // SAFETY: as above.
+        unsafe { cairo_user_font_face_set_init_func(face, init_trampoline) };
+        // SAFETY: as above.
         unsafe {
             cairo_user_font_face_set_unicode_to_glyph_func(face, unicode_to_glyph_trampoline)
         };
@@ -586,6 +604,9 @@ type FontOptionsHash = u64;
 pub(crate) trait UserFontHandler: Send + Sync {
     fn render_glyph(&self, glyph: u64, cr: &CairoContext, extents: &mut TextExtents) -> bool;
     fn unicode_to_glyph(&self, unicode: u64) -> Option<u64>;
+    fn font_extents(&self) -> Option<FontExtents> {
+        None
+    }
 }
 
 static USER_FONT_KEY: UserDataKey = UserDataKey { unused: 0 };
@@ -628,6 +649,24 @@ unsafe extern "C" fn render_glyph_trampoline(
     } else {
         STATUS_USER_FONT_ERROR
     }
+}
+
+unsafe extern "C" fn init_trampoline(
+    scaled_font: *mut RawScaledFont,
+    _cr: *mut RawCairo,
+    extents: *mut FontExtents,
+) -> c_int {
+    let Some(handler) = handler_of(scaled_font) else {
+        return STATUS_USER_FONT_ERROR;
+    };
+    if let Some(font_extents) = handler.font_extents() {
+        // SAFETY: cairo passes a valid extents struct for this call to fill in.
+        let Some(extents) = (unsafe { extents.as_mut() }) else {
+            return STATUS_USER_FONT_ERROR;
+        };
+        *extents = font_extents;
+    }
+    STATUS_SUCCESS
 }
 
 unsafe extern "C" fn unicode_to_glyph_trampoline(
@@ -742,6 +781,11 @@ impl CairoContext {
     pub fn line_to(&self, x: f64, y: f64) {
         // SAFETY: the context is live.
         unsafe { cairo_line_to(self.raw(), x, y) };
+    }
+
+    pub fn curve_to(&self, x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) {
+        // SAFETY: the context is live.
+        unsafe { cairo_curve_to(self.raw(), x1, y1, x2, y2, x3, y3) };
     }
 
     pub fn close_path(&self) {

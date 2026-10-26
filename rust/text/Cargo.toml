@@ -8,7 +8,7 @@ license = "LGPL-2.0-or-later"
 publish.workspace = true
 
 [features]
-rust-shaper = ["dep:harfrust", "dep:read-fonts"]
+rust-shaper = ["dep:harfrust", "dep:read-fonts", "dep:skrifa"]
 thai = []
 
 [dependencies]
@@ -16,6 +16,7 @@ southstar-bidi = { path = "../bidi" }
 southstar-unicode = { path = "../unicode" }
 harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }
 read-fonts = { version = "0.46", optional = true, default-features = false, features = ["std"] }
+skrifa = { version = "0.49", optional = true }
 
 [lints]
 workspace = true
