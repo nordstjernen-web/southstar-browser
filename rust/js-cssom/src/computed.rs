@@ -969,6 +969,7 @@ fn anim_key(sub: &str, is_anim: bool) -> Option<(&'static str, PropId)> {
         ("range-start", true) => ("range-start", PropId::AnimationRangeStart),
         ("range-end", true) => ("range-end", PropId::AnimationRangeEnd),
         ("behavior", false) => ("behavior", PropId::TransitionBehavior),
+        ("composition", true) => ("composition", PropId::AnimationComposition),
         _ => return None,
     })
 }
@@ -1071,6 +1072,7 @@ fn anim_lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         "timeline" => "auto",
         "range-start" | "range-end" => "normal",
         "behavior" => "normal",
+        "composition" => "replace",
         _ => return None,
     };
     Some(fallback.into())
@@ -1630,10 +1632,14 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             return Some((if preserve { "auto" } else { "0px" }).into());
         }
     }
-    if is(PropId::Opacity)
-        && ffi::has_style_table(js)
+    if let Some(id) = pid.filter(|_| {
+        is(PropId::Opacity)
+            || is(PropId::FillOpacity)
+            || is(PropId::StrokeOpacity)
+            || is(PropId::StopOpacity)
+    }) && ffi::has_style_table(js)
         && let Some((o, UNIT_NUMBER)) = ffi::style_of(js, n)
-            .and_then(|s| s.get(PropId::Opacity))
+            .and_then(|s| s.value_at(id))
             .and_then(ValueRef::length)
     {
         let o = if o.is_nan() || o < 0.0 {

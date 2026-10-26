@@ -361,10 +361,14 @@ pub enum Prop {
     RowRuleInsetCapEnd,
     RowRuleInsetJunctionStart,
     RowRuleInsetJunctionEnd,
+    TextJustify,
+    MathDepth,
+    MathShift,
+    MathStyle,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 353] = [
+    pub(crate) const ALL: [Prop; 357] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -718,6 +722,10 @@ impl Prop {
         Prop::RowRuleInsetCapEnd,
         Prop::RowRuleInsetJunctionStart,
         Prop::RowRuleInsetJunctionEnd,
+        Prop::TextJustify,
+        Prop::MathDepth,
+        Prop::MathShift,
+        Prop::MathStyle,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1169,6 +1177,10 @@ impl Prop {
             Prop::RowRuleInsetCapEnd => c"row-rule-inset-cap-end",
             Prop::RowRuleInsetJunctionStart => c"row-rule-inset-junction-start",
             Prop::RowRuleInsetJunctionEnd => c"row-rule-inset-junction-end",
+            Prop::TextJustify => c"text-justify",
+            Prop::MathDepth => c"math-depth",
+            Prop::MathShift => c"math-shift",
+            Prop::MathStyle => c"math-style",
         }
     }
 }

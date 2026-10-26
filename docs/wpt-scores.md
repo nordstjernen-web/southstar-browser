@@ -222,6 +222,8 @@ per file.
 | | `css/css-multicol/parsing` | +7 |
 | Non-legacy gradient stop colours keep their space | `css/css-images/parsing/gradient-interpolation-method-computed.html` | 466 → 932/932 |
 | Deferred sheet edits flushed before style and geometry reads | `css/css-cascade/all-prop-revert-layer.html` | 33 → 320/345 |
+| SVG opacity numbers, `stroke-miterlimit`, `text-justify`, `math-*`, `animation-composition` initial | `all-prop-revert-layer.html` (with the flush) | 320 → 329/345 |
+| | `css/css-text/parsing` | +9 |
 
 ## Top 10 improvements — 2026-10-14
 

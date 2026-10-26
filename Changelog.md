@@ -22,6 +22,13 @@ Southstar Browser 1.0.2-dev:
   indices and the legacy `RegExp.$1`-style values only when they are used.
   An `exec` loop and a pair of global `replace` calls run twice as fast,
   and Octane RegExp scores a third higher.
+* `fill-opacity`, `stroke-opacity` and `stop-opacity` accept numbers and
+  percentages like `opacity` (and compute clamped to 0–1), and
+  `stroke-miterlimit` accepts a non-negative number; all four used to
+  reject every value except `0`. `text-justify`, `math-depth`,
+  `math-shift` and `math-style` are parsed and computed, and
+  `animation-composition` computes to `replace` when unset instead of an
+  empty string.
 * JavaScript: `JSON.parse` reads the string with a JSON parser of its own
   (`builtins/json/parse.rs` in the Boa fork) that builds the values
   directly. It used to validate the text with `serde_json`, then parse and

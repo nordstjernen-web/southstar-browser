@@ -27,7 +27,7 @@ pub(crate) struct Def {
     pub(crate) grammar: &'static str,
 }
 
-pub(crate) const DEFS: [Def; 74] = [
+pub(crate) const DEFS: [Def; 78] = [
     Def {
         prop: Prop::TextUnderlineOffset,
         kind: Kind::Length,
@@ -546,6 +546,34 @@ pub(crate) const DEFS: [Def; 74] = [
         initial: c"0px",
         grammar: "overlap-join | <length-percentage>",
     },
+    Def {
+        prop: Prop::TextJustify,
+        kind: Kind::Keywords,
+        inherited: true,
+        initial: c"auto",
+        grammar: "auto | none | inter-word | inter-character",
+    },
+    Def {
+        prop: Prop::MathDepth,
+        kind: Kind::Keywords,
+        inherited: true,
+        initial: c"0",
+        grammar: "auto-add",
+    },
+    Def {
+        prop: Prop::MathShift,
+        kind: Kind::Keywords,
+        inherited: true,
+        initial: c"normal",
+        grammar: "normal | compact",
+    },
+    Def {
+        prop: Prop::MathStyle,
+        kind: Kind::Keywords,
+        inherited: true,
+        initial: c"normal",
+        grammar: "normal | compact",
+    },
 ];
 
 pub(crate) fn of(prop: Prop) -> Option<&'static Def> {
@@ -734,6 +762,25 @@ fn font_variant_alternates(t: &[u8]) -> Option<String> {
     Some(slots.into_iter().flatten().collect::<Vec<_>>().join(" "))
 }
 
+fn math_depth(t: &[u8]) -> Option<String> {
+    let t = strip(t);
+    if keyword_is(t, "auto-add") {
+        return Some("auto-add".to_owned());
+    }
+    let integer = |text: &[u8]| match parsed_length(text) {
+        Some(Parsed::Length(n, NUMBER)) if n.fract() == 0.0 && n.abs() < 1e9 => Some(n),
+        _ => None,
+    };
+    let lower = t.to_ascii_lowercase();
+    if let Some(inner) = lower
+        .strip_prefix(b"add(")
+        .and_then(|r| r.strip_suffix(b")"))
+    {
+        return integer(inner).map(|n| format!("add({})", n as i64));
+    }
+    integer(t).map(|n| (n as i64).to_string())
+}
+
 fn hyphenate_limit_chars_trim(canon: &str) -> String {
     let parts: Vec<&str> = canon.split(' ').collect();
     let mut n = parts.len();
@@ -750,6 +797,10 @@ fn keyword_canonical(def: &Def, t: &[u8]) -> Option<String> {
     match def.prop {
         Prop::ColorScheme => return color_scheme(t),
         Prop::FontVariantAlternates => return font_variant_alternates(t),
+        Prop::MathDepth => return math_depth(t),
+        Prop::TextJustify if keyword_is(t, "distribute") => {
+            return Some("inter-character".to_owned());
+        }
         _ => {}
     }
     let canon = grammar_canonical(def.grammar, t)?;
