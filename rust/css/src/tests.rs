@@ -320,3 +320,45 @@ fn gradient_stops_keep_non_legacy_colour_spaces() {
         Some("radial-gradient(rgb(255, 0, 0), oklch(0.5 0.1 none) 20% 40%)")
     );
 }
+
+fn parsed(prop: Prop, text: &str) -> Option<String> {
+    property::parse(prop, text.as_bytes())
+        .map(|v| String::from_utf8_lossy(&values::serialize(&v, false)).into_owned())
+}
+
+#[test]
+fn svg_opacities_and_miterlimit_take_numbers() {
+    assert_eq!(parsed(Prop::FillOpacity, "0.123").as_deref(), Some("0.123"));
+    assert_eq!(parsed(Prop::StrokeOpacity, "50%").as_deref(), Some("0.5"));
+    assert_eq!(parsed(Prop::StopOpacity, "2").as_deref(), Some("2"));
+    assert_eq!(parsed(Prop::FillOpacity, "1px"), None);
+    assert_eq!(
+        parsed(Prop::StrokeMiterlimit, "123").as_deref(),
+        Some("123")
+    );
+    assert_eq!(parsed(Prop::StrokeMiterlimit, "-1"), None);
+    assert_eq!(parsed(Prop::StrokeMiterlimit, "4px"), None);
+}
+
+#[test]
+fn math_and_text_justify_keywords() {
+    assert_eq!(parsed(Prop::MathDepth, "123").as_deref(), Some("123"));
+    assert_eq!(
+        parsed(Prop::MathDepth, "add(-2)").as_deref(),
+        Some("add(-2)")
+    );
+    assert_eq!(
+        parsed(Prop::MathDepth, "AUTO-ADD").as_deref(),
+        Some("auto-add")
+    );
+    assert_eq!(parsed(Prop::MathDepth, "1.5"), None);
+    assert_eq!(
+        parsed(Prop::MathStyle, "compact").as_deref(),
+        Some("compact")
+    );
+    assert_eq!(
+        parsed(Prop::TextJustify, "distribute").as_deref(),
+        Some("inter-character")
+    );
+    assert_eq!(parsed(Prop::TextJustify, "inter-ideograph"), None);
+}

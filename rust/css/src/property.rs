@@ -475,7 +475,14 @@ pub(crate) fn requires_nonnegative(prop: Prop) -> bool {
 fn bare_number_is_length(prop: Prop) -> bool {
     !matches!(
         prop,
-        Prop::Opacity | Prop::FlexGrow | Prop::FlexShrink | Prop::LineHeight
+        Prop::FlexGrow | Prop::FlexShrink | Prop::LineHeight | Prop::StrokeMiterlimit
+    ) && !is_opacity(prop)
+}
+
+fn is_opacity(prop: Prop) -> bool {
+    matches!(
+        prop,
+        Prop::Opacity | Prop::FillOpacity | Prop::StrokeOpacity | Prop::StopOpacity
     )
 }
 
@@ -495,10 +502,13 @@ fn numeric_valid(prop: Prop, body: &Body) -> bool {
         Body::Calc(c) if is_scroll_margin(prop) && c.pct != 0.0 => false,
         Body::Length(num, unit) => {
             let (num, unit) = (*num, *unit);
-            if prop == Prop::Opacity {
+            if is_opacity(prop) {
                 return unit == NUMBER || unit == PERCENT;
             }
             if prop == Prop::FlexGrow || prop == Prop::FlexShrink {
+                return unit == NUMBER && num >= 0.0;
+            }
+            if prop == Prop::StrokeMiterlimit {
                 return unit == NUMBER && num >= 0.0;
             }
             if unit == NUMBER && prop != Prop::LineHeight && num != 0.0 {
@@ -510,10 +520,10 @@ fn numeric_valid(prop: Prop, body: &Body) -> bool {
             if prop == Prop::FlexGrow || prop == Prop::FlexShrink {
                 return false;
             }
-            if prop == Prop::Opacity {
+            if is_opacity(prop) {
                 return c.px == 0.0 && c.em == 0.0 && c.rem == 0.0;
             }
-            true
+            prop != Prop::StrokeMiterlimit
         }
         _ => false,
     }
@@ -919,7 +929,7 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     {
         *unit = PX;
     }
-    if prop == Prop::Opacity {
+    if is_opacity(prop) {
         match &mut v.body {
             Body::Length(num, unit) if *unit == PERCENT => {
                 *num /= 100.0;
