@@ -2,7 +2,10 @@
 
 use crate::{
     Context, JsResult, JsValue,
-    builtins::{BuiltInBuilder, IntrinsicObject, object::for_in_iterator::ForInIterator},
+    builtins::{
+        BuiltInBuilder, IntrinsicObject, array::ArrayIterator, map::MapIterator,
+        object::for_in_iterator::ForInIterator, set::SetIterator,
+    },
     context::intrinsics::Intrinsics,
     error::JsNativeError,
     js_string,
@@ -371,6 +374,9 @@ impl IteratorResult {
     }
 }
 
+/// The steps of a built-in iterator's `next` method without the result object.
+type BuiltinStep = fn(&JsObject, &mut Context) -> JsResult<Option<JsValue>>;
+
 /// Iterator Record
 ///
 /// An Iterator Record is a Record value used to encapsulate an
@@ -548,6 +554,14 @@ impl IteratorRecord {
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-iteratorstep
     pub(crate) fn step(&mut self, context: &mut Context) -> JsResult<bool> {
+        if let Some(builtin_step) = self.builtin_step(context) {
+            return self.set_done_on_err(|iter| {
+                let value = builtin_step(&iter.iterator, context)?;
+                iter.done = value.is_none();
+                iter.last_result = LastResult::Value(value.unwrap_or_default());
+                Ok(iter.done)
+            });
+        }
         if self.iterator.is::<ForInIterator>() {
             return self.set_done_on_err(|iter| {
                 let key = ForInIterator::step(&iter.iterator, context)?;
@@ -575,6 +589,29 @@ impl IteratorRecord {
             // 6. Return result.
             Ok(iter.done)
         })
+    }
+
+    /// The steps of the built-in `next` method of this record, when it is the intrinsic `next` of
+    /// an array, map or set iterator: calling it creates a result object that nothing else can
+    /// observe, so the value is taken without it.
+    fn builtin_step(&self, context: &Context) -> Option<BuiltinStep> {
+        let next = self.next_method.as_object()?;
+        let objects = context.intrinsics().objects();
+        if self.iterator.is::<ArrayIterator>()
+            && JsObject::equals(&next, objects.array_iterator_next())
+        {
+            Some(ArrayIterator::step)
+        } else if self.iterator.is::<MapIterator>()
+            && JsObject::equals(&next, objects.map_iterator_next())
+        {
+            Some(MapIterator::step)
+        } else if self.iterator.is::<SetIterator>()
+            && JsObject::equals(&next, objects.set_iterator_next())
+        {
+            Some(SetIterator::step)
+        } else {
+            None
+        }
     }
 
     /// `IteratorStepValue ( iteratorRecord )`

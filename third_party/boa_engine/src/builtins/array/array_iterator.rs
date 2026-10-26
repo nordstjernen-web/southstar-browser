@@ -38,9 +38,27 @@ pub(crate) struct ArrayIterator {
 
 impl IntrinsicObject for ArrayIterator {
     fn init(realm: &Realm) {
+        let next = BuiltInBuilder::callable_with_object(
+            realm,
+            realm
+                .intrinsics()
+                .objects()
+                .array_iterator_next()
+                .clone()
+                .into(),
+            Self::next,
+        )
+        .name(js_string!("next"))
+        .length(0)
+        .build();
+
         BuiltInBuilder::with_intrinsic::<Self>(realm)
             .prototype(realm.intrinsics().constructors().iterator().prototype())
-            .static_method(Self::next, js_string!("next"), 0)
+            .static_property(
+                js_string!("next"),
+                next,
+                Attribute::WRITABLE | Attribute::NON_ENUMERABLE | Attribute::CONFIGURABLE,
+            )
             .static_property(
                 JsSymbol::to_string_tag(),
                 js_string!("Array Iterator"),
@@ -94,18 +112,25 @@ impl ArrayIterator {
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-%arrayiteratorprototype%.next
     pub(crate) fn next(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-        let object = this.as_object();
+        let object = this
+            .as_object()
+            .filter(JsObject::is::<Self>)
+            .ok_or_else(|| JsNativeError::typ().with_message("`this` is not an ArrayIterator"))?;
+        Ok(match Self::step(&object, context)? {
+            Some(value) => create_iter_result_object(value, false, context),
+            None => create_iter_result_object(JsValue::undefined(), true, context),
+        })
+    }
+
+    /// The steps of `%ArrayIteratorPrototype%.next` on `object`, an `ArrayIterator`, without
+    /// the result object: the next value, or `None` once the iterator is done.
+    pub(crate) fn step(object: &JsObject, context: &mut Context) -> JsResult<Option<JsValue>> {
         let mut array_iterator = object
-            .as_ref()
-            .and_then(JsObject::downcast_mut::<Self>)
+            .downcast_mut::<Self>()
             .ok_or_else(|| JsNativeError::typ().with_message("`this` is not an ArrayIterator"))?;
         let index = array_iterator.next_index;
         if array_iterator.done {
-            return Ok(create_iter_result_object(
-                JsValue::undefined(),
-                true,
-                context,
-            ));
+            return Ok(None);
         }
 
         let len = if let Some(f) = array_iterator.array.downcast_ref::<TypedArray>() {
@@ -126,23 +151,19 @@ impl ArrayIterator {
 
         if index >= len {
             array_iterator.done = true;
-            return Ok(create_iter_result_object(
-                JsValue::undefined(),
-                true,
-                context,
-            ));
+            return Ok(None);
         }
         array_iterator.next_index = index + 1;
         match array_iterator.kind {
-            PropertyNameKind::Key => Ok(create_iter_result_object(index.into(), false, context)),
+            PropertyNameKind::Key => Ok(Some(index.into())),
             PropertyNameKind::Value => {
                 let element_value = array_iterator.array.get(index, context)?;
-                Ok(create_iter_result_object(element_value, false, context))
+                Ok(Some(element_value))
             }
             PropertyNameKind::KeyAndValue => {
                 let element_value = array_iterator.array.get(index, context)?;
                 let result = Array::create_array_from_list([index.into(), element_value], context);
-                Ok(create_iter_result_object(result.into(), false, context))
+                Ok(Some(result.into()))
             }
         }
     }
