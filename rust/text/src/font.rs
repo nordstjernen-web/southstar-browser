@@ -560,10 +560,12 @@ impl Font {
         &self.0.glyph_source
     }
 
+    #[cfg(feature = "rust-shaper")]
     pub(crate) fn font_matrix(&self) -> &CairoMatrix {
         &self.0.font_matrix
     }
 
+    #[cfg(feature = "rust-shaper")]
     pub(crate) fn cairo_ctm(&self) -> &CairoMatrix {
         &self.0.ctm
     }
