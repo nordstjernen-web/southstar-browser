@@ -228,7 +228,7 @@ pub(crate) fn set_global_object_binding(
 
     let ic = &context.vm.frame().code_block().ic[usize::from(ic_index)];
     let object_borrowed = object.borrow();
-    if let Some((_, slot)) = ic.get(object_borrowed.shape())
+    if let Some(slot) = ic.get(object_borrowed.shape())
         && !slot.attributes.is_accessor_descriptor()
         && !slot.attributes.contains(SlotAttributes::PROTOTYPE)
     {

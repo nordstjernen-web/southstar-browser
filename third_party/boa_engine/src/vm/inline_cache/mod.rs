@@ -112,6 +112,7 @@ impl InlineCache {
         };
 
         let mut entries = self.entries.borrow_mut();
+        entries.retain(|entry| entry.shape.upgrade().is_some());
 
         // Add a new entry if there's space.
         if entries
@@ -152,46 +153,35 @@ impl InlineCache {
         self.set(current, slot);
     }
 
-    /// Returns the cached `(Shape, Slot)` if a matching shape exists in the inline cache.
+    /// Returns the cached slot if a matching shape exists in the inline cache.
     ///
     /// A prototype slot matches only while the prototype keeps the shape it had when the slot
     /// was cached; an entry whose prototype has changed shape is dropped.
     ///
-    /// Opportunistically cleans up stale weak shape references during lookup.
-    pub(crate) fn get(&self, shape: &Shape) -> Option<(Shape, Slot)> {
+    /// Shapes are compared through their weak references without upgrading them, so a hit
+    /// creates no new reference.
+    pub(crate) fn get(&self, shape: &Shape) -> Option<Slot> {
         if self.megamorphic.get() {
             return None;
         }
 
-        let mut entries = self.entries.borrow_mut();
-        let mut i = 0;
-        let mut result = None;
-        let shape_addr = shape.to_addr_usize();
-
-        while i < entries.len() {
-            if let Some(upgraded) = entries[i].shape.upgrade() {
-                if upgraded.to_addr_usize() == shape_addr {
-                    let slot = entries[i].slot;
-                    let cached_prototype = entries[i].prototype_shape.as_ref();
-                    if slot.attributes.contains(SlotAttributes::PROTOTYPE)
-                        && !prototype_kept_shape(
-                            &upgraded,
-                            cached_prototype.map(WeakShape::to_addr_usize),
-                        )
-                    {
-                        entries.swap_remove(i);
-                        break;
-                    }
-                    result = Some((upgraded, slot));
-                    break;
-                }
-                i += 1;
-            } else {
-                // Opportunistically clean up stale weak shapes.
-                entries.swap_remove(i);
+        let entries = self.entries.borrow();
+        let position = entries
+            .iter()
+            .position(|entry| entry.shape.points_to(shape))?;
+        let entry = &entries[position];
+        let slot = entry.slot;
+        if slot.attributes.contains(SlotAttributes::PROTOTYPE) {
+            let kept = match (shape.prototype(), entry.prototype_shape.as_ref()) {
+                (Some(prototype), Some(cached)) => cached.points_to(prototype.borrow().shape()),
+                _ => false,
+            };
+            if !kept {
+                drop(entries);
+                self.entries.borrow_mut().swap_remove(position);
+                return None;
             }
         }
-
-        result
+        Some(slot)
     }
 }

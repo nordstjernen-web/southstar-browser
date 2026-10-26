@@ -67,6 +67,17 @@ impl<K: Trace + ?Sized, V: Trace> Ephemeron<K, V> {
         Some(unsafe { Gc::from_raw(key_ptr) })
     }
 
+    /// Returns `true` if the key of this `Ephemeron` is still alive and is `key`, without
+    /// creating a new reference to it.
+    #[inline]
+    #[must_use]
+    pub fn key_is(&self, key: &Gc<K>) -> bool {
+        // SAFETY: this is safe because `Ephemeron` is tracked to always point to a valid pointer
+        // `inner_ptr`.
+        let key_ptr = unsafe { self.inner_ptr.as_ref().key_ptr() };
+        key_ptr.is_some_and(|key_ptr| std::ptr::addr_eq(key_ptr.as_ptr(), key.inner_ptr.as_ptr()))
+    }
+
     /// Gets the stored value of this `Ephemeron`, or `None` if the key was already garbage collected.
     #[must_use]
     pub fn value(&self) -> Option<EphemeronValueRef<'_, K, V>> {
