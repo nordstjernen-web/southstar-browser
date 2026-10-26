@@ -923,7 +923,9 @@ impl Font {
 
     fn user_glyph_extents(&self, glyph: Glyph) -> TextExtents {
         #[cfg(feature = "rust-shaper")]
-        if let Some(source) = self.glyph_source() {
+        if let Some(source) = self.glyph_source()
+            && !source.is_color_glyph(glyph)
+        {
             return crate::rust_glyphs::user_extents(source, glyph, &self.0.font_matrix);
         }
         self.scaled_font()

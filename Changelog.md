@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Color glyphs of Rust-backed fonts are painted in Rust: COLR v0 and v1
+  through `skrifa`'s paint traversal onto cairo (gradients as cairo
+  patterns, sweep gradients as mesh patterns, composite modes as cairo
+  operators, the text color through cairo's foreground marker), and CBDT and
+  sbix PNG strikes decoded by the `png` crate. Noto Color Emoji, Segoe UI
+  Emoji and the googlefonts/color-fonts test fonts render within
+  anti-aliasing of cairo-ft; COLR v1 test glyphs that crash the cairo-ft path
+  with a stack overflow render correctly. A malformed paint graph leaves a
+  partly painted glyph instead of failing the font.
 * JavaScript built-ins: `Math.round` no longer trusts the C runtime's
   `round` (MinGW's rounds 0.49999999999999994 up to 1); `Math.acosh`,
   `asinh` and `atanh` use musl's formulas, which keep their precision near

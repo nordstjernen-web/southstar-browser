@@ -8,28 +8,34 @@ use core::ptr::NonNull;
 use super::fontconfig::{PatternBuilder, RawPattern};
 use crate::ffi::fontconfig::Pattern;
 
+#[cfg(feature = "rust-shaper")]
+#[path = "cairo_color.rs"]
+mod color;
+#[cfg(feature = "rust-shaper")]
+pub(crate) use color::{CairoPattern, ColorForeground, ImageSurface};
+
 #[repr(C)]
 struct RawFontOptions {
     _private: [u8; 0],
 }
 
 #[repr(C)]
-struct RawScaledFont {
+pub(super) struct RawScaledFont {
     _private: [u8; 0],
 }
 
 #[repr(C)]
-struct RawFontFace {
+pub(super) struct RawFontFace {
     _private: [u8; 0],
 }
 
 #[repr(C)]
-struct RawCairo {
+pub(super) struct RawCairo {
     _private: [u8; 0],
 }
 
 #[repr(C)]
-struct RawSurface {
+pub(super) struct RawSurface {
     _private: [u8; 0],
 }
 
@@ -125,8 +131,8 @@ pub enum HintMetrics {
     On = 2,
 }
 
-const STATUS_SUCCESS: c_int = 0;
-const STATUS_USER_FONT_ERROR: c_int = 27;
+pub(super) const STATUS_SUCCESS: c_int = 0;
+pub(super) const STATUS_USER_FONT_ERROR: c_int = 27;
 const FILL_RULE_EVEN_ODD: c_int = 1;
 
 type RenderGlyphFunc = unsafe extern "C" fn(
@@ -525,6 +531,16 @@ impl ScaledFont {
         unsafe {
             cairo_user_font_face_set_unicode_to_glyph_func(face, unicode_to_glyph_trampoline)
         };
+        #[cfg(feature = "rust-shaper")]
+        if handler.has_color() {
+            // SAFETY: face is a live user font face that is not yet immutable.
+            unsafe {
+                color::cairo_user_font_face_set_render_color_glyph_func(
+                    face,
+                    color::render_color_glyph_trampoline,
+                )
+            };
+        }
         let data: *mut Box<dyn UserFontHandler> = Box::into_raw(Box::new(handler));
         // SAFETY: face is live; cairo owns data from here and frees it through destroy_handler.
         let status = unsafe {
@@ -607,6 +623,20 @@ pub(crate) trait UserFontHandler: Send + Sync {
     fn font_extents(&self) -> Option<FontExtents> {
         None
     }
+    #[cfg(feature = "rust-shaper")]
+    fn has_color(&self) -> bool {
+        false
+    }
+    #[cfg(feature = "rust-shaper")]
+    fn render_color_glyph(
+        &self,
+        _glyph: u64,
+        _cr: &CairoContext,
+        _extents: &mut TextExtents,
+        _foreground: &ColorForeground,
+    ) -> Option<bool> {
+        None
+    }
 }
 
 static USER_FONT_KEY: UserDataKey = UserDataKey { unused: 0 };
@@ -616,7 +646,7 @@ unsafe extern "C" fn destroy_handler(data: *mut c_void) {
     drop(unsafe { Box::from_raw(data.cast::<Box<dyn UserFontHandler>>()) });
 }
 
-fn handler_of<'a>(scaled_font: *mut RawScaledFont) -> Option<&'a dyn UserFontHandler> {
+pub(super) fn handler_of<'a>(scaled_font: *mut RawScaledFont) -> Option<&'a dyn UserFontHandler> {
     // SAFETY: cairo passes the live scaled font it is calling back for.
     let face = unsafe { cairo_scaled_font_get_font_face(scaled_font) };
     // SAFETY: face is live; the key is the static this module registered data under.
@@ -702,13 +732,13 @@ impl CairoContext {
         NonNull::new(cr.cast::<RawCairo>()).map(CairoContext::from_borrowed)
     }
 
-    fn from_borrowed(cr: NonNull<RawCairo>) -> CairoContext {
+    pub(super) fn from_borrowed(cr: NonNull<RawCairo>) -> CairoContext {
         // SAFETY: callers hand over a live cairo_t; the reference taken here is released in Drop.
         unsafe { cairo_reference(cr.as_ptr()) };
         CairoContext(cr)
     }
 
-    fn raw(&self) -> *mut RawCairo {
+    pub(super) fn raw(&self) -> *mut RawCairo {
         self.0.as_ptr()
     }
 
