@@ -918,12 +918,7 @@ unsafe extern "C" fn on_view_notify(
             EVT_DOWNLOAD => {
                 if let Some(t) = text.filter(|t| !t.is_empty()) {
                     let (target, name) = rules::split_download(t.to_bytes());
-                    let page_url = v.url();
-                    let local_target = rules::has_file_scheme(target);
-                    let local_page = page_url
-                        .as_deref()
-                        .is_some_and(|u| rules::has_file_scheme(u.to_bytes()));
-                    if !local_target || local_page {
+                    if !crate::procview::nav::is_local_url(target) || v.is_local_page() {
                         let target = cstring(target);
                         let name = name.filter(|n| !n.is_empty()).map(cstring);
                         downloads::start(pw.window.get(), &target, name.as_deref());

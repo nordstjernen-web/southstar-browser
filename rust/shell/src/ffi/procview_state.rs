@@ -229,6 +229,8 @@ pub struct NsProcView {
     pub history: *mut c_void,
     pub hist_index: c_int,
     pub pending_record: GBoolean,
+    pub pending_local: GBoolean,
+    pub local_page: GBoolean,
     pub deferred_url: *mut c_char,
     pub deferred_record: GBoolean,
     pub deferred_history: GBoolean,

@@ -100,10 +100,6 @@ pub fn clip_title(t: &[u8]) -> &[u8] {
     &t[..t.len().min(TAB_TITLE_BYTES)]
 }
 
-pub fn has_file_scheme(url: &[u8]) -> bool {
-    url.len() >= 5 && url[..5].eq_ignore_ascii_case(b"file:")
-}
-
 pub fn split_download(text: &[u8]) -> (&[u8], Option<&[u8]>) {
     match text.iter().position(|&c| c == b'\t') {
         Some(tab) => (&text[..tab], Some(&text[tab + 1..])),

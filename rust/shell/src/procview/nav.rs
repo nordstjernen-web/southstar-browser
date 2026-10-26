@@ -85,6 +85,34 @@ pub fn find_count(current: i32, total: i32) -> Vec<u8> {
     format!("{current}/{total}").into_bytes()
 }
 
+pub fn is_local_url(url: &[u8]) -> bool {
+    let scheme: Vec<u8> = url
+        .iter()
+        .copied()
+        .skip_while(|&c| c <= b' ')
+        .filter(|&c| !matches!(c, b'\t' | b'\n' | b'\r'))
+        .take(17)
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    let scheme = scheme.strip_prefix(b"view-source:").unwrap_or(&scheme);
+    scheme.starts_with(b"file:")
+}
+
+pub fn same_document_url_ok(current: Option<&[u8]>, next: &[u8], local_page: bool) -> bool {
+    if local_page {
+        return is_local_url(next);
+    }
+    if is_local_url(next) {
+        return false;
+    }
+    match current {
+        Some(current) if southstar_url::bytes::is_http_or_https(current) => {
+            southstar_url::bytes::same_origin(current, next)
+        }
+        _ => true,
+    }
+}
+
 pub fn find_scroll_target(match_y: i32) -> f64 {
     f64::from(if match_y > FIND_MARGIN {
         match_y - FIND_MARGIN

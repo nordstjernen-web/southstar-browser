@@ -7,6 +7,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::Ordering;
 use std::ffi::CString;
+use std::path::PathBuf;
 
 use southstar_media_shm::{
     AUDIO_CLOCK_MAGIC, AUDIO_CLOCK_SLOTS, AUDIO_CLOCK_VERSION, AudioClockHdr, VIDEO_RING_MAGIC,
@@ -19,7 +20,7 @@ use southstar_gtk_ffi::{
 };
 
 use super::appmain::ns_app_self_exe;
-use super::procview_result::{ns_proc_view_push_video_event, ns_proc_view_url};
+use super::procview_result::{ns_proc_view_local_page, ns_proc_view_push_video_event};
 use super::procview_state::NsProcView;
 use super::procview_view::{
     ns_proc_view_area, ns_proc_view_media, ns_proc_view_ref, ns_proc_view_unref,
@@ -101,12 +102,6 @@ unsafe extern "C" {
         length: *mut usize,
         error: *mut *mut GError,
     ) -> *mut c_char;
-    fn g_filename_from_uri(
-        uri: *const c_char,
-        hostname: *mut *mut c_char,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-    fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_file_test(filename: *const c_char, test: c_uint) -> GBoolean;
     fn g_path_is_absolute(file_name: *const c_char) -> GBoolean;
     fn g_find_program_in_path(program: *const c_char) -> *mut c_char;
@@ -513,40 +508,42 @@ fn spawn(path: &CStr, proxy: bool) -> Result<*mut GSubprocess, Vec<u8>> {
     Err(message)
 }
 
+fn path_from(bytes: &[u8]) -> Option<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
+    }
+    #[cfg(not(unix))]
+    {
+        core::str::from_utf8(bytes).ok().map(PathBuf::from)
+    }
+}
+
 fn stream_url_allowed(url: &[u8], subdir: &CStr) -> bool {
-    let Some(rest) = url.strip_prefix(b"file://") else {
+    let Some((dir, name)) = media::stream_file_parts(url) else {
         return false;
     };
-    let Ok(curl) = CString::new(url) else {
+    let Some(dir) = path_from(dir).filter(|d| d.is_absolute()) else {
         return false;
     };
-    let path = unsafe {
-        GStr::take(g_filename_from_uri(
-            curl.as_ptr(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-        ))
+    // SAFETY: GLib computes the user cache directory once and returns a string it never frees.
+    let cache = unsafe { glib::g_get_user_cache_dir() };
+    // SAFETY: the pointer is GLib's non-null, NUL-terminated, process-lifetime cache path.
+    let cache = unsafe { CStr::from_ptr(cache) };
+    let streams = build_filename(&[cache, c"southstar", subdir]);
+    let Some(streams) = path_from(streams.to_bytes()) else {
+        return false;
     };
-    let path = path.map_or_else(
-        || {
-            let rest = rest.strip_prefix(b"localhost").unwrap_or(rest);
-            CString::new(rest).unwrap_or_default()
-        },
-        |p| p.to_owned(),
-    );
-    let Some(canon) = (unsafe { GStr::take(g_canonicalize_filename(path.as_ptr(), ptr::null())) })
+    let (Ok(streams), Ok(dir)) = (std::fs::canonicalize(streams), std::fs::canonicalize(dir))
     else {
         return false;
     };
-    let cache = unsafe { glib::g_get_user_cache_dir() };
-    let cache = unsafe { CStr::from_ptr(cache) };
-    let streams = build_filename(&[cache, c"southstar", subdir, c""]);
-    let slashes = |s: &[u8]| -> Vec<u8> {
-        s.iter()
-            .map(|&b| if b == b'\\' { b'/' } else { b })
-            .collect()
+    let Some(name) = path_from(name) else {
+        return false;
     };
-    slashes(canon.to_bytes()).starts_with(&slashes(streams.to_bytes()))
+    dir == streams
+        && std::fs::symlink_metadata(dir.join(name)).is_ok_and(|m| m.file_type().is_file())
 }
 
 fn audio_url_allowed(v: *mut NsProcView, url: &[u8]) -> bool {
@@ -556,7 +553,7 @@ fn audio_url_allowed(v: *mut NsProcView, url: &[u8]) -> bool {
     if !url.starts_with(b"file://") {
         return false;
     }
-    if text(ns_proc_view_url(v)).is_some_and(|u| u.starts_with(b"file:")) {
+    if ns_proc_view_local_page(v) {
         return true;
     }
     stream_url_allowed(url, c"msaudio")
