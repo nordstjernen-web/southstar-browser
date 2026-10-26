@@ -177,14 +177,19 @@ unsafe extern "C" {
 }
 
 pub fn strtod(terminated: &[u8], pos: usize) -> (f64, usize) {
-    debug_assert_eq!(terminated.last(), Some(&0));
-    let start = terminated[pos..].as_ptr().cast::<c_char>();
+    let Some(rest) = terminated.get(pos..).filter(|r| r.last() == Some(&0)) else {
+        return (0.0, 0);
+    };
+    let start = rest.as_ptr().cast::<c_char>();
     let mut end: *mut c_char = ptr::null_mut();
+    // SAFETY: rest ends in a NUL byte, so g_ascii_strtod reads only inside it and sets end within it.
     let value = unsafe { g_ascii_strtod(start, &mut end) };
     let consumed = if end.is_null() {
         0
     } else {
-        end as usize - start as usize
+        (end as usize)
+            .saturating_sub(start as usize)
+            .min(rest.len() - 1)
     };
     (value, consumed)
 }

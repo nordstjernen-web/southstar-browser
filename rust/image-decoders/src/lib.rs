@@ -333,6 +333,10 @@ pub fn decode_webp(data: &[u8]) -> Option<Pixels> {
     webp_still(data).or_else(|| webp_animation_first_frame(data))
 }
 
+fn frame_delay_ms(prev_ts: i32, ts: i32) -> i32 {
+    ts.wrapping_sub(prev_ts).max(0)
+}
+
 pub fn decode_webp_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
     if !webp_supports(data) || data.len() > WEBP_MAX_INPUT {
         return None;
@@ -366,7 +370,7 @@ pub fn decode_webp_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
                 height,
                 stride,
             },
-            delay_ms: ts - prev_ts,
+            delay_ms: frame_delay_ms(prev_ts, ts),
         });
         prev_ts = ts;
     }
