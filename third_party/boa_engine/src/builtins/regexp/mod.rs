@@ -55,6 +55,28 @@ pub struct RegExp {
     legacy_features: bool,
 }
 
+/// The matchers compiled for recent pattern and flag pairs, so a regular expression literal
+/// evaluated in a loop, or the copy `split` and `replaceAll` construct, reuses its matcher.
+#[derive(Debug, Default)]
+pub(crate) struct MatcherCache {
+    matchers: std::collections::HashMap<(JsString, u8), Rc<Regex>>,
+}
+
+impl MatcherCache {
+    const CAPACITY: usize = 512;
+
+    fn get(&self, pattern: &JsString, flags: RegExpFlags) -> Option<Rc<Regex>> {
+        self.matchers.get(&(pattern.clone(), flags.bits())).cloned()
+    }
+
+    fn insert(&mut self, pattern: JsString, flags: RegExpFlags, matcher: Rc<Regex>) {
+        if self.matchers.len() >= Self::CAPACITY {
+            self.matchers.clear();
+        }
+        self.matchers.insert((pattern, flags.bits()), matcher);
+    }
+}
+
 /// The values of the legacy static properties of a realm's `%RegExp%` (`[[RegExpInput]]`,
 /// `[[RegExpLastMatch]]`, `[[RegExpLastParen]]`, `[[RegExpLeftContext]]`,
 /// `[[RegExpRightContext]]` and `[[RegExpParen1]]` to `[[RegExpParen9]]`).
@@ -517,7 +539,38 @@ impl RegExp {
 
         // 13. Let parseResult be ParsePattern(patternText, u, v).
         // 14. If parseResult is a non-empty List of SyntaxError objects, throw a SyntaxError exception.
+        let matcher = match context.regexp_cache.get(&p, flags) {
+            Some(matcher) => matcher,
+            None => {
+                let matcher = Rc::new(Self::compile_matcher(&p, flags)?);
+                context
+                    .regexp_cache
+                    .insert(p.clone(), flags, matcher.clone());
+                matcher
+            }
+        };
 
+        // 15. Assert: parseResult is a Pattern Parse Node.
+        // 16. Set obj.[[OriginalSource]] to P.
+        // 17. Set obj.[[OriginalFlags]] to F.
+        // 18. Let capturingGroupsCount be CountLeftCapturingParensWithin(parseResult).
+        // 19. Let rer be the RegExp Record { [[IgnoreCase]]: i, [[Multiline]]: m,
+        //     [[DotAll]]: s, [[Unicode]]: u, [[UnicodeSets]]: v,
+        //     [[CapturingGroupsCount]]: capturingGroupsCount }.
+        // 20. Set obj.[[RegExpRecord]] to rer.
+        // 21. Set obj.[[RegExpMatcher]] to CompilePattern of parseResult with argument rer.
+        Ok(RegExp {
+            matcher,
+            flags,
+            original_source: p,
+            original_flags: f,
+            realm_id: context.realm().id(),
+            legacy_features: true,
+        })
+    }
+
+    /// Compiles the matcher for a pattern and its flags.
+    fn compile_matcher(p: &JsString, flags: RegExpFlags) -> JsResult<Regex> {
         // If u or v flag is set, fullUnicode is true — compile as full codepoints.
         let full_unicode =
             flags.contains(RegExpFlags::UNICODE) || flags.contains(RegExpFlags::UNICODE_SETS);
@@ -556,24 +609,7 @@ impl RegExp {
                     .with_message(format!("failed to create matcher: {}", error.text))
             })?
         };
-
-        // 15. Assert: parseResult is a Pattern Parse Node.
-        // 16. Set obj.[[OriginalSource]] to P.
-        // 17. Set obj.[[OriginalFlags]] to F.
-        // 18. Let capturingGroupsCount be CountLeftCapturingParensWithin(parseResult).
-        // 19. Let rer be the RegExp Record { [[IgnoreCase]]: i, [[Multiline]]: m,
-        //     [[DotAll]]: s, [[Unicode]]: u, [[UnicodeSets]]: v,
-        //     [[CapturingGroupsCount]]: capturingGroupsCount }.
-        // 20. Set obj.[[RegExpRecord]] to rer.
-        // 21. Set obj.[[RegExpMatcher]] to CompilePattern of parseResult with argument rer.
-        Ok(RegExp {
-            matcher: Rc::new(matcher),
-            flags,
-            original_source: p,
-            original_flags: f,
-            realm_id: context.realm().id(),
-            legacy_features: true,
-        })
+        Ok(matcher)
     }
 
     /// `RegExpInitialize ( obj, pattern, flags )`

@@ -130,6 +130,8 @@ pub struct Context {
     /// Unique identifier for each parser instance used during the context lifetime.
     parser_identifier: u32,
 
+    pub(crate) regexp_cache: crate::builtins::regexp::MatcherCache,
+
     data: HostDefined<dyn Any>,
 }
 
@@ -1320,6 +1322,7 @@ impl ContextBuilder {
             optimizer_options: OptimizerOptions::OPTIMIZE_ALL,
             root_shape,
             parser_identifier: 0,
+            regexp_cache: crate::builtins::regexp::MatcherCache::default(),
             can_block: self.can_block,
             data: HostDefined::default(),
         };
