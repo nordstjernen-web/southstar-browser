@@ -5,8 +5,9 @@
 use boa_engine::native_function::NativeFunctionObject;
 use boa_engine::object::FunctionObjectBuilder;
 use boa_engine::property::PropertyDescriptor as BoaPropertyDescriptor;
-use boa_engine::{JsObject, JsString, JsValue, NativeFunction};
+use boa_engine::{Context, JsObject, JsString, JsValue, NativeFunction};
 
+use std::cell::RefCell;
 use std::sync::Mutex;
 
 use super::{Scope, Value};
@@ -20,6 +21,30 @@ pub(super) fn remember_class(class: &'static HostClass) {
     {
         classes.push(class);
     }
+}
+
+#[derive(Default)]
+struct ForwardedGlobals(RefCell<Vec<JsObject>>);
+
+fn forwarded_push(ctx: &mut Context) {
+    if !ctx.has_data::<ForwardedGlobals>() {
+        ctx.insert_data(ForwardedGlobals::default());
+    }
+    let global = ctx.global_object();
+    if let Some(stack) = ctx.get_data::<ForwardedGlobals>() {
+        stack.0.borrow_mut().push(global);
+    }
+}
+
+fn forwarded_pop(ctx: &mut Context) {
+    if let Some(stack) = ctx.get_data::<ForwardedGlobals>() {
+        stack.0.borrow_mut().pop();
+    }
+}
+
+pub(super) fn forwarded_global(ctx: &Context) -> Option<JsObject> {
+    ctx.get_data::<ForwardedGlobals>()
+        .and_then(|stack| stack.0.borrow().last().cloned())
 }
 
 impl Scope<'_> {
@@ -109,20 +134,24 @@ impl Scope<'_> {
         let target = self.object(target)?;
         let native = NativeFunction::from_copy_closure_with_captures(
             move |this, args, target: &JsObject, ctx| {
-                if constructor
+                forwarded_push(ctx);
+                let result = if constructor
                     && target.is_constructor()
                     && let Some(new_target) = this.as_constructor()
                 {
-                    return target
+                    target
                         .construct(args, Some(&new_target), ctx)
-                        .map(JsValue::from);
-                }
-                let this = if this.is_undefined() || this.is_null() {
-                    JsValue::from(ctx.global_object())
+                        .map(JsValue::from)
                 } else {
-                    this.clone()
+                    let this = if this.is_undefined() || this.is_null() {
+                        JsValue::from(ctx.global_object())
+                    } else {
+                        this.clone()
+                    };
+                    target.call(&this, args, ctx)
                 };
-                target.call(&this, args, ctx)
+                forwarded_pop(ctx);
+                result
             },
             target,
         );

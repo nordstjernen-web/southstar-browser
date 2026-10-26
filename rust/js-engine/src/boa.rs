@@ -822,8 +822,15 @@ impl Scope<'_> {
         Value(error.into_opaque(self.cx()).into())
     }
 
+    pub fn exception_global(&mut self) -> Value {
+        match reflect::forwarded_global(self.cx()) {
+            Some(global) => Value(global.into()),
+            None => self.global(),
+        }
+    }
+
     pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
-        let global = self.global();
+        let global = self.exception_global();
         if let Ok(interface) = self.get(&global, "DOMException")
             && interface.is_object()
         {

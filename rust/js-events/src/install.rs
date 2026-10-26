@@ -181,7 +181,23 @@ fn install_drag_event_support(scope: &mut Scope<'_>) {
     let _ = scope.eval_native_script(DRAG_EVENT_SOURCE, "<drag-event>");
 }
 
+const HIDDEN: Attributes = Attributes {
+    writable: false,
+    enumerable: false,
+    configurable: false,
+};
+
+fn exception_global(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    _args: &[Value],
+) -> Result<Value, Value> {
+    Ok(scope.exception_global())
+}
+
 pub(crate) fn install_window(scope: &mut Scope<'_>, global: &Value) {
+    let function = scope.function("__ns_exception_global", 0, exception_global);
+    let _ = scope.define(global, "__ns_exception_global", function, HIDDEN);
     bind_ctor(scope, global, "KeyboardEvent", 2, keyboard_event_ctor);
     bind_ctor(scope, global, "SubmitEvent", 2, ffi::submit_event_ctor);
     for name in EVENT_SUBCLASSES {

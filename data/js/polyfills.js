@@ -6051,15 +6051,25 @@
             DataCloneError:              25
         };
         var DomException = function (message, name) {
-            if (!(this instanceof DomException)) return new DomException(message, name);
+            var target = new.target;
+            if (!target) return new DomException(message, name);
+            var proto = target.prototype;
+            if (target === DomException && typeof global.__ns_exception_global === 'function') {
+                var realm = global.__ns_exception_global();
+                if (realm !== global && realm && typeof realm.DOMException === 'function')
+                    proto = realm.DOMException.prototype;
+            }
+            if (proto === null || (typeof proto !== 'object' && typeof proto !== 'function'))
+                proto = DomException.prototype;
             var err = new Error(String(message == null ? '' : message));
             err.name = String(name == null ? 'Error' : name);
             err.code = DOM_EXCEPTION_CODES[err.name] || 0;
-            Object.setPrototypeOf(err, DomException.prototype);
+            Object.setPrototypeOf(err, proto);
             return err;
         };
         DomException.prototype = Object.create(Error.prototype);
         DomException.prototype.constructor = DomException;
+        DomException.__ndRealmProto = true;
         var DOM_EXCEPTION_CONSTANTS = [
             'INDEX_SIZE_ERR', 'DOMSTRING_SIZE_ERR', 'HIERARCHY_REQUEST_ERR',
             'WRONG_DOCUMENT_ERR', 'INVALID_CHARACTER_ERR', 'NO_DATA_ALLOWED_ERR',

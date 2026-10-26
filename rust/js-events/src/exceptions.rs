@@ -13,7 +13,7 @@ const MEMBER: Attributes = Attributes {
 };
 
 fn dom_exception_interface(scope: &mut Scope<'_>) -> Option<Value> {
-    let global = scope.global();
+    let global = scope.exception_global();
     scope
         .get(&global, "DOMException")
         .ok()
