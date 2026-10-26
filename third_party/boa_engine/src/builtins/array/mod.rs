@@ -2173,35 +2173,8 @@ impl Array {
         let options = args.get_or_undefined(1);
 
         // 3. Let separator be the implementation-defined list-separator String value appropriate for the host environment's current locale (such as ", ").
-        let separator = {
-            #[cfg(feature = "intl")]
-            {
-                use crate::builtins::intl::locale::default_locale;
-                use icu_list::{
-                    ListFormatter, ListFormatterPreferences, options::ListFormatterOptions,
-                };
-
-                let locale = default_locale(context.intl_provider().locale_canonicalizer()?);
-                let preferences = ListFormatterPreferences::from(&locale);
-                let formatter = ListFormatter::try_new_unit_with_buffer_provider(
-                    context.intl_provider().erased_provider(),
-                    preferences,
-                    ListFormatterOptions::default(),
-                )
-                .map_err(|e| JsNativeError::typ().with_message(e.to_string()))?;
-
-                // Ask ICU for the list pattern literal by formatting two empty elements.
-                // For many locales this yields ", ", but it may differ.
-                js_string!(
-                    formatter.format_to_string(std::iter::once("").chain(std::iter::once("")))
-                )
-            }
-
-            #[cfg(not(feature = "intl"))]
-            {
-                js_string!(", ")
-            }
-        };
+        // Every browser engine joins with a comma regardless of locale, and pages rely on it.
+        let separator = js_string!(",");
 
         // 4. Let R be the empty String.
         let mut r = Vec::with_capacity(len as usize + len.saturating_sub(1) as usize);

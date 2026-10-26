@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript built-ins: `Math.round` no longer trusts the C runtime's
+  `round` (MinGW's rounds 0.49999999999999994 up to 1); `Math.acosh`,
+  `asinh` and `atanh` use musl's formulas, which keep their precision near
+  1; `toPrecision` works for numbers below 1e-100; dates far outside the
+  range Windows converts take the time-zone offset of the nearest year it
+  handles instead of UTC; `new Uint8ClampedArray(float64Array)` rounds
+  halves to even; `[1, 2].toLocaleString()` joins with a comma, as every
+  browser does, instead of the locale's list separator; built-in accessors
+  report `set: undefined`; `RegExp.prototype` has no own `lastIndex`, and
+  `source` escapes a `/` only where it needs it; `Set.prototype`
+  methods keep iterating correctly when the other set's `has` deletes and
+  re-adds elements; `RegExp` exec reads its flags after `lastIndex`; and the
+  Intl constructors throw for a revoked proxy as `newTarget`.
 * JavaScript: `for-of` loops, array destructuring and spread over arrays,
   maps and sets no longer create a `{ value, done }` object per element:
   the engine steps the built-in iterators directly when their `next`

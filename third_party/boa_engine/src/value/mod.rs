@@ -1196,19 +1196,25 @@ impl JsValue {
         // 1. Let number be ? ToNumber(argument).
         let number = self.to_number(context)?;
 
+        Ok(Self::f64_to_uint8_clamp(number))
+    }
+
+    /// Steps 2 to 9 of `ToUint8Clamp ( argument )`, for a number that is already converted.
+    #[must_use]
+    pub(crate) fn f64_to_uint8_clamp(number: f64) -> u8 {
         // 2. If number is NaN, return +0𝔽.
         if number.is_nan() {
-            return Ok(0);
+            return 0;
         }
 
         // 3. If ℝ(number) ≤ 0, return +0𝔽.
         if number <= 0.0 {
-            return Ok(0);
+            return 0;
         }
 
         // 4. If ℝ(number) ≥ 255, return 255𝔽.
         if number >= 255.0 {
-            return Ok(255);
+            return 255;
         }
 
         // 5. Let f be floor(ℝ(number)).
@@ -1216,21 +1222,21 @@ impl JsValue {
 
         // 6. If f + 0.5 < ℝ(number), return 𝔽(f + 1).
         if f + 0.5 < number {
-            return Ok(f as u8 + 1);
+            return f as u8 + 1;
         }
 
         // 7. If ℝ(number) < f + 0.5, return 𝔽(f).
         if number < f + 0.5 {
-            return Ok(f as u8);
+            return f as u8;
         }
 
         // 8. If f is odd, return 𝔽(f + 1).
         if !(f as u8).is_multiple_of(2) {
-            return Ok(f as u8 + 1);
+            return f as u8 + 1;
         }
 
         // 9. Return 𝔽(f).
-        Ok(f as u8)
+        f as u8
     }
 
     /// `7.1.8 ToInt16 ( argument )`

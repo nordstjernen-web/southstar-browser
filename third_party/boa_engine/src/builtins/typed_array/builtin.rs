@@ -2501,56 +2501,29 @@ impl BuiltinTypedArray {
             JsNativeError::typ().with_message("Value is not a typed array object")
         })?;
 
-        let (len, is_fixed_len) = {
+        let len = {
             let o = array.downcast_ref::<TypedArray>().ok_or_else(|| {
                 JsNativeError::typ().with_message("Value is not a typed array object")
             })?;
             let buf = o.viewed_array_buffer().as_buffer();
-            let Some((buf_len, is_fixed_len)) = buf
+            let Some(buf_len) = buf
                 .bytes(Ordering::SeqCst)
                 .filter(|s| !o.is_out_of_bounds(s.len()))
-                .map(|s| (s.len(), buf.is_fixed_len()))
+                .map(|s| s.len())
             else {
                 return Err(JsNativeError::typ()
                     .with_message("typed array is outside the bounds of its inner buffer")
                     .into());
             };
 
-            (o.array_length(buf_len), is_fixed_len)
+            o.array_length(buf_len)
         };
 
         let locales = args.get_or_undefined(0);
         let options = args.get_or_undefined(1);
 
-        let separator = {
-            #[cfg(feature = "intl")]
-            {
-                use crate::builtins::intl::locale::default_locale;
-                use icu_list::{
-                    ListFormatter, ListFormatterPreferences, options::ListFormatterOptions,
-                };
-
-                let locale = default_locale(context.intl_provider().locale_canonicalizer()?);
-                let preferences = ListFormatterPreferences::from(&locale);
-                let formatter = ListFormatter::try_new_unit_with_buffer_provider(
-                    context.intl_provider().erased_provider(),
-                    preferences,
-                    ListFormatterOptions::default(),
-                )
-                .map_err(|e| JsNativeError::typ().with_message(e.to_string()))?;
-
-                // Ask ICU for the list pattern literal by formatting two empty elements.
-                // For many locales this yields ", ", but it may differ.
-                js_string!(
-                    formatter.format_to_string(std::iter::once("").chain(std::iter::once("")))
-                )
-            }
-
-            #[cfg(not(feature = "intl"))]
-            {
-                js_string!(", ")
-            }
-        };
+        // Every browser engine joins with a comma regardless of locale, and pages rely on it.
+        let separator = js_string!(",");
 
         let mut r = Vec::with_capacity((len + len.saturating_sub(1)) as usize);
 
@@ -2561,9 +2534,9 @@ impl BuiltinTypedArray {
 
             let next_element = array.get(k, context)?;
 
-            // Mirrors the behaviour of `join`, but the compiler
-            // could unswitch the loop using `is_fixed_len`.
-            if is_fixed_len || !next_element.is_undefined() {
+            // A `toLocaleString` call can detach the buffer, after which elements read as
+            // undefined and are skipped, as `Array.prototype.toLocaleString` skips them.
+            if !next_element.is_undefined() {
                 let s = next_element
                     .invoke(
                         js_string!("toLocaleString"),

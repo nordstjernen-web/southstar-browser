@@ -558,7 +558,7 @@ impl TypedArrayKind {
             TypedArrayKind::Int8 => TypedArrayElement::Int8(value as i8),
             TypedArrayKind::Uint8 => TypedArrayElement::Uint8(value as u8),
             TypedArrayKind::Uint8Clamped => {
-                TypedArrayElement::Uint8Clamped(ClampedU8(value.clamp(0.0, 255.0).round() as u8))
+                TypedArrayElement::Uint8Clamped(ClampedU8(JsValue::f64_to_uint8_clamp(value)))
             }
             TypedArrayKind::Int16 => TypedArrayElement::Int16(value as i16),
             TypedArrayKind::Uint16 => TypedArrayElement::Uint16(value as u16),

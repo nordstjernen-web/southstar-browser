@@ -212,7 +212,6 @@ impl IntrinsicObject for RegExp {
                 None,
                 Attribute::CONFIGURABLE,
             )
-            .property(js_string!("lastIndex"), 0, Attribute::all())
             .method(Self::test, js_string!("test"), 1)
             .method(Self::exec, js_string!("exec"), 1)
             .method(Self::to_string, js_string!("toString"), 0)
@@ -334,7 +333,7 @@ impl BuiltInObject for RegExp {
 
 impl BuiltInConstructor for RegExp {
     const CONSTRUCTOR_ARGUMENTS: usize = 2;
-    const PROTOTYPE_STORAGE_SLOTS: usize = 30;
+    const PROTOTYPE_STORAGE_SLOTS: usize = 29;
     const CONSTRUCTOR_STORAGE_SLOTS: usize = if cfg!(feature = "annex-b") {
         3 + 2 * 19
     } else {
@@ -972,18 +971,39 @@ impl RegExp {
         if src.is_empty() {
             js_string!("(?:)").into()
         } else {
+            // A `/` is escaped only outside a character class and when no backslash escapes it
+            // already, and a line terminator after a backslash only needs its letter.
             let mut s = Vec::with_capacity(src.len());
-            let mut buf = [0; 2];
-            for c in src.code_points() {
-                match c {
-                    CodePoint::Unicode('/') => s.extend_from_slice(utf16!(r"\/")),
-                    CodePoint::Unicode('\n') => s.extend_from_slice(utf16!(r"\n")),
-                    CodePoint::Unicode('\r') => s.extend_from_slice(utf16!(r"\r")),
-                    CodePoint::Unicode('\u{2028}') => s.extend_from_slice(utf16!(r"\u2028")),
-                    CodePoint::Unicode('\u{2029}') => s.extend_from_slice(utf16!(r"\u2029")),
-                    CodePoint::Unicode(c) => s.extend_from_slice(c.encode_utf16(&mut buf)),
-                    CodePoint::UnpairedSurrogate(surr) => s.push(surr),
+            let mut escaped = false;
+            let mut in_class = false;
+            for unit in src.iter() {
+                let terminator: Option<&[u16]> = match unit {
+                    0x0A => Some(utf16!("n")),
+                    0x0D => Some(utf16!("r")),
+                    0x2028 => Some(utf16!("u2028")),
+                    0x2029 => Some(utf16!("u2029")),
+                    _ => None,
+                };
+                if let Some(letters) = terminator {
+                    if !escaped {
+                        s.push(u16::from(b'\\'));
+                    }
+                    s.extend_from_slice(letters);
+                    escaped = false;
+                    continue;
                 }
+                if escaped {
+                    escaped = false;
+                } else if unit == u16::from(b'\\') {
+                    escaped = true;
+                } else if unit == u16::from(b'[') {
+                    in_class = true;
+                } else if unit == u16::from(b']') {
+                    in_class = false;
+                } else if unit == u16::from(b'/') && !in_class {
+                    s.push(u16::from(b'\\'));
+                }
+                s.push(unit);
             }
 
             JsValue::new(js_string!(&s[..]))
@@ -1278,7 +1298,7 @@ impl RegExp {
         input: &JsString,
         context: &mut Context,
     ) -> JsResult<Option<JsObject>> {
-        let rx = this.borrow().data().clone();
+        let regexp = this.clone();
         let this = this.upcast();
 
         // 1. Let length be the length of S.
@@ -1288,6 +1308,10 @@ impl RegExp {
         let mut last_index = this
             .get(js_string!("lastIndex"), context)?
             .to_length(context)?;
+
+        // The flags and the matcher are read after `lastIndex`, whose conversion can recompile
+        // the RegExp through `RegExp.prototype.compile`.
+        let rx = regexp.borrow().data().clone();
 
         // 3. Let flags be R.[[OriginalFlags]].
         let flags = &rx.original_flags;
