@@ -16,14 +16,14 @@ fn inflate(compressed: &[u8], size: usize) -> Option<Vec<u8>> {
     (out.len() == size).then_some(out)
 }
 
-fn read_table(data: &[u8], r: &mut Reader) -> Option<Table> {
+fn read_table(data: &[u8], r: &mut Reader, budget: usize) -> Option<Table> {
     let tag = r.u32()?;
     let offset = r.u32()? as usize;
     let compressed_len = r.u32()? as usize;
     let orig_len = r.u32()?;
     r.u32()?;
     let size = orig_len as usize;
-    if offset < HEADER_LEN || compressed_len > size || size > MAX_OUTPUT {
+    if offset < HEADER_LEN || compressed_len > size || size > budget {
         return None;
     }
     let stored = data.get(offset..)?.get(..compressed_len)?;
@@ -62,8 +62,10 @@ pub fn woff_to_sfnt(data: &[u8]) -> Option<Sfnt> {
     }
     r.pos = HEADER_LEN;
     let mut tables: Vec<Table> = Vec::with_capacity(usize::from(num_tables));
+    let mut budget = MAX_OUTPUT;
     for _ in 0..num_tables {
-        let table = read_table(data, &mut r)?;
+        let table = read_table(data, &mut r, budget)?;
+        budget -= table.orig_len as usize;
         if tables.iter().any(|seen| seen.tag == table.tag) {
             return None;
         }
