@@ -51,6 +51,17 @@ Southstar Browser 1.0.2-dev:
   method is the original one. `for-of` over an array runs 8 times faster,
   over a set 12 times, destructuring `[a, b] = [x, y]` 5 times and
   `[...array]` almost 3 times.
+* `calc-size()` (CSS Values 5) works on `width`, `height`, their `min-`/
+  `max-` forms and `flex-basis`: a basis (`auto`, `min-content`,
+  `max-content`, `fit-content`, `stretch`, a length-percentage or another
+  `calc-size()`) and a calculation linear in `size` are parsed, serialized
+  canonically, laid out by block layout against the basis size, and
+  interpolated between compatible bases. Sizing keywords interpolate with
+  `calc-size()` values, and with lengths when `interpolate-size:
+  allow-keywords` applies, so `height: auto` ⇄ `height: 0` transitions
+  animate. Elsewhere in layout a `calc-size()` with a keyword basis acts as
+  that keyword. WPT `css/css-values/calc-size` goes from 1253 to about
+  2200 passing subtests (`calc-size-width-interpolation.html` 0 → 732/732).
 * JavaScript: `Function.prototype.toString` returns the source text of
   classes (`class A {}` printed as `function A() { [native code] }`, which
   broke the common `/^class\b/` test for telling classes from functions)

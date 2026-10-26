@@ -43,8 +43,8 @@ impl Val {
         southstar_css::value_resolve_font_units(&self.0, font_px, root_px).map(Val)
     }
 
-    pub fn interpolate(prop: i32, a: Borrowed, b: Borrowed, t: f64) -> Option<Val> {
-        southstar_css::value_interpolate(prop_at(prop), a.get()?, b.get()?, t).map(Val)
+    pub fn interpolate(prop: i32, a: Borrowed, b: Borrowed, t: f64, keywords: bool) -> Option<Val> {
+        southstar_css::value_interpolate(prop_at(prop), a.get()?, b.get()?, t, keywords).map(Val)
     }
 }
 
@@ -298,6 +298,12 @@ pub fn style_value(style: StyleRef<'_>, prop: i32) -> Borrowed {
         .ok()
         .and_then(|i| style.value_at(i))
         .map_or(Borrowed::NULL, |v| Borrowed(v.as_ptr()))
+}
+
+pub fn interpolates_keywords(style: StyleRef<'_>) -> bool {
+    style
+        .get(southstar_style::PropId::InterpolateSize)
+        .is_some_and(|v| v.is_keyword(c"allow-keywords"))
 }
 
 pub fn from_currentcolor(style: StyleRef<'_>, prop: i32) -> bool {

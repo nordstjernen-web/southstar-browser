@@ -108,13 +108,27 @@ pub enum Value<'a> {
     Other,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CalcSize {
+    pub basis: u8,
+    pub size: f64,
+    pub pct: f64,
+    pub px: f64,
+}
+
+impl CalcSize {
+    pub fn resolve(&self, basis_px: f64, pct_basis: f64) -> f64 {
+        self.size * basis_px + self.pct * pct_basis / 100.0 + self.px
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct ValueRef<'a>(&'a NsCssValue);
 
 impl<'a> ValueRef<'a> {
     pub fn get(self) -> Value<'a> {
         match self.kind() {
-            Kind::Keyword => Value::Keyword(self.0.keyword()),
+            Kind::Keyword => Value::Keyword(self.keyword_text()),
             Kind::Length => self
                 .0
                 .length()
@@ -141,12 +155,26 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn keyword_text(self) -> Option<&'a CStr> {
-        self.0.keyword()
+        self.0.keyword().or_else(|| self.calc_size_keyword())
+    }
+
+    fn calc_size_keyword(self) -> Option<&'static CStr> {
+        let c = self
+            .calc_head()
+            .filter(|c| c.func == southstar_css::FN_CALC_SIZE)?;
+        Some(match c.args[0].pct as u8 {
+            southstar_css::CALC_SIZE_AUTO => c"auto",
+            southstar_css::CALC_SIZE_MIN_CONTENT => c"min-content",
+            southstar_css::CALC_SIZE_MAX_CONTENT => c"max-content",
+            southstar_css::CALC_SIZE_FIT_CONTENT => c"fit-content",
+            southstar_css::CALC_SIZE_STRETCH => c"stretch",
+            _ => return None,
+        })
     }
 
     fn payload(self) -> Option<Payload<'a>> {
         let v = self.0;
-        Some(match self.kind() {
+        Some(match v.value_kind() {
             Kind::Keyword => Payload::Keyword(v.keyword()),
             Kind::Length => v.length().map(|(len, unit)| Payload::Length(len, unit))?,
             Kind::Size => v
@@ -177,6 +205,9 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn kind(self) -> Kind {
+        if self.calc_size_keyword().is_some() {
+            return Kind::Keyword;
+        }
         self.0.value_kind()
     }
 
@@ -207,6 +238,17 @@ impl<'a> ValueRef<'a> {
         self.0.calc()
     }
 
+    pub fn calc_size(self) -> Option<CalcSize> {
+        self.calc_head()
+            .filter(|c| c.func == southstar_css::FN_CALC_SIZE)
+            .map(|c| CalcSize {
+                basis: c.args[0].pct as u8,
+                size: c.args[0].px,
+                pct: c.pct,
+                px: c.px,
+            })
+    }
+
     pub fn calc_terms(self) -> Option<[f64; 4]> {
         self.calc_head().map(|c| [c.pct, c.px, c.em, c.rem])
     }
@@ -221,6 +263,9 @@ impl<'a> ValueRef<'a> {
     }
 
     pub fn calc(self) -> Option<(f64, f64)> {
+        if self.calc_size_keyword().is_some() {
+            return None;
+        }
         self.calc_head().map(|c| (c.pct, c.px))
     }
 

@@ -226,6 +226,7 @@ per file.
 | | `css/css-text/parsing` | +9 |
 | `Scope::dom_exception` builds real DOMExceptions | `css/css-properties-values-api` | +119 (`register-property-syntax-parsing.html` 129 → 246/246) |
 | | `css/cssom` | +9 |
+| `calc-size()` and `interpolate-size: allow-keywords` | `css/css-values/calc-size` | 1253 → ~2200 (`calc-size-width-interpolation.html` 0 → 732/732) |
 
 ## Top 10 improvements — 2026-10-14
 

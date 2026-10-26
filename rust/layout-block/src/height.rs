@@ -8,7 +8,9 @@ use southstar_layout_geom::{
     aspect_ratio_number, containing_block_definite_height, height_keyword_stretches,
     resolve_used_height, style_is_absolute_or_fixed,
 };
-use southstar_style::{Kind, PropId, ValueRef};
+use southstar_style::{
+    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, Kind, PropId, ValueRef,
+};
 
 use crate::align::block_align_content_shift;
 use crate::dispatch::shift_box_tree;
@@ -80,8 +82,32 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
         style.is_some() && kw_scrolls(overflow_axis_keyword(style_of(b), PropId::OverflowX));
     let measured = input.cursor_y - input.inner_y + input.legend_extra;
     b.set_measured_content_height(measured);
+    let calc_size_h = |v: Option<ValueRef<'_>>| {
+        let mut cs = v.and_then(|v| v.calc_size())?;
+        let cb_h = containing_block_definite_height(b);
+        if cs.basis == CALC_SIZE_PERCENT && cb_h < 0.0 {
+            cs.basis = CALC_SIZE_AUTO;
+            cs.pct = 0.0;
+        }
+        let keyword_basis = !matches!(cs.basis, CALC_SIZE_ANY | CALC_SIZE_PERCENT);
+        let basis = match cs.basis {
+            CALC_SIZE_ANY | CALC_SIZE_PERCENT => 0.0,
+            CALC_SIZE_STRETCH if cb_h >= 0.0 => {
+                let (m, p, bd) = (b.margin(), b.padding(), b.border());
+                (cb_h - m.top - m.bottom - bd.top - bd.bottom - p.top - p.bottom).max(0.0)
+            }
+            _ => measured,
+        };
+        let mut h = cs.resolve(basis, cb_h.max(0.0)).max(0.0);
+        if border_box && keyword_basis {
+            h += vert_extras;
+        }
+        Some(h)
+    };
     let mut explicit_h = -1.0;
-    if is_length_or_calc(hv) {
+    if let Some(h) = calc_size_h(hv) {
+        explicit_h = h;
+    } else if is_length_or_calc(hv) {
         explicit_h = resolve_used_height(b, hv, pcw, -1.0);
     }
     let mut stretch_h = -1.0;
@@ -128,7 +154,7 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
             b.set_content_height(measured);
         }
     }
-    let mut max_h = resolve_used_height(b, mxh, pcw, -1.0);
+    let mut max_h = calc_size_h(mxh).unwrap_or_else(|| resolve_used_height(b, mxh, pcw, -1.0));
     if border_box && max_h >= 0.0 {
         max_h -= vert_extras;
         if max_h < 0.0 {
@@ -144,7 +170,7 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
     if max_h >= 0.0 && b.content_height() > max_h {
         b.set_content_height(max_h);
     }
-    let mut min_h = resolve_used_height(b, mnh, pcw, -1.0);
+    let mut min_h = calc_size_h(mnh).unwrap_or_else(|| resolve_used_height(b, mnh, pcw, -1.0));
     if min_h < 0.0 && stretch_h >= 0.0 && height_keyword_stretches(mnh) {
         min_h = stretch_h + if border_box { vert_extras } else { 0.0 };
     }

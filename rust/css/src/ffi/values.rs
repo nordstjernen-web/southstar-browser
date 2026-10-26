@@ -115,11 +115,12 @@ pub fn value_interpolate(
     a: &NsCssValue,
     b: &NsCssValue,
     t: f64,
+    keywords: bool,
 ) -> Option<OwnedValue> {
     let (Some(a), Some(b)) = (rust_value(a, true), rust_value(b, true)) else {
         return None;
     };
-    values::interpolate_prop(prop, &a, &b, t).map(|value| OwnedValue(to_c(value)))
+    values::interpolate_prop(prop, &a, &b, t, keywords).map(|value| OwnedValue(to_c(value)))
 }
 
 pub fn values_equal(a: Option<&NsCssValue>, b: Option<&NsCssValue>) -> bool {

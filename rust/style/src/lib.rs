@@ -5,16 +5,18 @@
 mod ffi;
 
 pub use ffi::{
-    Display, Kind, NsCssValue, PROP_COUNT, Prop, RectValue, SizeValue, StyleRef, StyleTable, Value,
-    ValueRef, border_image_params, border_image_source, box_style, display_of, effective_transform,
-    font_family_for_pango, font_stretch_rank, layer, layer_count, styles_equal, value_slot,
-    values_equal,
+    CalcSize, Display, Kind, NsCssValue, PROP_COUNT, Prop, RectValue, SizeValue, StyleRef,
+    StyleTable, Value, ValueRef, border_image_params, border_image_source, box_style, display_of,
+    effective_transform, font_family_for_pango, font_stretch_rank, layer, layer_count,
+    styles_equal, value_slot, values_equal,
 };
 pub use southstar_css::{
-    BorderImageParams, Gradient, GradientStop, GridAreaRect, GridAreas, GridLineName, GridTrack,
-    GridTracks, Prop as PropId, Shadow, ShadowList, TimingFunction, Transform, TransformOp,
-    gradient_angle, gradient_radii, parse_color, timing_linear_eval, timing_parse,
-    timing_serialize, transform_is_3d, transform_to_mat4,
+    BorderImageParams, CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_FIT_CONTENT, CALC_SIZE_MAX_CONTENT,
+    CALC_SIZE_MIN_CONTENT, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, Gradient, GradientStop,
+    GridAreaRect, GridAreas, GridLineName, GridTrack, GridTracks, Prop as PropId, Shadow,
+    ShadowList, TimingFunction, Transform, TransformOp, gradient_angle, gradient_radii,
+    parse_color, timing_linear_eval, timing_parse, timing_serialize, transform_is_3d,
+    transform_to_mat4,
 };
 
 pub const UNIT_PX: u32 = 0;
