@@ -9,6 +9,15 @@ Southstar Browser 1.0.2-dev:
   number and back before looking it up: a loop over a `Float64Array`
   using `a.length` runs 2.5 times faster, and Octane Richards gains
   about 30%.
+* Security: the shell bounds what a renderer's tile description can make
+  it allocate. One update may hold at most 4096 tile parts, 256 viewport
+  layers, 4096 keeps and 4096 scroller rectangles, its textures together
+  may copy no more bytes than the shared framebuffer holds, the tile height
+  must lie between 16 and 8192 rows and the scale between 0 and 64, and the
+  tile cache is dropped once it exceeds 4096 tiles or 1 GiB. A compromised
+  renderer could previously repeat one tile line naming the whole
+  framebuffer hundreds of thousands of times and exhaust the browser's
+  memory.
 * Gradient colour stops written in a non-legacy colour syntax keep their
   colour space in the computed value: `linear-gradient(in lab,
   color(srgb 1 0 0), blue)` now computes to `color(srgb 1 0 0)` for the

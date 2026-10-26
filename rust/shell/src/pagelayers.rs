@@ -9,12 +9,22 @@ use southstar_gtk_ffi::{GdkRgba, GrapheneRect};
 use crate::ffi::gdk::{Canvas, Texture};
 
 const STICKY: i32 = 2;
+const MAX_VIEW_LAYERS: i32 = 256;
+const MAX_PARTS: usize = 4096;
+const MAX_KEEPS: usize = 4096;
+const MAX_SCROLLERS: usize = 4096;
+const MAX_TILES: usize = 4096;
+const MAX_CACHED_BYTES: usize = 1 << 30;
+const MAX_SCALE: f64 = 64.0;
+const MIN_TILE_H: i32 = 16;
+const MAX_TILE_H: i32 = 8192;
 
 struct Part {
     layer: i32,
     x: i32,
     y: i32,
     tex: Texture,
+    bytes: usize,
 }
 
 struct Tile {
@@ -37,6 +47,7 @@ struct ViewLayer {
     bottom_start: f64,
     bottom_cap: f64,
     tex: Option<Texture>,
+    bytes: usize,
 }
 
 struct Scroller {
@@ -63,6 +74,8 @@ pub struct LayerUpdate {
     keeps: Vec<i64>,
     scrollers: Vec<Scroller>,
     scrollers_all: bool,
+    parts: usize,
+    budget: usize,
 }
 
 #[derive(Default)]
@@ -173,23 +186,27 @@ impl<'a> Scan<'a> {
     }
 }
 
-fn texture(map: &[u8], at: i64, width: i32, rows: i32) -> Option<Texture> {
-    if width <= 0 || rows <= 0 {
-        return None;
-    }
-    let off = usize::try_from(at).ok().filter(|&off| off <= map.len())?;
-    let row = width as usize * 4;
-    let len = (rows as usize).checked_mul(row)?;
-    if len > map.len() - off {
-        return None;
-    }
-    Texture::from_bgra(&map[off..off + len], width, rows, row)
-}
-
 impl LayerUpdate {
+    fn texture(&mut self, map: &[u8], at: i64, width: i32, rows: i32) -> Option<(Texture, usize)> {
+        if width <= 0 || rows <= 0 {
+            return None;
+        }
+        let off = usize::try_from(at).ok().filter(|&off| off <= map.len())?;
+        let row = width as usize * 4;
+        let len = (rows as usize).checked_mul(row)?;
+        if len > map.len() - off || len > self.budget {
+            return None;
+        }
+        self.budget -= len;
+        Texture::from_bgra(&map[off..off + len], width, rows, row).map(|tex| (tex, len))
+    }
+
     pub fn parse(desc: &[u8], map: &[u8]) -> Option<LayerUpdate> {
         let mut lines = desc.split(|&c| c == b'\n');
-        let mut u = LayerUpdate::default();
+        let mut u = LayerUpdate {
+            budget: map.len(),
+            ..LayerUpdate::default()
+        };
         u.parse_gen(lines.next()?)?;
         for line in lines {
             u.parse_line(line, map);
@@ -219,7 +236,12 @@ impl LayerUpdate {
             blue: b as f32 / 255.0,
             alpha: 1.0,
         };
-        (self.width > 0 && self.tile_h > 0 && self.scale > 0.0 && self.n_vp >= 0).then_some(())
+        (self.width > 0
+            && (MIN_TILE_H..=MAX_TILE_H).contains(&self.tile_h)
+            && self.scale > 0.0
+            && self.scale <= MAX_SCALE
+            && (0..=MAX_VIEW_LAYERS).contains(&self.n_vp))
+        .then_some(())
     }
 
     fn parse_line(&mut self, line: &[u8], map: &[u8]) {
@@ -235,6 +257,9 @@ impl LayerUpdate {
     }
 
     fn parse_vp(&mut self, line: &[u8], map: &[u8]) -> Option<()> {
+        if self.vp.len() >= MAX_VIEW_LAYERS as usize {
+            return None;
+        }
         let mut s = Scan::after(line, b"vp")?;
         let mut l = ViewLayer::default();
         s.i32()?;
@@ -253,7 +278,10 @@ impl LayerUpdate {
         l.bottom_start = s.float()?;
         l.bottom_cap = s.float()?;
         l.keep = at < 0;
-        l.tex = texture(map, at, w, h);
+        if let Some((tex, bytes)) = self.texture(map, at, w, h) {
+            l.tex = Some(tex);
+            l.bytes = bytes;
+        }
         self.vp.push(l);
         Some(())
     }
@@ -276,6 +304,9 @@ impl LayerUpdate {
     }
 
     fn parse_tile(&mut self, line: &[u8], map: &[u8]) -> Option<()> {
+        if self.parts >= MAX_PARTS {
+            return None;
+        }
         let mut s = Scan::after(line, b"tile")?;
         let index = s.int()?;
         let layer = s.i32()?;
@@ -287,8 +318,15 @@ impl LayerUpdate {
         if layer < 0 || layer > self.n_vp {
             return None;
         }
-        let tex = texture(map, at, w, h)?;
-        self.tile(index).parts.push(Part { layer, x, y, tex });
+        let (tex, bytes) = self.texture(map, at, w, h)?;
+        self.parts += 1;
+        self.tile(index).parts.push(Part {
+            layer,
+            x,
+            y,
+            tex,
+            bytes,
+        });
         Some(())
     }
 
@@ -296,6 +334,9 @@ impl LayerUpdate {
         if line == b"sr-all" {
             self.scrollers_all = true;
             return Some(());
+        }
+        if self.scrollers.len() >= MAX_SCROLLERS {
+            return None;
         }
         let mut s = Scan::after(line, b"sr")?;
         let x = s.i32()?;
@@ -316,6 +357,9 @@ impl LayerUpdate {
     }
 
     fn parse_keep(&mut self, line: &[u8]) -> Option<()> {
+        if self.keeps.len() >= MAX_KEEPS {
+            return None;
+        }
         let index = Scan::after(line, b"keep")?.int()?;
         self.keeps.push(index);
         Some(())
@@ -373,6 +417,7 @@ impl PageLayers {
         for (l, old) in u.vp.iter_mut().zip(&self.vp) {
             if l.keep && l.tex.is_none() {
                 l.tex = old.tex.clone();
+                l.bytes = old.bytes;
             }
         }
     }
@@ -411,7 +456,16 @@ impl PageLayers {
                 t.generation = u.generation;
             }
         }
+        if self.tiles.len() > MAX_TILES || self.cached_bytes() > MAX_CACHED_BYTES {
+            self.reset();
+        }
         changed
+    }
+
+    fn cached_bytes(&self) -> usize {
+        let tiles = self.tiles.values().flat_map(|t| &t.parts).map(|p| p.bytes);
+        let layers = self.vp.iter().map(|l| l.bytes);
+        tiles.chain(layers).fold(0, usize::saturating_add)
     }
 
     pub fn active(&self) -> bool {
