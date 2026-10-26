@@ -12,7 +12,7 @@ use core::ptr::NonNull;
 use southstar_glib::g_free;
 
 unsafe extern "C" {
-    fn g_try_malloc(n_bytes: usize) -> *mut c_void;
+    fn g_try_malloc0(n_bytes: usize) -> *mut c_void;
 }
 
 pub struct Buffer {
@@ -22,7 +22,7 @@ pub struct Buffer {
 
 impl Buffer {
     pub fn try_new(len: usize) -> Option<Buffer> {
-        let ptr = NonNull::new(unsafe { g_try_malloc(len) }.cast())?;
+        let ptr = NonNull::new(unsafe { g_try_malloc0(len) }.cast())?;
         Some(Buffer { ptr, len })
     }
 

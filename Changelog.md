@@ -77,6 +77,14 @@ Southstar Browser 1.0.2-dev:
   more than 8 nested masks, or masks totalling more than 256 megapixels in
   one render now make the masked element render nothing, as the SVG
   specification asks for reference cycles.
+* Three soundness fixes. The SVG number parser's `strtod` wrapper checks
+  for the terminating NUL in every build instead of only under a debug
+  assertion; decoded-image buffers are allocated zeroed, so a decoder that
+  writes fewer pixels than the buffer holds can no longer expose
+  uninitialized memory as a `&[u8]`; and an animated WebP whose frame
+  timestamps wrap past `i32::MAX` (libwebp accumulates them in an `int`)
+  gets a wrapping, non-negative delay instead of an overflowing
+  subtraction that panics in overflow-checked builds.
 * JavaScript: property access is faster. Inline cache hits compare
   shapes without creating new references to them, and typed arrays no
   longer convert every named property (`length`, `subarray`, ...) to a
