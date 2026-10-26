@@ -10,10 +10,14 @@ use southstar_js_engine::{Scope, Value};
 
 const MAX_DEPTH: i32 = 32;
 const MAX_NODE_RENDERS: u32 = 4096;
+const MAX_INPUT_VISITS: u32 = 1 << 16;
+const MAX_RENDERED_SAMPLES: u64 = 1 << 30;
+const MAX_SCRATCH_BYTES: u64 = 1 << 30;
 
 struct Walk {
     depth: i32,
     renders_left: u32,
+    visits_left: u32,
 }
 
 pub(crate) fn positive(x: f64) -> bool {
@@ -215,7 +219,8 @@ fn sum_inputs(
         Ok(length) => scope.to_int32(&length).unwrap_or(0) as u32,
         Err(_) => 0,
     };
-    if count == 0 {
+    let scratch_bytes = (walk.depth as u64 + 1) * u64::from(frames) * 4;
+    if count == 0 || scratch_bytes > MAX_SCRATCH_BYTES {
         return;
     }
     let mut scratch = Vec::new();
@@ -225,7 +230,8 @@ fn sum_inputs(
     scratch.resize(frames as usize, 0.0f32);
     walk.depth += 1;
     let mut index = 0;
-    while index < count && walk.renders_left > 0 {
+    while index < count && walk.renders_left > 0 && walk.visits_left > 0 {
+        walk.visits_left -= 1;
         if let Ok(source) = scope.get_index(&inputs, index)
             && source.is_object()
         {
@@ -443,9 +449,11 @@ pub fn render_offline(scope: &mut Scope, destination: &Value, rate: f64, out: &m
     if !destination.is_object() {
         return false;
     }
+    let frames = (out.len() as u64).max(1);
     let mut walk = Walk {
         depth: 0,
-        renders_left: MAX_NODE_RENDERS,
+        renders_left: (MAX_RENDERED_SAMPLES / frames).clamp(1, u64::from(MAX_NODE_RENDERS)) as u32,
+        visits_left: MAX_INPUT_VISITS,
     };
     render(scope, destination, out.len() as u32, rate, out, &mut walk);
     for sample in out.iter_mut() {

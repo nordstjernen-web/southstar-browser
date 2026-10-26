@@ -116,12 +116,15 @@ fn analysis_throw(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     ))
 }
 
+const MAX_CONNECTIONS: u32 = 1 << 16;
+
 fn is_mic(scope: &mut Scope<'_>, node: &Value) -> bool {
     truthy(scope, node, "_micSrc") || truthy(scope, node, "_micTaint")
 }
 
 fn fill_bytes(scope: &mut Scope<'_>, this: &Value, args: &[Value], mic: fn(&mut [u8]), idle: u8) {
-    let mic_source = is_mic(scope, this);
+    let page = scope.context_opaque() as usize;
+    let mic_source = is_mic(scope, this) && southstar_mic::granted(page);
     let Some(target) = args.first() else {
         return;
     };
@@ -173,7 +176,7 @@ fn disconnect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     };
     let inputs = get(scope, target, "_inputs");
     if inputs.is_object() {
-        let count = array_length(scope, &inputs);
+        let count = array_length(scope, &inputs).min(MAX_CONNECTIONS);
         let kept = scope.new_array();
         let mut next = 0;
         for index in 0..count {

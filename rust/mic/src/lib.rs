@@ -3,10 +3,51 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+#[cfg(test)]
+mod tests;
 
 pub use ffi::{acquire, fill_frequency, fill_time_domain, release};
 
 use core::f64::consts::PI;
+use std::sync::Mutex;
+
+static GRANTS: Mutex<Vec<(usize, u32)>> = Mutex::new(Vec::new());
+
+fn grants() -> std::sync::MutexGuard<'static, Vec<(usize, u32)>> {
+    GRANTS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+pub fn grant(page: usize) {
+    let mut grants = grants();
+    match grants.iter_mut().find(|(key, _)| *key == page) {
+        Some((_, count)) => *count = count.saturating_add(1),
+        None => grants.push((page, 1)),
+    }
+}
+
+pub fn revoke(page: usize) -> bool {
+    let mut grants = grants();
+    let Some(at) = grants.iter().position(|(key, _)| *key == page) else {
+        return false;
+    };
+    grants[at].1 -= 1;
+    if grants[at].1 == 0 {
+        grants.swap_remove(at);
+    }
+    true
+}
+
+pub fn revoke_all(page: usize) -> u32 {
+    let mut grants = grants();
+    let Some(at) = grants.iter().position(|(key, _)| *key == page) else {
+        return 0;
+    };
+    grants.swap_remove(at).1
+}
+
+pub fn granted(page: usize) -> bool {
+    grants().iter().any(|(key, _)| *key == page)
+}
 
 pub const RING: usize = 16384;
 

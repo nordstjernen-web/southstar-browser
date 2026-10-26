@@ -16,8 +16,8 @@ pub(crate) fn request(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> J
             if want_video {
                 southstar_camera::acquire();
             }
-            if want_audio {
-                southstar_mic::acquire();
+            if want_audio && southstar_mic::acquire() {
+                southstar_mic::grant(page_key(scope));
             }
             "granted"
         }
@@ -32,9 +32,21 @@ pub(crate) fn release(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) ->
     Ok(Value::undefined())
 }
 
-pub(crate) fn mic_release(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    southstar_mic::release();
+pub(crate) fn mic_release(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+    if southstar_mic::revoke(page_key(scope)) {
+        southstar_mic::release();
+    }
     Ok(Value::undefined())
+}
+
+fn page_key(scope: &Scope<'_>) -> usize {
+    scope.context_opaque() as usize
+}
+
+pub(crate) fn release_page_mic(page: usize) {
+    for _ in 0..southstar_mic::revoke_all(page) {
+        southstar_mic::release();
+    }
 }
 
 pub(crate) fn label(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {

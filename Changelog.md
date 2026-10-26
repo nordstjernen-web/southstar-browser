@@ -34,6 +34,18 @@ Southstar Browser 1.0.2-dev:
   parameter's name, the legacy `caller` skips eval frames and never reports
   a generator or async function, and `GeneratorFunction` and
   `AsyncGeneratorFunction` inherit from `Function`.
+* Security: Web Audio bounds its graph walks and gates the microphone by
+  page. Offline rendering visits at most 65,536 input slots, renders at
+  most 2^30 samples in all and keeps at most 1 GiB of per-level scratch,
+  so a forged `_inputs.length` of -1 or a deep chain of long buffers can no
+  longer spin or exhaust the renderer; `disconnect()` looks at no more than
+  65,536 connections instead of copying a forged four-billion-entry list.
+  An AnalyserNode returns microphone samples only to a page that holds a
+  microphone grant from `getUserMedia`, instead of to any page that
+  passes an object to `createMediaStreamSource` while another page has
+  the device open; releasing the microphone only counts the page's own
+  grants, page teardown drops them, and the frequency and time-domain
+  views process at most 16,384 and 32,768 entries.
 * JavaScript: regular expression matching does far less work per match.
   `RegExp.prototype.exec` no longer copies the compiled regular expression
   or widens an ASCII subject string into a new buffer on every call,
