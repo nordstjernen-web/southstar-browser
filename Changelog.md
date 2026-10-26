@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
+  font (default instance, named instances and the variable pattern of each
+  face, names, weight, width, slant, charset, languages, spacing,
+  capabilities and the rest) are built from `read-fonts` instead of
+  `FcConfigAppFontAddFile` and `FcFreeTypeQueryAll`, so FreeType no longer
+  opens downloaded fonts at all. Over 535 font files and 691 patterns, all 31
+  fields equal fontconfig's own.
 * Web fonts take the pure-Rust font path by default: `-Drust-shaper` is on
   by default and `NS_RUST_FONTS` defaults to `web`, so `@font-face` fonts
   are shaped by HarfRust, answer layout from `read-fonts` and are drawn and

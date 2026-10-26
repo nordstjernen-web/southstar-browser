@@ -65,6 +65,27 @@ pub fn accepts_web_font(_data: &[u8]) -> bool {
     true
 }
 
+#[cfg(feature = "rust-shaper")]
+pub fn install_web_font(path: &str, data: &[u8], family: &str, weight: i32, slant: i32) -> bool {
+    crate::web_font::install_web_font(
+        path,
+        data,
+        family,
+        crate::web_font::Descriptors { weight, slant },
+    )
+}
+
+#[cfg(not(feature = "rust-shaper"))]
+pub fn install_web_font(
+    _path: &str,
+    _data: &[u8],
+    _family: &str,
+    _weight: i32,
+    _slant: i32,
+) -> bool {
+    false
+}
+
 impl Font {
     #[cfg(feature = "rust-shaper")]
     pub(crate) fn is_web_font(&self) -> bool {
