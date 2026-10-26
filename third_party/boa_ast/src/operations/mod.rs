@@ -789,6 +789,7 @@ impl<'ast, T: IdentList> Visitor<'ast> for LexicallyDeclaredNamesVisitor<'_, T> 
             LabelledItem::FunctionDeclaration(f) => {
                 BoundNamesVisitor(self.0).visit_function_declaration(f)
             }
+            LabelledItem::Statement(Statement::Labelled(labelled)) => self.visit_labelled(labelled),
             LabelledItem::Statement(_) => ControlFlow::Continue(()),
         }
     }
@@ -2030,8 +2031,12 @@ impl<'ast> Visitor<'ast> for LexicallyScopedDeclarationsVisitor<'_, 'ast> {
             }
 
             // LabelledItem : Statement
+            // 1. If Statement is Statement : LabelledStatement , return LexicallyScopedDeclarations of LabelledStatement.
+            LabelledItem::Statement(Statement::Labelled(labelled)) => {
+                return self.visit_labelled(labelled);
+            }
             LabelledItem::Statement(_) => {
-                // 1. Return a new empty List.
+                // 2. Return a new empty List.
             }
         }
         ControlFlow::Continue(())
@@ -2213,8 +2218,7 @@ impl<'ast> Visitor<'ast> for VarScopedDeclarationsVisitor<'_, 'ast> {
 
     fn visit_var_declaration(&mut self, node: &'ast VarDeclaration) -> ControlFlow<Self::BreakTy> {
         for var in node.0.as_ref() {
-            self.0
-                .push(VarScopedDeclaration::VariableDeclaration(var));
+            self.0.push(VarScopedDeclaration::VariableDeclaration(var));
         }
         ControlFlow::Continue(())
     }
@@ -2259,8 +2263,7 @@ impl<'ast> Visitor<'ast> for VarScopedDeclarationsVisitor<'_, 'ast> {
         node: &'ast crate::statement::ForInLoop,
     ) -> ControlFlow<Self::BreakTy> {
         if let IterableLoopInitializer::Var(var) = node.initializer() {
-            self.0
-                .push(VarScopedDeclaration::VariableDeclaration(var));
+            self.0.push(VarScopedDeclaration::VariableDeclaration(var));
         }
         self.visit(node.body())?;
         ControlFlow::Continue(())
@@ -2271,8 +2274,7 @@ impl<'ast> Visitor<'ast> for VarScopedDeclarationsVisitor<'_, 'ast> {
         node: &'ast crate::statement::ForOfLoop,
     ) -> ControlFlow<Self::BreakTy> {
         if let IterableLoopInitializer::Var(var) = node.initializer() {
-            self.0
-                .push(VarScopedDeclaration::VariableDeclaration(var));
+            self.0.push(VarScopedDeclaration::VariableDeclaration(var));
         }
         self.visit(node.body())?;
         ControlFlow::Continue(())
@@ -2351,12 +2353,10 @@ impl<'ast> Visitor<'ast> for TopLevelVarScopedDeclarationsVisitor<'_, 'ast> {
             StatementListItem::Declaration(d) => {
                 match d.as_ref() {
                     Declaration::FunctionDeclaration(f) => {
-                        self.0
-                            .push(VarScopedDeclaration::FunctionDeclaration(f));
+                        self.0.push(VarScopedDeclaration::FunctionDeclaration(f));
                     }
                     Declaration::GeneratorDeclaration(f) => {
-                        self.0
-                            .push(VarScopedDeclaration::GeneratorDeclaration(f));
+                        self.0.push(VarScopedDeclaration::GeneratorDeclaration(f));
                     }
                     Declaration::AsyncFunctionDeclaration(f) => {
                         self.0
@@ -2388,8 +2388,7 @@ impl<'ast> Visitor<'ast> for TopLevelVarScopedDeclarationsVisitor<'_, 'ast> {
                 ControlFlow::Continue(())
             }
             LabelledItem::FunctionDeclaration(f) => {
-                self.0
-                    .push(VarScopedDeclaration::FunctionDeclaration(f));
+                self.0.push(VarScopedDeclaration::FunctionDeclaration(f));
                 ControlFlow::Continue(())
             }
         }
@@ -2416,6 +2415,30 @@ where
     let mut declarations = Vec::new();
     let _ = AnnexBFunctionDeclarationNamesVisitor(&mut declarations).visit(node.into());
     declarations
+}
+
+/// Returns the plain function declaration of a statement list item, labelled any number of
+/// times or not, as web browsers treat a labelled function declaration in a block like an
+/// unlabelled one.
+fn block_level_function(item: &StatementListItem) -> Option<&FunctionDeclaration> {
+    match item {
+        StatementListItem::Declaration(declaration) => match declaration.as_ref() {
+            Declaration::FunctionDeclaration(function) => Some(function),
+            _ => None,
+        },
+        StatementListItem::Statement(statement) => {
+            let mut statement = statement.as_ref();
+            loop {
+                let Statement::Labelled(labelled) = statement else {
+                    return None;
+                };
+                match labelled.item() {
+                    LabelledItem::FunctionDeclaration(function) => return Some(function),
+                    LabelledItem::Statement(inner) => statement = inner,
+                }
+            }
+        }
+    }
 }
 
 /// The [`Visitor`] used for [`annex_b_function_declarations_names`].
@@ -2467,11 +2490,8 @@ impl<'ast> Visitor<'ast> for AnnexBFunctionDeclarationNamesVisitor<'_> {
         let start = self.0.len();
         self.visit(node.statement_list())?;
         for statement in node.statement_list().statements() {
-            if let StatementListItem::Declaration(declaration) = statement
-                && let Declaration::FunctionDeclaration(function) = &**declaration
-            {
-                let name = function.name();
-                self.0.push(name.sym());
+            if let Some(function) = block_level_function(statement) {
+                self.0.push(function.name().sym());
             }
         }
 
@@ -2489,22 +2509,16 @@ impl<'ast> Visitor<'ast> for AnnexBFunctionDeclarationNamesVisitor<'_> {
         for case in node.cases() {
             self.visit(case)?;
             for statement in case.body().statements() {
-                if let StatementListItem::Declaration(declaration) = statement
-                    && let Declaration::FunctionDeclaration(function) = &**declaration
-                {
-                    let name = function.name();
-                    self.0.push(name.sym());
+                if let Some(function) = block_level_function(statement) {
+                    self.0.push(function.name().sym());
                 }
             }
         }
         if let Some(default) = node.default() {
             self.visit(default)?;
             for statement in default.statements() {
-                if let StatementListItem::Declaration(declaration) = statement
-                    && let Declaration::FunctionDeclaration(function) = declaration.as_ref()
-                {
-                    let name = function.name();
-                    self.0.push(name.sym());
+                if let Some(function) = block_level_function(statement) {
+                    self.0.push(function.name().sym());
                 }
             }
         }

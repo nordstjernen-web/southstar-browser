@@ -1,4 +1,4 @@
-use crate::bytecompiler::{ByteCompiler, NodeKind};
+use crate::bytecompiler::ByteCompiler;
 use boa_ast::{
     Statement,
     statement::{Labelled, LabelledItem},
@@ -29,11 +29,12 @@ impl ByteCompiler<'_> {
                 }
                 stmt => self.compile_stmt(stmt, use_expr, true),
             },
-            LabelledItem::FunctionDeclaration(f) => {
-                let dst = self.register_allocator.alloc();
-                self.function_with_binding(f.into(), NodeKind::Declaration, &dst);
-                self.register_allocator.dealloc(dst);
-            }
+            // The function was instantiated with the declarations of the enclosing block or
+            // body, so evaluating it only performs the Annex B copy of a block function.
+            #[cfg(feature = "annex-b")]
+            LabelledItem::FunctionDeclaration(f) => self.compile_annex_b_block_function(f),
+            #[cfg(not(feature = "annex-b"))]
+            LabelledItem::FunctionDeclaration(_) => {}
         }
 
         self.pop_labelled_control_info();
