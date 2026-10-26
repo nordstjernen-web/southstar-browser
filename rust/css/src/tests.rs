@@ -304,3 +304,19 @@ fn gap_rule_inset_shorthands_expand_and_collapse() {
         Some("10px 20px")
     );
 }
+
+#[test]
+fn gradient_stops_keep_non_legacy_colour_spaces() {
+    let computed = |text: &str| {
+        property::parse(Prop::BackgroundImage, text.as_bytes())
+            .map(|v| String::from_utf8_lossy(&values::serialize(&v, false)).into_owned())
+    };
+    assert_eq!(
+        computed("linear-gradient(in lab, color(srgb 1 0 0), blue)").as_deref(),
+        Some("linear-gradient(in lab, color(srgb 1 0 0), rgb(0, 0, 255))")
+    );
+    assert_eq!(
+        computed("radial-gradient(red, oklch(0.5 0.1 none) 20% 40%)").as_deref(),
+        Some("radial-gradient(rgb(255, 0, 0), oklch(0.5 0.1 none) 20% 40%)")
+    );
+}

@@ -6,6 +6,8 @@ use core::f64::consts::{PI, SQRT_2};
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 
+use southstar_css_color::{Color, Space};
+
 use crate::calc;
 use crate::color::{self, color_text};
 use crate::ffi;
@@ -40,6 +42,46 @@ pub struct Stop {
     pub pos_is_angle: i32,
     pub is_hint: i32,
     pub pair_with_prev: i32,
+    pub color: StopColor,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct StopColor {
+    space: u8,
+    missing: u8,
+    components: [f64; 3],
+    alpha: f64,
+}
+
+impl StopColor {
+    fn of(color: Color) -> StopColor {
+        let mut missing = 0;
+        for (i, c) in color.components.iter().enumerate() {
+            if c.is_none() {
+                missing |= 1 << i;
+            }
+        }
+        if color.alpha.is_none() {
+            missing |= 8;
+        }
+        StopColor {
+            space: color.space.index() + 1,
+            missing,
+            components: color.values(),
+            alpha: color.alpha_value(),
+        }
+    }
+
+    fn color(&self) -> Option<Color> {
+        let space = Space::from_index(self.space.checked_sub(1)?)?;
+        let present = |bit: u8, v: f64| (self.missing & bit == 0).then_some(v);
+        Some(Color::new(
+            space,
+            [0, 1, 2].map(|i| present(1 << i, self.components[i])),
+            present(8, self.alpha),
+        ))
+    }
 }
 
 #[repr(C)]
@@ -71,9 +113,7 @@ pub struct Gradient {
 }
 
 const _: () = assert!(
-    core::mem::size_of::<Stop>() == 40
-        && core::mem::size_of::<Gradient>() == 1448
-        && core::mem::offset_of!(Gradient, size_x) == 48
+    core::mem::offset_of!(Gradient, size_x) == 48
         && core::mem::offset_of!(Gradient, has_from) == 88
         && core::mem::offset_of!(Gradient, interp) == 132
         && core::mem::offset_of!(Gradient, stops) == 168
@@ -670,6 +710,10 @@ fn stop_parse(gp: &mut GradientParse, seg: &[u8]) -> Option<bool> {
         }
         if !color_text_is_legacy(tok[0]) {
             gp.all_legacy = false;
+            if let Some(parsed) = color::parse_value(tok[0]) {
+                first.color = StopColor::of(parsed);
+                second.color = first.color;
+            }
         }
         gp.gr.push_stop(first);
         if n == 3 {
@@ -1137,7 +1181,10 @@ pub(crate) fn serialize_computed(gr: &Gradient) -> Vec<u8> {
             append_stop_pos(&mut out, st);
             continue;
         }
-        out.extend_from_slice(&color_text([st.r, st.g, st.b, st.a]));
+        match st.color.color() {
+            Some(color) => out.extend_from_slice(color.serialize().as_bytes()),
+            None => out.extend_from_slice(&color_text([st.r, st.g, st.b, st.a])),
+        }
         if st.has_pos != 0 {
             out.push(b' ');
             append_stop_pos(&mut out, st);

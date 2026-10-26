@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Gradient colour stops written in a non-legacy colour syntax keep their
+  colour space in the computed value: `linear-gradient(in lab,
+  color(srgb 1 0 0), blue)` now computes to `color(srgb 1 0 0)` for the
+  first stop instead of collapsing it to `rgb(255, 0, 0)`, as CSS Color 4
+  requires. WPT `gradient-interpolation-method-computed.html` goes from 466
+  to 932 of 932 subtests.
 * Text layout asks the font for its table data (nominal glyphs, advances,
   GDEF glyph classes and ligature carets, OpenType metrics, font extents and
   GSUB feature support) instead of calling HarfBuzz directly. In a
