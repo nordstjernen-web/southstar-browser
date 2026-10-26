@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* `docs/wpt-scores.md` has a re-clustered Top 10 list from the 2026-10-26
+  Windows compliance slice.
 * JavaScript: `Math`'s transcendental functions (`sin`, `cos`, `tan`, their
   inverses and hyperbolic forms, `log`, `log1p`, `log10`, `log2`, `expm1`,
   `cbrt`, `atan2`) come from the `libm` crate, a Rust port of musl's
