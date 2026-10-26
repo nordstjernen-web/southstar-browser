@@ -9526,6 +9526,41 @@
 
         var styleDeclarationProto = global.CSSStyleDeclaration &&
                                     global.CSSStyleDeclaration.prototype;
+        function flushBeforeMethod(proto, name) {
+            var desc = proto && Object.getOwnPropertyDescriptor(proto, name);
+            if (!desc || typeof desc.value !== 'function') return;
+            var nativeMethod = desc.value;
+            Object.defineProperty(proto, name, {
+                configurable: true, writable: true, enumerable: desc.enumerable,
+                value: function () {
+                    if (dirtySheets.length) flushSheets();
+                    return nativeMethod.apply(this, arguments);
+                }
+            });
+        }
+        function flushBeforeGetter(proto, name) {
+            var desc = proto && Object.getOwnPropertyDescriptor(proto, name);
+            if (!desc || typeof desc.get !== 'function') return;
+            var nativeGet = desc.get;
+            Object.defineProperty(proto, name, {
+                configurable: true, enumerable: desc.enumerable, set: desc.set,
+                get: function () {
+                    if (dirtySheets.length) flushSheets();
+                    return nativeGet.call(this);
+                }
+            });
+        }
+        flushBeforeMethod(styleDeclarationProto, 'getPropertyValue');
+        [global.Element && global.Element.prototype,
+         global.HTMLElement && global.HTMLElement.prototype].forEach(function (proto) {
+            ['getBoundingClientRect', 'getClientRects'].forEach(function (name) {
+                flushBeforeMethod(proto, name);
+            });
+            ['offsetWidth', 'offsetHeight', 'offsetTop', 'offsetLeft',
+             'clientWidth', 'clientHeight', 'scrollWidth', 'scrollHeight'].forEach(function (name) {
+                flushBeforeGetter(proto, name);
+            });
+        });
         if (styleDeclarationProto && !styleDeclarationProto.__ndRuleMutation) {
             ['setProperty', 'removeProperty'].forEach(function (name) {
                 var nativeMethod = styleDeclarationProto[name];

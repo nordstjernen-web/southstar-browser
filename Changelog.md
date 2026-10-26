@@ -36,6 +36,13 @@ Southstar Browser 1.0.2-dev:
   The helpers' `file://` media streams must name a stream file directly
   inside `~/.cache/southstar/msvideo` or `msaudio`, checked after
   resolving symbolic links, and must not be a link themselves.
+* Style sheets whose CSSOM edits were deferred past the eager-update budget
+  are applied before any style or geometry read, not only before a fresh
+  `getComputedStyle()` call: `getPropertyValue()` on a computed style kept
+  from earlier, `getBoundingClientRect()`, `getClientRects()` and the
+  offset/client/scroll size getters now see the edited rules instead of the
+  stale cascade. WPT `css/css-cascade/all-prop-revert-layer.html` goes from
+  33 to 320 of 345 subtests.
 * Text layout asks the font for its table data (nominal glyphs, advances,
   GDEF glyph classes and ligature carets, OpenType metrics, font extents and
   GSUB feature support) instead of calling HarfBuzz directly. In a

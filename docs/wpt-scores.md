@@ -221,6 +221,7 @@ per file.
 | Gap decorations: `row-rule-*`, rule lists with `repeat()`, `rule-*`, `*-rule-inset-*` | `css/css-gaps/parsing` | 354 → 1750/1750 |
 | | `css/css-multicol/parsing` | +7 |
 | Non-legacy gradient stop colours keep their space | `css/css-images/parsing/gradient-interpolation-method-computed.html` | 466 → 932/932 |
+| Deferred sheet edits flushed before style and geometry reads | `css/css-cascade/all-prop-revert-layer.html` | 33 → 320/345 |
 
 ## Top 10 improvements — 2026-10-14
 
