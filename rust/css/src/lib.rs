@@ -6,6 +6,7 @@ mod animation;
 mod attr_fn;
 mod border_image;
 mod calc;
+mod calc_size;
 mod cascade;
 mod clip_path;
 mod color;
@@ -70,6 +71,12 @@ pub use animation::{
 };
 pub use border_image::{Params as BorderImageParams, params as border_image_params};
 pub use calc::{Calc, CalcArg, math_fn_px as calc_math_fn_px};
+pub use calc_size::{
+    BASIS_ANY as CALC_SIZE_ANY, BASIS_AUTO as CALC_SIZE_AUTO,
+    BASIS_FIT_CONTENT as CALC_SIZE_FIT_CONTENT, BASIS_MAX_CONTENT as CALC_SIZE_MAX_CONTENT,
+    BASIS_MIN_CONTENT as CALC_SIZE_MIN_CONTENT, BASIS_PERCENT as CALC_SIZE_PERCENT,
+    BASIS_STRETCH as CALC_SIZE_STRETCH, FN_CALC_SIZE,
+};
 pub use cascade::currentcolor_bit;
 pub use color::parse_color;
 pub use container::condition_canonical as container_condition_canonical;

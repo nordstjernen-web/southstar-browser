@@ -10,7 +10,11 @@ use southstar_layout_geom::{
     edges_into_box, flex_direction_of, height_keyword_stretches, keyword_or, length_resolve,
     style_is_absolute_or_fixed, style_is_flex_container,
 };
-use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
+use southstar_style::{
+    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_FIT_CONTENT, CALC_SIZE_MAX_CONTENT,
+    CALC_SIZE_MIN_CONTENT, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, CalcSize, Display, Kind, PropId,
+    StyleRef, ValueRef, display_of,
+};
 
 use crate::align::length_is_auto;
 use crate::ffi::{
@@ -84,6 +88,24 @@ fn flex_col_item_stretches(b: BoxRef<'_>, parent: BoxRef<'_>) -> bool {
         || length_is_auto(prop(style, PropId::MarginRight)))
 }
 
+fn calc_size_width(b: BoxRef<'_>, cs: CalcSize, mi: *const Style, avail: f64, base: f64) -> f64 {
+    let avail = non_negative(avail);
+    let shrinks = display_is_atomic_inline_container(display_of(style_of(b)));
+    let fit = || {
+        let mn = min_width_of(b, mi);
+        measure_natural_width(b, mi).min(avail).max(mn)
+    };
+    let basis = match cs.basis {
+        CALC_SIZE_MIN_CONTENT => min_width_of(b, mi),
+        CALC_SIZE_MAX_CONTENT => measure_natural_width(b, mi),
+        CALC_SIZE_FIT_CONTENT => fit(),
+        CALC_SIZE_AUTO if shrinks => fit(),
+        CALC_SIZE_AUTO | CALC_SIZE_STRETCH => avail,
+        _ => 0.0,
+    };
+    non_negative(cs.resolve(basis, base))
+}
+
 fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
     let style = style_of(b);
     let wv = prop(style, PropId::Width);
@@ -118,6 +140,16 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
         cw = non_negative(pcw - horiz_total);
         explicit_width = true;
         flex_grow_filled = true;
+    } else if let Some(cs) = wv.and_then(|v| v.calc_size()) {
+        cw = calc_size_width(
+            b,
+            cs,
+            mi_style(inherited, b),
+            pcw - horiz_total,
+            pct_width_base,
+        );
+        explicit_width = true;
+        intrinsic_width = !matches!(cs.basis, CALC_SIZE_ANY | CALC_SIZE_PERCENT);
     } else if wv.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc)) {
         cw = length_resolve(wv, pct_width_base, 0.0);
         explicit_width = true;
@@ -172,7 +204,10 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
         cw = non_negative(cw - horiz_extras);
     }
     let keyword_avail = pcw - horiz_total;
-    let mut max_cw = length_resolve(mxw, pct_width_base, -1.0);
+    let mut max_cw = match mxw.and_then(|v| v.calc_size()) {
+        Some(cs) => calc_size_width(b, cs, mi_style(inherited, b), keyword_avail, pct_width_base),
+        None => length_resolve(mxw, pct_width_base, -1.0),
+    };
     if max_cw < 0.0
         && let Some(v) = mxw.filter(|v| v.kind() == Kind::Keyword)
     {
@@ -191,7 +226,10 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
             explicit_width = true;
         }
     }
-    let mut min_cw = length_resolve(mnw, pct_width_base, -1.0);
+    let mut min_cw = match mnw.and_then(|v| v.calc_size()) {
+        Some(cs) => calc_size_width(b, cs, mi_style(inherited, b), keyword_avail, pct_width_base),
+        None => length_resolve(mnw, pct_width_base, -1.0),
+    };
     if min_cw < 0.0
         && let Some(v) = mnw.filter(|v| v.kind() == Kind::Keyword)
     {

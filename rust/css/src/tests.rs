@@ -362,3 +362,70 @@ fn math_and_text_justify_keywords() {
     );
     assert_eq!(parsed(Prop::TextJustify, "inter-ideograph"), None);
 }
+
+#[test]
+fn calc_size_specified_values_are_canonical() {
+    let cases = [
+        (
+            "width",
+            "calc-size(auto, size)",
+            Some("calc-size(auto, size)"),
+        ),
+        (
+            "height",
+            "calc-size(min-content, size * 2)",
+            Some("calc-size(min-content, 2 * size)"),
+        ),
+        (
+            "max-width",
+            "calc-size(max-content, size / 2)",
+            Some("calc-size(max-content, 0.5 * size)"),
+        ),
+        (
+            "max-height",
+            "calc-size(fit-content, 30px + size / 2)",
+            Some("calc-size(fit-content, 30px + (0.5 * size))"),
+        ),
+        (
+            "width",
+            "calc-size(any, 50px + 30%)",
+            Some("calc-size(any, 30% + 50px)"),
+        ),
+        (
+            "width",
+            "calc-size(calc-size(any, 30px), size)",
+            Some("calc-size(calc-size(any, 30px), size)"),
+        ),
+        ("max-width", "calc-size(auto, size)", None),
+        ("width", "calc-size(none, size)", None),
+        ("width", "calc-size(any, size)", None),
+        ("width", "calc-size(any, fit-content)", None),
+        ("width", "calc-size(any, calc-size(any, 10px))", None),
+        ("color", "calc-size(auto, size)", None),
+    ];
+    for (prop, value, expected) in cases {
+        let parsed = Prop::from_name(prop.as_bytes())
+            .and_then(|p| property::parse(p, value.as_bytes()))
+            .and_then(|v| v.specified)
+            .map(|v| text(&v));
+        assert_eq!(parsed.as_deref(), expected, "{prop}: {value}");
+    }
+}
+
+#[test]
+fn calc_size_flattens_nested_bases_and_interpolates() {
+    let parse = |value: &str| property::parse(Prop::Width, value.as_bytes()).unwrap();
+    let nested = parse("calc-size(calc-size(auto, size / 2), size * 2)");
+    let flat = crate::calc_size::of_body(&nested.body).unwrap();
+    assert_eq!(flat.basis, crate::calc_size::BASIS_AUTO);
+    assert_eq!(flat.size, 1.0);
+    let a = crate::calc_size::of_body(&parse("calc-size(auto, size)").body).unwrap();
+    let b = crate::calc_size::of_body(&parse("calc-size(any, 50px)").body).unwrap();
+    let mid = crate::calc_size::interpolate(a, b, 0.25).unwrap();
+    let mid = crate::calc_size::of_body(&mid).unwrap();
+    assert_eq!(mid.basis, crate::calc_size::BASIS_AUTO);
+    assert_eq!(mid.size, 0.75);
+    assert_eq!(mid.linear.px, 12.5);
+    let other = crate::calc_size::of_body(&parse("calc-size(min-content, size)").body).unwrap();
+    assert!(crate::calc_size::interpolate(a, other, 0.5).is_none());
+}

@@ -86,6 +86,7 @@ struct Chan {
     paused_elapsed_ms: f64,
     timing: Timing,
     generation: u32,
+    keywords: bool,
 }
 
 impl Chan {
@@ -112,6 +113,7 @@ impl Chan {
             paused_elapsed_ms: 0.0,
             timing: Timing::default(),
             generation: 0,
+            keywords: false,
         }
     }
 
@@ -227,6 +229,7 @@ struct Run {
     fill: i32,
     timing: Timing,
     generation: u32,
+    keywords: bool,
     values: BTreeMap<i32, Val>,
     partials: BTreeMap<i32, Partial>,
 }
@@ -258,6 +261,7 @@ impl Run {
             fill: FILL_NONE,
             timing: Timing::default(),
             generation: 0,
+            keywords: false,
             values: BTreeMap::new(),
             partials: BTreeMap::new(),
         }
@@ -412,7 +416,7 @@ impl Run {
                         let to_wide = wide_resolved(prop, n.value(prop));
                         let from = from_wide.as_ref().map_or(p.value(prop), Val::borrow);
                         let to = to_wide.as_ref().map_or(n.value(prop), Val::borrow);
-                        out = Val::interpolate(prop, from, to, t)
+                        out = Val::interpolate(prop, from, to, t, self.keywords)
                             .or_else(|| Val::retain(if t < 0.5 { from } else { to }));
                     }
                     (Some(p), _) if p.pct >= 100.0 - 1e-9 => out = Val::retain(p.value(prop)),
@@ -485,6 +489,7 @@ struct State {
     prev_style: Option<RetainedStyle>,
     has_transition: bool,
     run_generation: u32,
+    keywords: bool,
 }
 
 impl State {
@@ -498,6 +503,17 @@ impl State {
             prev_style: None,
             has_transition: false,
             run_generation: 0,
+            keywords: false,
+        }
+    }
+
+    fn set_keywords(&mut self, keywords: bool) {
+        self.keywords = keywords;
+        for ch in &mut self.chans {
+            ch.keywords = keywords;
+        }
+        for r in self.runs.iter_mut().chain(self.scripts.iter_mut()) {
+            r.keywords = keywords;
         }
     }
 
@@ -673,7 +689,7 @@ impl Shared {
         let next = if ch.discrete {
             Val::retain(nearest)
         } else {
-            Val::interpolate(ch.prop, from, to, eased)
+            Val::interpolate(ch.prop, from, to, eased, ch.keywords)
         };
         ch.current = next.or_else(|| Val::retain(nearest));
         true
@@ -1254,8 +1270,10 @@ impl Anim {
         let cur = css::style_value(style, prop);
         let index = s.chan_ensure(prop);
         let node = s.node;
+        let keywords = s.keywords;
         let prev_style = s.prev_style.as_ref().map(RetainedStyle::get);
         let ch = &mut s.chans[index];
+        ch.keywords = keywords;
         if !cur.is_null() && ch.current.is_some() && cur == Borrowed::of(ch.current.as_ref()) {
             return;
         }
@@ -1325,7 +1343,7 @@ impl Anim {
                 } else {
                     last_eff
                 };
-                let interpolable = Val::interpolate(prop, from, cur_eff, 0.0).is_some();
+                let interpolable = Val::interpolate(prop, from, cur_eff, 0.0, keywords).is_some();
                 if interpolable && ancestor_transitions_to(&self.states, node, prop, cur_eff) {
                     if ch.active {
                         self.shared.chan_cancel(node, ch, now_us);
@@ -1427,7 +1445,9 @@ impl Anim {
                 let index = s.runs.len() as i32;
                 s.runs.push(Run::new(index, false));
             }
+            let keywords = s.keywords;
             let r = &mut s.runs[i];
+            r.keywords = keywords;
             let Some(name) = e.name().filter(|name| {
                 e.document_timeline()
                     && e.duration_ms().partial_cmp(&0.0) != Some(Ordering::Less)
@@ -1514,6 +1534,7 @@ impl Anim {
                 ch.cancelled = true;
             }
         }
+        s.set_keywords(css::interpolates_keywords(style));
         self.observe_transition(&mut s, style, &tv, now_us);
         self.observe_animation(&mut s, style, &av, now_us);
         self.track(&s);
@@ -1575,6 +1596,7 @@ impl Anim {
                 runs,
                 scripts,
                 base_values,
+                keywords,
                 ..
             } = s;
             for ch in chans.iter() {
@@ -1628,7 +1650,7 @@ impl Anim {
                     let (_to_owned, to) = endpoint(pa.to.as_ref());
                     let both = !from.is_null() && !to.is_null();
                     let mut out = if both {
-                        Val::interpolate(prop, from, to, pa.t)
+                        Val::interpolate(prop, from, to, pa.t, *keywords)
                     } else {
                         None
                     };
@@ -1802,7 +1824,9 @@ impl Anim {
         let now = self.shared.now();
         s.run_generation = s.run_generation.wrapping_add(1);
         let generation = s.run_generation;
+        let keywords = s.keywords;
         let r = &mut s.scripts[slot];
+        r.keywords = keywords;
         r.name = Some(Vec::new());
         r.cancelled_name = None;
         r.kf = None;

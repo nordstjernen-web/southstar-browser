@@ -58,6 +58,7 @@ carry forward from the 1.0.21 pass.
 | Absolute `Q`, `pt`, `cm`, `mm`, `in`, `pc` | ✅ | exact CSS ratios from `1in = 96px = 2.54cm` (`pt = 96/72`, `cm = 96/2.54`, `mm = 96/25.4`, `Q = 96/101.6`) |
 | `calc()` | ✅ | percentage + px mix; nested. Specified values serialize per the Values 4 "serialize a math function" rules (`rust/css`'s typed math sum): terms of the same type are summed, absolute lengths/angles/times/frequencies/resolutions fold to their canonical unit (`px`/`deg`/`s`/`hz`/`dppx`), products and quotients by a number distribute, and a sum that cannot reduce to one term serializes sorted — number, then percentage, then dimensions in ASCII-alphabetical unit order — so `calc(1px + 1%)` is `calc(1% + 1px)`, `calc(1px + 2em + 3rem + 4%)` is `calc(4% + 2em + 1px + 3rem)`, and `calc(2 * (1px + 1em))` is `calc(2em + 2px)`. A single-argument `min()`/`max()` reduces to `calc()`; a comparison that needs layout (`min(20px, 10%)`) stays as authored |
 | Math `round()` / `mod()` / `rem()` / `abs()` / `min()` / `max()` / `clamp()` | ✅ | the Values 4 length-math subset |
+| `calc-size()`, `interpolate-size` | 🟡 | `rust/css/src/calc_size.rs`: keyword, length-percentage and nested bases with a calculation linear in `size`, on width/height/min/max/`flex-basis`; block layout resolves it, keyword bases act as their keyword elsewhere; interpolates between compatible bases and from sizing keywords (lengths only with `allow-keywords`). Additive composition and nonlinear `size` expressions are not supported |
 
 ## Box model & sizing (Box 3, Sizing 3, Overflow 3)
 

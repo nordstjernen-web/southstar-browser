@@ -9,6 +9,7 @@ use southstar_css_color::Color;
 use crate::animation::{self, Entry, Longhand};
 use crate::border_image;
 use crate::calc::{self, Calc, Parsed};
+use crate::calc_size;
 use crate::clip_path;
 use crate::color;
 use crate::container;
@@ -850,6 +851,20 @@ fn folds_relative_units(t: &[u8]) -> bool {
 }
 
 fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
+    if starts_with_ci(t, b"calc-size(") {
+        let sizing = matches!(
+            prop,
+            Prop::Width
+                | Prop::Height
+                | Prop::MinWidth
+                | Prop::MinHeight
+                | Prop::MaxWidth
+                | Prop::MaxHeight
+                | Prop::FlexBasis
+        );
+        let allow_auto = !matches!(prop, Prop::MaxWidth | Prop::MaxHeight);
+        return sizing.then(|| calc_size::parse(t, allow_auto)).flatten();
+    }
     if prop == Prop::FontSize {
         if eq(t, b"larger") || eq(t, b"smaller") {
             return Some(Value::length(

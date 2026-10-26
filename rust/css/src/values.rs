@@ -6,6 +6,7 @@ use std::ffi::CString;
 
 use crate::animation::{self, Entry};
 use crate::calc::Calc;
+use crate::calc_size;
 use southstar_css_color::{Color, HueMethod, Interpolation, Space};
 
 use crate::color::{self, parse_color};
@@ -23,7 +24,7 @@ use crate::math::math_canonical;
 use crate::prop::Prop;
 use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
-use crate::scan::split_ws_limit;
+use crate::scan::{split_ws_limit, starts_with_ci, strip};
 use crate::shadow::{self, Shadow, ShadowList};
 use crate::shorthand::{self, border_radius_canonical};
 use crate::text::split_top_level_commas;
@@ -70,6 +71,9 @@ fn size_text(s: &Size) -> Vec<u8> {
 }
 
 fn calc_text(c: &Calc) -> Vec<u8> {
+    if let Some(text) = calc_size::computed_text(c) {
+        return text;
+    }
     let parts = [(c.pct, "%"), (c.em, "em"), (c.px, "px"), (c.rem, "rem")];
     let used: Vec<&(f64, &str)> = parts.iter().filter(|(v, _)| *v != 0.0).collect();
     match used.as_slice() {
@@ -646,7 +650,35 @@ fn keyword_starts_numeric(kw: &[u8]) -> bool {
         .is_some_and(|c| c.is_ascii_digit() || matches!(c, b'-' | b'+' | b'.'))
 }
 
-pub(crate) fn interpolate_prop(prop: Option<Prop>, a: &Value, b: &Value, t: f64) -> Option<Value> {
+fn sizing_keywords_interpolate(prop: Option<Prop>, a: &Value, b: &Value, t: f64) -> Option<Value> {
+    let sizing = matches!(
+        prop?,
+        Prop::Width
+            | Prop::Height
+            | Prop::MinWidth
+            | Prop::MinHeight
+            | Prop::MaxWidth
+            | Prop::MaxHeight
+            | Prop::FlexBasis
+    );
+    let one_keyword = matches!(a.body, Body::Keyword(_)) != matches!(b.body, Body::Keyword(_));
+    if !sizing || !one_keyword || a.next_layer.is_some() || b.next_layer.is_some() {
+        return None;
+    }
+    let (ca, cb) = (calc_size::operand(&a.body)?, calc_size::operand(&b.body)?);
+    calc_size::interpolate(ca, cb, t).map(Value::of)
+}
+
+pub(crate) fn interpolate_prop(
+    prop: Option<Prop>,
+    a: &Value,
+    b: &Value,
+    t: f64,
+    keywords: bool,
+) -> Option<Value> {
+    if keywords && let Some(value) = sizing_keywords_interpolate(prop, a, b, t) {
+        return Some(value);
+    }
     if let (Some(prop), Body::Keyword(ka), Body::Keyword(kb)) = (prop, &a.body, &b.body)
         && crate::defs::keywords_only(prop)
         && !(keyword_starts_numeric(ka) && keyword_starts_numeric(kb))
@@ -713,6 +745,10 @@ fn interpolate_layer(a: &Value, b: &Value, t: f64) -> Option<Value> {
     if let (Body::Transform(ta), true) = (&a.body, is_none_keyword(b)) {
         let identity = Value::of(Body::Transform(Box::new(identity_like(ta)?)));
         return interpolate(a, &identity, t);
+    }
+    if calc_size::is_calc_size(&a.body) || calc_size::is_calc_size(&b.body) {
+        let (ca, cb) = (calc_size::operand(&a.body)?, calc_size::operand(&b.body)?);
+        return calc_size::interpolate(ca, cb, t).map(Value::of);
     }
     if let Some(linear) = lerp_lengths(&a.body, &b.body, t) {
         return Some(Value::of(match linear {
@@ -831,6 +867,11 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
     let Some(prop) = prop else {
         return math_canonical(&c_text(value));
     };
+    if starts_with_ci(strip(value), b"calc-size(") {
+        return Prop::from_name(prop)
+            .and_then(|p| property::parse(p, value))
+            .and_then(|v| v.specified);
+    }
     if let Some(text) = gaps::specified(prop, value) {
         return Some(text);
     }
