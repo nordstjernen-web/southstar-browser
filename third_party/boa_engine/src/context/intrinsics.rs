@@ -1492,6 +1492,7 @@ pub(crate) struct ObjectTemplates {
 
     regexp: ObjectTemplate,
     regexp_without_proto: ObjectTemplate,
+    regexp_match: ObjectTemplate,
 
     unmapped_arguments: ObjectTemplate,
     mapped_arguments: ObjectTemplate,
@@ -1549,6 +1550,12 @@ impl ObjectTemplates {
 
         let mut regexp = regexp_without_proto.clone();
         regexp.set_prototype(constructors.regexp().prototype());
+
+        let mut regexp_match = array.clone();
+        regexp_match
+            .property(js_string!("index").into(), Attribute::all())
+            .property(js_string!("input").into(), Attribute::all())
+            .property(js_string!("groups").into(), Attribute::all());
 
         let name_property_key: PropertyKey = js_string!("name").into();
         let mut function = ObjectTemplate::new(root_shape);
@@ -1691,6 +1698,7 @@ impl ObjectTemplates {
             boolean,
             regexp,
             regexp_without_proto,
+            regexp_match,
             unmapped_arguments,
             mapped_arguments,
             function_with_prototype,
@@ -1802,6 +1810,17 @@ impl ObjectTemplates {
     /// 2. `__proto__`: `RegExp.prototype`
     pub(crate) const fn regexp_without_proto(&self) -> &ObjectTemplate {
         &self.regexp_without_proto
+    }
+
+    /// Cached template of the array `RegExpBuiltinExec` returns.
+    ///
+    /// Transitions:
+    ///
+    /// 1. `"length"`: (`WRITABLE`, `PERMANENT`, `NON_ENUMERABLE`)
+    /// 2. `__proto__`: `Array.prototype`
+    /// 3. `"index"`, `"input"`, `"groups"`: (`WRITABLE`, `ENUMERABLE`, `CONFIGURABLE`)
+    pub(crate) const fn regexp_match(&self) -> &ObjectTemplate {
+        &self.regexp_match
     }
 
     /// Cached unmapped arguments object template.

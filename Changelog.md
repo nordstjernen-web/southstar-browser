@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: regular expression matching does far less work per match.
+  `RegExp.prototype.exec` no longer copies the compiled regular expression
+  or widens an ASCII subject string into a new buffer on every call,
+  builds its result array from a template, and creates the `d`-flag
+  indices and the legacy `RegExp.$1`-style values only when they are used.
+  An `exec` loop and a pair of global `replace` calls run twice as fast,
+  and Octane RegExp scores a third higher.
 * JavaScript: `JSON.parse` reads the string with a JSON parser of its own
   (`builtins/json/parse.rs` in the Boa fork) that builds the values
   directly. It used to validate the text with `serde_json`, then parse and
