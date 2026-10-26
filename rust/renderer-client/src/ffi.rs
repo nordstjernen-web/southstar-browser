@@ -2,15 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr::NonNull;
-use std::ffi::CString;
 use std::sync::Mutex;
 
 use southstar_glib::{self as glib, GPtrArray};
 
 use crate::client::Renderer;
-use crate::os;
+use crate::{os, sheet};
 
 pub use southstar_print::PrintSetup;
 
@@ -24,6 +23,11 @@ struct CairoSurface {
     _private: [u8; 0],
 }
 
+type ReadFn = unsafe extern "C" fn(closure: *mut c_void, data: *mut u8, length: c_uint) -> c_int;
+
+const CAIRO_STATUS_SUCCESS: c_int = 0;
+const CAIRO_STATUS_READ_ERROR: c_int = 10;
+
 pub type PrintFn =
     unsafe extern "C" fn(conn: *mut c_void, out_setup: *mut c_void) -> *mut GPtrArray;
 
@@ -35,8 +39,10 @@ unsafe extern "C" {
     fn g_ptr_array_new() -> *mut GPtrArray;
     fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     fn g_ptr_array_free(array: *mut GPtrArray, free_segment: c_int) -> *mut *mut c_void;
-    fn g_remove(filename: *const c_char) -> c_int;
-    fn cairo_image_surface_create_from_png(filename: *const c_char) -> *mut CairoSurface;
+    fn cairo_image_surface_create_from_png_stream(
+        read: ReadFn,
+        closure: *mut c_void,
+    ) -> *mut CairoSurface;
     fn cairo_surface_status(surface: *mut CairoSurface) -> c_int;
     fn cairo_surface_destroy(surface: *mut CairoSurface);
 }
@@ -65,16 +71,39 @@ fn print_prefix() -> Vec<u8> {
     prefix
 }
 
-fn load_sheet(sheets: *mut GPtrArray, path: &CString) {
-    // SAFETY: path is a NUL-terminated file name.
-    let img = unsafe { cairo_image_surface_create_from_png(path.as_ptr()) };
+struct PngSource<'a> {
+    rest: &'a [u8],
+}
+
+unsafe extern "C" fn read_png(closure: *mut c_void, data: *mut u8, length: c_uint) -> c_int {
+    // SAFETY: closure is the PngSource load_sheet lends cairo for the duration of the decode.
+    let source = unsafe { &mut *closure.cast::<PngSource<'_>>() };
+    let length = length as usize;
+    if length > source.rest.len() {
+        return CAIRO_STATUS_READ_ERROR;
+    }
+    let (chunk, rest) = source.rest.split_at(length);
+    // SAFETY: cairo passes a writable buffer of length bytes.
+    let out = unsafe { core::slice::from_raw_parts_mut(data, length) };
+    out.copy_from_slice(chunk);
+    source.rest = rest;
+    CAIRO_STATUS_SUCCESS
+}
+
+fn load_sheet(sheets: *mut GPtrArray, png: &[u8]) -> bool {
+    let mut source = PngSource { rest: png };
+    let closure = (&raw mut source).cast::<c_void>();
+    // SAFETY: read_png only reads from source, which outlives this call.
+    let img = unsafe { cairo_image_surface_create_from_png_stream(read_png, closure) };
     // SAFETY: cairo returns a surface, possibly an error surface, that the caller owns.
     if unsafe { cairo_surface_status(img) } == 0 {
         // SAFETY: sheets is a live array from g_ptr_array_new; it takes over the surface.
         unsafe { g_ptr_array_add(sheets, img.cast()) };
+        true
     } else {
         // SAFETY: img is the caller's own reference, released exactly once here.
         unsafe { cairo_surface_destroy(img) };
+        false
     }
 }
 
@@ -103,17 +132,29 @@ pub fn print(r: &mut Renderer, setup: &mut PrintSetup) -> Option<PrintedPages> {
     }
     // SAFETY: g_ptr_array_new takes no arguments and returns a new array.
     let sheets = unsafe { g_ptr_array_new() };
-    for i in 0..reply.pages.max(0) {
+    let pages = usize::try_from(reply.pages)
+        .unwrap_or(0)
+        .min(sheet::MAX_SHEETS);
+    let mut loading = true;
+    let mut pixels = 0u64;
+    for i in 0..pages {
         let mut path = prefix.clone();
         path.extend_from_slice(format!("-{i}.png").as_bytes());
-        let path = CString::new(path).unwrap_or_default();
-        // SAFETY: path is a NUL-terminated file name.
-        if unsafe { glib::g_file_test(path.as_ptr(), glib::FILE_TEST_EXISTS) } == 0 {
+        let Some(path) = sheet::path_from(&path) else {
             break;
+        };
+        if loading {
+            let png = sheet::read(&path);
+            let size = png.as_deref().and_then(sheet::png_pixels);
+            loading = match (png, size) {
+                (Some(png), Some(size)) if pixels + size <= sheet::MAX_TOTAL_PIXELS => {
+                    pixels += size;
+                    load_sheet(sheets, &png)
+                }
+                _ => false,
+            };
         }
-        load_sheet(sheets, &path);
-        // SAFETY: path is a NUL-terminated file name.
-        unsafe { g_remove(path.as_ptr()) };
+        let _ = std::fs::remove_file(&path);
     }
     // SAFETY: sheets is the live array g_ptr_array_new returned above.
     if unsafe { (*sheets).len } == 0 {
