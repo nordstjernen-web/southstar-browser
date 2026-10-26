@@ -1,6 +1,16 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.3:
+======
+* Build: Southstar builds against fontconfig 2.15 again, the version
+  Debian 13 and Ubuntu 24.04 ship. The Rust text layer applied a
+  pattern's default substitutions with `FcConfigSetDefaultSubstitute`,
+  which fontconfig only added in 2.16, so linking `libsouthstar` failed
+  there with an undefined reference although `meson.build` accepts 2.15.
+  It now calls `FcDefaultSubstitute`, which does the same for the current
+  configuration.
+
 Southstar Browser 1.0.2:
 ======
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
