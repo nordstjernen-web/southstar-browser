@@ -126,7 +126,7 @@ plmpeg	0	0	0	0	0	0	0
 print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
 render	35	1	2	0	23	4	2
-renderer-client	98	54	0	0	42	4	0
+renderer-client	100	53	0	0	42	4	0
 renderer-host	69	45	1	0	25	4	0
 safebrowsing	26	4	0	0	13	5	0
 sandbox	79	49	0	0	19	8	0

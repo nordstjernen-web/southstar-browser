@@ -5,6 +5,7 @@
 mod client;
 mod ffi;
 mod os;
+mod sheet;
 
 pub use client::{Favicon, Frame, Page, Renderer, Text, Tick, TilesRequest, View, Wheel};
 pub use ffi::{PrintFn, PrintSetup, PrintedPages, exchange_dir};

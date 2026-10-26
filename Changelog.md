@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Security: printing reads the renderer's page images without following
+  links it may have planted. The sheets come from the exchange directory,
+  which the renderer can write, and the shell used to open them by name
+  with cairo, so a compromised renderer could swap one for a symbolic or
+  hard link to another file. The shell now refuses anything that is not a
+  regular file with a single link (opened with `O_NOFOLLOW | O_NONBLOCK`
+  and checked to be the same file it inspected), at most 256 MiB, whose
+  PNG header declares at most 16384 pixels a side, and decodes it from
+  memory; at most 1000 sheets and 2^30 pixels in all are loaded.
 * JavaScript: property access is faster. Inline cache hits compare
   shapes without creating new references to them, and typed arrays no
   longer convert every named property (`length`, `subarray`, ...) to a
