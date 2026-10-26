@@ -407,6 +407,38 @@ impl IndexedProperties {
         }
     }
 
+    /// The number of elements of dense storage, or `None` for sparse storage.
+    pub(crate) fn dense_len(&self) -> Option<usize> {
+        match self {
+            Self::DenseI32(vec) => Some(vec.len()),
+            Self::DenseF64(vec) => Some(vec.len()),
+            Self::DenseElement(vec) => Some(vec.len()),
+            Self::SparseElement(_) | Self::SparseProperty(_) => None,
+        }
+    }
+
+    /// Returns `true` if there are no indexed properties.
+    pub(crate) fn is_empty(&self) -> bool {
+        match self {
+            Self::DenseI32(vec) => vec.is_empty(),
+            Self::DenseF64(vec) => vec.is_empty(),
+            Self::DenseElement(vec) => vec.is_empty(),
+            Self::SparseElement(map) => map.is_empty(),
+            Self::SparseProperty(map) => map.is_empty(),
+        }
+    }
+
+    /// Removes and returns the last element of dense storage; `None` for sparse or empty
+    /// storage.
+    pub(crate) fn pop_dense(&mut self) -> Option<JsValue> {
+        match self {
+            Self::DenseI32(vec) => vec.pop().map(JsValue::new),
+            Self::DenseF64(vec) => vec.pop().map(JsValue::new),
+            Self::DenseElement(vec) => vec.pop(),
+            Self::SparseElement(_) | Self::SparseProperty(_) => None,
+        }
+    }
+
     /// Transform this array into a sparse array if it isn't so already.
     pub(crate) fn transform_to_sparse(&mut self) {
         match &*self {

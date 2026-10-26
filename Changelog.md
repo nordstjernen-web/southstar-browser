@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `Array.prototype.push` and `pop` append to and remove from a
+  plain array's element storage directly instead of running the generic
+  property `Set`, `Get` and `Delete` steps: a push loop runs 27% faster
+  and alternating push and pop 44% faster.
 * JavaScript: `new` on a class no longer allocates a function environment
   for the constructor unless it needs one (a captured binding, `super`,
   `new.target`, a direct `eval`, or an arrow function using `this`);
