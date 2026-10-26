@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `JSON.parse` reads the string with a JSON parser of its own
+  (`builtins/json/parse.rs` in the Boa fork) that builds the values
+  directly. It used to validate the text with `serde_json`, then parse and
+  compile it as a script and run the bytecode. Parsing 200,000 small
+  objects now takes 3.7 s instead of 43 s in a non-LTO build. Numbers out of
+  the double range (`1e400`) parse as `Infinity` instead of throwing, nesting
+  deeper than 128 levels works, lone surrogates in strings are kept, and
+  `JSON.rawJSON` uses the same parser.
 * Rust-backed fonts (`-Drust-shaper=true`, `NS_RUST_FONTS`) are drawn from
   `skrifa` outlines through a cairo user font instead of cairo-ft and
   FreeType: hinting chosen from the cairo options and fontconfig pattern the
