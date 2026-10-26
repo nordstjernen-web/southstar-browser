@@ -489,6 +489,12 @@ impl WeakSharedShape {
             inner: self.inner.upgrade()?,
         })
     }
+
+    /// Returns `true` if this points to the live `shape`.
+    #[inline]
+    pub(crate) fn points_to(&self, shape: &SharedShape) -> bool {
+        self.inner.points_to(&shape.inner)
+    }
 }
 
 impl From<&SharedShape> for WeakSharedShape {

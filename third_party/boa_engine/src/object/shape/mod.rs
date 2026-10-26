@@ -247,6 +247,17 @@ impl WeakShape {
         self.upgrade().as_ref().map_or(0, Shape::to_addr_usize)
     }
 
+    /// Returns `true` if this points to the live `shape`, without upgrading.
+    #[inline]
+    #[must_use]
+    pub(crate) fn points_to(&self, shape: &Shape) -> bool {
+        match (self, &shape.inner) {
+            (WeakShape::Shared(weak), Inner::Shared(shape)) => weak.points_to(shape),
+            (WeakShape::Unique(weak), Inner::Unique(shape)) => weak.points_to(shape),
+            _ => false,
+        }
+    }
+
     /// Return location in memory of the [`Shape`].
     ///
     /// Returns `0` if the shape has been freed.

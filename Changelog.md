@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: property access is faster. Inline cache hits compare
+  shapes without creating new references to them, and typed arrays no
+  longer convert every named property (`length`, `subarray`, ...) to a
+  number and back before looking it up: a loop over a `Float64Array`
+  using `a.length` runs 2.5 times faster, and Octane Richards gains
+  about 30%.
 * Gradient colour stops written in a non-legacy colour syntax keep their
   colour space in the computed value: `linear-gradient(in lab,
   color(srgb 1 0 0), blue)` now computes to `color(srgb 1 0 0)` for the

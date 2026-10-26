@@ -360,6 +360,15 @@ pub(crate) fn typed_array_exotic_prevent_extensions(
 ///
 /// [spec]: https://tc39.es/ecma262/#sec-canonicalnumericindexstring
 fn canonical_numeric_index_string(argument: &JsString) -> Option<f64> {
+    // NOTE: `ToString` of a Number starts with a digit, "-", "I" (Infinity) or "N" (NaN), so
+    //       any other property name, such as "length", is not numeric and needs no conversion.
+    if !matches!(
+        argument.code_unit_at(0),
+        Some(0x30..=0x39 | 0x2D | 0x49 | 0x4E)
+    ) {
+        return None;
+    }
+
     // 1. If argument is "-0", return -0𝔽.
     if argument == &js_str!("-0") {
         return Some(-0.0);

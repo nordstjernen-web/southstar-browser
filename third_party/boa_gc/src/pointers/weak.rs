@@ -29,6 +29,14 @@ impl<T: Trace + ?Sized> WeakGc<T> {
         self.inner.key()
     }
 
+    /// Returns `true` if this pointer still points to `value`'s allocation, without
+    /// upgrading it.
+    #[inline]
+    #[must_use]
+    pub fn points_to(&self, value: &Gc<T>) -> bool {
+        self.inner.key_is(value)
+    }
+
     /// Check if the [`WeakGc`] can be upgraded.
     #[inline]
     #[must_use]

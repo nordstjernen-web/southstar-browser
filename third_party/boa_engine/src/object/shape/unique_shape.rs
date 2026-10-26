@@ -260,6 +260,12 @@ impl WeakUniqueShape {
             inner: self.inner.upgrade()?,
         })
     }
+
+    /// Returns `true` if this points to the live `shape`.
+    #[inline]
+    pub(crate) fn points_to(&self, shape: &UniqueShape) -> bool {
+        self.inner.points_to(&shape.inner)
+    }
 }
 
 impl From<&UniqueShape> for WeakUniqueShape {

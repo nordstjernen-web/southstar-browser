@@ -42,9 +42,12 @@ fn get_by_name<const LENGTH: bool>(
 
     let ic = &context.vm.frame().code_block().ic[usize::from(index)];
     let object_borrowed = object.borrow();
-    if let Some((shape, slot)) = ic.get(object_borrowed.shape()) {
+    if let Some(slot) = ic.get(object_borrowed.shape()) {
         let mut result = if slot.attributes.contains(SlotAttributes::PROTOTYPE) {
-            let prototype = shape.prototype().expect("prototype should have value");
+            let prototype = object_borrowed
+                .shape()
+                .prototype()
+                .expect("prototype should have value");
             let prototype = prototype.borrow();
             prototype.properties().storage[slot.index as usize].clone()
         } else {
