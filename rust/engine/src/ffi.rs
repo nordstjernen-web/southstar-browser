@@ -373,6 +373,36 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
     styles
 }
 
+/// # Safety
+///
+/// `js` is null or the page's live script engine.
+pub unsafe fn restyle(req: &Relayout<'_>) -> Option<*mut GHashTable> {
+    let r = css::Relayout {
+        doc: req.page.doc.map_or(ptr::null_mut(), Node::as_mut_ptr),
+        base: req.page.base,
+        viewport_width: req.viewport_width,
+        viewport_height: req.viewport_height,
+        images: req
+            .images
+            .map_or(ptr::null_mut(), southstar_image::ImageCache::raw),
+        anim: req.anim,
+        js: req.js,
+        focused: Node::ptr_or_null(req.focused),
+        hover: Node::ptr_or_null(req.hover),
+        caret_byte: req.caret_byte,
+        sel_anchor_byte: req.sel_anchor_byte,
+    };
+    let _scope = CssScope::enter(r.base);
+    let sheets = crate::styles::collect_stylesheets(req.page.doc, r.base, req.page.css_cache);
+    if sheets.nested_documents {
+        return None;
+    }
+    let ctx = css::render_ctx(&r, &sheets);
+    let styles = css::render_restyle(&ctx)?;
+    css::publish_styles(req.js, styles);
+    Some(styles)
+}
+
 fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())

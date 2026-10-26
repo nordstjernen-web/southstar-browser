@@ -246,6 +246,27 @@ pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
     unsafe { southstar_engine::relayout(&req, layout) }
 }
 
+pub fn restyle(r: &Relayout) -> Option<*mut GHashTable> {
+    let req = southstar_engine::Relayout {
+        page: Page {
+            doc: r.doc,
+            base: r.base,
+            css_cache: Some(r.css_cache),
+        },
+        viewport_width: r.vw,
+        viewport_height: r.vh,
+        images: r.images,
+        anim: r.anim,
+        js: super::js_raw(r.js),
+        focused: r.focused,
+        hover: None,
+        caret_byte: r.caret,
+        sel_anchor_byte: r.anchor,
+    };
+    // SAFETY: the run's script engine, if any, is alive while it restyles its page.
+    unsafe { southstar_engine::restyle(&req) }
+}
+
 pub fn free_layout(layout: *mut NsBox) {
     southstar_paint::invalidate_3d();
     // SAFETY: the run passes its own layout tree, which nothing reads after this.

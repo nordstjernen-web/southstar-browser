@@ -1416,6 +1416,26 @@ fn physical_name(name: &str) -> Option<String> {
     None
 }
 
+fn depends_on_layout(name: &str) -> bool {
+    const RESOLVED_FROM_LAYOUT: [&str; 11] = [
+        "width",
+        "height",
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "transform",
+        "transform-origin",
+        "perspective-origin",
+        "grid-template-columns",
+        "grid-template-rows",
+    ];
+    RESOLVED_FROM_LAYOUT.contains(&name)
+        || name.starts_with("margin-")
+        || name.starts_with("padding-")
+        || (name.starts_with("border-") && name.ends_with("-width"))
+}
+
 fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     let name = if name == "css-float" || name == "cssFloat" {
         "float"
@@ -1428,10 +1448,15 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return value;
     }
 
-    ffi::flush_layout(js);
+    let lbox = if depends_on_layout(name) {
+        ffi::flush_layout(js);
+        ffi::find_box(js, n)
+    } else {
+        ffi::flush_style(js);
+        None
+    };
     let style_attr = str_of(n.attr(c"style"));
     let has_style_attr = style_attr.is_some_and(|s| !s.is_empty());
-    let lbox = ffi::find_box(js, n);
     let computed = ffi::style_of(js, n).or_else(|| lbox.and_then(box_style));
 
     if let Some(b) = lbox

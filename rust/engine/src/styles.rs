@@ -364,7 +364,7 @@ impl<'a> Collect<'a, '_> {
     fn docs_sync(&mut self) {
         self.flush();
         if let Some(doc) = self.doc {
-            let SheetList { sheets, docs } = &mut self.out;
+            let SheetList { sheets, docs, .. } = &mut self.out;
             docs.resize(docs.len().max(sheets.len()), doc);
         }
     }
@@ -375,6 +375,7 @@ impl<'a> Collect<'a, '_> {
                 self.walk(c, base, depth + 1);
                 continue;
             }
+            self.out.nested_documents = true;
             self.docs_sync();
             let outer = self.doc;
             self.doc = Some(c);

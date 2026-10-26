@@ -78,6 +78,12 @@ unsafe extern "C" fn on_flush(ud: *mut c_void) {
     }
 }
 
+unsafe extern "C" fn on_style_flush(ud: *mut c_void) {
+    if let Some(ctx) = unsafe { ud.cast::<Ctx>().as_ref() } {
+        crate::inproc::flush_style(ctx);
+    }
+}
+
 fn video_cache(ud: *mut c_void) -> Option<VideoCache> {
     // SAFETY: bind_media registers null or the run's cache handle, which outlives the script engine's callbacks.
     unsafe { VideoCache::from_raw(ud) }
@@ -199,10 +205,12 @@ impl Js {
     pub fn bind_layout_flush(self, ctx: &Ctx) {
         let ud = (ctx as *const Ctx).cast_mut().cast();
         api::set_layout_flush_hook(self.page(), Some(on_flush), ud);
+        api::set_style_flush_hook(self.page(), Some(on_style_flush), ud);
     }
 
     pub fn unbind_layout_flush(self) {
         api::set_layout_flush_hook(self.page(), None, ptr::null_mut());
+        api::set_style_flush_hook(self.page(), None, ptr::null_mut());
     }
 
     pub fn bind_media(self, video_cache: Option<VideoCache>) {

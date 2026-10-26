@@ -550,6 +550,25 @@ fn relayout(
     styles
 }
 
+pub fn restyle(c: &RenderCtx) -> Option<*mut GHashTable> {
+    let (want_cq, _) = containers_wanted(c);
+    if want_cq {
+        return None;
+    }
+    southstar_css_media::set_base_viewport(c.viewport_width, c.viewport_height);
+    unsafe {
+        southstar_css::set_focus_node(Node::from_ptr(c.focused_input));
+        southstar_css::set_hover_node(Node::from_ptr(c.hover_node));
+    }
+    record_page_state(c);
+    southstar_css::set_render_zoom(c.zoom());
+    let styles = southstar_css::compute_styles(c.doc(), c.sheets, c.sheet_docs, None);
+    style_pass(c, styles);
+    southstar_css::set_focus_node(None);
+    southstar_css::set_hover_node(None);
+    Some(styles)
+}
+
 pub fn page_uses_hover() -> bool {
     USES_HOVER.load(Ordering::Relaxed)
 }

@@ -28,6 +28,7 @@ fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
 pub struct SheetList<'a> {
     pub sheets: Vec<OwnedSheet>,
     pub docs: Vec<Node<'a>>,
+    pub nested_documents: bool,
 }
 
 pub fn media_query_matches(query: &CStr) -> bool {
@@ -165,6 +166,16 @@ pub fn publish_to_page(js: *mut c_void, styles: *mut GHashTable, layout: *mut Ns
     if !js.is_null() {
         api::set_style_table(js.cast(), styles);
         api::set_layout_root(js.cast(), layout.cast_const().cast());
+    }
+}
+
+pub fn render_restyle(ctx: &RenderCtx) -> Option<*mut GHashTable> {
+    southstar_render::restyle(ctx)
+}
+
+pub fn publish_styles(js: *mut c_void, styles: *mut GHashTable) {
+    if !js.is_null() {
+        api::set_style_table(js.cast(), styles);
     }
 }
 

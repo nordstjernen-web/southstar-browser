@@ -44,6 +44,7 @@ hook_setter!(set_soft_nav_hook, soft_nav, NavigateFn);
 hook_setter!(set_window_action_hook, window_action, UrlFn);
 hook_setter!(set_viewport_scroll_hook, viewport_scroll, ViewportScrollFn);
 hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
+hook_setter!(set_style_flush_hook, style_flush, DataFn);
 hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
 pub fn navigate(js: *const NsJs, url: &CStr, reload: bool) -> bool {
@@ -125,6 +126,24 @@ pub fn scroll_viewport(js: *const NsJs, x: f64, y: f64) {
         unsafe { scroll(&mut x, &mut y, data) };
     }
     glue::note_viewport_scroll(js, x, y);
+}
+
+pub fn flush_style(js: *const NsJs) {
+    let restyled = state(js, false, |state| {
+        let Some((flush, data)) = state.style_flush.get() else {
+            return false;
+        };
+        if state.in_layout_flush.get() {
+            return true;
+        }
+        state.in_layout_flush.set(true);
+        unsafe { flush(data) };
+        state.in_layout_flush.set(false);
+        true
+    });
+    if !restyled {
+        flush_layout(js);
+    }
 }
 
 pub fn flush_layout(js: *const NsJs) {

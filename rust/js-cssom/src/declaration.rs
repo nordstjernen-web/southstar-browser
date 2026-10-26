@@ -111,12 +111,12 @@ fn pseudo_supported(name: &str, colons: usize) -> bool {
 }
 
 fn custom_names(js: Js, node: Node<'_>) -> Vec<Vec<u8>> {
-    ffi::flush_layout(js);
+    ffi::flush_style(js);
     ffi::style_of(js, node).map_or_else(Vec::new, |s| s.var_names())
 }
 
 fn custom_count(js: Js, node: Node<'_>) -> usize {
-    ffi::flush_layout(js);
+    ffi::flush_style(js);
     ffi::style_of(js, node).map_or(0, |s| s.var_count())
 }
 

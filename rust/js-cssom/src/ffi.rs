@@ -173,7 +173,7 @@ pub(crate) fn flush_layout(js: Js) {
 
 pub(crate) fn flush_style(js: Js) {
     if !js.is_null() {
-        api::flush_layout(js.page());
+        api::flush_style(js.page());
     }
 }
 

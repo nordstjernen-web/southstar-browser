@@ -117,6 +117,7 @@ pub struct Ctx {
     pub anim: Option<Anim>,
     pub css_cache: CssCache,
     pub styles: Cell<*mut GHashTable>,
+    pub layout_styles: Cell<*mut GHashTable>,
     pub layout: Cell<*mut NsBox>,
     pub focused: Cell<Option<WeakNode>>,
     pub caret: Cell<usize>,
@@ -139,6 +140,29 @@ impl Ctx {
 
     pub fn set_focused(&self, n: Option<Node>) {
         self.focused.set(n.map(Node::downgrade));
+    }
+
+    pub fn release_layout_styles(&self) {
+        let table = self.layout_styles.replace(ptr::null_mut());
+        if !table.is_null() {
+            ffi::destroy_table(table);
+        }
+    }
+
+    fn relayout_args(&self) -> Relayout<'_> {
+        Relayout {
+            doc: self.doc(),
+            base: self.base.as_deref(),
+            vw: self.vw,
+            vh: self.vh,
+            images: self.image_cache,
+            anim: self.anim,
+            js: self.js,
+            css_cache: self.css_cache,
+            focused: self.focus_for_layout(),
+            caret: self.caret.get(),
+            anchor: self.anchor.get(),
+        }
     }
 
     fn focus_for_layout(&self) -> Option<Node<'_>> {
@@ -168,21 +192,52 @@ pub fn relayout(c: &Ctx) {
     if !c.styles.get().is_null() {
         ffi::destroy_table(c.styles.replace(ptr::null_mut()));
     }
-    let args = Relayout {
-        doc: c.doc(),
-        base: c.base.as_deref(),
-        vw: c.vw,
-        vh: c.vh,
-        images: c.image_cache,
-        anim: c.anim,
-        js: c.js,
-        css_cache: c.css_cache,
-        focused: c.focus_for_layout(),
-        caret: c.caret.get(),
-        anchor: c.anchor.get(),
-    };
+    c.release_layout_styles();
+    let args = c.relayout_args();
     c.styles.set(ffi::relayout(&args, &c.layout));
     c.relaying.set(false);
+}
+
+fn restyle(c: &Ctx) -> bool {
+    if c.relaying.get() {
+        return true;
+    }
+    c.relaying.set(true);
+    let args = c.relayout_args();
+    let restyled = ffi::restyle(&args);
+    c.relaying.set(false);
+    let Some(styles) = restyled else {
+        return false;
+    };
+    let previous = c.styles.replace(styles);
+    if c.layout_styles.get().is_null() {
+        c.layout_styles.set(previous);
+    } else if !previous.is_null() {
+        ffi::destroy_table(previous);
+    }
+    true
+}
+
+pub fn flush_style(c: &Ctx) {
+    let Some(js) = c.js else {
+        return;
+    };
+    if c.layout.get().is_null() {
+        flush_layout(c);
+        return;
+    }
+    if ffi::consume_mutated(Some(js)) {
+        STYLES_STALE.store(true, Ordering::Relaxed);
+    }
+    if !STYLES_STALE.load(Ordering::Relaxed) {
+        return;
+    }
+    if restyle(c) {
+        STYLES_STALE.store(false, Ordering::Relaxed);
+        LAYOUT_DIRTY.store(true, Ordering::Relaxed);
+    } else {
+        flush_layout(c);
+    }
 }
 
 pub fn flush_layout(c: &Ctx) {
@@ -687,6 +742,7 @@ pub fn run_one(
         anim,
         css_cache,
         styles: Cell::new(styles),
+        layout_styles: Cell::new(ptr::null_mut()),
         layout: Cell::new(ptr::null_mut()),
         focused: Cell::new(None),
         caret: Cell::new(0),
@@ -742,6 +798,7 @@ pub fn run_one(
         if !ctx.layout.get().is_null() {
             ffi::free_layout(ctx.layout.get());
         }
+        ctx.release_layout_styles();
         if !ctx.styles.get().is_null() {
             ffi::destroy_table(ctx.styles.get());
         }
@@ -884,6 +941,7 @@ pub fn run_one(
     if !ctx.layout.get().is_null() {
         ffi::free_layout(ctx.layout.get());
     }
+    ctx.release_layout_styles();
     if !ctx.styles.get().is_null() {
         ffi::destroy_table(ctx.styles.get());
     }
