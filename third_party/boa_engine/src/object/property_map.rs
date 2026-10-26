@@ -725,6 +725,13 @@ impl PropertyMap {
         false
     }
 
+    /// Adds the data property that `shape`, the shape an insert transition from the current one
+    /// leads to, places at the end of the storage, with `value`.
+    pub(crate) fn push_transition(&mut self, shape: Shape, value: JsValue) {
+        self.shape = shape;
+        self.storage.push(value);
+    }
+
     /// Remove the property with the given key from the [`PropertyMap`].
     pub fn remove(&mut self, key: &PropertyKey) -> bool {
         if let PropertyKey::Index(index) = key {

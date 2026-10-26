@@ -6,7 +6,7 @@ use boa_gc::GcRefCell;
 use boa_macros::{Finalize, Trace};
 
 use crate::{
-    JsString,
+    JsObject, JsString, JsValue,
     object::shape::{
         Shape, WeakShape,
         slot::{Slot, SlotAttributes},
@@ -47,6 +47,30 @@ mod tests;
 
 pub(crate) const PIC_CAPACITY: usize = 4;
 
+const ADD_CHAIN_CAPACITY: usize = 4;
+
+/// A prototype's shape, and its version, when an [`AddTransition`] was cached.
+#[derive(Clone, Debug, Trace, Finalize)]
+pub(crate) struct ChainLink {
+    shape: WeakShape,
+    #[unsafe_ignore_trace]
+    version: u32,
+}
+
+/// A cached property addition: an extensible object with the shape `from` and the internal
+/// methods at `methods` gains the property as a writable, enumerable and configurable data
+/// property at the end of its storage and takes the shape `to`, as long as the objects on its
+/// prototype chain still have the shapes and versions in `chain`, none of which had the
+/// property when it was cached.
+#[derive(Clone, Debug, Trace, Finalize)]
+pub(crate) struct AddTransition {
+    from: WeakShape,
+    to: WeakShape,
+    chain: ArrayVec<ChainLink, ADD_CHAIN_CAPACITY>,
+    #[unsafe_ignore_trace]
+    methods: usize,
+}
+
 /// A cached shape-to-slot mapping for a polymorphic inline cache.
 #[derive(Clone, Debug, Trace, Finalize)]
 pub(crate) struct CacheEntry {
@@ -74,6 +98,9 @@ pub(crate) struct InlineCache {
     /// Whether this access site has seen too many shapes and should no longer be cached.
     #[unsafe_ignore_trace]
     pub(crate) megamorphic: Cell<bool>,
+
+    /// The last property addition made through this site.
+    pub(crate) add: GcRefCell<Option<Box<AddTransition>>>,
 }
 
 impl fmt::Display for InlineCache {
@@ -97,7 +124,81 @@ impl InlineCache {
             name,
             entries: GcRefCell::new(ArrayVec::new()),
             megamorphic: Cell::new(false),
+            add: GcRefCell::new(None),
         }
+    }
+
+    /// Adds the property to `object` with `value` through the cached [`AddTransition`], when
+    /// it applies; `false` when it does not, having changed nothing.
+    ///
+    /// The prototype chain is identified by shapes: a shared shape never changes and fixes its
+    /// prototype, a unique shape counts its changes in its version, so equal shapes and versions
+    /// mean the same objects with the same properties, of which none has the property.
+    pub(crate) fn add_property(&self, object: &JsObject, value: &JsValue) -> bool {
+        let add = self.add.borrow();
+        let Some(add) = add.as_deref() else {
+            return false;
+        };
+        if std::ptr::from_ref(object.vtable()).addr() != add.methods {
+            return false;
+        }
+        let mut object = object.borrow_mut();
+        if !object.extensible || !add.from.points_to(object.shape()) {
+            return false;
+        }
+        let mut prototype = object.shape().prototype();
+        for link in &add.chain {
+            let Some(current) = prototype else {
+                return false;
+            };
+            let current = current.borrow();
+            if !link.shape.points_to(current.shape()) || current.shape().version() != link.version
+            {
+                return false;
+            }
+            prototype = current.prototype();
+        }
+        if prototype.is_some() {
+            return false;
+        }
+        let Some(to) = add.to.upgrade() else {
+            return false;
+        };
+        object.properties_mut().push_transition(to, value.clone());
+        true
+    }
+
+    /// Caches the addition of the property to `object`, whose shape was the one in
+    /// `looked_up` before, as a writable, enumerable and configurable data property by the
+    /// ordinary `[[Set]]` or `[[DefineOwnProperty]]`, with nothing on its prototype chain having
+    /// the property and every object on it using the ordinary internal methods.
+    pub(crate) fn set_add(&self, looked_up: &LookedUp, object: &JsObject) {
+        let from = &looked_up.shape;
+        let methods = std::ptr::from_ref(object.vtable()).addr();
+        let object = object.borrow();
+        let to = object.shape();
+        if !from.is_shared() || !to.is_shared() {
+            return;
+        }
+        let mut chain = ArrayVec::new();
+        let mut prototype = from.prototype();
+        while let Some(current) = prototype {
+            let current = current.borrow();
+            let link = ChainLink {
+                shape: current.shape().into(),
+                version: current.shape().version(),
+            };
+            if chain.try_push(link).is_err() {
+                return;
+            }
+            prototype = current.prototype();
+        }
+        *self.add.borrow_mut() = Some(Box::new(AddTransition {
+            from: from.into(),
+            to: to.into(),
+            chain,
+            methods,
+        }));
     }
 
     pub(crate) fn set(&self, shape: &Shape, slot: Slot) {

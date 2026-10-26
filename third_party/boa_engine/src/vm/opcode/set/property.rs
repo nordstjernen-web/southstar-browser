@@ -68,19 +68,24 @@ fn set_by_name(
         }
         return Ok(());
     }
-    let looked_up = LookedUp::new(object_borrowed.shape());
     drop(object_borrowed);
 
+    let own_receiver = receiver
+        .as_object()
+        .is_some_and(|receiver| JsObject::equals(&receiver, &object));
+    if own_receiver && ic.add_property(&object, &value) {
+        return Ok(());
+    }
+
+    let looked_up = LookedUp::new(object.borrow().shape());
     let name: PropertyKey = ic.name.clone().into();
 
-    if receiver
-        .as_object()
-        .is_some_and(|receiver| JsObject::equals(&receiver, &object))
-    {
+    if own_receiver {
         let mut slot = Slot::new();
         if set_new_ordinary_data_property(&object, &name, &value, &mut slot) {
+            let ic = &context.vm.frame().code_block.ic[usize::from(index)];
+            ic.set_add(&looked_up, &object);
             if slot.is_cacheable() {
-                let ic = &context.vm.frame().code_block.ic[usize::from(index)];
                 let object_borrowed = object.borrow();
                 ic.set_after_access(&looked_up, object_borrowed.shape(), slot);
             }

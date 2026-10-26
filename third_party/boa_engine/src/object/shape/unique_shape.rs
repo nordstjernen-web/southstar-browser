@@ -1,4 +1,7 @@
-use std::{cell::RefCell, fmt::Debug};
+use std::{
+    cell::{Cell, RefCell},
+    fmt::Debug,
+};
 
 use boa_gc::{Finalize, Gc, GcRefCell, Trace, WeakGc};
 
@@ -20,6 +23,10 @@ struct Inner {
 
     /// The prototype of the shape.
     prototype: GcRefCell<JsPrototype>,
+
+    /// Counts the changes made to the shape in place, which keep its address.
+    #[unsafe_ignore_trace]
+    version: Cell<u32>,
 }
 
 /// Represents a [`Shape`] that is not shared with any other object.
@@ -40,6 +47,7 @@ impl UniqueShape {
             inner: Gc::new(Inner {
                 property_table: RefCell::new(property_table),
                 prototype: GcRefCell::new(prototype),
+                version: Cell::new(0),
             }),
         }
     }
@@ -51,6 +59,17 @@ impl UniqueShape {
     ) {
         *self.inner.property_table.borrow_mut() = property_table;
         *self.inner.prototype.borrow_mut() = prototype;
+        self.bump_version();
+    }
+
+    /// The number of changes made to the shape in place: two objects with the same unique shape
+    /// and version have the same properties and prototype.
+    pub(crate) fn version(&self) -> u32 {
+        self.inner.version.get()
+    }
+
+    fn bump_version(&self) {
+        self.inner.version.set(self.inner.version.get().wrapping_add(1));
     }
 
     /// Get the prototype of the [`UniqueShape`].
@@ -67,6 +86,7 @@ impl UniqueShape {
     pub(crate) fn insert_property_transition(&self, key: TransitionKey) -> Self {
         let mut property_table = self.property_table().borrow_mut();
         property_table.insert(key.property_key, key.attributes);
+        self.bump_version();
         self.clone()
     }
 

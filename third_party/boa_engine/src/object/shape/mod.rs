@@ -96,6 +96,16 @@ impl Shape {
         matches!(self.inner, Inner::Unique(_))
     }
 
+    /// The number of changes made in place to a unique shape, `0` for a shared shape, which
+    /// never changes: two objects whose shapes have the same address and version have the same
+    /// properties and prototype.
+    pub(crate) fn version(&self) -> u32 {
+        match &self.inner {
+            Inner::Shared(_) => 0,
+            Inner::Unique(shape) => shape.version(),
+        }
+    }
+
     pub(crate) const fn as_unique(&self) -> Option<&UniqueShape> {
         if let Inner::Unique(shape) = &self.inner {
             return Some(shape);
