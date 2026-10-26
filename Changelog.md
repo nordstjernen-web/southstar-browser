@@ -16,6 +16,13 @@ Southstar Browser 1.0.2-dev:
   database, icon themes, spell-checking dictionaries and GPU shader
   caches) besides its own `southstar` directories. Other sandboxed
   processes keep the wider rules.
+* Security: the audio helper's downloads of `<audio>` sources and
+  standalone `.mp3` files go through the configured proxy again. The shell
+  passes the proxy settings in `http_proxy`/`https_proxy`/`all_proxy`/
+  `no_proxy`, which libcurl used to read; since the move to `rust/http`
+  nothing read them, so these requests connected directly and revealed the
+  user's address even with a proxy or Tor configured. A proxy setting that
+  does not parse now fails the download instead of going direct.
 * Packaging: an Arch Linux package, `southstar-browser`, in
   `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
   in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and

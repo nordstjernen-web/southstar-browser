@@ -1,4 +1,4 @@
-//! Southstar — unit tests for the HTTP client's TLS key exchange: the X25519MLKEM768 hybrid and the configured group list.
+//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list) and its proxy choice from the environment.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,6 +8,7 @@ use ring::rand::SystemRandom;
 use rustls::NamedGroup;
 use rustls::crypto::SupportedKxGroup;
 
+use crate::proxy;
 use crate::x25519_mlkem768::{CIPHERTEXT_LEN, SEED_LEN, X25519_LEN, X25519MlKem768};
 
 const ENCAPSULATION_KEY_LEN: usize = 1184;
@@ -138,4 +139,72 @@ fn group_list_follows_the_configured_names() {
     );
     assert_eq!(names(b"")[0], NamedGroup::X25519MLKEM768);
     assert_eq!(names(b"bogus")[0], NamedGroup::X25519MLKEM768);
+}
+
+fn env<'a>(vars: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<Vec<u8>> + 'a {
+    move |name| {
+        vars.iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| v.as_bytes().to_vec())
+    }
+}
+
+fn proxy_host(url: &str, host: &str, vars: &[(&str, &str)]) -> Option<String> {
+    proxy::from_env(url.as_bytes(), host, &env(vars)).map(|p| format!("{}:{}", p.host, p.port))
+}
+
+#[test]
+fn downloads_use_the_proxy_for_their_scheme() {
+    let vars = [
+        ("http_proxy", "http://plain.example:8080"),
+        ("https_proxy", "http://secure.example:3128"),
+    ];
+    assert_eq!(
+        proxy_host("https://a.example/x.mp3", "a.example", &vars).as_deref(),
+        Some("secure.example:3128")
+    );
+    assert_eq!(
+        proxy_host("http://a.example/x.mp3", "a.example", &vars).as_deref(),
+        Some("plain.example:8080")
+    );
+    let only_http = [("http_proxy", "http://plain.example:8080")];
+    assert_eq!(
+        proxy_host("https://a.example/x.mp3", "a.example", &only_http).as_deref(),
+        Some("plain.example:8080")
+    );
+    let all = [("all_proxy", "socks5h://127.0.0.1:9050")];
+    assert_eq!(
+        proxy_host("https://a.example/x.mp3", "a.example", &all).as_deref(),
+        Some("127.0.0.1:9050")
+    );
+    assert_eq!(
+        proxy_host("https://a.example/x.mp3", "a.example", &[]),
+        None
+    );
+}
+
+#[test]
+fn no_proxy_exempts_hosts() {
+    let vars = [
+        ("all_proxy", "socks5h://127.0.0.1:9050"),
+        ("no_proxy", "intranet.example"),
+    ];
+    assert_eq!(
+        proxy_host("https://intranet.example/a.mp3", "intranet.example", &vars),
+        None
+    );
+    assert!(proxy_host("https://other.example/a.mp3", "other.example", &vars).is_some());
+}
+
+#[test]
+fn an_unparsable_proxy_fails_closed() {
+    assert!(proxy::env_valid(&env(&[(
+        "http_proxy",
+        "http://p.example:80"
+    )])));
+    assert!(proxy::env_valid(&env(&[])));
+    assert!(!proxy::env_valid(&env(&[(
+        "all_proxy",
+        "bogus://p.example"
+    )])));
 }
