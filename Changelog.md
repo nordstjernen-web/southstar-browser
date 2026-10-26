@@ -90,6 +90,13 @@ Southstar Browser 1.0.2-dev:
   while a pixel pack or unpack buffer is bound, and WebGL 2 enables
   `PRIMITIVE_RESTART_FIXED_INDEX` and skips restart indices in the
   vertex-range check only while GL actually treats them as restarts.
+* The DOMExceptions thrown by `CSS.registerProperty()`, `CSSStyleDeclaration`,
+  the custom element registry, `TreeWalker`, `history`, `location`,
+  `postMessage()`, the navigation API, `navigator` and IndexedDB are real
+  `DOMException` objects with the right `code` and prototype, built from the
+  realm's `DOMException` interface, instead of plain `Error`s carrying only a
+  `name`. WPT `register-property-syntax-parsing.html` goes from 129 to 246
+  of 246 subtests (`css/css-properties-values-api` +119, `css/cssom` +9).
 * JavaScript: `JSON.parse` reads the string with a JSON parser of its own
   (`builtins/json/parse.rs` in the Boa fork) that builds the values
   directly. It used to validate the text with `serde_json`, then parse and

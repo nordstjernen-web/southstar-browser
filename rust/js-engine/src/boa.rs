@@ -823,6 +823,17 @@ impl Scope<'_> {
     }
 
     pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
+        let global = self.global();
+        if let Ok(interface) = self.get(&global, "DOMException")
+            && interface.is_object()
+        {
+            let args = [self.string(message), self.string(name)];
+            if let Ok(error) = self.construct(&interface, &args)
+                && error.is_object()
+            {
+                return error;
+            }
+        }
         let error = JsNativeError::error()
             .with_message(message.to_owned())
             .into_opaque(self.cx());
