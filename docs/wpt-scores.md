@@ -227,6 +227,10 @@ per file.
 | `Scope::dom_exception` builds real DOMExceptions | `css/css-properties-values-api` | +119 (`register-property-syntax-parsing.html` 129 → 246/246) |
 | | `css/cssom` | +9 |
 | `calc-size()` and `interpolate-size: allow-keywords` | `css/css-values/calc-size` | 1253 → ~2200 (`calc-size-width-interpolation.html` 0 → 732/732) |
+| RegExp matcher cache; `--wpt` turns testharness output off (as wptrunner does) | `css/css-color` | +3735 (`color-computed-hsl.html` 0 → 3735/3753) |
+| | `css/css-values` | +1847 (`calc-size-height-interpolation.html` 0 → 1115/1156, `calc-size-width-interpolation.html` 0 → 732/732 now within the timeout) |
+| | `css/selectors` | +910 (`attribute-case/semantics.html` 0 → 910/955) |
+| | `css/css-cascade` | +329 (`all-prop-revert-layer.html` 0 → 329/345 within the timeout) |
 
 ## Top 10 improvements — 2026-10-26
 

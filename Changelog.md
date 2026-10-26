@@ -9,6 +9,20 @@ Southstar Browser 1.0.2-dev:
   makes of its separator no longer parse and compile the pattern each
   time: a literal `test()` in a loop runs 4–10 times faster, `new RegExp`
   about 7 times and `split` by a regular expression 2–3 times.
+* `--wpt` runs testharness.js with its output disabled, as wptrunner's
+  integration does: asserts no longer record a stack trace and a
+  formatted copy of their arguments, and the results table is not built.
+  Together with the regular expression cache this halves the time of the
+  largest computed-value files (`color-computed-hsl.html`, 3,753
+  subtests, 26.7 s → 13.3 s on a loaded box) and lets five files that
+  used to exceed the runner's timeout report their ~6,300 subtests.
+* Firing an event at a non-node target (an `AbortSignal`, `XMLHttpRequest`,
+  `FileReader`…) with no listeners and no `on…` handler no longer builds
+  the event object: `AbortController.abort()` on an unobserved signal,
+  which testharness.js does for every test, is that much cheaper.
+* Windows: the screen size behind `outerWidth`/`outerHeight` and
+  `window.screen` is measured at most once a second instead of on every
+  relayout (`SystemParametersInfo` was 6% of a style-heavy test's time).
 * JavaScript: calls to built-in functions no longer allocate a vector for
   their arguments, and reading a variable captured by a closure skips the
   generic environment search when no `with` or `eval` is involved: a loop

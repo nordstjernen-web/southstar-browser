@@ -78,6 +78,9 @@ pub fn nsr_target_dispatch_with_event(scope: &mut Scope<'_>, obj: &Value, kind: 
 
 #[unsafe(no_mangle)]
 pub fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str) {
+    if !crate::target::has_handlers(scope, obj, kind) {
+        return;
+    }
     let ev = crate::target::make_event(scope, obj, kind);
     crate::target::dispatch_with_event(scope, obj, kind, &ev);
 }
