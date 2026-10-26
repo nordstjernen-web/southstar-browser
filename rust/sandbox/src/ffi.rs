@@ -387,8 +387,24 @@ mod linux {
         let config = glib_dir(glib::g_get_user_config_dir);
         let data = glib_dir(glib::g_get_user_data_dir);
         let cache = glib_dir(glib::g_get_user_cache_dir);
-        for dir in [&config, &data, &cache].into_iter().flatten() {
-            rules.allow(fs_read, dir);
+        if renderer {
+            let readable = [
+                (&config, &crate::RENDERER_CONFIG_SUBDIRS[..]),
+                (&data, &crate::RENDERER_DATA_SUBDIRS[..]),
+                (&cache, &crate::RENDERER_CACHE_SUBDIRS[..]),
+            ];
+            for (base, subdirs) in readable {
+                let Some(base) = base else {
+                    continue;
+                };
+                for sub in subdirs {
+                    rules.allow(fs_read, &build_filename(&[base, sub.as_bytes()]));
+                }
+            }
+        } else {
+            for dir in [&config, &data, &cache].into_iter().flatten() {
+                rules.allow(fs_read, dir);
+            }
         }
         if let Some(runtime) = glib_dir(super::g_get_user_runtime_dir) {
             if renderer {

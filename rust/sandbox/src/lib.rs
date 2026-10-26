@@ -153,6 +153,17 @@ pub const SYSTEM_READ_DIRS: [&str; 10] = [
     "/tmp/.ICE-unix",
 ];
 
+pub const RENDERER_CONFIG_SUBDIRS: [&str; 3] = ["fontconfig", "enchant", "gtk-4.0"];
+
+pub const RENDERER_DATA_SUBDIRS: [&str; 5] = ["fonts", "mime", "icons", "themes", "enchant"];
+
+pub const RENDERER_CACHE_SUBDIRS: [&str; 4] = [
+    "fontconfig",
+    "mesa_shader_cache",
+    "mesa_shader_cache_db",
+    "nvidia",
+];
+
 pub const HOME_READ_SUBDIRS: [&str; 4] = [".fonts", ".fontconfig", ".icons", ".themes"];
 
 pub const DEV_DATA_DIRS: [&str; 4] = [
