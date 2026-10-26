@@ -3633,6 +3633,7 @@ name = "southstar-text"
 version = "1.0.2-dev"
 dependencies = [
  "harfrust",
+ "png",
  "read-fonts",
  "skrifa",
  "southstar-bidi",

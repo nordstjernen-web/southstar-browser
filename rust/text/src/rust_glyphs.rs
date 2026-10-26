@@ -14,7 +14,8 @@ use skrifa::outline::{
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::ffi::cairo::{
-    CairoContext, CairoMatrix, FontExtents, FontOptions, ScaledFont, TextExtents, UserFontHandler,
+    CairoContext, CairoMatrix, ColorForeground, FontExtents, FontOptions, ScaledFont, TextExtents,
+    UserFontHandler,
 };
 
 const EMBOLDEN_DELTA: i64 = 0x0AAA;
@@ -78,7 +79,7 @@ pub(crate) struct Outline {
 }
 
 impl Outline {
-    fn end_contour(&mut self) {
+    pub(crate) fn end_contour(&mut self) {
         let start = self.ends.last().copied().unwrap_or(0);
         if self.points.len() > start {
             self.ends.push(self.points.len());
@@ -150,7 +151,15 @@ impl Outline {
     }
 
     pub(crate) fn draw(&self, cr: &CairoContext, scale: f64) {
-        let at = |&(x, y, _): &(f64, f64, PointKind)| (x * scale, -y * scale);
+        self.draw_scaled(cr, scale, -scale);
+    }
+
+    pub(crate) fn draw_font_units(&self, cr: &CairoContext) {
+        self.draw_scaled(cr, 1., 1.);
+    }
+
+    fn draw_scaled(&self, cr: &CairoContext, x_scale: f64, y_scale: f64) {
+        let at = |&(x, y, _): &(f64, f64, PointKind)| (x * x_scale, y * y_scale);
         for range in self.contours() {
             let contour = &self.points[range];
             let Some(first) = contour.first() else {
@@ -467,6 +476,35 @@ impl GlyphSource {
         Some((outline, extents))
     }
 
+    pub(crate) fn has_color(&self) -> bool {
+        self.font().is_some_and(|font| {
+            font.colr().is_ok()
+                || font.cbdt().is_ok()
+                || font.sbix().is_ok_and(|sbix| sbix.version() != 0)
+        })
+    }
+
+    pub(crate) fn is_color_glyph(&self, glyph: u32) -> bool {
+        self.has_color()
+            && self
+                .font()
+                .is_some_and(|font| crate::rust_color::has_color_glyph(&font, glyph))
+    }
+
+    fn paint_color(&self, cr: &CairoContext, glyph: u32, foreground: &ColorForeground) -> bool {
+        let Some(font) = self.font() else {
+            return false;
+        };
+        crate::rust_color::paint(
+            cr,
+            &font,
+            self.location(),
+            glyph,
+            self.settings.ppem,
+            foreground,
+        )
+    }
+
     pub(crate) fn font_extents(&self) -> FontExtents {
         let Some(font) = self.font() else {
             return FontExtents::default();
@@ -555,6 +593,32 @@ impl UserFontHandler for OutlineRenderer {
             cr.fill();
         }
         true
+    }
+
+    fn has_color(&self) -> bool {
+        self.source.has_color()
+    }
+
+    fn render_color_glyph(
+        &self,
+        glyph: u64,
+        cr: &CairoContext,
+        extents: &mut TextExtents,
+        foreground: &ColorForeground,
+    ) -> Option<bool> {
+        let glyph = u32::try_from(glyph).ok()?;
+        if !self.source.is_color_glyph(glyph) {
+            return None;
+        }
+        let advance = self.source.em_extents(glyph);
+        *extents = TextExtents {
+            x_advance: advance.x_advance,
+            y_advance: advance.y_advance,
+            ..TextExtents::default()
+        };
+        self.source
+            .paint_color(cr, glyph, foreground)
+            .then_some(true)
     }
 
     fn unicode_to_glyph(&self, unicode: u64) -> Option<u64> {

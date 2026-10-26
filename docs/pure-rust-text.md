@@ -10,8 +10,9 @@ HarfBuzz 14.2 does, and is drawn from `skrifa` outlines through a cairo user
 font (see "Drawing" below), so neither FreeType nor HarfBuzz reads it at render
 time. HarfRust matched HarfBuzz exactly in 97% of a 22,000-case corpus, with
 no glyph or cluster differences. Step 4 is done: `rust/bidi` replaced
-FriBiDi and `rust/unicode` GLib's Unicode data. Color glyphs and indexing
-web fonts without FreeType are not done yet.
+FriBiDi and `rust/unicode` GLib's Unicode data. Color glyphs (COLR v0 and
+v1, CBDT and sbix) are painted in Rust too (see "Color glyphs"). Indexing web
+fonts without FreeType is not done yet.
 
 This note describes a possible later step for Southstar's text stack:
 replacing the C libraries under text layout — HarfBuzz, FreeType,
@@ -212,6 +213,30 @@ paths through a user font:
 On the render tests with every font on the Rust path the pixel differences
 are anti-aliasing only; on a page of Google web fonts, GOV.UK and MDN they
 are under 0.3% of the pixels and invisible at normal size.
+
+## Color glyphs
+
+`rust/text/src/rust_color.rs` paints color glyphs of Rust-backed fonts from
+the cairo user font's color callback:
+
+- COLR v0 and v1 through `skrifa`'s paint traversal: transforms, glyph and
+  box clips, solid fills from CPAL palette 0 or the text color (cairo's
+  foreground marker, so cached glyphs follow the color), linear and radial
+  gradients as cairo patterns (radial color lines truncated where a radius
+  would turn negative), sweep gradients as mesh patterns of 2° slices, and
+  layers composited with the cairo operator of each composite mode. A paint
+  graph `skrifa` rejects (a cycle, too deep) leaves what was painted and
+  balances the cairo state.
+- CBDT and sbix PNG strikes decoded by the `png` crate (already a dependency
+  of `rust/raster`) under a 4096-pixel side limit, and uncompressed BGRA
+  strikes, placed by their bearings and scaled from the strike's ppem.
+- A glyph that is not a color glyph, or whose bitmap does not decode, falls
+  back to its outline. SVG-in-OpenType glyphs are drawn from their outlines.
+
+Noto Color Emoji (CBDT and COLR v1), Segoe UI Emoji and the COLR v1 and sbix
+test fonts of googlefonts/color-fonts render within anti-aliasing of
+cairo-ft. The COLR v1 test glyphs that crashed the renderer with a stack
+overflow in the cairo-ft path render on the Rust path.
 
 ## Decision
 

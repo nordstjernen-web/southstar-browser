@@ -32,6 +32,8 @@ pub mod matrix;
 pub mod metrics;
 pub mod render;
 #[cfg(feature = "rust-shaper")]
+mod rust_color;
+#[cfg(feature = "rust-shaper")]
 mod rust_glyphs;
 #[cfg(feature = "rust-shaper")]
 pub mod rust_shaper;
