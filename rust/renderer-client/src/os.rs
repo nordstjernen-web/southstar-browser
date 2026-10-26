@@ -408,6 +408,18 @@ mod sys {
     )))]
     const O_CLOEXEC: c_int = 0;
     const EINVAL: i32 = 22;
+    #[cfg(target_os = "linux")]
+    const MFD_CLOEXEC: c_uint = 1;
+    #[cfg(target_os = "linux")]
+    const MFD_ALLOW_SEALING: c_uint = 2;
+    #[cfg(target_os = "linux")]
+    const F_ADD_SEALS: c_int = 1033;
+    #[cfg(target_os = "linux")]
+    const F_SEAL_SEAL: c_int = 1;
+    #[cfg(target_os = "linux")]
+    const F_SEAL_SHRINK: c_int = 2;
+    #[cfg(target_os = "linux")]
+    const F_SEAL_GROW: c_int = 4;
 
     unsafe extern "C" {
         fn fork() -> c_int;
@@ -473,7 +485,8 @@ mod sys {
     fn open_fb_fd(size: usize) -> Option<c_int> {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         #[cfg(target_os = "linux")]
-        let mut fd = unsafe { memfd_create(c"nshttp-fb".as_ptr(), 1) };
+        let mut fd =
+            unsafe { memfd_create(c"nshttp-fb".as_ptr(), MFD_CLOEXEC | MFD_ALLOW_SEALING) };
         #[cfg(not(target_os = "linux"))]
         let mut fd = -1;
         if fd < 0 {
@@ -504,7 +517,16 @@ mod sys {
             unsafe { close(fd) };
             return None;
         }
+        #[cfg(target_os = "linux")]
+        seal_size(fd);
         Some(fd)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn seal_size(fd: c_int) {
+        let seals = F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_GROW;
+        // SAFETY: fd is the open memfd just created and sized; F_ADD_SEALS takes an int argument and touches no memory.
+        unsafe { fcntl(fd, F_ADD_SEALS, seals) };
     }
 
     fn close_inherited_fds(max_fd: c_long) {

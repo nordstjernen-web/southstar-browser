@@ -927,8 +927,9 @@ impl Media {
                     frame_drawn = true;
                     self.fallback_clear();
                     if pick.sequence != self.sequence {
-                        if self.sequence != 0 && pick.sequence > self.sequence + 1 {
-                            self.dropped += u64::from(pick.sequence - self.sequence - 1);
+                        let gap = pick.sequence.wrapping_sub(self.sequence);
+                        if self.sequence != 0 && gap > 1 && gap < u32::MAX / 2 {
+                            self.dropped += u64::from(gap - 1);
                         }
                         self.sequence = pick.sequence;
                         self.slot = pick.slot;
