@@ -90,6 +90,7 @@ pub(crate) fn reset(js: Js) {
 }
 
 pub(crate) fn teardown(js: Js) {
+    camera::release_page_mic(js.key());
     let page = PAGES
         .try_with(|pages| pages.borrow_mut().remove(&js.key()))
         .ok()

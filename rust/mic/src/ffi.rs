@@ -168,18 +168,25 @@ pub fn release() {
     sdl::release();
 }
 
+const MAX_TIME_DOMAIN: usize = 32768;
+const MAX_FREQUENCY_BINS: usize = 16384;
+
 pub fn fill_time_domain(dst: &mut [u8]) {
+    let (head, rest) = dst.split_at_mut(dst.len().min(MAX_TIME_DOMAIN));
+    rest.fill(128);
     if sdl::active() {
-        sdl::time_domain(dst);
+        sdl::time_domain(head);
     } else {
-        dst.fill(128);
+        head.fill(128);
     }
 }
 
 pub fn fill_frequency(dst: &mut [u8]) {
+    let (head, rest) = dst.split_at_mut(dst.len().min(MAX_FREQUENCY_BINS));
+    rest.fill(0);
     if sdl::active() {
-        sdl::frequency(dst);
+        sdl::frequency(head);
     } else {
-        dst.fill(0);
+        head.fill(0);
     }
 }
