@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 use crate::hpack_tables::{HUFFMAN_CODES, STATIC_TABLE};
 
 const ENTRY_OVERHEAD: usize = 32;
+pub const MAX_HEADER_LIST: usize = 1024 * 1024;
 const EOS: u16 = 256;
 const LEAF: u16 = 0x8000;
 
@@ -109,6 +110,14 @@ fn read_int(input: &[u8], pos: &mut usize, prefix_bits: u32) -> Result<usize, Er
     }
 }
 
+fn charge(list_size: usize, name: &[u8], value: &[u8]) -> Result<usize, Error> {
+    let total = list_size + name.len() + value.len() + ENTRY_OVERHEAD;
+    if total > MAX_HEADER_LIST {
+        return Err(Error);
+    }
+    Ok(total)
+}
+
 fn read_string(input: &[u8], pos: &mut usize) -> Result<Vec<u8>, Error> {
     let huffman = input.get(*pos).ok_or(Error)? & 0x80 != 0;
     let len = read_int(input, pos, 7)?;
@@ -175,11 +184,13 @@ impl Decoder {
         let mut headers = Vec::new();
         let mut pos = 0;
         let mut size_updates_allowed = true;
+        let mut list_size = 0;
         while pos < block.len() {
             let byte = block[pos];
             if byte & 0x80 != 0 {
                 let index = read_int(block, &mut pos, 7)?;
                 let (n, v) = self.lookup(index)?;
+                list_size = charge(list_size, n, v)?;
                 headers.push((n.to_vec(), v.to_vec()));
                 size_updates_allowed = false;
             } else if byte & 0xc0 == 0x40 {
@@ -190,6 +201,7 @@ impl Decoder {
                     self.lookup(index)?.0.to_vec()
                 };
                 let value = read_string(block, &mut pos)?;
+                list_size = charge(list_size, &name, &value)?;
                 self.insert(name.clone(), value.clone());
                 headers.push((name, value));
                 size_updates_allowed = false;
@@ -211,6 +223,7 @@ impl Decoder {
                     self.lookup(index)?.0.to_vec()
                 };
                 let value = read_string(block, &mut pos)?;
+                list_size = charge(list_size, &name, &value)?;
                 headers.push((name, value));
                 size_updates_allowed = false;
             }

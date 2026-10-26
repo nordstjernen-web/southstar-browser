@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Security: the HTTP/2 HPACK decoder caps a decoded header list at 1 MiB.
+  Indexed references to a large dynamic-table entry cost one byte each, so
+  a server could expand a 2 MiB header block into gigabytes and exhaust
+  memory before the 1 MiB response-header limit was checked. HTTP/2
+  response fields containing CR, LF or NUL are now a protocol error
+  (RFC 9113 section 8.2.1) instead of being passed on inside header lines.
 * Packaging: an Arch Linux package, `southstar-browser`, in
   `packaging/arch/` (PKGBUILD and .SRCINFO, ready for the AUR), documented
   in `docs/Arch.md`. It builds release 1.0.1 in a clean Arch container and
