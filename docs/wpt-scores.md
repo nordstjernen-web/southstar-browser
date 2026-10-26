@@ -220,6 +220,7 @@ per file.
 |--------|------|----------------|
 | Gap decorations: `row-rule-*`, rule lists with `repeat()`, `rule-*`, `*-rule-inset-*` | `css/css-gaps/parsing` | 354 → 1750/1750 |
 | | `css/css-multicol/parsing` | +7 |
+| Non-legacy gradient stop colours keep their space | `css/css-images/parsing/gradient-interpolation-method-computed.html` | 466 → 932/932 |
 
 ## Top 10 improvements — 2026-10-14
 
