@@ -75,6 +75,17 @@ the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
 There are no Southstar binaries yet — build from source (below). The
 per-platform build and packaging notes are in [docs/](docs/README.md).
 
+npm builds it from source for you:
+
+```sh
+npm install -g southstar-browser
+southstar https://example.com
+```
+
+The package builds the release on Linux, macOS, the BSDs and Windows (with
+MSYS2), and first names any build dependency that is missing, Rust included.
+See [npm/README.md](npm/README.md).
+
 ## Browser features
 
 - **HTML/CSS** — HTML is parsed by Southstar's own `rust/html5`; the CSS engine
