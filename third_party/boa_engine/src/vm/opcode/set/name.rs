@@ -7,7 +7,7 @@ use crate::{
     property::PropertyKey,
     vm::{
         LookedUp,
-        opcode::{IndexOperand, Operation, RegisterOperand},
+        opcode::{IndexOperand, Operation, RegisterOperand, get::name::declarative_binding},
     },
 };
 
@@ -56,6 +56,12 @@ impl SetName {
         context: &mut Context,
     ) -> JsResult<()> {
         let value = context.vm.get_register(value.into()).clone();
+        if let Some((env, binding_index)) = declarative_binding(index, context)
+            && env.get(binding_index).is_some()
+        {
+            env.set(binding_index, value);
+            return Ok(());
+        }
         let code_block = context.vm.frame().code_block();
         let mut binding_locator = code_block.bindings[usize::from(index)].clone();
         let strict = context.vm.frame().strict();
@@ -64,7 +70,7 @@ impl SetName {
 
         verify_initialized(&binding_locator, context)?;
 
-        context.set_binding(&binding_locator, value.clone(), strict)?;
+        context.set_binding(&binding_locator, value, strict)?;
 
         Ok(())
     }

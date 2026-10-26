@@ -73,7 +73,7 @@ impl Intrinsics {
 #[derive(Debug, Trace, Finalize, Clone)]
 pub struct StandardConstructor {
     constructor: JsFunction,
-    prototype: JsObject,
+    pub(crate) prototype: JsObject,
 }
 
 impl Default for StandardConstructor {

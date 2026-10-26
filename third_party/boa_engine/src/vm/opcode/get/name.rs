@@ -1,8 +1,10 @@
 use boa_ast::scope::{BindingLocator, BindingLocatorScope};
 
+use boa_gc::Gc;
+
 use crate::{
     Context, JsResult, JsValue,
-    environments::Environment,
+    environments::{DeclarativeEnvironment, Environment},
     error::JsNativeError,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
@@ -46,6 +48,18 @@ impl GetName {
 /// the compiled locator), read without copying the locator or walking the environments twice.
 /// `None` sends the caller down the full lookup, which also reports uninitialized bindings.
 fn get_declarative_binding(index: IndexOperand, context: &Context) -> Option<JsValue> {
+    let (env, binding_index) = declarative_binding(index, context)?;
+    env.get(binding_index)
+}
+
+/// The declarative environment and binding index of the binding at `index` when
+/// `find_runtime_binding` would keep its compiled locator: the binding lives in a declarative
+/// environment, is not deleted, and the innermost declarative environment is neither inside a
+/// `with` nor poisoned by a direct `eval`.
+pub(crate) fn declarative_binding(
+    index: IndexOperand,
+    context: &Context,
+) -> Option<(&Gc<DeclarativeEnvironment>, u32)> {
     let frame = context.vm.frame();
     let locator = &frame.code_block.bindings[usize::from(index)];
     let BindingLocatorScope::Stack(environment) = locator.scope() else {
@@ -60,10 +74,11 @@ fn get_declarative_binding(index: IndexOperand, context: &Context) -> Option<JsV
     let Environment::Declarative(env) = frame.environments.get(environment as usize)? else {
         return None;
     };
-    if env.is_deleted_binding(locator.binding_index()) {
+    let binding_index = locator.binding_index();
+    if env.is_deleted_binding(binding_index) {
         return None;
     }
-    env.get(locator.binding_index())
+    Some((env, binding_index))
 }
 
 impl Operation for GetName {

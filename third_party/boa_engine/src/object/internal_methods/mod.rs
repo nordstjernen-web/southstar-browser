@@ -16,6 +16,7 @@ use crate::{
     context::intrinsics::{StandardConstructor, StandardConstructors},
     object::JsObject,
     property::{DescriptorKind, PropertyDescriptor, PropertyKey},
+    symbol::JsSymbol,
     value::JsValue,
     vm::source_info::NativeSourceInfo,
 };
@@ -826,6 +827,34 @@ fn has_ordinary_property_methods(obj: &JsObject) -> bool {
         methods.__define_own_property__,
         ORDINARY_INTERNAL_METHODS.__define_own_property__,
     ) && std::ptr::fn_addr_eq(methods.__set__, ORDINARY_INTERNAL_METHODS.__set__)
+}
+
+/// Whether `GetMethod(obj, @@hasInstance)` is certain to return the realm's intrinsic
+/// `Function.prototype[@@hasInstance]`: `obj` has the ordinary `[[GetOwnProperty]]` and
+/// `[[GetPrototypeOf]]`, no own `@@hasInstance`, and `Function.prototype` as its prototype,
+/// whose `@@hasInstance` is neither writable nor configurable. The method then comes down to
+/// `OrdinaryHasInstance(obj, V)`.
+pub(crate) fn has_intrinsic_has_instance(obj: &JsObject, context: &Context) -> bool {
+    let methods = obj.vtable();
+    if !std::ptr::fn_addr_eq(
+        methods.__get_own_property__,
+        ORDINARY_INTERNAL_METHODS.__get_own_property__,
+    ) || !std::ptr::fn_addr_eq(
+        methods.__get_prototype_of__,
+        ORDINARY_INTERNAL_METHODS.__get_prototype_of__,
+    ) {
+        return false;
+    }
+    let object = obj.borrow();
+    let function_prototype = &context.intrinsics().constructors().function().prototype;
+    object
+        .properties()
+        .shape
+        .prototype()
+        .is_some_and(|prototype| JsObject::equals(&prototype, function_prototype))
+        && !object
+            .properties()
+            .contains_key(&PropertyKey::Symbol(JsSymbol::has_instance()))
 }
 
 /// `CreateDataProperty(obj, key, value)` for a string or symbol `key` that `obj`, an extensible

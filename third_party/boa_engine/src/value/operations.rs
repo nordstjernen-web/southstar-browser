@@ -5,6 +5,7 @@ use crate::{
         number::{f64_to_int32, f64_to_uint32},
     },
     error::JsNativeError,
+    object::internal_methods::has_intrinsic_has_instance,
     value::{JsSymbol, Numeric, PreferredType},
 };
 
@@ -467,6 +468,13 @@ impl JsValue {
                     target.type_of()
                 ))
                 .into());
+        }
+
+        if target
+            .as_object()
+            .is_some_and(|object| has_intrinsic_has_instance(&object, context))
+        {
+            return Self::ordinary_has_instance(target, self, context);
         }
 
         // 2. Let instOfHandler be ? GetMethod(target, @@hasInstance).
