@@ -164,35 +164,34 @@ fn varied_advance_units(default: F48Dot16, varied: F48Dot16) -> i32 {
     ((default.to_bits() >> 16) + rounded_delta) as i32
 }
 
+type FileBytes = Arc<dyn AsRef<[u8]> + Send + Sync>;
+
 pub(crate) fn file_blob(path: &str) -> Option<Blob> {
-    static FILES: OnceLock<Mutex<HashMap<String, Option<Blob>>>> = OnceLock::new();
+    static FILES: OnceLock<Mutex<HashMap<String, std::sync::Weak<Vec<u8>>>>> = OnceLock::new();
     let files = FILES.get_or_init(Default::default);
-    if let Some(blob) = lock(files).get(path) {
-        return blob.clone();
-    }
-    let blob = std::fs::read(path).ok().map(Blob::from);
-    lock(files).insert(path.to_owned(), blob.clone());
-    blob
+    let cached = lock(files).get(path).and_then(std::sync::Weak::upgrade);
+    let bytes = match cached {
+        Some(bytes) => bytes,
+        None => {
+            let bytes = Arc::new(std::fs::read(path).ok()?);
+            let mut files = lock(files);
+            files.retain(|_, weak| weak.strong_count() > 0);
+            files.insert(path.to_owned(), Arc::downgrade(&bytes));
+            bytes
+        }
+    };
+    let shared: FileBytes = bytes;
+    Some(Blob::from(shared))
 }
 
 fn load_face(path: &str, index: u32) -> Option<harfrust::Font> {
-    type Faces = HashMap<(String, u32), Option<harfrust::Font>>;
-    static FACES: OnceLock<Mutex<Faces>> = OnceLock::new();
-    let faces = FACES.get_or_init(Default::default);
-    let key = (path.to_owned(), index);
-    if let Some(face) = lock(faces).get(&key) {
-        return face.clone();
-    }
-    let face = file_blob(path).and_then(|blob| {
-        let is_collection = blob.as_ref().starts_with(b"ttcf");
-        harfrust::Font::new(blob.clone(), index).or_else(|| {
-            (index != 0 && !is_collection)
-                .then(|| harfrust::Font::new(blob, 0))
-                .flatten()
-        })
-    });
-    lock(faces).insert(key, face.clone());
-    face
+    let blob = file_blob(path)?;
+    let is_collection = blob.as_ref().starts_with(b"ttcf");
+    harfrust::Font::new(blob.clone(), index).or_else(|| {
+        (index != 0 && !is_collection)
+            .then(|| harfrust::Font::new(blob, 0))
+            .flatten()
+    })
 }
 
 pub fn shaper_face(font: &Font) -> Option<Arc<ShaperFace>> {

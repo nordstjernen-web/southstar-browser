@@ -393,8 +393,11 @@ pub(crate) fn fetched(url: &[u8], body: Option<&[u8]>) {
         let converted = convert(body);
         if let Some(keys) = &keys {
             match &converted {
-                Some((bytes, extension)) => install(keys, bytes, Some(extension)),
-                None => install(keys, body, None),
+                Some((bytes, extension)) if southstar_text::accepts_web_font(bytes) => {
+                    install(keys, bytes, Some(extension));
+                }
+                None if southstar_text::accepts_web_font(body) => install(keys, body, None),
+                _ => {}
             }
         }
     }

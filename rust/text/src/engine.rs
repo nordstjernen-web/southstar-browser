@@ -37,8 +37,32 @@ pub fn rust_fonts() -> RustFonts {
         Ok("web") => RustFonts::Web,
         Ok("off") => RustFonts::Off,
         _ if std::env::var("NS_TEXT_SHAPER").as_deref() == Ok("harfbuzz") => RustFonts::Off,
-        _ => RustFonts::All,
+        _ => RustFonts::Web,
     })
+}
+
+#[cfg(feature = "rust-shaper")]
+pub fn accepts_web_font(data: &[u8]) -> bool {
+    use read_fonts::{FileRef, TableProvider};
+    let Ok(file) = FileRef::new(data) else {
+        return false;
+    };
+    let mut fonts = file.fonts().peekable();
+    fonts.peek().is_some()
+        && fonts.all(|font| {
+            font.is_ok_and(|font| {
+                font.head().is_ok()
+                    && font.maxp().is_ok()
+                    && font.cmap().is_ok()
+                    && font.hhea().is_ok()
+                    && font.hmtx().is_ok()
+            })
+        })
+}
+
+#[cfg(not(feature = "rust-shaper"))]
+pub fn accepts_web_font(_data: &[u8]) -> bool {
+    true
 }
 
 impl Font {
@@ -68,15 +92,19 @@ impl Font {
 
     #[cfg(feature = "rust-shaper")]
     pub(crate) fn glyph_source(&self) -> Option<&Arc<GlyphSource>> {
-        let face = self.rust_face()?;
+        self.rust_face()?;
         self.glyph_source_slot()
-            .get_or_init(|| {
-                let blob = crate::rust_shaper::file_blob(&self.file()?)?;
-                let index = (self.face_index() as u32) & 0xFFFF;
-                let coords = face.font().normalized_coords().to_vec();
-                GlyphSource::new(blob, index, coords, self.glyph_settings()).map(Arc::new)
-            })
+            .get_or_init(|| self.new_glyph_source())
             .as_ref()
+    }
+
+    #[cfg(feature = "rust-shaper")]
+    pub(crate) fn new_glyph_source(&self) -> Option<Arc<GlyphSource>> {
+        let face = crate::rust_shaper::shaper_face(self)?;
+        let blob = crate::rust_shaper::file_blob(&self.file()?)?;
+        let index = (self.face_index() as u32) & 0xFFFF;
+        let coords = face.font().normalized_coords().to_vec();
+        GlyphSource::new(blob, index, coords, self.glyph_settings()).map(Arc::new)
     }
 
     #[cfg(feature = "rust-shaper")]

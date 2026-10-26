@@ -13,7 +13,7 @@ mod ellipsize;
 pub mod emoji;
 mod engine;
 
-pub use engine::WEB_FONT_OBJECT;
+pub use engine::{WEB_FONT_OBJECT, accepts_web_font};
 #[allow(unsafe_code)]
 mod ffi;
 pub mod font;

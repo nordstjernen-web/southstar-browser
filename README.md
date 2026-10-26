@@ -87,8 +87,10 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
   paragraph layout with justification and ellipsizing, and cairo rendering,
   pixel-identical to the C library it replaced. It caches finished glyph
   strings and font metrics across layouts, so measuring and painting a run
-  reach HarfBuzz once instead of three times. `-Drust-shaper=true` shapes
-  with HarfRust, the pure-Rust port of HarfBuzz, instead (experimental; see
+  reach HarfBuzz once instead of three times. Web fonts take a pure-Rust
+  path instead: HarfRust shaping, `read-fonts` tables and `skrifa` outlines
+  and color glyphs, so untrusted `@font-face` data never reaches HarfBuzz or
+  FreeType to be shaped or drawn (see
   [docs/pure-rust-text.md](docs/pure-rust-text.md)).
 - **JavaScript** on the Boa interpreter, with modern ECMAScript through
   ES2026 (iterator helpers, explicit resource management with `using`,
@@ -193,8 +195,9 @@ Southstar is an independent engine — no upstream browser code.
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
 (MP3, ported to Rust). Text layout is `rust/text`, a Rust port of Pango, so
 setup needs no network and no Pango;
-[HarfRust](https://github.com/harfbuzz/harfrust) can replace HarfBuzz with
-`-Drust-shaper=true`.
+web fonts are shaped by [HarfRust](https://github.com/harfbuzz/harfrust) and
+drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
+(`-Drust-shaper=false` leaves them on HarfBuzz and FreeType).
 
 **Required system libraries:**
 
@@ -203,7 +206,7 @@ setup needs no network and no Pango;
 | GTK 4 | **≥ 4.22.1 on Windows** (MSYS2 stock), ≥ 4.14 elsewhere (≥ 4.22 preferred) | UI toolkit, GSK renderer |
 | GLib / GModule | ≥ 2.80 | core types, Unicode data, dynamic module loading |
 | cairo (with FreeType and fontconfig) | ≥ 1.18 | 2D rendering, glyph drawing |
-| HarfBuzz | ≥ 8.3 | text shaping (unless `-Drust-shaper=true`) |
+| HarfBuzz | ≥ 8.3 | text shaping of system fonts |
 | fontconfig, FreeType | fontconfig ≥ 2.15 | font matching and font files |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
 | OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
