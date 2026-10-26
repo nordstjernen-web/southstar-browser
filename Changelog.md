@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: building a string by repeated `+=` or template literals
+  takes linear time instead of quadratic. `boa_string` joins the Boa fork
+  in `third_party/` and gains rope strings: `+` and template literals
+  join pieces whose combined length reaches 512 code units as a rope that
+  is copied into a flat string only when its characters are first read.
+  200,000 appends of a short piece went from 80 s to 0.2 s, and 100,000
+  template-literal appends from 28 s to 0.19 s.
 * Security: three decoders bound their allocations before decompressing.
   A GIF frame larger than the 16384-pixel / 64-megapixel image limits is
   rejected before its index buffer is allocated (a 40-byte file used to
