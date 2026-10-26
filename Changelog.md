@@ -18,6 +18,13 @@ Southstar Browser 1.0.2-dev:
   ICC profile can no longer inflate to gigabytes; and WOFF 1.0 tables
   count against one 64 MiB budget for the whole font as they are inflated,
   rather than 64 MiB each with the total checked afterwards.
+* Security: two MPEG-1 decoder bugs reachable from a crafted `.mpg` file
+  are fixed. The MP2 frame-sync search could leave its read position past
+  the end of the buffer when a packet ended in zero bytes; the next read
+  then panicked and aborted the audio helper. A picture header with an
+  invalid picture type or motion code kept the decoder on that picture,
+  so the stream never ended and seeking far ahead decoded frames without
+  end. The read position is now clamped and a bad picture is skipped.
 * Security: the HTTP/2 HPACK decoder caps a decoded header list at 1 MiB.
   Indexed references to a large dynamic-table entry cost one byte each, so
   a server could expand a 2 MiB header block into gigabytes and exhaust

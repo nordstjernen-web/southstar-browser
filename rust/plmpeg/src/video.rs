@@ -337,12 +337,14 @@ impl Video {
         self.picture_type = src.read(3);
         src.skip(16);
         if self.picture_type <= 0 || self.picture_type > PICTURE_TYPE_B {
+            self.start_code = -1;
             return;
         }
         if self.picture_type == PICTURE_TYPE_PREDICTIVE || self.picture_type == PICTURE_TYPE_B {
             self.motion_forward.full_px = src.read(1) != 0;
             let f_code = src.read(3);
             if f_code == 0 {
+                self.start_code = -1;
                 return;
             }
             self.motion_forward.r_size = f_code - 1;
@@ -351,6 +353,7 @@ impl Video {
             self.motion_backward.full_px = src.read(1) != 0;
             let f_code = src.read(3);
             if f_code == 0 {
+                self.start_code = -1;
                 return;
             }
             self.motion_backward.r_size = f_code - 1;

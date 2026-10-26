@@ -429,16 +429,16 @@ impl Audio {
 }
 
 fn find_frame_sync(buf: &mut Buffer) -> bool {
-    let end = buf.bytes.len().wrapping_sub(1);
+    let len = buf.bytes.len();
     let mut i = buf.bit_index >> 3;
-    while i < end {
+    while i + 1 < len {
         if buf.bytes[i] == 0xFF && (buf.bytes[i + 1] & 0xFE) == 0xFC {
             buf.bit_index = ((i + 1) << 3) + 3;
             return true;
         }
         i += 1;
     }
-    buf.bit_index = (i + 1) << 3;
+    buf.bit_index = (i + 1).min(len) << 3;
     false
 }
 

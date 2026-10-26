@@ -49,7 +49,7 @@ impl Buffer {
     }
 
     pub fn bits_left(&self) -> usize {
-        (self.bytes.len() << 3).wrapping_sub(self.bit_index)
+        (self.bytes.len() << 3).saturating_sub(self.bit_index)
     }
 
     pub fn write(&mut self, data: &[u8]) {

@@ -9,6 +9,8 @@ mod audio;
 mod audio_tables;
 mod buffer;
 mod demux;
+#[cfg(test)]
+mod tests;
 mod video;
 mod video_tables;
 
