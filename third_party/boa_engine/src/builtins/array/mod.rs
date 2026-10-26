@@ -314,6 +314,55 @@ impl Array {
         Ok(())
     }
 
+    /// The length of `o` when `push` and `pop` can work on its storage directly: `o` is an
+    /// extensible `Array` with no named property but its writable `length` (the shape of the
+    /// array template), its elements are dense and as many as its length, and every object on
+    /// its prototype chain uses the ordinary `[[GetOwnProperty]]`, `[[GetPrototypeOf]]` and
+    /// `[[Set]]` and has no indexed property. Adding or removing its last element can then call
+    /// no accessor and run into no read-only or inherited element.
+    fn dense_array_length(o: &JsObject, context: &Context) -> Option<u32> {
+        if !o.is_array() {
+            return None;
+        }
+        let object = o.borrow();
+        if !object.extensible
+            || object.properties().shape.to_addr_usize()
+                != context
+                    .intrinsics()
+                    .templates()
+                    .array()
+                    .shape()
+                    .to_addr_usize()
+        {
+            return None;
+        }
+        let len = u32::try_from(object.properties().indexed_properties.dense_len()?).ok()?;
+        if object.properties().storage[0].as_number() != Some(f64::from(len)) {
+            return None;
+        }
+        let mut prototype = object.prototype();
+        drop(object);
+        while let Some(proto) = prototype {
+            let methods = proto.vtable();
+            if !std::ptr::fn_addr_eq(
+                methods.__get_own_property__,
+                ORDINARY_INTERNAL_METHODS.__get_own_property__,
+            ) || !std::ptr::fn_addr_eq(
+                methods.__get_prototype_of__,
+                ORDINARY_INTERNAL_METHODS.__get_prototype_of__,
+            ) || !std::ptr::fn_addr_eq(methods.__set__, ORDINARY_INTERNAL_METHODS.__set__)
+            {
+                return None;
+            }
+            let proto = proto.borrow();
+            if !proto.properties().indexed_properties.is_empty() {
+                return None;
+            }
+            prototype = proto.prototype();
+        }
+        Some(len)
+    }
+
     /// Utility for constructing `Array` objects.
     ///
     /// More information:
@@ -864,6 +913,24 @@ impl Array {
     ) -> JsResult<JsValue> {
         // 1. Let O be ? ToObject(this value).
         let o = this.to_object(context)?;
+
+        // NOTE: Steps 2 to 7 on a dense array whose elements are plain data properties: each
+        //       `Set` defines a new element and `ArraySetLength` follows the count.
+        if let Some(len) = Self::dense_array_length(&o, context)
+            && let Some(new_len) = u32::try_from(args.len())
+                .ok()
+                .and_then(|count| len.checked_add(count))
+                .filter(|&new_len| new_len < u32::MAX)
+        {
+            let mut object = o.borrow_mut();
+            let properties = object.properties_mut();
+            for element in args {
+                properties.indexed_properties.push_dense(element);
+            }
+            properties.storage[0] = JsValue::new(new_len);
+            return Ok(new_len.into());
+        }
+
         // 2. Let len be ? LengthOfArrayLike(O).
         let mut len = o.length_of_array_like(context)?;
         // 3. Let argCount be the number of elements in items.
@@ -903,6 +970,20 @@ impl Array {
     pub(crate) fn pop(this: &JsValue, _: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
         // 1. Let O be ? ToObject(this value).
         let o = this.to_object(context)?;
+
+        // NOTE: Steps 2 to 5 on a dense, non-empty array: the last element is a configurable own
+        //       data property, so getting and deleting it calls nothing.
+        if let Some(len) = Self::dense_array_length(&o, context)
+            && len > 0
+        {
+            let mut object = o.borrow_mut();
+            let properties = object.properties_mut();
+            if let Some(element) = properties.indexed_properties.pop_dense() {
+                properties.storage[0] = JsValue::new(len - 1);
+                return Ok(element);
+            }
+        }
+
         // 2. Let len be ? LengthOfArrayLike(O).
         let len = o.length_of_array_like(context)?;
         // 3. If len = 0, then
