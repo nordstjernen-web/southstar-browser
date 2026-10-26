@@ -208,7 +208,7 @@ unsafe extern "C" {
     fn FcConfigDestroy(config: *mut c_void);
     fn FcConfigGetFonts(config: *mut c_void, set: c_int) -> *mut RawFontSet;
     fn FcConfigSubstitute(config: *mut c_void, p: *mut RawPattern, kind: c_int) -> c_int;
-    fn FcConfigSetDefaultSubstitute(config: *mut c_void, p: *mut RawPattern);
+    fn FcDefaultSubstitute(p: *mut RawPattern);
     fn FcFontSetList(
         config: *mut c_void,
         sets: *mut *mut RawFontSet,
@@ -536,8 +536,8 @@ impl PatternBuilder {
     }
 
     pub(crate) fn default_substitute(&mut self) {
-        // SAFETY: the pattern is uniquely owned; a NULL configuration means the current one.
-        unsafe { FcConfigSetDefaultSubstitute(core::ptr::null_mut(), self.raw()) };
+        // SAFETY: the pattern is uniquely owned.
+        unsafe { FcDefaultSubstitute(self.raw()) };
     }
 }
 
