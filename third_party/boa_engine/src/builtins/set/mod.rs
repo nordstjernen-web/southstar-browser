@@ -611,6 +611,7 @@ impl Set {
             // b. Let index be 0.
             let mut index = 0;
             // c. Repeat, while index < thisSize,
+            let _lock = SetLock::new(&this);
             while index < this_size {
                 // i. Let e be O.[[SetData]][index].
                 let e = this.borrow().data().get_index(index).cloned();
@@ -698,6 +699,7 @@ impl Set {
         let mut index = 0;
 
         // 7. Repeat, while index < thisSize,
+        let _lock = SetLock::new(&this);
         while index < this_size {
             // a. Let e be O.[[SetData]][index].
             let e = this.borrow().data().get_index(index).cloned();
@@ -943,6 +945,7 @@ impl Set {
             // b. Let index be 0.
             let mut index = 0;
             // c. Repeat, while index < thisSize,
+            let _lock = SetLock::new(&this);
             while index < this_size {
                 // i. Let e be O.[[SetData]][index].
                 let e = this.borrow().data().get_index(index).cloned();
@@ -1045,6 +1048,7 @@ impl Set {
             let mut index = 0;
 
             //  c. Repeat, while index < thisSize,
+            let _lock = SetLock::new(&this);
             while index < this_size {
                 // i. Let e be resultSetData[index].
                 let e = result_set.get_index(index).cloned();

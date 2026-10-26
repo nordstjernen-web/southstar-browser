@@ -493,20 +493,14 @@ pub(crate) fn prototype_from_constructor(
     if prototype.is_object() {
         return Ok(prototype);
     }
-    let realm_prototype = scope.function_handle(new_target).ok().and_then(|handle| {
-        handle.with(|other| {
-            let global = other.global();
-            other
-                .get(&global, "Intl")
-                .and_then(|intl| other.get(&intl, service))
-                .and_then(|constructor| other.get(&constructor, "prototype"))
-                .ok()
-                .filter(Value::is_object)
-        })
-    });
-    Ok(realm_prototype
-        .flatten()
-        .unwrap_or_else(|| intrinsic.clone()))
+    let global = scope.function_realm_global(new_target)?;
+    let realm_prototype = scope
+        .get(&global, "Intl")
+        .and_then(|intl| scope.get(&intl, service))
+        .and_then(|constructor| scope.get(&constructor, "prototype"))
+        .ok()
+        .filter(Value::is_object);
+    Ok(realm_prototype.unwrap_or_else(|| intrinsic.clone()))
 }
 
 pub(crate) fn ordinary_has_instance(

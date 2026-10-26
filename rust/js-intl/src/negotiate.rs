@@ -316,9 +316,8 @@ pub(crate) fn create_data_property(
     scope.define_entry(object, &key, value)
 }
 
-fn realm_prototype(scope: &mut Scope<'_>, new_target: &Value, service: &str) -> Option<Value> {
-    let global = scope.function_realm_global(new_target).ok()?;
-    let intl = scope.get(&global, "Intl").ok()?;
+fn realm_prototype(scope: &mut Scope<'_>, global: &Value, service: &str) -> Option<Value> {
+    let intl = scope.get(global, "Intl").ok()?;
     let constructor = scope.get(&intl, service).ok()?;
     scope
         .get(&constructor, "prototype")
@@ -336,5 +335,6 @@ pub(crate) fn prototype_from_constructor(
     if proto.is_object() {
         return Ok(proto);
     }
-    Ok(realm_prototype(scope, new_target, service).unwrap_or_else(|| fallback.clone()))
+    let global = scope.function_realm_global(new_target)?;
+    Ok(realm_prototype(scope, &global, service).unwrap_or_else(|| fallback.clone()))
 }

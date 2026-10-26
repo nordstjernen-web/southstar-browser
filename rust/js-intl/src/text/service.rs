@@ -44,11 +44,7 @@ pub(crate) fn prototype_from(
     if prototype.is_object() {
         return Ok(prototype);
     }
-    let realm_global = scope
-        .function_handle(new_target)
-        .ok()
-        .and_then(|realm| realm.with(|scope| scope.global()));
-    let global = realm_global.unwrap_or_else(|| scope.global());
+    let global = scope.function_realm_global(new_target)?;
     let intl = scope.get(&global, "Intl")?;
     let constructor = scope.get(&intl, service)?;
     scope.get(&constructor, "prototype")

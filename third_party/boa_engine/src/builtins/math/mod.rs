@@ -153,20 +153,14 @@ impl Math {
     /// [spec]: https://tc39.es/ecma262/#sec-math.acosh
     /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/acosh
     pub(crate) fn acosh(_: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-        // 1/√f64::EPSILON, as established by the Boost math library.
-        const ACOSH_LARGE_INPUT_THRESHOLD: f64 = 67_108_864.0;
-
         // 1. Let n be ? ToNumber(x).
         let n = args.get_or_undefined(0).to_number(context)?;
-        if n.is_finite() && n > ACOSH_LARGE_INPUT_THRESHOLD {
-            return Ok((n.ln() + std::f64::consts::LN_2).into());
-        }
 
         // 4. If n < 1𝔽, return NaN.
         // 2. If n is NaN or n is +∞𝔽, return n.
         // 3. If n is 1𝔽, return +0𝔽.
         // 5. Return an implementation-approximated value representing the result of the inverse hyperbolic cosine of ℝ(n).
-        Ok(n.acosh().into())
+        Ok(acosh(n).into())
     }
 
     /// Get the arcsine of a number.
@@ -198,20 +192,12 @@ impl Math {
     /// [spec]: https://tc39.es/ecma262/#sec-math.asinh
     /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/asinh
     pub(crate) fn asinh(_: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-        // 1/√f64::EPSILON, as established by the Boost math library.
-        const ASINH_LARGE_INPUT_THRESHOLD: f64 = 67_108_864.0;
-
         // 1. Let n be ? ToNumber(x).
         let n = args.get_or_undefined(0).to_number(context)?;
-        if n.is_finite() && n.abs() > ASINH_LARGE_INPUT_THRESHOLD {
-            return Ok((n.signum()
-                * (n.abs().ln() + std::f64::consts::LN_2 + 0.25 * n.recip() * n.recip()))
-            .into());
-        }
 
         // 2. If n is NaN, n is +0𝔽, n is -0𝔽, n is +∞𝔽, or n is -∞𝔽, return n.
         // 3. Return an implementation-approximated value representing the result of the inverse hyperbolic sine of ℝ(n).
-        Ok(n.asinh().into())
+        Ok(asinh(n).into())
     }
 
     /// Get the arctangent of a number.
@@ -244,17 +230,15 @@ impl Math {
     /// [spec]: https://tc39.es/ecma262/#sec-math.atanh
     /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/atanh
     pub(crate) fn atanh(_: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-        Ok(args
-            .get_or_undefined(0)
-            // 1. Let n be ? ToNumber(x).
-            .to_number(context)?
-            // 2. If n is NaN, n is +0𝔽, or n is -0𝔽, return n.
-            // 3. If n > 1𝔽 or n < -1𝔽, return NaN.
-            // 4. If n is 1𝔽, return +∞𝔽.
-            // 5. If n is -1𝔽, return -∞𝔽.
-            // 6. Return an implementation-approximated value representing the result of the inverse hyperbolic tangent of ℝ(n).
-            .atanh()
-            .into())
+        // 1. Let n be ? ToNumber(x).
+        let n = args.get_or_undefined(0).to_number(context)?;
+
+        // 2. If n is NaN, n is +0𝔽, or n is -0𝔽, return n.
+        // 3. If n > 1𝔽 or n < -1𝔽, return NaN.
+        // 4. If n is 1𝔽, return +∞𝔽.
+        // 5. If n is -1𝔽, return -∞𝔽.
+        // 6. Return an implementation-approximated value representing the result of the inverse hyperbolic tangent of ℝ(n).
+        Ok(atanh(n).into())
     }
 
     /// Get the four quadrant arctangent of the quotient y / x.
@@ -806,11 +790,19 @@ impl Math {
         //4. If n < +0𝔽 and n ≥ -0.5𝔽, return -0𝔽.
         //5. Return the integral Number closest to n, preferring the Number closer to +∞ in the case of a tie.
 
-        if num.fract() == -0.5 {
-            Ok(num.ceil().into())
-        } else {
-            Ok(num.round().into())
+        // The integral Number below `n` is exact, and so is `n` minus it, so the tie and the
+        // rounding direction are decided exactly instead of trusting the platform's `round`,
+        // which some C runtimes implement as `floor(n + 0.5)`.
+        if !num.is_finite() || num.fract() == 0.0 {
+            return Ok(num.into());
         }
+        let floor = num.floor();
+        let rounded = if num - floor >= 0.5 {
+            floor + 1.0
+        } else {
+            floor
+        };
+        Ok(rounded.copysign(num).into())
     }
 
     /// Get the sign of a number.
@@ -1052,4 +1044,53 @@ impl Math {
         // 12. Return 𝔽(sum).
         Ok(sum.sum().into())
     }
+}
+
+// The inverse hyperbolic functions of musl's libm (MIT licensed), which stay within 2 ulp where
+// the formulas of Rust's standard library lose most of their precision near 1.
+
+fn biased_exponent(x: f64) -> u64 {
+    (x.to_bits() >> 52) & 0x7ff
+}
+
+fn acosh(x: f64) -> f64 {
+    let e = biased_exponent(x);
+    if e < 0x3ff + 1 {
+        let t = x - 1.0;
+        (t + (t * t + 2.0 * t).sqrt()).ln_1p()
+    } else if e < 0x3ff + 26 {
+        (2.0 * x - 1.0 / (x + (x * x - 1.0).sqrt())).ln()
+    } else {
+        x.ln() + std::f64::consts::LN_2
+    }
+}
+
+fn asinh(x: f64) -> f64 {
+    let e = biased_exponent(x);
+    let a = x.abs();
+    let y = if e >= 0x3ff + 26 {
+        a.ln() + std::f64::consts::LN_2
+    } else if e >= 0x3ff + 1 {
+        (2.0 * a + 1.0 / ((a * a + 1.0).sqrt() + a)).ln()
+    } else if e >= 0x3ff - 26 {
+        (a + a * a / ((a * a + 1.0).sqrt() + 1.0)).ln_1p()
+    } else {
+        a
+    };
+    y.copysign(x)
+}
+
+fn atanh(x: f64) -> f64 {
+    let e = biased_exponent(x);
+    let a = x.abs();
+    let y = if e < 0x3ff - 1 {
+        if e < 0x3ff - 32 {
+            a
+        } else {
+            0.5 * (2.0 * a + 2.0 * a * a / (1.0 - a)).ln_1p()
+        }
+    } else {
+        0.5 * (2.0 * (a / (1.0 - a))).ln_1p()
+    };
+    y.copysign(x)
 }

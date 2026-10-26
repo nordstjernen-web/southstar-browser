@@ -199,10 +199,19 @@ pub trait HostHooks {
 
     /// Returns the offset of the local timezone to the `utc` timezone in seconds.
     fn local_timezone_offset_seconds(&self, unix_time_seconds: i64) -> i32 {
-        OffsetDateTime::from_unix_timestamp(unix_time_seconds)
-            .ok()
-            .and_then(|t| UtcOffset::local_offset_at(t).ok())
-            .map_or(0, UtcOffset::whole_seconds)
+        // Some hosts only convert a limited range of years (Windows: 1601 to 30827), so a
+        // time outside that range takes the offset of the nearest year the host handles
+        // instead of falling back to UTC.
+        const SUPPORTED: std::ops::RangeInclusive<i64> = -11_644_387_200..=253_402_214_400;
+        let local_offset = |seconds: i64| {
+            OffsetDateTime::from_unix_timestamp(seconds)
+                .ok()
+                .and_then(|t| UtcOffset::local_offset_at(t).ok())
+                .map(UtcOffset::whole_seconds)
+        };
+        local_offset(unix_time_seconds)
+            .or_else(|| local_offset(unix_time_seconds.clamp(*SUPPORTED.start(), *SUPPORTED.end())))
+            .unwrap_or(0)
     }
 
     /// Gets the maximum size in bits that can be allocated for an `ArrayBuffer` or a

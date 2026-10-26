@@ -490,7 +490,13 @@ impl Number {
             // Due to f64 limitations, this part differs a bit from the spec,
             // but has the same effect. It manipulates the string constructed
             // by `format`: digits with an optional dot between two of them.
-            suffix = format!("{this_num:.100}");
+            // A value below 1 needs its leading zeros on top of the 100 digits.
+            let leading_zeros = if this_num < 1.0 {
+                (-this_num.log10()).ceil() as usize
+            } else {
+                0
+            };
+            suffix = format!("{this_num:.digits$}", digits = 100 + leading_zeros);
 
             // a: getting an exponent
             exponent = Self::flt_str_to_exp(&suffix);
