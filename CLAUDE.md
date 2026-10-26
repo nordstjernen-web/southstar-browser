@@ -260,10 +260,16 @@ outlives a layout, so the crate caches finished glyph strings process-wide
   `NS_PANGO_SHAPE_CACHE=verify` shapes both ways and warns on any
   difference; run it over the affected pages after touching the cache key.
   `NS_PANGO_SHAPE_CACHE=0` disables the caches.
-- **`-Drust-shaper=true` shapes with HarfRust**, the HarfBuzz project's pure-Rust
-  port (cargo feature `rust-shaper`, off by default; `docs/pure-rust-text.md`
-  has the plan). `NS_TEXT_SHAPER=harfbuzz` switches back at runtime for
-  comparisons. HarfBuzz stays the fallback when a font file can't be read.
+- **`@font-face` web fonts take the pure-Rust font path by default**
+  (`-Drust-shaper`, cargo feature `rust-shaper`, on by default): HarfRust
+  shapes, `read-fonts` answers table queries and builds the fontconfig
+  pattern, and `skrifa` outlines and color glyphs (COLR, CBDT, sbix) are
+  painted through a cairo user font, so a downloaded font never reaches
+  FreeType, HarfBuzz or cairo-ft. A web font `read-fonts` can't parse is not
+  installed. System fonts keep the C path. `NS_RUST_FONTS=web|all|off`
+  picks the fonts at runtime (`off`, or `NS_TEXT_SHAPER=harfbuzz`, is the C
+  path only); `-Drust-shaper=false` builds without it.
+  `docs/pure-rust-text.md` has the details.
 
 ### HTML parser: `rust/html5`
 
