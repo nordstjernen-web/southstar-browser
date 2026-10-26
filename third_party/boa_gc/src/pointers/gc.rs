@@ -311,6 +311,7 @@ impl<T: Trace + ?Sized> Gc<T> {
         self.inner_ptr
     }
 
+    #[inline]
     fn inner(&self) -> &GcBox<T> {
         // SAFETY: Please see Gc::inner_ptr()
         unsafe { self.inner_ptr().as_ref() }
@@ -318,6 +319,7 @@ impl<T: Trace + ?Sized> Gc<T> {
 }
 
 impl<T: Trace + ?Sized> Finalize for Gc<T> {
+    #[inline(always)]
     fn finalize(&self) {
         // SAFETY: inner_ptr should be alive when calling finalize.
         // We don't call inner_ptr() to avoid overhead of calling finalizer_safe().
@@ -344,6 +346,7 @@ unsafe impl<T: Trace + ?Sized> Trace for Gc<T> {
 }
 
 impl<T: Trace + ?Sized> Clone for Gc<T> {
+    #[inline(always)]
     fn clone(&self) -> Self {
         let ptr = self.inner_ptr();
         // SAFETY: though `ptr` doesn't come from a `into_raw` call, it essentially does the same,
@@ -365,6 +368,7 @@ impl<T: Trace + ?Sized> Deref for Gc<T> {
 }
 
 impl<T: Trace + ?Sized> Drop for Gc<T> {
+    #[inline(always)]
     fn drop(&mut self) {
         if finalizer_safe() {
             Finalize::finalize(self);

@@ -128,9 +128,15 @@ impl Drop for DropGuard {
 
 /// Returns `true` if it is safe for a type to run [`Finalize::finalize`].
 #[must_use]
-#[inline]
+#[inline(always)]
 pub fn finalizer_safe() -> bool {
-    THREADS_DROPPING.load(Ordering::Relaxed) == 0 || GC_DROPPING.with(|dropping| !dropping.get())
+    THREADS_DROPPING.load(Ordering::Relaxed) == 0 || finalizer_safe_while_dropping()
+}
+
+#[cold]
+#[inline(never)]
+fn finalizer_safe_while_dropping() -> bool {
+    GC_DROPPING.with(|dropping| !dropping.get())
 }
 
 /// The Allocator handles allocation of garbage collected values.
