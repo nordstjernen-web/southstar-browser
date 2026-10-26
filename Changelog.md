@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: adding a new property to an ordinary object, as
+  constructors (`this.x = x`) and object literals do, skips the generic
+  `[[Set]]`/`[[DefineOwnProperty]]` steps when the object and its
+  prototypes are ordinary and none of them has the property: an
+  allocation loop of object literals takes 28% less CPU time and a
+  `new`-heavy class loop 23% less.
 * JavaScript: a labelled function declaration in a block or `switch` case
   (`{ l: function f() {} }`, sloppy mode only) behaves like an unlabelled
   one, as in other browsers: it is hoisted to the top of the block (under

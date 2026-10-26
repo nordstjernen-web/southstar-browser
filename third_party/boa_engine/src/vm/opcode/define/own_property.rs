@@ -1,7 +1,10 @@
 use crate::{
     Context, JsNativeError, JsResult,
-    object::internal_methods::InternalMethodPropertyContext,
-    property::PropertyDescriptor,
+    object::{
+        internal_methods::{InternalMethodPropertyContext, define_new_ordinary_data_property},
+        shape::slot::Slot,
+    },
+    property::{PropertyDescriptor, PropertyKey},
     vm::opcode::{IndexOperand, Operation, RegisterOperand},
 };
 
@@ -26,8 +29,12 @@ impl DefineOwnPropertyByName {
             .code_block()
             .constant_string(index.into());
         let object = object.to_object(context)?;
+        let name: PropertyKey = name.into();
+        if define_new_ordinary_data_property(&object, &name, &value, &mut Slot::new()) {
+            return Ok(());
+        }
         object.__define_own_property__(
-            &name.into(),
+            &name,
             PropertyDescriptor::builder()
                 .value(value.clone())
                 .writable(true)

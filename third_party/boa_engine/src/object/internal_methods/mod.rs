@@ -808,6 +808,87 @@ pub(crate) fn ordinary_try_get(
     }
 }
 
+/// Returns `true` if `obj` uses the ordinary `[[GetOwnProperty]]`, `[[GetPrototypeOf]]`,
+/// `[[IsExtensible]]`, `[[DefineOwnProperty]]` and `[[Set]]`, so that its property map and
+/// prototype say everything those methods would.
+fn has_ordinary_property_methods(obj: &JsObject) -> bool {
+    let methods = obj.vtable();
+    std::ptr::fn_addr_eq(
+        methods.__get_own_property__,
+        ORDINARY_INTERNAL_METHODS.__get_own_property__,
+    ) && std::ptr::fn_addr_eq(
+        methods.__get_prototype_of__,
+        ORDINARY_INTERNAL_METHODS.__get_prototype_of__,
+    ) && std::ptr::fn_addr_eq(
+        methods.__is_extensible__,
+        ORDINARY_INTERNAL_METHODS.__is_extensible__,
+    ) && std::ptr::fn_addr_eq(
+        methods.__define_own_property__,
+        ORDINARY_INTERNAL_METHODS.__define_own_property__,
+    ) && std::ptr::fn_addr_eq(methods.__set__, ORDINARY_INTERNAL_METHODS.__set__)
+}
+
+/// `CreateDataProperty(obj, key, value)` for a string or symbol `key` that `obj`, an extensible
+/// object with the ordinary internal methods, does not have: adds it as a writable, enumerable
+/// and configurable data property, recording its slot in `slot`.
+///
+/// Returns `false`, having changed nothing, when any of that does not hold; the caller then runs
+/// the full operation.
+pub(crate) fn define_new_ordinary_data_property(
+    obj: &JsObject,
+    key: &PropertyKey,
+    value: &JsValue,
+    slot: &mut Slot,
+) -> bool {
+    if matches!(key, PropertyKey::Index(_)) || !has_ordinary_property_methods(obj) {
+        return false;
+    }
+    let mut object = obj.borrow_mut();
+    if !object.extensible || object.properties().contains_key(key) {
+        return false;
+    }
+    object.properties_mut().insert_with_slot(
+        key,
+        PropertyDescriptor::builder()
+            .value(value.clone())
+            .writable(true)
+            .enumerable(true)
+            .configurable(true)
+            .build(),
+        slot,
+    );
+    true
+}
+
+/// `OrdinarySet(obj, key, value, obj)` for a string or symbol `key` that neither `obj` nor any
+/// object on its prototype chain has, when all of them use the ordinary internal methods: the
+/// steps then come down to `CreateDataProperty(obj, key, value)`, done here directly.
+///
+/// Returns `false`, having changed nothing, when that does not apply; the caller then runs the
+/// full `[[Set]]`.
+pub(crate) fn set_new_ordinary_data_property(
+    obj: &JsObject,
+    key: &PropertyKey,
+    value: &JsValue,
+    slot: &mut Slot,
+) -> bool {
+    if matches!(key, PropertyKey::Index(_)) {
+        return false;
+    }
+    let mut prototype = obj.borrow().prototype();
+    while let Some(object) = prototype {
+        if !has_ordinary_property_methods(&object) {
+            return false;
+        }
+        let object = object.borrow();
+        if object.properties().contains_key(key) {
+            return false;
+        }
+        prototype = object.prototype();
+    }
+    define_new_ordinary_data_property(obj, key, value, slot)
+}
+
 /// Abstract operation `OrdinarySet`.
 ///
 /// More information:
