@@ -44,6 +44,14 @@ impl<R> Cursor<R> {
         std::mem::replace(&mut self.source_collector, replace_with)
     }
 
+    /// Records `prefix` as source text read before the input, so that linear positions in the
+    /// input count from the end of `prefix`.
+    pub(super) fn collect_source_prefix(&mut self, prefix: &[u16]) {
+        for &unit in prefix {
+            self.source_collector.collect_code_point(u32::from(unit));
+        }
+    }
+
     /// Advances the position to the next column.
     fn next_column(&mut self) {
         let current_line = self.pos.line_number();

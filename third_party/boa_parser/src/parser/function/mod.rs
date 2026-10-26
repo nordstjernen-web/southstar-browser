@@ -387,10 +387,10 @@ where
                         .peek(0, interner)?
                         .is_some_and(|tok| tok.kind() == &TokenKind::Punctuator(Punctuator::Assign))
                     {
-                        Some(
-                            Initializer::new(true, self.allow_yield, self.allow_await)
-                                .parse(cursor, interner)?,
-                        )
+                        let mut init = Initializer::new(true, self.allow_yield, self.allow_await)
+                            .parse(cursor, interner)?;
+                        init.set_anonymous_function_definition_name(&ident);
+                        Some(init)
                     } else {
                         None
                     };

@@ -165,6 +165,10 @@ fn bound_function_exotic_construct(
 
     // 1. Let target be F.[[BoundTargetFunction]].
     let target = bound_function.target_function();
+    context
+        .vm
+        .stack
+        .calling_convention_set_function(argument_count, target.clone().into());
 
     // 2. Assert: IsConstructor(target) is true.
 

@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `Function.prototype.toString` returns the source text of
+  classes (`class A {}` printed as `function A() { [native code] }`, which
+  broke the common `/^class\b/` test for telling classes from functions)
+  and of functions made by `Function()`, `GeneratorFunction()` and the
+  async variants (`function anonymous(a\n) {\nbody\n}`), as well as of
+  the functions declared inside them. A bound function called with `new`
+  runs its target as the callee (`arguments.callee` was the bound
+  function), `Function()` parses its source before reading
+  `newTarget.prototype`, a parameter's default function or class takes the
+  parameter's name, the legacy `caller` skips eval frames and never reports
+  a generator or async function, and `GeneratorFunction` and
+  `AsyncGeneratorFunction` inherit from `Function`.
 * JavaScript: `JSON.parse` reads the string with a JSON parser of its own
   (`builtins/json/parse.rs` in the Boa fork) that builds the values
   directly. It used to validate the text with `serde_json`, then parse and

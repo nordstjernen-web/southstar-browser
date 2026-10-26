@@ -26,6 +26,7 @@ pub struct AsyncGeneratorFunction;
 impl IntrinsicObject for AsyncGeneratorFunction {
     fn init(realm: &Realm) {
         BuiltInBuilder::from_standard_constructor::<Self>(realm)
+            .prototype(realm.intrinsics().constructors().function().constructor())
             .inherits(Some(
                 realm.intrinsics().constructors().function().prototype(),
             ))

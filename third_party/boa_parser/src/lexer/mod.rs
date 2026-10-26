@@ -450,6 +450,10 @@ impl<R> Lexer<R> {
     pub(super) fn take_source(&mut self) -> boa_ast::SourceText {
         self.cursor.take_source()
     }
+
+    pub(super) fn collect_source_prefix(&mut self, prefix: &[u16]) {
+        self.cursor.collect_source_prefix(prefix);
+    }
 }
 
 impl<'a> From<&'a [u8]> for Lexer<UTF8Input<&'a [u8]>> {

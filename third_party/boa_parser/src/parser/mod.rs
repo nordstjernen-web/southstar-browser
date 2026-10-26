@@ -252,6 +252,25 @@ impl<'a, R: ReadChar> Parser<'a, R> {
         Ok(body)
     }
 
+    /// Parses the full input as an [ECMAScript `FunctionBody`][spec], like
+    /// [`Parser::parse_function_body`], and also returns the source text read, which starts with
+    /// the prefix given to [`Parser::set_source_prefix`].
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` on any parsing error, including invalid reads of the bytes being parsed.
+    ///
+    /// [spec]: https://tc39.es/ecma262/#prod-FunctionBody
+    pub fn parse_function_body_with_source(
+        &mut self,
+        interner: &mut Interner,
+        allow_yield: bool,
+        allow_await: bool,
+    ) -> ParseResult<(FunctionBody, boa_ast::SourceText)> {
+        let body = self.parse_function_body(interner, allow_yield, allow_await)?;
+        Ok((body, self.cursor.take_source()))
+    }
+
     /// Parses the full input as an [ECMAScript `FormalParameterList`][spec] into the boa AST representation.
     ///
     /// # Errors
@@ -312,6 +331,16 @@ impl<R> Parser<'_, R> {
         R: ReadChar,
     {
         self.cursor.set_identifier(identifier);
+    }
+
+    /// Treats `prefix` as source text that precedes the input: the source text the parser
+    /// returns starts with it, and the linear spans of the parsed nodes count from its start.
+    /// Must be called before anything is parsed.
+    pub fn set_source_prefix(&mut self, prefix: &[u16])
+    where
+        R: ReadChar,
+    {
+        self.cursor.collect_source_prefix(prefix);
     }
 
     /// Makes parsing fail with [`Error::StackExhausted`] instead of overflowing the native

@@ -296,4 +296,9 @@ where
     pub(super) fn take_source(&mut self) -> boa_ast::SourceText {
         self.lexer.take_source()
     }
+
+    pub(super) fn collect_source_prefix(&mut self, prefix: &[u16]) {
+        self.lexer.collect_source_prefix(prefix);
+        self.last_linear_pos = LinearPosition::new(self.last_linear_pos.pos() + prefix.len());
+    }
 }

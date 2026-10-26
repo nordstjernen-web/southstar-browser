@@ -383,4 +383,8 @@ where
     pub(super) fn take_source(&mut self) -> boa_ast::SourceText {
         self.buffered_lexer.take_source()
     }
+
+    pub(super) fn collect_source_prefix(&mut self, prefix: &[u16]) {
+        self.buffered_lexer.collect_source_prefix(prefix);
+    }
 }

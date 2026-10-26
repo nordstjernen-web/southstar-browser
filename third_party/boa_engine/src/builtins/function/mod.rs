@@ -34,11 +34,14 @@ use crate::{
     string::StaticJsStrings,
     symbol::JsSymbol,
     value::IntegerOrInfinity,
-    vm::{ActiveRunnable, CallFrame, CallFrameFlags, CodeBlock, opcode::DecoratedField},
+    vm::{
+        ActiveRunnable, CallFrame, CallFrameFlags, CodeBlock, opcode::DecoratedField,
+        source_info::SourcePath,
+    },
 };
 use boa_ast::{
-    Position, Span, Spanned, StatementList,
-    function::{FormalParameterList, FunctionBody},
+    Position, Span, Spanned,
+    function::FormalParameterList,
     operations::{
         ContainsSymbol, all_private_identifiers_valid, bound_names, contains,
         lexically_declared_names,
@@ -481,9 +484,6 @@ impl BuiltInFunctionObject {
             StandardConstructors::function
         };
 
-        // 22. Let proto be ? GetPrototypeFromConstructor(newTarget, fallbackProto).
-        let prototype = get_prototype_from_constructor(&new_target, default, context)?;
-
         // 6. Let argCount be the number of elements in parameterArgs.
         let (body, param_list) = if let Some((body, params)) = args.split_last() {
             // 7. Let parameterStrings be a new empty List.
@@ -512,27 +512,28 @@ impl BuiltInFunctionObject {
             context,
         )?;
 
+        // 12. Let P be the empty String.
+        // 13. If argCount > 0, then
+        //     a. Set P to parameterStrings[0].
+        //     b. Let k be 1.
+        //     c. Repeat, while k < argCount,
+        //         i. Let nextArgString be parameterStrings[k].
+        //         ii. Set P to the string-concatenation of P, "," (a comma), and nextArgString.
+        //         iii. Set k to k + 1.
+
+        // TODO: Replace with standard `Iterator::intersperse` iterator method when it's stabilized.
+        //       See: <https://github.com/rust-lang/rust/issues/79524>
+        let parameter_text = itertools::Itertools::intersperse(
+            param_list.iter().map(JsString::iter),
+            js_str!(",").iter(),
+        )
+        .flatten()
+        .collect::<Vec<_>>();
+
         let parameters = if param_list.is_empty() {
             FormalParameterList::default()
         } else {
-            // 12. Let P be the empty String.
-            // 13. If argCount > 0, then
-            //     a. Set P to parameterStrings[0].
-            //     b. Let k be 1.
-            //     c. Repeat, while k < argCount,
-            //         i. Let nextArgString be parameterStrings[k].
-            //         ii. Set P to the string-concatenation of P, "," (a comma), and nextArgString.
-            //         iii. Set k to k + 1.
-
-            // TODO: Replace with standard `Iterator::intersperse` iterator method when it's stabilized.
-            //       See: <https://github.com/rust-lang/rust/issues/79524>
-            let parameters = itertools::Itertools::intersperse(
-                param_list.iter().map(JsString::iter),
-                js_str!(",").iter(),
-            )
-            .flatten()
-            .collect::<Vec<_>>();
-            let mut parser = Parser::new(Source::from_utf16(&parameters));
+            let mut parser = Parser::new(Source::from_utf16(&parameter_text));
             parser.set_identifier(context.next_parser_identifier());
             parser.set_native_stack_floor(context.vm.native_stack_floor);
 
@@ -572,25 +573,36 @@ impl BuiltInFunctionObject {
             parameters
         };
 
-        let body = if body.is_empty() {
-            FunctionBody::new(StatementList::default(), Span::new((1, 1), (1, 1)))
-        } else {
+        // 15. Let sourceString be the string-concatenation of prefix, " anonymous(", P, 0x000A (LINE FEED), ") {", bodyParseString, and "}".
+        let prefix = match (r#async, generator) {
+            (false, false) => "function",
+            (false, true) => "function*",
+            (true, false) => "async function",
+            (true, true) => "async function*",
+        };
+        let mut source_prefix: Vec<u16> = prefix.encode_utf16().collect();
+        source_prefix.extend(" anonymous(".encode_utf16());
+        source_prefix.extend(&parameter_text);
+        source_prefix.extend("\n) {".encode_utf16());
+
+        let (body, mut source_text) = {
             // 14. Let bodyParseString be the string-concatenation of 0x000A (LINE FEED), bodyString, and 0x000A (LINE FEED).
-            let mut body_parse = Vec::with_capacity(body.len());
+            let mut body_parse = Vec::with_capacity(body.len() + 2);
             body_parse.push(u16::from(b'\n'));
             body_parse.extend(body.iter());
             body_parse.push(u16::from(b'\n'));
 
-            // 19. Let body be ParseText(StringToCodePoints(bodyParseString), bodySym).
-            // 20. If body is a List of errors, throw a SyntaxError exception.
+            // The body is parsed alone, but its source text is the end of sourceString, so the
+            // source text of the functions it contains, and of the whole function, can be shown.
             let mut parser = Parser::new(Source::from_utf16(&body_parse));
             parser.set_identifier(context.next_parser_identifier());
             parser.set_native_stack_floor(context.vm.native_stack_floor);
+            parser.set_source_prefix(&source_prefix);
 
             // 19. Let body be ParseText(StringToCodePoints(bodyParseString), bodySym).
             // 20. If body is a List of errors, throw a SyntaxError exception.
-            let body = parser
-                .parse_function_body(context.interner_mut(), generator, r#async)
+            let (body, source_text) = parser
+                .parse_function_body_with_source(context.interner_mut(), generator, r#async)
                 .map_err(|e| match e {
                     boa_parser::Error::StackExhausted => JsNativeError::from(e),
                     _ => JsNativeError::syntax()
@@ -680,10 +692,13 @@ impl BuiltInFunctionObject {
                 }
             }
 
-            body
+            (body, source_text)
         };
-
-        // TODO: create SourceText : "anonymous(" parameters \n ") {" body_parse "}"
+        source_text.collect_code_point(u32::from(b'}'));
+        let source_span = boa_ast::LinearSpan::new(
+            boa_ast::LinearPosition::new(0),
+            source_text.cur_linear_position(),
+        );
 
         let function_span_start = Position::new(1, 1);
         let function_span_end = body.span().end();
@@ -691,7 +706,7 @@ impl BuiltInFunctionObject {
             None,
             parameters,
             body,
-            None,
+            Some(source_span),
             false,
             Span::new(function_span_start, function_span_end),
         );
@@ -702,7 +717,10 @@ impl BuiltInFunctionObject {
         }
 
         let in_with = context.vm.frame().environments.has_object_environment();
-        let spanned_source_text = SpannedSourceText::new_empty();
+        let spanned_source_text = SpannedSourceText::new(
+            crate::spanned_source_text::SourceText::new(source_text),
+            Some(source_span),
+        );
 
         let code = FunctionCompiler::new(spanned_source_text)
             .name(js_string!("anonymous"))
@@ -719,6 +737,9 @@ impl BuiltInFunctionObject {
                 function.contains_direct_eval(),
                 context.interner_mut(),
             );
+
+        // 22. Let proto be ? GetPrototypeFromConstructor(newTarget, fallbackProto).
+        let prototype = get_prototype_from_constructor(&new_target, default, context)?;
 
         let saved = context.vm.frame_mut().environments.pop_to_global();
         let function_object = crate::vm::create_function_object(code, prototype, context);
@@ -931,10 +952,9 @@ impl BuiltInFunctionObject {
 
         let code = function.codeblock().clone();
         drop(function);
-        let source_available = context.host_hooks().has_source_text_available(
-            &JsFunction::from_object_unchecked(object.clone()),
-            context,
-        );
+        let source_available = context
+            .host_hooks()
+            .has_source_text_available(&JsFunction::from_object_unchecked(object.clone()), context);
         if source_available
             && let Some(code_points) = code.source_info().text_spanned().to_code_points()
         {
@@ -987,8 +1007,8 @@ impl BuiltInFunctionObject {
     /// The getter of the legacy `caller` property of non-strict functions.
     ///
     /// Returns the non-strict function that made the most recent active call to `this`, and
-    /// `null` when `this` is not running, or was called from a strict or built-in function or
-    /// from script or eval code. It never returns a strict function, as the [forbidden
+    /// `null` when `this` is not running, or was called from a strict, generator, async or
+    /// built-in function or from script code. It never returns a strict function, as the [forbidden
     /// extensions][spec] require.
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-forbidden-extensions
@@ -998,14 +1018,30 @@ impl BuiltInFunctionObject {
             return Ok(JsValue::null());
         };
         let vm = &context.vm;
-        let caller = (index > 1)
-            .then(|| vm.stack.get_function(&vm.frames[index - 1]))
-            .flatten()
-            .filter(|caller| {
-                caller
-                    .downcast_ref::<OrdinaryFunction>()
-                    .is_some_and(|f| !f.codeblock().strict())
-            });
+        // The frames of eval code between the two calls do not count: the caller is the
+        // function that ran the eval.
+        let mut caller_index = index;
+        let caller = loop {
+            if caller_index <= 1 {
+                break None;
+            }
+            caller_index -= 1;
+            let frame = &vm.frames[caller_index];
+            match vm.stack.get_function(frame) {
+                Some(function) => break Some(function),
+                None if matches!(
+                    frame.code_block().source_info().map().path(),
+                    SourcePath::Eval
+                ) => {}
+                None => break None,
+            }
+        }
+        .filter(|caller| {
+            caller.downcast_ref::<OrdinaryFunction>().is_some_and(|f| {
+                let code = f.codeblock();
+                !code.strict() && !code.is_generator() && !code.is_async()
+            })
+        });
         Ok(caller.map_or_else(JsValue::null, JsValue::from))
     }
 
