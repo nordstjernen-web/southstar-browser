@@ -149,8 +149,20 @@ impl ByteCompiler<'_> {
 
         let value = compiler.register_allocator.alloc();
         if let Some(expr) = &class.constructor {
-            compiler.code_block_flags |= CodeBlockFlags::HAS_FUNCTION_SCOPE;
-            let _ = compiler.push_scope(expr.scopes().function_scope());
+            // A base class constructor gets its `this` from the frame, so like other functions it
+            // needs a function environment only for bindings that escape, `super` or `new.target`.
+            let scopes = expr.scopes();
+            if class.super_ref.is_some()
+                || expr.contains_direct_eval()
+                || !scopes.function_scope().all_bindings_local()
+                || scopes.requires_function_scope()
+            {
+                compiler.code_block_flags |= CodeBlockFlags::HAS_FUNCTION_SCOPE;
+                let _ = compiler.push_scope(scopes.function_scope());
+            } else {
+                compiler.variable_scope = scopes.function_scope().clone();
+                compiler.lexical_scope = scopes.function_scope().clone();
+            }
 
             compiler.length = expr.parameters().length();
             compiler.params = expr.parameters().clone();
@@ -179,9 +191,8 @@ impl ByteCompiler<'_> {
             compiler.pop_into_register(&value);
             compiler.bytecode.emit_bind_this_value(value.variable());
         } else {
-            // We push an empty, unused function scope since the compiler expects a function scope.
-            compiler.code_block_flags |= CodeBlockFlags::HAS_FUNCTION_SCOPE;
-            let _ = compiler.push_scope(&Scope::new(compiler.lexical_scope.clone(), true));
+            // The implicit constructor of a base class has no bindings and gets its `this` from
+            // the frame, so it needs no function environment.
             compiler.bytecode.emit_store_undefined(value.variable());
         }
         compiler.bytecode.emit_set_accumulator(value.variable());

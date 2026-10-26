@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `new` on a class no longer allocates a function environment
+  for the constructor unless it needs one (a captured binding, `super`,
+  `new.target`, a direct `eval`, or an arrow function using `this`);
+  classes without a constructor get none at all. A loop constructing
+  small class instances takes about a third less CPU time.
 * JavaScript: adding a new property to an ordinary object, as
   constructors (`this.x = x`) and object literals do, skips the generic
   `[[Set]]`/`[[DefineOwnProperty]]` steps when the object and its

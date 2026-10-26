@@ -1509,6 +1509,7 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
         if let Some(super_ref) = &mut node.super_ref {
             self.visit_expression_mut(super_ref)?;
         }
+        let derived = node.super_ref.is_some();
         if let Some(constructor) = &mut node.constructor {
             let node = constructor;
             self.visit_function_like(
@@ -1517,7 +1518,7 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
                 &mut node.scopes,
                 &mut node.name_scope,
                 false,
-                true,
+                derived,
             )?;
         }
         for element in &mut *node.elements {
@@ -1544,6 +1545,7 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
         if let Some(super_ref) = &mut node.super_ref {
             self.visit_expression_mut(super_ref)?;
         }
+        let derived = node.super_ref.is_some();
         if let Some(constructor) = &mut node.constructor {
             self.visit_function_like(
                 &mut constructor.body,
@@ -1551,7 +1553,7 @@ impl<'ast> VisitorMut<'ast> for ScopeIndexVisitor {
                 &mut constructor.scopes,
                 &mut constructor.name_scope,
                 false,
-                true,
+                derived,
             )?;
         }
         for element in &mut *node.elements {
