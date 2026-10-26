@@ -31,6 +31,7 @@ pub struct GeneratorFunction;
 impl IntrinsicObject for GeneratorFunction {
     fn init(realm: &Realm) {
         BuiltInBuilder::from_standard_constructor::<Self>(realm)
+            .prototype(realm.intrinsics().constructors().function().constructor())
             .inherits(Some(
                 realm.intrinsics().constructors().function().prototype(),
             ))

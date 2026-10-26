@@ -29,6 +29,7 @@ pub struct ClassDeclaration {
     pub(crate) constructor: Option<FunctionExpression>,
     pub(crate) elements: Box<[ClassElement]>,
     pub(crate) decorators: Box<[Expression]>,
+    linear_span: Option<LinearSpanIgnoreEq>,
 
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) name_scope: Scope,
@@ -50,8 +51,24 @@ impl ClassDeclaration {
             constructor,
             elements,
             decorators: Box::default(),
+            linear_span: None,
             name_scope: Scope::default(),
         }
+    }
+
+    /// Sets the span of the source text of the class.
+    #[inline]
+    #[must_use]
+    pub fn with_linear_span(mut self, linear_span: LinearSpan) -> Self {
+        self.linear_span = Some(linear_span.into());
+        self
+    }
+
+    /// Returns the span of the source text of the class, if it was recorded.
+    #[inline]
+    #[must_use]
+    pub fn linear_span(&self) -> Option<LinearSpan> {
+        self.linear_span.map(|span| span.0)
     }
 
     /// Sets the decorators applied to the class declaration.
@@ -199,6 +216,7 @@ pub struct ClassExpression {
     pub(crate) constructor: Option<FunctionExpression>,
     pub(crate) elements: Box<[ClassElement]>,
     pub(crate) decorators: Box<[Expression]>,
+    linear_span: Option<LinearSpanIgnoreEq>,
 
     span: Span,
 
@@ -229,9 +247,25 @@ impl ClassExpression {
             constructor,
             elements,
             decorators: Box::default(),
+            linear_span: None,
             span,
             name_scope,
         }
+    }
+
+    /// Sets the span of the source text of the class.
+    #[inline]
+    #[must_use]
+    pub fn with_linear_span(mut self, linear_span: LinearSpan) -> Self {
+        self.linear_span = Some(linear_span.into());
+        self
+    }
+
+    /// Returns the span of the source text of the class, if it was recorded.
+    #[inline]
+    #[must_use]
+    pub fn linear_span(&self) -> Option<LinearSpan> {
+        self.linear_span.map(|span| span.0)
     }
 
     /// Sets the decorators applied to the class expression.

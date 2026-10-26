@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: `Function.prototype.toString` returns the source text of
+  classes (`class A {}` printed as `function A() { [native code] }`, which
+  broke the common `/^class\b/` test for telling classes from functions)
+  and of functions made by `Function()`, `GeneratorFunction()` and the
+  async variants (`function anonymous(a\n) {\nbody\n}`), as well as of
+  the functions declared inside them. A bound function called with `new`
+  runs its target as the callee (`arguments.callee` was the bound
+  function), `Function()` parses its source before reading
+  `newTarget.prototype`, a parameter's default function or class takes the
+  parameter's name, the legacy `caller` skips eval frames and never reports
+  a generator or async function, and `GeneratorFunction` and
+  `AsyncGeneratorFunction` inherit from `Function`.
 * JavaScript: regular expression matching does far less work per match.
   `RegExp.prototype.exec` no longer copies the compiled regular expression
   or widens an ASCII subject string into a new buffer on every call,
