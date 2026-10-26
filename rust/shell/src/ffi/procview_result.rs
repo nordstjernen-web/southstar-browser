@@ -100,6 +100,37 @@ fn dup(s: *const c_char) -> *mut c_char {
     unsafe { glib::g_strdup(s) }
 }
 
+fn url_bytes<'a>(url: *const c_char) -> Option<&'a [u8]> {
+    // SAFETY: every URL the view holds or receives is null or a NUL-terminated string it owns.
+    unsafe { glib::bytes(url) }
+}
+
+fn is_local(url: *const c_char) -> bool {
+    url_bytes(url).is_some_and(nav::is_local_url)
+}
+
+fn page_may_open(v: *mut NsProcView, url: *const c_char) -> bool {
+    if !is_local(url) || view(v).local_page != 0 {
+        return true;
+    }
+    post_emit(
+        v,
+        EVT_STATUS,
+        tr(c"Blocked a web page from opening a local file"),
+    );
+    false
+}
+
+pub(super) fn ns_pv_page_may_open(v: *mut NsProcView, url: *const c_char) -> bool {
+    page_may_open(v, url)
+}
+
+fn page_load(v: *mut NsProcView, url: *const c_char) {
+    if page_may_open(v, url) {
+        load(v, url);
+    }
+}
+
 fn replace(slot: &mut *mut c_char, value: *mut c_char) {
     unsafe { glib::g_free((*slot).cast()) };
     *slot = value;
@@ -173,7 +204,11 @@ fn follow_same_document_state(
     pushed: bool,
     title: *const c_char,
 ) {
-    if nonempty(url) && !same(url, view(v).current_url) {
+    let state = view(v);
+    let accepted = url_bytes(url).is_some_and(|next| {
+        nav::same_document_url_ok(url_bytes(state.current_url), next, state.local_page != 0)
+    });
+    if nonempty(url) && accepted && !same(url, view(v).current_url) {
         let index = view(v).hist_index;
         if pushed || index < 0 {
             push_history(v, url);
@@ -210,6 +245,7 @@ pub(super) fn do_load(
     ns_pv_media_video_shutdown(v);
     let state = view(v);
     state.pending_record = glib::boolean(record);
+    state.pending_local = glib::boolean(is_local(url));
     state.load_seq += 1;
     let seq = state.load_seq;
     state.render_seq += 1;
@@ -427,7 +463,8 @@ fn side_channels(v: *mut NsProcView, res: &Res) {
 
 fn redirect(v: *mut NsProcView, nav_url: *const c_char) -> bool {
     let state = view(v);
-    if nonempty(nav_url) && state.js_redirects < nav::MAX_JS_REDIRECTS {
+    if nonempty(nav_url) && state.js_redirects < nav::MAX_JS_REDIRECTS && page_may_open(v, nav_url)
+    {
         state.js_redirects += 1;
         do_load(v, nav_url, false, false, false);
         return true;
@@ -445,7 +482,7 @@ fn on_page(v: *mut NsProcView, res: &Res) {
         clear_busy_cursor(v);
         return;
     }
-    if nonempty(res.nav) {
+    if nonempty(res.nav) && page_may_open(v, res.nav) {
         let state = view(v);
         if state.js_redirects < nav::MAX_JS_REDIRECTS {
             state.js_redirects += 1;
@@ -456,6 +493,17 @@ fn on_page(v: *mut NsProcView, res: &Res) {
         post_emit(v, EVT_STATUS, tr(c"Stopped after too many redirects"));
     }
     let state = view(v);
+    if is_local(res.url) && state.pending_local == 0 {
+        post_emit(
+            v,
+            EVT_STATUS,
+            tr(c"Blocked a web page from opening a local file"),
+        );
+        finish_loading(v);
+        clear_busy_cursor(v);
+        return;
+    }
+    state.local_page = glib::boolean(is_local(res.url));
     state.js_redirects = 0;
     replace(&mut state.current_url, dup(res.url));
     replace(&mut state.current_title, dup(res.title));
@@ -642,8 +690,8 @@ fn on_link(v: *mut NsProcView, res: &Res) {
     if nonempty(res.href) {
         if res.action == ACT_NAVIGATE {
             navigated = true;
-            load(v, res.href);
-        } else if res.action == ACT_NEWTAB {
+            page_load(v, res.href);
+        } else if res.action == ACT_NEWTAB && page_may_open(v, res.href) {
             post_emit(v, EVT_NEWTAB, res.href);
         }
     }
@@ -850,7 +898,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             }
             if res.kind == 0 && nonempty(res.href) {
                 post_emit(v, EVT_STATUS, res.href);
-                load(v, res.href);
+                page_load(v, res.href);
             } else {
                 if res.fallback_scroll != 0 && res.prevented == 0 {
                     scroll_view_to(v, res.fallback_x, res.fallback_y);
@@ -864,7 +912,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             }
             if nonempty(res.href) {
                 post_emit(v, EVT_STATUS, res.href);
-                load(v, res.href);
+                page_load(v, res.href);
             } else {
                 request_render(v);
             }
@@ -880,7 +928,7 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
         RES_RELEASE => {
             if nonempty(res.href) {
                 post_emit(v, EVT_STATUS, res.href);
-                load(v, res.href);
+                page_load(v, res.href);
             } else if res.ok != 0 {
                 request_render(v);
             }
@@ -1029,6 +1077,10 @@ pub(super) fn ns_proc_view_exit_fullscreen(v: *mut NsProcView) {
 
 pub(super) fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char {
     view(v).current_url
+}
+
+pub(super) fn ns_proc_view_local_page(v: *mut NsProcView) -> bool {
+    !v.is_null() && view(v).local_page != 0
 }
 
 pub(super) fn ns_proc_view_title(v: *mut NsProcView) -> *const c_char {

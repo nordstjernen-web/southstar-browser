@@ -9,6 +9,18 @@ Southstar Browser 1.0.2-dev:
   first stop instead of collapsing it to `rgb(255, 0, 0)`, as CSS Color 4
   requires. WPT `gradient-interpolation-method-computed.html` goes from 466
   to 932 of 932 subtests.
+* Security: the shell decides for itself whether a tab shows a local file.
+  It records a page as local only when the browser UI (address bar,
+  bookmarks, history, reload) asked for a `file:` URL, and it ignores a
+  renderer's claim of a `file:` origin: renderer-requested navigations,
+  links and new tabs to `file:` URLs from a web page are refused, and a
+  same-document URL update must stay on the committed origin. Copying a
+  `file:` download into the Downloads folder and letting the audio helper
+  open an arbitrary `file://` URL both depend on that shell-tracked state,
+  so a compromised renderer can no longer reach local files through them.
+  The helpers' `file://` media streams must name a stream file directly
+  inside `~/.cache/southstar/msvideo` or `msaudio`, checked after
+  resolving symbolic links, and must not be a link themselves.
 * Text layout asks the font for its table data (nominal glyphs, advances,
   GDEF glyph classes and ligature carets, OpenType metrics, font extents and
   GSUB feature support) instead of calling HarfBuzz directly. In a

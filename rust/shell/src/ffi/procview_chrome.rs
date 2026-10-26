@@ -13,7 +13,7 @@ use super::gtk::{connect, cstring, handler, set_accessible_label, tr};
 use super::procview_input::{push_req, run_edit_op, start_select};
 use super::procview_result::{
     ns_proc_view_back, ns_proc_view_can_back, ns_proc_view_can_forward, ns_proc_view_forward,
-    ns_proc_view_load, ns_proc_view_reload, perm_resolve, post_emit,
+    ns_proc_view_load, ns_proc_view_reload, ns_pv_page_may_open, perm_resolve, post_emit,
 };
 use super::procview_state::{NsProcView, PrintSetup, Req};
 use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
@@ -318,14 +318,14 @@ unsafe extern "C" fn on_ctx_copy_url(_a: *mut c_void, _p: *mut c_void, ud: *mut 
 
 unsafe extern "C" fn on_ctx_open_newtab(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    if nonempty(view(v).ctx_link) {
+    if nonempty(view(v).ctx_link) && ns_pv_page_may_open(v, view(v).ctx_link) {
         post_emit(v, EVT_NEWTAB, view(v).ctx_link);
     }
 }
 
 unsafe extern "C" fn on_ctx_open_link(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    if nonempty(view(v).ctx_link) {
+    if nonempty(view(v).ctx_link) && ns_pv_page_may_open(v, view(v).ctx_link) {
         ns_proc_view_load(v, view(v).ctx_link);
     }
 }

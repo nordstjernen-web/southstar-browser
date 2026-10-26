@@ -60,6 +60,33 @@ pub fn line_ok(cmd: &[u8]) -> bool {
     cmd.len() < HELPER_LINE_MAX - 1 && !cmd.iter().any(|&b| b == b'\r' || b == b'\n')
 }
 
+fn stream_file_name_ok(name: &[u8]) -> bool {
+    let Some(stem) = name.strip_suffix(b".dat") else {
+        return false;
+    };
+    let Some((&kind, rest)) = stem.split_first() else {
+        return false;
+    };
+    let rest = rest.strip_prefix(b"-").unwrap_or(rest);
+    let Some((pid, token)) = rest
+        .iter()
+        .position(|&b| b == b'-')
+        .map(|i| rest.split_at(i))
+    else {
+        return false;
+    };
+    let digits = |s: &[u8]| (1..=10).contains(&s.len()) && s.iter().all(u8::is_ascii_digit);
+    matches!(kind, b'a' | b'v') && digits(pid) && digits(&token[1..])
+}
+
+pub fn stream_file_parts(url: &[u8]) -> Option<(&[u8], &[u8])> {
+    let rest = url.strip_prefix(b"file://")?;
+    let path = rest.strip_prefix(b"localhost").unwrap_or(rest);
+    let split = path.iter().rposition(|&b| b == b'/' || b == b'\\')?;
+    let (dir, name) = (&path[..split], &path[split + 1..]);
+    (!dir.is_empty() && stream_file_name_ok(name)).then_some((dir, name))
+}
+
 pub fn open_url(cmd: &[u8]) -> Option<&[u8]> {
     let mut s = cmd;
     while s.first().is_some_and(|&b| is_blank(b)) {

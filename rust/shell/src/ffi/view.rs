@@ -15,9 +15,9 @@ use super::procview_chrome::{
 use super::procview_result::{
     ns_proc_view_audio_pid, ns_proc_view_back, ns_proc_view_can_back, ns_proc_view_can_forward,
     ns_proc_view_end_task, ns_proc_view_exit_fullscreen, ns_proc_view_favicon, ns_proc_view_focus,
-    ns_proc_view_forward, ns_proc_view_is_loading, ns_proc_view_load, ns_proc_view_reload,
-    ns_proc_view_remote_ip, ns_proc_view_renderer_pid, ns_proc_view_security, ns_proc_view_stop,
-    ns_proc_view_stop_audio, ns_proc_view_stop_video, ns_proc_view_title,
+    ns_proc_view_forward, ns_proc_view_is_loading, ns_proc_view_load, ns_proc_view_local_page,
+    ns_proc_view_reload, ns_proc_view_remote_ip, ns_proc_view_renderer_pid, ns_proc_view_security,
+    ns_proc_view_stop, ns_proc_view_stop_audio, ns_proc_view_stop_video, ns_proc_view_title,
     ns_proc_view_toggle_console, ns_proc_view_url, ns_proc_view_video_pid, ns_proc_view_zoom_in,
     ns_proc_view_zoom_out, ns_proc_view_zoom_percent, ns_proc_view_zoom_reset,
 };
@@ -110,6 +110,10 @@ impl View {
 
     pub fn url(self) -> Option<CString> {
         owned(ns_proc_view_url(self.p()))
+    }
+
+    pub fn is_local_page(self) -> bool {
+        ns_proc_view_local_page(self.p())
     }
 
     pub fn title(self) -> Option<CString> {
