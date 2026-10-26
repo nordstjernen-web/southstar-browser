@@ -13,7 +13,7 @@ mod ellipsize;
 pub mod emoji;
 mod engine;
 
-pub use engine::{WEB_FONT_OBJECT, accepts_web_font};
+pub use engine::{WEB_FONT_OBJECT, accepts_web_font, install_web_font};
 #[allow(unsafe_code)]
 mod ffi;
 pub mod font;
@@ -47,5 +47,7 @@ pub mod types;
 pub mod unicode;
 mod utf8;
 pub mod utils;
+#[cfg(feature = "rust-shaper")]
+mod web_font;
 
 pub use types::*;

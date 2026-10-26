@@ -12,11 +12,10 @@ through a cairo user font (see "Drawing") and has its color glyphs (COLR v0
 and v1, CBDT, sbix) painted in Rust (see "Color glyphs"), so neither FreeType
 nor HarfBuzz reads a web font to shape or draw it. A web font `read-fonts`
 cannot parse is not installed at all. HarfRust matched HarfBuzz exactly in
-97% of a 22,000-case corpus, with no glyph or cluster differences. Step 4 is
-done: `rust/bidi` replaced FriBiDi and `rust/unicode` GLib's Unicode data.
-What remains for web fonts is indexing: fontconfig still builds their
-patterns with FreeType (`FcConfigAppFontAddFile`, `FcFreeTypeQueryAll`).
-System fonts keep the C path.
+97% of a 22,000-case corpus, with no glyph or cluster differences. Web fonts
+are also indexed from `read-fonts` (see "Web fonts"), so FreeType never opens
+a downloaded font. Step 4 is done: `rust/bidi` replaced FriBiDi and
+`rust/unicode` GLib's Unicode data. System fonts keep the C path.
 
 This note describes a possible later step for Southstar's text stack:
 replacing the C libraries under text layout — HarfBuzz, FreeType,
@@ -184,10 +183,16 @@ and HarfBuzz parse it again to draw and shape it. The order of work:
    produced `loca` tables pointing past the end of `glyf` in 355 of the 358
    (it truncated FreeType's own reconstruction to the original table
    length); FreeType tolerated it.
-2. **Index.** Build the fontconfig patterns in Rust from `read-fonts`
-   (charset from `cmap`, languages through `FcLangGetCharSet`) instead of
-   `FcConfigAppFontAddFile` and `FcFreeTypeQueryAll`, checked field by field
-   against fontconfig's own patterns.
+2. **Index (done).** `rust/text/src/web_font.rs` builds the fontconfig
+   patterns from `read-fonts` instead of `FcConfigAppFontAddFile` and
+   `FcFreeTypeQueryAll`: the default instance, named instances and the
+   variable pattern of every face, with fontconfig's name-table order and
+   language tags, weight, width and slant from OS/2 and style names, the
+   charset from the Unicode (or symbol) `cmap`, languages through
+   fontconfig's orthographies (`FcLangGetCharSet`), spacing, OpenType
+   capabilities, hinting, color and bitmap-strike fields. Over 535 font
+   files (the Windows fonts, Google web fonts and the color test fonts, 691
+   patterns) all 31 fields compared equal fontconfig's.
 3. **Draw.** Web fonts get a Rust backend in `rust/text`: `skrifa` metrics and
    outlines drawn through a cairo user font (the hex-box path already uses
    one) and HarfRust shaping, first behind a switch for old/new screenshots.
@@ -249,6 +254,8 @@ untrusted `@font-face` data carries the risk, the shaping and table answers
 match HarfBuzz, and the drawing differs from cairo-ft only in anti-aliasing,
 while COLR v1 fonts that crash the cairo-ft path render. System fonts stay on
 HarfBuzz, FreeType and cairo-ft until there is a reason to move them; `all`
-is there to compare. Next: build web-font patterns from `read-fonts` instead
-of `FcFreeTypeQueryAll` (step 2 of "Web fonts"), which takes FreeType out of
-the web-font path entirely.
+is there to compare. With web fonts indexed from `read-fonts` as well, a
+downloaded font reaches only memory-safe parsers: `rust/woff2`, `read-fonts`,
+HarfRust and `skrifa`; cairo draws paths and images, and fontconfig matches
+patterns. What would remain is moving system fonts, which carry no
+attacker-controlled data.

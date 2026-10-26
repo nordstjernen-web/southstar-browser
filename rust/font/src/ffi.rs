@@ -375,6 +375,11 @@ pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
 #[cfg(not(feature = "fontconfig"))]
 pub fn install_font_file(_path: &CStr, _family: &[u8], _descriptors: Descriptors) {}
 
+pub fn refresh_fonts() {
+    #[cfg(feature = "fontconfig")]
+    refresh_text_font_map();
+}
+
 #[cfg(feature = "fontconfig")]
 fn refresh_text_font_map() {
     southstar_text::fontmap::FontMap::default_for_thread().config_changed();

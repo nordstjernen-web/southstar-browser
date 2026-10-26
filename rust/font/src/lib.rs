@@ -369,7 +369,20 @@ fn install(keys: &[Vec<u8>], data: &[u8], forced_extension: Option<&[u8]>) {
             continue;
         };
         if ffi::write_file(&path, data) {
-            ffi::install_font_file(&path, &family, descriptors);
+            let indexed = path.to_str().is_ok_and(|path| {
+                southstar_text::install_web_font(
+                    path,
+                    data,
+                    &String::from_utf8_lossy(&family),
+                    descriptors.weight,
+                    descriptors.slant,
+                )
+            });
+            if indexed {
+                ffi::refresh_fonts();
+            } else {
+                ffi::install_font_file(&path, &family, descriptors);
+            }
             mark_loaded(key);
         }
     }
