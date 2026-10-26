@@ -1,7 +1,7 @@
 # The Boa fork
 
 Southstar's JavaScript engine is [Boa](https://github.com/boa-dev/boa).
-Four of its crates are forked into `third_party/`, each a copy of the
+Five of its crates are forked into `third_party/`, each a copy of the
 **0.22.0** release from crates.io patched into the build through
 `[patch.crates-io]` in `Cargo.toml`:
 
@@ -11,10 +11,11 @@ Four of its crates are forked into `third_party/`, each a copy of the
 | `boa_parser` | `641e81b3c8cbb7a2140547fb3ea534e9edf210b4e8c920b5fa864a919e11fbcf` |
 | `boa_ast` | `9221b0a090572b4a118b46c5874c0781fe4bc9546b85f0a615b8bfb609ca4ed7` |
 | `boa_gc` | `af82119558ab1002d1978c8459b53a3ebb506177d29a3aca37c07c1777b1d966` |
+| `boa_string` | `30bf86c2bcff5bf2547acbfc516c5d3108ca527cb131511d749bf6fbef762c0e` |
 
 `boa_engine` carries a small set of embedder hooks; the parser and the AST
-were forked for syntax that 0.22 does not parse, and `boa_gc` for the cost of
-its thread-locals on Windows. `boa_interner`, `boa_string` and the other Boa
+were forked for syntax that 0.22 does not parse, `boa_gc` for the cost of
+its thread-locals on Windows, and `boa_string` for rope strings. `boa_interner` and the other Boa
 crates come unchanged from crates.io at the
 same version, and `rust/js-engine` is the only crate that depends on Boa.
 
@@ -66,6 +67,7 @@ of each (`--crate boa_parser` limits it to one). On
 | An arrow's `this` escapes to the nearest enclosing function that is not an arrow: arrow function scopes are marked `lexical_this`, and `Scope::escape_this_in_enclosing_function_scope` walks past them, where it used to mark the first enclosing function scope, so a method whose `this` was used only by an arrow nested inside another arrow never kept its `this` and the inner arrow read the global object | `boa_ast`: `scope.rs`, `scope_analyzer.rs` | every page | yes: a bug fix |
 | A direct `eval` makes only the bindings of the functions that contain it escape: the escape analysis no longer carries the direct-eval flag into nested functions that contain no `eval` of their own, nor into every function of indirect-eval code, so their locals stay in registers instead of runtime-searched environments (code compiled through `(0,eval)(…)` or beside a `function(s){return eval(s)}` ran up to six times slower) | `boa_ast`: `scope_analyzer.rs` | every page: obfuscated scripts such as Google's search challenge | yes: a performance fix |
 | `Function.prototype.toString` asks `HostHooks::has_source_text_available` (HostHasSourceTextAvailable) before returning a function's source text and gives the native-code form when the host says no | `boa_engine`: `builtins/function/mod.rs` | engine-implemented web APIs print as `function createElement() { [native code] }`, as in other browsers | yes: the spec hook was unused |
+| `JsString::concat_lazy` joins two strings whose combined length is at least 512 code units as a rope (`RopeString`, a new `JsStringKind`) that keeps both halves and copies them into a sequence string the first time its characters are read; flattening and dropping walk a chain of ropes iteratively. The `+` operator and template literals (`ConcatToString`, which joins each long piece as a rope and the short runs between them flat) use it | `boa_string`: `vtable/rope.rs` (new), `vtable/mod.rs`, `lib.rs`, `display.rs`, `tests.rs`; `boa_engine`: `value/operations.rs`, `vm/opcode/concat/mod.rs` | every page: `s += piece` copied the whole string on every step, so building a string of n pieces took quadratic time (200,000 appends took 80 s, now 0.2 s) | yes: upstream has an open pull request for ropes (boa-dev/boa#5006) |
 | `Cargo.toml`: no `cdylib` crate type; the tests, benches, dev-dependencies and lint tables of files the crate does not ship are dropped (in `boa_parser` and `boa_ast` too) | `Cargo.toml` | building as an rlib inside the workspace | no |
 
 ## Conformance work

@@ -1,11 +1,10 @@
 use crate::{
-    Context, JsBigInt, JsResult, JsValue, JsVariant,
+    Context, JsBigInt, JsResult, JsString, JsValue, JsVariant,
     builtins::{
         Number,
         number::{f64_to_int32, f64_to_uint32},
     },
     error::JsNativeError,
-    js_string,
     value::{JsSymbol, Numeric, PreferredType},
 };
 
@@ -24,15 +23,21 @@ impl JsValue {
             (JsVariant::BigInt(x), JsVariant::BigInt(y)) => Self::new(JsBigInt::add(&x, &y)),
 
             // String concat
-            (JsVariant::String(x), JsVariant::String(y)) => Self::from(js_string!(&x, &y)),
+            (JsVariant::String(x), JsVariant::String(y)) => {
+                Self::from(JsString::concat_lazy(&x, &y))
+            }
 
             // Slow path:
             (_, _) => {
                 let x = self.to_primitive(context, PreferredType::Default)?;
                 let y = other.to_primitive(context, PreferredType::Default)?;
                 match (x.variant(), y.variant()) {
-                    (JsVariant::String(x), _) => Self::from(js_string!(&x, &y.to_string(context)?)),
-                    (_, JsVariant::String(y)) => Self::from(js_string!(&x.to_string(context)?, &y)),
+                    (JsVariant::String(x), _) => {
+                        Self::from(JsString::concat_lazy(&x, &y.to_string(context)?))
+                    }
+                    (_, JsVariant::String(y)) => {
+                        Self::from(JsString::concat_lazy(&x.to_string(context)?, &y))
+                    }
                     (_, _) => {
                         match (x.to_numeric(context)?, y.to_numeric(context)?) {
                             (Numeric::Number(x), Numeric::Number(y)) => Self::new(x + y),

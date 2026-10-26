@@ -31,6 +31,9 @@ audit-as-crates-io = false
 [policy.boa_parser]
 audit-as-crates-io = false
 
+[policy.boa_string]
+audit-as-crates-io = false
+
 [[exemptions.aligned-vec]]
 version = "0.6.4"
 criteria = "safe-to-deploy"
@@ -60,10 +63,6 @@ version = "0.22.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.boa_macros]]
-version = "0.22.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.boa_string]]
 version = "0.22.0"
 criteria = "safe-to-deploy"
 
