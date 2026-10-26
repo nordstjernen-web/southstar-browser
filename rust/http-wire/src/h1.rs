@@ -6,6 +6,10 @@ fn on_one_line(text: &[u8]) -> bool {
     !text.iter().any(|&c| matches!(c, b'\r' | b'\n' | 0))
 }
 
+pub fn field_is_one_line(name: &[u8], value: &[u8]) -> bool {
+    on_one_line(name) && on_one_line(value)
+}
+
 pub fn request_head(
     method: &[u8],
     path: &[u8],
@@ -24,7 +28,7 @@ pub fn request_head(
     out.extend_from_slice(b"\r\n");
     for (name, value) in fields
         .iter()
-        .filter(|(name, value)| on_one_line(name) && on_one_line(value))
+        .filter(|(name, value)| field_is_one_line(name, value))
     {
         out.extend_from_slice(name);
         out.extend_from_slice(b": ");

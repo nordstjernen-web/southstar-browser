@@ -85,7 +85,7 @@ impl<'h> Transfer<'h> {
             return;
         }
         self.header_bytes += name.len() + value.len();
-        if self.header_bytes > MAX_HEADER_BYTES {
+        if self.header_bytes > MAX_HEADER_BYTES || !crate::h1::field_is_one_line(name, value) {
             self.proto_error = true;
             return;
         }

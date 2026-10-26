@@ -237,3 +237,36 @@ fn request_head_drops_header_lines_that_would_split() {
     assert!(text.contains("Accept: */*\r\n"));
     assert!(text.contains("X-Fine: 3\r\n"));
 }
+
+fn literal_with_long_value(value_len: usize) -> Vec<u8> {
+    let mut block = vec![0x40, 0x01, b'x', 0x7f];
+    let mut rest = value_len - 127;
+    while rest >= 0x80 {
+        block.push((rest & 0x7f) as u8 | 0x80);
+        rest >>= 7;
+    }
+    block.push(rest as u8);
+    block.extend(std::iter::repeat_n(b'v', value_len));
+    block
+}
+
+#[test]
+fn hpack_header_list_is_bounded() {
+    let mut block = literal_with_long_value(4000);
+    block.extend(std::iter::repeat_n(0xbe, 300));
+    assert!(hpack::Decoder::new(4096).decode(&block).is_err());
+    let mut block = literal_with_long_value(4000);
+    block.extend(std::iter::repeat_n(0xbe, 100));
+    let decoded = hpack::Decoder::new(4096)
+        .decode(&block)
+        .expect("a list under the limit decodes");
+    assert_eq!(decoded.len(), 101);
+}
+
+#[test]
+fn field_lines_reject_line_breaks() {
+    assert!(h1::field_is_one_line(b"x-a", b"value"));
+    assert!(!h1::field_is_one_line(b"x-a", b"v\r\nset-cookie: a=b"));
+    assert!(!h1::field_is_one_line(b"x\na", b"v"));
+    assert!(!h1::field_is_one_line(b"x-a", b"v\0"));
+}
