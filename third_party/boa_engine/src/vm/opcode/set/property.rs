@@ -5,7 +5,11 @@ use crate::vm::opcode::{IndexOperand, RegisterOperand};
 use crate::{
     Context, JsNativeError, JsResult,
     builtins::function::set_function_name,
-    object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
+    object::{
+        JsObject,
+        internal_methods::{InternalMethodPropertyContext, set_new_ordinary_data_property},
+        shape::slot::{Slot, SlotAttributes},
+    },
     property::{PropertyDescriptor, PropertyKey},
     vm::{LookedUp, opcode::Operation},
 };
@@ -68,6 +72,21 @@ fn set_by_name(
     drop(object_borrowed);
 
     let name: PropertyKey = ic.name.clone().into();
+
+    if receiver
+        .as_object()
+        .is_some_and(|receiver| JsObject::equals(&receiver, &object))
+    {
+        let mut slot = Slot::new();
+        if set_new_ordinary_data_property(&object, &name, &value, &mut slot) {
+            if slot.is_cacheable() {
+                let ic = &context.vm.frame().code_block.ic[usize::from(index)];
+                let object_borrowed = object.borrow();
+                ic.set_after_access(&looked_up, object_borrowed.shape(), slot);
+            }
+            return Ok(());
+        }
+    }
 
     let context = &mut InternalMethodPropertyContext::new(context);
     let succeeded = object.__set__(name.clone(), value.clone(), receiver.clone(), context)?;
