@@ -228,6 +228,28 @@ per file.
 | | `css/cssom` | +9 |
 | `calc-size()` and `interpolate-size: allow-keywords` | `css/css-values/calc-size` | 1253 → ~2200 (`calc-size-width-interpolation.html` 0 → 732/732) |
 
+## Top 10 improvements — 2026-10-26
+
+Re-clustered from the 2026-10-26 Windows slice (2571 CSS files plus
+`html/syntax` and `domparsing`). Items 6–9 of the 2026-10-14 list (scroll
+snap logical longhands, `mask-*`, `place-*` computed, clip-path) have
+landed since; the gap decorations, gradient stop colours, sheet flush,
+DOMException and `calc-size()` work above came from this list's
+predecessor survey.
+
+| # | Improvement | Evidence | Est. gain |
+|---|-------------|----------|-----------|
+| 1 | **Style recalculation speed** — big computed-value files run 15–50 ms per subtest and hit the 60 s script limit or the runner's timeout (`color-computed-*`, `color-valid-relative-color`, `calc-size-height-interpolation`, `all-prop-revert-layer`). A deferred sheet flush rewrites and reparses the whole sheet text. | harness `TIMEOUT`/hang on the largest files | ~3000 + flake-free gating |
+| 2 | **Iframe realms** — an iframe document's objects use the parent realm's prototypes, so `assert_throws_dom` with the iframe's `DOMException` reports "wrong global". | `attribute-case/syntax.html` (76), many iframe tests | ~150+ |
+| 3 | **CSS `if()`** — not implemented (`style()`, `media()`, `supports()` conditions at substitution time). | `css-values/if-conditionals.html`, `if-cycle.html` | ~250 |
+| 4 | **Trusted Types parser options** (carried over) — `TrustedHTMLParserOptions` and policy-injected sanitizers. | `domparsing/positional-methods-with-*` | ~600 |
+| 5 | **`palette-mix()` and `@font-palette-values`** — `font-palette` lacks `palette-mix()`; the at-rule's descriptors are not validated. The colour-mix percentage normalization in `rust/css-color` can be shared. | `css-fonts/parsing/palette-mix-*`, `font-palette-values-*` | ~190 |
+| 6 | **`calc-size()` residue** — additive composition, flex-basis and replaced/table/list-box sizing, nonlinear `size` expressions. | `css-values/calc-size` (~300 left) | ~300 |
+| 7 | **Anchor positioning parsing** — `position-try-fallbacks`, `position-try` and friends. | `css-anchor-position/parsing` | ~180 |
+| 8 | **`color-layers()`** and font-relative `calc()` inside colours (carried over). | `css-color/parsing` | ~250 |
+| 9 | **Grid computed tracks** — implicit tracks in `grid-template-*` computed values and intrinsic `repeat(auto-fill, …)` tracks. | `css-grid/parsing/*-implicit-track*`, `*-intrinsic-auto-repeat-*` | ~150 |
+| 10 | **Small parsing clusters** — `@font-face src` `tech()`/`format()`/`local()`, highlight pseudo-elements, `scroll-button()`, `block-step`, `line-clamp`. | their `parsing` files | ~200 |
+
 ## Top 10 improvements — 2026-10-14
 
 Re-clustered from the 2026-10-14 Windows slice. The 2026-07-13 list's
