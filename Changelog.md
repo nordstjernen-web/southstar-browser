@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Text layout asks the font for its table data (nominal glyphs, advances,
+  GDEF glyph classes and ligature carets, OpenType metrics, font extents and
+  GSUB feature support) instead of calling HarfBuzz directly. In a
+  `-Drust-shaper=true` build, fonts on the Rust path answer those queries
+  from `read-fonts` (`rust/text/src/rust_tables.rs`), reproducing HarfBuzz
+  14.2's arithmetic down to its round-half-up `roundf`; over 3,252 font
+  instances, 4.19 million glyphs and 68,211 caret queries every answer equals
+  HarfBuzz's. `NS_RUST_FONTS=off|web|all` chooses which fonts take that path.
 * JavaScript: building a string by repeated `+=` or template literals
   takes linear time instead of quadratic. `boa_string` joins the Boa fork
   in `third_party/` and gains rope strings: `+` and template literals

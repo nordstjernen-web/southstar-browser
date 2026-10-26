@@ -240,11 +240,9 @@ fn find_hyphen(analysis: &Analysis, log_attrs: Option<&[LogAttr]>, num_chars: us
     let Some(font) = analysis.font.as_ref() else {
         return HYPHEN_NONE;
     };
-    let hb_font = font.hb_font();
-    let mut glyph = 0;
-    let mut hyphen = if hb_font.nominal_glyph_into(0x2010, &mut glyph) {
+    let mut hyphen = if font.nominal_glyph(0x2010).is_some() {
         HYPHEN_UNICODE
-    } else if hb_font.nominal_glyph_into(u32::from('-'), &mut glyph) {
+    } else if font.nominal_glyph(u32::from('-')).is_some() {
         HYPHEN_ASCII
     } else {
         HYPHEN_MISSING
@@ -494,12 +492,6 @@ fn rust_shape(_: &ShapeRequest<'_>, _: &mut GlyphString, _: Option<&mut CutSafet
 }
 
 #[cfg(feature = "rust-shaper")]
-fn rust_shaper_enabled() -> bool {
-    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ENABLED.get_or_init(|| std::env::var("NS_TEXT_SHAPER").map_or(true, |v| v != "harfbuzz"))
-}
-
-#[cfg(feature = "rust-shaper")]
 fn rust_shape(
     request: &ShapeRequest<'_>,
     glyphs: &mut GlyphString,
@@ -507,11 +499,8 @@ fn rust_shape(
 ) -> bool {
     use crate::rust_shaper::{self, ShapeDirection, buffer_flags, glyph_flags};
 
-    if !rust_shaper_enabled() {
-        return false;
-    }
     let analysis = request.analysis;
-    let Some(font) = analysis.font.as_ref() else {
+    let Some(font) = analysis.font.as_ref().filter(|font| font.is_rust_backed()) else {
         return false;
     };
     let Ok(paragraph) = core::str::from_utf8(request.paragraph) else {

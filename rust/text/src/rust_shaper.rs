@@ -136,18 +136,22 @@ const MAX_CACHED_PLANS: usize = 64;
 pub struct ShaperFace {
     font: harfrust::Font,
     default_instance: Option<harfrust::Font>,
-    x_scale: i32,
-    y_scale: i32,
+    pub(crate) x_scale: i32,
+    pub(crate) y_scale: i32,
     point_size: f32,
     slant_xy: f32,
     x_strength: i32,
-    y_strength: i32,
+    pub(crate) y_strength: i32,
     num_glyphs: u32,
     plans: Mutex<Vec<Arc<ShapePlan>>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+pub(crate) fn hb_roundf(value: f32) -> i32 {
+    (value + 0.5).floor() as i32
 }
 
 fn varied_advance_units(default: F48Dot16, varied: F48Dot16) -> i32 {
@@ -297,8 +301,8 @@ impl ShaperFace {
             y_scale: setup.y_scale,
             point_size: setup.point_size,
             slant_xy,
-            x_strength: (setup.x_scale.unsigned_abs() as f32 * setup.embolden).round() as i32,
-            y_strength: (setup.y_scale.unsigned_abs() as f32 * setup.embolden).round() as i32,
+            x_strength: hb_roundf(setup.x_scale.unsigned_abs() as f32 * setup.embolden),
+            y_strength: hb_roundf(setup.y_scale.unsigned_abs() as f32 * setup.embolden),
             default_instance: (!face.normalized_coords().is_empty())
                 .then(|| face.default_instance()),
             font: face,
@@ -974,7 +978,7 @@ impl ShapePass<'_> {
                 }
                 let mut x_offset = position.x_offset;
                 if slant_xy != 0. && position.y_offset != 0 {
-                    x_offset += (slant_xy * position.y_offset as f32).round() as i32;
+                    x_offset += hb_roundf(slant_xy * position.y_offset as f32);
                 }
                 ShapedGlyph {
                     glyph: funcs.stand_ins.made_up_for(info.glyph_id),
