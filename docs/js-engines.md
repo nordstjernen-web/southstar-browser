@@ -51,3 +51,14 @@ On 2026-10-15 the in-tree fork (`third_party/boa_engine`, its changes listed in 
 | test262 tests over 10 s | 0 |
 
 The slowest tests, `decodeURI/S15.1.3.1_A2.5_T1.js` and `decodeURIComponent/S15.1.3.2_A2.5_T1.js`, take about 2 s per mode now that writes to global variables go through an inline cache (they took 3 to 4 s per mode and timed out under load before).
+
+`--staging` adds the 1,483 tests test262 keeps in `test/staging`, most of them SpiderMonkey's. On 2026-10-26 the fork passes 1,462 of them on Windows x86-64 (98.6%; 53,588 of all 53,616 tests), up from 1,428 that morning (53,502 in all), after a direct JSON parser for `JSON.parse`, source text for classes and `Function()`-made functions, and a round of built-in fixes. Two tests outside `staging` had failed only on Windows (`Math.round` and a `Date.prototype.toISOString` time-zone case) and pass now.
+
+| | boa (Southstar fork), with `--staging` |
+|---|---:|
+| test262 total | 99.95% (53,588 / 53,616) |
+| test262 staging | 98.6% (1,462 / 1,483) |
+| test262 staging failures | 11 |
+| test262 staging tests over 10 s | 10 |
+
+The 11 staging failures are six RegExp tests that the `regress` crate gets wrong (case-insensitive canonicalization outside Latin-1, lone surrogates and braced escapes in `u` patterns), two that expect SpiderMonkey's treatment of a block function named `arguments`, which the specification and `annexB/language/function-code/block-decl-func-skip-arguments.js` rule out, the legacy date `+001997-3-8 11:19:20`, Unicode 17 case mappings that Rust 1.91's standard library predates, and a `Math.asinh` result two ulp off because MinGW's `log1p` is. Of the tests over 10 s, eight are `staging/sm/Date/dst-offset-caching-*`, which call `getTimezoneOffset` some three million times each, and two are long string and regression loops; all are bound by interpreter speed.

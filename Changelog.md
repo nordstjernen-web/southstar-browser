@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* JavaScript: a labelled function declaration in a block or `switch` case
+  (`{ l: function f() {} }`, sloppy mode only) behaves like an unlabelled
+  one, as in other browsers: it is hoisted to the top of the block (under
+  any number of labels), gets the Annex B variable binding outside the
+  block, and evaluating it no longer creates a second function object.
 * Color glyphs of Rust-backed fonts are painted in Rust: COLR v0 and v1
   through `skrifa`'s paint traversal onto cairo (gradients as cairo
   patterns, sweep gradients as mesh patterns, composite modes as cairo

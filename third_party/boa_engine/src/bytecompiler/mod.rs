@@ -2504,56 +2504,66 @@ impl<'ctx> ByteCompiler<'ctx> {
         match decl {
             #[cfg(feature = "annex-b")]
             Declaration::FunctionDeclaration(function) if block => {
-                let name = function.name();
-                if self.annex_b_function_names.contains(&name.sym())
-                    && !self.enclosing_block_declares(&name.to_js_string(self.interner()))
-                {
-                    let name = name.to_js_string(self.interner());
-                    let binding = self.lexical_scope.get_identifier_reference(name.clone());
-                    let index = self.get_binding(&binding);
-
-                    let value = self.register_allocator.alloc();
-                    self.emit_binding_access(BindingAccessOpcode::GetName, &index, &value);
-                    match self.variable_scope.set_mutable_binding_var(name.clone()) {
-                        // `fenv.SetMutableBinding(F, fobj, false)` writes the binding of the
-                        // variable environment itself, never the object of a `with` statement
-                        // in between, which a name lookup would find first.
-                        Ok(binding) if self.in_with => match self.get_binding(&binding) {
-                            // The variable environment is the global one only in script code
-                            // and in eval code run from it, where `this` is the global object.
-                            BindingKind::Global(_) => {
-                                let global = self.register_allocator.alloc();
-                                self.bytecode.emit_this(global.variable());
-                                self.emit_set_property_by_name(
-                                    &value,
-                                    None,
-                                    &global,
-                                    function.name().sym(),
-                                );
-                                self.register_allocator.dealloc(global);
-                            }
-                            index => self.emit_binding_access(
-                                BindingAccessOpcode::PutLexicalValue,
-                                &index,
-                                &value,
-                            ),
-                        },
-                        Ok(binding) => {
-                            let index = self.get_binding(&binding);
-                            self.emit_binding_access(BindingAccessOpcode::SetName, &index, &value);
-                        }
-                        Err(BindingLocatorError::MutateImmutable) => {
-                            let index = self.get_or_insert_string(name);
-                            self.bytecode.emit_throw_mutate_immutable(index.into());
-                        }
-                        Err(BindingLocatorError::Silent) => {}
-                    }
-                    self.register_allocator.dealloc(value);
-                }
+                self.compile_annex_b_block_function(function);
             }
             Declaration::ClassDeclaration(class) => self.compile_class(class.as_ref().into(), None),
             Declaration::Lexical(lexical) => self.compile_lexical_decl(lexical),
             _ => {}
+        }
+    }
+
+    /// Evaluates a function declaration in a block, which Annex B.3.2 changes to copy the
+    /// function from the block's binding to the variable environment's binding of its name.
+    #[cfg(feature = "annex-b")]
+    pub(crate) fn compile_annex_b_block_function(
+        &mut self,
+        function: &boa_ast::function::FunctionDeclaration,
+    ) {
+        let name = function.name();
+        if self.annex_b_function_names.contains(&name.sym())
+            && !self.enclosing_block_declares(&name.to_js_string(self.interner()))
+        {
+            let name = name.to_js_string(self.interner());
+            let binding = self.lexical_scope.get_identifier_reference(name.clone());
+            let index = self.get_binding(&binding);
+
+            let value = self.register_allocator.alloc();
+            self.emit_binding_access(BindingAccessOpcode::GetName, &index, &value);
+            match self.variable_scope.set_mutable_binding_var(name.clone()) {
+                // `fenv.SetMutableBinding(F, fobj, false)` writes the binding of the
+                // variable environment itself, never the object of a `with` statement
+                // in between, which a name lookup would find first.
+                Ok(binding) if self.in_with => match self.get_binding(&binding) {
+                    // The variable environment is the global one only in script code
+                    // and in eval code run from it, where `this` is the global object.
+                    BindingKind::Global(_) => {
+                        let global = self.register_allocator.alloc();
+                        self.bytecode.emit_this(global.variable());
+                        self.emit_set_property_by_name(
+                            &value,
+                            None,
+                            &global,
+                            function.name().sym(),
+                        );
+                        self.register_allocator.dealloc(global);
+                    }
+                    index => self.emit_binding_access(
+                        BindingAccessOpcode::PutLexicalValue,
+                        &index,
+                        &value,
+                    ),
+                },
+                Ok(binding) => {
+                    let index = self.get_binding(&binding);
+                    self.emit_binding_access(BindingAccessOpcode::SetName, &index, &value);
+                }
+                Err(BindingLocatorError::MutateImmutable) => {
+                    let index = self.get_or_insert_string(name);
+                    self.bytecode.emit_throw_mutate_immutable(index.into());
+                }
+                Err(BindingLocatorError::Silent) => {}
+            }
+            self.register_allocator.dealloc(value);
         }
     }
 
