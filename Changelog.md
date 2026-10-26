@@ -1,6 +1,18 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.4-dev:
+======
+* Packaging: Southstar can be installed from npm as `southstar-browser`
+  (`npm/`, documented in `docs/npm.md`). Installing builds the release
+  source with meson and cargo on Linux, macOS, the BSDs and Windows (in
+  MSYS2), after a check that names every missing or too-old build tool,
+  Rust toolchain and library and the command that installs it. A rustup
+  install satisfies the Rust check, since `rust-toolchain.toml` pins the
+  toolchain, and Ubuntu's versioned `rustc-1.91` is found in
+  `/usr/lib/rust-1.91/bin`. The build shows its progress, keeps a log, and
+  checks the source tarball against a checksum recorded in the package.
+
 Southstar Browser 1.0.3:
 ======
 * Build: Southstar builds against fontconfig 2.15 again, the version

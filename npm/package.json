@@ -1,0 +1,45 @@
+{
+  "name": "southstar-browser",
+  "version": "1.0.3",
+  "description": "Southstar Browser: a minimal, secure web browser written from scratch in Rust with GTK 4, built from source on install",
+  "keywords": [
+    "browser",
+    "web-browser",
+    "rust",
+    "gtk",
+    "gtk4"
+  ],
+  "homepage": "https://github.com/nordstjernen-web/southstar-browser",
+  "bugs": "https://github.com/nordstjernen-web/southstar-browser/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nordstjernen-web/southstar-browser.git",
+    "directory": "npm"
+  },
+  "license": "(LicenseRef-NSL-1.0 OR GPL-3.0-or-later)",
+  "author": "Andreas Røsdal",
+  "bin": {
+    "southstar": "bin/southstar.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "License.md",
+    "COPYING"
+  ],
+  "scripts": {
+    "postinstall": "node lib/postinstall.js",
+    "prepack": "node lib/prepack.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "freebsd",
+    "openbsd",
+    "netbsd",
+    "win32"
+  ]
+}
