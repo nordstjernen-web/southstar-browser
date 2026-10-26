@@ -151,6 +151,9 @@ pub(crate) fn get_image_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]
         return Err(scope.range_error("getImageData region too large"));
     }
     let (dw, dh) = (rw as usize, rh as usize);
+    if dw * dh * 4 > crate::api::IMAGEDATA_MAX_BYTES {
+        return Err(scope.range_error("getImageData region too large"));
+    }
     let mut out = Vec::new();
     if out.try_reserve_exact(dw * dh * 4).is_err() {
         return Err(scope.range_error("getImageData allocation failed"));

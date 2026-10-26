@@ -85,6 +85,17 @@ Southstar Browser 1.0.2-dev:
   timestamps wrap past `i32::MAX` (libwebp accumulates them in an `int`)
   gets a wrapping, non-negative delay instead of an overflowing
   subtraction that panics in overflow-checked builds.
+* Security: three canvas 2D fixes. Path and transform methods (`arc`,
+  `arcTo`, `ellipse`, `quadraticCurveTo`, `roundRect`, `setTransform`,
+  `transform`, `isPointInPath`, `isPointInStroke`) convert all their
+  arguments before taking the canvas's cairo context, so an argument's
+  `valueOf` that resizes the canvas can no longer leave the call drawing
+  through a destroyed context. A zero-radius `Path2D.ellipse` with a huge
+  start angle normalizes its end angle with `rem_euclid` instead of
+  adding 2π in a loop that never finished, which hung the renderer. And
+  `ImageData` buffers (`new ImageData`, `createImageData`,
+  `getImageData`) are capped at 1 GiB; a 32767×32767 request used to
+  allocate 4 GiB twice and could abort the renderer.
 * JavaScript: property access is faster. Inline cache hits compare
   shapes without creating new references to them, and typed arrays no
   longer convert every named property (`length`, `subarray`, ...) to a

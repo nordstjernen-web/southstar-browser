@@ -95,23 +95,23 @@ fn replay_path(cr: Context, path: &Value) -> crate::ffi::cairo::Path {
 }
 
 pub(crate) fn is_point_in_path(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result {
+    if args.len() < 2 {
+        return Ok(Value::boolean(false));
+    }
+    let with_path = crate::ffi::is_path2d(&args[0]);
+    if with_path && args.len() < 3 {
+        return Ok(Value::boolean(false));
+    }
+    let i = usize::from(with_path);
+    let x = arg(scope, args, i);
+    let y = arg(scope, args, i + 1);
     let Some(st) = state(scope, this) else {
         return Ok(Value::boolean(false));
     };
-    let Some(cr) = cairo_of(st).filter(|_| args.len() >= 2) else {
+    let Some(cr) = cairo_of(st) else {
         return Ok(Value::boolean(false));
     };
-    let mut i = 0;
-    let mut saved = None;
-    if crate::ffi::is_path2d(&args[0]) {
-        if args.len() < 3 {
-            return Ok(Value::boolean(false));
-        }
-        saved = Some(replay_path(cr, &args[0]));
-        i = 1;
-    }
-    let x = arg(scope, args, i);
-    let y = arg(scope, args, i + 1);
+    let saved = with_path.then(|| replay_path(cr, &args[0]));
     let rule = args
         .get(i + 2)
         .filter(|v| v.is_string())
@@ -131,27 +131,24 @@ pub(crate) fn is_point_in_path(scope: &mut Scope<'_>, this: &Value, args: &[Valu
 }
 
 pub(crate) fn is_point_in_stroke(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result {
-    let Some(st) = state(scope, this) else {
-        return Ok(Value::boolean(false));
-    };
     if args.len() < 2 {
         return Ok(Value::boolean(false));
     }
+    let with_path = crate::ffi::is_path2d(&args[0]);
+    if with_path && args.len() < 3 {
+        return Ok(Value::boolean(false));
+    }
+    let i = usize::from(with_path);
+    let x = arg(scope, args, i);
+    let y = arg(scope, args, i + 1);
+    let Some(st) = state(scope, this) else {
+        return Ok(Value::boolean(false));
+    };
     crate::style::sync(scope, this, st);
     let Some(cr) = cairo_of(st) else {
         return Ok(Value::boolean(false));
     };
-    let mut i = 0;
-    let mut saved = None;
-    if crate::ffi::is_path2d(&args[0]) {
-        if args.len() < 3 {
-            return Ok(Value::boolean(false));
-        }
-        saved = Some(replay_path(cr, &args[0]));
-        i = 1;
-    }
-    let x = arg(scope, args, i);
-    let y = arg(scope, args, i + 1);
+    let saved = with_path.then(|| replay_path(cr, &args[0]));
     cr.set_line_width(st.line_width);
     let inside = cr.in_stroke(x, y);
     restore_path(cr, saved);

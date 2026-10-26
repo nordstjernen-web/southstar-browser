@@ -98,14 +98,10 @@ const DEGENERATE_ELLIPSE_STEPS: u32 = 64;
 fn degenerate_ellipse(cr: Context, e: &Ellipse) {
     let (a0, mut a1) = e.angles;
     let full = 2.0 * PI;
-    if e.ccw {
-        while a1 > a0 {
-            a1 -= full;
-        }
-    } else {
-        while a1 < a0 {
-            a1 += full;
-        }
+    if e.ccw && a1 > a0 {
+        a1 = a0 - (a0 - a1).rem_euclid(full);
+    } else if !e.ccw && a1 < a0 {
+        a1 = a0 + (a1 - a0).rem_euclid(full);
     }
     let (cos_r, sin_r) = (e.rotation.cos(), e.rotation.sin());
     for step in 0..=DEGENERATE_ELLIPSE_STEPS {

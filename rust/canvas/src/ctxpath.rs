@@ -76,14 +76,14 @@ pub(crate) fn arc(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Result {
     if a.len() < 5 {
         return done();
     }
-    let Some(cr) = context(scope, this) else {
-        return done();
-    };
     let [x, y, r, a0, a1] = args(scope, a);
     if r < 0.0 {
         return Err(index_size(scope, "arc radius must not be negative"));
     }
     let ccw = a.len() >= 6 && scope.to_bool(&a[5]);
+    let Some(cr) = context(scope, this) else {
+        return done();
+    };
     cr.arc((x, y), r, (a0, a1), ccw);
     done()
 }
@@ -136,10 +136,10 @@ pub(crate) fn quadratic_curve_to(scope: &mut Scope<'_>, this: &Value, a: &[Value
     if a.len() < 4 {
         return done();
     }
+    let [cpx, cpy, x, y] = args(scope, a);
     let Some(cr) = context(scope, this) else {
         return done();
     };
-    let [cpx, cpy, x, y] = args(scope, a);
     quadratic_to(cr, (cpx, cpy), (x, y));
     done()
 }
@@ -159,13 +159,13 @@ pub(crate) fn arc_to_method(scope: &mut Scope<'_>, this: &Value, a: &[Value]) ->
     if a.len() < 5 {
         return done();
     }
-    let Some(cr) = context(scope, this) else {
-        return done();
-    };
     let [x1, y1, x2, y2, r] = args(scope, a);
     if r < 0.0 {
         return Err(index_size(scope, "arcTo radius must not be negative"));
     }
+    let Some(cr) = context(scope, this) else {
+        return done();
+    };
     arc_to(cr, (x1, y1), (x2, y2), r);
     done()
 }
@@ -174,14 +174,14 @@ pub(crate) fn ellipse(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Resul
     if a.len() < 7 {
         return done();
     }
-    let Some(cr) = context(scope, this) else {
-        return done();
-    };
     let [x, y, rx, ry, rotation, a0, a1] = args(scope, a);
     if rx < 0.0 || ry < 0.0 {
         return Err(index_size(scope, "ellipse radius must not be negative"));
     }
     let ccw = a.len() >= 8 && scope.to_bool(&a[7]);
+    let Some(cr) = context(scope, this) else {
+        return done();
+    };
     let e = Ellipse {
         center: (x, y),
         radii: (rx, ry),
@@ -197,9 +197,6 @@ pub(crate) fn round_rect(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Re
     if a.len() < 4 {
         return done();
     }
-    let Some(cr) = context(scope, this) else {
-        return done();
-    };
     let rect = args::<4>(scope, a);
     let mut radii = [0.0; 4];
     if let Some(spec) = a.get(4) {
@@ -209,6 +206,9 @@ pub(crate) fn round_rect(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Re
         }
         radii = r;
     }
+    let Some(cr) = context(scope, this) else {
+        return done();
+    };
     round_rect_subpath(cr, rect, radii);
     done()
 }
@@ -231,21 +231,14 @@ fn matrix_from_object(scope: &mut Scope<'_>, v: &Value) -> Option<[f64; 6]> {
 }
 
 pub(crate) fn set_transform(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Result {
-    let Some(cr) = context(scope, this) else {
-        return done();
+    let matrix = match a.len() {
+        0 => Some([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+        1 => matrix_from_object(scope, &a[0]),
+        2..=5 => None,
+        _ => Some(args::<6>(scope, a)),
     };
-    match a.len() {
-        0 => cr.identity_matrix(),
-        1 => {
-            if let Some(m) = matrix_from_object(scope, &a[0]) {
-                cr.set_matrix(m);
-            }
-        }
-        2..=5 => {}
-        _ => {
-            let m = args::<6>(scope, a);
-            cr.set_matrix(m);
-        }
+    if let (Some(m), Some(cr)) = (matrix, context(scope, this)) {
+        cr.set_matrix(m);
     }
     done()
 }
@@ -254,10 +247,10 @@ pub(crate) fn transform(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Res
     if a.len() < 6 {
         return done();
     }
+    let m = args::<6>(scope, a);
     let Some(cr) = context(scope, this) else {
         return done();
     };
-    let m = args::<6>(scope, a);
     cr.transform(m);
     done()
 }
