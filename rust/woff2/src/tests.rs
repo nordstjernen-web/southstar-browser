@@ -74,3 +74,40 @@ fn rejects_malformed_files() {
     assert!(woff_to_sfnt(&woff(&duplicate, |_| {})).is_none());
     assert!(woff_to_sfnt(b"wOFF").is_none());
 }
+
+fn woff_with_compressed(tables: &[(&[u8; 4], &[u8], usize)]) -> Vec<u8> {
+    let mut directory = Vec::new();
+    let mut body = Vec::new();
+    let mut offset = 44 + tables.len() * 20;
+    for (tag, stored, orig_len) in tables {
+        directory.extend_from_slice(*tag);
+        directory.extend_from_slice(&(offset as u32).to_be_bytes());
+        directory.extend_from_slice(&(stored.len() as u32).to_be_bytes());
+        directory.extend_from_slice(&(*orig_len as u32).to_be_bytes());
+        directory.extend_from_slice(&0u32.to_be_bytes());
+        offset += stored.len();
+        body.extend_from_slice(stored);
+    }
+    let mut out = b"wOFF".to_vec();
+    out.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+    out.extend_from_slice(&(offset as u32).to_be_bytes());
+    out.extend_from_slice(&(tables.len() as u16).to_be_bytes());
+    out.extend_from_slice(&[0; 30]);
+    out.extend_from_slice(&directory);
+    out.extend_from_slice(&body);
+    out
+}
+
+#[test]
+fn limits_the_total_decompressed_size() {
+    let stored = vec![0u8; 40 * 1024 * 1024];
+    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&[0u8; 64], 6);
+    let claimed = 30 * 1024 * 1024;
+    let file = woff_with_compressed(&[
+        (b"cmap", &stored, stored.len()),
+        (b"name", &compressed, claimed),
+    ]);
+    assert!(woff_to_sfnt(&file).is_none());
+    let alone = woff_with_compressed(&[(b"cmap", &stored, stored.len())]);
+    assert!(woff_to_sfnt(&alone).is_some());
+}

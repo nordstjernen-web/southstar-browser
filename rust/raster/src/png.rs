@@ -9,8 +9,15 @@ use png::{BitDepth, ColorType, Decoder, DisposeOp, Info, Limits, Reader, Transfo
 use super::pixel::{Blend, Canvas, Row, draw_row, premul_palette};
 use super::{AnimFrame, Animator, Disposal, Rect};
 
+const ALLOCATION_LIMIT: usize = 256 * 1024 * 1024;
+
 fn open(data: &[u8]) -> Option<Reader<Cursor<&[u8]>>> {
-    let mut decoder = Decoder::new_with_limits(Cursor::new(data), Limits { bytes: usize::MAX });
+    let limits = Limits {
+        bytes: ALLOCATION_LIMIT,
+    };
+    let mut decoder = Decoder::new_with_limits(Cursor::new(data), limits);
+    decoder.set_ignore_iccp_chunk(true);
+    decoder.set_ignore_text_chunk(true);
     decoder.set_transformations(Transformations::IDENTITY);
     decoder.read_info().ok()
 }

@@ -7,7 +7,7 @@ use std::io::Cursor;
 use gif::{ColorOutput, DecodeOptions, Decoder, DisposalMethod, MemoryLimit};
 
 use super::pixel::{Blend, Canvas, Row, draw_row, premul_palette};
-use super::{AnimFrame, Animator, Disposal, Rect};
+use super::{AnimFrame, Animator, Disposal, Rect, dims_ok};
 
 const MEMORY_LIMIT: u64 = 1 << 30;
 
@@ -97,6 +97,9 @@ fn read_frame(
     let frame = decoder.next_frame_info().ok()??;
     let (left, top) = (u32::from(frame.left), u32::from(frame.top));
     let (width, height) = (u32::from(frame.width), u32::from(frame.height));
+    if width != 0 && height != 0 && !dims_ok(width, height) {
+        return None;
+    }
     let interlaced = frame.interlaced;
     let transparent = frame.transparent;
     let delay_cs = frame.delay;

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Security: three decoders bound their allocations before decompressing.
+  A GIF frame larger than the 16384-pixel / 64-megapixel image limits is
+  rejected before its index buffer is allocated (a 40-byte file used to
+  claim 4 GiB); PNG decoding skips the unused iCCP and text chunks and
+  runs under a 256 MiB allocation limit instead of none, so a compressed
+  ICC profile can no longer inflate to gigabytes; and WOFF 1.0 tables
+  count against one 64 MiB budget for the whole font as they are inflated,
+  rather than 64 MiB each with the total checked afterwards.
 * Security: the HTTP/2 HPACK decoder caps a decoded header list at 1 MiB.
   Indexed references to a large dynamic-table entry cost one byte each, so
   a server could expand a 2 MiB header block into gigabytes and exhaust

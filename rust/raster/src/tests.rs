@@ -105,3 +105,14 @@ fn ignores_unknown_formats() {
     assert!(decode(b"not an image").is_none());
     assert!(decode(&[]).is_none());
 }
+
+#[test]
+fn rejects_a_gif_frame_beyond_the_size_limits() {
+    let mut gif = vec![
+        b'G', b'I', b'F', b'8', b'9', b'a', 1, 0, 1, 0, 0x80, 0, 0, 0xff, 0, 0, 0, 0, 0xff, 0x2c,
+        0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 1, 0, 0x3b,
+    ];
+    gif[24..28].copy_from_slice(&[0xff, 0xff, 0xff, 0xff]);
+    assert!(decode(&gif).is_none());
+    assert!(decode_animation(&gif).is_none());
+}
