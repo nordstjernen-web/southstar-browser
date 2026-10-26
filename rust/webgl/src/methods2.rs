@@ -43,11 +43,6 @@ simple! {
     sampler_parameter_i(|s, a| gl::sampler_parameter_i(name(a, 0), uint(s, a, 1), int(s, a, 2)));
     sampler_parameter_f(|s, a| gl::sampler_parameter_f(name(a, 0), uint(s, a, 1), float(s, a, 2)));
     uniform_block_binding(|s, a| gl::uniform_block_binding(name(a, 0), uint(s, a, 1), uint(s, a, 2)));
-    bind_buffer_base(|s, a| gl::bind_buffer_base(
-        uint(s, a, 0), uint(s, a, 1), if a.len() >= 3 { name(a, 2) } else { 0 }));
-    bind_buffer_range(|s, a| gl::bind_buffer_range(
-        uint(s, a, 0), uint(s, a, 1), if a.len() >= 3 { name(a, 2) } else { 0 },
-        int(s, a, 3) as isize, int(s, a, 4) as isize));
     copy_tex_sub_image_3d(|s, a| gl::copy_tex_sub_image_3d(
         uint(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3), int(s, a, 4),
         int(s, a, 5), int(s, a, 6), int(s, a, 7), int(s, a, 8)));
@@ -308,14 +303,77 @@ pub(crate) fn invalidate_sub_framebuffer(s: &mut Scope<'_>, this: &Value, a: &[V
     undefined()
 }
 
+fn indexed_target_ok(target: u32) -> bool {
+    target == UNIFORM_BUFFER || target == TRANSFORM_FEEDBACK_BUFFER
+}
+
+pub(crate) fn bind_buffer_base(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let target = uint(s, a, 0);
+    let index = uint(s, a, 1);
+    let buffer = if a.len() >= 3 { name(a, 2) } else { 0 };
+    if !indexed_target_ok(target) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return undefined();
+    }
+    gl::bind_buffer_base(target, index, buffer);
+    undefined()
+}
+
+pub(crate) fn bind_buffer_range(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let target = uint(s, a, 0);
+    let index = uint(s, a, 1);
+    let buffer = if a.len() >= 3 { name(a, 2) } else { 0 };
+    let offset = int(s, a, 3);
+    let size = int(s, a, 4);
+    if !indexed_target_ok(target) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return undefined();
+    }
+    let in_range = buffer == 0
+        || (size > 0 && limits::range_ok(offset, size, g.st.borrow().buffer_size(buffer)));
+    if !in_range {
+        g.st.borrow_mut().injected_error = INVALID_VALUE;
+        return undefined();
+    }
+    gl::bind_buffer_range(target, index, buffer, offset as isize, size as isize);
+    undefined()
+}
+
 pub(crate) fn copy_buffer_sub_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     let read_target = uint(s, a, 0);
     let write_target = uint(s, a, 1);
-    let read_offset = int(s, a, 2) as isize;
-    let write_offset = int(s, a, 3) as isize;
-    let size = int(s, a, 4) as isize;
-    gl::copy_buffer_sub_data(read_target, write_target, read_offset, write_offset, size);
+    let read_offset = int(s, a, 2);
+    let write_offset = int(s, a, 3);
+    let size = int(s, a, 4);
+    let (read_buffer, write_buffer) = (
+        limits::bound_buffer(read_target),
+        limits::bound_buffer(write_target),
+    );
+    if read_buffer == 0 || write_buffer == 0 {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
+        return undefined();
+    }
+    let valid = {
+        let st = g.st.borrow();
+        limits::range_ok(read_offset, size, st.buffer_size(read_buffer))
+            && limits::range_ok(write_offset, size, st.buffer_size(write_buffer))
+            && (read_buffer != write_buffer
+                || i64::from(read_offset).abs_diff(i64::from(write_offset)) >= size as u64)
+    };
+    if !valid {
+        g.st.borrow_mut().injected_error = INVALID_VALUE;
+        return undefined();
+    }
+    gl::copy_buffer_sub_data(
+        read_target,
+        write_target,
+        read_offset as isize,
+        write_offset as isize,
+        size as isize,
+    );
     g.st.borrow_mut()
         .elem_clear(limits::bound_buffer(write_target));
     undefined()
@@ -459,6 +517,10 @@ pub(crate) fn tex_image_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRe
     let border = int(s, a, 6);
     let format = uint(s, a, 7);
     let kind = uint(s, a, 8);
+    if limits::transfer_buffer_bound(g.version, PIXEL_UNPACK_BUFFER_BINDING) {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
+        return undefined();
+    }
     let need = limits::transfer_bytes(g.version, size, format, kind, false);
     let send = |px: Option<&[u8]>| {
         let len = px.map_or(0, <[u8]>::len);
@@ -486,6 +548,10 @@ pub(crate) fn tex_sub_image_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> 
     let format = uint(s, a, 8);
     let kind = uint(s, a, 9);
     if a.len() < 11 || !a[10].is_object() {
+        return undefined();
+    }
+    if limits::transfer_buffer_bound(g.version, PIXEL_UNPACK_BUFFER_BINDING) {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
         return undefined();
     }
     with_view(s, &a[10], |px| {
@@ -598,7 +664,7 @@ pub(crate) fn get_active_uniform_block_parameter(
         }
         return uint_array(s, &vals[..count]);
     }
-    let mut v = [0i32; 1];
+    let mut v = [0i32; 16];
     gl::get_active_uniform_block(program, index, pname, &mut v);
     Ok(Value::int(v[0]))
 }

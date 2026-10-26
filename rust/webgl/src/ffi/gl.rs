@@ -362,6 +362,8 @@ fn len_i32<T>(v: &[T]) -> i32 {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Sync(usize);
 
+const QUERY_SLOTS: usize = 16;
+
 pub(crate) fn get_integer(pname: u32) -> i32 {
     let mut v = 0;
     unsafe { raw_get_integerv(pname, &mut v) };
@@ -377,15 +379,15 @@ pub(crate) fn get_floats(pname: u32, out: &mut [f32; 4]) {
 }
 
 pub(crate) fn get_integer_indexed(target: u32, index: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_integeri_v(target, index, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_integeri_v(target, index, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn get_integer64_indexed(target: u32, index: u32) -> i64 {
-    let mut v = 0;
-    unsafe { raw_get_integer64i_v(target, index, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_integer64i_v(target, index, v.as_mut_ptr()) };
+    v[0]
 }
 
 macro_rules! gen_delete {
@@ -532,15 +534,15 @@ pub(crate) fn read_pixels(rect: (i32, i32, i32, i32), format: u32, kind: u32, ou
 }
 
 pub(crate) fn get_programiv(program: u32, pname: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_programiv(program, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_programiv(program, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn get_shaderiv(shader: u32, pname: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_shaderiv(shader, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_shaderiv(shader, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 #[derive(Clone, Copy)]
@@ -650,9 +652,9 @@ pub(crate) fn shader_source(shader: u32, source: &[u8]) {
 }
 
 pub(crate) fn get_vertex_attribi(index: u32, pname: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_vertex_attribiv(index, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_vertex_attribiv(index, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn get_vertex_attribf4(index: u32, pname: u32) -> [f32; 4] {
@@ -827,15 +829,16 @@ pub(crate) enum TargetQuery {
 }
 
 pub(crate) fn get_target_parameter(which: TargetQuery, target: u32, pname: u32) -> i32 {
-    let mut v = 0;
+    let mut v = [0; QUERY_SLOTS];
+    let out = v.as_mut_ptr();
     unsafe {
         match which {
-            TargetQuery::Buffer => raw_get_buffer_parameteriv(target, pname, &mut v),
-            TargetQuery::Texture => raw_get_tex_parameteriv(target, pname, &mut v),
-            TargetQuery::Renderbuffer => raw_get_renderbuffer_parameteriv(target, pname, &mut v),
+            TargetQuery::Buffer => raw_get_buffer_parameteriv(target, pname, out),
+            TargetQuery::Texture => raw_get_tex_parameteriv(target, pname, out),
+            TargetQuery::Renderbuffer => raw_get_renderbuffer_parameteriv(target, pname, out),
         }
     }
-    v
+    v[0]
 }
 
 pub(crate) fn get_framebuffer_attachment_parameter(
@@ -843,9 +846,11 @@ pub(crate) fn get_framebuffer_attachment_parameter(
     attachment: u32,
     pname: u32,
 ) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_framebuffer_attachment_parameteriv(target, attachment, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe {
+        raw_get_framebuffer_attachment_parameteriv(target, attachment, pname, v.as_mut_ptr())
+    };
+    v[0]
 }
 
 pub(crate) fn draw_buffers(bufs: &[u32]) {
@@ -891,15 +896,15 @@ pub(crate) fn get_internalformativ(target: u32, format: u32, pname: u32, out: &m
 }
 
 pub(crate) fn get_query_objectui(query: u32, pname: u32) -> u32 {
-    let mut v = 0;
-    unsafe { raw_get_query_objectuiv(query, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_query_objectuiv(query, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn get_queryi(target: u32, pname: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_queryiv(target, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_queryiv(target, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 fn c_names(names: &[Vec<u8>]) -> (Vec<CString>, Vec<*const c_char>) {
@@ -970,15 +975,15 @@ pub(crate) fn get_attached_shaders(program: u32) -> Vec<u32> {
 }
 
 pub(crate) fn get_sampler_parameterf(sampler: u32, pname: u32) -> f32 {
-    let mut v = 0f32;
-    unsafe { raw_get_sampler_parameterfv(sampler, pname, &mut v) };
-    v
+    let mut v = [0f32; QUERY_SLOTS];
+    unsafe { raw_get_sampler_parameterfv(sampler, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn get_sampler_parameteri(sampler: u32, pname: u32) -> i32 {
-    let mut v = 0;
-    unsafe { raw_get_sampler_parameteriv(sampler, pname, &mut v) };
-    v
+    let mut v = [0; QUERY_SLOTS];
+    unsafe { raw_get_sampler_parameteriv(sampler, pname, v.as_mut_ptr()) };
+    v[0]
 }
 
 pub(crate) fn fence_sync(condition: u32, flags: u32) -> Option<Sync> {
