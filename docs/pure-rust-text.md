@@ -1,18 +1,22 @@
 # Pure-Rust shaping and fonts
 
-Status: in a `-Drust-shaper=true` build (cargo feature `rust-shaper` on
-`southstar-text`) a font can take the Rust path, chosen by
-`NS_RUST_FONTS=off|web|all` (`web` = fonts loaded through `@font-face`;
-`NS_TEXT_SHAPER=harfbuzz` means off). A Rust-backed font is shaped by HarfRust,
-answers layout's table queries (glyph classes, ligature carets, OpenType
-metrics, font extents, GSUB feature support) from `read-fonts` exactly as
-HarfBuzz 14.2 does, and is drawn from `skrifa` outlines through a cairo user
-font (see "Drawing" below), so neither FreeType nor HarfBuzz reads it at render
-time. HarfRust matched HarfBuzz exactly in 97% of a 22,000-case corpus, with
-no glyph or cluster differences. Step 4 is done: `rust/bidi` replaced
-FriBiDi and `rust/unicode` GLib's Unicode data. Color glyphs (COLR v0 and
-v1, CBDT and sbix) are painted in Rust too (see "Color glyphs"). Indexing web
-fonts without FreeType is not done yet.
+Status: web fonts take the Rust path by default. The `rust-shaper` meson
+option (on by default; cargo feature `rust-shaper` on `southstar-text`)
+builds it, and `NS_RUST_FONTS=web|all|off` picks the fonts at runtime: `web`
+(the default) = fonts loaded through `@font-face`, `all` adds system fonts,
+`off` (or `NS_TEXT_SHAPER=harfbuzz`) is the C path only. A Rust-backed font is
+shaped by HarfRust, answers layout's table queries (glyph classes, ligature
+carets, OpenType metrics, font extents, GSUB feature support) from
+`read-fonts` exactly as HarfBuzz 14.2 does, is drawn from `skrifa` outlines
+through a cairo user font (see "Drawing") and has its color glyphs (COLR v0
+and v1, CBDT, sbix) painted in Rust (see "Color glyphs"), so neither FreeType
+nor HarfBuzz reads a web font to shape or draw it. A web font `read-fonts`
+cannot parse is not installed at all. HarfRust matched HarfBuzz exactly in
+97% of a 22,000-case corpus, with no glyph or cluster differences. Step 4 is
+done: `rust/bidi` replaced FriBiDi and `rust/unicode` GLib's Unicode data.
+What remains for web fonts is indexing: fontconfig still builds their
+patterns with FreeType (`FcConfigAppFontAddFile`, `FcFreeTypeQueryAll`).
+System fonts keep the C path.
 
 This note describes a possible later step for Southstar's text stack:
 replacing the C libraries under text layout — HarfBuzz, FreeType,
@@ -240,6 +244,11 @@ overflow in the cairo-ft path render on the Rust path.
 
 ## Decision
 
-Step 1 is available behind `-Drust-shaper=true`, and step 4 is done. Next,
-in order of risk removed per unit of work: `skrifa` for metrics and
-outlines of web fonts (steps 2 and 5), then color glyphs (step 3).
+Steps 1 to 5 are in place for web fonts, and the Rust path is their default:
+untrusted `@font-face` data carries the risk, the shaping and table answers
+match HarfBuzz, and the drawing differs from cairo-ft only in anti-aliasing,
+while COLR v1 fonts that crash the cairo-ft path render. System fonts stay on
+HarfBuzz, FreeType and cairo-ft until there is a reason to move them; `all`
+is there to compare. Next: build web-font patterns from `read-fonts` instead
+of `FcFreeTypeQueryAll` (step 2 of "Web fonts"), which takes FreeType out of
+the web-font path entirely.

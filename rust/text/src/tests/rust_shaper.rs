@@ -954,7 +954,7 @@ fn extents_like_cairo_ft() {
                 let Some(font) = load(&context, &description) else {
                     continue;
                 };
-                let Some(source) = font.glyph_source() else {
+                let Some(source) = font.new_glyph_source() else {
                     continue;
                 };
                 let options = font.font_options().cloned().unwrap_or_default();
@@ -970,7 +970,7 @@ fn extents_like_cairo_ft() {
                     .map_or(0, |face| face.num_glyphs())
                     .min(300);
                 for glyph in 0..count {
-                    let ours = crate::rust_glyphs::user_extents(source, glyph, font.font_matrix());
+                    let ours = crate::rust_glyphs::user_extents(&source, glyph, font.font_matrix());
                     let theirs = native.glyph_extents(glyph);
                     glyphs += 1;
                     let fields = [

@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.2-dev:
 ======
+* Web fonts take the pure-Rust font path by default: `-Drust-shaper` is on
+  by default and `NS_RUST_FONTS` defaults to `web`, so `@font-face` fonts
+  are shaped by HarfRust, answer layout from `read-fonts` and are drawn and
+  color-painted by `skrifa` and cairo instead of HarfBuzz, FreeType and
+  cairo-ft; system fonts keep the C path (`NS_RUST_FONTS=all` moves them
+  too, `off` restores the C path everywhere). A downloaded font that
+  `read-fonts` cannot parse is no longer installed. Font files read for the
+  Rust path are shared between faces and freed with the last font that uses
+  them instead of staying in memory for the life of the process.
 * JavaScript: compiled regular expressions are cached per pattern and
   flags, so a regular expression literal inside a loop or function, a
   repeated `new RegExp(pattern)` and the copy `String.prototype.split`

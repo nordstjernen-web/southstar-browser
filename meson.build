@@ -480,7 +480,7 @@ install_data(
 )
 
 summary({'WebAssembly (wasmi)': have_wasm}, section: 'Features')
-summary({'Pure-Rust shaper (HarfRust)': get_option('rust-shaper')}, section: 'Features')
+summary({'Pure-Rust fonts (HarfRust, skrifa)': get_option('rust-shaper')}, section: 'Features')
 summary({'AVIF images (libavif)': have_avif}, section: 'Features')
 summary({'GTK 4 shell': have_gtk}, section: 'Shells')
 summary({'Thai word breaking (libthai)': libthai.found()}, section: 'Features')
