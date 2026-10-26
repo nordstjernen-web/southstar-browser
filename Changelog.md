@@ -18,6 +18,13 @@ Southstar Browser 1.0.2-dev:
   is copied into a flat string only when its characters are first read.
   200,000 appends of a short piece went from 80 s to 0.2 s, and 100,000
   template-literal appends from 28 s to 0.19 s.
+* Security: the shell trusts a compromised renderer less. On Linux the
+  shared framebuffer memfd is sealed against shrinking and growing, so a
+  renderer can no longer truncate it and crash the browser with SIGBUS
+  when the shell next reads the pixels; the video overlay is clipped to
+  the page area so a renderer-reported rectangle cannot paint over the
+  toolbar; and a frame sequence number from the video ring can no longer
+  overflow the dropped-frame count.
 * Security: three decoders bound their allocations before decompressing.
   A GIF frame larger than the 16384-pixel / 64-megapixel image limits is
   rejected before its index buffer is allocated (a 40-byte file used to

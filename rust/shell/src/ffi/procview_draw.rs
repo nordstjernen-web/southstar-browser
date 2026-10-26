@@ -180,7 +180,11 @@ unsafe extern "C" fn area_snapshot(widget: *mut GtkWidget, snapshot: *mut GtkSna
         unsafe { gtk::gtk_snapshot_append_color(snapshot, &white, &area) };
     }
     if !ns_pv_media_on_page(v) {
+        // SAFETY: snapshot is the live snapshot GTK passed to this draw call and area outlives the call.
+        unsafe { gtk::gtk_snapshot_push_clip(snapshot, &area) };
         ns_pv_media_snapshot(v, fs, snapshot);
+        // SAFETY: pops the clip pushed just above on the same live snapshot.
+        unsafe { gtk::gtk_snapshot_pop(snapshot) };
     }
     let frame = state.frame.cast::<GdkTexture>();
     if frame.is_null() {
