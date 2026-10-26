@@ -2,6 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, CMethod};
@@ -17,7 +20,22 @@ pub(crate) struct Metrics {
     pub avail_top: i32,
 }
 
+static MEASURED: Mutex<Option<(Instant, Metrics)>> = Mutex::new(None);
+const MEASURE_INTERVAL: Duration = Duration::from_secs(1);
+
 pub(crate) fn metrics() -> Metrics {
+    let mut measured = MEASURED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, metrics)) = *measured
+        && at.elapsed() < MEASURE_INTERVAL
+    {
+        return metrics;
+    }
+    let metrics = measure();
+    *measured = Some((Instant::now(), metrics));
+    metrics
+}
+
+fn measure() -> Metrics {
     let mut metrics = Metrics {
         width: 1920,
         height: 1080,

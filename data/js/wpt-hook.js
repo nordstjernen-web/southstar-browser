@@ -55,11 +55,17 @@
         global.__ns_wpt_done = true;
     };
 
+    function quietHarness() {
+        if (typeof global.setup !== 'function') return;
+        try { global.setup({ output: false }); } catch (e) {}
+    }
+
     function arm(fn) {
         if (global.__ns_wpt_seen_harness) return;
         try {
             fn(global.__ns_wpt_oncomplete);
             global.__ns_wpt_seen_harness = true;
+            Promise.resolve().then(quietHarness);
         } catch (e) {}
     }
 

@@ -259,6 +259,15 @@ fn report_listener_native(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) 
     Ok(Value::undefined())
 }
 
+pub(crate) fn has_handlers(scope: &mut Scope<'_>, obj: &Value, kind: &str) -> bool {
+    let list = get(scope, obj, "_listeners");
+    if list.is_array() && length(scope, &list) > 0 {
+        return true;
+    }
+    let handler = with_key(&["on", kind], |name| get(scope, obj, name));
+    scope.is_function(&handler)
+}
+
 pub(crate) fn dispatch_with_event(scope: &mut Scope<'_>, obj: &Value, kind: &str, event: &Value) {
     let js = ffi::js_of(scope);
     let realm = handler_realm(scope, obj, kind, "fn");
