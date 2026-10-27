@@ -751,8 +751,7 @@ pub fn run_one(
             cache.free();
         }
         if let Some(cache) = video_cache {
-            // SAFETY: script, whose media callbacks hold a copy, was released above and the next page creates its own cache.
-            unsafe { cache.free() };
+            cache.free();
         }
         drop(decoded);
         let next_opts = Opts {
@@ -891,8 +890,7 @@ pub fn run_one(
         cache.free();
     }
     if let Some(cache) = video_cache {
-        // SAFETY: the run is over and script, whose media callbacks hold a copy, was released above.
-        unsafe { cache.free() };
+        cache.free();
     }
     rc
 }

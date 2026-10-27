@@ -6,8 +6,9 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::ffi::{self, NsVideo, OwnedStr, Player, str_of};
+use crate::ffi::{self, Player};
 use crate::mse::MseStream;
+use crate::store::{NsVideo, OwnedStr, str_of};
 use crate::{MAX_BYTES, Sink, dbg_audio, debug, helper_enabled};
 
 pub fn f3(x: f64) -> String {

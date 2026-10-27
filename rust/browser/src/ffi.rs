@@ -361,8 +361,7 @@ impl NsBrowser {
         }
         drop(self.doc.borrow_mut().take());
         if let Some(videos) = self.videos.take() {
-            // SAFETY: the handle is out of the page's slot, and script, whose media callbacks reach the cache through that slot, was released above.
-            unsafe { videos.free() };
+            videos.free();
         }
         if let Some(images) = self.images.take() {
             images.free();

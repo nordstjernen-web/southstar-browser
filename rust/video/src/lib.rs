@@ -6,6 +6,7 @@ mod decode;
 mod ffi;
 mod media;
 mod mse;
+mod store;
 
 use core::ffi::{CStr, c_void};
 use std::collections::{HashMap, HashSet};
@@ -13,17 +14,18 @@ use std::collections::{HashMap, HashSet};
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 
-use ffi::{Cues, NsVideo, OwnedStr, PendingPtr, Response, VideoPtr, str_of};
+use ffi::Response;
 use media::{
     audio_pause, audio_resync, audio_seek, audio_seek_to_current, audio_start, audio_stop,
     audio_volume, build_player, extend_timed, f3, helper_flush_rect, helper_playpause, helper_seek,
     helper_stop, materialize_audio, materialize_video, mse_sync, us,
 };
 use mse::{Appended, MseStream};
+use store::{Cues, NsVideo, OwnedStr, Video, str_of};
 
 pub use decode::codec_available;
-pub use ffi::{AudioSink, BoxVideo, JsSink, StillVideo, VideoCache};
 pub use media::helper_composited;
+pub use store::{AudioSink, BoxVideo, JsSink, StillVideo, VideoCache};
 
 const MAX_BYTES: usize = 256 * 1024 * 1024;
 const MEDIA_SRC_ATTR: &CStr = c"data-nd-media-src";
@@ -46,8 +48,8 @@ struct JsEvent {
 
 #[derive(Default)]
 pub struct Sink {
-    audio: Option<ffi::AudioOut>,
-    js: Option<ffi::JsOut>,
+    audio: Option<store::AudioOut>,
+    js: Option<store::JsOut>,
     queue: Vec<JsEvent>,
     next_token: u32,
 }
@@ -64,12 +66,9 @@ impl Sink {
     }
 
     fn event(&mut self, v: &NsVideo, kind: &'static CStr, value: f64) {
-        if self.js.is_some() && !v.dom_node.is_null() {
-            self.queue.push(JsEvent {
-                node: v.dom_node,
-                kind,
-                value,
-            });
+        let node = v.dom_addr();
+        if self.js.is_some() && !node.is_null() {
+            self.queue.push(JsEvent { node, kind, value });
         }
     }
 
@@ -90,11 +89,12 @@ struct NodeMediaState {
 }
 
 pub struct Cache {
-    videos: Vec<(Vec<u8>, VideoPtr)>,
+    videos: Vec<(Vec<u8>, Video)>,
     requested: HashSet<Vec<u8>>,
     streams: HashMap<u32, MseStream>,
     node_state: HashMap<usize, NodeMediaState>,
-    pending: Vec<PendingPtr>,
+    pending: usize,
+    outbox: Vec<store::Fetch>,
     base_url: Option<Vec<u8>>,
     sink: Sink,
     next_seq: u32,
@@ -121,8 +121,11 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
 
-fn lookup(videos: &[(Vec<u8>, VideoPtr)], key: &[u8]) -> Option<VideoPtr> {
-    videos.iter().find(|(k, _)| k == key).map(|(_, v)| *v)
+fn lookup(videos: &[(Vec<u8>, Video)], key: &[u8]) -> Option<Video> {
+    videos
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.clone())
 }
 
 fn mse_key(id: u32) -> Vec<u8> {
@@ -293,7 +296,7 @@ fn release_node(sink: &Sink, v: &mut NsVideo) {
     audio_stop(sink, v);
     helper_stop(sink, v);
     v.playing.set(false);
-    v.dom_node = core::ptr::null();
+    v.dom = None;
 }
 
 pub fn toggle(sink: &mut Sink, v: &mut NsVideo, now_us: i64) -> bool {
@@ -409,14 +412,14 @@ impl Drop for Cache {
     fn drop(&mut self) {
         if self.sink.audio_on() {
             for (_, p) in &self.videos {
-                let v = p.get();
-                audio_stop(&self.sink, v);
-                helper_stop(&self.sink, v);
+                if let Some(mut v) = p.try_get() {
+                    audio_stop(&self.sink, &mut v);
+                    helper_stop(&self.sink, &mut v);
+                }
             }
         }
-        ffi::mark_dead(&self.pending);
         for (_, p) in self.videos.drain(..) {
-            p.free();
+            p.close();
         }
     }
 }
@@ -428,7 +431,8 @@ impl Cache {
             requested: HashSet::new(),
             streams: HashMap::new(),
             node_state: HashMap::new(),
-            pending: Vec::new(),
+            pending: 0,
+            outbox: Vec::new(),
             base_url: None,
             sink: Sink::default(),
             next_seq: 0,
@@ -475,25 +479,25 @@ impl Cache {
         }
     }
 
-    fn newest(&self, pick: impl Fn(&NsVideo) -> bool) -> Option<VideoPtr> {
-        let mut best: Option<VideoPtr> = None;
+    fn newest(&self, pick: impl Fn(&NsVideo) -> bool) -> Option<Video> {
+        let mut best: Option<&Video> = None;
         for (_, p) in &self.videos {
-            let cand = p.get();
-            if !pick(cand) {
+            let cand = p.read();
+            if !pick(&cand) {
                 continue;
             }
-            if best.is_none_or(|b| cand.seq > b.get().seq) {
-                best = Some(*p);
+            if best.is_none_or(|b| cand.seq > b.read().seq) {
+                best = Some(p);
             }
         }
-        best
+        best.cloned()
     }
 
-    fn find_by_node(&self, dom_node: *const c_void) -> Option<VideoPtr> {
-        self.newest(|v| v.dom_node == dom_node && !v.is_camera.get())
+    fn find_by_node(&self, dom_node: *const c_void) -> Option<Video> {
+        self.newest(|v| v.dom_addr() == dom_node && !v.is_camera.get())
     }
 
-    fn find_mse_rollover(&self) -> Option<VideoPtr> {
+    fn find_mse_rollover(&self) -> Option<Video> {
         self.newest(|v| v.mse_id != 0 && v.playing.get() && !v.is_camera.get())
     }
 
@@ -501,23 +505,24 @@ impl Cache {
         let Some(p) = self
             .videos
             .iter()
-            .map(|(_, p)| *p)
-            .find(|p| str_of(&p.get().token) == Some(token))
+            .map(|(_, p)| p)
+            .find(|p| str_of(&p.read().token) == Some(token))
+            .cloned()
         else {
             return false;
         };
-        let v = p.get();
+        let mut v = p.get();
         let stalled = kind == b"stalled";
         if !stalled && (kind != b"ended" || v.ended.get()) {
             return false;
         }
-        if stalled || stream_growing(&self.streams, v) {
+        if stalled || stream_growing(&self.streams, &v) {
             v.stalled.set(true);
             v.stall_since_us = ffi::monotonic_us();
             if v.playing.get() {
                 v.base_us = v.stall_since_us - us(v.cur_time);
             }
-            self.sink.event(v, c"waiting", v.cur_time);
+            self.sink.event(&v, c"waiting", v.cur_time);
             return true;
         }
         let ended_at = v.duration;
@@ -529,21 +534,22 @@ impl Cache {
         }
         v.prev_tick_time = v.cur_time;
         v.last_emit_time = v.cur_time;
-        audio_stop(&self.sink, v);
-        helper_stop(&self.sink, v);
-        self.sink.event(v, c"ended", v.cur_time);
+        audio_stop(&self.sink, &mut v);
+        helper_stop(&self.sink, &mut v);
+        self.sink.event(&v, c"ended", v.cur_time);
         true
     }
 
     fn seek_node(&mut self, dom_node: *const c_void, seconds: f64, now_us: i64) -> bool {
         let found = self.find_by_node(dom_node);
-        if found.is_some_and(|p| p.get().is_camera.get()) {
+        if found.as_ref().is_some_and(|p| p.read().is_camera.get()) {
             return false;
         }
-        let Some(v) = found.map(VideoPtr::get) else {
+        let Some(p) = found else {
             self.node_state(dom_node).seek = Some(non_negative(seconds));
             return true;
         };
+        let mut v = p.get();
         if v.player.is_none() {
             v.cur_time = non_negative(seconds);
             v.prev_tick_time = v.cur_time;
@@ -557,8 +563,8 @@ impl Cache {
         v.cur_time = t;
         v.prev_tick_time = t;
         v.last_emit_time = t;
-        v.ended
-            .set(v.duration > 0.0 && t >= v.duration && !v.looping.get());
+        let ended = v.duration > 0.0 && t >= v.duration && !v.looping.get();
+        v.ended.set(ended);
         if v.playing.get() {
             v.base_us = now_us - us(t);
         }
@@ -568,22 +574,23 @@ impl Cache {
             v.frame_texture = frame;
         }
         if v.audio_opened.get() {
-            audio_seek(&self.sink, v, &f3(t));
+            audio_seek(&self.sink, &v, &f3(t));
         }
-        helper_seek(&self.sink, v, t);
-        self.sink.event(v, c"pos", t);
+        helper_seek(&self.sink, &v, t);
+        self.sink.event(&v, c"pos", t);
         true
     }
 
     fn set_node_playing(&mut self, dom_node: *const c_void, play: bool, now_us: i64) -> bool {
         let found = self.find_by_node(dom_node);
-        if found.is_some_and(|p| p.get().is_camera.get()) {
+        if found.as_ref().is_some_and(|p| p.read().is_camera.get()) {
             return false;
         }
-        let Some(v) = found.map(VideoPtr::get) else {
+        let Some(p) = found else {
             self.node_state(dom_node).playing = Some(play);
             return true;
         };
+        let mut v = p.get();
         if v.player.is_none() && !v.video_opened.get() {
             v.playing.set(play);
             return true;
@@ -604,12 +611,12 @@ impl Cache {
                 v.base_us = now_us - us(v.cur_time);
                 v.playing.set(true);
             }
-            audio_start(sink, v);
+            audio_start(sink, &mut v);
             if restart {
                 if v.audio_opened.get() {
-                    audio_seek(sink, v, "0");
+                    audio_seek(sink, &v, "0");
                 }
-                helper_seek(sink, v, 0.0);
+                helper_seek(sink, &v, 0.0);
             }
         } else {
             if v.player.is_some() {
@@ -620,71 +627,72 @@ impl Cache {
                 }
                 v.playing.set(false);
             }
-            audio_pause(sink, v);
+            audio_pause(sink, &v);
         }
-        helper_playpause(sink, v, play);
+        helper_playpause(sink, &v, play);
         true
     }
 
     fn set_node_volume(&mut self, dom_node: *const c_void, volume: f64) -> bool {
-        let Some(v) = self.find_by_node(dom_node).map(VideoPtr::get) else {
+        let Some(p) = self.find_by_node(dom_node) else {
             self.node_state(dom_node).volume = Some(volume);
             return true;
         };
+        let mut v = p.get();
         v.volume = volume;
         if v.token.is_some() && v.audio_opened.get() {
-            audio_volume(&self.sink, v);
+            audio_volume(&self.sink, &v);
         }
         if volume > 0.0 && !v.muted.get() && v.playing.get() && !v.audio_opened.get() {
-            audio_start(&mut self.sink, v);
-            audio_seek_to_current(&self.sink, v);
+            audio_start(&mut self.sink, &mut v);
+            audio_seek_to_current(&self.sink, &v);
         }
         true
     }
 
     fn set_node_muted(&mut self, dom_node: *const c_void, muted: bool) -> bool {
-        let found = self.find_by_node(dom_node).map(VideoPtr::get);
+        let found = self.find_by_node(dom_node);
         if dbg_audio() {
             debug(&format!(
                 "[set-muted] muted={} video={} was={}\n",
                 i32::from(muted),
                 if found.is_some() { "yes" } else { "NULL" },
-                found.as_ref().map_or(-1, |v| v.muted.raw())
+                found.as_ref().map_or(-1, |p| p.read().muted.raw())
             ));
         }
-        let Some(v) = found else {
+        let Some(p) = found else {
             self.node_state(dom_node).muted = Some(muted);
             return true;
         };
+        let mut v = p.get();
         if v.muted.get() == muted {
             return true;
         }
         v.muted.set(muted);
         if muted {
-            audio_pause(&self.sink, v);
+            audio_pause(&self.sink, &v);
         } else if v.playing.get() {
-            audio_start(&mut self.sink, v);
-            audio_seek_to_current(&self.sink, v);
+            audio_start(&mut self.sink, &mut v);
+            audio_seek_to_current(&self.sink, &v);
         }
         true
     }
 
-    fn check_audio_attr(&mut self, p: VideoPtr, dom: Option<Node<'_>>) {
+    fn check_audio_attr(&mut self, p: &Video, v: &mut NsVideo, dom: Option<Node<'_>>) {
         let Some(asrc) = attr(dom, c"data-audio-src") else {
             return;
         };
         if asrc.is_empty() || !asrc.starts_with(b"blob:") {
             return;
         }
-        let v = p.get();
         if str_of(&v.audio_url) == Some(asrc) {
             return;
         }
         v.audio_url = OwnedStr::new(asrc);
-        ffi::fetch(self, asrc, p, FetchKind::Audio);
+        store::fetch(self, asrc, p, FetchKind::Audio);
     }
 
-    fn refresh_growing_stream(&mut self, p: VideoPtr, v: &mut NsVideo, now_us: i64) {
+    fn refresh_growing_stream(&mut self, p: &Video, v: &mut NsVideo, now_us: i64) {
         if v.mse_id != 0 || v.player.is_none() {
             return;
         }
@@ -694,14 +702,15 @@ impl Cache {
         if now_us - v.last_refresh_us < 500_000 {
             return;
         }
-        v.last_refresh_us = now_us;
         let base = stream_key(url);
-        ffi::fetch(self, &base, p, FetchKind::Extend);
-        self.check_audio_attr(p, v.dom());
+        v.last_refresh_us = now_us;
+        store::fetch(self, &base, p, FetchKind::Extend);
+        let dom = v.dom();
+        self.check_audio_attr(p, v, dom);
     }
 
-    fn note_stream_version(&mut self, p: VideoPtr, dom: Option<Node<'_>>, abs_url: &[u8]) {
-        let v = p.get();
+    fn note_stream_version(&mut self, p: &Video, dom: Option<Node<'_>>, abs_url: &[u8]) {
+        let mut v = p.get();
         if v.is_camera.get() || str_of(&v.url) == Some(abs_url) {
             return;
         }
@@ -710,12 +719,12 @@ impl Cache {
         }
         self.requested.insert(abs_url.to_vec());
         v.url = OwnedStr::new(abs_url);
-        ffi::fetch(self, abs_url, p, FetchKind::Extend);
-        self.check_audio_attr(p, dom);
+        store::fetch(self, abs_url, p, FetchKind::Extend);
+        self.check_audio_attr(p, &mut v, dom);
     }
 
-    fn discover_track(&mut self, p: VideoPtr, dom: Node<'_>) {
-        if p.get().track_requested.get() {
+    fn discover_track(&mut self, p: &Video, dom: Node<'_>) {
+        if p.read().track_requested.get() {
             return;
         }
         let Some(track) = pick_track(dom) else {
@@ -728,12 +737,15 @@ impl Cache {
             return;
         };
         p.get().track_requested.set(true);
-        ffi::fetch(self, &abs, p, FetchKind::Track);
+        store::fetch(self, &abs, p, FetchKind::Track);
     }
 
-    fn adopt_existing(&mut self, p: VideoPtr, dom: Node<'_>, abs: &[u8]) {
-        p.get().dom_node = node_ptr(dom);
-        self.apply_node_state(p.get(), node_ptr(dom));
+    fn adopt_existing(&mut self, p: &Video, dom: Node<'_>, abs: &[u8]) {
+        {
+            let mut v = p.get();
+            v.dom = Some(dom.downgrade());
+            self.apply_node_state(&mut v, node_ptr(dom));
+        }
         self.discover_track(p, dom);
         self.note_stream_version(p, Some(dom), abs);
     }
@@ -757,14 +769,14 @@ impl Cache {
                 media.set_video(p.media_handle());
             }
             if mse_id == 0 {
-                self.note_stream_version(p, dom, abs);
+                self.note_stream_version(&p, dom, abs);
             }
             return;
         }
 
-        let mut v = NsVideo::zeroed();
+        let mut v = NsVideo::default();
         v.url = OwnedStr::new(abs);
-        v.dom_node = dom_ptr;
+        v.dom = dom.map(Node::downgrade);
         v.autoplay.set(attr(dom, c"autoplay").is_some());
         v.looping.set(attr(dom, c"loop").is_some());
         v.controls.set(attr(dom, c"controls").is_some());
@@ -774,32 +786,32 @@ impl Cache {
         self.next_seq = self.next_seq.wrapping_add(1);
         v.seq = self.next_seq;
         v.mse_id = mse_id;
-        let p = VideoPtr::adopt(v);
+        let p = Video::adopt(v);
         if let Some(prev) = previous {
-            if mse_id != 0 && prev.get().mse_id != mse_id {
-                inherit_node_playback(p.get(), prev.get());
+            if mse_id != 0 && prev.read().mse_id != mse_id {
+                inherit_node_playback(&mut p.get(), &prev.read());
             }
-            if dom.is_some() && prev.get().dom_node == dom_ptr {
-                release_node(&self.sink, prev.get());
+            if dom.is_some() && prev.read().dom_addr() == dom_ptr {
+                release_node(&self.sink, &mut prev.get());
             }
         }
-        self.videos.push((key, p));
+        self.videos.push((key, p.clone()));
         if let Some(media) = bx.and_then(BoxRef::media) {
             media.set_video(p.media_handle());
         }
         if let Some(dom) = dom {
-            self.apply_node_state(p.get(), dom_ptr);
-            self.discover_track(p, dom);
+            self.apply_node_state(&mut p.get(), dom_ptr);
+            self.discover_track(&p, dom);
         }
 
         if mse_id != 0 {
             if let Some(s) = self.streams.get_mut(&mse_id) {
-                mse_sync(&mut self.sink, s, p.get());
+                mse_sync(&mut self.sink, s, &mut p.get());
             }
             return;
         }
 
-        ffi::fetch(self, abs, p, FetchKind::Video);
+        store::fetch(self, abs, &p, FetchKind::Video);
 
         if let Some(asrc) = attr(dom, c"data-audio-src").filter(|a| {
             [&b"blob:"[..], b"https://", b"http://", b"file://"]
@@ -807,11 +819,11 @@ impl Cache {
                 .any(|s| a.starts_with(s))
         }) {
             p.get().audio_url = OwnedStr::new(asrc);
-            ffi::fetch(self, asrc, p, FetchKind::Audio);
+            store::fetch(self, asrc, &p, FetchKind::Audio);
         }
 
         if let Some(poster) = poster.filter(|s| !s.is_empty()) {
-            ffi::fetch(self, poster, p, FetchKind::Poster);
+            store::fetch(self, poster, &p, FetchKind::Poster);
         }
     }
 
@@ -839,7 +851,7 @@ impl Cache {
             return;
         }
         if let Some(p) = lookup(&self.videos, &stream_key(&abs)) {
-            self.adopt_existing(p, node, &abs);
+            self.adopt_existing(&p, node, &abs);
         } else if !self.requested.contains(&abs) {
             self.requested.insert(abs.clone());
             let poster = non_empty_attr(node, c"poster")
@@ -850,7 +862,7 @@ impl Cache {
 
     fn discover(&mut self, root: BoxRef<'_>, doc: Option<Node<'_>>) {
         for b in ffi::collect_videos(root) {
-            let (Some(media), Some(dom)) = (b.media(), ffi::node(b.dom_ptr())) else {
+            let (Some(media), Some(dom)) = (b.media(), b.dom()) else {
                 continue;
             };
             if attr(Some(dom), MEDIA_STREAM_ATTR) == Some(&b"camera"[..]) {
@@ -858,12 +870,12 @@ impl Cache {
                 let p = match lookup(&self.videos, &key) {
                     Some(p) => p,
                     None => {
-                        let mut cv = NsVideo::zeroed();
+                        let mut cv = NsVideo::default();
                         cv.is_camera.set(true);
-                        cv.dom_node = b.dom_ptr();
+                        cv.dom = Some(dom.downgrade());
                         cv.playing.set(true);
-                        let p = VideoPtr::adopt(cv);
-                        self.videos.push((key, p));
+                        let p = Video::adopt(cv);
+                        self.videos.push((key, p.clone()));
                         p
                     }
                 };
@@ -893,7 +905,7 @@ impl Cache {
                 .and_then(|p| ffi::url_resolve(self.base_url.as_deref(), p.to_bytes()));
             if let Some(p) = lookup(&self.videos, &stream_key(&abs)) {
                 media.set_video(p.media_handle());
-                self.adopt_existing(p, dom, &abs);
+                self.adopt_existing(&p, dom, &abs);
             } else if !self.requested.contains(&abs) {
                 self.requested.insert(abs.clone());
                 self.start(Some(dom), Some(b), &abs, poster.as_deref());
@@ -912,7 +924,10 @@ impl Cache {
         let scale = if scale > 0.0 { scale } else { 1.0 };
         let scroll_y = if self.page_coords { 0.0 } else { scroll_y };
         for b in ffi::collect_videos(root) {
-            let Some(v) = ffi::video_of_box(b) else {
+            let Some(video) = Video::of_box(b) else {
+                continue;
+            };
+            let Some(mut v) = video.try_get() else {
                 continue;
             };
             v.note_paint_rect(
@@ -923,50 +938,53 @@ impl Cache {
                 ffi::box_fit(b),
             );
             if self.page_coords {
-                v.note_paint_clip(v.rect_x, v.rect_y, v.rect_w, v.rect_h);
+                let (x, y, w, h) = (v.rect_x, v.rect_y, v.rect_w, v.rect_h);
+                v.note_paint_clip(x, y, w, h);
             }
         }
     }
 
     fn flush_composites(&mut self, now_us: i64) {
-        let mut decoder_owner: Option<VideoPtr> = None;
-        let mut layout_owner: Option<VideoPtr> = None;
+        let mut decoder_owner: Option<&Video> = None;
+        let mut layout_owner: Option<&Video> = None;
         for (_, p) in &self.videos {
-            let v = p.get();
+            let v = p.read();
             if v.mse_id != 0
                 && v.video_opened.get()
-                && decoder_owner.is_none_or(|d| v.seq > d.get().seq)
+                && decoder_owner.is_none_or(|d| v.seq > d.read().seq)
             {
-                decoder_owner = Some(*p);
+                decoder_owner = Some(p);
             }
             if v.mse_id != 0
                 && v.playing.get()
                 && v.last_paint_us > 0
                 && layout_owner.is_none_or(|l| {
-                    let l = l.get();
+                    let l = l.read();
                     v.last_paint_us > l.last_paint_us
                         || (v.last_paint_us == l.last_paint_us && v.seq > l.seq)
                 })
             {
-                layout_owner = Some(*p);
+                layout_owner = Some(p);
             }
         }
         if let (Some(d), Some(l)) = (decoder_owner, layout_owner)
             && d != l
-            && now_us - l.get().last_paint_us < 2_000_000
+            && now_us - l.read().last_paint_us < 2_000_000
         {
-            let l = l.get();
-            let (rect, fit, clip) = (
-                [l.rect_x, l.rect_y, l.rect_w, l.rect_h],
-                l.rect_fit,
-                [l.clip_x, l.clip_y, l.clip_w, l.clip_h],
-            );
-            let d = d.get();
+            let (rect, fit, clip) = {
+                let l = l.read();
+                (
+                    [l.rect_x, l.rect_y, l.rect_w, l.rect_h],
+                    l.rect_fit,
+                    [l.clip_x, l.clip_y, l.clip_w, l.clip_h],
+                )
+            };
+            let mut d = d.get();
             d.note_paint_rect(rect[0], rect[1], rect[2], rect[3], fit);
             d.note_paint_clip(clip[0], clip[1], clip[2], clip[3]);
         }
         for (_, p) in &self.videos {
-            helper_flush_rect(self.page_coords, &self.sink, p.get(), now_us);
+            helper_flush_rect(self.page_coords, &self.sink, &mut p.get(), now_us);
         }
     }
 
@@ -991,7 +1009,7 @@ impl Cache {
             ));
         }
         if let Some(v) = sv {
-            mse_sync(&mut self.sink, s, v.get());
+            mse_sync(&mut self.sink, s, &mut v.get());
         }
         true
     }
@@ -1015,22 +1033,23 @@ impl Cache {
         if !s.track(kind).remove(start, end) {
             return true;
         }
-        let v = lookup(&self.videos, &mse_key(stream_id)).map(VideoPtr::get);
+        let video = lookup(&self.videos, &mse_key(stream_id));
         if kind == b'a' {
             s.audio_rebased = true;
-            if let Some(v) = v {
-                audio_stop(&self.sink, v);
+            if let Some(p) = video {
+                audio_stop(&self.sink, &mut p.get());
             }
             return true;
         }
-        let Some(v) = v else {
+        let Some(p) = video else {
             return true;
         };
+        let mut v = p.get();
         let now = ffi::monotonic_us();
         if v.playing.get() && v.base_us > 0 {
             v.cur_time = (now - v.base_us) as f64 / 1e6;
         }
-        helper_stop(&self.sink, v);
+        helper_stop(&self.sink, &mut v);
         v.player = None;
         v.frame_texture = None;
         v.prev_tick_time = v.cur_time;
@@ -1054,18 +1073,18 @@ impl Cache {
             return;
         };
         s.eos = true;
-        if let Some(v) = lookup(&self.videos, &mse_key(stream_id)) {
-            mse_sync(&mut self.sink, s, v.get());
+        if let Some(p) = lookup(&self.videos, &mse_key(stream_id)) {
+            mse_sync(&mut self.sink, s, &mut p.get());
         }
     }
 
     fn tick(&mut self, now_us: i64) -> bool {
         let mut changed = false;
-        let mut emits: Vec<(VideoPtr, &'static CStr, f64)> = Vec::new();
+        let mut emits: Vec<(Video, &'static CStr, f64)> = Vec::new();
         let mut opened_count: u32 = 0;
-        let mut newest_audible: Option<VideoPtr> = None;
+        let mut newest_audible: Option<Video> = None;
         for (_, p) in &self.videos {
-            let c = p.get();
+            let c = p.read();
             if c.video_opened.get() || c.audio_opened.get() {
                 opened_count = opened_count.wrapping_add(1);
             }
@@ -1073,23 +1092,25 @@ impl Cache {
                 && c.playing.get()
                 && !c.muted.get()
                 && c.audio_opened.get()
-                && newest_audible.is_none_or(|n| c.seq > n.get().seq)
+                && newest_audible.as_ref().is_none_or(|n| c.seq > n.read().seq)
             {
-                newest_audible = Some(*p);
+                newest_audible = Some(p.clone());
             }
         }
-        let videos: Vec<VideoPtr> = self.videos.iter().map(|(_, p)| *p).collect();
+        let videos: Vec<Video> = self.videos.iter().map(|(_, p)| p.clone()).collect();
         for p in videos {
-            let v = p.get();
+            let mut v = p.get();
             let superseded = opened_count >= 2
-                && newest_audible.is_some_and(|n| n != p && v.mse_id != 0 && v.seq < n.get().seq);
+                && newest_audible
+                    .as_ref()
+                    .is_some_and(|n| *n != p && v.mse_id != 0 && v.seq < n.read().seq);
             let stale = v.last_paint_us > 0 && now_us - v.last_paint_us > 3_000_000;
             if opened_count >= 2
                 && (v.video_opened.get() || v.audio_opened.get())
                 && (superseded || stale)
             {
-                audio_stop(&self.sink, v);
-                helper_stop(&self.sink, v);
+                audio_stop(&self.sink, &mut v);
+                helper_stop(&self.sink, &mut v);
                 v.playing.set(false);
                 opened_count = opened_count.wrapping_sub(1);
                 continue;
@@ -1106,38 +1127,38 @@ impl Cache {
             if v.mse_id != 0
                 && let Some(s) = self.streams.get_mut(&v.mse_id)
             {
-                mse_sync(&mut self.sink, s, v);
+                mse_sync(&mut self.sink, s, &mut v);
             }
-            media::activate_pending(&self.sink, v);
+            media::activate_pending(&self.sink, &mut v);
             if v.player.is_none() {
                 continue;
             }
 
             if !v.meta_sent.get() && v.duration > 0.0 {
                 v.meta_sent.set(true);
-                emits.push((p, c"meta", v.duration));
+                emits.push((p.clone(), c"meta", v.duration));
                 if v.natural_width > 0 {
-                    emits.push((p, c"vwidth", f64::from(v.natural_width)));
+                    emits.push((p.clone(), c"vwidth", f64::from(v.natural_width)));
                 }
                 if v.natural_height > 0 {
-                    emits.push((p, c"vheight", f64::from(v.natural_height)));
+                    emits.push((p.clone(), c"vheight", f64::from(v.natural_height)));
                 }
             }
             if !v.buf_sent.get() {
                 v.buf_sent.set(true);
-                let mut end = buffered_end(&self.streams, v);
+                let mut end = buffered_end(&self.streams, &v);
                 if end <= 0.0 {
                     end = v.duration;
                 }
                 if end > 0.0 && end != v.sent_buffered_end {
                     v.sent_buffered_end = end;
-                    emits.push((p, c"buf", end));
+                    emits.push((p.clone(), c"buf", end));
                 }
             }
-            let helper_owns = helper_composited(v);
+            let helper_owns = helper_composited(&v);
             let helper = helper_enabled() && v.video_opened.get();
             if helper {
-                helper_flush_rect(self.page_coords, &self.sink, v, now_us);
+                helper_flush_rect(self.page_coords, &self.sink, &mut v, now_us);
             }
             if !v.playing.get() {
                 continue;
@@ -1147,8 +1168,8 @@ impl Cache {
                 && !v.muted.get()
                 && (v.has_audio.get() || v.audio_file.is_some())
             {
-                audio_start(&mut self.sink, v);
-                audio_seek_to_current(&self.sink, v);
+                audio_start(&mut self.sink, &mut v);
+                audio_seek_to_current(&self.sink, &v);
             }
 
             if v.base_us == 0 {
@@ -1160,14 +1181,14 @@ impl Cache {
                     "[clock] elapsed={elapsed:.2} prev={:.2} cur={:.2} edge={:.2}\n",
                     v.prev_tick_time,
                     v.cur_time,
-                    buffered_end(&self.streams, v)
+                    buffered_end(&self.streams, &v)
                 ));
             }
             if !helper_owns && elapsed - v.prev_tick_time > 1.0 {
                 elapsed = v.prev_tick_time + 1.0;
                 v.base_us = now_us - us(elapsed);
                 if v.audio_opened.get() && !helper {
-                    audio_seek(&self.sink, v, &f3(elapsed));
+                    audio_seek(&self.sink, &v, &f3(elapsed));
                 }
             }
             let mut t = elapsed;
@@ -1175,10 +1196,10 @@ impl Cache {
                 t = elapsed % v.duration;
             }
 
-            if stream_growing(&self.streams, v) {
-                let edge = non_negative(buffered_end(&self.streams, v) - 0.35);
+            if stream_growing(&self.streams, &v) {
+                let edge = non_negative(buffered_end(&self.streams, &v) - 0.35);
                 if t > edge {
-                    self.refresh_growing_stream(p, v, now_us);
+                    self.refresh_growing_stream(&p, &mut v, now_us);
                     v.base_us = now_us - us(edge);
                     t = edge;
                     if v.stall_since_us == 0 {
@@ -1186,7 +1207,7 @@ impl Cache {
                     }
                     if !v.stalled.get() && now_us - v.stall_since_us > 1_500_000 {
                         v.stalled.set(true);
-                        emits.push((p, c"waiting", edge));
+                        emits.push((p.clone(), c"waiting", edge));
                     }
                 } else {
                     v.stall_since_us = 0;
@@ -1194,7 +1215,7 @@ impl Cache {
             }
 
             if v.looping.get() && t + 1e-3 < v.prev_tick_time {
-                audio_resync(&self.sink, v);
+                audio_resync(&self.sink, &v);
             }
             v.prev_tick_time = t;
 
@@ -1206,54 +1227,54 @@ impl Cache {
             if helper_owns && !looping && v.duration > 0.0 && t >= v.duration {
                 ended = true;
             }
-            if helper && v.stalled.get() && t + 0.5 < buffered_end(&self.streams, v) {
+            if helper && v.stalled.get() && t + 0.5 < buffered_end(&self.streams, &v) {
                 v.stalled.set(false);
-                emits.push((p, c"resumed", t));
+                emits.push((p.clone(), c"resumed", t));
             }
             if let Some(frame) = frame {
                 v.frame_texture = Some(frame);
                 changed = true;
                 if v.stalled.get() {
                     v.stalled.set(false);
-                    emits.push((p, c"resumed", t));
+                    emits.push((p.clone(), c"resumed", t));
                 }
             }
             v.cur_time = t;
             if t - v.last_emit_time >= 0.20 || ended {
                 v.last_emit_time = t;
-                emits.push((p, c"pos", v.cur_time));
+                emits.push((p.clone(), c"pos", v.cur_time));
             }
             if ended {
-                if stream_growing(&self.streams, v) {
+                if stream_growing(&self.streams, &v) {
                     v.prev_tick_time = v.cur_time;
                     v.base_us = now_us - us(v.cur_time);
                     if !v.stalled.get() {
                         v.stalled.set(true);
-                        emits.push((p, c"waiting", v.cur_time));
+                        emits.push((p.clone(), c"waiting", v.cur_time));
                     }
-                    self.refresh_growing_stream(p, v, now_us);
+                    self.refresh_growing_stream(&p, &mut v, now_us);
                     continue;
                 }
                 v.playing.set(false);
                 v.ended.set(true);
                 v.cur_time = v.duration;
-                audio_stop(&self.sink, v);
-                helper_playpause(&self.sink, v, false);
-                emits.push((p, c"ended", v.duration));
+                audio_stop(&self.sink, &mut v);
+                helper_playpause(&self.sink, &v, false);
+                emits.push((p.clone(), c"ended", v.duration));
             }
         }
         for (p, kind, value) in emits {
-            self.sink.event(p.get(), kind, value);
+            self.sink.event(&p.read(), kind, value);
         }
         changed
     }
 
     fn animating(&self) -> bool {
-        if !self.pending.is_empty() {
+        if self.pending != 0 {
             return true;
         }
         self.videos.iter().any(|(_, p)| {
-            let v = p.get();
+            let v = p.read();
             (v.is_camera.get() && southstar_camera::is_active())
                 || (v.player.is_some() && v.playing.get())
         })
@@ -1261,7 +1282,7 @@ impl Cache {
 
     fn waiting_growth(&self) -> bool {
         self.videos.iter().any(|(_, p)| {
-            let v = p.get();
+            let v = p.read();
             v.playing.get() && v.stalled.get()
         })
     }
