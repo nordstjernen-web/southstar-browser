@@ -5,27 +5,9 @@
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
-use std::sync::Mutex;
 
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GError, GHashTable};
 pub use southstar_net::{NsResponse, Response};
-
-use crate::fetch::CssFetch;
-
-#[repr(C)]
-struct ResourceTiming {
-    top_url: *mut c_char,
-    url: *mut c_char,
-    initiator: *const c_char,
-    start_us: i64,
-    end_us: i64,
-    resp: *mut NsResponse,
-    render_blocking: GBoolean,
-    in_frame: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ResourceTiming>() == 56);
 
 #[repr(C)]
 pub struct GBytes {
@@ -59,15 +41,10 @@ unsafe extern "C" {
     fn g_bytes_ref(bytes: *mut GBytes) -> *mut GBytes;
     fn g_bytes_unref(bytes: *mut GBytes);
     fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
-    fn g_ptr_array_new_with_free_func(free: glib::GDestroyNotify) -> *mut GPtrArray;
 }
 
 pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
-}
-
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
 fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
@@ -362,75 +339,6 @@ impl CssCache {
             )
         };
     }
-}
-
-struct TimingPtr(*mut ResourceTiming);
-
-unsafe impl Send for TimingPtr {}
-
-const TIMING_CAP: usize = 256;
-
-static TIMINGS: Mutex<Vec<TimingPtr>> = Mutex::new(Vec::new());
-
-unsafe extern "C" fn resource_timing_free(p: *mut c_void) {
-    let Some(t) = (unsafe { p.cast::<ResourceTiming>().as_mut() }) else {
-        return;
-    };
-    unsafe {
-        glib::g_free(t.top_url.cast());
-        glib::g_free(t.url.cast());
-        drop(Response::from_raw(t.resp));
-        glib::g_free(p);
-    }
-}
-
-pub fn record_timing(f: &CssFetch, start_us: i64, resp: Response) {
-    let Some(top_url) = f.top_url else {
-        return;
-    };
-    let t =
-        unsafe { glib::g_malloc0(core::mem::size_of::<ResourceTiming>()) }.cast::<ResourceTiming>();
-    unsafe {
-        t.write(ResourceTiming {
-            top_url: glib::g_strdup(top_url.as_ptr()),
-            url: glib::g_strdup(f.url.as_ptr()),
-            initiator: f.initiator.as_ptr(),
-            start_us,
-            end_us: monotonic_us(),
-            resp: resp.into_raw(),
-            render_blocking: glib::boolean(f.render_blocking),
-            in_frame: glib::boolean(f.in_frame),
-        })
-    };
-    let Ok(mut timings) = TIMINGS.lock() else {
-        return;
-    };
-    if timings.len() >= TIMING_CAP {
-        let oldest = timings.remove(0);
-        unsafe { resource_timing_free(oldest.0.cast()) };
-    }
-    timings.push(TimingPtr(t));
-}
-
-pub fn take_resource_timings(top_url: Option<&CStr>) -> *mut GPtrArray {
-    let out = unsafe { g_ptr_array_new_with_free_func(Some(resource_timing_free)) };
-    let Some(top_url) = top_url else {
-        return out;
-    };
-    let Ok(mut timings) = TIMINGS.lock() else {
-        return out;
-    };
-    let mut kept = Vec::with_capacity(timings.len());
-    for t in timings.drain(..) {
-        let matches = c_str(unsafe { (*t.0).top_url }) == Some(top_url);
-        if matches {
-            unsafe { glib::g_ptr_array_add(out, t.0.cast()) };
-        } else {
-            kept.push(t);
-        }
-    }
-    *timings = kept;
-    out
 }
 
 pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {

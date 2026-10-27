@@ -123,7 +123,7 @@ fn language_names() -> Vec<Vec<u8>> {
     names
 }
 
-fn default_accept_language() -> &'static CStr {
+fn default_accept_language_c() -> &'static CStr {
     static CACHED: OnceLock<CString> = OnceLock::new();
     CACHED.get_or_init(|| {
         let value = match windows_locale() {
@@ -139,7 +139,7 @@ pub fn effective_accept_language() -> Vec<u8> {
     southstar_config::get()
         .and_then(|c| unsafe { glib::bytes(c.accept_language) })
         .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| default_accept_language().to_bytes())
+        .unwrap_or_else(default_accept_language)
         .to_vec()
 }
 
@@ -147,13 +147,6 @@ pub fn effective_navigator_languages() -> Vec<Vec<u8>> {
     crate::navigator_languages(&effective_accept_language())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_default_accept_language() -> *const c_char {
-    default_accept_language().as_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_proxy_mask(proxy_url: *const c_char) -> *mut c_char {
-    let proxy_url = unsafe { glib::bytes(proxy_url) }.unwrap_or_default();
-    glib::strdup(&crate::proxy_mask(proxy_url))
+pub fn default_accept_language() -> &'static [u8] {
+    default_accept_language_c().to_bytes()
 }

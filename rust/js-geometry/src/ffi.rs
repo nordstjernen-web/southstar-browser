@@ -301,15 +301,8 @@ pub unsafe extern "C" fn ns_box_find_by_dom(
     find_box_by_dom(root, target.cast()).map_or(ptr::null(), BoxRef::as_ptr)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_box_for_node(js: *mut NsJs, n: *const NsNode) -> *const NsBox {
-    let Some(root) = layout_root(Js(js)) else {
-        return ptr::null();
-    };
-    if n.is_null() {
-        return ptr::null();
-    }
-    crate::lookup::find_by_dom(root, n.cast()).map_or(ptr::null(), BoxRef::as_ptr)
+fn box_for_node(scope: &Scope<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
+    crate::lookup::find_by_dom(layout_root(js_of(scope))?, node.as_ptr().cast())
 }
 
 fn forget_box_lookup(js: *const NsJs) {
@@ -318,6 +311,9 @@ fn forget_box_lookup(js: *const NsJs) {
 
 pub fn install_runtime_hooks() {
     api::set_geometry_hooks(api::GeometryHooks { forget_box_lookup });
+    southstar_canvas::links::set_js_geometry_links(southstar_canvas::links::JsGeometryLinks {
+        box_for_node,
+    });
     southstar_js_runtime::links::set_js_geometry_links(
         southstar_js_runtime::links::JsGeometryLinks {
             window_scroll_by_pages: crate::ffi::nsr_window_scroll_by_pages,

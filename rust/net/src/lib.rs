@@ -5,6 +5,7 @@
 mod about;
 mod blocking;
 mod budget;
+mod build_info;
 mod coalesce;
 mod cookies;
 mod data_url;
@@ -36,6 +37,7 @@ pub use ffi::fetch::{
     ns_net_accept_headers_for as accept_headers_for, request_key,
 };
 pub use ffi::forms::{multipart_boundary, urlencoded_append_pair};
+pub use ffi::host::set_self_exe;
 pub use ffi::netlog::set_log_fetches;
 pub use ffi::proxy::{http_proxy, https_proxy, no_proxy, proxy_override, set_proxy_override};
 pub use ffi::queue::{

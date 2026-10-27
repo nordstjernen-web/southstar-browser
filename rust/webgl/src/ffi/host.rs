@@ -237,10 +237,6 @@ pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgl_canvas_surface(canvas: *const NsNode) -> *mut c_void {
-    let Some((gl, _)) = registered(canvas as usize) else {
-        return ptr::null_mut();
-    };
-    gl.canvas_surface()
+pub(crate) fn canvas_surface(canvas: usize) -> *mut c_void {
+    registered(canvas).map_or(ptr::null_mut(), |(gl, _)| gl.canvas_surface())
 }

@@ -4,7 +4,7 @@
 
 mod ffi;
 
-pub use ffi::{effective_accept_language, effective_navigator_languages};
+pub use ffi::{default_accept_language, effective_accept_language, effective_navigator_languages};
 
 use std::collections::HashSet;
 
@@ -171,26 +171,4 @@ pub fn url_from_local_path(path: &[u8]) -> Option<Vec<u8>> {
         candidate.push(separator);
     }
     ffi::filename_to_uri(&candidate)
-}
-
-pub fn proxy_mask(proxy_url: &[u8]) -> Vec<u8> {
-    if proxy_url.is_empty() {
-        return Vec::new();
-    }
-    let cursor = find(proxy_url, b"://").map_or(0, |sep| sep + 3);
-    let Some(at) = proxy_url[cursor..]
-        .iter()
-        .position(|&c| c == b'@')
-        .map(|i| cursor + i)
-    else {
-        return proxy_url.to_vec();
-    };
-    let Some(colon) = proxy_url[cursor..at]
-        .iter()
-        .position(|&c| c == b':')
-        .map(|i| cursor + i)
-    else {
-        return proxy_url.to_vec();
-    };
-    [&proxy_url[..colon], b":***", &proxy_url[at..]].concat()
 }

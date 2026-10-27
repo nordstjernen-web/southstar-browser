@@ -52,8 +52,6 @@ unsafe extern "C" {
     fn g_strdup_printf(format: *const c_char, ...) -> *mut c_char;
     fn g_mutex_lock(mutex: *mut GMutex);
     fn g_mutex_unlock(mutex: *mut GMutex);
-    fn ns_net_default_accept_language() -> *const c_char;
-    fn ns_net_proxy_mask(proxy_url: *const c_char) -> *mut c_char;
 }
 
 fn c_string(bytes: &[u8]) -> CString {
@@ -125,14 +123,6 @@ pub(crate) fn ascii_strtoll(value: &[u8]) -> Option<i64> {
 
 pub(crate) fn null_text() -> Vec<u8> {
     unsafe { take(g_strdup_printf(c"%s".as_ptr(), ptr::null::<c_char>())) }.unwrap_or_default()
-}
-
-pub(crate) fn default_accept_language() -> Vec<u8> {
-    text(unsafe { ns_net_default_accept_language() }).unwrap_or_else(null_text)
-}
-
-pub(crate) fn proxy_mask(proxy: *const c_char) -> Option<Vec<u8>> {
-    unsafe { take(ns_net_proxy_mask(proxy)) }
 }
 
 fn getenv(name: &str) -> Option<Vec<u8>> {
@@ -287,7 +277,7 @@ pub fn save() -> bool {
     written
 }
 
-pub fn dump() -> Vec<u8> {
+pub fn dump(default_language: &[u8]) -> Vec<u8> {
     let path = text(*global_path());
-    crate::render_dump(global_config(), path.as_deref())
+    crate::render_dump(global_config(), path.as_deref(), default_language)
 }

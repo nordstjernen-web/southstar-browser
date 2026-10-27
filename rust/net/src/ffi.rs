@@ -317,8 +317,10 @@ fn text_fields(r: &mut NsResponse) -> [&mut *mut c_char; 14] {
     ]
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_response_free(resp: *mut NsResponse) {
+/// # Safety
+///
+/// `resp` is null or a response this crate allocated, and nothing uses it afterwards.
+pub(crate) unsafe fn ns_response_free(resp: *mut NsResponse) {
     let Some(r) = (unsafe { resp.as_mut() }) else {
         return;
     };

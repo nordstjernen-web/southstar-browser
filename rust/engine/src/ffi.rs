@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GHashTable, GPtrArray};
+use southstar_glib::{self as glib, GBoolean, GHashTable};
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
@@ -28,8 +28,8 @@ pub use css::{
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
     Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, monotonic_us,
-    navigate_blocking, nosniff, preconnect, preload_clear, preload_request, record_timing,
-    url_is_http_or_https, url_origin, url_resolve,
+    navigate_blocking, nosniff, preconnect, preload_clear, preload_request, url_is_http_or_https,
+    url_origin, url_resolve,
 };
 
 use crate::fetch;
@@ -279,10 +279,6 @@ impl Out {
     }
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 pub struct Page<'a> {
     pub doc: Option<Node<'a>>,
     pub base: Option<&'a CStr>,
@@ -376,11 +372,6 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
 fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray {
-    net::take_resource_timings(c_str(top_url))
 }
 
 pub fn dump_text(root: BoxRef<'_>) -> Vec<u8> {

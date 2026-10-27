@@ -85,12 +85,6 @@ unsafe extern "C" {
     fn cairo_pattern_destroy(pattern: *mut c_void);
     fn cairo_set_operator(cr: *mut Cairo, op: c_int);
     fn cairo_paint(cr: *mut Cairo);
-    fn ns_webgl_canvas_surface(canvas: *const NsNode) -> *mut c_void;
-}
-
-#[cfg(feature = "webgpu")]
-unsafe extern "C" {
-    fn ns_webgpu_canvas_surface(canvas: *const NsNode) -> *mut c_void;
 }
 
 const OPERATOR_CLEAR: c_int = 0;
@@ -214,13 +208,13 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> *mut c_void {
     if el.is_null() {
         return ptr::null_mut();
     }
-    let gl = unsafe { ns_webgl_canvas_surface(el.0) };
+    let gl = crate::links::webgl_canvas_surface(el.addr());
     if !gl.is_null() {
         return gl;
     }
     #[cfg(feature = "webgpu")]
     {
-        let gpu = unsafe { ns_webgpu_canvas_surface(el.0) };
+        let gpu = crate::links::webgpu_canvas_surface(el.addr());
         if !gpu.is_null() {
             return gpu;
         }

@@ -1877,6 +1877,7 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-image",
+ "southstar-js-cssom",
  "southstar-js-engine",
  "southstar-js-images",
  "southstar-js-runtime",
@@ -1884,6 +1885,7 @@ dependencies = [
  "southstar-numfmt",
  "southstar-text",
  "southstar-texture",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2610,6 +2612,7 @@ dependencies = [
 name = "southstar-js-frames"
 version = "1.0.2-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-config",
  "southstar-csp",
  "southstar-css",
@@ -2782,6 +2785,7 @@ dependencies = [
  "southstar-js-url",
  "southstar-js-window",
  "southstar-layout",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2906,6 +2910,7 @@ dependencies = [
  "southstar-css",
  "southstar-debuglog",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-idb",
  "southstar-js-attrs",
@@ -2951,6 +2956,7 @@ dependencies = [
  "southstar-js-workers",
  "southstar-url",
  "southstar-webgl",
+ "southstar-webgpu",
 ]
 
 [[package]]
@@ -3005,6 +3011,7 @@ dependencies = [
  "southstar-js-intl",
  "southstar-js-realm",
  "southstar-js-temporal",
+ "southstar-js-wasm",
  "southstar-net",
  "southstar-url",
 ]
@@ -3135,6 +3142,7 @@ dependencies = [
 name = "southstar-js-window"
 version = "1.0.2-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",
@@ -3792,6 +3800,7 @@ dependencies = [
  "southstar-canvas",
  "southstar-dom",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]

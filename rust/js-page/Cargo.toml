@@ -12,6 +12,7 @@ southstar-canvas = { path = "../canvas" }
 southstar-css = { path = "../css" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
+southstar-engine = { path = "../engine" }
 southstar-glib = { path = "../glib" }
 southstar-idb = { path = "../idb" }
 southstar-js-attrs = { path = "../js-attrs" }
@@ -57,6 +58,10 @@ southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-url = { path = "../url" }
 southstar-webgl = { path = "../webgl" }
+southstar-webgpu = { path = "../webgpu", optional = true }
+
+[features]
+webgpu = ["dep:southstar-webgpu"]
 
 [lints]
 workspace = true

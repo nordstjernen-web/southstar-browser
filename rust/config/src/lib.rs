@@ -517,11 +517,36 @@ fn serialize(config: &mut NsConfig) -> Vec<u8> {
     out
 }
 
+fn proxy_mask(proxy_url: &[u8]) -> Vec<u8> {
+    if proxy_url.is_empty() {
+        return Vec::new();
+    }
+    let cursor = proxy_url
+        .windows(3)
+        .position(|w| w == b"://")
+        .map_or(0, |sep| sep + 3);
+    let Some(at) = proxy_url[cursor..]
+        .iter()
+        .position(|&c| c == b'@')
+        .map(|i| cursor + i)
+    else {
+        return proxy_url.to_vec();
+    };
+    let Some(colon) = proxy_url[cursor..at]
+        .iter()
+        .position(|&c| c == b':')
+        .map(|i| cursor + i)
+    else {
+        return proxy_url.to_vec();
+    };
+    [&proxy_url[..colon], b":***", &proxy_url[at..]].concat()
+}
+
 fn non_empty(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
     value.filter(|value| !value.is_empty())
 }
 
-fn render_dump(config: &mut NsConfig, path: Option<&[u8]>) -> Vec<u8> {
+fn render_dump(config: &mut NsConfig, path: Option<&[u8]>, default_language: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut line = |label: &str, value: &[u8]| {
         out.extend_from_slice(label.as_bytes());
@@ -537,7 +562,7 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>) -> Vec<u8> {
         Some(language) => line("accept_language       = ", &language),
         None => line(
             "accept_language       = ",
-            &[b"(auto: ".as_slice(), &ffi::default_accept_language(), b")"].concat(),
+            &[b"(auto: ".as_slice(), default_language, b")"].concat(),
         ),
     }
     line("search_engine         = ", &text(config, "search_engine"));
@@ -551,11 +576,11 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>) -> Vec<u8> {
     let none = || b"(none)".to_vec();
     line(
         "http_proxy            = ",
-        &non_empty(ffi::proxy_mask(config.http_proxy)).unwrap_or_else(none),
+        &non_empty(ffi::text(config.http_proxy).map(|p| proxy_mask(&p))).unwrap_or_else(none),
     );
     line(
         "https_proxy           = ",
-        &non_empty(ffi::proxy_mask(config.https_proxy)).unwrap_or_else(none),
+        &non_empty(ffi::text(config.https_proxy).map(|p| proxy_mask(&p))).unwrap_or_else(none),
     );
     line(
         "no_proxy              = ",

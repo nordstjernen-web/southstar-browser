@@ -13,6 +13,7 @@ southstar-digest = { path = "../digest" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-image = { path = "../image" }
+southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-images = { path = "../js-images" }
 southstar-js-runtime = { path = "../js-runtime" }
@@ -20,6 +21,7 @@ southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
+southstar-video = { path = "../video" }
 
 [features]
 webgpu = []

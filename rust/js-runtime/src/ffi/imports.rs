@@ -196,8 +196,4 @@ unsafe extern "Rust" {
         realm: ContextHandle,
         proto: &Value,
     ) -> Value;
-    #[cfg(feature = "webgpu")]
-    pub(crate) safe fn nsr_webgpu_install(scope: &mut Scope<'_>, navigator: &Value);
-    #[cfg(feature = "wasm")]
-    pub(crate) safe fn nsr_wasm_install(scope: &mut Scope<'_>, global: &Value);
 }

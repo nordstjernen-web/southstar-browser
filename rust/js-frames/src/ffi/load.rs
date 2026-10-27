@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint};
-use core::ptr::NonNull;
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode, Tree};
@@ -15,32 +14,10 @@ use super::ctx::Ctx;
 use super::imports::{nsr_realmdoc_deny_cookie, nsr_window_link_outward};
 use super::{Js, NsJs, c_string};
 
-#[repr(C)]
-pub(crate) struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    _cors_allow_origin: *mut c_char,
-    _refresh: *mut c_char,
-    _content_language: *mut c_char,
-    _raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-}
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
+pub(crate) use southstar_net::Response;
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn ns_response_free(resp: *mut NsResponse);
     fn ns_js_dispatch_resource_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -53,69 +30,6 @@ unsafe extern "C" {
         default_prevented: *mut GBoolean,
     ) -> GBoolean;
     fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
-}
-
-unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
-}
-
-pub(crate) struct Response(NonNull<NsResponse>);
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        unsafe { ns_response_free(self.0.as_ptr()) };
-    }
-}
-
-impl Response {
-    fn take(resp: *mut NsResponse) -> Option<Response> {
-        NonNull::new(resp).map(Response)
-    }
-
-    fn get(&self) -> &NsResponse {
-        unsafe { self.0.as_ref() }
-    }
-
-    fn as_ptr(&self) -> *const NsResponse {
-        self.0.as_ptr()
-    }
-
-    pub fn status(&self) -> c_long {
-        self.get().status
-    }
-
-    pub fn final_url(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().final_url) }
-    }
-
-    pub fn content_type(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().content_type) }
-    }
-
-    pub fn content_disposition(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().content_disposition) }
-    }
-
-    pub fn csp_header(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().csp_header) }
-    }
-
-    pub fn xframe_options(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().xframe_options) }
-    }
-
-    pub fn x_content_type_options(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().x_content_type_options) }
-    }
-
-    pub fn error(&self) -> Option<&CStr> {
-        unsafe { c_str(self.get().error) }
-    }
-
-    pub fn body(&self) -> Option<&[u8]> {
-        let body = unsafe { self.get().body.as_ref() }?;
-        Some(unsafe { glib::slice(body.data, body.len as usize) })
-    }
 }
 
 pub(crate) fn monotonic_time() -> i64 {
@@ -247,10 +161,7 @@ pub(crate) fn fetch_resource(
         content_type: Some(c"application/x-www-form-urlencoded"),
     });
     let fetched = api::fetch_resource(js.ptr(), url, Some(top_url), &[header], upload);
-    let response = fetched
-        .response
-        .map_or(core::ptr::null_mut(), southstar_net::Response::into_raw);
-    (Response::take(response.cast()), fetched.error)
+    (fetched.response, fetched.error)
 }
 
 pub(crate) fn fetch_script(
@@ -261,10 +172,7 @@ pub(crate) fn fetch_script(
 ) -> Option<Response> {
     let info = element_perf_info(js, script);
     let fetched = api::fetch_subresource(js.ptr(), url, Some(top_url), &[], Some(c"script"), &info);
-    let response = fetched
-        .response
-        .map_or(core::ptr::null_mut(), southstar_net::Response::into_raw);
-    Response::take(response.cast())
+    fetched.response
 }
 
 pub(crate) fn element_perf_info(js: Js, element: Node<'_>) -> ResourceInfo {
@@ -279,7 +187,7 @@ pub(crate) fn add_resource_timing(
     span: (i64, i64),
     resp: Option<&Response>,
 ) {
-    let resp = resp.map_or(core::ptr::null(), Response::as_ptr);
+    let resp = resp.map_or(core::ptr::null(), |resp| resp.as_ptr().cast_const());
     // SAFETY: the info's strings and the response are the caller's and outlive the call.
     unsafe {
         southstar_js_perf::add_resource_timed(

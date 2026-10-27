@@ -74,7 +74,7 @@ unsafe extern "C" {
 
 static SELF_EXE: AtomicPtr<c_char> = AtomicPtr::new(ptr::null_mut());
 
-fn self_exe() -> *const c_char {
+pub(crate) fn self_exe() -> *const c_char {
     SELF_EXE.load(Ordering::Acquire)
 }
 
@@ -85,12 +85,8 @@ fn self_exe_str() -> Option<&'static CStr> {
 }
 
 fn clear_self_exe() {
+    southstar_net::set_self_exe(None);
     unsafe { g_free(SELF_EXE.swap(ptr::null_mut(), Ordering::AcqRel).cast()) };
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_app_self_exe() -> *const c_char {
-    self_exe()
 }
 
 fn getenv(name: &CStr) -> Option<&'static CStr> {
@@ -218,6 +214,7 @@ fn init_self_exe(argv0: Option<&CStr>) {
         }
     }
     SELF_EXE.store(exe, Ordering::Release);
+    southstar_net::set_self_exe(self_exe_str().map(CStr::to_bytes));
 }
 
 const IGNORED_LOG_MESSAGES: [&[u8]; 5] = [
@@ -606,7 +603,9 @@ fn write_stdout(bytes: &[u8]) {
 }
 
 fn print_config() {
-    write_stdout(&southstar_config::dump());
+    write_stdout(&southstar_config::dump(
+        southstar_netutil::default_accept_language(),
+    ));
 }
 
 fn headless_opts<'a>(o: &Options<'a>) -> HeadlessOpts<'a> {
