@@ -87,6 +87,16 @@ Southstar Browser 1.0.2:
   values, and the node-to-style table is a Rust map shared through `Rc`,
   which also fixes a script page holding a dangling pointer to a style
   table the browser had freed.
+* The style, layout and page code no longer carries the C port's data
+  model. CSS values are a Rust enum shared through `Rc` instead of a 3 KB
+  hand-freed union (css: 192 `unsafe` to 15; restyles about 20% faster);
+  layout boxes are a Rust type in a per-thread slot store like the DOM's,
+  with `Cell` fields and weak DOM links (layout: 94 to 2); the browser
+  page, script page record and embedder hooks use typed references and
+  closures instead of raw pointers and callback trampolines (browser,
+  engine, js-runtime and headless: 761 to 352). Eleven more crates forbid
+  unsafe code. Fixes a reused box slot returning the wrong DOM node and a
+  resource-timing URL pointer that could dangle across a navigation.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,
