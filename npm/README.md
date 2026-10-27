@@ -6,22 +6,25 @@ minimal, secure web browser written from scratch in Rust with GTK 4.
 ![Southstar Browser](https://raw.githubusercontent.com/nordstjernen-web/southstar-browser/main/docs/screenshot.png)
 
 ```sh
-npm install -g southstar-browser
-southstar https://example.com
+sudo npm install -g southstar-browser
+southstar https://nordstjernen.org
 ```
+
+On Linux, macOS and the BSDs, run the install with `sudo`, because npm's global
+directory belongs to root; on Windows, run it without `sudo`.
 
 Installing builds Southstar from the release source on your machine, with
 meson, ninja and cargo, against your system's GTK 4 and other libraries. The
 source tarball is checked against the SHA-256 recorded in this package. The
 build takes several minutes and shows its progress in the terminal; it is
-installed inside the npm package, so `npm uninstall -g southstar-browser`
+installed inside the npm package, so `sudo npm uninstall -g southstar-browser`
 removes it.
 
 npm 11 warns that global install scripts are not yet allowed, and future
 versions skip them. Either allow the build at install time:
 
 ```sh
-npm install -g --allow-scripts=southstar-browser southstar-browser
+sudo npm install -g --allow-scripts=southstar-browser southstar-browser
 ```
 
 or let the first `southstar` launch build it. Package managers that never run

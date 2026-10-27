@@ -12,6 +12,12 @@ Southstar Browser 1.0.4-dev:
   toolchain, and Ubuntu's versioned `rustc-1.91` is found in
   `/usr/lib/rust-1.91/bin`. The build shows its progress, keeps a log, and
   checks the source tarball against a checksum recorded in the package.
+* Packaging: on Linux, macOS and the BSDs the npm installer makes the
+  installed `southstar`, `southstar-renderer`, `southstar-audio` and
+  `southstar-video` executable, and restores the executable bits on an
+  existing install when `southstar` starts, so a tree that lost them still
+  launches. The `southstar` launcher script is executable in the repository
+  too.
 
 Southstar Browser 1.0.3:
 ======
