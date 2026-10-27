@@ -6,8 +6,8 @@ use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 
 use southstar_dom::{Kind, Node, ancestors_and_self, children};
-use southstar_glib::GStr;
 use southstar_layout::BoxRef;
+use std::ffi::CString;
 
 use crate::ffi::{self, NsBrowser, Pointer};
 use crate::{build, callbacks, edit, hit, page};
@@ -355,7 +355,7 @@ pub fn drop_files(b: &NsBrowser, x: c_int, y: c_int, paths: &[&CStr]) -> c_int {
     0
 }
 
-pub fn eval(b: &NsBrowser, src: &CStr) -> Option<GStr> {
+pub fn eval(b: &NsBrowser, src: &CStr) -> Option<CString> {
     let js = b.js()?;
     page::damp_reset(b);
     let res = js.eval_console(src);

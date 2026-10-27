@@ -9,7 +9,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
-use southstar_dom::{Node, NsNode, Tree};
+use southstar_dom::{Node, Tree};
 use southstar_engine::Page;
 use southstar_layout::{BoxPool, BoxRef, NsBox};
 
@@ -109,10 +109,6 @@ impl Document {
 
     pub fn node(&self) -> Node<'static> {
         self.0.root()
-    }
-
-    pub fn as_ptr(&self) -> *mut NsNode {
-        self.0.root().as_mut_ptr()
     }
 
     pub fn free(self) {

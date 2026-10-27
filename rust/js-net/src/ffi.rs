@@ -507,23 +507,20 @@ impl Js {
     pub fn add_resource_timing(self, timing: &Timing<'_>, resp: &Response) {
         let info = api::ResourceInfo {
             timeline: timing.timeline.0.as_ptr().cast_const(),
-            document_url: api::realm_document_url_ptr(self.ptr(), timing.timeline.0),
+            document_url: api::realm_document_url(self.ptr(), timing.timeline.0),
             cors_mode: glib::boolean(timing.cors_mode),
             ..api::ResourceInfo::default()
         };
         let url = cstring(timing.url);
         let span = (timing.start_us, timing.end_us);
-        // SAFETY: the realm's document URL and the response are live for the call.
-        unsafe {
-            southstar_js_perf::add_resource_timed(
-                self.ptr(),
-                Some(&info),
-                &url,
-                Some(timing.initiator),
-                span,
-                resp.0.as_ref(),
-            )
-        };
+        southstar_js_perf::add_resource_timed(
+            self.ptr(),
+            Some(&info),
+            &url,
+            Some(timing.initiator),
+            span,
+            resp.0.as_ref(),
+        );
     }
 
     pub fn with_budget<R>(self, f: impl FnOnce() -> R) -> R {

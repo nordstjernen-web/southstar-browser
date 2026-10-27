@@ -151,9 +151,9 @@ pub(crate) fn c_line(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-pub(crate) fn log_line(js: Js, line: *const c_char) {
-    if let Some((log, data)) = js.st().log.get() {
-        unsafe { log(line, data) };
+pub(crate) fn log_line(js: Js, line: &CStr) {
+    if let Some(log) = js.st().log.get() {
+        log(line);
     }
 }
 
@@ -229,7 +229,7 @@ pub(crate) fn unwrap_element(value: &Value) -> *const NsNode {
 }
 
 pub(crate) fn is_detached_document(doc: *const NsNode) -> bool {
-    let Some(node) = (unsafe { southstar_dom::Node::from_ptr(doc) }) else {
+    let Some(node) = super::record::node(doc) else {
         return false;
     };
     node.kind() != southstar_dom::Kind::Document || node.flags() & NODE_FRAGMENT != 0
@@ -314,7 +314,11 @@ pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
 
 pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
     if super::record::unpin_wrapper(js.ptr(), node) {
-        unsafe { super::record::release_wrapper(js.ptr(), node) };
+        if let (Some(record), Some(node)) =
+            (super::record::record(js.ptr()), super::record::node(node))
+        {
+            super::record::release_wrapper(record, node);
+        }
         return true;
     }
     false
@@ -379,8 +383,7 @@ pub(crate) fn add_resource_timing(
 ) {
     let span = (start_us, super::monotonic_us());
     let add = crate::api::perf_hooks().add_resource_timed;
-    // SAFETY: the info's strings and the response belong to the fetch the caller just finished and outlive the call.
-    unsafe { add(js.ptr(), Some(info), url, Some(initiator), span, response) };
+    add(js.ptr(), Some(info), url, Some(initiator), span, response);
 }
 
 pub struct BytesView {

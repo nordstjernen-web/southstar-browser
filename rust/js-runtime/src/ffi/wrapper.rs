@@ -68,7 +68,7 @@ impl Drop for ElementData {
 }
 
 fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
+    super::record::node(p)
 }
 
 pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
@@ -275,7 +275,7 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
 
 fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
     let js_ptr = js.map_or(ptr::null_mut(), Js::ptr);
-    let proto = unsafe { super::record::kind_proto_value(js_ptr, n.as_ptr()) };
+    let proto = super::record::kind_proto_value(js_ptr, n.as_ptr());
     let proto = proto.unwrap_or_else(Value::undefined);
     let node_realm = match js {
         Some(js) if (crate::api::frames_hooks().cloners_made)(js.ptr()) => {
@@ -304,7 +304,7 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
 pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Value> {
     let js = Js::of_scope(scope);
     if let Some(js) = js
-        && ptr::eq(n.as_ptr(), unsafe { *js.st().slots.ce_main_doc })
+        && ptr::eq(n.as_ptr(), js.ce_main_doc())
         && n.parent().is_none()
     {
         let document = page_document_object(js)?;
@@ -385,6 +385,6 @@ pub(crate) fn arm_js_invalidate(target: Node<'_>) {
 }
 
 pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
-    let current_doc = unsafe { *page.st().slots.current_doc };
+    let current_doc = page.current_doc();
     scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))
 }

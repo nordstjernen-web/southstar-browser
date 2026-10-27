@@ -7,8 +7,7 @@ use std::ffi::CString;
 
 use southstar_dom::Tree;
 
-use super::glib::gstr_from;
-use southstar_glib::GStr;
+use super::glib::owned_text;
 
 pub use southstar_js_runtime::api::NavigationTiming;
 
@@ -135,8 +134,8 @@ pub fn build_error_page(
     url: &CStr,
     status: c_long,
     transport_error: Option<&CStr>,
-) -> Option<GStr> {
-    gstr_from(&southstar_net::build_error_page(
+) -> Option<CString> {
+    owned_text(&southstar_net::build_error_page(
         Some(url.to_bytes()),
         status,
         transport_error.map(CStr::to_bytes),
@@ -147,12 +146,12 @@ pub fn url_host_from(url: &CStr) -> Option<CString> {
     southstar_url::bytes::host_from(url.to_bytes()).and_then(|host| CString::new(host).ok())
 }
 
-pub fn url_strip_tracking_params(url: &CStr) -> Option<GStr> {
-    southstar_net::strip_tracking_params(url.to_bytes()).and_then(|url| gstr_from(&url))
+pub fn url_strip_tracking_params(url: &CStr) -> Option<CString> {
+    southstar_net::strip_tracking_params(url.to_bytes()).and_then(|url| owned_text(&url))
 }
 
-pub fn https_first_upgrade(url: &CStr) -> Option<GStr> {
-    southstar_net::https_first_upgrade(url.to_bytes()).and_then(|url| gstr_from(&url))
+pub fn https_first_upgrade(url: &CStr) -> Option<CString> {
+    southstar_net::https_first_upgrade(url.to_bytes()).and_then(|url| owned_text(&url))
 }
 
 pub fn safebrowsing_blocked(host: &CStr) -> bool {
@@ -163,8 +162,8 @@ pub fn safebrowsing_allow_host(host: &CStr) {
     southstar_safebrowsing::allow_host(host.to_bytes());
 }
 
-pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<GStr> {
-    gstr_from(&southstar_safebrowsing::interstitial(Some(url), Some(host)))
+pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<CString> {
+    owned_text(&southstar_safebrowsing::interstitial(Some(url), Some(host)))
 }
 
 pub struct ParsedDoc(pub(super) Option<Tree>);
@@ -250,7 +249,7 @@ fn uri_path_byte_allowed(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&b)
 }
 
-pub fn local_file_uri(path: &CStr) -> Option<GStr> {
+pub fn local_file_uri(path: &CStr) -> Option<CString> {
     let abs = absolute_path(path)?;
     let mut uri = b"file://".to_vec();
     if abs.first() != Some(&b'/') {
@@ -263,5 +262,5 @@ pub fn local_file_uri(path: &CStr) -> Option<GStr> {
             uri.extend_from_slice(format!("%{b:02X}").as_bytes());
         }
     }
-    gstr_from(&uri)
+    owned_text(&uri)
 }

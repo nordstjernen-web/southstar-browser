@@ -60,7 +60,7 @@ pub(crate) fn drain_microtasks(js: Js) {
             }
         }
         let line = glue::c_line(&line);
-        glue::log_line(js, line.as_ptr());
+        glue::log_line(js, &line);
     }
     budget::pop(js, saved);
     state.performing_microtask_checkpoint.set(false);
@@ -73,9 +73,9 @@ pub(crate) fn drain_microtasks(js: Js) {
 pub(crate) fn notify_mutated(js: Js) {
     let state = js.st();
     if state.mutated.get()
-        && let Some((hook, data)) = state.mutated_hook.get()
+        && let Some(hook) = state.mutated_hook.get()
     {
-        unsafe { hook(data) };
+        hook();
     }
     state.mutated.set(false);
 }

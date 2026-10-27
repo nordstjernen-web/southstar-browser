@@ -1,17 +1,16 @@
-//! Southstar — the C and Rust-ABI entry points of the media bindings, and the realm, event, video and microphone calls they make.
+//! Southstar — the Rust-ABI entry points and embedder hook setters of the media bindings, and the realm, event, video and microphone calls they make.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_uint};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-use crate::hooks::{self, Hook};
+use crate::hooks;
 use crate::{audio, element, eme, mse, support, tracks};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
@@ -33,34 +32,16 @@ impl Js {
     }
 }
 
-pub(crate) type Element = Node<'static>;
+pub type Element = Node<'static>;
 
-pub(crate) type AudioFn = unsafe extern "C" fn(command: *const c_char, data: *mut c_void);
-pub(crate) type SeekFn =
-    unsafe extern "C" fn(node: *const c_void, seconds: f64, data: *mut c_void) -> GBoolean;
-pub(crate) type ToggleFn =
-    unsafe extern "C" fn(node: *const c_void, on: GBoolean, data: *mut c_void);
-pub(crate) type VolumeFn =
-    unsafe extern "C" fn(node: *const c_void, volume: f64, data: *mut c_void);
-pub(crate) type MseFn = unsafe extern "C" fn(
-    stream: c_uint,
-    kind: c_char,
-    bytes: *const u8,
-    len: usize,
-    eos: GBoolean,
-    data: *mut c_void,
-) -> GBoolean;
-pub(crate) type MseBufferedFn =
-    unsafe extern "C" fn(stream: c_uint, kind: c_char, start: *mut f64, data: *mut c_void) -> f64;
-pub(crate) type MseRemoveFn = unsafe extern "C" fn(
-    stream: c_uint,
-    kind: c_char,
-    start: f64,
-    end: f64,
-    data: *mut c_void,
-) -> GBoolean;
-pub(crate) type MseBytesFn =
-    unsafe extern "C" fn(stream: c_uint, kind: c_char, data: *mut c_void) -> usize;
+pub type AudioFn = dyn Fn(&CStr);
+pub type SeekFn = dyn Fn(Element, f64) -> bool;
+pub type ToggleFn = dyn Fn(Element, bool);
+pub type VolumeFn = dyn Fn(Element, f64);
+pub type MseFn = dyn Fn(u32, u8, Option<&[u8]>) -> bool;
+pub type MseBufferedFn = dyn Fn(u32, u8) -> (f64, f64);
+pub type MseRemoveFn = dyn Fn(u32, u8, f64, f64) -> bool;
+pub type MseBytesFn = dyn Fn(u32, u8) -> usize;
 
 const FORMAT_LIBAV: c_uint = 1;
 const FORMAT_VORBIS: c_uint = 2;
@@ -76,16 +57,8 @@ fn until_nul(bytes: &[u8]) -> &[u8] {
     &bytes[..end]
 }
 
-fn c_text(text: &str) -> CString {
+pub(crate) fn c_text(text: &str) -> CString {
     CString::new(until_nul(text.as_bytes())).unwrap_or_default()
-}
-
-fn data_ptr(data: usize) -> *mut c_void {
-    data as *mut c_void
-}
-
-fn node_ptr(element: Element) -> *const c_void {
-    element.as_ptr().cast()
 }
 
 pub(crate) fn bind_listeners(scope: &mut Scope<'_>, object: &Value) {
@@ -183,67 +156,6 @@ pub(crate) fn with_bytes<R>(
     Some(result)
 }
 
-pub(crate) fn call_audio(hook: Hook<AudioFn>, command: &str) {
-    let command = c_text(command);
-    unsafe { (hook.f)(command.as_ptr(), data_ptr(hook.data)) };
-}
-
-pub(crate) fn call_toggle(hook: Hook<ToggleFn>, element: Element, on: bool) {
-    unsafe { (hook.f)(node_ptr(element), GBoolean::from(on), data_ptr(hook.data)) };
-}
-
-pub(crate) fn call_volume(hook: Hook<VolumeFn>, element: Element, volume: f64) {
-    unsafe { (hook.f)(node_ptr(element), volume, data_ptr(hook.data)) };
-}
-
-pub(crate) fn call_seek(hook: Hook<SeekFn>, element: Element, seconds: f64) -> bool {
-    unsafe { (hook.f)(node_ptr(element), seconds, data_ptr(hook.data)) != 0 }
-}
-
-pub(crate) fn call_mse(hook: Hook<MseFn>, stream: u32, kind: u8, bytes: Option<&[u8]>) -> bool {
-    let (data, len, eos) = match bytes {
-        Some(bytes) => (bytes.as_ptr(), bytes.len(), false),
-        None => (ptr::null(), 0, true),
-    };
-    unsafe {
-        (hook.f)(
-            stream,
-            kind as c_char,
-            data,
-            len,
-            GBoolean::from(eos),
-            data_ptr(hook.data),
-        ) != 0
-    }
-}
-
-pub(crate) fn call_mse_buffered(hook: Hook<MseBufferedFn>, stream: u32, kind: u8) -> (f64, f64) {
-    let mut start = 0.0;
-    let end = unsafe { (hook.f)(stream, kind as c_char, &mut start, data_ptr(hook.data)) };
-    (start, end)
-}
-
-pub(crate) fn call_mse_remove(
-    hook: Hook<MseRemoveFn>,
-    stream: u32,
-    kind: u8,
-    start: f64,
-    end: f64,
-) -> bool {
-    unsafe { (hook.f)(stream, kind as c_char, start, end, data_ptr(hook.data)) != 0 }
-}
-
-pub(crate) fn call_mse_bytes(hook: Hook<MseBytesFn>, stream: u32, kind: u8) -> usize {
-    unsafe { (hook.f)(stream, kind as c_char, data_ptr(hook.data)) }
-}
-
-fn hook<F: Copy>(f: Option<F>, data: *mut c_void) -> Option<Hook<F>> {
-    f.map(|f| Hook {
-        f,
-        data: data as usize,
-    })
-}
-
 macro_rules! methods {
     ($($name:ident => $f:path;)*) => {
         $(
@@ -280,9 +192,8 @@ macro_rules! setters {
 macro_rules! hook_setters {
     ($($name:ident: $ty:ty => $field:ident;)*) => {
         $(
-            #[unsafe(no_mangle)]
-            pub unsafe extern "C" fn $name(js: *mut NsJs, cb: Option<$ty>, data: *mut c_void) {
-                hooks::update(Js::from_ptr(js), |hooks| hooks.$field = hook(cb, data));
+            pub fn $name(js: *const NsJs, hook: Option<Rc<$ty>>) {
+                hooks::update(Js::from_ptr(js.cast_mut()), |hooks| hooks.$field = hook);
             }
         )*
     };
@@ -306,15 +217,15 @@ getters! {}
 setters! {}
 
 hook_setters! {
-    ns_js_set_audio_cb: AudioFn => audio;
-    ns_js_set_media_seek_cb: SeekFn => seek;
-    ns_js_set_media_play_cb: ToggleFn => play;
-    ns_js_set_media_muted_cb: ToggleFn => muted;
-    ns_js_set_media_volume_cb: VolumeFn => volume;
-    ns_js_set_mse_cb: MseFn => mse;
-    ns_js_set_mse_buffered_cb: MseBufferedFn => mse_buffered;
-    ns_js_set_mse_remove_cb: MseRemoveFn => mse_remove;
-    ns_js_set_mse_bytes_cb: MseBytesFn => mse_bytes;
+    set_audio_hook: AudioFn => audio;
+    set_seek_hook: SeekFn => seek;
+    set_play_hook: ToggleFn => play;
+    set_muted_hook: ToggleFn => muted;
+    set_volume_hook: VolumeFn => volume;
+    set_mse_hook: MseFn => mse;
+    set_mse_buffered_hook: MseBufferedFn => mse_buffered;
+    set_mse_remove_hook: MseRemoveFn => mse_remove;
+    set_mse_bytes_hook: MseBytesFn => mse_bytes;
 }
 
 pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {

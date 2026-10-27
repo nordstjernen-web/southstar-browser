@@ -7,7 +7,7 @@ pub(crate) mod form;
 mod imports;
 pub(crate) mod load;
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -385,16 +385,15 @@ fn cloners_made(js: *const NsJs) -> bool {
     !js.is_null() && page::peek(js, |page| page.cloners_made).unwrap_or(false)
 }
 
-fn frame_url(js: *const NsJs, frame: Option<Node<'_>>) -> *const c_char {
+fn frame_url(js: *const NsJs, frame: Option<Node<'_>>) -> Option<CString> {
     let js = Js::of(js);
     if js.is_null() {
-        return core::ptr::null();
+        return None;
     }
     page::frame_entry(js, frame_key(Node::ptr_or_null(frame)), |entry| {
-        entry.url.as_ref().map(|url| url.as_ptr())
+        entry.url.clone()
     })
     .flatten()
-    .unwrap_or(core::ptr::null())
 }
 
 fn realms_same_origin(js: *const NsJs, a: ContextHandle, b: ContextHandle) -> bool {

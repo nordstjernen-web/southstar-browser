@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -59,7 +59,7 @@ pub fn log_enabled(js: *const NsJs) -> bool {
 
 pub fn log_line(js: *const NsJs, line: &CStr) {
     if let Some(js) = Js::of(js) {
-        glue::log_line(js, line.as_ptr());
+        glue::log_line(js, line);
     }
 }
 
@@ -138,10 +138,6 @@ pub fn page_url(js: *const NsJs) -> Option<CString> {
     Js::of(js)?.current_url()
 }
 
-pub fn page_url_ptr(js: *const NsJs) -> *const c_char {
-    Js::of(js).map_or(ptr::null(), Js::current_url_ptr)
-}
-
 pub fn set_current_url(js: *const NsJs, url: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
         js.replace_current_url(url.map(CStr::to_owned));
@@ -179,17 +175,15 @@ pub fn realm_url(js: *const NsJs, realm: ContextHandle) -> Option<CString> {
     scopes::realm_url(Js::of(js)?, realm)
 }
 
-pub fn realm_document_url_ptr(js: *const NsJs, realm: ContextHandle) -> *const c_char {
-    let Some(js) = Js::of(js) else {
-        return ptr::null();
-    };
+pub fn realm_document_url(js: *const NsJs, realm: ContextHandle) -> Option<CString> {
+    let js = Js::of(js)?;
     if !realm.is_null() && realm != js.main_realm() {
         let url = record::frame_url(js, scopes::frame_of_realm(js, realm));
-        if !url.is_null() {
+        if url.is_some() {
             return url;
         }
     }
-    js.current_url_ptr()
+    js.current_url()
 }
 
 pub fn node_frame_url(node: Node<'_>) -> Option<CString> {

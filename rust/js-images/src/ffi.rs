@@ -160,8 +160,8 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     if southstar_js_perf::has_resource_timing(js.0, info.timeline, url, Some(c"img")) {
         return;
     }
-    info.next_hop_protocol = img.next_hop_protocol();
-    info.timing_allow_origin = img.timing_allow_origin();
+    info.next_hop_protocol = c_str(img.next_hop_protocol()).map(CStr::to_owned);
+    info.timing_allow_origin = c_str(img.timing_allow_origin()).map(CStr::to_owned);
     info.status = img.http_status();
     info.body_size = img.body_size();
     let now = unsafe { g_get_monotonic_time() };
@@ -177,17 +177,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     } else {
         now
     };
-    // SAFETY: the info's strings come from the element and the decoded image, which outlive the call.
-    unsafe {
-        southstar_js_perf::add_resource_timed(
-            js.0,
-            Some(&info),
-            url,
-            Some(c"img"),
-            (start, end),
-            None,
-        )
-    };
+    southstar_js_perf::add_resource_timed(js.0, Some(&info), url, Some(c"img"), (start, end), None);
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {

@@ -14,7 +14,6 @@ use core::cell::Cell;
 use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
-use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::{BoxRef, NsBox};
 
@@ -91,10 +90,6 @@ pub fn console_setup() {
 
 #[cfg(not(windows))]
 pub fn console_setup() {}
-
-pub fn node_from_ptr<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
-}
 
 pub fn box_from_ptr<'a>(p: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(p) }

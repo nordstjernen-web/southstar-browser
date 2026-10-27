@@ -6,9 +6,9 @@ use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::time::Duration;
-use std::ffi::OsString;
+use std::ffi::{CString, OsString};
 
-use southstar_glib::{self as glib, GBoolean, GStr};
+use southstar_glib::{self as glib, GBoolean};
 
 pub type SourceFunc = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
 
@@ -177,7 +177,7 @@ fn hex_value(b: u8) -> Option<u8> {
     char::from(b).to_digit(16).map(|d| d as u8)
 }
 
-pub fn uri_unescape(escaped: &CStr) -> Option<GStr> {
+pub fn uri_unescape(escaped: &CStr) -> Option<CString> {
     let input = escaped.to_bytes();
     let mut out = Vec::with_capacity(input.len());
     let mut i = 0;
@@ -196,16 +196,16 @@ pub fn uri_unescape(escaped: &CStr) -> Option<GStr> {
             i += 1;
         }
     }
-    gstr_from(&out)
+    owned_text(&out)
 }
 
-pub fn dup_text(text: &CStr) -> Option<GStr> {
-    gstr_from(text.to_bytes())
+pub fn dup_text(text: &CStr) -> Option<CString> {
+    owned_text(text.to_bytes())
 }
 
-pub fn gstr_from(bytes: &[u8]) -> Option<GStr> {
+pub fn owned_text(bytes: &[u8]) -> Option<CString> {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    unsafe { GStr::take(glib::strdup(&bytes[..end])) }
+    CString::new(&bytes[..end]).ok()
 }
 
 pub fn debug_log_console(line: &CStr) {
@@ -217,10 +217,10 @@ pub fn malloc_dup(bytes: &[u8]) -> *mut c_char {
     if out.is_null() {
         return ptr::null_mut();
     }
-    unsafe {
-        ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
-        *out.add(bytes.len()) = 0;
-    }
+    // SAFETY: malloc returned `bytes.len() + 1` writable bytes that nothing else refers to yet.
+    let copy = unsafe { core::slice::from_raw_parts_mut(out, bytes.len() + 1) };
+    copy[..bytes.len()].copy_from_slice(bytes);
+    copy[bytes.len()] = 0;
     out.cast()
 }
 

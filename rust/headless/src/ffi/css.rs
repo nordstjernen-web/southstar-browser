@@ -1,14 +1,13 @@
-//! Southstar — computed values read from ns_style, selector lists, box hit testing and the box's DOM node.
+//! Southstar — computed values read through rust/style, selector lists, box hit testing and the box's DOM node.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_uint};
-use core::marker::PhantomData;
-use core::ptr::NonNull;
 
-use southstar_css::{StyleData, StyleMap, ValueKind};
+use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
+use southstar_style::Kind;
 
 pub enum Value<'a> {
     Keyword(Option<&'a CStr>),
@@ -20,37 +19,33 @@ pub enum Value<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleRef<'a>(NonNull<Style>, PhantomData<&'a Style>);
+pub struct StyleRef<'a>(southstar_style::StyleRef<'a>);
 
 impl<'a> StyleRef<'a> {
-    fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
-        NonNull::new(p.cast_mut()).map(|p| StyleRef(p, PhantomData))
-    }
-
     pub fn value(self, name: &CStr) -> Option<Value<'a>> {
         let prop = southstar_css::Prop::from_name(name.to_bytes())?.id();
-        // SAFETY: a StyleRef points at a computed style made by rust/css that lives for 'a.
-        let style = unsafe { self.0.cast::<StyleData>().as_ref() };
-        let v = style.value_at(prop)?;
+        let v = self.0.value_at(prop)?.data();
         Some(match v.value_kind() {
-            ValueKind::Keyword => Value::Keyword(v.keyword()),
-            ValueKind::Length => v
+            Kind::Keyword => Value::Keyword(v.keyword()),
+            Kind::Length => v
                 .length()
-                .map_or(Value::Other, |(len, unit)| Value::Length(len, unit)),
-            ValueKind::Color => v.color_rgba().map_or(Value::Other, Value::Color),
-            ValueKind::Calc => v.calc().map_or(Value::Other, |c| Value::Calc(c.pct, c.px)),
-            ValueKind::Url => Value::Url(v.url()),
+                .map_or(Value::Other, |(v, unit)| Value::Length(v, unit)),
+            Kind::Color => v.color_rgba().map_or(Value::Other, Value::Color),
+            Kind::Calc => v
+                .calc()
+                .map_or(Value::Other, |calc| Value::Calc(calc.pct, calc.px)),
+            Kind::Url => Value::Url(v.url()),
             _ => Value::Other,
         })
     }
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    StyleRef::from_ptr(b.style())
+    southstar_style::box_style(b).map(StyleRef)
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub fn hit_test(root: Option<BoxRef<'_>>, x: f64, y: f64) -> Option<BoxRef<'_>> {
@@ -66,7 +61,9 @@ impl<'a> StyleTable<'a> {
     }
 
     pub fn get(self, node: Node<'_>) -> Option<StyleRef<'_>> {
-        StyleRef::from_ptr(self.0?.lookup(node.as_ptr()).cast())
+        let style = self.0?.lookup(node.as_ptr());
+        // SAFETY: the table holds a reference on each of its computed styles for as long as it lives.
+        unsafe { southstar_style::StyleRef::from_ptr(style.cast()) }.map(StyleRef)
     }
 }
 

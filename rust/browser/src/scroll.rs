@@ -5,15 +5,15 @@
 use core::ffi::{CStr, c_int};
 
 use southstar_dom::Node;
-use southstar_glib::GStr;
 use southstar_layout::{BoxRef, children};
+use std::ffi::CString;
 
 use crate::ffi::{self, NsBrowser};
 use crate::{page, settle};
 
 pub struct Fragment {
     pub present: bool,
-    pub text: Option<GStr>,
+    pub text: Option<CString>,
 }
 
 impl Fragment {

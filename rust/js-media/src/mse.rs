@@ -30,7 +30,7 @@ pub(crate) fn append(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResu
     };
     let (id, kind) = stream(scope, args);
     let appended = ffi::with_bytes(scope, &args[2], |bytes| {
-        id != 0 && ffi::call_mse(hook, id, kind, Some(bytes))
+        id != 0 && hook(id, kind, Some(bytes))
     });
     Ok(Value::boolean(appended == Some(true)))
 }
@@ -44,7 +44,7 @@ pub(crate) fn end_of_stream(scope: &mut Scope<'_>, _: &Value, args: &[Value]) ->
     if id == 0 {
         return Ok(Value::boolean(false));
     }
-    ffi::call_mse(hook, id, b'v', None);
+    hook(id, b'v', None);
     Ok(Value::boolean(true))
 }
 
@@ -57,7 +57,7 @@ fn buffered_range(scope: &mut Scope<'_>, args: &[Value]) -> (f64, f64) {
     if id == 0 {
         return (0.0, 0.0);
     }
-    ffi::call_mse_buffered(hook, id, kind)
+    hook(id, kind)
 }
 
 pub(crate) fn buffered(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
@@ -80,9 +80,7 @@ pub(crate) fn remove(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResu
     let (Ok(start), Ok(end)) = (scope.to_number(&args[2]), scope.to_number(&args[3])) else {
         return Ok(Value::boolean(false));
     };
-    Ok(Value::boolean(ffi::call_mse_remove(
-        hook, id, kind, start, end,
-    )))
+    Ok(Value::boolean(hook(id, kind, start, end)))
 }
 
 pub(crate) fn bytes(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
@@ -94,5 +92,5 @@ pub(crate) fn bytes(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResul
     if id == 0 {
         return Ok(Value::number(-1.0));
     }
-    Ok(Value::number(ffi::call_mse_bytes(hook, id, kind) as f64))
+    Ok(Value::number(hook(id, kind) as f64))
 }

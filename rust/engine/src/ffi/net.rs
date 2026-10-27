@@ -1,24 +1,23 @@
-//! Southstar — blocking requests on a nested main loop, the response view, stylesheet bytes and their cache, resource timings and preloads.
+//! Southstar — requests through the network crate, blocking ones on a nested main loop, the response view, stylesheet bytes and their cache, resource timings and preloads.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::cell::RefCell;
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use southstar_glib::{self as glib, GBoolean, GError};
-pub use southstar_net::Response;
+use southstar_glib::{self as glib, GBoolean};
+pub use southstar_net::{Outcome, Response};
 
 #[repr(C)]
 struct GMainLoop {
     _private: [u8; 0],
 }
-
-pub type AsyncReady =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -41,10 +40,6 @@ pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
-
 pub struct NestedLoop(NonNull<GMainLoop>);
 
 impl NestedLoop {
@@ -55,13 +50,14 @@ impl NestedLoop {
         )
     }
 
-    pub fn raw(&self) -> *mut c_void {
-        self.0.as_ptr().cast()
-    }
-
     pub fn run_blocking(&self) {
         let _blocking = southstar_net::BlockingFetch::enter();
         unsafe { g_main_loop_run(self.0.as_ptr()) };
+    }
+
+    pub fn quit(&self) {
+        // SAFETY: the loop is live while this handle owns its reference.
+        unsafe { g_main_loop_quit(self.0.as_ptr()) };
     }
 }
 
@@ -71,94 +67,59 @@ impl Drop for NestedLoop {
     }
 }
 
-pub unsafe fn quit_loop(main_loop: *mut c_void) {
-    unsafe { g_main_loop_quit(main_loop.cast()) };
-}
-
 pub fn nosniff(resp: &Response) -> bool {
     resp.x_content_type_options()
         .is_some_and(|value| southstar_net::header_is_nosniff(value.to_bytes()))
 }
 
-pub fn accept_headers(dest: Dest) -> *const *const c_char {
-    southstar_net::accept_headers_for(dest as c_int)
+fn accept_headers(dest: Dest) -> Vec<Vec<u8>> {
+    southstar_net::accept_header_lines(dest as c_int)
 }
 
-struct FetchState {
-    main_loop: *mut c_void,
-    resp: Option<Response>,
-    error: *mut GError,
+struct Request<'a> {
+    url: &'a CStr,
+    top_url: Option<&'a CStr>,
+    method: &'a [u8],
+    body: Option<&'a [u8]>,
+    content_type: Option<&'a CStr>,
+    headers: Vec<Vec<u8>>,
 }
 
-unsafe extern "C" fn on_fetch_done(_src: *mut c_void, result: *mut c_void, ud: *mut c_void) {
-    let st = unsafe { &mut *ud.cast::<FetchState>() };
-    st.resp = unsafe { southstar_net::fetch_finish(result, &mut st.error) };
-    unsafe { quit_loop(st.main_loop) };
-}
+impl Request<'_> {
+    fn submit(&self, done: impl FnOnce(Outcome) + 'static) {
+        let req = southstar_net::FetchRequest {
+            url: self.url.to_bytes(),
+            top_url: self.top_url.map(CStr::to_bytes),
+            method: Some(self.method),
+            body: self.body,
+            content_type: self.content_type.map(CStr::to_bytes),
+            headers: &self.headers,
+        };
+        southstar_net::request_with(&req, None, done);
+    }
 
-pub struct Request<'a> {
-    pub url: *const c_char,
-    pub top_url: *const c_char,
-    pub method: &'a CStr,
-    pub body: *const c_void,
-    pub body_len: usize,
-    pub content_type: *const c_char,
-    pub navigation: bool,
-    pub user_activated: bool,
-    pub initiator: Option<&'a CStr>,
-    pub headers: *const *const c_char,
-}
-
-pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> Option<Response> {
-    let main_loop = NestedLoop::new();
-    let mut st = FetchState {
-        main_loop: main_loop.raw(),
-        resp: None,
-        error: ptr::null_mut(),
-    };
-    let initiator = r
-        .initiator
-        .filter(|initiator| !initiator.is_empty())
-        .and_then(|initiator| {
-            CString::new([&b"X-ND-Initiator: "[..], initiator.to_bytes()].concat()).ok()
+    fn blocking(&self) -> Outcome {
+        let main_loop = Rc::new(NestedLoop::new());
+        let outcome = Rc::new(RefCell::new(None));
+        let (done_loop, done) = (Rc::clone(&main_loop), Rc::clone(&outcome));
+        self.submit(move |result| {
+            done.replace(Some(result));
+            done_loop.quit();
         });
-    let mut navigate = vec![c"X-ND-Navigate: 1".as_ptr()];
-    if r.user_activated {
-        navigate.push(c"X-ND-User-Activated: 1".as_ptr());
+        main_loop.run_blocking();
+        outcome.take().unwrap_or_else(|| Err(Vec::new()))
     }
-    if let Some(initiator) = &initiator {
-        navigate.push(initiator.as_ptr());
+}
+
+fn navigation_headers(user_activated: bool, initiator: Option<&CStr>) -> Vec<Vec<u8>> {
+    let mut headers = vec![b"X-ND-Navigate: 1".to_vec()];
+    if user_activated {
+        headers.push(b"X-ND-User-Activated: 1".to_vec());
     }
-    navigate.push(ptr::null());
-    let headers = if r.navigation {
-        navigate.as_ptr()
-    } else {
-        r.headers
-    };
-    unsafe {
-        southstar_net::request_async(
-            r.url,
-            r.top_url,
-            r.method.as_ptr(),
-            r.body,
-            r.body_len,
-            r.content_type,
-            headers,
-            ptr::null_mut(),
-            Some(on_fetch_done),
-            (&mut st as *mut FetchState).cast(),
-        )
-    };
-    main_loop.run_blocking();
-    drop(main_loop);
-    if error.is_null() {
-        if !st.error.is_null() {
-            unsafe { glib::g_error_free(st.error) };
-        }
-    } else {
-        unsafe { *error = st.error };
+    if let Some(initiator) = initiator.filter(|initiator| !initiator.is_empty()) {
+        headers.push([&b"X-ND-Initiator: "[..], initiator.to_bytes()].concat());
     }
-    st.resp
+    headers
 }
 
 pub fn fetch_blocking_with_headers(
@@ -166,34 +127,21 @@ pub fn fetch_blocking_with_headers(
     top_url: Option<&CStr>,
     dest: Dest,
 ) -> Option<Response> {
-    let r = Request {
-        url: url.as_ptr(),
-        top_url: ptr_or_null(top_url),
-        method: c"GET",
-        body: ptr::null(),
-        body_len: 0,
-        content_type: ptr::null(),
-        navigation: false,
-        user_activated: false,
-        initiator: None,
+    Request {
+        url,
+        top_url,
+        method: b"GET",
+        body: None,
+        content_type: None,
         headers: accept_headers(dest),
-    };
-    unsafe { request_blocking(&r, ptr::null_mut()) }
+    }
+    .blocking()
+    .ok()
 }
 
 pub struct Post<'a> {
     pub body: &'a [u8],
     pub content_type: Option<&'a CStr>,
-}
-
-fn take_error(error: *mut GError) -> Option<Vec<u8>> {
-    // SAFETY: error is null or a GError the finished request handed over.
-    let e = unsafe { error.as_ref() }?;
-    // SAFETY: a GError's message is null or a NUL-terminated string it owns.
-    let message = unsafe { glib::bytes(e.message) }.map(<[u8]>::to_vec);
-    // SAFETY: error is owned here and nothing else refers to it.
-    unsafe { glib::g_error_free(error) };
-    message
 }
 
 pub fn navigate_blocking(
@@ -203,40 +151,29 @@ pub fn navigate_blocking(
     user_activated: bool,
     post: Option<&Post<'_>>,
 ) -> Result<Response, Option<Vec<u8>>> {
-    let r = Request {
-        url: url.as_ptr(),
-        top_url: ptr_or_null(top_url),
-        method: if post.is_some() { c"POST" } else { c"GET" },
-        body: post.map_or(ptr::null(), |p| p.body.as_ptr().cast()),
-        body_len: post.map_or(0, |p| p.body.len()),
-        content_type: post.map_or(ptr::null(), |p| ptr_or_null(p.content_type)),
-        navigation: true,
-        user_activated,
-        initiator,
-        headers: ptr::null(),
-    };
-    let mut error = ptr::null_mut();
-    // SAFETY: the request's strings and body outlive the blocking call, and error starts null.
-    let resp = unsafe { request_blocking(&r, &mut error) };
-    let message = take_error(error);
-    resp.ok_or(message)
+    Request {
+        url,
+        top_url,
+        method: if post.is_some() { b"POST" } else { b"GET" },
+        body: post.map(|p| p.body),
+        content_type: post.and_then(|p| p.content_type),
+        headers: navigation_headers(user_activated, initiator),
+    }
+    .blocking()
+    .map_err(|message| (!message.is_empty()).then_some(message))
 }
 
 pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
-    let r = Request {
-        url: url.as_ptr(),
-        top_url: ptr_or_null(top_url),
-        method: c"GET",
-        body: ptr::null(),
-        body_len: 0,
-        content_type: ptr::null(),
-        navigation: false,
-        user_activated: false,
-        initiator: None,
-        headers: ptr::null(),
-    };
-    // SAFETY: the request's strings outlive the blocking call, and a null error slot is allowed.
-    unsafe { request_blocking(&r, ptr::null_mut()) }
+    Request {
+        url,
+        top_url,
+        method: b"GET",
+        body: None,
+        content_type: None,
+        headers: Vec::new(),
+    }
+    .blocking()
+    .ok()
 }
 
 #[derive(Clone)]
@@ -321,10 +258,6 @@ pub fn preconnect(origin: &[u8]) {
     southstar_net::preconnect_async(&cstring(origin));
 }
 
-unsafe extern "C" fn on_preload_fetched(_src: *mut c_void, result: *mut c_void, _ud: *mut c_void) {
-    drop(unsafe { southstar_net::fetch_finish(result, ptr::null_mut()) });
-}
-
 pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
     let url = cstring(url);
     let headers = accept_headers(dest);
@@ -333,55 +266,30 @@ pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
             url.to_bytes(),
             Some(base.to_bytes()),
             Some(b"GET"),
-            &southstar_net::accept_header_lines(dest as c_int),
+            &headers,
         )
     {
         southstar_net::preload_expect(&key);
     }
-    unsafe {
-        southstar_net::request_async(
-            url.as_ptr(),
-            base.as_ptr(),
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            headers,
-            ptr::null_mut(),
-            Some(on_preload_fetched),
-            ptr::null_mut(),
-        )
-    };
-}
-
-pub fn request_async(
-    url: *const c_char,
-    base: &CStr,
-    dest: Dest,
-    callback: AsyncReady,
-    ud: *mut c_void,
-) {
-    unsafe {
-        southstar_net::request_async(
-            url,
-            base.as_ptr(),
-            c"GET".as_ptr(),
-            ptr::null(),
-            0,
-            ptr::null(),
-            accept_headers(dest),
-            ptr::null_mut(),
-            Some(callback),
-            ud,
-        )
-    };
-}
-
-pub unsafe fn finish(result: *mut c_void) -> Option<Response> {
-    let mut err: *mut GError = ptr::null_mut();
-    let resp = unsafe { southstar_net::fetch_finish(result, &mut err) };
-    if !err.is_null() {
-        unsafe { glib::g_error_free(err) };
+    Request {
+        url: &url,
+        top_url: Some(base),
+        method: b"GET",
+        body: None,
+        content_type: None,
+        headers,
     }
-    resp
+    .submit(drop);
+}
+
+pub fn request_async(url: &CStr, base: &CStr, dest: Dest, done: impl FnOnce(Outcome) + 'static) {
+    Request {
+        url,
+        top_url: Some(base),
+        method: b"GET",
+        body: None,
+        content_type: None,
+        headers: accept_headers(dest),
+    }
+    .submit(done);
 }
