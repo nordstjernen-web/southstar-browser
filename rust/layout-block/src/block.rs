@@ -4,7 +4,7 @@
 
 use core::sync::atomic::{AtomicI32, Ordering};
 
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 use southstar_layout_float::{box_establishes_bfc, style_is_grid_container};
 use southstar_layout_geom::{
     edges_into_box, flex_direction_of, height_keyword_stretches, keyword_or, length_resolve,
@@ -60,12 +60,8 @@ fn non_negative(v: f64) -> f64 {
     if v < 0.0 { 0.0 } else { v }
 }
 
-fn mi_style(inherited: *const Style, b: BoxRef<'_>) -> *const Style {
-    if inherited.is_null() {
-        b.style()
-    } else {
-        inherited
-    }
+fn mi_style<'a>(inherited: Option<StyleRef<'a>>, b: BoxRef<'a>) -> Option<StyleRef<'a>> {
+    inherited.or_else(|| style_of(b))
 }
 
 struct UsedWidth {
@@ -88,7 +84,13 @@ fn flex_col_item_stretches(b: BoxRef<'_>, parent: BoxRef<'_>) -> bool {
         || length_is_auto(prop(style, PropId::MarginRight)))
 }
 
-fn calc_size_width(b: BoxRef<'_>, cs: CalcSize, mi: *const Style, avail: f64, base: f64) -> f64 {
+fn calc_size_width(
+    b: BoxRef<'_>,
+    cs: CalcSize,
+    mi: Option<StyleRef<'_>>,
+    avail: f64,
+    base: f64,
+) -> f64 {
     let avail = non_negative(avail);
     let shrinks = display_is_atomic_inline_container(display_of(style_of(b)));
     let fit = || {
@@ -106,7 +108,7 @@ fn calc_size_width(b: BoxRef<'_>, cs: CalcSize, mi: *const Style, avail: f64, ba
     non_negative(cs.resolve(basis, base))
 }
 
-fn used_width(b: BoxRef<'_>, pcw: f64, inherited: *const Style) -> UsedWidth {
+fn used_width(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) -> UsedWidth {
     let style = style_of(b);
     let wv = prop(style, PropId::Width);
     let mxw = prop(style, PropId::MaxWidth);
@@ -302,7 +304,7 @@ fn layout_flex_or_grid(b: BoxRef<'_>, content: &ContentBox, pcw: f64, cursor_y: 
     false
 }
 
-pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: *const Style) {
+pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) {
     inline_runs_join_splits(b);
     edges_into_box(b, pcw);
     b.set_margin_top_through(0.0);
@@ -321,7 +323,7 @@ pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: *const Style) {
     let child_inherited = if b.style().is_null() {
         inherited
     } else {
-        b.style()
+        southstar_style::box_style(b)
     };
     let legend = rendered_legend(b);
     let mut legend_extra = 0.0;

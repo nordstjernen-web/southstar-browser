@@ -4,12 +4,12 @@
 
 use core::ffi::CStr;
 
-use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
     containing_block_definite_height, height_keyword_stretches, keyword_or, length_resolve,
     resolve_height_with_basis, resolve_used_height, style_is_absolute_or_fixed, value_is_percent,
 };
-use southstar_style::{Kind, PropId, ValueRef};
+use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
 use crate::ffi::{
     box_is_scroll_container, dom_of, flex_box_is_border_box, flex_grow_of, flex_shrink_of,
@@ -96,12 +96,8 @@ pub fn outer_width(c: BoxRef<'_>) -> f64 {
     c.content_width() + p.left + p.right + b.left + b.right + m.left + m.right
 }
 
-pub fn or_style(inherited: *const Style, c: BoxRef<'_>) -> *const Style {
-    if inherited.is_null() {
-        c.style()
-    } else {
-        inherited
-    }
+pub fn or_style<'a>(inherited: Option<StyleRef<'a>>, c: BoxRef<'a>) -> Option<StyleRef<'a>> {
+    inherited.or_else(|| southstar_style::box_style(c))
 }
 
 fn main_axis_extras(c: BoxRef<'_>) -> f64 {
@@ -119,7 +115,12 @@ fn border_box_to_content(c: BoxRef<'_>, mut v: f64) -> f64 {
     v
 }
 
-fn keyword_width(c: BoxRef<'_>, v: Option<ValueRef<'_>>, cw: f64, inherited: *const Style) -> f64 {
+fn keyword_width(
+    c: BoxRef<'_>,
+    v: Option<ValueRef<'_>>,
+    cw: f64,
+    inherited: Option<StyleRef<'_>>,
+) -> f64 {
     let Some(kw) = v.and_then(ValueRef::keyword_text) else {
         return -1.0;
     };
@@ -128,7 +129,7 @@ fn keyword_width(c: BoxRef<'_>, v: Option<ValueRef<'_>>, cw: f64, inherited: *co
     intrinsic_keyword_width(c, kw, or_style(inherited, c), inner)
 }
 
-fn main_basis_explicit(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> Option<f64> {
+fn main_basis_explicit(c: BoxRef<'_>, cw: f64, inherited: Option<StyleRef<'_>>) -> Option<f64> {
     let s = style_of(c)?;
     let basis = s.get(PropId::FlexBasis);
     if is_length(basis) {
@@ -146,12 +147,12 @@ fn main_basis_explicit(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> Optio
     (keyword_w >= 0.0).then_some(keyword_w)
 }
 
-fn content_basis_from_natural(b: BoxRef<'_>, inherited: *const Style) -> f64 {
+fn content_basis_from_natural(b: BoxRef<'_>, inherited: Option<StyleRef<'_>>) -> f64 {
     let w = measure_natural_width(b, or_style(inherited, b));
     if w > 0.0 { w } else { 0.0 }
 }
 
-fn max_main(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> f64 {
+fn max_main(c: BoxRef<'_>, cw: f64, inherited: Option<StyleRef<'_>>) -> f64 {
     let mxw = value(c, PropId::MaxWidth);
     if mxw.is_some_and(|v| v.kind() == Kind::Keyword) {
         return keyword_width(c, mxw, cw, inherited);
@@ -186,7 +187,7 @@ pub fn is_replaced_like(c: BoxRef<'_>) -> bool {
     matches!(name, b"select" | b"textarea" | b"meter" | b"progress")
 }
 
-fn min_main(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> f64 {
+fn min_main(c: BoxRef<'_>, cw: f64, inherited: Option<StyleRef<'_>>) -> f64 {
     let mnw = value(c, PropId::MinWidth);
     if is_length(mnw) {
         let mn = border_box_to_content(c, length_resolve(mnw, cw, -1.0));
@@ -223,7 +224,7 @@ fn min_main(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> f64 {
     mn
 }
 
-pub fn row_len(c: BoxRef<'_>, cw: f64, inherited: *const Style) -> FlexLen {
+pub fn row_len(c: BoxRef<'_>, cw: f64, inherited: Option<StyleRef<'_>>) -> FlexLen {
     let basis = main_basis_explicit(c, cw, inherited)
         .unwrap_or_else(|| content_basis_from_natural(c, inherited));
     FlexLen {
@@ -478,7 +479,7 @@ pub fn relayout_after_cross_resize(
     layout_width: f64,
     main_size: f64,
     pre_h: f64,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
 ) {
     if c.first_child().is_none() {
         return;

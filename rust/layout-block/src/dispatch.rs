@@ -4,9 +4,9 @@
 
 use core::cell::Cell;
 
-use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::length_or;
-use southstar_style::{PropId, ValueRef};
+use southstar_style::{PropId, StyleRef, ValueRef};
 
 use crate::block::layout_block;
 use crate::ffi::{
@@ -55,7 +55,7 @@ fn set_dims_from_ancestors(b: BoxRef<'_>) {
     set_container_dims(inline_size, block_size);
 }
 
-pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
+pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<StyleRef<'_>>) {
     b.begin_layout(parent_content_width);
     if is_query_container(b) {
         CQ_SEEN_CONTAINER.set(true);

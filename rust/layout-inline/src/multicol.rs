@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxKind, BoxPool, BoxRef, Style, children, inline_kind};
+use southstar_layout::{BoxKind, BoxPool, BoxRef, children, inline_kind};
 use southstar_layout_tree::{append_child, clone_range};
 use southstar_paint::text_layout::{self, AttrList, Layout};
-use southstar_style::{PropId, ValueRef};
+use southstar_style::{PropId, StyleRef, ValueRef};
 
 use crate::{attrs, ffi};
 
@@ -30,14 +30,14 @@ fn keyword_is(v: Option<ValueRef<'_>>, kw: &core::ffi::CStr) -> bool {
     v.is_some_and(|v| v.is_keyword(kw))
 }
 
-pub fn can_fragment(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
+pub fn can_fragment(b: BoxRef<'_>, style: Option<StyleRef<'_>>, basis: f64) -> bool {
     if b.kind() != BoxKind::Inline || b.text().is_none_or(|t| t.is_empty()) {
         return false;
     }
     if b.inline_atomics().is_some_and(|a| !a.is_empty()) {
         return false;
     }
-    let s = ffi::style(style);
+    let s = style;
     let value = |p: PropId| s.and_then(|s| s.get(p));
     if keyword_is(value(PropId::WhiteSpace), c"nowrap")
         || keyword_is(value(PropId::WhiteSpace), c"pre")
@@ -56,7 +56,7 @@ pub fn can_fragment(b: BoxRef<'_>, style: *const Style, basis: f64) -> bool {
     b.attrs().iter().all(|a| attr_can_fragment(a.kind))
 }
 
-fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: *const Style) -> Layout {
+fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: Option<StyleRef<'_>>) -> Layout {
     let layout = ffi::new_layout(ps);
     layout.set_width((content_width * text_layout::SCALE_F) as i32);
     layout.set_wrap(ffi::wrap_mode_for(ps));
@@ -69,7 +69,7 @@ fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: *const Style) -> L
     let i18n = AttrList::new();
     ffi::apply_i18n(&layout, &i18n, b);
     ffi::apply_font_features(&i18n, ps);
-    attrs::apply_spacing(&i18n, ffi::style(ps), text.to_bytes());
+    attrs::apply_spacing(&i18n, ps, text.to_bytes());
     attrs::apply_layout_attrs(&i18n, b);
     attrs::set_attrs(&layout, Some(&i18n), Some(b));
     layout
@@ -83,7 +83,11 @@ pub struct Columns {
     pub n_cols: i32,
 }
 
-pub fn layout_single_inline(b: BoxRef<'_>, cols: &Columns, ps: *const Style) -> Option<f64> {
+pub fn layout_single_inline(
+    b: BoxRef<'_>,
+    cols: &Columns,
+    ps: Option<StyleRef<'_>>,
+) -> Option<f64> {
     let src = b.first_child()?;
     if src.next_sibling().is_some() || cols.n_cols < 2 {
         return None;

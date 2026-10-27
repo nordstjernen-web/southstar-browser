@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxRef, InlineAtomic, Style, inline_kind as k};
+use southstar_layout::{BoxRef, InlineAtomic, inline_kind as k};
 use southstar_paint::text_layout::{self, AttrList, Layout};
 use southstar_style::{Kind, PropId, StyleRef};
 
@@ -29,8 +29,8 @@ pub(crate) fn white_space_nowrap(s: Option<StyleRef<'_>>) -> bool {
     keyword_is(s, PropId::WhiteSpace, c"nowrap") || keyword_is(s, PropId::WhiteSpace, c"pre")
 }
 
-pub fn line_height(parent_style: *const Style) -> f64 {
-    let fs = font_size(ffi::style(parent_style));
+pub fn line_height(parent_style: Option<StyleRef<'_>>) -> f64 {
+    let fs = font_size(parent_style);
     let used = ffi::css_line_height_px(parent_style);
     if used > 0.0 { used } else { fs * 1.2 }
 }
@@ -72,14 +72,14 @@ fn style_sets_block_height(s: StyleRef<'_>) -> bool {
         .is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
 }
 
-fn textarea_total_height(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+fn textarea_total_height(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     let mut out = 0.0;
     for r in &b.attrs() {
         if (r.kind == k::INPUT_FIELD || r.kind == k::INPUT_FIELD_FOCUSED)
             && attrs::is_textarea(r)
             && r.box_h > 0.0
-            && !(r.style() == parent_style
-                && ffi::style(r.style()).is_some_and(style_sets_block_height))
+            && !(r.style() == StyleRef::ptr_or_null(parent_style)
+                && southstar_style::attr_style(r).is_some_and(style_sets_block_height))
         {
             let h = r.box_h + if r.native_chrome { 8.0 } else { 0.0 };
             if h > out {
@@ -127,17 +127,17 @@ fn apply_text_align(layout: &Layout, s: Option<StyleRef<'_>>) {
     }
 }
 
-pub(crate) fn shaping_attrs(layout: &Layout, b: BoxRef<'_>, ps: *const Style, text: &[u8]) {
+pub(crate) fn shaping_attrs(layout: &Layout, b: BoxRef<'_>, ps: Option<StyleRef<'_>>, text: &[u8]) {
     let i18n = AttrList::new();
     ffi::apply_i18n(layout, &i18n, b);
     ffi::apply_font_features(&i18n, ps);
     attrs::apply_atomic_shapes(&i18n, b);
-    attrs::apply_spacing(&i18n, ffi::style(ps), text);
+    attrs::apply_spacing(&i18n, ps, text);
     attrs::apply_layout_attrs(&i18n, b);
     attrs::set_attrs(layout, Some(&i18n), Some(b));
 }
 
-pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
+pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: Option<StyleRef<'_>>) -> (f64, f64) {
     let Some(text) = b.text() else {
         return (0.0, 0.0);
     };
@@ -154,7 +154,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
         let i18n = AttrList::new();
         ffi::apply_i18n(&layout, &i18n, b);
         ffi::apply_font_features(&i18n, ps);
-        attrs::apply_spacing(&i18n, ffi::style(ps), text.to_bytes());
+        attrs::apply_spacing(&i18n, ps, text.to_bytes());
         attrs::set_attrs(&layout, Some(&i18n), Some(b));
         drop(i18n);
         layout.set_text(&text);
@@ -166,7 +166,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
 fn record_abs_statics(
     layout: &Layout,
     b: BoxRef<'_>,
-    ps: *const Style,
+    ps: Option<StyleRef<'_>>,
     content_width: f64,
     line_heights: &[f64],
 ) {
@@ -185,11 +185,16 @@ fn record_abs_statics(
         let pos = layout.index_to_box(off);
         let line_index = usize::try_from(layout.index_to_line(off)).unwrap_or(0);
         let line_top = line_heights.iter().take(line_index).sum();
-        ffi::record_abs_static(target, b, indent + f64::from(pos.x) / SCALE, line_top);
+        ffi::record_abs_static(
+            target,
+            b.into_static(),
+            indent + f64::from(pos.x) / SCALE,
+            line_top,
+        );
     }
 }
 
-fn layout_atomics(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
+fn layout_atomics(b: BoxRef<'_>, content_width: f64, ps: Option<StyleRef<'_>>) {
     let mut i = 0;
     while let Some(a) = atomic_at(b, i) {
         i += 1;
@@ -210,7 +215,7 @@ fn layout_atomics(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
 fn place_atomics(
     layout: &Layout,
     b: BoxRef<'_>,
-    ps: *const Style,
+    ps: Option<StyleRef<'_>>,
     content_width: f64,
     line_heights: &[f64],
 ) {
@@ -275,14 +280,14 @@ fn place_atomics(
     }
 }
 
-pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
+pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: Option<StyleRef<'_>>) {
     let Some(text) = b.text().filter(|t| !t.is_empty()) else {
         b.set_content_width(0.0);
         b.set_content_height(0.0);
         b.set_first_baseline(0.0);
         return;
     };
-    let style = ffi::style(ps);
+    let style = ps;
     b.set_writing_mode(0, 0);
     let atomics = has_atomics(b);
     let wm = ffi::writing_mode(ps);
@@ -301,7 +306,7 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
     let cacheable = measure_cacheable(b);
     if cacheable
         && let Some((cs, cw, ch)) = b.inline_layout_cache()
-        && cs == ps
+        && cs == StyleRef::ptr_or_null(ps)
         && (cw - content_width).abs() < 0.001
     {
         b.set_content_width(content_width);
@@ -346,7 +351,7 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
     let line_count = measured.lines.max(1) as usize;
     let mut lh_default = line_height(ps);
     if let Some(parent) = b.parent()
-        && ffi::is_one_line_text_input(parent.dom_ptr())
+        && ffi::is_one_line_text_input(parent.dom())
     {
         lh_default = lh_default.max(ffi::normal_line_height_px(ps));
     }
@@ -400,7 +405,11 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
     }
     b.set_first_baseline(baseline);
     if cacheable {
-        b.set_inline_layout_cache(Some((ps, content_width, b.content_height())));
+        b.set_inline_layout_cache(Some((
+            StyleRef::ptr_or_null(ps),
+            content_width,
+            b.content_height(),
+        )));
     }
 
     if atomics {

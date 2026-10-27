@@ -67,7 +67,7 @@ fn register_abs_pseudo(host: Node<'_>, ps: Option<StyleRef<'_>>) {
 
 fn queue_absolute_node(n: Node<'_>, s: StyleRef<'_>) {
     let fixed = southstar_layout_content::controls::keyword_is(s.get(PropId::Position), c"fixed");
-    state::queue_absolute(n.as_ptr(), fixed);
+    state::queue_absolute(n, fixed);
 }
 
 fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {

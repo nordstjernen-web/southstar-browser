@@ -2,20 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
 
-pub(crate) fn style_of(s: *const Style) -> Option<StyleRef<'static>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
-pub(crate) fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub(crate) fn min_width_of(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
 pub(crate) use southstar_layout_sizing::{measure_natural_width, min_content_width_of};
 
-pub(crate) use southstar_layout::dispatch::{
+pub(crate) use southstar_layout_geom::dispatch::{
     layout_block, layout_box, legacy_align_block_child, shift_box_tree,
 };
 

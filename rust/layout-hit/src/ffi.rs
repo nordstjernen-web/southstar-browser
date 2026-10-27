@@ -2,26 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_int;
-
+use southstar_cairo::Matrix;
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, Transform};
-
-#[repr(C)]
-struct CairoMatrix {
-    xx: f64,
-    yx: f64,
-    xy: f64,
-    yy: f64,
-    x0: f64,
-    y0: f64,
-}
-
-unsafe extern "C" {
-    fn cairo_matrix_invert(m: *mut CairoMatrix) -> c_int;
-}
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
@@ -51,16 +36,8 @@ pub fn transform_to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
 }
 
 pub fn invert_affine(m: [f64; 6]) -> Option<[f64; 6]> {
-    let mut cm = CairoMatrix {
-        xx: m[0],
-        yx: m[1],
-        xy: m[2],
-        yy: m[3],
-        x0: m[4],
-        y0: m[5],
-    };
-    (unsafe { cairo_matrix_invert(&mut cm) } == 0)
-        .then_some([cm.xx, cm.yx, cm.xy, cm.yy, cm.x0, cm.y0])
+    let mut cm = Matrix::from(m);
+    cm.invert().ok().map(|()| cm.to_array())
 }
 
 pub fn viewport_size() -> (f64, f64) {

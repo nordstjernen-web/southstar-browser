@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_css::{AUTO_REPEAT_NONE, TRACK_PX};
-use southstar_layout::{BoxRef, Edges, Style, children};
+use southstar_layout::{BoxRef, Edges, children};
 use southstar_layout_geom::{edges_from_style, length_resolve};
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
@@ -62,7 +62,11 @@ fn explicit_row_count(s: Option<StyleRef<'_>>) -> usize {
     }
 }
 
-pub fn column_flow_width(b: BoxRef<'_>, child_style: *const Style, min_content: bool) -> f64 {
+pub fn column_flow_width(
+    b: BoxRef<'_>,
+    child_style: Option<StyleRef<'_>>,
+    min_content: bool,
+) -> f64 {
     let style = style_of(b);
     let rows = explicit_row_count(style);
     let mut sum = 0.0;
@@ -103,7 +107,7 @@ pub fn column_flow_width(b: BoxRef<'_>, child_style: *const Style, min_content: 
     sum + gap * f64::from(columns - 1)
 }
 
-pub fn natural_width(b: BoxRef<'_>, child_style: *const Style) -> f64 {
+pub fn natural_width(b: BoxRef<'_>, child_style: Option<StyleRef<'_>>) -> f64 {
     let style = style_of(b);
     if flows_by_column(style) {
         return column_flow_width(b, child_style, false);

@@ -2,37 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_layout::{
-    BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef, NsBox, Style,
-};
+use southstar_dom::Node;
+use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
 use std::rc::Rc;
 
 use crate::{block, generated, media, state};
 
 pub use southstar_svg::SvgSize;
-
-pub fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-pub fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
-
-pub fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
-pub fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
 
 pub fn viewport_w() -> f64 {
     southstar_css::viewport().0
@@ -145,8 +127,8 @@ pub use southstar_paint::sync_inline_atomic_offsets;
 
 pub use southstar_layout_query::compute_paint_bounds;
 
-pub fn record_frame_viewports(root: *mut NsBox) {
-    southstar_layout_query::record_frame_viewports(box_ref(root));
+pub fn record_frame_viewports(root: Option<BoxRef<'_>>) {
+    southstar_layout_query::record_frame_viewports(root);
 }
 
 pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
@@ -227,14 +209,23 @@ pub fn abs_pending_len() -> usize {
     state::with(|st| st.abs_pending.as_ref().map_or(0, Vec::len))
 }
 
-pub fn abs_pending_entry<'a>(i: usize) -> Option<(Option<Node<'a>>, Option<StyleRef<'a>>, bool)> {
+type PendingEntry<'a> = (Option<Node<'a>>, Option<StyleRef<'a>>, bool);
+
+pub fn abs_pending_entry(i: usize, table: StyleTable) -> Option<PendingEntry<'static>> {
     let (dom, pseudo, fixed) = state::with(|st| {
         st.abs_pending
             .as_ref()
             .and_then(|p| p.get(i))
             .map(|e| (e.dom, e.pseudo, e.fixed))
     })?;
-    Some((node(dom), style(pseudo), fixed))
+    let dom = dom.and_then(southstar_dom::WeakNode::get);
+    let pseudo = dom.and_then(|dom| table.get(dom)).and_then(|host| {
+        [host.before(), host.after()]
+            .into_iter()
+            .flatten()
+            .find(|s| s.as_ptr() == pseudo)
+    });
+    Some((dom, pseudo, fixed))
 }
 
 pub fn abs_pending_clear() {
@@ -247,7 +238,7 @@ pub fn abs_pending_clear() {
 
 pub fn abs_static_run<'a>(key: usize) -> Option<(BoxRef<'a>, f64, f64)> {
     let found = state::with(|st| st.abs_static.as_ref().and_then(|m| m.get(&key).copied()))?;
-    box_ref(found.run).map(|run| (run, found.rel_x, found.rel_y))
+    Some((found.run, found.rel_x, found.rel_y))
 }
 
 pub fn abs_build_box(
@@ -305,8 +296,7 @@ pub fn abs_static_target(b: BoxRef<'_>) -> Option<usize> {
     })
 }
 
-pub fn record_abs_static(key: usize, run: BoxRef<'_>, rel_x: f64, rel_y: f64) {
-    let run = run.as_mut_ptr();
+pub fn record_abs_static(key: usize, run: BoxRef<'static>, rel_x: f64, rel_y: f64) {
     state::with(|st| {
         if let Some(m) = st.abs_static.as_mut() {
             m.insert(key, state::AbsStatic { run, rel_x, rel_y });

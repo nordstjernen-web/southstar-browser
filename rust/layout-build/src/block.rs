@@ -533,7 +533,7 @@ fn build_block_impl(n: Node<'_>, styles: StyleTable) -> Option<BoxRef<'static>> 
     }
     if s.is_some() && style_is_absolute_or_fixed(s) {
         if !state::with(|st| st.abs_force_build) {
-            state::queue_absolute(n.as_ptr(), keyword_fixed(s));
+            state::queue_absolute(n, keyword_fixed(s));
             return None;
         }
         state::with(|st| st.abs_force_build = false);

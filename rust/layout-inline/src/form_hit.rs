@@ -43,7 +43,7 @@ fn hit_candidate(r: &InlineAttr, parent_style: Option<StyleRef<'_>>) -> bool {
     if !is_form_hit(r.kind) || r.dom_ptr().is_null() {
         return false;
     }
-    let rs = ffi::style(r.style()).or(parent_style);
+    let rs = southstar_style::attr_style(r).or(parent_style);
     !style_blocks_hit_testing(rs)
 }
 
@@ -59,7 +59,7 @@ pub fn inline_box_form_hit<'a>(
         return None;
     }
     let text = b.text().filter(|t| !t.is_empty())?;
-    let ps = parent_style.map_or(core::ptr::null(), StyleRef::as_ptr);
+    let ps = parent_style;
     let layout = ffi::new_layout(ps);
     layout.set_width((b.content_width() * f64::from(SCALE)) as c_int);
     layout.set_wrap(ffi::wrap_mode_for(ps));
@@ -122,7 +122,7 @@ pub fn inline_box_form_hit<'a>(
                 continue;
             }
             if let Some(dom) = ab.dom().filter(|d| node_is_form_hit_target(Some(*d))) {
-                atomic_hit = Some(dom.as_ptr());
+                atomic_hit = Some(Some(dom));
             }
         }
         for r in &attrs {
@@ -130,9 +130,9 @@ pub fn inline_box_form_hit<'a>(
                 continue;
             }
             if is_button_hit(r.kind) {
-                button_hit = Some(r.dom_ptr());
+                button_hit = Some(r.dom());
             } else if field_hit.is_none() {
-                field_hit = Some(r.dom_ptr());
+                field_hit = Some(r.dom());
             }
         }
     }
@@ -163,13 +163,10 @@ pub fn inline_box_form_hit<'a>(
             continue;
         }
         if is_button_hit(r.kind) {
-            button_hit = Some(r.dom_ptr());
+            button_hit = Some(r.dom());
         } else if field_hit.is_none() {
-            field_hit = Some(r.dom_ptr());
+            field_hit = Some(r.dom());
         }
     }
-    let hit = atomic_hit
-        .or(button_hit.map(|p| p.cast()))
-        .or(field_hit.map(|p| p.cast()))?;
-    ffi::node(hit.cast())
+    atomic_hit.or(button_hit).or(field_hit).flatten()
 }

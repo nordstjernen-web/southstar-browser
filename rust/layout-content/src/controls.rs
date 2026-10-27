@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
+use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_geom::{edges_from_style, length_resolve};
 pub use southstar_layout_geom::{keyword_is, length_or};
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
@@ -121,10 +121,10 @@ pub fn emit_attr_styled(
     kind: c_uint,
     start: usize,
     end: usize,
-    s: *const Style,
+    s: Option<StyleRef<'_>>,
 ) {
     if end > start {
-        attrs.push(InlineAttr::new(kind, start, end - start).with_style(s));
+        attrs.push(InlineAttr::new(kind, start, end - start).with_style(StyleRef::ptr_or_null(s)));
     }
 }
 

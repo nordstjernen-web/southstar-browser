@@ -514,6 +514,10 @@ impl<'a> BoxRef<'a> {
         ptr::from_ref(self.0)
     }
 
+    pub fn into_static(self) -> BoxRef<'static> {
+        BoxRef::of(self.0)
+    }
+
     pub fn as_mut_ptr(self) -> *mut NsBox {
         self.as_ptr().cast_mut()
     }

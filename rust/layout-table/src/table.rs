@@ -4,20 +4,20 @@
 
 use core::ops::Range;
 
-use southstar_layout::{BoxKind, BoxRef, Edges, Style, children};
+use southstar_layout::{BoxKind, BoxRef, Edges, children};
 use southstar_layout_geom::{
     edges_from_style, edges_into_box, length_resolve, resolve_used_height, value_is_percent,
 };
-use southstar_style::{Kind, PropId, UNIT_PERCENT, ValueRef, box_style};
+use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef, box_style};
 
 use crate::ffi::{
     layout_block, layout_box, legacy_align_block_child, measure_natural_width,
-    min_content_width_of, min_width_of, shift_box_tree, style_of, translate_subtree,
+    min_content_width_of, min_width_of, shift_box_tree, translate_subtree,
 };
 use crate::grid::{self, Placement, Span};
 
-fn value(s: *const Style, prop: PropId) -> Option<ValueRef<'static>> {
-    style_of(s).and_then(|s| s.get(prop))
+fn value<'a>(s: Option<StyleRef<'a>>, prop: PropId) -> Option<ValueRef<'a>> {
+    s.and_then(|s| s.get(prop))
 }
 
 fn is_length_or_calc(v: ValueRef<'_>) -> bool {
@@ -85,12 +85,8 @@ fn minus_outer_v(x: f64, b: BoxRef<'_>) -> f64 {
     x - m.top - m.bottom - p.top - p.bottom - bd.top - bd.bottom
 }
 
-fn styled_or(b: BoxRef<'_>, fallback: *const Style) -> *const Style {
-    if b.style().is_null() {
-        fallback
-    } else {
-        b.style()
-    }
+fn styled_or<'a>(b: BoxRef<'a>, fallback: Option<StyleRef<'a>>) -> Option<StyleRef<'a>> {
+    box_style(b).or(fallback)
 }
 
 #[derive(Clone, Copy)]
@@ -146,7 +142,7 @@ fn widen_columns(cols: &mut [f64], range: Range<usize>, outer: f64, hsp: f64) {
     }
 }
 
-fn cell_definite_width(s: *const Style, prop: PropId, h_extra: f64) -> f64 {
+fn cell_definite_width(s: Option<StyleRef<'_>>, prop: PropId, h_extra: f64) -> f64 {
     let Some(v) = definite(value(s, prop)) else {
         return -1.0;
     };
@@ -158,8 +154,8 @@ fn cell_definite_width(s: *const Style, prop: PropId, h_extra: f64) -> f64 {
 }
 
 fn cell_clamp(cell: BoxRef<'_>, h_extra: f64, mut w: f64) -> f64 {
-    let max_w = cell_definite_width(cell.style(), PropId::MaxWidth, h_extra);
-    let min_w = cell_definite_width(cell.style(), PropId::MinWidth, h_extra);
+    let max_w = cell_definite_width(southstar_style::box_style(cell), PropId::MaxWidth, h_extra);
+    let min_w = cell_definite_width(southstar_style::box_style(cell), PropId::MinWidth, h_extra);
     if max_w >= 0.0 && w > max_w {
         w = max_w;
     }
@@ -169,8 +165,8 @@ fn cell_clamp(cell: BoxRef<'_>, h_extra: f64, mut w: f64) -> f64 {
     w
 }
 
-fn border_spacing(s: *const Style) -> (f64, f64) {
-    let Some(s) = style_of(s) else {
+fn border_spacing(s: Option<StyleRef<'_>>) -> (f64, f64) {
+    let Some(s) = s else {
         return (0.0, 0.0);
     };
     if keyword_is_ignore_case(s.get(PropId::BorderCollapse), b"collapse") {
@@ -182,11 +178,11 @@ fn border_spacing(s: *const Style) -> (f64, f64) {
     }
 }
 
-fn is_collapse(s: *const Style) -> bool {
+fn is_collapse(s: Option<StyleRef<'_>>) -> bool {
     keyword_is_ignore_case(value(s, PropId::BorderCollapse), b"collapse")
 }
 
-pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64 {
+pub fn intrinsic_width(b: BoxRef<'_>, inherited: Option<StyleRef<'_>>, min: bool) -> f64 {
     let mut captions = 0.0;
     for c in children(b).filter(|c| c.kind() == BoxKind::TableCaption) {
         let cs = styled_or(c, inherited);
@@ -205,7 +201,7 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
     if max_cols == 0 {
         return captions;
     }
-    let (hsp, _) = border_spacing(b.style());
+    let (hsp, _) = border_spacing(southstar_style::box_style(b));
     let mut cols = vec![0.0; max_cols];
     for &GridCell { cell, at } in narrowest_first(&cells) {
         {
@@ -218,7 +214,7 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
             } else {
                 measure_natural_width(cell, cs)
             };
-            if let Some(wv) = definite(value(cell.style(), PropId::Width))
+            if let Some(wv) = definite(value(southstar_style::box_style(cell), PropId::Width))
                 && !value_is_percent(Some(wv))
             {
                 let e = length_resolve(Some(wv), 0.0, -1.0);
@@ -240,7 +236,7 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
             break;
         }
         let span = hint_span(hint.span());
-        if let Some(wv) = value(hint.style(), PropId::Width)
+        if let Some(wv) = value(southstar_style::col_hint_style(hint), PropId::Width)
             && let Some((_, unit)) = wv.length()
             && unit != UNIT_PERCENT
         {
@@ -258,7 +254,7 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
     if sum > captions { sum } else { captions }
 }
 
-fn width_from_style(s: *const Style, basis: f64) -> Option<f64> {
+fn width_from_style(s: Option<StyleRef<'_>>, basis: f64) -> Option<f64> {
     let wv = definite(value(s, PropId::Width))?;
     let w = length_resolve(Some(wv), basis, -1.0);
     (w >= 0.0).then_some(w)
@@ -294,14 +290,14 @@ fn fixed_columns(
         if col >= max_cols {
             break;
         }
-        if let Some(w) = width_from_style(hint.style(), cw) {
+        if let Some(w) = width_from_style(southstar_style::col_hint_style(hint), cw) {
             apply_fixed_width(widths, fixed, col, hint_span(hint.span()), w);
         }
         col += hint_span(hint.span());
     }
 
     for &GridCell { cell, at } in cells.iter().take_while(|c| c.at.row == 0) {
-        if let Some(mut w) = width_from_style(cell.style(), cw) {
+        if let Some(mut w) = width_from_style(southstar_style::box_style(cell), cw) {
             let (m, p, bd) = edges_from_style(box_style(cell), cw);
             w += margin_padding_border_h(&m, &p, &bd);
             apply_fixed_width(widths, fixed, at.col, at.cols, w);
@@ -343,7 +339,7 @@ fn fixed_columns(
 }
 
 fn caption_bottom(caption: BoxRef<'_>) -> bool {
-    style_of(caption.style())
+    southstar_style::box_style(caption)
         .and_then(|s| s.keyword_of(PropId::CaptionSide))
         .is_some_and(|side| side == c"bottom" || side == c"block-end")
 }
@@ -357,7 +353,7 @@ fn layout_captions(
     bottom: bool,
     inner_x: f64,
     cw: f64,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
     cursor_y: &mut f64,
 ) {
     for caption in children(b) {
@@ -410,7 +406,7 @@ fn collapse_borders(cells: &[GridCell<'_>], max_cols: usize, row_count: usize) {
 }
 
 fn vertical_align_factor(cell: BoxRef<'_>) -> f64 {
-    let va = value(cell.style(), PropId::VerticalAlign);
+    let va = value(southstar_style::box_style(cell), PropId::VerticalAlign);
     if keyword_is_ignore_case(va, b"middle") {
         0.5
     } else if keyword_is_ignore_case(va, b"bottom") {
@@ -420,7 +416,7 @@ fn vertical_align_factor(cell: BoxRef<'_>) -> f64 {
     }
 }
 
-fn is_border_box(s: *const Style) -> bool {
+fn is_border_box(s: Option<StyleRef<'_>>) -> bool {
     keyword_is(value(s, PropId::BoxSizing), b"border-box")
 }
 
@@ -431,7 +427,7 @@ fn content_box_width(
 ) -> f64 {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     let horiz_total = m.left + m.right + p.left + p.right + bd.left + bd.right;
-    let sizing_extras = if is_border_box(b.style()) {
+    let sizing_extras = if is_border_box(southstar_style::box_style(b)) {
         p.left + p.right + bd.left + bd.right
     } else {
         0.0
@@ -440,13 +436,13 @@ fn content_box_width(
         Some(wv) => length_resolve(Some(wv), parent_content_width, 0.0) - sizing_extras,
         None => parent_content_width - horiz_total,
     };
-    if let Some(mxw) = definite(value(b.style(), PropId::MaxWidth)) {
+    if let Some(mxw) = definite(value(southstar_style::box_style(b), PropId::MaxWidth)) {
         let m = length_resolve(Some(mxw), parent_content_width, -1.0);
         if m >= 0.0 && cw > m - sizing_extras {
             cw = m - sizing_extras;
         }
     }
-    if let Some(mnw) = definite(value(b.style(), PropId::MinWidth)) {
+    if let Some(mnw) = definite(value(southstar_style::box_style(b), PropId::MinWidth)) {
         let m = length_resolve(Some(mnw), parent_content_width, -1.0);
         if m >= 0.0 && cw < m - sizing_extras {
             cw = m - sizing_extras;
@@ -467,7 +463,7 @@ fn auto_columns(
     b: BoxRef<'_>,
     cells: &[GridCell<'_>],
     explicit_width: bool,
-    measure_inherited: *const Style,
+    measure_inherited: Option<StyleRef<'_>>,
     cols: &mut AutoColumns,
     col_avail: &mut f64,
     cw: &mut f64,
@@ -487,7 +483,7 @@ fn auto_columns(
             let cell_outer = cell_clamp(cell, h_extra, natural + h_extra);
             let mut cell_fixed = false;
             let mut cell_explicit = -1.0;
-            if let Some(cwv) = value(cell.style(), PropId::Width)
+            if let Some(cwv) = value(southstar_style::box_style(cell), PropId::Width)
                 && is_length_or_calc(cwv)
             {
                 cell_fixed = true;
@@ -519,7 +515,7 @@ fn auto_columns(
             break;
         }
         let hspan = hint_span(hint.span());
-        if let Some(w) = width_from_style(hint.style(), *col_avail) {
+        if let Some(w) = width_from_style(southstar_style::col_hint_style(hint), *col_avail) {
             has_explicit_cols = true;
             let per = w / hspan as f64;
             for e in cols.explicit.iter_mut().skip(col).take(hspan) {
@@ -632,8 +628,14 @@ fn auto_columns(
 }
 
 fn center_with_auto_margins(b: BoxRef<'_>, cw: f64, parent_content_width: f64) {
-    let ml_auto = keyword_is(value(b.style(), PropId::MarginLeft), b"auto");
-    let mr_auto = keyword_is(value(b.style(), PropId::MarginRight), b"auto");
+    let ml_auto = keyword_is(
+        value(southstar_style::box_style(b), PropId::MarginLeft),
+        b"auto",
+    );
+    let mr_auto = keyword_is(
+        value(southstar_style::box_style(b), PropId::MarginRight),
+        b"auto",
+    );
     if !ml_auto && !mr_auto {
         return;
     }
@@ -672,7 +674,7 @@ fn flow_height(b: BoxRef<'_>) -> f64 {
 fn layout_cell_content(
     cell: BoxRef<'_>,
     cell_outer_w: f64,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
 ) -> (f64, f64) {
     let cs = styled_or(cell, child_inherited);
     edges_into_box(cell, cell_outer_w);
@@ -700,7 +702,7 @@ fn layout_cell_content(
 }
 
 fn cell_height(cell: BoxRef<'_>, cell_inner_w: f64, mut cell_h: f64) -> f64 {
-    let s = cell.style();
+    let s = box_style(cell);
     if let Some(hv) = definite(value(s, PropId::Height)) {
         let eh = resolve_used_height(cell, Some(hv), cell_inner_w, -1.0);
         if eh > cell_h {
@@ -764,7 +766,7 @@ fn layout_row<'a>(
     cursor_y: f64,
     cw: f64,
     cols: &Columns<'_>,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
 ) -> f64 {
     row.set_x(inner_x);
     row.set_y(cursor_y);
@@ -782,7 +784,7 @@ fn layout_row<'a>(
             row_height = cell_outer_h;
         }
     }
-    if let Some(rhv) = definite(value(row.style(), PropId::Height)) {
+    if let Some(rhv) = definite(value(southstar_style::box_style(row), PropId::Height)) {
         let rh = length_resolve(Some(rhv), 0.0, -1.0);
         if rh > row_height {
             row_height = rh;
@@ -804,11 +806,11 @@ fn layout_row<'a>(
 }
 
 fn stretch_to_height(b: BoxRef<'_>, cw: f64) {
-    let Some(thv) = definite(value(b.style(), PropId::Height)) else {
+    let Some(thv) = definite(value(southstar_style::box_style(b), PropId::Height)) else {
         return;
     };
     let mut target = resolve_used_height(b, Some(thv), cw, -1.0);
-    if is_border_box(b.style()) {
+    if is_border_box(southstar_style::box_style(b)) {
         let (p, bd) = (b.padding(), b.border());
         target -= p.top + p.bottom + bd.top + bd.bottom;
     }
@@ -837,9 +839,9 @@ fn stretch_to_height(b: BoxRef<'_>, cw: f64) {
     b.set_content_height(target);
 }
 
-pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
+pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<StyleRef<'_>>) {
     edges_into_box(b, parent_content_width);
-    let explicit = definite(value(b.style(), PropId::Width));
+    let explicit = definite(value(southstar_style::box_style(b), PropId::Width));
     let explicit_width = explicit.is_some();
     let mut cw = content_box_width(b, parent_content_width, explicit);
     b.set_content_width(cw);
@@ -857,15 +859,18 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
         return;
     }
 
-    let (hsp, vsp) = border_spacing(b.style());
+    let (hsp, vsp) = border_spacing(southstar_style::box_style(b));
     let total_hsp = (max_cols + 1) as f64 * hsp;
     let mut col_avail = cw - total_hsp;
     if col_avail < 0.0 {
         col_avail = 0.0;
     }
 
-    let fixed_layout =
-        explicit_width && keyword_is(value(b.style(), PropId::TableLayout), b"fixed");
+    let fixed_layout = explicit_width
+        && keyword_is(
+            value(southstar_style::box_style(b), PropId::TableLayout),
+            b"fixed",
+        );
     let mut cols = AutoColumns {
         widths: vec![0.0; max_cols],
         min: Vec::new(),
@@ -952,7 +957,7 @@ pub fn layout(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style)
         });
     }
     layout_captions(b, true, inner_x, cw, child_inherited, &mut cursor_y);
-    if is_collapse(b.style()) {
+    if is_collapse(southstar_style::box_style(b)) {
         collapse_borders(&cells, max_cols, row_count);
     }
     b.set_content_height(cursor_y - inner_y);

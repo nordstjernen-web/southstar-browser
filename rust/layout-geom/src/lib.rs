@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod dispatch;
 pub mod flex;
 mod hit;
 mod text;

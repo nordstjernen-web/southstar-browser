@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{MAX_DEPTH, Node, NsNode, children, controls};
-use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
+use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::{
     FontKeyword, append_inline_spacer, emit_attr, emit_attr_styled, emit_color, emit_font_family,
     emit_font_features, emit_font_size, emit_font_stretch, emit_font_variations, emit_font_weight,
@@ -287,9 +287,7 @@ impl<'a> Collector<'a> {
 
     fn absolute(&mut self, n: Node<'_>, s: StyleRef<'_>) {
         let fixed = keyword_is(s.get(PropId::Position), c"fixed");
-        if let Some(ph) =
-            state::collect_absolute(n.as_ptr(), fixed, !fixed && self.abs_placeholders)
-        {
+        if let Some(ph) = state::collect_absolute(n, fixed, !fixed && self.abs_placeholders) {
             self.push_atomic(ph);
         }
     }
@@ -509,11 +507,7 @@ impl<'a> Collector<'a> {
         {
             (uline, oline, strike) = (false, false, false);
         }
-        let decor_style: *const Style = if uline || oline || strike {
-            s.map_or(ptr::null(), StyleRef::as_ptr)
-        } else {
-            ptr::null()
-        };
+        let decor_style = s.filter(|_| uline || oline || strike);
         let at = self.out.len();
         self.bold.open(bold, at);
         self.italic.open(italic, at);

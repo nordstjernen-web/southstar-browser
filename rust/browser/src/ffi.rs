@@ -319,8 +319,7 @@ impl NsBrowser {
     }
 
     fn selection<'a>(&'a self) -> Selection<'a> {
-        // SAFETY: the page clears its selection before it frees or replaces the layout, so the boxes it names belong to the live layout tree.
-        unsafe { self.selection.get().load() }
+        self.selection.get().load()
     }
 
     pub fn update_selection<'a>(&'a self, f: impl FnOnce(&mut Selection<'a>) -> bool) -> bool {

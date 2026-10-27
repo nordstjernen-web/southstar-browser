@@ -248,15 +248,15 @@ pub fn register_abs_pseudo(host: Option<Node<'_>>, ps: Option<StyleRef<'_>>) {
         return;
     }
     let fixed = keyword_is(ps.get(PropId::Position), c"fixed");
-    let host_ptr = Node::ptr_or_null(host);
+    let host = host.map(Node::downgrade);
     state::with(|st| {
         if let Some(pending) = st.abs_pending.as_mut()
             && !pending
                 .iter()
-                .any(|e| e.dom == host_ptr && e.pseudo == ps.as_ptr())
+                .any(|e| e.dom == host && e.pseudo == ps.as_ptr())
         {
             pending.push(AbsEntry {
-                dom: Node::ptr_or_null(host),
+                dom: host,
                 pseudo: ps.as_ptr(),
                 fixed,
             });

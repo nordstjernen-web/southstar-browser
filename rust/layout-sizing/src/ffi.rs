@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
-use southstar_layout::{BoxRef, MediaRef, Style};
+use southstar_layout::{BoxRef, MediaRef};
 use southstar_style::StyleRef;
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
@@ -27,15 +27,15 @@ pub use southstar_layout_geom::flex::{
     shrink_of as flex_shrink_of, wraps as flex_wraps,
 };
 
-pub use southstar_layout::dispatch::layout_box;
+pub use southstar_layout_geom::dispatch::layout_box;
 
 pub struct Measures {
-    pub inline_natural_width: fn(BoxRef<'_>, *const Style) -> f64,
-    pub inline_min_width: fn(BoxRef<'_>, *const Style) -> f64,
-    pub table_intrinsic_width: fn(BoxRef<'_>, *const Style, bool) -> f64,
-    pub grid_natural_width: fn(BoxRef<'_>, *const Style) -> f64,
+    pub inline_natural_width: fn(BoxRef<'_>, Option<StyleRef<'_>>) -> f64,
+    pub inline_min_width: fn(BoxRef<'_>, Option<StyleRef<'_>>) -> f64,
+    pub table_intrinsic_width: fn(BoxRef<'_>, Option<StyleRef<'_>>, bool) -> f64,
+    pub grid_natural_width: fn(BoxRef<'_>, Option<StyleRef<'_>>) -> f64,
     pub grid_flows_by_column: fn(Option<StyleRef<'_>>) -> bool,
-    pub grid_column_flow_width: fn(BoxRef<'_>, *const Style, bool) -> f64,
+    pub grid_column_flow_width: fn(BoxRef<'_>, Option<StyleRef<'_>>, bool) -> f64,
 }
 
 static MEASURES: OnceLock<Measures> = OnceLock::new();
@@ -52,19 +52,19 @@ fn measures() -> &'static Measures {
 
 pub use southstar_layout_build::{box_is_abs_placeholder, image_dimension_attr};
 
-pub fn inline_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn inline_natural_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     (measures().inline_natural_width)(b, parent_style)
 }
 
-pub fn inline_min_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn inline_min_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     (measures().inline_min_width)(b, parent_style)
 }
 
-pub fn table_intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64 {
+pub fn table_intrinsic_width(b: BoxRef<'_>, inherited: Option<StyleRef<'_>>, min: bool) -> f64 {
     (measures().table_intrinsic_width)(b, inherited, min)
 }
 
-pub fn grid_natural_width(b: BoxRef<'_>, child_style: *const Style) -> f64 {
+pub fn grid_natural_width(b: BoxRef<'_>, child_style: Option<StyleRef<'_>>) -> f64 {
     (measures().grid_natural_width)(b, child_style)
 }
 
@@ -72,7 +72,7 @@ pub fn grid_flows_by_column(s: Option<StyleRef<'_>>) -> bool {
     (measures().grid_flows_by_column)(s)
 }
 
-pub fn grid_column_flow_width(b: BoxRef<'_>, child_style: *const Style, min: bool) -> f64 {
+pub fn grid_column_flow_width(b: BoxRef<'_>, child_style: Option<StyleRef<'_>>, min: bool) -> f64 {
     (measures().grid_column_flow_width)(b, child_style, min)
 }
 

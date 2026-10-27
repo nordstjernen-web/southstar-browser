@@ -2,15 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_float::{
     float_side_of, kw_scrolls, overflow_axis_keyword, style_is_grid_container,
 };
 use southstar_layout_geom::{keyword_or, style_is_absolute_or_fixed, style_is_flex_container};
-use southstar_style::{PropId, ValueRef};
+use southstar_style::{PropId, StyleRef, ValueRef};
 
 use crate::dispatch::shift_box_tree;
-use crate::ffi::{dom_of, style_of, style_ref};
+use crate::ffi::{dom_of, style_of};
 
 pub fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
     v.and_then(ValueRef::keyword_text)
@@ -23,10 +23,8 @@ enum Legacy {
     Right,
 }
 
-fn legacy_block_align(c: BoxRef<'_>, inherited: *const Style) -> Option<Legacy> {
-    let ta = style_ref(inherited)?
-        .keyword_of(PropId::TextAlign)?
-        .to_bytes();
+fn legacy_block_align(c: BoxRef<'_>, inherited: Option<StyleRef<'_>>) -> Option<Legacy> {
+    let ta = inherited?.keyword_of(PropId::TextAlign)?.to_bytes();
     match ta {
         b"-webkit-center" | b"-moz-center" => return Some(Legacy::Center),
         b"-webkit-right" | b"-moz-right" => return Some(Legacy::Right),
@@ -67,7 +65,7 @@ pub fn legacy_align_block_child(
     c: BoxRef<'_>,
     avail_x: f64,
     avail_w: f64,
-    inherited: *const Style,
+    inherited: Option<StyleRef<'_>>,
 ) {
     if !matches!(c.kind(), BoxKind::Block | BoxKind::Table) {
         return;
