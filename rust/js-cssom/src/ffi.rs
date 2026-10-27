@@ -585,6 +585,9 @@ fn teardown(js: *const southstar_js_runtime::api::NsJs) {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_canvas::links::set_js_cssom_links(southstar_canvas::links::JsCssomLinks {
+        computed_text,
+    });
     api::set_cssom_hooks(api::PageStateHooks {
         init: |_| {},
         teardown,

@@ -165,7 +165,7 @@ pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {
 }
 
 pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
-    let text = southstar_js_cssom::computed_text(scope, dom_element(el)?, "color")?;
+    let text = crate::links::computed_text(scope, dom_element(el)?, "color")?;
     Some(text.into_bytes())
 }
 

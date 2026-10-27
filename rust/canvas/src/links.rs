@@ -30,6 +30,22 @@ fn js_events_links() -> &'static JsEventsLinks {
         .expect("southstar-js-events installs its links before the first page")
 }
 
+pub struct JsCssomLinks {
+    pub computed_text: fn(&Scope<'_>, Node<'_>, &str) -> Option<String>,
+}
+
+static JS_CSSOM_LINKS: OnceLock<JsCssomLinks> = OnceLock::new();
+
+pub fn set_js_cssom_links(links: JsCssomLinks) {
+    let _ = JS_CSSOM_LINKS.set(links);
+}
+
+fn js_cssom_links() -> &'static JsCssomLinks {
+    JS_CSSOM_LINKS
+        .get()
+        .expect("southstar-js-cssom installs its links before the first page")
+}
+
 pub struct JsFramesLinks {
     pub realm_for_node: fn(&Scope<'_>, Node<'_>) -> ContextHandle,
 }
@@ -164,4 +180,8 @@ pub(crate) fn webgpu_get_context(
 #[cfg(feature = "webgpu")]
 pub(crate) fn webgpu_canvas_surface(canvas: usize) -> *mut c_void {
     (webgpu_links().canvas_surface)(canvas)
+}
+
+pub(crate) fn computed_text(scope: &Scope<'_>, node: Node<'_>, name: &str) -> Option<String> {
+    (js_cssom_links().computed_text)(scope, node, name)
 }

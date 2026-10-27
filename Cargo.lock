@@ -1877,7 +1877,6 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-image",
- "southstar-js-cssom",
  "southstar-js-engine",
  "southstar-js-images",
  "southstar-js-runtime",
@@ -2417,6 +2416,7 @@ name = "southstar-js-cssom"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-anim",
+ "southstar-canvas",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-prop-syntax",
