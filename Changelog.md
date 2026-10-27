@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Docs: `SECURITY.md`'s known gaps no longer list the cookie-jar locking
+  and `HttpOnly` collision entries, both fixed earlier, and describe the
+  real residual gaps instead: renderers share the cookie, cache and
+  storage files on disk, page downloads are fetched by the shell, and the
+  audio helper fetches helper-played media without the page's cookies.
 * Security: the renderer protocol's JSON reader refuses a string with a
   `\u0000` escape and replaces a lone surrogate escape with U+FFFD, so a
   renderer cannot plant a NUL byte in a string the shell later hands to C
