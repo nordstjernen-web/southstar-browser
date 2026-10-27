@@ -4,12 +4,12 @@
 
 use core::ffi::{CStr, c_char};
 use core::ptr;
-use southstar_js_runtime::api::Page;
 use std::rc::Rc;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
+use southstar_js_runtime::api::Page;
 use southstar_texture::TextureRef;
 use southstar_video::BoxVideo;
 
@@ -88,10 +88,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     }
     let element = unsafe { Node::from_ptr(node.cast()) }?;
     let name = element.name()?.to_bytes();
-    let js = Page::current(scope);
-    if js.is_none() {
-        return None;
-    }
+    let js = Some(Page::current(scope)?);
     if name == b"canvas" {
         return canvas_source(scope, node);
     }

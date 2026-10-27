@@ -4,8 +4,9 @@
 
 use std::collections::HashMap;
 
-use southstar_js_runtime::api::Page;
 use std::sync::{LazyLock, Mutex, MutexGuard};
+
+use southstar_js_runtime::api::Page;
 
 use crate::ffi::host;
 

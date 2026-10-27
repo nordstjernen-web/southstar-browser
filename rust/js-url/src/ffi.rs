@@ -233,9 +233,7 @@ pub fn filereader_pending(js: Option<Page>) -> bool {
 }
 
 pub fn blob_url_lookup(js: Option<Page>, url: &[u8]) -> Option<crate::registry::Blob> {
-    if js.is_none() {
-        return None;
-    }
+    js?;
     crate::registry::lookup(Js(js), url)
 }
 

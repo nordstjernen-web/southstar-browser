@@ -5,12 +5,12 @@
 use core::ffi::{CStr, c_void};
 
 use core::ptr;
-use southstar_js_runtime::api::Page;
 use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
 use southstar_cairo::ContextRef;
 use southstar_dom::Node;
+use southstar_js_runtime::api::Page;
 use southstar_layout::{BoxRef, InlineAttr, NsBox};
 use southstar_selection::NsSelection;
 use southstar_style::StyleRef;

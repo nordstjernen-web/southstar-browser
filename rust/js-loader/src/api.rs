@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use southstar_js_runtime::api::Page;
 
 use southstar_dom::Node;
+use southstar_js_runtime::api::Page;
 
 use crate::ffi::{Js, PerfInfo};
 use crate::{Schedule, Task, compile, eval, fetch, hold, import_map, page, scan, schedule};

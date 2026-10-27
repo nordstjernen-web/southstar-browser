@@ -36,7 +36,7 @@ pub(crate) fn new_event_with_proto(scope: &mut Scope<'_>, proto: &Value) -> JsRe
 }
 
 pub(crate) fn has_page(scope: &Scope<'_>) -> bool {
-    !js_of(scope).is_none()
+    js_of(scope).is_some()
 }
 
 pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {

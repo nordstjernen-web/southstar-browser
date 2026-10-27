@@ -15,9 +15,9 @@ mod scan;
 mod schedule;
 
 use core::ffi::CStr;
-use southstar_js_runtime::api::Page;
 
 use southstar_dom::Node;
+use southstar_js_runtime::api::Page;
 
 use crate::ffi::Js;
 
