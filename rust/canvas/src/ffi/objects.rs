@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
 use std::ffi::CString;
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -142,7 +141,7 @@ pub(crate) fn new_imagedata_from(
 pub(crate) fn drawimage_source_surface(
     scope: &mut Scope<'_>,
     src: &Value,
-) -> Result<Option<(*mut c_void, i32, i32)>, Value> {
+) -> Result<Option<(southstar_cairo::Surface, i32, i32)>, Value> {
     let Some(source) = drawimage_source(scope, src) else {
         return Ok(None);
     };
@@ -155,7 +154,7 @@ pub(crate) fn drawimage_source_surface(
         ));
     }
     let (w, h) = source.size;
-    Ok(Some((source.surface.into_raw(), w, h)))
+    Ok(Some((source.surface.into_shared(), w, h)))
 }
 
 pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {

@@ -245,17 +245,13 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> Option<Surface> {
     if el.is_null() {
         return None;
     }
-    let gl = crate::links::webgl_canvas_surface(el.addr());
-    if !gl.is_null() {
-        // SAFETY: the WebGL link returns null or the canvas's live readback surface, referenced before anything can replace it.
-        return unsafe { Surface::from_borrowed(gl) };
+    if let Some(gl) = crate::links::webgl_canvas_surface(el.addr()) {
+        return Some(Surface::of(gl));
     }
     #[cfg(feature = "webgpu")]
     {
-        let gpu = crate::links::webgpu_canvas_surface(el.addr());
-        if !gpu.is_null() {
-            // SAFETY: the WebGPU link returns null or the canvas's live readback surface, referenced before anything can replace it.
-            return unsafe { Surface::from_borrowed(gpu) };
+        if let Some(gpu) = crate::links::webgpu_canvas_surface(el.addr()) {
+            return Some(Surface::of(gpu));
         }
     }
     if js.is_null() {

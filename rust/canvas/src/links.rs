@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 use std::sync::OnceLock;
 
 use southstar_dom::Node;
@@ -96,7 +96,7 @@ fn js_window_links() -> &'static JsWindowLinks {
 
 pub struct WebglLinks {
     pub webgl_get_context: WebglGetContextFn,
-    pub canvas_surface: fn(usize) -> *mut c_void,
+    pub canvas_surface: fn(usize) -> Option<southstar_cairo::Surface>,
 }
 
 static WEBGL_LINKS: OnceLock<WebglLinks> = OnceLock::new();
@@ -114,7 +114,7 @@ fn webgl_links() -> &'static WebglLinks {
 #[cfg(feature = "webgpu")]
 pub struct WebgpuLinks {
     pub get_context: fn(&mut Scope<'_>, &Value, usize) -> Value,
-    pub canvas_surface: fn(usize) -> *mut c_void,
+    pub canvas_surface: fn(usize) -> Option<southstar_cairo::Surface>,
 }
 
 #[cfg(feature = "webgpu")]
@@ -164,7 +164,7 @@ pub(crate) fn nsr_webgl_get_context(
     (webgl_links().webgl_get_context)(scope, js, canvas_obj, canvas, version, attrs)
 }
 
-pub(crate) fn webgl_canvas_surface(canvas: usize) -> *mut c_void {
+pub(crate) fn webgl_canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
     (webgl_links().canvas_surface)(canvas)
 }
 
@@ -178,7 +178,7 @@ pub(crate) fn webgpu_get_context(
 }
 
 #[cfg(feature = "webgpu")]
-pub(crate) fn webgpu_canvas_surface(canvas: usize) -> *mut c_void {
+pub(crate) fn webgpu_canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
     (webgpu_links().canvas_surface)(canvas)
 }
 

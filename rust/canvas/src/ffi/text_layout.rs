@@ -42,8 +42,7 @@ pub struct Extents {
 }
 
 fn text_cairo(cr: &Context) -> Option<CairoContext> {
-    // SAFETY: a canvas Context wraps the canvas's live cairo_t.
-    unsafe { CairoContext::from_raw(cr.raw().cast()) }
+    Some(CairoContext::from_cairo(cr.cairo()))
 }
 
 impl Layout {

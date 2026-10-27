@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_void;
-use core::ptr;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -24,8 +23,8 @@ impl Surface {
         southstar_cairo::Surface::image(southstar_cairo::Format::Argb32, w, h).map(Surface)
     }
 
-    pub(crate) fn as_ptr(&self) -> *mut c_void {
-        self.0.as_raw()
+    pub(crate) fn shared(&self) -> southstar_cairo::Surface {
+        self.0.clone()
     }
 
     pub(crate) fn with_pixels_mut<R>(&self, f: impl FnOnce(&mut [u8], usize) -> R) -> Option<R> {
@@ -98,14 +97,10 @@ pub(crate) fn drawimage_source(
     src: &Value,
 ) -> Result<Option<SourceImage>, Value> {
     let source = canvas::drawimage_source_surface(scope, src)?;
-    Ok(source.and_then(|(raw, w, h)| {
-        // SAFETY: the canvas hands over its own reference to a live surface, or null.
-        let surface = unsafe { southstar_cairo::Surface::from_raw_full(raw) }?;
-        Some(SourceImage {
-            surface: Surface(surface),
-            w,
-            h,
-        })
+    Ok(source.map(|(surface, w, h)| SourceImage {
+        surface: Surface(surface),
+        w,
+        h,
     }))
 }
 
@@ -198,6 +193,6 @@ pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install(scope, global);
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> *mut c_void {
-    registered(canvas).map_or(ptr::null_mut(), |(gl, _)| gl.canvas_surface())
+pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+    registered(canvas).and_then(|(gl, _)| gl.canvas_surface())
 }

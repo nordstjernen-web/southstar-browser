@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -241,7 +241,7 @@ fn registered(canvas: usize) -> Option<Rc<RefCell<Ctx>>> {
     })
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> Option<*mut c_void> {
+pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
     let ctx = registered(canvas)?;
     let mut c = ctx.try_borrow_mut().ok()?;
     let c = &mut *c;
@@ -260,7 +260,7 @@ pub(crate) fn canvas_surface(canvas: usize) -> Option<*mut c_void> {
     let mut descriptor = BufferDescriptor::zeroed();
     descriptor.usage = BUFFER_USAGE_MAP_READ | BUFFER_USAGE_COPY_DST;
     descriptor.size = size;
-    let surf_ptr = |surf: &Option<Surface>| surf.as_ref().map(Surface::as_ptr);
+    let surf_ptr = |surf: &Option<Surface>| surf.as_ref().map(Surface::shared);
     let Some(readback) = device.create_buffer(&descriptor) else {
         return surf_ptr(&c.surf);
     };

@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
-
 use southstar_cairo as cairo;
 
 pub(crate) use cairo::{Extend, Filter, LineCap, LineJoin};
@@ -64,17 +62,8 @@ impl Pattern {
 pub(crate) struct Surface(cairo::Surface);
 
 impl Surface {
-    /// # Safety
-    ///
-    /// `surface` is null or a live cairo surface used only on this thread.
-    pub unsafe fn from_borrowed(surface: *mut c_void) -> Option<Surface> {
-        // SAFETY: the caller passes null or a live surface; it is referenced before the borrow ends.
-        let borrowed = unsafe { cairo::SurfaceRef::from_raw(surface) }?;
-        Some(Surface(borrowed.reference()))
-    }
-
-    pub fn into_raw(self) -> *mut c_void {
-        self.0.into_raw()
+    pub fn of(surface: cairo::Surface) -> Surface {
+        Surface(surface)
     }
 
     pub fn reference(&self) -> Surface {
@@ -191,8 +180,8 @@ impl Context {
         self.cr() == other.cr()
     }
 
-    pub fn raw(&self) -> *mut c_void {
-        self.0.as_raw()
+    pub fn cairo(&self) -> cairo::ContextRef<'_> {
+        self.0.as_ref()
     }
 
     pub fn clip(&self) {

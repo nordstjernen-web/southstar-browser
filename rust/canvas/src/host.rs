@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
-
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 pub fn canvas_realm(scope: &Scope<'_>, canvas: usize) -> ContextHandle {
@@ -45,6 +43,6 @@ pub fn hidden_set(scope: &mut Scope<'_>, value: &Value, name: &str, field: Value
 pub fn drawimage_source_surface(
     scope: &mut Scope<'_>,
     src: &Value,
-) -> Result<Option<(*mut c_void, i32, i32)>, Value> {
+) -> Result<Option<(southstar_cairo::Surface, i32, i32)>, Value> {
     crate::ffi::drawimage_source_surface(scope, src)
 }
