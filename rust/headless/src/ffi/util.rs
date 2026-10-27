@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_uint, c_ulong, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
@@ -66,8 +66,8 @@ pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-pub fn usleep(us: c_ulong) {
-    std::thread::sleep(std::time::Duration::from_micros(u64::from(us)));
+pub fn usleep(us: u64) {
+    std::thread::sleep(std::time::Duration::from_micros(us));
 }
 
 fn c_input(s: &[u8]) -> CString {

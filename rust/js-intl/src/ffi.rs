@@ -75,6 +75,7 @@ pub(crate) fn real_time_ms() -> f64 {
 pub(crate) fn break_down(seconds: i64, utc: bool) -> Option<BrokenDown> {
     let mut tm = Tm::default();
     #[cfg(not(windows))]
+    // SAFETY: both pointers come from live locals for the duration of the call.
     let ok = unsafe {
         if utc {
             !gmtime_r(&seconds, &mut tm).is_null()
@@ -101,11 +102,14 @@ pub(crate) fn break_down(seconds: i64, utc: bool) -> Option<BrokenDown> {
 }
 
 pub(crate) fn local_zone_identifier() -> Option<Vec<u8>> {
+    // SAFETY: g_time_zone_new_local takes no arguments and returns a new reference or null.
     let zone = unsafe { g_time_zone_new_local() };
     if zone.is_null() {
         return None;
     }
+    // SAFETY: `zone` is the live reference created above, and the identifier it returns is a NUL-terminated string it owns.
     let id = unsafe { glib::bytes(g_time_zone_get_identifier(zone)) }.map(<[u8]>::to_vec);
+    // SAFETY: releases the reference created above; `id` was copied out first.
     unsafe { g_time_zone_unref(zone) };
     id
 }
@@ -116,12 +120,15 @@ pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
 
 pub(crate) fn language_names() -> Vec<Vec<u8>> {
     let mut names = Vec::new();
+    // SAFETY: GLib returns a NULL-terminated array it owns for the life of the process.
     let mut entry = unsafe { glib::g_get_language_names() };
     if entry.is_null() {
         return names;
     }
+    // SAFETY: `entry` points into the NULL-terminated array and has not passed its terminator; each entry is null or a NUL-terminated string owned by GLib.
     while let Some(name) = unsafe { glib::bytes(*entry) } {
         names.push(name.to_vec());
+        // SAFETY: the current entry was not the terminator, so the next one is in bounds.
         entry = unsafe { entry.add(1) };
     }
     names
