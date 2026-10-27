@@ -4,7 +4,7 @@
 
 use core::ffi::{c_uint, c_void};
 
-use southstar_dom::NsNode;
+use southstar_dom::{Node, WeakNode};
 use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
@@ -20,8 +20,8 @@ struct Request {
     realm: ContextHandle,
     callback: Value,
     video_frame: bool,
-    frame: *mut NsNode,
-    media: *mut NsNode,
+    frame: Option<WeakNode>,
+    media: Option<WeakNode>,
 }
 
 #[derive(Default)]
@@ -94,24 +94,22 @@ fn remove_where(page: &Page, mut doomed: impl FnMut(&Request) -> bool) {
     drop(removed);
 }
 
-pub(crate) fn purge_frame(js: Js, frame: *const NsNode) {
-    if frame.is_null() {
-        return;
-    }
+pub(crate) fn purge_frame(js: Js, frame: Node<'_>) {
     let Some(page) = page(js) else {
         return;
     };
     if !page.frames.borrow().requested {
         return;
     }
-    remove_where(&page, |request| request.frame.cast_const() == frame);
+    let weak = frame.downgrade();
+    remove_where(&page, |request| request.frame == Some(weak));
     js.forget_frame_context(frame);
 }
 
-fn in_tree(node: *const NsNode, root: *const NsNode) -> bool {
-    let mut current = ffi::node(node);
+fn in_tree(node: WeakNode, root: Node<'_>) -> bool {
+    let mut current = node.get();
     while let Some(node) = current {
-        if node.as_ptr() == root {
+        if node == root {
             return true;
         }
         current = node.parent();
@@ -119,15 +117,12 @@ fn in_tree(node: *const NsNode, root: *const NsNode) -> bool {
     false
 }
 
-pub(crate) fn purge_media(js: Js, root: *const NsNode) {
-    if root.is_null() {
-        return;
-    }
+pub(crate) fn purge_media(js: Js, root: Node<'_>) {
     let Some(page) = page(js) else {
         return;
     };
     remove_where(&page, |request| {
-        !request.media.is_null() && in_tree(request.media, root)
+        request.media.is_some_and(|media| in_tree(media, root))
     });
 }
 
@@ -176,10 +171,10 @@ fn request(
     js: Js,
     callback: &Value,
     video_frame: bool,
-    media: *mut NsNode,
+    media: Option<WeakNode>,
 ) -> i32 {
     let page = page_or_new(js);
-    let frame = js.context_frame(scope);
+    let frame = js.context_frame(scope).map(Node::downgrade);
     let realm = scope.handle();
     let id = {
         let mut frames = page.frames.borrow_mut();
@@ -217,13 +212,7 @@ pub(crate) fn request_animation_frame(
     let Some(callback) = callback_arg(scope, js, args) else {
         return Ok(Value::int(0));
     };
-    Ok(Value::int(request(
-        scope,
-        js,
-        &callback,
-        false,
-        core::ptr::null_mut(),
-    )))
+    Ok(Value::int(request(scope, js, &callback, false, None)))
 }
 
 pub fn request_video_frame_callback(
@@ -235,7 +224,7 @@ pub fn request_video_frame_callback(
     let Some(callback) = callback_arg(scope, js, args) else {
         return Ok(Value::int(0));
     };
-    let media = ffi::unwrap_element(this);
+    let media = ffi::unwrap_element(this).map(Node::downgrade);
     Ok(Value::int(request(scope, js, &callback, true, media)))
 }
 
@@ -268,15 +257,14 @@ fn number_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Value
     scope.get(object, key).ok().filter(Value::is_number)
 }
 
-fn video_frame_metadata(scope: &mut Scope<'_>, media: *mut NsNode, ts_ms: f64) -> Value {
+fn video_frame_metadata(scope: &mut Scope<'_>, media: Option<WeakNode>, ts_ms: f64) -> Value {
     let mut media_time = 0.0;
     let mut width = 0;
     let mut height = 0;
     let mut presented_frames = 0;
-    let element = if media.is_null() {
-        Value::undefined()
-    } else {
-        ffi::make_element(scope, media)
+    let element = match media {
+        None => Value::undefined(),
+        Some(media) => ffi::make_element(scope, media.get()),
     };
     if element.is_object() {
         if let Some(value) = number_prop(scope, &element, "_nd_pos") {
@@ -309,7 +297,8 @@ fn video_frame_metadata(scope: &mut Scope<'_>, media: *mut NsNode, ts_ms: f64) -
 }
 
 fn run_one(js: Js, request: Request, now_us: i64) {
-    let Some(callback_scope) = CallbackScope::enter(js, request.realm, request.frame) else {
+    let frame = request.frame.and_then(WeakNode::get);
+    let Some(callback_scope) = CallbackScope::enter(js, request.realm, frame) else {
         return;
     };
     let ts_ms = js.time_origin_ms(callback_scope.context(), now_us);

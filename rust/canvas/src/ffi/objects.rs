@@ -9,14 +9,10 @@ use southstar_js_runtime::api::Page;
 
 use super::cairo::Context;
 use super::drawimage_source;
+use super::state::Node;
 use crate::bitmap::ImageBitmap;
 use crate::hidden::{self, Hidden};
 use crate::path2d::Path2D;
-
-#[repr(C)]
-pub struct NsNode {
-    _private: [u8; 0],
-}
 
 pub(crate) fn with_hidden<R>(value: &Value, f: impl FnOnce(&Hidden) -> R) -> Option<R> {
     value.with_host::<Hidden, R>(f)
@@ -64,7 +60,7 @@ pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::ca
     if js.is_null() || !hidden::is_ctx2d(this) {
         return None;
     }
-    let el = super::state::Node::from_addr(hidden::ptr(this));
+    let el = hidden::node(this);
     crate::state::state_for(js, el).map(|st| st.context())
 }
 
@@ -86,7 +82,7 @@ pub(crate) fn in_realm<R>(
 }
 
 fn this_realm(scope: &Scope<'_>, this: &Value) -> ContextHandle {
-    canvas_realm(scope, hidden::ptr(this))
+    canvas_realm(scope, hidden::node(this))
 }
 
 pub(crate) fn new_textmetrics(scope: &mut Scope<'_>, this: &Value, values: &[f64; 10]) -> Value {
@@ -153,30 +149,28 @@ pub(crate) fn drawimage_source_surface(
     Ok(Some((source.surface.into_shared(), w, h)))
 }
 
-pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {
+pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: Node) {
     let js = super::state::js_of(scope);
-    let _ = crate::state::state_for(js, super::state::Node::from_addr(el));
+    let _ = crate::state::state_for(js, el);
 }
 
-pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
+pub(crate) fn computed_color(scope: &Scope<'_>, el: Node) -> Option<Vec<u8>> {
     let text = crate::links::computed_text(scope, dom_element(el)?, "color")?;
     Some(text.into_bytes())
 }
 
-fn dom_element(el: usize) -> Option<southstar_dom::Node<'static>> {
-    // SAFETY: canvas bindings pass 0 or the address of a node of this thread's DOM store.
-    unsafe { southstar_dom::Node::from_ptr(el as *const southstar_dom::NsNode) }
-        .filter(|el| el.is_element())
+fn dom_element(el: Node) -> Option<southstar_dom::Node<'static>> {
+    el.dom().filter(|el| el.is_element())
 }
 
-pub(crate) fn element_attr(el: usize, name: &str) -> Option<Vec<u8>> {
+pub(crate) fn element_attr(el: Node, name: &str) -> Option<Vec<u8>> {
     let name = CString::new(name).ok()?;
     dom_element(el)?
         .attr(&name)
         .map(|value| value.to_bytes().to_vec())
 }
 
-pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
+pub(crate) fn set_element_attr(el: Node, name: &str, value: &str) {
     let (Ok(name), Ok(value)) = (CString::new(name), CString::new(value)) else {
         return;
     };
@@ -185,17 +179,17 @@ pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
     }
 }
 
-pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
+pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> Node {
     let node = southstar_dom::node::new_element(b"canvas");
-    let el = node.as_ptr() as usize;
+    let el = Node::of(Some(node));
     let js = super::state::js_of(scope);
-    if let Some(st) = crate::state::state_for(js, super::state::Node::from_addr(el)) {
+    if let Some(st) = crate::state::state_for(js, el) {
         st.set_owned_node(node);
     }
     el
 }
 
-pub(crate) fn canvas_realm(scope: &Scope<'_>, el: usize) -> ContextHandle {
+pub(crate) fn canvas_realm(scope: &Scope<'_>, el: Node) -> ContextHandle {
     let current = scope.handle();
     if js_of(scope).is_none() {
         return current;
@@ -219,7 +213,7 @@ pub(crate) fn new_in_realm(
 
 pub(crate) fn ctx2d_new(
     scope: &mut Scope<'_>,
-    el: usize,
+    el: Node,
     canvas: &Value,
     offscreen: bool,
     attrs: Value,
@@ -238,10 +232,10 @@ pub(crate) fn ctx2d_new(
     obj
 }
 
-pub(crate) fn offscreen_node(obj: &Value) -> *const NsNode {
+pub(crate) fn offscreen_node(obj: &Value) -> Node {
     if hidden::is(obj, hidden::KIND_OFFSCREEN) {
-        hidden::ptr(obj) as *const NsNode
+        hidden::node(obj)
     } else {
-        core::ptr::null()
+        Node::NONE
     }
 }

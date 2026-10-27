@@ -3,12 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use southstar_cairo::{ContextRef, Matrix, Operator, Pattern};
+use southstar_cairo::{Context, ContextRef, Matrix, Operator, Pattern};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxKind, BoxRef, NsBox};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef, display_of, parse_color};
@@ -30,8 +30,6 @@ pub const LAYERS_PLAN: i32 = 1;
 pub const LAYERS_DOC: i32 = 2;
 
 const CULL_MARGIN: f64 = 400.0;
-
-pub type UpperFn = unsafe extern "C" fn(index: i32, data: *mut c_void) -> *mut c_void;
 
 #[derive(Clone, Copy)]
 pub struct VpCapture {
@@ -65,11 +63,11 @@ pub struct Layers {
     pub flush_layered: bool,
     pub vp_seen: i32,
     pub base: Matrix,
-    pub doc: *mut c_void,
+    pub doc: Option<Context>,
     pub kinds: Option<Rc<LayerKinds>>,
     pub found: Vec<VpCapture>,
-    pub upper: Option<UpperFn>,
-    pub upper_data: *mut c_void,
+    pub upper: Vec<Option<Context>>,
+    pub upper_used: Vec<bool>,
     pub n_upper: i32,
     pub video_above: bool,
 }
@@ -83,11 +81,11 @@ impl Layers {
             flush_layered: false,
             vp_seen: 0,
             base: Matrix::default(),
-            doc: ptr::null_mut(),
+            doc: None,
             kinds: None,
             found: Vec::new(),
-            upper: None,
-            upper_data: ptr::null_mut(),
+            upper: Vec::new(),
+            upper_used: Vec::new(),
             n_upper: 0,
             video_above: false,
         }
@@ -210,7 +208,7 @@ pub fn layers_mode() -> i32 {
 pub fn layers_note_video(cr: ContextRef) {
     with(|w| {
         let mut l = w.layers.borrow_mut();
-        if l.mode == LAYERS_DOC && cr.as_raw() != l.doc {
+        if l.mode == LAYERS_DOC && l.doc.as_ref().is_none_or(|doc| doc.as_ref() != cr) {
             l.video_above = true;
         }
     });
@@ -485,12 +483,22 @@ fn layers_record(cr: ContextRef, b: BoxRef<'static>, kind: i32, dx: f64, dy: f64
     });
 }
 
-fn layers_target<'a>(
-    cr: ContextRef<'a>,
-    cap: &Capture,
-    dx: f64,
-    dy: f64,
-) -> Option<ContextRef<'a>> {
+fn upper_layer(index: usize) -> Option<Context> {
+    with(|w| {
+        let mut l = w.layers.borrow_mut();
+        let target = l.upper.get(index)?.clone()?;
+        if !l.upper_used[index] {
+            l.upper_used[index] = true;
+            target.as_ref().save();
+            target.as_ref().set_operator(Operator::Clear);
+            target.as_ref().paint();
+            target.as_ref().restore();
+        }
+        Some(target)
+    })
+}
+
+fn layers_target(cr: ContextRef<'_>, cap: &Capture, dx: f64, dy: f64) -> Option<Context> {
     let (kind, mode) = with(|w| {
         let l = w.layers.borrow();
         let kind = l
@@ -508,28 +516,17 @@ fn layers_target<'a>(
         return None;
     }
     if mode == LAYERS_PLAN {
-        return Some(cr);
+        return Some(cr.reference());
     }
-    let (vp_seen, n_upper, doc, upper, data) = with(|w| {
+    let (vp_seen, n_upper, doc) = with(|w| {
         let l = w.layers.borrow();
-        (l.vp_seen, l.n_upper, l.doc, l.upper, l.upper_data)
+        (l.vp_seen, l.n_upper, l.doc.clone())
     });
-    // SAFETY: doc_layers records the document context it was handed, which stays alive until it returns and clears the layers.
-    let doc = unsafe { ContextRef::from_raw(doc) };
     if vp_seen == 0 || n_upper == 0 {
         return doc;
     }
     let i = vp_seen.min(n_upper) - 1;
-    let Some(upper) = upper else {
-        return doc;
-    };
-    let target = unsafe { upper(i, data) };
-    if target.is_null() {
-        doc
-    } else {
-        // SAFETY: the upper-layer callback hands out contexts the embedder keeps alive until doc_layers returns.
-        unsafe { ContextRef::from_raw(target) }
-    }
+    upper_layer(i as usize).or(doc)
 }
 
 fn debug_on() -> bool {
@@ -581,15 +578,16 @@ fn paint_flush_deferred(cr: ContextRef, list: Vec<Capture>, highlight: Option<&C
             dx = 0.0;
             dy = 0.0;
         }
-        let target = if layered {
+        let owned = if layered {
             layers_target(cr, &cap, dx, dy)
         } else {
-            Some(cr)
+            Some(cr.reference())
         };
-        let Some(target) = target else {
+        let Some(owned) = owned else {
             i += 1;
             continue;
         };
+        let target = owned.as_ref();
         if layered {
             with(|w| w.layers.borrow_mut().owner = cap.b.as_ptr());
         }

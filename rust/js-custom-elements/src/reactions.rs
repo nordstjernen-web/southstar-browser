@@ -16,8 +16,8 @@ const PROTOTYPE_DEPTH: usize = 8;
 
 pub(crate) fn key_for(js: Js, lower_name: &str, document: Option<Element>) -> Key {
     let document = match document {
-        Some(doc) if doc.as_ptr() as usize != ffi::main_document(js) => doc.as_ptr() as usize,
-        _ => 0,
+        Some(doc) if Some(doc) != ffi::main_document(js) => Some(doc.downgrade()),
+        _ => None,
     };
     Key {
         name: lower_name.to_owned(),
@@ -185,7 +185,7 @@ fn upgrade_with(
     class: &Value,
     depth: i32,
 ) {
-    let id = node.as_ptr() as usize;
+    let id = node.downgrade();
     if page.under_construction.borrow().contains(&id) {
         return;
     }

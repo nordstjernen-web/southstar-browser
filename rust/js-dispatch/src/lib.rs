@@ -19,7 +19,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use southstar_dom::{Kind, Node, NsNode};
+use southstar_dom::{Kind, Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 
 pub use crate::api::*;
@@ -54,7 +54,7 @@ pub(crate) struct DispatchPath {
 
 #[derive(Default)]
 pub(crate) struct Page {
-    pub listeners: HashMap<usize, Vec<Rc<Listener>>>,
+    pub listeners: HashMap<WeakNode, Vec<Rc<Listener>>>,
     pub paths: Vec<DispatchPath>,
     pub spare_paths: Vec<Vec<Element>>,
     pub spare_flags: Vec<Vec<bool>>,
@@ -90,12 +90,12 @@ pub(crate) fn return_snapshot(js: Js, mut snapshot: Vec<Rc<Listener>>) {
     with(js, |page| page.spare_snapshots.push(snapshot));
 }
 
-pub(crate) fn forget_node(js: Js, node: *const NsNode) {
+pub(crate) fn forget_node(js: Js, node: Node<'_>) {
     let dropped = PAGES.with(|pages| {
         let mut pages = pages.borrow_mut();
         pages
             .get_mut(&js)
-            .and_then(|page| page.listeners.remove(&(node as usize)))
+            .and_then(|page| page.listeners.remove(&node.downgrade()))
     });
     if let Some(dropped) = dropped {
         for listener in &dropped {

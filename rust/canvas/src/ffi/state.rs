@@ -7,6 +7,7 @@ use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::ContextHandle;
 use southstar_js_runtime::api::Page;
 
@@ -36,16 +37,11 @@ pub struct CanvasState {
     context_kind: Cell<i32>,
 }
 
-#[repr(C)]
-pub struct NsNode {
-    _private: [u8; 0],
-}
-
 #[derive(Clone, Copy)]
 pub(crate) struct Js(Option<Page>);
 
-#[derive(Clone, Copy)]
-pub(crate) struct Node(*const NsNode);
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct Node(Option<WeakNode>);
 
 impl Js {
     pub fn is_null(self) -> bool {
@@ -62,25 +58,31 @@ impl Js {
 }
 
 impl Node {
-    pub fn from_addr(addr: usize) -> Node {
-        Node(addr as *const NsNode)
+    pub const NONE: Node = Node(None);
+
+    pub fn of(node: Option<southstar_dom::Node<'_>>) -> Node {
+        Node(node.map(southstar_dom::Node::downgrade))
+    }
+
+    pub fn from_key(key: Option<WeakNode>) -> Node {
+        Node(key)
     }
 
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
-    pub fn addr(self) -> usize {
-        self.0 as usize
-    }
-
-    pub fn ptr(self) -> *const NsNode {
+    pub fn key(self) -> Option<WeakNode> {
         self.0
+    }
+
+    pub fn dom(self) -> Option<southstar_dom::Node<'static>> {
+        self.0.and_then(WeakNode::get)
     }
 }
 
 pub(crate) fn element_attr(el: Node, name: &str) -> Option<Vec<u8>> {
-    super::element_attr(el.addr(), name)
+    super::element_attr(el, name)
 }
 
 pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
@@ -244,12 +246,12 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> Option<Surface> {
     if el.is_null() {
         return None;
     }
-    if let Some(gl) = crate::links::webgl_canvas_surface(el.addr()) {
+    if let Some(gl) = crate::links::webgl_canvas_surface(el.key()) {
         return Some(Surface::of(gl));
     }
     #[cfg(feature = "webgpu")]
     {
-        if let Some(gpu) = crate::links::webgpu_canvas_surface(el.addr()) {
+        if let Some(gpu) = crate::links::webgpu_canvas_surface(el.key()) {
             return Some(Surface::of(gpu));
         }
     }
@@ -270,7 +272,7 @@ pub(crate) fn transfer_to_image_bitmap(
 ) -> Result<southstar_js_engine::Value, southstar_js_engine::Value> {
     use southstar_js_engine::Value;
     let js = js_of(scope);
-    let el = Node(crate::api::offscreen_node(this) as *const NsNode);
+    let el = crate::api::offscreen_node(this);
     if js.is_null() || el.is_null() {
         return Ok(Value::null());
     }
@@ -298,7 +300,7 @@ pub fn canvas_surface_for(
     js: Page,
     el: southstar_dom::Node<'_>,
 ) -> Option<southstar_cairo::Surface> {
-    canvas_surface(Js(Some(js)), Node(el.as_ptr().cast())).map(Surface::into_shared)
+    canvas_surface(Js(Some(js)), Node::of(Some(el))).map(Surface::into_shared)
 }
 
 fn teardown(js: Page) {

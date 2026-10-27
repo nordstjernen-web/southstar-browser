@@ -110,6 +110,14 @@ Southstar Browser 1.0.2:
   raw `NsJs` pointers and `usize` addresses. A GLib timer or idle callback
   that fires after its page was freed now gets no page instead of a stale
   pointer.
+* Video state is owned Rust (an `Rc` per video in a per-thread cache
+  registry, weak references from in-flight fetches) instead of raw cache
+  and video pointers, and DOM nodes remembered by frames, observers,
+  animation frames, scrollend, canvas, WebGL/WebGPU, listeners, image
+  loads and custom elements are `WeakNode`s instead of addresses, so a
+  reused node slot is never mistaken for a freed node. Paint draws upper
+  layers into contexts the browser hands it instead of through an
+  erased-lifetime callback.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

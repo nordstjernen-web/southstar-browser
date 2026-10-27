@@ -18,7 +18,7 @@ const INVALID_STATE_ERR: i32 = 11;
 struct Page {
     buffer: Option<Vec<u8>>,
     script: Option<WeakNode>,
-    last_written: Vec<(Option<WeakNode>, usize)>,
+    last_written: Vec<(Option<WeakNode>, WeakNode)>,
     parser_open: bool,
     dynamic_markup: i32,
 }
@@ -73,11 +73,11 @@ fn last_written(js: Js, script: Option<WeakNode>, parent: Element) -> Option<Ele
             .find(|(owner, _)| *owner == script)
             .map(|(_, node)| *node)
     })?;
-    southstar_dom::children(parent).find(|child| child.as_ptr() as usize == written)
+    southstar_dom::children(parent).find(|child| child.downgrade() == written)
 }
 
 fn note_written(js: Js, script: Option<WeakNode>, node: Element) {
-    let node = node.as_ptr() as usize;
+    let node = node.downgrade();
     with_page(js, |page| {
         match page
             .last_written

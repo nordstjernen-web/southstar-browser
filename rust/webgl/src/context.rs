@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
+use southstar_dom::WeakNode;
 use southstar_js_runtime::api::Page;
 
 use crate::consts::*;
@@ -59,7 +60,7 @@ pub(crate) struct State {
 pub(crate) struct WebGl {
     pub(crate) gl: GlContext,
     pub(crate) js: Option<Page>,
-    pub(crate) canvas: usize,
+    pub(crate) canvas: Option<WeakNode>,
     pub(crate) version: i32,
     pub(crate) attrs: Attributes,
     pub(crate) st: RefCell<State>,
@@ -104,7 +105,7 @@ fn parse_long(text: &[u8]) -> i64 {
     if negative { -value } else { value }
 }
 
-fn dim(canvas: usize, name: &core::ffi::CStr, default: i32) -> i32 {
+fn dim(canvas: Option<WeakNode>, name: &core::ffi::CStr, default: i32) -> i32 {
     let Some(text) = host::canvas_node(canvas).and_then(|n| n.attr(name)) else {
         return default;
     };
@@ -442,7 +443,7 @@ impl WebGl {
     pub(crate) fn make(
         gl: GlContext,
         js: Option<Page>,
-        canvas: usize,
+        canvas: Option<WeakNode>,
         version: i32,
         mut attrs: Attributes,
     ) -> Option<Rc<WebGl>> {

@@ -4,6 +4,7 @@
 
 use std::rc::Rc;
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 use southstar_js_runtime::api::Page;
 
@@ -589,7 +590,7 @@ fn attribute(s: &mut Scope<'_>, attrs: &Value, name: &str, default: bool) -> boo
 pub(crate) fn new_context(
     s: &mut Scope<'_>,
     js: Option<Page>,
-    canvas: usize,
+    canvas: Option<WeakNode>,
     version: i32,
     attrs: &Value,
 ) -> Option<(Rc<WebGl>, Value)> {

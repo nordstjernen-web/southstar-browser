@@ -446,7 +446,7 @@ pub(crate) fn has_own_unprefixed(js: Js, scope: &mut Scope<'_>, cur: Element, ba
             return true;
         }
     }
-    let key = cur.as_ptr() as usize;
+    let key = cur.downgrade();
     crate::peek(js, |page| {
         page.listeners.get(&key).is_some_and(|own| {
             own.iter()

@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::host::{Surface, canvas_attr, internal_error};
@@ -22,7 +23,7 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) struct Ctx {
     id: u64,
-    canvas: usize,
+    canvas: Option<WeakNode>,
     target: Option<Texture>,
     surf: Option<Surface>,
     device: Option<Device>,
@@ -37,7 +38,7 @@ pub(crate) struct Ctx {
 type Registered = (u64, Weak<RefCell<Ctx>>);
 
 thread_local! {
-    static BY_NODE: RefCell<HashMap<usize, Registered>> = RefCell::new(HashMap::new());
+    static BY_NODE: RefCell<HashMap<Option<WeakNode>, Registered>> = RefCell::new(HashMap::new());
 }
 
 impl Drop for Ctx {
@@ -112,7 +113,7 @@ fn parse_long(text: &[u8]) -> i64 {
     if negative { -value } else { value }
 }
 
-fn canvas_dim(canvas: usize, name: &CStr, default: i32) -> i32 {
+fn canvas_dim(canvas: Option<WeakNode>, name: &CStr, default: i32) -> i32 {
     let Some(text) = canvas_attr(canvas, name) else {
         return default;
     };
@@ -204,7 +205,11 @@ fn get_configuration(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResu
     Ok(o)
 }
 
-pub(crate) fn get_context(scope: &mut Scope<'_>, canvas_obj: &Value, canvas: usize) -> Value {
+pub(crate) fn get_context(
+    scope: &mut Scope<'_>,
+    canvas_obj: &Value,
+    canvas: Option<WeakNode>,
+) -> Value {
     if !crate::gpu::allowed() || !INSTALLED.load(Ordering::Relaxed) {
         return Value::null();
     }
@@ -233,7 +238,7 @@ pub(crate) fn get_context(scope: &mut Scope<'_>, canvas_obj: &Value, canvas: usi
     obj
 }
 
-fn registered(canvas: usize) -> Option<Rc<RefCell<Ctx>>> {
+fn registered(canvas: Option<WeakNode>) -> Option<Rc<RefCell<Ctx>>> {
     BY_NODE.with(|map| {
         map.borrow()
             .get(&canvas)
@@ -241,7 +246,7 @@ fn registered(canvas: usize) -> Option<Rc<RefCell<Ctx>>> {
     })
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+pub(crate) fn canvas_surface(canvas: Option<WeakNode>) -> Option<southstar_cairo::Surface> {
     let ctx = registered(canvas)?;
     let mut c = ctx.try_borrow_mut().ok()?;
     let c = &mut *c;

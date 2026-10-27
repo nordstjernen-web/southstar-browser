@@ -3,10 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_uint, c_void};
-use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::NsNode;
+use southstar_dom::{Node, WeakNode};
 use southstar_glib::GBoolean;
 
 use southstar_js_loader::{Schedule, ScriptTasks};
@@ -26,7 +25,7 @@ enum Phase {
 
 pub(crate) struct Lifecycle {
     source: c_uint,
-    doc: *mut NsNode,
+    doc: Option<WeakNode>,
     origin: Option<CString>,
     phase: Phase,
     start_us: i64,
@@ -36,7 +35,7 @@ impl Default for Lifecycle {
     fn default() -> Lifecycle {
         Lifecycle {
             source: 0,
-            doc: ptr::null_mut(),
+            doc: None,
             origin: None,
             phase: Phase::Interactive,
             start_us: 0,
@@ -64,7 +63,7 @@ pub(crate) fn teardown(js: Js, page: &Page) {
 
 pub(crate) fn start(
     js: Js,
-    doc: *mut NsNode,
+    doc: Node<'_>,
     tasks: ScriptTasks,
     origin: Option<&CStr>,
     start_us: i64,
@@ -77,7 +76,7 @@ pub(crate) fn start(
     js.set_lifecycle_tasks(Some(tasks));
     *page.lifecycle.borrow_mut() = Lifecycle {
         source: 0,
-        doc,
+        doc: Some(doc.downgrade()),
         origin: origin.map(CStr::to_owned),
         phase: Phase::Interactive,
         start_us,
@@ -102,7 +101,7 @@ fn load_blocked(js: Js) -> bool {
     js.eval_depth() > 0 || js.iframe_load_depth() > 0 || js.in_pump() || js.load_blocked()
 }
 
-fn complete(js: Js, page: &Page, doc: *mut NsNode) {
+fn complete(js: Js, page: &Page, doc: Option<Node<'_>>) {
     js.mark_navigation("domComplete");
     js.set_ready_state(2);
     js.scope(|scope| scope.gc());
@@ -135,10 +134,11 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
         let lifecycle = page.lifecycle.borrow();
         (lifecycle.doc, lifecycle.origin.clone(), lifecycle.phase)
     };
-    if js.halted() || doc.is_null() || !js.has_lifecycle_tasks() {
+    if js.halted() || doc.is_none() || !js.has_lifecycle_tasks() {
         release(js, &page);
         return SOURCE_REMOVE;
     }
+    let doc = doc.and_then(WeakNode::get);
     if js.eval_depth() > 0 || js.callback_depth() > 0 || js.in_pump() {
         let source = js.attach_timeout(BUSY_RETRY_MS, tick);
         page.lifecycle.borrow_mut().source = source;

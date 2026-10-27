@@ -131,11 +131,11 @@ fn indexed_lookup(
     }
     let js = js_of(scope);
     let (kind, key) = cache;
-    if let Some(cached) = page::qcache_get(js, root.as_ptr() as usize, kind, key) {
+    if let Some(cached) = page::qcache_get(js, Some(root.downgrade()), kind, key) {
         return cached;
     }
     let result = all_indexed(scope, list, root, doc, include_self);
-    page::qcache_put(js, root.as_ptr() as usize, kind, key, &result);
+    page::qcache_put(js, Some(root.downgrade()), kind, key, &result);
     result
 }
 

@@ -21,7 +21,7 @@ pub(crate) struct FrameRealm {
 }
 
 pub(crate) fn frame_of(node: Node<'_>) -> Frame {
-    Frame(node.as_ptr() as usize)
+    Frame(node.downgrade())
 }
 
 fn text_or_undefined(ctx: Ctx, text: Option<&[u8]>) -> Value {

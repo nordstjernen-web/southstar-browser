@@ -2,9 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
-
-use core::ptr;
+use core::ffi::CStr;
 use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
@@ -15,7 +13,7 @@ use southstar_layout::{BoxRef, InlineAttr, NsBox};
 use southstar_selection::NsSelection;
 use southstar_style::StyleRef;
 
-use crate::document::{self, DocLayers, LayerPlan};
+use crate::document::{self, LayerPlan};
 use crate::text_layout::{AttrList, Attribute, Context, Layout};
 use crate::walk::VpCapture;
 use crate::{inline, marker, state, text, three_d};
@@ -33,27 +31,15 @@ pub fn plan_layers(cr: ContextRef, root: BoxRef<'_>, plan: &mut LayerPlan) {
     document::plan_layers(cr, Some(root), plan);
 }
 
-type Upper<'u> = &'u mut dyn FnMut(i32) -> Option<ContextRef<'u>>;
-
-unsafe extern "C" fn upper_trampoline(index: i32, data: *mut c_void) -> *mut c_void {
-    // SAFETY: doc_layers passes a pointer to its own Upper closure reference, which outlives the walk that calls back.
-    let upper = unsafe { &mut *data.cast::<Upper<'_>>() };
-    upper(index).map_or(ptr::null_mut(), |cr| cr.as_raw())
-}
-
 pub fn doc_layers(
     cr: ContextRef,
-    mut upper: Upper<'_>,
+    upper: &[Option<ContextRef<'_>>],
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
     sel: Option<&NsSelection>,
     plan: &LayerPlan,
-) -> bool {
-    let up = DocLayers {
-        upper: Some(upper_trampoline),
-        upper_data: (&raw mut upper).cast(),
-    };
-    document::doc_layers(cr, up, root, highlight, sel, plan)
+) -> (bool, Vec<bool>) {
+    document::doc_layers(cr, upper, root, highlight, sel, plan)
 }
 
 pub fn vp_layer(
