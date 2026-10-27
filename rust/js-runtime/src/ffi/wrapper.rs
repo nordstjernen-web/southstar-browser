@@ -68,7 +68,7 @@ impl Drop for ElementData {
 }
 
 fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
+    super::record::node(p)
 }
 
 pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {

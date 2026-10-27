@@ -154,7 +154,7 @@ fn frame_url_leave(js: Js, fu: &mut FrameUrl) {
 }
 
 pub(crate) fn top_document(doc: *mut NsNode) -> *mut NsNode {
-    let mut current = unsafe { Node::from_ptr(doc) };
+    let mut current = super::record::node(doc);
     while let Some(node) = current {
         let Some(mut parent) = node.parent() else {
             break;

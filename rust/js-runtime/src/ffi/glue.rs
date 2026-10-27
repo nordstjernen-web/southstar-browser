@@ -229,7 +229,7 @@ pub(crate) fn unwrap_element(value: &Value) -> *const NsNode {
 }
 
 pub(crate) fn is_detached_document(doc: *const NsNode) -> bool {
-    let Some(node) = (unsafe { southstar_dom::Node::from_ptr(doc) }) else {
+    let Some(node) = super::record::node(doc) else {
         return false;
     };
     node.kind() != southstar_dom::Kind::Document || node.flags() & NODE_FRAGMENT != 0
