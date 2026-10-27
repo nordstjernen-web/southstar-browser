@@ -105,10 +105,16 @@ socket, so it normally needs no `/dev/shm` name at all.
   `/dev/urandom`, the X11 / Wayland sockets, the `$XAUTHORITY` file
   itself, and the XDG config, data and cache directories (`~/.config`,
   `~/.local/share`, `~/.cache`). Read+write access to
-  `~/.config/southstar`, `~/.local/share/southstar`,
+  `~/.config/southstar/cookies`, `~/.local/share/southstar`,
   `~/.cache/southstar`, and `southstar/` inside the GLib runtime
   directory (`$XDG_RUNTIME_DIR/southstar`), where the renderer writes
-  page exports and print sheets for the shell. The renderer gets nothing
+  page exports and print sheets for the shell. The rest of
+  `~/.config/southstar` — `southstar.conf`, `bookmarks.txt`,
+  `safebrowsing.list` — is read-only for the renderer: only the shell
+  writes the configuration, so a compromised renderer cannot turn on
+  WebGL (which widens every later renderer's sandbox to the GPU device
+  nodes), set a proxy or change the home page for the rest of the
+  browser. The renderer gets nothing
   else in the runtime directory — not the D-Bus and systemd sockets there —
   no `$XAUTHORITY`, no `/dev/snd` (audio plays in the separate helper) and
   no Downloads directory; those rules belong to the shell's wider ruleset
