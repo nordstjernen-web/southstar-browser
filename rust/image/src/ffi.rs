@@ -914,25 +914,24 @@ fn image_fetched(pending: Rc<Pending>, outcome: southstar_net::Outcome) {
         Err(message) => return finish_failed(&pending, &message),
     };
     let mut next = Fetched::Done;
-    pending.img.write(|img| {
-        record_response(img, &response);
-        let body = response.body().filter(|b| !b.is_empty());
-        if let Some(error) = response.error() {
-            set_error(img, error.to_bytes());
-        } else if response.status() >= 400 {
-            set_error(img, format!("HTTP {}", response.status()).as_bytes());
-        } else if let Some(body) = body {
-            let content_type = response.content_type().map(CStr::to_bytes);
-            if southstar_config::get().is_some_and(|c| c.async_image_decode != 0) {
-                next = Fetched::Decode(body.to_vec(), content_type.unwrap_or_default().to_vec());
-                return;
-            }
-            let decoded = decode_body(body);
-            apply_decoded_state(img, decoded, content_type, body.len());
+    let img = pending.img;
+    img.write(|img| record_response(img, &response));
+    let body = response.body().filter(|b| !b.is_empty());
+    if let Some(error) = response.error() {
+        img.write(|img| set_error(img, error.to_bytes()));
+    } else if response.status() >= 400 {
+        img.write(|img| set_error(img, format!("HTTP {}", response.status()).as_bytes()));
+    } else if let Some(body) = body {
+        let content_type = response.content_type().map(CStr::to_bytes);
+        if southstar_config::get().is_some_and(|c| c.async_image_decode != 0) {
+            next = Fetched::Decode(body.to_vec(), content_type.unwrap_or_default().to_vec());
         } else {
-            set_error(img, b"empty response");
+            let decoded = decode_body(body);
+            img.write(|img| apply_decoded_state(img, decoded, content_type, body.len()));
         }
-    });
+    } else {
+        img.write(|img| set_error(img, b"empty response"));
+    }
     drop(response);
     match next {
         Fetched::Decode(body, content_type) => task::start(Box::new(DecodeJob {
