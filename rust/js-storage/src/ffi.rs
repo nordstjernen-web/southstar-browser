@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use southstar_dom::Node;
@@ -50,14 +51,6 @@ unsafe extern "C" {
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
-    fn g_file_set_contents(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        error: *mut *mut GError,
-    ) -> GBoolean;
     fn g_key_file_new() -> *mut GKeyFile;
     fn g_key_file_free(key_file: *mut GKeyFile);
     fn g_key_file_load_from_file(
@@ -204,11 +197,12 @@ pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {
     let data_dir = owned(unsafe { glib::g_get_user_data_dir() })?;
     let separator = std::path::MAIN_SEPARATOR;
     let dir = format!("{data_dir}{separator}southstar{separator}localstorage");
-    let dir_c = c_text(&dir);
-    unsafe {
-        g_mkdir_with_parents(dir_c.as_ptr(), 0o700);
-        g_chmod(dir_c.as_ptr(), 0o700);
-    }
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    let _ = builder.create(&dir);
+    restrict_mode(Path::new(&dir), 0o700);
     Some(format!("{dir}{separator}{hash}.ini"))
 }
 
@@ -284,31 +278,46 @@ fn write_snapshot(snapshot: &Snapshot) {
     let Some(data) = (unsafe { GStr::take(data) }) else {
         return;
     };
-    let path = c_text(&snapshot.path);
-    let mut error: *mut GError = ptr::null_mut();
-    let written = unsafe {
-        g_file_set_contents(
-            path.as_ptr(),
-            data.as_ptr(),
-            isize::try_from(len).unwrap_or(isize::MAX),
-            &mut error,
-        )
-    };
-    if written == 0 {
-        let reason = if error.is_null() {
-            String::new()
-        } else {
-            let reason = owned(unsafe { (*error).message }).unwrap_or_default();
-            unsafe { glib::g_error_free(error) };
-            reason
-        };
+    let path = Path::new(&snapshot.path);
+    let contents = &data.to_bytes()[..len.min(data.to_bytes().len())];
+    if let Err(reason) = replace_file(path, contents) {
         warn(&format!(
             "local storage: failed to write {}: {reason}",
             snapshot.path
         ));
     }
-    unsafe { g_chmod(path.as_ptr(), 0o600) };
+    restrict_mode(path, 0o600);
 }
+
+fn replace_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(format!(".{}.tmp", std::process::id()));
+    let temp = PathBuf::from(temp_name);
+    let written = write_synced(&temp, contents).and_then(|()| std::fs::rename(&temp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    written
+}
+
+fn write_synced(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(path)?;
+    std::io::Write::write_all(&mut file, contents)?;
+    file.sync_all()
+}
+
+#[cfg(unix)]
+fn restrict_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+}
+
+#[cfg(not(unix))]
+fn restrict_mode(_path: &Path, _mode: u32) {}
 
 pub(crate) fn cancel_flush(page: &Page) {
     let source = page.flush_source.replace(0);

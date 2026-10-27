@@ -8,7 +8,6 @@ use std::ffi::CString;
 use southstar_dom::{self as dom, Node};
 
 unsafe extern "C" {
-    fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn atol(s: *const c_char) -> c_long;
     fn atoi(s: *const c_char) -> c_int;
 }
@@ -116,7 +115,8 @@ pub fn is_contenteditable_host(n: Node) -> bool {
 
 pub fn utf8_strlen(s: &[u8]) -> c_long {
     let c = cstring(s);
-    unsafe { g_utf8_strlen(c.as_ptr(), c.as_bytes().len() as isize) }
+    let chars = c.as_bytes().iter().filter(|&&b| b & 0xc0 != 0x80).count();
+    c_long::try_from(chars).unwrap_or(c_long::MAX)
 }
 
 pub fn c_atol(s: &CStr) -> c_long {

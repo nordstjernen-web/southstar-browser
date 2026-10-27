@@ -7,7 +7,6 @@ use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{Kind, Node, NsNode, WeakNode};
-use southstar_glib::{self as glib};
 use southstar_js_engine::{
     Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
     Scope, SetFlags, Trace, Value,
@@ -333,12 +332,10 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     {
         imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
-    if let Some(js) = js {
-        let pinned = unsafe { *js.st().slots.pinned_wrappers_set };
-        if !pinned.is_null() {
-            scope.retain_identity(&obj);
-            unsafe { glib::g_hash_table_add(pinned, n.as_mut_ptr().cast()) };
-        }
+    if let Some(js) = js
+        && super::record::pin_wrapper(js.ptr(), n.as_ptr())
+    {
+        scope.retain_identity(&obj);
     }
     Ok(obj)
 }
@@ -361,11 +358,7 @@ fn invalidate_wrapper(target: Node<'static>) {
         target.set_js_wrapper(ptr::null_mut());
         if let Some(page) = Js::of(js) {
             let ctx = page.ctx();
-            let pinned = unsafe { *page.st().slots.pinned_wrappers_set };
-            if !ctx.is_null()
-                && !pinned.is_null()
-                && unsafe { glib::g_hash_table_remove(pinned, n.cast()) } != 0
-            {
+            if !ctx.is_null() && super::record::unpin_wrapper(page.ptr(), n) {
                 ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
             }
         }

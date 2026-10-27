@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use southstar_dom::{Kind, Node, NsNode};
@@ -13,10 +13,6 @@ use super::Js;
 use crate::budget;
 
 const FRAME_URL_ATTR: &CStr = c"data-nd-frame-url";
-
-unsafe extern "C" {
-    fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
-}
 
 #[repr(C)]
 pub(crate) struct FrameUrl {
@@ -290,7 +286,7 @@ pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
     let current = js.current_url_raw();
     if !scope.entered_url.is_null()
         && !scope.prev_slot.is_null()
-        && unsafe { g_strcmp0(current, scope.entered_url) } != 0
+        && super::glue::text(current) != super::glue::text(scope.entered_url)
     {
         unsafe {
             glib::g_free((*scope.prev_slot).cast());
@@ -421,14 +417,10 @@ pub(crate) fn frame_load_end(js: Js, scope: &mut FrameLoadScope) {
 }
 
 pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameUrl>> {
-    let url = realm_url(js, realm);
-    if url.is_null() || unsafe { *url } == 0 {
-        return None;
-    }
-    let copy = unsafe { glib::g_strdup(url) };
-    let token = frame_url_begin(js, copy);
-    unsafe { glib::g_free(copy.cast()) };
-    Some(token)
+    let url = super::glue::text(realm_url(js, realm))
+        .filter(|url| !url.is_empty())?
+        .to_owned();
+    Some(frame_url_begin(js, url.as_ptr()))
 }
 
 pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> Box<TimerScope> {

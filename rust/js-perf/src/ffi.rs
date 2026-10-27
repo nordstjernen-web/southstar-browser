@@ -80,7 +80,6 @@ const _: () = assert!(
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn g_get_real_time() -> i64;
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -101,7 +100,12 @@ pub(crate) fn monotonic_us() -> i64 {
 }
 
 pub(crate) fn real_us() -> i64 {
-    unsafe { g_get_real_time() }
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or_else(
+            |before| -i64::try_from(before.duration().as_micros()).unwrap_or(i64::MAX),
+            |after| i64::try_from(after.as_micros()).unwrap_or(i64::MAX),
+        )
 }
 
 pub(crate) fn page_time_origin_us(js: Js) -> i64 {

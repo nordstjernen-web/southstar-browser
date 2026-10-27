@@ -19,15 +19,11 @@ unsafe extern "C" {
     #[cfg(target_os = "linux")]
     fn g_printerr(format: *const c_char, ...);
     #[cfg(target_os = "linux")]
-    fn g_strerror(errnum: c_int) -> *const c_char;
-    #[cfg(target_os = "linux")]
     fn g_get_home_dir() -> *const c_char;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn g_get_user_runtime_dir() -> *const c_char;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn g_get_user_special_dir(directory: c_int) -> *const c_char;
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
 }
 
 fn log(level: c_int, message: &str) {
@@ -46,13 +42,15 @@ fn info(message: &str) {
 
 #[cfg(target_os = "linux")]
 fn strerror(errnum: c_int) -> String {
-    unsafe { CStr::from_ptr(g_strerror(errnum)) }
-        .to_string_lossy()
-        .into_owned()
+    let message = std::io::Error::from_raw_os_error(errnum).to_string();
+    match message.rsplit_once(" (os error ") {
+        Some((detail, _)) => detail.to_owned(),
+        None => message,
+    }
 }
 
-fn getenv(name: &CStr) -> Option<&'static [u8]> {
-    unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }
+fn getenv(name: &CStr) -> Option<Vec<u8>> {
+    glib::env_bytes(name.to_str().ok()?)
 }
 
 fn env_flag(name: &CStr) -> bool {
@@ -116,25 +114,70 @@ fn glib_dir(get: unsafe extern "C" fn() -> *const c_char) -> Option<Vec<u8>> {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
-    let owned: Vec<CString> = parts
+    let mut result = Vec::new();
+    let mut have_leading = false;
+    let mut is_first = true;
+    let mut single = None;
+    let mut trailing: &[u8] = &[];
+    for element in parts
         .iter()
-        .map(|part| CString::new(*part).unwrap_or_default())
-        .collect();
-    let mut pointers: Vec<*mut c_char> =
-        owned.iter().map(|part| part.as_ptr().cast_mut()).collect();
-    pointers.push(ptr::null_mut());
-    unsafe {
-        let joined = glib::g_build_filenamev(pointers.as_mut_ptr());
-        let bytes = CStr::from_ptr(joined).to_bytes().to_vec();
-        glib::g_free(joined.cast());
-        bytes
+        .copied()
+        .filter(|e| !e.is_empty() && !e.contains(&0))
+    {
+        let start = element.iter().take_while(|&&b| b == b'/').count();
+        let end = element[start..]
+            .iter()
+            .rposition(|&b| b != b'/')
+            .map_or(start, |last| start + last + 1);
+        let last_trailing = element[..end]
+            .iter()
+            .rposition(|&b| b != b'/')
+            .map_or(0, |last| last + 1);
+        trailing = &element[last_trailing..];
+        if have_leading {
+            single = None;
+        } else {
+            if last_trailing <= start {
+                single = Some(element);
+            }
+            result.extend_from_slice(&element[..start]);
+            have_leading = true;
+        }
+        if end == start {
+            continue;
+        }
+        if !is_first {
+            result.push(b'/');
+        }
+        result.extend_from_slice(&element[start..end]);
+        is_first = false;
     }
+    if let Some(single) = single {
+        return single.to_vec();
+    }
+    result.extend_from_slice(trailing);
+    result
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn until_nul(bytes: &[u8]) -> &[u8] {
+    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn os_path(path: &[u8]) -> Option<&std::path::Path> {
+    use std::os::unix::ffi::OsStrExt;
+    (!path.contains(&0)).then(|| std::path::Path::new(std::ffi::OsStr::from_bytes(path)))
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn mkdir_with_parents(path: &[u8]) {
-    if let Ok(path) = CString::new(path) {
-        unsafe { g_mkdir_with_parents(path.as_ptr(), 0o700) };
+    use std::os::unix::fs::DirBuilderExt;
+    if let Some(path) = os_path(path) {
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path);
     }
 }
 
@@ -155,20 +198,27 @@ fn download_dir() -> Option<Vec<u8>> {
 
 #[cfg(target_os = "linux")]
 fn file_test(path: &[u8], test: glib::GFileTest) -> bool {
-    CString::new(path).is_ok_and(|path| unsafe { glib::g_file_test(path.as_ptr(), test) } != 0)
+    let Some(metadata) = os_path(path).map(std::fs::metadata) else {
+        return false;
+    };
+    let Ok(metadata) = metadata else {
+        return false;
+    };
+    (test & glib::FILE_TEST_EXISTS != 0)
+        || (test & glib::FILE_TEST_IS_REGULAR != 0 && metadata.is_file())
+        || (test & glib::FILE_TEST_IS_DIR != 0 && metadata.is_dir())
 }
 
 #[cfg(target_os = "linux")]
 fn dirname(path: &[u8]) -> Vec<u8> {
-    let Ok(path) = CString::new(path) else {
+    let path = until_nul(path);
+    let Some(mut base) = path.iter().rposition(|&b| b == b'/') else {
         return b".".to_vec();
     };
-    unsafe {
-        let dir = glib::g_path_get_dirname(path.as_ptr());
-        let bytes = CStr::from_ptr(dir).to_bytes().to_vec();
-        glib::g_free(dir.cast());
-        bytes
+    while base > 0 && path[base] == b'/' {
+        base -= 1;
     }
+    path[..=base].to_vec()
 }
 
 #[cfg(target_os = "linux")]
@@ -368,19 +418,19 @@ mod linux {
             rules.allow(fs_read | landlock::WRITE_FILE, b"/dev/snd");
         }
         if let Some(xauth) = getenv(c"XAUTHORITY").filter(|xauth| !renderer && !xauth.is_empty()) {
-            rules.allow(landlock::READ_FILE, xauth);
+            rules.allow(landlock::READ_FILE, &xauth);
         }
         for name in [c"CURL_CA_BUNDLE", c"SSL_CERT_FILE"] {
             if let Some(bundle) =
                 getenv(name).filter(|path| file_test(path, glib::FILE_TEST_IS_REGULAR))
             {
-                rules.allow(landlock::READ_FILE, bundle);
+                rules.allow(landlock::READ_FILE, &bundle);
             }
         }
         if let Some(dir) =
             getenv(c"SSL_CERT_DIR").filter(|path| file_test(path, glib::FILE_TEST_IS_DIR))
         {
-            rules.allow(fs_read, dir);
+            rules.allow(fs_read, &dir);
         }
 
         let home = glib_dir(super::g_get_home_dir);

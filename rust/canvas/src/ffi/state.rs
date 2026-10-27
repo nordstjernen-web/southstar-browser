@@ -2,11 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_double, c_int, c_void};
+use core::ffi::{c_double, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib as glib;
 use southstar_js_engine::ContextHandle;
 
 use super::cairo::{Cairo, Surface};
@@ -20,7 +19,7 @@ pub struct CanvasState {
     pub fill: [c_double; 4],
     pub stroke: [c_double; 4],
     pub line_width: c_double,
-    pub font: *mut c_char,
+    pub font: Vec<u8>,
     pub fill_pattern: *mut c_void,
     pub stroke_pattern: *mut c_void,
     pub shadow: [c_double; 4],
@@ -122,8 +121,8 @@ fn release_drawing(st: &mut CanvasState) {
         if !st.surf.is_null() {
             drop(Surface::from_raw(st.surf));
         }
-        glib::g_free(st.font.cast());
     }
+    st.font = Vec::new();
 }
 
 pub(crate) fn reset(st: *mut CanvasState, w: i32, h: i32) {
@@ -136,7 +135,7 @@ pub(crate) fn reset(st: *mut CanvasState, w: i32, h: i32) {
     st.fill = [0.0, 0.0, 0.0, 1.0];
     st.stroke = [0.0, 0.0, 0.0, 1.0];
     st.line_width = 1.0;
-    st.font = glib::strdup(b"10px sans-serif");
+    st.font = b"10px sans-serif".to_vec();
     st.shadow = [0.0; 4];
     st.shadow_blur = 0.0;
     st.shadow_ox = 0.0;
@@ -160,7 +159,7 @@ pub(crate) fn new_state(w: i32, h: i32) -> Box<CanvasState> {
         fill: [0.0; 4],
         stroke: [0.0; 4],
         line_width: 0.0,
-        font: ptr::null_mut(),
+        font: Vec::new(),
         fill_pattern: ptr::null_mut(),
         stroke_pattern: ptr::null_mut(),
         shadow: [0.0; 4],
@@ -281,8 +280,7 @@ pub(crate) fn clear_patterns(st: &mut CanvasState) {
 }
 
 pub(crate) fn set_font(st: &mut CanvasState, font: &[u8]) {
-    unsafe { glib::g_free(st.font.cast()) };
-    st.font = glib::strdup(font);
+    st.font = font[..font.iter().position(|&b| b == 0).unwrap_or(font.len())].to_vec();
 }
 
 fn teardown(js: *const NsJs) {

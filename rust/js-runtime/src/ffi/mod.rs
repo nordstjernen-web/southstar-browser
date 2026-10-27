@@ -14,7 +14,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
 use crate::worker;
@@ -114,7 +114,6 @@ unsafe extern "C" {
     fn g_source_remove(id: c_uint) -> GBoolean;
 
     fn g_get_monotonic_time() -> i64;
-    fn g_get_real_time() -> i64;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 }
 
@@ -204,10 +203,6 @@ impl Js {
 
     pub fn set_ce_main_doc(self, doc: *const NsNode) {
         unsafe { *self.st().slots.ce_main_doc = doc };
-    }
-
-    pub fn pinned_set(self) -> *mut GHashTable {
-        unsafe { *self.st().slots.pinned_wrappers_set }
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -355,18 +350,10 @@ impl Js {
     }
 
     pub fn take_pinned_wrappers(self) -> Vec<Element> {
-        let set = unsafe { record::pinned_wrappers(self.0) };
-        if set.is_null() {
-            return Vec::new();
-        }
-        let mut len: c_uint = 0;
-        let keys = unsafe { glib::g_hash_table_get_keys_as_array(set, &mut len) };
-        unsafe { glib::g_hash_table_remove_all(set) };
-        let nodes = (0..len as usize)
-            .filter_map(|i| unsafe { Node::from_ptr((*keys.add(i)).cast::<NsNode>()) })
-            .collect();
-        unsafe { glib::g_free(keys.cast()) };
-        nodes
+        record::take_pinned_wrappers(self.0)
+            .into_iter()
+            .filter_map(|key| unsafe { Node::from_ptr(key as *const NsNode) })
+            .collect()
     }
 
     pub fn detach_wrapper(self, node: Element, release: bool) {
@@ -644,15 +631,25 @@ pub(crate) fn monotonic_us() -> i64 {
 }
 
 pub(crate) fn real_time_us() -> i64 {
-    unsafe { g_get_real_time() }
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or_else(
+            |before| -i64::try_from(before.duration().as_micros()).unwrap_or(i64::MAX),
+            |after| i64::try_from(after.as_micros()).unwrap_or(i64::MAX),
+        )
 }
 
 pub(crate) fn warn(message: &str) {
-    let message = glib::strdup(message.as_bytes());
+    let message = glue::c_line(message.as_bytes());
+    // SAFETY: the format is "%s" and its one argument is a NUL-terminated string alive for the call.
     unsafe {
-        g_log(ptr::null(), LOG_LEVEL_WARNING, c"%s".as_ptr(), message);
-        glib::g_free(message.cast());
-    }
+        g_log(
+            ptr::null(),
+            LOG_LEVEL_WARNING,
+            c"%s".as_ptr(),
+            message.as_ptr(),
+        )
+    };
 }
 
 #[cfg(target_os = "macos")]

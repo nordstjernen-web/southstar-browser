@@ -21,12 +21,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn g_file_get_contents(
-        filename: *const c_char,
-        contents: *mut *mut c_char,
-        length: *mut usize,
-        error: *mut *mut c_void,
-    ) -> GBoolean;
     fn g_content_type_guess(
         filename: *const c_char,
         data: *const u8,
@@ -210,15 +204,7 @@ pub(crate) struct FileBytes {
 }
 
 pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
-    let mut contents: *mut c_char = ptr::null_mut();
-    let mut len: usize = 0;
-    let ok =
-        unsafe { g_file_get_contents(path.as_ptr(), &mut contents, &mut len, ptr::null_mut()) };
-    if ok == 0 || contents.is_null() {
-        return None;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts(contents.cast::<u8>(), len) }.to_vec();
-    unsafe { glib::g_free(contents.cast()) };
+    let bytes = southstar_glib::file_get_contents(path.to_bytes())?;
     let content_type = unsafe {
         g_content_type_guess(
             path.as_ptr(),

@@ -2,15 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 
 use southstar_csp::Csp;
 use southstar_dom::{Kind, Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{
     Attributes, ContextHandle, RuntimeHandle, RuntimeOptions, Scope, ScriptOptions, Value,
@@ -155,7 +155,7 @@ struct Record {
     raf_frame_ctx: *mut NsNode,
     pristine_promise: Value,
     layout_root: *const c_void,
-    pinned_wrappers_set: *mut GHashTable,
+    pinned_wrappers_set: RefCell<Option<HashSet<usize>>>,
     cookie_value: Option<CString>,
     cookie_version: Cell<u64>,
     cookie_buckets: Option<HashMap<CString, CString>>,
@@ -168,7 +168,7 @@ struct Record {
     time_origin_real_ms: f64,
     navigation_timing: Cell<NavigationTiming>,
     ce_main_doc: *const NsNode,
-    platform_globals: *mut GHashTable,
+    platform_globals: Option<Vec<Vec<u8>>>,
     protos: Option<DomProtos>,
     proto_document: Value,
     per_tag_protos: HashMap<Vec<u8>, Value>,
@@ -223,7 +223,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         raf_frame_ctx: ptr::null_mut(),
         pristine_promise: Value::undefined(),
         layout_root: ptr::null(),
-        pinned_wrappers_set: ptr::null_mut(),
+        pinned_wrappers_set: RefCell::new(None),
         cookie_value: None,
         cookie_version: Cell::new(0),
         cookie_buckets: None,
@@ -236,7 +236,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         time_origin_real_ms: 0.0,
         navigation_timing: Cell::new(NavigationTiming::starting_at(0, 0.0)),
         ce_main_doc: ptr::null(),
-        platform_globals: ptr::null_mut(),
+        platform_globals: None,
         protos: None,
         proto_document: Value::undefined(),
         per_tag_protos: HashMap::new(),
@@ -256,7 +256,6 @@ pub(crate) unsafe fn slots_of(js: *mut NsJs) -> Slots {
             raf_frame_ctx: &raw mut (*rec(js)).raf_frame_ctx,
             ce_main_doc: &raw mut (*rec(js)).ce_main_doc,
             halted: &raw mut (*rec(js)).halted,
-            pinned_wrappers_set: &raw mut (*rec(js)).pinned_wrappers_set,
         }
     }
 }
@@ -308,8 +307,7 @@ pub(crate) unsafe fn create_context(js: *mut NsJs) -> bool {
 
 pub(crate) unsafe fn init_tables(js: *mut NsJs, page: bool) {
     unsafe {
-        (*rec(js)).pinned_wrappers_set =
-            glib::g_hash_table_new(Some(glib::g_direct_hash), Some(glib::g_direct_equal));
+        (*rec(js)).pinned_wrappers_set = RefCell::new(Some(HashSet::new()));
         if page {
             (*rec(js)).frame_ctxs = Some(Vec::new());
             (*rec(js)).cookie_buckets = Some(HashMap::new());
@@ -322,8 +320,45 @@ pub(crate) unsafe fn set_partition_key(js: *mut NsJs, partition_key: *const c_ch
     unsafe { (*rec(js)).partition_key = key };
 }
 
-pub(crate) unsafe fn pinned_wrappers(js: *const NsJs) -> *mut GHashTable {
-    record(js).map_or(ptr::null_mut(), |js| js.pinned_wrappers_set)
+pub(crate) fn has_pinned_set(js: *const NsJs) -> bool {
+    record(js).is_some_and(|js| js.pinned_wrappers_set.borrow().is_some())
+}
+
+pub(crate) fn pin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
+    record(js).is_some_and(|js| {
+        js.pinned_wrappers_set
+            .borrow_mut()
+            .as_mut()
+            .map(|set| set.insert(n as usize))
+            .is_some()
+    })
+}
+
+pub(crate) fn unpin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
+    record(js).is_some_and(|js| {
+        js.pinned_wrappers_set
+            .borrow_mut()
+            .as_mut()
+            .is_some_and(|set| set.remove(&(n as usize)))
+    })
+}
+
+pub(crate) fn take_pinned_wrappers(js: *const NsJs) -> Vec<usize> {
+    record(js).map_or_else(Vec::new, |js| {
+        js.pinned_wrappers_set
+            .borrow_mut()
+            .as_mut()
+            .map_or_else(Vec::new, |set| set.drain().collect())
+    })
+}
+
+fn pinned_wrapper_nodes(js: *const NsJs) -> Vec<usize> {
+    record(js).map_or_else(Vec::new, |js| {
+        js.pinned_wrappers_set
+            .borrow()
+            .as_ref()
+            .map_or_else(Vec::new, |set| set.iter().copied().collect())
+    })
 }
 
 pub(crate) unsafe fn set_proto_document(js: *mut NsJs, proto: Value) {
@@ -393,11 +428,7 @@ pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
 
 pub(crate) unsafe fn free_pinned_set(js: *mut NsJs) {
     unsafe {
-        let set = (*rec(js)).pinned_wrappers_set;
-        if !set.is_null() {
-            glib::g_hash_table_destroy(set);
-            (*rec(js)).pinned_wrappers_set = ptr::null_mut();
-        }
+        (*rec(js)).pinned_wrappers_set = RefCell::new(None);
     }
 }
 
@@ -414,13 +445,7 @@ pub(crate) unsafe fn free_realm_values(js: *mut NsJs) {
 }
 
 pub(crate) unsafe fn free_platform_globals(js: *mut NsJs) {
-    unsafe {
-        let globals = (*rec(js)).platform_globals;
-        if !globals.is_null() {
-            glib::g_hash_table_destroy(globals);
-            (*rec(js)).platform_globals = ptr::null_mut();
-        }
-    }
+    unsafe { (*rec(js)).platform_globals = None };
 }
 
 pub(crate) unsafe fn free_partition(js: *mut NsJs) {
@@ -847,16 +872,16 @@ pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
         .find_map(|p| attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty()))
 }
 
-pub(crate) fn platform_globals(js: *mut NsJs) -> *mut GHashTable {
+pub(crate) fn platform_globals(js: *mut NsJs) -> Vec<Vec<u8>> {
     unsafe {
-        if (*rec(js)).platform_globals.is_null() {
+        if (*rec(js)).platform_globals.is_none() {
             let saved = (*rec(js)).ctx;
             (*rec(js)).ctx = main_context(&*rec(js));
             let globals = super::exports::snapshot_globals(super::Js(js));
             (*rec(js)).ctx = saved;
-            (*rec(js)).platform_globals = globals;
+            (*rec(js)).platform_globals = Some(globals);
         }
-        (*rec(js)).platform_globals
+        (*rec(js)).platform_globals.clone().unwrap_or_default()
     }
 }
 
@@ -864,14 +889,7 @@ pub(crate) fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
     if js.is_null() {
         return Vec::new();
     }
-    let table = platform_globals(js.cast_mut());
-    if table.is_null() {
-        return Vec::new();
-    }
-    // SAFETY: the table is the page's platform-globals set, alive until the page is freed, and its keys are strings it owns.
-    unsafe { glib::hash_table_entries(table) }
-        .filter_map(|(key, _)| super::glue::text(key.cast()).map(|name| name.to_bytes().to_vec()))
-        .collect()
+    platform_globals(js.cast_mut())
 }
 
 pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
@@ -944,18 +962,21 @@ pub(crate) fn node_wrapper(scope: &mut Scope<'_>, n: *const NsNode) -> Option<Va
 
 pub(crate) fn node_unpinned(js: *const NsJs, n: Node<'_>) -> bool {
     record(js).is_some_and(|js| {
-        !js.pinned_wrappers_set.is_null()
-            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.as_ptr().cast()) }
-                == 0
+        js.pinned_wrappers_set
+            .borrow()
+            .as_ref()
+            .is_some_and(|set| !set.contains(&(n.as_ptr() as usize)))
     })
 }
 
 pub(crate) fn wrapper_pinned(js: *const NsJs, n: Node<'_>) -> bool {
     record(js).is_some_and(|js| {
         n.has_js_wrapper()
-            && !js.pinned_wrappers_set.is_null()
-            && unsafe { glib::g_hash_table_contains(js.pinned_wrappers_set, n.as_ptr().cast()) }
-                != 0
+            && js
+                .pinned_wrappers_set
+                .borrow()
+                .as_ref()
+                .is_some_and(|set| set.contains(&(n.as_ptr() as usize)))
     })
 }
 
@@ -1059,15 +1080,8 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: AdoptedProtos) {
     let previous = unsafe { (*rec(js)).protos.replace(adopted) };
     let previous_document = unsafe { core::mem::replace(&mut (*rec(js)).proto_document, document) };
     drop((previous, previous_document));
-    let set = unsafe { (*rec(js)).pinned_wrappers_set };
-    if set.is_null() {
-        return;
-    }
-    let keys: Vec<*mut c_void> = unsafe { glib::hash_table_entries(set) }
-        .map(|(k, _)| k)
-        .collect();
-    for key in keys {
-        let Some(n) = node(key.cast()) else {
+    for key in pinned_wrapper_nodes(js) {
+        let Some(n) = node(key as *const NsNode) else {
             continue;
         };
         let wrapper = n.js_wrapper();
@@ -1145,10 +1159,8 @@ pub(crate) fn snapshot_platform_globals(js: *const NsJs) {
         return;
     }
     let js = js.cast_mut();
-    unsafe {
-        free_platform_globals(js);
-        (*rec(js)).platform_globals = super::exports::snapshot_globals(super::Js(js));
-    }
+    let globals = super::exports::snapshot_globals(super::Js(js));
+    unsafe { (*rec(js)).platform_globals = Some(globals) };
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {

@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 
 use super::imports;
@@ -318,8 +318,7 @@ pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
 }
 
 pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
-    let set = js.pinned_set();
-    if unsafe { glib::g_hash_table_remove(set, node.cast()) } != 0 {
+    if super::record::unpin_wrapper(js.ptr(), node) {
         unsafe { super::record::release_wrapper(js.ptr(), node) };
         return true;
     }
@@ -445,20 +444,13 @@ pub(crate) fn blob_bytes(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {
     imports::nsr_blob_bytes(scope, value)
 }
 
-pub(crate) fn names_table(names: Vec<Vec<u8>>) -> *mut GHashTable {
-    let table = unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            None,
-        )
-    };
-    for name in names {
-        let key = c_line(&name);
-        unsafe { glib::g_hash_table_add(table, glib::g_strdup(key.as_ptr()).cast()) };
-    }
-    table
+pub(crate) fn names_table(names: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
+    let mut seen = std::collections::HashSet::new();
+    names
+        .iter()
+        .map(|name| c_line(name).into_bytes())
+        .filter(|name| seen.insert(name.clone()))
+        .collect()
 }
 
 pub(crate) fn text<'a>(raw: *const c_char) -> Option<&'a CStr> {
