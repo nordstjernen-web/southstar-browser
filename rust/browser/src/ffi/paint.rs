@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::{Cell, OnceCell};
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
@@ -297,7 +297,6 @@ fn clear(pixels: &[Cell<u8>]) {
 
 struct DocTile<'t, 'a> {
     target: &'t TileTarget<'a>,
-    upper: Vec<OnceCell<Cairo>>,
 }
 
 impl DocTile<'_, '_> {
@@ -312,20 +311,10 @@ impl DocTile<'_, '_> {
         Cairo::for_data(pixels, t.width, t.height, t.stride, t.scale)
     }
 
-    fn upper(&self, index: c_int) -> Option<ContextRef<'_>> {
-        let i = index as usize;
-        if let Some(cr) = self.upper[i].get() {
-            return Some(cr.cr());
-        }
-        let buf = self.target.bufs[i + 1];
-        clear(buf);
-        let cr = self.for_buffer(buf);
-        if let Some(cr) = &cr {
-            self.transform(cr);
-        }
-        self.target.used[i].set(glib::boolean(cr.is_some()));
-        let cr = cr?;
-        Some(self.upper[i].get_or_init(|| cr).cr())
+    fn upper(&self, index: usize) -> Option<Cairo> {
+        let cr = self.for_buffer(self.target.bufs[index + 1])?;
+        self.transform(&cr);
+        Some(cr)
     }
 }
 
@@ -349,10 +338,7 @@ pub fn render_doc_tile(
     end: impl Fn(),
 ) -> c_int {
     let n_upper = plan.viewport_layers();
-    let tile = DocTile {
-        target,
-        upper: (0..n_upper.max(1)).map(|_| OnceCell::new()).collect(),
-    };
+    let tile = DocTile { target };
     for used in &target.used[..n_upper] {
         used.set(0);
     }
@@ -363,22 +349,29 @@ pub fn render_doc_tile(
     begin();
     let query = b.search_query.get();
     let sel = b.selection_if_range();
-    let ok = southstar_paint::doc_layers(
+    let upper: Vec<Option<Cairo>> = (0..n_upper).map(|index| tile.upper(index)).collect();
+    let upper_refs: Vec<Option<ContextRef<'_>>> =
+        upper.iter().map(|cr| cr.as_ref().map(Cairo::cr)).collect();
+    let (ok, used) = southstar_paint::doc_layers(
         cr.cr(),
-        &mut |index| tile.upper(index),
+        &upper_refs,
         layout,
         query.as_deref(),
         sel.as_ref(),
         plan,
     );
     end();
-    for upper in tile
-        .upper
-        .into_iter()
-        .take(n_upper)
-        .filter_map(OnceCell::into_inner)
-    {
-        drop(upper.finish());
+    drop(upper_refs);
+    for ((upper, used), flag) in upper.into_iter().zip(used).zip(&target.used[..n_upper]) {
+        let Some(upper) = upper else {
+            continue;
+        };
+        if used {
+            flag.set(glib::boolean(true));
+            drop(upper.finish());
+        } else {
+            upper.destroy();
+        }
     }
     drop(cr.finish());
     if ok { 0 } else { -2 }
