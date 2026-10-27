@@ -624,7 +624,9 @@ pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
 
     message("ns_watchdog: supervising browser");
 
+    // SAFETY: `sup` points at the supervisor allocated above, which lives until this function frees it below.
     if unsafe { (*sup).spawn(false) } {
+        // SAFETY: as above, and its main loop is not unreffed until after the loop returns.
         unsafe { g_main_loop_run((*sup).main_loop) };
     }
 
@@ -635,13 +637,16 @@ pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
     let sup = unsafe { Box::from_raw(sup) };
     for id in [sup.watch_id, sup.respawn_id, sup.force_kill_id] {
         if id != 0 {
+            // SAFETY: `id` is a source this supervisor attached and has not removed.
             unsafe { g_source_remove(id) };
         }
     }
     if sup.have_pid {
         os::kill_child(sup.pid, true);
+        // SAFETY: `pid` is the child this supervisor spawned and has not closed.
         unsafe { g_spawn_close_pid(sup.pid) };
     }
+    // SAFETY: drops the main loop reference created at startup; nothing uses it afterwards.
     unsafe { g_main_loop_unref(sup.main_loop) };
     if let Some(session) = glib::path_from_bytes(&session) {
         let _ = std::fs::remove_file(session);

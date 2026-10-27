@@ -111,10 +111,12 @@ pub fn url_host(url: &[u8]) -> Option<Vec<u8>> {
 
 pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     let lower = c(&host.to_ascii_lowercase());
+    // SAFETY: takes no arguments and returns libpsl's built-in list or null.
     let psl = unsafe { psl_builtin() };
     if psl.is_null() {
         return None;
     }
+    // SAFETY: `psl` is the built-in list and `lower` a NUL-terminated string that outlives the call.
     borrowed(unsafe { psl_registrable_domain(psl, lower.as_ptr()) })
 }
 
