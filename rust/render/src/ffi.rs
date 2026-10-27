@@ -562,8 +562,7 @@ pub fn page_rule() -> Option<PageRule> {
     *lock(&PAGE_RULE)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_render_relayout_profile(
+pub unsafe fn ns_render_relayout_profile(
     c: *const RenderCtx,
     out_layout: *mut *mut NsBox,
     profile: *mut RenderProfile,
@@ -578,8 +577,7 @@ pub unsafe extern "C" fn ns_render_relayout_profile(
     relayout(c, out_layout, unsafe { profile.as_mut() })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_render_relayout(
+pub unsafe fn ns_render_relayout(
     c: *const RenderCtx,
     out_layout: *mut *mut NsBox,
 ) -> *mut GHashTable {

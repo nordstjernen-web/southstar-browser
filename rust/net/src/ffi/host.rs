@@ -36,8 +36,6 @@ unsafe extern "C" {
     fn atoi(text: *const c_char) -> c_int;
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
-    fn ns_net_cookies_clear();
-    fn ns_net_site_storage_clear();
     fn cairo_version_string() -> *const c_char;
     fn sqlite3_libversion() -> *const c_char;
     fn WebPGetDecoderVersion() -> c_int;
@@ -214,10 +212,8 @@ pub fn history_page() -> Vec<u8> {
 pub fn clear_browsing_data() {
     southstar_history::clear();
     southstar_http_cache::clear();
-    unsafe {
-        ns_net_cookies_clear();
-        ns_net_site_storage_clear();
-    }
+    crate::storage::clear_cookies();
+    crate::storage::clear_site_storage();
 }
 
 pub struct Versions {

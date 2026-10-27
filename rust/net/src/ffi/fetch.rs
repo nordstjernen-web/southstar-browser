@@ -1031,8 +1031,7 @@ pub unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
     lines
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char {
+pub fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char {
     FetchDest::from_raw(dest).map_or(ptr::null(), |dest| dest.raw_accept_lines().0.as_ptr())
 }
 

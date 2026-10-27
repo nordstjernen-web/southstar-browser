@@ -77,17 +77,6 @@ unsafe extern "C" {
     fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_unref(array: *mut GByteArray);
-    fn ns_net_request_blocking(
-        url: *const c_char,
-        top_url: *const c_char,
-        method: *const c_char,
-        body: *const c_void,
-        body_len: usize,
-        content_type: *const c_char,
-        extra_headers: *const *const c_char,
-        cancellable: *mut c_void,
-        error: *mut *mut GError,
-    ) -> *mut NsResponse;
 }
 
 struct ByteArraySink(*mut GByteArray);
@@ -127,8 +116,7 @@ pub fn decode_data_url(url: &[u8], budget: u64) -> Option<Vec<u8>> {
     Some(sink.0)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_synthesize_data_response(
+pub unsafe fn ns_net_synthesize_data_response(
     url: *const c_char,
     resp: *mut NsResponse,
 ) -> GBoolean {
@@ -160,8 +148,7 @@ pub fn set_allow_file_urls(allow: bool) {
     file::ALLOW_FILE_URLS.store(allow, Ordering::Relaxed);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_synthesize_file_response(
+pub unsafe fn ns_net_synthesize_file_response(
     url: *const c_char,
     top_url: *const c_char,
     resp: *mut NsResponse,
@@ -186,8 +173,7 @@ pub unsafe extern "C" fn ns_net_synthesize_file_response(
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_finish_ftp_response(resp: *mut NsResponse) {
+pub unsafe fn ns_net_finish_ftp_response(resp: *mut NsResponse) {
     let Some(resp) = (unsafe { resp.as_mut() }) else {
         return;
     };
@@ -215,8 +201,7 @@ pub unsafe extern "C" fn ns_net_finish_ftp_response(resp: *mut NsResponse) {
     resp.content_type = glib::strdup(&mime);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_synthesize_about_response(
+pub unsafe fn ns_net_synthesize_about_response(
     url: *const c_char,
     top_url: *const c_char,
     method: *const c_char,
@@ -240,8 +225,7 @@ pub unsafe extern "C" fn ns_net_synthesize_about_response(
     1
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_synthesize_view_source_response(
+pub unsafe fn ns_net_synthesize_view_source_response(
     url: *const c_char,
     top_url: *const c_char,
     cancellable: *mut c_void,
@@ -262,7 +246,7 @@ pub unsafe extern "C" fn ns_net_synthesize_view_source_response(
     let inner_ptr = unsafe { url.add(view_source::PREFIX.len()) };
     let mut err: *mut GError = ptr::null_mut();
     let fetched = unsafe {
-        ns_net_request_blocking(
+        self::queue::ns_net_request_blocking(
             inner_ptr,
             ptr::null(),
             c"GET".as_ptr(),
@@ -347,8 +331,7 @@ pub unsafe extern "C" fn ns_response_free(resp: *mut NsResponse) {
     unsafe { glib::g_free(resp.cast()) };
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_response_copy(src: *const NsResponse) -> *mut NsResponse {
+pub unsafe fn ns_response_copy(src: *const NsResponse) -> *mut NsResponse {
     if src.is_null() {
         return ptr::null_mut();
     }

@@ -26,13 +26,11 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_aborting() -> GBoolean {
+pub fn ns_net_aborting() -> GBoolean {
     glib::boolean(ABORTING.load(Ordering::SeqCst))
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_begin_abort() {
+pub fn ns_net_begin_abort() {
     ABORTING.store(true, Ordering::SeqCst);
 }
 
@@ -76,8 +74,7 @@ fn warm_rng() {
     *lock(&RNG_WARMUP) = thread.ok();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_join_rng() {
+pub fn ns_net_join_rng() {
     let thread = lock(&RNG_WARMUP).take();
     if let Some(thread) = thread {
         let _ = thread.join();
@@ -94,8 +91,7 @@ pub fn init() {
     storage::cookie_dir();
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_transport_shutdown() {
+pub fn ns_net_transport_shutdown() {
     ACCEPT_ENCODING.set(None);
     super::storage::ns_net_state_shutdown();
     CA_BUNDLE.set(None);
@@ -106,7 +102,6 @@ pub fn ca_bundle_path() -> Option<Vec<u8>> {
     CA_BUNDLE.get()
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_ec_curves() -> *const c_char {
+pub fn ns_net_ec_curves() -> *const c_char {
     c"X25519MLKEM768:X25519:P-256:P-384".as_ptr()
 }

@@ -34,8 +34,7 @@ pub fn proxy_override() -> Option<Vec<u8>> {
     OVERRIDE.get()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_pick_configured_proxy(url: *const c_char) -> *const c_char {
+pub unsafe fn ns_net_pick_configured_proxy(url: *const c_char) -> *const c_char {
     let forced = override_ptr();
     if unsafe { glib::bytes(forced) }.is_some_and(|f| !f.is_empty()) {
         return forced;
@@ -55,8 +54,7 @@ pub unsafe extern "C" fn ns_net_pick_configured_proxy(url: *const c_char) -> *co
         .unwrap_or(ptr::null())
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_configured_no_proxy() -> *const c_char {
+pub fn ns_net_configured_no_proxy() -> *const c_char {
     config()
         .and_then(|cfg| non_empty(cfg.no_proxy))
         .unwrap_or(ptr::null())

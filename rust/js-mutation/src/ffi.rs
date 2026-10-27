@@ -294,8 +294,7 @@ pub unsafe extern "C" fn ns_js_record_child_change(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_attr_recorded_len(
+pub unsafe fn ns_js_set_attr_recorded_len(
     js: *mut NsJs,
     n: *mut NsNode,
     name: *const c_char,

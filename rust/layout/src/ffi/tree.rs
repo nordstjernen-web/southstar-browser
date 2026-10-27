@@ -124,7 +124,6 @@ unsafe fn release(cur: *mut NsBox, stack: &mut Vec<*mut NsBox>) {
     }
 }
 
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_layout_link_clear(data: *mut c_void) {
     let r = data.cast::<LinkRange>();
     unsafe {
