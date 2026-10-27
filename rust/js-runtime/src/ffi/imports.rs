@@ -2,11 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::NsNode;
-use southstar_js_engine::{ContextHandle, Scope, Value};
-
-use super::NsJs;
-
 pub(crate) use crate::links::nsr_attr_cloneNode;
 pub(crate) use crate::links::nsr_attr_to_js;
 pub(crate) use crate::links::nsr_blob_bytes;
@@ -166,34 +161,3 @@ pub(crate) use crate::links::nsr_xhr_install_interface;
 pub(crate) use southstar_js_crypto::nsr_crypto_install_window;
 pub(crate) use southstar_js_crypto::nsr_crypto_install_window_subtle;
 pub(crate) use southstar_js_crypto::nsr_crypto_install_worker;
-
-unsafe extern "Rust" {
-    pub(crate) unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
-    pub(crate) unsafe fn nsr_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> bool;
-    pub(crate) unsafe fn nsr_js_report_uncaught(
-        js: *mut NsJs,
-        exception: &Value,
-        origin: Option<&str>,
-    );
-    pub(crate) unsafe fn nsr_target_report_exception(
-        js: *mut NsJs,
-        scope: &mut Scope<'_>,
-        kind: Option<&str>,
-        exception: &Value,
-    );
-    pub(crate) unsafe fn nsr_window_install_state(
-        js: *const NsJs,
-        scope: &mut Scope<'_>,
-        global: &Value,
-    );
-    pub(crate) unsafe fn nsr_realm_proto_for(
-        js: *mut NsJs,
-        realm: ContextHandle,
-        proto: &Value,
-    ) -> Value;
-}

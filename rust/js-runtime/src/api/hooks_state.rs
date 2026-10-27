@@ -3,9 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_void};
+use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_js_engine::Scope;
+use southstar_js_engine::{Scope, Value};
+use southstar_layout::BoxRef;
 
 use super::NsJs;
 use super::hooks_tree::hook_table;
@@ -63,6 +65,10 @@ pub struct WindowHooks {
     pub sync_metrics: PageFn,
     pub history_teardown: PageFn,
     pub links_clear: PageFn,
+    pub link_outward: fn(*const NsJs, &Value, &Value),
+    pub child_frame: fn(Node<'_>, u32, Option<&CStr>) -> Option<Node<'static>>,
+    pub fire_page_transition: fn(*const NsJs, &CStr, bool),
+    pub install_state: fn(*const NsJs, &mut Scope<'_>, &Value),
 }
 
 impl WindowHooks {
@@ -71,6 +77,10 @@ impl WindowHooks {
         sync_metrics: |_| {},
         history_teardown: |_| {},
         links_clear: |_| {},
+        link_outward: |_, _, _| {},
+        child_frame: |_, _, _| None,
+        fire_page_transition: |_, _, _| {},
+        install_state: |_, _, _| {},
     };
 }
 
@@ -97,11 +107,25 @@ hook_table!(ServicesHooks, SERVICES, set_services_hooks, services_hooks);
 pub type WorkerHostClosingFn = unsafe fn(*const c_void) -> bool;
 pub type WorkerLogFn = unsafe fn(*mut c_void, &CStr);
 
+pub struct ServiceWorkerController(pub Box<dyn core::any::Any>);
+
+pub struct ServiceWorkerFetch<'a> {
+    pub id: u32,
+    pub url: &'a str,
+    pub method: &'a str,
+    pub headers: &'a [String],
+    pub body: &'a [u8],
+}
+
 pub struct WorkersHooks {
     pub host_closing: WorkerHostClosingFn,
     pub log_line: WorkerLogFn,
     pub shape_global: fn(&mut Scope<'_>, bool),
     pub teardown: PageFn,
+    pub sw_controller_for: fn(*const NsJs, &str) -> Option<ServiceWorkerController>,
+    pub sw_post_fetch: fn(&ServiceWorkerController, &ServiceWorkerFetch<'_>),
+    pub host_base_url: fn(*const NsJs) -> Option<CString>,
+    pub pending: fn(*const NsJs) -> bool,
 }
 
 impl WorkersHooks {
@@ -110,6 +134,10 @@ impl WorkersHooks {
         log_line: |_, _| {},
         shape_global: |_, _| {},
         teardown: |_| {},
+        sw_controller_for: |_, _| None,
+        sw_post_fetch: |_, _| {},
+        host_base_url: |_| None,
+        pending: |_| false,
     };
 }
 
@@ -119,6 +147,10 @@ pub struct LifecycleHooks {
     pub raf_set_host_driven: PageFn,
     pub purge_frame_rafs: fn(*const NsJs, Node<'_>),
     pub teardown: PageFn,
+    pub idle_frame_end: fn(*const NsJs, i64, i64) -> i64,
+    pub purge_media_rafs: fn(*const NsJs, Node<'_>),
+    pub queue_scrollend: fn(*const NsJs, Node<'_>),
+    pub queue_scrollend_document: fn(*const NsJs),
 }
 
 impl LifecycleHooks {
@@ -126,6 +158,10 @@ impl LifecycleHooks {
         raf_set_host_driven: |_| {},
         purge_frame_rafs: |_, _| {},
         teardown: |_| {},
+        idle_frame_end: |_, _, end| end,
+        purge_media_rafs: |_, _| {},
+        queue_scrollend: |_, _| {},
+        queue_scrollend_document: |_| {},
     };
 }
 
@@ -163,11 +199,13 @@ hook_table!(PageStateHooks, CSSOM, set_cssom_hooks, cssom_hooks);
 
 pub struct GeometryHooks {
     pub forget_box_lookup: PageFn,
+    pub find_box_by_dom: for<'a, 'b> fn(BoxRef<'a>, Node<'b>) -> Option<BoxRef<'a>>,
 }
 
 impl GeometryHooks {
     const NONE: GeometryHooks = GeometryHooks {
         forget_box_lookup: |_| {},
+        find_box_by_dom: |_, _| None,
     };
 }
 

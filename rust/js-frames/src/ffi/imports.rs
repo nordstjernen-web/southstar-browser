@@ -2,11 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::NsNode;
-use southstar_js_engine::{Scope, Value};
-
-use super::NsJs;
-
 pub(crate) use crate::links::nsr_element_addEventListener;
 pub(crate) use crate::links::nsr_element_dispatchEvent;
 pub(crate) use crate::links::nsr_element_removeEventListener;
@@ -27,20 +22,3 @@ pub(crate) use southstar_js_services::nsr_services_set_interval;
 pub(crate) use southstar_js_services::nsr_services_set_timeout;
 pub(crate) use southstar_js_storage::nsr_storage_area_of;
 pub(crate) use southstar_js_storage::nsr_storage_new;
-
-unsafe extern "Rust" {
-    pub(crate) unsafe fn nsr_window_link_outward(
-        js: *const NsJs,
-        outward: &Value,
-        realm_window: &Value,
-    );
-    pub(crate) unsafe fn nsr_make_realm_document(
-        scope: &mut Scope<'_>,
-        doc_node: *mut NsNode,
-        url: Option<&[u8]>,
-        charset: Option<&[u8]>,
-        content_type: Option<&[u8]>,
-        is_xml: bool,
-        inert: bool,
-    ) -> Value;
-}

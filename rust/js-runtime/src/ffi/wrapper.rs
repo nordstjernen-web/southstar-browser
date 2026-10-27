@@ -297,7 +297,7 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
         _ => ContextHandle::NULL,
     };
     if !node_realm.is_null() && proto.is_object() {
-        return unsafe { imports::nsr_realm_proto_for(js_ptr, node_realm, &proto) };
+        return (crate::api::frames_hooks().realm_proto_for)(js_ptr, node_realm, &proto);
     }
     proto
 }

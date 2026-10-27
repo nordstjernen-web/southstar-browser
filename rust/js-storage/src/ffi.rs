@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean, GError, GStr};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -91,17 +91,6 @@ unsafe extern "C" {
     );
 }
 
-unsafe extern "Rust" {
-    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> Value;
-    unsafe fn nsr_js_fire_element_handlers(
-        js: *mut NsJs,
-        element: *const NsNode,
-        kind: &str,
-        event: &Value,
-    );
-}
-
 fn c_text(text: &str) -> CString {
     let bytes = text.as_bytes();
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -153,11 +142,11 @@ pub(crate) fn in_page_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) ->
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
-    unsafe { nsr_make_event(scope, kind, ptr::null()) }
+    southstar_js_runtime::events::make_event(scope, kind, None)
 }
 
 pub(crate) fn frame_realm_window(js: Js, frame: Node<'_>) -> Value {
-    unsafe { nsr_js_frame_realm_window(js.ptr(), frame.as_ptr()) }
+    (api::frames_hooks().frame_realm_window)(js.ptr(), frame)
 }
 
 pub(crate) fn inline_handlers_allowed(js: Js) -> bool {
@@ -171,7 +160,7 @@ pub(crate) fn fire_element_handlers(
     kind: &str,
     event: &Value,
 ) {
-    unsafe { nsr_js_fire_element_handlers(js.ptr(), element.as_ptr(), kind, event) };
+    southstar_js_runtime::events::fire_element_handlers(js.ptr(), element, kind, event);
 }
 
 pub(crate) fn dispatch_window_event(_scope: &mut Scope<'_>, js: Js, kind: &str, event: &Value) {

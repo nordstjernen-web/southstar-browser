@@ -4,12 +4,3 @@
 
 pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_form_elements_named_lookup;
-use southstar_dom::NsNode;
-use southstar_js_engine::{Scope, Value};
-
-unsafe extern "Rust" {
-    pub(crate) unsafe fn nsr_live_build_labels(
-        scope: &mut Scope<'_>,
-        n: *const NsNode,
-    ) -> Result<Value, Value>;
-}

@@ -2,11 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -20,23 +19,12 @@ pub(crate) struct Js(usize);
 use southstar_js_events::nsr_dom_exception;
 use southstar_js_events::nsr_event_adopt_interface;
 use southstar_js_events::nsr_event_define_source;
-use southstar_js_events::nsr_make_event;
-use southstar_js_forms::nsr_js_request_submit_form;
-use southstar_js_forms::nsr_js_reset_form;
 
 use southstar_js_services::nsr_services_set_timeout;
 
 fn c_string(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-fn node(ptr: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(ptr) }
-}
-
-fn text(text: *const c_char) -> Option<&'static CStr> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
 }
 
 impl Js {
@@ -191,7 +179,7 @@ pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &CStr, code: i32, messa
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {
     let kind = kind.to_string_lossy();
-    unsafe { nsr_make_event(scope, &kind, target.as_ptr()) }
+    southstar_js_events::make_event(scope, &kind, Some(target))
 }
 
 pub(crate) fn define_event_source(scope: &mut Scope<'_>, event: &Value, source: Value) {
@@ -209,10 +197,8 @@ pub(crate) fn set_timeout(scope: &mut Scope<'_>, callback: Value) -> JsResult<i3
 
 pub(crate) fn submit_or_reset(scope: &mut Scope<'_>, form: Element, submitter: Option<Element>) {
     match submitter {
-        Some(submitter) => unsafe {
-            nsr_js_request_submit_form(scope, form.as_ptr(), submitter.as_ptr())
-        },
-        None => unsafe { nsr_js_reset_form(scope, form.as_mut_ptr()) },
+        Some(submitter) => southstar_js_forms::request_submit_form(scope, form, Some(submitter)),
+        None => southstar_js_forms::reset_form(scope, form),
     }
 }
 
@@ -298,75 +284,37 @@ pub fn flush_autofocus(js: *const NsJs) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_popover_removing(js: *const NsJs, el: *mut NsNode) {
-    let (js, Some(el)) = (Js::of(js), node(el)) else {
-        return;
-    };
-    if !js.is_null() && el.is_element() {
+fn popover_removing(js: *const NsJs, el: Node<'_>) {
+    if let (Some(js), Some(el)) = (page(js), live(el))
+        && el.is_element()
+    {
         crate::popover::removing_steps(js, el);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dialog_close(
-    js: *const NsJs,
-    dialog: *mut NsNode,
-    return_value: *const c_char,
-) {
-    let (js, Some(dialog)) = (Js::of(js), node(dialog)) else {
-        return;
-    };
-    if !js.is_null() {
-        let rv = text(return_value).map(CStr::to_owned);
-        crate::dialog::close(js, dialog, rv.as_deref(), None);
+fn dialog_close(js: *const NsJs, dialog: Node<'_>, return_value: Option<&CStr>) {
+    if let (Some(js), Some(dialog)) = (page(js), live(dialog)) {
+        crate::dialog::close(js, dialog, return_value, None);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_activate_summary(js: *const NsJs, el: *const NsNode) -> GBoolean {
-    let js = Js::of(js);
-    if js.is_null() {
-        return glib::FALSE;
-    }
-    glib::boolean(crate::details::activate_summary(js, node(el)))
+fn summary_toggle_target(el: Node<'_>) -> Option<Node<'static>> {
+    crate::details::summary_toggle_target(live(el))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_summary_toggle_target(el: *const NsNode) -> *mut NsNode {
-    Node::ptr_or_null(crate::details::summary_toggle_target(node(el))).cast_mut()
+fn is_button(el: Node<'_>) -> bool {
+    crate::invoker::is_button(live(el))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_button(el: *const NsNode) -> GBoolean {
-    glib::boolean(crate::invoker::is_button(node(el)))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_button_activation(
-    js: *const NsJs,
-    button: *mut NsNode,
-    event_target: *const NsNode,
-) {
-    let (js, Some(button)) = (Js::of(js), node(button)) else {
-        return;
-    };
-    if !js.is_null() {
-        crate::invoker::button_activation(js, button, node(event_target));
+fn button_activation(js: *const NsJs, button: Node<'_>, event_target: Option<Node<'_>>) {
+    if let (Some(js), Some(button)) = (page(js), live(button)) {
+        crate::invoker::button_activation(js, button, event_target.and_then(live));
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_popover_target_activation(
-    js: *const NsJs,
-    el: *mut NsNode,
-    event_target: *const NsNode,
-) {
-    let (js, Some(el)) = (Js::of(js), node(el)) else {
-        return;
-    };
-    if !js.is_null() {
-        crate::invoker::popover_target_activation(js, el, node(event_target));
+fn popover_target_activation(js: *const NsJs, el: Node<'_>, event_target: Option<Node<'_>>) {
+    if let (Some(js), Some(el)) = (page(js), live(el)) {
+        crate::invoker::popover_target_activation(js, el, event_target.and_then(live));
     }
 }
 
@@ -393,5 +341,12 @@ pub fn install_runtime_hooks() {
         popover_attr_changed,
         forget_node,
         clear: clear_top_layer,
+        popover_removing,
+        dialog_close,
+        activate_summary,
+        summary_toggle_target,
+        is_button,
+        button_activation,
+        popover_target_activation,
     });
 }

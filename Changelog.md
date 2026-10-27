@@ -62,6 +62,16 @@ Southstar Browser 1.0.2:
   typed link tables installed before first use. paint, selection,
   layout-position and layout-query lose most or all of their unsafe code;
   southstar-ffi and static now forbid it.
+* The last internal C-ABI links between the JavaScript binding crates are
+  gone. Event creation, dispatch and error reporting go through a typed
+  table in js-runtime (`southstar_js_runtime::events`), and the remaining
+  calls (top layer, lifecycle, mutation records, window, workers, frames,
+  document, geometry, loader, forms) are fields of js-runtime's existing
+  hook tables taking `Node`, `&str` and `Option` instead of raw pointers,
+  C strings and out-parameters. The service worker controller crosses as
+  an owned handle instead of an unreferenced `Arc` pointer. No `ns_*`/`nsr_*`
+  symbol is imported between Southstar's own crates any more, and ten
+  binding crates now forbid unsafe code.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

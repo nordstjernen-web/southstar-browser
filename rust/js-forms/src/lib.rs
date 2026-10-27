@@ -31,8 +31,7 @@ use southstar_dom::{Kind, Node, children, serialize};
 use southstar_js_engine::{Scope, Value};
 
 pub use ffi::nsr_form_controls_snapshot;
-pub use ffi::nsr_js_request_submit_form;
-pub use ffi::nsr_js_reset_form;
+pub use ffi::{request_submit_form, reset_form};
 
 pub use ffi::nsr_submit_event_ctor;
 
@@ -170,6 +169,10 @@ pub(crate) fn parent_select(option: Element) -> Option<Element> {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_forms_hooks(southstar_js_runtime::api::FormsHooks {
+        reset_form: crate::ffi::reset_form,
+        listed_controls: crate::ffi::listed_controls,
+    });
     southstar_js_collections::links::set_js_forms_links(
         southstar_js_collections::links::JsFormsLinks {
             form_elements_named_lookup: crate::ffi::nsr_form_elements_named_lookup,

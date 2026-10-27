@@ -7,10 +7,10 @@ use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
-use southstar_js_runtime::api::{self, ResourceInfo as PerfInfo};
+use southstar_js_runtime::api::{self};
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::{Element, Load};
@@ -33,14 +33,7 @@ type GBoolean = c_int;
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_js_element_perf_info(js: *mut NsJs, el: *const NsNode, info: *mut PerfInfo);
     fn g_get_monotonic_time() -> i64;
-    fn ns_js_dispatch_resource_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-    ) -> GBoolean;
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
@@ -163,8 +156,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     if js.is_null() {
         return;
     }
-    let mut info = PerfInfo::default();
-    unsafe { ns_js_element_perf_info(js.0, node.as_ptr(), &mut info) };
+    let mut info = (api::loader_hooks().element_perf_info)(js.0, Some(node));
     if southstar_js_perf::has_resource_timing(js.0, info.timeline, url, Some(c"img")) {
         return;
     }
@@ -199,12 +191,12 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
-    unsafe { ns_js_dispatch_resource_event(js.0, node.as_ptr(), kind.as_ptr()) };
+    southstar_js_runtime::events::dispatch_resource_event(js.0, node, &kind.to_string_lossy());
 }
 
 pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
     let root = unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }?;
-    let b = unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), el.as_ptr())) }?;
+    let b = (api::geometry_hooks().find_box_by_dom)(root, el)?;
     unsafe { ImageRef::from_ptr(b.media()?.image()) }
 }
 

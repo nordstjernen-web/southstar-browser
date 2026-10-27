@@ -6,8 +6,7 @@ use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
@@ -32,19 +31,6 @@ impl Js {
 }
 
 unsafe extern "C" {
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_queue_scrollend(js: *mut NsJs, node: *const NsNode);
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
 
@@ -133,10 +119,8 @@ pub(crate) fn notify_scroll_to(js: Js, node: Element) {
 }
 
 pub(crate) fn dispatch_scroll(js: Js, node: Element) {
-    unsafe {
-        ns_js_dispatch_event(js.0, node.as_ptr(), c"scroll".as_ptr(), ptr::null_mut());
-        ns_js_queue_scrollend(js.0, node.as_ptr());
-    }
+    southstar_js_runtime::events::dispatch_event(js.0, node, "scroll");
+    (api::lifecycle_hooks().queue_scrollend)(js.0, node);
 }
 
 pub(crate) fn observer_schedule_tick(js: Js) {
@@ -146,7 +130,7 @@ pub(crate) fn observer_schedule_tick(js: Js) {
 pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &[u8], value: &[u8]) {
     let name = CString::new(name).unwrap_or_default();
     let value = CString::new(value).unwrap_or_default();
-    unsafe { ns_js_set_attr_recorded(js.0, node.as_mut_ptr(), name.as_ptr(), value.as_ptr()) };
+    (api::mutation_hooks().set_attr_recorded)(js.0, node, &name, value.to_bytes());
 }
 
 pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<'a>> {
@@ -290,17 +274,6 @@ pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) 
     crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_find_by_dom(
-    root: *const NsBox,
-    target: *const NsNode,
-) -> *const NsBox {
-    let Some(root) = (unsafe { BoxRef::from_ptr(root) }) else {
-        return ptr::null();
-    };
-    find_box_by_dom(root, target.cast()).map_or(ptr::null(), BoxRef::as_ptr)
-}
-
 fn box_for_node(scope: &Scope<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
     crate::lookup::find_by_dom(layout_root(js_of(scope))?, node.as_ptr().cast())
 }
@@ -310,7 +283,10 @@ fn forget_box_lookup(js: *const NsJs) {
 }
 
 pub fn install_runtime_hooks() {
-    api::set_geometry_hooks(api::GeometryHooks { forget_box_lookup });
+    api::set_geometry_hooks(api::GeometryHooks {
+        forget_box_lookup,
+        find_box_by_dom: box_find_by_dom,
+    });
     southstar_canvas::links::set_js_geometry_links(southstar_canvas::links::JsGeometryLinks {
         box_for_node,
     });
@@ -322,4 +298,8 @@ pub fn install_runtime_hooks() {
             window_scroll_to: crate::ffi::nsr_window_scroll_to,
         },
     );
+}
+
+fn box_find_by_dom<'a>(root: BoxRef<'a>, target: Node<'_>) -> Option<BoxRef<'a>> {
+    find_box_by_dom(root, target.as_ptr().cast())
 }

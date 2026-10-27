@@ -2,11 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -18,24 +17,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(*mut NsJs);
 
-unsafe extern "C" {
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_attr_detach_matching(
-        js: *mut NsJs,
-        owner: *mut NsNode,
-        namespace_uri: *const c_char,
-        local_name: *const c_char,
-    );
-    fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode);
-    fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-}
-
 impl Js {
     pub(crate) fn of(js: *mut NsJs) -> Option<Js> {
         (!js.is_null()).then_some(Js(js))
@@ -46,16 +27,8 @@ fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
 }
 
-fn c_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(ptr::null(), CStr::as_ptr)
-}
-
 unsafe fn node(n: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(n) }
-}
-
-unsafe fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
 }
 
 pub(crate) fn qcache_invalidate(js: Option<Js>) {
@@ -63,7 +36,7 @@ pub(crate) fn qcache_invalidate(js: Option<Js>) {
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {
-    unsafe { ns_node_is_shadow_root(node.as_ptr()) != 0 }
+    southstar_dom::serialize::is_shadow_root_marked(node)
 }
 
 fn page_context(js: Js) -> ContextHandle {
@@ -187,14 +160,7 @@ pub(crate) fn attr_detach_matching(
     namespace_uri: Option<&CStr>,
     local_name: &CStr,
 ) {
-    unsafe {
-        ns_attr_detach_matching(
-            raw_js(js),
-            owner.as_mut_ptr(),
-            c_ptr(namespace_uri),
-            local_name.as_ptr(),
-        )
-    };
+    (api::attrs_hooks().detach_matching)(raw_js(js), owner, namespace_uri, local_name);
 }
 
 pub(crate) fn set_attr(el: Element, name: &CStr, value: &CStr) {
@@ -240,11 +206,11 @@ pub(crate) fn dispatch_forget_node(js: Js, node: Element) {
 }
 
 pub(crate) fn purge_media_rafs(js: Js, root: Element) {
-    unsafe { ns_js_purge_media_rafs(js.0, root.as_ptr()) };
+    (api::lifecycle_hooks().purge_media_rafs)(js.0, root);
 }
 
 pub(crate) fn focus_forget_subtree(js: Js, root: Element) {
-    unsafe { ns_focus_forget_subtree(js.0, root.as_ptr()) };
+    (api::focus_hooks().forget_subtree)(js.0, root);
 }
 
 pub(crate) fn editable_value<'a>(el: Element) -> Option<&'a CStr> {
@@ -252,74 +218,11 @@ pub(crate) fn editable_value<'a>(el: Element) -> Option<&'a CStr> {
 }
 
 pub(crate) fn dispatch_event(js: Js, target: Element, kind: &CStr) {
-    unsafe { ns_js_dispatch_event(js.0, target.as_ptr(), kind.as_ptr(), ptr::null_mut()) };
+    southstar_js_runtime::events::dispatch_event(js.0, target, &kind.to_string_lossy());
 }
 
 pub(crate) fn arm_js_invalidate(el: Element) {
     api::arm_js_invalidate(el);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_index_child_change(
-    js: *mut NsJs,
-    parent: *mut NsNode,
-    added: *mut NsNode,
-    removed: *mut NsNode,
-) {
-    // SAFETY: the caller passes null or live nodes of this thread's store.
-    let nodes = unsafe { (node(parent), node(added), node(removed)) };
-    match nodes {
-        (Some(parent), added, removed) => crate::index_child_change(js, parent, added, removed),
-        (None, ..) => qcache_invalidate(Js::of(js)),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_record_child_change(
-    js: *mut NsJs,
-    parent: *mut NsNode,
-    added: *mut NsNode,
-    removed: *mut NsNode,
-    previous_sibling: *mut NsNode,
-    next_sibling: *mut NsNode,
-) {
-    // SAFETY: the caller passes null or live nodes of this thread's store.
-    let (added, removed) = unsafe { (node(added), node(removed)) };
-    // SAFETY: as above.
-    let (previous, next) = unsafe { (node(previous_sibling), node(next_sibling)) };
-    // SAFETY: as above.
-    match unsafe { node(parent) } {
-        Some(parent) => crate::record_child_change(js, parent, added, removed, previous, next),
-        None => qcache_invalidate(Js::of(js)),
-    }
-}
-
-pub unsafe fn ns_js_set_attr_recorded_len(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    name: *const c_char,
-    value: *const c_char,
-    len: isize,
-) {
-    let (Some(n), Some(name)) = (unsafe { node(n) }, unsafe { c_str(name) }) else {
-        return;
-    };
-    let value: &[u8] = match (value.is_null(), usize::try_from(len)) {
-        (true, _) => b"",
-        (false, Ok(len)) => unsafe { glib::slice(value.cast(), len) },
-        (false, Err(_)) => unsafe { CStr::from_ptr(value) }.to_bytes(),
-    };
-    crate::set_attr_recorded(js, n, name, value);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_set_attr_recorded(
-    js: *mut NsJs,
-    n: *mut NsNode,
-    name: *const c_char,
-    value: *const c_char,
-) {
-    unsafe { ns_js_set_attr_recorded_len(js, n, name, value, -1) };
 }
 
 /// # Safety
@@ -445,5 +348,33 @@ pub fn install_runtime_hooks() {
         attribute_maps_teardown,
         set_attr_recorded,
         set_attr_recorded_paint_only,
+        index_child_removed,
+        record_child_added,
     });
+}
+
+fn index_child_removed(js: *const NsJs, parent: Option<Node<'_>>, removed: Node<'_>) {
+    match parent.and_then(element) {
+        Some(parent) => crate::index_child_change(js.cast_mut(), parent, None, element(removed)),
+        None => qcache_invalidate(Js::of(js.cast_mut())),
+    }
+}
+
+fn record_child_added(
+    js: *const NsJs,
+    parent: Node<'_>,
+    added: Node<'_>,
+    previous: Option<Node<'_>>,
+) {
+    match element(parent) {
+        Some(parent) => crate::record_child_change(
+            js.cast_mut(),
+            parent,
+            element(added),
+            None,
+            previous.and_then(element),
+            None,
+        ),
+        None => qcache_invalidate(Js::of(js.cast_mut())),
+    }
 }

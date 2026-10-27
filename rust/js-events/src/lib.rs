@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod attrs;
 mod class;
 mod ctors;
@@ -13,13 +15,13 @@ mod install;
 use southstar_dom::Node;
 use southstar_js_engine::{Attributes, Scope, Value};
 
+pub use ffi::make_event;
 pub use ffi::nsr_dom_exception;
 pub use ffi::nsr_event_adopt_interface;
 pub use ffi::nsr_event_define_cancel_bubble;
 pub use ffi::nsr_event_define_source;
 pub use ffi::nsr_event_new;
 pub use ffi::nsr_install_event_attribute_getters;
-pub use ffi::nsr_make_event;
 
 pub use ffi::nsr_event_composed_path;
 pub use ffi::nsr_event_prevent_default;
@@ -98,6 +100,11 @@ pub(crate) fn interface_prototype(scope: &mut Scope<'_>, global: &Value, name: &
 }
 
 pub fn install_runtime_hooks() {
+    southstar_js_runtime::events::set_event_object_hooks(
+        southstar_js_runtime::events::EventObjectHooks {
+            make_event: crate::ffi::make_event,
+        },
+    );
     southstar_canvas::links::set_js_events_links(southstar_canvas::links::JsEventsLinks {
         dom_exception: crate::ffi::nsr_dom_exception,
     });

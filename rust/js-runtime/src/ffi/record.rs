@@ -824,7 +824,7 @@ pub(crate) fn form_reset(js: *const NsJs, form: Node<'_>) {
     let Some(ctx) = record(js).map(|js| js.ctx) else {
         return;
     };
-    ctx.with(|scope| unsafe { imports::nsr_js_reset_form(scope, form.as_mut_ptr()) });
+    ctx.with(|scope| (crate::api::forms_hooks().reset_form)(scope, form));
 }
 
 pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {

@@ -36,8 +36,6 @@ unsafe extern "C" {
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
 }
 
-use southstar_js_events::nsr_make_event;
-
 fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()
 }
@@ -186,7 +184,7 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str, target: Element) -> Value {
     let kind = kind.replace('\0', " ");
-    unsafe { nsr_make_event(scope, &kind, target.as_ptr()) }
+    southstar_js_events::make_event(scope, &kind, Some(target))
 }
 
 pub(crate) fn realm_now_ms(scope: &Scope<'_>) -> f64 {

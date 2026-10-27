@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_long, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
@@ -16,57 +16,16 @@ use crate::{blocking, compile, eval, hold, import_map, page, schedule};
 pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
-#[repr(C)]
-struct NsWorkerHost {
-    _private: [u8; 0],
-}
-
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
 pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
 
 unsafe extern "C" {
-    fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean;
-    fn ns_worker_host_base_url(host: *const NsWorkerHost) -> *const c_char;
-    fn ns_js_node_document_base_url(js: *mut NsJs, node: *const NsNode) -> *mut c_char;
-    fn ns_js_dispatch_resource_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        ty: *const c_char,
-    ) -> GBoolean;
-    fn ns_js_index_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-    );
-    fn ns_js_record_child_change(
-        js: *mut NsJs,
-        parent: *mut NsNode,
-        added: *mut NsNode,
-        removed: *mut NsNode,
-        previous_sibling: *mut NsNode,
-        next_sibling: *mut NsNode,
-    );
-    fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode);
     fn g_source_remove(tag: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
 }
 
-unsafe extern "Rust" {
-    unsafe fn nsr_js_report_uncaught(js: *mut NsJs, exception: &Value, origin: Option<&str>);
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);
-
-fn owned(p: *mut c_char) -> Option<CString> {
-    if p.is_null() {
-        return None;
-    }
-    let out = unsafe { CStr::from_ptr(p) }.to_owned();
-    unsafe { glib::g_free(p.cast()) };
-    Some(out)
-}
 
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(
@@ -79,21 +38,13 @@ fn c_string(bytes: &[u8]) -> CString {
     .unwrap_or_default()
 }
 
-fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
-}
-
-unsafe fn cstr<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
 pub(crate) fn is_named(n: Node, tag: &CStr) -> bool {
     n.element_name() == Some(tag.to_bytes())
 }
 
 pub(crate) fn hidden_child(n: Node) -> bool {
     southstar_dom::serialize::is_embedded_doc(n)
-        || unsafe { ns_node_is_shadow_root(n.as_ptr()) != 0 }
+        || southstar_dom::serialize::is_shadow_root_marked(n)
 }
 
 pub(crate) fn node_remove(n: Node) {
@@ -219,11 +170,11 @@ impl Js {
     }
 
     pub(crate) fn base_url(self, n: Node) -> Option<CString> {
-        owned(unsafe { ns_js_node_document_base_url(self.0, n.as_ptr()) })
+        (api::document_hooks().node_base_url)(self.0, n).and_then(|url| CString::new(url).ok())
     }
 
     pub(crate) fn dispatch_resource_event(self, n: Node, ty: &CStr) {
-        unsafe { ns_js_dispatch_resource_event(self.0, n.as_ptr(), ty.as_ptr()) };
+        southstar_js_runtime::events::dispatch_resource_event(self.0, n, &ty.to_string_lossy());
     }
 
     pub(crate) fn upgrade_all(self) {
@@ -241,7 +192,7 @@ impl Js {
     }
 
     pub(crate) fn schedule_static_iframes(self, root: Node) {
-        unsafe { ns_js_schedule_static_iframes(self.0, root.as_mut_ptr()) }
+        (api::frames_hooks().schedule_static_iframes)(self.0, root)
     }
 
     pub(crate) fn rescan_images(self, root: Node) {
@@ -253,27 +204,11 @@ impl Js {
     }
 
     pub(crate) fn index_child_removed(self, parent: Option<Node>, removed: Node) {
-        unsafe {
-            ns_js_index_child_change(
-                self.0,
-                Node::ptr_or_null(parent).cast_mut(),
-                ptr::null_mut(),
-                removed.as_mut_ptr(),
-            )
-        }
+        (api::mutation_hooks().index_child_removed)(self.0, parent, removed);
     }
 
     pub(crate) fn record_child_added(self, parent: Node, added: Node, prev: Option<Node>) {
-        unsafe {
-            ns_js_record_child_change(
-                self.0,
-                parent.as_mut_ptr(),
-                added.as_mut_ptr(),
-                ptr::null_mut(),
-                Node::ptr_or_null(prev).cast_mut(),
-                ptr::null_mut(),
-            )
-        }
+        (api::mutation_hooks().record_child_added)(self.0, parent, added, prev);
     }
 
     pub(crate) fn eval_script_source(
@@ -361,7 +296,7 @@ impl Js {
 
     pub(crate) fn report_uncaught(self, exception: &Value, origin: Option<&CStr>) {
         let origin = origin.map(CStr::to_string_lossy);
-        unsafe { nsr_js_report_uncaught(self.0, exception, origin.as_deref()) }
+        southstar_js_runtime::events::report_uncaught(self.0, exception, origin.as_deref())
     }
 
     pub(crate) fn content_scripts_for_url(
@@ -433,11 +368,10 @@ impl Js {
         if self.is_null() {
             return None;
         }
-        let host = api::worker_host(self.0).cast::<NsWorkerHost>();
-        if host.is_null() {
+        if api::worker_host(self.0).is_null() {
             return Some(api::current_url(self.0));
         }
-        unsafe { cstr(ns_worker_host_base_url(host)) }.map(CStr::to_owned)
+        (api::workers_hooks().host_base_url)(self.0)
     }
 
     pub(crate) fn fetch(
@@ -518,6 +452,7 @@ pub fn install_runtime_hooks() {
         purge_subtree_script_refs,
         parser_hold_forget,
         teardown,
+        element_perf_info: crate::api::element_perf_info,
     });
     southstar_js_runtime::links::set_js_loader_links(southstar_js_runtime::links::JsLoaderLinks {
         js_module_load: crate::ffi::nsr_js_module_load,
@@ -558,17 +493,6 @@ pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut
     };
     info.render_blocking = glib::boolean(el.is_some_and(blocking::render_blocking));
     info.cors_mode = glib::boolean(el.is_some_and(|el| el.attr(c"crossorigin").is_some()));
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_element_perf_info(
-    js: *mut NsJs,
-    el: *const NsNode,
-    info: *mut PerfInfo,
-) {
-    if let Some(info) = unsafe { info.as_mut() } {
-        fill_element_perf_info(js, node(el), info);
-    }
 }
 
 pub fn nsr_js_compile_module_cached(

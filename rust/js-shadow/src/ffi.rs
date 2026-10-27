@@ -4,8 +4,6 @@
 
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -18,10 +16,6 @@ pub(crate) struct Js(*mut NsJs);
 
 use southstar_js_geometry::nsr_document_element_from_point;
 use southstar_js_geometry::nsr_document_elements_from_point;
-
-fn node_of(raw: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(raw) }
-}
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
     let js: *mut NsJs = scope.context_opaque().cast();
@@ -76,11 +70,6 @@ pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, V
             scope.function("elementsFromPoint", 2, nsr_document_elements_from_point),
         ),
     ]
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean {
-    GBoolean::from(node_of(n).is_some_and(crate::is_shadow_root))
 }
 
 #[allow(non_snake_case)]

@@ -5,8 +5,7 @@
 pub(crate) mod exports;
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int};
-use std::borrow::Cow;
+use core::ffi::{CStr, c_int};
 
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -24,10 +23,6 @@ const DLOG_ERROR: c_int = 2;
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(ptr) }
-}
-
-fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy())
 }
 
 impl Js {
@@ -193,7 +188,7 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str, target: Option<Element>) -> Value {
-    unsafe { imports::nsr_make_event(scope, kind, Node::ptr_or_null(target)) }
+    southstar_js_runtime::events::make_event(scope, kind, target)
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {

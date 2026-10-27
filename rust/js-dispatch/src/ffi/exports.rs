@@ -2,13 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
-
-use southstar_dom::NsNode;
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use super::{Js, NsJs, node, opt_text};
+use super::{Js, NsJs};
 use crate::JsResult;
 
 macro_rules! natives {
@@ -99,56 +95,6 @@ pub fn nsr_js_install_event_target(scope: &mut Scope<'_>, global: &Value) {
     crate::target::install_event_target(scope, global);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_dispatch_built_event(
-    js: *mut NsJs,
-    target: *const NsNode,
-    kind: &str,
-    event: Value,
-) -> (bool, bool) {
-    match node(target) {
-        Some(target) => crate::dispatch_built_event(js, target, kind, event),
-        None => (false, false),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_dispatch_window_only_event(
-    js: *mut NsJs,
-    target_doc: *const NsNode,
-    kind: &str,
-    event: Value,
-) -> bool {
-    crate::dispatch_window_only_event(js, node(target_doc), kind, event)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_event_window_for_document(
-    js: *mut NsJs,
-    scope: &mut Scope<'_>,
-    doc: *const NsNode,
-) -> Value {
-    crate::dispatch::window_for_document(Js::of(js), scope, node(doc))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_fire_element_handlers(
-    js: *mut NsJs,
-    element: *const NsNode,
-    kind: &str,
-    event: &Value,
-) {
-    let js = Js::of(js);
-    let Some(element) = node(element) else {
-        return;
-    };
-    if js.is_null() {
-        return;
-    }
-    crate::handlers::fire_inline(js, element, kind, event);
-    crate::handlers::fire_property(js, element, kind, event);
-}
-
 pub fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, proto: &Value) {
     crate::handlers::install_accessors(scope, proto);
 }
@@ -164,79 +110,6 @@ pub fn nsr_js_promise_rejection_tracker(
     handled: bool,
 ) {
     crate::errors::track_rejection(scope, promise, reason, handled);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_report_uncaught(js: *mut NsJs, exception: &Value, origin: Option<&str>) {
-    let js = Js::of(js);
-    if !js.is_null() {
-        crate::errors::report_exception_at(js, exception, origin, 0, 0);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_target_report_exception(
-    js: *mut NsJs,
-    scope: &mut Scope<'_>,
-    kind: Option<&str>,
-    exception: &Value,
-) {
-    crate::errors::report_handler_exception(Js::of(js), scope, kind, exception);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_event(
-    js: *mut NsJs,
-    target: *const NsNode,
-    kind: *const c_char,
-    default_prevented: *mut GBoolean,
-) -> GBoolean {
-    put_prevented(default_prevented, false);
-    let (Some(target), Some(kind)) = (node(target), opt_text(kind)) else {
-        return glib::FALSE;
-    };
-    let (fired, prevented) = crate::dispatch_event(js, target, &kind);
-    put_prevented(default_prevented, prevented);
-    glib::boolean(fired)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_event_type_init_flags(
-    kind: *const c_char,
-    at_document: GBoolean,
-    bubbles: *mut GBoolean,
-    cancelable: *mut GBoolean,
-) {
-    let kind = opt_text(kind).unwrap_or_default();
-    let (b, c) = crate::dispatch::init_flags(&kind, at_document != 0);
-    if let Some(slot) = unsafe { bubbles.as_mut() } {
-        *slot = glib::boolean(b);
-    }
-    if let Some(slot) = unsafe { cancelable.as_mut() } {
-        *slot = glib::boolean(c);
-    }
-}
-
-pub(super) fn put_prevented(slot: *mut GBoolean, prevented: bool) {
-    if let Some(slot) = unsafe { slot.as_mut() } {
-        *slot = glib::boolean(prevented);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_dispatch_resource_event(
-    js: *mut NsJs,
-    target: *const NsNode,
-    kind: *const c_char,
-) -> GBoolean {
-    let js = Js::of(js);
-    let (Some(target), Some(kind)) = (node(target), opt_text(kind)) else {
-        return glib::FALSE;
-    };
-    if js.is_null() {
-        return glib::FALSE;
-    }
-    glib::boolean(crate::ui_events::resource_event(js, target, &kind))
 }
 
 fn report_pending_rejections(js: *const NsJs) {
@@ -268,6 +141,17 @@ fn teardown(js: *const NsJs) {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_js_runtime::events::set_event_hooks(southstar_js_runtime::events::EventHooks {
+        dispatch_event: crate::api::dispatch_event,
+        dispatch_built_event: crate::api::dispatch_built_event,
+        dispatch_window_only_event: crate::api::dispatch_window_only_event,
+        dispatch_resource_event: crate::api::dispatch_resource_event,
+        window_for_document: crate::api::window_for_document,
+        fire_element_handlers: crate::api::fire_element_handlers,
+        report_uncaught: crate::api::report_uncaught,
+        report_handler_exception: crate::api::report_handler_exception,
+        init_flags: crate::api::init_flags,
+    });
     southstar_js_runtime::api::set_dispatch_hooks(southstar_js_runtime::api::DispatchHooks {
         report_pending_rejections,
         drop_pending_rejections: crate::drop_pending_rejections,

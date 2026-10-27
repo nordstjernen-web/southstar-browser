@@ -334,7 +334,7 @@ impl Js {
     }
 
     pub fn install_window_state(self, scope: &mut Scope<'_>, global: &Value) {
-        unsafe { imports::nsr_window_install_state(self.0, scope, global) };
+        (api::window_hooks().install_state)(self.0, scope, global);
     }
 
     #[cfg(feature = "webgpu")]

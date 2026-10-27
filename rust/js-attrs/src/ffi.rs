@@ -4,7 +4,7 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use core::ptr;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -30,10 +30,6 @@ impl Js {
 unsafe extern "C" {}
 
 const LIVE_ATTRIBUTES: i32 = 12;
-
-fn c_str<'a>(text: *const c_char) -> Option<&'a CStr> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) })
-}
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque().cast())
@@ -226,19 +222,6 @@ pub fn nsr_attr_to_js(
     attr::to_js(scope, owner, attr, include_base)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_attr_detach_matching(
-    js: *mut NsJs,
-    owner: *mut NsNode,
-    namespace_uri: *const c_char,
-    local_name: *const c_char,
-) {
-    let (Some(owner), Some(local)) = (unsafe { Node::from_ptr(owner) }, c_str(local_name)) else {
-        return;
-    };
-    attr::detach_matching(Js(js), owner, c_str(namespace_uri), local);
-}
-
 pub fn detach_all(js: *mut NsJs) {
     attr::detach_all(Js(js));
 }
@@ -262,6 +245,7 @@ pub fn install_runtime_hooks() {
         class_id,
         detach_owner,
         detach_all: detach_page,
+        detach_matching,
     });
     southstar_js_dom_factory::links::set_js_attrs_links(
         southstar_js_dom_factory::links::JsAttrsLinks {
@@ -277,4 +261,15 @@ pub fn install_runtime_hooks() {
     southstar_js_forms::links::set_js_attrs_links(southstar_js_forms::links::JsAttrsLinks {
         namedmap_item: crate::ffi::nsr_namedmap_item,
     });
+}
+
+fn detach_matching(
+    js: *const NsJs,
+    owner: Node<'_>,
+    namespace_uri: Option<&CStr>,
+    local_name: &CStr,
+) {
+    if let Some(owner) = owner.downgrade().get() {
+        attr::detach_matching(Js(js.cast_mut()), owner, namespace_uri, local_name);
+    }
 }

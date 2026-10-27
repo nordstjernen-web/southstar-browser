@@ -46,10 +46,6 @@ impl Js {
 
 type JsResult = Result<Value, Value>;
 
-unsafe extern "C" {
-    fn ns_window_child_frame(doc: *const NsNode, index: u32, name: *const c_char) -> *const NsNode;
-}
-
 #[derive(Clone, Copy)]
 pub(crate) enum Binding {
     CustomElementsDefine,
@@ -229,10 +225,6 @@ pub(crate) fn set_doc_ready_state(js: Js, doc: Node<'_>, state: c_int) {
     api::set_doc_ready_state(js.ptr(), doc, state);
 }
 
-fn opt_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(core::ptr::null(), CStr::as_ptr)
-}
-
 pub(crate) fn make_realm_document(
     scope: &mut Scope<'_>,
     doc: Node<'_>,
@@ -241,17 +233,15 @@ pub(crate) fn make_realm_document(
     content_type: Option<&CStr>,
     is_xml: bool,
 ) -> Result<Value, Value> {
-    Ok(unsafe {
-        nsr_make_realm_document(
-            scope,
-            doc.as_mut_ptr(),
-            url.map(CStr::to_bytes),
-            charset.map(CStr::to_bytes),
-            content_type.map(CStr::to_bytes),
-            is_xml,
-            false,
-        )
-    })
+    Ok((api::document_hooks().make_realm_document)(
+        scope,
+        doc,
+        url.map(CStr::to_bytes),
+        charset.map(CStr::to_bytes),
+        content_type.map(CStr::to_bytes),
+        is_xml,
+        false,
+    ))
 }
 
 pub(crate) fn platform_global_names(js: Js) -> Vec<String> {
@@ -283,13 +273,7 @@ pub(crate) fn window_child_frame(
     index: u32,
     name: Option<&CStr>,
 ) -> Option<Node<'static>> {
-    unsafe {
-        Node::from_ptr(ns_window_child_frame(
-            Node::ptr_or_null(doc),
-            index,
-            opt_ptr(name),
-        ))
-    }
+    (api::window_hooks().child_frame)(doc?, index, name)
 }
 
 pub(crate) fn new_document() -> Node<'static> {
@@ -504,28 +488,30 @@ pub fn install_runtime_hooks() {
         cloners_made,
         forget_node,
         realms_same_origin,
+        schedule_static_iframes,
+        realm_proto_for,
+        frame_realm_window,
     });
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_schedule_static_iframes(js: *mut NsJs, root: *mut NsNode) {
-    // SAFETY: the caller passes a live root node or null.
-    if let Some(root) = unsafe { Node::from_ptr(root) } {
-        crate::schedule_static_iframes(js, root);
+fn schedule_static_iframes(js: *const NsJs, root: Node<'_>) {
+    if let Some(root) = root.downgrade().get() {
+        crate::schedule_static_iframes(js.cast_mut(), root);
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_realm_proto_for(js: *mut NsJs, realm: ContextHandle, proto: &Value) -> Value {
-    let (Some(cx), js) = (Ctx::from_handle(realm), Js::of(js)) else {
+fn realm_proto_for(js: *const NsJs, realm: ContextHandle, proto: &Value) -> Value {
+    let (Some(cx), js) = (Ctx::from_handle(realm), Js::of(js.cast_mut())) else {
         return proto.clone();
     };
     cloner::proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_frame_realm_window(js: *mut NsJs, frame: *const NsNode) -> Value {
-    let js = Js::of(js);
-    let window = unsafe { Node::from_ptr(frame) }.and_then(|frame| realm::stored_window(js, frame));
-    window.unwrap_or_else(Value::null)
+fn frame_realm_window(js: *const NsJs, frame: Node<'_>) -> Value {
+    let js = Js::of(js.cast_mut());
+    frame
+        .downgrade()
+        .get()
+        .and_then(|frame| realm::stored_window(js, frame))
+        .unwrap_or_else(Value::null)
 }
