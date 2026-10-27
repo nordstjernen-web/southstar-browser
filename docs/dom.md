@@ -43,10 +43,15 @@ and again when it is vacated, so a live slot's generation is odd.
   host class's instance data), the stylesheet matcher's hover, active,
   focus and fullscreen elements, the active modal dialog, the page's
   hovered, pressed and scroll-anchor nodes and open `<select>` in
-  `rust/browser`, and the script runtime's orphan set, NamedNodeMap cache
-  and pending change event. A wrapper whose node was freed unwraps to
-  nothing, and a freed node simply stops matching; nothing has to be told
-  that it went away.
+  `rust/browser`, the script runtime's orphan set, NamedNodeMap cache
+  and pending change event, and the per-node state of the binding crates:
+  the frame table, observer targets and records, animation-frame,
+  scrollend and lifecycle state, event listeners, image loads, custom
+  element registries and the canvas identity WebGL and WebGPU key their
+  contexts by. A map keyed by a `WeakNode` never hands a freed node's
+  entry to the node that reuses its slot. A wrapper whose node was freed
+  unwraps to nothing, and a freed node simply stops matching; nothing has
+  to be told that it went away.
 - `Node::from_ptr`, the way back from the `*const NsNode` pointers of the
   remaining C ABI, returns `None` for a vacant slot.
 
