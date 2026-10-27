@@ -105,6 +105,11 @@ Southstar Browser 1.0.2:
   to 6; svg, texture and six more binding and layout crates now forbid
   unsafe code. Script element bookkeeping keeps weak node references, so a
   reused node slot is no longer mistaken for the freed node.
+* The binding crates pass the page as a `Page` handle everywhere (runtime
+  API, hook tables, per-crate wrappers, canvas, WebGL, paint) instead of
+  raw `NsJs` pointers and `usize` addresses. A GLib timer or idle callback
+  that fires after its page was freed now gets no page instead of a stale
+  pointer.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,
