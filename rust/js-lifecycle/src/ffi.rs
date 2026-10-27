@@ -3,15 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_uint, c_void};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_anim::AnimHandle;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use southstar_js_loader::{Schedule, ScriptTasks};
 
@@ -83,8 +82,8 @@ impl Js {
         api::mutated(self.0)
     }
 
-    pub fn current_document(self) -> *const NsNode {
-        Node::ptr_or_null(api::current_document(self.0))
+    pub fn current_document(self) -> Option<Node<'static>> {
+        api::current_document(self.0)
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -97,8 +96,8 @@ impl Js {
         }
     }
 
-    pub fn context_frame(self, scope: &Scope<'_>) -> *mut NsNode {
-        Node::ptr_or_null(api::context_frame(self.0, scope.handle())).cast_mut()
+    pub fn context_frame(self, scope: &Scope<'_>) -> Option<Node<'static>> {
+        api::context_frame(self.0, scope.handle())
     }
 
     pub fn budget_enter(self) -> i64 {
@@ -137,18 +136,16 @@ impl Js {
         api::process_pending_iframes(self.0);
     }
 
-    pub fn forget_frame_context(self, frame: *const NsNode) {
-        if let Some(frame) = node(frame) {
-            api::forget_frame_context(self.0, frame);
-        }
+    pub fn forget_frame_context(self, frame: Node<'_>) {
+        api::forget_frame_context(self.0, frame);
     }
 
-    pub fn node_in_page(self, node_ptr: *const NsNode) -> bool {
-        api::node_in_page(self.0, node(node_ptr))
+    pub fn node_in_page(self, node: Option<Node<'_>>) -> bool {
+        api::node_in_page(self.0, node)
     }
 
-    pub fn dispatch_built(self, target: *const NsNode, kind: &CStr, event: Value) {
-        if let Some(target) = node(target) {
+    pub fn dispatch_built(self, target: Option<Node<'_>>, kind: &CStr, event: Value) {
+        if let Some(target) = target {
             southstar_js_dispatch::dispatch_built_event(
                 self.0,
                 target,
@@ -158,17 +155,17 @@ impl Js {
         }
     }
 
-    pub fn dispatch_window_only(self, document: *const NsNode, kind: &CStr, event: Value) {
+    pub fn dispatch_window_only(self, document: Option<Node<'_>>, kind: &CStr, event: Value) {
         southstar_js_dispatch::dispatch_window_only_event(
             self.0,
-            node(document),
+            document,
             &kind.to_string_lossy(),
             event,
         );
     }
 
-    pub fn dispatch(self, target: *const NsNode, kind: &CStr) {
-        if let Some(target) = node(target) {
+    pub fn dispatch(self, target: Option<Node<'_>>, kind: &CStr) {
+        if let Some(target) = target {
             southstar_js_dispatch::dispatch_event(self.0, target, &kind.to_string_lossy());
         }
     }
@@ -221,14 +218,14 @@ impl Js {
         southstar_js_loader::schedule_pending_script_drain(self.0);
     }
 
-    pub fn upgrade_custom_elements(self, root: *mut NsNode) {
-        if let Some(root) = node(root) {
+    pub fn upgrade_custom_elements(self, root: Option<Node<'_>>) {
+        if let Some(root) = root {
             southstar_js_custom_elements::upgrade_subtree_all(self.0, root);
         }
     }
 
-    pub fn fire_parsed_stylesheet_loads(self, doc: *mut NsNode) {
-        if let Some(doc) = node(doc) {
+    pub fn fire_parsed_stylesheet_loads(self, doc: Option<Node<'_>>) {
+        if let Some(doc) = doc {
             southstar_js_loader::fire_parsed_stylesheet_loads(self.0, doc);
         }
     }
@@ -302,16 +299,16 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
 }
 
-pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: *const NsNode) -> Value {
-    southstar_js_events::make_event(scope, &kind.to_string_lossy(), node(target))
+pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Option<Node<'_>>) -> Value {
+    southstar_js_events::make_event(scope, &kind.to_string_lossy(), target)
 }
 
-pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
-    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
+pub(crate) fn make_element(scope: &mut Scope<'_>, node: Option<Node<'_>>) -> Value {
+    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
 }
 
-pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
-    Node::ptr_or_null(api::unwrap_element(value)).cast_mut()
+pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
+    api::unwrap_element(value)
 }
 
 pub(crate) fn image_settled(image: southstar_layout::MediaHandle) -> Option<bool> {
@@ -319,19 +316,11 @@ pub(crate) fn image_settled(image: southstar_layout::MediaHandle) -> Option<bool
     (image.loaded() || image.failed()).then_some(image.failed())
 }
 
-pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(node) }
-}
-
-pub(crate) fn layout_box<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
 pub(crate) struct CallbackScope(api::RafScope);
 
 impl CallbackScope {
-    pub fn enter(js: Js, realm: ContextHandle, frame: *mut NsNode) -> Option<CallbackScope> {
-        api::enter_raf_scope(js.0, realm, node(frame)).map(CallbackScope)
+    pub fn enter(js: Js, realm: ContextHandle, frame: Option<Node<'_>>) -> Option<CallbackScope> {
+        api::enter_raf_scope(js.0, realm, frame).map(CallbackScope)
     }
 
     pub fn context(&self) -> ContextHandle {
@@ -386,7 +375,7 @@ pub fn dispatch_anim_events(js: Page, anim: AnimHandle) {
 }
 
 pub fn fire_media_load_events(js: Page, layout: Option<BoxRef<'_>>) {
-    events::fire_media_load_events(Js::of_page(js), layout.map_or(ptr::null(), BoxRef::as_ptr));
+    events::fire_media_load_events(Js::of_page(js), layout);
 }
 
 pub fn raf_count(js: Option<Page>) -> usize {
@@ -408,7 +397,7 @@ pub fn start_lifecycle(
     origin: Option<&CStr>,
     start_us: i64,
 ) {
-    lifecycle::start(Js(js), doc.as_mut_ptr(), tasks, origin, start_us);
+    lifecycle::start(Js(js), doc, tasks, origin, start_us);
 }
 
 fn raf_set_host_driven(js: Option<Page>) {
@@ -416,7 +405,7 @@ fn raf_set_host_driven(js: Option<Page>) {
 }
 
 pub fn purge_frame_rafs(js: Option<Page>, frame: Node<'_>) {
-    frames::purge_frame(Js(js), frame.as_ptr());
+    frames::purge_frame(Js(js), frame);
 }
 
 fn teardown(js: Option<Page>) {
@@ -452,11 +441,11 @@ fn idle_frame_end(js: Option<Page>, now: i64, end: i64) -> i64 {
 }
 
 fn purge_media_rafs(js: Option<Page>, root: Node<'_>) {
-    frames::purge_media(Js(js), root.as_ptr());
+    frames::purge_media(Js(js), root);
 }
 
 fn queue_scrollend(js: Option<Page>, el: Node<'_>) {
-    scrollend::queue(Js(js), el.as_ptr());
+    scrollend::queue(Js(js), el);
 }
 
 fn queue_scrollend_document(js: Option<Page>) {

@@ -5,9 +5,9 @@
 use core::ffi::CStr;
 
 use southstar_anim::{AnimEvent, AnimHandle};
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use crate::ffi::{self, Js};
 
@@ -49,7 +49,7 @@ fn atoi(text: &[u8]) -> i32 {
     }
 }
 
-fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], name: &[u8]) {
+fn script_event_hook(scope: &mut Scope<'_>, node: Node<'_>, kind: &[u8], name: &[u8]) {
     let global = scope.global();
     let Ok(hook) = scope.get(&global, "__ns_anim_script_event") else {
         return;
@@ -57,7 +57,7 @@ fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], na
     if !scope.is_function(&hook) {
         return;
     }
-    let element = ffi::make_element(scope, node);
+    let element = ffi::make_element(scope, Some(node));
     let index = Value::int(atoi(name));
     let phase = scope.string(&String::from_utf8_lossy(&kind[4..]));
     let _ = scope.call(&hook, &Value::undefined(), &[element, index, phase]);
@@ -65,13 +65,13 @@ fn script_event_hook(scope: &mut Scope<'_>, node: *const NsNode, kind: &[u8], na
 
 fn animation_event(
     scope: &mut Scope<'_>,
-    node: *const NsNode,
+    node: Node<'_>,
     event_kind: &CStr,
     base_kind: &[u8],
     name: &[u8],
     elapsed_ms: f64,
 ) -> Value {
-    let event = ffi::make_event(scope, event_kind, node);
+    let event = ffi::make_event(scope, event_kind, Some(node));
     let _ = scope.set(&event, "bubbles", Value::boolean(true));
     let _ = scope.set(&event, "cancelable", Value::boolean(false));
     let _ = scope.set(&event, "elapsedTime", Value::number(elapsed_ms / 1000.0));
@@ -92,7 +92,7 @@ fn anim_event(js: Js, event: &AnimEvent) {
     if js.is_null() || ctx.is_null() || js.halted() {
         return;
     }
-    let node = event.node.as_ptr();
+    let node = event.node;
     let kind = event.kind;
     let name = event.name.as_slice();
     let elapsed_ms = event.elapsed_ms;
@@ -106,7 +106,7 @@ fn anim_event(js: Js, event: &AnimEvent) {
     else {
         return;
     };
-    js.dispatch_built(node, kind, event);
+    js.dispatch_built(Some(node), kind, event);
     let Some(legacy) = legacy_name(kind_bytes) else {
         return;
     };
@@ -118,7 +118,7 @@ fn anim_event(js: Js, event: &AnimEvent) {
     }) else {
         return;
     };
-    js.dispatch_built(node, legacy, event);
+    js.dispatch_built(Some(node), legacy, event);
 }
 
 pub(crate) fn dispatch_anim_events(js: Js, anim: AnimHandle) {
@@ -131,18 +131,16 @@ pub(crate) fn dispatch_anim_events(js: Js, anim: AnimHandle) {
 }
 
 #[derive(Default)]
-struct MediaEvents {
-    images: Vec<(Node<'static>, bool)>,
-    videos: Vec<*mut NsNode>,
+struct MediaEvents<'a> {
+    images: Vec<(Node<'a>, bool)>,
+    videos: Vec<Node<'a>>,
 }
 
-fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
-    let dom = b.dom_ptr().cast::<NsNode>();
-    if let Some(node) = ffi::node(dom)
+fn collect_media_events<'a>(b: BoxRef<'a>, out: &mut MediaEvents<'a>) {
+    if let Some(node) = b.dom()
         && let Some(name) = node.name()
         && let Some(media) = b.media()
     {
-        let dom = dom.cast_mut();
         let image = media.image();
         if name == c"img"
             && let Some(image) = image
@@ -157,7 +155,7 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
             && southstar_video::BoxVideo::of(b)
                 .is_some_and(southstar_video::BoxVideo::take_load_events)
         {
-            out.videos.push(dom);
+            out.videos.push(node);
         }
     }
     let mut child = b.first_child();
@@ -170,11 +168,11 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
     }
 }
 
-pub(crate) fn fire_media_load_events(js: Js, layout: *const NsBox) {
+pub(crate) fn fire_media_load_events(js: Js, layout: Option<BoxRef<'_>>) {
     if js.is_null() {
         return;
     }
-    let Some(root) = ffi::layout_box(layout) else {
+    let Some(root) = layout else {
         return;
     };
     if js.halted() || js.in_pump() {
@@ -186,8 +184,8 @@ pub(crate) fn fire_media_load_events(js: Js, layout: *const NsBox) {
         js.fire_img_load_once(img, failed);
     }
     for video in events.videos {
-        js.dispatch(video, c"loadedmetadata");
-        js.dispatch(video, c"loadeddata");
-        js.dispatch(video, c"canplay");
+        js.dispatch(Some(video), c"loadedmetadata");
+        js.dispatch(Some(video), c"loadeddata");
+        js.dispatch(Some(video), c"canplay");
     }
 }
