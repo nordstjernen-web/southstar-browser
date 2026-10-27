@@ -87,10 +87,6 @@ pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
     (!out.is_empty() && !reserved).then_some(out)
 }
 
-pub fn usable_name(name: &[u8]) -> bool {
-    safe_name(name).is_some()
-}
-
 pub fn strip_query(base: &[u8]) -> &[u8] {
     base.iter()
         .position(|&c| c == b'?' || c == b'#')

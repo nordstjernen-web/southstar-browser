@@ -123,20 +123,27 @@ unsafe extern "C" fn worker(data: *mut c_void) -> *mut c_void {
 
 unsafe extern "C" fn on_save(button: *mut GtkWidget, data: *mut c_void) {
     let d = data.cast::<Download>();
-    unsafe {
-        gtk::gtk_widget_set_visible(button, 0);
-        gtk::gtk_label_set_text((*d).status, (*d).name.as_ptr());
-        begin(d);
-    }
+    // SAFETY: data is the leaked Download the Save button was connected with; finish_idle frees it only after the download that begins here is done.
+    let status = unsafe { (*d).status };
+    // SAFETY: the same live Download; name is a CString it owns.
+    let name = unsafe { (*d).name.as_ptr() };
+    // SAFETY: button is the live GtkButton that emitted clicked.
+    unsafe { gtk::gtk_widget_set_visible(button, 0) };
+    // SAFETY: status is the row's live GtkLabel and name is NUL-terminated.
+    unsafe { gtk::gtk_label_set_text(status, name) };
+    begin(d);
 }
 
-unsafe fn begin(d: *mut Download) {
-    unsafe {
-        (*d).pulse = gtk::g_timeout_add(120, pulse, d.cast());
-        let t = gtk::g_thread_new(c"ns-download".as_ptr(), worker, d.cast());
-        if !t.is_null() {
-            gtk::g_thread_unref(t);
-        }
+fn begin(d: *mut Download) {
+    // SAFETY: d is a leaked Download that finish_idle frees once the worker is done; the pulse timeout stops before that.
+    let source = unsafe { gtk::g_timeout_add(120, pulse, d.cast()) };
+    // SAFETY: d is live, see above.
+    unsafe { (*d).pulse = source };
+    // SAFETY: the worker takes d and hands it on to finish_idle, which frees it.
+    let thread = unsafe { gtk::g_thread_new(c"ns-download".as_ptr(), worker, d.cast()) };
+    if !thread.is_null() {
+        // SAFETY: thread is the non-null GThread g_thread_new returned.
+        unsafe { gtk::g_thread_unref(thread) };
     }
 }
 
