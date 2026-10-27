@@ -33,30 +33,6 @@ pub struct GArray {
 }
 
 #[repr(C)]
-pub struct GHashTable {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-pub struct GHashTableIter {
-    _dummy: [*mut c_void; 6],
-}
-
-impl GHashTableIter {
-    pub const fn new() -> GHashTableIter {
-        GHashTableIter {
-            _dummy: [ptr::null_mut(); 6],
-        }
-    }
-}
-
-impl Default for GHashTableIter {
-    fn default() -> GHashTableIter {
-        GHashTableIter::new()
-    }
-}
-
-#[repr(C)]
 pub struct GError {
     pub domain: u32,
     pub code: c_int,
@@ -107,50 +83,6 @@ unsafe extern "C" {
     pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     pub fn g_ptr_array_unref(array: *mut GPtrArray);
     pub fn g_ptr_array_free(array: *mut GPtrArray, free_segment: GBoolean) -> *mut *mut c_void;
-    pub fn g_hash_table_new_full(
-        hash_func: Option<unsafe extern "C" fn(key: *const c_void) -> c_uint>,
-        key_equal_func: Option<
-            unsafe extern "C" fn(a: *const c_void, b: *const c_void) -> GBoolean,
-        >,
-        key_destroy_func: GDestroyNotify,
-        value_destroy_func: GDestroyNotify,
-    ) -> *mut GHashTable;
-    pub fn g_hash_table_insert(
-        table: *mut GHashTable,
-        key: *mut c_void,
-        value: *mut c_void,
-    ) -> GBoolean;
-    pub fn g_hash_table_lookup(table: *mut GHashTable, key: *const c_void) -> *mut c_void;
-    pub fn g_hash_table_unref(table: *mut GHashTable);
-    pub fn g_hash_table_new(
-        hash_func: Option<unsafe extern "C" fn(key: *const c_void) -> c_uint>,
-        key_equal_func: Option<
-            unsafe extern "C" fn(a: *const c_void, b: *const c_void) -> GBoolean,
-        >,
-    ) -> *mut GHashTable;
-    pub fn g_hash_table_replace(
-        table: *mut GHashTable,
-        key: *mut c_void,
-        value: *mut c_void,
-    ) -> GBoolean;
-    pub fn g_hash_table_add(table: *mut GHashTable, key: *mut c_void) -> GBoolean;
-    pub fn g_hash_table_remove(table: *mut GHashTable, key: *const c_void) -> GBoolean;
-    pub fn g_hash_table_contains(table: *mut GHashTable, key: *const c_void) -> GBoolean;
-    pub fn g_hash_table_remove_all(table: *mut GHashTable);
-    pub fn g_hash_table_size(table: *mut GHashTable) -> c_uint;
-    pub fn g_hash_table_iter_init(iter: *mut GHashTableIter, table: *mut GHashTable);
-    pub fn g_hash_table_iter_next(
-        iter: *mut GHashTableIter,
-        key: *mut *mut c_void,
-        value: *mut *mut c_void,
-    ) -> GBoolean;
-    pub fn g_hash_table_destroy(table: *mut GHashTable);
-    pub fn g_hash_table_get_keys_as_array(
-        table: *mut GHashTable,
-        length: *mut c_uint,
-    ) -> *mut *mut c_void;
-    pub fn g_direct_hash(v: *const c_void) -> c_uint;
-    pub fn g_direct_equal(a: *const c_void, b: *const c_void) -> GBoolean;
     pub fn g_ptr_array_new() -> *mut GPtrArray;
     pub fn g_ptr_array_insert(array: *mut GPtrArray, index: c_int, data: *mut c_void);
     pub fn g_ptr_array_set_size(array: *mut GPtrArray, length: c_int);
@@ -182,35 +114,6 @@ impl core::ops::Deref for GStr {
 impl Drop for GStr {
     fn drop(&mut self) {
         unsafe { g_free(self.0.as_ptr().cast()) };
-    }
-}
-
-pub struct HashTableEntries {
-    iter: GHashTableIter,
-    live: bool,
-}
-
-impl Iterator for HashTableEntries {
-    type Item = (*mut c_void, *mut c_void);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if !self.live {
-            return None;
-        }
-        let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
-        self.live = unsafe { g_hash_table_iter_next(&mut self.iter, &mut key, &mut value) } != 0;
-        self.live.then_some((key, value))
-    }
-}
-
-pub unsafe fn hash_table_entries(table: *mut GHashTable) -> HashTableEntries {
-    let mut iter = GHashTableIter::new();
-    if !table.is_null() {
-        unsafe { g_hash_table_iter_init(&mut iter, table) };
-    }
-    HashTableEntries {
-        iter,
-        live: !table.is_null(),
     }
 }
 

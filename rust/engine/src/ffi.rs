@@ -15,8 +15,9 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
+use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GHashTable};
+use southstar_glib as glib;
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
@@ -266,12 +267,12 @@ pub struct Page<'a> {
     pub css_cache: Option<CssCache>,
 }
 
-pub fn compute_cascade(page: &Page<'_>) -> *mut GHashTable {
+pub fn compute_cascade(page: &Page<'_>) -> Rc<StyleMap> {
     let _scope = CssScope::enter(page.base);
     let sheets = crate::styles::collect_stylesheets(page.doc, page.base, page.css_cache);
     let styles = css::css_compute(page.doc, &sheets);
     drop(sheets);
-    styles
+    Rc::new(styles)
 }
 
 pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
@@ -280,12 +281,10 @@ pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
     drop(sheets);
 }
 
-/// # Safety
-///
-/// `styles` is null or a live style table of the page the engine animates.
-pub unsafe fn anim_observe(anim: AnimHandle, styles: *mut GHashTable, now_us: i64) {
-    // SAFETY: the caller vouches for the style table.
-    unsafe { anim.observe_all(styles, now_us) };
+pub fn anim_observe(anim: AnimHandle, styles: Option<&StyleMap>, now_us: i64) {
+    if let Some(styles) = styles {
+        anim.observe_all(styles, now_us);
+    }
 }
 
 pub struct Relayout<'a> {
@@ -304,7 +303,7 @@ pub struct Relayout<'a> {
 /// # Safety
 ///
 /// `js` is null or the page's live script engine.
-pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
+pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
     let viewport_width = req.viewport_width;
     let js = req.js;
     let out_layout = layout.as_ptr();
@@ -334,7 +333,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
     } else {
         css::render_relayout(&ctx, out_layout)
     };
-    css::publish_to_page(js, styles, layout.get());
+    css::publish_to_page(js, styles.as_ref(), layout.get());
     if crate::styles::frame_viewports_disagree_with_layout() {
         css::discard_layout(js, styles, out_layout);
         drop(sheets);
@@ -342,10 +341,10 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> *mut GH
         sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
         let ctx = css::render_ctx(&r, &sheets);
         styles = css::render_relayout(&ctx, out_layout);
-        css::publish_to_page(js, styles, layout.get());
+        css::publish_to_page(js, styles.as_ref(), layout.get());
     }
     crate::styles::add_relayout(monotonic_us() - t0);
-    css::log_relayout(styles, viewport_width);
+    css::log_relayout(styles.as_deref(), viewport_width);
     drop(sheets);
     styles
 }

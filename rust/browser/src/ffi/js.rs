@@ -4,9 +4,12 @@
 
 use core::ffi::{CStr, c_void};
 use core::ptr::{self, NonNull};
+use std::rc::Rc;
+
+use southstar_css::StyleMap;
 
 use southstar_dom::Node;
-use southstar_glib::{GHashTable, GStr};
+use southstar_glib::GStr;
 use southstar_js_runtime::api::{self, NsJs};
 use southstar_layout::BoxRef;
 
@@ -42,8 +45,8 @@ impl Js {
         api::set_layout_root(self.page(), root.map_or(ptr::null(), |r| r.as_ptr().cast()));
     }
 
-    pub fn set_style_table(self, styles: Option<*mut GHashTable>) {
-        api::set_style_table(self.page(), styles.unwrap_or(ptr::null_mut()));
+    pub fn set_style_table(self, styles: Option<Rc<StyleMap>>) {
+        api::set_style_table(self.page(), styles);
     }
 
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {

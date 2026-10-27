@@ -19,9 +19,10 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::{Node, Tree, WeakNode};
 use southstar_engine::CssCache;
-use southstar_glib::{GBoolean, GHashTable, GStr};
+use southstar_glib::{GBoolean, GStr};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_selection::{NsSelection, Selection};
 
@@ -124,7 +125,7 @@ impl BoxSlot {
 pub struct NsBrowser {
     doc: RefCell<Option<Tree>>,
     layout: Cell<*mut NsBox>,
-    styles: Cell<*mut GHashTable>,
+    styles: RefCell<Option<Rc<StyleMap>>>,
     js: Cell<*mut c_void>,
     anim: Cell<Option<Anim>>,
     images: Cell<Option<Images>>,
@@ -265,7 +266,12 @@ impl NsBrowser {
             .cast::<RefCell<HashSet<CString>>>();
         // SAFETY: `requested` is the aligned address of the requested-image field inside the allocation.
         unsafe { requested.write(RefCell::new(HashSet::new())) };
-        // SAFETY: the Text, NodeSlot, POST body, document, image session and requested-image fields were written above; every other field is a cell of integers, floats, raw pointers or optional handles around a non-null pointer, for which all-zero bytes are a valid value.
+        let styles = raw
+            .wrapping_byte_add(offset_of!(NsBrowser, styles))
+            .cast::<RefCell<Option<Rc<StyleMap>>>>();
+        // SAFETY: `styles` is the aligned address of the style table field inside the allocation.
+        unsafe { styles.write(RefCell::new(None)) };
+        // SAFETY: the Text, NodeSlot, POST body, document, image session, requested-image and style table fields were written above; every other field is a cell of integers, floats, raw pointers or optional handles around a non-null pointer, for which all-zero bytes are a valid value.
         Page::adopt(unsafe { slot.assume_init() })
     }
 
@@ -309,10 +315,7 @@ impl NsBrowser {
     }
 
     pub fn drop_styles(&self) {
-        let styles = self.styles.replace(ptr::null_mut());
-        if !styles.is_null() {
-            unsafe { southstar_glib::g_hash_table_destroy(styles) };
-        }
+        drop(self.styles.take());
     }
 
     fn selection<'a>(&'a self) -> Selection<'a> {

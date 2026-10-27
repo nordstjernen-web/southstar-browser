@@ -7,7 +7,7 @@ use core::ffi::c_char;
 use southstar_glib as glib;
 use southstar_http::{Route, TlsSettings};
 
-use crate::ffi::proxy::{ns_net_configured_no_proxy, ns_net_pick_configured_proxy};
+use crate::ffi::proxy::{configured_no_proxy, pick_configured_proxy};
 use crate::ffi::transport::{ca_bundle_path, ns_net_ec_curves};
 use crate::{hsts, url};
 
@@ -23,19 +23,18 @@ pub fn tls_settings() -> TlsSettings {
 }
 
 pub fn apply_dns_over_https() {
-    let url = southstar_config::get().and_then(|c| text(c.doh_url));
+    let url = southstar_config::get().and_then(|c| c.doh_url.bytes());
     southstar_http::set_dns_over_https(url, tls_settings());
 }
 
 pub fn route(target: &[u8], host: &str) -> Route {
     apply_dns_over_https();
-    let target_c = std::ffi::CString::new(target).unwrap_or_default();
-    let proxy = text(unsafe { ns_net_pick_configured_proxy(target_c.as_ptr()) })
+    let proxy = pick_configured_proxy(target)
         .filter(|p| !p.is_empty())
-        .and_then(southstar_http::parse_proxy)
+        .and_then(|p| southstar_http::parse_proxy(&p))
         .filter(|_| {
             !southstar_http::proxy_bypassed(
-                text(ns_net_configured_no_proxy()).unwrap_or_default(),
+                configured_no_proxy().as_deref().unwrap_or_default(),
                 host,
             )
         });

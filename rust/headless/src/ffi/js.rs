@@ -7,8 +7,9 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 
@@ -215,7 +216,7 @@ impl Js {
         }
     }
 
-    pub fn set_style_table(self, styles: *mut GHashTable) {
+    pub fn set_style_table(self, styles: Option<Rc<StyleMap>>) {
         api::set_style_table(self.page(), styles);
     }
 

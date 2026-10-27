@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::GBoolean;
 
 use crate::ffi::state::PageState;
 use crate::ffi::{Js, NsJs, glue};
@@ -181,13 +181,8 @@ pub fn copy_selection(js: *const NsJs) -> bool {
         let Some((write, data)) = state.clipboard_write.get() else {
             return false;
         };
-        let text = state.selection_text.get();
-        let text = if text.is_null() {
-            c"".as_ptr()
-        } else {
-            text.cast_const()
-        };
-        unsafe { write(text, data) != 0 }
+        let text = state.selection_text.borrow().clone().unwrap_or_default();
+        unsafe { write(text.as_ptr(), data) != 0 }
     })
 }
 
@@ -211,7 +206,7 @@ pub fn selection_state(js: *const NsJs) -> Selection {
             has_range: false,
         },
         |state| Selection {
-            text: glue::text(state.selection_text.get()).map(CStr::to_owned),
+            text: state.selection_text.borrow().clone(),
             rect: state.selection_rect.get(),
             has_range: state.selection_has_range.get(),
         },
@@ -220,8 +215,9 @@ pub fn selection_state(js: *const NsJs) -> Selection {
 
 pub fn set_selection(js: *const NsJs, text: Option<&CStr>, has_range: bool, rect: [f64; 4]) {
     state(js, (), |state| {
-        let text = glib::strdup(text.map_or(&b""[..], CStr::to_bytes));
-        PageState::replace_owned(&state.selection_text, text);
+        state
+            .selection_text
+            .replace(Some(text.map_or_else(CString::default, CStr::to_owned)));
         state.selection_has_range.set(has_range);
         state.selection_rect.set(rect);
     });

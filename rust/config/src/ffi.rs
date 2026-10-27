@@ -66,32 +66,8 @@ pub(crate) fn enable_webgl() {
     }
 }
 
-pub(crate) fn text(p: *const c_char) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(p) }.map(<[u8]>::to_vec)
-}
-
-pub(crate) fn set_text(slot: &mut *mut c_char, value: &[u8]) {
-    unsafe { glib::g_free((*slot).cast()) };
-    *slot = glib::strdup(value);
-}
-
-pub(crate) fn adopt_text(to: &mut *mut c_char, from: &mut *mut c_char) {
-    let stale = if text(*to) != text(*from) {
-        core::mem::replace(to, *from)
-    } else {
-        *from
-    };
-    // SAFETY: stale is a g_strdup'd text the configuration owned and no slot refers to any more.
-    unsafe { glib::g_free(stale.cast()) };
-    *from = ptr::null_mut();
-}
-
 pub(crate) fn ascii_strtoll(value: &[u8]) -> Option<i64> {
     fs::ascii_strtoll(value)
-}
-
-pub(crate) fn null_text() -> Vec<u8> {
-    b"(null)".to_vec()
 }
 
 fn getenv(name: &str) -> Option<Vec<u8>> {
@@ -130,29 +106,13 @@ fn load(config: &mut NsConfig, path: &Path) {
     crate::load(config, contents.as_deref(), getenv);
 }
 
-fn free_texts(config: &mut NsConfig) {
-    for p in [
-        &mut config.home_url,
-        &mut config.user_agent,
-        &mut config.compat_mode,
-        &mut config.accept_language,
-        &mut config.search_engine,
-        &mut config.ai_model_mirror,
-        &mut config.http_proxy,
-        &mut config.https_proxy,
-        &mut config.no_proxy,
-        &mut config.doh_url,
-        &mut config.gsk_renderer,
-    ] {
-        unsafe { glib::g_free((*p).cast()) };
-        *p = ptr::null_mut();
-    }
-}
-
 fn user_config_dir() -> Vec<u8> {
     // SAFETY: g_get_user_config_dir has no preconditions and returns a string GLib owns.
     let dir = unsafe { glib::g_get_user_config_dir() };
-    text(dir).unwrap_or_default()
+    // SAFETY: the directory is null or a NUL-terminated string GLib keeps for the process lifetime.
+    unsafe { glib::bytes(dir) }
+        .map(<[u8]>::to_vec)
+        .unwrap_or_default()
 }
 
 pub fn init() {
@@ -178,9 +138,7 @@ pub fn reload() {
 }
 
 pub fn shutdown() {
-    let config = global_config();
-    free_texts(config);
-    *config = NsConfig::ZERO;
+    *global_config() = NsConfig::ZERO;
     *global_path() = None;
 }
 

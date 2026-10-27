@@ -5,9 +5,9 @@
 use core::ffi::{CStr, c_void};
 use core::ptr::NonNull;
 
+use southstar_css::StyleMap;
 use southstar_css::{Declarations, OwnedValue, Sheet};
 use southstar_dom::Node;
-use southstar_glib::GHashTable;
 use southstar_style::Transform;
 
 use crate::engine::{Anim, Info, ScriptTiming, TARGET_BG_COLOR, TARGET_COLOR};
@@ -140,13 +140,8 @@ impl AnimHandle {
         self.with(|a| a.load_keyframes(sheet));
     }
 
-    /// # Safety
-    ///
-    /// `styles` is null or a live table mapping this thread's nodes to the computed styles of the page the engine animates.
-    pub unsafe fn observe_all(self, styles: *mut GHashTable, now_us: i64) {
-        if let Some(styles) = StylesTable::new(styles) {
-            self.with(|a| a.observe_all(styles, now_us));
-        }
+    pub fn observe_all(self, styles: &StyleMap, now_us: i64) {
+        self.with(|a| a.observe_all(StylesTable::new(styles), now_us));
     }
 
     pub fn take_events(self) -> Vec<AnimEvent> {

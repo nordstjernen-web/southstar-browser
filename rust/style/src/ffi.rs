@@ -10,11 +10,10 @@ use std::sync::OnceLock;
 
 use southstar_css::{
     BorderImageParams, Calc, Gradient, GridAreas, GridTracks, Prop as PropId, ShadowList,
-    StyleData, Transform,
+    StyleData, StyleMap, Transform,
 };
 pub use southstar_css::{NsCssValue, ValueKind as Kind};
 use southstar_dom::Node;
-use southstar_glib::{GHashTable, g_hash_table_lookup};
 use southstar_layout::{BoxRef, Style};
 
 pub const PROP_COUNT: usize = southstar_css::PROP_COUNT;
@@ -503,27 +502,28 @@ impl<'a> StyleRef<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleTable(*mut GHashTable);
+pub struct StyleTable(*const StyleMap);
 
 impl StyleTable {
-    pub unsafe fn from_ptr(table: *mut GHashTable) -> StyleTable {
+    /// # Safety
+    ///
+    /// `table` is null or a style table that stays alive while this StyleTable or a copy of it is used.
+    pub unsafe fn from_ptr(table: *const StyleMap) -> StyleTable {
         StyleTable(table)
     }
 
     pub fn none() -> StyleTable {
-        StyleTable(core::ptr::null_mut())
+        StyleTable(core::ptr::null())
     }
 
-    pub fn as_ptr(self) -> *mut GHashTable {
+    pub fn as_ptr(self) -> *const StyleMap {
         self.0
     }
 
     pub fn get(self, node: Node<'_>) -> Option<StyleRef<'_>> {
-        if self.0.is_null() {
-            return None;
-        }
-        let style = unsafe { g_hash_table_lookup(self.0, node.as_ptr().cast()) };
-        unsafe { StyleRef::from_ptr(style.cast()) }
+        // SAFETY: from_ptr's caller keeps the table alive while it is used.
+        let table = unsafe { self.0.as_ref() }?;
+        unsafe { StyleRef::from_ptr(table.lookup(node.as_ptr()).cast()) }
     }
 }
 

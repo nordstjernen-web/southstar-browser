@@ -1077,8 +1077,10 @@ fn load_home_page(v: View) {
     let home = {
         let config = southstar_config::lock();
         config.reload();
-        // SAFETY: home_url is null or a NUL-terminated string the config owns while it stays locked.
-        let home = unsafe { borrowed(config.get().home_url) }
+        let home = config
+            .get()
+            .home_url
+            .c_str()
             .filter(|h| !h.is_empty())
             .unwrap_or(c"about:start");
         normalize_url(home)

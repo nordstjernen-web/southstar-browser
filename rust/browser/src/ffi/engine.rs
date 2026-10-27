@@ -4,9 +4,10 @@
 
 use core::ffi::{CStr, c_int};
 use core::ptr;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_glib::GHashTable;
 use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
 
 use super::glib::StrBufOwned;
@@ -42,20 +43,20 @@ impl NsBrowser {
         };
         // SAFETY: the page's script engine slot is null or holds its live engine.
         let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout) };
-        self.styles.set(styles);
+        self.styles.replace(styles);
     }
 
     pub fn compute_cascade(&self) {
         let base = self.base_url.get();
         let styles = southstar_engine::compute_cascade(&self.engine_page(base.as_deref()));
-        self.styles.set(styles);
+        self.styles.replace(Some(styles));
     }
 
     pub fn load_keyframes(&self, anim: Anim) {
         let base = self.base_url.get();
         southstar_engine::load_keyframes(anim, &self.engine_page(base.as_deref()));
-        // SAFETY: the page's style table is null or the live table of its last cascade.
-        unsafe { southstar_engine::anim_observe(anim, self.styles.get(), super::monotonic_us()) };
+        let styles = self.styles();
+        southstar_engine::anim_observe(anim, styles.as_deref(), super::monotonic_us());
     }
 
     pub fn speculative_preload(&self) {
@@ -65,8 +66,12 @@ impl NsBrowser {
         }
     }
 
-    pub fn styles_raw(&self) -> *mut GHashTable {
-        self.styles.get()
+    pub fn styles(&self) -> Option<Rc<StyleMap>> {
+        self.styles.borrow().clone()
+    }
+
+    pub fn has_styles(&self) -> bool {
+        self.styles.borrow().is_some()
     }
 
     pub fn set_open_select_for_layout(&self) {

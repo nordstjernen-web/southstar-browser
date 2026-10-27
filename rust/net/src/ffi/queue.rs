@@ -10,14 +10,14 @@ use std::time::{Duration, Instant};
 
 use southstar_glib::{self as glib, GBoolean, GError};
 
-use super::NsResponse;
-use super::fetch::{self, Failure, Fetch, Response};
+use super::fetch::{self, Failure, Fetch};
 use super::hop;
 use super::transport::{
     ns_net_aborting, ns_net_begin_abort, ns_net_join_rng, ns_net_transport_shutdown,
 };
 use crate::coalesce::{Claim, Coalescer, Shareable};
 use crate::request::MAX_TIMEOUT_S;
+use crate::response::{Response, cstr, text as field};
 use crate::{netlog, url};
 
 const MAX_CONCURRENT_FETCHES: usize = 32;
@@ -98,14 +98,17 @@ impl Drop for Task {
 }
 
 unsafe extern "C" fn response_free(data: *mut c_void) {
-    unsafe { super::ns_response_free(data.cast()) };
+    // SAFETY: GLib hands back the boxed response return_outcome gave the task, exactly once.
+    drop(unsafe { Box::from_raw(data.cast::<Response>()) });
 }
 
 fn return_outcome(task: *mut c_void, outcome: Result<Response, Failure>) {
     match outcome {
-        Ok(resp) => unsafe {
-            g_task_return_pointer(task, resp.into_raw().cast(), Some(response_free))
-        },
+        Ok(resp) => {
+            let boxed = Box::into_raw(Box::new(resp));
+            // SAFETY: the task is live and takes ownership of the box, freed with response_free.
+            unsafe { g_task_return_pointer(task, boxed.cast(), Some(response_free)) }
+        }
         Err(failure) => unsafe { g_task_return_error(task, failure.into_error()) },
     }
 }
@@ -131,18 +134,16 @@ unsafe extern "C" fn fetch_ctx_free(data: *mut c_void) {
 
 impl Shareable for Response {
     fn preloadable_len(&self) -> Option<usize> {
-        let r = self.view();
-        let body = unsafe { r.body.as_ref() }?;
-        let forbids_reuse = unsafe { glib::bytes(r.raw_headers) }.is_some_and(|raw| {
+        let forbids_reuse = field(&self.raw_headers).is_some_and(|raw| {
             raw.to_ascii_lowercase()
                 .windows(b"no-store".len())
                 .any(|w| w == b"no-store")
         });
-        (r.status == 200 && r.error.is_null() && !forbids_reuse).then_some(body.len as usize)
+        (self.status == 200 && self.error.is_none() && !forbids_reuse).then_some(self.body.len())
     }
 
     fn duplicate(&self) -> Response {
-        self.copy()
+        self.clone()
     }
 }
 
@@ -195,7 +196,7 @@ fn aborting() -> bool {
 
 fn copy_outcome(outcome: Result<&Response, &Failure>) -> Result<Response, Failure> {
     match outcome {
-        Ok(resp) => Ok(resp.copy()),
+        Ok(resp) => Ok(resp.clone()),
         Err(failure) => Err(failure.clone()),
     }
 }
@@ -324,19 +325,16 @@ fn log_fetch(message: Vec<u8>) {
 fn log_outcome(url: &[u8], outcome: Result<&Response, &Failure>) {
     match outcome {
         Err(failure) => log_fetch([b"failed ", url, b": ", failure.message()].concat()),
-        Ok(resp) => {
-            let r = resp.view();
-            match text(r.error) {
-                Some(error) => log_fetch([b"error ", url, b": ", error].concat()),
-                None => {
-                    let shown = text(r.final_url).unwrap_or(url);
-                    let len = unsafe { r.body.as_ref() }.map_or(0, |b| b.len);
-                    let head = format!("{} ", r.status).into_bytes();
-                    let tail = format!(" ({len} bytes)").into_bytes();
-                    log_fetch([&head[..], shown, &tail].concat());
-                }
+        Ok(resp) => match field(&resp.error) {
+            Some(error) => log_fetch([b"error ", url, b": ", error].concat()),
+            None => {
+                let shown = field(&resp.final_url).unwrap_or(url);
+                let len = resp.body.len();
+                let head = format!("{} ", resp.status).into_bytes();
+                let tail = format!(" ({len} bytes)").into_bytes();
+                log_fetch([&head[..], shown, &tail].concat());
             }
-        }
+        },
     }
 }
 
@@ -403,18 +401,16 @@ fn drain(timeout: Duration) -> bool {
 fn blob_response(url: &[u8]) -> Option<Response> {
     let resolve = lock(&BLOB_RESOLVER).filter(|_| url.starts_with(b"blob:"))?;
     let mut resp = Response::new();
-    resp.get().final_url = glib::strdup(url);
+    resp.final_url = Some(cstr(url));
     match resolve(url) {
         Some((bytes, content_type)) => {
-            resp.append(&bytes);
-            let r = resp.get();
-            r.status = 200;
-            r.content_type = content_type.map_or(ptr::null_mut(), |ct| glib::strdup(&ct));
+            resp.body.extend_from_slice(&bytes);
+            resp.status = 200;
+            resp.content_type = content_type.map(|ct| cstr(&ct));
         }
         None => {
-            let r = resp.get();
-            r.status = 404;
-            r.error = glib::strdup(b"blob URL not found");
+            resp.status = 404;
+            resp.error = Some(cstr(b"blob URL not found"));
         }
     }
     Some(resp)
@@ -498,8 +494,7 @@ unsafe extern "C" fn request_done(_source: *mut c_void, result: *mut c_void, dat
         // SAFETY: the error is owned here and freed once.
         unsafe { glib::g_error_free(error) };
     }
-    // SAFETY: a finished request's response is new and owned by nobody else.
-    let outcome = unsafe { Response::from_raw(resp) }.ok_or(message);
+    let outcome = resp.ok_or(message);
     (*done)(outcome);
 }
 
@@ -566,7 +561,10 @@ pub fn request_blocking(req: &FetchRequest<'_>) -> Result<Response, Failure> {
     blocking(req, ptr::null_mut())
 }
 
-fn blocking(req: &FetchRequest<'_>, cancellable: *mut c_void) -> Result<Response, Failure> {
+pub(crate) fn blocking(
+    req: &FetchRequest<'_>,
+    cancellable: *mut c_void,
+) -> Result<Response, Failure> {
     let key = coalescing_key(req, cancellable);
     if let Some(shared) = key.as_deref().and_then(join_blocking) {
         return shared;
@@ -718,41 +716,6 @@ pub unsafe fn ns_net_request_async(
     submit_request(&req, cancellable, callback, user_data);
 }
 
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn ns_net_request_blocking(
-    url: *const c_char,
-    top_url: *const c_char,
-    method: *const c_char,
-    body: *const c_void,
-    body_len: usize,
-    content_type: *const c_char,
-    extra_headers: *const *const c_char,
-    cancellable: *mut c_void,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
-    let Some(url) = text(url) else {
-        return ptr::null_mut();
-    };
-    // SAFETY: the caller passes extra_headers as null or a NULL-terminated array of C strings.
-    let headers = unsafe { fetch::header_lines(extra_headers) };
-    let req = FetchRequest {
-        url,
-        top_url: text(top_url),
-        method: text(method),
-        // SAFETY: a non-null body holds body_len readable bytes.
-        body: (!body.is_null()).then(|| unsafe { glib::slice(body.cast(), body_len) }),
-        content_type: text(content_type),
-        headers: &headers,
-    };
-    match blocking(&req, cancellable) {
-        Ok(resp) => resp.into_raw(),
-        Err(failure) => {
-            failure.set(error);
-            ptr::null_mut()
-        }
-    }
-}
-
 pub fn fetch_blocking(url: &CStr) -> Option<Response> {
     request_blocking(&FetchRequest {
         url: url.to_bytes(),
@@ -766,7 +729,10 @@ pub fn fetch_blocking(url: &CStr) -> Option<Response> {
 ///
 /// `result` is the GAsyncResult a request callback received, and `error` is null or
 /// points to a null GError slot.
-pub unsafe fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse {
+pub unsafe fn ns_net_fetch_finish(
+    result: *mut c_void,
+    error: *mut *mut GError,
+) -> Option<Response> {
     if unsafe { g_task_is_valid(result, ptr::null_mut()) } == 0 {
         unsafe {
             g_return_if_fail_warning(
@@ -775,7 +741,13 @@ pub unsafe fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) 
                 c"g_task_is_valid(result, NULL)".as_ptr(),
             )
         };
-        return ptr::null_mut();
+        return None;
     }
-    unsafe { g_task_propagate_pointer(result, error) }.cast()
+    // SAFETY: result is a valid GTask, checked above, and error is null or a null GError slot.
+    let raw = unsafe { g_task_propagate_pointer(result, error) }.cast::<Response>();
+    if raw.is_null() {
+        return None;
+    }
+    // SAFETY: a request task's pointer is the box return_outcome leaked, and propagating hands it over once.
+    Some(*unsafe { Box::from_raw(raw) })
 }

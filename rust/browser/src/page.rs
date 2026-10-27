@@ -154,7 +154,7 @@ pub fn relayout(b: &NsBrowser) {
     if b.layout().is_some() {
         b.take_layout();
     }
-    if let Some(js) = b.js().filter(|_| !b.styles_raw().is_null()) {
+    if let Some(js) = b.js().filter(|_| b.has_styles()) {
         js.set_style_table(None);
     }
     b.drop_styles();
@@ -172,7 +172,7 @@ pub fn relayout(b: &NsBrowser) {
     b.has_deferred_lazy.set(false);
     b.images_arrived_since_layout.set(false);
     if let Some(js) = b.js() {
-        js.set_style_table(Some(b.styles_raw()));
+        js.set_style_table(b.styles());
         js.set_layout_root(b.layout());
         images::ensure_images(b);
         ffi::schedule_media_events(b);

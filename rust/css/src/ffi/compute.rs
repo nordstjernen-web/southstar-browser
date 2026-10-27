@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint};
 use core::ops::Deref;
 use core::ptr;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -12,7 +12,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use southstar_dom::{Kind, Node, NsNode, children};
-use southstar_glib::{self as glib, GHashTable};
+use southstar_glib as glib;
 
 use super::cascade::{Parents, cascade_apply};
 use super::computed_units::{PROP_COUNT, RawStyle};
@@ -38,6 +38,7 @@ use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
 use super::sheet::{Sheet, SheetData};
 use super::style_alloc::{RetainedStyle, style_alloc, style_clone_shared, style_free};
+use super::style_map::StyleMap;
 use super::style_share::{
     Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
 };
@@ -73,10 +74,6 @@ fn pseudo_slot(pe: c_uint) -> usize {
         7 => 7,
         _ => 8,
     }
-}
-
-unsafe extern "C" fn style_free_notify(data: *mut c_void) {
-    unsafe { style_free(data.cast()) };
 }
 
 struct Scratch {
@@ -218,7 +215,7 @@ struct Pass<'a> {
 struct Walk<'a> {
     ua: Option<&'a SheetData>,
     layer_ranks: &'a LayerRanks,
-    out: *mut GHashTable,
+    out: StyleMap,
     registered: &'a RegisteredProps,
     adjust_cache: &'a AdjustCache,
     doc_sheets: Option<HashMap<usize, Vec<Option<&'a SheetData>>>>,
@@ -296,7 +293,10 @@ impl<'a> Walk<'a> {
                     self.compute_element(node, author, parent, layout_parent)
                 }
             };
-            unsafe { glib::g_hash_table_insert(self.out, ptr.cast_mut().cast(), style.cast()) };
+            // SAFETY: style is a live computed style whose reference this pass hands to the table.
+            if let Some(owned) = unsafe { RetainedStyle::adopt(style) } {
+                self.out.insert(ptr as usize, owned);
+            }
             let computed = unsafe { &*style };
             child_parent = style;
             if computed.display.box_ != BOX_CONTENTS {
@@ -501,12 +501,11 @@ fn pseudo_style(
     owned.clear();
 }
 
-fn retained(out: *mut GHashTable) -> Styles {
-    unsafe { glib::hash_table_entries(out) }
+fn retained(out: &StyleMap) -> Styles {
+    out.entries()
         .map(|(node, style)| {
-            let style = style.cast::<RawStyle>();
             unsafe { (*style).retain() };
-            (node as usize, StyleRef(style))
+            (node, StyleRef(style))
         })
         .collect()
 }
@@ -532,7 +531,7 @@ pub fn compute_styles(
     sheets: &[impl Deref<Target = Sheet>],
     sheet_docs: &[Node<'_>],
     containers: Option<&ContainerMap>,
-) -> *mut GHashTable {
+) -> StyleMap {
     let authors: Vec<Option<&SheetData>> = sheets.iter().map(|sheet| Some(sheet.raw())).collect();
     with_container_map(containers, || compute(doc, &authors, sheet_docs))
 }
@@ -541,15 +540,7 @@ fn compute(
     doc_node: Option<Node<'_>>,
     authors: &[Option<&SheetData>],
     sheet_docs: &[Node<'_>],
-) -> *mut GHashTable {
-    let out = unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_direct_hash),
-            Some(glib::g_direct_equal),
-            None,
-            Some(style_free_notify),
-        )
-    };
+) -> StyleMap {
     element_state::reset_language_cache();
     let doc = Node::ptr_or_null(doc_node);
     let quirks = doc_node.is_some_and(|d| d.flags() & NODE_QUIRKS != 0);
@@ -602,7 +593,7 @@ fn compute(
     let mut walk = Walk {
         ua,
         layer_ranks: &layer_ranks,
-        out,
+        out: StyleMap::default(),
         registered: &registered,
         adjust_cache: &adjust_cache,
         doc_sheets,
@@ -617,13 +608,14 @@ fn compute(
         walk.walk(doc, authors, ptr::null(), ptr::null(), false);
     }
     let (reused, recomputed) = (walk.reused, walk.recomputed);
+    let out = core::mem::take(&mut walk.out);
     SCRATCH.set(Some(scratch));
     ancestor_filter_end();
 
     if usable {
         let current = Previous {
             key: interaction_key(doc as usize, sig, containers),
-            styles: retained(out),
+            styles: retained(&out),
         };
         let mut state = incremental_state();
         let stale = state.before_change.take();

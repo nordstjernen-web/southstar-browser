@@ -15,7 +15,7 @@ use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{Selectors, StyleRef, StyleTable, Value, box_dom, box_style, hit_test};
@@ -30,11 +30,11 @@ pub use engine::{
     Anim, CssCache, Document, ImageCache, PrintSetup, Relayout, Response, Timing, Video,
     VideoCache, anim_observe, apply_render_page_rule, collect_videos, compute_cascade,
     css_set_active_node, css_set_doc_language, css_set_print_media, css_set_target_fragment,
-    css_set_viewport, decode_body, destroy_table, dump_layout, dump_text, error_page, fetch,
-    fetch_images, free_layout, hit_form_dom, hit_inline_dom, hit_link, image_document,
-    json_document, load_keyframes, navigate, node_dump, paint_set_anim, paint_set_js,
-    print_setup_default, relayout, suffix_before_ext, url_resolve, video_sources, write_pdf,
-    write_pdf_paged, write_png, xml_document,
+    css_set_viewport, decode_body, dump_layout, dump_text, error_page, fetch, fetch_images,
+    free_layout, hit_form_dom, hit_inline_dom, hit_link, image_document, json_document,
+    load_keyframes, navigate, node_dump, paint_set_anim, paint_set_js, print_setup_default,
+    relayout, suffix_before_ext, url_resolve, video_sources, write_pdf, write_pdf_paged, write_png,
+    xml_document,
 };
 pub use js::{
     DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_raw,
@@ -98,12 +98,6 @@ pub fn node_from_ptr<'a>(p: *const NsNode) -> Option<Node<'a>> {
 
 pub fn box_from_ptr<'a>(p: *const NsBox) -> Option<BoxRef<'a>> {
     unsafe { BoxRef::from_ptr(p) }
-}
-
-impl StyleTable {
-    pub fn from_table(table: *mut GHashTable) -> StyleTable {
-        unsafe { StyleTable::from_ptr(table) }
-    }
 }
 
 pub fn javascript_enabled() -> bool {

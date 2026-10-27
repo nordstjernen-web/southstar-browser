@@ -80,6 +80,13 @@ impl RetainedStyle {
         Some(RetainedStyle(style))
     }
 
+    /// # Safety
+    ///
+    /// `style` is null or a live computed style made by this crate, and the caller gives the RetainedStyle a reference it holds on it.
+    pub(super) unsafe fn adopt(style: *mut RawStyle) -> Option<RetainedStyle> {
+        NonNull::new(style).map(RetainedStyle)
+    }
+
     pub fn get(&self) -> &RawStyle {
         // SAFETY: a RetainedStyle holds a reference on a live style, which keeps it allocated.
         unsafe { self.0.as_ref() }

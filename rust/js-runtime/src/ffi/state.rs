@@ -6,9 +6,12 @@ use core::cell::{Cell, RefCell};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::collections::{HashMap, VecDeque};
+use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::NsNode;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, Scope, Value};
 
 use super::scopes::RealmScope;
@@ -27,13 +30,13 @@ pub type ViewportScrollFn = unsafe extern "C" fn(x: *mut f64, y: *mut f64, data:
 pub type TextQueryFn = unsafe extern "C" fn(text: *const c_char, data: *mut c_void) -> GBoolean;
 pub type DelayFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 pub(crate) type TaskRun = Box<dyn FnOnce(&mut Scope<'_>) -> Result<Value, Value>>;
+pub(crate) type UrlCell = Rc<RefCell<Option<CString>>>;
 
 #[repr(C)]
 pub(crate) struct Slots {
     pub rt: *mut RuntimeHandle,
     pub ctx: *mut ContextHandle,
     pub main_realm_ctx: *mut ContextHandle,
-    pub current_url: *mut *mut c_char,
     pub current_doc: *mut *mut NsNode,
     pub raf_frame_ctx: *mut *mut NsNode,
     pub ce_main_doc: *mut *const NsNode,
@@ -90,15 +93,16 @@ pub(crate) struct PageState {
     pub selection_cmd: Hook<TextQueryFn>,
     pub window_action: Hook<UrlFn>,
     pub in_layout_flush: Cell<bool>,
-    pub document_origin: Cell<*mut c_char>,
+    pub current_url: RefCell<Option<CString>>,
+    pub document_origin: RefCell<Option<CString>>,
     pub realm_scope_base: Cell<*mut RealmScope>,
-    pub top_url_slot: Cell<*mut *mut c_char>,
+    pub top_url_slot: RefCell<Option<UrlCell>>,
     pub current_script: Cell<*mut NsNode>,
-    pub early_inject_src: Cell<*mut c_char>,
+    pub early_inject_src: RefCell<Option<CString>>,
     pub mutated: Cell<bool>,
     pub main_context: Cell<*mut GMainContext>,
     pub worker_host: Cell<*mut WorkerHost>,
-    pub style_table: Cell<*mut GHashTable>,
+    pub style_table: RefCell<Option<Rc<StyleMap>>>,
     pub autofocus_processed: Cell<bool>,
     pub active_modal: Cell<*const NsNode>,
     pub user_activation_us: Cell<i64>,
@@ -120,7 +124,7 @@ pub(crate) struct PageState {
     pub last_orphan_sweep_us: Cell<i64>,
     pub observer_tick_source: Cell<c_uint>,
     pub iframe_doc: RefCell<Option<Value>>,
-    pub selection_text: Cell<*mut c_char>,
+    pub selection_text: RefCell<Option<CString>>,
     pub selection_has_range: Cell<bool>,
     pub selection_rect: Cell<[f64; 4]>,
     pub ignore_destructive_writes: Cell<c_int>,
@@ -147,15 +151,16 @@ impl PageState {
             selection_cmd: Hook::new(),
             window_action: Hook::new(),
             in_layout_flush: Cell::new(false),
-            document_origin: Cell::new(ptr::null_mut()),
+            current_url: RefCell::new(None),
+            document_origin: RefCell::new(None),
             realm_scope_base: Cell::new(ptr::null_mut()),
-            top_url_slot: Cell::new(ptr::null_mut()),
+            top_url_slot: RefCell::new(None),
             current_script: Cell::new(ptr::null_mut()),
-            early_inject_src: Cell::new(ptr::null_mut()),
+            early_inject_src: RefCell::new(None),
             mutated: Cell::new(false),
             main_context: Cell::new(ptr::null_mut()),
             worker_host: Cell::new(ptr::null_mut()),
-            style_table: Cell::new(ptr::null_mut()),
+            style_table: RefCell::new(None),
             autofocus_processed: Cell::new(false),
             active_modal: Cell::new(ptr::null()),
             user_activation_us: Cell::new(0),
@@ -177,28 +182,11 @@ impl PageState {
             last_orphan_sweep_us: Cell::new(0),
             observer_tick_source: Cell::new(0),
             iframe_doc: RefCell::new(None),
-            selection_text: Cell::new(ptr::null_mut()),
+            selection_text: RefCell::new(None),
             selection_has_range: Cell::new(false),
             selection_rect: Cell::new([0.0; 4]),
             ignore_destructive_writes: Cell::new(0),
             module_ctx: Cell::new(ContextHandle::NULL),
-        }
-    }
-
-    pub fn replace_owned(slot: &Cell<*mut c_char>, value: *mut c_char) {
-        let previous = slot.replace(value);
-        unsafe { glib::g_free(previous.cast()) };
-    }
-}
-
-impl Drop for PageState {
-    fn drop(&mut self) {
-        for slot in [
-            &self.document_origin,
-            &self.early_inject_src,
-            &self.selection_text,
-        ] {
-            PageState::replace_owned(slot, ptr::null_mut());
         }
     }
 }

@@ -260,7 +260,7 @@ impl Js {
                     &timing.url,
                     Some(timing.initiator),
                     span,
-                    timing.response.as_ptr().cast_const().cast(),
+                    Some(&timing.response),
                 )
             };
         }

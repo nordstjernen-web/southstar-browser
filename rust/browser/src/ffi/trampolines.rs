@@ -276,7 +276,7 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
     let raw = js.raw();
     let page = js.page();
     api::set_load_delay_hook(page, Some(on_load_delay), ud);
-    js.set_style_table(Some(b.styles_raw()));
+    js.set_style_table(b.styles());
     js.set_image_cache(b.images());
     js.set_anim(b.anim());
     api::set_form_submit_hook(page, Some(on_form_submit), ud);

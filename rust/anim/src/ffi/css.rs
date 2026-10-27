@@ -8,10 +8,9 @@ use core::ptr::{self, NonNull};
 pub use southstar_css::Keyframes;
 use southstar_css::{
     AnimationEntry, Declaration, Declarations, NsCssValue, OwnedValue, Prop as CssProp, Sheet,
-    ValueKind,
+    StyleMap, ValueKind,
 };
 use southstar_dom::{Node, NsNode};
-use southstar_glib as glib;
 use southstar_layout::Style;
 use southstar_style::{StyleRef, UNIT_PERCENT, UNIT_PX};
 
@@ -405,12 +404,8 @@ impl NodePtr {
         core::iter::successors(self.parent(), |p| p.parent())
     }
 
-    pub fn style_in(self, styles: StylesTable) -> Option<StyleRef<'static>> {
-        if styles.0.is_null() {
-            return None;
-        }
-        let style = unsafe { glib::g_hash_table_lookup(styles.0, self.0.cast()) };
-        unsafe { StyleRef::from_ptr(style.cast()) }
+    pub fn style_in(self, styles: StylesTable<'_>) -> Option<StyleRef<'static>> {
+        unsafe { StyleRef::from_ptr(styles.0.lookup(self.0).cast()) }
     }
 
     pub fn style_before_change(self) -> Option<RetainedStyle> {
@@ -423,21 +418,22 @@ impl NodePtr {
 }
 
 #[derive(Clone, Copy)]
-pub struct StylesTable(*mut glib::GHashTable);
+pub struct StylesTable<'a>(&'a StyleMap);
 
-impl StylesTable {
-    pub fn new(table: *mut glib::GHashTable) -> Option<StylesTable> {
-        (!table.is_null()).then_some(StylesTable(table))
+impl<'a> StylesTable<'a> {
+    pub fn new(table: &'a StyleMap) -> StylesTable<'a> {
+        StylesTable(table)
     }
 
     pub fn contains(self, node: NodePtr) -> bool {
-        unsafe { glib::g_hash_table_contains(self.0, node.0.cast()) != 0 }
+        self.0.contains(node.0)
     }
 
     pub fn entries(self) -> Vec<(NodePtr, StyleRef<'static>)> {
-        unsafe { glib::hash_table_entries(self.0) }
+        self.0
+            .entries()
             .filter_map(|(k, v)| {
-                Some((NodePtr::new(k.cast())?, unsafe {
+                Some((NodePtr::new(k as *const NsNode)?, unsafe {
                     StyleRef::from_ptr(v.cast())
                 }?))
             })

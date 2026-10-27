@@ -6,10 +6,11 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_int, c_long, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode, Tree};
 use southstar_engine::Page;
-use southstar_glib::{self as glib, GHashTable};
 use southstar_layout::{BoxPool, BoxRef, NsBox};
 
 pub use southstar_engine::{CssCache, PrintSetup};
@@ -169,16 +170,8 @@ fn page<'a>(doc: &Document, base: Option<&'a CStr>, css_cache: CssCache) -> Page
     }
 }
 
-pub fn compute_cascade(
-    doc: &Document,
-    base: Option<&CStr>,
-    css_cache: CssCache,
-) -> *mut GHashTable {
+pub fn compute_cascade(doc: &Document, base: Option<&CStr>, css_cache: CssCache) -> Rc<StyleMap> {
     southstar_engine::compute_cascade(&page(doc, base, css_cache))
-}
-
-pub fn destroy_table(table: *mut GHashTable) {
-    unsafe { glib::g_hash_table_destroy(table) };
 }
 
 pub use southstar_anim::AnimHandle as Anim;
@@ -187,9 +180,8 @@ pub fn load_keyframes(anim: Anim, doc: &Document, base: Option<&CStr>, css_cache
     southstar_engine::load_keyframes(anim, &page(doc, base, css_cache));
 }
 
-pub fn anim_observe(anim: Anim, styles: *mut GHashTable, now_us: i64) {
-    // SAFETY: the run passes the style table its cascade just computed, which is alive.
-    unsafe { southstar_engine::anim_observe(anim, styles, now_us) };
+pub fn anim_observe(anim: Anim, styles: Option<&StyleMap>, now_us: i64) {
+    southstar_engine::anim_observe(anim, styles, now_us);
 }
 
 pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
@@ -225,7 +217,7 @@ pub struct Relayout<'a> {
     pub anchor: usize,
 }
 
-pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> *mut GHashTable {
+pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
     let req = southstar_engine::Relayout {
         page: Page {
             doc: r.doc,

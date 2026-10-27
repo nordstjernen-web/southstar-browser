@@ -6,12 +6,13 @@ use core::ffi::{CStr, c_char, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{Mutex, MutexGuard};
 
 use southstar_anim::AnimHandle;
-use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData};
+use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData, StyleMap};
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GHashTable, GStr};
+use southstar_glib::{self as glib, GBoolean, GStr};
 use southstar_layout::{BoxPool, BoxRef, NsBox};
 use southstar_layout_position::BuildInput;
 use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
@@ -221,23 +222,22 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
     }
 }
 
-fn feed_animations(c: &RenderCtx, styles: *mut GHashTable) {
+fn feed_animations(c: &RenderCtx, styles: &StyleMap) {
     let Some(anim) = c.anim else {
         return;
     };
     for sheet in c.style_sheets() {
         anim.load_keyframes(sheet);
     }
-    // SAFETY: styles is the style table this relayout just computed for the page the engine animates.
-    unsafe { anim.observe_all(styles, now_us()) };
+    anim.observe_all(styles, now_us());
 }
 
-fn apply_zoom(c: &RenderCtx, styles: *mut GHashTable) {
+fn apply_zoom(c: &RenderCtx, styles: &StyleMap) {
     let zoom = c.zoom();
     if (zoom - 1.0).abs() <= 0.001 {
         return;
     }
-    for (_, style) in unsafe { glib::hash_table_entries(styles) } {
+    for (_, style) in styles.entries() {
         // SAFETY: the table holds the live computed styles of this pass, and none is borrowed while it is scaled.
         if let Some(style) = unsafe { style.cast::<StyleData>().as_mut() } {
             southstar_css::style_scale_font_size(style, zoom);
@@ -245,18 +245,19 @@ fn apply_zoom(c: &RenderCtx, styles: *mut GHashTable) {
     }
 }
 
-fn style_pass(c: &RenderCtx, styles: *mut GHashTable) {
+fn style_pass(c: &RenderCtx, styles: &StyleMap) {
     feed_animations(c, styles);
+    // SAFETY: the table is borrowed for the whole call.
     request_fonts(c, unsafe { StyleTable::from_ptr(styles) });
     apply_zoom(c, styles);
 }
 
-fn styles_tables_equal(a: *mut GHashTable, b: *mut GHashTable) -> bool {
-    if unsafe { glib::g_hash_table_size(a) != glib::g_hash_table_size(b) } {
+fn styles_tables_equal(a: &StyleMap, b: &StyleMap) -> bool {
+    if a.len() != b.len() {
         return false;
     }
-    unsafe { glib::hash_table_entries(a) }.all(|(node, style)| {
-        let other = unsafe { glib::g_hash_table_lookup(b, node) };
+    a.entries().all(|(node, style)| {
+        let other = b.lookup(node as *const c_void);
         unsafe {
             styles_equal(
                 StyleRef::from_ptr(style.cast()),
@@ -386,7 +387,7 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
         .any(|sheet| sheet.has_container_rules() || sheet.has_container_units())
 }
 
-fn build_layout(c: &RenderCtx, styles: *mut GHashTable, viewport_width: f64) -> *mut NsBox {
+fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> *mut NsBox {
     southstar_paint::list_ordinals_begin();
     let layout = southstar_layout_position::layout_build(BuildInput {
         doc: c.doc(),
@@ -421,7 +422,7 @@ fn relayout(
     c: &RenderCtx,
     out_layout: &mut *mut NsBox,
     mut profile: Option<&mut RenderProfile>,
-) -> *mut GHashTable {
+) -> Rc<StyleMap> {
     if let Some(p) = profile.as_deref_mut() {
         *p = RenderProfile::default();
     }
@@ -445,15 +446,20 @@ fn relayout(
         southstar_css::selector_cache_begin();
     }
     let compute = |containers: Option<&ContainerMap>| {
-        southstar_css::compute_styles(c.doc(), c.sheets, c.sheet_docs, containers)
+        Rc::new(southstar_css::compute_styles(
+            c.doc(),
+            c.sheets,
+            c.sheet_docs,
+            containers,
+        ))
     };
     let mut styles = compute(predicted.as_ref());
     let t1 = clock();
 
-    style_pass(c, styles);
+    style_pass(c, &styles);
     let t2 = clock();
 
-    let mut layout = build_layout(c, styles, viewport_width);
+    let mut layout = build_layout(c, &styles, viewport_width);
     let t3 = clock();
     if let Some(p) = profile.as_deref_mut() {
         p.css1_us = t1 - t0;
@@ -493,16 +499,16 @@ fn relayout(
         let styles2 = compute(Some(&containers));
         let t5 = clock();
         let features_used = southstar_css::container_features_used();
-        if (!features_used && !stale) || styles_tables_equal(styles, styles2) {
+        if (!features_used && !stale) || styles_tables_equal(&styles, &styles2) {
             if let Some(p) = profile.as_deref_mut() {
                 p.css2_us += t5 - t4;
             }
-            unsafe { glib::g_hash_table_destroy(styles2) };
+            drop(styles2);
             break;
         }
-        style_pass(c, styles2);
+        style_pass(c, &styles2);
         let t6 = clock();
-        let layout2 = build_layout(c, styles2, viewport_width);
+        let layout2 = build_layout(c, &styles2, viewport_width);
         let t7 = clock();
         if let Some(p) = profile.as_deref_mut() {
             p.css2_us += t5 - t4;
@@ -511,7 +517,6 @@ fn relayout(
         }
         unsafe {
             BoxPool::free_tree(BoxRef::from_ptr(layout));
-            glib::g_hash_table_destroy(styles);
         }
         layout = layout2;
         styles = styles2;
@@ -566,20 +571,16 @@ pub unsafe fn ns_render_relayout_profile(
     c: *const RenderCtx,
     out_layout: *mut *mut NsBox,
     profile: *mut RenderProfile,
-) -> *mut GHashTable {
-    let Some(out_layout) = (unsafe { out_layout.as_mut() }) else {
-        return ptr::null_mut();
-    };
+) -> Option<Rc<StyleMap>> {
+    let out_layout = unsafe { out_layout.as_mut() }?;
     *out_layout = ptr::null_mut();
-    let Some(c) = (unsafe { c.as_ref() }) else {
-        return ptr::null_mut();
-    };
-    relayout(c, out_layout, unsafe { profile.as_mut() })
+    let c = unsafe { c.as_ref() }?;
+    Some(relayout(c, out_layout, unsafe { profile.as_mut() }))
 }
 
 pub unsafe fn ns_render_relayout(
     c: *const RenderCtx,
     out_layout: *mut *mut NsBox,
-) -> *mut GHashTable {
+) -> Option<Rc<StyleMap>> {
     unsafe { ns_render_relayout_profile(c, out_layout, ptr::null_mut()) }
 }

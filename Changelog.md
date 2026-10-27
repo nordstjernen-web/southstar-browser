@@ -80,6 +80,13 @@ Southstar Browser 1.0.2:
   over the correctly rounded `f64::from_str`. GLib stays for the main loop,
   GIO, local time, platform folders, charset conversion and regular
   expressions. About 500 fewer `unsafe` and 180 fewer GLib imports.
+* Network responses are an ordinary Rust struct (owned strings and a
+  `Vec<u8>` body) instead of a C-layout record of `g_malloc`'d fields and
+  a `GByteArray` that crates passed as raw pointers. The configuration's
+  text fields, the page URL, document origin and selection text are owned
+  values, and the node-to-style table is a Rust map shared through `Rc`,
+  which also fixes a script page holding a dangling pointer to a style
+  table the browser had freed.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

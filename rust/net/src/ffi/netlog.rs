@@ -1,56 +1,49 @@
-//! Southstar — the C ABI of the network log, the fetch counters and connection statistics, and the switch that turns their collection on.
+//! Southstar — the network log, the fetch counters and connection statistics, and the switch that turns their collection on.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_long};
+use core::ffi::{c_int, c_long};
 use core::sync::atomic::Ordering;
-
-use southstar_glib as glib;
 
 use crate::netlog::{self, Entry};
 
 const DLOG_NET: c_int = 4;
 
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
-}
-
-fn owned(p: *const c_char) -> Vec<u8> {
-    text(p).map(<[u8]>::to_vec).unwrap_or_default()
-}
-
 pub fn set_log_fetches(on: bool) {
     netlog::LOG_FETCHES.store(on, Ordering::Relaxed);
 }
 
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn ns_net_log_record(
-    method: *const c_char,
-    url: *const c_char,
-    status: c_long,
-    content_type: *const c_char,
-    body_len: u64,
-    duration_ms: f64,
-    req_headers: *const c_char,
-    resp_headers: *const c_char,
-    error: *const c_char,
-) {
-    let Some(url) = text(url).filter(|u| !u.is_empty()) else {
+pub struct LogRecord<'a> {
+    pub method: Option<&'a [u8]>,
+    pub url: &'a [u8],
+    pub status: c_long,
+    pub content_type: Option<&'a [u8]>,
+    pub body_len: u64,
+    pub duration_ms: f64,
+    pub request_headers: Option<&'a [u8]>,
+    pub response_headers: Option<&'a [u8]>,
+    pub error: Option<&'a [u8]>,
+}
+
+pub fn log_record(r: &LogRecord<'_>) {
+    if r.url.is_empty() {
         return;
-    };
+    }
+    let owned = |v: Option<&[u8]>| v.map(<[u8]>::to_vec).unwrap_or_default();
     netlog::record(Entry {
-        method: text(method)
+        method: r
+            .method
             .filter(|m| !m.is_empty())
             .unwrap_or(b"GET")
             .to_vec(),
-        url: url.to_vec(),
-        status,
-        content_type: owned(content_type),
-        body_len,
-        duration_ms,
-        request_headers: owned(req_headers),
-        response_headers: owned(resp_headers),
-        error: text(error).filter(|e| !e.is_empty()).map(<[u8]>::to_vec),
+        url: r.url.to_vec(),
+        status: r.status,
+        content_type: owned(r.content_type),
+        body_len: r.body_len,
+        duration_ms: r.duration_ms,
+        request_headers: owned(r.request_headers),
+        response_headers: owned(r.response_headers),
+        error: r.error.filter(|e| !e.is_empty()).map(<[u8]>::to_vec),
     });
 }
 
@@ -58,19 +51,9 @@ pub fn ns_net_perf_record(start_us: i64, end_us: i64, bytes: u64) {
     netlog::record_timing(start_us, end_us, bytes);
 }
 
-pub unsafe fn ns_net_conn_stat_record(
-    url: *const c_char,
-    http_version: c_long,
-    new_connections: c_long,
-) {
-    let Some(message) =
-        text(url).and_then(|u| netlog::record_connection(u, http_version, new_connections))
-    else {
+pub fn conn_stat_record(url: &[u8], http_version: c_long, new_connections: c_long) {
+    let Some(message) = netlog::record_connection(url, http_version, new_connections) else {
         return;
     };
     southstar_debuglog::emit(DLOG_NET, b"conn", &message);
-}
-
-pub fn ns_net_http_version_name(version: c_long) -> *const c_char {
-    netlog::version_name(version).as_ptr()
 }

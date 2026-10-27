@@ -2,61 +2,61 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::cell::RefCell;
+use core::ffi::CStr;
 use core::ptr;
+use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::{Kind, Node, NsNode};
-use southstar_glib as glib;
 use southstar_js_engine::{ContextHandle, Value};
 
 use super::Js;
+use super::state::UrlCell;
 use crate::budget;
 
 const FRAME_URL_ATTR: &CStr = c"data-nd-frame-url";
 
-#[repr(C)]
 pub(crate) struct FrameUrl {
-    saved: *mut c_char,
+    saved: Option<UrlCell>,
     owns_slot: bool,
 }
 
 impl FrameUrl {
-    pub const fn new() -> FrameUrl {
+    pub fn new() -> FrameUrl {
         FrameUrl {
-            saved: ptr::null_mut(),
+            saved: None,
             owns_slot: false,
         }
     }
 }
 
-#[repr(C)]
 pub(crate) struct RealmScope {
     ctx: ContextHandle,
     doc: *mut NsNode,
     frame: *mut NsNode,
-    url: *mut c_char,
-    entered_url: *mut c_char,
-    prev_slot: *mut *mut c_char,
+    url: Option<UrlCell>,
+    entered_url: Option<CString>,
+    prev_slot: Option<UrlCell>,
     active: bool,
     is_base: bool,
 }
 
 impl RealmScope {
-    pub const fn inactive() -> RealmScope {
+    pub fn inactive() -> RealmScope {
         RealmScope {
             ctx: ContextHandle::NULL,
             doc: ptr::null_mut(),
             frame: ptr::null_mut(),
-            url: ptr::null_mut(),
-            entered_url: ptr::null_mut(),
-            prev_slot: ptr::null_mut(),
+            url: None,
+            entered_url: None,
+            prev_slot: None,
             active: false,
             is_base: false,
         }
     }
 }
 
-#[repr(C)]
 struct DispatchScope {
     ctx: ContextHandle,
     doc: *mut NsNode,
@@ -66,7 +66,7 @@ struct DispatchScope {
 }
 
 impl DispatchScope {
-    const fn inactive() -> DispatchScope {
+    fn inactive() -> DispatchScope {
         DispatchScope {
             ctx: ContextHandle::NULL,
             doc: ptr::null_mut(),
@@ -102,54 +102,55 @@ pub(crate) struct FrameLoadScope {
     frame: *mut NsNode,
 }
 
-pub(crate) fn top_slot(js: Js) -> *mut *mut c_char {
-    let slot = js.st().top_url_slot.get();
-    if slot.is_null() {
-        js.st().slots.current_url
-    } else {
-        slot
+fn with_top_slot<R>(js: Js, f: impl FnOnce(&mut Option<CString>) -> R) -> R {
+    let slot = js.st().top_url_slot.borrow().clone();
+    match slot {
+        Some(slot) => f(&mut slot.borrow_mut()),
+        None => f(&mut js.st().current_url.borrow_mut()),
     }
 }
 
-pub(crate) fn top_url(js: Js) -> *const c_char {
-    let url = unsafe { *top_slot(js) };
-    if url.is_null() { c"".as_ptr() } else { url }
+pub(crate) fn top_url(js: Js) -> CString {
+    with_top_slot(js, |url| url.clone().unwrap_or_default())
 }
 
-pub(crate) fn set_top_url(js: Js, url: *const c_char) {
-    let slot = top_slot(js);
-    let copy = unsafe { glib::g_strdup(non_null_text(url)) };
-    unsafe {
-        glib::g_free((*slot).cast());
-        *slot = copy;
-    }
+pub(crate) fn set_top_url(js: Js, url: Option<&CStr>) {
+    let copy = non_null_text(url);
+    with_top_slot(js, |slot| *slot = Some(copy));
 }
 
-fn non_null_text(text: *const c_char) -> *const c_char {
-    if text.is_null() { c"".as_ptr() } else { text }
+fn non_null_text(text: Option<&CStr>) -> CString {
+    text.map_or_else(CString::default, CStr::to_owned)
 }
 
-fn frame_url_attr(frame: *const NsNode) -> *const c_char {
-    super::record::node(frame)
-        .and_then(|frame| frame.attr(FRAME_URL_ATTR))
-        .map_or(ptr::null(), CStr::as_ptr)
+fn frame_url_attr<'a>(frame: *const NsNode) -> Option<&'a CStr> {
+    super::record::node(frame).and_then(|frame| frame.attr(FRAME_URL_ATTR))
 }
 
-fn frame_url_enter(js: Js, fu: &mut FrameUrl, url: *const c_char) {
-    fu.saved = js.current_url_raw();
-    fu.owns_slot = js.st().top_url_slot.get().is_null();
+fn save_current_url(js: Js) -> UrlCell {
+    Rc::new(RefCell::new(js.current_url()))
+}
+
+fn restore_current_url(js: Js, saved: Option<&UrlCell>) {
+    js.replace_current_url(saved.and_then(|saved| saved.borrow_mut().take()));
+}
+
+fn frame_url_enter(js: Js, fu: &mut FrameUrl, url: Option<&CStr>) {
+    let url = non_null_text(url);
+    let saved = save_current_url(js);
+    fu.owns_slot = js.st().top_url_slot.borrow().is_none();
     if fu.owns_slot {
-        js.st().top_url_slot.set(&mut fu.saved);
+        js.st().top_url_slot.replace(Some(saved.clone()));
     }
-    js.set_current_url_raw(unsafe { glib::g_strdup(non_null_text(url)) });
+    fu.saved = Some(saved);
+    js.replace_current_url(Some(url));
 }
 
 fn frame_url_leave(js: Js, fu: &mut FrameUrl) {
     if fu.owns_slot {
-        js.st().top_url_slot.set(ptr::null_mut());
+        js.st().top_url_slot.replace(None);
     }
-    unsafe { glib::g_free(js.current_url_raw().cast()) };
-    js.set_current_url_raw(fu.saved);
+    restore_current_url(js, fu.saved.as_ref());
 }
 
 pub(crate) fn top_document(doc: *mut NsNode) -> *mut NsNode {
@@ -197,9 +198,9 @@ fn save(js: Js, scope: &mut RealmScope) {
     scope.ctx = js.ctx();
     scope.doc = js.current_doc();
     scope.frame = js.frame();
-    scope.url = js.current_url_raw();
-    scope.entered_url = ptr::null_mut();
-    scope.prev_slot = js.st().top_url_slot.get();
+    scope.url = Some(save_current_url(js));
+    scope.entered_url = None;
+    scope.prev_slot = js.st().top_url_slot.borrow().clone();
     scope.is_base = false;
     scope.active = true;
 }
@@ -216,8 +217,8 @@ pub(crate) fn frame_scope_enter(
         state.realm_scope_base.set(scope);
         scope.is_base = true;
     }
-    if state.top_url_slot.get().is_null() {
-        state.top_url_slot.set(&mut scope.url);
+    if state.top_url_slot.borrow().is_none() {
+        state.top_url_slot.replace(scope.url.clone());
     }
     js.set_ctx(realm);
     let frame_doc = iframe_document_node(frame);
@@ -225,28 +226,24 @@ pub(crate) fn frame_scope_enter(
         js.set_current_doc(frame_doc);
     }
     js.set_frame(frame);
-    js.set_current_url_raw(unsafe { glib::g_strdup(non_null_text(frame_url_attr(frame))) });
+    js.replace_current_url(Some(non_null_text(frame_url_attr(frame))));
 }
 
-pub(crate) fn realm_url(js: Js, realm: ContextHandle) -> *const c_char {
+pub(crate) fn realm_url(js: Js, realm: ContextHandle) -> Option<CString> {
     if realm.is_null() {
-        return ptr::null();
+        return None;
     }
     let main = js.main_or_current();
     if realm == main {
-        return top_url(js);
+        return Some(top_url(js));
     }
     let frame = frame_of_realm(js, realm);
-    let url = if frame.is_null() {
-        ptr::null()
-    } else {
-        frame_url_attr(frame)
-    };
-    if url.is_null() || unsafe { *url } == 0 {
-        ptr::null()
-    } else {
-        url
+    if frame.is_null() {
+        return None;
     }
+    frame_url_attr(frame)
+        .filter(|url| !url.is_empty())
+        .map(CStr::to_owned)
 }
 
 pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mut RealmScope) {
@@ -264,9 +261,10 @@ pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mu
         let base = unsafe { base.as_ref() };
         js.set_frame(base.map_or(ptr::null_mut(), |base| base.frame));
         js.set_current_doc(base.map_or_else(|| top_document(js.current_doc()), |base| base.doc));
-        js.set_current_url_raw(unsafe { glib::g_strdup(top_url(js)) });
-        scope.entered_url = unsafe { glib::g_strdup(js.current_url_raw()) };
-        js.st().top_url_slot.set(ptr::null_mut());
+        let top = top_url(js);
+        scope.entered_url = Some(top.clone());
+        js.replace_current_url(Some(top));
+        js.st().top_url_slot.replace(None);
         return;
     }
     let frame = frame_of_realm(js, realm);
@@ -283,23 +281,18 @@ pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
     let Some(js) = js else {
         return;
     };
-    let current = js.current_url_raw();
-    if !scope.entered_url.is_null()
-        && !scope.prev_slot.is_null()
-        && super::glue::text(current) != super::glue::text(scope.entered_url)
+    let current = js.current_url();
+    let entered_url = scope.entered_url.take();
+    if let (Some(entered_url), Some(prev_slot)) = (entered_url, &scope.prev_slot)
+        && current.as_ref() != Some(&entered_url)
     {
-        unsafe {
-            glib::g_free((*scope.prev_slot).cast());
-            *scope.prev_slot = glib::g_strdup(non_null_text(current));
-        }
+        *prev_slot.borrow_mut() = Some(non_null_text(current.as_deref()));
     }
-    unsafe { glib::g_free(scope.entered_url.cast()) };
     if scope.is_base {
         js.st().realm_scope_base.set(ptr::null_mut());
     }
-    js.st().top_url_slot.set(scope.prev_slot);
-    unsafe { glib::g_free(js.current_url_raw().cast()) };
-    js.set_current_url_raw(scope.url);
+    js.st().top_url_slot.replace(scope.prev_slot.take());
+    restore_current_url(js, scope.url.as_ref());
     js.set_frame(scope.frame);
     js.set_current_doc(scope.doc);
     js.set_ctx(scope.ctx);
@@ -313,7 +306,7 @@ pub(crate) fn in_realm<R>(js: Option<Js>, realm: ContextHandle, f: impl FnOnce()
     result
 }
 
-pub(crate) fn frame_url_begin(js: Js, url: *const c_char) -> Box<FrameUrl> {
+pub(crate) fn frame_url_begin(js: Js, url: Option<&CStr>) -> Box<FrameUrl> {
     let mut fu = Box::new(FrameUrl::new());
     frame_url_enter(js, &mut fu, url);
     fu
@@ -372,7 +365,7 @@ pub(crate) fn frame_load_begin(
     js: Js,
     frame: *mut NsNode,
     doc: *mut NsNode,
-    url: *const c_char,
+    url: Option<&CStr>,
     realm_doc: Option<Value>,
 ) -> Box<FrameLoadScope> {
     let mut scope = Box::new(FrameLoadScope {
@@ -417,10 +410,8 @@ pub(crate) fn frame_load_end(js: Js, scope: &mut FrameLoadScope) {
 }
 
 pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameUrl>> {
-    let url = super::glue::text(realm_url(js, realm))
-        .filter(|url| !url.is_empty())?
-        .to_owned();
-    Some(frame_url_begin(js, url.as_ptr()))
+    let url = realm_url(js, realm).filter(|url| !url.is_empty())?;
+    Some(frame_url_begin(js, Some(&url)))
 }
 
 pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> Box<TimerScope> {
