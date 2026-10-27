@@ -8,7 +8,7 @@ use core::mem::{offset_of, size_of};
 use core::ops::Deref;
 
 use southstar_css_color::{Color, Space};
-use southstar_glib as glib;
+use std::ffi::CString;
 
 use super::animation::RawList;
 use crate::calc::{Calc, CalcArg, Parsed};
@@ -253,8 +253,39 @@ impl RawCalc {
     }
 }
 
+pub(crate) fn c_dup(text: &[u8]) -> *mut c_char {
+    let end = text.iter().position(|&c| c == 0).unwrap_or(text.len());
+    CString::new(&text[..end]).unwrap_or_default().into_raw()
+}
+
+/// # Safety
+///
+/// `text` is null or a NUL-terminated string.
+pub(crate) unsafe fn c_dup_raw(text: *const c_char) -> *mut c_char {
+    if text.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: text is a NUL-terminated string, as the caller guarantees.
+    unsafe { CStr::from_ptr(text) }.to_owned().into_raw()
+}
+
+/// # Safety
+///
+/// `text` is null or a string from c_dup or c_dup_raw that nothing uses afterwards.
+pub(crate) unsafe fn c_free(text: *mut c_char) {
+    if !text.is_null() {
+        // SAFETY: text came from CString::into_raw and is given up by the caller.
+        drop(unsafe { CString::from_raw(text) });
+    }
+}
+
+pub(crate) fn zeroed_value() -> *mut NsCssValue {
+    // SAFETY: NsCssValue holds only integers, floats, raw pointers, a cell and unions and arrays of them, for which all-zero bytes are a valid value.
+    Box::into_raw(unsafe { Box::new(core::mem::zeroed::<NsCssValue>()) })
+}
+
 pub(crate) fn new_value(parsed: &Parsed) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     match parsed {
         Parsed::Length(v, unit) => {
@@ -270,7 +301,7 @@ pub(crate) fn new_value(parsed: &Parsed) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_gradient(gradient: &Gradient) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_GRADIENT;
     value_ref.u.gradient = *gradient;
@@ -278,7 +309,7 @@ pub(crate) fn new_gradient(gradient: &Gradient) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_transform(transform: &Transform) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_TRANSFORM;
     value_ref.u.transform = *transform;
@@ -286,7 +317,7 @@ pub(crate) fn new_transform(transform: &Transform) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_tracks(tracks: &Tracks) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_TRACKS;
     value_ref.u.tracks = *tracks;
@@ -294,7 +325,7 @@ pub(crate) fn new_tracks(tracks: &Tracks) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_AREAS;
     let raw = unsafe { &mut value_ref.u.areas };
@@ -303,7 +334,7 @@ pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
     raw.n_rects = areas.rects.len() as c_int;
     for (slot, rect) in raw.rects.iter_mut().zip(&areas.rects) {
         *slot = RawAreaRect {
-            name: glib::strdup(&rect.name),
+            name: c_dup(&rect.name),
             r0: rect.r0,
             r1: rect.r1,
             c0: rect.c0,
@@ -314,7 +345,7 @@ pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_shadow(list: &ShadowList) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_SHADOW;
     value_ref.u.shadow = *list;
@@ -322,15 +353,15 @@ pub(crate) fn new_shadow(list: &ShadowList) -> *mut NsCssValue {
 }
 
 pub(crate) fn new_keyword(text: &[u8]) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_KEYWORD;
-    value_ref.u.keyword = glib::strdup(text);
+    value_ref.u.keyword = c_dup(text);
     value
 }
 
 pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     let value_ref = unsafe { &mut *value };
     value_ref.kind = KIND_ANIM;
     value_ref.u.anim = *list;
@@ -338,7 +369,7 @@ pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
 }
 
 pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
-    let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+    let value = zeroed_value();
     unsafe { (*value).kind = kind };
     value
 }
@@ -570,20 +601,20 @@ impl NsCssValue {
 unsafe fn free_payload(value: &mut NsCssValue) {
     unsafe {
         match value.kind {
-            KIND_KEYWORD => glib::g_free(value.u.keyword.cast()),
-            KIND_URL => glib::g_free(value.u.url.cast()),
+            KIND_KEYWORD => c_free(value.u.keyword),
+            KIND_URL => c_free(value.u.url),
             KIND_AREAS => {
                 let areas = &value.u.areas;
                 let n = usize::try_from(areas.n_rects).unwrap_or(0).min(AREAS_MAX);
                 for rect in &areas.rects[..n] {
-                    glib::g_free(rect.name.cast());
+                    c_free(rect.name);
                 }
             }
             KIND_ANIM => value.u.anim.free_names(),
             _ => {}
         }
-        glib::g_free(value.image_set_text.cast());
-        glib::g_free(value.specified.cast());
+        c_free(value.image_set_text);
+        c_free(value.specified);
     }
 }
 
@@ -598,7 +629,8 @@ pub(crate) unsafe fn value_free(mut v: *mut NsCssValue) {
         }
         unsafe { free_payload(value) };
         let next = value.next_layer;
-        unsafe { glib::g_free(v.cast()) };
+        // SAFETY: every value comes from zeroed_value's Box::into_raw, and this was its last reference.
+        drop(unsafe { Box::from_raw(v) });
         v = next;
     }
 }

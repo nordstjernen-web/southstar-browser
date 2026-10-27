@@ -1,119 +1,148 @@
-//! Southstar — the GLib file, hashing, clock and logging calls behind IndexedDB storage, and the nsr_idb_install entry point.
+//! Southstar — the file, hashing, clock and logging helpers behind IndexedDB storage, and the nsr_idb_install entry point.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
-use std::ffi::CString;
+use std::ffi::{CString, OsStr};
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::time::Instant;
 
-use southstar_glib::{self as glib, GStr};
+use southstar_glib as glib;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
-#[repr(C)]
-struct GDir {
-    _private: [u8; 0],
-}
-
 unsafe extern "C" {
-
-    fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
-    fn g_unlink(filename: *const c_char) -> c_int;
-    fn g_dir_open(path: *const c_char, flags: u32, error: *mut *mut c_void) -> *mut GDir;
-    fn g_dir_read_name(dir: *mut GDir) -> *const c_char;
-    fn g_dir_close(dir: *mut GDir);
-    fn g_get_monotonic_time() -> i64;
-    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: u32) -> i64;
     fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
 }
 
-fn cstring(bytes: &[u8]) -> CString {
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
+}
+
+fn cstring(bytes: &[u8]) -> CString {
+    CString::new(until_nul(bytes)).unwrap_or_default()
+}
+
+#[cfg(unix)]
+fn path_of(bytes: &[u8]) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+    PathBuf::from(OsStr::from_bytes(until_nul(bytes)))
+}
+
+#[cfg(not(unix))]
+fn path_of(bytes: &[u8]) -> PathBuf {
+    PathBuf::from(String::from_utf8_lossy(until_nul(bytes)).into_owned())
+}
+
+#[cfg(unix)]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    text.as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    text.to_string_lossy().into_owned().into_bytes()
 }
 
 pub fn sha256_hex(input: &[u8]) -> Vec<u8> {
-    let end = input.iter().position(|&b| b == 0).unwrap_or(input.len());
-    southstar_digest::sha256_hex(&input[..end]).into_bytes()
+    southstar_digest::sha256_hex(until_nul(input)).into_bytes()
 }
 
 pub fn user_data_dir() -> Vec<u8> {
+    // SAFETY: g_get_user_data_dir returns GLib's own NUL-terminated string, which lives for the whole process.
     unsafe { glib::bytes(glib::g_get_user_data_dir()) }
         .unwrap_or_default()
         .to_vec()
 }
 
 pub fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
-    let parts: Vec<CString> = parts.iter().map(|p| cstring(p)).collect();
-    let joined = unsafe {
-        match parts.as_slice() {
-            [a, b] => g_build_filename(a.as_ptr(), b.as_ptr(), ptr::null::<c_char>()),
-            [a, b, c] => {
-                g_build_filename(a.as_ptr(), b.as_ptr(), c.as_ptr(), ptr::null::<c_char>())
-            }
-            [a, b, c, d] => g_build_filename(
-                a.as_ptr(),
-                b.as_ptr(),
-                c.as_ptr(),
-                d.as_ptr(),
-                ptr::null::<c_char>(),
-            ),
-            _ => ptr::null_mut(),
-        }
-    };
-    unsafe { GStr::take(joined) }.map_or_else(Vec::new, |p| p.to_bytes().to_vec())
+    if !(2..=4).contains(&parts.len()) {
+        return Vec::new();
+    }
+    let joined = parts
+        .iter()
+        .fold(PathBuf::new(), |acc, part| acc.join(path_of(part)));
+    os_bytes(joined.as_os_str())
 }
 
+#[cfg(unix)]
+fn make_private(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
+}
+
+#[cfg(not(unix))]
+fn make_private(_path: &Path) {}
+
 pub fn make_private_dir(dir: &[u8]) {
-    let dir = cstring(dir);
-    unsafe {
-        g_mkdir_with_parents(dir.as_ptr(), 0o700);
-        g_chmod(dir.as_ptr(), 0o700);
+    let dir = path_of(dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir);
     }
+    #[cfg(not(unix))]
+    let _ = std::fs::create_dir_all(&dir);
+    make_private(&dir);
 }
 
 pub fn unlink(path: &[u8]) {
-    let path = cstring(path);
-    unsafe { g_unlink(path.as_ptr()) };
+    let _ = std::fs::remove_file(path_of(path));
 }
 
 pub fn dir_entries(dir: &[u8]) -> Option<Vec<Vec<u8>>> {
-    let dir = cstring(dir);
-    let handle = unsafe { g_dir_open(dir.as_ptr(), 0, ptr::null_mut()) };
-    if handle.is_null() {
-        return None;
-    }
-    let mut names = Vec::new();
-    loop {
-        let entry = unsafe { g_dir_read_name(handle) };
-        if entry.is_null() {
-            break;
-        }
-        names.push(unsafe { CStr::from_ptr(entry) }.to_bytes().to_vec());
-    }
-    unsafe { g_dir_close(handle) };
-    Some(names)
+    let entries = std::fs::read_dir(path_of(dir)).ok()?;
+    Some(
+        entries
+            .map_while(Result::ok)
+            .map(|entry| os_bytes(&entry.file_name()))
+            .collect(),
+    )
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
+    i64::try_from(EPOCH.elapsed().as_micros()).unwrap_or(i64::MAX)
 }
 
 pub fn ascii_strtoll(text: &[u8]) -> i64 {
-    let text = cstring(text);
-    unsafe { g_ascii_strtoll(text.as_ptr(), ptr::null_mut(), 10) }
+    let text = until_nul(text);
+    let start = text
+        .iter()
+        .position(|&b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .unwrap_or(text.len());
+    let mut rest = &text[start..];
+    let negative = rest.first() == Some(&b'-');
+    if matches!(rest.first(), Some(b'-' | b'+')) {
+        rest = &rest[1..];
+    }
+    let magnitude = rest
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .fold(0i128, |acc, &d| {
+            (acc * 10 + i128::from(d - b'0')).min(i128::from(i64::MAX) + 1)
+        });
+    let value = if negative { -magnitude } else { magnitude };
+    value.clamp(i128::from(i64::MIN), i128::from(i64::MAX)) as i64
 }
 
 pub fn env(name: &CStr) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }.map(<[u8]>::to_vec)
+    let name = name.to_str().ok()?;
+    std::env::var_os(name).map(|v| os_bytes(&v))
 }
 
 pub fn warning(message: &[u8]) {
     let message = cstring(message);
+    // SAFETY: the format is "%s" and its one argument is a NUL-terminated string that outlives the call.
     unsafe {
         g_log(
             ptr::null(),

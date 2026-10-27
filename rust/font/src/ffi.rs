@@ -1,58 +1,139 @@
-//! Southstar — the GLib, fontconfig and southstar-text calls behind the web font loader.
+//! Southstar — the file helpers and the fontconfig and southstar-text calls behind the web font loader.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 #[cfg(feature = "fontconfig")]
-use core::ffi::{c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
+#[cfg(feature = "fontconfig")]
 use core::ptr;
 #[cfg(feature = "fontconfig")]
 use core::ptr::NonNull;
-use std::ffi::CString;
-
-use southstar_glib::{self as glib, GBoolean, GError};
+use std::ffi::{CString, OsStr};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use crate::Descriptors;
 
-unsafe extern "C" {
-    fn g_file_set_contents(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        error: *mut *mut GError,
-    ) -> GBoolean;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_get_home_dir() -> *const c_char;
+#[cfg(windows)]
+const DIR_SEPARATOR: u8 = b'\\';
+#[cfg(not(windows))]
+const DIR_SEPARATOR: u8 = b'/';
 
+unsafe extern "C" {
+    fn g_get_home_dir() -> *const c_char;
 }
 
-fn take_gstring(s: *mut c_char) -> Option<CString> {
-    if s.is_null() {
-        return None;
-    }
-    let owned = unsafe { CStr::from_ptr(s) }.to_owned();
-    unsafe { glib::g_free(s.cast()) };
-    Some(owned)
+fn is_dir_separator(c: u8) -> bool {
+    c == b'/' || (cfg!(windows) && c == b'\\')
 }
 
 fn build_filename(parts: &[&CStr]) -> Option<CString> {
-    let mut args: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    args.push(ptr::null_mut());
-    take_gstring(unsafe { glib::g_build_filenamev(args.as_mut_ptr()) })
+    let mut result = Vec::new();
+    let mut separator = DIR_SEPARATOR;
+    let mut is_first = true;
+    let mut have_leading = false;
+    let mut single_element: Option<&[u8]> = None;
+    let mut last_trailing: &[u8] = &[];
+    for element in parts.iter().map(|part| part.to_bytes()) {
+        if element.is_empty() {
+            continue;
+        }
+        let start = element
+            .iter()
+            .position(|&c| !is_dir_separator(c))
+            .unwrap_or(element.len());
+        if cfg!(windows) && start > 0 {
+            separator = element[start - 1];
+        }
+        let end = element[start..]
+            .iter()
+            .rposition(|&c| !is_dir_separator(c))
+            .map_or(start, |i| start + i + 1);
+        if cfg!(windows) && end < element.len() {
+            separator = element[end];
+        }
+        last_trailing = &element[if end > start { end } else { 0 }..];
+        if !have_leading {
+            if end == start {
+                single_element = Some(element);
+            }
+            result.extend_from_slice(&element[..start]);
+            have_leading = true;
+        } else {
+            single_element = None;
+        }
+        if end == start {
+            continue;
+        }
+        if !is_first {
+            result.push(separator);
+        }
+        result.extend_from_slice(&element[start..end]);
+        is_first = false;
+    }
+    let joined = match single_element {
+        Some(element) => element.to_vec(),
+        None => [result.as_slice(), last_trailing].concat(),
+    };
+    CString::new(joined).ok()
+}
+
+#[cfg(unix)]
+fn path_of(path: &CStr) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+    PathBuf::from(OsStr::from_bytes(path.to_bytes()))
+}
+
+#[cfg(not(unix))]
+fn path_of(path: &CStr) -> PathBuf {
+    PathBuf::from(path.to_string_lossy().into_owned())
+}
+
+#[cfg(unix)]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    text.as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    text.to_string_lossy().into_owned().into_bytes()
+}
+
+fn make_private_dir(dir: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir);
+    }
+    #[cfg(not(unix))]
+    let _ = std::fs::create_dir_all(dir);
+}
+
+fn home_dir() -> CString {
+    // SAFETY: g_get_home_dir takes no arguments and returns GLib's own string, which lives for the whole process.
+    let home = unsafe { g_get_home_dir() };
+    if home.is_null() {
+        return CString::default();
+    }
+    // SAFETY: home is a non-null NUL-terminated string owned by GLib for the whole process.
+    unsafe { CStr::from_ptr(home) }.to_owned()
 }
 
 pub fn cache_dir() -> CString {
-    let xdg = unsafe { glib::bytes(glib::g_getenv(c"XDG_CACHE_HOME".as_ptr())) }
+    let xdg = std::env::var_os("XDG_CACHE_HOME")
+        .map(|value| os_bytes(&value))
         .filter(|x| !x.is_empty());
     let base = match xdg {
         Some(xdg) => CString::new(xdg).unwrap_or_default(),
-        None => {
-            let home = unsafe { CStr::from_ptr(g_get_home_dir()) };
-            build_filename(&[home, c".cache"]).unwrap_or_default()
-        }
+        None => build_filename(&[&home_dir(), c".cache"]).unwrap_or_default(),
     };
     let dir = build_filename(&[&base, c"southstar", c"webfonts"]).unwrap_or_default();
-    unsafe { g_mkdir_with_parents(dir.as_ptr(), 0o700) };
+    make_private_dir(&path_of(&dir));
     dir
 }
 
@@ -61,20 +142,25 @@ pub fn build_path(dir: &CStr, name: &[u8]) -> Option<CString> {
     build_filename(&[dir, &name])
 }
 
-pub fn write_file(path: &CStr, data: &[u8]) -> bool {
-    let mut error = ptr::null_mut();
-    let ok = unsafe {
-        g_file_set_contents(
-            path.as_ptr(),
-            data.as_ptr().cast(),
-            data.len() as isize,
-            &mut error,
-        )
-    };
-    if !error.is_null() {
-        unsafe { glib::g_error_free(error) };
+fn write_atomically(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(format!(".{}.tmp", std::process::id()));
+    let temp = PathBuf::from(temp_name);
+    let written = std::fs::File::create(&temp).and_then(|mut file| {
+        file.write_all(data)?;
+        file.sync_all()
+    });
+    match written.and_then(|()| std::fs::rename(&temp, path)) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp);
+            Err(error)
+        }
     }
-    ok != 0
+}
+
+pub fn write_file(path: &CStr, data: &[u8]) -> bool {
+    write_atomically(&path_of(path), data).is_ok()
 }
 
 #[cfg(feature = "fontconfig")]

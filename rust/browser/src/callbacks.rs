@@ -138,7 +138,7 @@ pub fn js_audio(b: &NsBrowser, command: &CStr) {
     if command.is_empty() {
         return;
     }
-    if ffi::env_set(c"NS_DBG_AUDIO") {
+    if ffi::env_set("NS_DBG_AUDIO") {
         let mut line = b"[audio-cmd] ".to_vec();
         line.extend_from_slice(command.to_bytes());
         line.push(b'\n');
@@ -153,7 +153,7 @@ pub fn js_audio(b: &NsBrowser, command: &CStr) {
 }
 
 pub fn media_seek(b: Option<&NsBrowser>, node: *const c_void, seconds: f64) -> bool {
-    if ffi::env_set(c"NS_DBG_AUDIO") {
+    if ffi::env_set("NS_DBG_AUDIO") {
         ffi::printerr_double(c"[media-seek] to=%.3f\n", seconds);
     }
     let Some(videos) = b.and_then(NsBrowser::videos) else {

@@ -2,11 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::mem::size_of;
 use core::ptr::{self, NonNull};
 use std::sync::{Mutex, PoisonError};
-
-use southstar_glib as glib;
 
 use super::computed_units::{RawStyle, style_retain};
 use super::value::value_free;
@@ -30,7 +27,8 @@ fn release(style: *mut RawStyle) {
         pool.0.push(style);
     } else {
         drop(pool);
-        unsafe { glib::g_free(style.cast()) };
+        // SAFETY: every pooled or released style came from Box::into_raw in style_alloc.
+        drop(unsafe { Box::from_raw(style) });
     }
 }
 
@@ -40,7 +38,8 @@ pub(super) fn style_alloc() -> *mut RawStyle {
             unsafe { ptr::write_bytes(style, 0, 1) };
             style
         }
-        None => unsafe { glib::g_malloc0(size_of::<RawStyle>()) }.cast(),
+        // SAFETY: RawStyle holds only integers, raw pointers, cells and plain structs of them, for which all-zero bytes are a valid value.
+        None => Box::into_raw(unsafe { Box::new(core::mem::zeroed::<RawStyle>()) }),
     }
 }
 

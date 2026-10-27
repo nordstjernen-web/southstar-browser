@@ -98,10 +98,13 @@ pub fn dump_performance(b: &NsBrowser) -> StrBufOwned {
     out.append(format!("  page size   {pw} x {ph} px\n").as_bytes());
     out.append(b"\nLayout\n");
     out.append(format!("  viewport    {} x ", b.vw.get()).as_bytes());
-    out.append_double(c"%.0f px\n", b.vh.get());
-    out.append_double(
-        c"  last reflow %.2f ms\n",
-        b.relayout_cost_us.get() as f64 / 1000.0,
+    out.append(format!("{:.0} px\n", b.vh.get()).as_bytes());
+    out.append(
+        format!(
+            "  last reflow {:.2} ms\n",
+            b.relayout_cost_us.get() as f64 / 1000.0
+        )
+        .as_bytes(),
     );
     out.append(format!("  oscillation {}\n", b.layout_osc.get()).as_bytes());
     out.append(b"\n");

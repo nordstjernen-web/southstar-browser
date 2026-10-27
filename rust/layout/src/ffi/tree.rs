@@ -7,17 +7,9 @@ use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 use std::sync::Mutex;
 
-use southstar_glib::{
-    GArray, GBoolean, g_array_append_vals, g_array_new, g_free, g_malloc, g_malloc0,
-    g_ptr_array_free, g_strdup,
-};
+use southstar_glib::{GBoolean, g_free, g_malloc, g_malloc0, g_strdup};
 
 use super::{BoxRef, InlineAtomic, InlineAttr, LinkRange, NsBox, NsBoxMedia, Style, TableColHint};
-
-unsafe extern "C" {
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
-    fn g_array_set_clear_func(array: *mut GArray, clear: Option<unsafe extern "C" fn(*mut c_void)>);
-}
 
 const POOL_MAX: usize = 16384;
 
@@ -46,9 +38,8 @@ impl BoxPool {
 
     pub fn new_inline() -> BoxRef<'static> {
         let b = BoxPool::new_box(1);
-        unsafe {
-            (*b.0.as_ptr()).attrs = g_array_new(0, 0, size_of::<InlineAttr>() as c_uint);
-        }
+        // SAFETY: b is the box just allocated, and nothing else refers to it yet.
+        unsafe { (*b.0.as_ptr()).attrs = Some(Box::default()) };
         b
     }
 
@@ -68,12 +59,6 @@ impl BoxPool {
     }
 }
 
-unsafe fn free_array(a: *mut GArray) {
-    if !a.is_null() {
-        unsafe { g_array_free(a, 1) };
-    }
-}
-
 unsafe fn release(cur: *mut NsBox, stack: &mut Vec<*mut NsBox>) {
     unsafe {
         let mut c = (*cur).first_child.cast_mut();
@@ -87,23 +72,21 @@ unsafe fn release(cur: *mut NsBox, stack: &mut Vec<*mut NsBox>) {
         {
             crate::paint_links::drop_box_cache(BoxRef(b, PhantomData));
         }
-        free_array((*cur).links);
-        free_array((*cur).attrs);
-        free_array((*cur).table_col_hints);
-        free_array((*cur).grid_col_tracks);
-        free_array((*cur).grid_row_tracks);
-        let atomics = (*cur).inline_atomics;
-        if !atomics.is_null() {
-            let data = (*atomics).data.cast::<InlineAtomic>();
-            for i in 0..(*atomics).len as usize {
-                let ab = (*data.add(i)).b.cast_mut();
-                if !ab.is_null() {
-                    stack.push(ab);
-                }
-            }
-            free_array(atomics);
+        let b = &mut *cur;
+        b.links = None;
+        b.attrs = None;
+        b.table_col_hints = None;
+        b.grid_col_tracks = None;
+        b.grid_row_tracks = None;
+        if let Some(atomics) = b.inline_atomics.take() {
+            stack.extend(
+                atomics
+                    .iter()
+                    .map(|a| a.b.cast_mut())
+                    .filter(|ab| !ab.is_null()),
+            );
         }
-        free_array((*cur).atomic_line_heights);
+        b.atomic_line_heights = None;
         g_free((*cur).text.cast_mut().cast());
         let media = (*cur).media;
         if !media.is_null() {
@@ -112,30 +95,14 @@ unsafe fn release(cur: *mut NsBox, stack: &mut Vec<*mut NsBox>) {
             g_free(m.bg_image_src.cast());
             g_free(m.marker_image_src.cast());
             g_free(m.border_image_src.cast());
-            if !m.bg_layer_srcs.is_null() {
-                g_ptr_array_free(m.bg_layer_srcs, 1);
-            }
-            if !m.bg_layer_images.is_null() {
-                g_ptr_array_free(m.bg_layer_images, 1);
-            }
+            m.bg_layer_srcs = None;
+            m.bg_layer_images = None;
             g_free(m.video_src.cast());
             g_free(m.video_poster.cast());
             g_free(m.video_audio_src.cast());
             g_free(media.cast());
         }
     }
-}
-
-pub unsafe extern "C" fn ns_layout_link_clear(data: *mut c_void) {
-    let r = data.cast::<LinkRange>();
-    unsafe {
-        g_free((*r).href.cast_mut().cast());
-        g_free((*r).target.cast_mut().cast());
-    }
-}
-
-pub fn link_clear_fn() -> unsafe extern "C" fn(*mut c_void) {
-    ns_layout_link_clear
 }
 
 fn dup(p: *const c_char) -> *const c_char {
@@ -177,8 +144,8 @@ impl LinkVec {
         &mut self.0
     }
 
-    fn into_inner(mut self) -> Vec<LinkRange> {
-        core::mem::take(&mut self.0)
+    pub fn push(&mut self, link: LinkRange) {
+        self.0.push(link);
     }
 }
 
@@ -190,39 +157,6 @@ impl Drop for LinkVec {
                 g_free(l.target.cast_mut().cast());
             }
         }
-    }
-}
-
-unsafe fn take_vec<T: Copy>(slot: *mut *mut GArray) -> Option<Vec<T>> {
-    unsafe {
-        let a = *slot;
-        if a.is_null() {
-            return None;
-        }
-        let data = (*a).data.cast::<T>();
-        let out = (0..(*a).len as usize).map(|i| *data.add(i)).collect();
-        g_array_set_clear_func(a, None);
-        g_array_free(a, 1);
-        *slot = ptr::null_mut();
-        Some(out)
-    }
-}
-
-unsafe fn put_vec<T>(slot: *mut *mut GArray, items: Option<&[T]>, clear: bool) {
-    unsafe {
-        free_array(*slot);
-        *slot = ptr::null_mut();
-        let Some(items) = items else {
-            return;
-        };
-        let a = g_array_new(0, 0, size_of::<T>() as c_uint);
-        if clear {
-            g_array_set_clear_func(a, Some(ns_layout_link_clear));
-        }
-        if !items.is_empty() {
-            g_array_append_vals(a, items.as_ptr().cast(), items.len() as c_uint);
-        }
-        *slot = a;
     }
 }
 
@@ -295,55 +229,48 @@ impl<'a> BoxRef<'a> {
         }
     }
 
+    fn fields_mut(self) -> &'a mut NsBox {
+        // SAFETY: self.0 points to a live box, and callers hold no other reference into it across the update.
+        unsafe { &mut *self.ptr_mut() }
+    }
+
     pub fn take_attrs(self) -> Option<Vec<InlineAttr>> {
-        unsafe { take_vec(&raw mut (*self.ptr_mut()).attrs) }
+        self.fields_mut().attrs.take().map(|a| *a)
     }
 
     pub fn put_attrs(self, attrs: Option<&[InlineAttr]>) {
-        unsafe { put_vec(&raw mut (*self.ptr_mut()).attrs, attrs, false) };
+        self.fields_mut().attrs = attrs.map(|a| Box::new(a.to_vec()));
     }
 
-    pub fn ensure_links_array(self) -> *mut GArray {
-        unsafe {
-            let slot = &raw mut (*self.ptr_mut()).links;
-            if (*slot).is_null() {
-                *slot = g_array_new(0, 0, size_of::<LinkRange>() as c_uint);
-                g_array_set_clear_func(*slot, Some(ns_layout_link_clear));
-            }
-            *slot
-        }
+    pub fn push_link(self, link: LinkRange) {
+        self.fields_mut().links.get_or_insert_default().push(link);
     }
 
     pub fn has_links(self) -> bool {
-        !self.raw().links.is_null()
+        self.raw().links.is_some()
     }
 
     pub fn take_links(self) -> Option<LinkVec> {
-        unsafe { take_vec(&raw mut (*self.ptr_mut()).links) }.map(LinkVec)
+        self.fields_mut().links.take().map(|l| *l)
     }
 
     pub fn put_links(self, links: Option<LinkVec>) {
-        let items = links.map(LinkVec::into_inner);
-        unsafe { put_vec(&raw mut (*self.ptr_mut()).links, items.as_deref(), true) };
+        self.fields_mut().links = links.map(Box::new);
     }
 
     pub fn take_atomics(self) -> Option<Vec<InlineAtomic>> {
-        unsafe { take_vec(&raw mut (*self.ptr_mut()).inline_atomics) }
+        self.fields_mut().inline_atomics.take().map(|a| *a)
     }
 
     pub fn put_atomics(self, atomics: Option<&[InlineAtomic]>) {
-        unsafe { put_vec(&raw mut (*self.ptr_mut()).inline_atomics, atomics, false) };
+        self.fields_mut().inline_atomics = atomics.map(|a| Box::new(a.to_vec()));
     }
 
     pub fn push_table_col_hint(self, style: *const Style, span: c_int) {
-        let hint = TableColHint { style, span };
-        unsafe {
-            let slot = &raw mut (*self.ptr_mut()).table_col_hints;
-            if (*slot).is_null() {
-                *slot = g_array_new(0, 0, size_of::<TableColHint>() as c_uint);
-            }
-            g_array_append_vals(*slot, (&raw const hint).cast(), 1);
-        }
+        self.fields_mut()
+            .table_col_hints
+            .get_or_insert_default()
+            .push(TableColHint { style, span });
     }
 
     pub fn invalidate_inline_caches(self) {

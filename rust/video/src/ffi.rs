@@ -8,7 +8,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef};
 
@@ -242,13 +242,6 @@ impl Response {
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_file_set_contents(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        error: *mut *mut GError,
-    ) -> GBoolean;
 }
 
 pub fn monotonic_us() -> i64 {
@@ -256,7 +249,8 @@ pub fn monotonic_us() -> i64 {
 }
 
 pub fn env_set(name: &CStr) -> bool {
-    !unsafe { glib::g_getenv(name.as_ptr()) }.is_null()
+    name.to_str()
+        .is_ok_and(|name| std::env::var_os(name).is_some())
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
@@ -264,13 +258,79 @@ fn until_nul(bytes: &[u8]) -> &[u8] {
     &bytes[..end]
 }
 
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
+fn is_dir_separator(b: u8) -> bool {
+    b == b'/' || (cfg!(windows) && b == b'\\')
 }
 
-fn take_gstr(p: *mut c_char) -> Option<Vec<u8>> {
-    let s = unsafe { glib::GStr::take(p) }?;
-    Some(s.to_bytes().to_vec())
+fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
+    let parts: Vec<&[u8]> = parts.iter().copied().filter(|p| !p.is_empty()).collect();
+    let separator = if cfg!(windows) {
+        parts
+            .iter()
+            .flat_map(|p| p.iter().copied())
+            .find(|&b| is_dir_separator(b))
+            .unwrap_or(b'\\')
+    } else {
+        b'/'
+    };
+    let mut out = Vec::new();
+    for (i, part) in parts.iter().enumerate() {
+        let first = i == 0;
+        let last = i + 1 == parts.len();
+        let start = if first {
+            0
+        } else {
+            part.iter()
+                .position(|&b| !is_dir_separator(b))
+                .unwrap_or(part.len())
+        };
+        let end = if last {
+            part.len()
+        } else {
+            part.iter()
+                .rposition(|&b| !is_dir_separator(b))
+                .map_or(start, |p| p + 1)
+        };
+        if start >= end && !first {
+            continue;
+        }
+        if !first && !out.last().is_some_and(|&b| is_dir_separator(b)) {
+            out.push(separator);
+        }
+        out.extend_from_slice(&part[start..end.max(start)]);
+    }
+    out
+}
+
+fn path_of(bytes: &[u8]) -> Option<std::path::PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Some(std::ffi::OsStr::from_bytes(bytes).into())
+    }
+    #[cfg(not(unix))]
+    {
+        std::str::from_utf8(bytes).ok().map(Into::into)
+    }
+}
+
+fn make_private_dir(dir: &std::path::Path) {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    let _ = builder.create(dir);
+}
+
+fn replace_file_contents(path: &std::path::Path, data: &[u8]) -> bool {
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = std::path::PathBuf::from(temp);
+    if std::fs::write(&temp, data).is_ok() && std::fs::rename(&temp, path).is_ok() {
+        return true;
+    }
+    let _ = std::fs::remove_file(&temp);
+    false
 }
 
 pub fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
@@ -287,15 +347,8 @@ pub fn decode_image(bytes: &[u8]) -> Option<(Texture, i32, i32)> {
 
 pub fn write_stream_file(subdir: &CStr, prefix: u8, token: u32, data: &[u8]) -> Option<Vec<u8>> {
     let cache_dir = unsafe { CStr::from_ptr(glib::g_get_user_cache_dir()) };
-    let mut parts = [
-        cache_dir.as_ptr().cast_mut(),
-        c"southstar".as_ptr().cast_mut(),
-        subdir.as_ptr().cast_mut(),
-        ptr::null_mut(),
-    ];
-    let dir = take_gstr(unsafe { glib::g_build_filenamev(parts.as_mut_ptr()) })?;
-    let dir_c = cstring(&dir);
-    unsafe { g_mkdir_with_parents(dir_c.as_ptr(), 0o700) };
+    let dir = build_filename(&[cache_dir.to_bytes(), b"southstar", subdir.to_bytes()]);
+    make_private_dir(&path_of(&dir)?);
     let mut path = dir;
     path.extend_from_slice(
         format!(
@@ -306,16 +359,7 @@ pub fn write_stream_file(subdir: &CStr, prefix: u8, token: u32, data: &[u8]) -> 
         )
         .as_bytes(),
     );
-    let path_c = cstring(&path);
-    let ok = unsafe {
-        g_file_set_contents(
-            path_c.as_ptr(),
-            data.as_ptr().cast(),
-            data.len() as isize,
-            ptr::null_mut(),
-        )
-    };
-    if ok == 0 {
+    if !replace_file_contents(&path_of(&path)?, data) {
         return None;
     }
     let mut url = b"file://".to_vec();

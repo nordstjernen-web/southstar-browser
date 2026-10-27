@@ -4,10 +4,10 @@
 
 use core::ffi::{CStr, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_cairo::{ContextRef, Matrix};
 use southstar_dom::{Kind as NodeKind, Node};
-use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_selection::NsSelection;
 use southstar_style::{PropId as P, ValueRef, layer, layer_count};
@@ -16,26 +16,17 @@ use crate::ffi::engine::{self, SelectionRun};
 use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
-    self, LAYERS_DOC, LAYERS_PLAN, Layers, UpperFn, VpCapture, box_clip_hides, box_is_hidden,
-    box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
+    self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, UpperFn, VpCapture, box_clip_hides,
+    box_is_hidden, box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
 };
 
 pub const VP_FIXED: i32 = 1;
 pub const VP_STICKY: i32 = 2;
 
-#[repr(C)]
 pub struct LayerPlan {
-    pub(crate) dynamic: GBoolean,
-    pub(crate) kinds: *mut GHashTable,
-    pub(crate) vp: *mut GArray,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<LayerPlan>() == 24);
-
-unsafe extern "C" {
-    fn g_array_set_size(array: *mut GArray, length: u32) -> *mut GArray;
-    fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut u8;
+    pub(crate) dynamic: bool,
+    pub(crate) kinds: Rc<LayerKinds>,
+    pub(crate) vp: Vec<VpCapture>,
 }
 
 fn node_of(b: BoxRef<'_>) -> Option<Node<'_>> {
@@ -241,7 +232,7 @@ fn layers_scan_children(
     b: BoxRef<'_>,
     under: i32,
     in_atomic: bool,
-    kinds: *mut GHashTable,
+    kinds: &mut LayerKinds,
     roots: &mut i32,
 ) -> bool {
     let mut c = b.first_child();
@@ -265,7 +256,7 @@ fn layers_scan(
     b: BoxRef<'_>,
     under: i32,
     in_atomic: bool,
-    kinds: *mut GHashTable,
+    kinds: &mut LayerKinds,
     roots: &mut i32,
 ) -> bool {
     if box_is_hidden(b) || box_clip_hides(b) {
@@ -277,35 +268,11 @@ fn layers_scan(
     }
     let mut under = under;
     if kind > 0 {
-        unsafe {
-            glib::g_hash_table_insert(
-                kinds,
-                b.as_ptr().cast_mut().cast(),
-                kind as isize as *mut c_void,
-            )
-        };
+        kinds.insert(b.as_ptr(), kind);
         *roots += 1;
         under = kind;
     }
     box_skips_contents(b) || layers_scan_children(b, under, in_atomic, kinds, roots)
-}
-
-pub fn plan_init(plan: &mut LayerPlan) {
-    plan.dynamic = 0;
-    plan.kinds =
-        unsafe { glib::g_hash_table_new(Some(glib::g_direct_hash), Some(glib::g_direct_equal)) };
-    plan.vp = unsafe { glib::g_array_new(0, 1, core::mem::size_of::<VpCapture>() as u32) };
-}
-
-pub fn plan_clear(plan: &mut LayerPlan) {
-    if !plan.kinds.is_null() {
-        unsafe { glib::g_hash_table_destroy(plan.kinds) };
-        plan.kinds = ptr::null_mut();
-    }
-    if !plan.vp.is_null() {
-        unsafe { g_array_free(plan.vp, 1) };
-    }
-    plan.vp = ptr::null_mut();
 }
 
 fn set_layers(layers: Layers) {
@@ -313,17 +280,19 @@ fn set_layers(layers: Layers) {
 }
 
 pub fn plan_layers(cr: ContextRef, root: Option<BoxRef<'_>>, plan: &mut LayerPlan) {
-    plan.dynamic = 0;
-    unsafe {
-        glib::g_hash_table_remove_all(plan.kinds);
-        g_array_set_size(plan.vp, 0);
-    }
+    plan.dynamic = false;
+    plan.vp.clear();
+    let mut kinds = LayerKinds::new();
     let Some(root) = root else {
+        plan.kinds = Rc::new(kinds);
         return;
     };
     let mut roots = 0;
-    if top_layer_box(root).is_some() || !layers_scan(root, 0, false, plan.kinds, &mut roots) {
-        plan.dynamic = 1;
+    let complete =
+        top_layer_box(root).is_none() && layers_scan(root, 0, false, &mut kinds, &mut roots);
+    plan.kinds = Rc::new(kinds);
+    if !complete {
+        plan.dynamic = true;
         return;
     }
     if roots == 0 {
@@ -332,14 +301,13 @@ pub fn plan_layers(cr: ContextRef, root: Option<BoxRef<'_>>, plan: &mut LayerPla
     let mut layers = Layers::off();
     layers.mode = LAYERS_PLAN;
     layers.root = root.as_ptr();
-    layers.kinds = plan.kinds;
-    layers.found = plan.vp;
+    layers.kinds = Some(Rc::clone(&plan.kinds));
     layers.base = cr.matrix();
     set_layers(layers);
     paint_document(cr, root, None, None);
-    set_layers(Layers::off());
-    if unsafe { (*plan.vp).len } as i32 != roots {
-        plan.dynamic = 1;
+    plan.vp = walk::with(|w| core::mem::replace(&mut *w.layers.borrow_mut(), Layers::off())).found;
+    if plan.vp.len() as i32 != roots {
+        plan.dynamic = true;
     }
 }
 
@@ -360,14 +328,10 @@ pub fn doc_layers(
     layers.mode = LAYERS_DOC;
     layers.root = root.as_ptr();
     layers.doc = cr.as_raw();
-    layers.kinds = plan.kinds;
+    layers.kinds = Some(Rc::clone(&plan.kinds));
     layers.upper = up.upper;
     layers.upper_data = up.upper_data;
-    layers.n_upper = if plan.vp.is_null() {
-        0
-    } else {
-        unsafe { (*plan.vp).len as i32 }
-    };
+    layers.n_upper = plan.vp.len() as i32;
     set_layers(layers);
     paint_document(cr, root, highlight, sel);
     let ok = !walk::with(|w| w.layers.borrow().video_above);

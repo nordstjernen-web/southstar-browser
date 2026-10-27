@@ -2,24 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint};
+use core::ffi::{CStr, c_int, c_long, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, GStr};
+use southstar_glib::GStr;
 use southstar_layout::BoxRef;
 
 use super::{Js, NsBrowser};
-
-unsafe extern "C" {
-    fn g_utf8_prev_char(p: *const c_char) -> *const c_char;
-    fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-    fn g_utf8_validate(s: *const c_char, max_len: isize, end: *mut *const c_char) -> GBoolean;
-    fn g_utf8_offset_to_pointer(s: *const c_char, offset: c_long) -> *const c_char;
-    fn strtol(s: *const c_char, end: *mut *mut c_char, base: c_int) -> c_long;
-    fn atoi(s: *const c_char) -> c_int;
-}
 
 fn modifiers(mods: c_int) -> southstar_js_input::Modifiers {
     southstar_js_input::Modifiers {
@@ -346,9 +336,15 @@ pub fn video_url_is_inline(url: &CStr) -> bool {
 pub use southstar_video::BoxVideo as VideoRef;
 
 pub fn utf8_prev(s: &CStr, at: usize) -> usize {
-    let base = s.as_ptr();
-    let prev = unsafe { g_utf8_prev_char(base.add(at)) };
-    (prev as usize).wrapping_sub(base as usize)
+    let bytes = s.to_bytes_with_nul();
+    let mut i = at;
+    while i > 0 {
+        i -= 1;
+        if bytes.get(i).is_none_or(|&b| b & 0xc0 != 0x80) {
+            break;
+        }
+    }
+    i
 }
 
 pub fn utf8_next(s: &[u8], at: usize) -> usize {
@@ -363,29 +359,56 @@ pub fn utf8_next(s: &[u8], at: usize) -> usize {
     at + skip
 }
 
+fn byte_at(s: &[u8], at: usize) -> u8 {
+    s.get(at).copied().unwrap_or(0)
+}
+
+fn strlen_until_nul(s: &[u8], from: usize) -> c_long {
+    let mut p = from;
+    let mut len = 0;
+    while byte_at(s, p) != 0 {
+        p = utf8_next(s, p);
+        len += 1;
+    }
+    len
+}
+
 pub fn utf8_strlen(s: &CStr) -> c_long {
-    unsafe { g_utf8_strlen(s.as_ptr(), -1) }
+    strlen_until_nul(s.to_bytes(), 0)
 }
 
 pub fn utf8_strlen_bytes(s: &CStr, max: usize) -> c_long {
-    unsafe { g_utf8_strlen(s.as_ptr(), max as isize) }
+    let bytes = s.to_bytes();
+    if max == 0 || byte_at(bytes, 0) == 0 {
+        return 0;
+    }
+    let mut len = 0;
+    let mut p = utf8_next(bytes, 0);
+    while p < max && byte_at(bytes, p) != 0 {
+        len += 1;
+        p = utf8_next(bytes, p);
+    }
+    if p <= max {
+        len += 1;
+    }
+    len
 }
 
 pub fn utf8_strlen_from(s: &CStr, at: usize) -> c_long {
-    unsafe { g_utf8_strlen(s.as_ptr().add(at), -1) }
+    strlen_until_nul(s.to_bytes(), at)
 }
 
 pub fn utf8_get_char(s: &CStr) -> u32 {
-    unsafe { g_utf8_get_char(s.as_ptr()) }
+    southstar_layout::utf8_get_char(s.to_bytes(), 0)
 }
 
 pub fn utf8_validate(s: &CStr) -> bool {
-    unsafe { g_utf8_validate(s.as_ptr(), -1, ptr::null_mut()) != 0 }
+    core::str::from_utf8(s.to_bytes()).is_ok()
 }
 
 pub fn utf8_offset(s: &CStr, chars: c_long) -> usize {
-    let p = unsafe { g_utf8_offset_to_pointer(s.as_ptr(), chars) };
-    (p as usize).wrapping_sub(s.as_ptr() as usize)
+    let bytes = s.to_bytes();
+    (0..chars.max(0)).fold(0, |p, _| utf8_next(bytes, p))
 }
 
 pub fn unichar_iscntrl(c: u32) -> bool {
@@ -396,14 +419,38 @@ pub fn unichar_isprint(c: u32) -> bool {
     southstar_unicode::is_print(c)
 }
 
+fn strtol(s: &[u8]) -> Option<c_long> {
+    let mut p = 0;
+    while matches!(byte_at(s, p), b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r') {
+        p += 1;
+    }
+    let negative = byte_at(s, p) == b'-';
+    if matches!(byte_at(s, p), b'-' | b'+') {
+        p += 1;
+    }
+    let digits = s.get(p..).unwrap_or_default();
+    let count = digits.iter().take_while(|b| b.is_ascii_digit()).count();
+    if count == 0 {
+        return None;
+    }
+    let mut v: c_long = 0;
+    for &d in &digits[..count] {
+        let d = c_long::from(d - b'0');
+        v = if negative {
+            v.saturating_mul(10).saturating_sub(d)
+        } else {
+            v.saturating_mul(10).saturating_add(d)
+        };
+    }
+    Some(v)
+}
+
 pub fn parse_long(s: &CStr) -> Option<c_long> {
-    let mut end: *mut c_char = ptr::null_mut();
-    let v = unsafe { strtol(s.as_ptr(), &mut end, 10) };
-    (end.cast_const() != s.as_ptr()).then_some(v)
+    strtol(s.to_bytes())
 }
 
 pub fn parse_int(s: &CStr) -> c_int {
-    unsafe { atoi(s.as_ptr()) }
+    strtol(s.to_bytes()).unwrap_or(0) as c_int
 }
 
 impl NsBrowser {

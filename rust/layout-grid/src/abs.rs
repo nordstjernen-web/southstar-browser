@@ -37,8 +37,8 @@ fn is_rtl(s: Option<StyleRef<'_>>) -> bool {
 }
 
 pub fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area> {
-    let ct = ffi::track_edges(cb.grid_tracks(true))?;
-    let rt = ffi::track_edges(cb.grid_tracks(false))?;
+    let ct = cb.grid_tracks(true)?;
+    let rt = cb.grid_tracks(false)?;
     let cs = style_of(cb);
     let col_lines = Lines {
         tracks: template(cs, true).and_then(ValueRef::tracks),
@@ -201,7 +201,7 @@ fn append_line_names(s: &mut Vec<u8>, tk: Option<&GridTracks>, line: i32) {
 }
 
 pub fn resolved_tracks(b: BoxRef<'_>, columns: bool) -> Option<Vec<u8>> {
-    let tr = ffi::track_edges(b.grid_tracks(columns))?;
+    let tr = b.grid_tracks(columns)?;
     let mut tv = template(style_of(b), columns).and_then(ValueRef::tracks);
     if tv.is_some_and(|t| t.subgrid != 0) {
         let mut p = b.parent();

@@ -3,12 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, OnceCell};
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{c_char, c_int, c_uint};
 use core::ops::Deref;
-use core::ptr::NonNull;
-use std::collections::HashSet;
-
-use southstar_glib::{self as glib, GHashTable};
+use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 
 use super::selector::SelectorGroup;
 use super::sheet::Scope;
@@ -63,7 +61,8 @@ pub(super) struct PendingDecl {
 }
 
 pub(super) struct VarTable {
-    table: NonNull<GHashTable>,
+    entries: Vec<(CString, CString)>,
+    index: HashMap<Vec<u8>, usize>,
     important: Option<HashSet<Vec<u8>>>,
 }
 
@@ -77,36 +76,29 @@ pub(super) fn lookup_key(text: &[u8]) -> &[u8] {
     if text.contains(&0) { &[] } else { text }
 }
 
-unsafe extern "C" {
-    fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut core::ffi::c_void);
+fn c_text(text: &[u8]) -> CString {
+    CString::new(until_nul(text)).unwrap_or_default()
 }
 
 impl VarTable {
     fn new() -> VarTable {
-        // SAFETY: the table owns its keys and values, which are GLib strings freed with g_free.
-        let table = unsafe {
-            glib::g_hash_table_new_full(
-                Some(glib::g_str_hash),
-                Some(glib::g_str_equal),
-                Some(glib::g_free),
-                Some(glib::g_free),
-            )
-        };
         VarTable {
-            table: NonNull::new(table).expect("g_hash_table_new_full"),
+            entries: Vec::new(),
+            index: HashMap::new(),
             important: None,
         }
     }
 
     fn set(&mut self, name: &[u8], value: &[u8], important: bool) {
-        // SAFETY: the table takes the two new GLib strings it is handed.
-        unsafe {
-            glib::g_hash_table_replace(
-                self.table.as_ptr(),
-                glib::strdup(name).cast(),
-                glib::strdup(value).cast(),
-            )
-        };
+        let key = until_nul(name);
+        let entry = (c_text(key), c_text(value));
+        match self.index.get(key) {
+            Some(&at) => self.entries[at] = entry,
+            None => {
+                self.index.insert(key.to_vec(), self.entries.len());
+                self.entries.push(entry);
+            }
+        }
         if important {
             self.important
                 .get_or_insert_with(HashSet::new)
@@ -117,46 +109,27 @@ impl VarTable {
     }
 
     pub(super) fn len(&self) -> usize {
-        // SAFETY: the table is live for as long as the VarTable.
-        unsafe { glib::g_hash_table_size(self.table.as_ptr()) as usize }
+        self.entries.len()
     }
 
     pub(super) fn entries(
         &self,
     ) -> impl Iterator<Item = (*const c_char, *const c_char, bool)> + '_ {
-        // SAFETY: the table is live, and the iterator borrows the VarTable, which keeps it unchanged.
-        let entries = unsafe { glib::hash_table_entries(self.table.as_ptr()) };
-        entries.map(|(name, text)| {
-            let name = name.cast_const().cast::<c_char>();
-            let important = self.important.as_ref().is_some_and(|set| {
-                // SAFETY: name is a key of the live table, a NUL-terminated string it owns.
-                set.contains(unsafe { CStr::from_ptr(name) }.to_bytes())
-            });
-            (name, text.cast_const().cast(), important)
+        self.entries.iter().map(|(name, text)| {
+            let important = self
+                .important
+                .as_ref()
+                .is_some_and(|set| set.contains(name.to_bytes()));
+            (name.as_ptr(), text.as_ptr(), important)
         })
     }
 
     pub(super) fn replace_texts(&mut self, mut replace: impl FnMut(&[u8]) -> Option<Vec<u8>>) {
-        let mut iter = glib::GHashTableIter::new();
-        // SAFETY: the table is live, and the VarTable is borrowed mutably while the iterator runs.
-        unsafe { glib::g_hash_table_iter_init(&mut iter, self.table.as_ptr()) };
-        let (mut key, mut value) = (core::ptr::null_mut(), core::ptr::null_mut());
-        // SAFETY: iter was initialized over the table, which is not changed but through the iterator.
-        while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-            // SAFETY: the table's values are NUL-terminated strings it owns.
-            let text = unsafe { CStr::from_ptr(value.cast()) }.to_bytes();
-            if let Some(replaced) = replace(text) {
-                // SAFETY: iter points at a live entry, and the table frees the value it replaces.
-                unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&replaced).cast()) };
+        for (_, text) in &mut self.entries {
+            if let Some(replaced) = replace(text.to_bytes()) {
+                *text = c_text(&replaced);
             }
         }
-    }
-}
-
-impl Drop for VarTable {
-    fn drop(&mut self) {
-        // SAFETY: the VarTable owns the table, and no entry outlives it.
-        unsafe { glib::g_hash_table_destroy(self.table.as_ptr()) };
     }
 }
 

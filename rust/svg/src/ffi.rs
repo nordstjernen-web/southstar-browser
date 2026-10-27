@@ -3,11 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, GStr};
+use southstar_glib::GBoolean;
 use southstar_text::font::CairoContext;
 use southstar_text::font_description::FontDescription;
 use southstar_text::fontmap::FontMap;
@@ -170,34 +170,37 @@ unsafe extern "C" {
     fn cairo_matrix_multiply(r: *mut Matrix, a: *const Matrix, b: *const Matrix);
     fn cairo_matrix_invert(m: *mut Matrix) -> c_int;
     fn cairo_matrix_transform_point(m: *const Matrix, x: *mut f64, y: *mut f64);
-
-    fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
 }
 
 pub fn strtod(terminated: &[u8], pos: usize) -> (f64, usize) {
     let Some(rest) = terminated.get(pos..).filter(|r| r.last() == Some(&0)) else {
         return (0.0, 0);
     };
-    let start = rest.as_ptr().cast::<c_char>();
-    let mut end: *mut c_char = ptr::null_mut();
-    // SAFETY: rest ends in a NUL byte, so g_ascii_strtod reads only inside it and sets end within it.
-    let value = unsafe { g_ascii_strtod(start, &mut end) };
-    let consumed = if end.is_null() {
-        0
-    } else {
-        (end as usize)
-            .saturating_sub(start as usize)
-            .min(rest.len() - 1)
-    };
-    (value, consumed)
+    southstar_glib::ascii_strtod_prefix(&rest[..rest.len() - 1])
+}
+
+fn hex_value(c: u8) -> Option<u8> {
+    char::from(c)
+        .to_digit(16)
+        .and_then(|d| u8::try_from(d).ok())
 }
 
 pub fn uri_unescape(raw: &[u8]) -> Option<Vec<u8>> {
-    let mut c = raw.to_vec();
-    c.push(0);
-    let out = unsafe { GStr::take(g_uri_unescape_string(c.as_ptr().cast(), ptr::null())) }?;
-    Some(out.to_bytes().to_vec())
+    let raw = &raw[..raw.iter().position(|&c| c == 0).unwrap_or(raw.len())];
+    let mut out = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == b'%' {
+            let high = raw.get(i + 1).copied().and_then(hex_value)?;
+            let low = raw.get(i + 2).copied().and_then(hex_value)?;
+            out.push(high << 4 | low);
+            i += 3;
+        } else {
+            out.push(raw[i]);
+            i += 1;
+        }
+    }
+    (!out.contains(&0)).then_some(out)
 }
 
 impl Matrix {

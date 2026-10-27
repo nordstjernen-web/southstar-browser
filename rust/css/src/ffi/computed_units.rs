@@ -7,11 +7,9 @@ use core::ffi::{CStr, c_int};
 use core::mem::{offset_of, size_of};
 use core::ptr;
 
-use southstar_glib as glib;
-
 use super::value::{
     KIND_CALC, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, KIND_SIZE, KIND_TRACKS, KIND_TRANSFORM,
-    Length, NsCssValue, RawCalc, RawSize,
+    Length, NsCssValue, RawCalc, RawSize, c_dup_raw, zeroed_value,
 };
 use super::vars::RawVarMap;
 use crate::computed_units;
@@ -240,7 +238,7 @@ impl ComputedStyle<'_> {
             }
             return;
         }
-        let value = unsafe { glib::g_malloc0(size_of::<NsCssValue>()) }.cast::<NsCssValue>();
+        let value = zeroed_value();
         unsafe {
             (*value).kind = KIND_LENGTH;
             (*value).u.length = Length { v: px, unit: PX };
@@ -266,11 +264,11 @@ pub(super) unsafe fn cow(style: &mut RawStyle, prop: usize) -> *mut NsCssValue {
         return value;
     }
     unsafe {
-        let copy = glib::g_malloc0(size_of::<NsCssValue>()).cast::<NsCssValue>();
+        let copy = zeroed_value();
         ptr::copy_nonoverlapping(value, copy, 1);
         (*copy).ref_count.set(0);
-        (*copy).image_set_text = glib::g_strdup(shared.image_set_text);
-        (*copy).specified = glib::g_strdup(shared.specified);
+        (*copy).image_set_text = c_dup_raw(shared.image_set_text);
+        (*copy).specified = c_dup_raw(shared.specified);
         if let Some(next) = (*copy).next_layer.as_ref() {
             next.add_ref();
         }

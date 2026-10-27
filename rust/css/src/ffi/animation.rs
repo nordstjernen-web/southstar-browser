@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use southstar_glib::{self as glib, GBoolean};
 
 use super::computed_units::RawStyle;
-use super::value::NsCssValue;
+use super::value::{NsCssValue, c_dup, c_free};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
 use crate::prop::Prop;
 use crate::timing::Timing;
@@ -43,7 +43,7 @@ impl RawList {
     pub(super) fn free_names(&mut self) {
         let n = usize::try_from(self.n).unwrap_or(0).min(ENTRIES_MAX);
         for entry in &mut self.entries[..n] {
-            unsafe { glib::g_free(entry.name.cast()) };
+            unsafe { c_free(entry.name) };
         }
     }
 }
@@ -105,7 +105,7 @@ impl RawEntry {
     fn from_entry(e: &Entry) -> RawEntry {
         RawEntry {
             target: e.target,
-            name: e.name.as_deref().map_or(ptr::null_mut(), glib::strdup),
+            name: e.name.as_deref().map_or(ptr::null_mut(), c_dup),
             duration_ms: e.duration_ms,
             delay_ms: e.delay_ms,
             timing: e.timing,
