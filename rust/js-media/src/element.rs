@@ -138,6 +138,12 @@ pub fn play(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
                     && !(is_video && ffi::video_url_is_inline(&url))
                     && plays_through_helper(&url) =>
             {
+                if !ffi::helper_may_fetch(js, &url) {
+                    set(scope, this, "_nd_playing", Value::boolean(false));
+                    hooks.notify_play(element, false);
+                    ffi::dispatch(js, element, "error");
+                    return resolved(scope, Value::undefined());
+                }
                 let token = audio_token(scope, js, element);
                 if !truthy(scope, this, "_nd_audio_opened") {
                     hooks.emit_audio(&format!("open {token} {url}"));

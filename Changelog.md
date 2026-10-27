@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: an `<audio>`/`<video>` source that plays through the audio
+  helper (`.mp3`, and `.opus`/`.ogg`/`.webm` with libav) is now checked
+  against the page's CSP `media-src` and the mixed-content rule before the
+  renderer hands the URL to the helper, which fetches it itself. Before,
+  those sources skipped both checks: an `https:` page could play an
+  `http:` stream and `media-src` did not apply to them. A blocked source
+  fires `error` instead of playing.
 * Security: `bind`, `listen`, `accept` and `accept4` are no longer on the
   renderer and media helper seccomp allow-list. Those processes only
   connect out, so a compromised one can no longer open a loopback service
