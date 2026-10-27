@@ -127,7 +127,7 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
         _ => {}
     }
     if let Some(resp) = resp {
-        ffi::record_timing(f, start_us, resp);
+        crate::timings::record_timing(f, start_us, ffi::monotonic_us(), resp);
     }
     bytes
 }

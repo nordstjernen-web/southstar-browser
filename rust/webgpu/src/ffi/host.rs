@@ -104,17 +104,6 @@ pub(crate) fn canvas_attr(canvas: usize, name: &CStr) -> Option<Vec<u8>> {
     node.attr(name).map(|text| text.to_bytes().to_vec())
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_webgpu_get_context(scope: &mut Scope<'_>, canvas_obj: &Value, canvas: usize) -> Value {
-    crate::context::get_context(scope, canvas_obj, canvas)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_webgpu_canvas_surface(canvas: *const NsNode) -> *mut c_void {
-    crate::context::canvas_surface(canvas as usize).unwrap_or(ptr::null_mut())
-}
-
-#[unsafe(no_mangle)]
-pub fn nsr_webgpu_install(scope: &mut Scope<'_>, navigator: &Value) {
-    crate::install::install(scope, navigator);
+pub(crate) fn canvas_surface(canvas: usize) -> *mut c_void {
+    crate::context::canvas_surface(canvas).unwrap_or(ptr::null_mut())
 }

@@ -272,7 +272,6 @@ pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
 pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 unsafe extern "C" {
-    fn ns_js_video_take_load_events(video: *mut c_void) -> GBoolean;
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
@@ -315,10 +314,6 @@ pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
     // SAFETY: image is null or an image its page's cache still holds.
     let image = unsafe { southstar_image::ImageRef::from_ptr(image) }?;
     (image.loaded() || image.failed()).then_some(image.failed())
-}
-
-pub(crate) fn video_take_load_events(video: *mut c_void) -> bool {
-    unsafe { ns_js_video_take_load_events(video) != 0 }
 }
 
 pub(crate) fn node<'a>(node: *const NsNode) -> Option<Node<'a>> {

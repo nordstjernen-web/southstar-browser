@@ -12,7 +12,7 @@ use southstar_bookmarks::Bookmarks;
 use southstar_config::NsConfig;
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkRgba, GtkWidget};
 
-use super::appmain::ns_app_self_exe;
+use super::appmain::self_exe;
 use super::gtk::{
     borrowed, connect, cstring, handler, set_accessible_label, set_margins, take_gstring,
     toggle_css_class, tr, tr_string,
@@ -140,7 +140,7 @@ pub unsafe fn install_icon_search_paths() {
             return;
         }
         gtk::gtk_icon_theme_add_resource_path(theme, c"/org/southstar/WebBrowser/icons".as_ptr());
-        let Some(exe) = borrowed(ns_app_self_exe()) else {
+        let Some(exe) = borrowed(self_exe()) else {
             return;
         };
         let Some(dir) = take_gstring(gtk::g_path_get_dirname(exe.as_ptr())) else {

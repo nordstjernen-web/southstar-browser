@@ -25,11 +25,6 @@ impl Entry {
     }
 }
 
-#[unsafe(no_mangle)]
-pub fn nsr_wasm_install(scope: &mut Scope<'_>, global: &Value) {
-    drop(crate::install(scope, global));
-}
-
 pub(crate) fn entered<R>(scope: &mut Scope<'_>, entry: &Entry, f: impl FnOnce() -> R) -> R {
     let previous = entry.context.replace(scope.handle());
     let result = f();

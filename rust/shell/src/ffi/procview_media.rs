@@ -19,7 +19,7 @@ use southstar_gtk_ffi::{
     self as gtk, Cairo, CairoSurface, GdkFrameClock, GrapheneRect, GtkSnapshot, GtkWidget,
 };
 
-use super::appmain::ns_app_self_exe;
+use super::appmain::self_exe;
 use super::procview_result::{ns_proc_view_local_page, ns_proc_view_push_video_event};
 use super::procview_state::NsProcView;
 use super::procview_view::{
@@ -418,7 +418,7 @@ fn write_line(stream: *mut GOutputStream, line: &[u8]) {
 }
 
 fn helper_path(name: &CStr) -> GStr {
-    let exe = ns_app_self_exe();
+    let exe = self_exe();
     if !exe.is_null()
         && let Some(dir) = unsafe { GStr::take(g_path_get_dirname(exe)) }
     {

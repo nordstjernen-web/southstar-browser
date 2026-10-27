@@ -9,7 +9,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk_ffi as gtk;
 use southstar_renderer_client::{Page, Renderer, TilesRequest, View};
 
-use super::appmain::ns_app_self_exe;
+use super::appmain::self_exe;
 use super::pagelayers::layer_update_parse;
 use super::procview_draw::stage_fill;
 use super::procview_result::on_result;
@@ -655,7 +655,7 @@ pub(super) fn ns_proc_renderer_path() -> *mut c_char {
     } else {
         c"southstar-renderer"
     };
-    let exe = ns_app_self_exe();
+    let exe = self_exe();
     if !exe.is_null() {
         unsafe {
             let dir = glib::g_path_get_dirname(exe);

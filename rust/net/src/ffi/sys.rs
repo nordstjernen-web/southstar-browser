@@ -84,7 +84,6 @@ unsafe extern "C" {
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_get_monotonic_time() -> i64;
-    fn ns_app_self_exe() -> *const c_char;
 }
 
 #[cfg(windows)]
@@ -512,9 +511,7 @@ fn platform_exe() -> Option<Vec<u8>> {
 }
 
 pub fn exe_dir() -> Option<Vec<u8>> {
-    let own = unsafe { glib::bytes(ns_app_self_exe()) }
-        .filter(|e| !e.is_empty())
-        .map(<[u8]>::to_vec);
+    let own = super::host::self_exe().filter(|e| !e.is_empty());
     own.or_else(platform_exe).map(|exe| path_dirname(&exe))
 }
 

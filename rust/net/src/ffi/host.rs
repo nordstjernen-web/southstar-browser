@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::sync::Mutex;
 
 use southstar_config::NsConfig;
 use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GStr};
@@ -14,7 +15,6 @@ const URI_PARAMS_WWW_FORM: c_uint = 1 << 1;
 const OPENSSL_VERSION: c_int = 0;
 
 unsafe extern "C" {
-    fn ns_app_self_exe() -> *const c_char;
     fn g_get_system_data_dirs() -> *const *const c_char;
     fn g_random_int_range(begin: i32, end: i32) -> i32;
     fn g_get_os_info(key: *const c_char) -> *mut c_char;
@@ -40,11 +40,6 @@ unsafe extern "C" {
     fn sqlite3_libversion() -> *const c_char;
     fn WebPGetDecoderVersion() -> c_int;
     fn OpenSSL_version(kind: c_int) -> *const c_char;
-    fn ns_rust_compiler_version() -> *const c_char;
-    fn ns_rust_minimum_version() -> *const c_char;
-    fn ns_rust_build_profile() -> *const c_char;
-    fn ns_rust_module_count() -> c_uint;
-    fn ns_rust_modules() -> *const c_char;
 }
 
 #[cfg(feature = "libav")]
@@ -96,8 +91,16 @@ pub fn read_file(path: &[u8]) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+static SELF_EXE: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+
+pub fn set_self_exe(path: Option<&[u8]>) {
+    if let Ok(mut exe) = SELF_EXE.lock() {
+        *exe = path.map(<[u8]>::to_vec);
+    }
+}
+
 pub fn self_exe() -> Option<Vec<u8>> {
-    borrowed(unsafe { ns_app_self_exe() })
+    SELF_EXE.lock().ok()?.clone()
 }
 
 pub fn user_data_dir() -> Option<Vec<u8>> {
@@ -261,14 +264,13 @@ pub struct RustInfo {
 }
 
 pub fn rust_info() -> RustInfo {
-    unsafe {
-        RustInfo {
-            compiler: borrowed(ns_rust_compiler_version()),
-            minimum: borrowed(ns_rust_minimum_version()),
-            profile: borrowed(ns_rust_build_profile()),
-            module_count: ns_rust_module_count(),
-            modules: borrowed(ns_rust_modules()),
-        }
+    let modules = crate::build_info::ported_modules();
+    RustInfo {
+        compiler: Some(crate::build_info::compiler_version().as_bytes().to_vec()),
+        minimum: Some(crate::build_info::minimum_version().as_bytes().to_vec()),
+        profile: Some(crate::build_info::build_profile().as_bytes().to_vec()),
+        module_count: modules.len() as u32,
+        modules: Some(modules.join(", ").into_bytes()),
     }
 }
 

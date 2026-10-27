@@ -29,6 +29,7 @@ southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-js-url = { path = "../js-url" }
 southstar-js-window = { path = "../js-window" }
 southstar-layout = { path = "../layout" }
+southstar-video = { path = "../video" }
 
 [lints]
 workspace = true

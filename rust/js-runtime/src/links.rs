@@ -900,6 +900,27 @@ pub(crate) fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     (webgl_links().webgl_install)(scope, global)
 }
 
+#[cfg(feature = "webgpu")]
+pub struct WebgpuLinks {
+    pub webgpu_install: fn(&mut Scope<'_>, &Value),
+}
+
+#[cfg(feature = "webgpu")]
+static WEBGPU_LINKS: OnceLock<WebgpuLinks> = OnceLock::new();
+
+#[cfg(feature = "webgpu")]
+pub fn set_webgpu_links(links: WebgpuLinks) {
+    let _ = WEBGPU_LINKS.set(links);
+}
+
+#[cfg(feature = "webgpu")]
+pub(crate) fn webgpu_install(scope: &mut Scope<'_>, navigator: &Value) {
+    let links = WEBGPU_LINKS
+        .get()
+        .expect("southstar-webgpu installs its links before the first page");
+    (links.webgpu_install)(scope, navigator)
+}
+
 pub struct JsDocumentLinks {
     pub document_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }

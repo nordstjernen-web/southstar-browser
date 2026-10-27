@@ -136,7 +136,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     imports::nsr_url_install_interface(scope);
 
     #[cfg(feature = "wasm")]
-    ffi::imports::nsr_wasm_install(scope, &global);
+    let _ = southstar_js_wasm::install(scope, &global);
     southstar_js_intl::install(scope, &global);
     let _ = southstar_js_temporal::install(scope, &global);
     let _ = scope.set(&global, "crossOriginIsolated", Value::boolean(false));

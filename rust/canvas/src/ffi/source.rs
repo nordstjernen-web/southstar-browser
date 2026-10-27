@@ -2,30 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
-use southstar_js_engine::{ContextHandle, Scope, Value};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_js_engine::{Scope, Value};
 use southstar_texture::Texture;
+use southstar_video::BoxVideo;
 
 use super::cairo::Surface;
 use super::objects::NsNode;
 use super::state::NsJs;
 use crate::bitmap::{ImageBitmap, Source};
-
-unsafe extern "C" {
-    fn ns_js_box_for_node(js: *mut NsJs, node: *const NsNode) -> *const NsBox;
-    fn ns_js_resource_origin_clean(
-        js: *mut NsJs,
-        ctx: ContextHandle,
-        url: *const c_char,
-        cors_allow_origin: *const c_char,
-    ) -> c_int;
-    fn ns_video_poster_texture(video: *const c_void, url: *mut *const c_char) -> *mut c_void;
-}
 
 struct Found<'a> {
     texture: *mut c_void,
@@ -44,21 +33,19 @@ fn from_image(image: ImageRef<'_>, cacheable: bool) -> Option<Found<'_>> {
     })
 }
 
-fn from_box<'a>(js: *mut NsJs, node: *const NsNode, name: &[u8]) -> Option<Found<'a>> {
-    let b = unsafe { BoxRef::from_ptr(ns_js_box_for_node(js, node)) }?;
+fn from_box(scope: &Scope<'_>, node: Node<'_>, name: &[u8]) -> Option<Found<'static>> {
+    let b = crate::links::box_for_node(scope, node)?;
     let media = b.media()?;
     match name {
         b"img" => from_image(unsafe { ImageRef::from_ptr(media.image()) }?, false),
-        b"video" if !media.video().is_null() => {
-            let mut url = ptr::null();
-            let texture = unsafe { ns_video_poster_texture(media.video(), &mut url) };
+        b"video" => BoxVideo::of(b)?.with_poster(|texture, url| {
             Some(Found {
-                texture,
-                url,
+                texture: texture.map_or(ptr::null_mut(), |t| t.as_ptr().cast()),
+                url: url.map_or(ptr::null(), CStr::as_ptr),
                 cors_allow_origin: ptr::null(),
                 cacheable: None,
             })
-        }
+        }),
         _ => None,
     }
 }
@@ -111,7 +98,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
         return canvas_source(scope, node);
     }
     let cors_requested = element.attr(c"crossorigin").is_some();
-    let found = from_box(js, node, name)
+    let found = from_box(scope, element, name)
         .filter(|f| !f.texture.is_null())
         .or_else(|| {
             if name != b"img" {
@@ -124,8 +111,9 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     } else {
         ptr::null()
     };
-    let origin_clean =
-        unsafe { ns_js_resource_origin_clean(js, scope.handle(), found.url, allow) } != 0;
+    let origin_clean = crate::links::resource_origin_clean();
+    // SAFETY: the found URL and allowed origin are null or strings their image or video keeps alive here.
+    let origin_clean = unsafe { origin_clean(scope, found.url, allow) };
     if let Some(image) = found.cacheable
         && let Some(cached) = unsafe { Surface::from_borrowed(image.render_surface()) }
     {

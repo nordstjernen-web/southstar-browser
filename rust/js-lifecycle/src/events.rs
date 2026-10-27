@@ -144,7 +144,6 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
     {
         let dom = dom.cast_mut();
         let image = media.image();
-        let video = media.video();
         if name == c"img" && !image.is_null() {
             if let Some(failed) = ffi::image_settled(image)
                 && node.flags() & IMG_LOAD_FIRED == 0
@@ -152,7 +151,10 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
             {
                 out.images.push((node, failed));
             }
-        } else if name == c"video" && !video.is_null() && ffi::video_take_load_events(video) {
+        } else if name == c"video"
+            && southstar_video::BoxVideo::of(b)
+                .is_some_and(southstar_video::BoxVideo::take_load_events)
+        {
             out.videos.push(dom);
         }
     }

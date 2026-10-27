@@ -2,38 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib as glib;
 use southstar_js_engine::{MemoryUsage, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
 use crate::{Element, run, stats};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
-
-#[repr(C)]
-struct NsResponse {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct ResourceTiming {
-    top_url: *mut c_char,
-    url: *mut c_char,
-    initiator: *const c_char,
-    start_us: i64,
-    end_us: i64,
-    resp: *mut NsResponse,
-    render_blocking: GBoolean,
-    in_frame: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ResourceTiming>() == 56);
 
 const DLOG_JS: c_int = 5;
 
@@ -116,8 +95,6 @@ pub(crate) enum ValueInstaller {
 }
 
 unsafe extern "C" {
-    fn ns_engine_take_resource_timings(top_url: *const c_char) -> *mut GPtrArray;
-
     fn g_get_monotonic_time() -> i64;
 }
 
@@ -268,38 +245,25 @@ impl Js {
     }
 
     pub fn record_stylesheet_timings(self, doc: Element, base_url: Option<&CStr>) {
-        let sheets = unsafe { ns_engine_take_resource_timings(c_ptr(base_url)) };
-        if sheets.is_null() {
-            return;
-        }
-        let len = unsafe { (*sheets).len } as usize;
-        for i in 0..len {
-            let timing = unsafe { &*(*(*sheets).pdata.add(i)).cast::<ResourceTiming>() };
-            if timing.in_frame != 0 {
+        for timing in southstar_engine::take_resource_timings(base_url) {
+            if timing.in_frame {
                 continue;
             }
             let mut info = southstar_js_loader::element_perf_info(self.0, Some(doc));
-            info.render_blocking = timing.render_blocking;
-            // SAFETY: the engine's timing record keeps its URL alive until the array is freed below.
-            let Some(url) = (unsafe { c_text(timing.url) }) else {
-                continue;
-            };
-            // SAFETY: the initiator is null or a static string the engine recorded.
-            let initiator = unsafe { c_text(timing.initiator) };
+            info.render_blocking = glib::boolean(timing.render_blocking);
             let span = (timing.start_us, timing.end_us);
             // SAFETY: the element's perf strings and the timing's response stay live for the call.
             unsafe {
                 southstar_js_perf::add_resource_timed(
                     self.0,
                     Some(&info),
-                    url,
-                    initiator,
+                    &timing.url,
+                    Some(timing.initiator),
                     span,
-                    timing.resp.cast(),
+                    timing.response.as_ptr().cast_const().cast(),
                 )
             };
         }
-        unsafe { glib::g_ptr_array_free(sheets, glib::TRUE) };
     }
 
     pub fn run_document_scripts(self, doc: Element, origin: &CStr, start_us: i64) {
@@ -332,10 +296,6 @@ impl Js {
             count(southstar_js_dispatch::listener_count(self.0)),
         ]
     }
-}
-
-fn c_ptr(text: Option<&CStr>) -> *const c_char {
-    text.map_or(ptr::null(), CStr::as_ptr)
 }
 
 pub(crate) fn build_document_indexes(doc: Element) {
@@ -432,10 +392,6 @@ pub(crate) fn name_engine_members(scope: &mut Scope<'_>) {
 
 pub(crate) fn memory_usage(scope: &mut Scope<'_>) -> MemoryUsage {
     scope.memory_usage()
-}
-
-unsafe fn c_text<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
 pub fn run_scripts_in_doc(js: *const NsJs, doc: Node<'_>, base_url: Option<&CStr>) {

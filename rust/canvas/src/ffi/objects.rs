@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 use std::ffi::CString;
 
-use southstar_glib as glib;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::cairo::Context;
@@ -22,15 +21,6 @@ pub struct NsJs {
 #[repr(C)]
 pub struct NsNode {
     _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    fn ns_js_realm_for_node(js: *mut NsJs, node: *const NsNode) -> ContextHandle;
-    fn ns_js_computed_text(
-        ctx: ContextHandle,
-        node: *const NsNode,
-        name: *const c_char,
-    ) -> *mut c_char;
 }
 
 pub(crate) fn with_hidden<R>(value: &Value, f: impl FnOnce(&Hidden) -> R) -> Option<R> {
@@ -175,13 +165,8 @@ pub(crate) fn canvas_state_for(scope: &Scope<'_>, el: usize) {
 }
 
 pub(crate) fn computed_color(scope: &Scope<'_>, el: usize) -> Option<Vec<u8>> {
-    if el == 0 {
-        return None;
-    }
-    let computed =
-        unsafe { ns_js_computed_text(scope.handle(), el as *const NsNode, c"color".as_ptr()) };
-    let text = unsafe { glib::GStr::take(computed) }?;
-    Some(text.to_bytes().to_vec())
+    let text = southstar_js_cssom::computed_text(scope, dom_element(el)?, "color")?;
+    Some(text.into_bytes())
 }
 
 fn dom_element(el: usize) -> Option<southstar_dom::Node<'static>> {
@@ -219,11 +204,12 @@ pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
 
 pub(crate) fn canvas_realm(scope: &Scope<'_>, el: usize) -> ContextHandle {
     let current = scope.handle();
-    let js = js_of(scope);
-    if js.is_null() || el == 0 {
+    if js_of(scope).is_null() {
         return current;
     }
-    unsafe { ns_js_realm_for_node(js, el as *const NsNode) }.or(current)
+    dom_element(el).map_or(current, |el| {
+        crate::links::realm_for_node(scope, el).or(current)
+    })
 }
 
 pub(crate) fn new_in_realm(

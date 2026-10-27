@@ -32,7 +32,9 @@ http-zstd = ["southstar-http/zstd"]
 libav = []
 poppler = []
 seccomp = []
+wasm = []
 webgpu = []
+woff2 = []
 
 [lints]
 workspace = true
