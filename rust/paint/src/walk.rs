@@ -428,12 +428,7 @@ fn tree_position(b: BoxRef<'_>) -> (Option<Node<'_>>, i32) {
         return (Some(n), 0);
     }
     match b.pseudo_host() {
-        Some((host, after)) => (
-            // SAFETY: pseudo_host holds the originating element recorded when
-            // layout built this box, and the DOM outlives the box tree.
-            unsafe { Node::from_ptr(host.cast()) },
-            if after { 2 } else { 1 },
-        ),
+        Some((host, after)) => (Some(host), if after { 2 } else { 1 }),
         None => (None, 0),
     }
 }

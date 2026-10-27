@@ -52,8 +52,7 @@ fn inline_run(
     last: Option<Node<'_>>,
     styles: StyleTable,
 ) -> Option<BoxRef<'static>> {
-    let raw = run::build_inline_run(Some(first), Node::ptr_or_null(last), styles, true);
-    ffi::box_ref(raw)
+    run::build_inline_run(Some(first), Node::ptr_or_null(last), styles, true)
 }
 
 fn append_or_free(parent: BoxRef<'_>, run: Option<BoxRef<'static>>) {
@@ -346,7 +345,7 @@ fn build_blockified_inline_item(
 ) -> Option<BoxRef<'static>> {
     let s = styles.get(n);
     let item = BoxPool::new_box(KIND_BLOCK);
-    item.set_dom(n.as_ptr().cast());
+    item.set_dom(Some(n));
     item.set_style(style_ptr(s));
     collect_box_bg_image(item, s);
     if let Some(s) = s {
@@ -368,8 +367,8 @@ fn build_blockified_inline_item(
         st.pseudo_block_after = after_block.is_some();
         saved
     });
-    let raw = run::build_inline_run(Some(n), Node::ptr_or_null(n.next_sibling()), styles, false);
-    let mut run = ffi::box_ref(raw);
+    let mut run =
+        run::build_inline_run(Some(n), Node::ptr_or_null(n.next_sibling()), styles, false);
     state::with(|st| {
         (
             st.pseudo_blocks_host,
@@ -412,7 +411,7 @@ fn build_rendered_legend(n: Node<'_>, styles: StyleTable) -> BoxRef<'static> {
     state::with(|st| st.blockified_legend = saved);
     let legend = legend.unwrap_or_else(|| {
         let b = BoxPool::new_box(KIND_BLOCK);
-        b.set_dom(n.as_ptr().cast());
+        b.set_dom(Some(n));
         b.set_style(style_ptr(styles.get(n)));
         b
     });
@@ -426,7 +425,7 @@ pub fn build_form_control_block(
     styles: StyleTable,
 ) -> BoxRef<'static> {
     let block = BoxPool::new_box(KIND_BLOCK);
-    block.set_dom(n.as_ptr().cast());
+    block.set_dom(Some(n));
     block.set_style(style_ptr(s));
     collect_box_bg_image(block, s);
     let prev = state::with(|st| core::mem::replace(&mut st.form_control_inline, n.as_ptr()));
@@ -469,7 +468,7 @@ fn build_slot(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> Optio
     let sr = shadow_root(host);
     let slot_name = n.attr(c"name").map_or(&b""[..], CStr::to_bytes);
     let sbox = BoxPool::new_box(KIND_BLOCK);
-    sbox.set_dom(n.as_ptr().cast());
+    sbox.set_dom(Some(n));
     sbox.set_style(style_ptr(s));
     let mut any = false;
     if let (Some(host), Some(sr)) = (host, sr) {
@@ -546,7 +545,7 @@ fn build_block_impl(n: Node<'_>, styles: StyleTable) -> Option<BoxRef<'static>> 
                 return None;
             }
             let clearance = BoxPool::new_box(KIND_BLOCK);
-            clearance.set_dom(n.as_ptr().cast());
+            clearance.set_dom(Some(n));
             clearance.set_style(style_ptr(s));
             return Some(clearance);
         }
@@ -557,7 +556,7 @@ fn build_block_impl(n: Node<'_>, styles: StyleTable) -> Option<BoxRef<'static>> 
         }
         Some(b"math") => {
             let mb = BoxPool::new_box(KIND_MATH);
-            mb.set_dom(n.as_ptr().cast());
+            mb.set_dom(Some(n));
             mb.set_style(style_ptr(s));
             return Some(mb);
         }
@@ -623,7 +622,7 @@ fn is_summary(c: Node<'_>) -> bool {
 
 fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> BoxRef<'static> {
     let block = BoxPool::new_box(KIND_BLOCK);
-    block.set_dom(n.as_ptr().cast());
+    block.set_dom(Some(n));
     block.set_style(style_ptr(s));
     let rendered_legend = fieldset_rendered_legend(n, styles);
     collect_box_bg_image(block, s);

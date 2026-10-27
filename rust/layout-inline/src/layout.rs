@@ -12,8 +12,8 @@ use crate::measure;
 
 const SCALE: f64 = text_layout::SCALE_F;
 
-pub(crate) fn atomic_at(b: BoxRef<'_>, i: usize) -> Option<&InlineAtomic> {
-    b.inline_atomics()?.get(i)
+pub(crate) fn atomic_at(b: BoxRef<'_>, i: usize) -> Option<InlineAtomic> {
+    b.inline_atomics()?.get(i).copied()
 }
 
 pub(crate) fn has_atomics(b: BoxRef<'_>) -> bool {
@@ -38,11 +38,11 @@ pub fn line_height(parent_style: *const Style) -> f64 {
 fn control_line_height(b: BoxRef<'_>, line_height: f64) -> f64 {
     let all = b.attrs();
     let mut out = line_height;
-    for r in all {
+    for r in &all {
         if r.kind != k::INPUT_FIELD && r.kind != k::INPUT_FIELD_FOCUSED && r.kind != k::BUTTON {
             continue;
         }
-        if attrs::is_textarea(r) || r.native_chrome == 0 {
+        if attrs::is_textarea(r) || !r.native_chrome {
             continue;
         }
         let cfs = all
@@ -74,14 +74,14 @@ fn style_sets_block_height(s: StyleRef<'_>) -> bool {
 
 fn textarea_total_height(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     let mut out = 0.0;
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if (r.kind == k::INPUT_FIELD || r.kind == k::INPUT_FIELD_FOCUSED)
             && attrs::is_textarea(r)
             && r.box_h > 0.0
             && !(r.style() == parent_style
                 && ffi::style(r.style()).is_some_and(style_sets_block_height))
         {
-            let h = r.box_h + if r.native_chrome != 0 { 8.0 } else { 0.0 };
+            let h = r.box_h + if r.native_chrome { 8.0 } else { 0.0 };
             if h > out {
                 out = h;
             }
@@ -145,7 +145,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
     if ffi::text_orientation(ps) == 1 {
         layout.set_width(-1);
         layout.set_alignment(text_layout::ALIGN_CENTER);
-        layout.set_text(&ffi::vertical_stack_text(text));
+        layout.set_text(&ffi::vertical_stack_text(&text));
         let (pw, ph) = layout.pixel_size();
         (f64::from(pw), f64::from(ph))
     } else {
@@ -157,7 +157,7 @@ pub(crate) fn vertical_measure(b: BoxRef<'_>, ps: *const Style) -> (f64, f64) {
         attrs::apply_spacing(&i18n, ffi::style(ps), text.to_bytes());
         attrs::set_attrs(&layout, Some(&i18n), Some(b));
         drop(i18n);
-        layout.set_text(text);
+        layout.set_text(&text);
         let (pw, ph) = layout.pixel_size();
         (f64::from(ph), f64::from(pw))
     }
@@ -174,7 +174,7 @@ fn record_abs_statics(
         return;
     };
     let indent = ffi::text_indent(b, ps, content_width);
-    for a in atomics {
+    for a in &atomics {
         let Some(ab) = a.box_ref() else {
             continue;
         };
@@ -218,7 +218,7 @@ fn place_atomics(
         return;
     };
     let line_count = line_heights.len();
-    layout.set_text(text);
+    layout.set_text(&text);
     if layout.width() < 0 && layout.alignment() != text_layout::ALIGN_LEFT {
         let (pw, _) = layout.pixel_size();
         if f64::from(pw) <= content_width {
@@ -245,7 +245,7 @@ fn place_atomics(
     let Some(atomics) = b.inline_atomics() else {
         return;
     };
-    for a in atomics {
+    for a in &atomics {
         let Some(ab) = a.box_ref() else {
             continue;
         };
@@ -339,7 +339,7 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
     }
     shaping_attrs(&layout, b, ps, text.to_bytes());
 
-    layout.set_text(text);
+    layout.set_text(&text);
     ffi::start_align_overflow(&layout);
     let measured = measure::measure(&layout);
     let measured_h = measured.pixel_logical().height;
@@ -367,7 +367,7 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: *const Style) {
         }
     }
     if let Some(list) = b.inline_atomics() {
-        for a in list {
+        for a in &list {
             let Some(atomic) = a.box_ref() else {
                 continue;
             };

@@ -153,10 +153,6 @@ pub fn register_font_oracle() {
     southstar_css::set_font_alias(text::font_alias);
 }
 
-pub fn drop_box_cache(b: BoxRef<'_>) {
-    inline::drop_box_cache(b);
-}
-
 pub fn inline_word_range(b: BoxRef<'_>, byte: usize) -> Option<(usize, usize)> {
     inline::inline_word_range(b, byte)
 }

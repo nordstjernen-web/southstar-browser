@@ -165,7 +165,6 @@ fn install_layout_hooks() {
             process_absolute_boxes: abs::process_absolute_boxes,
         });
         southstar_layout::paint_links::install(PaintLinks {
-            drop_box_cache: southstar_paint::drop_box_cache,
             inline_xy_to_byte: southstar_paint::inline_xy_to_byte,
             inline_word_range: southstar_paint::inline_word_range,
             inline_range_extents: southstar_paint::inline_range_extents,

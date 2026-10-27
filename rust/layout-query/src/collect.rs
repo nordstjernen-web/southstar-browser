@@ -14,7 +14,7 @@ fn with_atomics<'a>(b: BoxRef<'a>, mut visit: impl FnMut(BoxRef<'a>)) {
     for c in southstar_layout::children(b) {
         visit(c);
     }
-    for atomic in b.inline_atomics().unwrap_or(&[]) {
+    for atomic in &b.inline_atomics().unwrap_or_default() {
         if let Some(ab) = atomic.box_ref() {
             visit(ab);
         }

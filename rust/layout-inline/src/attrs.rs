@@ -180,7 +180,7 @@ pub(crate) fn apply_atomic_shapes(list: &AttrList, b: BoxRef<'_>) {
         .filter_map(|a| a.box_ref())
         .map(atomic_ascent)
         .fold(0.0, |acc, a| if a > acc { a } else { acc });
-    for a in atomics {
+    for a in &atomics {
         let Some(ab) = a.box_ref() else {
             continue;
         };
@@ -231,7 +231,7 @@ fn insert_line_height(list: &AttrList, px: f64, start: u32, end: u32) {
 }
 
 fn insert_spacer_line_heights(list: &AttrList, b: BoxRef<'_>) {
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if r.kind == k::SPACER && r.len > 0 {
             insert_line_height(list, 0.0, r.start as u32, (r.start + r.len) as u32);
         }
@@ -282,7 +282,7 @@ fn strut_kinds(b: BoxRef<'_>, n: usize, strut_px: f64) -> Vec<u8> {
             if shorter { STRUT_SHORTER } else { STRUT_ROOT },
         );
     }
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if r.kind == k::SPACER {
             mark_range(&mut kind, r, STRUT_SPACER);
         }
@@ -313,7 +313,7 @@ fn restore_strut_lines(layout: &Layout, list: &AttrList, b: BoxRef<'_>, strut_px
     }
     let kind = strut_kinds(b, n, strut_px);
     if layout.text().is_empty() {
-        layout.set_text(text);
+        layout.set_text(&text);
     }
     let mut with_struts: Option<AttrList> = None;
     let mut iter = layout.iter();
@@ -381,7 +381,7 @@ pub(crate) fn set_attrs(layout: &Layout, list: Option<&AttrList>, b: Option<BoxR
         return;
     };
     let mut stretched = false;
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if !is_text_input(r) || r.len < 4 {
             continue;
         }

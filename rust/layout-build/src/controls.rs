@@ -91,8 +91,7 @@ impl<'a> Collector<'a> {
         } else {
             inline_kind::PROGRESS
         };
-        let mut a =
-            InlineAttr::new(kind, start, self.out.len() - start).with_dom(n.as_ptr().cast());
+        let mut a = InlineAttr::new(kind, start, self.out.len() - start).with_dom(Some(n));
         a.font_size_px = frac;
         [a.r, a.g, a.b, a.a] = rgba;
         self.attrs.push(a);
@@ -363,7 +362,7 @@ impl<'a> Collector<'a> {
         if !is_placeholder && disp_end > val_start && !disabled && controls::spellcheck_used(n) {
             self.attrs.push(
                 InlineAttr::new(inline_kind::SPELLCHECK, val_start, disp_end - val_start)
-                    .with_dom(n.as_ptr().cast()),
+                    .with_dom(Some(n)),
             );
         }
     }

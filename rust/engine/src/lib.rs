@@ -145,7 +145,7 @@ fn write_text(b: BoxRef, out: &mut Out) {
             if let Some(dom) = ffi::box_dom(b) {
                 let alt = dom.attr(c"alt").filter(|a| !a.is_empty());
                 let src = b.media().and_then(|m| m.image_src());
-                match alt.or(src) {
+                match alt.or(src.as_deref()) {
                     Some(label) => out.append(&[b"[image: ", label.to_bytes(), b"]\n"].concat()),
                     None => out.append(b"[image]\n"),
                 }

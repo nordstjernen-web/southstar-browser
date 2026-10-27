@@ -46,7 +46,7 @@ pub fn compute_paint_bounds(b: BoxRef<'_>) {
             bottom = c.paint_bottom();
         }
     }
-    for atomic in b.inline_atomics().unwrap_or(&[]) {
+    for atomic in &b.inline_atomics().unwrap_or_default() {
         let Some(ab) = atomic.box_ref() else {
             continue;
         };
@@ -87,7 +87,7 @@ fn extent_walk(b: BoxRef<'_>, off: f64, ext: &mut Extent) {
     for c in southstar_layout::children(b) {
         extent_walk(c, off, ext);
     }
-    for atomic in b.inline_atomics().unwrap_or(&[]) {
+    for atomic in &b.inline_atomics().unwrap_or_default() {
         if let Some(ab) = atomic.box_ref() {
             extent_walk(
                 ab,
@@ -124,7 +124,7 @@ pub struct Rect {
 
 fn union_walk(root: BoxRef<'_>, target: Node<'_>, dx: f64, dy: f64, acc: &mut Option<Rect>) {
     if root.kind() == BoxKind::Inline && root.has_attrs() && root.text().is_some() {
-        for r in root.attrs() {
+        for r in &root.attrs() {
             if r.dom_ptr() != target.as_ptr().cast() || r.len == 0 {
                 continue;
             }
@@ -155,7 +155,7 @@ fn union_walk(root: BoxRef<'_>, target: Node<'_>, dx: f64, dy: f64, acc: &mut Op
     for c in southstar_layout::children(root) {
         union_walk(c, target, cdx, cdy, acc);
     }
-    for atomic in root.inline_atomics().unwrap_or(&[]) {
+    for atomic in &root.inline_atomics().unwrap_or_default() {
         let Some(ab) = atomic.box_ref() else {
             continue;
         };

@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{MAX_DEPTH, Node, NsNode, children, controls};
-use southstar_layout::{InlineAttr, NsBox, Style, inline_kind};
+use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
 use southstar_layout_content::controls::{
     FontKeyword, append_inline_spacer, emit_attr, emit_attr_styled, emit_color, emit_font_family,
     emit_font_features, emit_font_size, emit_font_stretch, emit_font_variations, emit_font_weight,
@@ -69,11 +69,9 @@ impl Span {
 pub struct Collector<'a> {
     pub styles: StyleTable,
     pub state: CollectState,
-    active_href: *const c_char,
-    active_target: *const c_char,
-    active_link_node: *const NsNode,
+    active_link: Option<(&'a CStr, Option<&'a CStr>, Node<'a>)>,
     pub out: Vec<u8>,
-    pub links: Vec<RawLink>,
+    pub links: Vec<RawLink<'a>>,
     pub attrs: Vec<InlineAttr>,
     bold: Span,
     italic: Span,
@@ -84,7 +82,7 @@ pub struct Collector<'a> {
     no_wrap: Span,
     q_depth: i32,
     pub text_transform: Option<&'a CStr>,
-    pub atomics: Vec<(usize, *mut NsBox)>,
+    pub atomics: Vec<(usize, BoxRef<'static>)>,
     abs_placeholders: bool,
     pub ws_ranges: Vec<WsRange>,
     ws_parent: *const NsNode,
@@ -148,9 +146,7 @@ impl<'a> Collector<'a> {
         Collector {
             styles,
             state: state::collect_state(),
-            active_href: ptr::null(),
-            active_target: ptr::null(),
-            active_link_node: ptr::null(),
+            active_link: None,
             out: Vec::new(),
             links: Vec::new(),
             attrs: Vec::new(),
@@ -200,15 +196,15 @@ impl<'a> Collector<'a> {
     }
 
     fn note_link(&mut self, start: usize) {
-        if self.active_href.is_null() {
+        let Some((href, target, dom)) = self.active_link else {
             return;
-        }
+        };
         self.links.push(RawLink {
             start,
             len: self.out.len() - start,
-            href: self.active_href,
-            target: self.active_target,
-            dom: self.active_link_node,
+            href,
+            target,
+            dom,
         });
     }
 
@@ -225,7 +221,7 @@ impl<'a> Collector<'a> {
         );
     }
 
-    pub fn push_atomic(&mut self, b: *mut NsBox) {
+    pub fn push_atomic(&mut self, b: BoxRef<'static>) {
         self.atomics.push((self.out.len(), b));
         self.push(OBJECT_REPLACEMENT);
     }
@@ -294,7 +290,7 @@ impl<'a> Collector<'a> {
         if let Some(ph) =
             state::collect_absolute(n.as_ptr(), fixed, !fixed && self.abs_placeholders)
         {
-            self.push_atomic(ph.as_mut_ptr());
+            self.push_atomic(ph);
         }
     }
 
@@ -322,7 +318,7 @@ impl<'a> Collector<'a> {
         }
         if !same(self.state.form_control_inline, n) && is_atomic_inline(Some(n), self.styles) {
             if let Some(sub) = crate::block::collect_atomic_block(n, self.styles, depth + 1) {
-                self.push_atomic(sub.as_mut_ptr());
+                self.push_atomic(sub);
             }
             return;
         }
@@ -359,7 +355,7 @@ impl<'a> Collector<'a> {
                     && self.abs_placeholders
                     && let Some(ph) = state::abs_placeholder(ps.as_ptr().cast())
                 {
-                    self.push_atomic(ph.as_mut_ptr());
+                    self.push_atomic(ph);
                 }
             } else {
                 self.pseudo_text(ps, content, host);
@@ -371,7 +367,7 @@ impl<'a> Collector<'a> {
                 .and_then(ValueRef::keyword_text)
                 .and_then(|raw| pseudo::resolve_content(raw.to_bytes(), Some(host)));
             let b = crate::generated::pseudo_block_with_text(ps, txt.as_deref());
-            self.push_atomic(b.as_mut_ptr());
+            self.push_atomic(b);
             return;
         }
         let side = |p| length_or(ps.get(p), 0.0);
@@ -428,7 +424,7 @@ impl<'a> Collector<'a> {
             .filter(|v| v.kind() == southstar_style::Kind::Keyword)
             .and_then(ValueRef::keyword_text)
         {
-            emit_font_family(attrs, start, end, f.as_ptr());
+            emit_font_family(attrs, start, end, f);
         }
         let weight = ps
             .get(PropId::FontWeight)
@@ -443,16 +439,14 @@ impl<'a> Collector<'a> {
     }
 
     fn element(&mut self, n: Node<'a>, s: Option<StyleRef<'a>>, name: &CStr, depth: i32) {
-        let prev = (self.active_href, self.active_target, self.active_link_node);
+        let prev = self.active_link;
         if name.to_bytes() == b"a"
             && let Some(h) = n.attr(c"href").filter(|h| !h.is_empty())
         {
-            self.active_href = h.as_ptr();
-            self.active_target = n.attr(c"target").map_or(ptr::null(), CStr::as_ptr);
-            self.active_link_node = n.as_ptr();
+            self.active_link = Some((h, n.attr(c"target"), n));
         }
         self.styled_element(n, s, name, depth);
-        (self.active_href, self.active_target, self.active_link_node) = prev;
+        self.active_link = prev;
     }
 
     fn styled_element(&mut self, n: Node<'a>, s: Option<StyleRef<'a>>, name: &CStr, depth: i32) {
@@ -616,7 +610,7 @@ impl<'a> Collector<'a> {
         let family_start = self.out.len();
         let family = get(PropId::FontFamily)
             .filter(|v| v.kind() == southstar_style::Kind::Keyword)
-            .map(|v| v.keyword_text().map_or(ptr::null(), CStr::as_ptr));
+            .and_then(ValueRef::keyword_text);
 
         let prev_text_transform = self.text_transform;
         if let Some(v) =
@@ -660,7 +654,7 @@ impl<'a> Collector<'a> {
         if let Some(c) = color.filter(|_| end > color_start) {
             emit_color(attrs, color_start, end, c);
         }
-        if let Some(f) = family.filter(|f| !f.is_null() && end > family_start) {
+        if let Some(f) = family.filter(|_| end > family_start) {
             emit_font_family(attrs, family_start, end, f);
         }
         if font_weight_active && end > weight_start {
@@ -670,17 +664,10 @@ impl<'a> Collector<'a> {
             emit_font_stretch(attrs, stretch_start, end, font_stretch_self);
         }
         if features_active && end > features_start {
-            emit_font_features(
-                attrs,
-                features_start,
-                end,
-                kerning,
-                ligatures.map_or(ptr::null(), CStr::as_ptr),
-                features.map_or(ptr::null(), CStr::as_ptr),
-            );
+            emit_font_features(attrs, features_start, end, kerning, ligatures, features);
         }
         if let Some(v) = variations.filter(|_| end > variations_start) {
-            emit_font_variations(attrs, variations_start, end, v.as_ptr());
+            emit_font_variations(attrs, variations_start, end, v);
         }
         if let Some(start) = self.bold.close(bold) {
             emit_attr(attrs, inline_kind::BOLD, start, end);
@@ -732,7 +719,7 @@ impl<'a> Collector<'a> {
                     elem_start,
                     self.out.len() - elem_start,
                 )
-                .with_dom(n.as_ptr().cast())
+                .with_dom(Some(n))
                 .with_style(s.map_or(ptr::null(), StyleRef::as_ptr)),
             );
         }

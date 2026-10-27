@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxKind, BoxPool, BoxRef, InlineAtomic, InlineAttr, LinkVec};
+use southstar_layout::{BoxKind, BoxPool, BoxRef, InlineAtomic, LinkVec, Text};
 
-fn text_bytes(b: BoxRef<'_>) -> &[u8] {
-    b.text().map_or(&[][..], |t| t.to_bytes())
+fn text_bytes(b: BoxRef<'_>) -> Text {
+    b.text_bytes()
 }
 
 fn same(a: Option<BoxRef<'_>>, b: BoxRef<'_>) -> bool {
@@ -29,8 +29,8 @@ pub fn merge_prefix<'a>(
         return Some(prefix);
     }
     let mut combined = Vec::with_capacity(plen + slen);
-    combined.extend_from_slice(text_bytes(prefix));
-    combined.extend_from_slice(text_bytes(suffix));
+    combined.extend_from_slice(&text_bytes(prefix));
+    combined.extend_from_slice(&text_bytes(suffix));
     suffix.set_text_bytes(&combined);
 
     let mut attrs = suffix.take_attrs();
@@ -48,7 +48,7 @@ pub fn merge_prefix<'a>(
     if prefix.has_attrs() {
         attrs
             .get_or_insert_default()
-            .extend_from_slice(prefix.attrs());
+            .extend_from_slice(&prefix.attrs());
     }
     suffix.put_attrs(attrs.as_deref());
 
@@ -73,7 +73,7 @@ pub fn merge_prefix<'a>(
 
     if prefix.has_links() {
         let dst = links.get_or_insert_default();
-        for l in prefix.links() {
+        for l in &prefix.links() {
             dst.push_copy(l, l.start, l.len);
         }
     }
@@ -88,15 +88,15 @@ fn split_attrs(run: BoxRef<'_>, tail: BoxRef<'_>, split: usize) {
     for a in run.take_attrs().unwrap_or_default() {
         let end = a.start + a.len;
         if a.start < split {
-            let mut h = a;
+            let mut h = a.clone();
             if end > split {
                 h.len = split - a.start;
             }
             head.push(h);
         }
         if end > split || a.start >= split {
-            let mut t: InlineAttr = a;
             let from = a.start.max(split);
+            let mut t = a;
             t.start = from - split;
             t.len = if end > split { end - from } else { 0 };
             tail_attrs.get_or_insert_default().push(t);
@@ -155,7 +155,7 @@ fn split_atomics(run: BoxRef<'_>, tail: BoxRef<'_>, split: usize) {
 
 pub fn run_split(run: BoxRef<'_>, split: usize) -> BoxRef<'static> {
     let tail = BoxPool::new_inline();
-    tail.set_dom(run.dom_ptr());
+    tail.set_dom(run.dom());
     tail.set_style(run.style());
     tail.set_inline_split_tail(true);
     tail.set_text_bytes(&text_bytes(run)[split..]);
@@ -258,31 +258,31 @@ pub fn clone_range(src: BoxRef<'_>, start: usize, end: usize) -> Option<BoxRef<'
     }
     let end = end.min(text_len);
     let out = BoxPool::new_inline();
-    out.set_dom(src.dom_ptr());
+    out.set_dom(src.dom());
     out.set_style(src.style());
     out.set_text_bytes(&text[start..end]);
 
     let mut attrs = out.take_attrs();
-    for a in src.attrs() {
+    for a in &src.attrs() {
         let a_end = range_end_clamped(a.start, a.len, text_len);
         let is = a.start.max(start);
         let ie = a_end.min(end);
         if ie <= is {
             continue;
         }
-        let mut copy = *a;
+        let mut copy = a.clone();
         copy.start = is - start;
         copy.len = ie - is;
-        attrs.get_or_insert_default().push(copy);
         if let Some(bg) = copy.bg_image_src() {
             out.set_bg_image_if_unset(bg, copy.bg_image());
         }
+        attrs.get_or_insert_default().push(copy);
     }
     out.put_attrs(attrs.as_deref());
 
     if src.has_links() {
         let mut links: Option<LinkVec> = None;
-        for r in src.links() {
+        for r in &src.links() {
             let r_end = range_end_clamped(r.start, r.len, text_len);
             let is = r.start.max(start);
             let ie = r_end.min(end);

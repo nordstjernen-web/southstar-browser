@@ -104,7 +104,7 @@ fn atomics_outer_width_sum(b: BoxRef<'_>, ps: *const Style) -> f64 {
     let mut sum = 0.0;
     for ab in b
         .inline_atomics()
-        .unwrap_or(&[])
+        .unwrap_or_default()
         .iter()
         .filter_map(|a| a.box_ref())
     {
@@ -136,14 +136,14 @@ pub fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     let layout = ffi::new_layout(ps);
     layout.set_width(-1);
     let saved = ffi::measure_atomics_begin(b, ps, true);
-    layout.set_text(text);
+    layout.set_text(&text);
     shaping_attrs(&layout, b, ps, text.to_bytes());
     let natural = measure::measure(&layout);
     let slack = px_length(ffi::style(ps).and_then(|s| s.get(PropId::LetterSpacing)))
         .filter(|&v| v > 0.0)
         .unwrap_or(0.0);
     let mut pw = (f64::from(natural.logical.width) / SCALE + slack).ceil();
-    for a in b.inline_atomics().unwrap_or(&[]) {
+    for a in &b.inline_atomics().unwrap_or_default() {
         if a.box_ref().is_none() {
             continue;
         }
@@ -178,7 +178,7 @@ pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     {
         return w;
     }
-    let fast = ascii_min_width(b, ps, text);
+    let fast = ascii_min_width(b, ps, &text);
     if fast >= 0.0 {
         if cacheable {
             b.set_inline_min_cache(ps, fast);
@@ -189,7 +189,7 @@ pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     layout.set_width(1);
     layout.set_wrap(text_layout::WRAP_WORD);
     let saved = ffi::measure_atomics_begin(b, ps, false);
-    layout.set_text(text);
+    layout.set_text(&text);
     shaping_attrs(&layout, b, ps, text.to_bytes());
     let pw = f64::from(measure::measure(&layout).pixel_logical().width);
     ffi::measure_atomics_end(saved);

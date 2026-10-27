@@ -301,7 +301,7 @@ pub fn collect_wanted_images(
         if let Some(src) = media.image_src() {
             srcs.push(src);
         } else if let Some(layers) = media.bg_layer_srcs() {
-            srcs.extend(layers.into_iter().flatten());
+            srcs.extend(layers.iter().flatten().cloned());
         } else if let Some(src) = media.bg_image_src() {
             srcs.push(src);
         }
@@ -322,7 +322,7 @@ pub fn collect_wanted_images(
             if src.to_bytes().starts_with(b"nd-inline-svg:") {
                 continue;
             }
-            let Some(abs) = ffi::url_resolve(box_base, src) else {
+            let Some(abs) = ffi::url_resolve(box_base, &src) else {
                 continue;
             };
             let abs = CString::new(abs).unwrap_or_default();

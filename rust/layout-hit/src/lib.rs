@@ -54,9 +54,10 @@ pub fn hit_inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
 
 pub fn hit_link(root: BoxRef<'_>, x: f64, y: f64) -> Option<LinkHit<'_>> {
     let range = walks::link_range(root, x, y)?;
+    let dom = range.dom();
     Some(LinkHit {
-        href: ffi::text(range.href_ptr()),
-        dom: ffi::node(range.dom_ptr()),
+        href: dom.and_then(|d| d.attr(c"href")),
+        dom,
     })
 }
 

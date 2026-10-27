@@ -45,7 +45,7 @@ pub fn form_hit<'a>(
             best = Some(m);
         }
     }
-    for atomic in b.inline_atomics().unwrap_or(&[]) {
+    for atomic in &b.inline_atomics().unwrap_or_default() {
         let Some((ab, ax, ay)) = atomic_point(b, atomic, cx, cy) else {
             continue;
         };
@@ -66,7 +66,7 @@ pub fn scrollable(root: BoxRef<'_>, x: f64, y: f64) -> Option<(BoxRef<'_>, f64, 
     if let Some(m) = children(root).find_map(|c| scrollable(c, cx, cy)) {
         return Some(m);
     }
-    for atomic in root.inline_atomics().unwrap_or(&[]) {
+    for atomic in &root.inline_atomics().unwrap_or_default() {
         let Some((ab, ax, ay)) = atomic_point(root, atomic, cx, cy) else {
             continue;
         };
@@ -84,9 +84,9 @@ fn inline_content_contains(b: BoxRef<'_>, x: f64, y: f64) -> bool {
     x >= b.x() && x <= b.x() + b.content_width() && y >= b.y() && y <= b.y() + b.content_height()
 }
 
-pub fn link_range(root: BoxRef<'_>, x: f64, y: f64) -> Option<&LinkRange> {
+pub fn link_range(root: BoxRef<'_>, x: f64, y: f64) -> Option<LinkRange> {
     let (x, y) = untransform(root, x, y)?;
-    for atomic in root.inline_atomics().unwrap_or(&[]) {
+    for atomic in &root.inline_atomics().unwrap_or_default() {
         let (sx, sy) = scrolled(root, x, y);
         let Some((ab, ax, ay)) = atomic_point(root, atomic, sx, sy) else {
             continue;
@@ -104,7 +104,8 @@ pub fn link_range(root: BoxRef<'_>, x: f64, y: f64) -> Option<&LinkRange> {
         let byte = ffi::inline_xy_to_byte(root, x - root.x(), y - root.y())?;
         return links
             .iter()
-            .find(|r| byte >= r.start && byte < r.start + r.len);
+            .find(|r| byte >= r.start && byte < r.start + r.len)
+            .cloned();
     }
     if clips_out(root, x, y) {
         return None;
@@ -125,7 +126,7 @@ pub fn inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     if outside_paint_span(root, y) {
         return None;
     }
-    for atomic in root.inline_atomics().unwrap_or(&[]) {
+    for atomic in &root.inline_atomics().unwrap_or_default() {
         let (sx, sy) = scrolled(root, x, y);
         let Some((ab, ax, ay)) = atomic_point(root, atomic, sx, sy) else {
             continue;
@@ -143,11 +144,11 @@ pub fn inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     {
         let byte = ffi::inline_xy_to_byte(root, x - root.x(), y - root.y())?;
         let mut best: Option<(Node<'_>, usize)> = None;
-        for r in attrs {
+        for r in &attrs {
             if r.kind != inline_kind::ELEMENT {
                 continue;
             }
-            let Some(dom) = ffi::node(r.dom_ptr()) else {
+            let Some(dom) = r.dom() else {
                 continue;
             };
             if byte < r.start || byte >= r.start + r.len {

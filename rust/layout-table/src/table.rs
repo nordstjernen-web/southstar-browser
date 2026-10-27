@@ -235,7 +235,7 @@ pub fn intrinsic_width(b: BoxRef<'_>, inherited: *const Style, min: bool) -> f64
         }
     }
     let mut col = 0;
-    for hint in b.table_col_hints() {
+    for hint in &b.table_col_hints() {
         if col >= max_cols {
             break;
         }
@@ -290,7 +290,7 @@ fn fixed_columns(
 ) -> f64 {
     let max_cols = widths.len();
     let mut col = 0;
-    for hint in b.table_col_hints() {
+    for hint in &b.table_col_hints() {
         if col >= max_cols {
             break;
         }
@@ -514,7 +514,7 @@ fn auto_columns(
         }
     }
     let mut col = 0;
-    for hint in b.table_col_hints() {
+    for hint in &b.table_col_hints() {
         if col >= max_cols {
             break;
         }

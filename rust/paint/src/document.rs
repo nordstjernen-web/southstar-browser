@@ -242,7 +242,7 @@ fn layers_scan_children(
         }
         c = child.next_sibling();
     }
-    for a in b.inline_atomics().unwrap_or(&[]) {
+    for a in &b.inline_atomics().unwrap_or_default() {
         if let Some(ab) = a.box_ref()
             && !layers_scan(ab, under, true, kinds, roots)
         {

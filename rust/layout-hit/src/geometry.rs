@@ -136,7 +136,7 @@ pub fn scrolled(b: BoxRef<'_>, x: f64, y: f64) -> (f64, f64) {
 
 pub fn atomic_point<'a>(
     owner: BoxRef<'_>,
-    atomic: &'a InlineAtomic,
+    atomic: &InlineAtomic,
     x: f64,
     y: f64,
 ) -> Option<(BoxRef<'a>, f64, f64)> {

@@ -8,9 +8,11 @@ use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::strdup;
-use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
+use southstar_layout::{
+    BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef, NsBox, Style,
+};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
+use std::rc::Rc;
 
 use crate::{block, generated, media, state};
 
@@ -93,9 +95,12 @@ pub fn data_url_decode(url: &CStr, budget: u64) -> Option<Vec<u8>> {
     southstar_net::decode_data_url(url.to_bytes(), budget)
 }
 
-pub fn choose_img_url<'a>(n: Node<'a>) -> (*mut c_char, Option<Node<'a>>, f64) {
+pub fn choose_img_url<'a>(n: Node<'a>) -> (Option<CString>, Option<Node<'a>>, f64) {
     let chosen = southstar_layout::choose_img(n);
-    let url = chosen.url.map_or(ptr::null_mut(), |url| strdup(&url));
+    let url = chosen.url.and_then(|url| {
+        let end = url.iter().position(|&b| b == 0).unwrap_or(url.len());
+        CString::new(&url[..end]).ok()
+    });
     (url, Some(chosen.img), chosen.density)
 }
 
@@ -104,7 +109,7 @@ pub fn svg_intrinsic_size(n: Node<'_>) -> SvgSize {
 }
 
 pub fn set_bg_layers(m: MediaRef<'_>, layers: &[Option<&CStr>]) {
-    let srcs = layers.iter().map(|l| l.map(CStr::to_owned)).collect();
+    let srcs = layers.iter().map(|l| l.map(Rc::from)).collect();
     let images = layers.iter().map(|l| media::peek_image(*l)).collect();
     m.set_bg_layers(srcs, images);
 }
@@ -156,37 +161,35 @@ pub fn unichar_isalnum(c: u32) -> bool {
     southstar_unicode::is_alnum(c)
 }
 
-pub struct RawLink {
+pub struct RawLink<'a> {
     pub start: usize,
     pub len: usize,
-    pub href: *const c_char,
-    pub target: *const c_char,
-    pub dom: *const NsNode,
+    pub href: &'a CStr,
+    pub target: Option<&'a CStr>,
+    pub dom: Node<'a>,
 }
 
-pub struct RunParts {
+pub struct RunParts<'a> {
     pub text: Vec<u8>,
-    pub links: Vec<RawLink>,
+    pub links: Vec<RawLink<'a>>,
     pub attrs: Vec<InlineAttr>,
-    pub atomics: Vec<(usize, *mut NsBox)>,
+    pub atomics: Vec<(usize, BoxRef<'static>)>,
 }
 
-fn dup_or_null(p: *const c_char) -> *mut c_char {
-    c_str(p).map_or(ptr::null_mut(), |s| strdup(s.to_bytes()))
-}
-
-pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
+pub fn new_inline_run(parts: RunParts<'_>) -> BoxRef<'static> {
     let b = southstar_layout::BoxPool::new_inline();
     if !parts.links.is_empty() {
+        let mut links = LinkVec::new();
         for l in &parts.links {
-            b.push_link(LinkRange::new(
+            links.push(LinkRange::new(
                 l.start,
                 l.len,
-                dup_or_null(l.href),
-                dup_or_null(l.target),
-                l.dom.cast(),
+                Some(l.href),
+                l.target,
+                Some(l.dom),
             ));
         }
+        b.put_links(Some(links));
     }
     for a in &parts.attrs {
         if let Some(src) = a.bg_image_src() {
@@ -199,10 +202,8 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
             .atomics
             .iter()
             .map(|&(off, child)| {
-                if let Some(c) = box_ref(child)
-                    && c.parent().is_none()
-                {
-                    c.set_parent(Some(b));
+                if child.parent().is_none() {
+                    child.set_parent(Some(b));
                 }
                 InlineAtomic::new(off, child)
             })
@@ -210,7 +211,7 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
         b.put_atomics(Some(&atomics));
     }
     b.set_text_bytes(&parts.text);
-    b.as_mut_ptr()
+    b
 }
 
 pub fn set_open_select(select: Option<Node<'_>>) {
@@ -266,12 +267,12 @@ pub fn abs_build_box(
         .get(dom)
         .and_then(StyleRef::after)
         .is_some_and(|a| a.as_ptr() == ps.as_ptr());
-    abox.set_pseudo_host(dom.as_ptr().cast(), after);
+    abox.set_pseudo_host(dom, after);
     media::collect_box_bg_image(abox, Some(ps));
     let mut generated = generated::build_pseudo_inline_for(Some(ps), Some(dom));
     if let Some(g) = generated
         && g.kind() == southstar_layout::BoxKind::Inline
-        && g.text().is_some_and(CStr::is_empty)
+        && g.text().is_some_and(|t| t.is_empty())
         && g.inline_atomics().is_none()
     {
         southstar_layout::BoxPool::free_tree(Some(g));

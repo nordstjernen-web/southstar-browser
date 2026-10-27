@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::c_int;
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
@@ -29,10 +29,6 @@ pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
-}
-
-pub fn node<'a>(p: *const core::ffi::c_void) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p.cast()) }
 }
 
 pub fn inline_box_form_hit<'a>(
@@ -78,11 +74,6 @@ pub use southstar_layout::image_map_area;
 pub use southstar_paint::{
     inline_xy_to_byte, pick_3d as paint_3d_pick, registered_3d as paint_3d_registered,
 };
-
-pub fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: `p` is null or a NUL-terminated string the box tree owns for as long as its boxes are borrowed.
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
 
 pub fn active_modal<'a>() -> Option<Node<'a>> {
     southstar_dom::tree::active_modal()

@@ -54,7 +54,7 @@ pub fn inline_box_form_hit<'a>(
     parent_style: Option<StyleRef<'_>>,
 ) -> Option<Node<'a>> {
     let attrs = b.attrs();
-    let atomics = b.inline_atomics().unwrap_or(&[]);
+    let atomics = b.inline_atomics().unwrap_or_default();
     if attrs.is_empty() && atomics.is_empty() {
         return None;
     }
@@ -80,7 +80,7 @@ pub fn inline_box_form_hit<'a>(
     ) {
         layout.set_ellipsize(ELLIPSIZE_END);
     }
-    layout.set_text(text);
+    layout.set_text(&text);
     let i18n = AttrList::new();
     ffi::apply_i18n(&layout, &i18n, b);
     ffi::apply_font_features(&i18n, ps);
@@ -114,7 +114,7 @@ pub fn inline_box_form_hit<'a>(
         .filter(|&i| i >= 0)
     {
         let idx = index as usize;
-        for a in atomics {
+        for a in &atomics {
             let Some(ab) = a.box_ref() else {
                 continue;
             };
@@ -125,7 +125,7 @@ pub fn inline_box_form_hit<'a>(
                 atomic_hit = Some(dom.as_ptr());
             }
         }
-        for r in attrs {
+        for r in &attrs {
             if !hit_candidate(r, parent_style) || idx < r.start || idx >= r.start + r.len {
                 continue;
             }
@@ -136,7 +136,7 @@ pub fn inline_box_form_hit<'a>(
             }
         }
     }
-    for r in attrs {
+    for r in &attrs {
         if !hit_candidate(r, parent_style) {
             continue;
         }

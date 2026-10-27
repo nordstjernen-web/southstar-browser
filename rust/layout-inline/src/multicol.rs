@@ -63,7 +63,8 @@ fn layout_for_multicol(b: BoxRef<'_>, content_width: f64, ps: *const Style) -> L
     if b.inline_atomics().is_none_or(|a| a.is_empty()) {
         ffi::apply_css_line_spacing(&layout, ps);
     }
-    let text = b.text().unwrap_or(c"");
+    let text = b.text();
+    let text = text.as_deref().unwrap_or(c"");
     layout.set_text(text);
     let i18n = AttrList::new();
     ffi::apply_i18n(&layout, &i18n, b);
