@@ -151,9 +151,9 @@ pub(crate) fn c_line(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-pub(crate) fn log_line(js: Js, line: *const c_char) {
-    if let Some((log, data)) = js.st().log.get() {
-        unsafe { log(line, data) };
+pub(crate) fn log_line(js: Js, line: &CStr) {
+    if let Some(log) = js.st().log.get() {
+        log(line);
     }
 }
 

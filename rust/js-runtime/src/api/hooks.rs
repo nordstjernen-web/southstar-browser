@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
 
 use crate::ffi::state::PageState;
 use crate::ffi::{Js, NsJs, glue};
@@ -28,8 +28,8 @@ fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R 
 
 macro_rules! hook_setter {
     ($name:ident, $field:ident, $ty:ty) => {
-        pub fn $name(js: *const NsJs, hook: Option<$ty>, data: *mut c_void) {
-            state(js, (), |state| state.$field.set(hook, data));
+        pub fn $name(js: *const NsJs, hook: Option<Rc<$ty>>) {
+            state(js, (), |state| state.$field.set(hook));
         }
     };
 }
@@ -47,13 +47,13 @@ hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
 hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
 pub fn navigate(js: *const NsJs, url: &CStr, reload: bool) -> bool {
-    state(js, false, |state| match state.navigate.get() {
-        Some((navigate, data)) => {
-            unsafe { navigate(url.as_ptr(), GBoolean::from(reload), data) };
+    match state(js, None, |state| state.navigate.get()) {
+        Some(navigate) => {
+            navigate(url, reload);
             true
         }
         None => false,
-    })
+    }
 }
 
 pub fn can_navigate(js: *const NsJs) -> bool {
@@ -61,38 +61,31 @@ pub fn can_navigate(js: *const NsJs) -> bool {
 }
 
 pub fn soft_navigate(js: *const NsJs, url: &CStr, replace: bool) {
-    state(js, (), |state| {
-        if let Some((navigate, data)) = state.soft_nav.get() {
-            unsafe { navigate(url.as_ptr(), GBoolean::from(replace), data) };
-        }
-    });
+    if let Some(navigate) = state(js, None, |state| state.soft_nav.get()) {
+        navigate(url, replace);
+    }
 }
 
 pub fn fragment_navigated(js: *const NsJs, url: &CStr) {
-    state(js, (), |state| {
-        if let Some((navigated, data)) = state.fragment_nav.get() {
-            unsafe { navigated(url.as_ptr(), data) };
-        }
-    });
+    if let Some(navigated) = state(js, None, |state| state.fragment_nav.get()) {
+        navigated(url);
+    }
 }
 
 pub fn request_download(js: *const NsJs, url: &CStr, filename: Option<&CStr>) -> bool {
-    let filename = filename.map_or(core::ptr::null(), CStr::as_ptr);
-    state(js, false, |state| match state.download.get() {
-        Some((download, data)) => {
-            unsafe { download(url.as_ptr(), filename, data) };
+    match state(js, None, |state| state.download.get()) {
+        Some(download) => {
+            download(url, filename);
             true
         }
         None => false,
-    })
+    }
 }
 
 pub fn window_action(js: *const NsJs, action: &CStr) {
-    state(js, (), |state| {
-        if let Some((window_action, data)) = state.window_action.get() {
-            unsafe { window_action(action.as_ptr(), data) };
-        }
-    });
+    if let Some(window_action) = state(js, None, |state| state.window_action.get()) {
+        window_action(action);
+    }
 }
 
 pub fn has_window_action(js: *const NsJs) -> bool {
@@ -100,43 +93,40 @@ pub fn has_window_action(js: *const NsJs) -> bool {
 }
 
 pub fn request_repaint(js: *const NsJs) {
-    state(js, (), |state| {
-        if let Some((repaint, data)) = state.repaint.get() {
-            unsafe { repaint(data) };
-        }
-    });
+    if let Some(repaint) = state(js, None, |state| state.repaint.get()) {
+        repaint();
+    }
 }
 
 pub fn notify_scroll_to(js: *const NsJs, target: Node<'_>) {
-    state(js, (), |state| {
-        if let Some((scroll, data)) = state.scroll_to.get() {
-            unsafe { scroll(target.as_ptr(), data) };
-        }
-    });
+    if let Some(scroll) = state(js, None, |state| state.scroll_to.get()) {
+        scroll(target);
+    }
 }
 
 pub fn scroll_viewport(js: *const NsJs, x: f64, y: f64) {
     let Some(js) = Js::of(js) else {
         return;
     };
-    let mut x = if !x.is_finite() || x < 0.0 { 0.0 } else { x };
-    let mut y = if !y.is_finite() || y < 0.0 { 0.0 } else { y };
-    if let Some((scroll, data)) = js.st().viewport_scroll.get() {
-        unsafe { scroll(&mut x, &mut y, data) };
-    }
+    let x = if !x.is_finite() || x < 0.0 { 0.0 } else { x };
+    let y = if !y.is_finite() || y < 0.0 { 0.0 } else { y };
+    let (x, y) = match js.st().viewport_scroll.get() {
+        Some(scroll) => scroll(x, y),
+        None => (x, y),
+    };
     glue::note_viewport_scroll(js, x, y);
 }
 
 pub fn flush_layout(js: *const NsJs) {
     state(js, (), |state| {
-        let Some((flush, data)) = state.layout_flush.get() else {
+        let Some(flush) = state.layout_flush.get() else {
             return;
         };
         if state.in_layout_flush.get() {
             return;
         }
         state.in_layout_flush.set(true);
-        unsafe { flush(data) };
+        flush();
         state.in_layout_flush.set(false);
     });
 }
@@ -145,26 +135,18 @@ pub fn submit_form(js: *const NsJs, form: Node<'_>, submitter: Option<Node<'_>>)
     if (super::frames_hooks().submit_form)(js, form, submitter) {
         return;
     }
-    let submitter = Node::ptr_or_null(submitter);
-    state(js, (), |state| {
-        if let Some((submit, data)) = state.form_submit.get() {
-            unsafe { submit(form.as_ptr(), submitter, data) };
-        }
-    });
+    if let Some(submit) = state(js, None, |state| state.form_submit.get()) {
+        submit(form, submitter);
+    }
 }
 
 pub fn load_delayed(js: *const NsJs) -> bool {
-    state(js, false, |state| match state.load_delay.get() {
-        Some((delayed, data)) => (unsafe { delayed(data) }) != 0,
-        None => false,
-    })
+    state(js, None, |state| state.load_delay.get()).is_some_and(|delayed| delayed())
 }
 
 pub fn clipboard_write(js: *const NsJs, text: &CStr) -> Option<bool> {
-    state(js, None, |state| {
-        let (write, data) = state.clipboard_write.get()?;
-        Some(unsafe { write(text.as_ptr(), data) } != 0)
-    })
+    let write = state(js, None, |state| state.clipboard_write.get())?;
+    Some(write(text))
 }
 
 pub fn selection_copyable(js: *const NsJs) -> bool {
@@ -177,13 +159,16 @@ pub fn copy_selection(js: *const NsJs) -> bool {
     if !selection_copyable(js) {
         return false;
     }
-    state(js, false, |state| {
-        let Some((write, data)) = state.clipboard_write.get() else {
-            return false;
-        };
-        let text = state.selection_text.borrow().clone().unwrap_or_default();
-        unsafe { write(text.as_ptr(), data) != 0 }
-    })
+    let Some((write, text)) = state(js, None, |state| {
+        let write = state.clipboard_write.get()?;
+        Some((
+            write,
+            state.selection_text.borrow().clone().unwrap_or_default(),
+        ))
+    }) else {
+        return false;
+    };
+    write(&text)
 }
 
 pub fn has_selection_commands(js: *const NsJs) -> bool {
@@ -191,10 +176,7 @@ pub fn has_selection_commands(js: *const NsJs) -> bool {
 }
 
 pub fn selection_command(js: *const NsJs, cmd: &CStr) -> bool {
-    state(js, false, |state| match state.selection_cmd.get() {
-        Some((command, data)) => (unsafe { command(cmd.as_ptr(), data) }) != 0,
-        None => false,
-    })
+    state(js, None, |state| state.selection_cmd.get()).is_some_and(|command| command(cmd))
 }
 
 pub fn selection_state(js: *const NsJs) -> Selection {

@@ -3,32 +3,30 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::ptr;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
-use southstar_dom::NsNode;
+use southstar_dom::{Node, NsNode};
 use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, Scope, Value};
 
 use super::scopes::RealmScope;
 use super::{GMainContext, WorkerHost};
 
-pub type LogFn = unsafe extern "C" fn(line: *const c_char, data: *mut c_void);
-pub type DataFn = unsafe extern "C" fn(data: *mut c_void);
-pub type NavigateFn = unsafe extern "C" fn(url: *const c_char, reload: GBoolean, data: *mut c_void);
-pub type DownloadFn =
-    unsafe extern "C" fn(url: *const c_char, filename: *const c_char, data: *mut c_void);
-pub type NodeFn = unsafe extern "C" fn(target: *const NsNode, data: *mut c_void);
-pub type UrlFn = unsafe extern "C" fn(url: *const c_char, data: *mut c_void);
-pub type FormSubmitFn =
-    unsafe extern "C" fn(form: *const NsNode, submitter: *const NsNode, data: *mut c_void);
-pub type ViewportScrollFn = unsafe extern "C" fn(x: *mut f64, y: *mut f64, data: *mut c_void);
-pub type TextQueryFn = unsafe extern "C" fn(text: *const c_char, data: *mut c_void) -> GBoolean;
-pub type DelayFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
+pub type LogFn = dyn Fn(&CStr);
+pub type DataFn = dyn Fn();
+pub type NavigateFn = dyn Fn(&CStr, bool);
+pub type DownloadFn = dyn Fn(&CStr, Option<&CStr>);
+pub type NodeFn = dyn Fn(Node<'_>);
+pub type UrlFn = dyn Fn(&CStr);
+pub type FormSubmitFn = dyn Fn(Node<'_>, Option<Node<'_>>);
+pub type ViewportScrollFn = dyn Fn(f64, f64) -> (f64, f64);
+pub type TextQueryFn = dyn Fn(&CStr) -> bool;
+pub type DelayFn = dyn Fn() -> bool;
 pub(crate) type TaskRun = Box<dyn FnOnce(&mut Scope<'_>) -> Result<Value, Value>>;
 pub(crate) type UrlCell = Rc<RefCell<Option<CString>>>;
 
@@ -43,30 +41,23 @@ pub(crate) struct Slots {
     pub halted: *mut GBoolean,
 }
 
-pub(crate) struct Hook<F: Copy> {
-    pub f: Cell<Option<F>>,
-    pub data: Cell<*mut c_void>,
-}
+pub(crate) struct Hook<F: ?Sized>(RefCell<Option<Rc<F>>>);
 
-impl<F: Copy> Hook<F> {
+impl<F: ?Sized> Hook<F> {
     fn new() -> Hook<F> {
-        Hook {
-            f: Cell::new(None),
-            data: Cell::new(ptr::null_mut()),
-        }
+        Hook(RefCell::new(None))
     }
 
-    pub fn set(&self, f: Option<F>, data: *mut c_void) {
-        self.f.set(f);
-        self.data.set(data);
+    pub fn set(&self, f: Option<Rc<F>>) {
+        drop(self.0.replace(f));
     }
 
-    pub fn get(&self) -> Option<(F, *mut c_void)> {
-        self.f.get().map(|f| (f, self.data.get()))
+    pub fn get(&self) -> Option<Rc<F>> {
+        self.0.borrow().clone()
     }
 
     pub fn is_set(&self) -> bool {
-        self.f.get().is_some()
+        self.0.borrow().is_some()
     }
 }
 

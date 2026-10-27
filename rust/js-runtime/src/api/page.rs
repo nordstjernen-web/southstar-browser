@@ -59,7 +59,7 @@ pub fn log_enabled(js: *const NsJs) -> bool {
 
 pub fn log_line(js: *const NsJs, line: &CStr) {
     if let Some(js) = Js::of(js) {
-        glue::log_line(js, line.as_ptr());
+        glue::log_line(js, line);
     }
 }
 

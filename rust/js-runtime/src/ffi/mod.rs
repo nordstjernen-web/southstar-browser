@@ -13,6 +13,7 @@ pub(crate) mod wrapper;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -79,14 +80,11 @@ pub(crate) struct WorkerSetup<'a> {
     pub service_worker: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Default)]
 pub struct Callbacks {
-    pub log: Option<LogFn>,
-    pub log_data: *mut c_void,
-    pub mutated: Option<DataFn>,
-    pub mutated_data: *mut c_void,
-    pub navigate: Option<NavigateFn>,
-    pub navigate_data: *mut c_void,
+    pub log: Option<Rc<LogFn>>,
+    pub mutated: Option<Rc<DataFn>>,
+    pub navigate: Option<Rc<NavigateFn>>,
 }
 
 #[derive(Clone, Copy)]
@@ -265,13 +263,9 @@ impl Js {
 
     pub fn set_callbacks(self, callbacks: Callbacks) {
         let state = self.st();
-        state.log.set(callbacks.log, callbacks.log_data);
-        state
-            .mutated_hook
-            .set(callbacks.mutated, callbacks.mutated_data);
-        state
-            .navigate
-            .set(callbacks.navigate, callbacks.navigate_data);
+        state.log.set(callbacks.log);
+        state.mutated_hook.set(callbacks.mutated);
+        state.navigate.set(callbacks.navigate);
     }
 
     pub fn init_tables(self, main_context: *mut GMainContext, page: bool) {
@@ -292,13 +286,13 @@ impl Js {
             .map_or(ptr::null(), CStr::as_ptr);
         self.st().worker_host.set(setup.host);
         unsafe { record::set_partition_key(self.0, partition) };
+        let host = setup.host.cast::<c_void>();
         self.set_callbacks(Callbacks {
-            log: Some(worker_log),
-            log_data: setup.host.cast(),
-            mutated: None,
-            mutated_data: ptr::null_mut(),
-            navigate: None,
-            navigate_data: ptr::null_mut(),
+            log: Some(Rc::new(move |line: &CStr| {
+                // SAFETY: the log hook of a worker page is set from its worker host, alive as long as the page.
+                unsafe { (api::workers_hooks().log_line)(host, line) };
+            })),
+            ..Callbacks::default()
         });
         self.init_tables(setup.context, false);
     }
@@ -604,14 +598,6 @@ pub(crate) fn install_worker_location(scope: &mut Scope<'_>, global: &Value, url
 
 pub(crate) fn shape_worker_global(scope: &mut Scope<'_>, service_worker: bool) {
     (api::workers_hooks().shape_global)(scope, service_worker);
-}
-
-unsafe extern "C" fn worker_log(line: *const c_char, host: *mut c_void) {
-    let Some(line) = glue::text(line) else {
-        return;
-    };
-    // SAFETY: the log data of a worker page is its worker host, alive as long as the page.
-    unsafe { (api::workers_hooks().log_line)(host, line) };
 }
 
 pub(crate) fn worker_compile(

@@ -11,8 +11,12 @@ mod mse;
 pub mod support;
 pub mod tracks;
 
-pub use ffi::install_runtime_hooks;
-pub use ffi::video_event;
+pub use ffi::{
+    AudioFn, Element, MseBufferedFn, MseBytesFn, MseFn, MseRemoveFn, SeekFn, ToggleFn, VolumeFn,
+    install_runtime_hooks, set_audio_hook, set_mse_buffered_hook, set_mse_bytes_hook, set_mse_hook,
+    set_mse_remove_hook, set_muted_hook, set_play_hook, set_seek_hook, set_volume_hook,
+    video_event,
+};
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 

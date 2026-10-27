@@ -647,7 +647,7 @@ pub fn run_one(
     ffi::anim_observe(anim, Some(&styles), ffi::monotonic_us());
     let anim = Some(anim);
 
-    let nav = NavCapture::default();
+    let nav = Rc::new(NavCapture::default());
     let timing = page
         .timing
         .as_ref()
