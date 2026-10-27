@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: on Windows a renderer process now inherits only its own
+  pipe ends, its own framebuffer mapping and the shell's stderr, through a
+  `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, instead of every inheritable handle
+  the shell holds. Before, each renderer spawned after another tab also
+  received that tab's live read+write framebuffer mapping and could read
+  or overwrite its pixels. A renderer command line that would not fit is
+  refused rather than silently truncated.
 * Packaging: Southstar can be installed from npm as `southstar-browser`
   (`npm/`, documented in `docs/npm.md`). Installing builds the release
   source with meson and cargo on Linux, macOS, the BSDs and Windows (in
