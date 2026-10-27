@@ -154,6 +154,6 @@ impl Js {
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        api::set_anim(self.page(), anim.map_or(ptr::null_mut(), Anim::raw));
+        api::set_anim(self.page(), anim);
     }
 }

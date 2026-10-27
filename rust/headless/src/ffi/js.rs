@@ -146,7 +146,7 @@ impl Js {
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        api::set_anim(self.page(), super::engine::anim_raw(anim));
+        api::set_anim(self.page(), anim);
     }
 
     pub fn clear_layout_root(self) {

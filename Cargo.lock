@@ -3004,6 +3004,7 @@ dependencies = [
 name = "southstar-js-runtime"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-anim",
  "southstar-config",
  "southstar-csp",
  "southstar-css",

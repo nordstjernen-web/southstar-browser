@@ -147,8 +147,7 @@ pub(crate) fn anim(js: Js) -> Option<AnimHandle> {
     if js.is_null() {
         return None;
     }
-    // SAFETY: the page's animation slot holds null or the live engine the browser handed it, which outlives the page's script.
-    unsafe { AnimHandle::from_raw(api::anim(js.page())) }
+    api::anim(js.page())
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8]) {

@@ -180,10 +180,6 @@ pub fn anim_observe(anim: Anim, styles: Option<&StyleMap>, now_us: i64) {
     southstar_engine::anim_observe(anim, styles, now_us);
 }
 
-pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
-    anim.map_or(ptr::null_mut(), Anim::raw)
-}
-
 pub use southstar_paint::set_anim as paint_set_anim;
 
 pub fn paint_set_js(js: Option<southstar_js_runtime::api::Page>) {

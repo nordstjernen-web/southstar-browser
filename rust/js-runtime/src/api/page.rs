@@ -8,6 +8,7 @@ use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::rc::Rc;
 
+use southstar_anim::AnimHandle;
 use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -593,11 +594,11 @@ pub fn set_image_cache(js: Option<Page>, cache: *mut c_void) {
     }
 }
 
-pub fn anim(js: Option<Page>) -> *mut c_void {
-    state(js, ptr::null_mut(), |state| state.anim.get())
+pub fn anim(js: Option<Page>) -> Option<AnimHandle> {
+    state(js, None, |state| state.anim.get())
 }
 
-pub fn set_anim(js: Option<Page>, anim: *mut c_void) {
+pub fn set_anim(js: Option<Page>, anim: Option<AnimHandle>) {
     if let Some(js) = Js::of(js) {
         js.st().anim.set(anim);
         glue::raf_set_host_driven(js);

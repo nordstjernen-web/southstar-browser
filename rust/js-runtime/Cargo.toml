@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-anim = { path = "../anim" }
 southstar-config = { path = "../config" }
 southstar-csp = { path = "../csp" }
 southstar-css = { path = "../css" }
