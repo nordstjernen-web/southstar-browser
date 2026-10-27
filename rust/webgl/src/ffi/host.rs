@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 use southstar_canvas::host as canvas;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api::{self, Page};
 
@@ -32,8 +32,8 @@ impl Surface {
     }
 }
 
-pub(crate) fn canvas_node(canvas: usize) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(canvas as *const NsNode) }
+pub(crate) fn canvas_node(canvas: Option<WeakNode>) -> Option<Node<'static>> {
+    canvas.and_then(WeakNode::get)
 }
 
 pub(crate) fn request_repaint(js: Option<Page>) {
@@ -46,7 +46,7 @@ pub(crate) fn page_url_and_origin(js: Option<Page>) -> (Option<Vec<u8>>, Option<
     (Some(url), origin)
 }
 
-pub(crate) fn api_proto(scope: &mut Scope<'_>, canvas: usize, iface: &str) -> Value {
+pub(crate) fn api_proto(scope: &mut Scope<'_>, canvas: Option<WeakNode>, iface: &str) -> Value {
     canvas::api_proto(scope, canvas, iface)
 }
 
@@ -60,7 +60,12 @@ pub(crate) fn api_interface(
     canvas::api_interface(scope, global, name, ctor, parent)
 }
 
-pub(crate) fn new_info(scope: &mut Scope<'_>, canvas: usize, kind: i32, iface: &str) -> Value {
+pub(crate) fn new_info(
+    scope: &mut Scope<'_>,
+    canvas: Option<WeakNode>,
+    kind: i32,
+    iface: &str,
+) -> Value {
     canvas::new_hidden(scope, canvas, kind, iface)
 }
 
@@ -138,10 +143,10 @@ struct Registered {
 }
 
 thread_local! {
-    static BY_NODE: RefCell<HashMap<usize, Registered>> = RefCell::new(HashMap::new());
+    static BY_NODE: RefCell<HashMap<Option<WeakNode>, Registered>> = RefCell::new(HashMap::new());
 }
 
-fn registered(canvas: usize) -> Option<(Rc<WebGl>, *mut c_void)> {
+fn registered(canvas: Option<WeakNode>) -> Option<(Rc<WebGl>, *mut c_void)> {
     BY_NODE.with(|map| {
         let map = map.borrow();
         let entry = map.get(&canvas)?;
@@ -153,7 +158,7 @@ pub(crate) fn context_count() -> usize {
     BY_NODE.with(|map| map.borrow().len())
 }
 
-pub(crate) fn forget_context(canvas: usize) {
+pub(crate) fn forget_context(canvas: Option<WeakNode>) {
     let _ = BY_NODE.try_with(|map| {
         if let Ok(mut map) = map.try_borrow_mut() {
             map.remove(&canvas);
@@ -165,7 +170,7 @@ pub fn nsr_webgl_get_context(
     scope: &mut Scope<'_>,
     js: Option<Page>,
     canvas_obj: &Value,
-    canvas: usize,
+    canvas: Option<WeakNode>,
     version: i32,
     attrs: &Value,
 ) -> Result<Value, Value> {
@@ -193,6 +198,6 @@ pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install(scope, global);
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+pub(crate) fn canvas_surface(canvas: Option<WeakNode>) -> Option<southstar_cairo::Surface> {
     registered(canvas).and_then(|(gl, _)| gl.canvas_surface())
 }

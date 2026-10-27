@@ -94,7 +94,7 @@ fn get_2d(
     if opaque {
         st.surface().fill_opaque_black();
     }
-    let obj = crate::ffi::ctx2d_new(scope, el.addr(), canvas, offscreen, attrs);
+    let obj = crate::ffi::ctx2d_new(scope, el, canvas, offscreen, attrs);
     st.attach_ctx2d(scope, &obj, KIND_2D);
     obj
 }
@@ -190,7 +190,7 @@ pub(crate) fn offscreen_get_context(
     this: &Value,
     args: &[Value],
 ) -> Result<Value, Value> {
-    let el = Node::from_addr(crate::api::offscreen_node(this));
+    let el = crate::api::offscreen_node(this);
     get_context(scope, el, this, true, args)
 }
 
@@ -255,7 +255,7 @@ pub(crate) fn convert_to_blob(
     _: &[Value],
 ) -> Result<Value, Value> {
     let (promise, resolve, reject) = scope.new_promise()?;
-    let el = Node::from_addr(crate::api::offscreen_node(this));
+    let el = crate::api::offscreen_node(this);
     let js = crate::ffi::state::js_of(scope);
     let mut outcome: Result<Value, Value> = Ok(Value::null());
     if !el.is_null()

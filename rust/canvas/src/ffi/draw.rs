@@ -13,7 +13,7 @@ pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<Rc<CanvasStat
     if js.is_null() || !crate::hidden::is_ctx2d(this) {
         return None;
     }
-    let el = super::state::Node::from_addr(crate::hidden::ptr(this));
+    let el = crate::hidden::node(this);
     crate::state::state_for(js, el)
 }
 

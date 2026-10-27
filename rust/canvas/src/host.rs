@@ -2,13 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-pub fn canvas_realm(scope: &Scope<'_>, canvas: usize) -> ContextHandle {
-    crate::ffi::canvas_realm(scope, canvas)
+use crate::ffi::state::Node;
+
+pub fn canvas_realm(scope: &Scope<'_>, canvas: Option<WeakNode>) -> ContextHandle {
+    crate::ffi::canvas_realm(scope, Node::from_key(canvas))
 }
 
-pub fn api_proto(scope: &mut Scope<'_>, canvas: usize, iface: &str) -> Value {
+pub fn api_proto(scope: &mut Scope<'_>, canvas: Option<WeakNode>, iface: &str) -> Value {
     let realm = canvas_realm(scope, canvas);
     crate::ffi::in_realm(scope, realm, |realm| crate::api::api_proto(realm, iface))
 }
@@ -23,7 +26,12 @@ pub fn api_interface(
     crate::api::interface(scope, global, name, ctor, parent)
 }
 
-pub fn new_hidden(scope: &mut Scope<'_>, canvas: usize, kind: i32, iface: &str) -> Value {
+pub fn new_hidden(
+    scope: &mut Scope<'_>,
+    canvas: Option<WeakNode>,
+    kind: i32,
+    iface: &str,
+) -> Value {
     let realm = canvas_realm(scope, canvas);
     crate::ffi::new_in_realm(scope, realm, kind, iface)
 }

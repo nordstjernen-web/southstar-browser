@@ -14,7 +14,6 @@ use southstar_texture::TextureRef;
 use southstar_video::BoxVideo;
 
 use super::cairo::Surface;
-use super::objects::NsNode;
 use crate::bitmap::{ImageBitmap, Source};
 
 struct Found<'a> {
@@ -65,9 +64,9 @@ fn texture_surface(texture: Option<TextureRef>) -> Option<Surface> {
     Some(surface)
 }
 
-fn canvas_source(scope: &Scope<'_>, node: *const NsNode) -> Option<Source> {
+fn canvas_source(scope: &Scope<'_>, node: super::state::Node) -> Option<Source> {
     let js = super::state::js_of(scope);
-    let st = crate::state::state_for(js, super::state::Node::from_addr(node as usize))?;
+    let st = crate::state::state_for(js, node)?;
     Some(Source {
         surface: st.surface(),
         size: st.size(),
@@ -84,9 +83,9 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     }
     let mut node = super::objects::offscreen_node(src);
     if node.is_null() {
-        node = super::context::unwrap_element(src).ptr().cast();
+        node = super::context::unwrap_element(src);
     }
-    let element = unsafe { Node::from_ptr(node.cast()) }?;
+    let element = node.dom()?;
     let name = element.name()?.to_bytes();
     let js = Some(Page::current(scope)?);
     if name == b"canvas" {

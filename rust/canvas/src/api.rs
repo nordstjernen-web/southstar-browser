@@ -7,6 +7,7 @@ use southstar_js_engine::{
 };
 
 use crate::ffi;
+use crate::ffi::state::Node;
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
 use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
 use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, images, path2d, text};
@@ -370,7 +371,7 @@ fn api_call(
 
 fn sync_canvas(scope: &mut Scope<'_>, this: &Value) {
     if hidden::is_ctx2d(this) {
-        ffi::canvas_state_for(scope, hidden::ptr(this));
+        ffi::canvas_state_for(scope, hidden::node(this));
     }
 }
 
@@ -415,7 +416,7 @@ fn color_for(scope: &mut Scope<'_>, owner: &Value, css: &[u8]) -> Option<Vec<u8>
     if !css.eq_ignore_ascii_case(b"currentcolor") {
         return crate::color::to_string(css);
     }
-    let computed = ffi::computed_color(scope, hidden::ptr(owner));
+    let computed = ffi::computed_color(scope, hidden::node(owner));
     let color = computed.as_deref().and_then(crate::color::to_string);
     Some(color.unwrap_or_else(|| b"#000000".to_vec()))
 }
@@ -780,11 +781,11 @@ pub(crate) fn ctx2d_init_state(scope: &mut Scope<'_>, obj: &Value) {
 pub(crate) fn ctx2d_finish(
     scope: &mut Scope<'_>,
     obj: &Value,
-    el: usize,
+    el: Node,
     canvas: &Value,
     attrs: Value,
 ) {
-    hidden::set_ptr(obj, el);
+    hidden::set_node(obj, el);
     hidden::set(scope, obj, "canvas", canvas.clone());
     hidden::set(scope, obj, "_attrs", attrs);
     ctx2d_init_state(scope, obj);
@@ -1048,17 +1049,17 @@ pub(crate) fn imagedata_new(
     Ok(obj)
 }
 
-pub(crate) fn offscreen_node(obj: &Value) -> usize {
+pub(crate) fn offscreen_node(obj: &Value) -> Node {
     if hidden::is(obj, KIND_OFFSCREEN) {
-        hidden::ptr(obj)
+        hidden::node(obj)
     } else {
-        0
+        Node::NONE
     }
 }
 
 pub(crate) fn offscreen_sync_size(scope: &mut Scope<'_>, obj: &Value) {
     let el = offscreen_node(obj);
-    if el == 0 {
+    if el.is_null() {
         return;
     }
     for name in ["width", "height"] {
@@ -1110,7 +1111,7 @@ pub(crate) fn offscreen_construct(
     let proto = api_proto_of_ctor(scope, new_target, "OffscreenCanvas");
     let obj = hidden::new(scope, KIND_OFFSCREEN, &proto);
     let el = ffi::new_offscreen_canvas_node(scope);
-    hidden::set_ptr(&obj, el);
+    hidden::set_node(&obj, el);
     hidden::set(scope, &obj, "width", Value::number(dims[0]));
     hidden::set(scope, &obj, "height", Value::number(dims[1]));
     hidden::set(scope, &obj, "oncontextlost", Value::null());

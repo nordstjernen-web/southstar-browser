@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 
 use southstar_canvas::host as canvas;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::WeakNode;
 use southstar_js_engine::{Scope, Value};
 
 pub(crate) struct Surface(southstar_cairo::Surface);
@@ -52,11 +52,11 @@ pub(crate) fn internal_error(scope: &mut Scope<'_>, message: &str) -> Value {
     scope.internal_error(message)
 }
 
-pub(crate) fn canvas_attr(canvas: usize, name: &CStr) -> Option<Vec<u8>> {
-    let node = unsafe { Node::from_ptr(canvas as *const NsNode) }?;
+pub(crate) fn canvas_attr(canvas: Option<WeakNode>, name: &CStr) -> Option<Vec<u8>> {
+    let node = canvas.and_then(WeakNode::get)?;
     node.attr(name).map(|text| text.to_bytes().to_vec())
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+pub(crate) fn canvas_surface(canvas: Option<WeakNode>) -> Option<southstar_cairo::Surface> {
     crate::context::canvas_surface(canvas)
 }
