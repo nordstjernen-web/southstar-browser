@@ -169,7 +169,6 @@ pub fn init() {
             cache_dir: ffi::cache_dir(),
         });
     }
-    ffi::register_font_oracle();
 }
 
 pub fn shutdown() {

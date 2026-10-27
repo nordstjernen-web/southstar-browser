@@ -642,7 +642,9 @@ fn quad3_unproject(q: &Quad3, sx: f64, sy: f64) -> Option<(f64, f64, f64)> {
     Some((u, v, z / w))
 }
 
-pub fn pick(root3d: BoxRef<'_>, x: f64, y: f64) -> *const NsBox {
+pub type HitTest = for<'a> fn(BoxRef<'a>, f64, f64) -> Option<BoxRef<'a>>;
+
+pub fn pick(root3d: BoxRef<'_>, x: f64, y: f64, hit_test: HitTest) -> *const NsBox {
     let existing = REGISTRY.with(|r| r.borrow().quads.get(&root3d.as_ptr()).cloned());
     let quads = match existing {
         Some(q) => q,
@@ -681,9 +683,8 @@ pub fn pick(root3d: BoxRef<'_>, x: f64, y: f64) -> *const NsBox {
         };
         let lx = q.bx + u * q.bw;
         let ly = q.by + v * q.bh;
-        let hit = engine::box_hit_test(qb, lx, ly);
-        if !hit.is_null() {
-            return hit;
+        if let Some(hit) = hit_test(qb, lx, ly) {
+            return hit.as_ptr();
         }
     }
     core::ptr::null()

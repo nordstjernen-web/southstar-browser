@@ -5,6 +5,13 @@
 pub const SCALE: i32 = 1024;
 pub const SCALE_F: f64 = 1024.0;
 
+pub fn font_size_units(size_px: f64) -> i32 {
+    if size_px.is_nan() || size_px <= 0.0 {
+        return 0;
+    }
+    (size_px.min(65535.0) * SCALE_F) as i32
+}
+
 pub type Glyph = u32;
 pub type GlyphUnit = i32;
 

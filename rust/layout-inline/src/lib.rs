@@ -10,6 +10,7 @@ mod layout;
 mod measure;
 mod multicol;
 
+pub use ffi::{apply_atomic_shapes, layout_set_attrs};
 pub use form_hit::inline_box_form_hit;
 pub use intrinsic::{min_width as inline_min_width, natural_width as inline_natural_width};
 pub use layout::{inline_layout as layout_inline, line_height};

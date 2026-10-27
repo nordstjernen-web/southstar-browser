@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-unicode = { path = "../unicode" }
 southstar-anim = { path = "../anim" }
 southstar-cairo = { path = "../cairo" }
+southstar-canvas = { path = "../canvas" }
 southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-font = { path = "../font" }

@@ -9,9 +9,10 @@ use southstar_cairo::{ContextRef, Matrix};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_glib::{self as glib, GArray, GBoolean, GHashTable};
 use southstar_layout::{BoxKind, BoxRef};
+use southstar_selection::NsSelection;
 use southstar_style::{PropId as P, ValueRef, layer, layer_count};
 
-use crate::ffi::engine;
+use crate::ffi::engine::{self, SelectionRun};
 use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
@@ -126,18 +127,25 @@ fn paint_top_layer(cr: ContextRef, root: BoxRef<'_>, highlight: Option<&CStr>) {
     });
 }
 
-fn begin_selection(root: BoxRef<'_>, sel: *const c_void) {
-    if !sel.is_null() {
-        let runs = unsafe { engine::selection_ranges(root, sel) };
-        walk::with(|w| w.sel_runs.set(runs));
-    }
+fn begin_selection(root: BoxRef<'_>, sel: Option<&NsSelection>) {
+    let Some(sel) = sel else {
+        return;
+    };
+    let runs = southstar_selection::stored_ranges(root, sel)
+        .into_iter()
+        .map(|run| {
+            let span = SelectionRun {
+                start: run.start,
+                end: run.end,
+            };
+            (run.b.as_ptr(), span)
+        })
+        .collect();
+    walk::with(|w| *w.sel_runs.borrow_mut() = runs);
 }
 
 fn end_selection() {
-    let runs = walk::with(|w| w.sel_runs.replace(ptr::null_mut()));
-    if !runs.is_null() {
-        unsafe { glib::g_hash_table_destroy(runs) };
-    }
+    walk::with(|w| w.sel_runs.borrow_mut().clear());
 }
 
 fn end_pass() {
@@ -152,7 +160,7 @@ pub fn paint_document(
     cr: ContextRef,
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
-    sel: *const c_void,
+    sel: Option<&NsSelection>,
 ) {
     marker::ordinals_begin();
     walk::clear_video_holes();
@@ -328,7 +336,7 @@ pub fn plan_layers(cr: ContextRef, root: Option<BoxRef<'_>>, plan: &mut LayerPla
     layers.found = plan.vp;
     layers.base = cr.matrix();
     set_layers(layers);
-    paint_document(cr, root, None, ptr::null());
+    paint_document(cr, root, None, None);
     set_layers(Layers::off());
     if unsafe { (*plan.vp).len } as i32 != roots {
         plan.dynamic = 1;
@@ -345,7 +353,7 @@ pub fn doc_layers(
     up: DocLayers,
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
-    sel: *const c_void,
+    sel: Option<&NsSelection>,
     plan: &LayerPlan,
 ) -> bool {
     let mut layers = Layers::off();
@@ -373,7 +381,7 @@ pub fn vp_layer(
     layer: &VpCapture,
     vp: (f64, f64),
     highlight: Option<&CStr>,
-    sel: *const c_void,
+    sel: Option<&NsSelection>,
 ) {
     marker::ordinals_begin();
     walk::clear_video_holes();

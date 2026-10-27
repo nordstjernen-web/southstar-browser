@@ -3360,6 +3360,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-block",
  "southstar-layout-build",
+ "southstar-layout-content",
  "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-layout-grid",
@@ -3368,6 +3369,8 @@ dependencies = [
  "southstar-layout-sizing",
  "southstar-layout-table",
  "southstar-layout-tree",
+ "southstar-mathml",
+ "southstar-paint",
  "southstar-style",
 ]
 
@@ -3429,6 +3432,7 @@ version = "1.0.4-dev"
 name = "southstar-mathml"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-dom",
  "southstar-glib",
  "southstar-paint",
@@ -3494,6 +3498,7 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-anim",
  "southstar-cairo",
+ "southstar-canvas",
  "southstar-css",
  "southstar-dom",
  "southstar-font",
@@ -3644,6 +3649,7 @@ dependencies = [
  "southstar-media-shm",
  "southstar-net",
  "southstar-netutil",
+ "southstar-paint",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-sandbox",

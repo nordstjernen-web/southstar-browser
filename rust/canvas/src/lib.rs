@@ -24,7 +24,7 @@ mod style;
 mod text;
 mod validate;
 
-pub use ffi::state::install_runtime_hooks;
+pub use ffi::state::{canvas_surface_for, install_runtime_hooks};
 
 pub use ffi::exports::nsr_canvas_clone_object;
 pub use ffi::exports::nsr_canvas_hidden_get;

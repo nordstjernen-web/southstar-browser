@@ -6,6 +6,7 @@ pub mod dispatch;
 mod ffi;
 mod image_map;
 mod image_source;
+pub mod paint_links;
 mod srcset;
 
 pub use ffi::{

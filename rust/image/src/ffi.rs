@@ -490,12 +490,6 @@ unsafe fn fire_pending(pending: *mut Pending) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_image_supports_mime(mime: *const c_char) -> GBoolean {
-    let mime = unsafe { glib::bytes(mime) };
-    glib::boolean(mime.is_some_and(crate::supports_mime))
-}
-
 pub fn decode_bytes(bytes: &[u8]) -> Option<(TextureRef, i32, i32)> {
     if bytes.is_empty() {
         return None;

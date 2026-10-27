@@ -513,6 +513,20 @@ pub fn edges_into_box(b: BoxRef<'_>, basis: f64) {
     b.set_border(border);
 }
 
+pub fn box_is_fixed(b: BoxRef<'_>) -> bool {
+    let Some(s) = southstar_style::box_style(b) else {
+        return false;
+    };
+    if !s
+        .get(PropId::Position)
+        .is_some_and(|v| v.is_keyword(c"fixed"))
+    {
+        return false;
+    }
+    core::iter::successors(b.parent(), |p| p.parent())
+        .all(|p| !style_creates_fixed_cb(southstar_style::box_style(p)))
+}
+
 pub fn style_creates_fixed_cb(s: Option<StyleRef<'_>>) -> bool {
     let Some(s) = s else {
         return false;
