@@ -8,6 +8,8 @@ mod image_map;
 mod image_source;
 pub mod paint_links;
 mod srcset;
+#[cfg(test)]
+mod tests;
 mod utf8;
 
 pub use boxes::{
