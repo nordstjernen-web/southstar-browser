@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
@@ -9,7 +10,7 @@ use std::rc::Rc;
 
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
-use southstar_layout::BoxRef;
+use southstar_layout::{BoxRef, MediaHandle};
 use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::{Cache, FetchKind, Sink};
@@ -146,17 +147,9 @@ pub struct NsVideo {
     pub duration: f64,
     pub cues: Option<Box<Cues>>,
     pub track_requested: Flag,
+    slot: Option<&'static VideoSlot>,
+    slot_stamp: u64,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<NsVideo>() == 544
-        && core::mem::offset_of!(NsVideo, duration) == 520
-        && core::mem::offset_of!(NsVideo, player) == 56
-        && core::mem::offset_of!(NsVideo, is_camera) == 72
-        && core::mem::offset_of!(NsVideo, video_opened) == 232
-        && core::mem::offset_of!(NsVideo, playing) == 416
-);
 
 impl NsVideo {
     pub fn zeroed() -> Box<NsVideo> {
@@ -168,23 +161,74 @@ impl NsVideo {
     }
 }
 
+pub struct VideoSlot {
+    stamp: Cell<u64>,
+    video: Cell<Option<NonNull<NsVideo>>>,
+}
+
+thread_local! {
+    static VACANT_SLOTS: RefCell<Vec<&'static VideoSlot>> = const { RefCell::new(Vec::new()) };
+    static NEXT_STAMP: Cell<u64> = const { Cell::new(1) };
+}
+
+fn open_slot(video: NonNull<NsVideo>) -> (&'static VideoSlot, u64) {
+    let slot = VACANT_SLOTS
+        .with(|v| v.borrow_mut().pop())
+        .unwrap_or_else(|| {
+            Box::leak(Box::new(VideoSlot {
+                stamp: Cell::new(0),
+                video: Cell::new(None),
+            }))
+        });
+    let stamp = NEXT_STAMP.with(|next| next.replace(next.get() + 1));
+    slot.stamp.set(stamp);
+    slot.video.set(Some(video));
+    (slot, stamp)
+}
+
+fn slot_of(handle: MediaHandle) -> Option<&'static VideoSlot> {
+    handle
+        .target()
+        .downcast_ref::<VideoSlot>()
+        .filter(|slot| slot.stamp.get() == handle.stamp())
+}
+
+fn close_slot(handle: MediaHandle) {
+    if let Some(slot) = slot_of(handle) {
+        slot.stamp.set(0);
+        slot.video.set(None);
+        VACANT_SLOTS.with(|v| v.borrow_mut().push(slot));
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VideoPtr(NonNull<NsVideo>);
 
 impl VideoPtr {
     pub fn adopt(v: Box<NsVideo>) -> VideoPtr {
-        VideoPtr(NonNull::from(Box::leak(v)))
+        let p = NonNull::from(Box::leak(v));
+        let (slot, stamp) = open_slot(p);
+        let p = VideoPtr(p);
+        p.get().slot = Some(slot);
+        p.get().slot_stamp = stamp;
+        p
     }
 
-    pub fn as_raw(self) -> *mut c_void {
-        self.0.as_ptr().cast()
+    pub fn media_handle(self) -> Option<MediaHandle> {
+        let v = self.get();
+        v.slot.map(|slot| MediaHandle::new(slot, v.slot_stamp))
     }
 
     pub fn get<'a>(self) -> &'a mut NsVideo {
+        // SAFETY: the video stays allocated until free(), after which no VideoPtr to it is used, and callers hold one borrow at a time.
         unsafe { &mut *self.0.as_ptr() }
     }
 
     pub fn free(self) {
+        if let Some(handle) = self.media_handle() {
+            close_slot(handle);
+        }
+        // SAFETY: adopt() leaked this box, and free() is its one release.
         drop(unsafe { Box::from_raw(self.0.as_ptr()) });
     }
 }
@@ -380,8 +424,7 @@ pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
 }
 
 pub fn video_of_box<'a>(b: BoxRef<'_>) -> Option<&'a mut NsVideo> {
-    b.media()
-        .and_then(|m| unsafe { m.video().cast::<NsVideo>().as_mut() })
+    BoxVideo::of(b).map(|v| VideoPtr(v.0).get())
 }
 
 pub fn box_fit(b: BoxRef<'_>) -> c_int {
@@ -602,12 +645,27 @@ pub struct BoxVideo(NonNull<NsVideo>);
 
 impl BoxVideo {
     pub fn of(b: BoxRef<'_>) -> Option<BoxVideo> {
-        NonNull::new(b.media()?.video().cast::<NsVideo>()).map(BoxVideo)
+        slot_of(b.media()?.video()?)?.video.get().map(BoxVideo)
     }
 
     fn with<R>(self, f: impl FnOnce(&mut NsVideo) -> R) -> R {
-        // SAFETY: a box's video slot holds a video the page's cache or the headless driver keeps alive while the box tree exists, and nothing else borrows it during the call.
-        f(unsafe { &mut *self.0.as_ptr() })
+        f(VideoPtr(self.0).get())
+    }
+
+    pub fn playing(self) -> bool {
+        self.with(|v| v.playing.get())
+    }
+
+    pub fn video_opened(self) -> bool {
+        self.with(|v| v.video_opened.get())
+    }
+
+    pub fn frame_texture(self) -> Option<Texture> {
+        self.with(|v| v.frame_texture.clone())
+    }
+
+    pub fn poster_texture(self) -> Option<Texture> {
+        self.with(|v| v.poster_texture.clone())
     }
 
     pub fn is_camera(self) -> bool {
@@ -702,9 +760,9 @@ impl StillVideo {
     }
 
     pub fn attach(self, b: BoxRef<'_>) -> Result<(), StillVideo> {
-        match b.media().filter(|m| m.video().is_null()) {
+        match b.media().filter(|m| m.video().is_none()) {
             Some(m) => {
-                m.set_video(Box::into_raw(self.0).cast());
+                m.set_video(VideoPtr::adopt(self.0).media_handle());
                 Ok(())
             }
             None => Err(self),

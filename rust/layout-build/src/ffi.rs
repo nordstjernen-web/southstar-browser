@@ -2,13 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef};
+use southstar_layout::{
+    BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaHandle, MediaRef,
+};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
 use std::rc::Rc;
 
@@ -44,31 +45,26 @@ pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
         .and_then(|abs| CString::new(abs).ok())
 }
 
-fn image_cache(cache: *mut c_void) -> Option<ImageCache> {
-    // SAFETY: the build input's image cache is null or the page's live cache.
-    unsafe { ImageCache::from_raw(cache) }
+pub fn image_cache_peek(cache: ImageCache, url: &CStr) -> Option<MediaHandle> {
+    cache.peek(url).map(ImageRef::media_handle)
 }
 
-fn image_ptr(image: Option<ImageRef<'_>>) -> *mut c_void {
-    image.map_or(ptr::null_mut(), |image| image.as_ptr().cast_mut())
+pub fn image_cache_insert_encoded(
+    cache: ImageCache,
+    key: &CStr,
+    bytes: &[u8],
+) -> Option<MediaHandle> {
+    cache.insert_encoded(key, bytes).map(ImageRef::media_handle)
 }
 
-pub fn image_cache_peek(cache: *mut c_void, url: &CStr) -> *mut c_void {
-    image_ptr(image_cache(cache).and_then(|cache| cache.peek(url)))
-}
-
-pub fn image_cache_insert_encoded(cache: *mut c_void, key: &CStr, bytes: &[u8]) -> *mut c_void {
-    image_ptr(image_cache(cache).and_then(|cache| cache.insert_encoded(key, bytes)))
-}
-
-pub fn image_cache_begin_generation(cache: *mut c_void) {
-    if let Some(cache) = image_cache(cache) {
+pub fn image_cache_begin_generation(cache: Option<ImageCache>) {
+    if let Some(cache) = cache {
         cache.begin_generation();
     }
 }
 
-pub fn image_cache_collect(cache: *mut c_void) {
-    if let Some(cache) = image_cache(cache) {
+pub fn image_cache_collect(cache: Option<ImageCache>) {
+    if let Some(cache) = cache {
         cache.collect();
     }
 }

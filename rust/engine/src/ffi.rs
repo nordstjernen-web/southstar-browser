@@ -312,9 +312,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<
         base: req.page.base,
         viewport_width,
         viewport_height: req.viewport_height,
-        images: req
-            .images
-            .map_or(ptr::null_mut(), southstar_image::ImageCache::raw),
+        images: req.images,
         anim: req.anim,
         js,
         focused: Node::ptr_or_null(req.focused),

@@ -94,7 +94,7 @@ pub struct Relayout<'a> {
     pub base: Option<&'a CStr>,
     pub viewport_width: c_int,
     pub viewport_height: f64,
-    pub images: *mut c_void,
+    pub images: Option<southstar_image::ImageCache>,
     pub anim: Option<southstar_anim::AnimHandle>,
     pub js: *mut c_void,
     pub focused: *const NsNode,

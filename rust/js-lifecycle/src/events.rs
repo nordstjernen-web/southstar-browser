@@ -144,7 +144,9 @@ fn collect_media_events(b: BoxRef<'_>, out: &mut MediaEvents) {
     {
         let dom = dom.cast_mut();
         let image = media.image();
-        if name == c"img" && !image.is_null() {
+        if name == c"img"
+            && let Some(image) = image
+        {
             if let Some(failed) = ffi::image_settled(image)
                 && node.flags() & IMG_LOAD_FIRED == 0
                 && !out.images.iter().any(|&(img, _)| img == node)

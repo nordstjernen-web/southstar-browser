@@ -1,10 +1,12 @@
-//! Southstar — decoded-image texture: an immutable, reference-counted BGRA pixel buffer with one slot of attached user data.
+//! Southstar — decoded-image texture: an immutable, reference-counted BGRA pixel buffer with one typed slot for data derived from it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
 
-pub use ffi::{Texture, TextureRef};
+mod texture;
+
+pub use texture::{Texture, TextureRef};
 
 pub struct Pixels {
     pub width: i32,

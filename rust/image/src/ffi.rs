@@ -1,156 +1,249 @@
-//! Southstar — the image cache and decode chain, over GLib, GTask, the network layer and the decoders.
+//! Southstar — the image cache and decode chain, over GTask, the network layer and the decoders.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::RefCell;
+use core::any::Any;
+use core::cell::{Cell, Ref, RefCell, RefMut};
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::marker::PhantomData;
 use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
-
-use southstar_glib::{self as glib, FALSE, GBoolean, GError, TRUE};
+use std::rc::Rc;
 
 use southstar_image_decoders::{self as decoders, Pixels};
-use southstar_net::Response;
-use southstar_texture::{Texture, TextureRef};
+use southstar_layout::MediaHandle;
+use southstar_net::{Response, monotonic_us};
+use southstar_texture::TextureRef;
 
 use crate::RetryState;
 
 const CACHE_BUDGET_BYTES: i64 = 256 * 1024 * 1024;
 
-pub struct NsImage {
-    url: *mut c_char,
-    final_url: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    texture: *mut Texture,
-    render_surface: *mut c_void,
+#[derive(Default)]
+struct State {
+    url: Option<CString>,
+    final_url: Option<CString>,
+    cors_allow_origin: Option<CString>,
+    texture: Option<TextureRef>,
+    render_cache: Option<Rc<dyn Any>>,
     natural_width: c_int,
     natural_height: c_int,
     http_status: c_long,
-    error: *mut c_char,
+    error: Option<CString>,
     failed_at_us: i64,
     request_us: i64,
     response_us: i64,
-    next_hop_protocol: *mut c_char,
-    timing_allow_origin: *mut c_char,
+    next_hop_protocol: Option<CString>,
+    timing_allow_origin: Option<CString>,
     body_size: i64,
     attempts: c_int,
-    loaded: GBoolean,
-    failed: GBoolean,
-    purged: GBoolean,
+    loaded: bool,
+    failed: bool,
+    purged: bool,
     bytes: i64,
     generation: u64,
     anim_frames: Option<Vec<AnimFrame>>,
     anim_start_us: i64,
-    anim_current: c_int,
+    anim_current: usize,
     anim_total_ms: c_int,
 }
 
+pub struct Image {
+    stamp: Cell<u64>,
+    state: RefCell<State>,
+}
+
+thread_local! {
+    static VACANT_IMAGES: RefCell<Vec<&'static Image>> = const { RefCell::new(Vec::new()) };
+    static CACHES: RefCell<Vec<&'static Cache>> = const { RefCell::new(Vec::new()) };
+    static NEXT_STAMP: Cell<u64> = const { Cell::new(1) };
+}
+
+fn next_stamp() -> u64 {
+    NEXT_STAMP.with(|next| {
+        let stamp = next.get();
+        next.set(stamp + 1);
+        stamp
+    })
+}
+
+fn text_ptr(text: &Option<CString>) -> *const c_char {
+    text.as_ref().map_or(ptr::null(), |t| t.as_ptr())
+}
+
+fn cstring(bytes: &[u8]) -> CString {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    CString::new(&bytes[..end]).unwrap_or_default()
+}
+
 #[derive(Clone, Copy)]
-pub struct ImageRef<'a>(
-    ptr::NonNull<NsImage>,
-    core::marker::PhantomData<&'a NsImage>,
-);
+pub struct ImageRef<'a> {
+    image: &'static Image,
+    stamp: u64,
+    life: PhantomData<&'a Image>,
+}
 
 impl<'a> ImageRef<'a> {
-    pub unsafe fn from_ptr(image: *const c_void) -> Option<ImageRef<'a>> {
-        ptr::NonNull::new(image.cast_mut().cast()).map(|p| ImageRef(p, core::marker::PhantomData))
+    pub fn from_media(handle: MediaHandle) -> Option<ImageRef<'a>> {
+        let image = ImageRef {
+            image: handle.target().downcast_ref::<Image>()?,
+            stamp: handle.stamp(),
+            life: PhantomData,
+        };
+        image.alive().then_some(image)
     }
 
-    fn raw(self) -> &'a NsImage {
-        unsafe { &*self.0.as_ptr() }
+    pub fn media_handle(self) -> MediaHandle {
+        MediaHandle::new(self.image, self.stamp)
     }
 
-    pub fn texture(self) -> *mut c_void {
-        self.raw().texture.cast()
+    pub fn same(self, other: ImageRef<'_>) -> bool {
+        ptr::eq(self.image, other.image) && self.stamp == other.stamp
+    }
+
+    fn alive(self) -> bool {
+        self.image.stamp.get() == self.stamp
+    }
+
+    fn state(self) -> Option<Ref<'static, State>> {
+        self.alive().then(|| self.image.state.borrow())
+    }
+
+    fn state_mut(self) -> Option<RefMut<'static, State>> {
+        self.alive().then(|| self.image.state.borrow_mut())
+    }
+
+    fn read<R: Default>(self, f: impl FnOnce(&State) -> R) -> R {
+        self.state().map_or_else(R::default, |s| f(&s))
+    }
+
+    fn write(self, f: impl FnOnce(&mut State)) {
+        if let Some(mut s) = self.state_mut() {
+            f(&mut s);
+        }
+    }
+
+    pub fn texture(self) -> Option<TextureRef> {
+        self.read(|s| s.texture.clone())
+    }
+
+    pub fn has_texture(self) -> bool {
+        self.read(|s| s.texture.is_some())
     }
 
     pub fn loaded(self) -> bool {
-        self.raw().loaded != 0
+        self.read(|s| s.loaded)
     }
 
     pub fn failed(self) -> bool {
-        self.raw().failed != 0
-    }
-
-    pub fn as_ptr(self) -> *const c_void {
-        self.0.as_ptr().cast()
+        self.read(|s| s.failed)
     }
 
     pub fn url(self) -> *const c_char {
-        self.raw().url
+        self.state().map_or(ptr::null(), |s| text_ptr(&s.url))
     }
 
     pub fn error(self) -> *const c_char {
-        self.raw().error
+        self.state().map_or(ptr::null(), |s| text_ptr(&s.error))
     }
 
     pub fn http_status(self) -> c_long {
-        self.raw().http_status
+        self.read(|s| s.http_status)
     }
 
     pub fn natural_size(self) -> (i32, i32) {
-        let image = self.raw();
-        (image.natural_width, image.natural_height)
+        self.read(|s| (s.natural_width, s.natural_height))
     }
 
     pub fn source_url(self) -> *const c_char {
-        let image = self.raw();
-        if image.final_url.is_null() {
-            image.url
-        } else {
-            image.final_url
-        }
+        self.state().map_or(ptr::null(), |s| {
+            text_ptr(if s.final_url.is_some() {
+                &s.final_url
+            } else {
+                &s.url
+            })
+        })
     }
 
     pub fn cors_allow_origin(self) -> *const c_char {
-        self.raw().cors_allow_origin
+        self.state()
+            .map_or(ptr::null(), |s| text_ptr(&s.cors_allow_origin))
     }
 
     pub fn is_animated(self) -> bool {
-        self.raw().anim_frames.is_some()
+        self.read(|s| s.anim_frames.is_some())
     }
 
-    pub fn render_surface(self) -> *mut c_void {
-        self.raw().render_surface
+    pub fn render_cache(self) -> Option<Rc<dyn Any>> {
+        self.read(|s| s.render_cache.clone())
+    }
+
+    pub fn set_render_cache(self, cache: Rc<dyn Any>) {
+        let old = self
+            .state_mut()
+            .and_then(|mut s| s.render_cache.replace(cache));
+        drop(old);
     }
 
     pub fn adopt_origin(self, final_url: Option<&CStr>, cors_allow_origin: Option<&CStr>) {
-        let image = self.0.as_ptr();
-        // SAFETY: the image is live while its cache holds it, and only the main thread touches it.
-        if !unsafe { (*image).final_url }.is_null() {
-            return;
-        }
-        let dup =
-            |value: Option<&CStr>| value.map_or(ptr::null_mut(), |v| glib::strdup(v.to_bytes()));
-        let final_url = dup(final_url);
-        let cors_allow_origin = dup(cors_allow_origin);
-        // SAFETY: as above; the field was null and now owns a fresh copy.
-        unsafe { (*image).final_url = final_url };
-        // SAFETY: as above; the field was null and now owns a fresh copy.
-        unsafe { (*image).cors_allow_origin = cors_allow_origin };
-    }
-
-    pub fn set_render_surface(self, surface: *mut c_void) {
-        unsafe { (*self.0.as_ptr()).render_surface = surface };
+        self.write(|s| {
+            if s.final_url.is_none() {
+                s.final_url = final_url.map(CStr::to_owned);
+                s.cors_allow_origin = cors_allow_origin.map(CStr::to_owned);
+            }
+        });
     }
 
     pub fn fetch_times_us(self) -> (i64, i64) {
-        let image = self.raw();
-        (image.request_us, image.response_us)
+        self.read(|s| (s.request_us, s.response_us))
     }
 
     pub fn next_hop_protocol(self) -> *const c_char {
-        self.raw().next_hop_protocol
+        self.state()
+            .map_or(ptr::null(), |s| text_ptr(&s.next_hop_protocol))
     }
 
     pub fn timing_allow_origin(self) -> *const c_char {
-        self.raw().timing_allow_origin
+        self.state()
+            .map_or(ptr::null(), |s| text_ptr(&s.timing_allow_origin))
     }
 
     pub fn body_size(self) -> i64 {
-        self.raw().body_size
+        self.read(|s| s.body_size)
     }
+}
+
+fn new_image(url: &CStr) -> ImageRef<'static> {
+    let image = VACANT_IMAGES
+        .with(|v| v.borrow_mut().pop())
+        .unwrap_or_else(|| {
+            Box::leak(Box::new(Image {
+                stamp: Cell::new(0),
+                state: RefCell::new(State::default()),
+            }))
+        });
+    let stamp = next_stamp();
+    image.stamp.set(stamp);
+    *image.state.borrow_mut() = State {
+        url: Some(url.to_owned()),
+        ..State::default()
+    };
+    ImageRef {
+        image,
+        stamp,
+        life: PhantomData,
+    }
+}
+
+fn release_image(image: ImageRef<'static>) {
+    if !image.alive() {
+        return;
+    }
+    image.image.stamp.set(0);
+    let old = image.image.state.replace(State::default());
+    VACANT_IMAGES.with(|v| v.borrow_mut().push(image.image));
+    drop(old);
 }
 
 struct AnimFrame {
@@ -159,131 +252,56 @@ struct AnimFrame {
 }
 
 pub type ImageReady = fn(image: ImageRef<'static>, data: usize);
-type AsyncCallback =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
-type TaskThreadFunc = unsafe extern "C" fn(
-    task: *mut c_void,
-    source: *mut c_void,
-    task_data: *mut c_void,
-    cancellable: *mut c_void,
-);
 
-unsafe extern "C" {
-    fn cairo_surface_destroy(surface: *mut c_void);
-    fn g_get_monotonic_time() -> i64;
-    fn g_task_new(
-        source: *mut c_void,
-        cancellable: *mut c_void,
-        callback: Option<AsyncCallback>,
-        user_data: *mut c_void,
-    ) -> *mut c_void;
-    fn g_task_set_task_data(task: *mut c_void, data: *mut c_void, destroy: glib::GDestroyNotify);
-    fn g_task_run_in_thread(task: *mut c_void, func: Option<TaskThreadFunc>);
-    fn g_task_return_pointer(task: *mut c_void, result: *mut c_void, destroy: glib::GDestroyNotify);
-    fn g_task_propagate_pointer(task: *mut c_void, error: *mut *mut GError) -> *mut c_void;
-    fn g_object_unref(object: *mut c_void);
+struct Pending {
+    img: ImageRef<'static>,
+    cache: ImageCache,
+    cb: Cell<Option<ImageReady>>,
+    data: Cell<usize>,
+    dead: Cell<bool>,
 }
 
-pub struct Cache {
-    by_url: RefCell<HashMap<CString, *mut NsImage>>,
-    pending: Vec<*mut Pending>,
+#[derive(Default)]
+struct CacheState {
+    by_url: HashMap<CString, ImageRef<'static>>,
+    pending: Vec<Rc<Pending>>,
     generation: u64,
     total_bytes: i64,
 }
 
-struct Pending {
-    img: *mut NsImage,
-    cache: *mut Cache,
-    cb: Option<ImageReady>,
-    data: usize,
-    dead: bool,
+pub struct Cache {
+    stamp: Cell<u64>,
+    state: RefCell<CacheState>,
 }
 
+#[derive(Clone, Copy)]
+pub struct ImageCache {
+    cache: &'static Cache,
+    stamp: u64,
+}
+
+impl PartialEq for ImageCache {
+    fn eq(&self, other: &ImageCache) -> bool {
+        ptr::eq(self.cache, other.cache) && self.stamp == other.stamp
+    }
+}
+
+impl Eq for ImageCache {}
+
 struct Decoded {
-    tex: *mut Texture,
+    tex: Option<TextureRef>,
     frames: Option<Vec<AnimFrame>>,
     w: c_int,
     h: c_int,
 }
 
 struct DecodeJob {
-    pending: *mut Pending,
+    pending: Rc<Pending>,
     body: Vec<u8>,
     content_type: Vec<u8>,
 }
 
-fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
-}
-
-fn gfree<T>(p: *mut T) {
-    unsafe { glib::g_free(p.cast()) };
-}
-
-/// # Safety
-///
-/// `p` is null or an image new_image made that nothing uses afterwards.
-unsafe fn image_free(p: *mut NsImage) {
-    if p.is_null() {
-        return;
-    }
-    // SAFETY: the caller hands over the image new_image boxed, which is freed once here.
-    let mut img = unsafe { Box::from_raw(p) };
-    for s in [
-        img.url,
-        img.final_url,
-        img.cors_allow_origin,
-        img.next_hop_protocol,
-        img.timing_allow_origin,
-        img.error,
-    ] {
-        gfree(s);
-    }
-    if !img.render_surface.is_null() {
-        // SAFETY: the image owns one reference to its render surface, released once here.
-        unsafe { cairo_surface_destroy(img.render_surface) };
-    }
-    if img.anim_frames.take().is_none() {
-        // SAFETY: the image owns its texture reference, released once here.
-        unsafe { TextureRef::release(img.texture) };
-    }
-}
-
-fn new_image(url: &CStr) -> *mut NsImage {
-    Box::into_raw(Box::new(NsImage {
-        url: glib::strdup(url.to_bytes()),
-        final_url: ptr::null_mut(),
-        cors_allow_origin: ptr::null_mut(),
-        texture: ptr::null_mut(),
-        render_surface: ptr::null_mut(),
-        natural_width: 0,
-        natural_height: 0,
-        http_status: 0,
-        error: ptr::null_mut(),
-        failed_at_us: 0,
-        request_us: 0,
-        response_us: 0,
-        next_hop_protocol: ptr::null_mut(),
-        timing_allow_origin: ptr::null_mut(),
-        body_size: 0,
-        attempts: 0,
-        loaded: FALSE,
-        failed: FALSE,
-        purged: FALSE,
-        bytes: 0,
-        generation: 0,
-        anim_frames: None,
-        anim_start_us: 0,
-        anim_current: 0,
-        anim_total_ms: 0,
-    }))
-}
-
-fn texture_bytes(texture: *mut Texture) -> i64 {
-    // SAFETY: image and frame textures are null or held by the image that is being measured.
-    let Some(texture) = (unsafe { Texture::borrow(texture) }) else {
-        return 0;
-    };
+fn texture_bytes(texture: &TextureRef) -> i64 {
     let (w, h) = (texture.width(), texture.height());
     if w > 0 && h > 0 {
         i64::from(w) * i64::from(h) * 4
@@ -292,172 +310,230 @@ fn texture_bytes(texture: *mut Texture) -> i64 {
     }
 }
 
-fn decoded_bytes(img: &NsImage) -> i64 {
-    let anim = img.anim_frames.as_deref().unwrap_or_default();
-    if !anim.is_empty() {
-        return anim.iter().map(|f| texture_bytes(f.texture.as_ptr())).sum();
+fn decoded_bytes(img: &State) -> i64 {
+    match img.anim_frames.as_deref() {
+        Some(anim) if !anim.is_empty() => anim.iter().map(|f| texture_bytes(&f.texture)).sum(),
+        _ => img.texture.as_ref().map_or(0, texture_bytes),
     }
-    texture_bytes(img.texture)
 }
 
-unsafe fn cache_account(cache: *mut Cache, img: *mut NsImage) {
-    let (Some(cache), Some(img)) = (unsafe { cache.as_mut() }, unsafe { img.as_mut() }) else {
-        return;
-    };
-    if img.loaded == FALSE || img.bytes != 0 {
-        return;
-    }
-    img.bytes = decoded_bytes(img);
-    img.generation = cache.generation;
-    cache.total_bytes += img.bytes;
-}
-
-fn has_pending(cache: &Cache, img: *mut NsImage) -> bool {
-    cache
-        .pending
-        .iter()
-        .any(|&p| unsafe { !(*p).dead && (*p).img == img })
-}
-
-fn purge(cache: &mut Cache, img: &mut NsImage) {
+fn purge(cache: &mut CacheState, img: &mut State) {
     cache.total_bytes -= img.bytes;
     img.bytes = 0;
-    unsafe {
-        if img.anim_frames.take().is_none() {
-            TextureRef::release(img.texture);
-        }
-        img.texture = ptr::null_mut();
-        if !img.render_surface.is_null() {
-            cairo_surface_destroy(img.render_surface);
-            img.render_surface = ptr::null_mut();
-        }
-    }
+    img.anim_frames = None;
+    img.texture = None;
+    img.render_cache = None;
     img.anim_current = 0;
     img.anim_total_ms = 0;
     img.anim_start_us = 0;
-    img.loaded = FALSE;
-    img.purged = TRUE;
+    img.loaded = false;
+    img.purged = true;
 }
-
-fn for_each_image<F: FnMut(*mut NsImage)>(table: &RefCell<HashMap<CString, *mut NsImage>>, f: F) {
-    let images: Vec<*mut NsImage> = table.borrow().values().copied().collect();
-    images.into_iter().for_each(f);
-}
-
-fn image_ref(img: *mut NsImage) -> Option<ImageRef<'static>> {
-    ptr::NonNull::new(img).map(|p| ImageRef(p, core::marker::PhantomData))
-}
-
-fn lookup(cache: &Cache, url: &CStr) -> *mut NsImage {
-    cache
-        .by_url
-        .borrow()
-        .get(url)
-        .copied()
-        .unwrap_or(ptr::null_mut())
-}
-
-fn insert(cache: &Cache, url: &CStr, img: *mut NsImage) {
-    let replaced = cache.by_url.borrow_mut().insert(url.to_owned(), img);
-    if let Some(old) = replaced {
-        // SAFETY: the table owned the image it replaced, and nothing else frees it.
-        unsafe { image_free(old) };
-    }
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ImageCache(ptr::NonNull<Cache>);
 
 impl ImageCache {
     pub fn create() -> ImageCache {
-        ImageCache(ptr::NonNull::from(Box::leak(Box::new(Cache {
-            by_url: RefCell::new(HashMap::new()),
-            pending: Vec::new(),
-            generation: 0,
-            total_bytes: 0,
-        }))))
+        let vacant = CACHES.with(|c| c.borrow().iter().copied().find(|c| c.stamp.get() == 0));
+        let cache = vacant.unwrap_or_else(|| {
+            let cache: &'static Cache = Box::leak(Box::new(Cache {
+                stamp: Cell::new(0),
+                state: RefCell::new(CacheState::default()),
+            }));
+            CACHES.with(|c| c.borrow_mut().push(cache));
+            cache
+        });
+        let stamp = next_stamp();
+        cache.stamp.set(stamp);
+        ImageCache { cache, stamp }
     }
 
     pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr().cast()
+        ptr::from_ref(self.cache).cast_mut().cast()
     }
 
-    /// # Safety
-    ///
-    /// No copy of this handle, and no pointer `raw()` returned, may be used afterwards.
-    pub unsafe fn free(self) {
-        // SAFETY: the cache was leaked from a Box by create(), and the caller guarantees nothing uses it again.
-        let cache = unsafe { Box::from_raw(self.0.as_ptr()) };
-        for &p in &cache.pending {
-            // SAFETY: a pending request stays allocated until its callback fires, which marking it dead turns into a no-op.
-            unsafe { (*p).dead = true };
+    pub fn from_raw(raw: *mut c_void) -> Option<ImageCache> {
+        CACHES.with(|c| {
+            c.borrow()
+                .iter()
+                .copied()
+                .find(|&cache| ptr::eq(ptr::from_ref(cache).cast(), raw.cast_const()))
+                .filter(|cache| cache.stamp.get() != 0)
+                .map(|cache| ImageCache {
+                    cache,
+                    stamp: cache.stamp.get(),
+                })
+        })
+    }
+
+    pub fn free(self) {
+        if !self.alive() {
+            return;
         }
-        for (_, img) in cache.by_url.take() {
-            // SAFETY: the table belongs to this cache alone and owns each image, freed once here.
-            unsafe { image_free(img) };
+        self.cache.stamp.set(0);
+        let state = self.cache.state.take();
+        for p in &state.pending {
+            p.dead.set(true);
+        }
+        for (_, img) in state.by_url {
+            release_image(img);
         }
     }
 
-    fn cache<'a>(self) -> &'a Cache {
-        // SAFETY: the cache stays allocated until free(), whose contract rules out later use, and the page only reads its fields here; images are changed through the raw pointers the table holds.
-        unsafe { self.0.as_ref() }
+    fn alive(self) -> bool {
+        self.cache.stamp.get() == self.stamp
+    }
+
+    fn state(self) -> Option<RefMut<'static, CacheState>> {
+        self.alive().then(|| self.cache.state.borrow_mut())
+    }
+
+    fn images(self) -> Vec<ImageRef<'static>> {
+        self.state()
+            .map(|c| c.by_url.values().copied().collect())
+            .unwrap_or_default()
+    }
+
+    fn lookup(self, url: &CStr) -> Option<ImageRef<'static>> {
+        self.state()?.by_url.get(url).copied()
+    }
+
+    fn insert(self, url: &CStr, img: ImageRef<'static>) {
+        let replaced = self
+            .state()
+            .and_then(|mut c| c.by_url.insert(url.to_owned(), img));
+        if let Some(old) = replaced {
+            release_image(old);
+        }
+    }
+
+    fn has_pending_for(self, img: ImageRef<'_>) -> bool {
+        self.state()
+            .is_some_and(|c| c.pending.iter().any(|p| !p.dead.get() && p.img.same(img)))
+    }
+
+    fn generation(self) -> u64 {
+        self.state().map_or(0, |c| c.generation)
+    }
+
+    fn account(self, img: ImageRef<'_>) {
+        let (Some(mut cache), Some(mut img)) = (self.state(), img.state_mut()) else {
+            return;
+        };
+        if !img.loaded || img.bytes != 0 {
+            return;
+        }
+        img.bytes = decoded_bytes(&img);
+        img.generation = cache.generation;
+        cache.total_bytes += img.bytes;
+    }
+
+    fn remove_pending(self, pending: &Rc<Pending>) {
+        if let Some(mut cache) = self.state()
+            && let Some(index) = cache.pending.iter().position(|p| Rc::ptr_eq(p, pending))
+        {
+            cache.pending.swap_remove(index);
+        }
+    }
+
+    fn take_pending_for(self, img: ImageRef<'_>) -> Vec<Rc<Pending>> {
+        let Some(mut cache) = self.state() else {
+            return Vec::new();
+        };
+        let mut fire = Vec::new();
+        let mut i = 0;
+        while i < cache.pending.len() {
+            if cache.pending[i].img.same(img) {
+                fire.push(cache.pending.swap_remove(i));
+            } else {
+                i += 1;
+            }
+        }
+        fire
     }
 
     pub fn tick(self, now_us: i64) -> bool {
         let mut any = false;
-        for_each_image(&self.cache().by_url, |img| {
-            // SAFETY: the table owns each image until it is removed, which nothing does during the walk.
-            let img = unsafe { &mut *img };
-            let anim = img.anim_frames.as_deref().unwrap_or_default();
-            if anim.len() < 2 || img.anim_total_ms <= 0 {
-                return;
-            }
-            let delays: Vec<i32> = anim.iter().map(|f| f.delay_ms).collect();
-            let index =
-                crate::animation_frame(&delays, img.anim_total_ms, img.anim_start_us, now_us);
-            if index as c_int != img.anim_current {
-                let texture = anim[index].texture.as_ptr();
-                img.anim_current = index as c_int;
-                img.texture = texture;
-                any = true;
-            }
-        });
+        for image in self.images() {
+            image.write(|img| {
+                let anim = img.anim_frames.as_deref().unwrap_or_default();
+                if anim.len() < 2 || img.anim_total_ms <= 0 {
+                    return;
+                }
+                let delays: Vec<i32> = anim.iter().map(|f| f.delay_ms).collect();
+                let index =
+                    crate::animation_frame(&delays, img.anim_total_ms, img.anim_start_us, now_us);
+                if index != img.anim_current {
+                    img.texture = Some(anim[index].texture.clone());
+                    img.anim_current = index;
+                    any = true;
+                }
+            });
+        }
         any
     }
 
     pub fn animating(self) -> bool {
-        let mut any = false;
-        for_each_image(&self.cache().by_url, |img| {
-            // SAFETY: the table owns each image until it is removed, which nothing does during the walk.
-            let img = unsafe { &*img };
-            any |= img.loaded != 0 && img.anim_frames.as_ref().is_some_and(|a| a.len() > 1);
-        });
-        any
+        self.images().into_iter().any(|image| {
+            image.read(|img| img.loaded && img.anim_frames.as_ref().is_some_and(|a| a.len() > 1))
+        })
     }
 
     pub fn has_pending(self) -> bool {
-        !self.cache().pending.is_empty()
+        self.state().is_some_and(|c| !c.pending.is_empty())
+    }
+
+    pub fn get(
+        self,
+        url: &CStr,
+        top_url: Option<&CStr>,
+        ready: Option<ImageReady>,
+        data: usize,
+    ) -> Option<ImageRef<'static>> {
+        if !self.alive() {
+            return None;
+        }
+        Some(cache_get(self, url, top_url, ready, data))
+    }
+
+    pub fn cancel_ready(self, data: usize) {
+        if let Some(cache) = self.state() {
+            for p in cache.pending.iter().filter(|p| p.data.get() == data) {
+                p.cb.set(None);
+                p.data.set(0);
+            }
+        }
+    }
+
+    pub fn peek(self, url: &CStr) -> Option<ImageRef<'static>> {
+        let image = self.lookup(url)?;
+        let generation = self.generation();
+        image.write(|img| img.generation = generation);
+        Some(image)
+    }
+
+    pub fn insert_encoded(self, url: &CStr, bytes: &[u8]) -> Option<ImageRef<'static>> {
+        if !self.alive() || bytes.is_empty() {
+            return None;
+        }
+        insert_encoded(self, url, bytes)
+    }
+
+    pub fn begin_generation(self) {
+        if let Some(mut cache) = self.state() {
+            cache.generation = cache.generation.wrapping_add(1);
+        }
+    }
+
+    pub fn collect(self) {
+        if let Some(mut cache) = self.state() {
+            collect(&mut cache);
+        }
     }
 }
 
-unsafe fn fire_pending(pending: *mut Pending) {
-    let (img, cache) = unsafe { ((*pending).img, (*pending).cache) };
-    let mut fire = Vec::new();
-    let mut i = 0;
-    while i < unsafe { (*cache).pending.len() } {
-        let p = unsafe { (&(*cache).pending)[i] };
-        if unsafe { (*p).img } == img {
-            unsafe { (*cache).pending.swap_remove(i) };
-            fire.push(p);
-        } else {
-            i += 1;
-        }
-    }
-    for p in fire {
-        let pending = unsafe { Box::from_raw(p) };
-        if let (Some(cb), Some(image)) = (pending.cb, image_ref(img)) {
-            cb(image, pending.data);
+fn fire_pending(pending: &Pending) {
+    for p in pending.cache.take_pending_for(pending.img) {
+        if let Some(cb) = p.cb.get() {
+            cb(p.img, p.data.get());
         }
     }
 }
@@ -652,15 +728,14 @@ fn decode_body(bytes: &[u8]) -> Decoded {
         && anim.frames.len() > 1
     {
         return Decoded {
-            tex: ptr::null_mut(),
+            tex: None,
             frames: Some(anim.frames),
             w: anim.w,
             h: anim.h,
         };
     }
-    let (tex, w, h) = decode_bytes(bytes).map_or((ptr::null_mut(), 0, 0), |(texture, w, h)| {
-        (texture.into_raw(), w, h)
-    });
+    let (tex, w, h) =
+        decode_bytes(bytes).map_or((None, 0, 0), |(texture, w, h)| (Some(texture), w, h));
     Decoded {
         tex,
         frames: None,
@@ -669,211 +744,241 @@ fn decode_body(bytes: &[u8]) -> Decoded {
     }
 }
 
-fn set_error(img: &mut NsImage, message: *mut c_char) {
-    img.failed = TRUE;
+fn set_error(img: &mut State, message: &[u8]) {
+    img.failed = true;
     img.failed_at_us = monotonic_us();
-    img.error = message;
+    img.error = Some(cstring(message));
 }
 
-fn apply_decoded_state(
-    img: &mut NsImage,
-    d: Decoded,
-    content_type: Option<&[u8]>,
-    body_len: usize,
-) {
+fn apply_decoded_state(img: &mut State, d: Decoded, content_type: Option<&[u8]>, body_len: usize) {
     if let Some(anim) = d.frames {
-        img.texture = anim[0].texture.as_ptr();
+        img.texture = anim.first().map(|f| f.texture.clone());
         img.natural_width = d.w;
         img.natural_height = d.h;
         img.anim_total_ms = crate::total_delay_ms(anim.iter().map(|f| i64::from(f.delay_ms)));
         img.anim_frames = Some(anim);
+        img.anim_current = 0;
         img.anim_start_us = monotonic_us();
-        img.loaded = TRUE;
-    } else if !d.tex.is_null() {
-        img.texture = d.tex;
+        img.loaded = true;
+    } else if let Some(tex) = d.tex {
+        img.texture = Some(tex);
         img.natural_width = d.w;
         img.natural_height = d.h;
-        img.loaded = TRUE;
+        img.loaded = true;
     } else {
-        set_error(
-            img,
-            glib::strdup(&crate::decode_error(content_type, body_len)),
-        );
+        set_error(img, &crate::decode_error(content_type, body_len));
     }
 }
 
-unsafe extern "C" fn decoded_free(data: *mut c_void) {
-    drop(unsafe { Box::from_raw(data.cast::<Decoded>()) });
+fn finish_decode(pending: &Rc<Pending>, decoded: Decoded, content_type: &[u8], body_len: usize) {
+    pending
+        .img
+        .write(|img| apply_decoded_state(img, decoded, Some(content_type), body_len));
+    pending.cache.account(pending.img);
+    fire_pending(pending);
 }
 
-unsafe extern "C" fn decode_worker(
-    task: *mut c_void,
-    _source: *mut c_void,
-    task_data: *mut c_void,
-    _cancel: *mut c_void,
-) {
-    let job = unsafe { &*task_data.cast::<DecodeJob>() };
-    let decoded = Box::new(decode_body(&job.body));
-    unsafe { g_task_return_pointer(task, Box::into_raw(decoded).cast(), Some(decoded_free)) };
-}
+mod task {
+    use core::ffi::c_void;
+    use core::ptr;
 
-unsafe extern "C" fn on_image_decoded(
-    _source: *mut c_void,
-    result: *mut c_void,
-    user_data: *mut c_void,
-) {
-    let job = unsafe { Box::from_raw(user_data.cast::<DecodeJob>()) };
-    let decoded = unsafe { g_task_propagate_pointer(result, ptr::null_mut()) }.cast::<Decoded>();
-    let decoded = (!decoded.is_null()).then(|| unsafe { Box::from_raw(decoded) });
-    let pending = job.pending;
-    if unsafe { (*pending).dead } {
-        if let Some(d) = decoded {
-            unsafe { TextureRef::release(d.tex) };
+    use southstar_glib::{GDestroyNotify, GError};
+
+    use super::{DecodeJob, Decoded, decode_body, finish_decode};
+
+    type AsyncCallback =
+        unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void);
+    type TaskThreadFunc = unsafe extern "C" fn(
+        task: *mut c_void,
+        source: *mut c_void,
+        task_data: *mut c_void,
+        cancellable: *mut c_void,
+    );
+
+    unsafe extern "C" {
+        fn g_task_new(
+            source: *mut c_void,
+            cancellable: *mut c_void,
+            callback: Option<AsyncCallback>,
+            user_data: *mut c_void,
+        ) -> *mut c_void;
+        fn g_task_set_task_data(task: *mut c_void, data: *mut c_void, destroy: GDestroyNotify);
+        fn g_task_run_in_thread(task: *mut c_void, func: Option<TaskThreadFunc>);
+        fn g_task_return_pointer(task: *mut c_void, result: *mut c_void, destroy: GDestroyNotify);
+        fn g_task_propagate_pointer(task: *mut c_void, error: *mut *mut GError) -> *mut c_void;
+        fn g_object_unref(object: *mut c_void);
+    }
+
+    unsafe extern "C" fn decoded_free(data: *mut c_void) {
+        // SAFETY: GTask hands back the Decoded box decode_worker returned, once, when nobody propagated it.
+        drop(unsafe { Box::from_raw(data.cast::<Decoded>()) });
+    }
+
+    unsafe extern "C" fn decode_worker(
+        task: *mut c_void,
+        _source: *mut c_void,
+        task_data: *mut c_void,
+        _cancel: *mut c_void,
+    ) {
+        let job = task_data.cast_const().cast::<DecodeJob>();
+        // SAFETY: the task data is the job, which on_image_decoded frees only after this worker returned; only its body is read here.
+        let body = unsafe { &(*job).body };
+        let decoded = Box::into_raw(Box::new(decode_body(body)));
+        // SAFETY: task is the running GTask, and decoded_free reclaims the box if nobody takes it.
+        unsafe { g_task_return_pointer(task, decoded.cast(), Some(decoded_free)) };
+    }
+
+    unsafe extern "C" fn on_image_decoded(
+        _source: *mut c_void,
+        result: *mut c_void,
+        user_data: *mut c_void,
+    ) {
+        // SAFETY: user_data is the DecodeJob start() leaked for this task, reclaimed once here.
+        let job = unsafe { Box::from_raw(user_data.cast::<DecodeJob>()) };
+        // SAFETY: result is this task, finished, and its pointer has not been taken before.
+        let decoded =
+            unsafe { g_task_propagate_pointer(result, ptr::null_mut()) }.cast::<Decoded>();
+        let decoded = (!decoded.is_null()).then(|| {
+            // SAFETY: the propagated pointer is the Decoded box decode_worker leaked, now owned here.
+            *unsafe { Box::from_raw(decoded) }
+        });
+        if job.pending.dead.get() {
+            return;
         }
-        drop(unsafe { Box::from_raw(pending) });
-        return;
-    }
-    let result = decoded.map_or(
-        Decoded {
-            tex: ptr::null_mut(),
+        let decoded = decoded.unwrap_or(Decoded {
+            tex: None,
             frames: None,
             w: 0,
             h: 0,
-        },
-        |d| *d,
-    );
-    unsafe {
-        let img = &mut *(*pending).img;
-        apply_decoded_state(img, result, Some(&job.content_type), job.body.len());
-        cache_account((*pending).cache, (*pending).img);
-        fire_pending(pending);
+        });
+        finish_decode(&job.pending, decoded, &job.content_type, job.body.len());
+    }
+
+    pub(super) fn start(job: Box<DecodeJob>) {
+        let job = Box::into_raw(job).cast::<c_void>();
+        // SAFETY: on_image_decoded takes ownership of job when the task completes.
+        let task = unsafe {
+            g_task_new(
+                ptr::null_mut(),
+                ptr::null_mut(),
+                Some(on_image_decoded),
+                job,
+            )
+        };
+        // SAFETY: the job outlives the worker, and GTask frees nothing.
+        unsafe { g_task_set_task_data(task, job, None) };
+        // SAFETY: task is the task created above, run once.
+        unsafe { g_task_run_in_thread(task, Some(decode_worker)) };
+        // SAFETY: drops this function's reference; the running task holds its own.
+        unsafe { g_object_unref(task) };
     }
 }
 
-fn record_response(img: &mut NsImage, resp: &Response) {
-    let dup = |value: Option<&CStr>| value.map_or(ptr::null_mut(), |v| glib::strdup(v.to_bytes()));
+fn record_response(img: &mut State, resp: &Response) {
     img.http_status = resp.status();
-    gfree(img.final_url);
-    img.final_url = dup(resp.final_url());
-    gfree(img.cors_allow_origin);
-    img.cors_allow_origin = dup(resp.cors_allow_origin());
-    gfree(img.next_hop_protocol);
-    img.next_hop_protocol = dup(resp.next_hop_protocol());
-    gfree(img.timing_allow_origin);
+    img.final_url = resp.final_url().map(CStr::to_owned);
+    img.cors_allow_origin = resp.cors_allow_origin().map(CStr::to_owned);
+    img.next_hop_protocol = resp.next_hop_protocol().map(CStr::to_owned);
     img.timing_allow_origin = resp
         .raw_headers()
         .and_then(|raw| southstar_net::raw_header_values(raw.to_bytes(), b"timing-allow-origin"))
-        .map_or(ptr::null_mut(), |values| glib::strdup(&values));
+        .map(|values| cstring(&values));
     img.body_size = resp.body().map_or(0, |b| b.len() as i64);
 }
 
-unsafe fn finish_failed(pending: *mut Pending, message: &[u8]) {
-    unsafe {
-        let img = &mut *(*pending).img;
-        let message = if message.is_empty() {
-            &b"fetch failed"[..]
-        } else {
-            message
-        };
-        set_error(img, glib::strdup(message));
-        if let (Some(cb), Some(image)) = ((*pending).cb, image_ref((*pending).img)) {
-            cb(image, (*pending).data);
-        }
-        let list = &mut (*(*pending).cache).pending;
-        if let Some(index) = list.iter().position(|&p| p == pending) {
-            list.swap_remove(index);
-        }
-        drop(Box::from_raw(pending));
+fn finish_failed(pending: &Rc<Pending>, message: &[u8]) {
+    let message = if message.is_empty() {
+        &b"fetch failed"[..]
+    } else {
+        message
+    };
+    pending.img.write(|img| set_error(img, message));
+    if let Some(cb) = pending.cb.get() {
+        cb(pending.img, pending.data.get());
     }
+    pending.cache.remove_pending(pending);
 }
 
-unsafe fn decode_in_thread(pending: *mut Pending, body: &[u8], content_type: &[u8]) {
-    let job = Box::new(DecodeJob {
-        pending,
-        body: body.to_vec(),
-        content_type: content_type.to_vec(),
-    });
-    let job = Box::into_raw(job).cast::<c_void>();
-    unsafe {
-        let task = g_task_new(
-            ptr::null_mut(),
-            ptr::null_mut(),
-            Some(on_image_decoded),
-            job,
-        );
-        g_task_set_task_data(task, job, None);
-        g_task_run_in_thread(task, Some(decode_worker));
-        g_object_unref(task);
-    }
+enum Fetched {
+    Done,
+    Decode(Vec<u8>, Vec<u8>),
 }
 
-unsafe fn image_fetched(pending: *mut Pending, outcome: southstar_net::Outcome) {
-    unsafe {
-        if (*pending).dead {
-            drop(Box::from_raw(pending));
-            return;
-        }
-        (*(*pending).img).response_us = monotonic_us();
-        let response = match outcome {
-            Ok(response) => response,
-            Err(message) => return finish_failed(pending, &message),
-        };
-        let img = &mut *(*pending).img;
+fn image_fetched(pending: Rc<Pending>, outcome: southstar_net::Outcome) {
+    if pending.dead.get() {
+        return;
+    }
+    pending.img.write(|img| img.response_us = monotonic_us());
+    let response = match outcome {
+        Ok(response) => response,
+        Err(message) => return finish_failed(&pending, &message),
+    };
+    let mut next = Fetched::Done;
+    pending.img.write(|img| {
         record_response(img, &response);
         let body = response.body().filter(|b| !b.is_empty());
         if let Some(error) = response.error() {
-            set_error(img, glib::strdup(error.to_bytes()));
+            set_error(img, error.to_bytes());
         } else if response.status() >= 400 {
-            set_error(
-                img,
-                glib::strdup(format!("HTTP {}", response.status()).as_bytes()),
-            );
+            set_error(img, format!("HTTP {}", response.status()).as_bytes());
         } else if let Some(body) = body {
             let content_type = response.content_type().map(CStr::to_bytes);
             if southstar_config::get().is_some_and(|c| c.async_image_decode != 0) {
-                return decode_in_thread(pending, body, content_type.unwrap_or_default());
+                next = Fetched::Decode(body.to_vec(), content_type.unwrap_or_default().to_vec());
+                return;
             }
             let decoded = decode_body(body);
             apply_decoded_state(img, decoded, content_type, body.len());
         } else {
-            set_error(img, glib::strdup(b"empty response"));
+            set_error(img, b"empty response");
         }
-        drop(response);
-        cache_account((*pending).cache, (*pending).img);
-        fire_pending(pending);
+    });
+    drop(response);
+    match next {
+        Fetched::Decode(body, content_type) => task::start(Box::new(DecodeJob {
+            pending,
+            body,
+            content_type,
+        })),
+        Fetched::Done => {
+            pending.cache.account(pending.img);
+            fire_pending(&pending);
+        }
     }
 }
 
-fn retry_state(img: &NsImage) -> RetryState {
+fn retry_state(img: &State) -> RetryState {
     RetryState {
-        failed: img.failed != 0,
+        failed: img.failed,
         attempts: img.attempts,
         http_status: img.http_status,
         failed_at_us: img.failed_at_us,
     }
 }
 
-unsafe fn start_request(
-    cache: *mut Cache,
-    img: *mut NsImage,
+fn start_request(
+    cache: ImageCache,
+    img: ImageRef<'static>,
     url: &CStr,
     top_url: Option<&CStr>,
     cb: Option<ImageReady>,
     data: usize,
 ) {
-    let pending = Box::into_raw(Box::new(Pending {
+    let pending = Rc::new(Pending {
         img,
         cache,
-        cb,
-        data,
-        dead: false,
-    }));
-    unsafe {
-        (*cache).pending.push(pending);
-        (*img).attempts += 1;
-        (*img).request_us = monotonic_us();
-        (*img).response_us = 0;
+        cb: Cell::new(cb),
+        data: Cell::new(data),
+        dead: Cell::new(false),
+    });
+    if let Some(mut c) = cache.state() {
+        c.pending.push(Rc::clone(&pending));
     }
+    img.write(|img| {
+        img.attempts += 1;
+        img.request_us = monotonic_us();
+        img.response_us = 0;
+    });
     let headers = southstar_net::FetchDest::Image.header_lines();
     let request = southstar_net::FetchRequest {
         url: url.to_bytes(),
@@ -883,8 +988,7 @@ unsafe fn start_request(
         ..southstar_net::FetchRequest::default()
     };
     southstar_net::request_with(&request, None, move |outcome| {
-        // SAFETY: the pending request stays allocated until this completion, which reclaims it.
-        unsafe { image_fetched(pending, outcome) }
+        image_fetched(pending, outcome);
     });
 }
 
@@ -892,213 +996,147 @@ fn images_disabled() -> bool {
     southstar_config::get().is_some_and(|c| c.images_enabled == 0)
 }
 
-unsafe fn cache_get(
-    cache: *mut Cache,
+fn settled(img: ImageRef<'_>) -> bool {
+    img.read(|s| s.loaded || s.failed)
+}
+
+fn cache_get(
+    cache: ImageCache,
     url: &CStr,
     top_url: Option<&CStr>,
     cb: Option<ImageReady>,
     data: usize,
-) -> *mut NsImage {
-    unsafe {
-        let cached = lookup(&*cache, url);
-        if let Some(img) = cached.as_mut() {
-            img.generation = (*cache).generation;
-            if images_disabled() {
-                if let Some(cb) = cb
-                    && (img.loaded != 0 || img.failed != 0)
-                    && let Some(image) = image_ref(cached)
-                {
-                    cb(image, data);
-                }
-                return cached;
-            }
-            if img.purged != 0 && !has_pending(&*cache, cached) {
-                img.purged = FALSE;
-                start_request(cache, cached, url, top_url, cb, data);
-                return cached;
-            }
-            if crate::should_retry(&retry_state(img), monotonic_us()) {
-                img.failed = FALSE;
-                img.http_status = 0;
-                img.failed_at_us = 0;
-                gfree(img.error);
-                img.error = ptr::null_mut();
-                start_request(cache, cached, url, top_url, cb, data);
-                return cached;
-            }
-            if img.loaded != 0 || img.failed != 0 {
-                if let (Some(cb), Some(image)) = (cb, image_ref(cached)) {
-                    cb(image, data);
-                }
-            } else if let Some(cb) = cb {
-                let duplicate = (*cache).pending.iter().any(|&p| {
-                    let p = &*p;
-                    !p.dead
-                        && p.img == cached
-                        && p.cb.is_some_and(|f| ptr::fn_addr_eq(f, cb))
-                        && p.data == data
-                });
-                if !duplicate {
-                    let pending = Box::into_raw(Box::new(Pending {
-                        img: cached,
-                        cache,
-                        cb: Some(cb),
-                        data,
-                        dead: false,
-                    }));
-                    (*cache).pending.push(pending);
-                }
-            }
-            return cached;
-        }
+) -> ImageRef<'static> {
+    let Some(cached) = cache.lookup(url) else {
         let img = new_image(url);
-        insert(&*cache, url, img);
+        cache.insert(url, img);
         if images_disabled() {
-            (*img).failed = TRUE;
-            if let (Some(cb), Some(image)) = (cb, image_ref(img)) {
-                cb(image, data);
+            img.write(|s| s.failed = true);
+            if let Some(cb) = cb {
+                cb(img, data);
             }
-            return img;
+        } else {
+            start_request(cache, img, url, top_url, cb, data);
         }
-        start_request(cache, img, url, top_url, cb, data);
-        img
-    }
-}
-
-unsafe fn insert_loaded(
-    cache: *mut Cache,
-    url: &CStr,
-    texture: TextureRef,
-    width: c_int,
-    height: c_int,
-) -> *mut NsImage {
-    unsafe {
-        let existing = lookup(&*cache, url);
-        if !existing.is_null() {
-            return existing;
-        }
-        let img = new_image(url);
-        (*img).texture = texture.into_raw();
-        (*img).natural_width = width;
-        (*img).natural_height = height;
-        (*img).loaded = TRUE;
-        insert(&*cache, url, img);
-        cache_account(cache, img);
-        img
-    }
-}
-
-unsafe fn insert_encoded(cache: *mut Cache, url: &CStr, bytes: &[u8]) -> *mut NsImage {
-    if bytes.is_empty() {
-        return ptr::null_mut();
-    }
-    unsafe {
-        let existing = lookup(&*cache, url);
-        if !existing.is_null() {
-            return existing;
-        }
-        let anim = pixel_frames_for(bytes)
-            .filter(|frames| frames.len() > 1)
-            .and_then(anim_frames_from_pixels);
-        if let Some(anim) = anim
-            && anim.frames.len() > 1
+        return img;
+    };
+    let generation = cache.generation();
+    cached.write(|s| s.generation = generation);
+    if images_disabled() {
+        if let Some(cb) = cb
+            && settled(cached)
         {
-            let img = new_image(url);
-            (*img).texture = anim.frames[0].texture.as_ptr();
-            (*img).anim_frames = Some(anim.frames);
-            (*img).natural_width = anim.w;
-            (*img).natural_height = anim.h;
-            (*img).anim_total_ms = anim.total_ms;
-            (*img).anim_start_us = monotonic_us();
-            (*img).loaded = TRUE;
-            insert(&*cache, url, img);
-            cache_account(cache, img);
-            return img;
+            cb(cached, data);
         }
-        match decode_bytes(bytes) {
-            Some((texture, w, h)) => insert_loaded(cache, url, texture, w, h),
-            None => ptr::null_mut(),
-        }
+        return cached;
     }
-}
-
-impl ImageCache {
-    /// # Safety
-    ///
-    /// `raw` is null or a pointer `raw()` returned for a cache that has not been freed.
-    pub unsafe fn from_raw(raw: *mut c_void) -> Option<ImageCache> {
-        ptr::NonNull::new(raw.cast()).map(ImageCache)
+    if cached.read(|s| s.purged) && !cache.has_pending_for(cached) {
+        cached.write(|s| s.purged = false);
+        start_request(cache, cached, url, top_url, cb, data);
+        return cached;
     }
-
-    pub fn get(
-        self,
-        url: &CStr,
-        top_url: Option<&CStr>,
-        ready: Option<ImageReady>,
-        data: usize,
-    ) -> Option<ImageRef<'static>> {
-        // SAFETY: the cache is live for as long as its handle may be used.
-        image_ref(unsafe { cache_get(self.0.as_ptr(), url, top_url, ready, data) })
-    }
-
-    pub fn cancel_ready(self, data: usize) {
-        for &p in &self.cache().pending {
-            // SAFETY: a pending request stays allocated while it is listed in the cache.
-            let p = unsafe { &mut *p };
-            if p.data == data {
-                p.cb = None;
-                p.data = 0;
-            }
-        }
-    }
-
-    pub fn peek(self, url: &CStr) -> Option<ImageRef<'static>> {
-        let cache = self.cache();
-        let image = image_ref(lookup(cache, url))?;
-        // SAFETY: the table owns the image until it is removed, which nothing does during the call.
-        unsafe { (*image.0.as_ptr()).generation = cache.generation };
-        Some(image)
-    }
-
-    pub fn insert_encoded(self, url: &CStr, bytes: &[u8]) -> Option<ImageRef<'static>> {
-        // SAFETY: the cache is live for as long as its handle may be used, and url is NUL-terminated.
-        image_ref(unsafe { insert_encoded(self.0.as_ptr(), url, bytes) })
-    }
-
-    pub fn begin_generation(self) {
-        // SAFETY: the cache is live for as long as its handle may be used, and nothing else borrows it during the call.
-        let cache = unsafe { &mut *self.0.as_ptr() };
-        cache.generation = cache.generation.wrapping_add(1);
-    }
-
-    pub fn collect(self) {
-        // SAFETY: the cache is live for as long as its handle may be used, and nothing else borrows it during the call.
-        let cache = unsafe { &mut *self.0.as_ptr() };
-        collect(cache);
-    }
-}
-
-fn collect(cache: &mut Cache) {
-    while cache.total_bytes > CACHE_BUDGET_BYTES {
-        let mut victim: *mut NsImage = ptr::null_mut();
-        let mut oldest = u64::MAX;
-        for_each_image(&cache.by_url, |img| {
-            let image = unsafe { &*img };
-            if image.loaded == 0
-                || image.bytes == 0
-                || image.generation == cache.generation
-                || has_pending(cache, img)
-            {
-                return;
-            }
-            if image.generation < oldest {
-                oldest = image.generation;
-                victim = img;
-            }
+    if cached.read(|s| crate::should_retry(&retry_state(s), monotonic_us())) {
+        cached.write(|s| {
+            s.failed = false;
+            s.http_status = 0;
+            s.failed_at_us = 0;
+            s.error = None;
         });
-        let Some(victim) = (unsafe { victim.as_mut() }) else {
+        start_request(cache, cached, url, top_url, cb, data);
+        return cached;
+    }
+    if settled(cached) {
+        if let Some(cb) = cb {
+            cb(cached, data);
+        }
+    } else if let Some(cb) = cb
+        && let Some(mut c) = cache.state()
+    {
+        let duplicate = c.pending.iter().any(|p| {
+            !p.dead.get()
+                && p.img.same(cached)
+                && p.cb.get().is_some_and(|f| ptr::fn_addr_eq(f, cb))
+                && p.data.get() == data
+        });
+        if !duplicate {
+            c.pending.push(Rc::new(Pending {
+                img: cached,
+                cache,
+                cb: Cell::new(Some(cb)),
+                data: Cell::new(data),
+                dead: Cell::new(false),
+            }));
+        }
+    }
+    cached
+}
+
+fn insert_loaded(
+    cache: ImageCache,
+    url: &CStr,
+    fill: impl FnOnce(&mut State),
+) -> ImageRef<'static> {
+    let img = new_image(url);
+    img.write(|s| {
+        fill(s);
+        s.loaded = true;
+    });
+    cache.insert(url, img);
+    cache.account(img);
+    img
+}
+
+fn insert_encoded(cache: ImageCache, url: &CStr, bytes: &[u8]) -> Option<ImageRef<'static>> {
+    if let Some(existing) = cache.lookup(url) {
+        return Some(existing);
+    }
+    let anim = pixel_frames_for(bytes)
+        .filter(|frames| frames.len() > 1)
+        .and_then(anim_frames_from_pixels);
+    if let Some(anim) = anim
+        && anim.frames.len() > 1
+    {
+        return Some(insert_loaded(cache, url, |s| {
+            s.texture = anim.frames.first().map(|f| f.texture.clone());
+            s.anim_frames = Some(anim.frames);
+            s.natural_width = anim.w;
+            s.natural_height = anim.h;
+            s.anim_total_ms = anim.total_ms;
+            s.anim_start_us = monotonic_us();
+        }));
+    }
+    let (texture, w, h) = decode_bytes(bytes)?;
+    Some(insert_loaded(cache, url, |s| {
+        s.texture = Some(texture);
+        s.natural_width = w;
+        s.natural_height = h;
+    }))
+}
+
+fn collect(cache: &mut CacheState) {
+    while cache.total_bytes > CACHE_BUDGET_BYTES {
+        let mut victim: Option<ImageRef<'static>> = None;
+        let mut oldest = u64::MAX;
+        for &img in cache.by_url.values() {
+            let pending = cache
+                .pending
+                .iter()
+                .any(|p| !p.dead.get() && p.img.same(img));
+            let generation = img.read(|s| {
+                (s.loaded && s.bytes != 0 && s.generation != cache.generation)
+                    .then_some(s.generation)
+            });
+            if let Some(generation) = generation
+                && !pending
+                && generation < oldest
+            {
+                oldest = generation;
+                victim = Some(img);
+            }
+        }
+        let Some(mut victim) = victim.and_then(ImageRef::state_mut) else {
             break;
         };
-        purge(cache, victim);
+        purge(cache, &mut victim);
     }
 }

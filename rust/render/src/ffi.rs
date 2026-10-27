@@ -29,7 +29,7 @@ pub struct RenderCtx<'a> {
     pub viewport_width: f64,
     pub viewport_height: f64,
     pub zoom: f64,
-    pub images: *mut c_void,
+    pub images: Option<southstar_image::ImageCache>,
     pub base_url: *const c_char,
     pub anim: Option<AnimHandle>,
     pub js: *mut c_void,

@@ -276,7 +276,7 @@ type VideoSources = (Option<Rc<CStr>>, Option<Rc<CStr>>);
 pub fn video_sources(b: BoxRef<'_>) -> Option<VideoSources> {
     let m = b.media()?;
     m.video()
-        .is_null()
+        .is_none()
         .then(|| (m.video_src(), m.video_poster()))
 }
 

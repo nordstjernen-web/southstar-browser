@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::sync::{Once, OnceLock};
 
 use southstar_dom::Node;
@@ -94,7 +94,7 @@ fn continues_inline_run(n: Node<'_>, st: StyleTable) -> bool {
     classify::continues_inline_run(Some(n), st)
 }
 
-fn peek_image(src: &CStr) -> *mut c_void {
+fn peek_image(src: &CStr) -> Option<southstar_layout::MediaHandle> {
     media::peek_image(Some(src))
 }
 

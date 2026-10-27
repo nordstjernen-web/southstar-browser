@@ -2,17 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_anim::AnimatedColor;
 use southstar_cairo::{ContextRef, Surface, SurfaceRef};
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr};
 use southstar_style::{StyleRef, Transform, ValueRef};
+use southstar_texture::TextureRef;
 use southstar_video::BoxVideo;
 
 use crate::links;
@@ -79,30 +79,37 @@ pub fn format_g8(value: f64) -> Vec<u8> {
     southstar_numfmt::general(value, 8).into_bytes()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Texture(*mut c_void);
+#[derive(Clone)]
+pub struct Texture(TextureRef);
 
 impl Texture {
-    pub unsafe fn from_raw(texture: *mut c_void) -> Option<Texture> {
-        (!texture.is_null()).then_some(Texture(texture))
+    pub fn same(&self, other: &Texture) -> bool {
+        self.0.ptr_eq(&other.0)
     }
 
-    pub fn raw(self) -> *mut c_void {
-        self.0
+    pub fn width(&self) -> i32 {
+        self.0.width()
     }
 
-    fn get(&self) -> &southstar_texture::Texture {
-        // SAFETY: from_raw's caller vouched for a live texture its owner keeps for this handle's use.
-        unsafe { &*self.0.cast::<southstar_texture::Texture>() }
+    pub fn height(&self) -> i32 {
+        self.0.height()
     }
 
-    pub fn width(self) -> i32 {
-        self.get().width()
+    pub fn download(&self, dst: &mut [u8], stride: usize) {
+        self.0.download(dst, stride);
     }
 
-    pub fn height(self) -> i32 {
-        self.get().height()
+    pub fn with_cache<T: core::any::Any + Send, R>(
+        &self,
+        init: impl FnOnce() -> T,
+        f: impl FnOnce(&mut T) -> R,
+    ) -> R {
+        self.0.with_cache(init, f)
     }
+}
+
+pub fn image_texture(image: ImageRef<'_>) -> Option<Texture> {
+    image.texture().map(Texture)
 }
 
 pub fn style_ptr(s: Option<StyleRef<'_>>) -> *const c_void {
@@ -115,105 +122,28 @@ pub struct SelectionRun {
     pub end: usize,
 }
 
-#[repr(C)]
-struct NsVideo {
-    url: *mut c_char,
-    natural_width: c_int,
-    natural_height: c_int,
-    poster_texture: *mut c_void,
-    poster_url: *mut c_char,
-    frame_texture: *mut c_void,
-    loaded: GBoolean,
-    load_events_fired: GBoolean,
-    failed: GBoolean,
-    player: *mut c_void,
-    dom_node: *const c_void,
-    is_camera: GBoolean,
-    autoplay: GBoolean,
-    loop_: GBoolean,
-    controls: GBoolean,
-    muted: GBoolean,
-    has_audio: GBoolean,
-    audio_opened: GBoolean,
-    audio_url: *mut c_char,
-    audio_file: *mut c_char,
-    audio_file_len: usize,
-    audio_file_gen: c_uint,
-    audio_timeline_start: f64,
-    pending_audio_file: *mut c_char,
-    pending_audio_file_len: usize,
-    pending_audio_file_gen: c_uint,
-    pending_audio_start: f64,
-    video_file: *mut c_char,
-    video_file_len: usize,
-    video_file_gen: c_uint,
-    pending_video_file: *mut c_char,
-    pending_video_file_len: usize,
-    pending_video_file_gen: c_uint,
-    pending_video_start: f64,
-    video_opened: GBoolean,
-    rect: [f64; 4],
-    clip: [f64; 4],
-    rect_fit: c_int,
-    last_paint_us: i64,
-    rect_dirty: GBoolean,
-    rect_sent_us: i64,
-    sent_rect: [f64; 4],
-    sent_clip: [f64; 4],
-    sent_rect_fit: c_int,
-    sent_rect_page: GBoolean,
-    token: *mut c_char,
-    playing: GBoolean,
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::offset_of!(NsVideo, player) == 56
-        && core::mem::offset_of!(NsVideo, video_opened) == 232
-        && core::mem::offset_of!(NsVideo, playing) == 416
-);
-
 #[derive(Clone, Copy)]
-pub struct Video<'a>(&'a NsVideo);
+pub struct Video(BoxVideo);
 
-impl Texture {
-    pub fn download(self, dst: &mut [u8], stride: usize) {
-        self.get().download(dst, stride);
-    }
-
-    pub fn user_data(self) -> *mut c_void {
-        self.get().user_data()
-    }
-
-    pub unsafe fn set_user_data(
-        self,
-        data: *mut c_void,
-        destroy: unsafe extern "C" fn(*mut c_void),
-    ) {
-        // SAFETY: the caller promises destroy may be called once with data on any thread.
-        unsafe { self.get().set_user_data(data, Some(destroy)) };
-    }
-}
-
-impl Video<'_> {
-    pub unsafe fn from_ptr<'a>(v: *mut c_void) -> Option<Video<'a>> {
-        unsafe { v.cast::<NsVideo>().as_ref() }.map(Video)
+impl Video {
+    pub fn of(b: BoxRef<'_>) -> Option<Video> {
+        BoxVideo::of(b).map(Video)
     }
 
     pub fn playing(self) -> bool {
-        self.0.playing != 0
+        self.0.playing()
     }
 
     pub fn video_opened(self) -> bool {
-        self.0.video_opened != 0
+        self.0.video_opened()
     }
 
     pub fn frame_texture(self) -> Option<Texture> {
-        unsafe { Texture::from_raw(self.0.frame_texture) }
+        self.0.frame_texture().map(Texture)
     }
 
     pub fn poster_texture(self) -> Option<Texture> {
-        unsafe { Texture::from_raw(self.0.poster_texture) }
+        self.0.poster_texture().map(Texture)
     }
 }
 

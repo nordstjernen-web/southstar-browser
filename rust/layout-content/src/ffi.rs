@@ -2,22 +2,22 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::sync::OnceLock;
 
-use southstar_layout::{BoxRef, InlineAttr};
+use southstar_layout::{BoxRef, InlineAttr, MediaHandle};
 use southstar_paint::text_layout::{self, Layout};
 use southstar_style::{StyleRef, attr_style};
 
 use crate::controls;
 
-static IMAGE_PEEK: OnceLock<fn(&CStr) -> *mut c_void> = OnceLock::new();
+static IMAGE_PEEK: OnceLock<fn(&CStr) -> Option<MediaHandle>> = OnceLock::new();
 
-pub fn install_image_peek(peek: fn(&CStr) -> *mut c_void) {
+pub fn install_image_peek(peek: fn(&CStr) -> Option<MediaHandle>) {
     let _ = IMAGE_PEEK.set(peek);
 }
 
-pub fn peek_image(src: &CStr) -> *mut c_void {
+pub fn peek_image(src: &CStr) -> Option<MediaHandle> {
     let peek = IMAGE_PEEK
         .get()
         .expect("the image cache peek is installed before the first build");

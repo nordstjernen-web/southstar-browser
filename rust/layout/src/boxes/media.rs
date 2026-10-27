@@ -2,31 +2,53 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::any::Any;
 use core::cell::Cell;
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::marker::PhantomData;
-use core::ptr;
 use std::rc::Rc;
 
 use super::{peek, shared_cstr};
 
 type Source = Option<Rc<CStr>>;
 
+#[derive(Clone, Copy)]
+pub struct MediaHandle {
+    target: &'static dyn Any,
+    stamp: u64,
+}
+
+impl MediaHandle {
+    pub fn new(target: &'static dyn Any, stamp: u64) -> MediaHandle {
+        MediaHandle { target, stamp }
+    }
+
+    pub fn target(self) -> &'static dyn Any {
+        self.target
+    }
+
+    pub fn stamp(self) -> u64 {
+        self.stamp
+    }
+}
+
+type Handle = Option<MediaHandle>;
+
 pub struct NsBoxMedia {
     image_src: Cell<Source>,
-    image: Cell<*mut c_void>,
+    image: Cell<Handle>,
     bg_image_src: Cell<Source>,
-    bg_image: Cell<*mut c_void>,
+    bg_image: Cell<Handle>,
     marker_image_src: Cell<Source>,
-    marker_image: Cell<*mut c_void>,
+    marker_image: Cell<Handle>,
     border_image_src: Cell<Source>,
-    border_image: Cell<*mut c_void>,
+    border_image: Cell<Handle>,
     bg_layer_srcs: Cell<Option<Rc<[Source]>>>,
-    bg_layer_images: Cell<Option<Rc<[*mut c_void]>>>,
+    bg_layer_images: Cell<Option<Rc<[Handle]>>>,
     video_src: Cell<Source>,
     video_poster: Cell<Source>,
     video_audio_src: Cell<Source>,
-    video: Cell<*mut c_void>,
+    video: Cell<Handle>,
     declared_image_size: Cell<bool>,
     placeholder_image_size: Cell<bool>,
     size_independent_of_image: Cell<bool>,
@@ -38,19 +60,19 @@ impl NsBoxMedia {
     pub(super) fn vacant() -> NsBoxMedia {
         NsBoxMedia {
             image_src: Cell::new(None),
-            image: Cell::new(ptr::null_mut()),
+            image: Cell::new(None),
             bg_image_src: Cell::new(None),
-            bg_image: Cell::new(ptr::null_mut()),
+            bg_image: Cell::new(None),
             marker_image_src: Cell::new(None),
-            marker_image: Cell::new(ptr::null_mut()),
+            marker_image: Cell::new(None),
             border_image_src: Cell::new(None),
-            border_image: Cell::new(ptr::null_mut()),
+            border_image: Cell::new(None),
             bg_layer_srcs: Cell::new(None),
             bg_layer_images: Cell::new(None),
             video_src: Cell::new(None),
             video_poster: Cell::new(None),
             video_audio_src: Cell::new(None),
-            video: Cell::new(ptr::null_mut()),
+            video: Cell::new(None),
             declared_image_size: Cell::new(false),
             placeholder_image_size: Cell::new(false),
             size_independent_of_image: Cell::new(false),
@@ -61,19 +83,19 @@ impl NsBoxMedia {
 
     pub(super) fn reset(&self) {
         self.image_src.set(None);
-        self.image.set(ptr::null_mut());
+        self.image.set(None);
         self.bg_image_src.set(None);
-        self.bg_image.set(ptr::null_mut());
+        self.bg_image.set(None);
         self.marker_image_src.set(None);
-        self.marker_image.set(ptr::null_mut());
+        self.marker_image.set(None);
         self.border_image_src.set(None);
-        self.border_image.set(ptr::null_mut());
+        self.border_image.set(None);
         self.bg_layer_srcs.set(None);
         self.bg_layer_images.set(None);
         self.video_src.set(None);
         self.video_poster.set(None);
         self.video_audio_src.set(None);
-        self.video.set(ptr::null_mut());
+        self.video.set(None);
         self.declared_image_size.set(false);
         self.placeholder_image_size.set(false);
         self.size_independent_of_image.set(false);
@@ -129,31 +151,31 @@ impl<'a> MediaRef<'a> {
         peek(&self.0.video_poster)
     }
 
-    pub fn image(self) -> *mut c_void {
+    pub fn image(self) -> Handle {
         self.0.image.get()
     }
 
-    pub fn bg_image(self) -> *mut c_void {
+    pub fn bg_image(self) -> Handle {
         self.0.bg_image.get()
     }
 
-    pub fn marker_image(self) -> *mut c_void {
+    pub fn marker_image(self) -> Handle {
         self.0.marker_image.get()
     }
 
-    pub fn border_image(self) -> *mut c_void {
+    pub fn border_image(self) -> Handle {
         self.0.border_image.get()
     }
 
-    pub fn bg_layer_images(self) -> Option<Rc<[*mut c_void]>> {
+    pub fn bg_layer_images(self) -> Option<Rc<[Handle]>> {
         peek(&self.0.bg_layer_images)
     }
 
-    pub fn video(self) -> *mut c_void {
+    pub fn video(self) -> Handle {
         self.0.video.get()
     }
 
-    pub fn set_video(self, video: *mut c_void) {
+    pub fn set_video(self, video: Handle) {
         self.0.video.set(video);
     }
 
@@ -181,7 +203,7 @@ impl<'a> MediaRef<'a> {
         self.0.image_src.set(shared_cstr(src));
     }
 
-    pub fn set_image(self, image: *mut c_void) {
+    pub fn set_image(self, image: Handle) {
         self.0.image.set(image);
     }
 
@@ -213,27 +235,27 @@ impl<'a> MediaRef<'a> {
         self.0.video_audio_src.set(shared_cstr(src));
     }
 
-    pub fn set_marker_image(self, src: Option<&CStr>, image: *mut c_void) {
+    pub fn set_marker_image(self, src: Option<&CStr>, image: Handle) {
         self.0.marker_image_src.set(shared_cstr(src));
         self.0.marker_image.set(image);
     }
 
-    pub fn set_border_image(self, src: Option<&CStr>, image: *mut c_void) {
+    pub fn set_border_image(self, src: Option<&CStr>, image: Handle) {
         self.0.border_image_src.set(shared_cstr(src));
         self.0.border_image.set(image);
     }
 
-    pub fn set_bg_image(self, src: Option<&CStr>, image: *mut c_void) {
+    pub fn set_bg_image(self, src: Option<&CStr>, image: Handle) {
         self.0.bg_image_src.set(shared_cstr(src));
         self.0.bg_image.set(image);
     }
 
-    pub fn set_bg_layers(self, srcs: Vec<Source>, images: Vec<*mut c_void>) {
+    pub fn set_bg_layers(self, srcs: Vec<Source>, images: Vec<Handle>) {
         self.0.bg_layer_srcs.set(Some(Rc::from(srcs)));
         self.0.bg_layer_images.set(Some(Rc::from(images)));
     }
 
-    pub(super) fn set_bg_image_if_unset(self, src: &CStr, image: *mut c_void) {
+    pub(super) fn set_bg_image_if_unset(self, src: &CStr, image: Handle) {
         if self.0.bg_image_src_is_unset() {
             self.set_bg_image(Some(src), image);
         }

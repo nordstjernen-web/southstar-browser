@@ -2320,6 +2320,7 @@ dependencies = [
  "southstar-config",
  "southstar-glib",
  "southstar-image-decoders",
+ "southstar-layout",
  "southstar-net",
  "southstar-svg",
  "southstar-texture",
@@ -3560,6 +3561,7 @@ dependencies = [
  "southstar-dom",
  "southstar-font",
  "southstar-glib",
+ "southstar-image",
  "southstar-layout",
  "southstar-layout-content",
  "southstar-layout-position",
@@ -3719,9 +3721,6 @@ dependencies = [
 [[package]]
 name = "southstar-texture"
 version = "1.0.4-dev"
-dependencies = [
- "southstar-glib",
-]
 
 [[package]]
 name = "southstar-threaddump"
