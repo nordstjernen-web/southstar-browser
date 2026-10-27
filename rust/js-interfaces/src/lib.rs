@@ -115,3 +115,11 @@ pub use global::{
 };
 pub use hierarchy::install as install_dom_hierarchy;
 pub use instof::{install_has_instance, install_to_string_tag};
+
+pub use ffi::nsr_document_install_funcs;
+pub use ffi::nsr_install_dom_hierarchy;
+pub use ffi::nsr_install_hasinstance;
+pub use ffi::nsr_install_namespace_object;
+pub use ffi::nsr_install_tostringtag;
+pub use ffi::nsr_js_host_class_proto;
+pub use ffi::nsr_js_install_proto_table;

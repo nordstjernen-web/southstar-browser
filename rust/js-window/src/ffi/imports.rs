@@ -7,19 +7,10 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::NsJs;
 
+pub(crate) use southstar_js_clone::nsr_structured_clone_transfer;
+pub(crate) use southstar_js_clone::nsr_window_structured_clone;
+
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_structured_clone_transfer(
-        scope: &mut Scope<'_>,
-        value: &Value,
-        transfer: &Value,
-        seed_from: &Value,
-        seed_to: &Value,
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_window_structured_clone(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
     pub(crate) unsafe fn nsr_make_event(
         scope: &mut Scope<'_>,
         kind: &str,

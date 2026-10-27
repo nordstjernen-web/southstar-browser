@@ -121,23 +121,33 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
 }
 
+use southstar_idb::nsr_idb_install;
+use southstar_js_collections::nsr_live_wire_constructors;
+use southstar_js_compression::nsr_compression_install;
+use southstar_js_dispatch::nsr_install_event_handler_accessors;
+use southstar_js_document::nsr_document_define_doctype_getter;
+use southstar_js_document::nsr_document_lift_methods_to_proto;
+use southstar_js_events::nsr_install_event_attribute_getters;
+use southstar_js_fonts::nsr_window_fontface_ctor;
+use southstar_js_interfaces::nsr_document_install_funcs;
+use southstar_js_interfaces::nsr_install_dom_hierarchy;
+use southstar_js_interfaces::nsr_install_hasinstance;
+use southstar_js_interfaces::nsr_install_tostringtag;
+use southstar_js_interfaces::nsr_js_host_class_proto;
+use southstar_js_interfaces::nsr_js_install_proto_table;
+use southstar_js_net::nsr_net_install_interfaces;
+use southstar_js_traversal::nsr_native_range;
+use southstar_js_traversal::nsr_tree_walker_install_proto;
+use southstar_js_window::nsr_document_expose_legacy_named;
+use southstar_js_window::nsr_window_make_location;
+
 unsafe extern "Rust" {
     safe fn nsr_window_event_ctor(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_window_fontface_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
     safe fn nsr_xml_serializer_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_native_range(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],
@@ -167,27 +177,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_install_dom_hierarchy(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_install_hasinstance(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_install_tostringtag(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_compression_install(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_idb_install(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_net_install_interfaces(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_live_wire_constructors(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_document_install_funcs(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_document_lift_methods_to_proto(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, target: &Value);
-    safe fn nsr_js_install_proto_table(scope: &mut Scope<'_>, proto: &Value, table: c_int);
-    safe fn nsr_js_host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value;
-    safe fn nsr_window_make_location(scope: &mut Scope<'_>) -> Value;
-    unsafe fn nsr_document_expose_legacy_named(
-        scope: &mut Scope<'_>,
-        root: *const NsNode,
-        document: &Value,
-    );
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

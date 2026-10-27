@@ -17,27 +17,19 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
+use southstar_js_events::nsr_dom_exception;
+use southstar_js_events::nsr_event_adopt_interface;
+use southstar_js_events::nsr_event_define_source;
+use southstar_js_events::nsr_make_event;
+use southstar_js_forms::nsr_js_request_submit_form;
+use southstar_js_forms::nsr_js_reset_form;
+
 unsafe extern "Rust" {
-    safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    safe fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value);
-    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
     safe fn nsr_services_set_timeout(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    unsafe fn nsr_js_request_submit_form(
-        scope: &mut Scope<'_>,
-        form: *const NsNode,
-        submitter: *const NsNode,
-    );
-    unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
 }
 
 fn c_string(bytes: &[u8]) -> CString {

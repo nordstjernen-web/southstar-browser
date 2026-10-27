@@ -15,6 +15,8 @@ use southstar_sqlite::{
     SQLITE_OPEN_READWRITE, SharedDb, Step,
 };
 
+pub use ffi::nsr_idb_install;
+
 const MAX_OPEN: usize = 16;
 const SIBLING_TTL_US: i64 = 5_000_000;
 const MAX_PAGES: i64 = 65_536;

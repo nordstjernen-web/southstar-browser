@@ -103,17 +103,14 @@ fn with_handle(ctx: ContextHandle, f: impl FnOnce(&mut Scope<'_>)) {
     let _ = ctx.with(f);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_hasinstance(scope: &mut Scope<'_>, global: &Value) {
     crate::install_has_instance(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_tostringtag(scope: &mut Scope<'_>, global: &Value) {
     crate::install_to_string_tag(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_dom_hierarchy(scope: &mut Scope<'_>, global: &Value) {
     crate::install_dom_hierarchy(scope, global);
 }
@@ -128,7 +125,6 @@ pub fn nsr_install_window_compat(scope: &mut Scope<'_>, global: &Value) {
     crate::compat::install_window_compat(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_namespace_object(
     scope: &mut Scope<'_>,
     global: &Value,
@@ -144,7 +140,6 @@ pub fn nsr_document_install_funcs(scope: &mut Scope<'_>, doc: &Value) {
     document_install_funcs(scope, doc);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
     host_class_proto(scope, which)
 }

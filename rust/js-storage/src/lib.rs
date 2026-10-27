@@ -20,6 +20,9 @@ use southstar_js_engine::Value;
 use crate::ffi::Js;
 use crate::store::Storage;
 
+pub use ffi::nsr_storage_area_of;
+pub use ffi::nsr_storage_new;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) struct PendingEvent {

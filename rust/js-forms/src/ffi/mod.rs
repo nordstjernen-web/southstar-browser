@@ -492,7 +492,9 @@ pub fn nsr_js_form_data_serialize(scope: &mut Scope<'_>, fd: &Value) -> (Vec<u8>
     crate::form_data::serialize(scope, fd)
 }
 
-#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `form` and `submitter` are null or point at live nodes.
 pub unsafe fn nsr_js_request_submit_form(
     scope: &mut Scope<'_>,
     form: *const NsNode,
@@ -501,6 +503,9 @@ pub unsafe fn nsr_js_request_submit_form(
     crate::submit::request_submit(scope, node(form), node(submitter));
 }
 
+/// # Safety
+///
+/// `form` is null or points at a live node.
 #[unsafe(no_mangle)]
 pub unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode) {
     crate::submit::reset_form(scope, node(form));
@@ -525,7 +530,6 @@ pub fn nsr_form_named_control(scope: &mut Scope<'_>, form: &Value, name: &[u8]) 
     crate::collection::named_control(scope, form, name)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult {
     crate::collection::controls_snapshot(scope, form)
 }

@@ -28,6 +28,11 @@ pub use crate::ffi::{
     note_viewport_scroll, reeval_media_queries, sync_window_metrics, with_named_access_suspended,
 };
 
+pub use ffi::nsr_document_expose_legacy_named;
+pub use ffi::nsr_make_window_event;
+pub use ffi::nsr_window_document_for;
+pub use ffi::nsr_window_make_location;
+
 pub(crate) struct Entry {
     pub url: Vec<u8>,
     pub state: Value,

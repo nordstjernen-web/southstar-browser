@@ -779,7 +779,6 @@ pub fn nsr_js_fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     crate::fetch::fetch(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub fn nsr_navigator_sendBeacon(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::beacon::send_beacon(scope, this, args)

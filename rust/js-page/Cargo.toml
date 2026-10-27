@@ -13,15 +13,18 @@ southstar-css = { path = "../css" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-idb = { path = "../idb" }
 southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-brand = { path = "../js-brand" }
 southstar-js-collections = { path = "../js-collections" }
+southstar-js-compression = { path = "../js-compression" }
 southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-events = { path = "../js-events" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-fonts = { path = "../js-fonts" }
 southstar-js-frames = { path = "../js-frames" }

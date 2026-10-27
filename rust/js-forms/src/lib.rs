@@ -29,6 +29,10 @@ use core::ffi::CStr;
 use southstar_dom::{Kind, Node, children, serialize};
 use southstar_js_engine::{Scope, Value};
 
+pub use ffi::nsr_form_controls_snapshot;
+pub use ffi::nsr_js_request_submit_form;
+pub use ffi::nsr_js_reset_form;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

@@ -2,9 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_int;
-
-use southstar_dom::NsNode;
 use southstar_js_engine::{Scope, Value};
 
 macro_rules! natives {
@@ -47,25 +44,11 @@ natives! {
     nsr_window_open_method,
 }
 
+pub(crate) use southstar_js_collections::nsr_make_live;
+pub(crate) use southstar_js_events::nsr_dom_exception;
+pub(crate) use southstar_js_window::nsr_document_expose_legacy_named;
+
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-    pub(crate) unsafe fn nsr_document_expose_legacy_named(
-        scope: &mut Scope<'_>,
-        root: *const NsNode,
-        document: &Value,
-    );
-    pub(crate) safe fn nsr_make_live(
-        scope: &mut Scope<'_>,
-        owner: &Value,
-        kind: c_int,
-        param: Option<&[u8]>,
-        param2: Option<&[u8]>,
-    ) -> Value;
     pub(crate) safe fn nsr_document_implementation(
         scope: &mut Scope<'_>,
         this: &Value,

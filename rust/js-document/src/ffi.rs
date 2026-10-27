@@ -454,6 +454,9 @@ fn text_arg(text: Option<&[u8]>) -> Option<&[u8]> {
     text.filter(|t| !t.is_empty())
 }
 
+/// # Safety
+///
+/// `doc_node` is null or points at a live document node.
 #[unsafe(no_mangle)]
 pub unsafe fn nsr_make_realm_document(
     scope: &mut Scope<'_>,
@@ -477,7 +480,6 @@ pub unsafe fn nsr_make_realm_document(
     crate::realm::make(scope, doc, &options)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_synth_xml_document(scope: &mut Scope<'_>) -> Value {
     crate::realm::synth_xml(scope)
 }
@@ -487,12 +489,10 @@ pub fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value) {
     crate::realm::deny_cookie(scope, doc);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_lift_methods_to_proto(scope: &mut Scope<'_>, document: &Value) {
     crate::realm::lift_methods_to_proto(scope, document);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, document: &Value) {
     crate::realm::define_getter(scope, document, "doctype", crate::realm::get_doctype);
 }

@@ -13,6 +13,14 @@ mod install;
 use southstar_dom::Node;
 use southstar_js_engine::{Attributes, Scope, Value};
 
+pub use ffi::nsr_dom_exception;
+pub use ffi::nsr_event_adopt_interface;
+pub use ffi::nsr_event_define_cancel_bubble;
+pub use ffi::nsr_event_define_source;
+pub use ffi::nsr_event_new;
+pub use ffi::nsr_install_event_attribute_getters;
+pub use ffi::nsr_make_event;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

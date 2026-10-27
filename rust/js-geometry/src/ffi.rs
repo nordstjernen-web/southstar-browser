@@ -48,8 +48,9 @@ unsafe extern "C" {
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
 
+use southstar_canvas::nsr_dommatrix_make;
+
 unsafe extern "Rust" {
-    safe fn nsr_dommatrix_make(scope: &mut Scope<'_>, m: [f64; 6]) -> Value;
     safe fn nsr_element_int_attr_getter(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -248,7 +249,6 @@ pub fn window_scroll_prop(scope: &mut Scope<'_>, prop: &str) -> f64 {
     crate::boxes::window_scroll(scope, prop)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
     crate::boxes::box_for_this(scope, this).map_or(ptr::null(), BoxRef::as_ptr)
 }
@@ -337,7 +337,6 @@ setters! {
     nsr_element_set_scrollLeft => crate::scroll::set_scroll_left,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value {
     crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
 }

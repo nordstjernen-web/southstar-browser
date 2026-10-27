@@ -9,6 +9,9 @@ use std::collections::HashMap;
 
 use southstar_js_engine::{Attributes, ElementType, ObjectKey, ObjectKind, Scope, Value};
 
+pub use ffi::nsr_structured_clone_transfer;
+pub use ffi::nsr_window_structured_clone;
+
 type Result<T = Value> = core::result::Result<T, Value>;
 
 pub(crate) const MAX_DEPTH: u32 = 512;

@@ -374,14 +374,12 @@ pub fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value) {
     binding::install_window(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_storage_area_of(value: &Value) -> Option<i32> {
     value
         .is_instance_of_class(&class::STORAGE_CLASS)
         .then(|| class::area_tag(value))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_storage_new(scope: &mut Scope<'_>, area: i32) -> Result<Value, Value> {
     class::new_storage(scope, area)
 }

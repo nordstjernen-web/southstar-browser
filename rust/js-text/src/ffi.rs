@@ -24,14 +24,7 @@ impl Js {
 
 unsafe extern "C" {}
 
-unsafe extern "Rust" {
-    safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-}
+use southstar_js_events::nsr_dom_exception;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque().cast())

@@ -14,13 +14,9 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
+use southstar_js_events::nsr_dom_exception;
+
 unsafe extern "Rust" {
-    safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
     safe fn nsr_make_token_list(
         scope: &mut Scope<'_>,
         element: &Value,
@@ -152,12 +148,10 @@ pub(crate) fn to_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<JsText> 
     Ok(JsText(bytes))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     strings::attr_get(scope, this, magic)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_attr_setter(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -172,7 +166,6 @@ pub fn nsr_element_int_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i
     numeric::int_get(scope, this, magic)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_int_attr_setter(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -182,7 +175,6 @@ pub fn nsr_element_int_attr_setter(
     numeric::int_set(scope, this, value, magic)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_reflect_str_get(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -192,7 +184,6 @@ pub fn nsr_element_reflect_str_get(
     Ok(strings::reflect_get(scope, this, attr, null_if_absent))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_reflect_str_set(
     scope: &mut Scope<'_>,
     this: &Value,

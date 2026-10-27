@@ -62,7 +62,6 @@ pub(crate) fn stop_waiting_for_fonts(js: Js) {
     southstar_font::remove_idle_waiter(fonts_idle, js.0);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_fontface_ctor(
     scope: &mut Scope<'_>,
     this: &Value,

@@ -31,9 +31,7 @@ pub(crate) struct SelectionState {
     pub rect: [f64; 4],
 }
 
-unsafe extern "Rust" {
-    safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
-}
+use southstar_js_geometry::nsr_make_dom_rect;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js::of(scope.context_opaque().cast())
@@ -92,7 +90,6 @@ pub fn nsr_document_create_range(scope: &mut Scope<'_>, this: &Value, args: &[Va
 }
 
 #[allow(non_snake_case)]
-#[unsafe(no_mangle)]
 pub fn nsr_native_range(
     scope: &mut southstar_js_engine::Scope<'_>,
     this: &southstar_js_engine::Value,
@@ -124,7 +121,6 @@ pub fn nsr_document_create_node_iterator(
     crate::iterator::create(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, proto: &Value) {
     crate::walker::install_proto(scope, proto);
 }

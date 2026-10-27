@@ -102,6 +102,9 @@ pub fn nsr_event_mark_default_prevented(scope: &mut Scope<'_>, event: &Value) {
     crate::event::mark_default_prevented(scope, event);
 }
 
+/// # Safety
+///
+/// `target` is null or points at a live node.
 #[unsafe(no_mangle)]
 pub unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value {
     crate::event::make_event(scope, kind, unsafe { Node::from_ptr(target) })

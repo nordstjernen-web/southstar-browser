@@ -20,6 +20,9 @@ pub use ffi::{
 use southstar_dom::Node;
 use southstar_js_engine::Value;
 
+pub use ffi::nsr_box_for_this;
+pub use ffi::nsr_make_dom_rect;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

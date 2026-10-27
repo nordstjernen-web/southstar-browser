@@ -153,7 +153,6 @@ pub(crate) fn internal_error(scope: &mut Scope<'_>, message: &str) -> Value {
     scope.internal_error(message)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_compression_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install(scope, global);
 }

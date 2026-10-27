@@ -10,7 +10,7 @@ use southstar_glib as glib;
 pub(crate) mod cairo;
 pub(crate) mod context;
 mod draw;
-mod exports;
+pub(crate) mod exports;
 mod imports;
 mod objects;
 mod source;

@@ -8,11 +8,11 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
+southstar-js-clone = { path = "../js-clone" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
@@ -21,6 +21,7 @@ southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-js-services = { path = "../js-services" }
 southstar-layout-hit = { path = "../layout-hit" }
+southstar-unicode = { path = "../unicode" }
 southstar-url = { path = "../url" }
 
 [lints]

@@ -12,14 +12,17 @@ southstar-csp = { path = "../csp" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
+southstar-js-collections = { path = "../js-collections" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-events = { path = "../js-events" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-traversal = { path = "../js-traversal" }
+southstar-js-window = { path = "../js-window" }
 southstar-net = { path = "../net" }
 southstar-url = { path = "../url" }
 

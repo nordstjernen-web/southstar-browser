@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-canvas = { path = "../canvas" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime" }

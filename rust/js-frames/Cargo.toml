@@ -9,27 +9,28 @@ publish.workspace = true
 
 [dependencies]
 southstar-config = { path = "../config" }
-southstar-css = { path = "../css" }
 southstar-csp = { path = "../csp" }
+southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
 southstar-forms = { path = "../forms" }
 southstar-glib = { path = "../glib" }
 southstar-html-parser = { path = "../html-parser" }
 southstar-html-util = { path = "../html-util" }
-southstar-js-geometry = { path = "../js-geometry" }
-southstar-js-loader = { path = "../js-loader" }
-southstar-js-services = { path = "../js-services" }
-southstar-net = { path = "../net" }
-southstar-sandbox = { path = "../sandbox" }
-southstar-xml = { path = "../xml" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+southstar-js-geometry = { path = "../js-geometry" }
+southstar-js-loader = { path = "../js-loader" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-perf = { path = "../js-perf" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-services = { path = "../js-services" }
+southstar-js-storage = { path = "../js-storage" }
 southstar-layout = { path = "../layout" }
+southstar-net = { path = "../net" }
+southstar-sandbox = { path = "../sandbox" }
 southstar-url = { path = "../url" }
+southstar-xml = { path = "../xml" }
 
 [lints]
 workspace = true

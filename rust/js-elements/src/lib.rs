@@ -11,6 +11,8 @@ pub mod table;
 use southstar_dom::{MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};
 
+pub use ffi::nsr_element_set_node_value;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

@@ -24,3 +24,9 @@ mod text;
 mod validate;
 
 pub use ffi::state::install_runtime_hooks;
+
+pub use ffi::exports::nsr_canvas_clone_object;
+pub use ffi::exports::nsr_canvas_hidden_get;
+pub use ffi::exports::nsr_canvas_hidden_is;
+pub use ffi::exports::nsr_dommatrix_make;
+pub use ffi::exports::nsr_image_bitmap_is;

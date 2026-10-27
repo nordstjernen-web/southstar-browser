@@ -22,6 +22,9 @@ pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{blob_url_lookup, filereader_pending};
 pub use crate::registry::Blob;
 
+pub use ffi::nsr_blob_bytes;
+pub use ffi::nsr_net_install_file_reader;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const ALL: Attributes = Attributes {
