@@ -5,17 +5,13 @@
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_dom::{Kind, Node};
+use southstar_dom::{Kind, Node, WeakNode};
 
 use crate::ffi::{self, Js, is_named};
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_NOT_PARSER_INSERTED, Schedule, Task, fetch, hold,
     import_map, page, scan, type_is_module,
 };
-
-fn node_at<'a>(addr: usize) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(addr as *const southstar_dom::NsNode) }
-}
 
 fn origin_of(js: Js, root: Node) -> CString {
     js.base_url(root).unwrap_or_else(|| c"inline".to_owned())
@@ -63,22 +59,22 @@ pub(crate) fn drain_timer_fired(js: Js) {
 }
 
 pub(crate) fn schedule_deferred_root(js: Js, root: Node) {
-    let addr = root.as_ptr() as usize;
+    let held = root.downgrade();
     page::with_page(js, |page| {
-        if !page.deferred_roots.contains(&addr) {
-            page.deferred_roots.push(addr);
+        if !page.deferred_roots.contains(&held) {
+            page.deferred_roots.push(held);
         }
     });
     schedule_pending_drain(js);
 }
 
 fn schedule_async_root(js: Js, root: Node) {
-    let addr = root.as_ptr() as usize;
+    let held = root.downgrade();
     let added = page::with_page(js, |page| {
-        if page.async_roots.contains(&addr) {
+        if page.async_roots.contains(&held) {
             return false;
         }
-        page.async_roots.push(addr);
+        page.async_roots.push(held);
         true
     });
     if added {
@@ -86,7 +82,7 @@ fn schedule_async_root(js: Js, root: Node) {
     }
 }
 
-fn take_first(js: Js, deferred: bool) -> Option<usize> {
+fn take_first(js: Js, deferred: bool) -> Option<WeakNode> {
     page::with_existing(js, |page| {
         let roots = if deferred {
             &mut page.deferred_roots
@@ -119,7 +115,7 @@ fn drain_async_roots(js: Js) {
         let Some(root) = take_first(js, false) else {
             break;
         };
-        let Some(root) = node_at(root).filter(|root| js.in_page(*root)) else {
+        let Some(root) = root.get().filter(|root| js.in_page(*root)) else {
             continue;
         };
         let origin = origin_of(js, root);
@@ -139,7 +135,7 @@ fn drain_deferred(js: Js) {
         let Some(root) = take_first(js, true) else {
             break;
         };
-        let Some(root) = node_at(root).filter(|root| js.in_page(*root)) else {
+        let Some(root) = root.get().filter(|root| js.in_page(*root)) else {
             continue;
         };
         let sheets = scan::pending_stylesheets(root);

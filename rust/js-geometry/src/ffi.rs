@@ -3,13 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_void};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, StyleTable};
 
@@ -76,7 +75,7 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }
+    api::layout_root(js.0)
 }
 
 pub(crate) fn style_table(js: Js) -> StyleTable {
@@ -87,7 +86,7 @@ pub(crate) fn style_table(js: Js) -> StyleTable {
 }
 
 pub(crate) fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'static>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+    southstar_style::box_style(b.into_static())
 }
 
 pub(crate) fn svg_styles(b: BoxRef<'_>) -> StyleTable {
@@ -95,7 +94,7 @@ pub(crate) fn svg_styles(b: BoxRef<'_>) -> StyleTable {
 }
 
 pub(crate) fn box_dom(b: BoxRef<'_>) -> Option<Element> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.into_static().dom()
 }
 
 pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64) {
@@ -205,8 +204,8 @@ pub fn window_scroll_prop(scope: &mut Scope<'_>, prop: &str) -> f64 {
     crate::boxes::window_scroll(scope, prop)
 }
 
-pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
-    crate::boxes::box_for_this(scope, this).map_or(ptr::null(), BoxRef::as_ptr)
+pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> Option<BoxRef<'static>> {
+    crate::boxes::box_for_this(scope, this)
 }
 
 macro_rules! natives {

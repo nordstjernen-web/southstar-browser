@@ -11,6 +11,7 @@ use std::rc::Rc;
 use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_layout::BoxRef;
 
 use crate::budget;
 use crate::ffi::state::PageState;
@@ -262,7 +263,7 @@ pub fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
     record::set_navigation_timing(js, timing);
 }
 
-pub fn layout_root(js: *const NsJs) -> *const c_void {
+pub fn layout_root(js: *const NsJs) -> Option<BoxRef<'static>> {
     record::layout_root(js)
 }
 

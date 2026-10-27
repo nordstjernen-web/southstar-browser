@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 
 use crate::Task;
 use crate::ffi::{self, Js};
@@ -13,8 +13,8 @@ use crate::hold::Hold;
 #[derive(Default)]
 pub(crate) struct Page {
     pub import_map: Vec<(Vec<u8>, Vec<u8>)>,
-    pub deferred_roots: Vec<usize>,
-    pub async_roots: Vec<usize>,
+    pub deferred_roots: Vec<WeakNode>,
+    pub async_roots: Vec<WeakNode>,
     pub async_source: u32,
     pub holds: Vec<Hold>,
     pub module_load_count: u32,
@@ -89,15 +89,15 @@ pub(crate) fn cancel_async(js: Js) {
     }
 }
 
-fn in_tree(addr: usize, root: usize) -> bool {
-    unsafe { Node::from_ptr(addr as *const NsNode) }
-        .is_some_and(|n| southstar_dom::ancestors_and_self(n).any(|p| p.as_ptr() as usize == root))
+fn in_tree(held: WeakNode, root: Node<'_>) -> bool {
+    held.get()
+        .is_some_and(|n| southstar_dom::ancestors_and_self(n).any(|p| p.as_ptr() == root.as_ptr()))
 }
 
-pub(crate) fn forget_roots_in(js: Js, root: usize) {
+pub(crate) fn forget_roots_in(js: Js, root: Node<'_>) {
     with_existing(js, |page| {
-        page.deferred_roots.retain(|&addr| !in_tree(addr, root));
-        page.async_roots.retain(|&addr| !in_tree(addr, root));
+        page.deferred_roots.retain(|&held| !in_tree(held, root));
+        page.async_roots.retain(|&held| !in_tree(held, root));
     });
 }
 

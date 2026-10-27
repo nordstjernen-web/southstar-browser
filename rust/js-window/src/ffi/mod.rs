@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -419,12 +419,15 @@ pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Opt
     crate::documents::current_document_for(scope, window)
 }
 
-pub fn nsr_window_current_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
-    Node::ptr_or_null(crate::documents::current_document_for(scope, window)).cast_mut()
+pub fn nsr_window_current_document_for(
+    scope: &mut Scope<'_>,
+    window: &Value,
+) -> Option<Node<'static>> {
+    crate::documents::current_document_for(scope, window)
 }
 
-pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
-    Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
+pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
+    crate::documents::document_for(scope, window)
 }
 
 pub fn nsr_window_find(

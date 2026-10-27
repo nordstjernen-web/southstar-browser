@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
@@ -161,11 +162,16 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
     }
 }
 
-pub fn publish_to_page(js: *mut c_void, styles: Option<&Rc<StyleMap>>, layout: *mut NsBox) {
+pub fn publish_to_page(js: *mut c_void, styles: Option<&Rc<StyleMap>>, layout: &Cell<*mut NsBox>) {
     if !js.is_null() {
         api::set_style_table(js.cast(), styles.cloned());
-        api::set_layout_root(js.cast(), layout.cast_const().cast());
+        api::set_layout_root(js.cast(), layout_box(layout));
     }
+}
+
+fn layout_box(layout: &Cell<*mut NsBox>) -> Option<BoxRef<'static>> {
+    // SAFETY: relayout's caller keeps the layout slot null or holding a box of this thread's layout store.
+    unsafe { BoxRef::from_ptr(layout.get()) }
 }
 
 pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> Option<Rc<StyleMap>> {
@@ -215,16 +221,14 @@ pub fn table_size(table: Option<&StyleMap>) -> c_uint {
     table.map_or(0, |table| table.len() as c_uint)
 }
 
-pub fn discard_layout(js: *mut c_void, styles: Option<Rc<StyleMap>>, out_layout: *mut *mut NsBox) {
+pub fn discard_layout(js: *mut c_void, styles: Option<Rc<StyleMap>>, layout: &Cell<*mut NsBox>) {
     if !js.is_null() {
-        api::set_layout_root(js.cast(), ptr::null());
+        api::set_layout_root(js.cast(), None);
         api::set_style_table(js.cast(), None);
     }
-    unsafe {
-        if !out_layout.is_null() && !(*out_layout).is_null() {
-            BoxPool::free_tree(BoxRef::from_ptr(*out_layout));
-            *out_layout = ptr::null_mut();
-        }
+    if let Some(root) = layout_box(layout) {
+        BoxPool::free_tree(Some(root));
+        layout.set(ptr::null_mut());
     }
     drop(styles);
 }

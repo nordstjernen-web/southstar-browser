@@ -8,7 +8,7 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use crate::mutation::{self, Emit};
 use crate::{intersection, page, resize};
@@ -63,7 +63,7 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(api::layout_root(js.ptr()).cast::<NsBox>()) }
+    api::layout_root(js.ptr())
 }
 
 pub(crate) fn call_observer(
@@ -114,7 +114,7 @@ pub(crate) fn realm_now_ms(scope: &mut Scope<'_>) -> f64 {
 }
 
 pub(crate) fn box_for(scope: &mut Scope<'_>, value: &Value) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(nsr_box_for_this(scope, value)) }
+    nsr_box_for_this(scope, value)
 }
 
 pub(crate) fn find_by_dom(root: BoxRef<'_>, node: usize) -> Option<BoxRef<'_>> {

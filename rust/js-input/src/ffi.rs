@@ -10,7 +10,7 @@ use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use crate::transfer::DragSession;
 use crate::{Element, Pointer};
@@ -80,7 +80,7 @@ impl Js {
     }
 
     pub fn layout_root(self) -> Option<BoxRef<'static>> {
-        unsafe { BoxRef::from_ptr(api::layout_root(self.ptr()).cast::<NsBox>()) }
+        api::layout_root(self.ptr())
     }
 
     pub fn halted(self) -> bool {

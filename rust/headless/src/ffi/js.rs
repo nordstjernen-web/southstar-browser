@@ -11,7 +11,7 @@ use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_runtime::api::{self, Page};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use super::engine::{Anim, ImageCache, VideoCache};
 use crate::inproc::{Ctx, NavCapture};
@@ -149,8 +149,8 @@ impl Js {
         api::set_anim(self.page(), super::engine::anim_raw(anim));
     }
 
-    pub fn set_layout_root(self, root: *const NsBox) {
-        api::set_layout_root(self.page(), root.cast());
+    pub fn clear_layout_root(self) {
+        api::set_layout_root(self.page(), None);
     }
 
     pub fn set_early_inject_src(self, src: &CStr) {

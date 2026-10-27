@@ -7,7 +7,6 @@ mod imports;
 
 use core::ffi::{CStr, c_int};
 
-use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
@@ -20,10 +19,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Js(usize);
 
 const DLOG_ERROR: c_int = 2;
-
-pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(ptr) }
-}
 
 impl Js {
     pub fn of(js: *const NsJs) -> Js {
@@ -265,11 +260,11 @@ pub(crate) fn invalid_state(scope: &mut Scope<'_>, message: &str) -> Value {
 }
 
 pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Element> {
-    node(api::document_root_for(scope, this))
+    api::document_root_for(scope, this)
 }
 
 pub(crate) fn window_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Element> {
-    node(imports::nsr_window_document_for(scope, window))
+    imports::nsr_window_document_for(scope, window)
 }
 
 pub(crate) fn suspend_named<R>(f: impl FnOnce() -> R) -> R {

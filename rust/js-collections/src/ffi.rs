@@ -5,10 +5,9 @@
 mod imports;
 
 use core::ffi::{CStr, c_int, c_void};
-use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -38,10 +37,6 @@ const SYNTAX_ERR: i32 = 12;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js::of(scope.context_opaque().cast())
-}
-
-fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(p) }
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
@@ -78,7 +73,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
 }
 
 pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Element> {
-    node(api::document_root_for(scope, this))
+    api::document_root_for(scope, this)
 }
 
 pub(crate) fn selector_syntax_error(scope: &mut Scope<'_>, selector: &[u8]) -> Value {
@@ -192,10 +187,8 @@ pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
     }
 }
 
-pub fn nsr_live_owner_node(obj: &Value) -> *mut NsNode {
-    live_of(obj)
-        .and_then(|back| unwrap_node(back.owner()))
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
+pub fn nsr_live_owner_node(obj: &Value) -> Option<Node<'static>> {
+    live_of(obj).and_then(|back| unwrap_node(back.owner()))
 }
 
 pub fn nsr_live_owner(obj: &Value) -> Value {

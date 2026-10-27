@@ -45,7 +45,7 @@ impl Js {
     }
 
     pub fn set_layout_root(self, root: Option<BoxRef<'_>>) {
-        api::set_layout_root(self.page(), root.map_or(ptr::null(), |r| r.as_ptr().cast()));
+        api::set_layout_root(self.page(), root);
     }
 
     pub fn set_style_table(self, styles: Option<Rc<StyleMap>>) {

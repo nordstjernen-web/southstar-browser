@@ -11,7 +11,6 @@ use southstar_dom::Node;
 use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
 use southstar_js_runtime::api::{self};
-use southstar_layout::{BoxRef, NsBox};
 
 use crate::{Element, Load};
 
@@ -185,7 +184,7 @@ pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
 }
 
 pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
-    let root = unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }?;
+    let root = api::layout_root(js.0)?;
     let b = (api::geometry_hooks().find_box_by_dom)(root, el)?;
     unsafe { ImageRef::from_ptr(b.media()?.image()) }
 }
