@@ -1,16 +1,11 @@
-//! Southstar — the DOM, form, editing and image-map calls of the in-process run, and C's numeric parsing.
+//! Southstar — the DOM, form, editing and image-map calls of the in-process run, and C-style leading-integer parsing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long};
+use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
 
 use southstar_dom::{self as dom, Node};
-
-unsafe extern "C" {
-    fn atol(s: *const c_char) -> c_long;
-    fn atoi(s: *const c_char) -> c_int;
-}
 
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -119,10 +114,34 @@ pub fn utf8_strlen(s: &[u8]) -> c_long {
     c_long::try_from(chars).unwrap_or(c_long::MAX)
 }
 
+fn leading_integer(s: &CStr) -> i64 {
+    let bytes = s.to_bytes();
+    let start = bytes
+        .iter()
+        .position(|b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .unwrap_or(bytes.len());
+    let (negative, digits) = match bytes.get(start) {
+        Some(b'-') => (true, &bytes[start + 1..]),
+        Some(b'+') => (false, &bytes[start + 1..]),
+        _ => (false, &bytes[start..]),
+    };
+    let magnitude = digits
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .fold(0i64, |n, d| {
+            n.saturating_mul(10).saturating_add(i64::from(d - b'0'))
+        });
+    if negative {
+        magnitude.saturating_neg()
+    } else {
+        magnitude
+    }
+}
+
 pub fn c_atol(s: &CStr) -> c_long {
-    unsafe { atol(s.as_ptr()) }
+    leading_integer(s).clamp(c_long::MIN.into(), c_long::MAX.into()) as c_long
 }
 
 pub fn c_atoi(s: &CStr) -> c_int {
-    unsafe { atoi(s.as_ptr()) }
+    leading_integer(s).clamp(c_int::MIN.into(), c_int::MAX.into()) as c_int
 }

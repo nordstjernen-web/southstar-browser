@@ -43,6 +43,7 @@ southstar-numfmt = { path = "../numfmt" }
 southstar-paint = { path = "../paint" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
+southstar-style = { path = "../style" }
 southstar-url = { path = "../url" }
 southstar-video = { path = "../video" }
 

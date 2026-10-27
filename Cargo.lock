@@ -2223,6 +2223,7 @@ dependencies = [
  "southstar-paint",
  "southstar-renderer-client",
  "southstar-renderer-host",
+ "southstar-style",
  "southstar-url",
  "southstar-video",
 ]
