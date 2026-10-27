@@ -94,6 +94,7 @@ impl Request<'_> {
             body: self.body,
             content_type: self.content_type.map(CStr::to_bytes),
             headers: &self.headers,
+            max_bytes: None,
         };
         southstar_net::request_with(&req, None, done);
     }

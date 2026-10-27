@@ -163,6 +163,7 @@ pub struct Fetch<'a> {
     pub content_type: Option<&'a [u8]>,
     pub headers: &'a [Vec<u8>],
     pub cancellable: *mut c_void,
+    pub max_bytes: Option<u64>,
 }
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
@@ -467,7 +468,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         request_http,
     );
 
-    let mut wctx = NsWriteCtx::new();
+    let mut wctx = NsWriteCtx::new(f.max_bytes);
     let mut hctx = NsHeaderCtx::new();
 
     let url_c = cstr(&url);
@@ -668,6 +669,7 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             content_type,
             headers: &headers,
             cancellable: f.cancellable,
+            max_bytes: f.max_bytes,
         };
         let mut resp = fetch_hop(&hop, &mut location)?;
         let r = &mut resp;

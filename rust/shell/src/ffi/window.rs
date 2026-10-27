@@ -921,7 +921,13 @@ unsafe extern "C" fn on_view_notify(
                     if !crate::procview::nav::is_local_url(target) || v.is_local_page() {
                         let target = cstring(target);
                         let name = name.filter(|n| !n.is_empty()).map(cstring);
-                        downloads::start(pw.window.get(), &target, name.as_deref());
+                        let page = v.url();
+                        downloads::start(
+                            pw.window.get(),
+                            &target,
+                            name.as_deref(),
+                            page.as_deref(),
+                        );
                     }
                 }
             }
