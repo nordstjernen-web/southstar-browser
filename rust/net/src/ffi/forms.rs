@@ -19,7 +19,6 @@ unsafe extern "C" {
         bytes_written: *mut usize,
         error: *mut *mut GError,
     ) -> *mut c_char;
-    fn g_random_int() -> u32;
 }
 
 fn converted(text: &[u8]) -> Option<Vec<u8>> {
@@ -73,8 +72,7 @@ pub fn multipart_boundary() -> Vec<u8> {
         }
     } else {
         for w in &mut words {
-            // SAFETY: g_random_int has no preconditions.
-            *w = unsafe { g_random_int() };
+            *w = southstar_config::util::random_u32();
         }
     }
     forms::boundary(words)

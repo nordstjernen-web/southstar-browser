@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use crate::ffi::sys;
 
 const APP_DIR: &[u8] = b"southstar";
-const PRIVATE_MODE_DIR: i32 = 0o700;
+const PRIVATE_MODE_DIR: u32 = 0o700;
 
 pub struct Slot(Mutex<Option<CString>>);
 

@@ -1,4 +1,4 @@
-//! Southstar — the GLib UTF-8 and regex calls the form helpers make, and the urlencoded query they append to.
+//! Southstar — the GLib regex call the form helpers make, character counting, and the urlencoded query they append to.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,7 +8,6 @@ use core::ptr;
 use southstar_glib::{self as glib, GBoolean, GError};
 
 unsafe extern "C" {
-    fn g_utf8_strlen(p: *const c_char, max: isize) -> c_long;
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_uint,
@@ -52,7 +51,10 @@ impl Query {
 }
 
 pub fn utf8_strlen(s: &CStr) -> c_long {
-    unsafe { g_utf8_strlen(s.as_ptr(), -1) }
+    s.to_bytes()
+        .iter()
+        .filter(|byte| **byte & 0xC0 != 0x80)
+        .count() as c_long
 }
 
 pub fn regex_matches(pattern: &CStr, value: &CStr) -> Option<bool> {

@@ -3,37 +3,19 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::Mutex;
 
 use southstar_config::NsConfig;
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable, GStr};
+use southstar_config::util;
+use southstar_glib::{self as glib, GStr};
 
-const URI_PARAMS_WWW_FORM: c_uint = 1 << 1;
 const OPENSSL_VERSION: c_int = 0;
 
 unsafe extern "C" {
     fn g_get_system_data_dirs() -> *const *const c_char;
-    fn g_random_int_range(begin: i32, end: i32) -> i32;
     fn g_get_os_info(key: *const c_char) -> *mut c_char;
-    fn g_get_num_processors() -> c_uint;
-    fn g_ascii_strdown(text: *const c_char, len: isize) -> *mut c_char;
-    fn g_uri_parse_params(
-        params: *const c_char,
-        length: isize,
-        separators: *const c_char,
-        flags: c_uint,
-        error: *mut *mut GError,
-    ) -> *mut GHashTable;
-    fn g_hash_table_iter_init(iter: *mut GHashTableIter, table: *mut GHashTable);
-    fn g_hash_table_iter_next(
-        iter: *mut GHashTableIter,
-        key: *mut *mut c_void,
-        value: *mut *mut c_void,
-    ) -> GBoolean;
-    fn atoi(text: *const c_char) -> c_int;
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
     fn cairo_version_string() -> *const c_char;
@@ -54,11 +36,6 @@ unsafe extern "C" {
     static glib_micro_version: c_uint;
 }
 
-#[repr(C)]
-struct GHashTableIter {
-    _dummy: [*mut c_void; 6],
-}
-
 fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     &bytes[..end]
@@ -77,18 +54,7 @@ fn borrowed(p: *const c_char) -> Option<Vec<u8>> {
 }
 
 pub fn read_file(path: &[u8]) -> Option<Vec<u8>> {
-    let path = c(path);
-    let mut contents: *mut c_char = ptr::null_mut();
-    let mut len = 0usize;
-    let ok = unsafe {
-        glib::g_file_get_contents(path.as_ptr(), &mut contents, &mut len, ptr::null_mut())
-    };
-    if ok == 0 {
-        return None;
-    }
-    let bytes = unsafe { glib::slice(contents.cast(), len) }.to_vec();
-    unsafe { glib::g_free(contents.cast()) };
-    Some(bytes)
+    std::fs::read(util::os_path(path)?).ok()
 }
 
 static SELF_EXE: Mutex<Option<Vec<u8>>> = Mutex::new(None);
@@ -121,12 +87,14 @@ pub fn system_data_dirs() -> Vec<Vec<u8>> {
 }
 
 pub fn markup_escape(text: &[u8]) -> Vec<u8> {
-    let text = c(text);
-    owned(unsafe { glib::g_markup_escape_text(text.as_ptr(), -1) }).unwrap_or_default()
+    util::markup_escape(text)
 }
 
 pub fn random_below(n: i32) -> usize {
-    usize::try_from(unsafe { g_random_int_range(0, n) }).unwrap_or(0)
+    match u32::try_from(n) {
+        Ok(n) if n > 0 => (util::random_u32() % n) as usize,
+        _ => 0,
+    }
 }
 
 pub fn os_info(key: &CStr) -> Option<Vec<u8>> {
@@ -134,7 +102,7 @@ pub fn os_info(key: &CStr) -> Option<Vec<u8>> {
 }
 
 pub fn processors() -> u32 {
-    unsafe { g_get_num_processors() }
+    std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX))
 }
 
 pub fn url_host(url: &[u8]) -> Option<Vec<u8>> {
@@ -142,8 +110,7 @@ pub fn url_host(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
-    let host = c(host);
-    let lower = unsafe { GStr::take(g_ascii_strdown(host.as_ptr(), -1)) }?;
+    let lower = c(&host.to_ascii_lowercase());
     let psl = unsafe { psl_builtin() };
     if psl.is_null() {
         return None;
@@ -151,39 +118,54 @@ pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     borrowed(unsafe { psl_registrable_domain(psl, lower.as_ptr()) })
 }
 
-pub fn parse_form(form: &[u8]) -> Option<HashMap<Vec<u8>, Vec<u8>>> {
-    let form = c(form);
-    let table = unsafe {
-        g_uri_parse_params(
-            form.as_ptr(),
-            -1,
-            c"&".as_ptr(),
-            URI_PARAMS_WWW_FORM,
-            ptr::null_mut(),
-        )
-    };
-    if table.is_null() {
-        return None;
-    }
-    let mut fields = HashMap::new();
-    let mut iter = GHashTableIter {
-        _dummy: [ptr::null_mut(); 6],
-    };
-    unsafe { g_hash_table_iter_init(&mut iter, table) };
-    let mut key: *mut c_void = ptr::null_mut();
-    let mut value: *mut c_void = ptr::null_mut();
-    while unsafe { g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-        if let (Some(k), Some(v)) = (borrowed(key.cast()), borrowed(value.cast())) {
-            fields.insert(k, v);
+fn form_decode(text: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut i = 0;
+    while i < text.len() {
+        match text[i] {
+            b'%' => {
+                let digit = |at: usize| {
+                    text.get(at)
+                        .and_then(|&b| char::from(b).to_digit(16))
+                        .and_then(|d| u8::try_from(d).ok())
+                };
+                out.push(digit(i + 1)? << 4 | digit(i + 2)?);
+                i += 3;
+            }
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            byte => {
+                out.push(byte);
+                i += 1;
+            }
         }
     }
-    unsafe { glib::g_hash_table_destroy(table) };
+    Some(until_nul(&out).to_vec())
+}
+
+pub fn parse_form(form: &[u8]) -> Option<HashMap<Vec<u8>, Vec<u8>>> {
+    let form = until_nul(form);
+    let mut fields = HashMap::new();
+    if form.is_empty() {
+        return Some(fields);
+    }
+    let mut params: Vec<&[u8]> = form.split(|&b| b == b'&').collect();
+    if form.ends_with(b"&") {
+        params.pop();
+    }
+    for param in params {
+        let eq = param.iter().position(|&b| b == b'=')?;
+        let key = form_decode(&param[..eq])?;
+        let value = form_decode(&param[eq + 1..])?;
+        fields.insert(key, value);
+    }
     Some(fields)
 }
 
 pub fn atoi_of(text: &[u8]) -> i32 {
-    let text = c(text);
-    unsafe { atoi(text.as_ptr()) }
+    util::ascii_strtoll(text).unwrap_or(0) as i32
 }
 
 pub fn config_text(p: *const c_char) -> Option<Vec<u8>> {
@@ -275,5 +257,6 @@ pub fn rust_info() -> RustInfo {
 }
 
 pub fn env_set(name: &CStr) -> bool {
-    !unsafe { glib::g_getenv(name.as_ptr()) }.is_null()
+    name.to_str()
+        .is_ok_and(|name| std::env::var_os(name).is_some())
 }

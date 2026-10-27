@@ -1,40 +1,19 @@
-//! Southstar — the C ABI of the shared network helpers, and the GLib and locale calls behind them.
+//! Southstar — the configuration, file system and locale lookups behind the shared network helpers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
-use core::ptr;
+use core::ffi::CStr;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_config::util;
+use southstar_glib as glib;
 
-unsafe extern "C" {
-    fn g_uri_escape_string(
-        unescaped: *const c_char,
-        reserved_chars_allowed: *const c_char,
-        allow_utf8: GBoolean,
-    ) -> *mut c_char;
-    fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
-    fn g_filename_to_uri(
-        filename: *const c_char,
-        hostname: *const c_char,
-        error: *mut *mut c_void,
-    ) -> *mut c_char;
-}
-
-const FILE_TEST_EXISTS: glib::GFileTest = 1 << 4;
-const FILE_TEST_IS_DIR: glib::GFileTest = 1 << 2;
+use crate::file_uri;
 
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-unsafe fn take(p: *mut c_char) -> Option<Vec<u8>> {
-    let bytes = unsafe { glib::bytes(p) }?.to_vec();
-    unsafe { glib::g_free(p.cast()) };
-    Some(bytes)
 }
 
 pub(crate) fn configured_search_engine() -> Option<Vec<u8>> {
@@ -43,37 +22,23 @@ pub(crate) fn configured_search_engine() -> Option<Vec<u8>> {
 }
 
 pub(crate) fn uri_escape(text: &[u8]) -> Vec<u8> {
-    let text = cstring(text);
-    unsafe { take(g_uri_escape_string(text.as_ptr(), ptr::null(), 1)) }.unwrap_or_default()
-}
-
-fn file_test(path: &[u8], test: glib::GFileTest) -> bool {
-    let path = cstring(path);
-    unsafe { glib::g_file_test(path.as_ptr(), test) != 0 }
+    file_uri::uri_escape(text)
 }
 
 pub(crate) fn file_exists(path: &[u8]) -> bool {
-    file_test(path, FILE_TEST_EXISTS)
+    util::os_path(path).is_some_and(|path| path.exists())
 }
 
 pub(crate) fn is_dir(path: &[u8]) -> bool {
-    file_test(path, FILE_TEST_IS_DIR)
+    util::os_path(path).is_some_and(|path| path.is_dir())
 }
 
 pub(crate) fn canonicalize_filename(path: &[u8]) -> Option<Vec<u8>> {
-    let path = cstring(path);
-    unsafe { take(g_canonicalize_filename(path.as_ptr(), ptr::null())) }
+    Some(file_uri::canonicalize_filename(path))
 }
 
 pub(crate) fn filename_to_uri(path: &[u8]) -> Option<Vec<u8>> {
-    let path = cstring(path);
-    unsafe {
-        take(g_filename_to_uri(
-            path.as_ptr(),
-            ptr::null(),
-            ptr::null_mut(),
-        ))
-    }
+    file_uri::filename_to_uri(path)
 }
 
 #[cfg(windows)]

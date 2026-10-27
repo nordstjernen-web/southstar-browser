@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-config = { path = "../config" }
 southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
 

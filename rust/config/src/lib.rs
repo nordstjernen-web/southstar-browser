@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+pub mod util;
 
 pub use ffi::{ConfigLock, dump, init, lock, reload, save, shutdown};
 
