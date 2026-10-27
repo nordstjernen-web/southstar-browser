@@ -126,6 +126,7 @@ struct FetchCtx {
     body: Option<Vec<u8>>,
     headers: Vec<Vec<u8>>,
     coalesce_key: Option<Vec<u8>>,
+    max_bytes: Option<u64>,
 }
 
 unsafe extern "C" fn fetch_ctx_free(data: *mut c_void) {
@@ -353,6 +354,7 @@ unsafe extern "C" fn fetch_thread(
         content_type: ctx.content_type.as_deref(),
         headers: &ctx.headers,
         cancellable,
+        max_bytes: ctx.max_bytes,
     });
     if let Some(key) = &ctx.coalesce_key {
         deliver(key, outcome.as_ref());
@@ -417,7 +419,7 @@ fn blob_response(url: &[u8]) -> Option<Response> {
 }
 
 fn coalescing_key(req: &FetchRequest<'_>, cancellable: *mut c_void) -> Option<Vec<u8>> {
-    if !cancellable.is_null() || req.body.is_some() {
+    if !cancellable.is_null() || req.body.is_some() || req.max_bytes.is_some() {
         return None;
     }
     fetch::request_key(req.url, req.top_url, req.method, req.headers)
@@ -431,6 +433,7 @@ pub struct FetchRequest<'a> {
     pub body: Option<&'a [u8]>,
     pub content_type: Option<&'a [u8]>,
     pub headers: &'a [Vec<u8>],
+    pub max_bytes: Option<u64>,
 }
 
 pub struct Cancellable(ptr::NonNull<c_void>);
@@ -547,6 +550,7 @@ fn submit_request(
         body: req.body.filter(|b| !b.is_empty()).map(<[u8]>::to_vec),
         headers: req.headers.to_vec(),
         coalesce_key: key,
+        max_bytes: req.max_bytes,
     });
     let task = Task::new(cancellable, callback, user_data).tagged(
         ns_net_request_async as *const c_void,
@@ -577,6 +581,7 @@ pub(crate) fn blocking(
         content_type: req.content_type,
         headers: req.headers,
         cancellable,
+        max_bytes: req.max_bytes,
     });
     if let Some(key) = &key {
         deliver(key, outcome.as_ref());
@@ -712,6 +717,7 @@ pub unsafe fn ns_net_request_async(
         body,
         content_type: text(content_type),
         headers: &headers,
+        max_bytes: None,
     };
     submit_request(&req, cancellable, callback, user_data);
 }
@@ -720,6 +726,17 @@ pub fn fetch_blocking(url: &CStr) -> Option<Response> {
     request_blocking(&FetchRequest {
         url: url.to_bytes(),
         method: Some(b"GET"),
+        ..FetchRequest::default()
+    })
+    .ok()
+}
+
+pub fn download_blocking(url: &CStr, top_url: Option<&CStr>, max_bytes: u64) -> Option<Response> {
+    request_blocking(&FetchRequest {
+        url: url.to_bytes(),
+        top_url: top_url.map(CStr::to_bytes),
+        method: Some(b"GET"),
+        max_bytes: Some(max_bytes),
         ..FetchRequest::default()
     })
     .ok()

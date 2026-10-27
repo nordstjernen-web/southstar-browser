@@ -230,6 +230,7 @@ fn fetch(
             .and_then(|upload| upload.content_type)
             .map(CStr::to_bytes),
         headers: &headers,
+        max_bytes: None,
     };
     match glue::fetch_resource(js, &req) {
         Ok(response) => Fetched {

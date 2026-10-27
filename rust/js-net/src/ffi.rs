@@ -615,6 +615,7 @@ impl Request {
             body: self.has_body.then_some(self.body.as_slice()),
             content_type: self.content_type.as_deref().map(CStr::to_bytes),
             headers: &headers,
+            max_bytes: None,
         };
         southstar_net::request_with(&request, cancellable, move |outcome| match outcome {
             Ok(resp) => done(Response(Some(resp)), None),

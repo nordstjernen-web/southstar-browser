@@ -176,6 +176,7 @@ pub(super) fn ns_procapp_run(
             gtk::g_setenv(c"NS_VIDEO_HELPER".as_ptr(), c"1".as_ptr(), 1);
         }
         clear_http_caches(false);
+        southstar_net::init();
         if !private_mode {
             southstar_history::init();
         }
@@ -195,6 +196,7 @@ pub(super) fn ns_procapp_run(
         let status = gtk::g_application_run(app, 0, ptr::null_mut());
         gtk::g_object_unref(app);
         southstar_history::shutdown();
+        southstar_net::shutdown();
         clear_http_caches(true);
         status
     }

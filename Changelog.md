@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: downloads started by a page are capped at 1 GiB, are fetched
+  with the page as the cookie partition instead of as a first-party
+  request, and get a file name made safe for one path component (no
+  separators, control characters, Windows-reserved characters or device
+  names). A file type that can run programs (`.exe`, `.msi`, `.bat`,
+  `.ps1`, `.sh`, `.desktop`, `.jar`, `.py`, …) is no longer saved on its
+  own: the Downloads window shows the name and the host and waits for
+  Save. The GTK shell now initialises the network layer at startup, so a
+  download started from a page finds the CA bundle on Windows instead of
+  failing with "certificate issuer is unknown".
 * Security: an `<audio>`/`<video>` source that plays through the audio
   helper (`.mp3`, and `.opus`/`.ogg`/`.webm` with libav) is now checked
   against the page's CSP `media-src` and the mixed-content rule before the

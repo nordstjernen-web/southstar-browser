@@ -24,11 +24,13 @@ struct Window {
 
 struct Download {
     url: CString,
+    top_url: Option<CString>,
     path: CString,
     name: CString,
     progress: *mut GtkWidget,
     status: *mut GtkWidget,
     open: *mut GtkWidget,
+    save: *mut GtkWidget,
     pulse: u32,
     ok: bool,
     size: u64,
@@ -91,7 +93,11 @@ unsafe extern "C" fn finish_idle(data: *mut c_void) -> GBoolean {
 unsafe extern "C" fn worker(data: *mut c_void) -> *mut c_void {
     let d = data.cast::<Download>();
     unsafe {
-        let resp = southstar_net::fetch_blocking(&(*d).url);
+        let resp = southstar_net::download_blocking(
+            &(*d).url,
+            (*d).top_url.as_deref(),
+            downloads::MAX_BYTES,
+        );
         let body = resp
             .as_ref()
             .filter(|r| r.error().is_none())
@@ -115,6 +121,25 @@ unsafe extern "C" fn worker(data: *mut c_void) -> *mut c_void {
     ptr::null_mut()
 }
 
+unsafe extern "C" fn on_save(button: *mut GtkWidget, data: *mut c_void) {
+    let d = data.cast::<Download>();
+    unsafe {
+        gtk::gtk_widget_set_visible(button, 0);
+        gtk::gtk_label_set_text((*d).status, (*d).name.as_ptr());
+        begin(d);
+    }
+}
+
+unsafe fn begin(d: *mut Download) {
+    unsafe {
+        (*d).pulse = gtk::g_timeout_add(120, pulse, d.cast());
+        let t = gtk::g_thread_new(c"ns-download".as_ptr(), worker, d.cast());
+        if !t.is_null() {
+            gtk::g_thread_unref(t);
+        }
+    }
+}
+
 unsafe fn row_new(
     name: &CStr,
     done: bool,
@@ -124,7 +149,17 @@ unsafe fn row_new(
     unsafe {
         let row = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 3);
         set_margins(row, 8, 8, 6, 6);
-        let status = label(name);
+        let consent = d
+            .as_ref()
+            .is_some_and(|d| downloads::needs_consent(d.name.to_bytes()));
+        let heading = match d.as_ref().filter(|_| consent) {
+            Some(d) => {
+                let host = southstar_url::bytes::host_from(d.url.to_bytes()).unwrap_or_default();
+                cstring(downloads::consent_label(name.to_bytes(), &host))
+            }
+            None => name.to_owned(),
+        };
+        let status = label(&heading);
         gtk::gtk_label_set_xalign(status, 0.0);
         gtk::gtk_label_set_ellipsize(status, gtk::ELLIPSIZE_MIDDLE);
         let hb = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 6);
@@ -147,6 +182,17 @@ unsafe fn row_new(
                 d.progress = progress;
                 d.status = status;
                 d.open = open;
+                if consent {
+                    let save = gtk::gtk_button_new_with_label(tr(c"Save").as_ptr());
+                    gtk::gtk_widget_add_css_class(save, c"suggested-action".as_ptr());
+                    gtk::gtk_widget_set_tooltip_text(
+                        save,
+                        tr(c"This file type can run programs on your computer").as_ptr(),
+                    );
+                    connect(save, c"clicked", handler!(on_save), ptr::from_mut(d).cast());
+                    gtk::gtk_box_append(hb, save);
+                    d.save = save;
+                }
             }
             None => gtk::gtk_box_append(hb, hexpand_spacer()),
         }
@@ -268,19 +314,19 @@ pub unsafe fn show(parent: *mut GtkWidget) -> *mut GtkWidget {
 }
 
 fn target_path(url: &CStr, suggested: Option<&CStr>) -> (CString, CString) {
-    let mut name = suggested
+    let from_page = suggested
         .filter(|s| !s.is_empty())
         .map(basename)
-        .unwrap_or_default();
-    if !downloads::usable_name(name.to_bytes()) {
+        .and_then(|s| downloads::safe_name(s.to_bytes()));
+    let from_url = || {
         let base = basename(url);
-        let base = downloads::strip_query(base.to_bytes());
-        name = if downloads::usable_name(base) {
-            cstring(base)
-        } else {
-            cstring(downloads::FALLBACK_NAME)
-        };
-    }
+        downloads::safe_name(downloads::strip_query(base.to_bytes()))
+    };
+    let name = cstring(
+        from_page
+            .or_else(from_url)
+            .unwrap_or_else(|| downloads::FALLBACK_NAME.to_vec()),
+    );
     let dir = downloads_dir();
     let mut path = build_filename(&[dir, &name]);
     let mut n = 1;
@@ -292,32 +338,36 @@ fn target_path(url: &CStr, suggested: Option<&CStr>) -> (CString, CString) {
     (name, path)
 }
 
-pub unsafe fn start(parent: *mut GtkWidget, url: &CStr, suggested: Option<&CStr>) {
+pub unsafe fn start(
+    parent: *mut GtkWidget,
+    url: &CStr,
+    suggested: Option<&CStr>,
+    top_url: Option<&CStr>,
+) {
     if url.is_empty() {
         return;
     }
     let (name, path) = target_path(url, suggested);
     unsafe {
         let list = show(parent);
-        let mut d = Box::new(Download {
+        let d = Box::into_raw(Box::new(Download {
             url: url.to_owned(),
+            top_url: top_url.map(CStr::to_owned),
             path,
             name,
             progress: ptr::null_mut(),
             status: ptr::null_mut(),
             open: ptr::null_mut(),
+            save: ptr::null_mut(),
             pulse: 0,
             ok: false,
             size: 0,
-        });
-        let (row_name, row_path) = (d.name.clone(), d.path.clone());
-        let row = row_new(&row_name, false, &row_path, Some(&mut d));
+        }));
+        let (row_name, row_path) = ((*d).name.clone(), (*d).path.clone());
+        let row = row_new(&row_name, false, &row_path, Some(&mut *d));
         gtk::gtk_list_box_prepend(list, row);
-        let d = Box::into_raw(d);
-        (*d).pulse = gtk::g_timeout_add(120, pulse, d.cast());
-        let t = gtk::g_thread_new(c"ns-download".as_ptr(), worker, d.cast());
-        if !t.is_null() {
-            gtk::g_thread_unref(t);
+        if (*d).save.is_null() {
+            begin(d);
         }
     }
 }

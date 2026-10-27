@@ -13,6 +13,7 @@ pub struct NsWriteCtx {
     body: Vec<u8>,
     total: u64,
     budget: u64,
+    limit: Option<u64>,
     next_recheck: u64,
     exceeded: bool,
 }
@@ -38,11 +39,12 @@ pub struct NsHeaderCtx {
 }
 
 impl NsWriteCtx {
-    pub fn new() -> NsWriteCtx {
+    pub fn new(limit: Option<u64>) -> NsWriteCtx {
         NsWriteCtx {
             body: Vec::new(),
             total: 0,
-            budget: crate::transport::response_budget(),
+            budget: capped(crate::transport::response_budget(), limit),
+            limit,
             next_recheck: RECHECK_BYTES,
             exceeded: false,
         }
@@ -112,13 +114,17 @@ impl NsHeaderCtx {
     }
 }
 
+fn capped(budget: u64, limit: Option<u64>) -> u64 {
+    limit.map_or(budget, |limit| budget.min(limit))
+}
+
 pub fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
     let bytes = data.len() as u64;
     if bytes == 0 || bytes > u64::from(u32::MAX) {
         return 0;
     }
     if ctx.total >= ctx.next_recheck {
-        ctx.budget = crate::transport::response_budget();
+        ctx.budget = capped(crate::transport::response_budget(), ctx.limit);
         ctx.next_recheck = ctx.total + RECHECK_BYTES;
     }
     if ctx.total + bytes > ctx.budget || ctx.total + bytes > u64::from(u32::MAX) {
