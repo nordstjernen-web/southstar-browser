@@ -2,31 +2,30 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::RefCell;
 use core::ptr::NonNull;
-use std::sync::{Mutex, PoisonError};
 
 use super::computed_units::RawStyle;
 
 const POOL_MAX: usize = 16384;
 
-#[allow(clippy::vec_box)]
-struct Pool(Vec<Box<RawStyle>>);
-
-// SAFETY: a pooled style is empty: it holds no value, variable map or style another thread could reach.
-unsafe impl Send for Pool {}
-
-static POOL: Mutex<Pool> = Mutex::new(Pool(Vec::new()));
+thread_local! {
+    #[allow(clippy::vec_box)]
+    static POOL: RefCell<Vec<Box<RawStyle>>> = const { RefCell::new(Vec::new()) };
+}
 
 fn release(mut style: Box<RawStyle>) {
     *style = RawStyle::new();
-    let mut pool = POOL.lock().unwrap_or_else(PoisonError::into_inner);
-    if pool.0.len() < POOL_MAX {
-        pool.0.push(style);
-    }
+    let _ = POOL.try_with(|pool| {
+        let mut pool = pool.borrow_mut();
+        if pool.len() < POOL_MAX {
+            pool.push(style);
+        }
+    });
 }
 
 pub(super) fn style_alloc() -> Box<RawStyle> {
-    let pooled = POOL.lock().unwrap_or_else(PoisonError::into_inner).0.pop();
+    let pooled = POOL.try_with(|pool| pool.borrow_mut().pop()).ok().flatten();
     pooled.unwrap_or_else(|| Box::new(RawStyle::new()))
 }
 
