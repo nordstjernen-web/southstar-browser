@@ -78,3 +78,17 @@ fn finds_nothing_in_missing_or_truncated_bodies() {
     assert_eq!(json_value(b"\"", b""), None);
     assert_eq!(json_value(b"", b"url"), None);
 }
+
+#[test]
+fn rejects_a_nul_escape_and_replaces_lone_surrogates() {
+    assert_eq!(json_string(br#""a\u0000b""#), None);
+    assert_eq!(
+        json_string(br#""\ud83d\ude00""#).as_deref(),
+        Some("\u{1F600}".as_bytes())
+    );
+    assert_eq!(
+        json_string(br#""x\ud800y""#).as_deref(),
+        Some("x\u{FFFD}y".as_bytes())
+    );
+    assert_eq!(json_string(br#""\u0041""#).as_deref(), Some(&b"A"[..]));
+}
