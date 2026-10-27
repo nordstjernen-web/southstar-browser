@@ -96,7 +96,7 @@ pub use ffi::{
     ImportRule, KeyframeStop, Keyframes, MatchContext, NsCssValue, OwnedSheet, OwnedValue,
     PROP_COUNT, PageRule, QueryKey, RawAreaRect as GridAreaRect, RawAreas as GridAreas,
     RawStyle as StyleData, RegisterError, Registration, RetainedStyle, Selector, SelectorList,
-    Sheet, ValueKind, animation_effective, animation_lists, clear_registered_properties,
+    Sheet, StyleMap, ValueKind, animation_effective, animation_lists, clear_registered_properties,
     compute_styles, incremental_exclude, merged_styles_cached, parse_import_cached,
     parse_url_cached, register_property, relayout_enter, relayout_leave, selector_cache_begin,
     selector_cache_end, set_active_node, set_focus_node, set_focus_visible_node, set_font_alias,

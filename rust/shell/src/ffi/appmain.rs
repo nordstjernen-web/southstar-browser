@@ -7,7 +7,7 @@ use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
 use std::ffi::CString;
 
-use southstar_config::NsConfig;
+use southstar_config::{NsConfig, Text};
 use southstar_glib::{GBoolean, GError, GStr, g_free, g_getenv, g_path_get_dirname, g_strdup};
 
 use super::app::{ns_procapp_run, ns_procapp_set_window_size};
@@ -470,9 +470,8 @@ fn config() -> Option<&'static NsConfig> {
     southstar_config::get()
 }
 
-fn config_text(field: impl FnOnce(&NsConfig) -> *mut c_char) -> Option<&'static CStr> {
-    let value = config().map_or(ptr::null_mut(), field);
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
+fn config_text(field: impl FnOnce(&'static NsConfig) -> &'static Text) -> Option<&'static CStr> {
+    config().and_then(|c| field(c).c_str())
 }
 
 fn add_screenshot_writable_dirs(args: &[&CStr]) {
@@ -568,10 +567,10 @@ fn run_proc_gui(
     recover: bool,
     private_mode: bool,
 ) -> c_int {
-    apply_gsk_renderer(gsk_renderer_override.or_else(|| config_text(|c| c.gsk_renderer)));
+    apply_gsk_renderer(gsk_renderer_override.or_else(|| config_text(|c| &c.gsk_renderer)));
     let start = match url {
         Some(url) if !url.is_empty() => url,
-        _ => config_text(|c| c.home_url)
+        _ => config_text(|c| &c.home_url)
             .filter(|h| !h.is_empty())
             .unwrap_or(c"about:start"),
     };
@@ -776,7 +775,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     apply_gsk_renderer(
         options
             .gsk_renderer_override
-            .or_else(|| config_text(|c| c.gsk_renderer)),
+            .or_else(|| config_text(|c| &c.gsk_renderer)),
     );
     let opts = headless_opts(&options);
     let headless_rc = run_headless(&opts);

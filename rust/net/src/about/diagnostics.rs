@@ -66,9 +66,9 @@ fn feature(out: &mut Vec<u8>, key: &str, on: bool) {
 fn user_agent() -> Option<Vec<u8>> {
     let config = sys::unlocked_config();
     config
-        .and_then(|c| sys::config_text(c.user_agent))
-        .filter(|ua| !ua.is_empty())
-        .or_else(|| sys::user_agent_for_mode(config.map_or(core::ptr::null(), |c| c.compat_mode)))
+        .and_then(|c| c.user_agent.non_empty())
+        .map(<[u8]>::to_vec)
+        .or_else(|| sys::user_agent_for_mode(config.and_then(|c| c.compat_mode.bytes())))
 }
 
 pub fn html() -> Vec<u8> {

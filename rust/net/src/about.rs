@@ -229,9 +229,12 @@ const DOCUMENT_STYLE: &str = concat!(
 
 fn search_engine() -> Vec<u8> {
     let config = southstar_config::lock();
-    sys::config_text(config.get().search_engine)
-        .filter(|e| !e.is_empty())
-        .unwrap_or_else(|| southstar_config::DEFAULT_SEARCH_ENGINE.as_bytes().to_vec())
+    config
+        .get()
+        .search_engine
+        .non_empty()
+        .unwrap_or(southstar_config::DEFAULT_SEARCH_ENGINE.as_bytes())
+        .to_vec()
 }
 
 fn js_string_escape(text: &[u8]) -> Vec<u8> {

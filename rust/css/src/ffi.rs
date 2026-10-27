@@ -29,6 +29,7 @@ mod sheet;
 mod sheet_cache;
 mod shorthand;
 mod style_alloc;
+mod style_map;
 mod style_share;
 mod ua;
 mod value;
@@ -82,6 +83,7 @@ pub use sheet_cache::{
 };
 pub(crate) use shorthand::prop_named;
 pub use style_alloc::RetainedStyle;
+pub use style_map::StyleMap;
 pub(crate) use value::RawCalc;
 pub use value::{NsCssValue, OwnedValue, RawAreaRect, RawAreas, ValueKind};
 pub use values::{value_interpolate, value_resolve_font_units, value_serialize, values_equal};

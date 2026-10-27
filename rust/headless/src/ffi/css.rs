@@ -6,8 +6,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
+use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GHashTable};
 use southstar_layout::{BoxRef, Style};
 
 #[repr(C)]
@@ -97,19 +97,15 @@ pub fn hit_test(root: Option<BoxRef<'_>>, x: f64, y: f64) -> Option<BoxRef<'_>> 
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleTable(*mut GHashTable);
+pub struct StyleTable<'a>(Option<&'a StyleMap>);
 
-impl StyleTable {
-    pub unsafe fn from_ptr(table: *mut GHashTable) -> StyleTable {
+impl<'a> StyleTable<'a> {
+    pub fn new(table: Option<&'a StyleMap>) -> StyleTable<'a> {
         StyleTable(table)
     }
 
     pub fn get(self, node: Node<'_>) -> Option<StyleRef<'_>> {
-        if self.0.is_null() {
-            return None;
-        }
-        let style = unsafe { glib::g_hash_table_lookup(self.0, node.as_ptr().cast()) };
-        StyleRef::from_ptr(style.cast())
+        StyleRef::from_ptr(self.0?.lookup(node.as_ptr()).cast())
     }
 }
 

@@ -12,6 +12,7 @@ pub(crate) mod wrapper;
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
 use southstar_glib::{self as glib, GBoolean};
@@ -177,12 +178,20 @@ impl Js {
         unsafe { *self.st().slots.rt }
     }
 
-    pub fn current_url_raw(self) -> *mut c_char {
-        unsafe { *self.st().slots.current_url }
+    pub fn current_url(self) -> Option<CString> {
+        self.st().current_url.borrow().clone()
     }
 
-    pub fn set_current_url_raw(self, url: *mut c_char) {
-        unsafe { *self.st().slots.current_url = url };
+    pub fn current_url_ptr(self) -> *const c_char {
+        self.st()
+            .current_url
+            .borrow()
+            .as_deref()
+            .map_or(ptr::null(), CStr::as_ptr)
+    }
+
+    pub fn replace_current_url(self, url: Option<CString>) -> Option<CString> {
+        self.st().current_url.replace(url)
     }
 
     pub fn current_doc(self) -> *mut NsNode {
@@ -396,6 +405,7 @@ impl Js {
 
     pub fn free_page_strings(self) {
         unsafe { record::free_page_strings(self.0) };
+        self.replace_current_url(None);
     }
 
     pub fn teardown_page_services(self) {

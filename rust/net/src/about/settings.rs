@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_config::NsConfig;
+use southstar_config::{NsConfig, Text};
 use southstar_glib::GBoolean;
 
 use crate::ffi::host as sys;
@@ -26,14 +26,8 @@ fn flag(on: bool) -> &'static str {
     if on { "true" } else { "false" }
 }
 
-fn text_field(
-    c: Option<&NsConfig>,
-    field: impl Fn(&NsConfig) -> *mut core::ffi::c_char,
-) -> Vec<u8> {
-    json_escape(
-        &c.and_then(|c| sys::config_text(field(c)))
-            .unwrap_or_default(),
-    )
+fn text_field(c: Option<&NsConfig>, field: impl Fn(&NsConfig) -> &Text) -> Vec<u8> {
+    json_escape(c.and_then(|c| field(c).bytes()).unwrap_or_default())
 }
 
 pub fn json() -> Vec<u8> {
@@ -42,9 +36,9 @@ pub fn json() -> Vec<u8> {
     let c = Some(config.get());
     let on = |field: fn(&NsConfig) -> GBoolean| flag(c.is_some_and(|c| field(c) != 0));
     let mut out = b"{\"home_url\":\"".to_vec();
-    out.extend_from_slice(&text_field(c, |c| c.home_url));
+    out.extend_from_slice(&text_field(c, |c| &c.home_url));
     out.extend_from_slice(b"\",\"search_engine\":\"");
-    out.extend_from_slice(&text_field(c, |c| c.search_engine));
+    out.extend_from_slice(&text_field(c, |c| &c.search_engine));
     out.extend_from_slice(
         format!(
             concat!(
@@ -97,10 +91,10 @@ pub fn save(form: &[u8]) {
     let c = config.get_mut();
     let value = |key: &str| fields.get(key.as_bytes());
     if let Some(v) = value("home_url") {
-        sys::set_config_text(&mut c.home_url, v);
+        c.home_url.set(v);
     }
     if let Some(v) = value("search_engine") {
-        sys::set_config_text(&mut c.search_engine, v);
+        c.search_engine.set(v);
     }
     if let Some(v) = value("cookie_policy") {
         c.cookie_policy = sys::atoi_of(v);

@@ -502,12 +502,8 @@ impl NsBrowser {
     }
 
     pub fn style_for(&self, node: southstar_dom::Node<'_>) -> *const Style {
-        let styles = self.styles.get();
-        if styles.is_null() {
-            return ptr::null();
-        }
-        unsafe { glib::g_hash_table_lookup(styles, node.as_ptr().cast()) }
-            .cast_const()
-            .cast()
+        self.styles.borrow().as_ref().map_or(ptr::null(), |styles| {
+            styles.lookup(node.as_ptr()).cast_const().cast()
+        })
     }
 }

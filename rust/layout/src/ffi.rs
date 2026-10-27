@@ -17,7 +17,7 @@ use core::ptr::NonNull;
 use southstar_dom::Node;
 use std::ffi::CString;
 
-use southstar_glib::{GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GridTrack {
@@ -115,7 +115,7 @@ pub struct NsBox {
     grid_explicit_cols: c_int,
     grid_explicit_rows: c_int,
     media: *mut NsBoxMedia,
-    svg_styles: *mut GHashTable,
+    svg_styles: *const southstar_css::StyleMap,
     colspan: c_int,
     rowspan: c_int,
     columns: c_int,
@@ -804,7 +804,7 @@ impl<'a> BoxRef<'a> {
         self.raw().columns
     }
 
-    pub fn svg_styles(self) -> *mut GHashTable {
+    pub fn svg_styles(self) -> *const southstar_css::StyleMap {
         self.raw().svg_styles
     }
 
@@ -988,7 +988,7 @@ impl<'a> BoxRef<'a> {
         unsafe { (*self.0.as_ptr()).is_rendered_legend = GBoolean::from(legend) };
     }
 
-    pub fn set_svg_styles(self, styles: *mut GHashTable) {
+    pub fn set_svg_styles(self, styles: *const southstar_css::StyleMap) {
         unsafe { (*self.0.as_ptr()).svg_styles = styles };
     }
 

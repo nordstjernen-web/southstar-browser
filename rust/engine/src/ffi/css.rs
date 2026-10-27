@@ -5,10 +5,10 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
-use southstar_css::OwnedSheet;
+use southstar_css::{OwnedSheet, StyleMap};
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GHashTable};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxPool, BoxRef, NsBox};
 
@@ -131,7 +131,7 @@ pub fn load_into_anim(anim: southstar_anim::AnimHandle, sheets: &SheetList) {
     }
 }
 
-pub fn css_compute(doc: Option<Node>, sheets: &SheetList) -> *mut GHashTable {
+pub fn css_compute(doc: Option<Node>, sheets: &SheetList) -> StyleMap {
     southstar_css::compute_styles(doc, &sheets.sheets, &sheets.docs, None)
 }
 
@@ -161,14 +161,14 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
     }
 }
 
-pub fn publish_to_page(js: *mut c_void, styles: *mut GHashTable, layout: *mut NsBox) {
+pub fn publish_to_page(js: *mut c_void, styles: Option<&Rc<StyleMap>>, layout: *mut NsBox) {
     if !js.is_null() {
-        api::set_style_table(js.cast(), styles);
+        api::set_style_table(js.cast(), styles.cloned());
         api::set_layout_root(js.cast(), layout.cast_const().cast());
     }
 }
 
-pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> *mut GHashTable {
+pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> Option<Rc<StyleMap>> {
     unsafe { southstar_render::ns_render_relayout(ctx, out_layout) }
 }
 
@@ -176,13 +176,13 @@ pub fn render_relayout_profiled(
     ctx: &RenderCtx,
     out_layout: *mut *mut NsBox,
     viewport_width: c_int,
-) -> *mut GHashTable {
+) -> Option<Rc<StyleMap>> {
     let mut prof = RenderProfile::default();
     let t0 = super::net::monotonic_us();
     let styles =
         unsafe { southstar_render::ns_render_relayout_profile(ctx, out_layout, &mut prof) };
     let total = super::net::monotonic_us() - t0;
-    let nstyles = table_size(styles);
+    let nstyles = table_size(styles.as_deref());
     unsafe {
         g_printerr(
             c"[profile] relayout vw=%d nodes=%u total=%.2fms css=%.2f style=%.2f layout=%.2f"
@@ -211,31 +211,25 @@ pub fn render_relayout_profiled(
     styles
 }
 
-pub fn table_size(table: *mut GHashTable) -> c_uint {
-    if table.is_null() {
-        0
-    } else {
-        unsafe { glib::g_hash_table_size(table) }
-    }
+pub fn table_size(table: Option<&StyleMap>) -> c_uint {
+    table.map_or(0, |table| table.len() as c_uint)
 }
 
-pub fn discard_layout(js: *mut c_void, styles: *mut GHashTable, out_layout: *mut *mut NsBox) {
+pub fn discard_layout(js: *mut c_void, styles: Option<Rc<StyleMap>>, out_layout: *mut *mut NsBox) {
     if !js.is_null() {
         api::set_layout_root(js.cast(), ptr::null());
-        api::set_style_table(js.cast(), ptr::null_mut());
+        api::set_style_table(js.cast(), None);
     }
     unsafe {
         if !out_layout.is_null() && !(*out_layout).is_null() {
             BoxPool::free_tree(BoxRef::from_ptr(*out_layout));
             *out_layout = ptr::null_mut();
         }
-        if !styles.is_null() {
-            glib::g_hash_table_destroy(styles);
-        }
     }
+    drop(styles);
 }
 
-pub fn log_relayout(styles: *mut GHashTable, viewport_width: c_int) {
+pub fn log_relayout(styles: Option<&StyleMap>, viewport_width: c_int) {
     const DLOG_RENDER: c_int = 3;
     let message = format!("styles={} vw={}", table_size(styles), viewport_width);
     southstar_debuglog::emit(DLOG_RENDER, b"relayout", message.as_bytes());
