@@ -3,24 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_char, c_uint, c_void};
+use core::ffi::{CStr, c_void};
 use core::ptr::NonNull;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_glib::{self as glib, GBoolean, GHashTable};
-
 use super::net::{self, Dest, NestedLoop, Response};
-
-unsafe extern "C" {
-    fn g_hash_table_new_full(
-        hash: unsafe extern "C" fn(*const c_void) -> c_uint,
-        equal: unsafe extern "C" fn(*const c_void, *const c_void) -> GBoolean,
-        key_destroy: glib::GDestroyNotify,
-        value_destroy: glib::GDestroyNotify,
-    ) -> *mut GHashTable;
-}
 
 pub use southstar_layout_query::collect_images;
 
@@ -49,61 +38,41 @@ impl ImageCache {
     }
 }
 
-pub struct Wanted(NonNull<GHashTable>);
+#[derive(Default)]
+pub struct Wanted {
+    order: RefCell<Vec<CString>>,
+    set: RefCell<HashSet<CString>>,
+}
 
 impl Wanted {
     pub fn new() -> Wanted {
-        let table = unsafe {
-            g_hash_table_new_full(
-                glib::g_str_hash,
-                glib::g_str_equal,
-                Some(glib::g_free),
-                None,
-            )
-        };
-        Wanted(NonNull::new(table).expect("g_hash_table_new_full"))
+        Wanted::default()
     }
 
     pub fn contains(&self, url: &CStr) -> bool {
-        unsafe { glib::g_hash_table_contains(self.0.as_ptr(), url.as_ptr().cast()) != 0 }
+        self.set.borrow().contains(url)
     }
 
     pub fn add(&self, url: &CStr) {
-        unsafe { glib::g_hash_table_add(self.0.as_ptr(), glib::g_strdup(url.as_ptr()).cast()) };
+        if self.set.borrow_mut().insert(url.to_owned()) {
+            self.order.borrow_mut().push(url.to_owned());
+        }
     }
 
-    fn keys(&self) -> Vec<*const c_char> {
-        let mut len: c_uint = 0;
-        let keys = unsafe { glib::g_hash_table_get_keys_as_array(self.0.as_ptr(), &mut len) };
-        let out = (0..len as usize)
-            .map(|i| unsafe { *keys.add(i) }.cast_const().cast())
-            .collect();
-        unsafe { glib::g_free(keys.cast()) };
-        out
+    fn keys(&self) -> Vec<CString> {
+        self.order.borrow().clone()
     }
 
     pub fn len(&self) -> usize {
-        unsafe { glib::g_hash_table_size(self.0.as_ptr()) as usize }
+        self.order.borrow().len()
     }
 
     pub fn exclude_and_record(&self, requested: &mut HashSet<CString>) {
-        for key in self.keys() {
-            // SAFETY: the key is a NUL-terminated string the table owns until it is removed.
-            if requested.contains(unsafe { CStr::from_ptr(key) }) {
-                // SAFETY: the key is still in this live table.
-                unsafe { glib::g_hash_table_remove(self.0.as_ptr(), key.cast()) };
-            }
-        }
-        for key in self.keys() {
-            // SAFETY: the key is a NUL-terminated string the table owns.
-            requested.insert(unsafe { CStr::from_ptr(key) }.to_owned());
-        }
-    }
-}
-
-impl Drop for Wanted {
-    fn drop(&mut self) {
-        unsafe { glib::g_hash_table_destroy(self.0.as_ptr()) };
+        self.order
+            .borrow_mut()
+            .retain(|key| !requested.contains(key));
+        self.set.borrow_mut().retain(|key| !requested.contains(key));
+        requested.extend(self.order.borrow().iter().cloned());
     }
 }
 
@@ -115,21 +84,19 @@ struct BlockingFetch {
 
 struct BlockingItem {
     state: *const BlockingFetch,
-    abs: *mut c_char,
+    abs: CString,
 }
 
 unsafe extern "C" fn on_image_fetched(_src: *mut c_void, result: *mut c_void, ud: *mut c_void) {
     let item = unsafe { Box::from_raw(ud.cast::<BlockingItem>()) };
     let st = unsafe { &*item.state };
     if let Some(resp) = unsafe { net::finish(result) } {
-        // SAFETY: abs is the item's own g_strdup'd URL, freed only after this call.
-        st.cache.store(unsafe { CStr::from_ptr(item.abs) }, &resp);
+        st.cache.store(&item.abs, &resp);
     }
     st.pending.set(st.pending.get() - 1);
     if st.pending.get() == 0 {
         unsafe { net::quit_loop(st.main_loop) };
     }
-    unsafe { glib::g_free(item.abs.cast()) };
 }
 
 pub fn fetch_images_blocking(wanted: &Wanted, base: &CStr, cache: ImageCache) {
@@ -142,9 +109,9 @@ pub fn fetch_images_blocking(wanted: &Wanted, base: &CStr, cache: ImageCache) {
     for key in wanted.keys() {
         let item = Box::new(BlockingItem {
             state: &state,
-            abs: unsafe { glib::g_strdup(key) },
+            abs: key,
         });
-        let abs = item.abs;
+        let abs = item.abs.as_ptr();
         net::request_async(
             abs,
             base,
@@ -168,7 +135,7 @@ pub struct Session {
 
 struct SessionItem {
     session: *const Session,
-    abs: *mut c_char,
+    abs: CString,
 }
 
 unsafe fn session_unref(s: *const Session) {
@@ -189,8 +156,7 @@ unsafe extern "C" fn on_session_image_fetched(
     if let Some(resp) = unsafe { net::finish(result) }
         && !s.dead.get()
     {
-        // SAFETY: abs is the item's own g_strdup'd URL, freed only after this call.
-        s.cache.store(unsafe { CStr::from_ptr(item.abs) }, &resp);
+        s.cache.store(&item.abs, &resp);
     }
     if s.outstanding.get() > 0 {
         s.outstanding.set(s.outstanding.get() - 1);
@@ -202,7 +168,6 @@ unsafe extern "C" fn on_session_image_fetched(
         }
     }
     unsafe { session_unref(item.session) };
-    unsafe { glib::g_free(item.abs.cast()) };
 }
 
 pub fn start_session(
@@ -219,13 +184,10 @@ pub fn start_session(
         arrived: RefCell::new(Some(arrived)),
     }));
     for key in wanted.keys() {
-        let item = Box::new(SessionItem {
-            session,
-            abs: unsafe { glib::g_strdup(key) },
-        });
+        let item = Box::new(SessionItem { session, abs: key });
         let s = unsafe { &*session };
         s.refs.set(s.refs.get() + 1);
-        let abs = item.abs;
+        let abs = item.abs.as_ptr();
         net::request_async(
             abs,
             base,

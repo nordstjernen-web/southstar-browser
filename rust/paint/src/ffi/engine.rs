@@ -176,11 +176,6 @@ const _: () = assert!(
 #[derive(Clone, Copy)]
 pub struct Video<'a>(&'a NsVideo);
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-}
-
 impl Texture {
     pub fn download(self, dst: &mut [u8], stride: usize) {
         self.get().download(dst, stride);
@@ -339,19 +334,12 @@ pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
     unsafe { SurfaceRef::from_raw(surface) }.map(|s| s.reference())
 }
 
-pub fn monotonic_time() -> i64 {
-    unsafe { g_get_monotonic_time() }
-}
-
 pub fn unichar_isalpha(c: u32) -> bool {
     southstar_unicode::is_alpha(c)
 }
 
 pub fn utf8_get_char(text: &CStr, pos: usize) -> u32 {
-    if pos >= text.to_bytes().len() {
-        return 0;
-    }
-    unsafe { g_utf8_get_char(text.as_ptr().add(pos)) }
+    southstar_layout::utf8_get_char(text.to_bytes(), pos)
 }
 
 fn utf8_skip(lead: u8) -> usize {

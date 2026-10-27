@@ -208,9 +208,10 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
         .position(|&c| c == b'#')
         .unwrap_or(action.len())];
     let mut full = action.to_vec();
-    if body.len() > 0 {
+    let body = body.into_bytes();
+    if !body.is_empty() {
         full.push(if action.contains(&b'?') { b'&' } else { b'?' });
-        full.extend_from_slice(body.bytes());
+        full.extend_from_slice(&body);
     }
     b.pending_nav.adopt(ffi::gstr_from(&full));
 }

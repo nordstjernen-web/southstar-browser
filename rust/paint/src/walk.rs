@@ -10,9 +10,9 @@ use std::ffi::CString;
 
 use southstar_cairo::{ContextRef, Matrix, Operator, Pattern};
 use southstar_dom::{Kind as NodeKind, Node};
-use southstar_glib::{GArray, GHashTable};
 use southstar_layout::{BoxKind, BoxRef, NsBox};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef, display_of, parse_color};
+use std::rc::Rc;
 
 use crate::decor::paint_block;
 use crate::ffi::engine;
@@ -60,6 +60,8 @@ struct Capture {
     seq: u32,
 }
 
+pub type LayerKinds = HashMap<*const NsBox, i32>;
+
 pub struct Layers {
     pub mode: i32,
     pub root: *const NsBox,
@@ -68,8 +70,8 @@ pub struct Layers {
     pub vp_seen: i32,
     pub base: Matrix,
     pub doc: *mut c_void,
-    pub kinds: *mut GHashTable,
-    pub found: *mut GArray,
+    pub kinds: Option<Rc<LayerKinds>>,
+    pub found: Vec<VpCapture>,
     pub upper: Option<UpperFn>,
     pub upper_data: *mut c_void,
     pub n_upper: i32,
@@ -86,8 +88,8 @@ impl Layers {
             vp_seen: 0,
             base: Matrix::default(),
             doc: ptr::null_mut(),
-            kinds: ptr::null_mut(),
-            found: ptr::null_mut(),
+            kinds: None,
+            found: Vec::new(),
             upper: None,
             upper_data: ptr::null_mut(),
             n_upper: 0,
@@ -488,7 +490,7 @@ pub fn merge_sort_by<T: Copy>(items: &mut [T], cmp: &impl Fn(&T, &T) -> i32) {
 
 fn layers_record(cr: ContextRef, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
     with(|w| {
-        let l = w.layers.borrow();
+        let mut l = w.layers.borrow_mut();
         let mut m = cr.matrix();
         m.translate(dx, dy);
         let mut inv = l.base;
@@ -500,7 +502,7 @@ fn layers_record(cr: ContextRef, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
             kind,
             rel: Matrix::multiply(&m, &inv),
         };
-        unsafe { southstar_glib::g_array_append_vals(l.found, ptr::from_ref(&layer).cast(), 1) };
+        l.found.push(layer);
     });
 }
 
@@ -510,11 +512,15 @@ fn layers_target<'a>(
     dx: f64,
     dy: f64,
 ) -> Option<ContextRef<'a>> {
-    let (kinds, mode) = with(|w| {
+    let (kind, mode) = with(|w| {
         let l = w.layers.borrow();
-        (l.kinds, l.mode)
+        let kind = l
+            .kinds
+            .as_ref()
+            .and_then(|k| k.get(&cap.b).copied())
+            .unwrap_or(0);
+        (kind, l.mode)
     });
-    let kind = unsafe { southstar_glib::g_hash_table_lookup(kinds, cap.b.cast()) } as isize as i32;
     if kind != 0 {
         if mode == LAYERS_PLAN {
             layers_record(cr, cap.b, kind, dx, dy);

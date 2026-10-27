@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
+use core::ffi::{c_int, c_uint, c_ulong, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean, GStr};
+use southstar_glib::{self as glib, GBoolean};
 
 #[repr(C)]
 struct GMainLoop {
@@ -22,9 +22,6 @@ unsafe extern "C" {
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
     fn g_idle_add(function: GSourceFunc, data: *mut c_void) -> c_uint;
     fn g_get_monotonic_time() -> i64;
-    fn g_usleep(microseconds: c_ulong);
-    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
-    fn g_strcompress(source: *const c_char) -> *mut c_char;
 }
 
 pub struct MainLoop(NonNull<GMainLoop>);
@@ -70,7 +67,7 @@ pub fn monotonic_us() -> i64 {
 }
 
 pub fn usleep(us: c_ulong) {
-    unsafe { g_usleep(us) };
+    std::thread::sleep(std::time::Duration::from_micros(u64::from(us)));
 }
 
 fn c_input(s: &[u8]) -> CString {
@@ -79,28 +76,72 @@ fn c_input(s: &[u8]) -> CString {
 }
 
 pub fn ascii_strtoll(s: &[u8]) -> i64 {
-    unsafe { g_ascii_strtoll(c_input(s).as_ptr(), ptr::null_mut(), 10) }
-}
-
-pub fn strcompress(s: &[u8]) -> GStr {
-    let compressed = unsafe { GStr::take(g_strcompress(c_input(s).as_ptr())) };
-    compressed.expect("g_strcompress")
-}
-
-pub fn file_contents(path: &[u8]) -> Option<GStr> {
-    let mut contents: *mut c_char = ptr::null_mut();
-    let ok = unsafe {
-        glib::g_file_get_contents(
-            c_input(path).as_ptr(),
-            &mut contents,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
-    if ok == 0 {
-        return None;
+    let s = until_nul(s);
+    let start = s
+        .iter()
+        .position(|b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+        .unwrap_or(s.len());
+    let mut rest = &s[start..];
+    let negative = rest.first() == Some(&b'-');
+    if matches!(rest.first(), Some(b'+' | b'-')) {
+        rest = &rest[1..];
     }
-    unsafe { GStr::take(contents) }
+    let magnitude = rest
+        .iter()
+        .take_while(|b| b.is_ascii_digit())
+        .fold(0i128, |acc, d| {
+            (acc * 10 + i128::from(d - b'0')).min(i128::from(u64::MAX))
+        });
+    let value = if negative { -magnitude } else { magnitude };
+    i64::try_from(value).unwrap_or(if negative { i64::MIN } else { i64::MAX })
+}
+
+fn until_nul(s: &[u8]) -> &[u8] {
+    &s[..s.iter().position(|&b| b == 0).unwrap_or(s.len())]
+}
+
+pub fn strcompress(s: &[u8]) -> CString {
+    let mut out = Vec::with_capacity(s.len());
+    let mut rest = until_nul(s);
+    while let Some((&b, tail)) = rest.split_first() {
+        rest = tail;
+        if b != b'\\' {
+            out.push(b);
+            continue;
+        }
+        let Some((&escaped, tail)) = rest.split_first() else {
+            break;
+        };
+        rest = tail;
+        let byte = match escaped {
+            b'0'..=b'7' => {
+                let mut value = u32::from(escaped - b'0');
+                for _ in 0..2 {
+                    match rest.split_first() {
+                        Some((&d @ b'0'..=b'7', tail)) => {
+                            value = value * 8 + u32::from(d - b'0');
+                            rest = tail;
+                        }
+                        _ => break,
+                    }
+                }
+                value.to_le_bytes()[0]
+            }
+            b'b' => 0x08,
+            b'f' => 0x0c,
+            b'n' => b'\n',
+            b'r' => b'\r',
+            b't' => b'\t',
+            b'v' => 0x0b,
+            other => other,
+        };
+        out.push(byte);
+    }
+    c_input(&out)
+}
+
+pub fn file_contents(path: &[u8]) -> Option<CString> {
+    glib::file_get_contents(until_nul(path)).map(|contents| c_input(&contents))
 }
 
 pub fn dlog_level_name(level: u32) -> Option<&'static [u8]> {

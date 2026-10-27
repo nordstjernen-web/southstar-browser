@@ -1,19 +1,14 @@
-//! Southstar — the GLib pieces the page lifecycle uses: GString buffers, the main context, timeouts, logging and allocation.
+//! Southstar — the pieces the page lifecycle uses: text buffers, the GLib main context, timeouts, logging and allocation.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_ulong, c_void};
+use core::cell::{Cell, RefCell};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
+use core::time::Duration;
+use std::ffi::OsString;
 
 use southstar_glib::{self as glib, GBoolean, GStr};
-
-#[repr(C)]
-pub struct GString {
-    str_: *mut c_char,
-    len: usize,
-    _allocated_len: usize,
-}
 
 pub type SourceFunc = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
 
@@ -21,16 +16,9 @@ const LOG_LEVEL_MESSAGE: c_int = 1 << 5;
 const DLOG_JS: c_int = 5;
 
 unsafe extern "C" {
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
-    fn g_string_erase(s: *mut GString, pos: isize, len: isize) -> *mut GString;
-    fn g_string_truncate(s: *mut GString, len: usize) -> *mut GString;
-    fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn g_string_append_printf(s: *mut GString, format: *const c_char, ...);
     fn g_get_monotonic_time() -> i64;
     fn g_main_context_pending(context: *mut c_void) -> GBoolean;
     fn g_main_context_iteration(context: *mut c_void, may_block: GBoolean) -> GBoolean;
-    fn g_usleep(microseconds: c_ulong);
     fn g_source_remove(tag: c_uint) -> GBoolean;
     pub fn g_timeout_add(interval: c_uint, function: SourceFunc, data: *mut c_void) -> c_uint;
     pub fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut c_void;
@@ -39,13 +27,7 @@ unsafe extern "C" {
     pub fn g_main_loop_unref(main_loop: *mut c_void);
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_printerr(format: *const c_char, ...);
-    fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn malloc(size: usize) -> *mut c_void;
-    fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut glib::GError)
-    -> *mut c_void;
-    fn g_dir_read_name(dir: *mut c_void) -> *const c_char;
-    fn g_dir_close(dir: *mut c_void);
-    fn g_strchomp(s: *mut c_char) -> *mut c_char;
 }
 
 fn c_input(bytes: &[u8]) -> Vec<u8> {
@@ -55,46 +37,38 @@ fn c_input(bytes: &[u8]) -> Vec<u8> {
     v
 }
 
-#[repr(transparent)]
-pub struct StrBuf(Cell<*mut GString>);
+#[derive(Default)]
+#[allow(clippy::box_collection)]
+pub struct StrBuf(Cell<Option<Box<Vec<u8>>>>);
 
 impl StrBuf {
-    fn ensure(&self) -> *mut GString {
-        if self.0.get().is_null() {
-            self.0.set(unsafe { g_string_new(ptr::null()) });
-        }
-        self.0.get()
+    fn with<R>(&self, f: impl FnOnce(&mut Vec<u8>) -> R) -> R {
+        let mut buf = self.0.take().unwrap_or_default();
+        let result = f(&mut buf);
+        self.0.set(Some(buf));
+        result
     }
 
     pub fn len(&self) -> usize {
-        unsafe { self.0.get().as_ref() }.map_or(0, |s| s.len)
+        self.with(|buf| buf.len())
     }
 
     pub fn create(&self) {
-        self.ensure();
+        self.with(|_| ());
     }
 
     pub fn append(&self, bytes: &[u8]) {
-        let s = self.ensure();
-        unsafe { g_string_append_len(s, bytes.as_ptr().cast(), bytes.len() as isize) };
+        self.with(|buf| buf.extend_from_slice(bytes));
     }
 
     pub fn erase_front(&self, n: usize) {
-        unsafe { g_string_erase(self.ensure(), 0, n as isize) };
+        self.with(|buf| {
+            buf.drain(..n.min(buf.len()));
+        });
     }
 
     pub fn take_bytes(&self) -> Option<Vec<u8>> {
-        let s = self.0.get();
-        if s.is_null() || self.len() == 0 {
-            return None;
-        }
-        // SAFETY: a non-null buffer is the GString this slot owns.
-        let text = unsafe { &*s };
-        // SAFETY: the GString holds `len` bytes at `str`.
-        let bytes = unsafe { glib::slice(text.str_.cast(), text.len) }.to_vec();
-        // SAFETY: the GString is live and owned by this slot.
-        unsafe { g_string_truncate(s, 0) };
-        Some(bytes)
+        self.with(|buf| (!buf.is_empty()).then(|| core::mem::take(buf)))
     }
 
     pub fn take_text(&self) -> *mut c_char {
@@ -103,47 +77,28 @@ impl StrBuf {
     }
 
     pub fn free(&self) {
-        let s = self.0.replace(ptr::null_mut());
-        if !s.is_null() {
-            unsafe { g_string_free(s, glib::TRUE) };
-        }
+        self.0.take();
     }
 }
 
-pub struct StrBufOwned(*mut GString);
+#[derive(Default)]
+pub struct StrBufOwned(RefCell<Vec<u8>>);
 
 impl StrBufOwned {
     pub fn new() -> StrBufOwned {
-        StrBufOwned(unsafe { g_string_new(ptr::null()) })
+        StrBufOwned::default()
     }
 
-    pub fn bytes(&self) -> &[u8] {
-        let s = unsafe { &*self.0 };
-        unsafe { glib::slice(s.str_.cast(), s.len) }
-    }
-
-    pub fn len(&self) -> usize {
-        unsafe { (*self.0).len }
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.0.into_inner()
     }
 
     pub fn append(&self, bytes: &[u8]) {
-        unsafe { g_string_append_len(self.0, bytes.as_ptr().cast(), bytes.len() as isize) };
-    }
-
-    pub fn append_double(&self, format: &CStr, value: f64) {
-        unsafe { g_string_append_printf(self.0, format.as_ptr(), value) };
+        self.0.borrow_mut().extend_from_slice(bytes);
     }
 
     pub fn into_text(self) -> *mut c_char {
-        let s = self.0;
-        core::mem::forget(self);
-        unsafe { g_string_free(s, glib::FALSE) }
-    }
-}
-
-impl Drop for StrBufOwned {
-    fn drop(&mut self) {
-        unsafe { g_string_free(self.0, glib::TRUE) };
+        glib::strdup(&self.into_bytes())
     }
 }
 
@@ -160,7 +115,7 @@ pub fn main_context_iteration() {
 }
 
 pub fn usleep(us: u64) {
-    unsafe { g_usleep(us as c_ulong) };
+    std::thread::sleep(Duration::from_micros(us));
 }
 
 pub fn source_remove(tag: c_uint) {
@@ -187,9 +142,20 @@ pub fn printerr_double(format: &CStr, value: f64) {
     unsafe { g_printerr(format.as_ptr(), value) };
 }
 
-pub fn env_value(name: &CStr) -> Option<&'static CStr> {
-    let v = unsafe { glib::g_getenv(name.as_ptr()) };
-    (!v.is_null()).then(|| unsafe { CStr::from_ptr(v) })
+fn os_bytes(value: OsString) -> Vec<u8> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        value.into_vec()
+    }
+    #[cfg(not(unix))]
+    {
+        value.to_string_lossy().into_owned().into_bytes()
+    }
+}
+
+pub fn env_value(name: &str) -> Option<Vec<u8>> {
+    std::env::var_os(name).map(os_bytes)
 }
 
 pub fn printerr_paint_profile(ms: f64, width: c_int, height: c_int) {
@@ -203,16 +169,38 @@ pub fn printerr_paint_profile(ms: f64, width: c_int, height: c_int) {
     };
 }
 
-pub fn env_set(name: &CStr) -> bool {
-    !unsafe { glib::g_getenv(name.as_ptr()) }.is_null()
+pub fn env_set(name: &str) -> bool {
+    std::env::var_os(name).is_some()
+}
+
+fn hex_value(b: u8) -> Option<u8> {
+    char::from(b).to_digit(16).map(|d| d as u8)
 }
 
 pub fn uri_unescape(escaped: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(g_uri_unescape_string(escaped.as_ptr(), ptr::null())) }
+    let input = escaped.to_bytes();
+    let mut out = Vec::with_capacity(input.len());
+    let mut i = 0;
+    while i < input.len() {
+        if input[i] == b'%' {
+            let hi = input.get(i + 1).copied().and_then(hex_value)?;
+            let lo = input.get(i + 2).copied().and_then(hex_value)?;
+            let c = (hi << 4) | lo;
+            if c == 0 {
+                return None;
+            }
+            out.push(c);
+            i += 3;
+        } else {
+            out.push(input[i]);
+            i += 1;
+        }
+    }
+    gstr_from(&out)
 }
 
 pub fn dup_text(text: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(glib::g_strdup(text.as_ptr())) }
+    gstr_from(text.to_bytes())
 }
 
 pub fn gstr_from(bytes: &[u8]) -> Option<GStr> {
@@ -241,45 +229,33 @@ pub enum Threads {
     Listed(Vec<(Vec<u8>, Vec<u8>)>),
 }
 
+fn chomp(bytes: &[u8]) -> &[u8] {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    let mut bytes = &bytes[..end];
+    while let [rest @ .., b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'] = bytes {
+        bytes = rest;
+    }
+    bytes
+}
+
 pub fn list_threads() -> Threads {
-    let mut error: *mut glib::GError = ptr::null_mut();
-    let dir = unsafe { g_dir_open(c"/proc/self/task".as_ptr(), 0, &mut error) };
-    if dir.is_null() {
-        let message = unsafe { error.as_ref() }
-            .and_then(|e| unsafe { glib::bytes(e.message) })
-            .map_or_else(|| b"?".to_vec(), <[u8]>::to_vec);
-        if !error.is_null() {
-            unsafe { glib::g_error_free(error) };
+    const TASKS: &str = "/proc/self/task";
+    let dir = match std::fs::read_dir(TASKS) {
+        Ok(dir) => dir,
+        Err(error) => {
+            return Threads::Unavailable(
+                format!("Error opening directory \u{201c}{TASKS}\u{201d}: {error}").into_bytes(),
+            );
         }
-        return Threads::Unavailable(message);
-    }
+    };
     let mut threads = Vec::new();
-    loop {
-        let tid = unsafe { g_dir_read_name(dir) };
-        if tid.is_null() {
-            break;
+    for entry in dir.flatten() {
+        let tid = os_bytes(entry.file_name());
+        let mut path = entry.path();
+        path.push("comm");
+        if let Ok(comm) = std::fs::read(&path) {
+            threads.push((tid, chomp(&comm).to_vec()));
         }
-        let tid = unsafe { CStr::from_ptr(tid) }.to_bytes().to_vec();
-        let mut path = b"/proc/self/task/".to_vec();
-        path.extend_from_slice(&tid);
-        path.extend_from_slice(b"/comm\0");
-        let mut comm: *mut c_char = ptr::null_mut();
-        let ok = unsafe {
-            glib::g_file_get_contents(
-                path.as_ptr().cast(),
-                &mut comm,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        };
-        if ok != 0 && !comm.is_null() {
-            let name = unsafe { CStr::from_ptr(g_strchomp(comm)) }
-                .to_bytes()
-                .to_vec();
-            threads.push((tid, name));
-        }
-        unsafe { glib::g_free(comm.cast()) };
     }
-    unsafe { g_dir_close(dir) };
     Threads::Listed(threads)
 }

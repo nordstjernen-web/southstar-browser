@@ -126,12 +126,12 @@ pub fn render_rgba(
 }
 
 fn dump_frame(surface: &Surface) {
-    let Some(dir) = ffi::env_value(c"NS_FRAME_DUMP") else {
+    let Some(dir) = ffi::env_value("NS_FRAME_DUMP") else {
         return;
     };
     let frame = FRAME_NO.fetch_add(1, Ordering::Relaxed);
     if frame.is_multiple_of(FRAME_DUMP_EVERY) {
-        let mut path = dir.to_bytes().to_vec();
+        let mut path = dir;
         path.extend_from_slice(format!("/frame-{frame:05}.png").as_bytes());
         if let Some(path) = ffi::gstr_from(&path) {
             surface.write_png(&path);
@@ -163,7 +163,7 @@ pub fn render_argb32(
         cr.paint(b, layout);
     }
     b.flush_video_composites(ffi::monotonic_us());
-    if ffi::env_set(c"NS_PROFILE") {
+    if ffi::env_set("NS_PROFILE") {
         ffi::printerr_paint_profile(
             (ffi::monotonic_us() - t0) as f64 / 1000.0,
             out.width,

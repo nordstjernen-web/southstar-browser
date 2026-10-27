@@ -1,15 +1,19 @@
-//! Southstar — the C ABI of the safe-browsing blocklist, and the GLib and platform calls behind it.
+//! Southstar — the files, folders and platform calls behind the safe-browsing blocklist.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::ffi::CStr;
+#[cfg(target_vendor = "apple")]
+use core::ffi::c_char;
 #[cfg(target_vendor = "apple")]
 use core::ffi::c_int;
 #[cfg(any(windows, target_vendor = "apple"))]
 use core::ffi::c_void;
-use core::ffi::{CStr, c_char};
+#[cfg(any(windows, target_vendor = "apple"))]
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_config::util;
 use southstar_glib as glib;
 
 #[cfg(windows)]
@@ -24,57 +28,43 @@ unsafe extern "C" {
     fn free(p: *mut c_void);
 }
 
-unsafe fn borrow<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-unsafe fn take(p: *mut c_char) -> CString {
-    let Some(owned) = (unsafe { borrow(p) }).map(CStr::to_owned) else {
-        return CString::default();
-    };
-    unsafe { glib::g_free(p.cast()) };
-    owned
+fn c_string(bytes: &[u8]) -> CString {
+    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<CString> {
-    unsafe { borrow(glib::g_getenv(name.as_ptr())) }.map(CStr::to_owned)
+    util::env_bytes(name.to_str().ok()?).map(|value| c_string(&value))
 }
 
 pub(crate) fn user_config_dir() -> CString {
-    unsafe { borrow(glib::g_get_user_config_dir()) }
-        .map(CStr::to_owned)
-        .unwrap_or_default()
+    // SAFETY: g_get_user_config_dir has no preconditions and returns a string GLib owns.
+    let dir = unsafe { glib::g_get_user_config_dir() };
+    // SAFETY: dir is NULL or the NUL-terminated string GLib keeps for the life of the process.
+    let dir = unsafe { glib::bytes(dir) };
+    c_string(dir.unwrap_or_default())
 }
 
 pub(crate) fn build_filename(parts: &[&CStr]) -> CString {
-    let mut args: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    args.push(ptr::null_mut());
-    unsafe { take(glib::g_build_filenamev(args.as_mut_ptr())) }
+    let parts: Vec<&[u8]> = parts.iter().map(|part| part.to_bytes()).collect();
+    c_string(&util::build_filename(&parts))
 }
 
-fn path_get_dirname(path: &CStr) -> CString {
-    unsafe { take(glib::g_path_get_dirname(path.as_ptr())) }
+fn path_get_dirname(path: &[u8]) -> CString {
+    c_string(&util::path_dirname(path))
 }
 
 pub(crate) fn exists(path: &CStr) -> bool {
-    unsafe { glib::g_file_test(path.as_ptr(), glib::FILE_TEST_EXISTS) != glib::FALSE }
+    util::os_path(path.to_bytes()).is_some_and(|path| path.exists())
 }
 
 pub(crate) fn file_text(path: &CStr) -> Option<Vec<u8>> {
-    let mut contents: *mut c_char = ptr::null_mut();
-    let loaded = unsafe {
-        glib::g_file_get_contents(
-            path.as_ptr(),
-            &mut contents,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
-    (loaded != glib::FALSE).then(|| unsafe { take(contents) }.into_bytes())
+    let contents = std::fs::read(util::os_path(path.to_bytes())?).ok()?;
+    Some(c_string(&contents).into_bytes())
 }
 
 pub(crate) fn markup_escape(text: &CStr) -> Vec<u8> {
-    unsafe { take(glib::g_markup_escape_text(text.as_ptr(), -1)) }.into_bytes()
+    util::markup_escape(text.to_bytes())
 }
 
 #[cfg(windows)]
@@ -90,16 +80,9 @@ pub(crate) fn self_exe_dir() -> Option<CString> {
     if n == 0 || n >= cap {
         return None;
     }
-    let utf8 = unsafe {
-        glib::g_utf16_to_utf8(
-            buf.as_ptr(),
-            -1,
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
-    (!utf8.is_null()).then(|| path_get_dirname(&unsafe { take(utf8) }))
+    let end = buf.iter().position(|&unit| unit == 0).unwrap_or(buf.len());
+    let exe = String::from_utf16(&buf[..end]).ok()?;
+    Some(path_get_dirname(exe.as_bytes()))
 }
 
 #[cfg(target_vendor = "apple")]
@@ -115,13 +98,13 @@ pub(crate) fn self_exe_dir() -> Option<CString> {
     }
     let real = unsafe { realpath(raw.as_ptr(), ptr::null_mut()) };
     let path = if real.is_null() { raw.as_ptr() } else { real };
-    let dir = path_get_dirname(unsafe { CStr::from_ptr(path) });
+    let dir = path_get_dirname(unsafe { CStr::from_ptr(path) }.to_bytes());
     unsafe { free(real.cast()) };
     Some(dir)
 }
 
 #[cfg(not(any(windows, target_vendor = "apple")))]
 pub(crate) fn self_exe_dir() -> Option<CString> {
-    let exe = unsafe { glib::g_file_read_link(c"/proc/self/exe".as_ptr(), ptr::null_mut()) };
-    (!exe.is_null()).then(|| path_get_dirname(&unsafe { take(exe) }))
+    let exe = std::fs::read_link("/proc/self/exe").ok()?;
+    Some(path_get_dirname(&util::path_bytes(&exe)))
 }

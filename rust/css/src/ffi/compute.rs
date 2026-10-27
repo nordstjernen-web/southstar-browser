@@ -19,7 +19,7 @@ use super::computed_units::{PROP_COUNT, RawStyle};
 use super::container::{
     ContainerMap, container_map_signature, container_stack_push, with_container_map,
 };
-use super::custom_props::{build_vars, compute_registered_vars};
+use super::custom_props::{AdjustCache, build_vars, compute_registered_vars};
 use super::fixups::{
     display_contents_to_none, frame_viewport_from_style, strip_native_widget_decorations,
 };
@@ -44,7 +44,6 @@ use super::style_share::{
 use super::ua::ua_sheet;
 use super::value::{KIND_LENGTH, OwnedValue};
 use super::values::values_equal;
-use super::vars::var_map_unref;
 use super::viewport;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
 use crate::incremental::{self, PassKey};
@@ -78,10 +77,6 @@ fn pseudo_slot(pe: c_uint) -> usize {
 
 unsafe extern "C" fn style_free_notify(data: *mut c_void) {
     unsafe { style_free(data.cast()) };
-}
-
-unsafe extern "C" fn var_map_unref_notify(data: *mut c_void) {
-    unsafe { var_map_unref(data.cast()) };
 }
 
 struct Scratch {
@@ -216,7 +211,7 @@ type Sheets<'a> = [Option<&'a SheetData>];
 #[derive(Clone, Copy)]
 struct Pass<'a> {
     registered: &'a RegisteredProps,
-    adjust_cache: *mut GHashTable,
+    adjust_cache: &'a AdjustCache,
     root_px: f64,
 }
 
@@ -225,7 +220,7 @@ struct Walk<'a> {
     layer_ranks: &'a LayerRanks,
     out: *mut GHashTable,
     registered: &'a RegisteredProps,
-    adjust_cache: *mut GHashTable,
+    adjust_cache: &'a AdjustCache,
     doc_sheets: Option<HashMap<usize, Vec<Option<&'a SheetData>>>>,
     reuse: Option<&'a Styles>,
     scratch: &'a mut Scratch,
@@ -427,7 +422,7 @@ impl<'a> Walk<'a> {
             vars,
             pending,
         } = &mut element[0];
-        style.vars = build_vars(parent_vars, vars, pass.registered, pass.adjust_cache);
+        style.vars = build_vars(parent_vars, vars, pass.registered, Some(pass.adjust_cache));
         let resolved = Resolved {
             matches: decls,
             owned,
@@ -474,7 +469,7 @@ fn pseudo_style(
         vars,
         pending,
     } = dest;
-    pseudo.vars = build_vars(style.vars, vars, pass.registered, pass.adjust_cache);
+    pseudo.vars = build_vars(style.vars, vars, pass.registered, Some(pass.adjust_cache));
     let resolved = Resolved {
         matches: decls,
         owned,
@@ -575,14 +570,7 @@ fn compute(
     decl_sheet_cache_trim();
     container::stack_reset();
     style_share_begin();
-    let adjust_cache = unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_direct_hash),
-            Some(glib::g_direct_equal),
-            Some(var_map_unref_notify),
-            Some(var_map_unref_notify),
-        )
-    };
+    let adjust_cache = AdjustCache::default();
     matcher::has_memo_begin();
     matcher::batch_begin();
 
@@ -616,7 +604,7 @@ fn compute(
         layer_ranks: &layer_ranks,
         out,
         registered: &registered,
-        adjust_cache,
+        adjust_cache: &adjust_cache,
         doc_sheets,
         reuse: previous.as_ref().filter(|_| active).map(|p| &p.styles),
         scratch: &mut scratch,
@@ -661,7 +649,7 @@ fn compute(
     matcher::has_memo_end();
     matcher::batch_end();
     style_share_end();
-    unsafe { glib::g_hash_table_destroy(adjust_cache) };
+    drop(adjust_cache);
     registered_props_end();
     if profile {
         let finished = Instant::now();

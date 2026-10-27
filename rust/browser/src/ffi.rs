@@ -363,7 +363,7 @@ impl NsBrowser {
     }
 
     pub fn set_post(&self, body: StrBufOwned, content_type: &CStr) {
-        self.pending_post_body.replace(Some(body.bytes().to_vec()));
+        self.pending_post_body.replace(Some(body.into_bytes()));
         self.pending_post_ct.set(Some(content_type));
     }
 
@@ -396,8 +396,7 @@ impl NsBrowser {
         }
         self.drop_styles();
         if let Some(cache) = self.css_cache.take() {
-            // SAFETY: the cache is out of the page's slot and the engine holds no copy between calls.
-            unsafe { cache.free() };
+            cache.free();
         }
         if let Some(js) = self.js() {
             js.free();
@@ -612,7 +611,7 @@ pub extern "C" fn ns_browser_shutdown() {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_render_text(b: *mut NsBrowser) -> *mut c_char {
     match (unsafe { browser(b) }).and_then(query::dump_text) {
-        Some(text) => malloc_dup(text.bytes()),
+        Some(text) => malloc_dup(&text.into_bytes()),
         None => ptr::null_mut(),
     }
 }

@@ -2,29 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
 
 use southstar_dom::Tree;
 
 use super::glib::gstr_from;
-use southstar_glib::{self as glib, GError, GStr};
+use southstar_glib::GStr;
 
 pub use southstar_js_runtime::api::NavigationTiming;
-
-unsafe extern "C" {
-    fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
-    fn g_filename_to_uri(
-        filename: *const c_char,
-        hostname: *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-}
-
-fn take(p: *mut c_char) -> Option<GStr> {
-    unsafe { GStr::take(p) }
-}
 
 pub use southstar_engine::Post;
 
@@ -201,11 +187,81 @@ pub fn css_set_reduced_motion(reduce: bool) {
     southstar_css_media::set_prefers_reduced_motion(reduce);
 }
 
+#[cfg(unix)]
+fn os_path(path: &CStr) -> Option<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    Some(std::ffi::OsStr::from_bytes(path.to_bytes()).into())
+}
+
+#[cfg(not(unix))]
+fn os_path(path: &CStr) -> Option<std::path::PathBuf> {
+    path.to_str().ok().map(Into::into)
+}
+
 pub fn file_exists(path: &CStr) -> bool {
-    unsafe { glib::g_file_test(path.as_ptr(), glib::FILE_TEST_EXISTS) != 0 }
+    os_path(path).is_some_and(|p| p.exists())
+}
+
+#[cfg(unix)]
+fn absolute_path(path: &CStr) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut full = Vec::new();
+    if !path.to_bytes().starts_with(b"/") {
+        full.extend_from_slice(std::env::current_dir().ok()?.as_os_str().as_bytes());
+        full.push(b'/');
+    }
+    full.extend_from_slice(path.to_bytes());
+    let slashes = full.iter().take_while(|&&b| b == b'/').count();
+    let mut out: Vec<u8> = if slashes == 2 {
+        b"//".to_vec()
+    } else {
+        b"/".to_vec()
+    };
+    let root = out.len();
+    for part in full.split(|&b| b == b'/') {
+        match part {
+            b"" | b"." => {}
+            b".." => {
+                let cut = out[root..]
+                    .iter()
+                    .rposition(|&b| b == b'/')
+                    .map_or(root, |i| root + i);
+                out.truncate(cut);
+            }
+            _ => {
+                if out.len() > root {
+                    out.push(b'/');
+                }
+                out.extend_from_slice(part);
+            }
+        }
+    }
+    Some(out)
+}
+
+#[cfg(not(unix))]
+fn absolute_path(path: &CStr) -> Option<Vec<u8>> {
+    let abs = std::path::absolute(os_path(path)?).ok()?;
+    let abs = abs.to_str()?.replace('\\', "/");
+    Some(abs.into_bytes())
+}
+
+fn uri_path_byte_allowed(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&b)
 }
 
 pub fn local_file_uri(path: &CStr) -> Option<GStr> {
-    let abs = take(unsafe { g_canonicalize_filename(path.as_ptr(), ptr::null()) })?;
-    take(unsafe { g_filename_to_uri(abs.as_ptr(), ptr::null(), ptr::null_mut()) })
+    let abs = absolute_path(path)?;
+    let mut uri = b"file://".to_vec();
+    if abs.first() != Some(&b'/') {
+        uri.push(b'/');
+    }
+    for &b in &abs {
+        if uri_path_byte_allowed(b) {
+            uri.push(b);
+        } else {
+            uri.extend_from_slice(format!("%{b:02X}").as_bytes());
+        }
+    }
+    gstr_from(&uri)
 }

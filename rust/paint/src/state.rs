@@ -5,6 +5,7 @@
 use core::cell::Cell;
 use core::ffi::c_void;
 use core::ptr;
+use std::time::{Duration, Instant};
 
 use southstar_anim::AnimHandle;
 use southstar_layout::NsBox;
@@ -16,7 +17,7 @@ struct PaintState {
     search_active: Cell<*const NsBox>,
     caret_visible: Cell<bool>,
     debug_point: Cell<Option<(i32, i32)>>,
-    last_composite_log_us: Cell<i64>,
+    last_composite_log: Cell<Option<Instant>>,
 }
 
 impl PaintState {
@@ -28,7 +29,7 @@ impl PaintState {
             search_active: Cell::new(ptr::null()),
             caret_visible: Cell::new(true),
             debug_point: Cell::new(None),
-            last_composite_log_us: Cell::new(0),
+            last_composite_log: Cell::new(None),
         }
     }
 }
@@ -76,14 +77,17 @@ pub fn set_caret_visible(visible: bool) {
     STATE.with(|s| s.caret_visible.set(visible));
 }
 
-pub fn composite_log_due(now_us: i64) -> bool {
+pub fn composite_log_due() -> bool {
     STATE.with(|s| {
-        if now_us - s.last_composite_log_us.get() > 1_000_000 {
-            s.last_composite_log_us.set(now_us);
-            true
-        } else {
-            false
+        let now = Instant::now();
+        let due = s
+            .last_composite_log
+            .get()
+            .is_none_or(|last| now.duration_since(last) > Duration::from_secs(1));
+        if due {
+            s.last_composite_log.set(Some(now));
         }
+        due
     })
 }
 

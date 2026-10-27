@@ -745,8 +745,7 @@ pub fn run_one(
         if !ctx.styles.get().is_null() {
             ffi::destroy_table(ctx.styles.get());
         }
-        // SAFETY: the cascade and relayouts that used the cache are done and the next page makes its own.
-        unsafe { css_cache.free() };
+        css_cache.free();
         if let Some(js) = js {
             js.free();
         }
@@ -887,8 +886,7 @@ pub fn run_one(
     if !ctx.styles.get().is_null() {
         ffi::destroy_table(ctx.styles.get());
     }
-    // SAFETY: the run is over and nothing relays out its page again.
-    unsafe { css_cache.free() };
+    css_cache.free();
     if let Some(js) = js {
         js.free();
     }

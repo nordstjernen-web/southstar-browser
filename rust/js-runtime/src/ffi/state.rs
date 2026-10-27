@@ -38,7 +38,6 @@ pub(crate) struct Slots {
     pub raf_frame_ctx: *mut *mut NsNode,
     pub ce_main_doc: *mut *const NsNode,
     pub halted: *mut GBoolean,
-    pub pinned_wrappers_set: *mut *mut GHashTable,
 }
 
 pub(crate) struct Hook<F: Copy> {

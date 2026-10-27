@@ -4,6 +4,8 @@
 
 mod ffi;
 mod rules;
+#[cfg(test)]
+mod tests;
 
 use std::cmp::Ordering;
 use std::collections::HashSet;

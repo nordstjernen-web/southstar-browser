@@ -81,9 +81,9 @@ pub fn file_line(millis: i64, level: c_int, category: &[u8], message: &[u8]) -> 
 
 fn file_enabled() -> bool {
     if cfg!(windows) {
-        ffi::env(c"NS_NO_LOG_FILE").is_none()
+        ffi::env("NS_NO_LOG_FILE").is_none()
     } else {
-        ffi::env(c"NS_LOG_FILE").is_some()
+        ffi::env("NS_LOG_FILE").is_some()
     }
 }
 
@@ -102,8 +102,8 @@ fn path_buf(path: &[u8]) -> PathBuf {
 pub fn file_path() -> Option<CString> {
     let mut path = lock(&FILE_PATH);
     if path.is_none() && file_enabled() {
-        *path = match ffi::env(c"NS_LOG_FILE") {
-            Some(fixed) if !fixed.is_empty() => Some(fixed.to_owned()),
+        *path = match ffi::env("NS_LOG_FILE") {
+            Some(fixed) if !fixed.is_empty() => CString::new(fixed).ok(),
             _ => ffi::default_log_path(),
         };
     }

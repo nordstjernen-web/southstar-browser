@@ -10,8 +10,10 @@ publish.workspace = true
 [dependencies]
 southstar-unicode = { path = "../unicode" }
 southstar-about-style = { path = "../about-style" }
+southstar-config = { path = "../config" }
 southstar-glib = { path = "../glib" }
 southstar-sqlite = { path = "../sqlite" }
+southstar-url = { path = "../url" }
 
 [lints]
 workspace = true

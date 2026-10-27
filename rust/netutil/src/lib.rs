@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+pub mod file_uri;
 
 pub use ffi::{default_accept_language, effective_accept_language, effective_navigator_languages};
 

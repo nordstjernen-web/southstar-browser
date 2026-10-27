@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_void};
 use std::sync::OnceLock;
 
 use southstar_dom::{Node, NsNode};
@@ -11,10 +11,6 @@ use southstar_paint::text_layout::{self, Layout};
 use southstar_style::StyleRef;
 
 use crate::controls;
-
-unsafe extern "C" {
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-}
 
 static IMAGE_PEEK: OnceLock<fn(&CStr) -> *mut c_void> = OnceLock::new();
 
@@ -55,7 +51,7 @@ pub fn utf8_get_char(s: &CStr, at: usize) -> u32 {
     if at >= bytes.len() {
         return 0;
     }
-    unsafe { g_utf8_get_char(bytes.as_ptr().add(at).cast()) }
+    southstar_layout::utf8_get_char(bytes, at)
 }
 
 pub fn unichar_isspace(c: u32) -> bool {

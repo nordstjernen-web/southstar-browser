@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -28,10 +28,6 @@ impl Js {
     pub fn addr(self) -> usize {
         self.0 as usize
     }
-}
-
-unsafe extern "C" {
-    fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
 
 use southstar_canvas::nsr_dommatrix_make;
@@ -179,23 +175,12 @@ pub(crate) fn viewport_h() -> f64 {
 }
 
 pub(crate) fn ascii_strtod(text: &CStr, at: usize) -> Option<(f64, usize)> {
-    let start = text.as_ptr().wrapping_add(at);
-    let mut end: *mut c_char = ptr::null_mut();
-    let v = unsafe { g_ascii_strtod(start, &mut end) };
-    let used = (end as usize).wrapping_sub(start as usize);
-    (!end.is_null() && used > 0).then_some((v, at + used))
+    let (v, end) = southstar_glib::ascii_strtod_at(text, at);
+    (end > at.min(text.to_bytes().len())).then_some((v, end))
 }
 
 pub(crate) fn ascii_strtod_prefix(text: &CStr) -> (f64, usize) {
-    let start = text.as_ptr();
-    let mut end: *mut c_char = ptr::null_mut();
-    let v = unsafe { g_ascii_strtod(start, &mut end) };
-    let used = if end.is_null() {
-        0
-    } else {
-        (end as usize).wrapping_sub(start as usize)
-    };
-    (v, used.min(text.to_bytes().len()))
+    southstar_glib::ascii_strtod_prefix(text.to_bytes())
 }
 
 pub fn box_border_box(b: BoxRef<'_>) -> Rect {

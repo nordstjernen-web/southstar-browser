@@ -8,14 +8,22 @@ mod tree;
 
 pub use image_map::image_map_area;
 pub use image_source::{choose_img, img_chosen_density, img_chosen_url};
-pub use tree::{BoxPool, LinkVec, link_clear_fn};
+pub use tree::{BoxPool, LinkVec};
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
 use southstar_dom::Node;
-use southstar_glib::{GArray, GBoolean, GHashTable, GPtrArray};
+use std::ffi::CString;
+
+use southstar_glib::{GBoolean, GHashTable};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GridTrack {
+    pub start: f64,
+    pub end: f64,
+}
 
 #[repr(C)]
 pub struct Style {
@@ -48,6 +56,7 @@ pub struct Edges {
 }
 
 #[repr(C)]
+#[allow(clippy::box_collection)]
 pub struct NsBox {
     kind: c_uint,
     dom: *const c_void,
@@ -96,13 +105,13 @@ pub struct NsBox {
     inline_min_cache_width: f64,
     inline_min_cache_valid: GBoolean,
     paint_layout: *mut c_void,
-    links: *mut GArray,
-    attrs: *mut GArray,
-    inline_atomics: *mut GArray,
-    atomic_line_heights: *mut GArray,
-    table_col_hints: *mut GArray,
-    grid_col_tracks: *mut GArray,
-    grid_row_tracks: *mut GArray,
+    links: Option<Box<LinkVec>>,
+    attrs: Option<Box<Vec<InlineAttr>>>,
+    inline_atomics: Option<Box<Vec<InlineAtomic>>>,
+    atomic_line_heights: Option<Box<Vec<f64>>>,
+    table_col_hints: Option<Box<Vec<TableColHint>>>,
+    grid_col_tracks: Option<Box<Vec<GridTrack>>>,
+    grid_row_tracks: Option<Box<Vec<GridTrack>>>,
     grid_explicit_cols: c_int,
     grid_explicit_rows: c_int,
     media: *mut NsBoxMedia,
@@ -129,6 +138,7 @@ const _: () =
     assert!(size_of::<NsBox>() == 576 && core::mem::offset_of!(NsBox, next_sibling) == 552);
 
 #[repr(C)]
+#[allow(clippy::box_collection)]
 pub struct NsBoxMedia {
     image_src: *mut c_char,
     image: *mut c_void,
@@ -138,8 +148,8 @@ pub struct NsBoxMedia {
     marker_image: *mut c_void,
     border_image_src: *mut c_char,
     border_image: *mut c_void,
-    bg_layer_srcs: *mut GPtrArray,
-    bg_layer_images: *mut GPtrArray,
+    bg_layer_srcs: Option<Box<Vec<Option<CString>>>>,
+    bg_layer_images: Option<Box<Vec<*mut c_void>>>,
     video_src: *mut c_char,
     video_poster: *mut c_char,
     video_audio_src: *mut c_char,
@@ -451,12 +461,8 @@ impl<'a> MediaRef<'a> {
     }
 
     pub fn bg_layer_srcs(self) -> Option<Vec<Option<&'a CStr>>> {
-        let layers = unsafe { self.raw().bg_layer_srcs.as_ref() }?;
-        Some(
-            (0..layers.len as usize)
-                .map(|i| c_str(unsafe { *layers.pdata.add(i) }.cast()))
-                .collect(),
-        )
+        let layers = self.raw().bg_layer_srcs.as_deref()?;
+        Some(layers.iter().map(Option::as_deref).collect())
     }
 
     pub fn video_src(self) -> Option<&'a CStr> {
@@ -488,12 +494,7 @@ impl<'a> MediaRef<'a> {
     }
 
     pub fn bg_layer_images(self) -> Option<Vec<*mut c_void>> {
-        let layers = unsafe { self.raw().bg_layer_images.as_ref() }?;
-        Some(
-            (0..layers.len as usize)
-                .map(|i| unsafe { *layers.pdata.add(i) })
-                .collect(),
-        )
+        self.raw().bg_layer_images.as_deref().cloned()
     }
 
     pub fn video(self) -> *mut c_void {
@@ -588,12 +589,12 @@ impl<'a> MediaRef<'a> {
         }
     }
 
-    pub fn set_bg_layers(self, srcs: *mut GPtrArray, images: *mut GPtrArray) {
+    pub fn set_bg_layers(self, srcs: Vec<Option<CString>>, images: Vec<*mut c_void>) {
         let m = self.get_mut();
-        unsafe {
-            (*m).bg_layer_srcs = srcs;
-            (*m).bg_layer_images = images;
-        }
+        // SAFETY: m is this media record's live allocation and no reference into it is held across the write.
+        unsafe { (*m).bg_layer_srcs = Some(Box::new(srcs)) };
+        // SAFETY: as above, for the image list.
+        unsafe { (*m).bg_layer_images = Some(Box::new(images)) };
     }
 }
 
@@ -667,12 +668,10 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn inline_atomic_boxes(self) -> Vec<BoxRef<'a>> {
-        let Some(atomics) = (unsafe { self.raw().inline_atomics.as_ref() }) else {
-            return Vec::new();
-        };
-        let data = atomics.data.cast::<InlineAtomic>();
-        (0..atomics.len as usize)
-            .filter_map(|i| unsafe { BoxRef::from_ptr((*data.add(i)).b) })
+        self.inline_atomics()
+            .unwrap_or_default()
+            .iter()
+            .filter_map(InlineAtomic::box_handle)
             .collect()
     }
 
@@ -822,50 +821,27 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn attrs(self) -> &'a [InlineAttr] {
-        let Some(attrs) = (unsafe { self.raw().attrs.as_ref() }) else {
-            return &[];
-        };
-        if attrs.len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(attrs.data.cast::<InlineAttr>(), attrs.len as usize) }
+        self.raw().attrs.as_deref().map_or(&[], Vec::as_slice)
     }
 
     pub fn links(self) -> &'a [LinkRange] {
-        let Some(links) = (unsafe { self.raw().links.as_ref() }) else {
-            return &[];
-        };
-        if links.len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(links.data.cast::<LinkRange>(), links.len as usize) }
+        self.raw().links.as_deref().map_or(&[], LinkVec::items)
     }
 
     pub fn has_attrs(self) -> bool {
-        !self.raw().attrs.is_null()
+        self.raw().attrs.is_some()
     }
 
     pub fn inline_atomics(self) -> Option<&'a [InlineAtomic]> {
-        let atomics = unsafe { self.raw().inline_atomics.as_ref() }?;
-        if atomics.len == 0 {
-            return Some(&[]);
-        }
-        Some(unsafe {
-            core::slice::from_raw_parts(atomics.data.cast::<InlineAtomic>(), atomics.len as usize)
-        })
+        self.raw().inline_atomics.as_deref().map(Vec::as_slice)
     }
 
     pub fn set_atomic_owner_offset(self, index: usize, x: f64, y: f64) {
-        let Some(atomics) = (unsafe { self.raw().inline_atomics.as_ref() }) else {
-            return;
-        };
-        if index >= atomics.len as usize {
-            return;
-        }
-        let atomic = unsafe { atomics.data.cast::<InlineAtomic>().add(index) };
-        unsafe {
-            (*atomic).owner_offset_x = x;
-            (*atomic).owner_offset_y = y;
+        // SAFETY: self.0 points to a live box and no other reference to its atomics is held during the update.
+        let b = unsafe { &mut *self.0.as_ptr() };
+        if let Some(atomic) = b.inline_atomics.as_mut().and_then(|a| a.get_mut(index)) {
+            atomic.owner_offset_x = x;
+            atomic.owner_offset_y = y;
         }
     }
 
@@ -882,15 +858,10 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn table_col_hints(self) -> &'a [TableColHint] {
-        let Some(hints) = (unsafe { self.raw().table_col_hints.as_ref() }) else {
-            return &[];
-        };
-        if hints.len == 0 {
-            return &[];
-        }
-        unsafe {
-            core::slice::from_raw_parts(hints.data.cast::<TableColHint>(), hints.len as usize)
-        }
+        self.raw()
+            .table_col_hints
+            .as_deref()
+            .map_or(&[], Vec::as_slice)
     }
 
     pub fn set_x(self, x: f64) {
@@ -961,19 +932,12 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn translate_grid_tracks(self, dx: f64, dy: f64) {
-        for (tracks, d) in [
-            (self.raw().grid_col_tracks, dx),
-            (self.raw().grid_row_tracks, dy),
-        ] {
-            let Some(tracks) = (unsafe { tracks.as_ref() }) else {
-                continue;
-            };
-            let edges = tracks.data.cast::<[f64; 2]>();
-            for i in 0..tracks.len as usize {
-                unsafe {
-                    (*edges.add(i))[0] += d;
-                    (*edges.add(i))[1] += d;
-                }
+        // SAFETY: self.0 points to a live box and no other reference to it is held during the update.
+        let b = unsafe { &mut *self.0.as_ptr() };
+        for (tracks, d) in [(&mut b.grid_col_tracks, dx), (&mut b.grid_row_tracks, dy)] {
+            for track in tracks.iter_mut().flat_map(|t| t.iter_mut()) {
+                track.start += d;
+                track.end += d;
             }
         }
     }
@@ -1116,20 +1080,20 @@ impl<'a> BoxRef<'a> {
         unsafe { (*self.0.as_ptr()).cb_height_override = h };
     }
 
-    pub fn grid_tracks(self, columns: bool) -> *mut GArray {
-        if columns {
-            self.raw().grid_col_tracks
+    pub fn grid_tracks(self, columns: bool) -> Option<&'a [GridTrack]> {
+        let tracks = if columns {
+            &self.raw().grid_col_tracks
         } else {
-            self.raw().grid_row_tracks
-        }
+            &self.raw().grid_row_tracks
+        };
+        tracks.as_deref().map(Vec::as_slice)
     }
 
-    pub fn set_grid_tracks(self, cols: *mut GArray, rows: *mut GArray) {
-        let b = self.0.as_ptr();
-        unsafe {
-            (*b).grid_col_tracks = cols;
-            (*b).grid_row_tracks = rows;
-        }
+    pub fn set_grid_tracks(self, cols: Vec<GridTrack>, rows: Vec<GridTrack>) {
+        // SAFETY: self.0 points to a live box and no other reference to it is held during the update.
+        let b = unsafe { &mut *self.0.as_ptr() };
+        b.grid_col_tracks = Some(Box::new(cols));
+        b.grid_row_tracks = Some(Box::new(rows));
     }
 
     pub fn grid_explicit(self) -> (c_int, c_int) {
@@ -1227,29 +1191,14 @@ impl<'a> BoxRef<'a> {
     }
 
     pub fn set_atomic_line_heights(self, heights: &[f64]) {
-        let b = self.0.as_ptr();
-        unsafe {
-            if (*b).atomic_line_heights.is_null() {
-                (*b).atomic_line_heights =
-                    southstar_glib::g_array_new(0, 0, size_of::<f64>() as c_uint);
-            }
-            let a = (*b).atomic_line_heights;
-            (*a).len = 0;
-            southstar_glib::g_array_append_vals(
-                a,
-                heights.as_ptr().cast(),
-                heights.len() as c_uint,
-            );
-        }
+        // SAFETY: self.0 points to a live box and no other reference to its line heights is held during the update.
+        let b = unsafe { &mut *self.0.as_ptr() };
+        let slot = b.atomic_line_heights.get_or_insert_default();
+        slot.clear();
+        slot.extend_from_slice(heights);
     }
 
     pub fn atomic_line_heights(self) -> Option<&'a [f64]> {
-        let heights = unsafe { self.raw().atomic_line_heights.as_ref() }?;
-        if heights.len == 0 {
-            return Some(&[]);
-        }
-        Some(unsafe {
-            core::slice::from_raw_parts(heights.data.cast::<f64>(), heights.len as usize)
-        })
+        self.raw().atomic_line_heights.as_deref().map(Vec::as_slice)
     }
 }

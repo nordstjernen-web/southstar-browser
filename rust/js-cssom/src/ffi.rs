@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_anim::AnimHandle;
@@ -62,11 +62,6 @@ pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
     lossy(&css_engine::timing_serialize(Some(&entry.timing)))
 }
 
-unsafe extern "C" {
-
-    fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
-}
-
 fn until_nul(text: &str) -> &[u8] {
     let text = text.as_bytes();
     &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
@@ -82,15 +77,7 @@ pub(crate) fn c_string(text: &[u8]) -> CString {
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
-    let c = c_string(text.as_bytes());
-    let mut end: *mut c_char = core::ptr::null_mut();
-    let value = unsafe { g_ascii_strtod(c.as_ptr(), &mut end) };
-    let used = if end.is_null() {
-        0
-    } else {
-        (end as usize).saturating_sub(c.as_ptr() as usize)
-    };
-    (value, used.min(text.len()))
+    southstar_glib::ascii_strtod_prefix(text.as_bytes())
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {

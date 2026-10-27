@@ -1,11 +1,12 @@
-//! Southstar — the embedding API's history call, and the GLib calls behind browsing history.
+//! Southstar — the embedding API's history call, and the local times, folders and logging behind browsing history.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_config::util;
 use southstar_glib as glib;
 
 #[repr(C)]
@@ -13,26 +14,10 @@ struct GDateTime {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct GUri {
-    _private: [u8; 0],
-}
-
 const LOG_LEVEL_WARNING: c_int = 1 << 4;
-const URI_FLAGS_NONE: c_int = 0;
 
 unsafe extern "C" {
-    fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
     fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
-    fn g_markup_escape_text(text: *const c_char, length: isize) -> *mut c_char;
-    fn g_utf8_make_valid(text: *const c_char, length: isize) -> *mut c_char;
-    fn g_utf8_get_char_validated(p: *const c_char, max_len: isize) -> u32;
-    fn g_unichar_to_utf8(c: u32, outbuf: *mut c_char) -> c_int;
-    fn g_uri_parse(uri_string: *const c_char, flags: c_int, error: *mut *mut c_void) -> *mut GUri;
-    fn g_uri_get_host(uri: *mut GUri) -> *const c_char;
-    fn g_uri_unref(uri: *mut GUri);
     fn g_date_time_new_now_local() -> *mut GDateTime;
     fn g_date_time_new_from_unix_local(t: i64) -> *mut GDateTime;
     fn g_date_time_get_day_of_year(datetime: *mut GDateTime) -> c_int;
@@ -69,61 +54,54 @@ pub(crate) fn warn(message: &[u8]) {
 }
 
 pub(crate) fn build_filename(dir: &CStr, name: &CStr) -> CString {
-    unsafe {
-        let path = g_build_filename(dir.as_ptr(), name.as_ptr(), ptr::null::<c_char>());
-        c_string(&take(path).unwrap_or_default())
-    }
+    c_string(&util::build_filename(&[dir.to_bytes(), name.to_bytes()]))
 }
 
 pub(crate) fn user_data_dir() -> CString {
-    c_string(&unsafe { borrowed(glib::g_get_user_data_dir()) })
+    // SAFETY: g_get_user_data_dir has no preconditions and returns a string GLib owns.
+    let dir = unsafe { glib::g_get_user_data_dir() };
+    // SAFETY: dir is NULL or the NUL-terminated string GLib keeps for the life of the process.
+    c_string(&unsafe { borrowed(dir) })
 }
 
-pub(crate) fn mkdir_with_parents(path: &CStr, mode: c_int) {
-    unsafe { g_mkdir_with_parents(path.as_ptr(), mode) };
+pub(crate) fn mkdir_with_parents(path: &CStr, mode: u32) {
+    if let Some(path) = util::os_path(path.to_bytes()) {
+        let _ = util::make_dirs(&path, mode);
+    }
 }
 
-pub(crate) fn chmod(path: &CStr, mode: c_int) {
-    unsafe { g_chmod(path.as_ptr(), mode) };
+pub(crate) fn chmod(path: &CStr, mode: u32) {
+    if let Some(path) = util::os_path(path.to_bytes()) {
+        let _ = util::set_mode(&path, mode);
+    }
 }
 
 pub(crate) fn markup_escape(text: &[u8]) -> Vec<u8> {
-    let text = c_string(text);
-    unsafe { take(g_markup_escape_text(text.as_ptr(), -1)) }.unwrap_or_default()
+    util::markup_escape(text)
 }
 
 pub(crate) fn utf8_make_valid(text: &[u8]) -> Vec<u8> {
-    let text = c_string(text);
-    unsafe { take(g_utf8_make_valid(text.as_ptr(), -1)) }.unwrap_or_default()
+    util::utf8_make_valid(text)
 }
 
-pub(crate) fn first_char(text: &[u8]) -> Option<u32> {
-    let text = c_string(text);
-    let c = unsafe { g_utf8_get_char_validated(text.as_ptr(), -1) };
-    (c != u32::MAX && c != u32::MAX - 1).then_some(c)
+pub(crate) fn first_char(text: &[u8]) -> Option<char> {
+    let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+    text[..end]
+        .utf8_chunks()
+        .next()
+        .and_then(|chunk| chunk.valid().chars().next())
 }
 
-pub(crate) fn unichar_isalnum(c: u32) -> bool {
-    southstar_unicode::is_alnum(c)
+pub(crate) fn unichar_isalnum(c: char) -> bool {
+    southstar_unicode::is_alnum(u32::from(c))
 }
 
-pub(crate) fn unichar_to_utf8(c: u32) -> Vec<u8> {
-    let mut out = [0u8; 8];
-    let n = unsafe { g_unichar_to_utf8(c, out.as_mut_ptr().cast()) };
-    out[..n.clamp(0, 6) as usize].to_vec()
+pub(crate) fn unichar_to_utf8(c: char) -> Vec<u8> {
+    c.encode_utf8(&mut [0; 4]).as_bytes().to_vec()
 }
 
 pub(crate) fn uri_host(url: &[u8]) -> Option<Vec<u8>> {
-    let url = c_string(url);
-    unsafe {
-        let uri = g_uri_parse(url.as_ptr(), URI_FLAGS_NONE, ptr::null_mut());
-        if uri.is_null() {
-            return None;
-        }
-        let host = glib::bytes(g_uri_get_host(uri)).map(<[u8]>::to_vec);
-        g_uri_unref(uri);
-        host
-    }
+    southstar_url::bytes::host_from(url)
 }
 
 pub(crate) struct LocalTime(*mut GDateTime);

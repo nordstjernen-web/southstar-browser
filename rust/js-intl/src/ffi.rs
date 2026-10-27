@@ -40,7 +40,6 @@ pub(crate) struct BrokenDown {
 }
 
 unsafe extern "C" {
-    fn g_get_real_time() -> i64;
     fn g_time_zone_new_local() -> *mut GTimeZone;
     fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
     fn g_time_zone_unref(tz: *mut GTimeZone);
@@ -64,7 +63,13 @@ fn cstring(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn real_time_ms() -> f64 {
-    (unsafe { g_get_real_time() } / 1000) as f64
+    let real_us: i64 = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or_else(
+            |before| -i64::try_from(before.duration().as_micros()).unwrap_or(i64::MAX),
+            |after| i64::try_from(after.as_micros()).unwrap_or(i64::MAX),
+        );
+    (real_us / 1000) as f64
 }
 
 pub(crate) fn break_down(seconds: i64, utc: bool) -> Option<BrokenDown> {
@@ -106,7 +111,7 @@ pub(crate) fn local_zone_identifier() -> Option<Vec<u8>> {
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }.map(<[u8]>::to_vec)
+    glib::env_bytes(name.to_str().ok()?)
 }
 
 pub(crate) fn language_names() -> Vec<Vec<u8>> {
@@ -157,9 +162,6 @@ pub(crate) fn c_text(bytes: &[u8]) -> CString {
 
 #[cfg(windows)]
 pub(crate) mod windows {
-    use core::ffi::c_long;
-
-    use southstar_glib as glib;
 
     #[repr(C)]
     struct SystemTime {
@@ -189,21 +191,13 @@ pub(crate) mod windows {
     }
 
     fn utf8(wide: &[u16]) -> Option<Vec<u8>> {
-        let text = unsafe {
-            glib::g_utf16_to_utf8(
-                wide.as_ptr(),
-                -1 as c_long,
-                core::ptr::null_mut(),
-                core::ptr::null_mut(),
-                core::ptr::null_mut(),
-            )
-        };
-        if text.is_null() {
-            return None;
-        }
-        let bytes = unsafe { glib::bytes(text) }.unwrap_or_default().to_vec();
-        unsafe { glib::g_free(text.cast()) };
-        Some(bytes)
+        let end = wide
+            .iter()
+            .position(|&unit| unit == 0)
+            .unwrap_or(wide.len());
+        String::from_utf16(&wide[..end])
+            .ok()
+            .map(String::into_bytes)
     }
 
     pub(crate) fn zone() -> Option<(Vec<u8>, Option<Vec<u8>>)> {

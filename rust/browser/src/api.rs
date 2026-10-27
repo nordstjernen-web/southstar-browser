@@ -7,7 +7,7 @@ use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
 use std::ffi::CString;
 
-use crate::ffi::{self, NsBrowser, PixelBuf};
+use crate::ffi::{self, NsBrowser, PixelBuf, StrBufOwned};
 use crate::{build, callbacks, hit, input, open, page, query, render, scroll, settle};
 
 pub use crate::ffi::{LayerPlan, PrintPages, PrintSetup, StickyY, VpLayerInfo};
@@ -157,7 +157,7 @@ impl Page {
     }
 
     pub fn render_text(&self) -> Option<Vec<u8>> {
-        query::dump_text(self.browser()).map(|text| text.bytes().to_vec())
+        query::dump_text(self.browser()).map(StrBufOwned::into_bytes)
     }
 
     pub fn dump_dom(&self) -> Option<Vec<u8>> {
@@ -165,11 +165,11 @@ impl Page {
     }
 
     pub fn dump_layout(&self) -> Option<Vec<u8>> {
-        query::dump_layout(self.browser()).map(|text| text.bytes().to_vec())
+        query::dump_layout(self.browser()).map(StrBufOwned::into_bytes)
     }
 
     pub fn dump_performance(&self) -> Vec<u8> {
-        query::dump_performance(self.browser()).bytes().to_vec()
+        query::dump_performance(self.browser()).into_bytes()
     }
 
     pub fn console_drain(&self) -> Option<Vec<u8>> {

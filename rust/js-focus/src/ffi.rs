@@ -2,12 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
@@ -19,10 +17,6 @@ use southstar_js_runtime::events;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
-
-unsafe extern "C" {
-    fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-}
 
 use southstar_js_window::nsr_make_window_event;
 
@@ -207,15 +201,6 @@ fn c_string(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-fn owned_text(text: *mut c_char) -> Option<Vec<u8>> {
-    if text.is_null() {
-        return None;
-    }
-    let bytes = unsafe { CStr::from_ptr(text) }.to_bytes().to_vec();
-    unsafe { glib::g_free(text.cast()) };
-    Some(bytes)
-}
-
 pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: Element) {
     crate::activation::activation_behavior(scope, act, target);
 }
@@ -249,8 +234,20 @@ pub(crate) fn anchor_resolved_href(js: Js, el: Element) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn uri_unescape(text: &[u8]) -> Option<Vec<u8>> {
-    let text = c_string(text);
-    owned_text(unsafe { g_uri_unescape_string(text.as_ptr(), ptr::null()) })
+    let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+    let mut out = Vec::with_capacity(text.len());
+    let mut rest = text.iter();
+    while let Some(&b) = rest.next() {
+        if b != b'%' {
+            out.push(b);
+            continue;
+        }
+        let hi = char::from(*rest.next()?).to_digit(16)?;
+        let lo = char::from(*rest.next()?).to_digit(16)?;
+        let byte = u8::try_from(hi * 16 + lo).ok().filter(|&byte| byte != 0)?;
+        out.push(byte);
+    }
+    Some(out)
 }
 
 pub(crate) fn note(el: Element) {

@@ -14,7 +14,6 @@ use crate::ffi::new_session;
 use crate::frame::FrameMemory;
 
 unsafe extern "C" {
-    fn g_getenv(variable: *const c_char) -> *const c_char;
     fn g_setenv(variable: *const c_char, value: *const c_char, overwrite: c_int) -> c_int;
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
@@ -22,9 +21,8 @@ unsafe extern "C" {
     fn SDL_SetMainReady();
 }
 
-fn env(name: &CStr) -> Option<&'static [u8]> {
-    let value = unsafe { g_getenv(name.as_ptr()) };
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) }.to_bytes())
+fn env(name: &CStr) -> Option<Vec<u8>> {
+    southstar_glib::env_bytes(name.to_str().ok()?)
 }
 
 fn selftest(url: &[u8]) -> c_int {
@@ -61,7 +59,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
         SDL_SetMainReady()
     };
     if let Some(url) = env(c"NS_RENDER_SELFTEST").filter(|u| !u.is_empty()) {
-        return selftest(url);
+        return selftest(&url);
     }
     if args.len() < 3 {
         return 2;

@@ -1,4 +1,4 @@
-//! Southstar — the GLib and uchardet calls behind the HTML helpers.
+//! Southstar — the GLib conversion and uchardet calls behind the HTML helpers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,11 +6,9 @@ use core::ffi::{c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 
 unsafe extern "C" {
-    fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
-    fn g_utf8_validate(str_: *const c_char, max_len: isize, end: *mut *const c_char) -> GBoolean;
     fn g_convert(
         str_: *const c_char,
         len: isize,
@@ -31,10 +29,13 @@ fn cstring(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes)).unwrap_or_default()
 }
 
-unsafe fn take(p: *mut c_char) -> Vec<u8> {
-    let bytes = unsafe { glib::bytes(p) }.unwrap_or_default().to_vec();
-    unsafe { glib::g_free(p.cast()) };
-    bytes
+#[cfg(windows)]
+const DIR_SEPARATOR: u8 = b'\\';
+#[cfg(not(windows))]
+const DIR_SEPARATOR: u8 = b'/';
+
+fn is_dir_separator(c: u8) -> bool {
+    c == b'/' || (cfg!(windows) && c == b'\\')
 }
 
 pub(crate) fn ascii_strtod(text: &[u8]) -> f64 {
@@ -42,8 +43,24 @@ pub(crate) fn ascii_strtod(text: &[u8]) -> f64 {
 }
 
 pub(crate) fn path_basename(path: &[u8]) -> Vec<u8> {
-    let path = cstring(path);
-    unsafe { take(g_path_get_basename(path.as_ptr())) }
+    let path = crate::until_nul(path);
+    if path.is_empty() {
+        return b".".to_vec();
+    }
+    let Some(last) = path.iter().rposition(|&c| !is_dir_separator(c)) else {
+        return vec![DIR_SEPARATOR];
+    };
+    let has_drive =
+        cfg!(windows) && path.len() >= 2 && path[0].is_ascii_alphabetic() && path[1] == b':';
+    if has_drive && last == 1 {
+        return vec![DIR_SEPARATOR];
+    }
+    let base = match path[..=last].iter().rposition(|&c| is_dir_separator(c)) {
+        Some(i) => i + 1,
+        None if has_drive => 2,
+        None => 0,
+    };
+    path[base..=last].to_vec()
 }
 
 pub(crate) fn utf8_make_valid(text: &[u8]) -> Vec<u8> {
@@ -51,7 +68,7 @@ pub(crate) fn utf8_make_valid(text: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn utf8_validate(text: &[u8]) -> bool {
-    unsafe { g_utf8_validate(text.as_ptr().cast(), text.len() as isize, ptr::null_mut()) != 0 }
+    !text.contains(&0) && core::str::from_utf8(text).is_ok()
 }
 
 pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<Vec<u8>> {
