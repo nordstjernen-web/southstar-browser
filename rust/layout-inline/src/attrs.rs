@@ -83,7 +83,7 @@ fn stretch_from_css(rank: i32) -> i32 {
 }
 
 fn dom_is(r: &InlineAttr, name: &CStr) -> bool {
-    ffi::node(r.dom_ptr()).and_then(|n| n.name()) == Some(name)
+    r.dom().and_then(|n| n.name()) == Some(name)
 }
 
 pub(crate) fn is_textarea(r: &InlineAttr) -> bool {
@@ -146,12 +146,12 @@ fn outer_width(b: BoxRef<'_>) -> f64 {
 }
 
 fn vertical_align(b: BoxRef<'_>) -> Option<&CStr> {
-    ffi::style(b.style()).and_then(|s| s.keyword_of(PropId::VerticalAlign))
+    southstar_style::box_style(b).and_then(|s| s.keyword_of(PropId::VerticalAlign))
 }
 
 fn atomic_ascent(ab: BoxRef<'_>) -> f64 {
     let h = outer_height(ab).max(0.0);
-    let fs = font_size(ffi::style(ab.style()));
+    let fs = font_size(southstar_style::box_style(ab));
     let xh = fs * 0.5;
     let mut a_asc = h;
     if !ffi::clips_children(ab)
@@ -180,13 +180,13 @@ pub(crate) fn apply_atomic_shapes(list: &AttrList, b: BoxRef<'_>) {
         .filter_map(|a| a.box_ref())
         .map(atomic_ascent)
         .fold(0.0, |acc, a| if a > acc { a } else { acc });
-    for a in atomics {
+    for a in &atomics {
         let Some(ab) = a.box_ref() else {
             continue;
         };
         let w = outer_width(ab).max(0.0);
         let h = outer_height(ab).max(0.0);
-        let fs = font_size(ffi::style(ab.style()));
+        let fs = font_size(southstar_style::box_style(ab));
         let (asc, desc, xh) = (fs * 0.8, fs * 0.2, fs * 0.5);
         let mut top = -h;
         if !ffi::clips_children(ab)
@@ -231,7 +231,7 @@ fn insert_line_height(list: &AttrList, px: f64, start: u32, end: u32) {
 }
 
 fn insert_spacer_line_heights(list: &AttrList, b: BoxRef<'_>) {
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if r.kind == k::SPACER && r.len > 0 {
             insert_line_height(list, 0.0, r.start as u32, (r.start + r.len) as u32);
         }
@@ -248,7 +248,7 @@ fn apply_line_heights(list: &AttrList, b: Option<BoxRef<'_>>, strut_px: f64) -> 
         if r.kind != k::ELEMENT || r.style().is_null() || r.len == 0 {
             continue;
         }
-        let px = ffi::css_line_height_px(r.style());
+        let px = ffi::css_line_height_px(southstar_style::attr_style(r));
         if px <= 0.0 || (px - strut_px).abs() < 0.01 {
             continue;
         }
@@ -274,7 +274,7 @@ fn strut_kinds(b: BoxRef<'_>, n: usize, strut_px: f64) -> Vec<u8> {
         if r.kind != k::ELEMENT || r.style().is_null() {
             continue;
         }
-        let px = ffi::css_line_height_px(r.style());
+        let px = ffi::css_line_height_px(southstar_style::attr_style(r));
         let shorter = px > 0.0 && px < strut_px - 0.01;
         mark_range(
             &mut kind,
@@ -282,7 +282,7 @@ fn strut_kinds(b: BoxRef<'_>, n: usize, strut_px: f64) -> Vec<u8> {
             if shorter { STRUT_SHORTER } else { STRUT_ROOT },
         );
     }
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if r.kind == k::SPACER {
             mark_range(&mut kind, r, STRUT_SPACER);
         }
@@ -313,7 +313,7 @@ fn restore_strut_lines(layout: &Layout, list: &AttrList, b: BoxRef<'_>, strut_px
     }
     let kind = strut_kinds(b, n, strut_px);
     if layout.text().is_empty() {
-        layout.set_text(text);
+        layout.set_text(&text);
     }
     let mut with_struts: Option<AttrList> = None;
     let mut iter = layout.iter();
@@ -344,7 +344,7 @@ fn is_text_input(r: &InlineAttr) -> bool {
     if r.kind != k::INPUT_FIELD && r.kind != k::INPUT_FIELD_FOCUSED {
         return false;
     }
-    let Some(n) = ffi::node(r.dom_ptr()) else {
+    let Some(n) = r.dom() else {
         return false;
     };
     if n.name() != Some(c"input") {
@@ -381,7 +381,7 @@ pub(crate) fn set_attrs(layout: &Layout, list: Option<&AttrList>, b: Option<BoxR
         return;
     };
     let mut stretched = false;
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if !is_text_input(r) || r.len < 4 {
             continue;
         }
@@ -398,7 +398,7 @@ pub(crate) fn set_attrs(layout: &Layout, list: Option<&AttrList>, b: Option<BoxR
         if prefix < 0.0 {
             continue;
         }
-        let fs = font_size(ffi::style(r.style()));
+        let fs = font_size(southstar_style::attr_style(r));
         let w = css_w - prefix;
         if w < fs * 0.4 {
             continue;

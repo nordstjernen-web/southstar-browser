@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 southstar-css = { path = "../css" }
 southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
 southstar-layout = { path = "../layout" }
 southstar-layout-build = { path = "../layout-build" }
 southstar-layout-content = { path = "../layout-content" }

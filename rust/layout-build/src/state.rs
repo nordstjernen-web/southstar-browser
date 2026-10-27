@@ -8,18 +8,18 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
-use southstar_dom::NsNode;
-use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
+use southstar_dom::{Node, NsNode, WeakNode};
+use southstar_layout::{BoxPool, BoxRef, Style};
 
 pub struct AbsEntry {
-    pub dom: *const NsNode,
+    pub dom: Option<WeakNode>,
     pub pseudo: *const Style,
     pub fixed: bool,
 }
 
 #[derive(Clone, Copy)]
 pub struct AbsStatic {
-    pub run: *mut NsBox,
+    pub run: BoxRef<'static>,
     pub rel_x: f64,
     pub rel_y: f64,
 }
@@ -103,7 +103,7 @@ pub fn datalist_open() -> bool {
     DATALIST_OPEN.load(Ordering::Relaxed)
 }
 
-pub fn queue_absolute(dom: *const NsNode, fixed: bool) {
+pub fn queue_absolute(dom: Node<'_>, fixed: bool) {
     with(|st| {
         if st.abs_pending.is_none() {
             return;
@@ -111,13 +111,13 @@ pub fn queue_absolute(dom: *const NsNode, fixed: bool) {
         if !st
             .abs_seen
             .as_mut()
-            .is_none_or(|seen| seen.insert(dom as usize))
+            .is_none_or(|seen| seen.insert(dom.as_ptr() as usize))
         {
             return;
         }
         if let Some(pending) = st.abs_pending.as_mut() {
             pending.push(AbsEntry {
-                dom,
+                dom: Some(dom.downgrade()),
                 pseudo: ptr::null(),
                 fixed,
             });
@@ -159,16 +159,12 @@ pub fn collect_state() -> CollectState {
     })
 }
 
-pub fn collect_absolute(
-    dom: *const NsNode,
-    fixed: bool,
-    placeholder: bool,
-) -> Option<BoxRef<'static>> {
+pub fn collect_absolute(dom: Node<'_>, fixed: bool, placeholder: bool) -> Option<BoxRef<'static>> {
     queue_absolute(dom, fixed);
     if !placeholder {
         return None;
     }
-    abs_placeholder(dom)
+    abs_placeholder(dom.as_ptr())
 }
 
 pub fn abs_placeholder(key: *const NsNode) -> Option<BoxRef<'static>> {

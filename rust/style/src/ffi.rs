@@ -14,7 +14,7 @@ use southstar_css::{
 };
 pub use southstar_css::{NsCssValue, ValueKind as Kind};
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::{BoxRef, InlineAttr, Style, TableColHint};
 
 pub const PROP_COUNT: usize = southstar_css::PROP_COUNT;
 
@@ -374,6 +374,14 @@ impl<'a> StyleRef<'a> {
         self.0.as_ptr().cast_const().cast()
     }
 
+    pub fn ptr_or_null(style: Option<StyleRef<'_>>) -> *const Style {
+        style.map_or(ptr::null(), StyleRef::as_ptr)
+    }
+
+    pub fn from_data(data: &'a StyleData) -> StyleRef<'a> {
+        StyleRef(NonNull::from(data), PhantomData)
+    }
+
     pub fn retained(style: &'a southstar_css::RetainedStyle) -> StyleRef<'a> {
         let p = style.as_ptr().cast_mut();
         StyleRef(NonNull::new(p).expect("a retained style"), PhantomData)
@@ -528,8 +536,20 @@ impl StyleTable {
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    // SAFETY: a box's style pointer is null or the computed style the box holds for as long as it lives.
-    unsafe { StyleRef::from_ptr(b.style()) }
+    layout_style(b.style())
+}
+
+pub fn attr_style(a: &InlineAttr) -> Option<StyleRef<'_>> {
+    layout_style(a.style())
+}
+
+pub fn col_hint_style(h: &TableColHint) -> Option<StyleRef<'_>> {
+    layout_style(h.style())
+}
+
+fn layout_style<'a>(style: *const Style) -> Option<StyleRef<'a>> {
+    // SAFETY: the box tree stores only null or the computed style a box, inline attribute or column hint was built from, which outlives the box tree.
+    unsafe { StyleRef::from_ptr(style) }
 }
 
 pub fn display_of(style: Option<StyleRef<'_>>) -> Display {

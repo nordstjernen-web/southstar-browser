@@ -2,9 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxRef, Style, children};
+use southstar_layout::{BoxRef, children};
 use southstar_layout_geom::{edges_into_box, resolve_used_height};
-use southstar_style::{Kind, PropId, ValueRef};
+use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
 use crate::align::length_is_auto;
 use crate::dispatch::{layout_box, shift_box_tree};
@@ -72,7 +72,7 @@ pub fn layout_rendered_legend(
     legend: BoxRef<'_>,
     cw: f64,
     inner_x: f64,
-    inherited: *const Style,
+    inherited: Option<StyleRef<'_>>,
 ) -> f64 {
     edges_into_box(legend, cw);
     let (m, p, bd) = (legend.margin(), legend.padding(), legend.border());

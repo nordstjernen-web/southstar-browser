@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod ffi;
 mod geometry;
 mod stack;
@@ -54,9 +56,10 @@ pub fn hit_inline_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
 
 pub fn hit_link(root: BoxRef<'_>, x: f64, y: f64) -> Option<LinkHit<'_>> {
     let range = walks::link_range(root, x, y)?;
+    let dom = range.dom();
     Some(LinkHit {
-        href: ffi::text(range.href_ptr()),
-        dom: ffi::node(range.dom_ptr()),
+        href: dom.and_then(|d| d.attr(c"href")),
+        dom,
     })
 }
 

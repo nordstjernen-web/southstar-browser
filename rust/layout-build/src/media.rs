@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_void};
 use core::ptr;
 
 use southstar_dom::{Node, children};
-use southstar_glib::{ascii_strtod, strdup};
+use southstar_glib::ascii_strtod;
 use southstar_layout::{BoxPool, BoxRef};
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
@@ -34,9 +34,8 @@ pub fn peek_image(src: Option<&CStr>) -> *mut c_void {
     }
 }
 
-fn dup_peek(src: &CStr) -> (*mut core::ffi::c_char, *mut c_void) {
-    let copy = strdup(src.to_bytes());
-    (copy, peek_image(Some(src)))
+fn dup_peek(src: &CStr) -> (Option<&CStr>, *mut c_void) {
+    (Some(src), peek_image(Some(src)))
 }
 
 pub fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {
@@ -105,12 +104,12 @@ fn decode_data_image(url: &CStr, key: &CStr) -> *mut c_void {
 }
 
 pub fn build_image_box(n: Node<'_>) -> BoxRef<'static> {
-    let (url_ptr, img, density) = ffi::choose_img_url(n);
-    let url = ffi::c_str(url_ptr);
+    let (url, img, density) = ffi::choose_img_url(n);
+    let url = url.as_deref();
     let b = BoxPool::new_box(KIND_IMAGE);
-    b.set_dom(Node::ptr_or_null(img).cast());
+    b.set_dom(img);
     let m = b.ensure_media();
-    m.set_image_src(url_ptr);
+    m.set_image_src(url);
     m.set_image_density(if density > 0.0 { density } else { 1.0 });
     b.set_content_width(image_dimension_attr(img, c"width"));
     b.set_content_height(image_dimension_attr(img, c"height"));
@@ -167,10 +166,10 @@ fn strtod_or(s: Option<&CStr>, dflt: f64) -> f64 {
 
 pub fn build_audio_box(n: Node<'_>) -> BoxRef<'static> {
     let b = BoxPool::new_box(KIND_VIDEO);
-    b.set_dom(n.as_ptr().cast());
+    b.set_dom(Some(n));
     let m = b.ensure_media();
     if let Some(src) = first_media_source_url(n) {
-        m.set_video_audio_src(strdup(src.to_bytes()));
+        m.set_video_audio_src(Some(src));
     }
     if n.attr(c"controls").is_some() {
         b.set_content_width(strtod_or(n.attr(c"width"), 250.0));
@@ -182,10 +181,10 @@ pub fn build_audio_box(n: Node<'_>) -> BoxRef<'static> {
 pub fn build_video_box(n: Node<'_>) -> BoxRef<'static> {
     let src = first_media_source_url(n);
     let b = BoxPool::new_box(KIND_VIDEO);
-    b.set_dom(n.as_ptr().cast());
+    b.set_dom(Some(n));
     let m = b.ensure_media();
     if let Some(src) = src {
-        m.set_video_src(strdup(src.to_bytes()));
+        m.set_video_src(Some(src));
     }
     let mut poster = n.attr(c"poster");
     let data_poster = n.attr(c"data-poster");
@@ -199,7 +198,7 @@ pub fn build_video_box(n: Node<'_>) -> BoxRef<'static> {
         poster = fallback_poster;
     }
     if let Some(p) = poster.filter(|p| !p.is_empty()) {
-        m.set_video_poster(strdup(p.to_bytes()));
+        m.set_video_poster(Some(p));
     }
     let metadata = node_has_media_metadata(Some(n));
     b.set_content_width(strtod_or(
@@ -211,14 +210,14 @@ pub fn build_video_box(n: Node<'_>) -> BoxRef<'static> {
         if metadata { 360.0 } else { 150.0 },
     ));
     if let Some(audio) = n.attr(c"data-audio-src").filter(|a| !a.is_empty()) {
-        m.set_video_audio_src(strdup(audio.to_bytes()));
+        m.set_video_audio_src(Some(audio));
     }
     b
 }
 
 pub fn build_svg_box(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> BoxRef<'static> {
     let b = BoxPool::new_box(KIND_SVG);
-    b.set_dom(n.as_ptr().cast());
+    b.set_dom(Some(n));
     b.set_style(s.map_or(ptr::null(), StyleRef::as_ptr));
     b.set_svg_styles(styles.as_ptr());
     let m = b.ensure_media();
@@ -279,7 +278,7 @@ pub fn build_svg_box(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -
 
 pub fn build_canvas_box(n: Node<'_>, s: Option<StyleRef<'_>>) -> BoxRef<'static> {
     let b = BoxPool::new_box(KIND_IMAGE);
-    b.set_dom(n.as_ptr().cast());
+    b.set_dom(Some(n));
     b.set_style(s.map_or(ptr::null(), StyleRef::as_ptr));
     let m = b.ensure_media();
     b.set_content_width(image_dimension_attr(Some(n), c"width"));

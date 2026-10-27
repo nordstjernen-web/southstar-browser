@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 
 use southstar_dom::{Kind as NodeKind, Node};
-use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
     edges_from_style, height_keyword_stretches, length_resolve, resolve_height_with_basis,
     style_creates_fixed_cb, value_is_percent,
@@ -376,7 +376,7 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
         cb_pad_w
     };
     let mut cb_h = if cb_is_icb { viewport_h() } else { cb_pad_h };
-    let cs: *const Style = cb.style();
+    let cs: Option<StyleRef<'_>> = southstar_style::box_style(cb);
     let grid = if inline_cb.is_some() {
         inline_cb
     } else if !cb_is_icb && e.pseudo.is_none() {
@@ -572,7 +572,7 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
 fn precompute_round(ctx: &mut Ctx<'_, '_>, from: usize, to: usize) {
     let mut entries = Vec::new();
     for i in from..to {
-        let Some(Some(e)) = ffi::pending_entry(i) else {
+        let Some(Some(e)) = ffi::pending_entry(i, ctx.styles) else {
             continue;
         };
         if static_run(e).is_some() {
@@ -597,7 +597,7 @@ pub fn process_absolute_boxes(root: BoxRef<'_>, styles: StyleTable, viewport_wid
     if batch_len == 0 {
         return;
     }
-    let Some(Some(first)) = ffi::pending_entry(0) else {
+    let Some(Some(first)) = ffi::pending_entry(0, styles) else {
         ffi::pending_clear();
         return;
     };
@@ -617,7 +617,7 @@ pub fn process_absolute_boxes(root: BoxRef<'_>, styles: StyleTable, viewport_wid
     };
     precompute_round(&mut ctx, 0, batch_len);
     let mut i = 0;
-    while let Some(entry) = ffi::pending_entry(i) {
+    while let Some(entry) = ffi::pending_entry(i, styles) {
         if i == ctx.batch.len() {
             precompute_round(&mut ctx, i, ffi::pending_len());
         }

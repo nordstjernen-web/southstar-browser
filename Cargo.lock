@@ -3216,7 +3216,6 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-flex",
  "southstar-layout-float",
@@ -3259,7 +3258,6 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-html-util",
  "southstar-layout",
  "southstar-layout-geom",
@@ -3287,7 +3285,6 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-geom",
  "southstar-style",
@@ -3321,9 +3318,9 @@ dependencies = [
 name = "southstar-layout-hit"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-float",
  "southstar-layout-geom",
@@ -3340,7 +3337,6 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-build",
  "southstar-layout-content",
@@ -3408,7 +3404,6 @@ dependencies = [
 name = "southstar-layout-table"
 version = "1.0.4-dev"
 dependencies = [
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-geom",
  "southstar-layout-sizing",
@@ -3437,9 +3432,7 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-cairo",
  "southstar-dom",
- "southstar-glib",
  "southstar-paint",
- "southstar-text",
  "southstar-unicode",
 ]
 
@@ -3618,7 +3611,6 @@ dependencies = [
 name = "southstar-selection"
 version = "1.0.4-dev"
 dependencies = [
- "southstar-glib",
  "southstar-layout",
  "southstar-style",
 ]

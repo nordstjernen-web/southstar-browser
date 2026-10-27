@@ -41,15 +41,15 @@ fn c16(v: u8) -> u16 {
 }
 
 fn attr_style(r: &InlineAttr) -> Option<StyleRef<'_>> {
-    unsafe { StyleRef::from_ptr(r.style()) }
+    southstar_style::attr_style(r)
 }
 
 fn attr_node(r: &InlineAttr) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(r.dom_ptr().cast()) }
+    r.dom()
 }
 
 fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 fn node_named(n: Option<Node<'_>>, name: &[u8]) -> bool {
@@ -277,7 +277,7 @@ fn paint_inline_dashed_decorations(
             let base_y = y_origin + f64::from(iter.baseline()) / S;
             let line_start = line.start_index();
             let line_end = line.start_index() + line.length();
-            for r in attrs {
+            for r in &attrs {
                 if !is_decoration(r.kind) {
                     continue;
                 }
@@ -470,7 +470,7 @@ fn paint_spell_underlines(attrs: &AttrList, b: BoxRef<'_>) {
     }
     let tlen = text.to_bytes().len();
     let mut ranges_known = false;
-    for a in b.attrs() {
+    for a in &b.attrs() {
         if a.kind == k::INPUT_FIELD || a.kind == k::INPUT_FIELD_FOCUSED {
             ranges_known = true;
         }
@@ -480,7 +480,7 @@ fn paint_spell_underlines(attrs: &AttrList, b: BoxRef<'_>) {
         let s = a.start;
         let e = cmin_usize(a.start + a.len, tlen);
         if s < e {
-            spell_underline_range(attrs, text, s, e);
+            spell_underline_range(attrs, &text, s, e);
             ranges_known = true;
         }
     }
@@ -497,16 +497,7 @@ fn paint_spell_underlines(attrs: &AttrList, b: BoxRef<'_>) {
         bx = cur.parent();
     }
     if owner.is_some_and(engine::node_spellcheck_host) {
-        spell_underline_range(attrs, text, 0, tlen);
-    }
-}
-
-pub fn drop_box_cache(b: BoxRef<'_>) {
-    let layout = b.paint_layout();
-    if !layout.is_null() {
-        // SAFETY: a box's paint layout is a handle inline_layout stored with Layout::into_raw.
-        drop(unsafe { Layout::from_raw(layout) });
-        b.set_paint_layout(core::ptr::null_mut());
+        spell_underline_range(attrs, &text, 0, tlen);
     }
 }
 
@@ -527,7 +518,7 @@ fn base_layout(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<(Layout, AttrLi
         layout.set_width((b.content_width() * S) as i32);
     }
     layout.set_wrap(wrap_mode_for(s));
-    if b.inline_atomics().is_none_or(<[_]>::is_empty) {
+    if b.inline_atomics().is_none_or(|a| a.is_empty()) {
         apply_css_line_spacing(Some(&layout), s);
     }
     let ti = inline_text_indent_px(b, s, b.content_width());
@@ -541,7 +532,7 @@ fn base_layout(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<(Layout, AttrLi
         layout.set_height(-(lc as i32));
         layout.set_ellipsize(text_layout::ELLIPSIZE_END);
     }
-    layout.set_text(text);
+    layout.set_text(&text);
     let attrs = AttrList::new();
     apply_i18n(Some(&layout), Some(&attrs), Some(b));
     if let Some(st) = s {
@@ -941,7 +932,9 @@ fn paint_inline_line_baselines(b: BoxRef<'_>, layout: &Layout, y_origin: f64) ->
     let n = layout.line_count();
     let mut out = vec![0.0; if n > 0 { n as usize } else { 1 }];
     let heights = b.atomic_line_heights();
-    let by_layout = heights.is_some_and(|h| h.len() >= 2 && h.len() == n as usize);
+    let by_layout = heights
+        .as_ref()
+        .is_some_and(|h| h.len() >= 2 && h.len() == n as usize);
     let mut it = layout.iter();
     let mut line_top = b.y();
     let mut i = 0usize;
@@ -949,7 +942,7 @@ fn paint_inline_line_baselines(b: BoxRef<'_>, layout: &Layout, y_origin: f64) ->
         let logical = it.line_logical_extents();
         let baseline = it.baseline();
         if by_layout {
-            let line_h = heights.map_or(0.0, |h| h[i]);
+            let line_h = heights.as_ref().map_or(0.0, |h| h[i]);
             out[i] = line_top
                 + (line_h - f64::from(logical.height) / S) / 2.0
                 + f64::from(baseline - logical.y) / S;
@@ -1312,7 +1305,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
     let (mut opt_minx, mut opt_maxx, mut opt_miny, mut opt_maxy) = (1e9, -1e9, 1e9, -1e9);
     let mut opt_count = 0;
     let mut opt_sel: Vec<(f64, f64)> = Vec::new();
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if !is_field(r.kind) && r.kind != k::BUTTON {
             continue;
         }
@@ -1436,7 +1429,7 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
         }
         let block_chrome = field_box.is_some_and(|fb| core::ptr::eq(fb.dom_ptr(), r.dom_ptr()))
             && style_has_inline_box_paint(attr_style(r));
-        let mut draw_native = r.native_chrome != 0 && !block_chrome;
+        let mut draw_native = r.native_chrome && !block_chrome;
         if r.kind == k::BUTTON
             && dom.is_some_and(|d| d.attr(c"class").is_some())
             && r.box_w <= 0.0
@@ -1506,7 +1499,7 @@ fn paint_carets(
     y_origin: f64,
 ) {
     let attrs = b.attrs();
-    for r in attrs {
+    for r in &attrs {
         if r.kind != k::CARET || !state::caret_visible() {
             continue;
         }
@@ -1522,7 +1515,7 @@ fn paint_carets(
         }
         cr.save();
         let mut cstyle = s;
-        for f in attrs {
+        for f in &attrs {
             if is_field(f.kind)
                 && !f.style().is_null()
                 && f.start <= r.start
@@ -1577,7 +1570,7 @@ fn paint_check_controls(
 ) {
     let font_size = length_or(get(s, P::FontSize), 16.0);
     let accent = accent_color(s);
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if !matches!(
             r.kind,
             k::CHECKBOX | k::CHECKBOX_CHECKED | k::RADIO | k::RADIO_CHECKED
@@ -1639,7 +1632,7 @@ fn paint_meters(
     y_origin: f64,
 ) {
     let accent = accent_color(s);
-    for r in b.attrs() {
+    for r in &b.attrs() {
         if r.kind != k::PROGRESS && r.kind != k::METER {
             continue;
         }
@@ -1755,7 +1748,7 @@ fn paint_vertical(
         let Some(text) = b.text() else {
             return;
         };
-        let stacked = engine::vertical_stack_text(text);
+        let stacked = engine::vertical_stack_text(&text);
         let Some(layout) = paint_inline_make_layout(b, s, highlight) else {
             return;
         };
@@ -1816,8 +1809,7 @@ fn inline_layout(
 ) -> Option<Layout> {
     let cacheable = highlight.is_none_or(CStr::is_empty);
     let cached = if cacheable {
-        // SAFETY: a box's paint layout is null or a handle inline_layout stored with Layout::into_raw.
-        unsafe { Layout::clone_from_raw(b.paint_layout()) }
+        b.paint_layout().and_then(Layout::from_any)
     } else {
         None
     };
@@ -1825,8 +1817,8 @@ fn inline_layout(
         Some(l) => l,
         None => paint_inline_make_layout(b, s, highlight)?,
     };
-    if cacheable && b.paint_layout().is_null() {
-        b.set_paint_layout(layout.clone().into_raw());
+    if cacheable && !b.has_paint_layout() {
+        b.set_paint_layout(Some(layout.clone().into_any()));
     }
     Some(layout)
 }
@@ -1948,7 +1940,7 @@ pub fn sync_inline_atomic_offsets(root: BoxRef<'_>) {
         child = c.next_sibling();
     }
     if let Some(atomics) = root.inline_atomics() {
-        for a in atomics {
+        for a in &atomics {
             if let Some(ab) = a.box_ref() {
                 sync_inline_atomic_offsets(ab);
             }

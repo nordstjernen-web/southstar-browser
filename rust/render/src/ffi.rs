@@ -399,7 +399,7 @@ fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> *mut N
         caret_byte: c.caret_byte,
         anchor_byte: c.sel_anchor_byte,
         image_cache: c.images,
-        base_url: c.base_url,
+        base_url: text(c.base_url),
     });
     southstar_paint::list_ordinals_end();
     layout

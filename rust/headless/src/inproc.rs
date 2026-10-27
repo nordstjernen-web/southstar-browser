@@ -406,8 +406,8 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
         };
         let (want_src, want_poster) = match ffi::video_sources(b) {
             Some((src, poster)) => (
-                src.and_then(|s| ffi::url_resolve(base, s)),
-                poster.and_then(|p| ffi::url_resolve(base, p)),
+                src.and_then(|s| ffi::url_resolve(base, &s)),
+                poster.and_then(|p| ffi::url_resolve(base, &p)),
             ),
             None => (None, None),
         };

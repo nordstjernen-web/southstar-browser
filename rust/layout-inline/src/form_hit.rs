@@ -43,7 +43,7 @@ fn hit_candidate(r: &InlineAttr, parent_style: Option<StyleRef<'_>>) -> bool {
     if !is_form_hit(r.kind) || r.dom_ptr().is_null() {
         return false;
     }
-    let rs = ffi::style(r.style()).or(parent_style);
+    let rs = southstar_style::attr_style(r).or(parent_style);
     !style_blocks_hit_testing(rs)
 }
 
@@ -54,12 +54,12 @@ pub fn inline_box_form_hit<'a>(
     parent_style: Option<StyleRef<'_>>,
 ) -> Option<Node<'a>> {
     let attrs = b.attrs();
-    let atomics = b.inline_atomics().unwrap_or(&[]);
+    let atomics = b.inline_atomics().unwrap_or_default();
     if attrs.is_empty() && atomics.is_empty() {
         return None;
     }
     let text = b.text().filter(|t| !t.is_empty())?;
-    let ps = parent_style.map_or(core::ptr::null(), StyleRef::as_ptr);
+    let ps = parent_style;
     let layout = ffi::new_layout(ps);
     layout.set_width((b.content_width() * f64::from(SCALE)) as c_int);
     layout.set_wrap(ffi::wrap_mode_for(ps));
@@ -80,7 +80,7 @@ pub fn inline_box_form_hit<'a>(
     ) {
         layout.set_ellipsize(ELLIPSIZE_END);
     }
-    layout.set_text(text);
+    layout.set_text(&text);
     let i18n = AttrList::new();
     ffi::apply_i18n(&layout, &i18n, b);
     ffi::apply_font_features(&i18n, ps);
@@ -114,7 +114,7 @@ pub fn inline_box_form_hit<'a>(
         .filter(|&i| i >= 0)
     {
         let idx = index as usize;
-        for a in atomics {
+        for a in &atomics {
             let Some(ab) = a.box_ref() else {
                 continue;
             };
@@ -122,21 +122,21 @@ pub fn inline_box_form_hit<'a>(
                 continue;
             }
             if let Some(dom) = ab.dom().filter(|d| node_is_form_hit_target(Some(*d))) {
-                atomic_hit = Some(dom.as_ptr());
+                atomic_hit = Some(Some(dom));
             }
         }
-        for r in attrs {
+        for r in &attrs {
             if !hit_candidate(r, parent_style) || idx < r.start || idx >= r.start + r.len {
                 continue;
             }
             if is_button_hit(r.kind) {
-                button_hit = Some(r.dom_ptr());
+                button_hit = Some(r.dom());
             } else if field_hit.is_none() {
-                field_hit = Some(r.dom_ptr());
+                field_hit = Some(r.dom());
             }
         }
     }
-    for r in attrs {
+    for r in &attrs {
         if !hit_candidate(r, parent_style) {
             continue;
         }
@@ -163,13 +163,10 @@ pub fn inline_box_form_hit<'a>(
             continue;
         }
         if is_button_hit(r.kind) {
-            button_hit = Some(r.dom_ptr());
+            button_hit = Some(r.dom());
         } else if field_hit.is_none() {
-            field_hit = Some(r.dom_ptr());
+            field_hit = Some(r.dom());
         }
     }
-    let hit = atomic_hit
-        .or(button_hit.map(|p| p.cast()))
-        .or(field_hit.map(|p| p.cast()))?;
-    ffi::node(hit.cast())
+    atomic_hit.or(button_hit).or(field_hit).flatten()
 }

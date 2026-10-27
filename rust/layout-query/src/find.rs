@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_layout::{BoxKind, BoxRef};
+use southstar_layout::{BoxKind, BoxRef, Text};
 
 fn matches_at(text: &[u8], needle: &[u8], case_sensitive: bool) -> bool {
     if case_sensitive {
@@ -29,19 +29,19 @@ pub fn count_in_text(text: &[u8], needle: &[u8], case_sensitive: bool) -> u32 {
     hits
 }
 
-fn run_text(b: BoxRef<'_>) -> Option<&[u8]> {
+fn run_text(b: BoxRef<'_>) -> Option<Text> {
     if b.kind() != BoxKind::Inline {
         return None;
     }
-    b.text().map(|t| t.to_bytes())
+    Some(b.text_bytes()).filter(Text::is_present)
 }
 
 fn run_has_match(b: BoxRef<'_>, needle: &[u8], case_sensitive: bool) -> bool {
-    run_text(b).is_some_and(|t| count_in_text(t, needle, case_sensitive) > 0)
+    run_text(b).is_some_and(|t| count_in_text(&t, needle, case_sensitive) > 0)
 }
 
 pub fn count_matches(root: BoxRef<'_>, needle: &[u8], case_sensitive: bool) -> u32 {
-    let own = run_text(root).map_or(0, |t| count_in_text(t, needle, case_sensitive));
+    let own = run_text(root).map_or(0, |t| count_in_text(&t, needle, case_sensitive));
     southstar_layout::children(root)
         .fold(own, |sum, c| sum + count_matches(c, needle, case_sensitive))
 }
@@ -85,7 +85,7 @@ fn ordinal_walk(
     acc: &mut u32,
 ) -> bool {
     if let Some(text) = run_text(root) {
-        let here = count_in_text(text, needle, case_sensitive);
+        let here = count_in_text(&text, needle, case_sensitive);
         if root.same(target) {
             if here > 0 {
                 *acc += 1;

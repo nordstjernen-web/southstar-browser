@@ -2,35 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::strdup;
-use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
+use southstar_dom::Node;
+use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
+use std::rc::Rc;
 
 use crate::{block, generated, media, state};
 
 pub use southstar_svg::SvgSize;
-
-pub fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-pub fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
-
-pub fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
-pub fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
 
 pub fn viewport_w() -> f64 {
     southstar_css::viewport().0
@@ -93,9 +77,12 @@ pub fn data_url_decode(url: &CStr, budget: u64) -> Option<Vec<u8>> {
     southstar_net::decode_data_url(url.to_bytes(), budget)
 }
 
-pub fn choose_img_url<'a>(n: Node<'a>) -> (*mut c_char, Option<Node<'a>>, f64) {
+pub fn choose_img_url<'a>(n: Node<'a>) -> (Option<CString>, Option<Node<'a>>, f64) {
     let chosen = southstar_layout::choose_img(n);
-    let url = chosen.url.map_or(ptr::null_mut(), |url| strdup(&url));
+    let url = chosen.url.and_then(|url| {
+        let end = url.iter().position(|&b| b == 0).unwrap_or(url.len());
+        CString::new(&url[..end]).ok()
+    });
     (url, Some(chosen.img), chosen.density)
 }
 
@@ -104,7 +91,7 @@ pub fn svg_intrinsic_size(n: Node<'_>) -> SvgSize {
 }
 
 pub fn set_bg_layers(m: MediaRef<'_>, layers: &[Option<&CStr>]) {
-    let srcs = layers.iter().map(|l| l.map(CStr::to_owned)).collect();
+    let srcs = layers.iter().map(|l| l.map(Rc::from)).collect();
     let images = layers.iter().map(|l| media::peek_image(*l)).collect();
     m.set_bg_layers(srcs, images);
 }
@@ -140,8 +127,8 @@ pub use southstar_paint::sync_inline_atomic_offsets;
 
 pub use southstar_layout_query::compute_paint_bounds;
 
-pub fn record_frame_viewports(root: *mut NsBox) {
-    southstar_layout_query::record_frame_viewports(box_ref(root));
+pub fn record_frame_viewports(root: Option<BoxRef<'_>>) {
+    southstar_layout_query::record_frame_viewports(root);
 }
 
 pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
@@ -156,37 +143,35 @@ pub fn unichar_isalnum(c: u32) -> bool {
     southstar_unicode::is_alnum(c)
 }
 
-pub struct RawLink {
+pub struct RawLink<'a> {
     pub start: usize,
     pub len: usize,
-    pub href: *const c_char,
-    pub target: *const c_char,
-    pub dom: *const NsNode,
+    pub href: &'a CStr,
+    pub target: Option<&'a CStr>,
+    pub dom: Node<'a>,
 }
 
-pub struct RunParts {
+pub struct RunParts<'a> {
     pub text: Vec<u8>,
-    pub links: Vec<RawLink>,
+    pub links: Vec<RawLink<'a>>,
     pub attrs: Vec<InlineAttr>,
-    pub atomics: Vec<(usize, *mut NsBox)>,
+    pub atomics: Vec<(usize, BoxRef<'static>)>,
 }
 
-fn dup_or_null(p: *const c_char) -> *mut c_char {
-    c_str(p).map_or(ptr::null_mut(), |s| strdup(s.to_bytes()))
-}
-
-pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
+pub fn new_inline_run(parts: RunParts<'_>) -> BoxRef<'static> {
     let b = southstar_layout::BoxPool::new_inline();
     if !parts.links.is_empty() {
+        let mut links = LinkVec::new();
         for l in &parts.links {
-            b.push_link(LinkRange::new(
+            links.push(LinkRange::new(
                 l.start,
                 l.len,
-                dup_or_null(l.href),
-                dup_or_null(l.target),
-                l.dom.cast(),
+                Some(l.href),
+                l.target,
+                Some(l.dom),
             ));
         }
+        b.put_links(Some(links));
     }
     for a in &parts.attrs {
         if let Some(src) = a.bg_image_src() {
@@ -199,10 +184,8 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
             .atomics
             .iter()
             .map(|&(off, child)| {
-                if let Some(c) = box_ref(child)
-                    && c.parent().is_none()
-                {
-                    c.set_parent(Some(b));
+                if child.parent().is_none() {
+                    child.set_parent(Some(b));
                 }
                 InlineAtomic::new(off, child)
             })
@@ -210,7 +193,7 @@ pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
         b.put_atomics(Some(&atomics));
     }
     b.set_text_bytes(&parts.text);
-    b.as_mut_ptr()
+    b
 }
 
 pub fn set_open_select(select: Option<Node<'_>>) {
@@ -226,14 +209,23 @@ pub fn abs_pending_len() -> usize {
     state::with(|st| st.abs_pending.as_ref().map_or(0, Vec::len))
 }
 
-pub fn abs_pending_entry<'a>(i: usize) -> Option<(Option<Node<'a>>, Option<StyleRef<'a>>, bool)> {
+type PendingEntry<'a> = (Option<Node<'a>>, Option<StyleRef<'a>>, bool);
+
+pub fn abs_pending_entry(i: usize, table: StyleTable) -> Option<PendingEntry<'static>> {
     let (dom, pseudo, fixed) = state::with(|st| {
         st.abs_pending
             .as_ref()
             .and_then(|p| p.get(i))
             .map(|e| (e.dom, e.pseudo, e.fixed))
     })?;
-    Some((node(dom), style(pseudo), fixed))
+    let dom = dom.and_then(southstar_dom::WeakNode::get);
+    let pseudo = dom.and_then(|dom| table.get(dom)).and_then(|host| {
+        [host.before(), host.after()]
+            .into_iter()
+            .flatten()
+            .find(|s| s.as_ptr() == pseudo)
+    });
+    Some((dom, pseudo, fixed))
 }
 
 pub fn abs_pending_clear() {
@@ -246,7 +238,7 @@ pub fn abs_pending_clear() {
 
 pub fn abs_static_run<'a>(key: usize) -> Option<(BoxRef<'a>, f64, f64)> {
     let found = state::with(|st| st.abs_static.as_ref().and_then(|m| m.get(&key).copied()))?;
-    box_ref(found.run).map(|run| (run, found.rel_x, found.rel_y))
+    Some((found.run, found.rel_x, found.rel_y))
 }
 
 pub fn abs_build_box(
@@ -266,12 +258,12 @@ pub fn abs_build_box(
         .get(dom)
         .and_then(StyleRef::after)
         .is_some_and(|a| a.as_ptr() == ps.as_ptr());
-    abox.set_pseudo_host(dom.as_ptr().cast(), after);
+    abox.set_pseudo_host(dom, after);
     media::collect_box_bg_image(abox, Some(ps));
     let mut generated = generated::build_pseudo_inline_for(Some(ps), Some(dom));
     if let Some(g) = generated
         && g.kind() == southstar_layout::BoxKind::Inline
-        && g.text().is_some_and(CStr::is_empty)
+        && g.text().is_some_and(|t| t.is_empty())
         && g.inline_atomics().is_none()
     {
         southstar_layout::BoxPool::free_tree(Some(g));
@@ -304,8 +296,7 @@ pub fn abs_static_target(b: BoxRef<'_>) -> Option<usize> {
     })
 }
 
-pub fn record_abs_static(key: usize, run: BoxRef<'_>, rel_x: f64, rel_y: f64) {
-    let run = run.as_mut_ptr();
+pub fn record_abs_static(key: usize, run: BoxRef<'static>, rel_x: f64, rel_y: f64) {
     state::with(|st| {
         if let Some(m) = st.abs_static.as_mut() {
             m.insert(key, state::AbsStatic { run, rel_x, rel_y });

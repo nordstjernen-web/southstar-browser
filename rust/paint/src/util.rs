@@ -96,7 +96,7 @@ pub fn keyword(v: Option<ValueRef<'_>>) -> Option<&CStr> {
 }
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+    southstar_style::box_style(b)
 }
 
 pub fn get(s: Option<StyleRef<'_>>, prop: PropId) -> Option<ValueRef<'_>> {

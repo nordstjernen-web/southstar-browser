@@ -21,13 +21,13 @@ pub use southstar_layout_sizing::{
 
 pub use southstar_layout_float::box_is_scroll_container;
 
-pub use southstar_layout::dispatch::layout_box;
+pub use southstar_layout_geom::dispatch::layout_box;
 
 pub fn overflow_scrolls(s: StyleRef<'_>, axis: PropId) -> bool {
     kw_scrolls(overflow_axis_keyword(Some(s), axis))
 }
 
-pub use southstar_layout::dispatch::shift_box_tree;
+pub use southstar_layout_geom::dispatch::shift_box_tree;
 
 pub use southstar_layout_geom::flex::{
     align_is_baseline as flex_align_is_baseline, box_is_border_box as flex_box_is_border_box,

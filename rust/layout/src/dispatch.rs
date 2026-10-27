@@ -4,13 +4,15 @@
 
 use std::sync::OnceLock;
 
-use crate::{BoxRef, Style};
+use southstar_css::StyleData;
+
+use crate::BoxRef;
 
 pub struct Dispatch {
-    pub layout_box: fn(BoxRef<'_>, f64, *const Style),
-    pub layout_block: fn(BoxRef<'_>, f64, *const Style),
+    pub layout_box: fn(BoxRef<'_>, f64, Option<&StyleData>),
+    pub layout_block: fn(BoxRef<'_>, f64, Option<&StyleData>),
     pub shift_box_tree: fn(BoxRef<'_>, f64, f64),
-    pub legacy_align_block_child: fn(BoxRef<'_>, f64, f64, *const Style),
+    pub legacy_align_block_child: fn(BoxRef<'_>, f64, f64, Option<&StyleData>),
     pub max_bottom: fn(BoxRef<'_>, f64) -> f64,
     pub clips_out_point: fn(BoxRef<'_>, f64, f64) -> bool,
 }
@@ -27,11 +29,11 @@ pub(crate) fn get() -> &'static Dispatch {
         .expect("the layout entry points are installed before the first layout")
 }
 
-pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
+pub fn layout_box(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<&StyleData>) {
     (get().layout_box)(b, parent_content_width, inherited);
 }
 
-pub fn layout_block(b: BoxRef<'_>, parent_content_width: f64, inherited: *const Style) {
+pub fn layout_block(b: BoxRef<'_>, parent_content_width: f64, inherited: Option<&StyleData>) {
     (get().layout_block)(b, parent_content_width, inherited);
 }
 
@@ -43,7 +45,7 @@ pub fn legacy_align_block_child(
     c: BoxRef<'_>,
     avail_x: f64,
     avail_w: f64,
-    inherited: *const Style,
+    inherited: Option<&StyleData>,
 ) {
     (get().legacy_align_block_child)(c, avail_x, avail_w, inherited);
 }

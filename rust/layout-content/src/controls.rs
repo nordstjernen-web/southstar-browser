@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, InlineAttr, Style, inline_kind};
+use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_geom::{edges_from_style, length_resolve};
 pub use southstar_layout_geom::{keyword_is, length_or};
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
@@ -121,10 +121,10 @@ pub fn emit_attr_styled(
     kind: c_uint,
     start: usize,
     end: usize,
-    s: *const Style,
+    s: Option<StyleRef<'_>>,
 ) {
     if end > start {
-        attrs.push(InlineAttr::new(kind, start, end - start).with_style(s));
+        attrs.push(InlineAttr::new(kind, start, end - start).with_style(StyleRef::ptr_or_null(s)));
     }
 }
 
@@ -427,7 +427,7 @@ pub fn emit_form_attr_sized(
     let (mut bw, mut bh) = (0.0, 0.0);
     let mut s = None;
     let mut fs = 16.0;
-    let mut bg_src: *const c_char = ptr::null();
+    let mut bg_src = None;
     let mut bg_image = ptr::null_mut();
     if let Some(d) = dom.filter(|_| !styles.as_ptr().is_null()) {
         s = styles.get(d);
@@ -442,7 +442,7 @@ pub fn emit_form_attr_sized(
                 bh += css_extra(dom, s, true);
             }
             if let Some(url) = st.get(PropId::BackgroundImage).and_then(ValueRef::url) {
-                bg_src = url.as_ptr();
+                bg_src = Some(url);
                 bg_image = ffi::peek_image(url);
             }
         }
@@ -465,12 +465,12 @@ pub fn emit_form_attr_sized(
         }
     }
     let mut a = InlineAttr::new(kind, start, end - start)
-        .with_dom(Node::ptr_or_null(dom).cast())
+        .with_dom(dom)
         .with_style(s.map_or(ptr::null(), StyleRef::as_ptr))
         .with_bg_image(bg_src, bg_image);
     a.box_w = bw;
     a.box_h = bh;
-    a.native_chrome = southstar_glib::boolean(!prefers_css_chrome(kind, dom, s));
+    a.native_chrome = !prefers_css_chrome(kind, dom, s);
     attrs.push(a);
 }
 
@@ -499,7 +499,7 @@ pub fn emit_control_text_style(
                     field_start,
                     field_end - field_start,
                 )
-                .with_family(fam.as_ptr()),
+                .with_family(Some(fam)),
             );
         }
     }
@@ -588,17 +588,14 @@ pub fn emit_font_features(
     start: usize,
     end: usize,
     kerning: c_int,
-    ligatures: *const c_char,
-    features: *const c_char,
+    ligatures: Option<&CStr>,
+    features: Option<&CStr>,
 ) {
-    if end <= start || (kerning < 0 && ligatures.is_null() && features.is_null()) {
+    if end <= start || (kerning < 0 && ligatures.is_none() && features.is_none()) {
         return;
     }
-    let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, start, end - start).with_font_settings(
-        ligatures,
-        features,
-        ptr::null(),
-    );
+    let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, start, end - start)
+        .with_font_settings(ligatures, features, None);
     a.font_kerning = kerning;
     attrs.push(a);
 }
@@ -607,14 +604,14 @@ pub fn emit_font_variations(
     attrs: &mut Vec<InlineAttr>,
     start: usize,
     end: usize,
-    variations: *const c_char,
+    variations: &CStr,
 ) {
-    if end > start && !variations.is_null() {
+    if end > start {
         attrs.push(
             InlineAttr::new(inline_kind::FONT_VARIATIONS, start, end - start).with_font_settings(
-                ptr::null(),
-                ptr::null(),
-                variations,
+                None,
+                None,
+                Some(variations),
             ),
         );
     }
@@ -628,15 +625,10 @@ pub fn emit_color(attrs: &mut Vec<InlineAttr>, start: usize, end: usize, rgba: [
     }
 }
 
-pub fn emit_font_family(
-    attrs: &mut Vec<InlineAttr>,
-    start: usize,
-    end: usize,
-    family: *const c_char,
-) {
-    if end > start && !family.is_null() {
+pub fn emit_font_family(attrs: &mut Vec<InlineAttr>, start: usize, end: usize, family: &CStr) {
+    if end > start {
         attrs.push(
-            InlineAttr::new(inline_kind::FONT_FAMILY, start, end - start).with_family(family),
+            InlineAttr::new(inline_kind::FONT_FAMILY, start, end - start).with_family(Some(family)),
         );
     }
 }

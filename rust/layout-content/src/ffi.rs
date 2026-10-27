@@ -5,10 +5,9 @@
 use core::ffi::{CStr, c_void};
 use std::sync::OnceLock;
 
-use southstar_dom::{Node, NsNode};
-use southstar_layout::{BoxRef, InlineAttr, Style};
+use southstar_layout::{BoxRef, InlineAttr};
 use southstar_paint::text_layout::{self, Layout};
-use southstar_style::StyleRef;
+use southstar_style::{StyleRef, attr_style};
 
 use crate::controls;
 
@@ -64,9 +63,9 @@ pub fn unichar_title_utf8(c: u32) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-pub fn char_cell_px(s: *const Style) -> f64 {
+pub fn char_cell_px(s: Option<StyleRef<'_>>) -> f64 {
     let layout = Layout::new(southstar_paint::text_context());
-    southstar_paint::apply_inline_font(&layout, style(s));
+    southstar_paint::apply_inline_font(&layout, s);
     let ctx = layout.context();
     let fd = layout
         .font_description()
@@ -76,18 +75,10 @@ pub fn char_cell_px(s: *const Style) -> f64 {
     })
 }
 
-fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(n) }
-}
-
-fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
 pub fn inline_attr_css_extra_w(r: &InlineAttr, s: StyleRef<'_>) -> f64 {
-    controls::css_extra(node(r.dom_ptr().cast()), Some(s), false)
+    controls::css_extra(r.dom(), Some(s), false)
 }
 
 pub fn inline_attr_control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {
-    controls::inline_attr_control_width(r, style(r.style()), node(r.dom_ptr().cast()), Some(b))
+    controls::inline_attr_control_width(r, attr_style(r), r.dom(), Some(b))
 }

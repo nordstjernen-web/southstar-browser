@@ -6,7 +6,7 @@ use core::cell::Cell;
 use core::ffi::CStr;
 
 use southstar_css::{GridTracks, TRACK_AUTO, TRACK_FR, TRACK_PERCENT, TRACK_PX};
-use southstar_layout::{BoxKind, BoxRef, Style, children};
+use southstar_layout::{BoxKind, BoxRef, children};
 use southstar_layout_geom::{
     clamp_height_minmax_px, edges_from_style, edges_into_box, keyword_or, length_resolve,
     resolve_used_height, self_start_is_far_side, specified_height_to_content, value_is_percent,
@@ -148,7 +148,7 @@ fn stretched_item_max_height(c: BoxRef<'_>) -> f64 {
     }
 }
 
-fn relayout_stretched(c: BoxRef<'_>, h: f64, child_inherited: *const Style) {
+fn relayout_stretched(c: BoxRef<'_>, h: f64, child_inherited: Option<StyleRef<'_>>) {
     if c.first_child().is_none() || !c.definite_height_read() || c.definite_height() > 0.0 {
         return;
     }
@@ -372,7 +372,11 @@ fn mark_used(items: &[Item<'_>], columns: bool, limit: i32) -> [bool; MAX] {
     used
 }
 
-fn measure_contribution(c: BoxRef<'_>, inherited: *const Style, avail: f64) -> Contribution {
+fn measure_contribution(
+    c: BoxRef<'_>,
+    inherited: Option<StyleRef<'_>>,
+    avail: f64,
+) -> Contribution {
     let mut nw = ffi::natural_width(c, inherited);
     let mut mw = ffi::min_width(c, inherited);
     if let Some(s) = style_of(c) {
@@ -429,7 +433,7 @@ pub fn layout_grid(
     cw: f64,
     inner_x: f64,
     inner_y: f64,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
 ) -> f64 {
     let sg = PENDING_COLS.take();
     let sgr = PENDING_ROWS.take();

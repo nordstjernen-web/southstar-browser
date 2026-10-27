@@ -10,8 +10,8 @@ use southstar_style::{Display, StyleRef, display_of};
 use crate::ffi::{
     Styles, append_display_contents_children, append_generated_after, append_node_children,
     build_block, build_inline_run, build_pseudo_block_for, build_pseudo_inline_for,
-    collect_box_bg_image, continues_inline_run, dom_ptr_of, is_inline_dom, parse_int,
-    queue_absolute_node, register_abs_pseudo, tag_is_non_rendering,
+    collect_box_bg_image, continues_inline_run, is_inline_dom, parse_int, queue_absolute_node,
+    register_abs_pseudo, tag_is_non_rendering,
 };
 use crate::runs::{append_child, merge_prefix};
 
@@ -270,7 +270,7 @@ fn cell_flush_pending<'a>(cell: BoxRef<'a>, pending_before: &mut Option<BoxRef<'
 
 fn build_cell<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let cell = BoxPool::new_box(BOX_TABLE_CELL);
-    cell.set_dom(dom_ptr_of(n));
+    cell.set_dom(Some(n));
     let s = styles.get(n);
     cell.set_style(s.map_or(core::ptr::null(), StyleRef::as_ptr));
     collect_box_bg_image(cell, s);
@@ -365,7 +365,7 @@ fn collect_table_col_hints(table: BoxRef<'_>, n: Node<'_>, styles: Styles) {
 
 fn build_table_caption<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let caption = BoxPool::new_box(BOX_TABLE_CAPTION);
-    caption.set_dom(dom_ptr_of(n));
+    caption.set_dom(Some(n));
     let s = styles.get(n);
     caption.set_style(s.map_or(core::ptr::null(), StyleRef::as_ptr));
     collect_box_bg_image(caption, s);
@@ -462,7 +462,7 @@ fn build_anonymous_table_cell<'a>(n: Node<'_>, styles: Styles) -> Option<BoxRef<
 
 fn build_table_row<'a>(tr: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let row = BoxPool::new_box(BOX_TABLE_ROW);
-    row.set_dom(dom_ptr_of(tr));
+    row.set_dom(Some(tr));
     row.set_style(styles.get(tr).map_or(core::ptr::null(), StyleRef::as_ptr));
     for c in siblings_from(tr.first_child()) {
         if !is_cell_element(c, styles) || style_is_none(styles.get(c)) {
@@ -484,7 +484,7 @@ fn build_row_from_cell_run<'a>(
     styles: Styles,
 ) -> Option<BoxRef<'a>> {
     let row = BoxPool::new_box(BOX_TABLE_ROW);
-    row.set_dom(dom.map_or(core::ptr::null(), dom_ptr_of));
+    row.set_dom(dom);
     for c in until(start, end) {
         if !is_cell_element(c, styles) {
             continue;
@@ -504,7 +504,7 @@ fn build_row_from_cell_run<'a>(
 
 pub fn build_table<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     let table = BoxPool::new_box(BOX_TABLE);
-    table.set_dom(dom_ptr_of(n));
+    table.set_dom(Some(n));
     table.set_style(styles.get(n).map_or(core::ptr::null(), StyleRef::as_ptr));
     collect_table_col_hints(table, n, styles);
     for c in siblings_from(n.first_child()) {
@@ -522,7 +522,7 @@ pub fn build_table<'a>(n: Node<'_>, styles: Styles) -> BoxRef<'a> {
     } else if rows.is_empty() {
         if let Some(cell) = build_anonymous_table_cell(n, styles) {
             let row = BoxPool::new_box(BOX_TABLE_ROW);
-            row.set_dom(dom_ptr_of(n));
+            row.set_dom(Some(n));
             append_child(row, cell);
             append_child(table, row);
         }

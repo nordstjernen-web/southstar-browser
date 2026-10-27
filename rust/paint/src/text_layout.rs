@@ -2,8 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::any::Any;
 use core::cell::{RefCell, RefMut};
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::borrow::Cow;
 use std::rc::Rc;
 use std::sync::{Arc, MutexGuard, PoisonError};
@@ -203,30 +204,14 @@ impl Layout {
         self.0.borrow_mut()
     }
 
-    pub fn into_raw(self) -> *mut c_void {
-        Rc::into_raw(self.0).cast_mut().cast()
+    pub fn into_any(self) -> Rc<dyn Any> {
+        self.0
     }
 
-    /// # Safety
-    ///
-    /// `raw` is null or came from `Layout::into_raw` on this thread and has not been released;
-    /// the returned handle takes over that reference.
-    pub unsafe fn from_raw(raw: *mut c_void) -> Option<Layout> {
-        if raw.is_null() {
-            return None;
-        }
-        // SAFETY: the caller passes a pointer from Rc::into_raw that still holds its reference.
-        Some(Layout(unsafe { Rc::from_raw(raw.cast_const().cast()) }))
-    }
-
-    /// # Safety
-    ///
-    /// `raw` is null or came from `Layout::into_raw` on this thread and has not been released;
-    /// the reference stays with the caller and the returned handle holds a new one.
-    pub unsafe fn clone_from_raw(raw: *mut c_void) -> Option<Layout> {
-        // SAFETY: the caller's contract is the one from_raw needs.
-        let borrowed = core::mem::ManuallyDrop::new(unsafe { Layout::from_raw(raw) }?);
-        Some(Layout::clone(&borrowed))
+    pub fn from_any(any: Rc<dyn Any>) -> Option<Layout> {
+        any.downcast::<RefCell<text_layout::Layout>>()
+            .ok()
+            .map(Layout)
     }
 
     pub fn context(&self) -> Context {

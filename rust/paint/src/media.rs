@@ -285,7 +285,7 @@ pub fn paint_math(cr: ContextRef, b: BoxRef<'_>) {
 }
 
 fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub fn paint_image(cr: ContextRef, b: BoxRef<'_>) {
@@ -532,7 +532,7 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
     };
     let mut bg_painted = b.media().is_some_and(|m| loaded(m.bg_image()));
     if !bg_painted && let Some(images) = b.media().and_then(|m| m.bg_layer_images()) {
-        bg_painted = images.into_iter().any(loaded);
+        bg_painted = images.iter().copied().any(loaded);
     }
     let punched = engine::video_helper_composited(b);
     if let Some(v) = v {

@@ -1,55 +1,44 @@
-//! Southstar — the Cairo and southstar-text calls behind MathML layout, and the paint entry point the painter calls.
+//! Southstar — the cairo and southstar-text calls behind MathML layout, and the paint entry point the painter calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
 use southstar_cairo::ContextRef;
 use southstar_dom::Node;
 use southstar_paint::text_layout::{self, FontDescription, Layout};
-use southstar_text::font::CairoContext;
 
 pub const PANGO_SCALE: f64 = 1024.0;
 
-unsafe extern "C" {
-    fn cairo_save(cr: *mut c_void);
-    fn cairo_restore(cr: *mut c_void);
-    fn cairo_move_to(cr: *mut c_void, x: f64, y: f64);
-    fn cairo_line_to(cr: *mut c_void, x: f64, y: f64);
-    fn cairo_stroke(cr: *mut c_void);
-    fn cairo_set_line_width(cr: *mut c_void, width: f64);
-    fn cairo_set_source_rgba(cr: *mut c_void, red: f64, green: f64, blue: f64, alpha: f64);
-}
+pub struct Canvas<'a>(ContextRef<'a>);
 
-pub struct Canvas(*mut c_void);
-
-impl Canvas {
+impl Canvas<'_> {
     pub fn save(&self) {
-        unsafe { cairo_save(self.0) };
+        self.0.save();
     }
 
     pub fn restore(&self) {
-        unsafe { cairo_restore(self.0) };
+        self.0.restore();
     }
 
     pub fn move_to(&self, x: f64, y: f64) {
-        unsafe { cairo_move_to(self.0, x, y) };
+        self.0.move_to(x, y);
     }
 
     pub fn line_to(&self, x: f64, y: f64) {
-        unsafe { cairo_line_to(self.0, x, y) };
+        self.0.line_to(x, y);
     }
 
     pub fn stroke(&self) {
-        unsafe { cairo_stroke(self.0) };
+        self.0.stroke();
     }
 
     pub fn set_line_width(&self, width: f64) {
-        unsafe { cairo_set_line_width(self.0, width) };
+        self.0.set_line_width(width);
     }
 
     pub fn set_source_rgba(&self, [r, g, b, a]: [f64; 4]) {
-        unsafe { cairo_set_source_rgba(self.0, r, g, b, a) };
+        self.0.set_source_rgba(r, g, b, a);
     }
 }
 
@@ -81,11 +70,8 @@ impl Token {
         (logical.width, logical.height)
     }
 
-    pub fn show(&self, canvas: &Canvas) {
-        // SAFETY: a Canvas wraps the live cairo_t paint_math was handed.
-        if let Some(cr) = unsafe { CairoContext::from_raw(canvas.0) } {
-            self.0.show_on(&cr);
-        }
+    pub fn show(&self, canvas: &Canvas<'_>) {
+        self.0.show(canvas.0);
     }
 }
 
@@ -106,5 +92,5 @@ pub fn paint_math(
     font_px: f64,
     rgba: [f64; 4],
 ) {
-    crate::paint(&Canvas(cr.as_raw()), math, x, y, font_px, rgba);
+    crate::paint(&Canvas(cr), math, x, y, font_px, rgba);
 }

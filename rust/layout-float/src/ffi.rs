@@ -3,29 +3,24 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 use southstar_style::{PropId, StyleRef};
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct FloatRef {
-    b: *mut NsBox,
+    b: Option<BoxRef<'static>>,
     pub side: c_int,
     pub top: f64,
     pub bottom: f64,
     pub outer_w: f64,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<FloatRef>() == 40);
-
 impl FloatRef {
     pub fn placed(b: BoxRef<'_>, side: i32, top: f64, bottom: f64, outer_w: f64) -> FloatRef {
         FloatRef {
-            b: b.as_mut_ptr(),
+            b: Some(b.into_static()),
             side,
             top,
             bottom,
@@ -35,7 +30,7 @@ impl FloatRef {
 
     pub fn band(side: i32, top: f64, bottom: f64, outer_w: f64) -> FloatRef {
         FloatRef {
-            b: ptr::null_mut(),
+            b: None,
             side,
             top,
             bottom,
@@ -44,7 +39,7 @@ impl FloatRef {
     }
 
     pub fn placed_box<'a>(&self) -> Option<BoxRef<'a>> {
-        unsafe { BoxRef::from_ptr(self.b) }
+        self.b
     }
 }
 
@@ -60,4 +55,4 @@ pub fn overflow_axis_keyword<'a>(s: Option<StyleRef<'a>>, axis: PropId) -> Optio
     Some(southstar_css::overflow_keyword(s.map(StyleRef::data), axis))
 }
 
-pub use southstar_layout::dispatch::shift_box_tree;
+pub use southstar_layout_geom::dispatch::shift_box_tree;

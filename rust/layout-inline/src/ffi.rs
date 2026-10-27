@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, InlineAttr, Style};
+use southstar_layout::{BoxRef, InlineAttr};
 use southstar_layout_sizing::SavedGeometry;
 use southstar_paint::text_layout::{AttrList, Attribute, Layout};
 use southstar_style::StyleRef;
@@ -15,54 +15,46 @@ use crate::attrs;
 
 pub(crate) const LINE_HEIGHT_KEY: &CStr = c"ns-css-line-height";
 
-pub(crate) fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
-}
-
-pub(crate) fn node<'a>(dom: *const c_void) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(dom.cast()) }
-}
-
-pub(crate) fn new_layout(parent_style: *const Style) -> Layout {
+pub(crate) fn new_layout(parent_style: Option<StyleRef<'_>>) -> Layout {
     let layout = Layout::new(southstar_paint::text_context());
-    southstar_paint::apply_inline_font(&layout, style(parent_style));
+    southstar_paint::apply_inline_font(&layout, parent_style);
     layout
 }
 
-pub(crate) fn style_text_indent(s: *const Style, basis: f64) -> f64 {
-    southstar_layout_geom::text_indent_px(style(s), basis)
+pub(crate) fn style_text_indent(s: Option<StyleRef<'_>>, basis: f64) -> f64 {
+    southstar_layout_geom::text_indent_px(s, basis)
 }
 
 pub(crate) fn paint_inline_layout(run: BoxRef<'_>) -> Option<Layout> {
     southstar_paint::build_inline_layout(run)
 }
 
-pub(crate) fn wrap_mode_for(s: *const Style) -> c_int {
-    southstar_paint::wrap_mode_for(style(s))
+pub(crate) fn wrap_mode_for(s: Option<StyleRef<'_>>) -> c_int {
+    southstar_paint::wrap_mode_for(s)
 }
 
-pub(crate) fn apply_css_line_spacing(layout: &Layout, s: *const Style) {
-    southstar_paint::apply_css_line_spacing(layout, style(s));
+pub(crate) fn apply_css_line_spacing(layout: &Layout, s: Option<StyleRef<'_>>) {
+    southstar_paint::apply_css_line_spacing(layout, s);
 }
 
 pub(crate) fn apply_i18n(layout: &Layout, attrs: &AttrList, b: BoxRef<'_>) {
     southstar_paint::apply_i18n(layout, attrs, b);
 }
 
-pub(crate) fn apply_font_features(attrs: &AttrList, s: *const Style) {
-    southstar_paint::apply_font_features(attrs, style(s));
+pub(crate) fn apply_font_features(attrs: &AttrList, s: Option<StyleRef<'_>>) {
+    southstar_paint::apply_font_features(attrs, s);
 }
 
 pub(crate) fn start_align_overflow(layout: &Layout) {
     southstar_paint::start_align_overflow(layout);
 }
 
-pub(crate) fn css_line_height_px(s: *const Style) -> f64 {
-    southstar_paint::css_line_height_px(style(s))
+pub(crate) fn css_line_height_px(s: Option<StyleRef<'_>>) -> f64 {
+    southstar_paint::css_line_height_px(s)
 }
 
-pub(crate) fn normal_line_height_px(s: *const Style) -> f64 {
-    southstar_paint::normal_line_height_px(style(s))
+pub(crate) fn normal_line_height_px(s: Option<StyleRef<'_>>) -> f64 {
+    southstar_paint::normal_line_height_px(s)
 }
 
 pub(crate) fn pango_font_size(size_px: f64) -> c_int {
@@ -77,10 +69,10 @@ pub(crate) fn font_variations_attr(r: &InlineAttr) -> Option<Attribute> {
     southstar_paint::font_variations_attr(r.font_variations())
 }
 
-pub(crate) use southstar_layout::dispatch::{layout_box, shift_box_tree as shift};
+pub(crate) use southstar_layout_geom::dispatch::{layout_box, shift_box_tree as shift};
 
-pub(crate) fn text_indent(run: BoxRef<'_>, s: *const Style, basis: f64) -> f64 {
-    southstar_layout_geom::inline_text_indent_px(run, style(s), basis)
+pub(crate) fn text_indent(run: BoxRef<'_>, s: Option<StyleRef<'_>>, basis: f64) -> f64 {
+    southstar_layout_geom::inline_text_indent_px(run, s, basis)
 }
 
 pub(crate) use southstar_layout_geom::flex::box_first_baseline as first_baseline;
@@ -104,16 +96,16 @@ pub(crate) fn math_ascent(math: Option<Node<'_>>, font_px: f64) -> f64 {
     southstar_mathml::measure(math, font_px).1
 }
 
-pub(crate) fn is_one_line_text_input(dom: *const c_void) -> bool {
-    node(dom).is_some_and(southstar_dom::controls::is_one_line_text)
+pub(crate) fn is_one_line_text_input(dom: Option<Node<'_>>) -> bool {
+    dom.is_some_and(southstar_dom::controls::is_one_line_text)
 }
 
-pub(crate) fn writing_mode(s: *const Style) -> c_int {
-    southstar_layout_geom::writing_mode(style(s))
+pub(crate) fn writing_mode(s: Option<StyleRef<'_>>) -> c_int {
+    southstar_layout_geom::writing_mode(s)
 }
 
-pub(crate) fn text_orientation(s: *const Style) -> c_int {
-    southstar_css::text_orientation(style(s).map(StyleRef::data))
+pub(crate) fn text_orientation(s: Option<StyleRef<'_>>) -> c_int {
+    southstar_css::text_orientation(s.map(StyleRef::data))
 }
 
 pub(crate) fn vertical_stack_text(text: &CStr) -> CString {

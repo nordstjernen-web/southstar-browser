@@ -5,15 +5,11 @@
 use core::ffi::CStr;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
-}
-
-pub fn style_ref<'a>(s: *const Style) -> Option<StyleRef<'a>> {
-    unsafe { StyleRef::from_ptr(s) }
 }
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
@@ -24,14 +20,14 @@ pub use southstar_layout_sizing::{
     layout_image, measure_natural_width, size_keyword_is_intrinsic, text_input_intrinsic_width,
 };
 
-pub fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn min_width_of(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
 pub fn intrinsic_keyword_width(
     b: BoxRef<'_>,
     kw: Option<&CStr>,
-    mi: *const Style,
+    mi: Option<StyleRef<'_>>,
     avail: f64,
 ) -> f64 {
     kw.map_or(-1.0, |kw| {
@@ -57,7 +53,7 @@ pub fn multicol_single_inline(
     col_w: f64,
     col_gap: f64,
     n_cols: i32,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'_>>,
     cursor_y: &mut f64,
 ) -> bool {
     let cols = southstar_layout_inline::Columns {
@@ -80,14 +76,14 @@ pub fn inline_run_split(run: BoxRef<'_>, split: usize) {
     southstar_layout_tree::run_split(run, split);
 }
 
-pub struct ContentBox {
+pub struct ContentBox<'a> {
     pub cw: f64,
     pub inner_x: f64,
     pub inner_y: f64,
-    pub child_inherited: *const Style,
+    pub child_inherited: Option<StyleRef<'a>>,
 }
 
-fn flex_frame(cb: &ContentBox, reverse: bool) -> southstar_layout_flex::Frame {
+fn flex_frame<'a>(cb: &ContentBox<'a>, reverse: bool) -> southstar_layout_flex::Frame<'a> {
     southstar_layout_flex::Frame {
         cw: cb.cw,
         inner_x: cb.inner_x,

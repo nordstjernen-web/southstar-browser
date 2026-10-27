@@ -870,11 +870,12 @@ impl Cache {
                 media.set_video(p.as_raw());
                 continue;
             }
+            let box_src = media.video_src();
             let Some(src) = non_empty_attr(dom, c"src")
                 .or_else(|| non_empty_attr(dom, MEDIA_SRC_ATTR))
                 .or_else(|| {
-                    media
-                        .video_src()
+                    box_src
+                        .as_deref()
                         .map(CStr::to_bytes)
                         .filter(|s| !s.is_empty())
                 })

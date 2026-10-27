@@ -9,7 +9,7 @@ use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::{PropId, StyleRef, StyleTable};
 
-use crate::{block, classify, ffi, generated, media, run, state};
+use crate::{block, classify, generated, media, run, state};
 
 pub struct Passes {
     pub reset_container_queries: fn(),
@@ -50,12 +50,7 @@ fn build_inline_run(
     last_excl: Option<Node<'_>>,
     st: StyleTable,
 ) -> Option<BoxRef<'static>> {
-    ffi::box_ref(run::build_inline_run(
-        Some(first),
-        Node::ptr_or_null(last_excl),
-        st,
-        true,
-    ))
+    run::build_inline_run(Some(first), Node::ptr_or_null(last_excl), st, true)
 }
 
 fn build_pseudo_block_for(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'static>> {
@@ -72,7 +67,7 @@ fn register_abs_pseudo(host: Node<'_>, ps: Option<StyleRef<'_>>) {
 
 fn queue_absolute_node(n: Node<'_>, s: StyleRef<'_>) {
     let fixed = southstar_layout_content::controls::keyword_is(s.get(PropId::Position), c"fixed");
-    state::queue_absolute(n.as_ptr(), fixed);
+    state::queue_absolute(n, fixed);
 }
 
 fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {

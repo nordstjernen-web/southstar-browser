@@ -11,9 +11,7 @@ publish.workspace = true
 southstar-unicode = { path = "../unicode" }
 southstar-cairo = { path = "../cairo" }
 southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
 southstar-paint = { path = "../paint" }
-southstar-text = { path = "../text" }
 
 [lints]
 workspace = true

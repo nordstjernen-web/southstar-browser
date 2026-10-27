@@ -210,10 +210,10 @@ pub fn media_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<MediaHit> {
             m.video_audio_src()
         }
     });
-    if msrc.is_none_or(|s| s.is_empty()) && element {
-        msrc = dom.attr(MEDIA_SRC_ATTR);
+    if msrc.as_ref().is_none_or(|s| s.is_empty()) && element {
+        msrc = dom.attr(MEDIA_SRC_ATTR).map(std::rc::Rc::from);
     }
-    let mut abs = match msrc {
+    let mut abs = match msrc.as_deref() {
         Some(src) if !force_stream => ffi::url_resolve(b.base_url.get().as_deref(), src),
         _ => None,
     };
