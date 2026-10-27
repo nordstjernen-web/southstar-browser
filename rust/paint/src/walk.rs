@@ -33,16 +33,12 @@ const CULL_MARGIN: f64 = 400.0;
 
 pub type UpperFn = unsafe extern "C" fn(index: i32, data: *mut c_void) -> *mut c_void;
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VpCapture {
-    pub(crate) b: *const NsBox,
+    pub(crate) b: BoxRef<'static>,
     pub(crate) kind: i32,
     pub(crate) rel: Matrix,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<VpCapture>() == 64);
 
 #[derive(Clone, Copy)]
 struct Hole {
@@ -54,7 +50,7 @@ struct Hole {
 
 #[derive(Clone, Copy)]
 struct Capture {
-    b: *const NsBox,
+    b: BoxRef<'static>,
     dev_x: f64,
     dev_y: f64,
     seq: u32,
@@ -344,7 +340,7 @@ fn box_isolates_positioned_descendants(b: BoxRef<'_>) -> bool {
 }
 
 fn node_of(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 fn dom_tree_order_cmp(a: Option<Node<'_>>, b: Option<Node<'_>>) -> i32 {
@@ -354,18 +350,18 @@ fn dom_tree_order_cmp(a: Option<Node<'_>>, b: Option<Node<'_>>) -> i32 {
     if a == b {
         return 0;
     }
-    let chain = |n: Node<'_>| {
+    fn chain(n: Node<'_>) -> Vec<Node<'_>> {
         let mut out = Vec::new();
         let mut p = Some(n);
         while let Some(node) = p {
             if out.len() >= 128 {
                 break;
             }
-            out.push(node.as_ptr());
+            out.push(node);
             p = node.parent();
         }
         out
-    };
+    }
     let pa = chain(a);
     let pb = chain(b);
     if pa.len() >= 128 || pb.len() >= 128 {
@@ -383,11 +379,7 @@ fn dom_tree_order_cmp(a: Option<Node<'_>>, b: Option<Node<'_>>) -> i32 {
     if ib < 0 {
         return 1;
     }
-    let na = unsafe { Node::from_ptr(pa[ia as usize]) };
-    let nb = unsafe { Node::from_ptr(pb[ib as usize]) };
-    let (Some(na), Some(nb)) = (na, nb) else {
-        return 0;
-    };
+    let (na, nb) = (pa[ia as usize], pb[ib as usize]);
     if na.parent() != nb.parent() {
         return 0;
     }
@@ -402,15 +394,7 @@ fn dom_tree_order_cmp(a: Option<Node<'_>>, b: Option<Node<'_>>) -> i32 {
 }
 
 fn capture_cmp(a: &Capture, b: &Capture) -> i32 {
-    let ab = unsafe { BoxRef::from_ptr(a.b) };
-    let bb = unsafe { BoxRef::from_ptr(b.b) };
-    let (Some(ab), Some(bb)) = (ab, bb) else {
-        return match (ab.is_some(), bb.is_some()) {
-            (true, false) => 1,
-            (false, true) => -1,
-            _ => 0,
-        };
-    };
+    let (ab, bb) = (a.b, b.b);
     let za = box_z_index(ab);
     let zb = box_z_index(bb);
     if za != zb {
@@ -483,7 +467,7 @@ pub fn merge_sort_by<T: Copy>(items: &mut [T], cmp: &impl Fn(&T, &T) -> i32) {
     items.copy_from_slice(&merged);
 }
 
-fn layers_record(cr: ContextRef, b: *const NsBox, kind: i32, dx: f64, dy: f64) {
+fn layers_record(cr: ContextRef, b: BoxRef<'static>, kind: i32, dx: f64, dy: f64) {
     with(|w| {
         let mut l = w.layers.borrow_mut();
         let mut m = cr.matrix();
@@ -512,7 +496,7 @@ fn layers_target<'a>(
         let kind = l
             .kinds
             .as_ref()
-            .and_then(|k| k.get(&cap.b).copied())
+            .and_then(|k| k.get(&cap.b.as_ptr()).copied())
             .unwrap_or(0);
         (kind, l.mode)
     });
@@ -607,7 +591,7 @@ fn paint_flush_deferred(cr: ContextRef, list: Vec<Capture>, highlight: Option<&C
             continue;
         };
         if layered {
-            with(|w| w.layers.borrow_mut().owner = cap.b);
+            with(|w| w.layers.borrow_mut().owner = cap.b.as_ptr());
         }
         target.save();
         if target != cr {
@@ -616,12 +600,8 @@ fn paint_flush_deferred(cr: ContextRef, list: Vec<Capture>, highlight: Option<&C
         if dx != 0.0 || dy != 0.0 {
             target.translate(dx, dy);
         }
-        with(|w| w.flush_box.set(cap.b));
-        let Some(cb) = (unsafe { BoxRef::from_ptr(cap.b) }) else {
-            target.restore();
-            i += 1;
-            continue;
-        };
+        with(|w| w.flush_box.set(cap.b.as_ptr()));
+        let cb = cap.b;
         if debug_on() && !cb.dom_ptr().is_null() {
             let (gx0, gy0, gx1, gy1) = cr.clip_extents();
             printerr(&format!(
@@ -1051,7 +1031,7 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
                 .borrow_mut()
                 .get_or_insert_with(Vec::new)
                 .push(Capture {
-                    b: b.as_ptr(),
+                    b: b.into_static(),
                     dev_x,
                     dev_y,
                     seq,

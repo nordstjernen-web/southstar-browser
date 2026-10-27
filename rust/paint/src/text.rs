@@ -222,7 +222,7 @@ fn nearest_node_attr<'a>(n: Node<'a>, attr: &CStr) -> Option<&'a CStr> {
 }
 
 fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub fn apply_i18n(layout: Option<&Layout>, attrs: Option<&AttrList>, b: Option<BoxRef<'_>>) {

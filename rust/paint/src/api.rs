@@ -131,8 +131,7 @@ impl VpCapture {
     }
 
     pub fn box_ref(&self) -> Option<BoxRef<'_>> {
-        // SAFETY: captures are recorded by the planner from boxes of the tree the plan was made over, which the page keeps until it plans again.
-        unsafe { BoxRef::from_ptr(self.b) }
+        Some(self.b)
     }
 }
 
@@ -253,6 +252,5 @@ pub fn pick_3d<'a>(
     y: f64,
     hit_test: three_d::HitTest,
 ) -> Option<BoxRef<'a>> {
-    // SAFETY: pick returns null or a box of root3d's tree, which the caller's borrow keeps alive.
-    unsafe { BoxRef::from_ptr(three_d::pick(root3d, x, y, hit_test)) }
+    three_d::pick(root3d, x, y, hit_test)
 }

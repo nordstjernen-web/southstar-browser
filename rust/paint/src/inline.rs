@@ -41,15 +41,15 @@ fn c16(v: u8) -> u16 {
 }
 
 fn attr_style(r: &InlineAttr) -> Option<StyleRef<'_>> {
-    unsafe { StyleRef::from_ptr(r.style()) }
+    southstar_style::attr_style(r)
 }
 
 fn attr_node(r: &InlineAttr) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(r.dom_ptr().cast()) }
+    r.dom()
 }
 
 fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 fn node_named(n: Option<Node<'_>>, name: &[u8]) -> bool {

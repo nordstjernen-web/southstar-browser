@@ -904,7 +904,7 @@ fn inline_bg_image(
 }
 
 pub fn paint_inline_css_chrome(cr: ContextRef, r: Option<&InlineAttr>, rect: (f64, f64, f64, f64)) {
-    let s = r.and_then(|r| unsafe { StyleRef::from_ptr(r.style()) });
+    let s = r.and_then(southstar_style::attr_style);
     let (x, y, w, h) = rect;
     if !style_has_inline_box_paint(s) || w <= 0.0 || h <= 0.0 {
         return;
@@ -1725,7 +1725,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
 }
 
 pub fn paint_hr(cr: ContextRef, b: BoxRef<'_>) {
-    let dom = unsafe { southstar_dom::Node::from_ptr(b.dom_ptr().cast()) };
+    let dom = b.dom();
     if dom
         .and_then(|d| d.name())
         .is_none_or(|n| n.to_bytes() != b"hr")

@@ -285,7 +285,7 @@ pub fn paint_math(cr: ContextRef, b: BoxRef<'_>) {
 }
 
 fn box_node(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub fn paint_image(cr: ContextRef, b: BoxRef<'_>) {
