@@ -291,12 +291,10 @@ pub fn nsr_document_implementation(scope: &mut Scope<'_>, this: &Value) -> JsRes
     implementation::of_document(scope, this)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_doc_wrapper_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
     adopt::doc_is_xml(scope, doc)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_validate_attr_ns(
     scope: &mut Scope<'_>,
     namespace: Option<&[u8]>,

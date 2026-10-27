@@ -14,6 +14,13 @@ use southstar_js_engine::Value;
 
 use tables::Keywords;
 
+pub use ffi::nsr_element_attr_getter;
+pub use ffi::nsr_element_attr_setter;
+pub use ffi::nsr_element_int_attr_getter;
+pub use ffi::nsr_element_int_attr_setter;
+pub use ffi::nsr_element_reflect_str_get;
+pub use ffi::nsr_element_reflect_str_set;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

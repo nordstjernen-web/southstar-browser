@@ -10,6 +10,8 @@ use southstar_js_engine::{Attributes, NativeFn, ObjectKind, Scope, Value};
 
 use crate::ffi::{Step, Zlib};
 
+pub use ffi::nsr_compression_install;
+
 const MAX_OUTPUT: usize = 256 * 1024 * 1024;
 
 const CHUNK: usize = 16384;

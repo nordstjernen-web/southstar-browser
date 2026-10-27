@@ -28,6 +28,12 @@ pub use crate::ffi::{
 };
 pub use crate::headers::cors_allows;
 
+pub use ffi::nsr_fetch_install_interfaces;
+pub use ffi::nsr_navigator_sendBeacon;
+pub use ffi::nsr_net_install_interfaces;
+pub use ffi::nsr_window_request_ctor;
+pub use ffi::nsr_window_response_ctor;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 #[derive(Default)]

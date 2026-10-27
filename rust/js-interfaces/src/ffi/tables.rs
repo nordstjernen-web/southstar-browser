@@ -32,6 +32,9 @@ use southstar_js_traversal as traversal;
 
 use super::{adapt, natives};
 
+use southstar_js_reflect::nsr_element_attr_getter;
+use southstar_js_reflect::nsr_element_attr_setter;
+
 unsafe extern "Rust" {
     safe fn nsr_tlist_contains(
         scope: &mut Scope<'_>,
@@ -80,17 +83,6 @@ unsafe extern "Rust" {
         scope: &mut Scope<'_>,
         this: &Value,
         value: &Value,
-    ) -> Result<(), Value>;
-    safe fn nsr_element_attr_getter(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        magic: i32,
-    ) -> Result<Value, Value>;
-    safe fn nsr_element_attr_setter(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        value: &Value,
-        magic: i32,
     ) -> Result<(), Value>;
 }
 

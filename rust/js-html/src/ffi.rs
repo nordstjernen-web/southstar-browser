@@ -23,19 +23,9 @@ unsafe extern "C" {
     fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
 
-unsafe extern "Rust" {
-    safe fn nsr_make_token_list(
-        scope: &mut Scope<'_>,
-        element: &Value,
-        attr: &'static CStr,
-    ) -> Result<Value, Value>;
-    safe fn nsr_nodelist_from_array(scope: &mut Scope<'_>, array: Value) -> Value;
-    safe fn nsr_element_set_node_value(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        value: &Value,
-    ) -> Result<(), Value>;
-}
+use southstar_js_attrs::nsr_make_token_list;
+use southstar_js_collections::nsr_nodelist_from_array;
+use southstar_js_elements::nsr_element_set_node_value;
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)

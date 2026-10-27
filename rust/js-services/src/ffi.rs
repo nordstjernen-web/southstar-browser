@@ -199,15 +199,11 @@ unsafe extern "C" {
     fn g_get_num_processors() -> c_uint;
 }
 
+use southstar_js_net::nsr_navigator_sendBeacon;
+
 unsafe extern "Rust" {
     #[allow(non_snake_case)]
     safe fn nsr_target_dispatchEvent(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    #[allow(non_snake_case)]
-    safe fn nsr_navigator_sendBeacon(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],
@@ -567,7 +563,6 @@ pub fn nsr_services_worker_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::worker(scope)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_console_emit(
     js: *const NsJs,
     scope: &mut Scope<'_>,

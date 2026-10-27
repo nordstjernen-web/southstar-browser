@@ -282,7 +282,6 @@ pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
     unsafe { imports::nsr_make_event(scope, kind, core::ptr::null()) }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value {
     crate::window_events::make_window_event(scope, kind)
 }
@@ -417,7 +416,6 @@ pub fn nsr_window_install_history(scope: &mut Scope<'_>, global: &Value) {
     set(scope, global, "navigation", navigation);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_make_location(scope: &mut Scope<'_>) -> Value {
     location::make_location(scope)
 }
@@ -440,7 +438,6 @@ pub fn nsr_window_current_document_for(scope: &mut Scope<'_>, window: &Value) ->
     Node::ptr_or_null(crate::documents::current_document_for(scope, window)).cast_mut()
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
     Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
 }
@@ -527,7 +524,9 @@ pub unsafe extern "C" fn ns_window_child_frame(
     Node::ptr_or_null(named::child_frame(doc, index, name))
 }
 
-#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `root` is null or points at a live node.
 pub unsafe fn nsr_document_expose_legacy_named(
     scope: &mut Scope<'_>,
     root: *const NsNode,

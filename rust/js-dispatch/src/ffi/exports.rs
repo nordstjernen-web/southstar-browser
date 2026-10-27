@@ -39,7 +39,6 @@ natives! {
     nsr_window_report_error => crate::errors::report_error;
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_listener_parse_options(
     scope: &mut Scope<'_>,
     opts: &Value,
@@ -56,7 +55,6 @@ pub fn nsr_listener_parse_options(
     })
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_listeners_compact_dead(scope: &mut Scope<'_>, owner: &Value) {
     crate::target::compact_dead(scope, owner);
 }
@@ -102,7 +100,6 @@ pub fn nsr_xhr_fire_progress_event(
     crate::target::fire_progress_event(scope, target, kind, loaded, total, length_computable);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, ev: &Value) {
     crate::target::dispatch_engine_event(scope, target, ev);
 }
@@ -162,7 +159,6 @@ pub unsafe fn nsr_js_fire_element_handlers(
     crate::handlers::fire_property(js, element, kind, event);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, proto: &Value) {
     crate::handlers::install_accessors(scope, proto);
 }

@@ -279,9 +279,7 @@ unsafe extern "C" {
     fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
 
-unsafe extern "Rust" {
-    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-}
+use southstar_js_events::nsr_make_event;
 
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }

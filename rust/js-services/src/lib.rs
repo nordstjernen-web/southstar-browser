@@ -30,6 +30,8 @@ use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::Js;
 
+pub use ffi::nsr_services_console_emit;
+
 const PROTOTYPE_ONLY_WRITABLE: Attributes = Attributes {
     writable: true,
     enumerable: false,

@@ -9,6 +9,10 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::NsJs;
 
+pub(crate) use southstar_js_crypto::nsr_crypto_install_window;
+pub(crate) use southstar_js_crypto::nsr_crypto_install_window_subtle;
+pub(crate) use southstar_js_crypto::nsr_crypto_install_worker;
+
 unsafe extern "Rust" {
     pub(crate) safe fn nsr_attr_to_js(
         scope: &mut Scope<'_>,
@@ -34,9 +38,6 @@ unsafe extern "Rust" {
     pub(crate) safe fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool);
     pub(crate) safe fn nsr_cssom_install_window(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_crypto_install_window(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_crypto_install_window_subtle(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_crypto_install_worker(scope: &mut Scope<'_>, global: &Value);
     pub(crate) safe fn nsr_static_range_ctor(
         scope: &mut Scope<'_>,
         this: &Value,

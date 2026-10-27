@@ -13,6 +13,10 @@ mod subtle;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
+pub use ffi::nsr_crypto_install_window;
+pub use ffi::nsr_crypto_install_window_subtle;
+pub use ffi::nsr_crypto_install_worker;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const HIDDEN_WRITABLE: Attributes = Attributes::METHOD;

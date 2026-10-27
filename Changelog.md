@@ -9,6 +9,11 @@ Southstar Browser 1.0.2-dev:
   the iframe-sandbox exports nothing called, and 28 `#[no_mangle]` network,
   render, layout and mutation functions that only their own crate calls,
   which are now ordinary Rust functions.
+* 103 calls between the JavaScript binding crates that went through
+  `#[no_mangle]` symbols and `extern "Rust"` declarations resolved at link
+  time are now ordinary Rust calls through Cargo dependencies, so the
+  compiler checks their signatures: about 100 fewer imported symbols and
+  57 fewer exports.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

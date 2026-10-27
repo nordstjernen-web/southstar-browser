@@ -11,6 +11,8 @@ pub use ffi::install_runtime_hooks;
 
 use southstar_js_engine::{NativeFn, Scope, Value};
 
+pub use ffi::nsr_window_fontface_ctor;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {

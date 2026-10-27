@@ -4,6 +4,9 @@
 
 use southstar_js_engine::{Scope, Value};
 
+pub(crate) use southstar_js_url::nsr_blob_bytes;
+pub(crate) use southstar_js_url::nsr_net_install_file_reader;
+
 unsafe extern "Rust" {
     pub(crate) safe fn nsr_dom_exception(
         scope: &mut Scope<'_>,
@@ -56,6 +59,4 @@ unsafe extern "Rust" {
         fd: &Value,
     ) -> (Vec<u8>, Vec<u8>);
     pub(crate) safe fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_net_install_file_reader(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8>;
 }

@@ -41,9 +41,12 @@ unsafe extern "C" {
     fn ns_node_is_button(el: *const NsNode) -> GBoolean;
 }
 
+use southstar_js_forms::nsr_js_request_submit_form;
+use southstar_js_forms::nsr_js_reset_form;
+use southstar_js_window::nsr_make_window_event;
+
 unsafe extern "Rust" {
     unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    safe fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value;
     unsafe fn nsr_js_dispatch_built_event(
         js: *mut NsJs,
         target: *const NsNode,
@@ -61,12 +64,6 @@ unsafe extern "Rust" {
         scope: &mut Scope<'_>,
         doc: *const NsNode,
     ) -> Value;
-    unsafe fn nsr_js_request_submit_form(
-        scope: &mut Scope<'_>,
-        form: *const NsNode,
-        submitter: *const NsNode,
-    );
-    unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode);
 }
 
 pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {

@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_char, c_void};
 use core::ptr;
 use std::borrow::Cow;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
@@ -36,9 +36,7 @@ unsafe extern "C" {
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
 }
 
-unsafe extern "Rust" {
-    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-}
+use southstar_js_events::nsr_make_event;
 
 fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()

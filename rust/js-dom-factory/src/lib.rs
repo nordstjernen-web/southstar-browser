@@ -16,6 +16,9 @@ pub use names::{valid_attr_name, valid_element_local_name};
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Attributes, Scope, Value};
 
+pub use ffi::nsr_doc_wrapper_is_xml;
+pub use ffi::nsr_validate_attr_ns;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

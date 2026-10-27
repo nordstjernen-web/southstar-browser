@@ -34,10 +34,8 @@ impl Js {
 
 pub(crate) use southstar_js_geometry::Rect;
 
-unsafe extern "Rust" {
-    safe fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value;
-    safe fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox;
-}
+use southstar_js_geometry::nsr_box_for_this;
+use southstar_js_geometry::nsr_make_dom_rect;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque() as usize)

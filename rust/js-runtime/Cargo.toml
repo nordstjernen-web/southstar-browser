@@ -15,6 +15,7 @@ southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-brand = { path = "../js-brand" }
+southstar-js-crypto = { path = "../js-crypto" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-intl = { path = "../js-intl", default-features = false }
 southstar-js-realm = { path = "../js-realm", default-features = false }

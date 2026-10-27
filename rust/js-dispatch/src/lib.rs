@@ -26,6 +26,14 @@ use crate::errors::Rejection;
 use crate::ffi::Js;
 use crate::listeners::Listener;
 
+pub use ffi::exports::nsr_install_event_handler_accessors;
+pub use ffi::exports::nsr_js_dispatch_engine_event;
+pub use ffi::exports::nsr_listener_parse_options;
+pub use ffi::exports::nsr_listeners_compact_dead;
+pub use ffi::exports::nsr_target_dispatch_with_event;
+pub use ffi::exports::nsr_target_fire_event;
+pub use ffi::exports::nsr_target_handler_realm;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

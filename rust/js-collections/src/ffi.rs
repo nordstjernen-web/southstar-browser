@@ -188,7 +188,6 @@ rust_methods! {
     nsr_live_length_get => live_length,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_live(
     scope: &mut Scope<'_>,
     owner: &Value,
@@ -202,7 +201,6 @@ pub fn nsr_make_live(
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
     match live_of(obj) {
         Some(back) => live::snapshot(scope, back),
@@ -210,14 +208,12 @@ pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_live_owner_node(obj: &Value) -> *mut NsNode {
     live_of(obj)
         .and_then(|back| unwrap_node(back.owner()))
         .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_live_owner(obj: &Value) -> Value {
     live_of(obj).map_or_else(Value::undefined, |back| back.owner().clone())
 }
@@ -227,22 +223,18 @@ pub fn nsr_live_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
     live::proto(js_of(scope), which).unwrap_or_else(Value::undefined)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_live_wire_constructors(scope: &mut Scope<'_>, global: &Value) {
     live::wire_constructors(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_nodelist_from_array(scope: &mut Scope<'_>, array: Value) -> Value {
     nodelist::finish(scope, array)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_qcache_get(scope: &mut Scope<'_>, root: *const c_void, kind: u8, key: &[u8]) -> Value {
     page::qcache_get(js_of(scope), root as usize, kind, key).unwrap_or_else(Value::undefined)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_qcache_put(
     scope: &mut Scope<'_>,
     root: *const c_void,

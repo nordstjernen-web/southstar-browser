@@ -8,17 +8,14 @@ pub(crate) fn csprng_fill(bytes: &mut [u8]) -> bool {
     southstar_sandbox::csprng_fill(bytes)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_crypto_install_window(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_window(scope, global)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_crypto_install_window_subtle(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_window_subtle(scope, global)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_crypto_install_worker(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_worker(scope, global)
 }

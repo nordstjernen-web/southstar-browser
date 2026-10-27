@@ -217,7 +217,6 @@ pub fn nsr_make_token_list(
     crate::element::token_list(scope, element, attr)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_attr_owner(value: &Value) -> *mut NsNode {
     attr_owner_node(value)
 }

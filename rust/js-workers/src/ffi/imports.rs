@@ -2,51 +2,25 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 
 type Native = Result<Value, Value>;
 
+pub(crate) use southstar_js_dispatch::nsr_js_dispatch_engine_event;
+pub(crate) use southstar_js_dispatch::nsr_listener_parse_options;
+pub(crate) use southstar_js_dispatch::nsr_listeners_compact_dead;
+pub(crate) use southstar_js_dispatch::nsr_target_dispatch_with_event;
+pub(crate) use southstar_js_dispatch::nsr_target_fire_event;
+pub(crate) use southstar_js_dispatch::nsr_target_handler_realm;
+pub(crate) use southstar_js_events::nsr_dom_exception;
+pub(crate) use southstar_js_events::nsr_event_define_cancel_bubble;
+pub(crate) use southstar_js_events::nsr_event_new;
+pub(crate) use southstar_js_interfaces::nsr_install_namespace_object;
+pub(crate) use southstar_js_net::nsr_fetch_install_interfaces;
+pub(crate) use southstar_js_net::nsr_window_request_ctor;
+pub(crate) use southstar_js_net::nsr_window_response_ctor;
+
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-    pub(crate) safe fn nsr_event_new(scope: &mut Scope<'_>) -> Native;
-    pub(crate) safe fn nsr_event_define_cancel_bubble(scope: &mut Scope<'_>, event: &Value);
-    pub(crate) safe fn nsr_target_handler_realm(
-        scope: &mut Scope<'_>,
-        obj: &Value,
-        kind: &str,
-        listener_key: &str,
-    ) -> ContextHandle;
-    pub(crate) safe fn nsr_target_dispatch_with_event(
-        scope: &mut Scope<'_>,
-        obj: &Value,
-        kind: &str,
-        ev: &Value,
-    );
-    pub(crate) safe fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str);
-    pub(crate) safe fn nsr_js_dispatch_engine_event(
-        scope: &mut Scope<'_>,
-        target: &Value,
-        ev: &Value,
-    );
-    pub(crate) safe fn nsr_listener_parse_options(
-        scope: &mut Scope<'_>,
-        opts: &Value,
-        strict_signal: bool,
-    ) -> Result<(bool, bool, bool, bool, Option<Value>), Value>;
-    pub(crate) safe fn nsr_listeners_compact_dead(scope: &mut Scope<'_>, owner: &Value);
-    pub(crate) safe fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_install_namespace_object(
-        scope: &mut Scope<'_>,
-        global: &Value,
-        name: &str,
-        object: Value,
-        tag: &str,
-    );
     pub(crate) safe fn nsr_event_prevent_default(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -91,16 +65,6 @@ unsafe extern "Rust" {
         args: &[Value],
     ) -> Native;
     pub(crate) safe fn nsr_window_event_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Native;
-    pub(crate) safe fn nsr_window_response_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Native;
-    pub(crate) safe fn nsr_window_request_ctor(
         scope: &mut Scope<'_>,
         this: &Value,
         args: &[Value],

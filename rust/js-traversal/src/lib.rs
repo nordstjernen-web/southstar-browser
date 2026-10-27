@@ -16,6 +16,9 @@ use southstar_dom::Node;
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
+pub use ffi::nsr_native_range;
+pub use ffi::nsr_tree_walker_install_proto;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

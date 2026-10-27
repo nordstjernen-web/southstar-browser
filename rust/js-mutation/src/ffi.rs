@@ -322,7 +322,9 @@ pub unsafe extern "C" fn ns_js_set_attr_recorded(
     unsafe { ns_js_set_attr_recorded_len(js, n, name, value, -1) };
 }
 
-#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `js` is null or the live page record, and `owner` is null or points at a live node.
 pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Option<Value> {
     match (Js::of(js), unsafe { node(owner) }) {
         (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
@@ -330,7 +332,9 @@ pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> O
     }
 }
 
-#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `js` is null or the live page record, and `owner` is null or points at a live node.
 pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, map: &Value) {
     if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
         attribute_maps::remember(js, owner, map.clone());

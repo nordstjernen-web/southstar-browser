@@ -7,7 +7,8 @@ use core::ffi::c_void;
 use southstar_dom::NsNode;
 use southstar_js_engine::{Scope, Value};
 
-use super::NsJs;
+pub(crate) use southstar_js_services::nsr_services_console_emit;
+pub(crate) use southstar_js_window::nsr_window_document_for;
 
 unsafe extern "Rust" {
     pub(crate) safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
@@ -41,15 +42,5 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-    pub(crate) safe fn nsr_window_document_for(
-        scope: &mut Scope<'_>,
-        window: &Value,
-    ) -> *mut NsNode;
-    pub(crate) safe fn nsr_services_console_emit(
-        js: *const NsJs,
-        scope: &mut Scope<'_>,
-        prefix: &str,
-        args: &[Value],
-    );
     pub(crate) safe fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool;
 }

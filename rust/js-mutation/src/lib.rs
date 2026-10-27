@@ -23,6 +23,9 @@ use crate::ffi::Js;
 pub use api::*;
 pub use ffi::install_runtime_hooks;
 
+pub use ffi::nsr_attribute_map_lookup;
+pub use ffi::nsr_attribute_map_remember;
+
 pub(crate) type Element = Node<'static>;
 
 #[derive(Default)]

@@ -18,6 +18,15 @@ use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node};
 use southstar_js_engine::{Scope, Value};
 
+pub use ffi::nsr_live_owner;
+pub use ffi::nsr_live_owner_node;
+pub use ffi::nsr_live_snapshot;
+pub use ffi::nsr_live_wire_constructors;
+pub use ffi::nsr_make_live;
+pub use ffi::nsr_nodelist_from_array;
+pub use ffi::nsr_qcache_get;
+pub use ffi::nsr_qcache_put;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

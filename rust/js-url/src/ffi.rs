@@ -234,7 +234,6 @@ pub fn nsr_net_install_text_codecs(scope: &mut Scope<'_>, global: &Value) {
     crate::text_codec::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_file_reader(scope: &mut Scope<'_>, global: &Value) {
     crate::file_reader::install(scope, global);
 }

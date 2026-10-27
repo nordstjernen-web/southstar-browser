@@ -66,6 +66,9 @@ const FORMAT_LIBAV: c_uint = 1;
 const FORMAT_VORBIS: c_uint = 2;
 const FORMAT_OPUS: c_uint = 4;
 
+use southstar_js_events::nsr_event_adopt_interface;
+use southstar_js_events::nsr_event_new;
+
 unsafe extern "Rust" {
     #[allow(non_snake_case)]
     safe fn nsr_target_dispatchEvent(
@@ -73,8 +76,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
-    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
 }
 
 fn until_nul(bytes: &[u8]) -> &[u8] {

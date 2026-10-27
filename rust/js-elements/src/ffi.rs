@@ -19,33 +19,11 @@ pub(crate) struct Js(*mut NsJs);
 
 const LIVE_LABELS: c_int = 13;
 
-unsafe extern "Rust" {
-    safe fn nsr_make_live(
-        scope: &mut Scope<'_>,
-        owner: &Value,
-        kind: c_int,
-        param: Option<&[u8]>,
-        param2: Option<&[u8]>,
-    ) -> Value;
-    safe fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult;
-    safe fn nsr_element_reflect_str_set(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        value: &Value,
-        attr: &CStr,
-    ) -> JsResult<()>;
-    safe fn nsr_element_int_attr_getter(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        magic: i32,
-    ) -> JsResult;
-    safe fn nsr_element_int_attr_setter(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        value: &Value,
-        magic: i32,
-    ) -> JsResult<()>;
-}
+use southstar_js_collections::nsr_make_live;
+use southstar_js_forms::nsr_form_controls_snapshot;
+use southstar_js_reflect::nsr_element_int_attr_getter;
+use southstar_js_reflect::nsr_element_int_attr_setter;
+use southstar_js_reflect::nsr_element_reflect_str_set;
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
@@ -238,7 +216,6 @@ pub fn nsr_element_img_natural_height(scope: &mut Scope<'_>, this: &Value) -> Js
     crate::image::natural_height(scope, this)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_set_node_value(
     scope: &mut Scope<'_>,
     this: &Value,

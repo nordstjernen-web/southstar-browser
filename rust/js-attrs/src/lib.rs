@@ -18,6 +18,9 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 
+pub use ffi::nsr_attr_owner;
+pub use ffi::nsr_make_token_list;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

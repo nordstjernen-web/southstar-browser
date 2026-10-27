@@ -2,12 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_void};
-
 use southstar_dom::NsNode;
 use southstar_js_engine::{Scope, Value};
 
 use super::NsJs;
+
+pub(crate) use southstar_js_collections::nsr_live_owner;
+pub(crate) use southstar_js_collections::nsr_live_snapshot;
+pub(crate) use southstar_js_collections::nsr_make_live;
+pub(crate) use southstar_js_collections::nsr_qcache_get;
+pub(crate) use southstar_js_collections::nsr_qcache_put;
+pub(crate) use southstar_js_url::nsr_blob_bytes;
 
 unsafe extern "Rust" {
     #[allow(non_snake_case)]
@@ -21,7 +26,6 @@ unsafe extern "Rust" {
         code: i32,
         message: &[u8],
     ) -> Value;
-    pub(crate) safe fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8>;
     pub(crate) unsafe fn nsr_make_event(
         scope: &mut Scope<'_>,
         kind: &str,
@@ -43,26 +47,4 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_make_live(
-        scope: &mut Scope<'_>,
-        owner: &Value,
-        kind: c_int,
-        param: Option<&[u8]>,
-        param2: Option<&[u8]>,
-    ) -> Value;
-    pub(crate) safe fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value;
-    pub(crate) safe fn nsr_live_owner(obj: &Value) -> Value;
-    pub(crate) safe fn nsr_qcache_get(
-        scope: &mut Scope<'_>,
-        root: *const c_void,
-        kind: u8,
-        key: &[u8],
-    ) -> Value;
-    pub(crate) safe fn nsr_qcache_put(
-        scope: &mut Scope<'_>,
-        root: *const c_void,
-        kind: u8,
-        key: &[u8],
-        value: &Value,
-    );
 }
