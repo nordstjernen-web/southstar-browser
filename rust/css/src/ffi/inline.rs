@@ -40,7 +40,7 @@ pub(crate) fn sheet_declarations(
             out.push(SheetDecl {
                 prop,
                 // SAFETY: a declaration's value is a live value the rule holds a reference on.
-                text: unsafe { text_of(decl.value(), true) },
+                text: text_of(Some(decl.value()), true),
                 important: decl.important(),
             });
         }

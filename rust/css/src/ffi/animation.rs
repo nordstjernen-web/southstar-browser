@@ -1,24 +1,23 @@
-//! Southstar — the animation and transition lists css.c keeps in a value, and the ones a computed style's longhands give.
+//! Southstar — the animation and transition lists a value keeps, and the ones a computed style's longhands give.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
 use std::sync::OnceLock;
 
 use southstar_glib::{self as glib, GBoolean};
 
 use super::computed_units::RawStyle;
-use super::value::{NsCssValue, c_dup, c_free};
+use super::value::{NsCssValue, c_dup};
 use crate::animation::{self, ENTRIES_MAX, Entry, Longhand};
 use crate::prop::Prop;
 use crate::timing::Timing;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct RawEntry {
     target: c_int,
-    name: *mut c_char,
+    name: Option<CString>,
     duration_ms: f64,
     delay_ms: f64,
     timing: Timing,
@@ -32,35 +31,15 @@ pub(crate) struct RawEntry {
     document_timeline: GBoolean,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct RawList {
     n: c_int,
     entries: [RawEntry; ENTRIES_MAX],
 }
 
-impl RawList {
-    pub(super) fn free_names(&mut self) {
-        let n = usize::try_from(self.n).unwrap_or(0).min(ENTRIES_MAX);
-        for entry in &mut self.entries[..n] {
-            unsafe { c_free(entry.name) };
-        }
-    }
-}
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<RawEntry>() == 120
-        && core::mem::offset_of!(RawEntry, timing) == 32
-        && core::mem::offset_of!(RawEntry, iterations) == 88
-        && core::mem::offset_of!(RawEntry, allow_discrete) == 112
-        && core::mem::offset_of!(RawEntry, document_timeline) == 116
-        && core::mem::size_of::<RawList>() == 968
-);
-
 const ZERO_ENTRY: RawEntry = RawEntry {
     target: 0,
-    name: ptr::null_mut(),
+    name: None,
     duration_ms: 0.0,
     delay_ms: 0.0,
     timing: Timing {
@@ -92,12 +71,9 @@ impl RawList {
         list
     }
 
-    pub(super) unsafe fn entries(&self) -> Vec<Entry> {
+    pub(super) fn entries(&self) -> Vec<Entry> {
         let n = usize::try_from(self.n).unwrap_or(0).min(ENTRIES_MAX);
-        self.entries[..n]
-            .iter()
-            .map(|e| unsafe { e.entry() })
-            .collect()
+        self.entries[..n].iter().map(RawEntry::entry).collect()
     }
 }
 
@@ -105,7 +81,7 @@ impl RawEntry {
     fn from_entry(e: &Entry) -> RawEntry {
         RawEntry {
             target: e.target,
-            name: e.name.as_deref().map_or(ptr::null_mut(), c_dup),
+            name: e.name.as_deref().map(c_dup),
             duration_ms: e.duration_ms,
             delay_ms: e.delay_ms,
             timing: e.timing,
@@ -120,10 +96,10 @@ impl RawEntry {
         }
     }
 
-    unsafe fn entry(&self) -> Entry {
+    fn entry(&self) -> Entry {
         Entry {
             target: self.target,
-            name: unsafe { bytes(self.name) }.map(<[u8]>::to_vec),
+            name: self.name.as_deref().map(|name| name.to_bytes().to_vec()),
             duration_ms: self.duration_ms,
             delay_ms: self.delay_ms,
             timing: self.timing,
@@ -137,10 +113,6 @@ impl RawEntry {
             document_timeline: self.document_timeline != 0,
         }
     }
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
 }
 
 fn prop_ids() -> &'static [c_int; 17] {

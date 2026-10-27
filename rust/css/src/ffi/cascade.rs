@@ -3,20 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_int, c_void};
-use core::mem::size_of;
-use core::ptr;
+use core::ffi::{c_int, c_void};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_color::Color;
 use southstar_glib::GBoolean;
 
-use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView, cow};
+use super::computed_units::{ComputedStyle, PROP_COUNT, RawStyle, StyleView};
 use super::property::to_c;
-use super::value::{
-    KIND_COLOR, KIND_KEYWORD, KIND_LENGTH, KIND_SHADOW, NsCssValue, RawColor, new_keyword,
-    value_free,
-};
+use super::value::{NsCssValue, OwnedValue, Payload, RawColor, new_keyword};
 use crate::cascade::{self, CURRENTCOLOR_PROPS, DisplayContext, Entry, OverflowFix, Revert};
 use crate::color;
 use crate::computed_units;
@@ -28,7 +23,6 @@ use crate::property;
 use crate::property::{Body, Value};
 use crate::style_query;
 
-#[repr(C)]
 pub(super) struct RawMatch {
     pub(super) origin: c_int,
     pub(super) spec_a: c_int,
@@ -42,60 +36,36 @@ pub(super) struct RawMatch {
     pub(super) important: GBoolean,
     pub(super) inline_style: GBoolean,
     pub(super) rule: *const c_void,
-    pub(super) value: *mut NsCssValue,
+    pub(super) value: OwnedValue,
     pub(super) prop: c_int,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawMatch>() == 72);
-
-struct InitialValues(Vec<Option<*mut NsCssValue>>);
-
-impl Drop for InitialValues {
-    fn drop(&mut self) {
-        for &value in self.0.iter().flatten() {
-            unsafe { value_free(value) };
-        }
-    }
-}
-
 thread_local! {
-    static INITIAL: RefCell<InitialValues> = const { RefCell::new(InitialValues(Vec::new())) };
+    static INITIAL: RefCell<Vec<Option<Option<OwnedValue>>>> = const { RefCell::new(Vec::new()) };
 }
 
-fn keyword<'a>(v: *const NsCssValue) -> Option<&'a [u8]> {
-    let v = unsafe { v.as_ref() }?;
-    if v.kind != KIND_KEYWORD {
-        return None;
-    }
-    let kw = unsafe { v.u.keyword };
-    (!kw.is_null()).then(|| unsafe { CStr::from_ptr(kw) }.to_bytes())
+fn keyword(v: Option<&NsCssValue>) -> Option<&[u8]> {
+    v?.keyword_bytes()
 }
 
-fn dup(v: *mut NsCssValue) -> *mut NsCssValue {
-    if let Some(value) = unsafe { v.as_ref() } {
-        value.add_ref();
-    }
-    v
-}
-
-fn initial_value_of(prop: usize) -> *mut NsCssValue {
-    let parsed = INITIAL.with(|cache| {
-        let cache = &mut cache.borrow_mut().0;
+fn initial_value_of(prop: usize) -> Option<OwnedValue> {
+    INITIAL.with(|cache| {
+        let cache = &mut *cache.borrow_mut();
         if cache.len() < PROP_COUNT {
             cache.resize(PROP_COUNT, None);
         }
-        *cache[prop].get_or_insert_with(|| {
-            Prop::from_id(prop)
-                .and_then(|p| initial::initial_value(p.name()))
-                .and_then(|text| property::parse_for(Prop::from_id(prop), text.to_bytes()))
-                .map_or(ptr::null_mut(), to_c)
-        })
-    });
-    dup(parsed)
+        cache[prop]
+            .get_or_insert_with(|| {
+                Prop::from_id(prop)
+                    .and_then(|p| initial::initial_value(p.name()))
+                    .and_then(|text| property::parse_for(Prop::from_id(prop), text.to_bytes()))
+                    .map(to_c)
+            })
+            .clone()
+    })
 }
 
-fn revert_of(v: *const NsCssValue) -> Option<Revert> {
+fn revert_of(v: Option<&NsCssValue>) -> Option<Revert> {
     match keyword(v)? {
         b"revert" => Some(Revert::Origin),
         b"revert-layer" => Some(Revert::Layer),
@@ -109,22 +79,21 @@ struct Out<'a> {
 }
 
 impl Out<'_> {
-    fn get(&self, prop: Prop) -> *mut NsCssValue {
-        self.style.values[prop.id()]
+    fn get(&self, prop: Prop) -> Option<&NsCssValue> {
+        self.style.value_at(prop.id())
     }
 
     fn keyword(&self, prop: Prop) -> Option<&[u8]> {
         keyword(self.get(prop))
     }
 
-    fn replace(&mut self, prop: usize, v: *mut NsCssValue) {
-        unsafe { value_free(self.style.values[prop]) };
+    fn replace(&mut self, prop: usize, v: Option<OwnedValue>) {
         self.style.values[prop] = v;
     }
 }
 
-fn parent_value(parent: Option<&RawStyle>, prop: usize) -> *mut NsCssValue {
-    parent.map_or(ptr::null_mut(), |p| p.values[prop])
+fn parent_value(parent: Option<&RawStyle>, prop: usize) -> Option<OwnedValue> {
+    parent.and_then(|p| p.values[prop].clone())
 }
 
 fn apply_winners(out: &mut Out<'_>, raw: &[RawMatch]) {
@@ -142,20 +111,20 @@ fn apply_winners(out: &mut Out<'_>, raw: &[RawMatch]) {
             inline_style: m.inline_style != 0,
             rule: m.rule as usize,
             prop: usize::try_from(m.prop).unwrap_or(usize::MAX),
-            revert: revert_of(m.value),
+            revert: revert_of(Some(&m.value)),
         })
         .collect();
     for (prop, won) in cascade::winners(&list, PROP_COUNT).into_iter().enumerate() {
         if let Some(won) = won {
-            out.replace(prop, won.map_or(ptr::null_mut(), |e| dup(raw[e].value)));
+            out.replace(prop, won.map(|e| raw[e].value.clone()));
         }
     }
 }
 
 fn normalize_overflow(out: &mut Out<'_>) {
     match cascade::overflow_fix(out.keyword(Prop::OverflowX), out.keyword(Prop::OverflowY)) {
-        Some(OverflowFix::XAuto) => out.replace(Prop::OverflowX.id(), new_keyword(b"auto")),
-        Some(OverflowFix::YAuto) => out.replace(Prop::OverflowY.id(), new_keyword(b"auto")),
+        Some(OverflowFix::XAuto) => out.replace(Prop::OverflowX.id(), Some(new_keyword(b"auto"))),
+        Some(OverflowFix::YAuto) => out.replace(Prop::OverflowY.id(), Some(new_keyword(b"auto"))),
         None => {}
     }
 }
@@ -177,23 +146,22 @@ pub(super) fn passed_to_children(prop: usize) -> bool {
 fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     let mut explicit_initial = [false; PROP_COUNT];
     for (prop, initial) in explicit_initial.iter_mut().enumerate() {
-        let kw = keyword(out.style.values[prop]);
-        match kw {
+        match keyword(out.style.value_at(prop)) {
             Some(b"inherit") => {
                 note_explicit_inherit(prop);
-                out.replace(prop, dup(parent_value(parent, prop)));
+                out.replace(prop, parent_value(parent, prop));
             }
             Some(b"initial") => {
                 let inherits = Prop::from_id(prop).is_some_and(Prop::inherits);
                 let value = if inherits {
                     initial_value_of(prop)
                 } else {
-                    ptr::null_mut()
+                    None
                 };
                 out.replace(prop, value);
                 *initial = true;
             }
-            Some(b"unset") => out.replace(prop, ptr::null_mut()),
+            Some(b"unset") => out.replace(prop, None),
             _ => {}
         }
     }
@@ -202,27 +170,22 @@ fn resolve_wide_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     };
     for (prop, &initial) in explicit_initial.iter().enumerate() {
         let inherits = Prop::from_id(prop).is_some_and(Prop::inherits);
-        if out.style.values[prop].is_null()
-            && !initial
-            && inherits
-            && !parent.values[prop].is_null()
+        if out.style.values[prop].is_none() && !initial && inherits && parent.values[prop].is_some()
         {
-            out.style.values[prop] = dup(parent.values[prop]);
+            out.style.values[prop].clone_from(&parent.values[prop]);
         }
     }
 }
 
-fn raw_color(v: *const NsCssValue) -> Option<RawColor> {
-    unsafe { v.as_ref() }
-        .filter(|v| v.kind == KIND_COLOR)
-        .map(|v| unsafe { v.u.color })
+fn raw_color(v: Option<&NsCssValue>) -> Option<RawColor> {
+    v?.raw_color()
 }
 
-fn new_color(color: &Color) -> *mut NsCssValue {
+fn new_color(color: &Color) -> OwnedValue {
     to_c(Value::of(Body::Color(*color)))
 }
 
-fn current_color_function(kw: &[u8], current: *const NsCssValue) -> Option<*mut NsCssValue> {
+fn current_color_function(kw: &[u8], current: Option<&NsCssValue>) -> Option<OwnedValue> {
     if !color::needs_current_color(kw) {
         return None;
     }
@@ -235,18 +198,15 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     match out.keyword(Prop::Color) {
         Some(b"currentcolor") => {
             let color = match parent {
-                Some(p) => dup(p.values[Prop::Color.id()]),
+                Some(p) => p.values[Prop::Color.id()].clone(),
                 None => initial_value_of(Prop::Color.id()),
             };
             out.replace(Prop::Color.id(), color);
         }
         Some(kw) => {
-            let inherited = match parent {
-                Some(p) => p.values[Prop::Color.id()],
-                None => ptr::null_mut(),
-            };
+            let inherited = parent.and_then(|p| p.value_at(Prop::Color.id()));
             if let Some(color) = current_color_function(kw, inherited) {
-                out.replace(Prop::Color.id(), color);
+                out.replace(Prop::Color.id(), Some(color));
             }
         }
         None => {}
@@ -254,24 +214,24 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     if let Some(kw @ (b"bolder" | b"lighter")) = out.keyword(Prop::FontWeight) {
         let bolder = kw == b"bolder";
         let parent_weight = parent.map_or(400, |p| {
-            font::weight_number(keyword(p.values[Prop::FontWeight.id()]), 400)
+            font::weight_number(keyword(p.value_at(Prop::FontWeight.id())), 400)
         });
         let weight = font::weight_relative(parent_weight, bolder).to_string();
-        out.replace(Prop::FontWeight.id(), new_keyword(weight.as_bytes()));
+        out.replace(Prop::FontWeight.id(), Some(new_keyword(weight.as_bytes())));
     }
     for (bit, prop) in CURRENTCOLOR_PROPS.iter().enumerate() {
         match out.keyword(*prop) {
             Some(b"currentcolor") => {
-                let color = dup(out.get(Prop::Color));
+                let color = out.style.values[Prop::Color.id()].clone();
                 out.replace(prop.id(), color);
                 out.style.currentcolor_bits |= 1 << bit;
             }
             Some(b"transparent") => {
-                out.replace(prop.id(), new_color(&Color::transparent()));
+                out.replace(prop.id(), Some(new_color(&Color::transparent())));
             }
             Some(kw) => {
                 if let Some(color) = current_color_function(kw, out.get(Prop::Color)) {
-                    out.replace(prop.id(), color);
+                    out.replace(prop.id(), Some(color));
                 }
             }
             None => {}
@@ -279,21 +239,16 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
     }
     let current = raw_color(out.get(Prop::Color));
     for prop in [Prop::BoxShadow, Prop::TextShadow] {
-        let Some(v) = (unsafe { out.get(prop).as_ref() }) else {
+        let Some(list) = out.get(prop).and_then(NsCssValue::shadows) else {
             continue;
         };
-        if v.kind != KIND_SHADOW {
-            continue;
-        }
-        let list = unsafe { &v.u.shadow };
         let n = usize::try_from(list.n).unwrap_or(0).min(list.s.len());
         if !list.s[..n].iter().any(|sh| sh.currentcolor != 0) {
             continue;
         }
-        let Some(v) = (unsafe { cow(out.style, prop.id()).as_mut() }) else {
+        let Some(Payload::Shadow(list)) = out.style.make_mut(prop.id()).map(|v| &mut v.u) else {
             continue;
         };
-        let list = unsafe { &mut v.u.shadow };
         for sh in list.s[..n].iter_mut().filter(|sh| sh.currentcolor != 0) {
             sh.currentcolor = 0;
             let (r, g, b, a) = current.map_or((0, 0, 0, 255), |c| (c.r, c.g, c.b, c.a));
@@ -315,12 +270,12 @@ fn legacy_webkit_box(out: &mut Out<'_>, mut d: Display) -> Display {
     ) {
         return d;
     }
-    let clamp = unsafe { out.get(Prop::LineClamp).as_ref() };
-    if clamp.is_some_and(|c| c.kind == KIND_LENGTH && unsafe { c.u.length.v } >= 1.0) {
+    let clamp = out.get(Prop::LineClamp).and_then(NsCssValue::length);
+    if clamp.is_some_and(|(v, _)| v >= 1.0) {
         d.inner = display::INNER_FLOW_ROOT;
         return d;
     }
-    out.replace(Prop::FlexDirection.id(), new_keyword(b"column"));
+    out.replace(Prop::FlexDirection.id(), Some(new_keyword(b"column")));
     d
 }
 
@@ -350,7 +305,7 @@ fn derive_white_space(out: &mut Out<'_>) {
     let value = if legacy == b"normal" {
         initial_value_of(Prop::WhiteSpace.id())
     } else {
-        new_keyword(legacy)
+        Some(new_keyword(legacy))
     };
     out.replace(Prop::WhiteSpace.id(), value);
 }
@@ -364,12 +319,12 @@ fn resolve_emphasis_style(out: &mut Out<'_>) {
     let horizontal = style_query::writing_mode_of(out.style.keyword(Prop::WritingMode)) == 0;
     let shape: &[u8] = if horizontal { b"circle" } else { b"sesame" };
     let value = new_keyword(&[fill, shape].concat());
-    out.replace(Prop::TextEmphasisStyle.id(), value);
+    out.replace(Prop::TextEmphasisStyle.id(), Some(value));
 }
 
 fn resolve_text_size_adjust(out: &mut Out<'_>) {
     if out.keyword(Prop::TextSizeAdjust) == Some(b"none") {
-        out.replace(Prop::TextSizeAdjust.id(), new_keyword(b"100%"));
+        out.replace(Prop::TextSizeAdjust.id(), Some(new_keyword(b"100%")));
     }
 }
 
@@ -387,7 +342,10 @@ fn fix_display(out: &mut Out<'_>, layout_parent: Option<&RawStyle>, is_root: boo
     };
     let used = cascade::blockify(legacy, &cx);
     if specified != used {
-        out.replace(Prop::Display.id(), new_keyword(&display::serialize(used)));
+        out.replace(
+            Prop::Display.id(),
+            Some(new_keyword(&display::serialize(used))),
+        );
     }
     out.style.display = used;
 }

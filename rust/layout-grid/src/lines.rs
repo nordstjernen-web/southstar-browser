@@ -44,10 +44,7 @@ fn areas_on_axis<'a>(gl: &Lines<'a>) -> impl Iterator<Item = AreaEdges<'a>> {
     });
     let row_axis = gl.row_axis;
     rects.iter().filter_map(move |a| {
-        if a.name.is_null() {
-            return None;
-        }
-        let name = unsafe { CStr::from_ptr(a.name) }.to_bytes();
+        let name = a.name()?.to_bytes();
         let (start, end) = if row_axis {
             (a.r0 + 1, a.r1 + 2)
         } else {

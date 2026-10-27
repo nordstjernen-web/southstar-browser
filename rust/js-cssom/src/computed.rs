@@ -1349,10 +1349,8 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
     })
 }
 
-const KIND_TRACKS: u32 = 7;
-
 fn is_tracks(v: ValueRef<'_>) -> bool {
-    unsafe { *v.as_ptr().cast::<u32>() == KIND_TRACKS }
+    v.tracks().is_some()
 }
 
 fn str_of(c: Option<&core::ffi::CStr>) -> Option<&str> {

@@ -3,10 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, OnceCell};
-use core::ffi::{c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use core::ops::Deref;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use super::selector::SelectorGroup;
 use super::sheet::Scope;
@@ -19,7 +20,7 @@ pub(super) struct Rule {
     pub(super) selectors: SelectorGroup,
     pub(super) decls: Vec<Declaration>,
     pub(super) vars: Option<VarTable>,
-    pub(super) pending: Vec<PendingDecl>,
+    pub(super) pending: Vec<Rc<PendingDecl>>,
     pub(super) layer_name: Option<Vec<u8>>,
     pub(super) container_condition: Option<Vec<u8>>,
     container_query: OnceCell<Query>,
@@ -52,6 +53,7 @@ impl Rule {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct PendingDecl {
     name: Vec<u8>,
     pub(super) raw_text: Vec<u8>,
@@ -61,7 +63,7 @@ pub(super) struct PendingDecl {
 }
 
 pub(super) struct VarTable {
-    entries: Vec<(CString, CString)>,
+    entries: Vec<(Rc<CStr>, Rc<CStr>)>,
     index: HashMap<Vec<u8>, usize>,
     important: Option<HashSet<Vec<u8>>>,
 }
@@ -91,7 +93,7 @@ impl VarTable {
 
     fn set(&mut self, name: &[u8], value: &[u8], important: bool) {
         let key = until_nul(name);
-        let entry = (c_text(key), c_text(value));
+        let entry = (Rc::from(c_text(key)), Rc::from(c_text(value)));
         match self.index.get(key) {
             Some(&at) => self.entries[at] = entry,
             None => {
@@ -112,22 +114,20 @@ impl VarTable {
         self.entries.len()
     }
 
-    pub(super) fn entries(
-        &self,
-    ) -> impl Iterator<Item = (*const c_char, *const c_char, bool)> + '_ {
+    pub(super) fn entries(&self) -> impl Iterator<Item = (&Rc<CStr>, &Rc<CStr>, bool)> + '_ {
         self.entries.iter().map(|(name, text)| {
             let important = self
                 .important
                 .as_ref()
                 .is_some_and(|set| set.contains(name.to_bytes()));
-            (name.as_ptr(), text.as_ptr(), important)
+            (name, text, important)
         })
     }
 
     pub(super) fn replace_texts(&mut self, mut replace: impl FnMut(&[u8]) -> Option<Vec<u8>>) {
         for (_, text) in &mut self.entries {
             if let Some(replaced) = replace(text.to_bytes()) {
-                *text = c_text(&replaced);
+                *text = Rc::from(c_text(&replaced));
             }
         }
     }
@@ -194,13 +194,13 @@ impl Sink for RuleSink<'_> {
             Some(prev) if prev.decl_index == decl_index => prev.decl_rank + 1,
             _ => 0,
         };
-        self.rule.pending.push(PendingDecl {
+        self.rule.pending.push(Rc::new(PendingDecl {
             name: until_nul(name).to_vec(),
             raw_text: until_nul(raw).to_vec(),
             important,
             decl_index,
             decl_rank,
-        });
+        }));
     }
 
     fn declaration(&mut self, name: &[u8], text: &[u8], important: bool) {
@@ -239,8 +239,12 @@ impl Declaration {
         self.value
     }
 
-    pub(super) fn value_ptr(&self) -> *mut NsCssValue {
-        self.value.0
+    pub fn value_handle(&self) -> &OwnedValue {
+        &self.value
+    }
+
+    pub(super) fn value_mut(&mut self) -> &mut OwnedValue {
+        &mut self.value
     }
 }
 

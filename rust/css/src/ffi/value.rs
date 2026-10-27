@@ -1,14 +1,13 @@
-//! Southstar — struct ns_css_value as the style engine lays it out for the value kinds the Rust sections build, building one css.c can own and free, and the owned reference other crates hold on one.
+//! Southstar — a parsed or computed CSS value: its payload for each value kind, its specified and image-set text and further layers, and the shared reference styles, declarations and other crates hold on one.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::mem::{offset_of, size_of};
+use core::ffi::{CStr, c_int, c_uint};
 use core::ops::Deref;
+use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_css_color::{Color, Space};
-use std::ffi::CString;
 
 use super::animation::RawList;
 use crate::calc::{Calc, CalcArg, Parsed};
@@ -31,21 +30,18 @@ pub(crate) const KIND_AREAS: c_uint = 10;
 pub(crate) const KIND_ANIM: c_uint = 11;
 pub(crate) const KIND_RECT: c_uint = 12;
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct Length {
     pub v: f64,
     pub unit: c_uint,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct RawCalcArg {
     pub px: f64,
     pub pct: f64,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct RawCalc {
     pub pct: f64,
@@ -64,18 +60,22 @@ pub(crate) struct RawCalc {
     pub args: [RawCalcArg; 4],
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Default)]
 pub struct RawAreaRect {
-    pub name: *mut c_char,
+    name: Option<CString>,
     pub r0: c_int,
     pub r1: c_int,
     pub c0: c_int,
     pub c1: c_int,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+impl RawAreaRect {
+    pub fn name(&self) -> Option<&CStr> {
+        self.name.as_deref()
+    }
+}
+
+#[derive(Clone)]
 pub struct RawAreas {
     pub n_rows: c_int,
     pub n_cols: c_int,
@@ -83,7 +83,6 @@ pub struct RawAreas {
     pub rects: [RawAreaRect; AREAS_MAX],
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct RawSize {
     pub w: f64,
@@ -94,7 +93,6 @@ pub(crate) struct RawSize {
     pub h_auto: c_int,
 }
 
-#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub(crate) struct RawColor {
     pub r: u8,
@@ -149,7 +147,6 @@ impl RawColor {
     }
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct RawRect {
     pub v: [f64; 4],
@@ -157,47 +154,30 @@ pub(crate) struct RawRect {
     pub is_auto: [c_int; 4],
 }
 
-#[repr(C)]
-pub(crate) union ValueUnion {
-    pub length: Length,
-    pub size: RawSize,
-    pub color: RawColor,
-    pub rect: RawRect,
-    pub url: *mut c_char,
-    pub calc: RawCalc,
-    pub gradient: Gradient,
-    pub transform: Transform,
-    pub shadow: ShadowList,
-    pub anim: RawList,
-    pub tracks: Tracks,
-    pub areas: RawAreas,
-    pub keyword: *mut c_char,
-    _storage: [u64; 381],
+#[derive(Clone)]
+pub(crate) enum Payload {
+    Keyword(Option<CString>),
+    Length(Length),
+    Size(RawSize),
+    Color(RawColor),
+    Calc(RawCalc),
+    Shadow(Box<ShadowList>),
+    Gradient(Box<Gradient>),
+    Tracks(Box<Tracks>),
+    Url(Option<CString>),
+    Transform(Box<Transform>),
+    Areas(Box<RawAreas>),
+    Anim(Box<RawList>),
+    Rect(RawRect),
 }
 
-#[repr(C)]
+#[derive(Clone)]
 pub struct NsCssValue {
-    pub(crate) kind: c_uint,
-    pub(crate) ref_count: Cell<c_int>,
-    pub(crate) u: ValueUnion,
-    pub(crate) image_set_text: *mut c_char,
-    pub(crate) specified: *mut c_char,
-    pub(crate) next_layer: *mut NsCssValue,
+    pub(crate) u: Payload,
+    pub(crate) image_set_text: Option<CString>,
+    pub(crate) specified: Option<CString>,
+    pub(crate) next_layer: Option<OwnedValue>,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    size_of::<NsCssValue>() == 3080
-        && offset_of!(NsCssValue, u) == 8
-        && offset_of!(NsCssValue, next_layer) == 3072
-        && offset_of!(RawCalc, func) == 80
-        && offset_of!(RawCalc, args) == 88
-        && size_of::<RawCalc>() == 152
-        && size_of::<RawAreaRect>() == 24
-        && size_of::<RawAreas>() == 784
-        && size_of::<RawSize>() == 32
-        && size_of::<RawRect>() == 64
-);
 
 impl RawCalc {
     pub(crate) fn to_calc(self) -> Calc {
@@ -253,125 +233,63 @@ impl RawCalc {
     }
 }
 
-pub(crate) fn c_dup(text: &[u8]) -> *mut c_char {
+pub(crate) fn c_dup(text: &[u8]) -> CString {
     let end = text.iter().position(|&c| c == 0).unwrap_or(text.len());
-    CString::new(&text[..end]).unwrap_or_default().into_raw()
+    CString::new(&text[..end]).unwrap_or_default()
 }
 
-/// # Safety
-///
-/// `text` is null or a NUL-terminated string.
-pub(crate) unsafe fn c_dup_raw(text: *const c_char) -> *mut c_char {
-    if text.is_null() {
-        return core::ptr::null_mut();
-    }
-    // SAFETY: text is a NUL-terminated string, as the caller guarantees.
-    unsafe { CStr::from_ptr(text) }.to_owned().into_raw()
-}
-
-/// # Safety
-///
-/// `text` is null or a string from c_dup or c_dup_raw that nothing uses afterwards.
-pub(crate) unsafe fn c_free(text: *mut c_char) {
-    if !text.is_null() {
-        // SAFETY: text came from CString::into_raw and is given up by the caller.
-        drop(unsafe { CString::from_raw(text) });
-    }
-}
-
-pub(crate) fn zeroed_value() -> *mut NsCssValue {
-    // SAFETY: NsCssValue holds only integers, floats, raw pointers, a cell and unions and arrays of them, for which all-zero bytes are a valid value.
-    Box::into_raw(unsafe { Box::new(core::mem::zeroed::<NsCssValue>()) })
-}
-
-pub(crate) fn new_value(parsed: &Parsed) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    match parsed {
-        Parsed::Length(v, unit) => {
-            value_ref.kind = KIND_LENGTH;
-            value_ref.u.length = Length { v: *v, unit: *unit };
-        }
-        Parsed::Calc(calc) => {
-            value_ref.kind = KIND_CALC;
-            value_ref.u.calc = RawCalc::from_calc(calc);
-        }
-    }
-    value
-}
-
-pub(crate) fn new_gradient(gradient: &Gradient) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_GRADIENT;
-    value_ref.u.gradient = *gradient;
-    value
-}
-
-pub(crate) fn new_transform(transform: &Transform) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_TRANSFORM;
-    value_ref.u.transform = *transform;
-    value
-}
-
-pub(crate) fn new_tracks(tracks: &Tracks) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_TRACKS;
-    value_ref.u.tracks = *tracks;
-    value
-}
-
-pub(crate) fn new_areas(areas: &Areas) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_AREAS;
-    let raw = unsafe { &mut value_ref.u.areas };
-    raw.n_rows = areas.rows;
-    raw.n_cols = areas.cols;
-    raw.n_rects = areas.rects.len() as c_int;
+pub(crate) fn areas_of(areas: &Areas) -> RawAreas {
+    let mut raw = RawAreas {
+        n_rows: areas.rows,
+        n_cols: areas.cols,
+        n_rects: areas.rects.len() as c_int,
+        rects: core::array::from_fn(|_| RawAreaRect::default()),
+    };
     for (slot, rect) in raw.rects.iter_mut().zip(&areas.rects) {
         *slot = RawAreaRect {
-            name: c_dup(&rect.name),
+            name: Some(c_dup(&rect.name)),
             r0: rect.r0,
             r1: rect.r1,
             c0: rect.c0,
             c1: rect.c1,
         };
     }
-    value
+    raw
 }
 
-pub(crate) fn new_shadow(list: &ShadowList) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_SHADOW;
-    value_ref.u.shadow = *list;
-    value
+impl Payload {
+    pub(crate) fn of_parsed(parsed: &Parsed) -> Payload {
+        match parsed {
+            Parsed::Length(v, unit) => Payload::Length(Length { v: *v, unit: *unit }),
+            Parsed::Calc(calc) => Payload::Calc(RawCalc::from_calc(calc)),
+        }
+    }
+
+    pub(crate) fn keyword(text: &[u8]) -> Payload {
+        Payload::Keyword(Some(c_dup(text)))
+    }
+
+    fn kind(&self) -> c_uint {
+        match self {
+            Payload::Keyword(_) => KIND_KEYWORD,
+            Payload::Length(_) => KIND_LENGTH,
+            Payload::Size(_) => KIND_SIZE,
+            Payload::Color(_) => KIND_COLOR,
+            Payload::Calc(_) => KIND_CALC,
+            Payload::Shadow(_) => KIND_SHADOW,
+            Payload::Gradient(_) => KIND_GRADIENT,
+            Payload::Tracks(_) => KIND_TRACKS,
+            Payload::Url(_) => KIND_URL,
+            Payload::Transform(_) => KIND_TRANSFORM,
+            Payload::Areas(_) => KIND_AREAS,
+            Payload::Anim(_) => KIND_ANIM,
+            Payload::Rect(_) => KIND_RECT,
+        }
+    }
 }
 
-pub(crate) fn new_keyword(text: &[u8]) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_KEYWORD;
-    value_ref.u.keyword = c_dup(text);
-    value
-}
-
-pub(crate) fn new_anim(list: &RawList) -> *mut NsCssValue {
-    let value = zeroed_value();
-    let value_ref = unsafe { &mut *value };
-    value_ref.kind = KIND_ANIM;
-    value_ref.u.anim = *list;
-    value
-}
-
-pub(crate) fn alloc(kind: c_uint) -> *mut NsCssValue {
-    let value = zeroed_value();
-    unsafe { (*value).kind = kind };
-    value
+pub(crate) fn new_keyword(text: &[u8]) -> OwnedValue {
+    OwnedValue::of(Payload::keyword(text))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -390,144 +308,137 @@ pub enum ValueKind {
 }
 
 impl NsCssValue {
+    pub(crate) fn of(u: Payload) -> NsCssValue {
+        NsCssValue {
+            u,
+            image_set_text: None,
+            specified: None,
+            next_layer: None,
+        }
+    }
+
     pub fn kind(&self) -> c_uint {
-        self.kind
+        self.u.kind()
     }
 
     pub fn value_kind(&self) -> ValueKind {
-        match self.kind {
-            KIND_KEYWORD => ValueKind::Keyword,
-            KIND_LENGTH => ValueKind::Length,
-            KIND_SIZE => ValueKind::Size,
-            KIND_COLOR => ValueKind::Color,
-            KIND_CALC => ValueKind::Calc,
-            KIND_SHADOW => ValueKind::Shadow,
-            KIND_GRADIENT => ValueKind::Gradient,
-            KIND_URL => ValueKind::Url,
-            KIND_TRANSFORM => ValueKind::Transform,
-            KIND_RECT => ValueKind::Rect,
-            _ => ValueKind::Other,
+        match self.u {
+            Payload::Keyword(_) => ValueKind::Keyword,
+            Payload::Length(_) => ValueKind::Length,
+            Payload::Size(_) => ValueKind::Size,
+            Payload::Color(_) => ValueKind::Color,
+            Payload::Calc(_) => ValueKind::Calc,
+            Payload::Shadow(_) => ValueKind::Shadow,
+            Payload::Gradient(_) => ValueKind::Gradient,
+            Payload::Url(_) => ValueKind::Url,
+            Payload::Transform(_) => ValueKind::Transform,
+            Payload::Rect(_) => ValueKind::Rect,
+            Payload::Tracks(_) | Payload::Areas(_) | Payload::Anim(_) => ValueKind::Other,
         }
     }
 
     pub fn keyword(&self) -> Option<&CStr> {
-        if self.kind != KIND_KEYWORD {
-            return None;
+        match &self.u {
+            Payload::Keyword(text) => text.as_deref(),
+            _ => None,
         }
-        // SAFETY: a keyword value keeps its text pointer in the keyword field.
-        let keyword = unsafe { self.u.keyword };
-        if keyword.is_null() {
-            return None;
-        }
-        // SAFETY: the keyword is a NUL-terminated string the value owns.
-        Some(unsafe { CStr::from_ptr(keyword) })
+    }
+
+    pub(crate) fn keyword_bytes(&self) -> Option<&[u8]> {
+        self.keyword().map(CStr::to_bytes)
     }
 
     pub fn length(&self) -> Option<(f64, c_uint)> {
-        if self.kind != KIND_LENGTH {
-            return None;
+        match self.u {
+            Payload::Length(v) => Some((v.v, v.unit)),
+            _ => None,
         }
-        // SAFETY: a length value keeps a Length in the union.
-        let v = unsafe { self.u.length };
-        Some((v.v, v.unit))
+    }
+
+    pub(crate) fn raw_color(&self) -> Option<RawColor> {
+        match self.u {
+            Payload::Color(v) => Some(v),
+            _ => None,
+        }
     }
 
     pub fn color_rgba(&self) -> Option<[u8; 4]> {
-        if self.kind != KIND_COLOR {
-            return None;
-        }
-        // SAFETY: a colour value keeps a RawColor in the union.
-        let v = unsafe { self.u.color };
-        Some([v.r, v.g, v.b, v.a])
+        self.raw_color().map(|v| [v.r, v.g, v.b, v.a])
     }
 
     pub fn size_parts(&self) -> Option<([f64; 2], [c_uint; 2], [bool; 2])> {
-        if self.kind != KIND_SIZE {
-            return None;
+        match self.u {
+            Payload::Size(v) => Some((
+                [v.w, v.h],
+                [v.w_unit, v.h_unit],
+                [v.w_auto != 0, v.h_auto != 0],
+            )),
+            _ => None,
         }
-        // SAFETY: a size value keeps a RawSize in the union.
-        let v = unsafe { self.u.size };
-        Some((
-            [v.w, v.h],
-            [v.w_unit, v.h_unit],
-            [v.w_auto != 0, v.h_auto != 0],
-        ))
     }
 
     pub fn calc(&self) -> Option<Calc> {
-        if self.kind != KIND_CALC {
-            return None;
+        match self.u {
+            Payload::Calc(v) => Some(v.to_calc()),
+            _ => None,
         }
-        // SAFETY: a calc value keeps a RawCalc in the union.
-        let v = unsafe { self.u.calc };
-        Some(v.to_calc())
     }
 
     pub fn url(&self) -> Option<&CStr> {
-        if self.kind != KIND_URL {
-            return None;
+        match &self.u {
+            Payload::Url(url) => url.as_deref(),
+            _ => None,
         }
-        // SAFETY: a URL value keeps its text pointer in the url field.
-        let url = unsafe { self.u.url };
-        if url.is_null() {
-            return None;
-        }
-        // SAFETY: the URL is a NUL-terminated string the value owns.
-        Some(unsafe { CStr::from_ptr(url) })
     }
 
     pub fn rect_parts(&self) -> Option<([f64; 4], [c_uint; 4], [bool; 4])> {
-        if self.kind != KIND_RECT {
-            return None;
+        match self.u {
+            Payload::Rect(v) => Some((v.v, v.unit, v.is_auto.map(|a| a != 0))),
+            _ => None,
         }
-        // SAFETY: a rect value keeps a RawRect in the union.
-        let v = unsafe { self.u.rect };
-        Some((v.v, v.unit, v.is_auto.map(|a| a != 0)))
     }
 
     pub fn gradient(&self) -> Option<&Gradient> {
-        if self.kind != KIND_GRADIENT {
-            return None;
+        match &self.u {
+            Payload::Gradient(v) => Some(v),
+            _ => None,
         }
-        // SAFETY: a gradient value keeps a Gradient in the union.
-        Some(unsafe { &self.u.gradient })
     }
 
     pub fn shadows(&self) -> Option<&ShadowList> {
-        if self.kind != KIND_SHADOW {
-            return None;
+        match &self.u {
+            Payload::Shadow(v) => Some(v),
+            _ => None,
         }
-        // SAFETY: a shadow value keeps a ShadowList in the union.
-        Some(unsafe { &self.u.shadow })
     }
 
     pub fn tracks(&self) -> Option<&Tracks> {
-        if self.kind != KIND_TRACKS {
-            return None;
+        match &self.u {
+            Payload::Tracks(v) => Some(v),
+            _ => None,
         }
-        // SAFETY: a tracks value keeps Tracks in the union.
-        Some(unsafe { &self.u.tracks })
     }
 
     pub fn areas(&self) -> Option<&RawAreas> {
-        if self.kind != KIND_AREAS {
-            return None;
+        match &self.u {
+            Payload::Areas(v) => Some(v),
+            _ => None,
         }
-        // SAFETY: an areas value keeps RawAreas in the union.
-        Some(unsafe { &self.u.areas })
     }
 
     pub fn transform(&self) -> Option<&Transform> {
-        if self.kind != KIND_TRANSFORM {
-            return None;
+        match &self.u {
+            Payload::Transform(v) => Some(v),
+            _ => None,
         }
-        // SAFETY: a transform value keeps a Transform in the union.
-        Some(unsafe { &self.u.transform })
     }
 
     pub fn next_layer(&self) -> Option<&NsCssValue> {
-        // SAFETY: next_layer is null or the next layer this value owns.
-        unsafe { self.next_layer.as_ref() }
+        self.next_layer.as_deref()
+    }
+
+    pub fn specified_text(&self) -> Option<&CStr> {
+        self.specified.as_deref()
     }
 
     pub fn length_or(&self, fallback: f64) -> f64 {
@@ -540,33 +451,32 @@ impl NsCssValue {
     }
 }
 
-pub struct OwnedValue(pub(super) *mut NsCssValue);
+#[derive(Clone)]
+pub struct OwnedValue(Rc<NsCssValue>);
 
 impl OwnedValue {
-    pub fn retain(value: &NsCssValue) -> OwnedValue {
-        value.add_ref();
-        OwnedValue(core::ptr::from_ref(value).cast_mut())
+    pub(crate) fn new(value: NsCssValue) -> OwnedValue {
+        OwnedValue(Rc::new(value))
+    }
+
+    pub(crate) fn of(u: Payload) -> OwnedValue {
+        OwnedValue::new(NsCssValue::of(u))
     }
 
     pub fn placeholder() -> OwnedValue {
-        OwnedValue(alloc(KIND_KEYWORD))
-    }
-
-    /// # Safety
-    ///
-    /// `value` is null or a value made by this crate whose one reference the caller hands over.
-    pub unsafe fn from_raw(value: *mut NsCssValue) -> Option<OwnedValue> {
-        (!value.is_null()).then_some(OwnedValue(value))
-    }
-
-    pub fn into_raw(self) -> *mut NsCssValue {
-        let raw = self.0;
-        core::mem::forget(self);
-        raw
+        OwnedValue::of(Payload::Keyword(None))
     }
 
     pub fn as_ptr(&self) -> *const NsCssValue {
-        self.0
+        Rc::as_ptr(&self.0)
+    }
+
+    pub fn ptr_eq(a: &OwnedValue, b: &OwnedValue) -> bool {
+        Rc::ptr_eq(&a.0, &b.0)
+    }
+
+    pub(crate) fn make_mut(&mut self) -> &mut NsCssValue {
+        Rc::make_mut(&mut self.0)
     }
 }
 
@@ -574,63 +484,6 @@ impl Deref for OwnedValue {
     type Target = NsCssValue;
 
     fn deref(&self) -> &NsCssValue {
-        // SAFETY: an OwnedValue holds a reference on a live value, which keeps it allocated.
-        unsafe { &*self.0 }
-    }
-}
-
-impl Clone for OwnedValue {
-    fn clone(&self) -> OwnedValue {
-        OwnedValue::retain(self)
-    }
-}
-
-impl Drop for OwnedValue {
-    fn drop(&mut self) {
-        // SAFETY: an OwnedValue holds the one reference handed to it, on a value nothing else frees.
-        unsafe { value_free(self.0) };
-    }
-}
-
-impl NsCssValue {
-    pub(crate) fn add_ref(&self) {
-        self.ref_count.set(self.ref_count.get() + 1);
-    }
-}
-
-unsafe fn free_payload(value: &mut NsCssValue) {
-    unsafe {
-        match value.kind {
-            KIND_KEYWORD => c_free(value.u.keyword),
-            KIND_URL => c_free(value.u.url),
-            KIND_AREAS => {
-                let areas = &value.u.areas;
-                let n = usize::try_from(areas.n_rects).unwrap_or(0).min(AREAS_MAX);
-                for rect in &areas.rects[..n] {
-                    c_free(rect.name);
-                }
-            }
-            KIND_ANIM => value.u.anim.free_names(),
-            _ => {}
-        }
-        c_free(value.image_set_text);
-        c_free(value.specified);
-    }
-}
-
-/// # Safety
-///
-/// `v` is null or a value made by this crate, and the caller gives up the reference it holds on it.
-pub(crate) unsafe fn value_free(mut v: *mut NsCssValue) {
-    while let Some(value) = unsafe { v.as_mut() } {
-        if value.ref_count.get() > 0 {
-            value.ref_count.set(value.ref_count.get() - 1);
-            return;
-        }
-        unsafe { free_payload(value) };
-        let next = value.next_layer;
-        // SAFETY: every value comes from zeroed_value's Box::into_raw, and this was its last reference.
-        drop(unsafe { Box::from_raw(v) });
-        v = next;
+        &self.0
     }
 }
