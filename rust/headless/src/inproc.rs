@@ -158,7 +158,7 @@ pub fn relayout(c: &Ctx) {
         err(b"[anim] headless_relayout\n");
     }
     if let (Some(js), false) = (c.js, c.layout.get().is_null()) {
-        js.set_layout_root(ptr::null());
+        js.clear_layout_root();
     }
     if !c.layout.get().is_null() {
         ffi::free_layout(c.layout.replace(ptr::null_mut()));
@@ -731,7 +731,7 @@ pub fn run_one(
         err(&[b"[headless follow", marker, b" ", next.as_slice(), b"]\n"].concat());
         if let Some(js) = js {
             js.unbind_layout_flush();
-            js.set_layout_root(ptr::null());
+            js.clear_layout_root();
             js.set_style_table(None);
         }
         if let Some(anim) = anim {
@@ -748,8 +748,7 @@ pub fn run_one(
         }
         doc.free();
         if let Some(cache) = image_cache {
-            // SAFETY: script, the layout and the document that held copies were released above and the next page creates its own cache.
-            unsafe { cache.free() };
+            cache.free();
         }
         if let Some(cache) = video_cache {
             // SAFETY: script, whose media callbacks hold a copy, was released above and the next page creates its own cache.
@@ -875,7 +874,7 @@ pub fn run_one(
         unsafe { anim.free() };
     }
     if let Some(js) = js {
-        js.set_layout_root(ptr::null());
+        js.clear_layout_root();
         js.set_style_table(None);
     }
     if !ctx.layout.get().is_null() {
@@ -889,8 +888,7 @@ pub fn run_one(
     }
     doc.free();
     if let Some(cache) = image_cache {
-        // SAFETY: the run is over and script, the layout and the document that held copies were released above.
-        unsafe { cache.free() };
+        cache.free();
     }
     if let Some(cache) = video_cache {
         // SAFETY: the run is over and script, whose media callbacks hold a copy, was released above.

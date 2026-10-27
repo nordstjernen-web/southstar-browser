@@ -17,7 +17,7 @@ pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
 }
 
 pub(crate) fn attr_owner(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(imports::nsr_attr_owner(value)) }
+    imports::nsr_attr_owner(value)
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {

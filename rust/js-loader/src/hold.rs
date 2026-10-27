@@ -6,29 +6,25 @@ use core::ffi::CStr;
 use std::cell::Cell;
 use std::collections::HashSet;
 
-use southstar_dom::{Kind, MAX_DEPTH, Node};
+use southstar_dom::{Kind, MAX_DEPTH, Node, WeakNode};
 
 use crate::ffi::{self, Js, hidden_child, is_named};
 use crate::{Schedule, Task, fetch, page};
 
 #[derive(Clone, Copy)]
 struct Held {
-    parent: Option<usize>,
-    node: Option<usize>,
+    parent: Option<WeakNode>,
+    node: Option<WeakNode>,
 }
 
 pub(crate) struct Hold {
     held: Vec<Held>,
     next: usize,
-    members: HashSet<usize>,
+    members: HashSet<WeakNode>,
 }
 
 thread_local! {
     static ACTIVE: Cell<usize> = const { Cell::new(0) };
-}
-
-fn node_at<'a>(addr: usize) -> Option<Node<'a>> {
-    unsafe { Node::from_ptr(addr as *const southstar_dom::NsNode) }
 }
 
 pub(crate) fn released(count: usize) {
@@ -40,7 +36,8 @@ pub(crate) fn holding(js: Js) -> bool {
         && page::peek_page(js, |page| !page.holds.is_empty()).unwrap_or(false)
 }
 
-pub(crate) fn forget(js: Js, n: usize) {
+pub(crate) fn forget(js: Js, n: Node<'_>) {
+    let n = n.downgrade();
     if ACTIVE.with(Cell::get) == 0 {
         return;
     }
@@ -66,13 +63,13 @@ fn collect(hold: &mut Hold, parent: Node, n: Node, depth: i32) {
     if hidden_child(n) {
         return;
     }
-    let (parent, addr) = (parent.as_ptr() as usize, n.as_ptr() as usize);
+    let (parent, held) = (parent.downgrade(), n.downgrade());
     hold.held.push(Held {
         parent: Some(parent),
-        node: Some(addr),
+        node: Some(held),
     });
     hold.members.insert(parent);
-    hold.members.insert(addr);
+    hold.members.insert(held);
     if depth >= MAX_DEPTH || is_named(n, c"template") {
         return;
     }
@@ -114,8 +111,8 @@ fn hold_after(js: Js, script: Node) -> usize {
         ffi::node_remove(top);
     }
     for entry in entries {
-        let parent = entry.parent.and_then(node_at);
-        let child = entry.node.and_then(node_at);
+        let parent = entry.parent.and_then(WeakNode::get);
+        let child = entry.node.and_then(WeakNode::get);
         ffi::arm_invalidate(parent);
         ffi::arm_invalidate(child);
         if let Some(child) = child
@@ -142,9 +139,10 @@ fn put_back(js: Js, index: usize, upto: usize) {
         let Some(entry) = step else {
             break;
         };
-        let (Some(parent), Some(child)) =
-            (entry.parent.and_then(node_at), entry.node.and_then(node_at))
-        else {
+        let (Some(parent), Some(child)) = (
+            entry.parent.and_then(WeakNode::get),
+            entry.node.and_then(WeakNode::get),
+        ) else {
             continue;
         };
         if child.parent().is_some() {
@@ -158,7 +156,7 @@ fn put_back(js: Js, index: usize, upto: usize) {
 }
 
 fn reach(js: Js, index: usize, script: Node) {
-    let script = Some(script.as_ptr() as usize);
+    let script = Some(script.downgrade());
     let upto = page::with_existing(js, |page| {
         let hold = page.holds.get(index)?;
         let len = hold.held.len();

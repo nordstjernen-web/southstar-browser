@@ -754,7 +754,7 @@ impl Cache {
         let key = stream_key(abs);
         if let Some(p) = lookup(&self.videos, &key) {
             if let Some(media) = bx.and_then(BoxRef::media) {
-                media.set_video(p.as_raw());
+                media.set_video(p.media_handle());
             }
             if mse_id == 0 {
                 self.note_stream_version(p, dom, abs);
@@ -785,7 +785,7 @@ impl Cache {
         }
         self.videos.push((key, p));
         if let Some(media) = bx.and_then(BoxRef::media) {
-            media.set_video(p.as_raw());
+            media.set_video(p.media_handle());
         }
         if let Some(dom) = dom {
             self.apply_node_state(p.get(), dom_ptr);
@@ -867,7 +867,7 @@ impl Cache {
                         p
                     }
                 };
-                media.set_video(p.as_raw());
+                media.set_video(p.media_handle());
                 continue;
             }
             let box_src = media.video_src();
@@ -892,7 +892,7 @@ impl Cache {
                 .video_poster()
                 .and_then(|p| ffi::url_resolve(self.base_url.as_deref(), p.to_bytes()));
             if let Some(p) = lookup(&self.videos, &stream_key(&abs)) {
-                media.set_video(p.as_raw());
+                media.set_video(p.media_handle());
                 self.adopt_existing(p, dom, &abs);
             } else if !self.requested.contains(&abs) {
                 self.requested.insert(abs.clone());

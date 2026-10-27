@@ -9,7 +9,7 @@ mod store;
 
 pub use image_map::image_map_area;
 pub use image_source::{choose_img, img_chosen_density, img_chosen_url};
-pub use media::{MediaRef, NsBoxMedia};
+pub use media::{MediaHandle, MediaRef, NsBoxMedia};
 pub use store::{BoxPool, LinkVec};
 
 use core::any::Any;
@@ -299,7 +299,7 @@ pub struct InlineAttr {
     dom: Option<WeakNode>,
     style: *const Style,
     bg_image_src: Option<Rc<CStr>>,
-    bg_image: *mut c_void,
+    bg_image: Option<MediaHandle>,
 }
 
 impl InlineAttr {
@@ -326,7 +326,7 @@ impl InlineAttr {
             dom: None,
             style: ptr::null(),
             bg_image_src: None,
-            bg_image: ptr::null_mut(),
+            bg_image: None,
         }
     }
 
@@ -357,7 +357,7 @@ impl InlineAttr {
         self
     }
 
-    pub fn with_bg_image(mut self, src: Option<&CStr>, image: *mut c_void) -> InlineAttr {
+    pub fn with_bg_image(mut self, src: Option<&CStr>, image: Option<MediaHandle>) -> InlineAttr {
         self.bg_image_src = shared_cstr(src);
         self.bg_image = image;
         self
@@ -391,7 +391,7 @@ impl InlineAttr {
         self.style
     }
 
-    pub fn bg_image(&self) -> *mut c_void {
+    pub fn bg_image(&self) -> Option<MediaHandle> {
         self.bg_image
     }
 

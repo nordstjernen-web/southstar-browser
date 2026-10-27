@@ -3,15 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
-use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_js_runtime::api::{self, Page};
+use southstar_layout::BoxRef;
 
 use super::engine::{Anim, ImageCache, VideoCache};
 use crate::inproc::{Ctx, NavCapture};
@@ -19,10 +19,10 @@ use crate::inproc::{Ctx, NavCapture};
 pub use southstar_js_runtime::api::NavigationTiming;
 
 #[derive(Clone, Copy)]
-pub struct Js(NonNull<c_void>);
+pub struct Js(Page);
 
 pub fn js_raw(js: Option<Js>) -> *mut c_void {
-    js.map_or(ptr::null_mut(), |js| js.0.as_ptr())
+    js.map_or(ptr::null_mut(), |js| js.0.as_ptr().cast_mut().cast())
 }
 
 pub fn new_js(nav: &Rc<NavCapture>, timing: &NavigationTiming) -> Option<Js> {
@@ -35,7 +35,7 @@ pub fn new_js(nav: &Rc<NavCapture>, timing: &NavigationTiming) -> Option<Js> {
         mutated: Some(Rc::new(crate::inproc::note_mutated)),
         navigate: Some(Rc::new(move |url: &CStr, _reload| nav.navigate(url))),
     };
-    NonNull::new(api::new_page(callbacks, Some(*timing)).cast()).map(Js)
+    api::new_page(callbacks, Some(*timing)).map(Js)
 }
 
 pub fn consume_mutated(js: Option<Js>) -> bool {
@@ -49,22 +49,24 @@ pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<CString>
 }
 
 pub fn note_pointer_input(js: Option<Js>, pointer: bool) {
-    // SAFETY: js_raw gives null or the run's live script engine.
-    unsafe { southstar_js_focus::note_pointer_input(js_raw(js), pointer) };
+    if let Some(js) = js {
+        southstar_js_focus::note_pointer_input(js.0, pointer);
+    }
 }
 
 pub fn note_viewport_scroll(js: Option<Js>, x: f64, y: f64) {
-    // SAFETY: js_raw gives null or the run's live script engine.
-    unsafe { southstar_js_window::note_viewport_scroll(js_raw(js), x, y) };
+    if let Some(js) = js {
+        southstar_js_window::note_viewport_scroll(js.0, x, y);
+    }
 }
 
 impl Js {
-    fn raw(self) -> *mut c_void {
-        self.0.as_ptr()
+    fn handle(self) -> Page {
+        self.0
     }
 
     fn page(self) -> *const api::NsJs {
-        self.0.as_ptr().cast()
+        self.0.as_ptr()
     }
 
     pub fn free(self) {
@@ -147,8 +149,8 @@ impl Js {
         api::set_anim(self.page(), super::engine::anim_raw(anim));
     }
 
-    pub fn set_layout_root(self, root: *const NsBox) {
-        api::set_layout_root(self.page(), root.cast());
+    pub fn clear_layout_root(self) {
+        api::set_layout_root(self.page(), None);
     }
 
     pub fn set_early_inject_src(self, src: &CStr) {
@@ -164,8 +166,7 @@ impl Js {
     }
 
     pub fn set_focused_node(self, el: Node) {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_focus::set_focused_node(self.raw(), Some(el)) };
+        southstar_js_focus::set_focused_node(self.handle(), Some(el));
     }
 
     pub fn dispatch(self, target: Node, kind: &CStr) {
@@ -181,9 +182,8 @@ impl Js {
     }
 
     pub fn dispatch_submit(self, form: Node, submitter: Node) -> bool {
-        // SAFETY: a Js handle names the run's live script engine.
         let (_, prevented) =
-            unsafe { southstar_js_forms::dispatch_submit_event(self.raw(), form, Some(submitter)) };
+            southstar_js_forms::dispatch_submit_event(self.handle(), form, Some(submitter));
         prevented
     }
 
@@ -221,16 +221,13 @@ impl Js {
         prevented: &mut GBoolean,
     ) {
         let input = pointer((x, y), button, buttons);
-        // SAFETY: a Js handle names the run's live script engine.
-        let (_, was_prevented) = unsafe {
-            southstar_js_input::dispatch_mouse_event(self.raw(), target, kind, &input, None)
-        };
+        let (_, was_prevented) =
+            southstar_js_input::dispatch_mouse_event(self.handle(), target, kind, &input, None);
         *prevented = glib::boolean(was_prevented);
     }
 
     pub fn click_activate(self, node: Node) -> bool {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_forms::click_activate(self.raw(), node) }
+        southstar_js_forms::click_activate(self.handle(), node)
     }
 
     pub fn details_toggle_open(self, details: Node, open: bool) {
@@ -238,28 +235,23 @@ impl Js {
     }
 
     pub fn sequential_focus_target<'a>(self) -> Option<Node<'a>> {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_focus::sequential_focus_target(self.raw(), false) }
+        southstar_js_focus::sequential_focus_target(self.handle(), false)
     }
 
     pub fn dispatch_anim_events(self, anim: Anim) {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_lifecycle::dispatch_anim_events(self.raw(), anim) };
+        southstar_js_lifecycle::dispatch_anim_events(self.handle(), anim);
     }
 
     pub fn run_animation_frame(self) {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_lifecycle::run_animation_frame(self.raw()) };
+        southstar_js_lifecycle::run_animation_frame(self.handle());
     }
 
     pub fn fire_media_load_events(self, layout: Option<BoxRef<'_>>) {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_lifecycle::fire_media_load_events(self.raw(), layout) };
+        southstar_js_lifecycle::fire_media_load_events(self.handle(), layout);
     }
 
     pub fn drag_session(self) -> Option<DragSession> {
-        // SAFETY: a Js handle names the run's live script engine.
-        unsafe { southstar_js_input::DragData::new(self.raw()) }.map(DragSession)
+        southstar_js_input::DragData::new(self.handle()).map(DragSession)
     }
 }
 
@@ -303,17 +295,14 @@ impl DragSession {
         related: Option<Node>,
     ) -> bool {
         let input = pointer(at, 0, buttons);
-        // SAFETY: a Js handle names the run's live script engine.
-        let (_, prevented) = unsafe {
-            southstar_js_input::dispatch_drag_event(
-                js.raw(),
-                Some(&self.0),
-                target,
-                kind,
-                &input,
-                related,
-            )
-        };
+        let (_, prevented) = southstar_js_input::dispatch_drag_event(
+            js.handle(),
+            Some(&self.0),
+            target,
+            kind,
+            &input,
+            related,
+        );
         prevented
     }
 }

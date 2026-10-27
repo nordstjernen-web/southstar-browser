@@ -242,7 +242,7 @@ pub fn frame_realm_finish(
     }
 }
 
-pub fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> *mut NsNode {
+pub fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Node<'static>> {
     record::document_root_for(scope, this)
 }
 

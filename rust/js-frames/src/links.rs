@@ -5,7 +5,7 @@
 use std::sync::OnceLock;
 
 type Native = Result<Value, Value>;
-use southstar_dom::NsNode;
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 
 pub struct JsDocumentLinks {
@@ -27,7 +27,7 @@ fn js_document_links() -> &'static JsDocumentLinks {
 pub struct JsWindowLinks {
     pub js_new_window_named: fn(&mut Scope<'_>) -> Native,
     pub is_window_named: fn(&Value) -> bool,
-    pub window_current_document_for: fn(&mut Scope<'_>, &Value) -> *mut NsNode,
+    pub window_current_document_for: fn(&mut Scope<'_>, &Value) -> Option<Node<'static>>,
     pub window_make_post_message: fn(&mut Scope<'_>, &Value) -> Value,
     pub window_bind_post_message: fn(&mut Scope<'_>, &Value),
 }
@@ -59,7 +59,7 @@ pub(crate) fn nsr_is_window_named(value: &Value) -> bool {
 pub(crate) fn nsr_window_current_document_for(
     scope: &mut Scope<'_>,
     window: &Value,
-) -> *mut NsNode {
+) -> Option<Node<'static>> {
     (js_window_links().window_current_document_for)(scope, window)
 }
 

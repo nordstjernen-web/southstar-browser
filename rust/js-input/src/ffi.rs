@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_char};
 use core::ptr;
 use std::borrow::Cow;
 
@@ -10,12 +10,13 @@ use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use crate::transfer::DragSession;
 use crate::{Element, Pointer};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -43,12 +44,16 @@ impl Js {
         Js(js as usize)
     }
 
+    fn of_page(page: Page) -> Js {
+        Js::of(page.as_ptr())
+    }
+
     fn ptr(self) -> *mut NsJs {
         self.0 as *mut NsJs
     }
 
-    pub fn is_null(self) -> bool {
-        self.0 == 0
+    fn page(self) -> Option<Page> {
+        Page::from_ptr(self.ptr())
     }
 
     pub fn ctx(self) -> ContextHandle {
@@ -75,7 +80,7 @@ impl Js {
     }
 
     pub fn layout_root(self) -> Option<BoxRef<'static>> {
-        unsafe { BoxRef::from_ptr(api::layout_root(self.ptr()).cast::<NsBox>()) }
+        api::layout_root(self.ptr())
     }
 
     pub fn halted(self) -> bool {
@@ -99,8 +104,9 @@ impl Js {
     }
 
     pub fn note_pointer_input(self, pointer: bool) {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::note_pointer_input(self.ptr().cast(), pointer) };
+        if let Some(page) = self.page() {
+            southstar_js_focus::note_pointer_input(page, pointer);
+        }
     }
 
     pub fn path_has_active_listener(self, target: Element, kind: &str) -> bool {
@@ -138,8 +144,9 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Option<Element>) {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::set_focus(self.ptr().cast(), el) };
+        if let Some(page) = self.page() {
+            southstar_js_focus::set_focus(page, el);
+        }
     }
 
     pub fn focused_node(self) -> Option<Element> {
@@ -147,16 +154,14 @@ impl Js {
     }
 
     pub fn sequential_focus_target(self, backward: bool) -> Option<Element> {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::sequential_focus_target(self.ptr().cast(), backward) }
+        southstar_js_focus::sequential_focus_target(self.page()?, backward)
     }
 
     pub fn keyboard_activate(self, el: Element, key: &str, keyup: bool) {
         let key = key.replace('\0', " ");
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe {
-            southstar_js_focus::keyboard_activate(self.ptr().cast(), el, key.as_bytes(), keyup)
-        };
+        if let Some(page) = self.page() {
+            southstar_js_focus::keyboard_activate(page, el, key.as_bytes(), keyup);
+        }
     }
 
     pub fn process_close_request(self) {
@@ -230,43 +235,31 @@ pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
     })
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_mouse_event(
-    js: *mut c_void,
+pub fn dispatch_mouse_event(
+    js: Page,
     target: Node<'_>,
     kind: &CStr,
     input: &Pointer,
     related: Option<Node<'_>>,
 ) -> (bool, bool) {
-    let js = Js::of(js.cast());
+    let js = Js::of_page(js);
     let Some(target) = live(target) else {
         return (false, false);
     };
-    if js.is_null() {
-        return (false, false);
-    }
     let kind = kind.to_string_lossy();
     crate::mouse::mouse_event(js, target, &kind, input, related.and_then(live))
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_clipboard_event(
-    js: *mut c_void,
+pub fn dispatch_clipboard_event(
+    js: Page,
     target: Node<'_>,
     kind: &CStr,
     text: Option<&CStr>,
 ) -> (bool, bool) {
-    let js = Js::of(js.cast());
+    let js = Js::of_page(js);
     let Some(target) = live(target) else {
         return (false, false);
     };
-    if js.is_null() {
-        return (false, false);
-    }
     let kind = kind.to_string_lossy();
     let text = text.map(CStr::to_string_lossy);
     crate::transfer::clipboard_event(js, target, &kind, text.as_deref())
@@ -275,15 +268,8 @@ pub unsafe fn dispatch_clipboard_event(
 pub struct DragData(Option<DragSession>);
 
 impl DragData {
-    /// # Safety
-    ///
-    /// `js` is null or a live script engine that outlives the session.
-    pub unsafe fn new(js: *mut c_void) -> Option<DragData> {
-        let js = Js::of(js.cast());
-        if js.is_null() {
-            return None;
-        }
-        DragSession::new(js).map(|session| DragData(Some(session)))
+    pub fn new(js: Page) -> Option<DragData> {
+        DragSession::new(Js::of_page(js)).map(|session| DragData(Some(session)))
     }
 
     pub fn set_data(&self, kind: &CStr, data: Option<&CStr>) {
@@ -308,24 +294,18 @@ impl Drop for DragData {
     }
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_drag_event(
-    js: *mut c_void,
+pub fn dispatch_drag_event(
+    js: Page,
     session: Option<&DragData>,
     target: Node<'_>,
     kind: &CStr,
     input: &Pointer,
     related: Option<Node<'_>>,
 ) -> (bool, bool) {
-    let js = Js::of(js.cast());
+    let js = Js::of_page(js);
     let Some(target) = live(target) else {
         return (false, false);
     };
-    if js.is_null() {
-        return (false, false);
-    }
     let kind = kind.to_string_lossy();
     let session = session.and_then(|data| data.0.as_ref());
     crate::transfer::drag_event(js, session, target, &kind, input, related.and_then(live))

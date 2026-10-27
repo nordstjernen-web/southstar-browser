@@ -13,6 +13,7 @@ thai = []
 
 [dependencies]
 southstar-bidi = { path = "../bidi" }
+southstar-cairo = { path = "../cairo" }
 southstar-unicode = { path = "../unicode" }
 harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }
 png = { version = "0.18", optional = true, default-features = false }

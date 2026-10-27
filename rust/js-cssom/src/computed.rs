@@ -445,7 +445,7 @@ pub(crate) const COMPUTED_PROPS: &[&str] = &[
 ];
 
 fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'static>> {
-    unsafe { StyleRef::from_ptr(b.style()) }
+    southstar_style::box_style(b.into_static())
 }
 
 fn keyword_of(v: Option<ValueRef<'_>>) -> Option<&str> {

@@ -140,7 +140,7 @@ pub(crate) fn quadratic_curve_to(scope: &mut Scope<'_>, this: &Value, a: &[Value
     let Some(cr) = context(scope, this) else {
         return done();
     };
-    quadratic_to(cr, (cpx, cpy), (x, y));
+    quadratic_to(&cr, (cpx, cpy), (x, y));
     done()
 }
 
@@ -166,7 +166,7 @@ pub(crate) fn arc_to_method(scope: &mut Scope<'_>, this: &Value, a: &[Value]) ->
     let Some(cr) = context(scope, this) else {
         return done();
     };
-    arc_to(cr, (x1, y1), (x2, y2), r);
+    arc_to(&cr, (x1, y1), (x2, y2), r);
     done()
 }
 
@@ -189,7 +189,7 @@ pub(crate) fn ellipse(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Resul
         angles: (a0, a1),
         ccw,
     };
-    ellipse_scaled(cr, &e);
+    ellipse_scaled(&cr, &e);
     done()
 }
 
@@ -209,7 +209,7 @@ pub(crate) fn round_rect(scope: &mut Scope<'_>, this: &Value, a: &[Value]) -> Re
     let Some(cr) = context(scope, this) else {
         return done();
     };
-    round_rect_subpath(cr, rect, radii);
+    round_rect_subpath(&cr, rect, radii);
     done()
 }
 

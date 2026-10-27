@@ -221,7 +221,7 @@ impl Js {
     }
 
     pub(crate) fn forget_script_roots_in(self, root: Node) {
-        page::forget_roots_in(self, root.as_ptr() as usize);
+        page::forget_roots_in(self, root);
     }
 
     pub(crate) fn has_log(self) -> bool {
@@ -427,7 +427,7 @@ fn eval_source(js: *const NsJs, source: &[u8], origin: Option<&CStr>) {
 
 fn parser_hold_forget(js: *const NsJs, n: Node<'_>) {
     if !js.is_null() {
-        hold::forget(Js(js.cast_mut()), n.as_ptr() as usize);
+        hold::forget(Js(js.cast_mut()), n);
     }
 }
 

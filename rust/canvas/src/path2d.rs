@@ -29,7 +29,7 @@ fn to_number_or_nan(scope: &mut Scope<'_>, value: Result<Value, Value>) -> f64 {
         .unwrap_or(f64::NAN)
 }
 
-pub(crate) fn quadratic_to(cr: Context, control: (f64, f64), to: (f64, f64)) {
+pub(crate) fn quadratic_to(cr: &Context, control: (f64, f64), to: (f64, f64)) {
     if !cr.has_current_point() {
         cr.move_to(control.0, control.1);
     }
@@ -43,7 +43,7 @@ pub(crate) fn quadratic_to(cr: Context, control: (f64, f64), to: (f64, f64)) {
     );
 }
 
-pub(crate) fn arc_to(cr: Context, p1: (f64, f64), p2: (f64, f64), r: f64) {
+pub(crate) fn arc_to(cr: &Context, p1: (f64, f64), p2: (f64, f64), r: f64) {
     let (x1, y1) = p1;
     let (x2, y2) = p2;
     if !cr.has_current_point() {
@@ -95,7 +95,7 @@ pub(crate) struct Ellipse {
 
 const DEGENERATE_ELLIPSE_STEPS: u32 = 64;
 
-fn degenerate_ellipse(cr: Context, e: &Ellipse) {
+fn degenerate_ellipse(cr: &Context, e: &Ellipse) {
     let (a0, mut a1) = e.angles;
     let full = 2.0 * PI;
     if e.ccw && a1 > a0 {
@@ -117,7 +117,7 @@ fn degenerate_ellipse(cr: Context, e: &Ellipse) {
     }
 }
 
-pub(crate) fn ellipse(cr: Context, e: &Ellipse) {
+pub(crate) fn ellipse(cr: &Context, e: &Ellipse) {
     if e.radii.0 == 0.0 || e.radii.1 == 0.0 {
         degenerate_ellipse(cr, e);
         return;
@@ -125,7 +125,7 @@ pub(crate) fn ellipse(cr: Context, e: &Ellipse) {
     ellipse_scaled(cr, e);
 }
 
-pub(crate) fn ellipse_scaled(cr: Context, e: &Ellipse) {
+pub(crate) fn ellipse_scaled(cr: &Context, e: &Ellipse) {
     cr.save();
     cr.translate(e.center.0, e.center.1);
     cr.rotate(e.rotation);
@@ -134,7 +134,7 @@ pub(crate) fn ellipse_scaled(cr: Context, e: &Ellipse) {
     cr.restore();
 }
 
-pub(crate) fn round_rect_subpath(cr: Context, rect: [f64; 4], radii: [f64; 4]) {
+pub(crate) fn round_rect_subpath(cr: &Context, rect: [f64; 4], radii: [f64; 4]) {
     let [mut x, mut y, w, h] = rect;
     let (aw, ah) = (w.abs(), h.abs());
     let max_r = (if aw < ah { aw } else { ah }) / 2.0;
@@ -228,7 +228,7 @@ pub(crate) fn quadratic_curve_to(
     let cr = path_of(scope, this)?;
     if args.len() >= 4 {
         let v: Vec<f64> = (0..4).map(|i| arg(scope, args, i)).collect();
-        quadratic_to(cr, (v[0], v[1]), (v[2], v[3]));
+        quadratic_to(&cr, (v[0], v[1]), (v[2], v[3]));
     }
     Ok(Value::undefined())
 }
@@ -251,7 +251,7 @@ pub(crate) fn arc_to_method(
     let cr = path_of(scope, this)?;
     if args.len() >= 5 {
         let v: Vec<f64> = (0..5).map(|i| arg(scope, args, i)).collect();
-        arc_to(cr, (v[0], v[1]), (v[2], v[3]), v[4]);
+        arc_to(&cr, (v[0], v[1]), (v[2], v[3]), v[4]);
     }
     Ok(Value::undefined())
 }
@@ -282,7 +282,7 @@ pub(crate) fn ellipse_method(
             angles: (v[5], v[6]),
             ccw,
         };
-        ellipse(cr, &e);
+        ellipse(&cr, &e);
     }
     Ok(Value::undefined())
 }
@@ -319,7 +319,7 @@ pub(crate) fn round_rect(
         }
         radii = r;
     }
-    round_rect_subpath(cr, v, radii);
+    round_rect_subpath(&cr, v, radii);
     Ok(Value::undefined())
 }
 

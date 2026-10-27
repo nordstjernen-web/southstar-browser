@@ -418,6 +418,12 @@ pub fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResu
     crate::collection::controls_snapshot(scope, form)
 }
 
+impl Page {
+    fn of_page(js: api::Page) -> Page {
+        Page(js.as_ptr().cast_mut())
+    }
+}
+
 fn page_of(js: *mut NsJs) -> Option<Page> {
     (!js.is_null()).then_some(Page(js))
 }
@@ -470,75 +476,61 @@ pub fn checkable_post_click(
     }
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_submit_event(
-    js: *mut c_void,
+pub fn dispatch_submit_event(
+    js: api::Page,
     form: Node<'_>,
     submitter: Option<Node<'_>>,
 ) -> (bool, bool) {
-    let (Some(page), Some(form)) = (page_of(js.cast()), live(form)) else {
+    let page = Page::of_page(js);
+    let Some(form) = live(form) else {
         return (false, false);
     };
     page.dispatch_submit(form, submitter.and_then(live))
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn click_activate(js: *mut c_void, n: Node<'_>) -> bool {
-    let (Some(page), Some(n)) = (page_of(js.cast()), live(n)) else {
+pub fn click_activate(js: api::Page, n: Node<'_>) -> bool {
+    let page = Page::of_page(js);
+    let Some(n) = live(n) else {
         return false;
     };
     crate::checkable::click_activate(page, n)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn select_choose_option(js: *mut c_void, option: Node<'_>) -> bool {
-    let (Some(page), Some(option)) = (page_of(js.cast()), live(option)) else {
+pub fn select_choose_option(js: api::Page, option: Node<'_>) -> bool {
+    let page = Page::of_page(js);
+    let Some(option) = live(option) else {
         return false;
     };
     crate::select::choose_option(page, option)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn select_toggle_option(js: *mut c_void, option: Node<'_>) -> bool {
-    let (Some(page), Some(option)) = (page_of(js.cast()), live(option)) else {
+pub fn select_toggle_option(js: api::Page, option: Node<'_>) -> bool {
+    let page = Page::of_page(js);
+    let Some(option) = live(option) else {
         return false;
     };
     crate::select::toggle_option(page, option)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn select_step(js: *mut c_void, select: Node<'_>, dir: c_int) -> bool {
-    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+pub fn select_step(js: api::Page, select: Node<'_>, dir: c_int) -> bool {
+    let page = Page::of_page(js);
+    let Some(select) = live(select) else {
         return false;
     };
     crate::select::step(page, select, dir)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn select_edge(js: *mut c_void, select: Node<'_>, last: bool) -> bool {
-    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+pub fn select_edge(js: api::Page, select: Node<'_>, last: bool) -> bool {
+    let page = Page::of_page(js);
+    let Some(select) = live(select) else {
         return false;
     };
     crate::select::edge(page, select, last)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn select_typeahead(js: *mut c_void, select: Node<'_>, key: &[u8]) -> bool {
-    let (Some(page), Some(select)) = (page_of(js.cast()), live(select)) else {
+pub fn select_typeahead(js: api::Page, select: Node<'_>, key: &[u8]) -> bool {
+    let page = Page::of_page(js);
+    let Some(select) = live(select) else {
         return false;
     };
     crate::select::typeahead(page, select, key)

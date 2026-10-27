@@ -320,7 +320,7 @@ pub(crate) fn resolve_url(base: &CStr, href: &CStr) -> Option<CString> {
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
-    unsafe { BoxRef::from_ptr(api::layout_root(js.ptr()).cast()) }
+    api::layout_root(js.ptr())
 }
 
 pub(crate) fn find_box<'a>(root: BoxRef<'a>, node: Node<'_>) -> Option<BoxRef<'a>> {
@@ -351,7 +351,7 @@ fn iframe_child_frame_of(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -
     let [window, key, ..] = args else {
         return Ok(Value::undefined());
     };
-    let doc = unsafe { Node::from_ptr(nsr_window_current_document_for(scope, window)) };
+    let doc = nsr_window_current_document_for(scope, window);
     match ctx::property_key(scope, key)? {
         PropertyKey::Index(index) => owner::child_frame_window(scope, doc, index, None, true),
         PropertyKey::Name(name) => {

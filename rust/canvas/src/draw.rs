@@ -4,7 +4,9 @@
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::cairo::{Context, OwnedContext, Path, Surface};
+use std::rc::Rc;
+
+use crate::ffi::cairo::{Context, Path, Surface};
 use crate::ffi::state::CanvasState;
 
 type Result = core::result::Result<Value, Value>;
@@ -43,12 +45,12 @@ const SAVABLE: [&str; 27] = [
     "_dashes",
 ];
 
-pub(crate) fn state(scope: &mut Scope<'_>, this: &Value) -> Option<&'static mut CanvasState> {
+pub(crate) fn state(scope: &mut Scope<'_>, this: &Value) -> Option<Rc<CanvasState>> {
     crate::ffi::ctx_state(scope, this)
 }
 
-fn main_context(st: &CanvasState) -> Option<Context> {
-    unsafe { Context::from_raw(st.cr) }
+fn main_context(st: &CanvasState) -> Context {
+    st.context()
 }
 
 fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
@@ -56,28 +58,28 @@ fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
         .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
 }
 
-pub(crate) fn with_shadow(st: &CanvasState, mut draw: impl FnMut(Context)) {
-    let Some(cr) = main_context(st) else {
-        return;
-    };
-    if !crate::style::has_shadow(st) || st.w <= 0 || st.h <= 0 {
-        draw(cr);
+pub(crate) fn with_shadow(st: &CanvasState, mut draw: impl FnMut(&Context)) {
+    let cr = main_context(st);
+    let (w, h) = st.size();
+    if !crate::style::has_shadow(st) || w <= 0 || h <= 0 {
+        draw(&cr);
         return;
     }
-    let off = Surface::image(st.w, st.h);
+    let off = Surface::image(w, h);
     if !off.is_ok() {
-        draw(cr);
+        draw(&cr);
         return;
     }
     {
-        let ocr = OwnedContext::on(&off);
-        ocr.context().set_matrix(cr.matrix());
-        draw(ocr.context());
+        let ocr = Context::on(&off);
+        ocr.set_matrix(cr.matrix());
+        draw(&ocr);
     }
-    let alpha = st.shadow[3];
-    let [r, g, b] = [st.shadow[0], st.shadow[1], st.shadow[2]];
+    let shadow = st.shadow.get();
+    let alpha = shadow[3];
+    let [r, g, b] = [shadow[0], shadow[1], shadow[2]];
     let (sw, sh) = off.size();
-    let half_blur = st.shadow_blur * 0.5 + 0.5;
+    let half_blur = st.shadow_blur.get() * 0.5 + 0.5;
     let radius = if half_blur < f64::from(MAX_SHADOW_RADIUS) {
         half_blur as i32
     } else {
@@ -100,49 +102,41 @@ pub(crate) fn with_shadow(st: &CanvasState, mut draw: impl FnMut(Context)) {
     });
     cr.save();
     cr.identity_matrix();
-    cr.set_source_surface(&off, st.shadow_ox, st.shadow_oy);
+    cr.set_source_surface(&off, st.shadow_ox.get(), st.shadow_oy.get());
     cr.paint();
     cr.restore();
     drop(off);
-    draw(cr);
+    draw(&cr);
 }
 
 pub(crate) fn set_fill_source(scope: &mut Scope<'_>, this: &Value, st: &CanvasState) {
     let ga = crate::style::global_alpha(scope, this);
-    let Some(cr) = main_context(st) else {
-        return;
-    };
-    if st.fill_pattern.is_null() {
-        let [r, g, b, a] = st.fill;
+    let cr = main_context(st);
+    if !st.apply_fill_pattern(&cr) {
+        let [r, g, b, a] = st.fill.get();
         cr.set_source_rgba([r, g, b, a * ga]);
-    } else {
-        cr.set_source_pattern(st.fill_pattern);
     }
 }
 
 pub(crate) fn set_stroke_source(scope: &mut Scope<'_>, this: &Value, st: &CanvasState) {
     let ga = crate::style::global_alpha(scope, this);
-    let Some(cr) = main_context(st) else {
-        return;
-    };
-    if st.stroke_pattern.is_null() {
-        let [r, g, b, a] = st.stroke;
+    let cr = main_context(st);
+    if !st.apply_stroke_pattern(&cr) {
+        let [r, g, b, a] = st.stroke.get();
         cr.set_source_rgba([r, g, b, a * ga]);
-    } else {
-        cr.set_source_pattern(st.stroke_pattern);
     }
 }
 
-fn is_main(cr: Context, st: &CanvasState) -> bool {
-    cr.raw() == st.cr
+fn is_main(cr: &Context, st: &CanvasState) -> bool {
+    st.is_main(cr)
 }
 
-fn plain_source(scope: &mut Scope<'_>, this: &Value, cr: Context, rgba: [f64; 4]) {
+fn plain_source(scope: &mut Scope<'_>, this: &Value, cr: &Context, rgba: [f64; 4]) {
     let ga = crate::style::global_alpha(scope, this);
     cr.set_source_rgba([rgba[0], rgba[1], rgba[2], rgba[3] * ga]);
 }
 
-fn on_own_path(cr: Context, draw: impl FnOnce(Context)) {
+fn on_own_path(cr: &Context, draw: impl FnOnce(&Context)) {
     let saved = cr.copy_path();
     cr.new_path();
     draw(cr);
@@ -170,14 +164,14 @@ pub(crate) fn fill_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    crate::style::sync(scope, this, st);
+    crate::style::sync(scope, this, &st);
     let [x, y, w, h] = rect_args(scope, args);
-    let st: &CanvasState = st;
+    let st: &CanvasState = &st;
     with_shadow(st, |cr| {
         if is_main(cr, st) {
             set_fill_source(scope, this, st);
         } else {
-            plain_source(scope, this, cr, st.fill);
+            plain_source(scope, this, cr, st.fill.get());
         }
         crate::style::apply_composite(scope, this, cr);
         on_own_path(cr, |cr| {
@@ -197,15 +191,15 @@ pub(crate) fn stroke_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    crate::style::sync(scope, this, st);
+    crate::style::sync(scope, this, &st);
     let [x, y, w, h] = rect_args(scope, args);
-    let st: &CanvasState = st;
-    let lw = st.line_width;
+    let st: &CanvasState = &st;
+    let lw = st.line_width.get();
     with_shadow(st, |cr| {
         if is_main(cr, st) {
             set_stroke_source(scope, this, st);
         } else {
-            plain_source(scope, this, cr, st.stroke);
+            plain_source(scope, this, cr, st.stroke.get());
         }
         crate::style::apply_composite(scope, this, cr);
         cr.set_line_width(lw);
@@ -227,15 +221,14 @@ pub(crate) fn clear_rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    if let Some(cr) = main_context(st) {
-        cr.save();
-        cr.set_operator(OPERATOR_CLEAR);
-        on_own_path(cr, |cr| {
-            cr.rectangle(x, y, w, h);
-            cr.fill();
-        });
-        cr.restore();
-    }
+    let cr = main_context(&st);
+    cr.save();
+    cr.set_operator(OPERATOR_CLEAR);
+    on_own_path(&cr, |cr| {
+        cr.rectangle(x, y, w, h);
+        cr.fill();
+    });
+    cr.restore();
     mark_mutated(scope);
     Ok(Value::undefined())
 }
@@ -250,7 +243,7 @@ fn rule_text(scope: &mut Scope<'_>, v: &Value) -> Option<Vec<u8>> {
 
 pub(crate) fn prepare_path_and_rule(
     scope: &mut Scope<'_>,
-    cr: Context,
+    cr: &Context,
     args: &[Value],
 ) -> Option<Path> {
     let mut path = None;
@@ -278,7 +271,7 @@ pub(crate) fn prepare_path_and_rule(
     saved
 }
 
-pub(crate) fn restore_path(cr: Context, saved: Option<Path>) {
+pub(crate) fn restore_path(cr: &Context, saved: Option<Path>) {
     if let Some(saved) = saved {
         cr.new_path();
         cr.append_path(&saved);
@@ -289,12 +282,10 @@ pub(crate) fn fill(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Resul
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    crate::style::sync(scope, this, st);
-    let Some(main) = main_context(st) else {
-        return Ok(Value::undefined());
-    };
-    let saved = prepare_path_and_rule(scope, main, args);
-    let st: &CanvasState = st;
+    crate::style::sync(scope, this, &st);
+    let main = main_context(&st);
+    let saved = prepare_path_and_rule(scope, &main, args);
+    let st: &CanvasState = &st;
     let snapshot = crate::style::has_shadow(st).then(|| main.copy_path());
     let fill_rule = main.fill_rule();
     with_shadow(st, |cr| {
@@ -305,7 +296,7 @@ pub(crate) fn fill(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Resul
             if let Some(snapshot) = &snapshot {
                 cr.append_path(snapshot);
             }
-            plain_source(scope, this, cr, st.fill);
+            plain_source(scope, this, cr, st.fill.get());
         }
         cr.set_fill_rule(fill_rule);
         crate::style::apply_composite(scope, this, cr);
@@ -313,7 +304,7 @@ pub(crate) fn fill(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Resul
         cr.set_operator(OPERATOR_OVER);
     });
     drop(snapshot);
-    restore_path(main, saved);
+    restore_path(&main, saved);
     mark_mutated(scope);
     Ok(Value::undefined())
 }
@@ -322,10 +313,8 @@ pub(crate) fn stroke(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Res
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    crate::style::sync(scope, this, st);
-    let Some(main) = main_context(st) else {
-        return Ok(Value::undefined());
-    };
+    crate::style::sync(scope, this, &st);
+    let main = main_context(&st);
     let saved = match args.first() {
         Some(first) if crate::ffi::is_path2d(first) => {
             let saved = main.copy_path();
@@ -338,9 +327,9 @@ pub(crate) fn stroke(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Res
         }
         _ => None,
     };
-    let st: &CanvasState = st;
+    let st: &CanvasState = &st;
     let snapshot = crate::style::has_shadow(st).then(|| main.copy_path());
-    let lw = st.line_width;
+    let lw = st.line_width.get();
     with_shadow(st, |cr| {
         if is_main(cr, st) {
             set_stroke_source(scope, this, st);
@@ -349,7 +338,7 @@ pub(crate) fn stroke(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Res
             if let Some(snapshot) = &snapshot {
                 cr.append_path(snapshot);
             }
-            plain_source(scope, this, cr, st.stroke);
+            plain_source(scope, this, cr, st.stroke.get());
         }
         crate::style::apply_composite(scope, this, cr);
         cr.set_line_width(lw);
@@ -357,7 +346,7 @@ pub(crate) fn stroke(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Res
         cr.set_operator(OPERATOR_OVER);
     });
     drop(snapshot);
-    restore_path(main, saved);
+    restore_path(&main, saved);
     mark_mutated(scope);
     Ok(Value::undefined())
 }
@@ -380,9 +369,7 @@ pub(crate) fn save(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result {
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    if let Some(cr) = main_context(st) {
-        cr.save();
-    }
+    main_context(&st).save();
     let mut stack = crate::hidden::get(scope, this, "_stateStack")?;
     if !stack.is_array() {
         stack = scope.new_array();
@@ -418,8 +405,6 @@ pub(crate) fn restore(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Resul
         crate::hidden::set(scope, this, name, v);
     }
     let _ = scope.set(&stack, "length", Value::int64(i64::from(n - 1)));
-    if let Some(cr) = main_context(st) {
-        cr.restore();
-    }
+    main_context(&st).restore();
     Ok(Value::undefined())
 }

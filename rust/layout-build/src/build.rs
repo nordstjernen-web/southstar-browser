@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
 use core::ptr;
 use std::collections::{HashMap, HashSet};
 
@@ -56,7 +55,7 @@ pub struct BuildInput<'a> {
     pub focused_input: Option<Node<'a>>,
     pub caret_byte: usize,
     pub anchor_byte: usize,
-    pub image_cache: *mut c_void,
+    pub image_cache: Option<southstar_image::ImageCache>,
     pub base_url: Option<&'a [u8]>,
 }
 
@@ -95,7 +94,7 @@ pub fn layout_build(input: BuildInput<'_>) -> Option<BoxRef<'static>> {
         st.focused_is_contenteditable = false;
         st.caret_byte = 0;
         st.anchor_byte = 0;
-        st.image_cache = ptr::null_mut();
+        st.image_cache = None;
         st.base_url = None;
     });
     counters_clear();

@@ -302,7 +302,7 @@ pub struct Relayout<'a> {
 
 /// # Safety
 ///
-/// `js` is null or the page's live script engine.
+/// `js` is null or the page's live script engine, and `layout` holds null or a box of this thread's layout store.
 pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
     let viewport_width = req.viewport_width;
     let js = req.js;
@@ -312,9 +312,7 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<
         base: req.page.base,
         viewport_width,
         viewport_height: req.viewport_height,
-        images: req
-            .images
-            .map_or(ptr::null_mut(), southstar_image::ImageCache::raw),
+        images: req.images,
         anim: req.anim,
         js,
         focused: Node::ptr_or_null(req.focused),
@@ -333,15 +331,15 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<
     } else {
         css::render_relayout(&ctx, out_layout)
     };
-    css::publish_to_page(js, styles.as_ref(), layout.get());
+    css::publish_to_page(js, styles.as_ref(), layout);
     if crate::styles::frame_viewports_disagree_with_layout() {
-        css::discard_layout(js, styles, out_layout);
+        css::discard_layout(js, styles, layout);
         drop(sheets);
         scope.cache_begin();
         sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
         let ctx = css::render_ctx(&r, &sheets);
         styles = css::render_relayout(&ctx, out_layout);
-        css::publish_to_page(js, styles.as_ref(), layout.get());
+        css::publish_to_page(js, styles.as_ref(), layout);
     }
     crate::styles::add_relayout(monotonic_us() - t0);
     css::log_relayout(styles.as_deref(), viewport_width);

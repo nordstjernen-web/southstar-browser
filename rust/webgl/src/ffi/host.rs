@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::c_void;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -15,62 +14,21 @@ use southstar_js_runtime::api::{self, NsJs};
 
 use crate::context::WebGl;
 
-unsafe extern "C" {
-    fn cairo_image_surface_create(format: c_int, w: c_int, h: c_int) -> *mut c_void;
-    fn cairo_surface_status(s: *mut c_void) -> c_int;
-    fn cairo_surface_destroy(s: *mut c_void);
-    fn cairo_surface_flush(s: *mut c_void);
-    fn cairo_surface_mark_dirty(s: *mut c_void);
-    fn cairo_image_surface_get_data(s: *mut c_void) -> *mut u8;
-    fn cairo_image_surface_get_stride(s: *mut c_void) -> c_int;
-    fn cairo_image_surface_get_height(s: *mut c_void) -> c_int;
-}
-
-const CAIRO_FORMAT_ARGB32: c_int = 0;
-const CAIRO_STATUS_SUCCESS: c_int = 0;
-
 pub(crate) use southstar_glctx::GlContext;
 
-pub(crate) struct Surface(NonNull<c_void>);
+pub(crate) struct Surface(southstar_cairo::Surface);
 
 impl Surface {
     pub(crate) fn new(w: i32, h: i32) -> Option<Surface> {
-        let raw = unsafe { cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h) };
-        let surface = Surface(NonNull::new(raw)?);
-        (unsafe { cairo_surface_status(raw) } == CAIRO_STATUS_SUCCESS).then_some(surface)
+        southstar_cairo::Surface::image(southstar_cairo::Format::Argb32, w, h).map(Surface)
     }
 
-    pub(crate) fn as_ptr(&self) -> *mut c_void {
-        self.0.as_ptr()
+    pub(crate) fn shared(&self) -> southstar_cairo::Surface {
+        self.0.clone()
     }
 
-    pub(crate) fn flush(&self) {
-        unsafe { cairo_surface_flush(self.as_ptr()) };
-    }
-
-    pub(crate) fn mark_dirty(&self) {
-        unsafe { cairo_surface_mark_dirty(self.as_ptr()) };
-    }
-
-    pub(crate) fn pixels(&mut self) -> Option<(&mut [u8], usize)> {
-        let raw = self.as_ptr();
-        let data = unsafe { cairo_image_surface_get_data(raw) };
-        let stride = unsafe { cairo_image_surface_get_stride(raw) };
-        let height = unsafe { cairo_image_surface_get_height(raw) };
-        if data.is_null() || stride <= 0 || height <= 0 {
-            return None;
-        }
-        let len = stride as usize * height as usize;
-        Some((
-            unsafe { core::slice::from_raw_parts_mut(data, len) },
-            stride as usize,
-        ))
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        unsafe { cairo_surface_destroy(self.as_ptr()) };
+    pub(crate) fn with_pixels_mut<R>(&self, f: impl FnOnce(&mut [u8], usize) -> R) -> Option<R> {
+        self.0.as_ref().with_data_mut(f)
     }
 }
 
@@ -129,8 +87,8 @@ pub(crate) struct SourceImage {
 }
 
 impl SourceImage {
-    pub(crate) fn pixels(&mut self) -> Option<(&[u8], usize)> {
-        self.surface.pixels().map(|(data, stride)| (&*data, stride))
+    pub(crate) fn with_pixels<R>(&self, f: impl FnOnce(&[u8], usize) -> R) -> Option<R> {
+        self.surface.0.as_ref().with_data(f)
     }
 }
 
@@ -139,12 +97,10 @@ pub(crate) fn drawimage_source(
     src: &Value,
 ) -> Result<Option<SourceImage>, Value> {
     let source = canvas::drawimage_source_surface(scope, src)?;
-    Ok(source.and_then(|(raw, w, h)| {
-        NonNull::new(raw).map(|s| SourceImage {
-            surface: Surface(s),
-            w,
-            h,
-        })
+    Ok(source.map(|(surface, w, h)| SourceImage {
+        surface: Surface(surface),
+        w,
+        h,
     }))
 }
 
@@ -237,6 +193,6 @@ pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install(scope, global);
 }
 
-pub(crate) fn canvas_surface(canvas: usize) -> *mut c_void {
-    registered(canvas).map_or(ptr::null_mut(), |(gl, _)| gl.canvas_surface())
+pub(crate) fn canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+    registered(canvas).and_then(|(gl, _)| gl.canvas_surface())
 }

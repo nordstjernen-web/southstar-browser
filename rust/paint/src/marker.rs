@@ -513,11 +513,11 @@ fn paint_marker_label(
 
 fn marker_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<Texture> {
     let media = b.media()?;
-    let image = unsafe { ImageRef::from_ptr(media.marker_image()) }?;
+    let image = ImageRef::from_media(media.marker_image()?)?;
     if get(s, P::ListStyleImage).is_none_or(|v| v.kind() != Kind::Url) {
         return None;
     }
-    let texture = unsafe { Texture::from_raw(image.texture()) }?;
+    let texture = engine::image_texture(image)?;
     (image.loaded() && texture.width() > 0 && texture.height() > 0).then_some(texture)
 }
 
@@ -573,7 +573,7 @@ pub fn paint_marker(cr: ContextRef, b: BoxRef<'_>) {
             dw *= cap / dh;
             dh = cap;
         }
-        if let Some(surf) = crate::media::texture_surface_cached(texture, None) {
+        if let Some(surf) = crate::media::texture_surface_cached(&texture, None) {
             let dx = if rtl {
                 edge_x + font_size * 0.35
             } else {

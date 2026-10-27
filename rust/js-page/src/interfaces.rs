@@ -290,7 +290,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
         scope,
         ValueInstaller::TreeWalkerProto,
         &tree_walker_proto,
-        core::ptr::null(),
+        None,
     );
     ffi::install_on(scope, Installer::LiveConstructors, global);
     let validity_proto = install_table_on(scope, global, "ValidityState", ProtoTable::Validity);
@@ -318,19 +318,9 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
     ffi::install_on(scope, Installer::ToStringTag, global);
     for &name in EVENT_HANDLER_TARGETS {
         let proto = prototype_of(scope, global, name);
-        ffi::install_value(
-            scope,
-            ValueInstaller::EventHandlerAccessors,
-            &proto,
-            core::ptr::null(),
-        );
+        ffi::install_value(scope, ValueInstaller::EventHandlerAccessors, &proto, None);
     }
-    ffi::install_value(
-        scope,
-        ValueInstaller::EventHandlerAccessors,
-        global,
-        core::ptr::null(),
-    );
+    ffi::install_value(scope, ValueInstaller::EventHandlerAccessors, global, None);
     ffi::install_on(scope, Installer::IndexedDb, global);
     ffi::install_on(scope, Installer::NetInterfaces, global);
 }

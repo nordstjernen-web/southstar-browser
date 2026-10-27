@@ -6,7 +6,7 @@ use core::ffi::CStr;
 
 use southstar_dom::Node;
 
-use crate::ffi::{self, Js, NsJs};
+use crate::ffi::{self, Js, NsJs, Page};
 use crate::{Element, attribute_maps, attrs, change, orphans, record, tree};
 
 pub use crate::attrs::QualifiedName;
@@ -118,15 +118,15 @@ pub fn forget_pending_change(js: *mut NsJs) {
     }
 }
 
-pub fn note_user_edit(js: *mut NsJs, el: Node<'_>, value_before: &CStr) {
-    if let (Some(js), Some(el)) = (Js::of(js), el.downgrade().get()) {
-        change::note_user_edit(js, el, value_before);
+pub fn note_user_edit(js: Page, el: Node<'_>, value_before: &CStr) {
+    if let Some(el) = el.downgrade().get() {
+        change::note_user_edit(Js::of_page(js), el, value_before);
     }
 }
 
-pub fn commit_change(js: *mut NsJs, el: Node<'_>) {
-    if let (Some(js), Some(el)) = (Js::of(js), el.downgrade().get()) {
-        change::commit(js, el);
+pub fn commit_change(js: Page, el: Node<'_>) {
+    if let Some(el) = el.downgrade().get() {
+        change::commit(Js::of_page(js), el);
     }
 }
 

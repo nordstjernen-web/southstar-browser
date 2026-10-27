@@ -19,7 +19,7 @@ pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
 }
 
 pub fn image_of<'a>(media: MediaRef<'a>) -> Option<ImageRef<'a>> {
-    unsafe { ImageRef::from_ptr(media.image()) }
+    media.image().and_then(ImageRef::from_media)
 }
 
 pub use southstar_layout_geom::flex::{

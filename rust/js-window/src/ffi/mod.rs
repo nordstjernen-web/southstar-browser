@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -174,6 +174,7 @@ pub fn anchor_fragment_navigate(js: *const NsJs, abs_url: &[u8]) -> bool {
 }
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
@@ -181,6 +182,10 @@ pub(crate) struct Js(usize);
 impl Js {
     fn of(js: *const NsJs) -> Js {
         Js(js as usize)
+    }
+
+    fn of_page(page: Page) -> Js {
+        Js::of(page.as_ptr())
     }
 
     pub fn is_null(self) -> bool {
@@ -414,12 +419,15 @@ pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Opt
     crate::documents::current_document_for(scope, window)
 }
 
-pub fn nsr_window_current_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
-    Node::ptr_or_null(crate::documents::current_document_for(scope, window)).cast_mut()
+pub fn nsr_window_current_document_for(
+    scope: &mut Scope<'_>,
+    window: &Value,
+) -> Option<Node<'static>> {
+    crate::documents::current_document_for(scope, window)
 }
 
-pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
-    Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
+pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> Option<Node<'static>> {
+    crate::documents::document_for(scope, window)
 }
 
 pub fn nsr_window_find(
@@ -481,24 +489,12 @@ fn sync_metrics(js: Js) {
     });
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn sync_window_metrics(js: *mut c_void) {
-    sync_metrics(Js::of(js.cast()));
+pub fn sync_window_metrics(js: Page) {
+    sync_metrics(Js::of_page(js));
 }
 
-/// # Safety
-///
-/// `root` is null or points at a live node.
-pub unsafe fn nsr_document_expose_legacy_named(
-    scope: &mut Scope<'_>,
-    root: *const NsNode,
-    document: &Value,
-) {
-    if let Some(root) = unsafe { Node::from_ptr(root) } {
-        named::expose_legacy_named(scope, root, document);
-    }
+pub fn nsr_document_expose_legacy_named(scope: &mut Scope<'_>, root: Node<'_>, document: &Value) {
+    named::expose_legacy_named(scope, root, document);
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -578,36 +574,20 @@ fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn note_viewport_scroll(js: *mut c_void, x: f64, y: f64) {
-    page::note_viewport_scroll(Js::of(js.cast()), x, y);
+pub fn note_viewport_scroll(js: Page, x: f64, y: f64) {
+    page::note_viewport_scroll(Js::of_page(js), x, y);
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_resize(js: *mut c_void) {
-    if !js.is_null() {
-        page::dispatch_resize(Js::of(js.cast()));
-    }
+pub fn dispatch_resize(js: Page) {
+    page::dispatch_resize(Js::of_page(js));
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn reeval_media_queries(js: *mut c_void) {
-    reeval_services_media_queries(Js::of(js.cast()));
+pub fn reeval_media_queries(js: Page) {
+    reeval_services_media_queries(Js::of_page(js));
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn fire_page_transition(js: *mut c_void, kind: &CStr, persisted: bool) {
-    if !js.is_null() {
-        page::fire_page_transition(Js::of(js.cast()), kind, persisted);
-    }
+pub fn fire_page_transition(js: Page, kind: &CStr, persisted: bool) {
+    page::fire_page_transition(Js::of_page(js), kind, persisted);
 }
 
 /// # Safety

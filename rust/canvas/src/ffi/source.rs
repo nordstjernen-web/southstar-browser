@@ -2,13 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{CStr, c_char};
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
-use southstar_texture::Texture;
+use southstar_texture::TextureRef;
 use southstar_video::BoxVideo;
 
 use super::cairo::Surface;
@@ -17,7 +18,7 @@ use super::state::NsJs;
 use crate::bitmap::{ImageBitmap, Source};
 
 struct Found<'a> {
-    texture: *mut c_void,
+    texture: Option<TextureRef>,
     url: *const c_char,
     cors_allow_origin: *const c_char,
     cacheable: Option<ImageRef<'a>>,
@@ -25,7 +26,7 @@ struct Found<'a> {
 
 fn from_image(image: ImageRef<'_>, cacheable: bool) -> Option<Found<'_>> {
     let texture = image.texture();
-    (!texture.is_null()).then(|| Found {
+    texture.is_some().then(|| Found {
         texture,
         url: image.source_url(),
         cors_allow_origin: image.cors_allow_origin(),
@@ -37,10 +38,10 @@ fn from_box(scope: &Scope<'_>, node: Node<'_>, name: &[u8]) -> Option<Found<'sta
     let b = crate::links::box_for_node(scope, node)?;
     let media = b.media()?;
     match name {
-        b"img" => from_image(unsafe { ImageRef::from_ptr(media.image()) }?, false),
+        b"img" => from_image(ImageRef::from_media(media.image()?)?, false),
         b"video" => BoxVideo::of(b)?.with_poster(|texture, url| {
             Some(Found {
-                texture: texture.map_or(ptr::null_mut(), |t| t.as_ptr().cast()),
+                texture: texture.cloned(),
                 url: url.map_or(ptr::null(), CStr::as_ptr),
                 cors_allow_origin: ptr::null(),
                 cacheable: None,
@@ -50,9 +51,8 @@ fn from_box(scope: &Scope<'_>, node: Node<'_>, name: &[u8]) -> Option<Found<'sta
     }
 }
 
-fn texture_surface(texture: *mut c_void) -> Option<Surface> {
-    // SAFETY: texture is null or the image's or video's texture, which its owner keeps alive here.
-    let texture = unsafe { Texture::borrow(texture.cast()) }?;
+fn texture_surface(texture: Option<TextureRef>) -> Option<Surface> {
+    let texture = texture?;
     let (w, h) = (texture.width(), texture.height());
     if w <= 0 || h <= 0 {
         return None;
@@ -68,12 +68,10 @@ fn texture_surface(texture: *mut c_void) -> Option<Surface> {
 fn canvas_source(scope: &Scope<'_>, node: *const NsNode) -> Option<Source> {
     let js = super::state::js_of(scope);
     let st = crate::state::state_for(js, super::state::Node::from_addr(node as usize))?;
-    let st = unsafe { &*st };
-    let surface = unsafe { Surface::from_borrowed(st.surf) }?;
     Some(Source {
-        surface,
-        size: (st.w, st.h),
-        origin_clean: st.origin_clean != 0,
+        surface: st.surface(),
+        size: st.size(),
+        origin_clean: st.origin_clean.get(),
     })
 }
 
@@ -99,7 +97,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     }
     let cors_requested = element.attr(c"crossorigin").is_some();
     let found = from_box(scope, element, name)
-        .filter(|f| !f.texture.is_null())
+        .filter(|f| f.texture.is_some())
         .or_else(|| {
             if name != b"img" {
                 return None;
@@ -115,7 +113,9 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     // SAFETY: the found URL and allowed origin are null or strings their image or video keeps alive here.
     let origin_clean = unsafe { origin_clean(scope, found.url, allow) };
     if let Some(image) = found.cacheable
-        && let Some(cached) = unsafe { Surface::from_borrowed(image.render_surface()) }
+        && let Some(cached) = image
+            .render_cache()
+            .and_then(|c| c.downcast_ref::<Surface>().map(Surface::reference))
     {
         let size = cached.size();
         return Some(Source {
@@ -126,7 +126,7 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     }
     let surface = texture_surface(found.texture)?;
     if let Some(image) = found.cacheable {
-        image.set_render_surface(surface.reference().into_raw());
+        image.set_render_cache(Rc::new(surface.reference()));
     }
     let size = surface.size();
     Some(Source {

@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, OnceCell, RefCell};
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
@@ -14,6 +14,7 @@ use southstar_js_bind::bind_native;
 use southstar_js_engine::{
     Attributes, ContextHandle, RuntimeHandle, RuntimeOptions, Scope, ScriptOptions, Value,
 };
+use southstar_layout::BoxRef;
 
 use super::NavigationTiming;
 use super::imports;
@@ -151,7 +152,7 @@ pub(crate) struct Record {
     pub current_doc: Cell<*mut NsNode>,
     pub raf_frame_ctx: Cell<*mut NsNode>,
     pristine_promise: RefCell<Value>,
-    layout_root: Cell<*const c_void>,
+    layout_root: Cell<Option<BoxRef<'static>>>,
     pinned_wrappers_set: RefCell<Option<HashSet<usize>>>,
     cookie_value: RefCell<Option<CString>>,
     cookie_version: Cell<u64>,
@@ -174,6 +175,11 @@ pub(crate) struct Record {
 
 thread_local! {
     static ACTIVE: Cell<*mut NsJs> = const { Cell::new(ptr::null_mut()) };
+    static LIVE: RefCell<HashSet<usize>> = RefCell::new(HashSet::new());
+}
+
+pub(crate) fn is_live(js: *const NsJs) -> bool {
+    LIVE.with_borrow(|live| live.contains(&js.addr()))
 }
 
 pub(crate) fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
@@ -216,7 +222,7 @@ pub(crate) fn alloc() -> *mut NsJs {
         current_doc: Cell::new(ptr::null_mut()),
         raf_frame_ctx: Cell::new(ptr::null_mut()),
         pristine_promise: RefCell::new(Value::undefined()),
-        layout_root: Cell::new(ptr::null()),
+        layout_root: Cell::new(None),
         pinned_wrappers_set: RefCell::new(None),
         cookie_value: RefCell::new(None),
         cookie_version: Cell::new(0),
@@ -237,7 +243,9 @@ pub(crate) fn alloc() -> *mut NsJs {
         state: OnceCell::new(),
     });
     drop(record.state.set(Box::new(PageState::new())));
-    Box::into_raw(record).cast()
+    let js: *mut NsJs = Box::into_raw(record).cast();
+    LIVE.with_borrow_mut(|live| live.insert(js.addr()));
+    js
 }
 
 impl Record {
@@ -424,6 +432,7 @@ pub(crate) unsafe fn free_engine(js: *mut NsJs) {
     let Some(record) = record(js) else {
         return;
     };
+    LIVE.with_borrow_mut(|live| live.remove(&js.addr()));
     free_realm_values(record);
     free_window_values(record);
     for ctx in record.frame_ctxs.take().unwrap_or_default() {
@@ -765,17 +774,18 @@ pub(crate) fn attr_apply_proto(scope: &mut Scope<'_>, obj: &Value) {
     bind_native(scope, obj, "isSameNode", 1, imports::nsr_element_isSameNode);
 }
 
-pub(crate) fn set_layout_root(js: *const NsJs, root: *const c_void) {
+pub(crate) fn set_layout_root(js: *const NsJs, root: Option<BoxRef<'_>>) {
     let Some(record) = record(js) else {
         return;
     };
     let js = js.cast_mut();
-    if record.layout_root.get() != root {
+    let root = root.map(BoxRef::into_static);
+    if record.layout_root.get().map(BoxRef::as_ptr) != root.map(BoxRef::as_ptr) {
         (crate::api::geometry_hooks().forget_box_lookup)(js);
     }
     record.layout_root.set(root);
     (crate::api::window_hooks().sync_metrics)(js);
-    if !root.is_null() {
+    if root.is_some() {
         (crate::api::frames_hooks().promote_deferred)(js);
         if super::glue::is_running_script(super::Js(js).ctx()) {
             crate::api::observer_schedule_tick(js);
@@ -909,11 +919,11 @@ pub(crate) fn frame_realm_finish(
     });
 }
 
-pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> *mut NsNode {
+pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Node<'static>> {
     if let Some(root) = super::wrapper::unwrap(this).filter(|root| root.kind() == Kind::Document) {
-        return root.as_mut_ptr();
+        return Some(root);
     }
-    record(page_of(scope)).map_or(ptr::null_mut(), |js| js.current_doc.get())
+    node(record(page_of(scope))?.current_doc.get())
 }
 
 pub(crate) fn ce_main_doc(js: *const NsJs) -> Option<Node<'static>> {
@@ -1182,8 +1192,8 @@ pub(crate) fn pristine_promise(js: *const NsJs) -> Value {
     record(js).map_or_else(Value::undefined, |js| js.pristine_promise.borrow().clone())
 }
 
-pub(crate) fn layout_root(js: *const NsJs) -> *const c_void {
-    record(js).map_or(ptr::null(), |js| js.layout_root.get())
+pub(crate) fn layout_root(js: *const NsJs) -> Option<BoxRef<'static>> {
+    record(js)?.layout_root.get()
 }
 
 pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {

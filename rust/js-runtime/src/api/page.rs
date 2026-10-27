@@ -4,13 +4,14 @@
 
 use core::cell::Cell;
 use core::ffi::{CStr, c_int, c_void};
-use core::ptr;
+use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_js_engine::{ContextHandle, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_layout::BoxRef;
 
 use crate::budget;
 use crate::ffi::state::PageState;
@@ -262,7 +263,7 @@ pub fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
     record::set_navigation_timing(js, timing);
 }
 
-pub fn layout_root(js: *const NsJs) -> *const c_void {
+pub fn layout_root(js: *const NsJs) -> Option<BoxRef<'static>> {
     record::layout_root(js)
 }
 
@@ -524,8 +525,29 @@ pub fn worker_eval(
     }
 }
 
-pub fn new_page(callbacks: ffi::Callbacks, timing: Option<NavigationTiming>) -> *mut NsJs {
-    ffi::new_page(callbacks, timing)
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Page(NonNull<NsJs>);
+
+impl Page {
+    pub fn from_ptr(js: *const NsJs) -> Option<Page> {
+        if record::is_live(js) {
+            NonNull::new(js.cast_mut()).map(Page)
+        } else {
+            None
+        }
+    }
+
+    pub fn of_scope(scope: &Scope<'_>) -> Option<Page> {
+        Page::from_ptr(scope.context_opaque().cast())
+    }
+
+    pub fn as_ptr(self) -> *const NsJs {
+        self.0.as_ptr().cast_const()
+    }
+}
+
+pub fn new_page(callbacks: ffi::Callbacks, timing: Option<NavigationTiming>) -> Option<Page> {
+    Page::from_ptr(ffi::new_page(callbacks, timing))
 }
 
 pub fn free(js: *const NsJs) {

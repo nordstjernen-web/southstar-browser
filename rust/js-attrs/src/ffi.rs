@@ -5,11 +5,10 @@
 mod imports;
 
 use core::ffi::CStr;
-use core::ptr;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use southstar_dom::{AttrView, Node, NsNode};
+use southstar_dom::{AttrView, Node};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -26,8 +25,6 @@ impl Js {
         self.0.is_null()
     }
 }
-
-unsafe extern "C" {}
 
 const LIVE_ATTRIBUTES: i32 = 12;
 
@@ -95,12 +92,14 @@ pub(crate) fn attribute_map_lookup(
     js: Js,
     owner: Element,
 ) -> Option<Value> {
-    unsafe { imports::nsr_attribute_map_lookup(js.0, owner.as_ptr()) }
+    imports::nsr_attribute_map_lookup(api::Page::from_ptr(js.0)?, owner)
         .filter(|map| !map.is_undefined())
 }
 
 pub(crate) fn attribute_map_remember(_scope: &mut Scope<'_>, js: Js, owner: Element, map: &Value) {
-    unsafe { imports::nsr_attribute_map_remember(js.0, owner.as_ptr(), map) };
+    if let Some(page) = api::Page::from_ptr(js.0) {
+        imports::nsr_attribute_map_remember(page, owner, map);
+    }
 }
 
 pub(crate) fn make_attributes_live(scope: &mut Scope<'_>, owner: &Value) -> Result<Value, Value> {
@@ -114,7 +113,7 @@ pub(crate) fn make_attributes_live(scope: &mut Scope<'_>, owner: &Value) -> Resu
 }
 
 pub(crate) fn named_map_owner(value: &Value) -> Option<Element> {
-    unsafe { Node::from_ptr(imports::nsr_live_owner_node(value)) }
+    imports::nsr_live_owner_node(value)
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
@@ -141,10 +140,8 @@ pub(crate) fn apply_attr_proto(scope: &mut Scope<'_>, entry: &Value) {
     api::attr_apply_proto(scope, entry);
 }
 
-pub(crate) fn attr_owner_node(value: &Value) -> *mut NsNode {
-    state_of(value)
-        .and_then(|state| state.borrow().owner)
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
+pub(crate) fn attr_owner_node(value: &Value) -> Option<Element> {
+    state_of(value).and_then(|state| state.borrow().owner)
 }
 
 macro_rules! rust_methods {
@@ -209,7 +206,7 @@ pub fn nsr_make_token_list(
     crate::element::token_list(scope, element, attr)
 }
 
-pub fn nsr_attr_owner(value: &Value) -> *mut NsNode {
+pub fn nsr_attr_owner(value: &Value) -> Option<Element> {
     attr_owner_node(value)
 }
 

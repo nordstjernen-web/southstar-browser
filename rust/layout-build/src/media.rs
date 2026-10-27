@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{Node, children};
 use southstar_glib::ascii_strtod;
-use southstar_layout::{BoxPool, BoxRef};
+use southstar_layout::{BoxPool, BoxRef, MediaHandle};
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::classify::{MEDIA_POSTER_ATTR, MEDIA_SRC_ATTR, node_has_media_metadata};
@@ -20,21 +20,17 @@ pub const KIND_VIDEO: u32 = 8;
 pub const KIND_MATH: u32 = 9;
 pub const KIND_SVG: u32 = 10;
 
-pub fn peek_image(src: Option<&CStr>) -> *mut c_void {
-    let Some(src) = src else {
-        return ptr::null_mut();
-    };
+pub fn peek_image(src: Option<&CStr>) -> Option<MediaHandle> {
+    let src = src?;
     let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
-    if cache.is_null() {
-        return ptr::null_mut();
-    }
+    let cache = cache?;
     match ffi::url_resolve(base.as_deref(), src) {
         Some(abs) => ffi::image_cache_peek(cache, &abs),
         None => ffi::image_cache_peek(cache, src),
     }
 }
 
-fn dup_peek(src: &CStr) -> (Option<&CStr>, *mut c_void) {
+fn dup_peek(src: &CStr) -> (Option<&CStr>, Option<MediaHandle>) {
     (Some(src), peek_image(Some(src)))
 }
 
@@ -88,18 +84,17 @@ pub fn image_dimension_attr(n: Option<Node<'_>>, name: &CStr) -> f64 {
     v
 }
 
-fn decode_data_image(url: &CStr, key: &CStr) -> *mut c_void {
-    let cache = state::with(|st| st.image_cache);
-    if cache.is_null() || !url.to_bytes().starts_with(b"data:image/") {
-        return ptr::null_mut();
+fn decode_data_image(url: &CStr, key: &CStr) -> Option<MediaHandle> {
+    let cache = state::with(|st| st.image_cache)?;
+    if !url.to_bytes().starts_with(b"data:image/") {
+        return None;
     }
-    let cached = ffi::image_cache_peek(cache, key);
-    if !cached.is_null() {
-        return cached;
+    if let Some(cached) = ffi::image_cache_peek(cache, key) {
+        return Some(cached);
     }
     match ffi::data_url_decode(url, 64 * 1024 * 1024) {
         Some(bytes) if !bytes.is_empty() => ffi::image_cache_insert_encoded(cache, key, &bytes),
-        _ => ptr::null_mut(),
+        _ => None,
     }
 }
 
@@ -123,22 +118,22 @@ pub fn build_image_box(n: Node<'_>) -> BoxRef<'static> {
     }
     let declared = b.content_width() > 0.0 && b.content_height() > 0.0;
     m.set_declared_image_size(declared);
-    let mut image = ptr::null_mut();
+    let mut image = None;
     let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
-    if !cache.is_null() {
+    if let Some(cache) = cache {
         let abs = url.and_then(|u| ffi::url_resolve(base.as_deref(), u));
         let key = abs.as_deref().or(url);
         if let (Some(u), Some(k)) = (url, key) {
             image = decode_data_image(u, k);
         }
-        if image.is_null() {
-            image = key.map_or(ptr::null_mut(), |k| ffi::image_cache_peek(cache, k));
+        if image.is_none() {
+            image = key.and_then(|k| ffi::image_cache_peek(cache, k));
         }
         m.set_image(image);
     }
     if !declared
         && url.is_some()
-        && image.is_null()
+        && image.is_none()
         && b.content_width() <= 0.0
         && b.content_height() <= 0.0
     {

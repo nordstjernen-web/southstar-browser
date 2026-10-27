@@ -34,8 +34,8 @@ pub(crate) fn font_string(css: &[u8]) -> Option<Vec<u8>> {
     Some(crate::font::canonical(&canon))
 }
 
-pub(crate) fn state_font(st: &state::CanvasState) -> &[u8] {
-    &st.font
+pub(crate) fn state_font(st: &state::CanvasState) -> core::cell::Ref<'_, [u8]> {
+    st.font()
 }
 
 pub(crate) fn strtod_prefix(text: &[u8]) -> (f64, usize) {

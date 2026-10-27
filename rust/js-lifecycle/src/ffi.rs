@@ -18,6 +18,7 @@ use southstar_js_loader::{Schedule, ScriptTasks};
 use crate::{events, frames, lifecycle, scrollend};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);
@@ -25,6 +26,10 @@ pub(crate) struct Js(*mut NsJs);
 impl Js {
     pub fn from_data(data: *mut c_void) -> Js {
         Js(data.cast())
+    }
+
+    pub fn of_page(page: Page) -> Js {
+        Js(page.as_ptr().cast_mut())
     }
 
     pub fn is_null(self) -> bool {
@@ -226,8 +231,9 @@ impl Js {
     }
 
     pub fn fire_page_transition(self, kind: &CStr) {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_window::fire_page_transition(self.0.cast(), kind, false) };
+        if let Some(page) = Page::from_ptr(self.0) {
+            southstar_js_window::fire_page_transition(page, kind, false);
+        }
     }
 
     pub fn run_content_scripts(self, url: Option<&CStr>) {
@@ -305,9 +311,8 @@ pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
     Node::ptr_or_null(api::unwrap_element(value)).cast_mut()
 }
 
-pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
-    // SAFETY: image is null or an image its page's cache still holds.
-    let image = unsafe { southstar_image::ImageRef::from_ptr(image) }?;
+pub(crate) fn image_settled(image: southstar_layout::MediaHandle) -> Option<bool> {
+    let image = southstar_image::ImageRef::from_media(image)?;
     (image.loaded() || image.failed()).then_some(image.failed())
 }
 
@@ -357,52 +362,28 @@ pub fn nsr_window_cancelAnimationFrame(
     frames::cancel_animation_frame(scope, this, args)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn run_animation_frame(js: *mut c_void) -> bool {
-    let js = Js::from_data(js);
-    !js.is_null() && frames::run(js)
+pub fn run_animation_frame(js: Page) -> bool {
+    frames::run(Js::of_page(js))
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn has_pending_animation_frame(js: *mut c_void) -> bool {
-    frames::has_pending(Js::from_data(js))
+pub fn has_pending_animation_frame(js: Page) -> bool {
+    frames::has_pending(Js::of_page(js))
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn has_pending_work(js: *mut c_void) -> bool {
-    let js = Js::from_data(js);
-    !js.is_null() && js.has_pending_work()
+pub fn has_pending_work(js: Page) -> bool {
+    Js::of_page(js).has_pending_work()
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn needs_tick(js: *mut c_void) -> bool {
-    let js = Js::from_data(js);
-    !js.is_null() && js.needs_tick()
+pub fn needs_tick(js: Page) -> bool {
+    Js::of_page(js).needs_tick()
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn dispatch_anim_events(js: *mut c_void, anim: AnimHandle) {
-    events::dispatch_anim_events(Js::from_data(js), anim);
+pub fn dispatch_anim_events(js: Page, anim: AnimHandle) {
+    events::dispatch_anim_events(Js::of_page(js), anim);
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn fire_media_load_events(js: *mut c_void, layout: Option<BoxRef<'_>>) {
-    events::fire_media_load_events(
-        Js::from_data(js),
-        layout.map_or(ptr::null(), BoxRef::as_ptr),
-    );
+pub fn fire_media_load_events(js: Page, layout: Option<BoxRef<'_>>) {
+    events::fire_media_load_events(Js::of_page(js), layout.map_or(ptr::null(), BoxRef::as_ptr));
 }
 
 pub fn raf_count(js: *const NsJs) -> usize {

@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -13,6 +13,7 @@ use crate::attrs::QualifiedName;
 use crate::{Element, attribute_maps, attrs, change, orphans};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+pub(crate) use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(*mut NsJs);
@@ -21,14 +22,14 @@ impl Js {
     pub(crate) fn of(js: *mut NsJs) -> Option<Js> {
         (!js.is_null()).then_some(Js(js))
     }
+
+    pub(crate) fn of_page(page: Page) -> Js {
+        Js(page.as_ptr().cast_mut())
+    }
 }
 
 fn raw_js(js: Option<Js>) -> *mut NsJs {
     js.map_or(ptr::null_mut(), |js| js.0)
-}
-
-unsafe fn node(n: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(n) }
 }
 
 pub(crate) fn qcache_invalidate(js: Option<Js>) {
@@ -225,22 +226,13 @@ pub(crate) fn arm_js_invalidate(el: Element) {
     api::arm_js_invalidate(el);
 }
 
-/// # Safety
-///
-/// `js` is null or the live page record, and `owner` is null or points at a live node.
-pub unsafe fn nsr_attribute_map_lookup(js: *mut NsJs, owner: *const NsNode) -> Option<Value> {
-    match (Js::of(js), unsafe { node(owner) }) {
-        (Some(js), Some(owner)) => attribute_maps::lookup(js, owner),
-        _ => None,
-    }
+pub fn nsr_attribute_map_lookup(js: Page, owner: Node<'_>) -> Option<Value> {
+    attribute_maps::lookup(Js::of_page(js), element(owner)?)
 }
 
-/// # Safety
-///
-/// `js` is null or the live page record, and `owner` is null or points at a live node.
-pub unsafe fn nsr_attribute_map_remember(js: *mut NsJs, owner: *const NsNode, map: &Value) {
-    if let (Some(js), Some(owner)) = (Js::of(js), unsafe { node(owner) }) {
-        attribute_maps::remember(js, owner, map.clone());
+pub fn nsr_attribute_map_remember(js: Page, owner: Node<'_>, map: &Value) {
+    if let Some(owner) = element(owner) {
+        attribute_maps::remember(Js::of_page(js), owner, map.clone());
     }
 }
 

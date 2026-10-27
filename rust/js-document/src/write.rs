@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use std::cell::RefCell;
 use std::ffi::CString;
 
-use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node, NsNode};
+use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -17,8 +17,8 @@ const INVALID_STATE_ERR: i32 = 11;
 #[derive(Default)]
 struct Page {
     buffer: Option<Vec<u8>>,
-    script: usize,
-    last_written: Vec<(usize, usize)>,
+    script: Option<WeakNode>,
+    last_written: Vec<(Option<WeakNode>, usize)>,
     parser_open: bool,
     dynamic_markup: i32,
 }
@@ -62,15 +62,11 @@ pub(crate) fn throw_during_construction(scope: &mut Scope<'_>, method: &str) -> 
     )
 }
 
-fn node_at(addr: usize) -> Option<Element> {
-    unsafe { Node::from_ptr(addr as *const NsNode) }
+fn script_handle(node: Option<Element>) -> Option<WeakNode> {
+    node.map(Node::downgrade)
 }
 
-fn script_addr(node: Option<Element>) -> usize {
-    node.map_or(0, |n| n.as_ptr() as usize)
-}
-
-fn last_written(js: Js, script: usize, parent: Element) -> Option<Element> {
+fn last_written(js: Js, script: Option<WeakNode>, parent: Element) -> Option<Element> {
     let written = with_page(js, |page| {
         page.last_written
             .iter()
@@ -80,7 +76,7 @@ fn last_written(js: Js, script: usize, parent: Element) -> Option<Element> {
     southstar_dom::children(parent).find(|child| child.as_ptr() as usize == written)
 }
 
-fn note_written(js: Js, script: usize, node: Element) {
+fn note_written(js: Js, script: Option<WeakNode>, node: Element) {
     let node = node.as_ptr() as usize;
     with_page(js, |page| {
         match page
@@ -94,12 +90,12 @@ fn note_written(js: Js, script: usize, node: Element) {
     });
 }
 
-fn write_parent(js: Js, script_addr: usize) -> Option<(Element, Option<Element>)> {
+fn write_parent(js: Js, script_handle: Option<WeakNode>) -> Option<(Element, Option<Element>)> {
     let doc = ffi::current_document(js)?;
-    if let Some(script) = node_at(script_addr)
+    if let Some(script) = script_handle.and_then(WeakNode::get)
         && let Some(parent) = script.parent()
     {
-        let after = last_written(js, script_addr, parent).unwrap_or(script);
+        let after = last_written(js, script_handle, parent).unwrap_or(script);
         return Some((parent, Some(after)));
     }
     let body = southstar_dom::index::find_first_element(doc, c"body")?;
@@ -110,7 +106,7 @@ pub(crate) fn flush(js: Js) {
     let pending = with_page(js, |page| {
         let buffer = page.buffer.as_mut()?;
         if buffer.is_empty() {
-            page.script = 0;
+            page.script = None;
             return None;
         }
         Some(())
@@ -121,7 +117,7 @@ pub(crate) fn flush(js: Js) {
     let script = with_page(js, |page| page.script);
     let target = write_parent(js, script);
     let html = with_page(js, |page| {
-        page.script = 0;
+        page.script = None;
         page.buffer
             .as_mut()
             .map(core::mem::take)
@@ -162,7 +158,7 @@ pub(crate) fn flush(js: Js) {
         adjust_dynamic_markup(js, -1);
         return;
     };
-    if script != 0 {
+    if script.is_some() {
         note_written(js, script, last);
     }
     ffi::with_main_context(js, |scope| {
@@ -198,7 +194,7 @@ fn open_current(js: Js) {
         if let Some(buffer) = page.buffer.as_mut() {
             buffer.clear();
         }
-        page.script = 0;
+        page.script = None;
         page.last_written.clear();
         page.parser_open = true;
     });
@@ -281,7 +277,7 @@ fn write_common(scope: &mut Scope<'_>, args: &[Value], newline: bool) -> JsResul
     {
         open_current(js);
     }
-    let script = script_addr(script);
+    let script = script_handle(script);
     if with_page(js, |page| page.buffer.is_some() && page.script != script) {
         flush(js);
     }
@@ -298,7 +294,7 @@ fn write_common(scope: &mut Scope<'_>, args: &[Value], newline: bool) -> JsResul
         append_to_buffer(js, b"\n");
     }
     let complete = with_page(js, |page| {
-        script == 0 || page.buffer.as_deref().is_some_and(markup_is_complete)
+        script.is_none() || page.buffer.as_deref().is_some_and(markup_is_complete)
     });
     if complete {
         flush(js);

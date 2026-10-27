@@ -44,10 +44,8 @@ impl Js {
             buttons: p.buttons,
             modifiers: modifiers(p.mods),
         };
-        // SAFETY: a Js handle names the page's live script engine.
-        let (_, prevented) = unsafe {
-            southstar_js_input::dispatch_mouse_event(self.raw(), target, kind, &input, related)
-        };
+        let (_, prevented) =
+            southstar_js_input::dispatch_mouse_event(self.handle(), target, kind, &input, related);
         want_prevented && prevented
     }
 
@@ -103,10 +101,8 @@ impl Js {
     }
 
     pub fn dispatch_clipboard(self, target: Node<'_>, kind: &CStr, text: &CStr) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        let (_, prevented) = unsafe {
-            southstar_js_input::dispatch_clipboard_event(self.raw(), target, kind, Some(text))
-        };
+        let (_, prevented) =
+            southstar_js_input::dispatch_clipboard_event(self.handle(), target, kind, Some(text));
         prevented
     }
 
@@ -115,8 +111,7 @@ impl Js {
     }
 
     pub fn drop_files(self, target: Node<'_>, paths: &[&CStr], x: c_int, y: c_int) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        let Some(session) = (unsafe { southstar_js_input::DragData::new(self.raw()) }) else {
+        let Some(session) = southstar_js_input::DragData::new(self.handle()) else {
             return false;
         };
         for path in paths {
@@ -131,17 +126,14 @@ impl Js {
             modifiers: southstar_js_input::Modifiers::default(),
         };
         let dispatch = |kind: &CStr| {
-            // SAFETY: a Js handle names the page's live script engine.
-            let (_, prevented) = unsafe {
-                southstar_js_input::dispatch_drag_event(
-                    self.raw(),
-                    Some(&session),
-                    target,
-                    kind,
-                    &input,
-                    None,
-                )
-            };
+            let (_, prevented) = southstar_js_input::dispatch_drag_event(
+                self.handle(),
+                Some(&session),
+                target,
+                kind,
+                &input,
+                None,
+            );
             prevented
         };
         let mut accept = dispatch(c"dragenter");
@@ -156,30 +148,23 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Node<'_>) {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_focus::set_focus(self.raw(), Some(el)) };
+        southstar_js_focus::set_focus(self.handle(), Some(el));
     }
 
     pub fn focus_from_pointer(self, target: Option<Node<'_>>) {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_focus::focus_from_pointer(self.raw(), target) };
+        southstar_js_focus::focus_from_pointer(self.handle(), target);
     }
 
     pub fn note_user_edit(self, el: Node<'_>, value_before: Option<&CStr>) {
-        southstar_js_mutation::note_user_edit(
-            self.raw().cast(),
-            el,
-            value_before.unwrap_or_default(),
-        );
+        southstar_js_mutation::note_user_edit(self.handle(), el, value_before.unwrap_or_default());
     }
 
     pub fn commit_change(self, el: Node<'_>) {
-        southstar_js_mutation::commit_change(self.raw().cast(), el);
+        southstar_js_mutation::commit_change(self.handle(), el);
     }
 
     pub fn click_activate(self, node: Node<'_>) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::click_activate(self.raw(), node) }
+        southstar_js_forms::click_activate(self.handle(), node)
     }
 
     pub fn activate_summary(self, el: Node<'_>) -> bool {
@@ -191,34 +176,28 @@ impl Js {
     }
 
     pub fn select_toggle_option(self, option: Node<'_>) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::select_toggle_option(self.raw(), option) }
+        southstar_js_forms::select_toggle_option(self.handle(), option)
     }
 
     pub fn select_choose_option(self, option: Node<'_>) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::select_choose_option(self.raw(), option) }
+        southstar_js_forms::select_choose_option(self.handle(), option)
     }
 
     pub fn select_step(self, select: Node<'_>, dir: c_int) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::select_step(self.raw(), select, dir) }
+        southstar_js_forms::select_step(self.handle(), select, dir)
     }
 
     pub fn select_edge(self, select: Node<'_>, last: bool) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::select_edge(self.raw(), select, last) }
+        southstar_js_forms::select_edge(self.handle(), select, last)
     }
 
     pub fn select_typeahead(self, select: Node<'_>, key: &CStr) -> bool {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_forms::select_typeahead(self.raw(), select, key.to_bytes()) }
+        southstar_js_forms::select_typeahead(self.handle(), select, key.to_bytes())
     }
 
     pub fn keyboard_activate(self, el: Node<'_>, key: Option<&CStr>, keyup: bool) -> bool {
         key.is_some_and(|key| {
-            // SAFETY: a Js handle names the page's live script engine.
-            unsafe { southstar_js_focus::keyboard_activate(self.raw(), el, key.to_bytes(), keyup) }
+            southstar_js_focus::keyboard_activate(self.handle(), el, key.to_bytes(), keyup)
         })
     }
 
@@ -227,13 +206,11 @@ impl Js {
     }
 
     pub fn sequential_focus_target<'a>(self, backward: bool) -> Option<Node<'a>> {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_focus::sequential_focus_target(self.raw(), backward) }
+        southstar_js_focus::sequential_focus_target(self.handle(), backward)
     }
 
     pub fn activate_element(self, el: Node<'_>) {
-        // SAFETY: a Js handle names the page's live script engine.
-        unsafe { southstar_js_focus::activate_element(self.raw(), el) };
+        southstar_js_focus::activate_element(self.handle(), el);
     }
 
     pub fn node_has_click_handler(self, node: Node<'_>) -> bool {
@@ -246,8 +223,9 @@ impl Js {
 }
 
 pub fn note_pointer_input(js: Option<Js>, pointer: bool) {
-    // SAFETY: the page passes null or its live script engine.
-    unsafe { southstar_js_focus::note_pointer_input(js.map_or(ptr::null_mut(), Js::raw), pointer) };
+    if let Some(js) = js {
+        southstar_js_focus::note_pointer_input(js.handle(), pointer);
+    }
 }
 
 pub fn keyboard_activates(el: Node<'_>, key: Option<&CStr>) -> bool {

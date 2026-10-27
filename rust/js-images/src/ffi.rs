@@ -11,7 +11,6 @@ use southstar_dom::Node;
 use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
 use southstar_js_runtime::api::{self};
-use southstar_layout::{BoxRef, NsBox};
 
 use crate::{Element, Load};
 
@@ -78,8 +77,7 @@ pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<CString> {
 }
 
 fn image_cache(js: Js) -> Option<ImageCache> {
-    // SAFETY: the page's image cache pointer is null or its live cache.
-    unsafe { ImageCache::from_raw(api::image_cache(js.0)) }
+    ImageCache::from_raw(api::image_cache(js.0))
 }
 
 pub(crate) fn has_image_cache(js: Js) -> bool {
@@ -185,9 +183,9 @@ pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
 }
 
 pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
-    let root = unsafe { BoxRef::from_ptr(api::layout_root(js.0).cast::<NsBox>()) }?;
+    let root = api::layout_root(js.0)?;
     let b = (api::geometry_hooks().find_box_by_dom)(root, el)?;
-    unsafe { ImageRef::from_ptr(b.media()?.image()) }
+    ImageRef::from_media(b.media()?.image()?)
 }
 
 unsafe fn retain(data: *mut c_void) -> Option<Rc<Load>> {

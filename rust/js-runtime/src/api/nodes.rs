@@ -2,9 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 
 use southstar_dom::Node;
+use southstar_layout::BoxRef;
 
 use crate::ffi::{NsJs, record, wrapper};
 
@@ -50,7 +51,7 @@ pub fn form_reset(js: *const NsJs, form: Node<'_>) {
     record::form_reset(js, form);
 }
 
-pub fn set_layout_root(js: *const NsJs, root: *const c_void) {
+pub fn set_layout_root(js: *const NsJs, root: Option<BoxRef<'_>>) {
     record::set_layout_root(js, root);
 }
 

@@ -125,7 +125,7 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     if js.is_null() {
         return None;
     }
-    unsafe { BoxRef::from_ptr(api::layout_root(js.page()).cast()) }
+    api::layout_root(js.page())
 }
 
 pub(crate) fn find_box(js: Js, node: Node<'_>) -> Option<BoxRef<'static>> {

@@ -479,7 +479,7 @@ fn path_command(
     ctrl_x: &mut f64,
     ctrl_y: &mut f64,
 ) -> Option<()> {
-    let cr = pen.cr;
+    let cr = pen.cr.clone();
     match cmd {
         b'M' => {
             let [mut x, mut y] = nums::<2>(c)?;
