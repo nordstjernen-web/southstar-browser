@@ -234,7 +234,7 @@ pub fn layers_prepare(
     if plan.dynamic() { -1 } else { 0 }
 }
 
-pub fn render_doc_tile(b: &NsBrowser, plan: &LayerPlan, mut target: TileTarget) -> c_int {
+pub fn render_doc_tile(b: &NsBrowser, plan: &LayerPlan, mut target: TileTarget<'_>) -> c_int {
     let Some(layout) = b.layout() else {
         return -1;
     };

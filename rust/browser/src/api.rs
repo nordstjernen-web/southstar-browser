@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
@@ -468,14 +469,21 @@ impl Page {
             .ok()
             .zip(usize::try_from(target.height).ok())
             .and_then(|(stride, height)| stride.checked_mul(height));
-        let fits = needed.is_some_and(|needed| target.bufs.iter().all(|buf| buf.len() >= needed));
-        if !fits || target.bufs.len() <= layers || target.upper_used.len() < layers {
+        let Some(needed) =
+            needed.filter(|&needed| target.bufs.iter().all(|buf| buf.len() >= needed))
+        else {
+            return -1;
+        };
+        if target.bufs.len() <= layers || target.upper_used.len() < layers {
             return -1;
         }
-        let bufs: Vec<*mut u8> = target.bufs.iter_mut().map(|buf| buf.as_mut_ptr()).collect();
         let tile = ffi::TileTarget {
-            bufs: bufs.as_ptr(),
-            used: target.upper_used.as_mut_ptr(),
+            bufs: target
+                .bufs
+                .iter_mut()
+                .map(|buf| Cell::from_mut(&mut buf[..needed]).as_slice_of_cells())
+                .collect(),
+            used: Cell::from_mut(target.upper_used).as_slice_of_cells(),
             width: target.width,
             height: target.height,
             stride: target.stride,

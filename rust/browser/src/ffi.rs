@@ -991,6 +991,26 @@ pub unsafe extern "C" fn ns_browser_open_post_viewport(
     )
 }
 
+/// # Safety
+///
+/// `out` is null or points to `stride * height` writable bytes that nothing else uses for `'a`.
+unsafe fn pixel_buf<'a>(
+    out: *mut u8,
+    width: c_int,
+    height: c_int,
+    stride: c_int,
+) -> Option<PixelBuf<'a>> {
+    let len = usize::try_from(stride)
+        .ok()?
+        .checked_mul(usize::try_from(height).ok()?)?;
+    if out.is_null() {
+        return None;
+    }
+    // SAFETY: the caller passes `stride * height` writable bytes at `out`, unaliased for 'a.
+    let pixels = unsafe { core::slice::from_raw_parts_mut(out, len) };
+    PixelBuf::from_slice(pixels, width, height, stride)
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_browser_render_rgba(
     b: Option<&NsBrowser>,
@@ -1002,10 +1022,8 @@ pub unsafe extern "C" fn ns_browser_render_rgba(
     out: *mut u8,
     stride: c_int,
 ) -> c_int {
-    match b {
-        Some(b) if !out.is_null() => render::render_rgba(b, scroll_x, scroll_y, scale, &unsafe {
-            PixelBuf::new(out, width, height, stride)
-        }),
+    match (b, unsafe { pixel_buf(out, width, height, stride) }) {
+        (Some(b), Some(buf)) => render::render_rgba(b, scroll_x, scroll_y, scale, &buf),
         _ => -1,
     }
 }
@@ -1021,10 +1039,8 @@ pub unsafe extern "C" fn ns_browser_render_argb32(
     out: *mut u8,
     stride: c_int,
 ) -> c_int {
-    match b {
-        Some(b) if !out.is_null() => render::render_argb32(b, scroll_x, scroll_y, scale, &unsafe {
-            PixelBuf::new(out, width, height, stride)
-        }),
+    match (b, unsafe { pixel_buf(out, width, height, stride) }) {
+        (Some(b), Some(buf)) => render::render_argb32(b, scroll_x, scroll_y, scale, &buf),
         _ => -1,
     }
 }

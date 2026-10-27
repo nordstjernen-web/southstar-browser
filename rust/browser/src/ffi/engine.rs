@@ -170,7 +170,7 @@ pub fn inline_rect_y(layout: BoxRef<'_>, target: Node<'_>) -> Option<f64> {
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub fn paint_3d_invalidate() {
