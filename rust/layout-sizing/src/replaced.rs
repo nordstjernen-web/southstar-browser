@@ -3,14 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Node;
-use southstar_layout::{BoxKind, BoxRef, Edges, Style};
+use southstar_layout::{BoxKind, BoxRef, Edges};
 use southstar_layout_float::{float_side_of, style_is_grid_container};
 use southstar_layout_geom::{
     aspect_ratio_number, containing_block_definite_height, edges_from_style, edges_into_box,
     flex_direction_of, height_keyword_stretches, length_resolve, resolve_height_with_basis,
     resolve_used_height, style_is_absolute_or_fixed, style_is_flex_container, value_is_percent,
 };
-use southstar_style::{Display, Kind, PropId, ValueRef, display_of};
+use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
 
 use crate::ffi::{
     box_is_abs_placeholder, container_w, dom_of, image_dimension_attr, image_of, layout_box,
@@ -292,7 +292,7 @@ fn inline_atomic_needs_layout(ab: BoxRef<'_>) -> bool {
 pub fn inline_atomic_measure_basis(b: BoxRef<'_>) -> f64 {
     let wv = style_value(b, PropId::Width);
     if value_is_percent(wv) && !is_replaced(b) {
-        let content = measure_natural_width(b, b.style());
+        let content = measure_natural_width(b, southstar_style::box_style(b));
         if content >= 0.0 && is_border_box(b) {
             let (_, pd, bd) = edges_from_style(style_of(b), 0.0);
             return content + pd.left + pd.right + bd.left + bd.right;
@@ -566,7 +566,7 @@ fn geometry(ab: BoxRef<'_>) -> AtomicGeometry<'_> {
 
 pub fn measure_inline_atomics_begin<'a>(
     b: BoxRef<'a>,
-    parent_style: *const Style,
+    parent_style: Option<StyleRef<'_>>,
     max_content: bool,
 ) -> Option<Box<SavedGeometry<'a>>> {
     b.inline_atomics()?;

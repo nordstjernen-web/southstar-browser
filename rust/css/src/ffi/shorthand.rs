@@ -17,7 +17,7 @@ pub(super) fn expanded(name: &[u8], text: &[u8]) -> Vec<(c_int, OwnedValue)> {
     let mut out: Vec<(c_int, OwnedValue)> = Vec::new();
     for decl in shorthand::expand(name, text) {
         let value = match decl.slot {
-            Slot::Own(value) => OwnedValue(to_c(value)),
+            Slot::Own(value) => to_c(value),
             Slot::Dup(of) => out[of].1.clone(),
         };
         out.push((id_of(decl.prop), value));

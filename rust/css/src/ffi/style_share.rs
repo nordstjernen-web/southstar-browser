@@ -3,19 +3,18 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
-
-use southstar_glib as glib;
+use std::rc::Rc;
 
 use super::cascade::RawMatch;
 use super::computed_units::RawStyle;
 use super::container::Container;
 use super::custom_props::RawVarMatch;
-use super::declarations::PendingDecl;
 use super::gather::Matches;
 use super::pending::RawPendingMatch;
-use super::value::{KIND_LENGTH, NsCssValue};
+use super::style_alloc::{RetainedStyle, style_clone_shared};
+use super::value::NsCssValue;
 use crate::container;
 use crate::nesting;
 use crate::prop::Prop;
@@ -23,11 +22,7 @@ use crate::style_share::{self, ShareTable};
 use crate::units::{CQH, CQMAX, CQMIN, CQW};
 
 thread_local! {
-    static TABLE: RefCell<ShareTable> = RefCell::new(ShareTable::default());
-}
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
+    static TABLE: RefCell<ShareTable<RetainedStyle>> = RefCell::new(ShareTable::default());
 }
 
 fn put_ints(key: &mut Vec<u8>, ints: &[c_int]) {
@@ -44,10 +39,10 @@ fn put_len<T>(key: &mut Vec<u8>, items: &[T]) {
     key.extend_from_slice(&(items.len() as u32).to_ne_bytes());
 }
 
-fn container_length(value: *const NsCssValue) -> bool {
-    unsafe { value.as_ref() }.is_some_and(|v| {
-        v.kind == KIND_LENGTH && matches!(unsafe { v.u.length.unit }, CQW | CQH | CQMIN | CQMAX)
-    })
+fn container_length(value: &NsCssValue) -> bool {
+    value
+        .length()
+        .is_some_and(|(_, unit)| matches!(unit, CQW | CQH | CQMIN | CQMAX))
 }
 
 struct Arrays<'a> {
@@ -68,10 +63,7 @@ impl<'a> Arrays<'a> {
     }
 
     fn pending_texts(&self) -> impl Iterator<Item = &'a [u8]> + use<'a> {
-        self.pending
-            .iter()
-            .filter_map(|e| unsafe { e.pd.as_ref() })
-            .filter_map(PendingDecl::raw_text)
+        self.pending.iter().filter_map(|e| e.pd.raw_text())
     }
 
     fn uses_attr(&self) -> bool {
@@ -82,11 +74,11 @@ impl<'a> Arrays<'a> {
         let font_size = Prop::FontSize.id() as c_int;
         self.matches
             .iter()
-            .any(|e| e.prop == font_size && container_length(e.value))
+            .any(|e| e.prop == font_size && container_length(&e.value))
             || self
                 .vars
                 .iter()
-                .any(|e| text(e.text).is_some_and(nesting::has_container_units))
+                .any(|e| nesting::has_container_units(e.text.to_bytes()))
             || self.pending_texts().any(nesting::has_container_units)
     }
 
@@ -110,7 +102,7 @@ impl<'a> Arrays<'a> {
                 ],
             );
             put_ptr(key, e.rule);
-            put_ptr(key, e.value);
+            put_ptr(key, e.value.as_ptr());
             put_ints(key, &[e.prop]);
         }
         put_len(key, self.vars);
@@ -132,8 +124,8 @@ impl<'a> Arrays<'a> {
                 ],
             );
             put_ptr(key, e.rule);
-            put_ptr(key, e.name);
-            put_ptr(key, e.text);
+            put_ptr(key, e.name.as_ptr());
+            put_ptr(key, e.text.as_ptr());
         }
         put_len(key, self.pending);
         for e in self.pending {
@@ -153,7 +145,7 @@ impl<'a> Arrays<'a> {
                 ],
             );
             put_ptr(key, e.rule);
-            put_ptr(key, e.pd);
+            put_ptr(key, Rc::as_ptr(&e.pd));
         }
     }
 }
@@ -201,7 +193,7 @@ pub(super) fn style_share_end() {
 pub(super) enum Shared {
     Unkeyed,
     Miss,
-    Hit(*const RawStyle),
+    Hit(Box<RawStyle>),
 }
 
 pub(super) fn style_share_find(
@@ -220,12 +212,12 @@ pub(super) fn style_share_find(
         let parent_id = parent.map_or(0, |p| p.share_id);
         build_key(table.new_key(), parent_id, root_px, pes, outs);
         match table.find() {
-            Some(style) => Shared::Hit(style as *const RawStyle),
+            Some(style) => Shared::Hit(style_clone_shared(style.get())),
             None => Shared::Miss,
         }
     })
 }
 
-pub(super) fn style_share_insert(style: *const RawStyle) {
-    TABLE.with_borrow_mut(|table| table.insert(style as usize));
+pub(super) fn style_share_insert(style: &RetainedStyle) {
+    TABLE.with_borrow_mut(|table| table.insert(style.clone()));
 }

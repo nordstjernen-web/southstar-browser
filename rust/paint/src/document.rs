@@ -30,7 +30,7 @@ pub struct LayerPlan {
 }
 
 fn node_of(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 fn find_element_box_named<'a>(b: BoxRef<'a>, name: &[u8]) -> Option<BoxRef<'a>> {
@@ -242,7 +242,7 @@ fn layers_scan_children(
         }
         c = child.next_sibling();
     }
-    for a in b.inline_atomics().unwrap_or(&[]) {
+    for a in &b.inline_atomics().unwrap_or_default() {
         if let Some(ab) = a.box_ref()
             && !layers_scan(ab, under, true, kinds, roots)
         {
@@ -357,17 +357,15 @@ pub fn vp_layer(
     });
     begin_selection(root, sel);
     if layer.kind == VP_STICKY {
-        walk::with(|w| w.sticky_static.set(layer.b));
+        walk::with(|w| w.sticky_static.set(layer.b.as_ptr()));
     }
     let saved_flush = walk::with(|w| w.flush_box.get());
     cr.save();
     let base = cr.matrix();
     let m = Matrix::multiply(&layer.rel, &base);
     cr.set_matrix(&m);
-    if let Some(lb) = unsafe { BoxRef::from_ptr(layer.b) } {
-        walk::with(|w| w.flush_box.set(lb.as_ptr()));
-        paint_walk(cr, lb, highlight);
-    }
+    walk::with(|w| w.flush_box.set(layer.b.as_ptr()));
+    paint_walk(cr, layer.b, highlight);
     walk::with(|w| w.flush_box.set(saved_flush));
     cr.restore();
     walk::with(|w| w.sticky_static.set(ptr::null()));

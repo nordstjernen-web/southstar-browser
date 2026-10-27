@@ -22,7 +22,7 @@ use crate::walk::{self, box_is_hidden, box_skips_contents, merge_sort_by, paint_
 
 #[derive(Clone, Copy)]
 pub struct Quad3 {
-    b: *const NsBox,
+    b: BoxRef<'static>,
     m: Mat4,
     bx: f64,
     by: f64,
@@ -186,7 +186,7 @@ fn collect_3d_quads(b: BoxRef<'_>, pm: &Mat4, quads: &mut Vec<Quad3>) {
     }
     let p3d = box_preserve3d(b);
     let quad = |own_only: bool, seq: usize| Quad3 {
-        b: b.as_ptr(),
+        b: b.into_static(),
         m,
         bx,
         by,
@@ -223,7 +223,7 @@ fn collect_3d_quads(b: BoxRef<'_>, pm: &Mat4, quads: &mut Vec<Quad3>) {
 }
 
 fn quad_box<'a>(q: &Quad3) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(q.b) }
+    Some(q.b)
 }
 
 fn clamp_like_c(x: f64, lo: f64, hi: f64) -> f64 {
@@ -242,7 +242,7 @@ fn quad_texture(q: &Qb<'_>, tw: i32, th: i32, k: f64, highlight: Option<&CStr>) 
         && !q.q.own_only
         && b.first_child().is_none()
         && b.kind() == BoxKind::Block
-        && unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+        && b.dom()
             .and_then(Node::name)
             .is_none_or(|n| n.to_bytes() != b"canvas");
     if cacheable
@@ -644,7 +644,7 @@ fn quad3_unproject(q: &Quad3, sx: f64, sy: f64) -> Option<(f64, f64, f64)> {
 
 pub type HitTest = for<'a> fn(BoxRef<'a>, f64, f64) -> Option<BoxRef<'a>>;
 
-pub fn pick(root3d: BoxRef<'_>, x: f64, y: f64, hit_test: HitTest) -> *const NsBox {
+pub fn pick<'a>(root3d: BoxRef<'a>, x: f64, y: f64, hit_test: HitTest) -> Option<BoxRef<'a>> {
     let existing = REGISTRY.with(|r| r.borrow().quads.get(&root3d.as_ptr()).cloned());
     let quads = match existing {
         Some(q) => q,
@@ -684,10 +684,10 @@ pub fn pick(root3d: BoxRef<'_>, x: f64, y: f64, hit_test: HitTest) -> *const NsB
         let lx = q.bx + u * q.bw;
         let ly = q.by + v * q.bh;
         if let Some(hit) = hit_test(qb, lx, ly) {
-            return hit.as_ptr();
+            return Some(hit);
         }
     }
-    core::ptr::null()
+    None
 }
 
 fn collect_root_quads(b: BoxRef<'_>) -> Vec<Quad3> {
@@ -735,12 +735,12 @@ fn debug_3d(b: BoxRef<'_>, quads: &[Quad3]) {
         return;
     }
     let name = |bx: BoxRef<'_>| {
-        unsafe { Node::from_ptr(bx.dom_ptr().cast()) }
+        bx.dom()
             .and_then(Node::name)
             .map_or_else(|| "?".to_string(), |n| n.to_string_lossy().into_owned())
     };
     let class = |bx: BoxRef<'_>| {
-        unsafe { Node::from_ptr(bx.dom_ptr().cast()) }
+        bx.dom()
             .and_then(|n| n.attr(c"class"))
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
     };
@@ -808,7 +808,7 @@ pub fn paint_3d_root(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
                 || (after.3 - before.3).abs() > 0.5)
                 && let Some(qb) = quad_box(q)
             {
-                let node = unsafe { Node::from_ptr(qb.dom_ptr().cast()) };
+                let node = qb.dom();
                 let line = format!(
                     "[quad3-LEAK] <{} class={}> rect {:.0},{:.0} {}x{}\n",
                     node.and_then(Node::name)

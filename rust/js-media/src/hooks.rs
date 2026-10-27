@@ -4,31 +4,26 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::ffi::{
     AudioFn, Element, Js, MseBufferedFn, MseBytesFn, MseFn, MseRemoveFn, SeekFn, ToggleFn, VolumeFn,
 };
 
-#[derive(Clone, Copy)]
-pub(crate) struct Hook<F: Copy> {
-    pub f: F,
-    pub data: usize,
-}
-
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct Hooks {
-    pub audio: Option<Hook<AudioFn>>,
-    pub seek: Option<Hook<SeekFn>>,
-    pub play: Option<Hook<ToggleFn>>,
-    pub muted: Option<Hook<ToggleFn>>,
-    pub volume: Option<Hook<VolumeFn>>,
-    pub mse: Option<Hook<MseFn>>,
-    pub mse_buffered: Option<Hook<MseBufferedFn>>,
-    pub mse_remove: Option<Hook<MseRemoveFn>>,
-    pub mse_bytes: Option<Hook<MseBytesFn>>,
+    pub audio: Option<Rc<AudioFn>>,
+    pub seek: Option<Rc<SeekFn>>,
+    pub play: Option<Rc<ToggleFn>>,
+    pub muted: Option<Rc<ToggleFn>>,
+    pub volume: Option<Rc<VolumeFn>>,
+    pub mse: Option<Rc<MseFn>>,
+    pub mse_buffered: Option<Rc<MseBufferedFn>>,
+    pub mse_remove: Option<Rc<MseRemoveFn>>,
+    pub mse_bytes: Option<Rc<MseBytesFn>>,
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 struct Page {
     hooks: Hooks,
     next_audio_token: u32,
@@ -53,7 +48,7 @@ pub(crate) fn teardown(js: Js) {
 
 pub(crate) fn hooks(js: Js) -> Hooks {
     PAGES
-        .try_with(|pages| pages.borrow().get(&js).map(|page| page.hooks))
+        .try_with(|pages| pages.borrow().get(&js).map(|page| page.hooks.clone()))
         .ok()
         .flatten()
         .unwrap_or_default()
@@ -77,31 +72,32 @@ pub(crate) fn next_audio_token(js: Js) -> u32 {
 
 impl Hooks {
     pub fn emit_audio(&self, command: &str) {
-        if let Some(hook) = self.audio {
-            crate::ffi::call_audio(hook, command);
+        if let Some(hook) = &self.audio {
+            hook(&crate::ffi::c_text(command));
         }
     }
 
     pub fn notify_play(&self, element: Element, play: bool) {
-        if let Some(hook) = self.play {
-            crate::ffi::call_toggle(hook, element, play);
+        if let Some(hook) = &self.play {
+            hook(element, play);
         }
     }
 
     pub fn notify_muted(&self, element: Element, muted: bool) {
-        if let Some(hook) = self.muted {
-            crate::ffi::call_toggle(hook, element, muted);
+        if let Some(hook) = &self.muted {
+            hook(element, muted);
         }
     }
 
     pub fn notify_volume(&self, element: Element, volume: f64) {
-        if let Some(hook) = self.volume {
-            crate::ffi::call_volume(hook, element, volume);
+        if let Some(hook) = &self.volume {
+            hook(element, volume);
         }
     }
 
     pub fn seek(&self, element: Element, seconds: f64) -> bool {
         self.seek
-            .is_some_and(|hook| crate::ffi::call_seek(hook, element, seconds))
+            .as_ref()
+            .is_some_and(|hook| hook(element, seconds))
     }
 }

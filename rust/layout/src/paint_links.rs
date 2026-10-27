@@ -9,7 +9,6 @@ use crate::{BoxRef, InlineAttr};
 pub type Extents = (f64, f64, f64, f64);
 
 pub struct PaintLinks {
-    pub drop_box_cache: fn(BoxRef<'_>),
     pub inline_xy_to_byte: fn(BoxRef<'_>, f64, f64) -> Option<usize>,
     pub inline_word_range: fn(BoxRef<'_>, usize) -> Option<(usize, usize)>,
     pub inline_range_extents: fn(BoxRef<'_>, usize, usize, Option<&InlineAttr>) -> Option<Extents>,
@@ -19,12 +18,6 @@ static LINKS: OnceLock<PaintLinks> = OnceLock::new();
 
 pub fn install(links: PaintLinks) {
     let _ = LINKS.set(links);
-}
-
-pub fn drop_box_cache(b: BoxRef<'_>) {
-    if let Some(links) = LINKS.get() {
-        (links.drop_box_cache)(b);
-    }
 }
 
 pub fn inline_xy_to_byte(b: BoxRef<'_>, rel_x: f64, rel_y: f64) -> Option<usize> {

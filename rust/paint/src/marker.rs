@@ -523,7 +523,7 @@ fn marker_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Option<Texture> {
 
 pub fn paint_marker(cr: ContextRef, b: BoxRef<'_>) {
     let s = style_of(b);
-    let dom = unsafe { Node::from_ptr(b.dom_ptr().cast()) };
+    let dom = b.dom();
     if !li_generates_marker(dom, s) || li_is_inside(s) {
         return;
     }

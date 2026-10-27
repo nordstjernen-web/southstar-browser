@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::c_void;
 use core::ptr;
 use std::collections::{HashMap, HashSet};
 
 use southstar_dom::{Node, NsNode, controls};
-use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef};
 use southstar_layout_content::text_input;
 use southstar_layout_content::{counters_build, counters_clear};
 use southstar_style::StyleTable;
@@ -15,7 +15,11 @@ use southstar_style::StyleTable;
 use crate::block::build_block;
 use crate::{ffi, passes, state};
 
-fn build_once(doc: Option<Node<'_>>, styles: StyleTable, viewport_width: f64) -> *mut NsBox {
+fn build_once(
+    doc: Option<Node<'_>>,
+    styles: StyleTable,
+    viewport_width: f64,
+) -> Option<BoxRef<'static>> {
     state::with(|st| {
         st.abs_pending = Some(Vec::new());
         st.abs_seen = Some(HashSet::new());
@@ -29,7 +33,7 @@ fn build_once(doc: Option<Node<'_>>, styles: StyleTable, viewport_width: f64) ->
     if let Some(root) = root {
         root.set_x(0.0);
         root.set_y(0.0);
-        southstar_layout::dispatch::layout_block(root, viewport_width, ptr::null());
+        southstar_layout_geom::dispatch::layout_block(root, viewport_width, None);
         passes::apply_position_offsets(root, viewport_width, root.content_height());
         passes::process_absolute_boxes(root, styles, viewport_width);
         ffi::sync_inline_atomic_offsets(root);
@@ -42,7 +46,7 @@ fn build_once(doc: Option<Node<'_>>, styles: StyleTable, viewport_width: f64) ->
         st.abs_static = None;
         st.block_media_cache = None;
     });
-    root.map_or(ptr::null_mut(), BoxRef::as_mut_ptr)
+    root
 }
 
 pub struct BuildInput<'a> {
@@ -53,7 +57,7 @@ pub struct BuildInput<'a> {
     pub caret_byte: usize,
     pub anchor_byte: usize,
     pub image_cache: *mut c_void,
-    pub base_url: *const c_char,
+    pub base_url: Option<&'a [u8]>,
 }
 
 fn contenteditable_focus(n: Option<Node<'_>>) -> bool {
@@ -64,7 +68,7 @@ fn contenteditable_focus(n: Option<Node<'_>>) -> bool {
     })
 }
 
-pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
+pub fn layout_build(input: BuildInput<'_>) -> Option<BoxRef<'static>> {
     passes::install_builders();
     state::with(|st| {
         st.focused_input = Node::ptr_or_null(input.focused_input);
@@ -72,13 +76,15 @@ pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
         st.caret_byte = input.caret_byte;
         st.anchor_byte = input.anchor_byte;
         st.image_cache = input.image_cache;
-        st.base_url = ffi::c_str(input.base_url).map(CStr::to_owned);
+        st.base_url = input
+            .base_url
+            .and_then(|url| std::ffi::CString::new(url).ok());
     });
     ffi::image_cache_begin_generation(input.image_cache);
     counters_build(input.doc, input.styles);
     let mut root = build_once(input.doc, input.styles, input.viewport_width);
-    if !text_input::columns_active() && ffi::box_ref(root).is_some_and(text_input::fit_columns) {
-        BoxPool::free_tree(ffi::box_ref(root));
+    if !text_input::columns_active() && root.is_some_and(text_input::fit_columns) {
+        BoxPool::free_tree(root);
         ffi::image_cache_begin_generation(input.image_cache);
         root = build_once(input.doc, input.styles, input.viewport_width);
         text_input::clear_columns();

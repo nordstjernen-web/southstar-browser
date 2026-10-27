@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::sync::OnceLock;
 
 use southstar_dom::Node;
@@ -100,8 +100,4 @@ pub fn continues_inline_run(n: Node<'_>, styles: Styles) -> bool {
 
 pub fn parse_int(s: Option<&CStr>, dflt: i32, min_v: i32, max_v: i32) -> i32 {
     southstar_dom::controls::parse_int(s, dflt, min_v, max_v)
-}
-
-pub fn dom_ptr_of(n: Node<'_>) -> *const c_void {
-    n.as_ptr().cast()
 }

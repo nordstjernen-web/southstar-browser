@@ -1,90 +1,49 @@
-//! Southstar — a computed style's lifetime: the pool ns_style structs come from, freeing one with its values, pseudo-element styles and variables, the reference other crates hold on one, and the clone style sharing hands an element.
+//! Southstar — a computed style's lifetime: the pool styles come from, the counted reference the style table and other crates hold on one, and the clone style sharing hands an element.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr::{self, NonNull};
-use std::sync::{Mutex, PoisonError};
+use core::cell::RefCell;
+use core::ptr::NonNull;
 
-use super::computed_units::{RawStyle, style_retain};
-use super::value::value_free;
-use super::vars::{map_ref, var_map_unref};
+use super::computed_units::RawStyle;
 
 const POOL_MAX: usize = 16384;
 
-struct Pool(Vec<*mut RawStyle>);
-
-unsafe impl Send for Pool {}
-
-static POOL: Mutex<Pool> = Mutex::new(Pool(Vec::new()));
-
-fn pooled() -> Option<*mut RawStyle> {
-    POOL.lock().unwrap_or_else(PoisonError::into_inner).0.pop()
+thread_local! {
+    #[allow(clippy::vec_box)]
+    static POOL: RefCell<Vec<Box<RawStyle>>> = const { RefCell::new(Vec::new()) };
 }
 
-fn release(style: *mut RawStyle) {
-    let mut pool = POOL.lock().unwrap_or_else(PoisonError::into_inner);
-    if pool.0.len() < POOL_MAX {
-        pool.0.push(style);
-    } else {
-        drop(pool);
-        // SAFETY: every pooled or released style came from Box::into_raw in style_alloc.
-        drop(unsafe { Box::from_raw(style) });
-    }
-}
-
-pub(super) fn style_alloc() -> *mut RawStyle {
-    match pooled() {
-        Some(style) => {
-            unsafe { ptr::write_bytes(style, 0, 1) };
-            style
+fn release(mut style: Box<RawStyle>) {
+    *style = RawStyle::new();
+    let _ = POOL.try_with(|pool| {
+        let mut pool = pool.borrow_mut();
+        if pool.len() < POOL_MAX {
+            pool.push(style);
         }
-        // SAFETY: RawStyle holds only integers, raw pointers, cells and plain structs of them, for which all-zero bytes are a valid value.
-        None => Box::into_raw(unsafe { Box::new(core::mem::zeroed::<RawStyle>()) }),
-    }
+    });
 }
 
-/// # Safety
-///
-/// `s` is null or a computed style made by this crate, and the caller gives up the reference it holds on it.
-pub(super) unsafe fn style_free(s: *mut RawStyle) {
-    let Some(style) = (unsafe { s.as_mut() }) else {
-        return;
-    };
-    if !style.release() {
-        return;
-    }
-    for &value in &style.values {
-        if !value.is_null() {
-            unsafe { value_free(value) };
-        }
-    }
-    for &pseudo in &style.pseudo_styles {
-        unsafe { style_free(pseudo) };
-    }
-    if !style.vars.is_null() {
-        unsafe { var_map_unref(style.vars) };
-    }
-    release(s);
+pub(super) fn style_alloc() -> Box<RawStyle> {
+    let pooled = POOL.try_with(|pool| pool.borrow_mut().pop()).ok().flatten();
+    pooled.unwrap_or_else(|| Box::new(RawStyle::new()))
 }
 
 pub struct RetainedStyle(NonNull<RawStyle>);
 
 impl RetainedStyle {
+    pub(super) fn new(style: Box<RawStyle>) -> RetainedStyle {
+        RetainedStyle(NonNull::from(Box::leak(style)))
+    }
+
     /// # Safety
     ///
     /// `style` is null or a live computed style made by this crate.
     pub unsafe fn retain<T>(style: *const T) -> Option<RetainedStyle> {
         let style = NonNull::new(style.cast::<RawStyle>().cast_mut())?;
         // SAFETY: the caller passes a live computed style.
-        unsafe { style_retain(style.as_ptr()) };
+        unsafe { style.as_ref() }.retain();
         Some(RetainedStyle(style))
-    }
-
-    /// # Safety
-    ///
-    /// `style` is null or a live computed style made by this crate, and the caller gives the RetainedStyle a reference it holds on it.
-    pub(super) unsafe fn adopt(style: *mut RawStyle) -> Option<RetainedStyle> {
-        NonNull::new(style).map(RetainedStyle)
     }
 
     pub fn get(&self) -> &RawStyle {
@@ -97,27 +56,35 @@ impl RetainedStyle {
     }
 }
 
-impl Drop for RetainedStyle {
-    fn drop(&mut self) {
-        // SAFETY: a RetainedStyle gives up the one reference it took on the style.
-        unsafe { style_free(self.0.as_ptr()) };
+impl Clone for RetainedStyle {
+    fn clone(&self) -> RetainedStyle {
+        self.get().retain();
+        RetainedStyle(self.0)
     }
 }
 
-pub(super) fn style_clone_shared(source: &RawStyle) -> *mut RawStyle {
-    let out = style_alloc();
-    let clone = unsafe { &mut *out };
+impl Drop for RetainedStyle {
+    fn drop(&mut self) {
+        if !self.get().release() {
+            return;
+        }
+        // SAFETY: the style came from Box::leak in RetainedStyle::new, and this was its last reference.
+        release(unsafe { Box::from_raw(self.0.as_ptr()) });
+    }
+}
+
+pub(super) fn style_clone_shared(source: &RawStyle) -> Box<RawStyle> {
+    let mut clone = style_alloc();
     clone.share_id = source.share_id;
     clone.display = source.display;
-    for (slot, &value) in clone.values.iter_mut().zip(&source.values) {
-        if let Some(v) = unsafe { value.as_ref() } {
-            v.add_ref();
-        }
-        *slot = value;
+    for (slot, value) in clone.values.iter_mut().zip(&source.values) {
+        slot.clone_from(value);
     }
-    for (slot, &pseudo) in clone.pseudo_styles.iter_mut().zip(&source.pseudo_styles) {
-        *slot = unsafe { pseudo.as_ref() }.map_or(ptr::null_mut(), style_clone_shared);
+    for (slot, pseudo) in clone.pseudo_styles.iter_mut().zip(&source.pseudo_styles) {
+        *slot = pseudo
+            .as_ref()
+            .map(|pseudo| RetainedStyle::new(style_clone_shared(pseudo.get())));
     }
-    clone.vars = unsafe { map_ref(source.vars) };
-    out
+    clone.vars.clone_from(&source.vars);
+    clone
 }

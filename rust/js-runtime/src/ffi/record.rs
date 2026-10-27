@@ -2,15 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_char, c_void};
+use core::cell::{Cell, OnceCell, RefCell};
+use core::ffi::{CStr, c_void};
 use core::ptr;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 
 use southstar_csp::Csp;
 use southstar_dom::{Kind, Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{
     Attributes, ContextHandle, RuntimeHandle, RuntimeOptions, Scope, ScriptOptions, Value,
@@ -18,7 +17,7 @@ use southstar_js_engine::{
 
 use super::NavigationTiming;
 use super::imports;
-use super::state::Slots;
+use super::state::PageState;
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 const FLAG_IMG_LOAD_FIRED: u32 = 1 << 3;
@@ -144,33 +143,33 @@ pub struct NsJs {
     _private: [u8; 0],
 }
 
-struct Record {
-    rt: RuntimeHandle,
-    ctx: ContextHandle,
-    main_realm_ctx: ContextHandle,
-    frame_ctxs: Option<Vec<ContextHandle>>,
-    current_doc: *mut NsNode,
-    raf_frame_ctx: *mut NsNode,
-    pristine_promise: Value,
-    layout_root: *const c_void,
+pub(crate) struct Record {
+    pub rt: Cell<RuntimeHandle>,
+    pub ctx: Cell<ContextHandle>,
+    pub main_realm_ctx: Cell<ContextHandle>,
+    frame_ctxs: RefCell<Option<Vec<ContextHandle>>>,
+    pub current_doc: Cell<*mut NsNode>,
+    pub raf_frame_ctx: Cell<*mut NsNode>,
+    pristine_promise: RefCell<Value>,
+    layout_root: Cell<*const c_void>,
     pinned_wrappers_set: RefCell<Option<HashSet<usize>>>,
-    cookie_value: Option<CString>,
+    cookie_value: RefCell<Option<CString>>,
     cookie_version: Cell<u64>,
-    cookie_buckets: Option<HashMap<CString, CString>>,
-    partition_key: Option<CString>,
-    opaque_counter: u64,
-    navigator_brand: Value,
-    halted: GBoolean,
-    csp: Option<Csp>,
-    time_origin_us: i64,
-    time_origin_real_ms: f64,
+    cookie_buckets: RefCell<Option<HashMap<CString, CString>>>,
+    partition_key: RefCell<Option<CString>>,
+    opaque_counter: Cell<u64>,
+    navigator_brand: RefCell<Value>,
+    pub halted: Cell<bool>,
+    csp: RefCell<Option<Csp>>,
+    time_origin_us: Cell<i64>,
+    time_origin_real_ms: Cell<f64>,
     navigation_timing: Cell<NavigationTiming>,
-    ce_main_doc: *const NsNode,
-    platform_globals: Option<Vec<Vec<u8>>>,
-    protos: Option<DomProtos>,
-    proto_document: Value,
-    per_tag_protos: HashMap<Vec<u8>, Value>,
-    runtime: *mut c_void,
+    pub ce_main_doc: Cell<*const NsNode>,
+    platform_globals: RefCell<Option<Vec<Vec<u8>>>>,
+    protos: RefCell<Option<DomProtos>>,
+    proto_document: RefCell<Value>,
+    per_tag_protos: RefCell<HashMap<Vec<u8>, Value>>,
+    state: OnceCell<Box<PageState>>,
 }
 
 thread_local! {
@@ -178,6 +177,7 @@ thread_local! {
 }
 
 pub(crate) fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
+    // SAFETY: the bindings pass null or a node of this thread's store, and from_ptr returns None once that node is freed.
     unsafe { Node::from_ptr(n) }
 }
 
@@ -189,16 +189,13 @@ fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
     n.attr(name)
 }
 
-fn rec(js: *const NsJs) -> *mut Record {
-    js.cast_mut().cast()
-}
-
-fn record<'a>(js: *const NsJs) -> Option<&'a Record> {
-    unsafe { rec(js).as_ref() }
+pub(crate) fn record<'a>(js: *const NsJs) -> Option<&'a Record> {
+    // SAFETY: a page pointer is null or a record alloc leaked, which stays live until free_engine reclaims it.
+    unsafe { js.cast::<Record>().as_ref() }
 }
 
 fn main_context(js: &Record) -> ContextHandle {
-    js.main_realm_ctx.or(js.ctx)
+    js.main_realm_ctx.get().or(js.ctx.get())
 }
 
 fn page_of(scope: &Scope<'_>) -> *mut NsJs {
@@ -211,64 +208,47 @@ fn cstring(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn alloc() -> *mut NsJs {
-    Box::into_raw(Box::new(Record {
-        rt: RuntimeHandle::NULL,
-        ctx: ContextHandle::NULL,
-        main_realm_ctx: ContextHandle::NULL,
-        frame_ctxs: None,
-        current_doc: ptr::null_mut(),
-        raf_frame_ctx: ptr::null_mut(),
-        pristine_promise: Value::undefined(),
-        layout_root: ptr::null(),
+    let record = Box::new(Record {
+        rt: Cell::new(RuntimeHandle::NULL),
+        ctx: Cell::new(ContextHandle::NULL),
+        main_realm_ctx: Cell::new(ContextHandle::NULL),
+        frame_ctxs: RefCell::new(None),
+        current_doc: Cell::new(ptr::null_mut()),
+        raf_frame_ctx: Cell::new(ptr::null_mut()),
+        pristine_promise: RefCell::new(Value::undefined()),
+        layout_root: Cell::new(ptr::null()),
         pinned_wrappers_set: RefCell::new(None),
-        cookie_value: None,
+        cookie_value: RefCell::new(None),
         cookie_version: Cell::new(0),
-        cookie_buckets: None,
-        partition_key: None,
-        opaque_counter: 0,
-        navigator_brand: Value::undefined(),
-        halted: glib::FALSE,
-        csp: None,
-        time_origin_us: 0,
-        time_origin_real_ms: 0.0,
+        cookie_buckets: RefCell::new(None),
+        partition_key: RefCell::new(None),
+        opaque_counter: Cell::new(0),
+        navigator_brand: RefCell::new(Value::undefined()),
+        halted: Cell::new(false),
+        csp: RefCell::new(None),
+        time_origin_us: Cell::new(0),
+        time_origin_real_ms: Cell::new(0.0),
         navigation_timing: Cell::new(NavigationTiming::starting_at(0, 0.0)),
-        ce_main_doc: ptr::null(),
-        platform_globals: None,
-        protos: None,
-        proto_document: Value::undefined(),
-        per_tag_protos: HashMap::new(),
-        runtime: ptr::null_mut(),
-    }))
-    .cast()
+        ce_main_doc: Cell::new(ptr::null()),
+        platform_globals: RefCell::new(None),
+        protos: RefCell::new(None),
+        proto_document: RefCell::new(Value::undefined()),
+        per_tag_protos: RefCell::new(HashMap::new()),
+        state: OnceCell::new(),
+    });
+    drop(record.state.set(Box::new(PageState::new())));
+    Box::into_raw(record).cast()
 }
 
-pub(crate) unsafe fn slots_of(js: *mut NsJs) -> Slots {
-    unsafe {
-        Slots {
-            rt: &raw mut (*rec(js)).rt,
-            ctx: &raw mut (*rec(js)).ctx,
-            main_realm_ctx: &raw mut (*rec(js)).main_realm_ctx,
-            current_doc: &raw mut (*rec(js)).current_doc,
-            raf_frame_ctx: &raw mut (*rec(js)).raf_frame_ctx,
-            ce_main_doc: &raw mut (*rec(js)).ce_main_doc,
-            halted: &raw mut (*rec(js)).halted,
-        }
+impl Record {
+    pub(crate) fn state(&self) -> &PageState {
+        self.state.get().expect("alloc sets the page state")
     }
 }
 
-pub(crate) unsafe fn runtime_state(js: *const NsJs) -> *mut c_void {
-    record(js).map_or(ptr::null_mut(), |js| js.runtime)
-}
-
-pub(crate) unsafe fn set_runtime_state(js: *mut NsJs, state: *mut c_void) {
-    unsafe { (*rec(js)).runtime = state };
-}
-
-pub(crate) unsafe fn set_time_origin(js: *mut NsJs, origin_us: i64, origin_real_ms: f64) {
-    unsafe {
-        (*rec(js)).time_origin_us = origin_us;
-        (*rec(js)).time_origin_real_ms = origin_real_ms;
-    }
+pub(crate) fn set_time_origin(js: &Record, origin_us: i64, origin_real_ms: f64) {
+    js.time_origin_us.set(origin_us);
+    js.time_origin_real_ms.set(origin_real_ms);
 }
 
 pub(crate) fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
@@ -281,39 +261,35 @@ pub(crate) fn navigation_timing(js: *const NsJs) -> Option<NavigationTiming> {
     record(js).map(|js| js.navigation_timing.get())
 }
 
-pub(crate) unsafe fn create_runtime(js: *mut NsJs, options: &RuntimeOptions) -> bool {
+pub(crate) fn create_runtime(js: &Record, options: &RuntimeOptions) -> bool {
     let rt = RuntimeHandle::new(options);
-    unsafe { (*rec(js)).rt = rt };
+    js.rt.set(rt);
     !rt.is_null()
 }
 
-pub(crate) unsafe fn create_context(js: *mut NsJs) -> bool {
-    let rt = unsafe { (*rec(js)).rt };
-    let ctx = rt.new_context(js.cast());
+pub(crate) fn create_context(page: *mut NsJs, js: &Record) -> bool {
+    let rt = js.rt.get();
+    let ctx = rt.new_context(page.cast());
     if ctx.is_null() {
         return false;
     }
-    unsafe {
-        (*rec(js)).ctx = ctx;
-        (*rec(js)).main_realm_ctx = ctx;
-    }
-    rt.set_opaque(js.cast());
+    js.ctx.set(ctx);
+    js.main_realm_ctx.set(ctx);
+    rt.set_opaque(page.cast());
     true
 }
 
-pub(crate) unsafe fn init_tables(js: *mut NsJs, page: bool) {
-    unsafe {
-        (*rec(js)).pinned_wrappers_set = RefCell::new(Some(HashSet::new()));
-        if page {
-            (*rec(js)).frame_ctxs = Some(Vec::new());
-            (*rec(js)).cookie_buckets = Some(HashMap::new());
-        }
+pub(crate) fn init_tables(js: &Record, page: bool) {
+    js.pinned_wrappers_set.replace(Some(HashSet::new()));
+    if page {
+        js.frame_ctxs.replace(Some(Vec::new()));
+        js.cookie_buckets.replace(Some(HashMap::new()));
     }
 }
 
-pub(crate) unsafe fn set_partition_key(js: *mut NsJs, partition_key: *const c_char) {
-    let key = unsafe { glib::bytes(partition_key) }.map(cstring);
-    unsafe { (*rec(js)).partition_key = key };
+pub(crate) fn set_partition_key(js: &Record, partition_key: Option<&CStr>) {
+    js.partition_key
+        .replace(partition_key.map(|key| cstring(key.to_bytes())));
 }
 
 pub(crate) fn has_pinned_set(js: *const NsJs) -> bool {
@@ -357,34 +333,30 @@ fn pinned_wrapper_nodes(js: *const NsJs) -> Vec<usize> {
     })
 }
 
-pub(crate) unsafe fn set_proto_document(js: *mut NsJs, proto: Value) {
-    unsafe { (*rec(js)).proto_document = proto };
+pub(crate) fn set_proto_document(js: &Record, proto: Value) {
+    drop(js.proto_document.replace(proto));
 }
 
-pub(crate) unsafe fn set_navigator_brand(js: *mut NsJs, brand: Value) {
-    unsafe { (*rec(js)).navigator_brand = brand };
+pub(crate) fn set_navigator_brand(js: &Record, brand: Value) {
+    drop(js.navigator_brand.replace(brand));
 }
 
-pub(crate) unsafe fn set_pristine_promise(js: *mut NsJs, promise: Value) {
-    unsafe { (*rec(js)).pristine_promise = promise };
+pub(crate) fn set_pristine_promise(js: &Record, promise: Value) {
+    drop(js.pristine_promise.replace(promise));
 }
 
-pub(crate) unsafe fn release_wrapper(js: *mut NsJs, n: *mut NsNode) {
-    let Some(n) = node(n) else {
-        return;
-    };
+pub(crate) fn release_wrapper(js: &Record, n: Node<'_>) {
     let wrapper = n.js_wrapper();
     if wrapper.is_null() {
         return;
     }
-    let ctx = unsafe { (*rec(js)).ctx };
-    ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
+    // SAFETY: the node's wrapper identity names its live wrapper, whose pin is released once, here.
+    js.ctx
+        .get()
+        .with(|scope| unsafe { scope.release_identity(wrapper) });
 }
 
-pub(crate) unsafe fn detach_wrapper(js: *mut NsJs, n: *mut NsNode, release: bool) {
-    let Some(n) = node(n) else {
-        return;
-    };
+pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, release: bool) {
     let wrapper = n.js_wrapper();
     if wrapper.is_null() {
         return;
@@ -398,8 +370,10 @@ pub(crate) unsafe fn detach_wrapper(js: *mut NsJs, n: *mut NsNode, release: bool
     n.set_js_wrapper(ptr::null_mut());
     n.set_js_invalidate(None);
     if release {
-        let ctx = unsafe { (*rec(js)).ctx };
-        ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
+        // SAFETY: the identity was the node's wrapper until just above and is released once, here.
+        js.ctx
+            .get()
+            .with(|scope| unsafe { scope.release_identity(wrapper) });
     }
 }
 
@@ -412,62 +386,59 @@ pub(crate) fn eval_worker_polyfills(js: *mut NsJs) {
     eval_bundled(js, POLYFILLS, c"<worker-polyfills>");
 }
 
-pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
-    unsafe {
-        (*rec(js)).csp = None;
-        (*rec(js)).cookie_value = None;
-        (*rec(js)).cookie_version.set(0);
-    }
+pub(crate) fn free_page_strings(js: &Record) {
+    js.csp.replace(None);
+    js.cookie_value.replace(None);
+    js.cookie_version.set(0);
 }
 
-pub(crate) unsafe fn free_pinned_set(js: *mut NsJs) {
-    unsafe {
-        (*rec(js)).pinned_wrappers_set = RefCell::new(None);
-    }
+pub(crate) fn free_pinned_set(js: &Record) {
+    js.pinned_wrappers_set.replace(None);
 }
 
-pub(crate) unsafe fn free_realm_values(js: *mut NsJs) {
-    let (pristine, protos, document, per_tag) = unsafe {
-        (
-            core::mem::replace(&mut (*rec(js)).pristine_promise, Value::undefined()),
-            (*rec(js)).protos.take(),
-            core::mem::replace(&mut (*rec(js)).proto_document, Value::undefined()),
-            core::mem::take(&mut (*rec(js)).per_tag_protos),
-        )
-    };
+pub(crate) fn free_realm_values(js: &Record) {
+    let pristine = js.pristine_promise.replace(Value::undefined());
+    let protos = js.protos.take();
+    let document = js.proto_document.replace(Value::undefined());
+    let per_tag = js.per_tag_protos.take();
     drop((pristine, protos, document, per_tag));
 }
 
-pub(crate) unsafe fn free_platform_globals(js: *mut NsJs) {
-    unsafe { (*rec(js)).platform_globals = None };
+pub(crate) fn free_platform_globals(js: &Record) {
+    js.platform_globals.replace(None);
 }
 
-pub(crate) unsafe fn free_partition(js: *mut NsJs) {
-    unsafe {
-        (*rec(js)).cookie_buckets = None;
-        (*rec(js)).partition_key = None;
-    }
+pub(crate) fn free_partition(js: &Record) {
+    js.cookie_buckets.replace(None);
+    js.partition_key.replace(None);
 }
 
-pub(crate) unsafe fn free_window_values(js: *mut NsJs) {
-    let brand = unsafe { core::mem::replace(&mut (*rec(js)).navigator_brand, Value::undefined()) };
-    drop(brand);
+pub(crate) fn free_window_values(js: &Record) {
+    drop(js.navigator_brand.replace(Value::undefined()));
 }
 
+/// # Safety
+///
+/// `js` is a page alloc returned that nothing uses afterwards.
 pub(crate) unsafe fn free_engine(js: *mut NsJs) {
-    unsafe {
-        free_realm_values(js);
-        free_window_values(js);
-        for ctx in (*rec(js)).frame_ctxs.take().unwrap_or_default() {
-            ctx.free();
-        }
-        (*rec(js)).ctx.free();
-        (*rec(js)).rt.free();
-        drop(Box::from_raw(rec(js)));
+    let Some(record) = record(js) else {
+        return;
+    };
+    free_realm_values(record);
+    free_window_values(record);
+    for ctx in record.frame_ctxs.take().unwrap_or_default() {
+        // SAFETY: the page owns its frame realms, and the runtime that created them is still live.
+        unsafe { ctx.free() };
     }
+    // SAFETY: the page owns its main context, freed once here before its runtime.
+    unsafe { record.ctx.get().free() };
+    // SAFETY: the page owns its runtime, whose contexts were all freed above.
+    unsafe { record.rt.get().free() };
+    // SAFETY: the record came from Box::into_raw in alloc, and the caller guarantees it is not used again.
+    drop(unsafe { Box::from_raw(js.cast::<Record>()) });
 }
 
-pub(crate) unsafe fn worker_compile(
+pub(crate) fn worker_compile(
     scope: &mut Scope<'_>,
     source: &CStr,
     len: usize,
@@ -495,38 +466,33 @@ pub(crate) unsafe fn worker_compile(
     (Ok(compiled), false)
 }
 
-fn partition_apply(js: *mut NsJs, new_url: *const c_char) {
-    let origin = unsafe { glib::bytes(new_url) }
-        .and_then(southstar_url::bytes::origin_from)
+fn partition_apply(page: *mut NsJs, js: &Record, new_url: Option<&CStr>) {
+    let origin = new_url
+        .and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
         .filter(|origin| !origin.is_empty())
         .map(|origin| cstring(&origin));
     let new_key = origin.unwrap_or_else(|| {
-        let counter = unsafe {
-            (*rec(js)).opaque_counter += 1;
-            (*rec(js)).opaque_counter
-        };
+        let counter = js.opaque_counter.get() + 1;
+        js.opaque_counter.set(counter);
         cstring(format!("opaque://{counter}").as_bytes())
     });
-    if unsafe { (*rec(js)).partition_key.as_ref() } == Some(&new_key) {
+    if js.partition_key.borrow().as_ref() == Some(&new_key) {
         return;
     }
-    unsafe {
-        if let (Some(key), Some(buckets)) = (
-            (*rec(js)).partition_key.clone(),
-            (*rec(js)).cookie_buckets.as_mut(),
-        ) {
-            let value = (*rec(js)).cookie_value.clone().unwrap_or_default();
-            buckets.insert(key, value);
-        }
-        let old_key = (*rec(js)).partition_key.as_deref();
-        (crate::api::storage_hooks().switch_session)(js, old_key, &new_key);
-        (*rec(js)).cookie_value = (*rec(js))
-            .cookie_buckets
-            .as_ref()
-            .and_then(|buckets| buckets.get(&new_key).cloned());
-        (*rec(js)).cookie_version.set(0);
-        (*rec(js)).partition_key = Some(new_key);
+    let old_key = js.partition_key.borrow().clone();
+    if let (Some(key), Some(buckets)) = (old_key.clone(), js.cookie_buckets.borrow_mut().as_mut()) {
+        let value = js.cookie_value.borrow().clone().unwrap_or_default();
+        buckets.insert(key, value);
     }
+    (crate::api::storage_hooks().switch_session)(page, old_key.as_deref(), &new_key);
+    let value = js
+        .cookie_buckets
+        .borrow()
+        .as_ref()
+        .and_then(|buckets| buckets.get(&new_key).cloned());
+    js.cookie_value.replace(value);
+    js.cookie_version.set(0);
+    js.partition_key.replace(Some(new_key));
 }
 
 fn foreign_kind_proto<'a>(protos: &'a DomProtos, n: Node<'_>) -> &'a Value {
@@ -538,64 +504,77 @@ fn foreign_kind_proto<'a>(protos: &'a DomProtos, n: Node<'_>) -> &'a Value {
     }
 }
 
-fn html_kind_proto<'a>(js: &'a Record, protos: &'a DomProtos, n: Node<'_>) -> &'a Value {
+fn html_kind_proto<'a>(js: &Record, protos: &'a DomProtos, n: Node<'_>) -> Option<&'a Value> {
     let Some(name) = n.name() else {
-        return &protos.html_element;
+        return Some(&protos.html_element);
     };
     let name = name.to_bytes();
     if !name.iter().any(u8::is_ascii_uppercase) {
-        if let Some(proto) = js.per_tag_protos.get(name) {
-            return proto;
+        if js.per_tag_protos.borrow().contains_key(name) {
+            return None;
         }
         if PLAIN_INTERFACE_TAGS.contains(&name) {
-            return &protos.html_element;
+            return Some(&protos.html_element);
         }
     }
     let valid_custom = n
         .name()
         .is_some_and(|name| (crate::api::custom_elements_hooks().name_valid)(name.to_bytes()));
     if !valid_custom && protos.html_unknown_element.is_object() {
-        return &protos.html_unknown_element;
+        return Some(&protos.html_unknown_element);
     }
-    &protos.html_element
+    Some(&protos.html_element)
 }
 
-fn kind_proto<'a>(js: &'a Record, n: Node<'_>) -> Option<&'a Value> {
-    let protos = js.protos.as_ref()?;
+fn per_tag_proto(js: &Record, n: Node<'_>) -> Option<Value> {
+    let name = n.name()?.to_bytes();
+    js.per_tag_protos.borrow().get(name).cloned()
+}
+
+fn kind_proto(js: &Record, n: Node<'_>) -> Option<Value> {
+    let protos = js.protos.borrow();
+    let protos = protos.as_ref()?;
+    let document = js.proto_document.borrow();
     let flags = n.flags();
-    Some(match n.kind() {
-        Kind::Element => {
-            if flags & FLAG_SVG_NS != 0 {
-                if n.name()
-                    .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(b"a"))
-                    && protos.svga_element.is_object()
-                {
-                    &protos.svga_element
-                } else if protos.svg_element.is_object() {
-                    &protos.svg_element
+    Some(
+        match n.kind() {
+            Kind::Element => {
+                if flags & FLAG_SVG_NS != 0 {
+                    if n.name()
+                        .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(b"a"))
+                        && protos.svga_element.is_object()
+                    {
+                        &protos.svga_element
+                    } else if protos.svg_element.is_object() {
+                        &protos.svg_element
+                    } else {
+                        &protos.element
+                    }
+                } else if flags & FLAG_FOREIGN_NS != 0 {
+                    foreign_kind_proto(protos, n)
                 } else {
-                    &protos.element
+                    match html_kind_proto(js, protos, n) {
+                        Some(proto) => proto,
+                        None => return per_tag_proto(js, n),
+                    }
                 }
-            } else if flags & FLAG_FOREIGN_NS != 0 {
-                foreign_kind_proto(protos, n)
-            } else {
-                html_kind_proto(js, protos, n)
             }
+            Kind::Text if flags & FLAG_CDATA != 0 => &protos.cdata,
+            Kind::Text => &protos.text,
+            Kind::Comment if flags & FLAG_PI != 0 => &protos.pi,
+            Kind::Comment => &protos.comment,
+            Kind::Doctype => &protos.doctype,
+            Kind::Document if flags & FLAG_FRAGMENT != 0 => &protos.docfrag,
+            Kind::Document => &*document,
+            Kind::Other => return None,
         }
-        Kind::Text if flags & FLAG_CDATA != 0 => &protos.cdata,
-        Kind::Text => &protos.text,
-        Kind::Comment if flags & FLAG_PI != 0 => &protos.pi,
-        Kind::Comment => &protos.comment,
-        Kind::Doctype => &protos.doctype,
-        Kind::Document if flags & FLAG_FRAGMENT != 0 => &protos.docfrag,
-        Kind::Document => &js.proto_document,
-        Kind::Other => return None,
-    })
+        .clone(),
+    )
 }
 
-pub(crate) unsafe fn kind_proto_value(js: *const NsJs, n: *const NsNode) -> Option<Value> {
+pub(crate) fn kind_proto_value(js: *const NsJs, n: *const NsNode) -> Option<Value> {
     match (record(js), node(n)) {
-        (Some(js), Some(n)) => kind_proto(js, n).cloned(),
+        (Some(js), Some(n)) => kind_proto(js, n),
         _ => None,
     }
 }
@@ -647,11 +626,11 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
 }
 
 pub(crate) fn storage_load_for(js: *const NsJs, new_url: Option<&CStr>) {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
+    };
     let js = js.cast_mut();
-    partition_apply(js, new_url.map_or(ptr::null(), CStr::as_ptr));
+    partition_apply(js, record, new_url);
     (crate::api::storage_hooks().load_local)(js, new_url);
 }
 
@@ -734,6 +713,7 @@ pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
         return true;
     };
     js.csp
+        .borrow()
         .as_ref()
         .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page.as_deref(), None, true))
 }
@@ -786,16 +766,14 @@ pub(crate) fn attr_apply_proto(scope: &mut Scope<'_>, obj: &Value) {
 }
 
 pub(crate) fn set_layout_root(js: *const NsJs, root: *const c_void) {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
+    };
     let js = js.cast_mut();
-    // SAFETY: the page is live and not null, checked above.
-    if unsafe { (*rec(js)).layout_root } != root {
+    if record.layout_root.get() != root {
         (crate::api::geometry_hooks().forget_box_lookup)(js);
     }
-    // SAFETY: the page is live and not null, checked above.
-    unsafe { (*rec(js)).layout_root = root };
+    record.layout_root.set(root);
     (crate::api::window_hooks().sync_metrics)(js);
     if !root.is_null() {
         (crate::api::frames_hooks().promote_deferred)(js);
@@ -840,7 +818,7 @@ pub(crate) fn is_disabled_form_control(el: Node<'_>) -> bool {
 }
 
 pub(crate) fn form_reset(js: *const NsJs, form: Node<'_>) {
-    let Some(ctx) = record(js).map(|js| js.ctx) else {
+    let Some(ctx) = record(js).map(|js| js.ctx.get()) else {
         return;
     };
     ctx.with(|scope| (crate::api::forms_hooks().reset_form)(scope, form));
@@ -850,13 +828,13 @@ pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {
     let Some(record) = record(js) else {
         return ContextHandle::NULL;
     };
-    let realm = node(record.raf_frame_ctx).map_or(ContextHandle::NULL, |frame| {
+    let realm = node(record.raf_frame_ctx.get()).map_or(ContextHandle::NULL, |frame| {
         (crate::api::frames_hooks().frame_context)(js, frame)
     });
-    realm.or(record.ctx)
+    realm.or(record.ctx.get())
 }
 
-pub(crate) fn frame_url(js: super::Js, frame: *const NsNode) -> *const c_char {
+pub(crate) fn frame_url(js: super::Js, frame: *const NsNode) -> Option<CString> {
     (crate::api::frames_hooks().frame_url)(js.ptr(), node(frame))
 }
 
@@ -866,32 +844,24 @@ pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
         .find_map(|p| attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty()))
 }
 
-pub(crate) fn platform_globals(js: *mut NsJs) -> Vec<Vec<u8>> {
-    unsafe {
-        if (*rec(js)).platform_globals.is_none() {
-            let saved = (*rec(js)).ctx;
-            (*rec(js)).ctx = main_context(&*rec(js));
-            let globals = super::exports::snapshot_globals(super::Js(js));
-            (*rec(js)).ctx = saved;
-            (*rec(js)).platform_globals = Some(globals);
-        }
-        (*rec(js)).platform_globals.clone().unwrap_or_default()
-    }
-}
-
 pub(crate) fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return Vec::new();
+    };
+    if record.platform_globals.borrow().is_none() {
+        let saved = record.ctx.replace(main_context(record));
+        let globals = super::exports::snapshot_globals(super::Js(js.cast_mut()));
+        record.ctx.set(saved);
+        record.platform_globals.replace(Some(globals));
     }
-    platform_globals(js.cast_mut())
+    record.platform_globals.borrow().clone().unwrap_or_default()
 }
 
 pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return ContextHandle::NULL;
-    }
-    let js = js.cast_mut();
-    let fctx = unsafe { (*rec(js)).rt }.new_context(js.cast());
+    };
+    let fctx = record.rt.get().new_context(js.cast_mut().cast());
     if fctx.is_null() {
         return fctx;
     }
@@ -899,13 +869,13 @@ pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
         let global = scope.global();
         southstar_js_realm::hide_shared_array_buffer(scope, &global);
     });
-    if let Some(frames) = unsafe { (*rec(js)).frame_ctxs.as_mut() } {
+    if let Some(frames) = record.frame_ctxs.borrow_mut().as_mut() {
         frames.push(fctx);
     }
     fctx
 }
 
-pub(crate) unsafe fn frame_realm_finish(
+pub(crate) fn frame_realm_finish(
     js: *mut NsJs,
     fctx: ContextHandle,
     frame_global: &Value,
@@ -913,8 +883,9 @@ pub(crate) unsafe fn frame_realm_finish(
 ) {
     let interfaces = crate::api::interfaces_hooks();
     (interfaces.install_pdf_plugins)(fctx);
-    // SAFETY: the caller passes a live page.
-    adopt_frame_window_events(unsafe { &*rec(js) }, fctx, frame_global);
+    if let Some(record) = record(js) {
+        adopt_frame_window_events(record, fctx, frame_global);
+    }
     (interfaces.link_interface_ctors)(fctx);
     (interfaces.lock_global_prototypes)(fctx);
     let attr_class = (crate::api::attrs_hooks().class_id)();
@@ -942,11 +913,11 @@ pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> *mut NsN
     if let Some(root) = super::wrapper::unwrap(this).filter(|root| root.kind() == Kind::Document) {
         return root.as_mut_ptr();
     }
-    record(page_of(scope)).map_or(ptr::null_mut(), |js| js.current_doc)
+    record(page_of(scope)).map_or(ptr::null_mut(), |js| js.current_doc.get())
 }
 
 pub(crate) fn ce_main_doc(js: *const NsJs) -> Option<Node<'static>> {
-    node(record(js)?.ce_main_doc)
+    node(record(js)?.ce_main_doc.get())
 }
 
 pub(crate) fn node_wrapper(scope: &mut Scope<'_>, n: *const NsNode) -> Option<Value> {
@@ -992,7 +963,7 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    let live = || record(js).is_some_and(|js| !js.ctx.is_null() && js.halted == 0);
+    let live = || record(js).is_some_and(|js| !js.ctx.get().is_null() && !js.halted.get());
     let attr_bytes = attr_name.to_bytes();
     if live() {
         let focus = crate::api::focus_hooks();
@@ -1027,19 +998,18 @@ pub(crate) fn illegal_constructor(
 }
 
 pub(crate) fn register_tag_proto(scope: &mut Scope<'_>, tag: &[u8], proto: Value) {
-    let js = page_of(scope);
-    if js.is_null() {
+    let Some(js) = record(page_of(scope)) else {
         return;
-    }
-    let previous = unsafe { (*rec(js)).per_tag_protos.insert(tag.to_vec(), proto) };
+    };
+    let previous = js.per_tag_protos.borrow_mut().insert(tag.to_vec(), proto);
     drop(previous);
 }
 
 pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: AdoptedProtos) {
     let js = page_of(scope);
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
+    };
     let AdoptedProtos {
         node: _,
         element,
@@ -1071,8 +1041,8 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: AdoptedProtos) {
         doctype,
         docfrag,
     };
-    let previous = unsafe { (*rec(js)).protos.replace(adopted) };
-    let previous_document = unsafe { core::mem::replace(&mut (*rec(js)).proto_document, document) };
+    let previous = record.protos.replace(Some(adopted));
+    let previous_document = record.proto_document.replace(document);
     drop((previous, previous_document));
     for key in pinned_wrapper_nodes(js) {
         let Some(n) = node(key as *const NsNode) else {
@@ -1082,10 +1052,7 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: AdoptedProtos) {
         if wrapper.is_null() {
             continue;
         }
-        let Some(proto) = kind_proto(unsafe { &*rec(js) }, n)
-            .filter(|proto| proto.is_object())
-            .cloned()
-        else {
+        let Some(proto) = kind_proto(record, n).filter(Value::is_object) else {
             continue;
         };
         let object = scope.object_from_identity(wrapper);
@@ -1123,21 +1090,20 @@ pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node_val: &Value) {
 }
 
 pub(crate) fn free_frame_contexts(js: *const NsJs) {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
-    let frames = unsafe { (*rec(js)).frame_ctxs.as_mut() };
-    if let Some(frames) = frames {
-        for ctx in frames.drain(..) {
-            unsafe { ctx.free() };
-        }
+    };
+    let frames = record.frame_ctxs.borrow_mut().as_mut().map(core::mem::take);
+    for ctx in frames.unwrap_or_default() {
+        // SAFETY: the page owns its frame realms, and taking them out of the list above frees each once.
+        unsafe { ctx.free() };
     }
 }
 
 pub(crate) fn frame_context_count(js: *const NsJs) -> u32 {
     record(js)
-        .and_then(|js| js.frame_ctxs.as_ref())
-        .map_or(0, |frames| frames.len() as u32)
+        .and_then(|js| js.frame_ctxs.borrow().as_ref().map(Vec::len))
+        .map_or(0, |frames| frames as u32)
 }
 
 pub(crate) fn eval_polyfills(js: *const NsJs) {
@@ -1149,12 +1115,11 @@ pub(crate) fn eval_polyfills(js: *const NsJs) {
 }
 
 pub(crate) fn snapshot_platform_globals(js: *const NsJs) {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
-    let js = js.cast_mut();
-    let globals = super::exports::snapshot_globals(super::Js(js));
-    unsafe { (*rec(js)).platform_globals = Some(globals) };
+    };
+    let globals = super::exports::snapshot_globals(super::Js(js.cast_mut()));
+    record.platform_globals.replace(Some(globals));
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {
@@ -1167,13 +1132,13 @@ pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
     let Some(header_value) = header_value.filter(|header| !header.is_empty()) else {
         return;
     };
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
+    };
     let Some(mut parsed) = Csp::parse(header_value.to_bytes()) else {
         return;
     };
-    match unsafe { &mut (*rec(js)).csp } {
+    match &mut *record.csp.borrow_mut() {
         Some(csp) => csp.merge(&mut parsed),
         slot @ None => *slot = Some(parsed),
     }
@@ -1184,7 +1149,8 @@ pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>
     let Some(js) = record(js) else {
         return true;
     };
-    let (Some(csp), Some(action_url)) = (js.csp.as_ref(), action_url) else {
+    let csp = js.csp.borrow();
+    let (Some(csp), Some(action_url)) = (csp.as_ref(), action_url) else {
         return true;
     };
     csp.allows(
@@ -1197,41 +1163,39 @@ pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>
 }
 
 pub(crate) fn inline_handlers_allowed(js: *const NsJs) -> bool {
-    record(js)
-        .and_then(|js| js.csp.as_ref())
-        .is_none_or(Csp::inline_event_handler_allowed)
+    with_page_csp(js, |csp| csp.is_none_or(Csp::inline_event_handler_allowed))
 }
 
 pub(crate) fn time_origin_us(js: *const NsJs) -> i64 {
-    record(js).map_or(0, |js| js.time_origin_us)
+    record(js).map_or(0, |js| js.time_origin_us.get())
 }
 
 pub(crate) fn time_origin_real_ms(js: *const NsJs) -> f64 {
-    record(js).map_or(0.0, |js| js.time_origin_real_ms)
+    record(js).map_or(0.0, |js| js.time_origin_real_ms.get())
 }
 
 pub(crate) fn navigator_brand(js: *const NsJs) -> Value {
-    record(js).map_or_else(Value::undefined, |js| js.navigator_brand.clone())
+    record(js).map_or_else(Value::undefined, |js| js.navigator_brand.borrow().clone())
 }
 
 pub(crate) fn pristine_promise(js: *const NsJs) -> Value {
-    record(js).map_or_else(Value::undefined, |js| js.pristine_promise.clone())
+    record(js).map_or_else(Value::undefined, |js| js.pristine_promise.borrow().clone())
 }
 
 pub(crate) fn layout_root(js: *const NsJs) -> *const c_void {
-    record(js).map_or(ptr::null(), |js| js.layout_root)
+    record(js).map_or(ptr::null(), |js| js.layout_root.get())
 }
 
 pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {
-    record(js)?.cookie_value.clone()
+    record(js)?.cookie_value.borrow().clone()
 }
 
 pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
-    if js.is_null() {
+    let Some(record) = record(js) else {
         return;
-    }
+    };
     let value = value.map(|value| cstring(value.to_bytes()));
-    unsafe { (*rec(js)).cookie_value = value };
+    record.cookie_value.replace(value);
 }
 
 pub(crate) fn cookie_version(js: *const NsJs) -> u64 {
@@ -1245,15 +1209,18 @@ pub(crate) fn set_cookie_version(js: *const NsJs, version: u64) {
 }
 
 pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {
-    record(js)?.partition_key.clone()
+    record(js)?.partition_key.borrow().clone()
 }
 
 pub(crate) fn with_page_csp<R>(js: *const NsJs, f: impl FnOnce(Option<&Csp>) -> R) -> R {
-    f(record(js).and_then(|js| js.csp.as_ref()))
+    match record(js) {
+        Some(js) => f(js.csp.borrow().as_ref()),
+        None => f(None),
+    }
 }
 
 pub(crate) fn csp_allows_connect(js: *const NsJs, url: &CStr, page: Option<&CStr>) -> bool {
-    record(js)
-        .and_then(|js| js.csp.as_ref())
-        .is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
+    with_page_csp(js, |csp| {
+        csp.is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
+    })
 }

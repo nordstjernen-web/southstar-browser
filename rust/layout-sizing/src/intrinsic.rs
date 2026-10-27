@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use core::sync::atomic::{AtomicI32, Ordering};
 
 use southstar_css::TRACK_PX;
-use southstar_layout::{BoxKind, BoxRef, Style, children};
+use southstar_layout::{BoxKind, BoxRef, children};
 use southstar_layout_float::{float_side_of, overflow_establishes_bfc, style_is_grid_container};
 use southstar_layout_geom::{
     edges_from_style, flex_direction_of, length_resolve, style_is_flex_container, value_is_percent,
@@ -66,7 +66,7 @@ fn subtract_inline_padding_border(b: BoxRef<'_>, w: f64) -> f64 {
     if w < 0.0 { 0.0 } else { w }
 }
 
-pub fn measure_natural_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn measure_natural_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     match b.kind() {
         BoxKind::Inline => return inline_natural_width(b, parent_style),
         BoxKind::Image | BoxKind::Video | BoxKind::Svg => {
@@ -149,7 +149,7 @@ fn definite_width_limit(b: BoxRef<'_>, v: Option<ValueRef<'_>>) -> f64 {
 fn width_contribution_keyword_limits(
     b: BoxRef<'_>,
     mut w: f64,
-    parent_style: *const Style,
+    parent_style: Option<StyleRef<'_>>,
     max_content: bool,
 ) -> f64 {
     let Some(style) = style_of(b) else {
@@ -192,7 +192,7 @@ fn width_contribution_keyword_limits(
     w
 }
 
-pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     if matches!(b.kind(), BoxKind::Inline | BoxKind::Text) || is_replaced(b) {
         return measure_natural_width(b, parent_style);
     }
@@ -203,7 +203,7 @@ pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f
     let child_style = if b.style().is_null() {
         parent_style
     } else {
-        b.style()
+        southstar_style::box_style(b)
     };
     if b.kind() == BoxKind::Table {
         return table_intrinsic_width(b, child_style, false);
@@ -263,14 +263,14 @@ pub fn measure_max_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f
     if flex_row { row_sum } else { max_child }
 }
 
-pub fn min_width_of(b: Option<BoxRef<'_>>, parent_style: *const Style) -> f64 {
+pub fn min_width_of(b: Option<BoxRef<'_>>, parent_style: Option<StyleRef<'_>>) -> f64 {
     MIN_MEASURE_DEPTH.fetch_add(1, Ordering::Relaxed);
     let w = b.map_or(0.0, |b| measure_min_width(b, parent_style));
     MIN_MEASURE_DEPTH.fetch_sub(1, Ordering::Relaxed);
     w
 }
 
-fn measure_min_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+fn measure_min_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     match b.kind() {
         BoxKind::Inline => return inline_min_width(b, parent_style),
         BoxKind::Image | BoxKind::Video | BoxKind::Svg => {
@@ -379,7 +379,7 @@ fn c_min(a: f64, b: f64) -> f64 {
     if a < b { a } else { b }
 }
 
-fn flex_row_item_min_contribution(c: BoxRef<'_>, child_style: *const Style) -> f64 {
+fn flex_row_item_min_contribution(c: BoxRef<'_>, child_style: Option<StyleRef<'_>>) -> f64 {
     let Some(s) = style_of(c).filter(|_| !matches!(c.kind(), BoxKind::Inline | BoxKind::Text))
     else {
         return min_width_of(Some(c), child_style);
@@ -406,7 +406,7 @@ fn flex_row_item_min_contribution(c: BoxRef<'_>, child_style: *const Style) -> f
     contribution
 }
 
-pub fn min_content_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn min_content_width_of(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     MIN_MEASURE_DEPTH.fetch_add(1, Ordering::Relaxed);
     let w = measure_min_content_width(b, parent_style);
     MIN_MEASURE_DEPTH.fetch_sub(1, Ordering::Relaxed);
@@ -445,7 +445,7 @@ fn template_columns_min_width(style: StyleRef<'_>) -> Option<f64> {
     Some(sum)
 }
 
-fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+fn measure_min_content_width(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     if matches!(b.kind(), BoxKind::Inline | BoxKind::Text) || is_replaced(b) {
         return min_width_of(Some(b), parent_style);
     }
@@ -457,7 +457,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
         let inherited = if b.style().is_null() {
             parent_style
         } else {
-            b.style()
+            southstar_style::box_style(b)
         };
         return table_intrinsic_width(b, inherited, true);
     }
@@ -465,7 +465,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
         && style_is_grid_container(style)
     {
         if grid_flows_by_column(Some(s)) {
-            let gw = grid_column_flow_width(b, s.as_ptr(), true);
+            let gw = grid_column_flow_width(b, Some(s), true);
             if gw >= 0.0 {
                 return gw;
             }
@@ -477,7 +477,7 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     let child_style = if b.style().is_null() {
         parent_style
     } else {
-        b.style()
+        southstar_style::box_style(b)
     };
     let single_line_row = style_is_flex_container(style_of(b))
         && starts_row(flex_direction_of(style_of(b)).to_bytes())
@@ -510,7 +510,12 @@ fn measure_min_content_width(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
     row_sum
 }
 
-pub fn intrinsic_keyword_width(b: BoxRef<'_>, kw: &CStr, mi: *const Style, mut avail: f64) -> f64 {
+pub fn intrinsic_keyword_width(
+    b: BoxRef<'_>,
+    kw: &CStr,
+    mi: Option<StyleRef<'_>>,
+    mut avail: f64,
+) -> f64 {
     if avail < 0.0 {
         avail = 0.0;
     }

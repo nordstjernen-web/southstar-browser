@@ -4,7 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 
-use southstar_layout::{BoxKind, BoxRef, NsBox, Style, children};
+use southstar_layout::{BoxKind, BoxRef, NsBox, children};
 use southstar_layout_float::floats::{self, Outer};
 use southstar_layout_float::{
     FloatRef, box_establishes_bfc, clear_kind_of, float_side_of, multicol_column_host,
@@ -21,7 +21,7 @@ use crate::dispatch::{layout_box, shift_box_tree};
 use crate::ffi::{
     ContentBox, dom_of, inline_box_can_fragment_multicol, inline_line_height,
     inline_run_break_before, inline_run_split, measure_natural_width, min_width_of,
-    multicol_single_inline, style_of, style_ref,
+    multicol_single_inline, style_of,
 };
 use crate::fieldset::c_max;
 use southstar_layout_geom::flex::box_is_border_box;
@@ -128,7 +128,7 @@ struct Flow<'a> {
     cw: f64,
     inner_x: f64,
     inner_y: f64,
-    child_inherited: *const Style,
+    child_inherited: Option<StyleRef<'a>>,
     floats: Vec<FloatRef>,
     cursor_y: f64,
     prev_margin_bottom: f64,
@@ -415,7 +415,7 @@ impl<'a> Flow<'a> {
             let (m, p, bd) = (c.margin(), c.padding(), c.border());
             outer += p.left + p.right + bd.left + bd.right + m.left + m.right;
         }
-        let ta = style_ref(self.child_inherited).and_then(|s| s.get(PropId::TextAlign));
+        let ta = self.child_inherited.and_then(|s| s.get(PropId::TextAlign));
         let mut self_center = false;
         let mut self_right = false;
         if is_table {
@@ -448,7 +448,11 @@ struct Columns<'a> {
     host: Option<BoxRef<'a>>,
 }
 
-fn plan_columns<'a>(b: BoxRef<'a>, cw: &mut f64, child_inherited: *const Style) -> Columns<'a> {
+fn plan_columns<'a>(
+    b: BoxRef<'a>,
+    cw: &mut f64,
+    child_inherited: Option<StyleRef<'_>>,
+) -> Columns<'a> {
     let (mut n, gap) = southstar_css::used_column_count(style_of(b).map(StyleRef::data), *cw);
     let mut host = None;
     if n > 1 {

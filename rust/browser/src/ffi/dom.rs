@@ -5,9 +5,9 @@
 use core::ffi::CStr;
 
 use southstar_dom::{self as dom, Node};
-use southstar_glib::GStr;
+use std::ffi::CString;
 
-use super::glib::gstr_from;
+use super::glib::owned_text;
 
 pub fn is_named(n: Node<'_>, tag: &CStr) -> bool {
     n.element_name() == Some(tag.to_bytes())
@@ -67,16 +67,16 @@ pub fn set_submission_charset(charset: Option<&CStr>) {
     southstar_net::set_submission_charset(charset.map(CStr::to_bytes));
 }
 
-pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<GStr> {
+pub fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
     southstar_url::bytes::resolve(base.map(CStr::to_bytes), href.to_bytes())
-        .and_then(|abs| gstr_from(&abs))
+        .and_then(|abs| owned_text(&abs))
 }
 
 pub fn url_origin_from(url: Option<&CStr>) -> Option<Vec<u8>> {
     url.and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
 }
 
-pub fn parse_refresh(input: &CStr) -> Option<(f64, Option<GStr>)> {
+pub fn parse_refresh(input: &CStr) -> Option<(f64, Option<CString>)> {
     let (seconds, target) = southstar_net::parse_refresh(input.to_bytes())?;
-    Some((seconds, target.and_then(|target| gstr_from(&target))))
+    Some((seconds, target.and_then(|target| owned_text(&target))))
 }

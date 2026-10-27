@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use core::ffi::CStr;
+use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -39,7 +39,7 @@ pub struct FramesHooks {
     pub scrub_globals: fn(*const NsJs, Node<'_>),
     pub promote_deferred: fn(*const NsJs),
     pub frame_context: fn(*const NsJs, Node<'_>) -> ContextHandle,
-    pub frame_url: fn(*const NsJs, Option<Node<'_>>) -> *const c_char,
+    pub frame_url: fn(*const NsJs, Option<Node<'_>>) -> Option<CString>,
     pub document_node: fn(Node<'_>) -> Option<Node<'_>>,
     pub frame_of_realm: fn(*const NsJs, ContextHandle) -> Option<Node<'static>>,
     pub node_realm_context: fn(*const NsJs, Node<'_>) -> ContextHandle,
@@ -65,7 +65,7 @@ impl FramesHooks {
         scrub_globals: |_, _| {},
         promote_deferred: |_| {},
         frame_context: |_, _| ContextHandle::NULL,
-        frame_url: |_, _| ptr::null(),
+        frame_url: |_, _| None,
         document_node: |_| None,
         frame_of_realm: |_, _| None,
         node_realm_context: |_, _| ContextHandle::NULL,

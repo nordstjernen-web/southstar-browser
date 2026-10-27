@@ -5,8 +5,8 @@
 use core::ffi::{CStr, c_int};
 
 use southstar_dom::{Kind, Node, ancestors_and_self};
-use southstar_glib::GStr;
 use southstar_layout::BoxRef;
+use std::ffi::CString;
 
 use crate::callbacks;
 use crate::ffi::{self, NsBrowser, VideoRef};
@@ -60,7 +60,7 @@ pub fn is_hyperlink(n: Node<'_>) -> bool {
     ffi::is_named(n, c"a") || ffi::is_named(n, c"area")
 }
 
-pub fn link_near(b: &NsBrowser, x: c_int, y: c_int, probes: usize) -> Option<GStr> {
+pub fn link_near(b: &NsBrowser, x: c_int, y: c_int, probes: usize) -> Option<CString> {
     let layout = b.layout()?;
     let r = LINK_PROBE_RADIUS;
     let offsets = [
@@ -173,7 +173,7 @@ fn media_box(hit: Option<BoxRef<'_>>) -> Option<BoxRef<'_>> {
 }
 
 pub struct MediaHit {
-    pub url: GStr,
+    pub url: CString,
     pub is_video: bool,
     pub stream: bool,
 }
@@ -210,10 +210,10 @@ pub fn media_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<MediaHit> {
             m.video_audio_src()
         }
     });
-    if msrc.is_none_or(|s| s.is_empty()) && element {
-        msrc = dom.attr(MEDIA_SRC_ATTR);
+    if msrc.as_ref().is_none_or(|s| s.is_empty()) && element {
+        msrc = dom.attr(MEDIA_SRC_ATTR).map(std::rc::Rc::from);
     }
-    let mut abs = match msrc {
+    let mut abs = match msrc.as_deref() {
         Some(src) if !force_stream => ffi::url_resolve(b.base_url.get().as_deref(), src),
         _ => None,
     };

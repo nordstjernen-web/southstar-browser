@@ -44,10 +44,7 @@ use southstar_glib::{self as glib};
 pub use animation::{animation_effective, animation_lists, style_may_animate};
 pub use compute::{compute_styles, incremental_exclude, set_render_zoom, style_before_change};
 pub(crate) use computed_units::{ComputedStyle, Slot, SlotMut, StyleView, slot};
-pub use computed_units::{
-    PROP_COUNT, RawStyle, style_retain, style_scale_font_size, style_value_slot,
-    tracks_computed_text,
-};
+pub use computed_units::{PROP_COUNT, RawStyle, style_scale_font_size, tracks_computed_text};
 pub use container::ContainerMap;
 pub(crate) use container::{Container, container_map_installed};
 pub use declarations::{Declaration, Declarations};

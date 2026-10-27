@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use southstar_css::StyleMap;
-use southstar_dom::{Node, NsNode, WeakNode, ancestors_and_self};
+use southstar_dom::{Node, WeakNode, ancestors_and_self};
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::ffi::{
@@ -108,7 +108,7 @@ pub fn form_submit(nav: &NavCapture, form: Node, submitter: Option<Node>) {
 }
 
 pub struct Ctx {
-    pub doc: *mut NsNode,
+    pub doc: WeakNode,
     pub js: Option<Js>,
     pub base: Option<CString>,
     pub vw: c_int,
@@ -127,7 +127,7 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn doc(&self) -> Option<Node<'_>> {
-        ffi::node_from_ptr(self.doc)
+        self.doc.get()
     }
 
     pub fn layout(&self) -> Option<BoxRef<'_>> {
@@ -406,8 +406,8 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
         };
         let (want_src, want_poster) = match ffi::video_sources(b) {
             Some((src, poster)) => (
-                src.and_then(|s| ffi::url_resolve(base, s)),
-                poster.and_then(|p| ffi::url_resolve(base, p)),
+                src.and_then(|s| ffi::url_resolve(base, &s)),
+                poster.and_then(|p| ffi::url_resolve(base, &p)),
             ),
             None => (None, None),
         };
@@ -647,7 +647,7 @@ pub fn run_one(
     ffi::anim_observe(anim, Some(&styles), ffi::monotonic_us());
     let anim = Some(anim);
 
-    let nav = NavCapture::default();
+    let nav = Rc::new(NavCapture::default());
     let timing = page
         .timing
         .as_ref()
@@ -676,7 +676,7 @@ pub fn run_one(
     let video_cache = Some(VideoCache::create());
     let flush_base = page_url.clone();
     let ctx = Ctx {
-        doc: doc.as_ptr(),
+        doc: doc.node().downgrade(),
         js,
         base: flush_base.clone(),
         vw,

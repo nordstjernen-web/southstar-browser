@@ -10,7 +10,7 @@ use southstar_js_engine::{NativeFn, Scope, Value};
 
 use super::{NavigationTiming, NsJs, ResourceInfo};
 
-pub type AddResourceTimedFn = unsafe fn(
+pub type AddResourceTimedFn = fn(
     *const NsJs,
     Option<&ResourceInfo>,
     &CStr,

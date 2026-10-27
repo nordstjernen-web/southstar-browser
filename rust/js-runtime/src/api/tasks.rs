@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_long, c_void};
+use core::ffi::{CStr, c_long, c_void};
 use core::ptr;
 use std::ffi::CString;
 
@@ -15,31 +15,27 @@ use crate::{budget, orphans, scheduling, teardown};
 
 pub use crate::ffi::glue::SourceFn;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ResourceInfo {
     pub timeline: *const c_void,
-    pub document_url: *const c_char,
+    pub document_url: Option<CString>,
     pub render_blocking: GBoolean,
     pub cors_mode: GBoolean,
-    pub next_hop_protocol: *const c_char,
-    pub timing_allow_origin: *const c_char,
+    pub next_hop_protocol: Option<CString>,
+    pub timing_allow_origin: Option<CString>,
     pub status: c_long,
     pub body_size: i64,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ResourceInfo>() == 56);
 
 impl Default for ResourceInfo {
     fn default() -> ResourceInfo {
         ResourceInfo {
             timeline: ptr::null(),
-            document_url: ptr::null(),
+            document_url: None,
             render_blocking: 0,
             cors_mode: 0,
-            next_hop_protocol: ptr::null(),
-            timing_allow_origin: ptr::null(),
+            next_hop_protocol: None,
+            timing_allow_origin: None,
             status: 0,
             body_size: 0,
         }

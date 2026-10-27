@@ -32,14 +32,23 @@ impl Hasher for WordHasher {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct ShareTable {
-    styles: HashMap<Box<[u8]>, usize, BuildHasherDefault<WordHasher>>,
+pub(crate) struct ShareTable<T> {
+    styles: HashMap<Box<[u8]>, T, BuildHasherDefault<WordHasher>>,
     key: Vec<u8>,
     active: bool,
 }
 
-impl ShareTable {
+impl<T> Default for ShareTable<T> {
+    fn default() -> Self {
+        ShareTable {
+            styles: HashMap::default(),
+            key: Vec::new(),
+            active: false,
+        }
+    }
+}
+
+impl<T> ShareTable<T> {
     pub(crate) fn begin(&mut self) {
         self.styles = HashMap::default();
         self.active = true;
@@ -59,11 +68,11 @@ impl ShareTable {
         &mut self.key
     }
 
-    pub(crate) fn find(&self) -> Option<usize> {
-        self.styles.get(self.key.as_slice()).copied()
+    pub(crate) fn find(&self) -> Option<&T> {
+        self.styles.get(self.key.as_slice())
     }
 
-    pub(crate) fn insert(&mut self, style: usize) {
+    pub(crate) fn insert(&mut self, style: T) {
         if self.active {
             self.styles.insert(self.key.as_slice().into(), style);
         }

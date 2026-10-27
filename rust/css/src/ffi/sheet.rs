@@ -4,22 +4,23 @@
 
 use core::cell::{Cell, OnceCell};
 use core::ffi::{CStr, c_int, c_uint, c_void};
-use core::mem::{ManuallyDrop, size_of};
+use core::mem::size_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use std::collections::HashSet;
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::GBoolean;
 
 use super::declarations::{Rule, RuleSink, lookup_key, until_nul};
 use super::keyframes::{KeyframeStop, Keyframes};
 use super::rule_index::RuleIndex;
 use super::selector::SelectorGroup;
-use super::value::{KIND_URL, NsCssValue, c_dup, c_free};
+use super::value::{NsCssValue, OwnedValue, Payload, c_dup};
 use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
@@ -398,8 +399,8 @@ impl SheetBuilder {
 
 pub struct OwnedSheet(NonNull<SheetData>);
 
-impl OwnedSheet {
-    pub fn parse(css: &[u8]) -> OwnedSheet {
+impl SheetData {
+    pub(super) fn parse(css: &[u8]) -> Box<SheetData> {
         let serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
         let has_container_units = nesting::has_container_units(css);
         let mut builder = SheetBuilder {
@@ -410,16 +411,18 @@ impl OwnedSheet {
             flattened.truncate(nul);
         }
         sheet::parse_into(&mut builder, &flattened);
-        OwnedSheet(NonNull::from(Box::leak(builder.sheet)))
+        builder.sheet
+    }
+}
+
+impl OwnedSheet {
+    pub fn parse(css: &[u8]) -> OwnedSheet {
+        OwnedSheet(NonNull::from(Box::leak(SheetData::parse(css))))
     }
 
     fn raw_mut(&mut self) -> &mut SheetData {
         // SAFETY: the handle points to a live sheet, and borrowing the handle mutably keeps its other uses out.
         unsafe { self.0.as_mut() }
-    }
-
-    pub(super) fn into_raw(self) -> *mut SheetData {
-        ManuallyDrop::new(self).0.as_ptr()
     }
 
     pub(super) fn set_cached(&self, cached: bool) {
@@ -485,15 +488,14 @@ impl OwnedSheet {
 
 fn rule_resolve_urls(rule: &mut Rule, base: &CStr) {
     for decl in &mut rule.decls {
-        // SAFETY: a declaration's value is a live value chain it holds a reference on, and the sheet is borrowed mutably.
-        unsafe { value_resolve_url(decl.value_ptr(), base) };
+        value_resolve_url(decl.value_mut(), base);
     }
     if let Some(vars) = &mut rule.vars {
         vars.replace_texts(|text| raw_text_resolve_urls(text, base));
     }
     for pending in &mut rule.pending {
         if let Some(resolved) = raw_text_resolve_urls(&pending.raw_text, base) {
-            pending.raw_text = until_nul(&resolved).to_vec();
+            Rc::make_mut(pending).raw_text = until_nul(&resolved).to_vec();
         }
     }
 }
@@ -587,27 +589,27 @@ fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {
     changed.then_some(out)
 }
 
-/// # Safety
-///
-/// `v` is null or a live value chain that nothing else borrows during the call.
-unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
-    // SAFETY: the caller passes null or a live value chain that nothing else borrows.
-    while let Some(value) = unsafe { v.as_mut() } {
-        if value.kind == KIND_URL {
-            // SAFETY: a url value's payload is its url string.
-            let url = unsafe { value.u.url };
-            // SAFETY: url is null or a NUL-terminated string the value owns.
-            if let Some(resolved) = unsafe { glib::bytes(url) }
-                .filter(|url| url_should_resolve(url))
-                .and_then(|url| url_resolve(base, url))
-            {
-                // SAFETY: url is the value's own GLib string, replaced right after.
-                unsafe { c_free(url) };
-                value.u.url = c_dup(&resolved);
-            }
-        }
-        v = value.next_layer;
+fn value_resolve_url(value: &mut OwnedValue, base: &CStr) {
+    let resolved = value
+        .url()
+        .map(CStr::to_bytes)
+        .filter(|url| url_should_resolve(url))
+        .and_then(|url| url_resolve(base, url));
+    let resolve_next = value.next_layer.as_ref().is_some_and(|next| has_url(next));
+    if resolved.is_none() && !resolve_next {
+        return;
     }
+    let value = value.make_mut();
+    if let Some(resolved) = resolved {
+        value.u = Payload::Url(Some(c_dup(&resolved)));
+    }
+    if let Some(next) = value.next_layer.as_mut() {
+        value_resolve_url(next, base);
+    }
+}
+
+fn has_url(value: &NsCssValue) -> bool {
+    value.url().is_some() || value.next_layer().is_some_and(has_url)
 }
 
 #[repr(transparent)]

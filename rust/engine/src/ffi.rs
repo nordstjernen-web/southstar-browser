@@ -91,7 +91,7 @@ pub fn is_named(n: Node, tag: &CStr) -> bool {
 }
 
 pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
-    unsafe { Node::from_ptr(b.dom_ptr().cast()) }
+    b.dom()
 }
 
 pub struct Capture {

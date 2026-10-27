@@ -115,7 +115,7 @@ impl<'a> Walk<'a> {
                 best = Some(m);
             }
         }
-        for atomic in root.inline_atomics().unwrap_or(&[]) {
+        for atomic in &root.inline_atomics().unwrap_or_default() {
             let Some((ab, ax, ay)) = atomic_point(root, atomic, cx, cy) else {
                 continue;
             };

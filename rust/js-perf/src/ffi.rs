@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_long, c_void};
+use core::ffi::{CStr, c_long, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -45,12 +45,8 @@ fn long(value: c_long) -> i64 {
     value as i64
 }
 
-unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    if p.is_null() {
-        None
-    } else {
-        Some(unsafe { CStr::from_ptr(p) }.to_bytes())
-    }
+fn bytes(text: Option<&CStr>) -> Option<&[u8]> {
+    text.map(CStr::to_bytes)
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -170,10 +166,7 @@ fn teardown(js: *const NsJs) {
     timeline::teardown(Js::of(js));
 }
 
-/// # Safety
-///
-/// The strings `info` points to are null or NUL-terminated and live for the call.
-pub unsafe fn add_resource_timed(
+pub fn add_resource_timed(
     js: *const NsJs,
     info: Option<&ResourceInfo>,
     url: &CStr,
@@ -186,17 +179,15 @@ pub unsafe fn add_resource_timed(
         return;
     }
     let info = match info {
-        Some(info) => unsafe {
-            entry::ResourceInfo {
-                timeline: info.timeline as usize,
-                document_url: bytes(info.document_url),
-                render_blocking: info.render_blocking != 0,
-                cors_mode: info.cors_mode != 0,
-                next_hop_protocol: bytes(info.next_hop_protocol),
-                timing_allow_origin: bytes(info.timing_allow_origin),
-                status: long(info.status),
-                body_size: info.body_size,
-            }
+        Some(info) => entry::ResourceInfo {
+            timeline: info.timeline as usize,
+            document_url: bytes(info.document_url.as_deref()),
+            render_blocking: info.render_blocking != 0,
+            cors_mode: info.cors_mode != 0,
+            next_hop_protocol: bytes(info.next_hop_protocol.as_deref()),
+            timing_allow_origin: bytes(info.timing_allow_origin.as_deref()),
+            status: long(info.status),
+            body_size: info.body_size,
         },
         None => entry::ResourceInfo {
             timeline: 0,

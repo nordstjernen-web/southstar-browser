@@ -5,10 +5,11 @@
 use core::ffi::CStr;
 use std::sync::Once;
 
+use southstar_css::StyleData;
 use southstar_dom::Node;
 use southstar_layout::dispatch::Dispatch;
 use southstar_layout::paint_links::PaintLinks;
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, NsBox};
 use southstar_layout_build::{BuildInput, Passes};
 use southstar_layout_sizing::Measures;
 use southstar_paint::{LayoutLinks, LegendGap};
@@ -48,7 +49,7 @@ pub use southstar_layout_sizing::{
     estimate_natural_width, measure_natural_width, size_keyword_is_intrinsic,
 };
 
-pub fn min_width_of(b: BoxRef<'_>, parent_style: *const Style) -> f64 {
+pub fn min_width_of(b: BoxRef<'_>, parent_style: Option<StyleRef<'_>>) -> f64 {
     southstar_layout_sizing::min_width_of(Some(b), parent_style)
 }
 
@@ -71,8 +72,8 @@ pub use southstar_layout_build::{
     abs_pending_clear as pending_clear, abs_pending_len as pending_len,
 };
 
-pub fn pending_entry<'a>(i: usize) -> Option<Option<Entry<'a>>> {
-    let (dom, pseudo, fixed) = southstar_layout_build::abs_pending_entry(i)?;
+pub fn pending_entry(i: usize, styles: StyleTable) -> Option<Option<Entry<'static>>> {
+    let (dom, pseudo, fixed) = southstar_layout_build::abs_pending_entry(i, styles)?;
     Some(dom.map(|dom| Entry { dom, pseudo, fixed }))
 }
 
@@ -148,14 +149,26 @@ fn in_scroller(b: BoxRef<'_>) -> bool {
     sticky::scrollport_for(b).is_some()
 }
 
+fn dispatch_layout_box(b: BoxRef<'_>, width: f64, inherited: Option<&StyleData>) {
+    southstar_layout_block::layout_box(b, width, inherited.map(StyleRef::from_data));
+}
+
+fn dispatch_layout_block(b: BoxRef<'_>, width: f64, inherited: Option<&StyleData>) {
+    southstar_layout_block::layout_block(b, width, inherited.map(StyleRef::from_data));
+}
+
+fn dispatch_legacy_align(c: BoxRef<'_>, x: f64, w: f64, inherited: Option<&StyleData>) {
+    southstar_layout_block::legacy_align_block_child(c, x, w, inherited.map(StyleRef::from_data));
+}
+
 fn install_layout_hooks() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
         southstar_layout::dispatch::install(Dispatch {
-            layout_box: southstar_layout_block::layout_box,
-            layout_block: southstar_layout_block::layout_block,
+            layout_box: dispatch_layout_box,
+            layout_block: dispatch_layout_block,
             shift_box_tree: southstar_layout_block::shift_box_tree,
-            legacy_align_block_child: southstar_layout_block::legacy_align_block_child,
+            legacy_align_block_child: dispatch_legacy_align,
             max_bottom: southstar_layout_float::max_bottom,
             clips_out_point: southstar_layout_float::clips_out_point,
         });
@@ -165,7 +178,6 @@ fn install_layout_hooks() {
             process_absolute_boxes: abs::process_absolute_boxes,
         });
         southstar_layout::paint_links::install(PaintLinks {
-            drop_box_cache: southstar_paint::drop_box_cache,
             inline_xy_to_byte: southstar_paint::inline_xy_to_byte,
             inline_word_range: southstar_paint::inline_word_range,
             inline_range_extents: southstar_paint::inline_range_extents,
@@ -192,5 +204,5 @@ fn install_layout_hooks() {
 
 pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
     install_layout_hooks();
-    southstar_layout_build::layout_build(input)
+    southstar_layout_build::layout_build(input).map_or(core::ptr::null_mut(), BoxRef::as_mut_ptr)
 }

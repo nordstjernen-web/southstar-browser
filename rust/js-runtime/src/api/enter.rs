@@ -149,7 +149,7 @@ fn finish_timer(scope: &mut scopes::TimerScope, exception: Option<Value>) {
                 line.extend_from_slice(&stack);
             }
             let line = glue::c_line(&line);
-            glue::log_line(js, line.as_ptr());
+            glue::log_line(js, &line);
         }
         glue::report_uncaught(js, &exception, js.current_url().as_deref());
     }

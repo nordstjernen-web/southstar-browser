@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, PoisonError};
 
 use southstar_dom::Node;
 
@@ -16,8 +16,6 @@ const MERGED_TRIM_TO: usize = 48;
 const URL_SHEETS_MAX: usize = 256;
 
 struct Sheet(OwnedSheet);
-
-unsafe impl Send for Sheet {}
 
 impl Sheet {
     fn adopt(sheet: OwnedSheet) -> Self {
@@ -136,23 +134,20 @@ impl Caches {
     }
 }
 
-static CACHES: LazyLock<Mutex<Caches>> = LazyLock::new(Mutex::default);
-
-fn lock() -> std::sync::MutexGuard<'static, Caches> {
-    CACHES.lock().unwrap_or_else(PoisonError::into_inner)
+thread_local! {
+    static CACHES: RefCell<Caches> = RefCell::default();
 }
 
 fn with<R>(f: impl FnOnce(&mut Caches) -> R) -> R {
     let generation = southstar_css_media::generation();
-    let stale = {
-        let mut caches = lock();
+    let stale = CACHES.with_borrow_mut(|caches| {
         (caches.media_generation != generation).then(|| {
             caches.media_generation = generation;
             caches.take_sheets()
         })
-    };
+    });
     drop(stale);
-    f(&mut lock())
+    CACHES.with_borrow_mut(f)
 }
 
 fn parse_in_layer(css: &[u8], layer: Option<&[u8]>) -> OwnedSheet {

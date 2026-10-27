@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::OnceCell;
+use core::cell::{Cell, OnceCell};
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
@@ -87,26 +86,23 @@ impl Surface {
     pub fn copy_to_rgba(&self, out: &PixelBuf) {
         let src = unsafe { cairo_image_surface_get_data(self.0.as_ptr()) };
         let src_stride = unsafe { cairo_image_surface_get_stride(self.0.as_ptr()) } as usize;
-        for y in 0..out.height as usize {
+        let rows = out.height as usize;
+        // SAFETY: the surface is an ARGB32 image of the output's height, so its data holds `rows` rows of `src_stride` bytes, and nothing writes to it while it is read here.
+        let src = unsafe { core::slice::from_raw_parts(src, src_stride * rows) };
+        for y in 0..rows {
             for x in 0..out.width as usize {
-                let px = unsafe {
-                    src.add(y * src_stride + x * 4)
-                        .cast::<u32>()
-                        .read_unaligned()
-                };
+                let at = y * src_stride + x * 4;
+                let px = u32::from_ne_bytes([src[at], src[at + 1], src[at + 2], src[at + 3]]);
                 let rgba = [
                     (px >> 16) as u8,
                     (px >> 8) as u8,
                     px as u8,
                     (px >> 24) as u8,
                 ];
-                unsafe {
-                    ptr::copy_nonoverlapping(
-                        rgba.as_ptr(),
-                        out.data.add(y * out.stride as usize + x * 4),
-                        4,
-                    )
-                };
+                let row = y * out.stride as usize + x * 4;
+                for (cell, byte) in out.pixels[row..row + 4].iter().zip(rgba) {
+                    cell.set(byte);
+                }
             }
         }
     }
@@ -133,12 +129,13 @@ impl Cairo {
     }
 
     fn for_data(
-        data: *mut u8,
+        pixels: &[Cell<u8>],
         width: c_int,
         height: c_int,
         stride: c_int,
         scale: f64,
     ) -> Option<Cairo> {
+        let data = pixels.as_ptr().cast_mut().cast::<u8>();
         let surf = unsafe {
             cairo_image_surface_create_for_data(data, FORMAT_ARGB32, width, height, stride)
         };
@@ -154,7 +151,7 @@ impl Cairo {
     }
 
     pub fn on_buffer(buf: &PixelBuf, scale: f64) -> Option<Cairo> {
-        Cairo::for_data(buf.data, buf.width, buf.height, buf.stride, scale)
+        Cairo::for_data(buf.pixels, buf.width, buf.height, buf.stride, scale)
     }
 
     fn setup(&self, width: c_int, height: c_int, scale: f64) {
@@ -227,24 +224,13 @@ impl Cairo {
 }
 
 pub struct PixelBuf<'a> {
-    data: *mut u8,
+    pixels: &'a [Cell<u8>],
     pub width: c_int,
     pub height: c_int,
     pub stride: c_int,
-    _pixels: PhantomData<&'a mut [u8]>,
 }
 
 impl<'a> PixelBuf<'a> {
-    pub unsafe fn new(data: *mut u8, width: c_int, height: c_int, stride: c_int) -> PixelBuf<'a> {
-        PixelBuf {
-            data,
-            width,
-            height,
-            stride,
-            _pixels: PhantomData,
-        }
-    }
-
     pub fn from_slice(
         pixels: &'a mut [u8],
         width: c_int,
@@ -258,16 +244,15 @@ impl<'a> PixelBuf<'a> {
             return None;
         }
         Some(PixelBuf {
-            data: pixels.as_mut_ptr(),
+            pixels: Cell::from_mut(&mut pixels[..needed]).as_slice_of_cells(),
             width,
             height,
             stride,
-            _pixels: PhantomData,
         })
     }
 
     pub fn clear(&self) {
-        unsafe { ptr::write_bytes(self.data, 0, self.stride as usize * self.height as usize) };
+        clear(self.pixels);
     }
 }
 
@@ -304,50 +289,49 @@ impl PrintPages {
     }
 }
 
-struct DocTile {
-    bufs: *const *mut u8,
-    upper: Vec<OnceCell<Cairo>>,
-    used: *mut GBoolean,
-    width: c_int,
-    height: c_int,
-    stride: c_int,
-    scroll_x: c_int,
-    tile_y: c_int,
-    scale: f64,
-}
-
-impl DocTile {
-    fn transform(&self, cr: &Cairo) {
-        cr.translate(0.0, -f64::from(self.tile_y));
-        cr.scale(self.scale);
-        cr.translate(-f64::from(self.scroll_x), 0.0);
+fn clear(pixels: &[Cell<u8>]) {
+    for pixel in pixels {
+        pixel.set(0);
     }
 }
 
-impl DocTile {
+struct DocTile<'t, 'a> {
+    target: &'t TileTarget<'a>,
+    upper: Vec<OnceCell<Cairo>>,
+}
+
+impl DocTile<'_, '_> {
+    fn transform(&self, cr: &Cairo) {
+        cr.translate(0.0, -f64::from(self.target.tile_y));
+        cr.scale(self.target.scale);
+        cr.translate(-f64::from(self.target.scroll_x), 0.0);
+    }
+
+    fn for_buffer(&self, pixels: &[Cell<u8>]) -> Option<Cairo> {
+        let t = self.target;
+        Cairo::for_data(pixels, t.width, t.height, t.stride, t.scale)
+    }
+
     fn upper(&self, index: c_int) -> Option<ContextRef<'_>> {
         let i = index as usize;
         if let Some(cr) = self.upper[i].get() {
             return Some(cr.cr());
         }
-        // SAFETY: the embedder passes one buffer per viewport layer after the document's own, and `i` is below the plan's layer count.
-        let buf = unsafe { *self.bufs.add(i + 1) };
-        // SAFETY: each layer buffer holds `stride * height` writable bytes.
-        unsafe { ptr::write_bytes(buf, 0, self.stride as usize * self.height as usize) };
-        let cr = Cairo::for_data(buf, self.width, self.height, self.stride, self.scale);
+        let buf = self.target.bufs[i + 1];
+        clear(buf);
+        let cr = self.for_buffer(buf);
         if let Some(cr) = &cr {
             self.transform(cr);
         }
-        // SAFETY: the embedder's used flags hold one entry per viewport layer.
-        unsafe { *self.used.add(i) = glib::boolean(cr.is_some()) };
+        self.target.used[i].set(glib::boolean(cr.is_some()));
         let cr = cr?;
         Some(self.upper[i].get_or_init(|| cr).cr())
     }
 }
 
-pub struct TileTarget {
-    pub bufs: *const *mut u8,
-    pub used: *mut GBoolean,
+pub struct TileTarget<'a> {
+    pub bufs: Vec<&'a [Cell<u8>]>,
+    pub used: &'a [Cell<GBoolean>],
     pub width: c_int,
     pub height: c_int,
     pub stride: c_int,
@@ -360,33 +344,19 @@ pub fn render_doc_tile(
     b: &NsBrowser,
     layout: BoxRef<'_>,
     plan: &LayerPlan,
-    target: &TileTarget,
+    target: &TileTarget<'_>,
     begin: impl Fn(),
     end: impl Fn(),
 ) -> c_int {
     let n_upper = plan.viewport_layers();
     let tile = DocTile {
-        bufs: target.bufs,
+        target,
         upper: (0..n_upper.max(1)).map(|_| OnceCell::new()).collect(),
-        used: target.used,
-        width: target.width,
-        height: target.height,
-        stride: target.stride,
-        scroll_x: target.scroll_x,
-        tile_y: target.tile_y,
-        scale: target.scale,
     };
-    for i in 0..n_upper {
-        unsafe { *target.used.add(i) = 0 };
+    for used in &target.used[..n_upper] {
+        used.set(0);
     }
-    let first = unsafe { *target.bufs };
-    let Some(cr) = Cairo::for_data(
-        first,
-        target.width,
-        target.height,
-        target.stride,
-        target.scale,
-    ) else {
+    let Some(cr) = tile.for_buffer(target.bufs[0]) else {
         return -1;
     };
     tile.transform(&cr);
@@ -482,7 +452,7 @@ impl NsBrowser {
     }
 
     pub fn selection_if_range(&self) -> Option<NsSelection> {
-        self.selection_has_range().then(|| self.selection.get())
+        self.selection_has_range().then(|| self.selection.0.get())
     }
 
     pub fn flush_video_composites(&self, now_us: i64) {

@@ -2,13 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr::{self, NonNull};
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
@@ -18,127 +18,6 @@ use crate::inproc::{Ctx, NavCapture};
 
 pub use southstar_js_runtime::api::NavigationTiming;
 
-type MseCb = unsafe extern "C" fn(
-    stream_id: c_uint,
-    kind: c_char,
-    data: *const u8,
-    len: usize,
-    eos: GBoolean,
-    ud: *mut c_void,
-) -> GBoolean;
-type MseBufferedCb =
-    unsafe extern "C" fn(stream_id: c_uint, kind: c_char, start: *mut f64, ud: *mut c_void) -> f64;
-type MseRemoveCb = unsafe extern "C" fn(
-    stream_id: c_uint,
-    kind: c_char,
-    start: f64,
-    end: f64,
-    ud: *mut c_void,
-) -> GBoolean;
-type MseBytesCb = unsafe extern "C" fn(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize;
-
-unsafe extern "C" {
-    fn ns_js_set_mse_cb(js: *mut c_void, cb: MseCb, ud: *mut c_void);
-    fn ns_js_set_mse_buffered_cb(js: *mut c_void, cb: MseBufferedCb, ud: *mut c_void);
-    fn ns_js_set_mse_remove_cb(js: *mut c_void, cb: MseRemoveCb, ud: *mut c_void);
-    fn ns_js_set_mse_bytes_cb(js: *mut c_void, cb: MseBytesCb, ud: *mut c_void);
-}
-
-unsafe extern "C" fn on_log(line: *const c_char, _ud: *mut c_void) {
-    let line = (!line.is_null()).then(|| unsafe { CStr::from_ptr(line) }.to_bytes());
-    crate::inproc::js_log(line.unwrap_or(b"(null)"));
-}
-
-unsafe extern "C" fn on_mutated(_ud: *mut c_void) {
-    crate::inproc::note_mutated();
-}
-
-unsafe extern "C" fn on_navigate(url: *const c_char, _reload: GBoolean, ud: *mut c_void) {
-    let (Some(nav), false) = (unsafe { ud.cast::<NavCapture>().as_ref() }, url.is_null()) else {
-        return;
-    };
-    nav.navigate(unsafe { CStr::from_ptr(url) });
-}
-
-unsafe extern "C" fn on_form_submit(
-    form: *const NsNode,
-    submitter: *const NsNode,
-    ud: *mut c_void,
-) {
-    let (Some(nav), Some(form)) = (unsafe { ud.cast::<NavCapture>().as_ref() }, unsafe {
-        Node::from_ptr(form)
-    }) else {
-        return;
-    };
-    crate::inproc::form_submit(nav, form, unsafe { Node::from_ptr(submitter) });
-}
-
-unsafe extern "C" fn on_flush(ud: *mut c_void) {
-    if let Some(ctx) = unsafe { ud.cast::<Ctx>().as_ref() } {
-        crate::inproc::flush_layout(ctx);
-    }
-}
-
-fn video_cache(ud: *mut c_void) -> Option<VideoCache> {
-    // SAFETY: bind_media registers null or the run's cache handle, which outlives the script engine's callbacks.
-    unsafe { VideoCache::from_raw(ud) }
-}
-
-unsafe extern "C" fn on_mse_data(
-    stream_id: c_uint,
-    kind: c_char,
-    data: *const u8,
-    len: usize,
-    eos: GBoolean,
-    ud: *mut c_void,
-) -> GBoolean {
-    let Some(cache) = video_cache(ud) else {
-        return glib::FALSE;
-    };
-    if eos != 0 {
-        cache.mse_eos(stream_id);
-        return glib::TRUE;
-    }
-    if data.is_null() {
-        return glib::FALSE;
-    }
-    // SAFETY: the script engine passes `len` readable bytes at `data` for the duration of the call.
-    let data = unsafe { glib::slice(data, len) };
-    glib::boolean(cache.mse_append(stream_id, kind as u8, data))
-}
-
-unsafe extern "C" fn on_mse_buffered(
-    stream_id: c_uint,
-    kind: c_char,
-    start: *mut f64,
-    ud: *mut c_void,
-) -> f64 {
-    let (first, end) = video_cache(ud).map_or((0.0, 0.0), |cache| {
-        cache.mse_buffered(stream_id, kind as u8)
-    });
-    // SAFETY: `start` is null or the script engine's out-parameter, writable for the call.
-    if let Some(start) = unsafe { start.as_mut() } {
-        *start = first;
-    }
-    end
-}
-
-unsafe extern "C" fn on_mse_remove(
-    stream_id: c_uint,
-    kind: c_char,
-    start: f64,
-    end: f64,
-    ud: *mut c_void,
-) -> GBoolean {
-    glib::boolean(
-        video_cache(ud).is_some_and(|cache| cache.mse_remove(stream_id, kind as u8, start, end)),
-    )
-}
-
-unsafe extern "C" fn on_mse_bytes(stream_id: c_uint, kind: c_char, ud: *mut c_void) -> usize {
-    video_cache(ud).map_or(0, |cache| cache.mse_bytes(stream_id, kind as u8))
-}
-
 #[derive(Clone, Copy)]
 pub struct Js(NonNull<c_void>);
 
@@ -146,15 +25,15 @@ pub fn js_raw(js: Option<Js>) -> *mut c_void {
     js.map_or(ptr::null_mut(), |js| js.0.as_ptr())
 }
 
-pub fn new_js(nav: &NavCapture, timing: &NavigationTiming) -> Option<Js> {
+pub fn new_js(nav: &Rc<NavCapture>, timing: &NavigationTiming) -> Option<Js> {
     southstar_js_page::install_runtime_hooks();
+    let nav = Rc::clone(nav);
     let callbacks = api::PageCallbacks {
-        log: Some(on_log),
-        log_data: ptr::null_mut(),
-        mutated: Some(on_mutated),
-        mutated_data: ptr::null_mut(),
-        navigate: Some(on_navigate),
-        navigate_data: (nav as *const NavCapture).cast_mut().cast(),
+        log: Some(Rc::new(|line: &CStr| {
+            crate::inproc::js_log(line.to_bytes())
+        })),
+        mutated: Some(Rc::new(crate::inproc::note_mutated)),
+        navigate: Some(Rc::new(move |url: &CStr, _reload| nav.navigate(url))),
     };
     NonNull::new(api::new_page(callbacks, Some(*timing)).cast()).map(Js)
 }
@@ -192,28 +71,68 @@ impl Js {
         api::free(self.page());
     }
 
-    pub fn bind_form_submit(self, nav: &NavCapture) {
-        let ud = (nav as *const NavCapture).cast_mut().cast();
-        api::set_form_submit_hook(self.page(), Some(on_form_submit), ud);
+    pub fn bind_form_submit(self, nav: &Rc<NavCapture>) {
+        let nav = Rc::clone(nav);
+        api::set_form_submit_hook(
+            self.page(),
+            Some(Rc::new(
+                move |form: Node<'_>, submitter: Option<Node<'_>>| {
+                    crate::inproc::form_submit(&nav, form, submitter);
+                },
+            )),
+        );
     }
 
     pub fn bind_layout_flush(self, ctx: &Ctx) {
-        let ud = (ctx as *const Ctx).cast_mut().cast();
-        api::set_layout_flush_hook(self.page(), Some(on_flush), ud);
+        let ctx = ptr::from_ref(ctx);
+        api::set_layout_flush_hook(
+            self.page(),
+            Some(Rc::new(move || {
+                // SAFETY: the run unbinds the layout flush before its context goes away.
+                crate::inproc::flush_layout(unsafe { &*ctx });
+            })),
+        );
     }
 
     pub fn unbind_layout_flush(self) {
-        api::set_layout_flush_hook(self.page(), None, ptr::null_mut());
+        api::set_layout_flush_hook(self.page(), None);
     }
 
     pub fn bind_media(self, video_cache: Option<VideoCache>) {
-        let ud = video_cache.map_or(ptr::null_mut(), VideoCache::raw);
-        unsafe {
-            ns_js_set_mse_cb(self.raw(), on_mse_data, ud);
-            ns_js_set_mse_buffered_cb(self.raw(), on_mse_buffered, ud);
-            ns_js_set_mse_remove_cb(self.raw(), on_mse_remove, ud);
-            ns_js_set_mse_bytes_cb(self.raw(), on_mse_bytes, ud);
-        }
+        let page = self.page();
+        southstar_js_media::set_mse_hook(
+            page,
+            Some(Rc::new(move |stream_id, kind, data: Option<&[u8]>| {
+                let Some(cache) = video_cache else {
+                    return false;
+                };
+                match data {
+                    Some(data) => cache.mse_append(stream_id, kind, data),
+                    None => {
+                        cache.mse_eos(stream_id);
+                        true
+                    }
+                }
+            })),
+        );
+        southstar_js_media::set_mse_buffered_hook(
+            page,
+            Some(Rc::new(move |stream_id, kind| {
+                video_cache.map_or((0.0, 0.0), |cache| cache.mse_buffered(stream_id, kind))
+            })),
+        );
+        southstar_js_media::set_mse_remove_hook(
+            page,
+            Some(Rc::new(move |stream_id, kind, start, end| {
+                video_cache.is_some_and(|cache| cache.mse_remove(stream_id, kind, start, end))
+            })),
+        );
+        southstar_js_media::set_mse_bytes_hook(
+            page,
+            Some(Rc::new(move |stream_id, kind| {
+                video_cache.map_or(0, |cache| cache.mse_bytes(stream_id, kind))
+            })),
+        );
     }
 
     pub fn set_style_table(self, styles: Option<Rc<StyleMap>>) {

@@ -10,17 +10,17 @@ mod items;
 mod row;
 mod wrap;
 
-use southstar_layout::Style;
+use southstar_style::StyleRef;
 
 pub use column::layout as layout_column;
 pub use row::layout as layout_row;
 pub use wrap::layout as layout_row_wrap;
 
 #[derive(Clone, Copy)]
-pub struct Frame {
+pub struct Frame<'a> {
     pub cw: f64,
     pub inner_x: f64,
     pub inner_y: f64,
-    pub child_inherited: *const Style,
+    pub child_inherited: Option<StyleRef<'a>>,
     pub reverse: bool,
 }

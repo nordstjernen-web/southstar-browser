@@ -183,7 +183,7 @@ fn collect(b: BoxRef<'_>, cols: &mut HashMap<usize, c_int>) -> bool {
         let have = size_attr(dom);
         let shown = display_cps(dom);
         let cell = if shown > 0 {
-            ffi::char_cell_px(s.as_ptr())
+            ffi::char_cell_px(Some(s))
         } else {
             0.0
         };

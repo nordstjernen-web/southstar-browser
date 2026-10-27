@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_layout::{InlineAttr, NsBox, inline_kind};
+use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword};
 use southstar_layout_geom::style_is_contents;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
@@ -206,28 +206,24 @@ fn first_letter_attrs(fl: StyleRef<'_>, text: &[u8], out: &mut Vec<InlineAttr>) 
         .filter(|v| v.kind() == southstar_style::Kind::Keyword)
     {
         out.push(
-            InlineAttr::new(inline_kind::FONT_FAMILY, start, len)
-                .with_family(fam.keyword_text().map_or(ptr::null(), CStr::as_ptr)),
+            InlineAttr::new(inline_kind::FONT_FAMILY, start, len).with_family(fam.keyword_text()),
         );
     }
     let kerning = font_kerning(Some(fl));
     let ligatures = font_keyword(Some(fl), FontKeyword::Ligatures);
     let features = font_keyword(Some(fl), FontKeyword::Features);
     if kerning >= 0 || ligatures.is_some() || features.is_some() {
-        let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, start, len).with_font_settings(
-            ligatures.map_or(ptr::null(), CStr::as_ptr),
-            features.map_or(ptr::null(), CStr::as_ptr),
-            ptr::null(),
-        );
+        let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, start, len)
+            .with_font_settings(ligatures, features, None);
         a.font_kerning = kerning;
         out.push(a);
     }
     if let Some(v) = font_keyword(Some(fl), FontKeyword::Variations) {
         out.push(
             InlineAttr::new(inline_kind::FONT_VARIATIONS, start, len).with_font_settings(
-                ptr::null(),
-                ptr::null(),
-                v.as_ptr(),
+                None,
+                None,
+                Some(v),
             ),
         );
     }
@@ -238,7 +234,7 @@ pub fn build_inline_run(
     last_excl: *const NsNode,
     styles: StyleTable,
     abs_placeholders: bool,
-) -> *mut NsBox {
+) -> Option<BoxRef<'static>> {
     let mut c = Collector::new(styles, abs_placeholders);
     let parent = first.and_then(Node::parent);
     let parent_style = parent.and_then(|p| styles.get(p));
@@ -324,10 +320,10 @@ pub fn build_inline_run(
         })
         .collect();
 
-    ffi::new_inline_run(RunParts {
+    Some(ffi::new_inline_run(RunParts {
         text: collapsed.text,
         links,
         attrs,
         atomics,
-    })
+    }))
 }

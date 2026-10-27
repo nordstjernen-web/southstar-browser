@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use southstar_layout::{BoxRef, Style, inline_kind as k};
+use southstar_layout::{BoxRef, inline_kind as k};
 use southstar_paint::text_layout;
 use southstar_style::{PropId, StyleRef};
 
@@ -72,8 +72,8 @@ fn longest_word(text: &[u8]) -> (usize, usize) {
     (best, best_len)
 }
 
-fn ascii_min_width(b: BoxRef<'_>, ps: *const Style, text: &CStr) -> f64 {
-    let style = ffi::style(ps);
+fn ascii_min_width(b: BoxRef<'_>, ps: Option<StyleRef<'_>>, text: &CStr) -> f64 {
+    let style = ps;
     if has_atomics(b)
         || b.attrs().iter().any(|a| affects_measure(a.kind))
         || has_measure_adjustments(style)
@@ -99,12 +99,12 @@ fn ascii_min_width(b: BoxRef<'_>, ps: *const Style, text: &CStr) -> f64 {
     (f64::from(m.logical.width) / SCALE).ceil()
 }
 
-fn atomics_outer_width_sum(b: BoxRef<'_>, ps: *const Style) -> f64 {
+fn atomics_outer_width_sum(b: BoxRef<'_>, ps: Option<StyleRef<'_>>) -> f64 {
     let saved = ffi::measure_atomics_begin(b, ps, true);
     let mut sum = 0.0;
     for ab in b
         .inline_atomics()
-        .unwrap_or(&[])
+        .unwrap_or_default()
         .iter()
         .filter_map(|a| a.box_ref())
     {
@@ -115,7 +115,7 @@ fn atomics_outer_width_sum(b: BoxRef<'_>, ps: *const Style) -> f64 {
     sum
 }
 
-pub fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
+pub fn natural_width(b: BoxRef<'_>, ps: Option<StyleRef<'_>>) -> f64 {
     let text = b.text().filter(|t| !t.is_empty());
     if text.is_some() && ffi::writing_mode(ps) != 0 && !has_atomics(b) {
         return vertical_measure(b, ps).0;
@@ -129,21 +129,21 @@ pub fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     let cacheable = measure_cacheable(b);
     if cacheable
         && let Some((cs, w)) = b.inline_natural_cache()
-        && cs == ps
+        && cs == StyleRef::ptr_or_null(ps)
     {
         return w;
     }
     let layout = ffi::new_layout(ps);
     layout.set_width(-1);
     let saved = ffi::measure_atomics_begin(b, ps, true);
-    layout.set_text(text);
+    layout.set_text(&text);
     shaping_attrs(&layout, b, ps, text.to_bytes());
     let natural = measure::measure(&layout);
-    let slack = px_length(ffi::style(ps).and_then(|s| s.get(PropId::LetterSpacing)))
+    let slack = px_length(ps.and_then(|s| s.get(PropId::LetterSpacing)))
         .filter(|&v| v > 0.0)
         .unwrap_or(0.0);
     let mut pw = (f64::from(natural.logical.width) / SCALE + slack).ceil();
-    for a in b.inline_atomics().unwrap_or(&[]) {
+    for a in &b.inline_atomics().unwrap_or_default() {
         if a.box_ref().is_none() {
             continue;
         }
@@ -156,32 +156,32 @@ pub fn natural_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     ffi::measure_atomics_end(saved);
     drop(layout);
     if cacheable {
-        b.set_inline_natural_cache(ps, pw);
+        b.set_inline_natural_cache(StyleRef::ptr_or_null(ps), pw);
     }
     pw
 }
 
-pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
+pub fn min_width(b: BoxRef<'_>, ps: Option<StyleRef<'_>>) -> f64 {
     let Some(text) = b.text().filter(|t| !t.is_empty()) else {
         return 0.0;
     };
     if ffi::writing_mode(ps) != 0 && !has_atomics(b) {
         return vertical_measure(b, ps).0;
     }
-    if white_space_nowrap(ffi::style(ps)) {
+    if white_space_nowrap(ps) {
         return natural_width(b, ps);
     }
     let cacheable = measure_cacheable(b);
     if cacheable
         && let Some((cs, w)) = b.inline_min_cache()
-        && cs == ps
+        && cs == StyleRef::ptr_or_null(ps)
     {
         return w;
     }
-    let fast = ascii_min_width(b, ps, text);
+    let fast = ascii_min_width(b, ps, &text);
     if fast >= 0.0 {
         if cacheable {
-            b.set_inline_min_cache(ps, fast);
+            b.set_inline_min_cache(StyleRef::ptr_or_null(ps), fast);
         }
         return fast;
     }
@@ -189,13 +189,13 @@ pub fn min_width(b: BoxRef<'_>, ps: *const Style) -> f64 {
     layout.set_width(1);
     layout.set_wrap(text_layout::WRAP_WORD);
     let saved = ffi::measure_atomics_begin(b, ps, false);
-    layout.set_text(text);
+    layout.set_text(&text);
     shaping_attrs(&layout, b, ps, text.to_bytes());
     let pw = f64::from(measure::measure(&layout).pixel_logical().width);
     ffi::measure_atomics_end(saved);
     drop(layout);
     if cacheable {
-        b.set_inline_min_cache(ps, pw);
+        b.set_inline_min_cache(StyleRef::ptr_or_null(ps), pw);
     }
     pw
 }

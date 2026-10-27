@@ -4,12 +4,12 @@
 
 use core::ffi::CStr;
 
-use southstar_layout::{BoxKind, BoxRef, Style};
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
     aspect_ratio_number, edges_into_box, height_keyword_stretches, keyword_or, length_resolve,
     resolve_used_height, style_is_absolute_or_fixed, value_is_percent,
 };
-use southstar_style::{Kind, PropId};
+use southstar_style::{Kind, PropId, StyleRef};
 
 use crate::Frame;
 use crate::ffi::{
@@ -155,7 +155,7 @@ fn stretch_replaced_width(c: BoxRef<'_>, line_w: f64) {
     c.set_content_width(w);
 }
 
-fn layout_item(c: BoxRef<'_>, line_w: f64, fit: bool, child_inherited: *const Style) {
+fn layout_item(c: BoxRef<'_>, line_w: f64, fit: bool, child_inherited: Option<StyleRef<'_>>) {
     let width_explicit = is_length(value(c, PropId::Width));
     let mut parent_w = line_w;
     if fit && !width_explicit {

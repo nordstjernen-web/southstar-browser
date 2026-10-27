@@ -2,11 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod ffi;
 
 pub use ffi::{NsSelection, stored_ranges};
 
-use southstar_layout::{BoxKind, BoxRef, children};
+use southstar_layout::{BoxKind, BoxRef, Text, children};
 
 const LINE_SEPARATOR: &[u8] = "\u{2028}".as_bytes();
 const PARAGRAPH_SEPARATOR: &[u8] = "\u{2029}".as_bytes();
@@ -42,8 +44,8 @@ enum Walk {
     Done,
 }
 
-fn text(b: BoxRef<'_>) -> &[u8] {
-    b.text().map_or(&[], |t| t.to_bytes())
+fn text(b: BoxRef<'_>) -> Text {
+    b.text_bytes()
 }
 
 fn has_text(b: BoxRef<'_>) -> bool {

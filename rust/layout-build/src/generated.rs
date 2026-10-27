@@ -71,7 +71,7 @@ fn add_edge_spacers(b: BoxRef<'_>, ps: StyleRef<'_>) {
     for a in &mut attrs {
         a.start += lead;
     }
-    let body = b.text().map_or(&[][..], CStr::to_bytes).to_vec();
+    let body = b.text_bytes().to_vec();
     let mut text = Vec::with_capacity(body.len() + 4 * slen);
     for (e, &w) in edges.iter().enumerate() {
         if e == 2 {
@@ -131,7 +131,7 @@ pub fn build_pseudo_inline_for(
         run.set_style(ps.as_ptr());
         run.set_text_bytes(OBJECT_REPLACEMENT);
         inner.set_parent(Some(run));
-        run.put_atomics(Some(&[InlineAtomic::new(0, inner.as_ptr())]));
+        run.put_atomics(Some(&[InlineAtomic::new(0, inner)]));
         return Some(run);
     }
     let b = BoxPool::new_inline();
@@ -177,20 +177,17 @@ pub fn build_pseudo_inline_for(
     let ligatures = font_keyword(Some(ps), FontKeyword::Ligatures);
     let features = font_keyword(Some(ps), FontKeyword::Features);
     if kerning >= 0 || ligatures.is_some() || features.is_some() {
-        let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, 0, tlen).with_font_settings(
-            ligatures.map_or(ptr::null(), CStr::as_ptr),
-            features.map_or(ptr::null(), CStr::as_ptr),
-            ptr::null(),
-        );
+        let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, 0, tlen)
+            .with_font_settings(ligatures, features, None);
         a.font_kerning = kerning;
         attrs.push(a);
     }
     if let Some(v) = font_keyword(Some(ps), FontKeyword::Variations) {
         attrs.push(
             InlineAttr::new(inline_kind::FONT_VARIATIONS, 0, tlen).with_font_settings(
-                ptr::null(),
-                ptr::null(),
-                v.as_ptr(),
+                None,
+                None,
+                Some(v),
             ),
         );
     }
@@ -251,15 +248,15 @@ pub fn register_abs_pseudo(host: Option<Node<'_>>, ps: Option<StyleRef<'_>>) {
         return;
     }
     let fixed = keyword_is(ps.get(PropId::Position), c"fixed");
-    let host_ptr = Node::ptr_or_null(host);
+    let host = host.map(Node::downgrade);
     state::with(|st| {
         if let Some(pending) = st.abs_pending.as_mut()
             && !pending
                 .iter()
-                .any(|e| e.dom == host_ptr && e.pseudo == ps.as_ptr())
+                .any(|e| e.dom == host && e.pseudo == ps.as_ptr())
         {
             pending.push(AbsEntry {
-                dom: Node::ptr_or_null(host),
+                dom: host,
                 pseudo: ps.as_ptr(),
                 fixed,
             });
@@ -273,8 +270,8 @@ pub fn append_generated_after(block: BoxRef<'_>, generated: BoxRef<'static>) {
         return;
     };
     let ll = last.text().map_or(0, |t| t.to_bytes().len());
-    let mut combined = last.text().map_or(&[][..], CStr::to_bytes).to_vec();
-    combined.extend_from_slice(generated.text().map_or(&[][..], CStr::to_bytes));
+    let mut combined = last.text_bytes().to_vec();
+    combined.extend_from_slice(&generated.text_bytes());
     last.set_text_bytes(&combined);
     let gen_attrs = generated.attrs().to_vec();
     if !gen_attrs.is_empty() {
