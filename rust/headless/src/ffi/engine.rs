@@ -180,15 +180,10 @@ pub fn anim_observe(anim: Anim, styles: Option<&StyleMap>, now_us: i64) {
     southstar_engine::anim_observe(anim, styles, now_us);
 }
 
-pub fn anim_raw(anim: Option<Anim>) -> *mut c_void {
-    anim.map_or(ptr::null_mut(), Anim::raw)
-}
-
 pub use southstar_paint::set_anim as paint_set_anim;
 
-pub fn paint_set_js(js: *mut c_void) {
-    // SAFETY: the run's script engine stays alive through the captures painted after this, and the next run replaces it before it paints.
-    unsafe { southstar_paint::set_js(js) };
+pub fn paint_set_js(js: Option<southstar_js_runtime::api::Page>) {
+    southstar_paint::set_js(js);
 }
 
 pub use southstar_image::ImageCache;
@@ -224,13 +219,13 @@ pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>>
         viewport_height: r.vh,
         images: r.images,
         anim: r.anim,
-        js: super::js_raw(r.js),
+        js: r.js.map(super::Js::handle),
         focused: r.focused,
         hover: None,
         caret_byte: r.caret,
         sel_anchor_byte: r.anchor,
     };
-    // SAFETY: the run's script engine, if any, is alive while it relays out its page.
+    // SAFETY: the layout slot holds null or a box of this thread's layout store.
     unsafe { southstar_engine::relayout(&req, layout) }
 }
 

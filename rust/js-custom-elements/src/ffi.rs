@@ -8,25 +8,24 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::Element;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    pub(crate) fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    pub(crate) fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -35,7 +34,7 @@ fn c_string(text: &str) -> CString {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -116,7 +115,7 @@ pub fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> Valu
     crate::registry::html_element_construct(scope, new_target).unwrap_or_else(Value::undefined)
 }
 
-pub fn class_for_node(js: *const NsJs, node: Node<'_>) -> Value {
+pub fn class_for_node(js: Option<Page>, node: Node<'_>) -> Value {
     let (js, Some(node)) = (Js::of(js), element(node)) else {
         return Value::undefined();
     };
@@ -126,32 +125,32 @@ pub fn class_for_node(js: *const NsJs, node: Node<'_>) -> Value {
     .unwrap_or_else(Value::undefined)
 }
 
-pub fn upgrade_element(js: *const NsJs, node: Node<'_>) {
+pub fn upgrade_element(js: Option<Page>, node: Node<'_>) {
     if let Some(node) = element(node) {
         crate::reactions::upgrade_element(Js::of(js), node);
     }
 }
 
-pub fn upgrade_subtree_all(js: *const NsJs, root: Node<'_>) {
+pub fn upgrade_subtree_all(js: Option<Page>, root: Node<'_>) {
     if let Some(root) = element(root) {
         crate::reactions::upgrade_subtree_all(Js::of(js), root);
     }
 }
 
-pub fn upgrade_subtree_detached(js: *const NsJs, root: Node<'_>) {
+pub fn upgrade_subtree_detached(js: Option<Page>, root: Node<'_>) {
     if let Some(root) = element(root) {
         crate::reactions::upgrade_subtree_detached(Js::of(js), root);
     }
 }
 
-pub fn disconnect_subtree(js: *const NsJs, root: Node<'_>) {
+pub fn disconnect_subtree(js: Option<Page>, root: Node<'_>) {
     if let Some(root) = element(root) {
         crate::reactions::disconnect_subtree(Js::of(js), root);
     }
 }
 
 fn attribute_changed(
-    js: *const NsJs,
+    js: Option<Page>,
     node: Node<'_>,
     attr: &CStr,
     old_value: Option<&CStr>,
@@ -169,21 +168,21 @@ fn attribute_changed(
     );
 }
 
-pub fn has_pending(js: *const NsJs) -> bool {
+pub fn has_pending(js: Option<Page>) -> bool {
     crate::existing_page(Js::of(js)).is_some_and(|page| !page.pending.borrow().is_empty())
 }
 
-pub fn upgrading(js: *const NsJs) -> bool {
+pub fn upgrading(js: Option<Page>) -> bool {
     crate::existing_page(Js::of(js)).is_some_and(|page| page.upgrading.borrow().is_some())
 }
 
-pub fn reset(js: *const NsJs) {
+pub fn reset(js: Option<Page>) {
     if let Some(page) = crate::existing_page(Js::of(js)) {
         page.reset();
     }
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::teardown(Js::of(js));
 }
 
@@ -191,7 +190,7 @@ pub fn install_runtime_hooks() {
     api::set_custom_elements_hooks(api::CustomElementsHooks {
         name_valid: crate::name_valid,
         attribute_changed,
-        teardown,
+        teardown: |js| teardown(Some(js)),
         define: crate::registry::define,
         get: crate::registry::get,
         when_defined: crate::registry::when_defined,

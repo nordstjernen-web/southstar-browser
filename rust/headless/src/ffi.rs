@@ -36,7 +36,7 @@ pub use engine::{
     xml_document,
 };
 pub use js::{
-    DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_raw,
+    DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_page,
     new_js, note_pointer_input, note_viewport_scroll,
 };
 pub use rproc::{encode_png, frame_size};

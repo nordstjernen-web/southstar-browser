@@ -10,7 +10,7 @@ use std::rc::{Rc, Weak};
 use southstar_canvas::host as canvas;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
-use southstar_js_runtime::api::{self, NsJs};
+use southstar_js_runtime::api::{self, Page};
 
 use crate::context::WebGl;
 
@@ -36,12 +36,12 @@ pub(crate) fn canvas_node(canvas: usize) -> Option<Node<'static>> {
     unsafe { Node::from_ptr(canvas as *const NsNode) }
 }
 
-pub(crate) fn request_repaint(js: usize) {
-    api::request_repaint(js as *const NsJs);
+pub(crate) fn request_repaint(js: Option<Page>) {
+    api::request_repaint(js);
 }
 
-pub(crate) fn page_url_and_origin(js: usize) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-    let url = api::current_url(js as *const NsJs).into_bytes();
+pub(crate) fn page_url_and_origin(js: Option<Page>) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+    let url = api::current_url(js).into_bytes();
     let origin = southstar_url::bytes::origin_from(&url);
     (Some(url), origin)
 }
@@ -163,7 +163,7 @@ pub(crate) fn forget_context(canvas: usize) {
 
 pub fn nsr_webgl_get_context(
     scope: &mut Scope<'_>,
-    js: usize,
+    js: Option<Page>,
     canvas_obj: &Value,
     canvas: usize,
     version: i32,

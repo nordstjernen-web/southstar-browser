@@ -99,7 +99,7 @@ pub(crate) fn source_remove(js: Option<Js>, id: c_uint) {
 }
 
 pub(crate) fn timeout_add(ms: c_uint, func: SourceFn, js: Js) -> c_uint {
-    unsafe { g_timeout_add(ms, func, js.ptr().cast()) }
+    unsafe { g_timeout_add(ms, func, js.raw()) }
 }
 
 pub(crate) fn pump_iteration(js: Option<Js>) {
@@ -158,47 +158,47 @@ pub(crate) fn log_line(js: Js, line: &CStr) {
 }
 
 pub(crate) fn storage_drain_deferred_events(js: Js) {
-    (api::storage_hooks().drain_deferred_events)(js.ptr());
+    (api::storage_hooks().drain_deferred_events)(js.page());
 }
 
 pub(crate) fn report_pending_rejections(js: Js) {
-    (api::dispatch_hooks().report_pending_rejections)(js.ptr());
+    (api::dispatch_hooks().report_pending_rejections)(js.page());
 }
 
 pub(crate) fn storage_schedule_flush(js: Js) {
-    (api::storage_hooks().schedule_flush)(js.ptr());
+    (api::storage_hooks().schedule_flush)(js.page());
 }
 
 pub(crate) fn run_due_timers(js: Js) {
-    (api::services_hooks().run_due_timers)(js.ptr());
+    (api::services_hooks().run_due_timers)(js.page());
 }
 
 pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: Option<&CStr>) {
     let origin = origin.map(|origin| origin.to_string_lossy().into_owned());
-    crate::events::report_uncaught(js.ptr(), exception, origin.as_deref());
+    crate::events::report_uncaught(js.some(), exception, origin.as_deref());
 }
 
 pub(crate) fn observers_tick(js: Js) {
     let observers = api::observers_hooks();
-    (observers.intersection_tick)(js.ptr());
-    (observers.resize_tick)(js.ptr());
+    (observers.intersection_tick)(js.page());
+    (observers.resize_tick)(js.page());
 }
 
 pub(crate) fn raf_set_host_driven(js: Js) {
-    (api::lifecycle_hooks().raf_set_host_driven)(js.ptr());
+    (api::lifecycle_hooks().raf_set_host_driven)(js.page());
 }
 
 pub(crate) fn blob_registry(js: Js, add: bool) {
     let url = api::url_hooks();
     if add {
-        (url.blob_registry_add)(js.ptr());
+        (url.blob_registry_add)(js.page());
     } else {
-        (url.blob_registry_remove)(js.ptr());
+        (url.blob_registry_remove)(js.page());
     }
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
-    (api::window_hooks().note_viewport_scroll)(js.ptr(), x, y);
+    (api::window_hooks().note_viewport_scroll)(js.page(), x, y);
 }
 
 pub(crate) fn set_active_modal(modal: *const NsNode) {
@@ -206,8 +206,8 @@ pub(crate) fn set_active_modal(modal: *const NsNode) {
 }
 
 pub(crate) fn finish_eval_depth(js: Js) {
-    (api::document_hooks().flush_write)(js.ptr());
-    (api::loader_hooks().schedule_pending_script_drain)(js.ptr());
+    (api::document_hooks().flush_write)(js.page());
+    (api::loader_hooks().schedule_pending_script_drain)(js.page());
 }
 
 pub(crate) fn dispatch_window_only_event(
@@ -217,7 +217,7 @@ pub(crate) fn dispatch_window_only_event(
     event: Value,
 ) {
     let kind = text(kind).map_or_else(String::new, |kind| kind.to_string_lossy().into_owned());
-    crate::events::dispatch_window_only_event(js.ptr(), super::record::node(doc), &kind, event);
+    crate::events::dispatch_window_only_event(js.some(), super::record::node(doc), &kind, event);
 }
 
 pub(crate) fn active_js() -> Option<Js> {
@@ -261,7 +261,7 @@ pub(crate) fn call_observer(
     let returned = returned.unwrap_or_else(|| Ok(Value::undefined()));
     match (returned, report_type) {
         (Err(exception), Some(kind)) => {
-            let page = js.map_or(ptr::null_mut(), Js::ptr);
+            let page = js.map(Js::page);
             ctx.with(|scope| {
                 crate::events::report_handler_exception(page, scope, Some(kind), &exception)
             });
@@ -281,41 +281,41 @@ pub(crate) fn run_message_task(task: MessageTask) {
 }
 
 pub(crate) fn orphan_count(js: Js) -> usize {
-    (api::mutation_hooks().orphan_count)(js.ptr())
+    (api::mutation_hooks().orphan_count)(js.page())
 }
 
 pub(crate) fn collect_orphans(js: Js) -> Vec<Node<'static>> {
-    (api::mutation_hooks().collect_orphans)(js.ptr())
+    (api::mutation_hooks().collect_orphans)(js.page())
 }
 
 pub(crate) fn free_orphan_subtree(js: Js, root: Node<'static>) {
-    super::record::purge_subtree_rafs(js.ptr(), root.as_mut_ptr());
-    (api::frames_hooks().purge_subtree_pending)(js.ptr(), root);
-    (api::loader_hooks().purge_subtree_script_refs)(js.ptr(), root);
-    (api::mutation_hooks().purge_subtree_node_refs)(js.ptr(), root);
+    super::record::purge_subtree_rafs(js.some(), root.as_mut_ptr());
+    (api::frames_hooks().purge_subtree_pending)(js.page(), root);
+    (api::loader_hooks().purge_subtree_script_refs)(js.page(), root);
+    (api::mutation_hooks().purge_subtree_node_refs)(js.page(), root);
     root.free_tree();
 }
 
 pub(crate) fn pending_iframe_count(js: Js) -> u32 {
-    (api::frames_hooks().pending_count)(js.ptr())
+    (api::frames_hooks().pending_count)(js.page())
 }
 
 pub(crate) fn pending_iframe_first(js: Js) -> Option<Node<'static>> {
-    (api::frames_hooks().pending_first)(js.ptr())
+    (api::frames_hooks().pending_first)(js.page())
 }
 
 pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
     let frames = api::frames_hooks();
-    (frames.pending_remove_first)(js.ptr());
+    (frames.pending_remove_first)(js.page());
     if let Some(iframe) = iframe {
-        (frames.load_now)(js.ptr(), iframe);
+        (frames.load_now)(js.page(), iframe);
     }
 }
 
 pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
-    if super::record::unpin_wrapper(js.ptr(), node) {
+    if super::record::unpin_wrapper(js.some(), node) {
         if let (Some(record), Some(node)) =
-            (super::record::record(js.ptr()), super::record::node(node))
+            (super::record::record(js.some()), super::record::node(node))
         {
             super::record::release_wrapper(record, node);
         }
@@ -383,7 +383,7 @@ pub(crate) fn add_resource_timing(
 ) {
     let span = (start_us, super::monotonic_us());
     let add = crate::api::perf_hooks().add_resource_timed;
-    add(js.ptr(), Some(info), url, Some(initiator), span, response);
+    add(js.page(), Some(info), url, Some(initiator), span, response);
 }
 
 pub struct BytesView {

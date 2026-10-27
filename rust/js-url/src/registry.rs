@@ -23,8 +23,8 @@ impl Entry {
 #[derive(Default)]
 struct Registry {
     installed: bool,
-    pages: Vec<Js>,
-    urls: HashMap<Js, HashMap<Vec<u8>, Entry>>,
+    pages: Vec<usize>,
+    urls: HashMap<usize, HashMap<Vec<u8>, Entry>>,
 }
 
 static REGISTRY: LazyLock<Mutex<Registry>> = LazyLock::new(Mutex::default);
@@ -38,6 +38,7 @@ fn key(url: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn add_page(js: Js) -> bool {
+    let js = js.key();
     let mut registry = registry();
     let install = !registry.installed;
     registry.installed = true;
@@ -48,6 +49,7 @@ pub(crate) fn add_page(js: Js) -> bool {
 }
 
 pub(crate) fn remove_page(js: Js) {
+    let js = js.key();
     let mut registry = registry();
     if let Some(index) = registry.pages.iter().position(|&p| p == js) {
         registry.pages.swap_remove(index);
@@ -55,6 +57,7 @@ pub(crate) fn remove_page(js: Js) {
 }
 
 pub(crate) fn put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
+    let js = js.key();
     let entry = Entry {
         bytes: bytes.into(),
         kind: kind
@@ -69,17 +72,20 @@ pub(crate) fn put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
 }
 
 pub(crate) fn remove(js: Js, url: &[u8]) {
+    let js = js.key();
     if let Some(urls) = registry().urls.get_mut(&js) {
         urls.remove(&key(url));
     }
 }
 
 pub(crate) fn free_page(js: Js) {
+    let js = js.key();
     let urls = registry().urls.remove(&js);
     drop(urls);
 }
 
 pub(crate) fn lookup(js: Js, url: &[u8]) -> Option<Blob> {
+    let js = js.key();
     registry().urls.get(&js)?.get(url).map(Entry::blob)
 }
 

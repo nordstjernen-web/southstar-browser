@@ -14,7 +14,9 @@ const SOURCE_REMOVE: GBoolean = 0;
 const SOURCE_CONTINUE: GBoolean = 1;
 
 pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
-    let js = Js(data.cast());
+    let Some(js) = Js::of_raw(data) else {
+        return SOURCE_REMOVE;
+    };
     match scheduling::run_message_tasks(js) {
         RunTasks::Done => SOURCE_REMOVE,
         RunTasks::Continue => SOURCE_CONTINUE,

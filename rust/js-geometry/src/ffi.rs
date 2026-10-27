@@ -8,31 +8,30 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, StyleTable};
 
 use crate::{Element, JsResult, Rect};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     pub fn addr(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 }
 
 use southstar_canvas::nsr_dommatrix_make;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -102,7 +101,9 @@ pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64) {
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
-    (api::window_hooks().note_viewport_scroll)(js.0, x, y);
+    if let Some(js) = js.0 {
+        (api::window_hooks().note_viewport_scroll)(js, x, y);
+    }
 }
 
 pub(crate) fn request_repaint(js: Js) {
@@ -134,7 +135,7 @@ pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<
 
 pub(crate) fn active_js() -> Option<Js> {
     let js = api::active();
-    (!js.is_null()).then_some(Js(js))
+    (js.is_some()).then_some(Js(js))
 }
 
 pub(crate) fn computed_text(scope: &mut Scope<'_>, node: Element, name: &CStr) -> Option<CString> {
@@ -262,13 +263,13 @@ fn box_for_node(scope: &Scope<'_>, node: Node<'_>) -> Option<BoxRef<'static>> {
     crate::lookup::find_by_dom(layout_root(js_of(scope))?, node.as_ptr().cast())
 }
 
-fn forget_box_lookup(js: *const NsJs) {
-    crate::lookup::forget(Js(js.cast_mut()));
+fn forget_box_lookup(js: Option<Page>) {
+    crate::lookup::forget(Js(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_geometry_hooks(api::GeometryHooks {
-        forget_box_lookup,
+        forget_box_lookup: |js| forget_box_lookup(Some(js)),
         find_box_by_dom: box_find_by_dom,
     });
     southstar_canvas::links::set_js_geometry_links(southstar_canvas::links::JsGeometryLinks {

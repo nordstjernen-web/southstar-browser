@@ -8,7 +8,7 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use super::{NsJs, ResourceInfo};
+use super::{Page, ResourceInfo};
 
 macro_rules! hook_table {
     ($table:ident, $slot:ident, $set:ident, $get:ident) => {
@@ -27,28 +27,28 @@ macro_rules! hook_table {
 pub(crate) use hook_table;
 
 pub struct FramesHooks {
-    pub submit_form: fn(*const NsJs, Node<'_>, Option<Node<'_>>) -> bool,
-    pub purge_subtree_pending: fn(*const NsJs, Node<'_>),
-    pub pending_count: fn(*const NsJs) -> u32,
-    pub pending_first: fn(*const NsJs) -> Option<Node<'static>>,
-    pub pending_remove_first: fn(*const NsJs),
-    pub load_now: fn(*const NsJs, Node<'_>),
-    pub clear_initial_blank: fn(*const NsJs),
-    pub teardown: fn(*const NsJs),
-    pub schedule_load: fn(*const NsJs, Node<'_>, bool),
-    pub scrub_globals: fn(*const NsJs, Node<'_>),
-    pub promote_deferred: fn(*const NsJs),
-    pub frame_context: fn(*const NsJs, Node<'_>) -> ContextHandle,
-    pub frame_url: fn(*const NsJs, Option<Node<'_>>) -> Option<CString>,
+    pub submit_form: fn(Option<Page>, Node<'_>, Option<Node<'_>>) -> bool,
+    pub purge_subtree_pending: fn(Page, Node<'_>),
+    pub pending_count: fn(Page) -> u32,
+    pub pending_first: fn(Page) -> Option<Node<'static>>,
+    pub pending_remove_first: fn(Page),
+    pub load_now: fn(Page, Node<'_>),
+    pub clear_initial_blank: fn(Page),
+    pub teardown: fn(Page),
+    pub schedule_load: fn(Option<Page>, Node<'_>, bool),
+    pub scrub_globals: fn(Option<Page>, Node<'_>),
+    pub promote_deferred: fn(Option<Page>),
+    pub frame_context: fn(Option<Page>, Node<'_>) -> ContextHandle,
+    pub frame_url: fn(Page, Option<Node<'_>>) -> Option<CString>,
     pub document_node: fn(Node<'_>) -> Option<Node<'_>>,
-    pub frame_of_realm: fn(*const NsJs, ContextHandle) -> Option<Node<'static>>,
-    pub node_realm_context: fn(*const NsJs, Node<'_>) -> ContextHandle,
-    pub cloners_made: fn(*const NsJs) -> bool,
-    pub forget_node: fn(*const NsJs, Node<'_>),
-    pub realms_same_origin: fn(*const NsJs, ContextHandle, ContextHandle) -> bool,
-    pub schedule_static_iframes: fn(*const NsJs, Node<'_>),
-    pub realm_proto_for: fn(*const NsJs, ContextHandle, &Value) -> Value,
-    pub frame_realm_window: fn(*const NsJs, Node<'_>) -> Value,
+    pub frame_of_realm: fn(Page, ContextHandle) -> Option<Node<'static>>,
+    pub node_realm_context: fn(Page, Node<'_>) -> ContextHandle,
+    pub cloners_made: fn(Page) -> bool,
+    pub forget_node: fn(Page, Node<'_>),
+    pub realms_same_origin: fn(Page, ContextHandle, ContextHandle) -> bool,
+    pub schedule_static_iframes: fn(Option<Page>, Node<'_>),
+    pub realm_proto_for: fn(Page, ContextHandle, &Value) -> Value,
+    pub frame_realm_window: fn(Option<Page>, Node<'_>) -> Value,
 }
 
 impl FramesHooks {
@@ -81,23 +81,23 @@ impl FramesHooks {
 hook_table!(FramesHooks, FRAMES, set_frames_hooks, frames_hooks);
 
 pub struct MutationHooks {
-    pub init: fn(*const NsJs),
-    pub teardown: fn(*const NsJs),
-    pub orphan_count: fn(*const NsJs) -> usize,
-    pub collect_orphans: fn(*const NsJs) -> Vec<Node<'static>>,
-    pub orphans_snapshot: fn(*const NsJs) -> Option<Vec<Node<'static>>>,
-    pub orphan_tracked: fn(*const NsJs, Node<'_>) -> bool,
-    pub track_orphan: fn(*const NsJs, Node<'_>),
-    pub unorphan_node: fn(*const NsJs, Node<'_>),
-    pub purge_subtree_node_refs: fn(*const NsJs, Node<'_>),
-    pub forget_pending_change: fn(*const NsJs),
-    pub forget_pending_change_for: fn(*const NsJs, Node<'_>),
-    pub attribute_map_release_owner: fn(*const NsJs, Node<'_>),
-    pub attribute_maps_teardown: fn(*const NsJs),
-    pub set_attr_recorded: fn(*const NsJs, Node<'_>, &CStr, &[u8]),
-    pub set_attr_recorded_paint_only: fn(*const NsJs, Node<'_>, &CStr, &CStr),
-    pub index_child_removed: fn(*const NsJs, Option<Node<'_>>, Node<'_>),
-    pub record_child_added: fn(*const NsJs, Node<'_>, Node<'_>, Option<Node<'_>>),
+    pub init: fn(Page),
+    pub teardown: fn(Page),
+    pub orphan_count: fn(Page) -> usize,
+    pub collect_orphans: fn(Page) -> Vec<Node<'static>>,
+    pub orphans_snapshot: fn(Page) -> Option<Vec<Node<'static>>>,
+    pub orphan_tracked: fn(Page, Node<'_>) -> bool,
+    pub track_orphan: fn(Option<Page>, Node<'_>),
+    pub unorphan_node: fn(Page, Node<'_>),
+    pub purge_subtree_node_refs: fn(Page, Node<'_>),
+    pub forget_pending_change: fn(Page),
+    pub forget_pending_change_for: fn(Page, Node<'_>),
+    pub attribute_map_release_owner: fn(Option<Page>, Node<'_>),
+    pub attribute_maps_teardown: fn(Page),
+    pub set_attr_recorded: fn(Option<Page>, Node<'_>, &CStr, &[u8]),
+    pub set_attr_recorded_paint_only: fn(Option<Page>, Node<'_>, &CStr, &CStr),
+    pub index_child_removed: fn(Option<Page>, Option<Node<'_>>, Node<'_>),
+    pub record_child_added: fn(Option<Page>, Node<'_>, Node<'_>, Option<Node<'_>>),
 }
 
 impl MutationHooks {
@@ -125,13 +125,13 @@ impl MutationHooks {
 hook_table!(MutationHooks, MUTATION, set_mutation_hooks, mutation_hooks);
 
 pub struct LoaderHooks {
-    pub eval: fn(*const NsJs, &[u8], Option<&CStr>),
-    pub script_needs_prepare: fn(*const NsJs, Node<'_>),
-    pub schedule_pending_script_drain: fn(*const NsJs),
-    pub purge_subtree_script_refs: fn(*const NsJs, Node<'_>),
-    pub parser_hold_forget: fn(*const NsJs, Node<'_>),
-    pub teardown: fn(*const NsJs),
-    pub element_perf_info: fn(*const NsJs, Option<Node<'_>>) -> ResourceInfo,
+    pub eval: fn(Option<Page>, &[u8], Option<&CStr>),
+    pub script_needs_prepare: fn(Option<Page>, Node<'_>),
+    pub schedule_pending_script_drain: fn(Page),
+    pub purge_subtree_script_refs: fn(Page, Node<'_>),
+    pub parser_hold_forget: fn(Page, Node<'_>),
+    pub teardown: fn(Page),
+    pub element_perf_info: fn(Option<Page>, Option<Node<'_>>) -> ResourceInfo,
 }
 
 impl LoaderHooks {
@@ -149,11 +149,11 @@ impl LoaderHooks {
 hook_table!(LoaderHooks, LOADER, set_loader_hooks, loader_hooks);
 
 pub struct DispatchHooks {
-    pub report_pending_rejections: fn(*const NsJs),
-    pub drop_pending_rejections: fn(*const NsJs),
-    pub forget_node: fn(*const NsJs, Node<'_>),
-    pub teardown_listeners: fn(*const NsJs),
-    pub teardown: fn(*const NsJs),
+    pub report_pending_rejections: fn(Page),
+    pub drop_pending_rejections: fn(Page),
+    pub forget_node: fn(Page, Node<'_>),
+    pub teardown_listeners: fn(Page),
+    pub teardown: fn(Page),
 }
 
 impl DispatchHooks {
@@ -169,11 +169,11 @@ impl DispatchHooks {
 hook_table!(DispatchHooks, DISPATCH, set_dispatch_hooks, dispatch_hooks);
 
 pub struct FocusHooks {
-    pub focused_node: fn(*const NsJs) -> Option<Node<'static>>,
-    pub update_focus_visible: fn(*const NsJs),
-    pub forget_node: fn(*const NsJs, Node<'_>),
-    pub teardown: fn(*const NsJs),
-    pub forget_subtree: fn(*const NsJs, Node<'_>),
+    pub focused_node: fn(Option<Page>) -> Option<Node<'static>>,
+    pub update_focus_visible: fn(Option<Page>),
+    pub forget_node: fn(Page, Node<'_>),
+    pub teardown: fn(Page),
+    pub forget_subtree: fn(Option<Page>, Node<'_>),
 }
 
 impl FocusHooks {
@@ -189,16 +189,16 @@ impl FocusHooks {
 hook_table!(FocusHooks, FOCUS, set_focus_hooks, focus_hooks);
 
 pub struct TopLayerHooks {
-    pub popover_attr_changed: fn(*const NsJs, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
-    pub forget_node: fn(*const NsJs, Node<'_>),
-    pub clear: fn(*const NsJs),
-    pub popover_removing: fn(*const NsJs, Node<'_>),
-    pub dialog_close: fn(*const NsJs, Node<'_>, Option<&CStr>),
-    pub activate_summary: fn(*const NsJs, Node<'_>) -> bool,
+    pub popover_attr_changed: fn(Option<Page>, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
+    pub forget_node: fn(Page, Node<'_>),
+    pub clear: fn(Page),
+    pub popover_removing: fn(Option<Page>, Node<'_>),
+    pub dialog_close: fn(Option<Page>, Node<'_>, Option<&CStr>),
+    pub activate_summary: fn(Option<Page>, Node<'_>) -> bool,
     pub summary_toggle_target: fn(Node<'_>) -> Option<Node<'static>>,
     pub is_button: fn(Node<'_>) -> bool,
-    pub button_activation: fn(*const NsJs, Node<'_>, Option<Node<'_>>),
-    pub popover_target_activation: fn(*const NsJs, Node<'_>, Option<Node<'_>>),
+    pub button_activation: fn(Option<Page>, Node<'_>, Option<Node<'_>>),
+    pub popover_target_activation: fn(Option<Page>, Node<'_>, Option<Node<'_>>),
 }
 
 impl TopLayerHooks {
@@ -225,9 +225,9 @@ hook_table!(
 
 pub struct AttrsHooks {
     pub class_id: fn() -> u32,
-    pub detach_owner: fn(*const NsJs, Node<'_>),
-    pub detach_all: fn(*const NsJs),
-    pub detach_matching: fn(*const NsJs, Node<'_>, Option<&CStr>, &CStr),
+    pub detach_owner: fn(Option<Page>, Node<'_>),
+    pub detach_all: fn(Page),
+    pub detach_matching: fn(Option<Page>, Node<'_>, Option<&CStr>, &CStr),
 }
 
 impl AttrsHooks {
@@ -242,8 +242,8 @@ impl AttrsHooks {
 hook_table!(AttrsHooks, ATTRS, set_attrs_hooks, attrs_hooks);
 
 pub struct TraversalHooks {
-    pub pre_remove: fn(*const NsJs, Node<'_>),
-    pub teardown: fn(*const NsJs),
+    pub pre_remove: fn(Option<Page>, Node<'_>),
+    pub teardown: fn(Page),
 }
 
 impl TraversalHooks {
@@ -261,10 +261,10 @@ hook_table!(
 );
 
 pub struct ObserversHooks {
-    pub intersection_tick: fn(*const NsJs),
-    pub resize_tick: fn(*const NsJs),
-    pub scrub_node: fn(*const NsJs, Node<'_>),
-    pub teardown: fn(*const NsJs),
+    pub intersection_tick: fn(Page),
+    pub resize_tick: fn(Page),
+    pub scrub_node: fn(Option<Page>, Node<'_>),
+    pub teardown: fn(Page),
 }
 
 impl ObserversHooks {
@@ -284,10 +284,10 @@ hook_table!(
 );
 
 pub struct DocumentHooks {
-    pub base_url: fn(*const NsJs) -> Option<Vec<u8>>,
-    pub flush_write: fn(*const NsJs),
-    pub write_teardown: fn(*const NsJs),
-    pub node_base_url: fn(*const NsJs, Node<'_>) -> Option<Vec<u8>>,
+    pub base_url: fn(Option<Page>) -> Option<Vec<u8>>,
+    pub flush_write: fn(Page),
+    pub write_teardown: fn(Page),
+    pub node_base_url: fn(Option<Page>, Node<'_>) -> Option<Vec<u8>>,
     pub make_realm_document: MakeRealmDocumentFn,
 }
 
@@ -328,7 +328,7 @@ pub type MakeRealmDocumentFn =
     fn(&mut Scope<'_>, Node<'_>, Option<&[u8]>, Option<&[u8]>, Option<&[u8]>, bool, bool) -> Value;
 
 pub struct DomFactoryHooks {
-    pub anchor_resolved_href: fn(*const NsJs, Node<'_>) -> Option<Vec<u8>>,
+    pub anchor_resolved_href: fn(Option<Page>, Node<'_>) -> Option<Vec<u8>>,
 }
 
 impl DomFactoryHooks {

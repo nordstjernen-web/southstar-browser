@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -21,8 +21,8 @@ pub use southstar_js_runtime::api::NavigationTiming;
 #[derive(Clone, Copy)]
 pub struct Js(Page);
 
-pub fn js_raw(js: Option<Js>) -> *mut c_void {
-    js.map_or(ptr::null_mut(), |js| js.0.as_ptr().cast_mut().cast())
+pub fn js_page(js: Option<Js>) -> Option<Page> {
+    js.map(Js::handle)
 }
 
 pub fn new_js(nav: &Rc<NavCapture>, timing: &NavigationTiming) -> Option<Js> {
@@ -39,11 +39,11 @@ pub fn new_js(nav: &Rc<NavCapture>, timing: &NavigationTiming) -> Option<Js> {
 }
 
 pub fn consume_mutated(js: Option<Js>) -> bool {
-    api::consume_mutated(js_raw(js).cast())
+    api::consume_mutated(js_page(js))
 }
 
 pub fn eval_source(js: Option<Js>, src: &CStr, origin: &CStr) -> Option<CString> {
-    let mut out = southstar_js_loader::eval_source(js_raw(js).cast(), src, Some(origin))?;
+    let mut out = southstar_js_loader::eval_source(js_page(js), src, Some(origin))?;
     out.truncate(out.iter().position(|&b| b == 0).unwrap_or(out.len()));
     CString::new(out).ok()
 }
@@ -61,16 +61,16 @@ pub fn note_viewport_scroll(js: Option<Js>, x: f64, y: f64) {
 }
 
 impl Js {
-    fn handle(self) -> Page {
+    pub fn handle(self) -> Page {
         self.0
     }
 
-    fn page(self) -> *const api::NsJs {
-        self.0.as_ptr()
+    fn page(self) -> Option<Page> {
+        Some(self.0)
     }
 
     pub fn free(self) {
-        api::free(self.page());
+        api::free(self.0);
     }
 
     pub fn bind_form_submit(self, nav: &Rc<NavCapture>) {
@@ -146,7 +146,7 @@ impl Js {
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        api::set_anim(self.page(), super::engine::anim_raw(anim));
+        api::set_anim(self.page(), anim);
     }
 
     pub fn clear_layout_root(self) {

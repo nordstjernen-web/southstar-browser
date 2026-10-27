@@ -11,7 +11,8 @@ use std::sync::Arc;
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{make_constructor, natives};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
-use southstar_js_runtime::api::{self, NsJs};
+use southstar_js_runtime::api::Page;
+use southstar_js_runtime::api::{self};
 
 use self::imports::*;
 use crate::scope as worker_scope;
@@ -71,21 +72,21 @@ pub(crate) fn dispatch_with_event(
 }
 
 pub(crate) struct Budget {
-    js: *mut c_void,
+    js: Option<Page>,
     saved: i64,
 }
 
 impl Budget {
     pub(crate) fn enter(scope: &Scope<'_>) -> Budget {
-        let js = scope.context_opaque();
-        let saved = api::budget_enter(js.cast());
+        let js = Page::current(scope);
+        let saved = api::budget_enter(js);
         Budget { js, saved }
     }
 }
 
 impl Drop for Budget {
     fn drop(&mut self) {
-        api::budget_leave(self.js.cast(), self.saved);
+        api::budget_leave(self.js, self.saved);
     }
 }
 
@@ -238,19 +239,23 @@ unsafe extern "C" {
 pub(crate) struct Js(usize);
 
 impl Js {
+    fn of(page: Option<Page>) -> Js {
+        Js(page.map_or(0, Page::addr))
+    }
+
     pub(crate) fn is_null(self) -> bool {
         self.0 == 0
     }
 
-    fn page(self) -> *const NsJs {
-        self.0 as *const NsJs
+    fn page(self) -> Option<Page> {
+        Page::from_addr(self.0)
     }
 }
 
 pub(crate) type Ctx = ContextHandle;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque() as usize)
+    Js::of(Page::current(scope))
 }
 
 pub(crate) fn ctx_of(scope: &Scope<'_>) -> Ctx {
@@ -419,7 +424,9 @@ pub(crate) fn drain_mutations(js: Js) {
 }
 
 pub(crate) fn js_free(js: Js) {
-    api::free(js.page());
+    if let Some(page) = js.page() {
+        api::free(page);
+    }
 }
 
 pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
@@ -435,7 +442,7 @@ pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
         name: Some(&name),
         service_worker: host.is_service_worker,
     };
-    Js(api::new_worker(&options) as usize)
+    Js::of(api::new_worker(&options))
 }
 
 pub(crate) fn worker_eval(
@@ -757,8 +764,8 @@ pub fn nsr_worker_promise_rejection_tracker(
     }
 }
 
-pub fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
-    worker::report_exception(Js(js as usize), exception)
+pub fn nsr_worker_report_exception(js: Option<Page>, exception: &Value) -> bool {
+    worker::report_exception(Js::of(js), exception)
 }
 
 /// # Safety
@@ -787,8 +794,8 @@ unsafe fn host_log_line(host: *mut c_void, line: &CStr) {
     });
 }
 
-fn teardown(js: *const NsJs) {
-    worker::teardown(Js(js as usize));
+fn teardown(js: Page) {
+    worker::teardown(Js::of(Some(js)));
 }
 
 pub fn install_runtime_hooks() {
@@ -843,8 +850,8 @@ pub fn install_runtime_hooks() {
     });
 }
 
-fn sw_controller_for(js: *const NsJs, url: &str) -> Option<api::ServiceWorkerController> {
-    service::controller_for(Js(js as usize), url)
+fn sw_controller_for(js: Option<Page>, url: &str) -> Option<api::ServiceWorkerController> {
+    service::controller_for(Js::of(js), url)
         .map(|host| api::ServiceWorkerController(Box::new(host)))
 }
 
@@ -862,12 +869,12 @@ fn sw_post_fetch(controller: &api::ServiceWorkerController, fetch: &api::Service
     service::post_fetch_request(host, request);
 }
 
-fn host_base_url(js: *const NsJs) -> Option<CString> {
-    let host = api::worker_host(js.cast_mut()).cast::<Host>();
+fn host_base_url(js: Option<Page>) -> Option<CString> {
+    let host = api::worker_host(js).cast::<Host>();
     // SAFETY: a worker page's host slot holds null or its live Host, which outlives the page.
     unsafe { host.as_ref() }.map(|host| host.base_url.clone())
 }
 
-fn workers_pending(js: *const NsJs) -> bool {
-    worker::pending(Js(js as usize))
+fn workers_pending(js: Option<Page>) -> bool {
+    worker::pending(Js::of(js))
 }

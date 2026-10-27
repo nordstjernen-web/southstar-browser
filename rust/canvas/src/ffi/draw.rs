@@ -18,5 +18,5 @@ pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<Rc<CanvasStat
 }
 
 pub(crate) fn mark_mutated(scope: &Scope<'_>) {
-    southstar_js_runtime::api::mark_mutated(super::state::js_of(scope).ptr());
+    southstar_js_runtime::api::mark_mutated(super::state::js_of(scope).page());
 }

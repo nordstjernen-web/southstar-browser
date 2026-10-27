@@ -8,28 +8,29 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::entry::{self, Fetch, Response};
 use crate::navigation;
 use crate::timeline::{self, Observer};
 
+pub(crate) use southstar_js_runtime::api::NavigationTiming;
 use southstar_js_runtime::api::ResourceInfo;
-pub(crate) use southstar_js_runtime::api::{NavigationTiming, NsJs};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *const NsJs {
-        self.0 as *const NsJs
+    fn page(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -63,37 +64,37 @@ pub(crate) fn real_us() -> i64 {
 }
 
 pub(crate) fn page_time_origin_us(js: Js) -> i64 {
-    api::time_origin_us(js.ptr())
+    api::time_origin_us(js.page())
 }
 
 pub(crate) fn page_time_origin_real_ms(js: Js) -> f64 {
-    api::time_origin_real_ms(js.ptr())
+    api::time_origin_real_ms(js.page())
 }
 
 pub(crate) fn main_realm(js: Js) -> usize {
-    api::main_realm(js.ptr()).as_ptr() as usize
+    api::main_realm(js.page()).as_ptr() as usize
 }
 
 pub(crate) fn main_context(js: Js) -> Option<ContextHandle> {
-    api::main_context(js.ptr()).non_null()
+    api::main_context(js.page()).non_null()
 }
 
 pub(crate) fn navigation_timing(js: Js) -> Option<NavigationTiming> {
-    api::navigation_timing(js.ptr())
+    api::navigation_timing(js.page())
 }
 
 pub(crate) fn current_url(js: Js) -> Vec<u8> {
-    api::current_url(js.ptr()).into_bytes()
+    api::current_url(js.page()).into_bytes()
 }
 
 pub(crate) fn log_line(js: Js, line: &[u8]) {
     if let Ok(line) = CString::new(line) {
-        api::log_line(js.ptr(), &line);
+        api::log_line(js.page(), &line);
     }
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque() as usize)
+    Js(Page::current(scope))
 }
 
 pub(crate) fn realm_of(scope: &Scope<'_>) -> usize {
@@ -124,11 +125,11 @@ pub(crate) fn enqueue_drain(js: Js) {
     });
 }
 
-pub fn page_now_ms(js: *const NsJs) -> f64 {
+pub fn page_now_ms(js: Option<Page>) -> f64 {
     crate::now_ms(Js::of(js))
 }
 
-pub fn time_origin_us(js: *const NsJs, realm: ContextHandle) -> i64 {
+pub fn time_origin_us(js: Option<Page>, realm: ContextHandle) -> i64 {
     timeline::time_origin_us(Js::of(js), realm.as_ptr() as usize)
 }
 
@@ -138,36 +139,36 @@ pub fn scope_now_ms(scope: &mut Scope<'_>) -> f64 {
 
 pub fn context_now_ms(ctx: ContextHandle) -> f64 {
     ctx.with(|scope| crate::realm_now_ms(js_of(scope), realm_of(scope)))
-        .unwrap_or_else(|| crate::realm_now_ms(Js(0), 0))
+        .unwrap_or_else(|| crate::realm_now_ms(Js(None), 0))
 }
 
-pub fn start_frame_clock(js: *const NsJs, frame: Node<'_>) {
+pub fn start_frame_clock(js: Option<Page>, frame: Node<'_>) {
     timeline::start_frame_clock(Js::of(js), frame.as_ptr() as usize);
 }
 
-pub fn adopt_frame_clock(js: *const NsJs, frame: Option<Node<'_>>, ctx: ContextHandle) {
+pub fn adopt_frame_clock(js: Option<Page>, frame: Option<Node<'_>>, ctx: ContextHandle) {
     let frame = Node::ptr_or_null(frame) as usize;
     timeline::adopt_frame_clock(Js::of(js), frame, ctx.as_ptr() as usize);
 }
 
-pub fn clear_frame_clocks(js: *const NsJs, destroy: bool) {
+pub fn clear_frame_clocks(js: Option<Page>, destroy: bool) {
     timeline::clear_frame_clocks(Js::of(js), destroy);
 }
 
-pub fn reset_observers(js: *const NsJs) {
+pub fn reset_observers(js: Option<Page>) {
     timeline::reset_observers(Js::of(js));
 }
 
-fn init(js: *const NsJs) {
-    timeline::init(Js::of(js));
+fn init(js: Page) {
+    timeline::init(Js::of(Some(js)));
 }
 
-fn teardown(js: *const NsJs) {
-    timeline::teardown(Js::of(js));
+fn teardown(js: Page) {
+    timeline::teardown(Js::of(Some(js)));
 }
 
 pub fn add_resource_timed(
-    js: *const NsJs,
+    js: Option<Page>,
     info: Option<&ResourceInfo>,
     url: &CStr,
     initiator: Option<&CStr>,
@@ -226,7 +227,7 @@ pub fn add_resource_timed(
 }
 
 pub fn has_resource_timing(
-    js: *const NsJs,
+    js: Option<Page>,
     timeline: *const c_void,
     url: &CStr,
     initiator: Option<&CStr>,
@@ -241,7 +242,7 @@ pub fn has_resource_timing(
         )
 }
 
-pub fn move_frame_timeline(js: *const NsJs, frame: Node<'_>, realm: ContextHandle) {
+pub fn move_frame_timeline(js: Option<Page>, frame: Node<'_>, realm: ContextHandle) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::move_timeline(js, frame.as_ptr() as usize, realm.as_ptr() as usize);
@@ -252,9 +253,9 @@ fn coarsen_navigation_timing(timing: &mut NavigationTiming) {
     navigation::coarsen(timing);
 }
 
-pub fn mark_navigation(js: *const NsJs, legacy_key: &str) {
+pub fn mark_navigation(js: Option<Page>, legacy_key: &str) {
     let js = Js::of(js);
-    let Some(mut timing) = api::navigation_timing(js.ptr()) else {
+    let Some(mut timing) = api::navigation_timing(js.page()) else {
         return;
     };
     let Some(field) = navigation::milestone(&mut timing, legacy_key) else {
@@ -262,22 +263,22 @@ pub fn mark_navigation(js: *const NsJs, legacy_key: &str) {
     };
     *field = crate::now_ms(js);
     let milestone_ms = *field;
-    api::set_navigation_timing(js.ptr(), timing);
+    api::set_navigation_timing(js.page(), timing);
     let absolute_ms = (page_time_origin_real_ms(js) + milestone_ms).floor() as i64;
     if let Some(ctx) = main_context(js) {
         ctx.with(|scope| navigation::record_legacy_milestone(scope, legacy_key, absolute_ms));
     }
 }
 
-fn make_performance_object(scope: &mut Scope<'_>, js: *const NsJs, include_memory: bool) -> Value {
-    crate::object::make_performance_object(scope, Js::of(js), include_memory)
+fn make_performance_object(scope: &mut Scope<'_>, js: Page, include_memory: bool) -> Value {
+    crate::object::make_performance_object(scope, Js::of(Some(js)), include_memory)
 }
 
 pub fn install_runtime_hooks() {
     api::set_perf_hooks(api::PerfHooks {
         init,
         teardown,
-        clear_frame_clocks,
+        clear_frame_clocks: |js, destroy| clear_frame_clocks(Some(js), destroy),
         coarsen_navigation_timing,
         make_performance_object,
         supported_entry_types: crate::supported_entry_types,
@@ -287,6 +288,8 @@ pub fn install_runtime_hooks() {
         observer_observe: crate::observe,
         observer_disconnect: crate::disconnect,
         observer_take_records: crate::take_records,
-        add_resource_timed,
+        add_resource_timed: |js, info, url, initiator, span, resp| {
+            add_resource_timed(Some(js), info, url, initiator, span, resp);
+        },
     });
 }

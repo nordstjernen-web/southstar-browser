@@ -274,12 +274,12 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
 }
 
 fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
-    let js_ptr = js.map_or(ptr::null_mut(), Js::ptr);
-    let proto = super::record::kind_proto_value(js_ptr, n.as_ptr());
+    let page = js.map(Js::page);
+    let proto = super::record::kind_proto_value(page, n.as_ptr());
     let proto = proto.unwrap_or_else(Value::undefined);
     let node_realm = match js {
-        Some(js) if (crate::api::frames_hooks().cloners_made)(js.ptr()) => {
-            let realm = (crate::api::frames_hooks().node_realm_context)(js.ptr(), n);
+        Some(js) if (crate::api::frames_hooks().cloners_made)(js.page()) => {
+            let realm = (crate::api::frames_hooks().node_realm_context)(js.page(), n);
             if realm.is_null() {
                 let root = core::iter::successors(Some(n), |n| n.parent())
                     .last()
@@ -295,8 +295,11 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
         }
         _ => ContextHandle::NULL,
     };
-    if !node_realm.is_null() && proto.is_object() {
-        return (crate::api::frames_hooks().realm_proto_for)(js_ptr, node_realm, &proto);
+    if let Some(page) = page
+        && !node_realm.is_null()
+        && proto.is_object()
+    {
+        return (crate::api::frames_hooks().realm_proto_for)(page, node_realm, &proto);
     }
     proto
 }
@@ -333,7 +336,7 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
         imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
     if let Some(js) = js
-        && super::record::pin_wrapper(js.ptr(), n.as_ptr())
+        && super::record::pin_wrapper(js.some(), n.as_ptr())
     {
         scope.retain_identity(&obj);
     }
@@ -358,12 +361,12 @@ fn invalidate_wrapper(target: Node<'static>) {
         target.set_js_wrapper(ptr::null_mut());
         if let Some(page) = Js::of(js) {
             let ctx = page.ctx();
-            if !ctx.is_null() && super::record::unpin_wrapper(page.ptr(), n) {
+            if !ctx.is_null() && super::record::unpin_wrapper(page.some(), n) {
                 ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
             }
         }
     }
-    if !js.is_null() {
+    if let Some(js) = js {
         (crate::api::mutation_hooks().unorphan_node)(js, target);
         (crate::api::images_hooks().forget_node)(js, target);
         (crate::api::focus_hooks().forget_node)(js, target);
@@ -373,7 +376,7 @@ fn invalidate_wrapper(target: Node<'static>) {
         (crate::api::top_layer_hooks().forget_node)(js, target);
     }
     target.set_js_invalidate(None);
-    if !js.is_null() {
+    if let Some(js) = js {
         (crate::api::dispatch_hooks().forget_node)(js, target);
     }
 }

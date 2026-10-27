@@ -807,7 +807,7 @@ pub fn run_one(
                     relayout(&ctx);
                 }
             }
-            ffi::paint_set_js(ffi::js_raw(js));
+            ffi::paint_set_js(ffi::js_page(js));
             fetch_videos_into_layout(&ctx, base);
 
             let time_ms = if o.time_ms >= 0 { o.time_ms } else { 1000 };

@@ -5,17 +5,13 @@
 use std::ffi::CString;
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::Page;
 
 use super::cairo::Context;
 use super::drawimage_source;
 use crate::bitmap::ImageBitmap;
 use crate::hidden::{self, Hidden};
 use crate::path2d::Path2D;
-
-#[repr(C)]
-pub struct NsJs {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 pub struct NsNode {
@@ -59,8 +55,8 @@ pub(crate) fn decode_image(bytes: &[u8]) -> Option<Decoded> {
     })
 }
 
-fn js_of(scope: &Scope<'_>) -> *mut NsJs {
-    scope.context_opaque().cast()
+fn js_of(scope: &Scope<'_>) -> Option<Page> {
+    Page::current(scope)
 }
 
 pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::cairo::Context> {
@@ -201,7 +197,7 @@ pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
 
 pub(crate) fn canvas_realm(scope: &Scope<'_>, el: usize) -> ContextHandle {
     let current = scope.handle();
-    if js_of(scope).is_null() {
+    if js_of(scope).is_none() {
         return current;
     }
     dom_element(el).map_or(current, |el| {

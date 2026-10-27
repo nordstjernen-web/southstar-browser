@@ -2,14 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
 
 use southstar_dom::Node;
-use southstar_js_runtime::api::{self, NsJs, Page};
+use southstar_js_runtime::api::{self, Page};
 use southstar_layout::BoxRef;
 use std::ffi::CString;
 
@@ -24,12 +24,8 @@ impl Js {
         Js(page)
     }
 
-    pub fn raw(self) -> *mut c_void {
-        self.0.as_ptr().cast_mut().cast()
-    }
-
-    pub fn page(self) -> *const NsJs {
-        self.0.as_ptr()
+    pub fn page(self) -> Option<Page> {
+        Some(self.0)
     }
 
     pub fn handle(self) -> Page {
@@ -132,7 +128,7 @@ impl Js {
     }
 
     pub fn free(self) {
-        api::free(self.page());
+        api::free(self.0);
     }
 
     pub fn submit_form(self, form: Node<'_>, submitter: Node<'_>) {
@@ -158,6 +154,6 @@ impl Js {
     }
 
     pub fn set_anim(self, anim: Option<Anim>) {
-        api::set_anim(self.page(), anim.map_or(ptr::null_mut(), Anim::raw));
+        api::set_anim(self.page(), anim);
     }
 }

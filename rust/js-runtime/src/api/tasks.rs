@@ -9,8 +9,9 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_glib::GBoolean;
 
+use crate::api::Page;
 use crate::ffi::glue;
-use crate::ffi::{self, Js, NsJs, record};
+use crate::ffi::{self, Js, record};
 use crate::{budget, orphans, scheduling, teardown};
 
 pub use crate::ffi::glue::SourceFn;
@@ -60,29 +61,29 @@ pub enum TimerGate {
     Drop,
 }
 
-fn each(js: *const NsJs, f: impl FnOnce(Js)) {
+fn each(js: Option<Page>, f: impl FnOnce(Js)) {
     if let Some(js) = Js::of(js) {
         f(js);
     }
 }
 
-pub fn drain_microtasks(js: *const NsJs) {
+pub fn drain_microtasks(js: Option<Page>) {
     each(js, scheduling::drain_microtasks);
 }
 
-pub fn drain_mutations(js: *const NsJs) {
+pub fn drain_mutations(js: Option<Page>) {
     each(js, scheduling::drain_mutations);
 }
 
-pub fn microtask_checkpoint(js: *const NsJs) {
+pub fn microtask_checkpoint(js: Option<Page>) {
     each(js, scheduling::microtask_checkpoint);
 }
 
-pub fn due_timers_allowed(js: *const NsJs) -> bool {
+pub fn due_timers_allowed(js: Option<Page>) -> bool {
     Js::of(js).is_some_and(scheduling::due_timers_allowed)
 }
 
-pub fn timer_gate(js: *const NsJs, frame: Option<Node<'_>>, idle_expired: bool) -> TimerGate {
+pub fn timer_gate(js: Option<Page>, frame: Option<Node<'_>>, idle_expired: bool) -> TimerGate {
     let Some(js) = Js::of(js) else {
         return TimerGate::Drop;
     };
@@ -93,22 +94,22 @@ pub fn timer_gate(js: *const NsJs, frame: Option<Node<'_>>, idle_expired: bool) 
     }
 }
 
-pub fn dispatch_finish(js: *const NsJs) {
+pub fn dispatch_finish(js: Option<Page>) {
     each(js, scheduling::dispatch_finish);
 }
 
-pub fn drop_message_tasks(js: *const NsJs) {
+pub fn drop_message_tasks(js: Option<Page>) {
     each(js, scheduling::drop_message_tasks);
 }
 
 unsafe extern "C" fn observer_tick(data: *mut c_void) -> GBoolean {
-    let Some(js) = Js::of(data.cast()) else {
+    let Some(js) = Js::of_raw(data) else {
         return 0;
     };
     GBoolean::from(scheduling::observer_tick(js))
 }
 
-pub fn observer_schedule_tick(js: *const NsJs) {
+pub fn observer_schedule_tick(js: Option<Page>) {
     let Some(js) = Js::of(js) else {
         return;
     };
@@ -124,50 +125,50 @@ pub fn observer_schedule_tick(js: *const NsJs) {
         .set(glue::timeout_add(4, observer_tick, js));
 }
 
-pub fn process_pending_iframes(js: *const NsJs) {
+pub fn process_pending_iframes(js: Option<Page>) {
     each(js, orphans::process_pending_iframes);
 }
 
-pub fn sweep_orphans(js: *const NsJs) {
+pub fn sweep_orphans(js: Option<Page>) {
     each(js, orphans::sweep);
 }
 
-pub fn unpin_subtree(js: *const NsJs, root: Node<'_>) {
+pub fn unpin_subtree(js: Option<Page>, root: Node<'_>) {
     let root = record::node(root.as_ptr());
     if let (Some(js), Some(root)) = (Js::of(js), root) {
         orphans::unpin_subtree(js, root);
     }
 }
 
-pub fn purge_subtree_rafs(js: *const NsJs, root: Node<'_>) {
+pub fn purge_subtree_rafs(js: Option<Page>, root: Node<'_>) {
     record::purge_subtree_rafs(js, root.as_mut_ptr());
 }
 
-pub fn source_remove(js: *const NsJs, id: u32) {
+pub fn source_remove(js: Option<Page>, id: u32) {
     glue::source_remove(Js::of(js), id);
 }
 
-pub fn attach_timeout(js: *const NsJs, ms: u32, func: SourceFn, data: *mut c_void) -> u32 {
+pub fn attach_timeout(js: Option<Page>, ms: u32, func: SourceFn, data: *mut c_void) -> u32 {
     glue::attach_timeout(Js::of(js), ms, func, data)
 }
 
-pub fn attach_idle(js: *const NsJs, func: SourceFn, data: *mut c_void) -> u32 {
+pub fn attach_idle(js: Option<Page>, func: SourceFn, data: *mut c_void) -> u32 {
     glue::attach_idle(Js::of(js), func, data)
 }
 
-pub fn budget_enter(js: *const NsJs) -> i64 {
+pub fn budget_enter(js: Option<Page>) -> i64 {
     Js::of(js).map_or(0, budget::push)
 }
 
-pub fn budget_leave(js: *const NsJs, saved: i64) {
+pub fn budget_leave(js: Option<Page>, saved: i64) {
     each(js, |js| budget::pop(js, saved));
 }
 
-pub fn credit_pumped_time(js: *const NsJs, pump_start_us: i64) {
+pub fn credit_pumped_time(js: Option<Page>, pump_start_us: i64) {
     each(js, |js| budget::credit_pumped_time(js, pump_start_us));
 }
 
-pub fn pump_iteration(js: *const NsJs) -> bool {
+pub fn pump_iteration(js: Option<Page>) -> bool {
     let js = Js::of(js);
     if js.is_some_and(Js::halted) {
         return false;
@@ -177,7 +178,7 @@ pub fn pump_iteration(js: *const NsJs) -> bool {
 }
 
 pub fn frame_eval<R>(
-    js: *const NsJs,
+    js: Option<Page>,
     script: Option<Node<'_>>,
     deadline_us: i64,
     f: impl FnOnce() -> R,
@@ -243,7 +244,7 @@ fn fetch(
 }
 
 pub fn fetch_resource(
-    js: *const NsJs,
+    js: Option<Page>,
     url: &CStr,
     top_url: Option<&CStr>,
     headers: &[&CStr],
@@ -253,7 +254,7 @@ pub fn fetch_resource(
 }
 
 pub fn fetch_subresource(
-    js: *const NsJs,
+    js: Option<Page>,
     url: &CStr,
     top_url: Option<&CStr>,
     headers: &[&CStr],
@@ -271,14 +272,14 @@ pub fn fetch_subresource(
     fetched
 }
 
-pub fn eval_polyfills(js: *const NsJs) {
+pub fn eval_polyfills(js: Option<Page>) {
     record::eval_polyfills(js);
 }
 
-pub fn release_pinned_wrappers(js: *const NsJs) {
+pub fn release_pinned_wrappers(js: Option<Page>) {
     each(js, teardown::release_pinned_wrappers);
 }
 
-pub fn storage_load_for(js: *const NsJs, url: Option<&CStr>) {
+pub fn storage_load_for(js: Option<Page>, url: Option<&CStr>) {
     record::storage_load_for(js, url);
 }

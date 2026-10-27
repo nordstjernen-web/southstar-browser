@@ -9,10 +9,9 @@ use southstar_dom::Node;
 use southstar_glib as glib;
 use southstar_js_engine::{MemoryUsage, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, run, stats};
-
-pub(crate) use southstar_js_runtime::api::NsJs;
 
 const DLOG_JS: c_int = 5;
 
@@ -127,7 +126,7 @@ use southstar_js_events::nsr_window_event_ctor;
 use southstar_js_html::nsr_xml_serializer_ctor;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -393,15 +392,15 @@ pub(crate) fn memory_usage(scope: &mut Scope<'_>) -> MemoryUsage {
     scope.memory_usage()
 }
 
-pub fn run_scripts_in_doc(js: *const NsJs, doc: Node<'_>, base_url: Option<&CStr>) {
-    if let (false, Some(doc)) = (js.is_null(), doc.downgrade().get()) {
-        run::run_scripts_in_doc(Js(js.cast_mut()), doc, base_url);
+pub fn run_scripts_in_doc(js: Option<Page>, doc: Node<'_>, base_url: Option<&CStr>) {
+    if let (false, Some(doc)) = (js.is_none(), doc.downgrade().get()) {
+        run::run_scripts_in_doc(Js(js), doc, base_url);
     }
 }
 
-pub fn dump_stats(js: *const NsJs) -> String {
-    if js.is_null() {
+pub fn dump_stats(js: Option<Page>) -> String {
+    if js.is_none() {
         return String::new();
     }
-    stats::dump(Js(js.cast_mut()))
+    stats::dump(Js(js))
 }

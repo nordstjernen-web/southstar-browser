@@ -35,7 +35,7 @@ pub(crate) fn sweep(js: Js) {
 }
 
 pub(crate) fn unpin_subtree(js: Js, root: Node<'static>) {
-    if !ffi::record::has_pinned_set(js.ptr()) {
+    if !ffi::record::has_pinned_set(js.some()) {
         return;
     }
     let mut stack = vec![root];

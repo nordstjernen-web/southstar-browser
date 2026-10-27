@@ -293,7 +293,7 @@ pub struct Relayout<'a> {
     pub viewport_height: f64,
     pub images: Option<southstar_image::ImageCache>,
     pub anim: Option<AnimHandle>,
-    pub js: *mut c_void,
+    pub js: Option<southstar_js_runtime::api::Page>,
     pub focused: Option<Node<'a>>,
     pub hover: Option<Node<'a>>,
     pub caret_byte: usize,
@@ -302,7 +302,7 @@ pub struct Relayout<'a> {
 
 /// # Safety
 ///
-/// `js` is null or the page's live script engine, and `layout` holds null or a box of this thread's layout store.
+/// `layout` holds null or a box of this thread's layout store.
 pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
     let viewport_width = req.viewport_width;
     let js = req.js;
@@ -314,7 +314,6 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<
         viewport_height: req.viewport_height,
         images: req.images,
         anim: req.anim,
-        js,
         focused: Node::ptr_or_null(req.focused),
         hover: Node::ptr_or_null(req.hover),
         caret_byte: req.caret_byte,

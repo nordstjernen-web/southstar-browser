@@ -32,7 +32,6 @@ pub struct RenderCtx<'a> {
     pub images: Option<southstar_image::ImageCache>,
     pub base_url: *const c_char,
     pub anim: Option<AnimHandle>,
-    pub js: *mut c_void,
     pub focused_input: *const NsNode,
     pub hover_node: *const NsNode,
     pub caret_byte: usize,

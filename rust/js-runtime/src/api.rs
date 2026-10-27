@@ -134,12 +134,7 @@ pub fn reject_with_message(scope: &mut Scope<'_>, reject: &Value, message: &[u8]
 pub(crate) fn queue_task(js: Js, ctx: ContextHandle, run: TaskRun) {
     let task = glue::message_task(ctx, run);
     if scheduling::queue_message_task(js, task) {
-        let source = glue::attach_timeout(
-            Some(js),
-            0,
-            ffi::exports::run_message_tasks,
-            js.ptr().cast(),
-        );
+        let source = glue::attach_timeout(Some(js), 0, ffi::exports::run_message_tasks, js.raw());
         js.st().message_task_source.set(source);
     }
 }
@@ -154,7 +149,7 @@ pub fn queue_message_task(scope: &mut Scope<'_>, f: TaskFn, args: &[Value]) -> R
     Ok(())
 }
 
-pub fn this_is_detached_window(js: *const NsJs, scope: &mut Scope<'_>, this: &Value) -> bool {
+pub fn this_is_detached_window(js: Option<Page>, scope: &mut Scope<'_>, this: &Value) -> bool {
     let Some(js) = Js::of(js) else {
         return false;
     };
@@ -173,7 +168,7 @@ pub fn this_is_detached_window(js: *const NsJs, scope: &mut Scope<'_>, this: &Va
 }
 
 pub fn call_observer(
-    js: *const NsJs,
+    js: Option<Page>,
     ctx: ContextHandle,
     cb: &Value,
     this: &Value,
@@ -199,7 +194,7 @@ pub fn call_observer(
     result
 }
 
-pub fn dispatch_document_window_event(js: *const NsJs, kind: &str, event: Value) {
+pub fn dispatch_document_window_event(js: Option<Page>, kind: &str, event: Value) {
     let Some(js) = Js::of(js) else {
         return;
     };
@@ -207,7 +202,7 @@ pub fn dispatch_document_window_event(js: *const NsJs, kind: &str, event: Value)
     glue::dispatch_window_only_event(js, js.current_doc(), kind.as_ptr(), event);
 }
 
-pub fn iframe_document(js: *const NsJs) -> Option<Value> {
+pub fn iframe_document(js: Option<Page>) -> Option<Value> {
     Js::of(js)?.st().iframe_doc.borrow().clone()
 }
 
@@ -215,7 +210,7 @@ pub fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
     record::array_length(scope, arr)
 }
 
-pub fn kind_proto(js: *const NsJs, node: *const NsNode) -> Option<Value> {
+pub fn kind_proto(js: Option<Page>, node: *const NsNode) -> Option<Value> {
     record::kind_proto_value(js, node)
 }
 
@@ -232,13 +227,13 @@ pub fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
 }
 
 pub fn frame_realm_finish(
-    js: *const NsJs,
+    js: Option<Page>,
     frame: ContextHandle,
     frame_global: &Value,
     parent_global: &Value,
 ) {
-    if !js.is_null() {
-        record::frame_realm_finish(js.cast_mut(), frame, frame_global, parent_global);
+    if let Some(js) = js {
+        record::frame_realm_finish(js, frame, frame_global, parent_global);
     }
 }
 
@@ -278,11 +273,11 @@ pub fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> Vec<u8> {
     record::exception_message(scope, exception)
 }
 
-pub fn navigator_brand(js: *const NsJs) -> Value {
+pub fn navigator_brand(js: Option<Page>) -> Value {
     record::navigator_brand(js)
 }
 
-pub fn pristine_promise(js: *const NsJs) -> Value {
+pub fn pristine_promise(js: Option<Page>) -> Value {
     record::pristine_promise(js)
 }
 
@@ -302,7 +297,7 @@ pub fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     wrapper::unwrap(value)
 }
 
-pub fn new_document_object(js: *const NsJs, scope: &mut Scope<'_>) -> Result<Value, Value> {
+pub fn new_document_object(js: Option<Page>, scope: &mut Scope<'_>) -> Result<Value, Value> {
     match Js::of(js) {
         Some(page) => wrapper::new_document_object(page, scope),
         None => Ok(Value::undefined()),

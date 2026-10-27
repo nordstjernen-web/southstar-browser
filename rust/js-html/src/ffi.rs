@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use core::ptr;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -11,20 +10,19 @@ use std::ffi::CString;
 use southstar_dom::Tree;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult, markup};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 use southstar_js_attrs::nsr_make_token_list;
 use southstar_js_collections::nsr_nodelist_from_array;
 use southstar_js_elements::nsr_element_set_node_value;
 
-fn raw_js(js: Option<Js>) -> *mut NsJs {
-    js.map_or(ptr::null_mut(), |js| js.0)
+fn raw_js(js: Option<Js>) -> Option<Page> {
+    js.map(|js| js.0)
 }
 
 pub(crate) fn c_string(bytes: &[u8]) -> CString {
@@ -33,8 +31,7 @@ pub(crate) fn c_string(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = scope.context_opaque().cast();
-    (!js.is_null()).then_some(Js(js))
+    Page::current(scope).map(Js)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -72,7 +69,7 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
 }
 
 pub(crate) fn current_document(js: Option<Js>) -> Option<Element> {
-    js.and_then(|js| api::current_document(js.0))
+    js.and_then(|js| api::current_document(Some(js.0)))
 }
 
 pub(crate) fn resolve_against_page(js: Option<Js>, href: &CStr) -> Option<Vec<u8>> {
@@ -100,7 +97,7 @@ pub(crate) fn replace_all_recorded(js: Option<Js>, node: Element, added: Option<
 }
 
 pub(crate) fn script_needs_prepare(js: Js, node: Element) {
-    southstar_js_loader::script_needs_prepare(js.0, node);
+    southstar_js_loader::script_needs_prepare(Some(js.0), node);
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {
@@ -108,15 +105,15 @@ pub(crate) fn new_text(text: &[u8]) -> Element {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.0);
+    api::mark_mutated(Some(js.0));
 }
 
 pub(crate) fn track_orphan(js: Js, node: Element) {
-    southstar_js_mutation::track_orphan(js.0, node);
+    southstar_js_mutation::track_orphan(Some(js.0), node);
 }
 
 pub(crate) fn unorphan(js: Js, node: Element) {
-    southstar_js_mutation::unorphan_node(js.0, node);
+    southstar_js_mutation::unorphan_node(Some(js.0), node);
 }
 
 pub(crate) fn orphan_node(js: Option<Js>, node: Element) {
@@ -124,7 +121,7 @@ pub(crate) fn orphan_node(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn clear_children_unrecorded(node: Element) {
-    southstar_js_mutation::clear_children(ptr::null_mut(), node);
+    southstar_js_mutation::clear_children(None, node);
 }
 
 pub(crate) fn record_child_change(
@@ -134,7 +131,7 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    southstar_js_mutation::record_child_change(js.0, parent, added, None, previous, next);
+    southstar_js_mutation::record_child_change(Some(js.0), parent, added, None, previous, next);
 }
 
 pub(crate) fn record_child_changes(
@@ -145,19 +142,19 @@ pub(crate) fn record_child_changes(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    southstar_js_mutation::record_child_changes(js.0, parent, added, removed, previous, next);
+    southstar_js_mutation::record_child_changes(Some(js.0), parent, added, removed, previous, next);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
-    southstar_js_custom_elements::disconnect_subtree(js.0, root);
+    southstar_js_custom_elements::disconnect_subtree(Some(js.0), root);
 }
 
 pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
-    southstar_js_custom_elements::upgrade_subtree_all(js.0, root);
+    southstar_js_custom_elements::upgrade_subtree_all(Some(js.0), root);
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
-    southstar_js_loader::run_inserted_scripts(js.0, root);
+    southstar_js_loader::run_inserted_scripts(Some(js.0), root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {

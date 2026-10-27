@@ -7,21 +7,20 @@ use std::ffi::CString;
 use southstar_dom::{Node, Tree};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -34,7 +33,7 @@ pub(crate) struct SelectionState {
 use southstar_js_geometry::nsr_make_dom_rect;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -120,24 +119,24 @@ pub fn nsr_tree_walker_install_proto(scope: &mut Scope<'_>, proto: &Value) {
     crate::walker::install_proto(scope, proto);
 }
 
-pub fn iters_pre_remove(js: *const NsJs, removed: Element) {
+pub fn iters_pre_remove(js: Option<Page>, removed: Element) {
     crate::iterator::pre_remove(Js::of(js), removed);
 }
 
-fn pre_remove(js: *const NsJs, removed: Node<'_>) {
+fn pre_remove(js: Option<Page>, removed: Node<'_>) {
     if let Some(removed) = removed.downgrade().get() {
         iters_pre_remove(js, removed);
     }
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::iterator::teardown(Js::of(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_traversal_hooks(api::TraversalHooks {
         pre_remove,
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_traversal_links(
         southstar_js_runtime::links::JsTraversalLinks {

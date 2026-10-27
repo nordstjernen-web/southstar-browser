@@ -8,13 +8,12 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 use southstar_js_events::nsr_dom_exception;
 use southstar_js_events::nsr_event_adopt_interface;
@@ -28,16 +27,16 @@ fn c_string(bytes: &[u8]) -> CString {
 }
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -61,7 +60,7 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Option<Element>) {
-        if let Some(page) = api::Page::from_ptr(self.ptr()) {
+        if let Some(page) = self.ptr().filter(|page| page.is_live()) {
             southstar_js_focus::set_focus(page, el);
         }
     }
@@ -155,7 +154,7 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
@@ -244,48 +243,48 @@ fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()
 }
 
-fn page(js: *const NsJs) -> Option<Js> {
+fn page(js: Option<Page>) -> Option<Js> {
     let js = Js::of(js);
     (!js.is_null()).then_some(js)
 }
 
-pub fn clear_top_layer(js: *const NsJs) {
+pub fn clear_top_layer(js: Option<Page>) {
     crate::clear(Js::of(js));
 }
 
-pub fn popover_light_dismiss(js: *const NsJs, target: Node<'_>, up: bool) {
+pub fn popover_light_dismiss(js: Option<Page>, target: Node<'_>, up: bool) {
     if let (Some(js), Some(target)) = (page(js), live(target)) {
         crate::popover::light_dismiss(js, target, up);
     }
 }
 
-pub fn dialog_light_dismiss(js: *const NsJs, target: Node<'_>, up: bool) {
+pub fn dialog_light_dismiss(js: Option<Page>, target: Node<'_>, up: bool) {
     if let (Some(js), Some(target)) = (page(js), live(target)) {
         crate::dialog::light_dismiss(js, target, up);
     }
 }
 
-pub fn process_close_request(js: *const NsJs) -> bool {
+pub fn process_close_request(js: Option<Page>) -> bool {
     page(js).is_some_and(|js| !js.halted() && crate::dialog::process_close_request(js))
 }
 
-pub fn details_toggle_open(js: *const NsJs, details: Node<'_>, open: bool) {
+pub fn details_toggle_open(js: Option<Page>, details: Node<'_>, open: bool) {
     if let (Some(js), Some(details)) = (page(js), live(details)) {
         crate::details::toggle_open(js, details, open);
     }
 }
 
-pub fn activate_summary(js: *const NsJs, el: Node<'_>) -> bool {
+pub fn activate_summary(js: Option<Page>, el: Node<'_>) -> bool {
     page(js).is_some_and(|js| crate::details::activate_summary(js, live(el)))
 }
 
-pub fn flush_autofocus(js: *const NsJs) {
+pub fn flush_autofocus(js: Option<Page>) {
     if let Some(js) = page(js) {
         crate::focus::flush_autofocus(js);
     }
 }
 
-fn popover_removing(js: *const NsJs, el: Node<'_>) {
+fn popover_removing(js: Option<Page>, el: Node<'_>) {
     if let (Some(js), Some(el)) = (page(js), live(el))
         && el.is_element()
     {
@@ -293,7 +292,7 @@ fn popover_removing(js: *const NsJs, el: Node<'_>) {
     }
 }
 
-fn dialog_close(js: *const NsJs, dialog: Node<'_>, return_value: Option<&CStr>) {
+fn dialog_close(js: Option<Page>, dialog: Node<'_>, return_value: Option<&CStr>) {
     if let (Some(js), Some(dialog)) = (page(js), live(dialog)) {
         crate::dialog::close(js, dialog, return_value, None);
     }
@@ -307,26 +306,26 @@ fn is_button(el: Node<'_>) -> bool {
     crate::invoker::is_button(live(el))
 }
 
-fn button_activation(js: *const NsJs, button: Node<'_>, event_target: Option<Node<'_>>) {
+fn button_activation(js: Option<Page>, button: Node<'_>, event_target: Option<Node<'_>>) {
     if let (Some(js), Some(button)) = (page(js), live(button)) {
         crate::invoker::button_activation(js, button, event_target.and_then(live));
     }
 }
 
-fn popover_target_activation(js: *const NsJs, el: Node<'_>, event_target: Option<Node<'_>>) {
+fn popover_target_activation(js: Option<Page>, el: Node<'_>, event_target: Option<Node<'_>>) {
     if let (Some(js), Some(el)) = (page(js), live(el)) {
         crate::invoker::popover_target_activation(js, el, event_target.and_then(live));
     }
 }
 
-fn forget_node(js: *const NsJs, n: Node<'_>) {
+fn forget_node(js: Option<Page>, n: Node<'_>) {
     if let Some(n) = n.downgrade().get() {
         crate::forget_node(Js::of(js), n);
     }
 }
 
 fn popover_attr_changed(
-    js: *const NsJs,
+    js: Option<Page>,
     el: Node<'_>,
     attr: &CStr,
     old_value: Option<&CStr>,
@@ -340,8 +339,8 @@ fn popover_attr_changed(
 pub fn install_runtime_hooks() {
     api::set_top_layer_hooks(api::TopLayerHooks {
         popover_attr_changed,
-        forget_node,
-        clear: clear_top_layer,
+        forget_node: |js, a1| forget_node(Some(js), a1),
+        clear: |js| clear_top_layer(Some(js)),
         popover_removing,
         dialog_close,
         activate_summary,

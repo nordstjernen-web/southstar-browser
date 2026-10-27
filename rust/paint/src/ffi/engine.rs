@@ -201,11 +201,8 @@ pub fn node_spellcheck_host(n: Node<'_>) -> bool {
 }
 
 pub fn js_image_for_node(b: BoxRef<'_>) -> Option<ImageRef<'_>> {
-    let js = crate::state::js();
-    if js.is_null() {
-        return None;
-    }
-    southstar_js_images::image_for_node(js.cast(), b.dom()?)
+    let js = crate::state::js()?;
+    southstar_js_images::image_for_node(Some(js), b.dom()?)
 }
 
 pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
@@ -253,10 +250,7 @@ pub fn active_modal<'a>() -> Option<Node<'a>> {
 }
 
 pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
-    let js = crate::state::js();
-    if js.is_null() {
-        return None;
-    }
+    let js = crate::state::js()?;
     southstar_canvas::canvas_surface_for(js, b.dom()?)
 }
 

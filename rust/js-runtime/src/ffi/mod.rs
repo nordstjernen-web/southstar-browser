@@ -19,6 +19,7 @@ use southstar_dom::NsNode;
 use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
+use crate::api::Page;
 use crate::worker;
 use crate::{Element, api, interrupt, page, teardown};
 use state::{DataFn, LogFn, NavigateFn, PageState};
@@ -129,27 +130,39 @@ unsafe extern "C" {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 impl Js {
     fn alloc() -> Js {
         Js(record::alloc())
     }
 
-    fn rec(self) -> &'static record::Record {
-        record::record(self.0).expect("a Js handle names a live page")
+    pub(crate) fn rec(self) -> &'static record::Record {
+        record::record(Some(self.0)).expect("a Js handle names a live page")
     }
 
-    pub(crate) fn of(js: *const NsJs) -> Option<Js> {
-        (!js.is_null()).then_some(Js(js.cast_mut()))
+    pub(crate) fn of(js: Option<Page>) -> Option<Js> {
+        js.map(Js)
+    }
+
+    pub(crate) fn of_raw(js: *const c_void) -> Option<Js> {
+        Page::from_ptr(js.cast()).map(Js)
     }
 
     pub(crate) fn of_scope(scope: &Scope<'_>) -> Option<Js> {
-        Js::of(scope.context_opaque().cast())
+        Page::current(scope).map(Js)
     }
 
-    pub(crate) fn ptr(self) -> *mut NsJs {
+    pub(crate) fn page(self) -> Page {
         self.0
+    }
+
+    pub(crate) fn some(self) -> Option<Page> {
+        Some(self.0)
+    }
+
+    pub(crate) fn raw(self) -> *mut c_void {
+        self.0.as_ptr().cast_mut().cast()
     }
 
     pub(crate) fn st(self) -> &'static PageState {
@@ -213,7 +226,7 @@ impl Js {
     }
 
     pub fn set_navigation_timing(self, timing: NavigationTiming) {
-        record::set_navigation_timing(self.0, timing);
+        record::set_navigation_timing(self.some(), timing);
         self.set_time_origin(timing.origin_us, timing.origin_real_ms);
     }
 
@@ -243,7 +256,7 @@ impl Js {
             memory_limit,
             stack_size,
             interrupt: Some(interrupt_handler),
-            interrupt_opaque: self.0.cast(),
+            interrupt_opaque: self.raw(),
             rejection_tracker: Some(tracker),
             compile_strings: Some(compile_strings_allowed),
             module_normalize: Some(imports::nsr_js_module_normalize),
@@ -334,19 +347,19 @@ impl Js {
     }
 
     pub fn eval_worker_polyfills(self) {
-        record::eval_worker_polyfills(self.0);
+        record::eval_worker_polyfills(self.some());
     }
 
     pub fn is_active(self) -> bool {
-        record::active() == self.0
+        record::active() == self.some()
     }
 
     pub fn clear_active(self) {
-        record::set_active(ptr::null_mut());
+        record::set_active(None);
     }
 
     pub fn take_pinned_wrappers(self) -> Vec<Element> {
-        record::take_pinned_wrappers(self.0)
+        record::take_pinned_wrappers(self.some())
             .into_iter()
             .filter_map(|key| record::node(key as *const NsNode))
             .collect()
@@ -480,7 +493,7 @@ impl Js {
 }
 
 fn interrupt_handler(opaque: *mut c_void) -> bool {
-    Js::of(opaque.cast()).is_some_and(interrupt::should_interrupt)
+    Js::of_raw(opaque).is_some_and(interrupt::should_interrupt)
 }
 
 fn compile_strings_allowed(
@@ -492,14 +505,14 @@ fn compile_strings_allowed(
         return true;
     };
     if caller != callee
-        && !(crate::api::frames_hooks().realms_same_origin)(js.ptr(), caller, callee)
+        && !(crate::api::frames_hooks().realms_same_origin)(js.page(), caller, callee)
     {
         return false;
     }
     let main = js.main_realm();
     (caller != main && callee != main)
         || scope.is_host_access()
-        || record::with_page_csp(js.ptr(), |csp| {
+        || record::with_page_csp(js.some(), |csp| {
             csp.is_none_or(southstar_csp::Csp::eval_allowed)
         })
 }
@@ -608,7 +621,7 @@ pub(crate) fn default_main_context() -> *mut GMainContext {
 }
 
 pub(crate) fn set_active(js: Js) {
-    record::set_active(js.0);
+    record::set_active(js.some());
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -656,26 +669,16 @@ pub(crate) fn thread_stack_size() -> usize {
     0
 }
 
-pub(crate) fn new_page(callbacks: Callbacks, timing: Option<NavigationTiming>) -> *mut NsJs {
+pub(crate) fn new_page(callbacks: Callbacks, timing: Option<NavigationTiming>) -> Option<Page> {
     let js = Js::alloc();
-    if page::create(js, timing, callbacks) {
-        js.0
-    } else {
-        ptr::null_mut()
-    }
+    page::create(js, timing, callbacks).then_some(js.0)
 }
 
-pub(crate) fn new_worker(setup: &WorkerSetup<'_>) -> *mut NsJs {
+pub(crate) fn new_worker(setup: &WorkerSetup<'_>) -> Option<Page> {
     let js = Js::alloc();
-    if worker::create(js, setup) {
-        js.0
-    } else {
-        ptr::null_mut()
-    }
+    worker::create(js, setup).then_some(js.0)
 }
 
-pub(crate) fn free(js: *const NsJs) {
-    if let Some(js) = Js::of(js) {
-        teardown::free(js);
-    }
+pub(crate) fn free(js: Page) {
+    teardown::free(Js(js));
 }

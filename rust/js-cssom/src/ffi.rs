@@ -11,6 +11,7 @@ use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
@@ -21,25 +22,16 @@ use crate::links::nsr_port_add_event_listener;
 use crate::links::nsr_port_remove_event_listener;
 use crate::{computed, css};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn page(self) -> *const api::NsJs {
-        self.0 as *const api::NsJs
-    }
-
-    fn mut_ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn page(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
@@ -81,7 +73,7 @@ pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque() as usize)
+    Js(Page::current(scope))
 }
 
 pub(crate) fn new_event(scope: &mut Scope<'_>) -> Value {
@@ -155,13 +147,12 @@ pub(crate) fn anim(js: Js) -> Option<AnimHandle> {
     if js.is_null() {
         return None;
     }
-    // SAFETY: the page's animation slot holds null or the live engine the browser handed it, which outlives the page's script.
-    unsafe { AnimHandle::from_raw(api::anim(js.page())) }
+    api::anim(js.page())
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8]) {
     let value = c_string(value);
-    (api::mutation_hooks().set_attr_recorded)(js.mut_ptr().cast(), node, name, value.to_bytes());
+    (api::mutation_hooks().set_attr_recorded)(js.page(), node, name, value.to_bytes());
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
@@ -189,7 +180,7 @@ pub(crate) fn style_decl_proto(scope: &mut Scope<'_>) -> Value {
 }
 
 pub(crate) fn write_ignored(scope: &Scope<'_>, node: Node<'_>) -> bool {
-    api::node_unpinned(scope.context_opaque().cast(), node)
+    api::node_unpinned(Page::current(scope), node)
 }
 
 pub(crate) fn element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
@@ -553,8 +544,8 @@ pub fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value) {
     css::install_css(scope, global).ok();
 }
 
-fn teardown(js: *const southstar_js_runtime::api::NsJs) {
-    crate::teardown(Js(js as usize));
+fn teardown(js: Page) {
+    crate::teardown(Js(Some(js)));
 }
 
 pub fn install_runtime_hooks() {

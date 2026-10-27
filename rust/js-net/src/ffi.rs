@@ -11,6 +11,7 @@ use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::JsResult;
 
@@ -18,26 +19,24 @@ mod imports;
 
 use imports::*;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    pub fn of_ptr(js: *const NsJs) -> Js {
-        Js(js as usize)
+    pub fn of_ptr(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     pub fn of(scope: &Scope<'_>) -> Js {
-        Js(scope.context_opaque() as usize)
+        Js(Page::current(scope))
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -798,23 +797,27 @@ pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value)
     crate::abort::install(scope, global);
 }
 
-pub fn reset_page(js: *mut NsJs) {
+pub fn reset_page(js: Option<Page>) {
     crate::page_reset(Js::of_ptr(js));
 }
 
-pub fn pending_fetch_count(js: *const NsJs) -> usize {
+pub fn pending_fetch_count(js: Option<Page>) -> usize {
     crate::pending_fetches(Js::of_ptr(js))
 }
 
-pub fn pending_xhr_count(js: *const NsJs) -> usize {
+pub fn pending_xhr_count(js: Option<Page>) -> usize {
     crate::pending_xhrs(Js::of_ptr(js))
 }
 
-pub fn pending_socket_count(js: *const NsJs) -> usize {
+pub fn pending_socket_count(js: Option<Page>) -> usize {
     crate::pending_sockets(Js::of_ptr(js))
 }
 
-pub fn service_worker_fetch_result(js: *const NsJs, id: u32, outcome: crate::fetch::SwOutcome<'_>) {
+pub fn service_worker_fetch_result(
+    js: Option<Page>,
+    id: u32,
+    outcome: crate::fetch::SwOutcome<'_>,
+) {
     crate::fetch::service_worker_result(Js::of_ptr(js), id, outcome);
 }
 
@@ -868,14 +871,14 @@ pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::Time
     js.attach_timeout(ms, on_abort_timeout, data);
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::page_teardown(Js::of_ptr(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_net_hooks(api::PageStateHooks {
         init: |_| {},
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_net_links(southstar_js_runtime::links::JsNetLinks {
         net_install_interfaces: crate::ffi::nsr_net_install_interfaces,

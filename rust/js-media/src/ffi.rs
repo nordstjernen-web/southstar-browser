@@ -9,26 +9,25 @@ use std::rc::Rc;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::hooks;
 use crate::{audio, element, eme, mse, support, tracks};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn from_ptr(js: *mut NsJs) -> Js {
-        Js(js as usize)
+    fn from_ptr(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
@@ -80,7 +79,7 @@ pub(crate) fn adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn element(value: &Value) -> Option<Element> {
@@ -192,8 +191,8 @@ macro_rules! setters {
 macro_rules! hook_setters {
     ($($name:ident: $ty:ty => $field:ident;)*) => {
         $(
-            pub fn $name(js: *const NsJs, hook: Option<Rc<$ty>>) {
-                hooks::update(Js::from_ptr(js.cast_mut()), |hooks| hooks.$field = hook);
+            pub fn $name(js: Option<Page>, hook: Option<Rc<$ty>>) {
+                hooks::update(Js::from_ptr(js), |hooks| hooks.$field = hook);
             }
         )*
     };
@@ -228,8 +227,8 @@ hook_setters! {
     set_mse_bytes_hook: MseBytesFn => mse_bytes;
 }
 
-pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {
-    let js = Js::from_ptr(js.cast_mut());
+pub fn video_event(js: Option<Page>, node: Node<'_>, kind: &CStr, value: f64) {
+    let js = Js::from_ptr(js);
     let Some(node) = node.downgrade().get() else {
         return;
     };
@@ -248,12 +247,12 @@ pub fn nsr_media_install_audio(scope: &mut Scope<'_>, global: &Value) {
     audio::install(scope, global);
 }
 
-fn init(js: *const NsJs) {
-    hooks::init(Js::from_ptr(js.cast_mut()));
+fn init(js: Page) {
+    hooks::init(Js::from_ptr(Some(js)));
 }
 
-fn teardown(js: *const NsJs) {
-    hooks::teardown(Js::from_ptr(js.cast_mut()));
+fn teardown(js: Page) {
+    hooks::teardown(Js::from_ptr(Some(js)));
 }
 
 pub fn install_runtime_hooks() {

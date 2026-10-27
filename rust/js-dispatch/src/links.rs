@@ -5,8 +5,7 @@
 use std::sync::OnceLock;
 
 use southstar_js_engine::{Scope, Value};
-
-use core::ffi::c_void;
+use southstar_js_runtime::api::Page;
 
 pub struct JsEventsLinks {
     pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
@@ -33,7 +32,7 @@ fn js_events_links() -> &'static JsEventsLinks {
 }
 
 pub struct JsWorkersLinks {
-    pub worker_report_exception: fn(*mut c_void, &Value) -> bool,
+    pub worker_report_exception: fn(Option<Page>, &Value) -> bool,
 }
 
 static JS_WORKERS_LINKS: OnceLock<JsWorkersLinks> = OnceLock::new();
@@ -77,7 +76,7 @@ pub(crate) fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value> {
     (js_events_links().event_new)(scope)
 }
 
-pub(crate) fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
+pub(crate) fn nsr_worker_report_exception(js: Option<Page>, exception: &Value) -> bool {
     (js_workers_links().worker_report_exception)(js, exception)
 }
 

@@ -10,33 +10,32 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::live::{self, Live, LiveKind};
 use crate::{Element, nodelist, page, query};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *const NsJs {
-        self.0 as *const NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub(crate) fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
 const SYNTAX_ERR: i32 = 12;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
@@ -221,18 +220,18 @@ pub fn nsr_qcache_put(
     page::qcache_put(js_of(scope), root as usize, kind, key, value);
 }
 
-pub fn qcache_invalidate(js: *const NsJs) {
+pub fn qcache_invalidate(js: Option<Page>) {
     page::invalidate(Js::of(js));
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     page::teardown(Js::of(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_collections_hooks(api::PageStateHooks {
         init: |_| {},
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_collections_links(
         southstar_js_runtime::links::JsCollectionsLinks {

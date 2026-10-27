@@ -158,7 +158,7 @@ pub fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value) -> Va
     message::make_post_message(scope, window)
 }
 
-pub fn clear_window_links(js: *const NsJs) {
+pub fn clear_window_links(js: Option<Page>) {
     message::links_clear(Js::of(js));
 }
 
@@ -169,31 +169,30 @@ pub fn with_named_access_suspended<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
-pub fn anchor_fragment_navigate(js: *const NsJs, abs_url: &[u8]) -> bool {
+pub fn anchor_fragment_navigate(js: Option<Page>, abs_url: &[u8]) -> bool {
     page::anchor_fragment_navigate(Js::of(js), abs_url)
 }
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     fn of_page(page: Page) -> Js {
-        Js::of(page.as_ptr())
+        Js(Some(page))
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -212,7 +211,7 @@ fn c_text(bytes: &[u8]) -> &[u8] {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque() as usize)
+    Js(Page::current(scope))
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -621,28 +620,28 @@ pub fn nsr_is_window_named(value: &Value) -> bool {
     value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
 }
 
-fn history_teardown(js: *const NsJs) {
+fn history_teardown(js: Option<Page>) {
     crate::teardown(Js::of(js));
 }
 
-fn sync_page_metrics(js: *const NsJs) {
+fn sync_page_metrics(js: Option<Page>) {
     sync_metrics(Js::of(js));
 }
 
-fn note_page_scroll(js: *const NsJs, x: f64, y: f64) {
+fn note_page_scroll(js: Option<Page>, x: f64, y: f64) {
     page::note_viewport_scroll(Js::of(js), x, y);
 }
 
 pub fn install_runtime_hooks() {
     southstar_js_runtime::api::set_window_hooks(southstar_js_runtime::api::WindowHooks {
-        note_viewport_scroll: note_page_scroll,
-        sync_metrics: sync_page_metrics,
-        history_teardown,
-        links_clear: clear_window_links,
+        note_viewport_scroll: |js, a1, a2| note_page_scroll(Some(js), a1, a2),
+        sync_metrics: |js| sync_page_metrics(Some(js)),
+        history_teardown: |js| history_teardown(Some(js)),
+        links_clear: |js| clear_window_links(Some(js)),
         link_outward,
         child_frame,
         fire_page_transition: page_transition,
-        install_state,
+        install_state: |js, a1, a2| install_state(Some(js), a1, a2),
     });
     southstar_canvas::links::set_js_window_links(southstar_canvas::links::JsWindowLinks {
         resource_origin_clean,
@@ -665,7 +664,7 @@ pub fn install_runtime_hooks() {
     });
 }
 
-fn link_outward(js: *const NsJs, outward: &Value, realm_window: &Value) {
+fn link_outward(js: Option<Page>, outward: &Value, realm_window: &Value) {
     message::link_outward(Js::of(js), outward, realm_window);
 }
 
@@ -673,12 +672,12 @@ fn child_frame(doc: Node<'_>, index: u32, name: Option<&CStr>) -> Option<Node<'s
     named::child_frame(doc, index, name).and_then(|frame| frame.downgrade().get())
 }
 
-fn page_transition(js: *const NsJs, kind: &CStr, persisted: bool) {
-    if !js.is_null() {
+fn page_transition(js: Option<Page>, kind: &CStr, persisted: bool) {
+    if js.is_some() {
         page::fire_page_transition(Js::of(js), kind, persisted);
     }
 }
 
-fn install_state(js: *const NsJs, scope: &mut Scope<'_>, global: &Value) {
+fn install_state(js: Option<Page>, scope: &mut Scope<'_>, global: &Value) {
     context::install_state(scope, Js::of(js), global);
 }
