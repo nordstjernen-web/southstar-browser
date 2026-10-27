@@ -220,6 +220,10 @@ pub fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> 
     record::csp_allows_connect(js, url, page)
 }
 
+pub fn csp_allows_media(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
+    record::csp_allows_media(js, url, page)
+}
+
 pub fn inline_handlers_allowed(js: Option<Page>) -> bool {
     record::inline_handlers_allowed(js)
 }

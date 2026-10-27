@@ -1237,3 +1237,9 @@ pub(crate) fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CSt
         csp.is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
     })
 }
+
+pub(crate) fn csp_allows_media(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
+    with_page_csp(js, |csp| {
+        csp.is_none_or(|csp| csp.allows(southstar_csp::MEDIA, url, page, None, true))
+    })
+}
