@@ -212,11 +212,9 @@ pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
     let Some(svg) = b.dom() else {
         return;
     };
-    // SAFETY: the paint pass holds cr live for the whole call.
-    let canvas = unsafe { southstar_svg::Canvas::from_raw(cr.as_raw()) };
     // SAFETY: a box's SVG style table is null or a live table its layout owns.
     let styles = unsafe { southstar_style::StyleTable::from_ptr(b.svg_styles()) };
-    southstar_svg::render_node(canvas, svg, w, h, styles, southstar_style::box_style(b));
+    southstar_svg::render_node(cr.into(), svg, w, h, styles, southstar_style::box_style(b));
 }
 
 pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {

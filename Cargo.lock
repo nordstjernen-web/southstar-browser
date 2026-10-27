@@ -3632,6 +3632,7 @@ dependencies = [
  "southstar-bookmarks",
  "southstar-browser",
  "southstar-bytecode-cache",
+ "southstar-cairo",
  "southstar-config",
  "southstar-debuglog",
  "southstar-dom",
@@ -3696,6 +3697,7 @@ dependencies = [
 name = "southstar-svg"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
@@ -3715,6 +3717,7 @@ dependencies = [
  "read-fonts",
  "skrifa",
  "southstar-bidi",
+ "southstar-cairo",
  "southstar-unicode",
 ]
 
@@ -3785,6 +3788,7 @@ version = "1.0.4-dev"
 name = "southstar-webgl"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-canvas",
  "southstar-config",
  "southstar-dom",
@@ -3799,6 +3803,7 @@ dependencies = [
 name = "southstar-webgpu"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-canvas",
  "southstar-dom",
  "southstar-js-engine",

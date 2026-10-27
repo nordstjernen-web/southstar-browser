@@ -576,10 +576,9 @@ impl WebGl {
             }
         }
         let st = &mut *st;
-        let Some(surf) = st.surf.as_mut() else {
+        let Some(surf) = st.surf.as_ref() else {
             return ptr::null_mut();
         };
-        surf.flush();
         let need = w as usize * h as usize * 4;
         if st.readback.len() < need {
             st.readback.resize(need, 0);
@@ -589,14 +588,13 @@ impl WebGl {
         gl::read_pixels((0, 0, w, h), RGBA, UNSIGNED_BYTE, rgba);
         pack.restore();
         let alpha = self.attrs.alpha;
-        if let Some((dst, stride)) = surf.pixels() {
+        surf.with_pixels_mut(|dst, stride| {
             for y in 0..h as usize {
                 let src = &rgba[(h as usize - 1 - y) * w as usize * 4..][..w as usize * 4];
                 let row = &mut dst[y * stride..][..w as usize * 4];
                 copy_row(row, src, alpha);
             }
-        }
-        surf.mark_dirty();
+        });
         st.dirty = false;
         st.repaint_queued = false;
         surf.as_ptr()

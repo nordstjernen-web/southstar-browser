@@ -767,7 +767,7 @@ pub(crate) fn queue_copy_external_image(
     let source = prop(scope, &args[0], "source");
     let flip = prop(scope, &args[0], "flipY");
     let flip_y = scope.to_bool(&flip);
-    let Some(mut image) = drawimage_source(scope, &source)? else {
+    let Some(image) = drawimage_source(scope, &source)? else {
         return Ok(Value::undefined());
     };
     let (w, h) = (image.w, image.h);
@@ -783,13 +783,37 @@ pub(crate) fn queue_copy_external_image(
     });
     let premultiplied = prop(scope, &args[0], "premultipliedAlpha");
     let premultiply = scope.to_bool(&premultiplied);
-    let Some((data, stride)) = image.pixels() else {
+    let rows = image.with_pixels(|data, stride| {
+        source_rows(data, stride, (w, h), flip_y, premultiply, to_rgba)
+    });
+    let Some(out) = rows.flatten() else {
         return Ok(Value::undefined());
     };
+    let mut layout = TexelCopyBufferLayout::zeroed();
+    layout.bytes_per_row = (w as u32) * 4;
+    layout.rows_per_image = h as u32;
+    let size = Extent3D {
+        width: w as u32,
+        height: h as u32,
+        depth_or_array_layers: 1,
+    };
+    queue.write_texture(&destination, &out, &layout, &size);
+    drop(texture);
+    Ok(Value::undefined())
+}
+
+fn source_rows(
+    data: &[u8],
+    stride: usize,
+    (w, h): (i32, i32),
+    flip_y: bool,
+    premultiply: bool,
+    to_rgba: bool,
+) -> Option<Vec<u8>> {
     let (wu, hu) = (w as usize, h as usize);
     let bpr = wu * 4;
     if stride < bpr || data.len() < (hu - 1) * stride + bpr {
-        return Ok(Value::undefined());
+        return None;
     }
     let mut out = vec![0u8; bpr * hu];
     for y in 0..hu {
@@ -817,17 +841,7 @@ pub(crate) fn queue_copy_external_image(
             o[3] = a as u8;
         }
     }
-    let mut layout = TexelCopyBufferLayout::zeroed();
-    layout.bytes_per_row = bpr as u32;
-    layout.rows_per_image = h as u32;
-    let size = Extent3D {
-        width: w as u32,
-        height: h as u32,
-        depth_or_array_layers: 1,
-    };
-    queue.write_texture(&destination, &out, &layout, &size);
-    drop(texture);
-    Ok(Value::undefined())
+    Some(out)
 }
 
 fn query_set_destroy(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {

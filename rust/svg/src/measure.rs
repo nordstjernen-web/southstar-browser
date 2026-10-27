@@ -8,7 +8,7 @@ use southstar_dom::{Node, children};
 use southstar_glib::boolean;
 use southstar_style::{StyleRef, StyleTable};
 
-use crate::ffi::{FORMAT_A8, Matrix, OwnedCanvas, Segment, Surface, SvgGeometry};
+use crate::ffi::{Canvas, FORMAT_A8, Matrix, Segment, Surface, SvgGeometry};
 use crate::state::{State, cmax, cmin};
 use crate::{
     Ctx, HEIGHT, MAX_DEPTH, MAX_NESTING, MAX_NODES, SVG_X, SVG_Y, WIDTH, attr_length, is_element,
@@ -135,7 +135,7 @@ impl<'a> Measure<'a> {
     }
 
     fn shape(&mut self, ctx: &mut Ctx<'a>, n: Node<'a>, st: &State, own: &mut Extent) {
-        let cr = ctx.cr;
+        let cr = ctx.cr.clone();
         cr.new_path();
         if ctx.shape_path(n, st) && cr.has_current_point() {
             let (x0, y0, mut x1, mut y1) = cr.path_extents();
@@ -384,7 +384,7 @@ pub fn node_geometry(
     let Some(surface) = Surface::image(FORMAT_A8, 1, 1) else {
         return empty_geometry();
     };
-    let cr = OwnedCanvas::on(&surface);
+    let cr = Canvas::on(&surface);
     let mut m = Measure {
         target,
         path,
@@ -392,7 +392,7 @@ pub fn node_geometry(
         boxless: false,
         out: empty_geometry(),
     };
-    let mut ctx = Ctx::new(cr.canvas(), svg, styles, 0.0, 0.0);
+    let mut ctx = Ctx::new(cr, svg, styles, 0.0, 0.0);
     m.out.rendered = boolean(true);
     let to_root = viewbox_matrix(svg, width, height);
     let frame = Frame {

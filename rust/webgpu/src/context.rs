@@ -293,9 +293,8 @@ pub(crate) fn canvas_surface(canvas: usize) -> Option<*mut c_void> {
             if surf.is_none() {
                 *surf = Surface::new(w, h);
             }
-            if let Some(surf) = surf.as_mut().filter(|s| s.ok()) {
-                surf.flush();
-                if let Some((pixels, stride)) = surf.pixels() {
+            if let Some(surf) = surf.as_ref() {
+                surf.with_pixels_mut(|pixels, stride| {
                     copy_rows(
                         map,
                         pixels,
@@ -305,8 +304,7 @@ pub(crate) fn canvas_surface(canvas: usize) -> Option<*mut c_void> {
                         swap,
                         opaque,
                     );
-                }
-                surf.mark_dirty();
+                });
             }
         });
     }
