@@ -70,8 +70,7 @@ pub(crate) fn context_cairo(scope: &Scope<'_>, this: &Value) -> Option<super::ca
         return None;
     }
     let el = super::state::Node::from_addr(hidden::ptr(this));
-    let st = crate::state::state_for(js, el)?;
-    unsafe { super::cairo::Context::from_raw((*st).cr) }
+    crate::state::state_for(js, el).map(|st| st.context())
 }
 
 pub(crate) fn in_realm<R>(
@@ -192,14 +191,13 @@ pub(crate) fn set_element_attr(el: usize, name: &str, value: &str) {
 }
 
 pub(crate) fn new_offscreen_canvas_node(scope: &Scope<'_>) -> usize {
-    let el = southstar_dom::node::new_element(b"canvas")
-        .as_mut_ptr()
-        .cast::<NsNode>();
+    let node = southstar_dom::node::new_element(b"canvas");
+    let el = node.as_ptr() as usize;
     let js = super::state::js_of(scope);
-    if let Some(st) = crate::state::state_for(js, super::state::Node::from_addr(el as usize)) {
-        unsafe { (*st).owned_node = el.cast() };
+    if let Some(st) = crate::state::state_for(js, super::state::Node::from_addr(el)) {
+        st.set_owned_node(node);
     }
-    el as usize
+    el
 }
 
 pub(crate) fn canvas_realm(scope: &Scope<'_>, el: usize) -> ContextHandle {

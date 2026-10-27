@@ -1872,6 +1872,7 @@ dependencies = [
 name = "southstar-canvas"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-css",
  "southstar-digest",
  "southstar-dom",

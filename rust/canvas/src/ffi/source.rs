@@ -68,12 +68,10 @@ fn texture_surface(texture: Option<TextureRef>) -> Option<Surface> {
 fn canvas_source(scope: &Scope<'_>, node: *const NsNode) -> Option<Source> {
     let js = super::state::js_of(scope);
     let st = crate::state::state_for(js, super::state::Node::from_addr(node as usize))?;
-    let st = unsafe { &*st };
-    let surface = unsafe { Surface::from_borrowed(st.surf) }?;
     Some(Source {
-        surface,
-        size: (st.w, st.h),
-        origin_clean: st.origin_clean != 0,
+        surface: st.surface(),
+        size: st.size(),
+        origin_clean: st.origin_clean.get(),
     })
 }
 

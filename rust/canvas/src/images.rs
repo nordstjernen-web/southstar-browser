@@ -5,12 +5,10 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::draw::state;
-use crate::ffi::cairo::{Context, Surface};
+use crate::ffi::cairo::Filter;
 
 type Result = core::result::Result<Value, Value>;
 
-const FILTER_NEAREST: i32 = 3;
-const FILTER_BILINEAR: i32 = 4;
 const MAX_SIDE: i64 = 32767;
 
 fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
@@ -65,11 +63,9 @@ pub(crate) fn draw_image(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    let Some(cr) = (unsafe { Context::from_raw(st.cr) }) else {
-        return Ok(Value::undefined());
-    };
+    let cr = st.context();
     cr.save();
-    crate::style::apply_composite(scope, this, cr);
+    crate::style::apply_composite(scope, this, &cr);
     cr.translate(dx, dy);
     cr.scale(dw / sw, dh / sh);
     cr.translate(-sx, -sy);
@@ -77,9 +73,9 @@ pub(crate) fn draw_image(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     cr.clip();
     cr.set_source_surface(&src.surface, 0.0, 0.0);
     cr.set_source_filter(if smooth {
-        FILTER_BILINEAR
+        Filter::Bilinear
     } else {
-        FILTER_NEAREST
+        Filter::Nearest
     });
     if ga < 1.0 - 1e-6 {
         cr.paint_with_alpha(ga);
@@ -88,7 +84,7 @@ pub(crate) fn draw_image(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     }
     cr.restore();
     if !src.origin_clean {
-        st.origin_clean = 0;
+        st.origin_clean.set(false);
     }
     drop(src);
     crate::ffi::mark_mutated(scope);
@@ -122,7 +118,7 @@ pub(crate) fn get_image_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     let sw = int(scope, args.get(2));
     let sh = int(scope, args.get(3));
     let st = state(scope, this);
-    if st.as_ref().is_some_and(|st| st.origin_clean == 0) {
+    if st.as_ref().is_some_and(|st| !st.origin_clean.get()) {
         return Err(crate::api::throw_dom(
             scope,
             "SecurityError",
@@ -159,7 +155,7 @@ pub(crate) fn get_image_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]
         return Err(scope.range_error("getImageData allocation failed"));
     }
     out.resize(dw * dh * 4, 0);
-    let surface = st.and_then(|st| unsafe { Surface::from_borrowed(st.surf) });
+    let surface = st.map(|st| st.surface());
     if let Some(surface) = surface {
         surface.read_pixels(|data, stride, (cw, ch)| {
             for y in 0..dh {
@@ -234,9 +230,7 @@ pub(crate) fn put_image_data(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    let Some(surface) = (unsafe { Surface::from_borrowed(st.surf) }) else {
-        return Ok(Value::undefined());
-    };
+    let surface = st.surface();
     let needed = iw as usize * ih as usize * 4;
     let pixels = scope
         .with_typed_array(&data, |t| {

@@ -5,13 +5,11 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::draw::{prepare_path_and_rule, restore_path, state};
-use crate::ffi::cairo::Context;
+use crate::ffi::cairo::{Context, LineCap, LineJoin};
 
 type Result = core::result::Result<Value, Value>;
 
 const OPERATOR_CLEAR: i32 = 0;
-const LINE_CAP_BUTT: i32 = 0;
-const LINE_JOIN_MITER: i32 = 0;
 const DEFAULT_MITER_LIMIT: f64 = 10.0;
 const IMAGEDATA_MAX: i64 = 32767;
 
@@ -29,16 +27,16 @@ fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
 }
 
 fn cairo_of(st: &crate::ffi::state::CanvasState) -> Option<Context> {
-    unsafe { Context::from_raw(st.cr) }
+    Some(st.context())
 }
 
 pub(crate) fn clip(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result {
-    let Some(cr) = state(scope, this).and_then(|st| cairo_of(st)) else {
+    let Some(cr) = state(scope, this).and_then(|st| cairo_of(&st)) else {
         return Ok(Value::undefined());
     };
-    let saved = prepare_path_and_rule(scope, cr, args);
+    let saved = prepare_path_and_rule(scope, &cr, args);
     cr.clip_preserve();
-    restore_path(cr, saved);
+    restore_path(&cr, saved);
     Ok(Value::undefined())
 }
 
@@ -84,7 +82,7 @@ pub(crate) fn get_line_dash(scope: &mut Scope<'_>, this: &Value, _: &[Value]) ->
     Ok(out)
 }
 
-fn replay_path(cr: Context, path: &Value) -> crate::ffi::cairo::Path {
+fn replay_path(cr: &Context, path: &Value) -> crate::ffi::cairo::Path {
     let saved = cr.copy_path();
     if let Some(src) = crate::ffi::path2d_context(path) {
         let copy = src.copy_path();
@@ -108,10 +106,10 @@ pub(crate) fn is_point_in_path(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     let Some(st) = state(scope, this) else {
         return Ok(Value::boolean(false));
     };
-    let Some(cr) = cairo_of(st) else {
+    let Some(cr) = cairo_of(&st) else {
         return Ok(Value::boolean(false));
     };
-    let saved = with_path.then(|| replay_path(cr, &args[0]));
+    let saved = with_path.then(|| replay_path(&cr, &args[0]));
     let rule = args
         .get(i + 2)
         .filter(|v| v.is_string())
@@ -126,7 +124,7 @@ pub(crate) fn is_point_in_path(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     cr.set_fill_rule(crate::raster::fill_rule(rule.as_deref()));
     let inside = cr.in_fill(x, y);
     cr.set_fill_rule(previous);
-    restore_path(cr, saved);
+    restore_path(&cr, saved);
     Ok(Value::boolean(inside))
 }
 
@@ -144,14 +142,14 @@ pub(crate) fn is_point_in_stroke(scope: &mut Scope<'_>, this: &Value, args: &[Va
     let Some(st) = state(scope, this) else {
         return Ok(Value::boolean(false));
     };
-    crate::style::sync(scope, this, st);
-    let Some(cr) = cairo_of(st) else {
+    crate::style::sync(scope, this, &st);
+    let Some(cr) = cairo_of(&st) else {
         return Ok(Value::boolean(false));
     };
-    let saved = with_path.then(|| replay_path(cr, &args[0]));
-    cr.set_line_width(st.line_width);
+    let saved = with_path.then(|| replay_path(&cr, &args[0]));
+    cr.set_line_width(st.line_width.get());
     let inside = cr.in_stroke(x, y);
-    restore_path(cr, saved);
+    restore_path(&cr, saved);
     Ok(Value::boolean(inside))
 }
 
@@ -159,7 +157,7 @@ pub(crate) fn reset(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result 
     let Some(st) = state(scope, this) else {
         return Ok(Value::undefined());
     };
-    if let Some(cr) = cairo_of(st) {
+    if let Some(cr) = cairo_of(&st) {
         cr.save();
         cr.identity_matrix();
         cr.set_operator(OPERATOR_CLEAR);
@@ -170,20 +168,20 @@ pub(crate) fn reset(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result 
         cr.reset_clip();
         cr.set_dash(&[], 0.0);
         cr.set_line_width(1.0);
-        cr.set_line_cap(LINE_CAP_BUTT);
-        cr.set_line_join(LINE_JOIN_MITER);
+        cr.set_line_cap(LineCap::Butt);
+        cr.set_line_join(LineJoin::Miter);
         cr.set_miter_limit(DEFAULT_MITER_LIMIT);
     }
     crate::api::ctx2d_init_state(scope, this);
-    crate::ffi::state::set_font(st, b"10px sans-serif");
-    st.fill = [0.0, 0.0, 0.0, 1.0];
-    st.stroke = [0.0, 0.0, 0.0, 1.0];
-    st.line_width = 1.0;
-    crate::ffi::state::clear_patterns(st);
-    st.shadow = [0.0; 4];
-    st.shadow_blur = 0.0;
-    st.shadow_ox = 0.0;
-    st.shadow_oy = 0.0;
+    st.set_font(b"10px sans-serif");
+    st.fill.set([0.0, 0.0, 0.0, 1.0]);
+    st.stroke.set([0.0, 0.0, 0.0, 1.0]);
+    st.line_width.set(1.0);
+    st.clear_patterns();
+    st.shadow.set([0.0; 4]);
+    st.shadow_blur.set(0.0);
+    st.shadow_ox.set(0.0);
+    st.shadow_oy.set(0.0);
     crate::ffi::mark_mutated(scope);
     Ok(Value::undefined())
 }
