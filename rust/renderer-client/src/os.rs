@@ -822,12 +822,21 @@ mod sys {
         flags: u32,
     }
 
+    #[repr(C)]
+    struct StartupInfoEx {
+        startup_info: StartupInfo,
+        attribute_list: *mut c_void,
+    }
+
     const PAGE_READWRITE: u32 = 4;
     const FILE_MAP_READ_WRITE: u32 = 4 | 2;
     const HANDLE_FLAG_INHERIT: u32 = 1;
     const STARTF_USESTDHANDLES: u32 = 0x100;
     const STD_ERROR_HANDLE: u32 = -12i32 as u32;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const EXTENDED_STARTUPINFO_PRESENT: u32 = 0x0008_0000;
+    const PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 0x20002;
+    const INVALID_HANDLE_VALUE: Handle = -1isize as Handle;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const STILL_ACTIVE: u32 = 259;
     const TH32CS_SNAPTHREAD: u32 = 0x4;
@@ -871,6 +880,22 @@ mod sys {
             startup_info: *mut StartupInfo,
             process_information: *mut ProcessInformation,
         ) -> i32;
+        fn InitializeProcThreadAttributeList(
+            list: *mut c_void,
+            attribute_count: u32,
+            flags: u32,
+            size: *mut usize,
+        ) -> i32;
+        fn UpdateProcThreadAttribute(
+            list: *mut c_void,
+            flags: u32,
+            attribute: usize,
+            value: *const c_void,
+            size: usize,
+            previous_value: *mut c_void,
+            return_size: *mut usize,
+        ) -> i32;
+        fn DeleteProcThreadAttributeList(list: *mut c_void);
         fn TerminateProcess(process: Handle, exit_code: u32) -> i32;
         fn WaitForSingleObject(handle: Handle, millis: u32) -> u32;
         fn GetProcessId(process: Handle) -> u32;
@@ -913,6 +938,80 @@ mod sys {
                 unsafe { CloseHandle(handle) };
             }
         }
+    }
+
+    struct InheritedHandles {
+        list: Vec<u8>,
+        handles: Vec<Handle>,
+    }
+
+    impl InheritedHandles {
+        fn new(handles: Vec<Handle>) -> Option<Self> {
+            let mut size = 0usize;
+            // SAFETY: a null list with a size out-parameter only asks for the buffer size.
+            unsafe { InitializeProcThreadAttributeList(ptr::null_mut(), 1, 0, &mut size) };
+            if size == 0 {
+                return None;
+            }
+            let mut inherited = Self {
+                list: vec![0u8; size],
+                handles,
+            };
+            let list = inherited.list.as_mut_ptr().cast::<c_void>();
+            // SAFETY: the buffer holds the size the first call reported for one attribute.
+            if unsafe { InitializeProcThreadAttributeList(list, 1, 0, &mut size) } == 0 {
+                return None;
+            }
+            let bytes = inherited.handles.len() * mem::size_of::<Handle>();
+            // SAFETY: the list was initialized above and the handle array outlives it.
+            let updated = unsafe {
+                UpdateProcThreadAttribute(
+                    list,
+                    0,
+                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                    inherited.handles.as_ptr().cast(),
+                    bytes,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                )
+            };
+            if updated == 0 {
+                // SAFETY: the list was initialized above and is deleted once here.
+                unsafe { DeleteProcThreadAttributeList(list) };
+                inherited.list.clear();
+                return None;
+            }
+            Some(inherited)
+        }
+
+        fn list(&mut self) -> *mut c_void {
+            self.list.as_mut_ptr().cast()
+        }
+    }
+
+    impl Drop for InheritedHandles {
+        fn drop(&mut self) {
+            if self.list.is_empty() {
+                return;
+            }
+            // SAFETY: the list was initialized by new and is deleted once.
+            unsafe { DeleteProcThreadAttributeList(self.list()) };
+        }
+    }
+
+    fn inheritable_stderr() -> Handle {
+        // SAFETY: GetStdHandle has no preconditions.
+        let handle = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+        if handle.is_null() || handle == INVALID_HANDLE_VALUE {
+            return ptr::null_mut();
+        }
+        // SAFETY: handle is a live standard handle of this process.
+        let marked =
+            unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) };
+        if marked == 0 {
+            return ptr::null_mut();
+        }
+        handle
     }
 
     pub fn spawn(
@@ -996,7 +1095,10 @@ mod sys {
             format!(" {max_w} {max_h}{private_arg}")
         };
         command.extend_from_slice(tail.as_bytes());
-        command.truncate(1023);
+        if command.len() >= 32767 || command.contains(&0) {
+            close_all(&[child_in, parent_in, parent_out, child_out]);
+            return unmap(pixels, mapping);
+        }
         command.push(0);
         let mut program = path.to_vec();
         program.push(0);
@@ -1004,12 +1106,25 @@ mod sys {
             d.push(0);
             d
         });
-        let mut startup: StartupInfo = unsafe { mem::zeroed() };
-        startup.cb = mem::size_of::<StartupInfo>() as u32;
-        startup.flags = STARTF_USESTDHANDLES;
-        startup.std_input = child_in;
-        startup.std_output = child_out;
-        startup.std_error = unsafe { GetStdHandle(STD_ERROR_HANDLE) };
+        let stderr = inheritable_stderr();
+        let mut handles = vec![child_in, child_out];
+        if shm {
+            handles.push(mapping);
+        }
+        if !stderr.is_null() {
+            handles.push(stderr);
+        }
+        let Some(mut inherited) = InheritedHandles::new(handles) else {
+            close_all(&[child_in, parent_in, parent_out, child_out]);
+            return unmap(pixels, mapping);
+        };
+        let mut startup: StartupInfoEx = unsafe { mem::zeroed() };
+        startup.startup_info.cb = mem::size_of::<StartupInfoEx>() as u32;
+        startup.startup_info.flags = STARTF_USESTDHANDLES;
+        startup.startup_info.std_input = child_in;
+        startup.startup_info.std_output = child_out;
+        startup.startup_info.std_error = stderr;
+        startup.attribute_list = inherited.list();
         let mut info: ProcessInformation = unsafe { mem::zeroed() };
         let ok = unsafe {
             CreateProcessA(
@@ -1018,13 +1133,14 @@ mod sys {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 1,
-                CREATE_NO_WINDOW,
+                CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
                 ptr::null_mut(),
                 workdir.as_ref().map_or(ptr::null(), |d| d.as_ptr().cast()),
-                &mut startup,
+                (&raw mut startup).cast(),
                 &mut info,
             )
         };
+        drop(inherited);
         close_all(&[child_in, child_out]);
         if ok == 0 {
             close_all(&[parent_in, parent_out]);
