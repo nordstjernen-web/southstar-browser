@@ -27,11 +27,6 @@ pub(crate) struct GSource {
 }
 
 #[repr(C)]
-pub struct Response {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 struct GMainLoop {
     _private: [u8; 0],
 }
@@ -380,7 +375,7 @@ pub(crate) fn add_resource_timing(
     url: &CStr,
     initiator: &CStr,
     start_us: i64,
-    response: *const Response,
+    response: Option<&southstar_net::Response>,
 ) {
     let span = (start_us, super::monotonic_us());
     let add = crate::api::perf_hooks().add_resource_timed;

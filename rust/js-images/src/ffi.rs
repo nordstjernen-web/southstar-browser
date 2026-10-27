@@ -185,7 +185,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
             url,
             Some(c"img"),
             (start, end),
-            ptr::null(),
+            None,
         )
     };
 }

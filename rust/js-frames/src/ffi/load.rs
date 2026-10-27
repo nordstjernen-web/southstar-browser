@@ -174,7 +174,6 @@ pub(crate) fn add_resource_timing(
     span: (i64, i64),
     resp: Option<&Response>,
 ) {
-    let resp = resp.map_or(core::ptr::null(), |resp| resp.as_ptr().cast_const());
     // SAFETY: the info's strings and the response are the caller's and outlive the call.
     unsafe {
         southstar_js_perf::add_resource_timed(
@@ -183,7 +182,7 @@ pub(crate) fn add_resource_timing(
             url,
             Some(initiator),
             span,
-            resp.cast(),
+            resp,
         )
     };
 }

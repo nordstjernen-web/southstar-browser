@@ -13,7 +13,7 @@ use crate::ffi::glue;
 use crate::ffi::{self, Js, NsJs, record};
 use crate::{budget, orphans, scheduling, teardown};
 
-pub use crate::ffi::glue::{Response, SourceFn};
+pub use crate::ffi::glue::SourceFn;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -270,10 +270,7 @@ pub fn fetch_subresource(
         && js.st().worker_host.get().is_null()
         && let Some(initiator) = initiator
     {
-        let response = fetched.response.as_ref().map_or(ptr::null(), |response| {
-            response.as_ptr().cast_const().cast()
-        });
-        glue::add_resource_timing(js, info, url, initiator, start, response);
+        glue::add_resource_timing(js, info, url, initiator, start, fetched.response.as_ref());
     }
     fetched
 }

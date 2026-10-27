@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use southstar_glib::{self as glib, GBoolean, GError};
-pub use southstar_net::{NsResponse, Response};
+pub use southstar_net::Response;
 
 #[repr(C)]
 struct GMainLoop {
@@ -86,7 +86,7 @@ pub fn accept_headers(dest: Dest) -> *const *const c_char {
 
 struct FetchState {
     main_loop: *mut c_void,
-    resp: *mut NsResponse,
+    resp: Option<Response>,
     error: *mut GError,
 }
 
@@ -109,11 +109,11 @@ pub struct Request<'a> {
     pub headers: *const *const c_char,
 }
 
-pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> *mut NsResponse {
+pub unsafe fn request_blocking(r: &Request, error: *mut *mut GError) -> Option<Response> {
     let main_loop = NestedLoop::new();
     let mut st = FetchState {
         main_loop: main_loop.raw(),
-        resp: ptr::null_mut(),
+        resp: None,
         error: ptr::null_mut(),
     };
     let initiator = r
@@ -178,7 +178,7 @@ pub fn fetch_blocking_with_headers(
         initiator: None,
         headers: accept_headers(dest),
     };
-    unsafe { Response::from_raw(request_blocking(&r, ptr::null_mut())) }
+    unsafe { request_blocking(&r, ptr::null_mut()) }
 }
 
 pub struct Post<'a> {
@@ -219,8 +219,7 @@ pub fn navigate_blocking(
     // SAFETY: the request's strings and body outlive the blocking call, and error starts null.
     let resp = unsafe { request_blocking(&r, &mut error) };
     let message = take_error(error);
-    // SAFETY: request_blocking hands over a response the caller owns, or null.
-    unsafe { Response::from_raw(resp) }.ok_or(message)
+    resp.ok_or(message)
 }
 
 pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
@@ -237,9 +236,7 @@ pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
         headers: ptr::null(),
     };
     // SAFETY: the request's strings outlive the blocking call, and a null error slot is allowed.
-    let resp = unsafe { request_blocking(&r, ptr::null_mut()) };
-    // SAFETY: request_blocking hands over a response the caller owns, or null.
-    unsafe { Response::from_raw(resp) }
+    unsafe { request_blocking(&r, ptr::null_mut()) }
 }
 
 #[derive(Clone)]
@@ -325,7 +322,7 @@ pub fn preconnect(origin: &[u8]) {
 }
 
 unsafe extern "C" fn on_preload_fetched(_src: *mut c_void, result: *mut c_void, _ud: *mut c_void) {
-    drop(unsafe { Response::from_raw(southstar_net::fetch_finish(result, ptr::null_mut())) });
+    drop(unsafe { southstar_net::fetch_finish(result, ptr::null_mut()) });
 }
 
 pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
@@ -386,5 +383,5 @@ pub unsafe fn finish(result: *mut c_void) -> Option<Response> {
     if !err.is_null() {
         unsafe { glib::g_error_free(err) };
     }
-    unsafe { Response::from_raw(resp) }
+    resp
 }
