@@ -471,13 +471,23 @@ The `document.cookie` setter:
   this; both require additional integration work (manifest /
   capability declarations / re-routed config paths) and are
   tracked as future work.
-- **`document.cookie` writes to the jar without file locking.** A
-  JS cookie write and a concurrent `Set-Cookie` write from an
-  in-flight transfer are not serialised against each other, so a
-  write can occasionally be lost to the racing one. A shared,
-  locked cookie store is the long-term fix; in practice script
-  cookie writes happen between transfers, so the window is small.
-- **`HttpOnly` name collisions from JS are not rejected.** Setting
-  `document.cookie` with the same name as an existing `HttpOnly`
-  cookie adds a second entry rather than being refused; the
-  `HttpOnly` line is preserved untouched.
+- **Every renderer shares the on-disk cookie jars, HTTP cache,
+  localStorage and IndexedDB.** The renderer does its own fetching and
+  persistence, so a compromised renderer can read every site's cookies
+  from `~/.config/southstar/cookies` and write a cache entry that a tab
+  for another origin will load. Per-site renderers and a
+  networking/storage broker in the shell are the fix and are tracked as
+  future work; the configuration file is already out of the renderer's
+  writable set.
+- **Downloads are fetched by the shell.** A download started by a page
+  is fetched by the GTK shell's own network stack (TLS, HTTP/2,
+  decompression) rather than by the sandboxed renderer. It is capped at
+  1 GiB, partitioned by the page and named safely, and executable file
+  types wait for the user, but the parsing happens outside the renderer
+  sandbox until the renderer streams the bytes to the shell.
+- **The audio helper fetches helper-played media itself.** `.mp3` (and
+  `.opus`/`.ogg`/`.webm` with libav) sources pass the page's CSP
+  `media-src` and mixed-content checks in the renderer, but the helper's
+  own fetch sends no cookies, a distinct User-Agent and bypasses the
+  HTTP cache, so a server can tell the decoder's request from the
+  engine's.
