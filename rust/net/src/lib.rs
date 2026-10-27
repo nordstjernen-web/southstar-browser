@@ -18,6 +18,7 @@ mod hsts;
 mod listing;
 mod netlog;
 mod request;
+mod response;
 pub mod route;
 mod storage;
 mod transport;
@@ -33,8 +34,7 @@ pub use cookies::{
 pub use error_page::build as build_error_page;
 pub use ffi::fetch::Failure;
 pub use ffi::fetch::{
-    FetchDest, Response, Timing as ResponseTiming, accept_header_lines,
-    ns_net_accept_headers_for as accept_headers_for, request_key,
+    FetchDest, accept_header_lines, ns_net_accept_headers_for as accept_headers_for, request_key,
 };
 pub use ffi::forms::{multipart_boundary, urlencoded_append_pair};
 pub use ffi::host::set_self_exe;
@@ -51,11 +51,12 @@ pub use ffi::url::{
     http_date, https_first_upgrade, is_mobile_mode, navigator_platform, strip_tracking_params,
     ua_hint_platform, user_agent_for_mode,
 };
-pub use ffi::{NsResponse, decode_data_url, set_allow_file_urls};
+pub use ffi::{decode_data_url, set_allow_file_urls};
 pub use forms::set_submission_charset;
 pub use netlog::{
     Snapshot as PerfSnapshot, clear as log_clear, dump as log_dump, snapshot as perf_snapshot,
 };
+pub use response::{Response, Timing as ResponseTiming};
 pub use url::{
     has_client_hints, is_nosniff as header_is_nosniff, origin_from, parse_refresh,
     raw_header_values, referer_for, same_origin,

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_long, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -35,48 +35,6 @@ impl Js {
 
 #[derive(Clone, Copy)]
 pub(crate) struct RawObject(usize);
-
-#[repr(C)]
-struct GByteArray {
-    data: *mut u8,
-    len: c_uint,
-}
-
-#[repr(C)]
-struct NsResponse {
-    status: c_long,
-    final_url: *mut c_char,
-    content_type: *mut c_char,
-    content_disposition: *mut c_char,
-    csp_header: *mut c_char,
-    xframe_options: *mut c_char,
-    x_content_type_options: *mut c_char,
-    cors_allow_origin: *mut c_char,
-    refresh: *mut c_char,
-    content_language: *mut c_char,
-    raw_headers: *mut c_char,
-    body: *mut GByteArray,
-    error: *mut c_char,
-    tls_warning: *mut c_char,
-    remote_ip: *mut c_char,
-    next_hop_protocol: *mut c_char,
-    request_start_us: i64,
-    request_start_real_ms: f64,
-    domain_lookup_ms: f64,
-    connect_ms: f64,
-    tls_ms: f64,
-    pretransfer_ms: f64,
-    response_start_ms: f64,
-    response_end_ms: f64,
-    security: c_int,
-    redirect_count: c_int,
-}
-
-const _: () = assert!(
-    core::mem::size_of::<NsResponse>() == 200
-        && core::mem::offset_of!(NsResponse, body) == 88
-        && core::mem::offset_of!(NsResponse, response_end_ms) == 184
-);
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
@@ -214,15 +172,14 @@ fn teardown(js: *const NsJs) {
 
 /// # Safety
 ///
-/// The strings `info` points to are null or NUL-terminated and live for the call, and `resp` is
-/// null or a live response.
+/// The strings `info` points to are null or NUL-terminated and live for the call.
 pub unsafe fn add_resource_timed(
     js: *const NsJs,
     info: Option<&ResourceInfo>,
     url: &CStr,
     initiator: Option<&CStr>,
     (start_us, end_us): (i64, i64),
-    resp: *const api::Response,
+    resp: Option<&southstar_net::Response>,
 ) {
     let js = Js::of(js);
     if js.is_null() {
@@ -252,19 +209,20 @@ pub unsafe fn add_resource_timed(
             body_size: 0,
         },
     };
-    let response = unsafe { resp.cast::<NsResponse>().as_ref() }.map(|r| unsafe {
+    let response = resp.map(|r| {
+        let timing = r.timing();
         Response {
-            status: long(r.status),
-            cors_allow_origin: bytes(r.cors_allow_origin),
-            raw_headers: bytes(r.raw_headers),
-            body_len: r.body.as_ref().map(|body| i64::from(body.len)),
-            next_hop_protocol: bytes(r.next_hop_protocol),
-            request_start_us: r.request_start_us,
-            domain_lookup_ms: r.domain_lookup_ms,
-            connect_ms: r.connect_ms,
-            tls_ms: r.tls_ms,
-            pretransfer_ms: r.pretransfer_ms,
-            response_start_ms: r.response_start_ms,
+            status: long(r.status()),
+            cors_allow_origin: r.cors_allow_origin().map(CStr::to_bytes),
+            raw_headers: r.raw_headers().map(CStr::to_bytes),
+            body_len: r.body().map(|body| body.len() as i64),
+            next_hop_protocol: r.next_hop_protocol().map(CStr::to_bytes),
+            request_start_us: timing.request_start_us,
+            domain_lookup_ms: timing.domain_lookup_ms,
+            connect_ms: timing.connect_ms,
+            tls_ms: timing.tls_ms,
+            pretransfer_ms: timing.pretransfer_ms,
+            response_start_ms: timing.response_start_ms,
         }
     });
     let fetch = Fetch {

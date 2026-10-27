@@ -2,8 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
-use core::ptr::{self, NonNull, addr_of_mut};
+use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ptr;
 use std::ffi::CString;
 
 use southstar_glib::{self as glib, GBoolean, GError};
@@ -12,8 +12,8 @@ use southstar_http_cache as http_cache;
 use super::hop::{self, HopOut, HopReq};
 use super::proxy::{ns_net_configured_no_proxy, ns_net_pick_configured_proxy};
 use super::sinks::{NsHeaderCtx, NsWriteCtx};
-use super::{GByteArray, NsResponse};
 use crate::request::{self, DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S};
+use crate::response::{Response, cstr, text as field};
 use crate::{hsts, netlog, storage, transport, url};
 
 const IO_ERROR_CANCELLED: c_int = 19;
@@ -33,11 +33,6 @@ unsafe extern "C" {
     fn g_quark_from_static_string(string: *const c_char) -> u32;
     fn g_io_error_quark() -> u32;
     fn g_error_new_literal(domain: u32, code: c_int, message: *const c_char) -> *mut GError;
-    fn g_set_error_literal(err: *mut *mut GError, domain: u32, code: c_int, message: *const c_char);
-    fn g_byte_array_new() -> *mut GByteArray;
-    fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
-    -> *mut GByteArray;
-    fn g_byte_array_set_size(array: *mut GByteArray, length: c_uint) -> *mut GByteArray;
     fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
 }
 
@@ -135,11 +130,6 @@ impl Failure {
         }
     }
 
-    pub(crate) fn set(&self, error: *mut *mut GError) {
-        let (domain, code, message) = self.parts();
-        unsafe { g_set_error_literal(error, domain, code, message.as_ptr()) };
-    }
-
     pub(crate) fn into_error(self) -> *mut GError {
         let (domain, code, message) = self.parts();
         unsafe { g_error_new_literal(domain, code, message.as_ptr()) }
@@ -155,225 +145,6 @@ impl Failure {
 
 pub fn net_error_domain() -> u32 {
     unsafe { g_quark_from_static_string(c"nd-net-error".as_ptr()) }
-}
-
-pub struct Timing {
-    pub request_start_us: i64,
-    pub request_start_real_ms: f64,
-    pub domain_lookup_ms: f64,
-    pub connect_ms: f64,
-    pub tls_ms: f64,
-    pub pretransfer_ms: f64,
-    pub response_start_ms: f64,
-    pub response_end_ms: f64,
-}
-
-pub struct Response(NonNull<NsResponse>);
-
-unsafe impl Send for Response {}
-
-impl Default for Response {
-    fn default() -> Response {
-        Response::new()
-    }
-}
-
-impl Response {
-    pub fn new() -> Response {
-        let raw =
-            unsafe { glib::g_malloc0(core::mem::size_of::<NsResponse>()) }.cast::<NsResponse>();
-        let resp = Response(NonNull::new(raw).expect("g_malloc0 aborts on failure"));
-        unsafe { (*resp.as_ptr()).body = g_byte_array_new() };
-        resp
-    }
-
-    pub fn as_ptr(&self) -> *mut NsResponse {
-        self.0.as_ptr()
-    }
-
-    pub fn get(&mut self) -> &mut NsResponse {
-        unsafe { self.0.as_mut() }
-    }
-
-    pub fn view(&self) -> &NsResponse {
-        unsafe { self.0.as_ref() }
-    }
-
-    pub fn copy(&self) -> Response {
-        let raw = unsafe { super::ns_response_copy(self.as_ptr()) };
-        Response(NonNull::new(raw).expect("copy of a response"))
-    }
-
-    pub fn append(&mut self, bytes: &[u8]) {
-        append(self.get().body, bytes);
-    }
-
-    pub fn into_raw(self) -> *mut NsResponse {
-        let raw = self.as_ptr();
-        core::mem::forget(self);
-        raw
-    }
-
-    /// # Safety
-    ///
-    /// `resp` is null or a response the caller owns; the returned value frees it.
-    pub unsafe fn from_raw(resp: *mut NsResponse) -> Option<Response> {
-        NonNull::new(resp).map(Response)
-    }
-
-    pub fn status(&self) -> c_long {
-        self.view().status
-    }
-
-    pub fn final_url(&self) -> Option<&CStr> {
-        c_str(self.view().final_url)
-    }
-
-    pub fn content_type(&self) -> Option<&CStr> {
-        c_str(self.view().content_type)
-    }
-
-    pub fn cors_allow_origin(&self) -> Option<&CStr> {
-        c_str(self.view().cors_allow_origin)
-    }
-
-    pub fn x_content_type_options(&self) -> Option<&CStr> {
-        c_str(self.view().x_content_type_options)
-    }
-
-    pub fn error(&self) -> Option<&CStr> {
-        c_str(self.view().error)
-    }
-
-    pub fn body(&self) -> Option<&[u8]> {
-        // SAFETY: a response's body is null or the GByteArray it owns.
-        let body = unsafe { self.view().body.as_ref() }?;
-        // SAFETY: the array holds len initialized bytes at data, or data is null.
-        Some(unsafe { glib::slice(body.data, body.len as usize) })
-    }
-
-    pub fn refresh(&self) -> Option<&CStr> {
-        c_str(self.view().refresh)
-    }
-
-    pub fn content_language(&self) -> Option<&CStr> {
-        c_str(self.view().content_language)
-    }
-
-    pub fn csp_header(&self) -> Option<&CStr> {
-        c_str(self.view().csp_header)
-    }
-
-    pub fn raw_headers(&self) -> Option<&CStr> {
-        c_str(self.view().raw_headers)
-    }
-
-    pub fn next_hop_protocol(&self) -> Option<&CStr> {
-        c_str(self.view().next_hop_protocol)
-    }
-
-    pub fn content_disposition(&self) -> Option<&CStr> {
-        c_str(self.view().content_disposition)
-    }
-
-    pub fn xframe_options(&self) -> Option<&CStr> {
-        c_str(self.view().xframe_options)
-    }
-
-    pub fn redirect_count(&self) -> c_int {
-        self.view().redirect_count
-    }
-
-    pub fn set_status(&mut self, status: c_long) {
-        self.get().status = status;
-    }
-
-    pub fn set_error(&mut self, message: &[u8]) {
-        replace(&mut self.get().error, Some(message));
-    }
-
-    pub fn set_cors_allow_origin(&mut self, value: &[u8]) {
-        replace(&mut self.get().cors_allow_origin, Some(value));
-    }
-
-    pub fn set_raw_headers(&mut self, value: &[u8]) {
-        replace(&mut self.get().raw_headers, Some(value));
-    }
-
-    pub fn remote_ip(&self) -> Option<&CStr> {
-        c_str(self.view().remote_ip)
-    }
-
-    pub fn security(&self) -> c_int {
-        self.view().security
-    }
-
-    pub fn timing(&self) -> Timing {
-        let r = self.view();
-        Timing {
-            request_start_us: r.request_start_us,
-            request_start_real_ms: r.request_start_real_ms,
-            domain_lookup_ms: r.domain_lookup_ms,
-            connect_ms: r.connect_ms,
-            tls_ms: r.tls_ms,
-            pretransfer_ms: r.pretransfer_ms,
-            response_start_ms: r.response_start_ms,
-            response_end_ms: r.response_end_ms,
-        }
-    }
-
-    pub fn set_body(&mut self, bytes: &[u8]) {
-        let r = self.get();
-        if r.body.is_null() {
-            // SAFETY: g_byte_array_new has no preconditions and never returns null.
-            r.body = unsafe { g_byte_array_new() };
-        }
-        // SAFETY: the body is the live GByteArray this response owns.
-        unsafe { g_byte_array_set_size(r.body, 0) };
-        append(r.body, bytes);
-    }
-
-    pub fn set_content_type(&mut self, value: &CStr) {
-        replace(&mut self.get().content_type, Some(value.to_bytes()));
-    }
-
-    pub fn set_final_url(&mut self, value: &CStr) {
-        replace(&mut self.get().final_url, Some(value.to_bytes()));
-    }
-
-    pub fn clear_error(&mut self) {
-        replace(&mut self.get().error, None);
-    }
-
-    pub fn set_security(&mut self, security: c_int) {
-        self.get().security = security;
-    }
-
-    fn with_error(url: &[u8], status: c_long, error: &[u8]) -> Response {
-        let mut resp = Response::new();
-        let r = resp.get();
-        r.final_url = glib::strdup(url);
-        r.status = status;
-        r.error = glib::strdup(error);
-        resp
-    }
-
-    fn from_cache(entry: &http_cache::Entry) -> Response {
-        let mut resp = Response::new();
-        let r = resp.get();
-        r.status = entry.status as c_long;
-        r.final_url = dup(entry.final_url.as_deref());
-        r.content_type = dup(entry.content_type.as_deref());
-        r.cors_allow_origin = dup(entry.cors_allow_origin.as_deref());
-        append(r.body, &entry.body);
-        resp
-    }
-}
-
-impl Drop for Response {
-    fn drop(&mut self) {
-        unsafe { super::ns_response_free(self.as_ptr()) };
-    }
 }
 
 struct OriginSlot(Vec<u8>);
@@ -398,45 +169,8 @@ fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
 }
 
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    // SAFETY: response texts are null or NUL-terminated strings the response owns.
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
-
-pub fn cstr(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-fn opt_cstr(bytes: Option<&[u8]>) -> Option<CString> {
-    bytes.map(cstr)
-}
-
-fn opt_ptr(value: &Option<CString>) -> *const c_char {
-    value.as_ref().map_or(ptr::null(), |c| c.as_ptr())
-}
-
-fn dup(value: Option<&[u8]>) -> *mut c_char {
-    value.map_or(ptr::null_mut(), glib::strdup)
-}
-
-fn append(body: *mut GByteArray, bytes: &[u8]) {
-    if !bytes.is_empty() {
-        unsafe { g_byte_array_append(body, bytes.as_ptr(), bytes.len() as c_uint) };
-    }
-}
-
-fn replace(field: &mut *mut c_char, value: Option<&[u8]>) {
-    unsafe { glib::g_free((*field).cast()) };
-    *field = dup(value);
-}
-
 pub fn widen<T: Into<i64>>(value: T) -> i64 {
     value.into()
-}
-
-fn body_len(r: &NsResponse) -> usize {
-    unsafe { r.body.as_ref() }.map_or(0, |b| b.len as usize)
 }
 
 fn without_nul(s: &'static str) -> &'static [u8] {
@@ -497,32 +231,17 @@ fn host_is_dead(url: &[u8]) -> bool {
     url::origin_from_any(url).is_some_and(|o| !o.is_empty() && transport::host_recently_dead(&o))
 }
 
-fn synthesized(f: &Fetch, resp: &Response) -> bool {
+fn synthesized(f: &Fetch, resp: &mut Response) -> bool {
     let url = cstr(f.url);
-    let top = opt_cstr(f.top_url);
-    let method = opt_cstr(f.method);
-    let (body, body_len) = f
-        .body
-        .map_or((ptr::null(), 0), |b| (b.as_ptr().cast::<c_void>(), b.len()));
-    let raw = resp.as_ptr();
-    unsafe {
-        super::ns_net_synthesize_about_response(
-            url.as_ptr(),
-            opt_ptr(&top),
-            opt_ptr(&method),
-            body,
-            body_len,
-            raw,
-        ) != 0
-            || super::ns_net_synthesize_view_source_response(
-                url.as_ptr(),
-                opt_ptr(&top),
-                f.cancellable,
-                raw,
-            ) != 0
-            || super::ns_net_synthesize_data_response(url.as_ptr(), raw) != 0
-            || super::ns_net_synthesize_file_response(url.as_ptr(), opt_ptr(&top), raw) != 0
-    }
+    let url = url.to_bytes();
+    let top = f.top_url.map(cstr);
+    let top = top.as_deref().map(CStr::to_bytes);
+    let method = f.method.map(cstr);
+    let method = method.as_deref().map(CStr::to_bytes);
+    super::synthesize_about_response(url, top, method, f.body, resp)
+        || super::synthesize_view_source_response(url, top, f.cancellable, resp)
+        || super::synthesize_data_response(url, resp)
+        || super::synthesize_file_response(url, top, resp)
 }
 
 fn upgraded(url: &[u8]) -> Vec<u8> {
@@ -617,9 +336,9 @@ fn shape_headers(
 
 fn security_of(final_url: &[u8], out: &HopOut, has_warning: bool) -> c_int {
     if final_url.starts_with(b"https://") {
-        if out.tls_verify_failed != 0 || has_warning {
+        if out.tls_verify_failed || has_warning {
             SECURITY_INVALID
-        } else if out.ok != 0 {
+        } else if out.ok {
             SECURITY_SECURE
         } else {
             0
@@ -633,17 +352,16 @@ fn security_of(final_url: &[u8], out: &HopOut, has_warning: bool) -> c_int {
 
 pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, Failure> {
     let is_navigation = request::is_navigation(f.headers);
-    let resp = Response::new();
+    let mut resp = Response::new();
 
     if !is_navigation && host_is_dead(f.url) {
-        drop(resp);
         return Ok(Response::with_error(
             f.url,
             0,
             b"host unreachable (recent connection failure)",
         ));
     }
-    if synthesized(f, &resp) {
+    if synthesized(f, &mut resp) {
         return Ok(resp);
     }
 
@@ -655,7 +373,6 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
             .is_some_and(|t| !t.is_empty() && !t.starts_with(b"ftp://"))
         && !is_navigation
     {
-        drop(resp);
         return Ok(Response::with_error(
             &url,
             0,
@@ -717,7 +434,6 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
                     .as_deref()
                     .is_some_and(|fu| url::same_origin(effective_top, fu));
             if has_cors {
-                drop(resp);
                 return Ok(Response::from_cache(entry));
             }
             cached = None;
@@ -753,20 +469,8 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         request_http,
     );
 
-    let raw = resp.as_ptr();
-    let mut wctx = NsWriteCtx::new(unsafe { (*raw).body });
-    let mut hctx = unsafe {
-        NsHeaderCtx::new([
-            addr_of_mut!((*raw).content_type),
-            addr_of_mut!((*raw).content_disposition),
-            addr_of_mut!((*raw).csp_header),
-            addr_of_mut!((*raw).xframe_options),
-            addr_of_mut!((*raw).x_content_type_options),
-            addr_of_mut!((*raw).cors_allow_origin),
-            addr_of_mut!((*raw).refresh),
-            addr_of_mut!((*raw).content_language),
-        ])
-    };
+    let mut wctx = NsWriteCtx::new();
+    let mut hctx = NsHeaderCtx::new();
 
     let url_c = cstr(&url);
     let js_jar = cookie_jar
@@ -794,7 +498,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         request_ftp,
     };
 
-    let mut out = HopOut::new();
+    let mut out = HopOut::default();
     let start_us = monotonic_us();
     let start_real_ms = real_time_ms();
 
@@ -802,24 +506,25 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let mut captured = hctx.take();
 
     if !produced {
-        let failure = if out.cancelled != 0 {
+        let failure = if out.cancelled {
             Failure::Cancelled
         } else {
             Failure::Net(
                 1,
-                text(out.error_message)
+                field(&out.error_message)
                     .unwrap_or(b"transport init failed")
                     .to_vec(),
             )
         };
-        out.clear();
         return Err(failure);
     }
 
-    let transport_ok = out.ok != 0;
-    let r = unsafe { &mut *raw };
+    let transport_ok = out.ok;
+    let r = &mut resp;
+    r.body = wctx.take_body();
+    hctx.store(r);
     r.status = out.status;
-    r.final_url = dup(Some(text(out.effective_url).unwrap_or(&url)));
+    r.final_url = Some(cstr(field(&out.effective_url).unwrap_or(&url)));
     r.redirect_count = 0;
     r.request_start_us = start_us;
     r.request_start_real_ms = start_real_ms;
@@ -829,53 +534,48 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     r.pretransfer_ms = out.t_pretransfer_ms;
     r.response_start_ms = out.t_starttransfer_ms;
     r.response_end_ms = out.t_total_ms;
-    if !out.remote_ip.is_null() {
-        r.remote_ip = unsafe { glib::g_strdup(out.remote_ip) };
+    if let Some(remote_ip) = out.remote_ip.take() {
+        r.remote_ip = Some(remote_ip);
     }
     if out.http_version != 0 {
-        r.next_hop_protocol =
-            unsafe { glib::g_strdup(super::netlog::ns_net_http_version_name(out.http_version)) };
+        r.next_hop_protocol = Some(netlog::version_name(out.http_version).to_owned());
     }
-    if !out.tls_warning.is_null() {
-        r.tls_warning = unsafe { glib::g_strdup(out.tls_warning) };
+    if let Some(tls_warning) = out.tls_warning.take() {
+        r.tls_warning = Some(tls_warning);
     }
-    let final_url = text(r.final_url).unwrap_or_default().to_vec();
-    r.security = security_of(&final_url, &out, !r.tls_warning.is_null());
+    let final_url = field(&r.final_url).unwrap_or_default().to_vec();
+    r.security = security_of(&final_url, &out, r.tls_warning.is_some());
     if netlog::logging() {
-        unsafe {
-            super::netlog::ns_net_conn_stat_record(r.final_url, out.http_version, out.num_connects)
-        };
+        super::netlog::conn_stat_record(&final_url, out.http_version, out.num_connects);
     }
     if transport_ok && request_ftp {
-        unsafe { super::ns_net_finish_ftp_response(raw) };
+        super::finish_ftp_response(r);
     }
 
     if let Some(reach) = url::origin_from_any(&url).filter(|o| !o.is_empty()) {
         if transport_ok || out.status > 0 {
             transport::mark_host_alive(&reach);
-        } else if out.status == 0 && out.connect_failed != 0 {
+        } else if out.status == 0 && out.connect_failed {
             transport::mark_host_dead(&reach);
         }
     }
 
-    let r = unsafe { &mut *raw };
     if !transport_ok {
         let message = if wctx.exceeded() {
             request::too_large_message(wctx.total())
         } else {
-            text(out.error_message)
+            field(&out.error_message)
                 .unwrap_or(b"transport error")
                 .to_vec()
         };
-        r.error = glib::strdup(&message);
+        r.error = Some(cstr(&message));
     }
-    out.clear();
 
     if transport_ok
         && request_http
         && request::is_simple_get(f.method)
         && !captured.set_cookie_seen
-        && r.tls_warning.is_null()
+        && r.tls_warning.is_none()
     {
         match cached.as_ref().filter(|_| r.status == 304) {
             Some(entry) => {
@@ -886,25 +586,24 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
                     captured.cache_control.as_deref(),
                     captured.expires.as_deref(),
                 );
-                unsafe { g_byte_array_set_size(r.body, 0) };
-                append(r.body, &entry.body);
+                r.body.clear();
+                r.body.extend_from_slice(&entry.body);
                 r.status = entry.status as c_long;
-                replace(&mut r.content_type, entry.content_type.as_deref());
-                replace(&mut r.cors_allow_origin, entry.cors_allow_origin.as_deref());
+                r.content_type = entry.content_type.as_deref().map(cstr);
+                r.cors_allow_origin = entry.cors_allow_origin.as_deref().map(cstr);
             }
-            None if r.status > 0 && r.status < 300 && body_len(r) > 0 => {
-                let body = super::body_bytes(r.body).unwrap_or_default();
+            None if r.status > 0 && r.status < 300 && !r.body.is_empty() => {
                 let stored = http_cache::Response {
-                    final_url: text(r.final_url),
+                    final_url: field(&r.final_url),
                     status: widen(r.status),
-                    content_type: text(r.content_type),
-                    cors_allow_origin: text(r.cors_allow_origin),
+                    content_type: field(&r.content_type),
+                    cors_allow_origin: field(&r.cors_allow_origin),
                     etag: captured.etag.as_deref(),
                     last_modified: captured.last_modified.as_deref(),
                     cache_control: captured.cache_control.as_deref(),
                     expires_header: captured.expires.as_deref(),
                     vary: captured.vary.as_deref(),
-                    body,
+                    body: &r.body,
                 };
                 http_cache::put(&url, Some(&cache_partition), &stored, &cache_headers);
             }
@@ -914,34 +613,28 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
 
     *location = captured.location.take();
     if let Some(raw_headers) = captured.take_raw() {
-        unsafe { glib::g_free(r.raw_headers.cast()) };
-        r.raw_headers = raw_headers;
+        r.raw_headers = Some(raw_headers);
     }
     let end_us = monotonic_us();
-    let body_len = body_len(r) as u64;
+    let body_len = r.body.len() as u64;
     super::netlog::ns_net_perf_record(start_us, end_us, body_len);
-    let sent = if lines.is_empty() {
-        ptr::null_mut()
-    } else {
-        glib::strdup(&transport::serialize_headers(
+    let sent = (!lines.is_empty()).then(|| {
+        cstr(&transport::serialize_headers(
             lines.iter().map(Vec::as_slice),
         ))
-    };
-    let method_log = opt_cstr(f.method);
-    unsafe {
-        super::netlog::ns_net_log_record(
-            opt_ptr(&method_log),
-            url_c.as_ptr(),
-            r.status,
-            r.content_type,
-            body_len,
-            (end_us - start_us) as f64 / 1000.0,
-            sent,
-            r.raw_headers,
-            r.error,
-        );
-        glib::g_free(sent.cast());
-    }
+    });
+    let method_log = f.method.map(cstr);
+    super::netlog::log_record(&super::netlog::LogRecord {
+        method: method_log.as_deref().map(CStr::to_bytes),
+        url: url_c.to_bytes(),
+        status: r.status,
+        content_type: field(&r.content_type),
+        body_len,
+        duration_ms: (end_us - start_us) as f64 / 1000.0,
+        request_headers: sent.as_deref().map(CStr::to_bytes),
+        response_headers: field(&r.raw_headers),
+        error: field(&r.error),
+    });
     Ok(resp)
 }
 
@@ -978,26 +671,26 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             cancellable: f.cancellable,
         };
         let mut resp = fetch_hop(&hop, &mut location)?;
-        let r = resp.get();
+        let r = &mut resp;
         let status = widen(r.status);
         let location = location.filter(|l| !l.is_empty());
-        let Some(location) = location.filter(|_| request::is_redirect(status) && r.error.is_null())
+        let Some(location) = location.filter(|_| request::is_redirect(status) && r.error.is_none())
         else {
             r.redirect_count = hops as c_int;
             return Ok(resp);
         };
         if hops >= max_redirs {
-            replace(&mut r.error, Some(b"too many redirects"));
+            r.error = Some(cstr(b"too many redirects"));
             r.redirect_count = hops as c_int;
             return Ok(resp);
         }
-        let base = text(r.final_url).unwrap_or(&url).to_vec();
+        let base = field(&r.final_url).unwrap_or(&url).to_vec();
         let Some(next) = url::resolve(Some(&base), &location) else {
             r.redirect_count = hops as c_int;
             return Ok(resp);
         };
         if !request::redirect_allowed(&next, started_https, navigation) {
-            replace(&mut r.error, Some(b"redirect to a disallowed URL blocked"));
+            r.error = Some(cstr(b"redirect to a disallowed URL blocked"));
             r.redirect_count = hops as c_int;
             return Ok(resp);
         }

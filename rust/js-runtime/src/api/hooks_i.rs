@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use southstar_dom::Node;
 use southstar_js_engine::{NativeFn, Scope, Value};
 
-use super::{NavigationTiming, NsJs, ResourceInfo, Response};
+use super::{NavigationTiming, NsJs, ResourceInfo};
 
 pub type AddResourceTimedFn = unsafe fn(
     *const NsJs,
@@ -16,7 +16,7 @@ pub type AddResourceTimedFn = unsafe fn(
     &CStr,
     Option<&CStr>,
     (i64, i64),
-    *const Response,
+    Option<&southstar_net::Response>,
 );
 
 pub struct PerfHooks {

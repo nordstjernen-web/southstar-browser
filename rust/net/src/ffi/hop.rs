@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_long, c_void};
-use core::ptr;
+use std::ffi::CString;
 use std::time::Duration;
 
 use southstar_glib::{self as glib, GBoolean};
@@ -12,6 +12,7 @@ use southstar_netstore::cookies::Context;
 
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
 use super::transport::{ca_bundle_path, ns_net_aborting, ns_net_ec_curves};
+use crate::response::cstr;
 use crate::{cookies, hsts, url};
 
 const HTTP_VERSION_1_1: c_long = 2;
@@ -38,10 +39,11 @@ pub struct HopReq<'a> {
     pub request_ftp: bool,
 }
 
+#[derive(Default)]
 pub struct HopOut {
     pub status: c_long,
-    pub effective_url: *mut c_char,
-    pub remote_ip: *mut c_char,
+    pub effective_url: Option<CString>,
+    pub remote_ip: Option<CString>,
     pub http_version: c_long,
     pub num_connects: c_long,
     pub t_namelookup_ms: f64,
@@ -50,48 +52,12 @@ pub struct HopOut {
     pub t_pretransfer_ms: f64,
     pub t_starttransfer_ms: f64,
     pub t_total_ms: f64,
-    pub ok: GBoolean,
-    pub cancelled: GBoolean,
-    pub tls_verify_failed: GBoolean,
-    pub connect_failed: GBoolean,
-    pub tls_warning: *mut c_char,
-    pub error_message: *mut c_char,
-}
-
-impl HopOut {
-    pub fn new() -> HopOut {
-        HopOut {
-            status: 0,
-            effective_url: ptr::null_mut(),
-            remote_ip: ptr::null_mut(),
-            http_version: 0,
-            num_connects: 0,
-            t_namelookup_ms: 0.0,
-            t_connect_ms: 0.0,
-            t_appconnect_ms: 0.0,
-            t_pretransfer_ms: 0.0,
-            t_starttransfer_ms: 0.0,
-            t_total_ms: 0.0,
-            ok: 0,
-            cancelled: 0,
-            tls_verify_failed: 0,
-            connect_failed: 0,
-            tls_warning: ptr::null_mut(),
-            error_message: ptr::null_mut(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        for field in [
-            &mut self.effective_url,
-            &mut self.remote_ip,
-            &mut self.tls_warning,
-            &mut self.error_message,
-        ] {
-            unsafe { glib::g_free((*field).cast()) };
-            *field = ptr::null_mut();
-        }
-    }
+    pub ok: bool,
+    pub cancelled: bool,
+    pub tls_verify_failed: bool,
+    pub connect_failed: bool,
+    pub tls_warning: Option<CString>,
+    pub error_message: Option<CString>,
 }
 
 struct Sinks<'a> {
@@ -149,12 +115,12 @@ pub fn transport(
 ) -> bool {
     let url_bytes = hop.url;
     crate::route::apply_dns_over_https();
-    out.effective_url = glib::strdup(url_bytes);
+    out.effective_url = Some(cstr(url_bytes));
     let proxy_spec = hop.proxy.filter(|p| !p.is_empty());
     let proxy = proxy_spec.and_then(southstar_http::parse_proxy);
     if proxy_spec.is_some() && proxy.is_none() {
-        out.error_message = glib::strdup(b"unsupported proxy");
-        out.connect_failed = 1;
+        out.error_message = Some(cstr(b"unsupported proxy"));
+        out.connect_failed = true;
         return true;
     }
     let no_proxy = hop.no_proxy.unwrap_or_default();
@@ -187,8 +153,8 @@ pub fn transport(
                 || p.protocol.eq_ignore_ascii_case(b"http:"))
     });
     let Some(parts) = parts else {
-        out.error_message = glib::strdup(b"invalid URL");
-        out.connect_failed = 1;
+        out.error_message = Some(cstr(b"invalid URL"));
+        out.connect_failed = true;
         return true;
     };
     let https = parts.protocol.eq_ignore_ascii_case(b"https:");
@@ -279,24 +245,24 @@ fn write_outcome(out: &mut HopOut, outcome: &Outcome, wctx: &mut NsWriteCtx, htt
     };
     out.num_connects = c_long::from(outcome.connects as u8);
     if let Some(ip) = &outcome.remote_ip {
-        out.remote_ip = glib::strdup(ip.as_bytes());
+        out.remote_ip = Some(cstr(ip.as_bytes()));
     }
     if let Some(warning) = &outcome.tls_warning {
-        out.tls_warning = glib::strdup(warning.as_bytes());
+        out.tls_warning = Some(cstr(warning.as_bytes()));
     }
-    out.tls_verify_failed = glib::boolean(outcome.tls_verify_failed);
-    out.connect_failed = glib::boolean(outcome.connect_failed);
+    out.tls_verify_failed = outcome.tls_verify_failed;
+    out.connect_failed = outcome.connect_failed;
     if outcome.cancelled {
-        out.cancelled = 1;
+        out.cancelled = true;
         return false;
     }
     if outcome.sink_full {
         wctx.mark_exceeded();
     }
     out.status = outcome.status as c_long;
-    out.ok = glib::boolean(outcome.ok);
+    out.ok = outcome.ok;
     if let Some(error) = &outcome.error {
-        out.error_message = glib::strdup(error.as_bytes());
+        out.error_message = Some(cstr(error.as_bytes()));
     }
     true
 }
