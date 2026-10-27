@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use southstar_dom::Kind;
+use southstar_dom::{Kind, Node};
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_layout::{BoxKind, BoxRef};
 
@@ -398,7 +398,7 @@ fn root_rect(scope: &mut Scope<'_>, observer: &Observer, layout_root: Option<Box
         let root_node = ffi::unwrap_element(&observer.root);
         if let (Some(node), Some(layout_root)) = (root_node, layout_root)
             && node.kind() == Kind::Element
-            && let Some(b) = ffi::find_by_dom(layout_root, node.as_ptr() as usize)
+            && let Some(b) = ffi::find_by_dom(layout_root, node)
         {
             return if overflow_clips(b) {
                 ffi::visual_padding_box(b)
@@ -438,7 +438,11 @@ const EMPTY: Rect = Rect {
     h: 0.0,
 };
 
-fn compute(scope: &mut Scope<'_>, observer: &Observer, target: usize) -> (bool, Geometry) {
+fn compute(
+    scope: &mut Scope<'_>,
+    observer: &Observer,
+    target: Option<Node<'_>>,
+) -> (bool, Geometry) {
     let js = ffi::js_of(scope);
     let layout_root = ffi::layout_root(js);
     let mut root = root_rect(scope, observer, layout_root);
@@ -461,7 +465,7 @@ fn compute(scope: &mut Scope<'_>, observer: &Observer, target: usize) -> (bool, 
         ratio: 0.0,
         intersecting: false,
     };
-    let Some(layout_root) = layout_root.filter(|_| target != 0) else {
+    let (Some(layout_root), Some(target)) = (layout_root, target) else {
         return (false, geometry);
     };
     let Some(target_box) = ffi::find_by_dom(layout_root, target) else {
@@ -471,11 +475,11 @@ fn compute(scope: &mut Scope<'_>, observer: &Observer, target: usize) -> (bool, 
     let mut clipped = geometry.target;
     let mut intersects = intersect(root, &mut clipped);
     let root_node = ffi::unwrap_element(&observer.root);
-    let root_ptr = root_node.map_or(0, |n| n.as_ptr() as usize);
+    let root_ptr = Node::ptr_or_null(root_node).cast();
     let mut found_root = root_node.is_none_or(|n| n.kind() == Kind::Document);
     let mut parent = target_box.parent();
     while let Some(p) = parent {
-        if p.dom_ptr() as usize == root_ptr {
+        if p.dom_ptr() == root_ptr {
             found_root = true;
             break;
         }
@@ -543,7 +547,7 @@ fn entry(scope: &mut Scope<'_>, target: &Value, geometry: &Geometry) -> Value {
 }
 
 fn evaluate(scope: &mut Scope<'_>, observer: &Observer, target: &mut Target) -> Option<Value> {
-    let node = ffi::node_address(&target.wrapper);
+    let node = ffi::unwrap_element(&target.wrapper);
     let (has_box, mut geometry) = compute(scope, observer, node);
     let intersecting = has_box && geometry.intersecting;
     geometry.intersecting = intersecting;
@@ -652,9 +656,9 @@ fn observer_of(scope: &mut Scope<'_>, this: &Value) -> Option<Rc<Observer>> {
     scope.host_data::<Handle>(this).map(|handle| handle.0)
 }
 
-fn element_node(target: Option<&Value>) -> Option<usize> {
+fn element_node(target: Option<&Value>) -> Option<Node<'static>> {
     let node = ffi::unwrap_element(target?)?;
-    (node.kind() == Kind::Element).then_some(node.as_ptr() as usize)
+    (node.kind() == Kind::Element).then_some(node)
 }
 
 const NOT_AN_ELEMENT: &str = "IntersectionObserver target must be an Element";
@@ -676,7 +680,7 @@ pub(crate) fn observe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
         if state
             .targets
             .iter()
-            .any(|t| ffi::node_address(&t.wrapper) == node)
+            .any(|t| ffi::unwrap_element(&t.wrapper) == Some(node))
         {
             return Ok(Value::undefined());
         }
@@ -711,7 +715,7 @@ pub(crate) fn unobserve(
         let removed = state
             .targets
             .iter()
-            .position(|t| ffi::node_address(&t.wrapper) == node)
+            .position(|t| ffi::unwrap_element(&t.wrapper) == Some(node))
             .map(|index| state.targets.remove(index));
         (removed, state.targets.is_empty())
     };

@@ -30,13 +30,13 @@ fn register(scope: &mut Scope<'_>, js: Js, observer: &Value, target: &Value, box
     let (heights, _) = array_or_new(scope, observer, "__lastHeights");
     let (boxes, _) = array_or_new(scope, observer, "__boxes");
     let length = crate::array_length(scope, &targets);
-    let wanted = ffi::node_address(target);
+    let wanted = ffi::unwrap_element(target);
     let mut index = length;
     for i in 0..length {
         let existing = scope
             .get_index(&targets, i)
             .unwrap_or_else(|_| Value::undefined());
-        if ffi::node_address(&existing) == wanted {
+        if ffi::unwrap_element(&existing) == wanted {
             index = i;
             break;
         }
@@ -253,7 +253,7 @@ pub(crate) fn unobserve(
         let kept_heights = scope.new_array();
         let kept_boxes = scope.new_array();
         let mut k = 0u32;
-        let wanted = ffi::node_address(&args[0]);
+        let wanted = ffi::unwrap_element(&args[0]);
         let item = |scope: &mut Scope<'_>, array: &Value, i: u32| {
             if array.is_array() {
                 scope
@@ -270,7 +270,7 @@ pub(crate) fn unobserve(
             let w = item(scope, &widths, i);
             let h = item(scope, &heights, i);
             let b = item(scope, &boxes, i);
-            if ffi::node_address(&target) != wanted {
+            if ffi::unwrap_element(&target) != wanted {
                 set_index(scope, &kept, k, target);
                 set_index(scope, &kept_widths, k, w);
                 set_index(scope, &kept_heights, k, h);
