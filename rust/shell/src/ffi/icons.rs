@@ -112,7 +112,10 @@ unsafe fn draw(
             return;
         };
         let cr = gtk::gtk_snapshot_append_cairo(snapshot, &bounds);
-        let canvas = southstar_svg::Canvas::from_raw(cr.cast());
+        let Some(canvas) = southstar_cairo::ContextRef::from_raw(cr.cast()) else {
+            return;
+        };
+        let canvas = southstar_svg::Canvas::from(canvas);
         match color {
             Some(color) => {
                 gtk::cairo_push_group(cr);

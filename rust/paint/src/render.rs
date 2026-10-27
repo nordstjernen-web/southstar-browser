@@ -13,8 +13,7 @@ use southstar_text::layout::{Layout, LineRef};
 use southstar_text::render;
 
 fn text_cairo(cr: ContextRef) -> Option<CairoContext> {
-    // SAFETY: a ContextRef always wraps a live cairo_t; CairoContext takes its own reference.
-    unsafe { CairoContext::from_raw(cr.as_raw()) }
+    Some(CairoContext::from_cairo(cr))
 }
 
 pub fn show_layout(cr: ContextRef, layout: &mut Layout) {

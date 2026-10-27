@@ -732,6 +732,11 @@ impl CairoContext {
         NonNull::new(cr.cast::<RawCairo>()).map(CairoContext::from_borrowed)
     }
 
+    pub fn from_cairo(cr: southstar_cairo::ContextRef<'_>) -> CairoContext {
+        let raw = NonNull::new(cr.as_raw().cast::<RawCairo>());
+        CairoContext::from_borrowed(raw.expect("a cairo context handle is never null"))
+    }
+
     pub(super) fn from_borrowed(cr: NonNull<RawCairo>) -> CairoContext {
         // SAFETY: callers hand over a live cairo_t; the reference taken here is released in Drop.
         unsafe { cairo_reference(cr.as_ptr()) };
