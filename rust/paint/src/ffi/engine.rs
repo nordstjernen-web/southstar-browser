@@ -2,19 +2,20 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_double, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_anim::AnimatedColor;
 use southstar_cairo::{ContextRef, Surface, SurfaceRef};
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 use southstar_image::ImageRef;
-use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
+use southstar_layout::{BoxRef, InlineAttr};
 use southstar_style::{StyleRef, Transform, ValueRef};
 use southstar_video::BoxVideo;
 
+use crate::links;
 use crate::text_layout::{AttrList, Layout};
 use crate::util::Rgba;
 
@@ -108,7 +109,6 @@ pub fn style_ptr(s: Option<StyleRef<'_>>) -> *const c_void {
     s.map_or(ptr::null(), |s| s.as_ptr().cast())
 }
 
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SelectionRun {
     pub start: usize,
@@ -177,28 +177,6 @@ const _: () = assert!(
 pub struct Video<'a>(&'a NsVideo);
 
 unsafe extern "C" {
-    fn ns_box_fieldset_legend_gap(
-        b: *const NsBox,
-        inset: *mut c_double,
-        x0: *mut c_double,
-        x1: *mut c_double,
-        y0: *mut c_double,
-        y1: *mut c_double,
-    ) -> GBoolean;
-    fn ns_inline_apply_atomic_shapes(attrs: *const c_void, b: *const NsBox);
-    fn ns_inline_layout_set_attrs(layout: *const c_void, attrs: *const c_void, b: *const NsBox);
-    fn ns_control_css_extra_w(dom: *const c_void, s: *const Style) -> c_double;
-    fn ns_math_paint(
-        cr: *mut c_void,
-        math: *const c_void,
-        x: c_double,
-        y: c_double,
-        font_px: c_double,
-        r: c_double,
-        g: c_double,
-        b: c_double,
-        a: c_double,
-    );
     fn g_get_monotonic_time() -> i64;
     fn g_utf8_get_char(p: *const c_char) -> u32;
 }
@@ -261,29 +239,24 @@ pub fn border_image_source(s: StyleRef<'_>) -> Option<ValueRef<'_>> {
 }
 
 pub fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64, f64)> {
-    let (mut inset, mut x0, mut x1, mut y0, mut y1) = (0.0, 0.0, 0.0, 0.0, 0.0);
-    let found = unsafe {
-        ns_box_fieldset_legend_gap(b.as_ptr(), &mut inset, &mut x0, &mut x1, &mut y0, &mut y1)
-    };
-    (found != 0).then_some((inset, x0, x1, y0, y1))
+    let gap = (links::get()?.fieldset_legend_gap)(b)?;
+    Some((gap.inset, gap.x0, gap.x1, gap.y0, gap.y1))
 }
 
 pub fn inline_apply_atomic_shapes(attrs: &AttrList, b: BoxRef<'_>) {
-    unsafe { ns_inline_apply_atomic_shapes(ptr::from_ref(attrs).cast(), b.as_ptr()) };
+    if let Some(links) = links::get() {
+        (links.inline_apply_atomic_shapes)(attrs, b);
+    }
 }
 
 pub fn inline_layout_set_attrs(layout: &Layout, attrs: &AttrList, b: BoxRef<'_>) {
-    unsafe {
-        ns_inline_layout_set_attrs(
-            ptr::from_ref(layout).cast(),
-            ptr::from_ref(attrs).cast(),
-            b.as_ptr(),
-        )
-    };
+    if let Some(links) = links::get() {
+        (links.inline_layout_set_attrs)(layout, attrs, b);
+    }
 }
 
 pub fn control_css_extra_w(r: &InlineAttr, s: StyleRef<'_>) -> f64 {
-    unsafe { ns_control_css_extra_w(r.dom_ptr(), s.as_ptr()) }
+    links::get().map_or(0.0, |links| (links.control_css_extra_w)(r, s))
 }
 
 pub fn vertical_stack_text(text: &CStr) -> CString {
@@ -322,24 +295,9 @@ pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
 }
 
 pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {
-    unsafe { ns_math_paint(cr.as_raw(), b.dom_ptr(), x, y, font_px, c.r, c.g, c.b, c.a) };
-}
-
-unsafe extern "C" {
-    fn ns_box_is_fixed(b: *const NsBox) -> GBoolean;
-    fn ns_box_in_scroller(b: *const NsBox) -> GBoolean;
-    fn ns_box_sticky_offset(
-        b: *const NsBox,
-        x0: c_double,
-        y0: c_double,
-        x1: c_double,
-        y1: c_double,
-        dx: *mut c_double,
-        dy: *mut c_double,
-    );
-    fn ns_box_hit_test(root: *const NsBox, x: c_double, y: c_double) -> *const NsBox;
-    fn ns_selection_ranges(root: *const NsBox, sel: *const c_void) -> *mut GHashTable;
-    fn ns_js_canvas_surface(js: *mut c_void, n: *const c_void) -> *mut c_void;
+    if let Some((links, math)) = links::get().zip(b.dom()) {
+        (links.math_paint)(cr, math, x, y, font_px, [c.r, c.g, c.b, c.a]);
+    }
 }
 
 pub fn anim_opacity(b: BoxRef<'_>) -> Option<f64> {
@@ -354,29 +312,21 @@ pub fn effective_transform(b: BoxRef<'_>, s: Option<StyleRef<'_>>) -> Transform 
 }
 
 pub fn box_is_fixed(b: BoxRef<'_>) -> bool {
-    unsafe { ns_box_is_fixed(b.as_ptr()) != 0 }
+    southstar_layout_geom::box_is_fixed(b)
 }
 
 pub fn box_in_scroller(b: BoxRef<'_>) -> bool {
-    unsafe { ns_box_in_scroller(b.as_ptr()) != 0 }
+    links::get().is_some_and(|links| (links.in_scroller)(b))
 }
 
 pub fn box_sticky_offset(b: BoxRef<'_>, clip: (f64, f64, f64, f64)) -> (f64, f64) {
-    let (mut dx, mut dy) = (0.0, 0.0);
-    unsafe { ns_box_sticky_offset(b.as_ptr(), clip.0, clip.1, clip.2, clip.3, &mut dx, &mut dy) };
-    (dx, dy)
-}
-
-pub fn box_hit_test(root: BoxRef<'_>, x: f64, y: f64) -> *const NsBox {
-    unsafe { ns_box_hit_test(root.as_ptr(), x, y) }
+    links::get().map_or((0.0, 0.0), |links| {
+        (links.sticky_offset)(b, clip.0, clip.1, clip.2, clip.3)
+    })
 }
 
 pub fn active_modal<'a>() -> Option<Node<'a>> {
     southstar_dom::tree::active_modal()
-}
-
-pub unsafe fn selection_ranges(root: BoxRef<'_>, sel: *const c_void) -> *mut GHashTable {
-    unsafe { ns_selection_ranges(root.as_ptr(), sel) }
 }
 
 pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
@@ -384,7 +334,7 @@ pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
     if js.is_null() {
         return None;
     }
-    let surface = unsafe { ns_js_canvas_surface(js, b.dom_ptr()) };
+    let surface = southstar_canvas::canvas_surface_for(js, b.dom()?);
     // SAFETY: the canvas keeps its surface alive while the page paints, and it is referenced here before anything can replace it.
     unsafe { SurfaceRef::from_raw(surface) }.map(|s| s.reference())
 }

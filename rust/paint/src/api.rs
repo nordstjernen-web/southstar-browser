@@ -8,7 +8,7 @@ use core::ptr;
 use southstar_anim::AnimHandle;
 use southstar_cairo::ContextRef;
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::{BoxRef, InlineAttr, NsBox};
 use southstar_selection::NsSelection;
 use southstar_style::StyleRef;
 
@@ -17,17 +17,13 @@ use crate::text_layout::{AttrList, Attribute, Context, Layout};
 use crate::walk::VpCapture;
 use crate::{inline, marker, state, text, three_d};
 
-fn selection_ptr(sel: Option<&NsSelection>) -> *const c_void {
-    sel.map_or(ptr::null(), |s| ptr::from_ref(s).cast())
-}
-
 pub fn paint(
     cr: ContextRef,
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
     sel: Option<&NsSelection>,
 ) {
-    document::paint_document(cr, root, highlight, selection_ptr(sel));
+    document::paint_document(cr, root, highlight, sel);
 }
 
 pub fn plan_layers(cr: ContextRef, root: BoxRef<'_>, plan: &mut LayerPlan) {
@@ -54,7 +50,7 @@ pub fn doc_layers(
         upper: Some(upper_trampoline),
         upper_data: (&raw mut upper).cast(),
     };
-    document::doc_layers(cr, up, root, highlight, selection_ptr(sel), plan)
+    document::doc_layers(cr, up, root, highlight, sel, plan)
 }
 
 pub fn vp_layer(
@@ -65,7 +61,7 @@ pub fn vp_layer(
     highlight: Option<&CStr>,
     sel: Option<&NsSelection>,
 ) {
-    document::vp_layer(cr, root, layer, vp, highlight, selection_ptr(sel));
+    document::vp_layer(cr, root, layer, vp, highlight, sel);
 }
 
 pub fn canvas_color(root: BoxRef<'_>) -> (bool, [f64; 4]) {
@@ -163,6 +159,32 @@ pub fn pango_font_size(size_px: f64) -> i32 {
     text::pango_font_size(size_px)
 }
 
+pub fn register_font_oracle() {
+    southstar_css::set_font_oracle(southstar_css::FontOracle {
+        available: text::font_available,
+        generation: text::font_generation,
+        metrics: text::font_metrics,
+    });
+    southstar_css::set_font_alias(text::font_alias);
+}
+
+pub fn drop_box_cache(b: BoxRef<'_>) {
+    inline::drop_box_cache(b);
+}
+
+pub fn inline_word_range(b: BoxRef<'_>, byte: usize) -> Option<(usize, usize)> {
+    inline::inline_word_range(b, byte)
+}
+
+pub fn inline_range_extents(
+    b: BoxRef<'_>,
+    start: usize,
+    len: usize,
+    element: Option<&InlineAttr>,
+) -> Option<(f64, f64, f64, f64)> {
+    inline::inline_range_extents(b, start, len, element)
+}
+
 pub fn wrap_mode_for(s: Option<StyleRef<'_>>) -> i32 {
     text::wrap_mode_for(s)
 }
@@ -244,7 +266,12 @@ pub fn registered_3d(b: BoxRef<'_>) -> bool {
     three_d::registered(b)
 }
 
-pub fn pick_3d<'a>(root3d: BoxRef<'a>, x: f64, y: f64) -> Option<BoxRef<'a>> {
+pub fn pick_3d<'a>(
+    root3d: BoxRef<'a>,
+    x: f64,
+    y: f64,
+    hit_test: three_d::HitTest,
+) -> Option<BoxRef<'a>> {
     // SAFETY: pick returns null or a box of root3d's tree, which the caller's borrow keeps alive.
-    unsafe { BoxRef::from_ptr(three_d::pick(root3d, x, y)) }
+    unsafe { BoxRef::from_ptr(three_d::pick(root3d, x, y, hit_test)) }
 }

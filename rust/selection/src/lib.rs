@@ -4,7 +4,7 @@
 
 mod ffi;
 
-pub use ffi::NsSelection;
+pub use ffi::{NsSelection, stored_ranges};
 
 use southstar_layout::{BoxKind, BoxRef, children};
 

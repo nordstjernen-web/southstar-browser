@@ -1,4 +1,4 @@
-//! Southstar — the document layout entry point, which installs the layout hooks before building, and the positioned-layout entry points the painters call, with the box builder and sizing calls positioned layout makes.
+//! Southstar — the document layout entry point, which installs the layout hooks and the painter's links before building, with the box builder and sizing calls positioned layout makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -6,11 +6,12 @@ use core::ffi::CStr;
 use std::sync::Once;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::dispatch::Dispatch;
+use southstar_layout::paint_links::PaintLinks;
 use southstar_layout::{BoxRef, NsBox, Style};
 use southstar_layout_build::{BuildInput, Passes};
 use southstar_layout_sizing::Measures;
+use southstar_paint::{LayoutLinks, LegendGap};
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::sticky;
@@ -132,6 +133,21 @@ pub fn viewport_h() -> f64 {
     southstar_css::viewport().1
 }
 
+fn fieldset_legend_gap(b: BoxRef<'_>) -> Option<LegendGap> {
+    let gap = southstar_layout_block::fieldset_legend_gap(b)?;
+    Some(LegendGap {
+        inset: gap.inset,
+        x0: gap.x0,
+        x1: gap.x1,
+        y0: gap.y0,
+        y1: gap.y1,
+    })
+}
+
+fn in_scroller(b: BoxRef<'_>) -> bool {
+    sticky::scrollport_for(b).is_some()
+}
+
 fn install_layout_hooks() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
@@ -148,6 +164,21 @@ fn install_layout_hooks() {
             apply_position_offsets: relative::apply_position_offsets,
             process_absolute_boxes: abs::process_absolute_boxes,
         });
+        southstar_layout::paint_links::install(PaintLinks {
+            drop_box_cache: southstar_paint::drop_box_cache,
+            inline_xy_to_byte: southstar_paint::inline_xy_to_byte,
+            inline_word_range: southstar_paint::inline_word_range,
+            inline_range_extents: southstar_paint::inline_range_extents,
+        });
+        southstar_paint::install_layout_links(LayoutLinks {
+            fieldset_legend_gap,
+            inline_apply_atomic_shapes: southstar_layout_inline::apply_atomic_shapes,
+            inline_layout_set_attrs: southstar_layout_inline::layout_set_attrs,
+            control_css_extra_w: southstar_layout_content::inline_attr_css_extra_w,
+            math_paint: southstar_mathml::paint_math,
+            sticky_offset: sticky::offset,
+            in_scroller,
+        });
         southstar_layout_sizing::install(Measures {
             inline_natural_width: southstar_layout_inline::inline_natural_width,
             inline_min_width: southstar_layout_inline::inline_min_width,
@@ -162,29 +193,4 @@ fn install_layout_hooks() {
 pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
     install_layout_hooks();
     southstar_layout_build::layout_build(input)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_sticky_offset(
-    b: *const NsBox,
-    vp_x0: f64,
-    vp_y0: f64,
-    vp_x1: f64,
-    vp_y1: f64,
-    dx: *mut f64,
-    dy: *mut f64,
-) {
-    let (ox, oy) = unsafe { BoxRef::from_ptr(b) }.map_or((0.0, 0.0), |b| {
-        sticky::offset(b, vp_x0, vp_y0, vp_x1, vp_y1)
-    });
-    unsafe {
-        *dx = ox;
-        *dy = oy;
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_in_scroller(b: *const NsBox) -> GBoolean {
-    let b = unsafe { BoxRef::from_ptr(b) };
-    glib::boolean(b.and_then(sticky::scrollport_for).is_some())
 }

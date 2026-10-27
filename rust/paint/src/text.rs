@@ -68,13 +68,7 @@ pub fn weight_from_css(weight: i32) -> i32 {
     }
 }
 
-pub fn pango_font_size(size_px: f64) -> i32 {
-    if size_px.is_nan() || size_px <= 0.0 {
-        return 0;
-    }
-    let size_px = if size_px > 65535.0 { 65535.0 } else { size_px };
-    (size_px * text_layout::SCALE_F) as i32
-}
+pub use southstar_text::font_size_units as pango_font_size;
 
 pub fn stretch_from_css(rank: i32) -> i32 {
     rank.clamp(0, 8)

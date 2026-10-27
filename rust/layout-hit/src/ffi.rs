@@ -1,13 +1,11 @@
-//! Southstar — the layout.c, css, paint and cairo calls hit testing makes, and the hit-test entry points.
+//! Southstar — the layout.c, css, paint and cairo calls hit testing makes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, boolean};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{StyleRef, Transform};
 
@@ -88,22 +86,4 @@ pub fn text<'a>(p: *const c_char) -> Option<&'a CStr> {
 
 pub fn active_modal<'a>() -> Option<Node<'a>> {
     southstar_dom::tree::active_modal()
-}
-
-fn entry<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
-fn box_out(b: Option<BoxRef<'_>>) -> *const NsBox {
-    b.map_or(ptr::null(), BoxRef::as_ptr)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_is_fixed(b: *const NsBox) -> GBoolean {
-    boolean(entry(b).is_some_and(crate::geometry::is_fixed))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_hit_test(root: *const NsBox, x: f64, y: f64) -> *const NsBox {
-    box_out(entry(root).and_then(|root| crate::tree::hit_test(root, x, y)))
 }

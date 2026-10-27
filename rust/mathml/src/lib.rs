@@ -7,6 +7,7 @@ mod ffi;
 use core::ffi::CStr;
 use std::ffi::CString;
 
+pub use ffi::paint_math;
 use ffi::{Canvas, Token};
 use southstar_dom::{Node, children};
 

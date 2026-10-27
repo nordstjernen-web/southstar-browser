@@ -5,7 +5,6 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_layout::{BoxRef, InlineAtomic};
-use southstar_layout_geom::style_creates_fixed_cb;
 use southstar_style::{PropId, StyleRef};
 
 use crate::ffi;
@@ -30,19 +29,7 @@ pub fn position_keyword(s: Option<StyleRef<'_>>) -> Option<&core::ffi::CStr> {
     s?.get(PropId::Position)?.keyword_text()
 }
 
-pub fn is_fixed(b: BoxRef<'_>) -> bool {
-    let Some(s) = ffi::style_of(b) else {
-        return false;
-    };
-    if !s
-        .get(PropId::Position)
-        .is_some_and(|v| v.is_keyword(c"fixed"))
-    {
-        return false;
-    }
-    core::iter::successors(b.parent(), |p| p.parent())
-        .all(|p| !style_creates_fixed_cb(ffi::style_of(p)))
-}
+pub use southstar_layout_geom::box_is_fixed as is_fixed;
 
 pub fn hit_offset(b: BoxRef<'_>) -> (f64, f64) {
     let (vx, vy) = viewport();

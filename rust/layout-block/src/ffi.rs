@@ -1,15 +1,12 @@
-//! Southstar — the fieldset legend gap the painters ask for, the mathml measure block layout calls, and the sibling-crate helpers it borrows.
+//! Southstar — the mathml measure block layout calls and the sibling-crate helpers it borrows.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
 
 use southstar_dom::Node;
-use southstar_glib::{GBoolean, boolean};
-use southstar_layout::{BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 use southstar_style::StyleRef;
-
-use crate::fieldset;
 
 pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     southstar_style::box_style(b)
@@ -136,34 +133,4 @@ pub use southstar_mathml::measure as math_measure;
 
 pub fn set_container_dims(inline_px: f64, block_px: f64) {
     southstar_css::set_container_unit_dims(inline_px, block_px);
-}
-
-fn box_ref<'a>(b: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(b) }
-}
-
-fn out(p: *mut f64, v: f64) {
-    if let Some(p) = unsafe { p.as_mut() } {
-        *p = v;
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_box_fieldset_legend_gap(
-    fs: *const NsBox,
-    border_inset: *mut f64,
-    gap_x0: *mut f64,
-    gap_x1: *mut f64,
-    gap_y0: *mut f64,
-    gap_y1: *mut f64,
-) -> GBoolean {
-    let Some(gap) = box_ref(fs).and_then(fieldset::legend_gap) else {
-        return boolean(false);
-    };
-    out(border_inset, gap.inset);
-    out(gap_x0, gap.x0);
-    out(gap_x1, gap.x1);
-    out(gap_y0, gap.y0);
-    out(gap_y1, gap.y1);
-    boolean(true)
 }

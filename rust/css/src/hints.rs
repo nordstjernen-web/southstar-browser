@@ -268,7 +268,9 @@ fn img_dimension_source(img: Node<'_>) -> Node<'_> {
         if non_empty(c, c"media").is_some_and(|media| !ffi::media_query_matches(media)) {
             continue;
         }
-        if attr(c, c"type").is_some_and(|ty| !ty.is_empty() && !ffi::image_supports_mime(ty)) {
+        if attr(c, c"type")
+            .is_some_and(|ty| !ty.is_empty() && !crate::image_type_supported(ty.to_bytes()))
+        {
             continue;
         }
         return if attr(c, c"width").is_some() || attr(c, c"height").is_some() {

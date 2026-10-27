@@ -32,6 +32,7 @@ southstar-i18n = { path = "../i18n" }
 southstar-media-shm = { path = "../media-shm" }
 southstar-net = { path = "../net" }
 southstar-netutil = { path = "../netutil" }
+southstar-paint = { path = "../paint" }
 southstar-renderer-client = { path = "../renderer-client" }
 southstar-renderer-host = { path = "../renderer-host" }
 southstar-sandbox = { path = "../sandbox" }

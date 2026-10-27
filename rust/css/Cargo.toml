@@ -21,5 +21,8 @@ southstar-numfmt = { path = "../numfmt" }
 southstar-selector-text = { path = "../selector-text" }
 southstar-url = { path = "../url" }
 
+[features]
+avif = []
+
 [lints]
 workspace = true

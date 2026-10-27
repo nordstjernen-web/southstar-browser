@@ -13,3 +13,4 @@ mod height;
 pub use align::legacy_align_block_child;
 pub use block::layout_block;
 pub use dispatch::{layout_box, reset_container_queries, shift_box_tree};
+pub use fieldset::{LegendGap, legend_gap as fieldset_legend_gap};

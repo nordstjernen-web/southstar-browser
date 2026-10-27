@@ -1,4 +1,4 @@
-//! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and its C ABI.
+//! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and the surface the painter composites.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -269,9 +269,8 @@ pub(crate) fn transfer_to_image_bitmap(
     Ok(crate::bitmap::make(scope, Some(copy), (w, h), origin_clean))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_canvas_surface(js: *mut NsJs, el: *const NsNode) -> *mut c_void {
-    canvas_surface(Js(js), Node(el))
+pub fn canvas_surface_for(js: *mut c_void, el: southstar_dom::Node<'_>) -> *mut c_void {
+    canvas_surface(Js(js.cast()), Node(el.as_ptr().cast()))
 }
 
 pub(crate) fn clear_patterns(st: &mut CanvasState) {
