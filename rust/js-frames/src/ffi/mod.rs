@@ -10,7 +10,7 @@ pub(crate) mod load;
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -197,7 +197,7 @@ pub(crate) fn run_script_element(js: Js, node: Node<'_>, origin: Option<&[u8]>) 
 }
 
 pub(crate) fn frame_node(frame: Frame) -> Option<Node<'static>> {
-    unsafe { Node::from_ptr(frame.0 as *const NsNode) }
+    frame.0.get()
 }
 
 pub(crate) fn scope_ctx(scope: &Scope<'_>) -> Ctx {
@@ -342,10 +342,6 @@ pub(crate) fn mark_mutated(js: Js) {
     api::mark_mutated(js.ptr());
 }
 
-fn frame_key(node: *const NsNode) -> Frame {
-    Frame(node as usize)
-}
-
 fn iframe_child_frame_of(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let [window, key, ..] = args else {
         return Ok(Value::undefined());
@@ -386,13 +382,11 @@ fn cloners_made(js: Option<Page>) -> bool {
 
 fn frame_url(js: Option<Page>, frame: Option<Node<'_>>) -> Option<CString> {
     let js = Js::of(js);
+    let frame = frame?;
     if js.is_null() {
         return None;
     }
-    page::frame_entry(js, frame_key(Node::ptr_or_null(frame)), |entry| {
-        entry.url.clone()
-    })
-    .flatten()
+    page::frame_entry(js, crate::realm::frame_of(frame), |entry| entry.url.clone()).flatten()
 }
 
 fn realms_same_origin(js: Option<Page>, a: ContextHandle, b: ContextHandle) -> bool {
@@ -409,7 +403,7 @@ fn forget_node(js: Option<Page>, node: Node<'_>) {
         return;
     }
     page::peek_mut(js, |page| {
-        if let Some(entry) = page.frames.get_mut(&frame_key(node.as_ptr())) {
+        if let Some(entry) = page.frames.get_mut(&crate::realm::frame_of(node)) {
             entry.url = None;
             entry.referrer = None;
         }
