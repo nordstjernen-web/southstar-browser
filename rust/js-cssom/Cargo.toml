@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 southstar-anim = { path = "../anim" }
+southstar-canvas = { path = "../canvas" }
 southstar-css = { path = "../css" }
 southstar-css-media = { path = "../css-media" }
 southstar-css-prop-syntax = { path = "../css-prop-syntax" }

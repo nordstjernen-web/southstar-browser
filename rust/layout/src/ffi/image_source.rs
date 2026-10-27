@@ -2,28 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
-use std::ffi::CString;
-
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
 
 use crate::image_source::{Chosen, Environment};
-
-unsafe extern "C" {
-    fn ns_image_supports_mime(mime: *const c_char) -> GBoolean;
-}
-
-fn c_string(text: &[u8]) -> CString {
-    CString::new(text).unwrap_or_default()
-}
 
 pub fn choose_img(node: Node<'_>) -> Chosen<'_> {
     let resolve_sizes =
         |sizes: Option<&[u8]>| southstar_css::sizes_resolve(sizes.unwrap_or_default());
     let media_matches = |query: &[u8]| southstar_css_media::query_matches(query);
-    let supports_type =
-        |mime: &[u8]| unsafe { ns_image_supports_mime(c_string(mime).as_ptr()) != 0 };
+    let supports_type = |mime: &[u8]| southstar_css::image_type_supported(mime);
     Environment {
         device_pixel_ratio: southstar_css_media::device_pixel_ratio(),
         resolve_sizes: &resolve_sizes,

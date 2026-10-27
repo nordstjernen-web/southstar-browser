@@ -83,7 +83,7 @@ pub(crate) fn webgpu_context(
     canvas: &Value,
     el: Node,
 ) -> Result<Option<Value>, Value> {
-    Ok(Some(imports::nsr_webgpu_get_context(
+    Ok(Some(crate::links::webgpu_get_context(
         scope,
         canvas,
         el.addr(),

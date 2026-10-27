@@ -11,4 +11,6 @@ pub mod tags;
 pub mod text_input;
 
 pub use counters::{build as counters_build, clear as counters_clear};
-pub use ffi::{inline_attr_control_width, install_image_peek, utf8_casefold};
+pub use ffi::{
+    inline_attr_control_width, inline_attr_css_extra_w, install_image_peek, utf8_casefold,
+};

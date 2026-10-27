@@ -18,6 +18,7 @@ pub use permission::{set_decision, take_pending_origin};
 pub fn install_runtime_hooks() {
     southstar_canvas::links::set_webgl_links(southstar_canvas::links::WebglLinks {
         webgl_get_context: crate::ffi::host::nsr_webgl_get_context,
+        canvas_surface: crate::ffi::host::canvas_surface,
     });
     southstar_js_runtime::links::set_webgl_links(southstar_js_runtime::links::WebglLinks {
         webgl_install: crate::ffi::host::nsr_webgl_install,

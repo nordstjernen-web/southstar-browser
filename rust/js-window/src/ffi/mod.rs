@@ -211,8 +211,6 @@ pub(crate) struct UrlOrigin {
     pub port: Vec<u8>,
 }
 
-unsafe extern "C" {}
-
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(bytes).unwrap_or_default()
 }
@@ -670,30 +668,27 @@ pub unsafe extern "C" fn ns_js_fire_page_transition(
     page::fire_page_transition(Js::of(js), kind, persisted != 0);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_resource_origin_clean(
-    js: *mut NsJs,
-    ctx: ContextHandle,
+/// # Safety
+///
+/// `url` and `cors_allow_origin` are null or NUL-terminated strings that live for the call.
+unsafe fn resource_origin_clean(
+    scope: &Scope<'_>,
     url: *const c_char,
     cors_allow_origin: *const c_char,
-) -> GBoolean {
+) -> bool {
     let Some(url) = opt_bytes(url) else {
-        return 0;
+        return false;
     };
+    let js = js_of(scope);
     if js.is_null() {
-        return 0;
+        return false;
     }
-    let js = Js::of(js);
     let caller = if url.starts_with(b"data:") || url.starts_with(b"blob:") {
         None
     } else {
-        caller_document_url(js, ctx)
+        caller_document_url(js, scope.handle())
     };
-    southstar_glib::boolean(page::resource_origin_clean(
-        caller,
-        url,
-        opt_bytes(cors_allow_origin),
-    ))
+    page::resource_origin_clean(caller, url, opt_bytes(cors_allow_origin))
 }
 
 pub fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Result<Value, Value> {
@@ -727,6 +722,9 @@ pub fn install_runtime_hooks() {
         sync_metrics: sync_page_metrics,
         history_teardown,
         links_clear: clear_window_links,
+    });
+    southstar_canvas::links::set_js_window_links(southstar_canvas::links::JsWindowLinks {
+        resource_origin_clean,
     });
     southstar_js_frames::links::set_js_window_links(southstar_js_frames::links::JsWindowLinks {
         js_new_window_named: crate::ffi::nsr_js_new_window_named,

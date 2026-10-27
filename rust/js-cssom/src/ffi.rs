@@ -9,8 +9,7 @@ use southstar_anim::AnimHandle;
 use southstar_css::{self as css_engine, Prop};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
-use southstar_glib as glib;
-use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
@@ -569,7 +568,7 @@ pub(crate) fn time_computed(text: &str) -> Option<String> {
     css_engine::time_list_serialize(until_nul(text), true).map(|text| lossy(&text))
 }
 
-pub fn computed_text(scope: &mut Scope<'_>, node: Node<'_>, name: &str) -> Option<String> {
+pub fn computed_text(scope: &Scope<'_>, node: Node<'_>, name: &str) -> Option<String> {
     computed::lookup(js_of(scope), node, name)
 }
 
@@ -581,26 +580,14 @@ pub fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value) {
     css::install_css(scope, global).ok();
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_computed_text(
-    ctx: ContextHandle,
-    node: *const NsNode,
-    name: *const c_char,
-) -> *mut c_char {
-    let (Some(node), false) = (unsafe { Node::from_ptr(node) }, name.is_null()) else {
-        return core::ptr::null_mut();
-    };
-    let js = ctx.with(|scope| js_of(scope)).unwrap_or(Js(0));
-    let name = unsafe { CStr::from_ptr(name) }.to_string_lossy();
-    computed::lookup(js, node, &name)
-        .map_or(core::ptr::null_mut(), |text| glib::strdup(text.as_bytes()))
-}
-
 fn teardown(js: *const southstar_js_runtime::api::NsJs) {
     crate::teardown(Js(js as usize));
 }
 
 pub fn install_runtime_hooks() {
+    southstar_canvas::links::set_js_cssom_links(southstar_canvas::links::JsCssomLinks {
+        computed_text,
+    });
     api::set_cssom_hooks(api::PageStateHooks {
         init: |_| {},
         teardown,

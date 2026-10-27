@@ -88,9 +88,8 @@ fn style<'a>(s: *const Style) -> Option<StyleRef<'a>> {
     unsafe { StyleRef::from_ptr(s) }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_control_css_extra_w(dom: *const NsNode, s: *const Style) -> f64 {
-    controls::css_extra(node(dom), style(s), false)
+pub fn inline_attr_css_extra_w(r: &InlineAttr, s: StyleRef<'_>) -> f64 {
+    controls::css_extra(node(r.dom_ptr().cast()), Some(s), false)
 }
 
 pub fn inline_attr_control_width(r: &InlineAttr, b: BoxRef<'_>) -> f64 {

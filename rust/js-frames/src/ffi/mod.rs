@@ -392,15 +392,8 @@ pub(crate) fn realm_clone_function(ctx: Ctx) -> Value {
     ctx.enter(|scope| scope.function("realmClone", 1, realm_clone))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_realm_for_node(
-    js: *const NsJs,
-    node: *const NsNode,
-) -> ContextHandle {
-    // SAFETY: the caller passes a live node or null.
-    unsafe { Node::from_ptr(node) }.map_or(ContextHandle::NULL, |node| {
-        crate::node_realm_context(js, node)
-    })
+fn realm_for_node(scope: &Scope<'_>, node: Node<'_>) -> ContextHandle {
+    crate::node_realm_context(scope.context_opaque().cast(), node)
 }
 
 fn cloners_made(js: *const NsJs) -> bool {
@@ -488,6 +481,9 @@ fn load_now(js: *const NsJs, iframe: Node<'_>) {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_canvas::links::set_js_frames_links(southstar_canvas::links::JsFramesLinks {
+        realm_for_node,
+    });
     api::set_frames_hooks(api::FramesHooks {
         submit_form,
         purge_subtree_pending,

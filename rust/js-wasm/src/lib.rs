@@ -209,7 +209,7 @@ fn guard_buffer_transfer(
     Ok(())
 }
 
-pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) -> Result<(), Value> {
+pub fn install(scope: &mut Scope<'_>, global: &Value) -> Result<(), Value> {
     let protos = Protos {
         module: scope.new_object(),
         instance: scope.new_object(),

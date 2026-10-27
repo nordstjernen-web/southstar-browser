@@ -5,6 +5,7 @@
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_void};
 use core::ptr;
+use std::collections::HashMap;
 use std::ffi::CString;
 
 use southstar_cairo::{ContextRef, Matrix, Operator, Pattern};
@@ -104,7 +105,7 @@ pub struct Walk {
     pub have_viewport: Cell<bool>,
     pub vp_x0: Cell<f64>,
     pub vp_y0: Cell<f64>,
-    pub sel_runs: Cell<*mut GHashTable>,
+    pub sel_runs: RefCell<HashMap<*const NsBox, SelectionRun>>,
     pub sticky_static: Cell<*const NsBox>,
     holes: RefCell<Vec<Hole>>,
     capture_seq: Cell<u32>,
@@ -128,7 +129,7 @@ impl Walk {
             have_viewport: Cell::new(false),
             vp_x0: Cell::new(0.0),
             vp_y0: Cell::new(0.0),
-            sel_runs: Cell::new(ptr::null_mut()),
+            sel_runs: RefCell::new(HashMap::new()),
             sticky_static: Cell::new(ptr::null()),
             holes: RefCell::new(Vec::new()),
             capture_seq: Cell::new(0),
@@ -221,19 +222,10 @@ pub fn viewport_origin() -> (bool, f64, f64) {
     with(|w| (w.have_viewport.get(), w.vp_x0.get(), w.vp_y0.get()))
 }
 
-pub fn selection_runs() -> *mut GHashTable {
-    with(|w| w.sel_runs.get())
-}
-
 pub use crate::ffi::engine::SelectionRun;
 
 pub fn selection_run(b: BoxRef<'_>) -> Option<SelectionRun> {
-    let runs = selection_runs();
-    if runs.is_null() {
-        return None;
-    }
-    let run = unsafe { southstar_glib::g_hash_table_lookup(runs, b.as_ptr().cast()) };
-    unsafe { run.cast::<SelectionRun>().as_ref() }.copied()
+    with(|w| w.sel_runs.borrow().get(&b.as_ptr()).copied())
 }
 
 pub fn paint_walk_atomic(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {

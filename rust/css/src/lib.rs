@@ -29,6 +29,7 @@ mod grid;
 mod hints;
 mod host_scope;
 mod image;
+mod image_type;
 mod incremental;
 mod initial;
 mod inline;
@@ -122,6 +123,7 @@ pub use grid::{
     grid_compose as grid_shorthand_compose, placement_compose as grid_placement_compose,
     template_compose as grid_template_compose,
 };
+pub use image_type::image_type_supported;
 pub use initial::initial_value;
 pub use inline::{
     background_position_zip as background_position_join, columns_serialize,

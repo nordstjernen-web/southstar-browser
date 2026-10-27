@@ -1,10 +1,11 @@
-//! Southstar — the C ABI of MathML layout, over Cairo, southstar-text token layouts and GLib's Unicode tables.
+//! Southstar — the Cairo and southstar-text calls behind MathML layout, and the paint entry point the painter calls.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_void};
 
-use southstar_dom::{Node, NsNode};
+use southstar_cairo::ContextRef;
+use southstar_dom::Node;
 use southstar_paint::text_layout::{self, FontDescription, Layout};
 use southstar_text::font::CairoContext;
 
@@ -81,7 +82,7 @@ impl Token {
     }
 
     pub fn show(&self, canvas: &Canvas) {
-        // SAFETY: a Canvas wraps the live cairo_t ns_math_paint was handed.
+        // SAFETY: a Canvas wraps the live cairo_t paint_math was handed.
         if let Some(cr) = unsafe { CairoContext::from_raw(canvas.0) } {
             self.0.show_on(&cr);
         }
@@ -97,24 +98,13 @@ pub fn is_single_letter(text: &CStr) -> bool {
     )
 }
 
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_math_paint(
-    cr: *mut c_void,
-    math: *const NsNode,
+pub fn paint_math(
+    cr: ContextRef<'_>,
+    math: Node<'_>,
     x: f64,
     y: f64,
     font_px: f64,
-    r: f64,
-    g: f64,
-    b: f64,
-    a: f64,
+    rgba: [f64; 4],
 ) {
-    let Some(math) = (unsafe { Node::from_ptr(math) }) else {
-        return;
-    };
-    if cr.is_null() {
-        return;
-    }
-    crate::paint(&Canvas(cr), math, x, y, font_px, [r, g, b, a]);
+    crate::paint(&Canvas(cr.as_raw()), math, x, y, font_px, rgba);
 }

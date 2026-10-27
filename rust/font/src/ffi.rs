@@ -1,4 +1,4 @@
-//! Southstar — the C ABI of the web font loader, over the network layer, GLib, fontconfig and southstar-text.
+//! Southstar — the GLib, fontconfig and southstar-text calls behind the web font loader.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -15,7 +15,6 @@ use southstar_glib::{self as glib, GBoolean, GError};
 use crate::Descriptors;
 
 unsafe extern "C" {
-    fn ns_paint_register_font_oracle();
     fn g_file_set_contents(
         filename: *const c_char,
         contents: *const c_char,
@@ -76,10 +75,6 @@ pub fn write_file(path: &CStr, data: &[u8]) -> bool {
         unsafe { glib::g_error_free(error) };
     }
     ok != 0
-}
-
-pub fn register_font_oracle() {
-    unsafe { ns_paint_register_font_oracle() };
 }
 
 #[cfg(feature = "fontconfig")]

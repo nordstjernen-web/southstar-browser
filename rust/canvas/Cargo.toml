@@ -20,6 +20,7 @@ southstar-layout = { path = "../layout" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-text = { path = "../text" }
 southstar-texture = { path = "../texture" }
+southstar-video = { path = "../video" }
 
 [features]
 webgpu = []

@@ -2,10 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_uint};
-use std::ffi::CString;
-use std::sync::OnceLock;
-
 const COMPILER: &str = match option_env!("NS_RUSTC_VERSION") {
     Some(version) => version,
     None => "unknown",
@@ -101,39 +97,22 @@ const PORTED: &[&str] = &[
     "woff2.c",
 ];
 
-fn leak(slot: &'static OnceLock<CString>, text: impl FnOnce() -> String) -> *const c_char {
-    slot.get_or_init(|| CString::new(text()).unwrap_or_default())
-        .as_ptr()
+pub fn compiler_version() -> &'static str {
+    COMPILER
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rust_compiler_version() -> *const c_char {
-    static TEXT: OnceLock<CString> = OnceLock::new();
-    leak(&TEXT, || COMPILER.to_owned())
+pub fn minimum_version() -> &'static str {
+    env!("CARGO_PKG_RUST_VERSION")
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rust_minimum_version() -> *const c_char {
-    static TEXT: OnceLock<CString> = OnceLock::new();
-    leak(&TEXT, || env!("CARGO_PKG_RUST_VERSION").to_owned())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rust_build_profile() -> *const c_char {
+pub fn build_profile() -> &'static str {
     if cfg!(debug_assertions) {
-        c"debug".as_ptr()
+        "debug"
     } else {
-        c"release (LTO)".as_ptr()
+        "release (LTO)"
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rust_module_count() -> c_uint {
-    PORTED.len() as c_uint
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_rust_modules() -> *const c_char {
-    static TEXT: OnceLock<CString> = OnceLock::new();
-    leak(&TEXT, || PORTED.join(", "))
+pub fn ported_modules() -> &'static [&'static str] {
+    PORTED
 }

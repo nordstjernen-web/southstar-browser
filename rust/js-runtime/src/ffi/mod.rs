@@ -339,7 +339,7 @@ impl Js {
 
     #[cfg(feature = "webgpu")]
     pub fn install_webgpu(self, scope: &mut Scope<'_>, navigator: &Value) {
-        imports::nsr_webgpu_install(scope, navigator);
+        crate::links::webgpu_install(scope, navigator);
     }
 
     pub fn eval_worker_polyfills(self) {

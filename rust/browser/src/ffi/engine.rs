@@ -191,6 +191,7 @@ pub fn init_subsystems() {
     southstar_http_cache::init();
     southstar_history::init();
     southstar_font::init();
+    southstar_paint::register_font_oracle();
     southstar_spellcheck::init();
     southstar_bytecode_cache::init();
 }

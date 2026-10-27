@@ -43,8 +43,12 @@ impl OwnedStr {
         NonNull::new(owned.into_raw()).map(OwnedStr)
     }
 
+    pub fn c_str(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.0.as_ptr()) }
+    }
+
     pub fn bytes(&self) -> &[u8] {
-        unsafe { CStr::from_ptr(self.0.as_ptr()) }.to_bytes()
+        self.c_str().to_bytes()
     }
 }
 
@@ -401,10 +405,6 @@ fn flush_js(cache: *mut Cache) {
     }
 }
 
-fn video_ref<'a>(v: *const NsVideo) -> Option<&'a NsVideo> {
-    unsafe { v.as_ref() }
-}
-
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VideoCache(NonNull<Cache>);
@@ -582,6 +582,25 @@ impl BoxVideo {
         self.with(|v| crate::helper_composited(v))
     }
 
+    pub fn with_poster<R>(self, f: impl FnOnce(Option<&Texture>, Option<&CStr>) -> R) -> R {
+        self.with(|v| {
+            f(
+                v.poster_texture.as_ref(),
+                v.poster_url.as_ref().map(OwnedStr::c_str),
+            )
+        })
+    }
+
+    pub fn take_load_events(self) -> bool {
+        self.with(|v| {
+            let take = v.loaded.get() && !v.load_events_fired.get();
+            if take {
+                v.load_events_fired.set(true);
+            }
+            take
+        })
+    }
+
     pub fn active_cue_text(self) -> Option<Vec<u8>> {
         self.with(|v| {
             let cues = v.cues.as_ref()?;
@@ -647,31 +666,4 @@ impl StillVideo {
             None => Err(self),
         }
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_video_poster_texture(
-    v: *const NsVideo,
-    url: *mut *const c_char,
-) -> *mut c_void {
-    let v = video_ref(v);
-    if let Some(url) = unsafe { url.as_mut() } {
-        *url = v
-            .and_then(|v| v.poster_url.as_ref())
-            .map_or(ptr::null(), |s| s.0.as_ptr().cast_const());
-    }
-    v.and_then(|v| v.poster_texture.as_ref())
-        .map_or(ptr::null_mut(), |t| t.as_ptr().cast())
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_video_take_load_events(video: *mut NsVideo) -> GBoolean {
-    let Some(video) = (unsafe { video.as_mut() }) else {
-        return glib::FALSE;
-    };
-    if !video.loaded.get() || video.load_events_fired.get() {
-        return glib::FALSE;
-    }
-    video.load_events_fired.set(true);
-    glib::TRUE
 }

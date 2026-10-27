@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, InlineAttr, NsBox, Style};
+use southstar_layout::{BoxRef, InlineAttr, Style};
 use southstar_layout_sizing::SavedGeometry;
 use southstar_paint::text_layout::{AttrList, Attribute, Layout};
 use southstar_style::StyleRef;
@@ -120,28 +120,10 @@ pub(crate) fn vertical_stack_text(text: &CStr) -> CString {
     southstar_layout_geom::vertical_stack_text(text.to_bytes())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_apply_atomic_shapes(list: *const c_void, b: *const NsBox) {
-    // SAFETY: paint passes null or a pointer to an AttrList it borrows for the call.
-    let Some(list) = (unsafe { list.cast::<AttrList>().as_ref() }) else {
-        return;
-    };
-    if let Some(b) = unsafe { BoxRef::from_ptr(b) } {
-        attrs::apply_atomic_shapes(list, b);
-    }
+pub fn apply_atomic_shapes(list: &AttrList, b: BoxRef<'_>) {
+    attrs::apply_atomic_shapes(list, b);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_inline_layout_set_attrs(
-    layout: *const c_void,
-    list: *const c_void,
-    b: *const NsBox,
-) {
-    // SAFETY: paint passes null or a pointer to a Layout it borrows for the call.
-    let Some(layout) = (unsafe { layout.cast::<Layout>().as_ref() }) else {
-        return;
-    };
-    // SAFETY: paint passes null or a pointer to an AttrList it borrows for the call.
-    let list = unsafe { list.cast::<AttrList>().as_ref() };
-    attrs::set_attrs(layout, list, unsafe { BoxRef::from_ptr(b) });
+pub fn layout_set_attrs(layout: &Layout, list: &AttrList, b: BoxRef<'_>) {
+    attrs::set_attrs(layout, Some(list), Some(b));
 }

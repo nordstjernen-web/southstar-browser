@@ -17,10 +17,6 @@ use super::cairo::Context;
 
 pub const PANGO_SCALE: f64 = 1024.0;
 
-unsafe extern "C" {
-    fn ns_paint_pango_font_size(size_px: f64) -> c_int;
-}
-
 pub struct FontDescription(TextFontDescription);
 
 impl FontDescription {
@@ -31,8 +27,7 @@ impl FontDescription {
             families
         };
         let mut desc = TextFontDescription::from_string(&String::from_utf8_lossy(families));
-        // SAFETY: ns_paint_pango_font_size is a pure conversion exported by the paint crate.
-        let size = unsafe { ns_paint_pango_font_size(size_px) };
+        let size = southstar_text::font_size_units(size_px);
         desc.set_absolute_size(f64::from(size));
         FontDescription(desc)
     }

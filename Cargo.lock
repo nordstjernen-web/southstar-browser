@@ -1884,6 +1884,7 @@ dependencies = [
  "southstar-numfmt",
  "southstar-text",
  "southstar-texture",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2415,6 +2416,7 @@ name = "southstar-js-cssom"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-anim",
+ "southstar-canvas",
  "southstar-css",
  "southstar-css-media",
  "southstar-css-prop-syntax",
@@ -2610,6 +2612,7 @@ dependencies = [
 name = "southstar-js-frames"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-config",
  "southstar-csp",
  "southstar-css",
@@ -2782,6 +2785,7 @@ dependencies = [
  "southstar-js-url",
  "southstar-js-window",
  "southstar-layout",
+ "southstar-video",
 ]
 
 [[package]]
@@ -2906,6 +2910,7 @@ dependencies = [
  "southstar-css",
  "southstar-debuglog",
  "southstar-dom",
+ "southstar-engine",
  "southstar-glib",
  "southstar-idb",
  "southstar-js-attrs",
@@ -2951,6 +2956,7 @@ dependencies = [
  "southstar-js-workers",
  "southstar-url",
  "southstar-webgl",
+ "southstar-webgpu",
 ]
 
 [[package]]
@@ -3005,6 +3011,7 @@ dependencies = [
  "southstar-js-intl",
  "southstar-js-realm",
  "southstar-js-temporal",
+ "southstar-js-wasm",
  "southstar-net",
  "southstar-url",
 ]
@@ -3135,6 +3142,7 @@ dependencies = [
 name = "southstar-js-window"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",
@@ -3352,6 +3360,7 @@ dependencies = [
  "southstar-layout",
  "southstar-layout-block",
  "southstar-layout-build",
+ "southstar-layout-content",
  "southstar-layout-float",
  "southstar-layout-geom",
  "southstar-layout-grid",
@@ -3360,6 +3369,8 @@ dependencies = [
  "southstar-layout-sizing",
  "southstar-layout-table",
  "southstar-layout-tree",
+ "southstar-mathml",
+ "southstar-paint",
  "southstar-style",
 ]
 
@@ -3421,6 +3432,7 @@ version = "1.0.4-dev"
 name = "southstar-mathml"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-dom",
  "southstar-glib",
  "southstar-paint",
@@ -3486,6 +3498,7 @@ version = "1.0.4-dev"
 dependencies = [
  "southstar-anim",
  "southstar-cairo",
+ "southstar-canvas",
  "southstar-css",
  "southstar-dom",
  "southstar-font",
@@ -3636,6 +3649,7 @@ dependencies = [
  "southstar-media-shm",
  "southstar-net",
  "southstar-netutil",
+ "southstar-paint",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-sandbox",
@@ -3792,6 +3806,7 @@ dependencies = [
  "southstar-canvas",
  "southstar-dom",
  "southstar-js-engine",
+ "southstar-js-runtime",
 ]
 
 [[package]]

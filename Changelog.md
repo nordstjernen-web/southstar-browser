@@ -53,6 +53,15 @@ Southstar Browser 1.0.2:
   js-document, js-frames and js-runtime are gone: their 170 functions are
   reached through Rust paths or link tables, and 163 generated wrappers
   nothing used any more are deleted.
+* Paint, layout, selection, MathML, SVG, image, network, config, video,
+  canvas, WebGL/WebGPU and the build-information page no longer reach each
+  other through C-ABI symbols: 39 links became typed Rust calls, functions
+  moved to the crate both sides use (font size units into rust/text, the
+  fixed-position test into layout-geom, image MIME support into css, the
+  proxy mask into config, the build information into net), arguments, or
+  typed link tables installed before first use. paint, selection,
+  layout-position and layout-query lose most or all of their unsafe code;
+  southstar-ffi and static now forbid it.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

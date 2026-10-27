@@ -1,4 +1,4 @@
-//! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and its C ABI.
+//! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and the surface the painter composites.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -85,12 +85,6 @@ unsafe extern "C" {
     fn cairo_pattern_destroy(pattern: *mut c_void);
     fn cairo_set_operator(cr: *mut Cairo, op: c_int);
     fn cairo_paint(cr: *mut Cairo);
-    fn ns_webgl_canvas_surface(canvas: *const NsNode) -> *mut c_void;
-}
-
-#[cfg(feature = "webgpu")]
-unsafe extern "C" {
-    fn ns_webgpu_canvas_surface(canvas: *const NsNode) -> *mut c_void;
 }
 
 const OPERATOR_CLEAR: c_int = 0;
@@ -214,13 +208,13 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> *mut c_void {
     if el.is_null() {
         return ptr::null_mut();
     }
-    let gl = unsafe { ns_webgl_canvas_surface(el.0) };
+    let gl = crate::links::webgl_canvas_surface(el.addr());
     if !gl.is_null() {
         return gl;
     }
     #[cfg(feature = "webgpu")]
     {
-        let gpu = unsafe { ns_webgpu_canvas_surface(el.0) };
+        let gpu = crate::links::webgpu_canvas_surface(el.addr());
         if !gpu.is_null() {
             return gpu;
         }
@@ -269,9 +263,8 @@ pub(crate) fn transfer_to_image_bitmap(
     Ok(crate::bitmap::make(scope, Some(copy), (w, h), origin_clean))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_canvas_surface(js: *mut NsJs, el: *const NsNode) -> *mut c_void {
-    canvas_surface(Js(js), Node(el))
+pub fn canvas_surface_for(js: *mut c_void, el: southstar_dom::Node<'_>) -> *mut c_void {
+    canvas_surface(Js(js.cast()), Node(el.as_ptr().cast()))
 }
 
 pub(crate) fn clear_patterns(st: &mut CanvasState) {

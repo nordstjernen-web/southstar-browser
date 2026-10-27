@@ -1,4 +1,4 @@
-//! Southstar — Cairo, southstar-text, GLib and DOM calls behind SVG rendering, and its C ABI.
+//! Southstar — Cairo, southstar-text, GLib and DOM calls behind SVG rendering.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -171,7 +171,6 @@ unsafe extern "C" {
     fn cairo_matrix_invert(m: *mut Matrix) -> c_int;
     fn cairo_matrix_transform_point(m: *const Matrix, x: *mut f64, y: *mut f64);
 
-    fn ns_paint_pango_font_size(size_px: f64) -> c_int;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
     fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
 }
@@ -606,8 +605,7 @@ impl Canvas {
         let family = font.family.map(southstar_style::font_family_for_pango);
         let family = family.as_deref().unwrap_or(c"sans-serif");
         desc.set_family(Some(&family.to_string_lossy()));
-        // SAFETY: ns_paint_pango_font_size is a pure conversion exported by the paint crate.
-        desc.set_absolute_size(f64::from(unsafe { ns_paint_pango_font_size(font.size) }));
+        desc.set_absolute_size(f64::from(southstar_text::font_size_units(font.size)));
         desc.set_weight(Weight(font.weight));
         if font.italic {
             desc.set_style(Style::Italic);

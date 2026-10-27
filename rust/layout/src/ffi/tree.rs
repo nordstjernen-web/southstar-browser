@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::marker::PhantomData;
+use core::ptr::{self, NonNull};
 use std::sync::Mutex;
 
 use southstar_glib::{
@@ -16,7 +17,6 @@ use super::{BoxRef, InlineAtomic, InlineAttr, LinkRange, NsBox, NsBoxMedia, Styl
 unsafe extern "C" {
     fn g_array_free(array: *mut GArray, free_segment: GBoolean) -> *mut c_char;
     fn g_array_set_clear_func(array: *mut GArray, clear: Option<unsafe extern "C" fn(*mut c_void)>);
-    fn ns_paint_drop_box_cache(b: *mut NsBox);
 }
 
 const POOL_MAX: usize = 16384;
@@ -82,8 +82,10 @@ unsafe fn release(cur: *mut NsBox, stack: &mut Vec<*mut NsBox>) {
             stack.push(c);
             c = next;
         }
-        if !(*cur).paint_layout.is_null() {
-            ns_paint_drop_box_cache(cur);
+        if !(*cur).paint_layout.is_null()
+            && let Some(b) = NonNull::new(cur)
+        {
+            crate::paint_links::drop_box_cache(BoxRef(b, PhantomData));
         }
         free_array((*cur).links);
         free_array((*cur).attrs);
@@ -351,7 +353,7 @@ impl<'a> BoxRef<'a> {
             (*b).inline_natural_cache_valid = 0;
             (*b).inline_min_cache_valid = 0;
             if !(*b).paint_layout.is_null() {
-                ns_paint_drop_box_cache(b);
+                crate::paint_links::drop_box_cache(self);
             }
         }
     }

@@ -57,5 +57,7 @@ pub fn install_runtime_hooks() {
         southstar_js_window::install_runtime_hooks();
         southstar_js_workers::install_runtime_hooks();
         southstar_webgl::install_runtime_hooks();
+        #[cfg(feature = "webgpu")]
+        southstar_webgpu::install_runtime_hooks();
     });
 }

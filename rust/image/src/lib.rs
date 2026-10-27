@@ -8,42 +8,8 @@ pub use ffi::{BgraPixels, ImageCache, ImageReady, ImageRef, decode_bytes, decode
 
 use core::ffi::c_long;
 
-const BUILTIN_TYPES: [&[u8]; 8] = [
-    b"image/png",
-    b"image/jpeg",
-    b"image/jpg",
-    b"image/gif",
-    b"image/bmp",
-    b"image/webp",
-    b"image/x-icon",
-    b"image/vnd.microsoft.icon",
-];
 const SECOND_US: i64 = 1_000_000;
 const RETRYABLE_STATUS: [c_long; 7] = [408, 425, 429, 500, 502, 503, 504];
-
-fn builtin_supports_mime(bare: &[u8]) -> bool {
-    BUILTIN_TYPES.contains(&bare)
-        || bare == b"image/svg+xml"
-        || (cfg!(feature = "avif") && bare == b"image/avif")
-}
-
-#[cfg(windows)]
-fn mime_blocked_on_platform(bare: &[u8]) -> bool {
-    [
-        &b"image/avif"[..],
-        b"image/heif",
-        b"image/heic",
-        b"image/heif-sequence",
-        b"image/heic-sequence",
-        b"image/jxl",
-    ]
-    .contains(&bare)
-}
-
-#[cfg(not(windows))]
-fn mime_blocked_on_platform(_bare: &[u8]) -> bool {
-    false
-}
 
 #[cfg(windows)]
 pub(crate) fn bytes_blocked_on_platform(data: &[u8]) -> bool {
@@ -66,23 +32,6 @@ pub(crate) fn bytes_blocked_on_platform(data: &[u8]) -> bool {
 #[cfg(not(windows))]
 pub(crate) fn bytes_blocked_on_platform(_data: &[u8]) -> bool {
     false
-}
-
-pub fn supports_mime(mime: &[u8]) -> bool {
-    let start = mime
-        .iter()
-        .position(|b| !b.is_ascii_whitespace())
-        .unwrap_or(mime.len());
-    let rest = &mime[start..];
-    let end = rest
-        .iter()
-        .position(|&b| b == b';' || b.is_ascii_whitespace())
-        .unwrap_or(rest.len());
-    if end == 0 {
-        return false;
-    }
-    let bare = rest[..end].to_ascii_lowercase();
-    !mime_blocked_on_platform(&bare) && builtin_supports_mime(&bare)
 }
 
 pub struct RetryState {
