@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_glib as glib;
 use southstar_js_engine::{MemoryUsage, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -146,8 +146,8 @@ impl Js {
         api::current_url(self.0)
     }
 
-    pub fn current_document(self) -> *const NsNode {
-        Node::ptr_or_null(api::current_document(self.0))
+    pub fn current_document(self) -> Option<Element> {
+        api::current_document(self.0)
     }
 
     pub fn set_document(self, doc: Option<Element>, url: &CStr) {
@@ -369,14 +369,16 @@ pub(crate) fn install_value(
     scope: &mut Scope<'_>,
     installer: ValueInstaller,
     value: &Value,
-    root: *const NsNode,
+    root: Option<Node<'_>>,
 ) {
     match installer {
         ValueInstaller::DoctypeGetter => nsr_document_define_doctype_getter(scope, value),
         ValueInstaller::DocumentFunctions => nsr_document_install_funcs(scope, value),
-        ValueInstaller::LegacyNamed => unsafe {
-            nsr_document_expose_legacy_named(scope, root, value)
-        },
+        ValueInstaller::LegacyNamed => {
+            if let Some(root) = root {
+                nsr_document_expose_legacy_named(scope, root, value);
+            }
+        }
         ValueInstaller::TreeWalkerProto => nsr_tree_walker_install_proto(scope, value),
         ValueInstaller::EventHandlerAccessors => nsr_install_event_handler_accessors(scope, value),
         ValueInstaller::LiftDocumentMethods => nsr_document_lift_methods_to_proto(scope, value),

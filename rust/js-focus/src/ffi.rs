@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -13,6 +13,7 @@ use southstar_js_runtime::api;
 use crate::{Element, JsResult};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page;
 use southstar_js_runtime::events;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,6 +24,10 @@ use southstar_js_window::nsr_make_window_event;
 impl Js {
     fn of(js: *const NsJs) -> Js {
         Js(js as usize)
+    }
+
+    fn of_page(page: Page) -> Js {
+        Js::of(page.as_ptr())
     }
 
     fn ptr(self) -> *mut NsJs {
@@ -62,7 +67,9 @@ impl Js {
     }
 
     pub fn commit_change(self, el: Element) {
-        southstar_js_mutation::commit_change(self.ptr(), el);
+        if let Some(page) = Page::from_ptr(self.ptr()) {
+            southstar_js_mutation::commit_change(page, el);
+        }
     }
 
     pub fn log_line(self, line: &CStr) {
@@ -318,44 +325,20 @@ pub fn keyboard_activates(el: Node<'_>, key: &[u8]) -> bool {
     element(el).is_some_and(|el| crate::click::keyboard_activates(el, key))
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn note_pointer_input(js: *mut c_void, pointer: bool) {
-    let js = Js::of(js.cast());
-    if !js.is_null() {
-        crate::with(js, |page| page.pointer_input = pointer);
-    }
+pub fn note_pointer_input(js: Page, pointer: bool) {
+    crate::with(Js::of_page(js), |page| page.pointer_input = pointer);
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn set_focus(js: *mut c_void, el: Option<Node<'_>>) {
-    let js = Js::of(js.cast());
-    if !js.is_null() {
-        crate::focus::set_focus_in(js, el.and_then(element), None);
-    }
+pub fn set_focus(js: Page, el: Option<Node<'_>>) {
+    crate::focus::set_focus_in(Js::of_page(js), el.and_then(element), None);
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn set_focused_node(js: *mut c_void, el: Option<Node<'_>>) {
-    let js = Js::of(js.cast());
-    if !js.is_null() {
-        crate::focus::set_focused_node(js, el.and_then(element));
-    }
+pub fn set_focused_node(js: Page, el: Option<Node<'_>>) {
+    crate::focus::set_focused_node(Js::of_page(js), el.and_then(element));
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn focus_from_pointer(js: *mut c_void, target: Option<Node<'_>>) {
-    let js = Js::of(js.cast());
-    if !js.is_null() {
-        crate::focus::focus_from_pointer(js, target.and_then(element));
-    }
+pub fn focus_from_pointer(js: Page, target: Option<Node<'_>>) {
+    crate::focus::focus_from_pointer(Js::of_page(js), target.and_then(element));
 }
 
 pub fn focused_node(js: *const NsJs) -> Option<Element> {
@@ -394,22 +377,12 @@ pub fn click_activation_target(el: Node<'_>) -> Option<Element> {
     element(el).and_then(crate::activation::click_activation_target)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn sequential_focus_target(js: *mut c_void, backward: bool) -> Option<Element> {
-    let js = Js::of(js.cast());
-    if js.is_null() {
-        return None;
-    }
-    crate::focus::sequential_target(js, backward)
+pub fn sequential_focus_target(js: Page, backward: bool) -> Option<Element> {
+    crate::focus::sequential_target(Js::of_page(js), backward)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn activate_element(js: *mut c_void, el: Node<'_>) {
-    let (js, Some(el)) = (Js::of(js.cast()), element(el)) else {
+pub fn activate_element(js: Page, el: Node<'_>) {
+    let (js, Some(el)) = (Js::of_page(js), element(el)) else {
         return;
     };
     if js.has_context() {
@@ -417,24 +390,15 @@ pub unsafe fn activate_element(js: *mut c_void, el: Node<'_>) {
     }
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn keyboard_activate(js: *mut c_void, el: Node<'_>, key: &[u8], keyup: bool) -> bool {
-    let (js, Some(el)) = (Js::of(js.cast()), element(el)) else {
+pub fn keyboard_activate(js: Page, el: Node<'_>, key: &[u8], keyup: bool) -> bool {
+    let (js, Some(el)) = (Js::of_page(js), element(el)) else {
         return false;
     };
     js.has_context() && crate::click::keyboard_activate(js, el, key, keyup)
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine.
-pub unsafe fn window_action_applied(js: *mut c_void) {
-    let js = Js::of(js.cast());
-    if !js.is_null() {
-        crate::fullscreen::window_action_applied(js);
-    }
+pub fn window_action_applied(js: Page) {
+    crate::fullscreen::window_action_applied(Js::of_page(js));
 }
 
 fn update_focus_visible(js: *const NsJs) {

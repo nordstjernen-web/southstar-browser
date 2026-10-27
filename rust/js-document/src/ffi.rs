@@ -387,7 +387,7 @@ pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
 }
 
 pub(crate) fn expose_legacy_named(scope: &mut Scope<'_>, root: Element, document: &Value) {
-    unsafe { imports::nsr_document_expose_legacy_named(scope, root.as_ptr(), document) };
+    imports::nsr_document_expose_legacy_named(scope, root, document);
 }
 
 pub(crate) fn arm_js_invalidate(node: Element) {

@@ -95,12 +95,14 @@ pub(crate) fn attribute_map_lookup(
     js: Js,
     owner: Element,
 ) -> Option<Value> {
-    unsafe { imports::nsr_attribute_map_lookup(js.0, owner.as_ptr()) }
+    imports::nsr_attribute_map_lookup(api::Page::from_ptr(js.0)?, owner)
         .filter(|map| !map.is_undefined())
 }
 
 pub(crate) fn attribute_map_remember(_scope: &mut Scope<'_>, js: Js, owner: Element, map: &Value) {
-    unsafe { imports::nsr_attribute_map_remember(js.0, owner.as_ptr(), map) };
+    if let Some(page) = api::Page::from_ptr(js.0) {
+        imports::nsr_attribute_map_remember(page, owner, map);
+    }
 }
 
 pub(crate) fn make_attributes_live(scope: &mut Scope<'_>, owner: &Value) -> Result<Value, Value> {

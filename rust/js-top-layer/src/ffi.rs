@@ -61,8 +61,9 @@ impl Js {
     }
 
     pub fn set_focus(self, el: Option<Element>) {
-        // SAFETY: a Js value names the page's live script engine.
-        unsafe { southstar_js_focus::set_focus(self.ptr().cast(), el) };
+        if let Some(page) = api::Page::from_ptr(self.ptr()) {
+            southstar_js_focus::set_focus(page, el);
+        }
     }
 
     pub fn halted(self) -> bool {

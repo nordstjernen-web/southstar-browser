@@ -174,6 +174,11 @@ pub(crate) struct Record {
 
 thread_local! {
     static ACTIVE: Cell<*mut NsJs> = const { Cell::new(ptr::null_mut()) };
+    static LIVE: RefCell<HashSet<usize>> = RefCell::new(HashSet::new());
+}
+
+pub(crate) fn is_live(js: *const NsJs) -> bool {
+    LIVE.with_borrow(|live| live.contains(&js.addr()))
 }
 
 pub(crate) fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
@@ -237,7 +242,9 @@ pub(crate) fn alloc() -> *mut NsJs {
         state: OnceCell::new(),
     });
     drop(record.state.set(Box::new(PageState::new())));
-    Box::into_raw(record).cast()
+    let js: *mut NsJs = Box::into_raw(record).cast();
+    LIVE.with_borrow_mut(|live| live.insert(js.addr()));
+    js
 }
 
 impl Record {
@@ -424,6 +431,7 @@ pub(crate) unsafe fn free_engine(js: *mut NsJs) {
     let Some(record) = record(js) else {
         return;
     };
+    LIVE.with_borrow_mut(|live| live.remove(&js.addr()));
     free_realm_values(record);
     free_window_values(record);
     for ctx in record.frame_ctxs.take().unwrap_or_default() {

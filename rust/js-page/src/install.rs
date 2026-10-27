@@ -176,12 +176,7 @@ fn finish_shapes(scope: &mut Scope<'_>) {
     let document = scope
         .get(&global, "document")
         .unwrap_or_else(|_| Value::undefined());
-    ffi::install_value(
-        scope,
-        ValueInstaller::LiftDocumentMethods,
-        &document,
-        core::ptr::null(),
-    );
+    ffi::install_value(scope, ValueInstaller::LiftDocumentMethods, &document, None);
     southstar_js_interfaces::install_node_shapes(scope);
     southstar_js_interfaces::install_element_shapes(scope);
 }
