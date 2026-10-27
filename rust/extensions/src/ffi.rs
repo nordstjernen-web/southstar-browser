@@ -1,10 +1,12 @@
-//! Southstar — the C ABI of the extension host, and the GLib, GRegex and libpsl calls behind it.
+//! Southstar — the C ABI of the extension host, and the file, GLib, GRegex and libpsl calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
-use std::ffi::CString;
+use std::ffi::{CString, OsStr};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 use southstar_glib::{self as glib, GBoolean};
 
@@ -13,12 +15,12 @@ pub(crate) const SEARCHPATH_SEPARATOR: u8 = b';';
 #[cfg(not(windows))]
 pub(crate) const SEARCHPATH_SEPARATOR: u8 = b':';
 
-const G_REGEX_CASELESS: c_int = 1 << 0;
+#[cfg(windows)]
+const DIR_SEPARATOR: u8 = b'\\';
+#[cfg(not(windows))]
+const DIR_SEPARATOR: u8 = b'/';
 
-#[repr(C)]
-struct GDir {
-    _private: [u8; 0],
-}
+const G_REGEX_CASELESS: c_int = 1 << 0;
 
 #[repr(C)]
 struct GRegex {
@@ -31,19 +33,6 @@ struct PslContext {
 }
 
 unsafe extern "C" {
-    fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
-    fn g_file_set_contents(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        error: *mut *mut glib::GError,
-    ) -> GBoolean;
-    fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut glib::GError) -> *mut GDir;
-    fn g_dir_read_name(dir: *mut GDir) -> *const c_char;
-    fn g_dir_close(dir: *mut GDir);
-
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_int,
@@ -86,27 +75,114 @@ impl Drop for Regex {
     }
 }
 
-fn cstring(bytes: &[u8]) -> CString {
+fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
+    &bytes[..end]
 }
 
-fn take_string(text: *mut c_char) -> Vec<u8> {
-    let bytes = unsafe { glib::bytes(text) }.unwrap_or_default().to_vec();
-    unsafe { glib::g_free(text.cast()) };
-    bytes
+fn cstring(bytes: &[u8]) -> CString {
+    CString::new(until_nul(bytes)).unwrap_or_default()
+}
+
+#[cfg(unix)]
+fn path_of(bytes: &[u8]) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+    PathBuf::from(OsStr::from_bytes(until_nul(bytes)))
+}
+
+#[cfg(not(unix))]
+fn path_of(bytes: &[u8]) -> PathBuf {
+    PathBuf::from(String::from_utf8_lossy(until_nul(bytes)).into_owned())
+}
+
+#[cfg(unix)]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    text.as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+fn os_bytes(text: &OsStr) -> Vec<u8> {
+    text.to_string_lossy().into_owned().into_bytes()
+}
+
+fn is_dir_separator(c: u8) -> bool {
+    c == b'/' || (cfg!(windows) && c == b'\\')
 }
 
 pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
-    let owned: Vec<CString> = parts.iter().map(|part| cstring(part)).collect();
-    let mut pointers: Vec<*mut c_char> = owned.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    pointers.push(ptr::null_mut());
-    take_string(unsafe { glib::g_build_filenamev(pointers.as_mut_ptr()) })
+    let mut result = Vec::new();
+    let mut separator = DIR_SEPARATOR;
+    let mut is_first = true;
+    let mut have_leading = false;
+    let mut single_element: Option<&[u8]> = None;
+    let mut last_trailing: &[u8] = &[];
+    for element in parts.iter().map(|part| until_nul(part)) {
+        if element.is_empty() {
+            continue;
+        }
+        let start = element
+            .iter()
+            .position(|&c| !is_dir_separator(c))
+            .unwrap_or(element.len());
+        if cfg!(windows) && start > 0 {
+            separator = element[start - 1];
+        }
+        let end = element[start..]
+            .iter()
+            .rposition(|&c| !is_dir_separator(c))
+            .map_or(start, |i| start + i + 1);
+        if cfg!(windows) && end < element.len() {
+            separator = element[end];
+        }
+        let trailing_from = if end > start { end } else { 0 };
+        last_trailing = &element[trailing_from..];
+        if !have_leading {
+            if end == start {
+                single_element = Some(element);
+            }
+            result.extend_from_slice(&element[..start]);
+            have_leading = true;
+        } else {
+            single_element = None;
+        }
+        if end == start {
+            continue;
+        }
+        if !is_first {
+            result.push(separator);
+        }
+        result.extend_from_slice(&element[start..end]);
+        is_first = false;
+    }
+    match single_element {
+        Some(element) => element.to_vec(),
+        None => {
+            result.extend_from_slice(last_trailing);
+            result
+        }
+    }
 }
 
 pub(crate) fn basename(path: &[u8]) -> Vec<u8> {
-    let path = cstring(path);
-    take_string(unsafe { g_path_get_basename(path.as_ptr()) })
+    let path = until_nul(path);
+    if path.is_empty() {
+        return b".".to_vec();
+    }
+    let Some(last) = path.iter().rposition(|&c| !is_dir_separator(c)) else {
+        return vec![DIR_SEPARATOR];
+    };
+    let has_drive =
+        cfg!(windows) && path.len() >= 2 && path[0].is_ascii_alphabetic() && path[1] == b':';
+    if has_drive && last == 1 {
+        return vec![DIR_SEPARATOR];
+    }
+    let base = match path[..=last].iter().rposition(|&c| is_dir_separator(c)) {
+        Some(i) => i + 1,
+        None if has_drive => 2,
+        None => 0,
+    };
+    path[base..=last].to_vec()
 }
 
 pub(crate) fn user_data_dir() -> Vec<u8> {
@@ -116,7 +192,8 @@ pub(crate) fn user_data_dir() -> Vec<u8> {
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(glib::g_getenv(name.as_ptr())) }.map(<[u8]>::to_vec)
+    let name = name.to_str().ok()?;
+    std::env::var_os(name).map(|value| os_bytes(&value))
 }
 
 pub(crate) fn language_name() -> Option<Vec<u8>> {
@@ -128,73 +205,80 @@ pub(crate) fn language_name() -> Option<Vec<u8>> {
 }
 
 pub(crate) fn sha256_hex(text: &[u8]) -> Vec<u8> {
-    southstar_digest::sha256_hex(cstring(text).as_bytes()).into_bytes()
-}
-
-fn file_test(path: &[u8], test: glib::GFileTest) -> bool {
-    let path = cstring(path);
-    unsafe { glib::g_file_test(path.as_ptr(), test) != 0 }
+    southstar_digest::sha256_hex(until_nul(text)).into_bytes()
 }
 
 pub(crate) fn exists(path: &[u8]) -> bool {
-    file_test(path, glib::FILE_TEST_EXISTS)
+    path_of(path).exists()
 }
 
 pub(crate) fn is_dir(path: &[u8]) -> bool {
-    file_test(path, glib::FILE_TEST_IS_DIR)
+    path_of(path).is_dir()
 }
 
 pub(crate) fn list_dir(path: &[u8]) -> Vec<Vec<u8>> {
-    let path = cstring(path);
-    let dir = unsafe { g_dir_open(path.as_ptr(), 0, ptr::null_mut()) };
-    if dir.is_null() {
-        return Vec::new();
-    }
-    let mut names = Vec::new();
-    while let Some(name) = unsafe { glib::bytes(g_dir_read_name(dir)) } {
-        names.push(name.to_vec());
-    }
-    unsafe { g_dir_close(dir) };
-    names
+    std::fs::read_dir(path_of(path)).map_or_else(
+        |_| Vec::new(),
+        |entries| {
+            entries
+                .map_while(Result::ok)
+                .map(|entry| os_bytes(&entry.file_name()))
+                .collect()
+        },
+    )
 }
 
 pub(crate) fn read_file(path: &[u8]) -> Option<Vec<u8>> {
-    let path = cstring(path);
-    let mut contents: *mut c_char = ptr::null_mut();
-    let mut length = 0usize;
-    let ok = unsafe {
-        glib::g_file_get_contents(path.as_ptr(), &mut contents, &mut length, ptr::null_mut())
-    };
-    if ok == 0 {
-        return None;
-    }
-    let data = unsafe { glib::slice(contents.cast(), length) }.to_vec();
-    unsafe { glib::g_free(contents.cast()) };
-    Some(data)
+    std::fs::read(path_of(path)).ok()
 }
 
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) {}
+
 pub(crate) fn make_private_dir(path: &[u8]) {
-    let path = cstring(path);
-    unsafe {
-        g_mkdir_with_parents(path.as_ptr(), 0o700);
-        g_chmod(path.as_ptr(), 0o700);
+    let path = path_of(path);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let _ = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&path);
+    }
+    #[cfg(not(unix))]
+    let _ = std::fs::create_dir_all(&path);
+    set_mode(&path, 0o700);
+}
+
+fn write_atomically(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(format!(".{}.tmp", std::process::id()));
+    let temp = PathBuf::from(temp_name);
+    let written = std::fs::File::create(&temp).and_then(|mut file| {
+        file.write_all(data)?;
+        file.sync_all()
+    });
+    match written.and_then(|()| std::fs::rename(&temp, path)) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp);
+            Err(error)
+        }
     }
 }
 
 pub(crate) fn write_private_file(path: &[u8], data: &[u8]) -> bool {
-    let path = cstring(path);
-    let written = unsafe {
-        g_file_set_contents(
-            path.as_ptr(),
-            data.as_ptr().cast(),
-            data.len() as isize,
-            ptr::null_mut(),
-        )
-    };
-    if written == 0 {
+    let path = path_of(path);
+    if write_atomically(&path, data).is_err() {
         return false;
     }
-    unsafe { g_chmod(path.as_ptr(), 0o600) };
+    set_mode(&path, 0o600);
     true
 }
 

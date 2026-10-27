@@ -4,15 +4,13 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::CString;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use southstar_glib::{self as glib, GBoolean, GError, GHashTable};
+use southstar_glib::{self as glib, GBoolean, GError};
 pub use southstar_net::{NsResponse, Response};
-
-#[repr(C)]
-pub struct GBytes {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 struct GMainLoop {
@@ -37,10 +35,6 @@ unsafe extern "C" {
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
     fn g_get_monotonic_time() -> i64;
-    fn g_bytes_new(data: *const c_void, size: usize) -> *mut GBytes;
-    fn g_bytes_ref(bytes: *mut GBytes) -> *mut GBytes;
-    fn g_bytes_unref(bytes: *mut GBytes);
-    fn g_bytes_get_data(bytes: *mut GBytes, size: *mut usize) -> *const c_void;
 }
 
 pub fn monotonic_us() -> i64 {
@@ -248,96 +242,56 @@ pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
     unsafe { Response::from_raw(resp) }
 }
 
-pub struct Bytes(NonNull<GBytes>);
+#[derive(Clone)]
+pub struct Bytes(Arc<[u8]>);
 
 impl Bytes {
     pub fn new(data: &[u8]) -> Bytes {
-        Bytes(
-            NonNull::new(unsafe { g_bytes_new(data.as_ptr().cast(), data.len()) })
-                .expect("g_bytes_new"),
-        )
-    }
-
-    pub unsafe fn borrow(p: *mut GBytes) -> Option<Bytes> {
-        NonNull::new(p)
-            .map(|b| Bytes(NonNull::new(unsafe { g_bytes_ref(b.as_ptr()) }).expect("g_bytes_ref")))
+        Bytes(Arc::from(data))
     }
 
     pub fn data(&self) -> &[u8] {
-        let mut len = 0usize;
-        let data = unsafe { g_bytes_get_data(self.0.as_ptr(), &mut len) };
-        if data.is_null() || len == 0 {
-            return &[];
-        }
-        unsafe { core::slice::from_raw_parts(data.cast(), len) }
+        &self.0
     }
 
     pub fn addr(&self) -> usize {
-        self.0.as_ptr() as usize
+        Arc::as_ptr(&self.0).cast::<u8>() as usize
     }
 
     pub fn clone_ref(&self) -> Bytes {
-        Bytes(NonNull::new(unsafe { g_bytes_ref(self.0.as_ptr()) }).expect("g_bytes_ref"))
-    }
-
-    pub fn into_raw(self) -> *mut GBytes {
-        let raw = self.0.as_ptr();
-        core::mem::forget(self);
-        raw
+        self.clone()
     }
 }
 
-impl Drop for Bytes {
-    fn drop(&mut self) {
-        unsafe { g_bytes_unref(self.0.as_ptr()) };
-    }
+static CSS_CACHES: Mutex<BTreeMap<u64, HashMap<CString, Bytes>>> = Mutex::new(BTreeMap::new());
+static NEXT_CSS_CACHE: AtomicU64 = AtomicU64::new(1);
+
+fn css_caches() -> MutexGuard<'static, BTreeMap<u64, HashMap<CString, Bytes>>> {
+    CSS_CACHES.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-unsafe extern "C" fn bytes_unref(bytes: *mut c_void) {
-    // SAFETY: the table only holds GBytes values, each carrying the reference the table owns.
-    unsafe { g_bytes_unref(bytes.cast()) };
-}
-
-#[repr(transparent)]
 #[derive(Clone, Copy)]
-pub struct CssCache(NonNull<GHashTable>);
+pub struct CssCache(u64);
 
 impl CssCache {
     pub fn create() -> CssCache {
-        // SAFETY: the keys are g_strdup'd strings and the values GBytes, matching the hash, equality and destroy functions.
-        let table = unsafe {
-            glib::g_hash_table_new_full(
-                Some(glib::g_str_hash),
-                Some(glib::g_str_equal),
-                Some(glib::g_free),
-                Some(bytes_unref),
-            )
-        };
-        CssCache(NonNull::new(table).expect("g_hash_table_new_full"))
+        let id = NEXT_CSS_CACHE.fetch_add(1, Ordering::Relaxed);
+        css_caches().insert(id, HashMap::new());
+        CssCache(id)
     }
 
-    /// # Safety
-    ///
-    /// No copy of this handle may be used afterwards.
-    pub unsafe fn free(self) {
-        // SAFETY: the table was made by create() and the caller guarantees nothing uses it again.
-        unsafe { glib::g_hash_table_destroy(self.0.as_ptr()) };
+    pub fn free(self) {
+        css_caches().remove(&self.0);
     }
 
     pub fn lookup(self, url: &CStr) -> Option<Bytes> {
-        unsafe {
-            Bytes::borrow(glib::g_hash_table_lookup(self.0.as_ptr(), url.as_ptr().cast()).cast())
-        }
+        css_caches().get(&self.0)?.get(url).cloned()
     }
 
     pub fn insert(self, url: &CStr, bytes: Bytes) {
-        unsafe {
-            glib::g_hash_table_insert(
-                self.0.as_ptr(),
-                glib::g_strdup(url.as_ptr()).cast(),
-                bytes.into_raw().cast(),
-            )
-        };
+        if let Some(cache) = css_caches().get_mut(&self.0) {
+            cache.insert(url.to_owned(), bytes);
+        }
     }
 }
 

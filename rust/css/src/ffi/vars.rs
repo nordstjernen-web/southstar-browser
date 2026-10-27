@@ -2,35 +2,31 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use std::collections::HashSet;
-
-use southstar_glib::{self as glib, GHashTable, GPtrArray};
+use core::cell::OnceCell;
+use core::ffi::{CStr, c_int};
+use std::collections::{HashMap, HashSet};
+use std::ffi::CString;
 
 use super::declarations::lookup_key;
 use super::registry::RegisteredProps;
 use crate::vars::{self, Lookup};
 
-#[repr(C)]
+pub(super) type VarTable = HashMap<CString, CString>;
+
 pub(super) struct RawVarMap {
     ref_count: c_int,
-    pub(super) own: *mut GHashTable,
+    pub(super) own: VarTable,
     parent: *mut RawVarMap,
-    names: *mut GPtrArray,
+    names: OnceCell<Vec<CString>>,
 }
 
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawVarMap>() == 32);
-
-pub(super) unsafe fn new_map(own: *mut GHashTable, parent: *mut RawVarMap) -> *mut RawVarMap {
-    let map = unsafe { glib::g_malloc0(size_of::<RawVarMap>()) }.cast::<RawVarMap>();
-    unsafe {
-        (*map).ref_count = 1;
-        (*map).own = own;
-        (*map).parent = parent;
-    }
-    map
+pub(super) fn new_map(own: VarTable, parent: *mut RawVarMap) -> *mut RawVarMap {
+    Box::into_raw(Box::new(RawVarMap {
+        ref_count: 1,
+        own,
+        parent,
+        names: OnceCell::new(),
+    }))
 }
 
 pub(super) unsafe fn map_ref(map: *mut RawVarMap) -> *mut RawVarMap {
@@ -47,33 +43,14 @@ pub(super) unsafe fn var_map_unref(mut map: *mut RawVarMap) {
             return;
         }
         let parent = m.parent;
-        unsafe {
-            if !m.own.is_null() {
-                glib::g_hash_table_destroy(m.own);
-            }
-            if !m.names.is_null() {
-                glib::g_ptr_array_unref(m.names);
-            }
-            glib::g_free(map.cast());
-        }
+        // SAFETY: map came from new_map's Box::into_raw and its last reference is being released.
+        drop(unsafe { Box::from_raw(map) });
         map = parent;
     }
 }
 
-unsafe extern "C" {
-    fn g_ptr_array_ref(array: *mut GPtrArray) -> *mut GPtrArray;
-    fn g_ptr_array_sort(
-        array: *mut GPtrArray,
-        compare: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
-    );
-}
-
-unsafe fn text<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-fn c_string(text: &[u8]) -> std::ffi::CString {
-    std::ffi::CString::new(text).unwrap_or_default()
+fn c_string(text: &[u8]) -> CString {
+    CString::new(text).unwrap_or_default()
 }
 
 struct Chain<'a> {
@@ -87,11 +64,8 @@ pub(super) fn chain_lookup_text<'a>(
 ) -> Option<&'a CStr> {
     let key = c_string(name);
     while let Some(m) = map {
-        if !m.own.is_null() {
-            let value = unsafe { glib::g_hash_table_lookup(m.own, key.as_ptr().cast()) };
-            if !value.is_null() {
-                return Some(unsafe { CStr::from_ptr(value.cast()) });
-            }
+        if let Some(value) = m.own.get(&key) {
+            return Some(value);
         }
         map = unsafe { m.parent.as_ref() };
     }
@@ -125,61 +99,29 @@ pub(super) fn substitute_in(
     vars::substitute(value, lookup.filter(|_| !map.is_null()), 0)
 }
 
-unsafe extern "C" fn name_cmp(a: *const c_void, b: *const c_void) -> c_int {
-    let (a, b) = unsafe { (*a.cast::<*const c_char>(), *b.cast::<*const c_char>()) };
-    unsafe { CStr::from_ptr(a).cmp(CStr::from_ptr(b)) as c_int }
-}
-
 pub(super) fn chain_names(map: &RawVarMap) -> Vec<&CStr> {
-    let array = unsafe { names_array(map) };
-    let names = match unsafe { array.as_ref() } {
-        Some(a) if !a.pdata.is_null() => {
-            // SAFETY: a non-empty pointer array's pdata holds len name pointers.
-            let names = unsafe { core::slice::from_raw_parts(a.pdata, a.len as usize) };
-            names
-                .iter()
-                // SAFETY: each name is a NUL-terminated key owned by the variable map.
-                .map(|&name| unsafe { CStr::from_ptr(name.cast()) })
-                .collect()
-        }
-        _ => Vec::new(),
-    };
-    unsafe { glib::g_ptr_array_unref(array) };
-    names
+    map.names
+        .get_or_init(|| names_of(map))
+        .iter()
+        .map(CString::as_c_str)
+        .collect()
 }
 
-unsafe fn names_array(map: *const RawVarMap) -> *mut GPtrArray {
-    let raw = map.cast_mut();
-    if let Some(m) = unsafe { raw.as_ref() }
-        && !m.names.is_null()
-    {
-        return unsafe { g_ptr_array_ref(m.names) };
-    }
-    let names = unsafe { glib::g_ptr_array_new_with_free_func(Some(glib::g_free)) };
-    let mut seen: HashSet<Vec<u8>> = HashSet::new();
-    let mut current = unsafe { raw.as_ref() };
+fn names_of(map: &RawVarMap) -> Vec<CString> {
+    let mut names = Vec::new();
+    let mut seen: HashSet<&[u8]> = HashSet::new();
+    let mut current = Some(map);
     while let Some(m) = current {
-        if !m.own.is_null() {
-            let mut iter = glib::GHashTableIter::new();
-            unsafe { glib::g_hash_table_iter_init(&mut iter, m.own) };
-            let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
-            while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-                let name = unsafe { text(key.cast()) }.unwrap_or_default();
-                if !seen.insert(name.to_vec()) {
-                    continue;
-                }
-                let value = unsafe { text(value.cast()) };
-                if value.is_some_and(|v| !v.eq_ignore_ascii_case(b"initial")) {
-                    unsafe { glib::g_ptr_array_add(names, glib::strdup(name).cast()) };
-                }
+        for (name, value) in &m.own {
+            if !seen.insert(name.to_bytes()) {
+                continue;
+            }
+            if !value.to_bytes().eq_ignore_ascii_case(b"initial") {
+                names.push(name.clone());
             }
         }
         current = unsafe { m.parent.as_ref() };
     }
-    unsafe { g_ptr_array_sort(names, Some(name_cmp)) };
-    let Some(m) = (unsafe { raw.as_mut() }) else {
-        return names;
-    };
-    m.names = names;
-    unsafe { g_ptr_array_ref(names) }
+    names.sort();
+    names
 }

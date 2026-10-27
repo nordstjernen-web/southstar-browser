@@ -8,20 +8,13 @@ use southstar_image::{ImageCache, ImageRef};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{
-    GPtrArray, g_array_append_vals, g_free, g_ptr_array_add, g_ptr_array_new,
-    g_ptr_array_new_with_free_func, strdup,
-};
+use southstar_glib::strdup;
 use southstar_layout::{BoxRef, InlineAtomic, InlineAttr, LinkRange, MediaRef, NsBox, Style};
 use southstar_style::{StyleRef, StyleTable, ValueRef};
 
 use crate::{block, generated, media, state};
 
 pub use southstar_svg::SvgSize;
-
-unsafe extern "C" {
-    fn g_utf8_get_char(p: *const c_char) -> u32;
-}
 
 pub fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
@@ -111,16 +104,9 @@ pub fn svg_intrinsic_size(n: Node<'_>) -> SvgSize {
 }
 
 pub fn set_bg_layers(m: MediaRef<'_>, layers: &[Option<&CStr>]) {
-    unsafe {
-        let srcs = g_ptr_array_new_with_free_func(Some(g_free));
-        let images: *mut GPtrArray = g_ptr_array_new();
-        for l in layers {
-            let src = l.map_or(ptr::null_mut(), |s| strdup(s.to_bytes()));
-            g_ptr_array_add(srcs, src.cast());
-            g_ptr_array_add(images, media::peek_image(*l));
-        }
-        m.set_bg_layers(srcs, images);
-    }
+    let srcs = layers.iter().map(|l| l.map(CStr::to_owned)).collect();
+    let images = layers.iter().map(|l| media::peek_image(*l)).collect();
+    m.set_bg_layers(srcs, images);
 }
 
 pub fn inline_merge_prefix(
@@ -163,11 +149,7 @@ pub fn li_marker(li: Node<'_>, s: Option<StyleRef<'_>>) -> Option<Vec<u8>> {
 }
 
 pub fn utf8_get_char(s: &[u8], at: usize) -> u32 {
-    let mut buf = [0u8; 8];
-    let tail = &s[at.min(s.len())..];
-    let n = tail.len().min(7);
-    buf[..n].copy_from_slice(&tail[..n]);
-    unsafe { g_utf8_get_char(buf.as_ptr().cast()) }
+    southstar_layout::utf8_get_char(s, at)
 }
 
 pub fn unichar_isalnum(c: u32) -> bool {
@@ -196,16 +178,14 @@ fn dup_or_null(p: *const c_char) -> *mut c_char {
 pub fn new_inline_run(parts: RunParts) -> *mut NsBox {
     let b = southstar_layout::BoxPool::new_inline();
     if !parts.links.is_empty() {
-        let links = b.ensure_links_array();
         for l in &parts.links {
-            let out = LinkRange::new(
+            b.push_link(LinkRange::new(
                 l.start,
                 l.len,
                 dup_or_null(l.href),
                 dup_or_null(l.target),
                 l.dom.cast(),
-            );
-            unsafe { g_array_append_vals(links, ptr::from_ref(&out).cast(), 1) };
+            ));
         }
     }
     for a in &parts.attrs {

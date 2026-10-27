@@ -484,7 +484,7 @@ fn debug_composite(v: Video<'_>, punched: bool, has_tex: bool, b: BoxRef<'_>) {
     if std::env::var_os("NS_DBG_COMPOSITE").is_none() {
         return;
     }
-    if !crate::state::composite_log_due(engine::monotonic_time()) {
+    if !crate::state::composite_log_due() {
         return;
     }
     let line = format!(

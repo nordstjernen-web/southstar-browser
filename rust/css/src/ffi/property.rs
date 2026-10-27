@@ -24,7 +24,7 @@ pub(crate) fn prop_of(id: c_int) -> Option<Prop> {
 }
 
 fn strdup_opt(text: Option<Vec<u8>>) -> *mut c_char {
-    text.map_or(ptr::null_mut(), |t| glib::strdup(&t))
+    text.map_or(ptr::null_mut(), |t| value::c_dup(&t))
 }
 
 pub(crate) fn to_c(v: Value) -> *mut NsCssValue {
@@ -64,7 +64,7 @@ pub(crate) fn to_c(v: Value) -> *mut NsCssValue {
         }
         Body::Url(url) => {
             let raw = value::alloc(KIND_URL);
-            unsafe { (*raw).u.url = glib::strdup(&url) };
+            unsafe { (*raw).u.url = value::c_dup(&url) };
             raw
         }
         Body::Shadow(list) => value::new_shadow(&list),

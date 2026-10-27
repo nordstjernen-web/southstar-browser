@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_void};
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
 use southstar_cairo::ContextRef;
@@ -94,25 +95,15 @@ pub fn invalidate_3d() {
 
 impl LayerPlan {
     pub fn new() -> LayerPlan {
-        let mut plan = LayerPlan {
-            dynamic: 0,
-            kinds: ptr::null_mut(),
-            vp: ptr::null_mut(),
-        };
-        document::plan_init(&mut plan);
-        plan
+        LayerPlan {
+            dynamic: false,
+            kinds: Rc::default(),
+            vp: Vec::new(),
+        }
     }
 
     fn captures(&self) -> &[VpCapture] {
-        // SAFETY: a plan's layer array is null or the GArray plan_init created, alive until the plan drops.
-        let Some(vp) = (unsafe { self.vp.as_ref() }) else {
-            return &[];
-        };
-        if vp.len == 0 || vp.data.is_null() {
-            return &[];
-        }
-        // SAFETY: the planner fills the array with `len` VpCapture records at `data`.
-        unsafe { core::slice::from_raw_parts(vp.data.cast::<VpCapture>(), vp.len as usize) }
+        &self.vp
     }
 
     pub fn viewport_layers(&self) -> usize {
@@ -120,7 +111,7 @@ impl LayerPlan {
     }
 
     pub fn dynamic(&self) -> bool {
-        self.dynamic != 0
+        self.dynamic
     }
 
     pub fn capture(&self, index: usize) -> Option<&VpCapture> {
@@ -131,12 +122,6 @@ impl LayerPlan {
 impl Default for LayerPlan {
     fn default() -> LayerPlan {
         LayerPlan::new()
-    }
-}
-
-impl Drop for LayerPlan {
-    fn drop(&mut self) {
-        document::plan_clear(self);
     }
 }
 

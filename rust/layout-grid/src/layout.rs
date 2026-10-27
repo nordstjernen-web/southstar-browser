@@ -1272,20 +1272,17 @@ pub fn layout_grid(
         cursor_y += total_extra;
     }
 
-    ffi::free_track_array(b.grid_tracks(true));
-    ffi::free_track_array(b.grid_tracks(false));
-    let col_tracks = ffi::new_track_array();
-    let row_tracks_out = ffi::new_track_array();
-    for t in 0..n_cols.max(0) as usize {
-        ffi::append_track(col_tracks, track_edge(col_x[t], col_x[t] + col_sizes[t]));
-    }
-    for (r, gr) in grid_rows.iter().enumerate() {
-        let top = gr.top + row_extra_before[r] + group_off + row_between * r as f64;
-        ffi::append_track(
-            row_tracks_out,
-            track_edge(top, top + gr.height + row_extra[r]),
-        );
-    }
+    let col_tracks = (0..n_cols.max(0) as usize)
+        .map(|t| track_edge(col_x[t], col_x[t] + col_sizes[t]))
+        .collect();
+    let row_tracks_out = grid_rows
+        .iter()
+        .enumerate()
+        .map(|(r, gr)| {
+            let top = gr.top + row_extra_before[r] + group_off + row_between * r as f64;
+            track_edge(top, top + gr.height + row_extra[r])
+        })
+        .collect();
     b.set_grid_tracks(col_tracks, row_tracks_out);
     b.set_grid_explicit(explicit_cols, row_line_tracks);
     cursor_y

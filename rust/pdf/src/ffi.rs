@@ -2,24 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
 use std::ffi::CString;
-
-use southstar_glib as glib;
-
-unsafe extern "C" {
-    fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
-}
 
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-unsafe fn take(p: *mut c_char) -> Vec<u8> {
-    let bytes = unsafe { glib::bytes(p) }.unwrap_or_default().to_vec();
-    unsafe { glib::g_free(p.cast()) };
-    bytes
 }
 
 pub(crate) fn html_escape(text: &[u8]) -> Vec<u8> {
@@ -28,8 +15,26 @@ pub(crate) fn html_escape(text: &[u8]) -> Vec<u8> {
 
 #[cfg_attr(not(feature = "poppler"), allow(dead_code))]
 pub(crate) fn path_basename(path: &[u8]) -> Vec<u8> {
-    let path = cstring(path);
-    unsafe { take(g_path_get_basename(path.as_ptr())) }
+    let end = path.iter().position(|&b| b == 0).unwrap_or(path.len());
+    let path = &path[..end];
+    if path.is_empty() {
+        return b".".to_vec();
+    }
+    let is_separator = |b: u8| b == b'/' || (cfg!(windows) && b == b'\\');
+    let has_drive =
+        cfg!(windows) && path.len() >= 2 && path[0].is_ascii_alphabetic() && path[1] == b':';
+    let Some(last) = path.iter().rposition(|&b| !is_separator(b)) else {
+        return std::path::MAIN_SEPARATOR_STR.as_bytes().to_vec();
+    };
+    if has_drive && last == 1 {
+        return std::path::MAIN_SEPARATOR_STR.as_bytes().to_vec();
+    }
+    let base = match path[..last].iter().rposition(|&b| is_separator(b)) {
+        Some(sep) => sep + 1,
+        None if has_drive => 2,
+        None => 0,
+    };
+    path[base..=last].to_vec()
 }
 
 #[cfg(feature = "poppler")]

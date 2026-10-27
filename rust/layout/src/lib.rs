@@ -8,13 +8,15 @@ mod image_map;
 mod image_source;
 pub mod paint_links;
 mod srcset;
+mod utf8;
 
 pub use ffi::{
-    BoxKind, BoxPool, BoxRef, Edges, InlineAtomic, InlineAttr, LinkRange, LinkVec, MediaRef, NsBox,
-    NsBoxMedia, Style, TableColHint, choose_img, image_map_area, img_chosen_density,
-    img_chosen_url, inline_kind, link_clear_fn,
+    BoxKind, BoxPool, BoxRef, Edges, GridTrack, InlineAtomic, InlineAttr, LinkRange, LinkVec,
+    MediaRef, NsBox, NsBoxMedia, Style, TableColHint, choose_img, image_map_area,
+    img_chosen_density, img_chosen_url, inline_kind,
 };
 pub use image_source::Chosen;
+pub use utf8::utf8_get_char;
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {
     core::iter::successors(b.first_child(), |child| child.next_sibling())

@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::{self as glib, GHashTable};
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{
@@ -35,13 +35,6 @@ pub use net::{
 use crate::fetch;
 
 pub use southstar_print::PrintSetup;
-
-#[repr(C)]
-pub struct GString {
-    str: *mut c_char,
-    len: usize,
-    _allocated_len: usize,
-}
 
 #[repr(C)]
 struct CairoSurface {
@@ -86,10 +79,6 @@ unsafe extern "C" {
     fn cairo_create(surface: *mut CairoSurface) -> *mut Cairo;
     fn cairo_destroy(cr: *mut Cairo);
     fn cairo_show_page(cr: *mut Cairo);
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_free(s: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn g_string_append_len(s: *mut GString, val: *const c_char, len: isize) -> *mut GString;
-    fn g_string_append_printf(s: *mut GString, format: *const c_char, ...);
 }
 
 pub fn err(bytes: &[u8]) {
@@ -236,46 +225,38 @@ pub fn page_offsets(root: BoxRef, page_h: f64) -> Offsets {
     Offsets(southstar_print::page_offsets(Some(root), page_h))
 }
 
-pub struct Out(NonNull<GString>);
+pub struct Out(Vec<u8>);
+
+fn fixed0(v: f64) -> String {
+    if v.is_nan() {
+        String::from("nan")
+    } else {
+        format!("{v:.0}")
+    }
+}
 
 impl Out {
     fn collect(fill: impl FnOnce(&mut Out)) -> Vec<u8> {
-        // SAFETY: a null initial value asks for a new empty string.
-        let string = unsafe { g_string_new(ptr::null()) };
-        let mut out = Out(NonNull::new(string).expect("g_string_new"));
+        let mut out = Out(Vec::new());
         fill(&mut out);
-        // SAFETY: the string is live until it is freed below.
-        let g = unsafe { out.0.as_ref() };
-        let bytes = if g.str.is_null() || g.len == 0 {
-            Vec::new()
-        } else {
-            // SAFETY: a GString's buffer holds `len` bytes.
-            unsafe { core::slice::from_raw_parts(g.str.cast::<u8>(), g.len) }.to_vec()
-        };
-        // SAFETY: the string was made above and is freed once, with its buffer.
-        unsafe { g_string_free(out.0.as_ptr(), glib::TRUE) };
-        bytes
+        out.0
     }
 
     pub fn append(&mut self, bytes: &[u8]) {
-        unsafe {
-            g_string_append_len(self.0.as_ptr(), bytes.as_ptr().cast(), bytes.len() as isize)
-        };
+        self.0.extend_from_slice(bytes);
     }
 
     pub fn box_line(&mut self, b: BoxRef) {
-        let name = southstar_layout_query::kind_name(b.kind_raw()).as_ptr();
-        unsafe {
-            g_string_append_printf(
-                self.0.as_ptr(),
-                c"%s @(%.0f,%.0f) %.0fx%.0f".as_ptr(),
-                name,
-                b.x(),
-                b.y(),
-                b.content_width(),
-                b.content_height(),
-            )
-        };
+        let name = southstar_layout_query::kind_name(b.kind_raw());
+        self.0.extend_from_slice(name.to_bytes());
+        let line = format!(
+            " @({},{}) {}x{}",
+            fixed0(b.x()),
+            fixed0(b.y()),
+            fixed0(b.content_width()),
+            fixed0(b.content_height())
+        );
+        self.0.extend_from_slice(line.as_bytes());
     }
 }
 

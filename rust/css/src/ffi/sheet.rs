@@ -19,7 +19,7 @@ use super::declarations::{Rule, RuleSink, lookup_key, until_nul};
 use super::keyframes::{KeyframeStop, Keyframes};
 use super::rule_index::RuleIndex;
 use super::selector::SelectorGroup;
-use super::value::{KIND_URL, NsCssValue};
+use super::value::{KIND_URL, NsCssValue, c_dup, c_free};
 use crate::declarations;
 use crate::nesting;
 use crate::selector::{self, RuleSelectors};
@@ -602,8 +602,8 @@ unsafe fn value_resolve_url(mut v: *mut NsCssValue, base: &CStr) {
                 .and_then(|url| url_resolve(base, url))
             {
                 // SAFETY: url is the value's own GLib string, replaced right after.
-                unsafe { glib::g_free(url.cast()) };
-                value.u.url = glib::strdup(&resolved);
+                unsafe { c_free(url) };
+                value.u.url = c_dup(&resolved);
             }
         }
         v = value.next_layer;

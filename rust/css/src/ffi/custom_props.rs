@@ -2,20 +2,23 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::OnceCell;
+use core::cell::{OnceCell, RefCell};
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
+use std::collections::HashMap;
+use std::ffi::CString;
 
 use southstar_css_prop_syntax::{self as prop_syntax, Context};
-use southstar_glib::{self as glib, GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 
 use super::computed_units::{RawStyle, StyleView};
+use super::declarations::until_nul;
 use super::font::relative_unit_px;
 use super::registry::RegisteredProps;
 use super::sheet::PropertyRule;
 use super::values::text_of;
-use super::vars::{RawVarMap, chain_lookup, map_ref, new_map};
+use super::vars::{RawVarMap, VarTable, chain_lookup, map_ref, new_map, var_map_unref};
 use crate::computed_units::{self, Font};
 use crate::custom_props::{self, Inherited, Own, Registered, Registry, VarMatch};
 use crate::prop::Prop;
@@ -41,10 +44,6 @@ pub(super) struct RawVarMatch {
 
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(size_of::<RawVarMatch>() == 72);
-
-unsafe extern "C" {
-    fn g_hash_table_iter_replace(iter: *mut glib::GHashTableIter, value: *mut c_void);
-}
 
 struct Props<'a>(&'a RegisteredProps);
 
@@ -108,32 +107,35 @@ fn views(raw: &[RawVarMatch]) -> Vec<VarMatch<'_>> {
         .collect()
 }
 
-fn own_table(own: Own) -> *mut GHashTable {
-    let table = unsafe {
-        glib::g_hash_table_new_full(
-            Some(glib::g_str_hash),
-            Some(glib::g_str_equal),
-            Some(glib::g_free),
-            Some(glib::g_free),
-        )
-    };
-    for (name, value) in own {
-        unsafe {
-            glib::g_hash_table_insert(
-                table,
-                glib::strdup(&name).cast(),
-                glib::strdup(&value).cast(),
-            )
-        };
+fn c_text(text: &[u8]) -> CString {
+    CString::new(until_nul(text)).unwrap_or_default()
+}
+
+fn own_table(own: Own) -> VarTable {
+    own.into_iter()
+        .map(|(name, value)| (c_text(&name), c_text(&value)))
+        .collect()
+}
+
+#[derive(Default)]
+pub(super) struct AdjustCache(RefCell<HashMap<*mut RawVarMap, *mut RawVarMap>>);
+
+impl Drop for AdjustCache {
+    fn drop(&mut self) {
+        for (parent, built) in self.0.get_mut().drain() {
+            // SAFETY: the cache holds one reference on each parent and each built map.
+            unsafe { var_map_unref(parent) };
+            // SAFETY: the cache holds one reference on each parent and each built map.
+            unsafe { var_map_unref(built) };
+        }
     }
-    table
 }
 
 pub(super) fn build_vars(
     parent: *mut RawVarMap,
     raw: &[RawVarMatch],
     registered_props: &RegisteredProps,
-    adjust_cache: *mut GHashTable,
+    adjust_cache: Option<&AdjustCache>,
 ) -> *mut RawVarMap {
     let have_regs = !registered_props.is_empty();
     let have_local = !raw.is_empty();
@@ -151,25 +153,26 @@ pub(super) fn build_vars(
             return unsafe { map_ref(parent) };
         }
         let own = custom_props::unregistered(&matches, inherited);
-        return unsafe { new_map(own_table(own), map_ref(parent)) };
+        return new_map(own_table(own), unsafe { map_ref(parent) });
     }
-    let cacheable = !parent.is_null() && !have_local && !adjust_cache.is_null();
-    if cacheable {
-        let hit = unsafe { glib::g_hash_table_lookup(adjust_cache, parent.cast()) };
-        if !hit.is_null() {
-            return unsafe { map_ref(hit.cast()) };
-        }
+    let adjust_cache = adjust_cache.filter(|_| !parent.is_null() && !have_local);
+    if let Some(cache) = adjust_cache
+        && let Some(&hit) = cache.0.borrow().get(&parent)
+    {
+        return unsafe { map_ref(hit) };
     }
     let own = custom_props::registered(&matches, inherited, &Props(registered_props));
     let built = if !parent.is_null() && !have_local && own.is_empty() {
         unsafe { map_ref(parent) }
     } else {
-        unsafe { new_map(own_table(own), map_ref(parent)) }
+        new_map(own_table(own), unsafe { map_ref(parent) })
     };
-    if cacheable {
-        unsafe {
-            glib::g_hash_table_insert(adjust_cache, map_ref(parent).cast(), map_ref(built).cast())
-        };
+    if let Some(cache) = adjust_cache {
+        // SAFETY: parent is a live map the caller holds a reference on, and the cache keeps the new one.
+        let key = unsafe { map_ref(parent) };
+        // SAFETY: built is the live map just made or referenced above, and the cache keeps the new reference.
+        let value = unsafe { map_ref(built) };
+        cache.0.borrow_mut().insert(key, value);
     }
     built
 }
@@ -212,12 +215,10 @@ pub(super) fn compute_registered_vars(
     registered_props: &RegisteredProps,
     root_px: f64,
 ) {
-    let Some(vars) = (unsafe { style.vars.as_ref() }) else {
+    // SAFETY: vars is null or a map this style holds a reference on, and no reference into it is live during the cascade step.
+    let Some(vars) = (unsafe { style.vars.as_mut() }) else {
         return;
     };
-    if vars.own.is_null() {
-        return;
-    }
     if parent_style.is_some_and(|p| p.vars == style.vars) {
         return;
     }
@@ -226,14 +227,9 @@ pub(super) fn compute_registered_vars(
     }
     let current_color = OnceCell::new();
     let mut ctx: Option<Context<'_>> = None;
-    let mut iter = glib::GHashTableIter::new();
-    unsafe { glib::g_hash_table_iter_init(&mut iter, vars.own) };
-    let (mut key, mut value) = (ptr::null_mut(), ptr::null_mut());
-    while unsafe { glib::g_hash_table_iter_next(&mut iter, &mut key, &mut value) } != 0 {
-        // SAFETY: the variable map's keys are NUL-terminated names it owns.
-        let name = unsafe { CStr::from_ptr(key.cast()) }.to_bytes();
+    for (name, value) in &mut vars.own {
         let Some(syntax) = registered_props
-            .get(name)
+            .get(name.to_bytes())
             .and_then(PropertyRule::typed_syntax)
         else {
             continue;
@@ -243,11 +239,8 @@ pub(super) fn compute_registered_vars(
                 .get_or_init(|| unsafe { text_of(style.value(Prop::Color as usize), false) });
             syntax_ctx(&StyleView(style), root_px, color)
         });
-        let Some(value) = (unsafe { glib::bytes(value.cast()) }) else {
-            continue;
-        };
-        if let Some(computed) = prop_syntax::compute(syntax, value, Some(ctx)) {
-            unsafe { g_hash_table_iter_replace(&mut iter, glib::strdup(&computed).cast()) };
+        if let Some(computed) = prop_syntax::compute(syntax, value.to_bytes(), Some(ctx)) {
+            *value = c_text(&computed);
         }
     }
 }
