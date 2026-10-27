@@ -78,9 +78,12 @@ per-platform build and packaging notes are in [docs/](docs/README.md).
 npm builds it from source for you:
 
 ```sh
-npm install -g southstar-browser
+sudo npm install -g southstar-browser
 southstar https://nordstjernen.org
 ```
+
+On Linux, macOS and the BSDs, run the install with `sudo`, because npm's global
+directory belongs to root; on Windows, run it without `sudo`.
 
 The package builds the release on Linux, macOS, the BSDs and Windows (with
 MSYS2), and first names any build dependency that is missing, Rust included.
