@@ -17,13 +17,7 @@ pub(crate) struct Js(*mut NsJs);
 use crate::links::nsr_make_token_list;
 use southstar_js_events::nsr_dom_exception;
 
-unsafe extern "Rust" {
-    safe fn nsr_element_async_method(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_services::nsr_element_async_method;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque().cast())

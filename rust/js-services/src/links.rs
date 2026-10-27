@@ -10,6 +10,7 @@ pub struct JsDispatchLinks {
     pub target_dispatch_with_event: fn(&mut Scope<'_>, &Value, &str, &Value),
     pub target_make_event: fn(&mut Scope<'_>, &Value, &str) -> Value,
     pub target_fire_event: fn(&mut Scope<'_>, &Value, &str),
+    pub target_dispatch_event: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_DISPATCH_LINKS: OnceLock<JsDispatchLinks> = OnceLock::new();
@@ -59,4 +60,46 @@ pub(crate) fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &s
 
 pub(crate) fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
     (js_events_links().event_adopt_interface)(scope, event, iface)
+}
+
+pub struct JsMediaLinks {
+    pub media_capabilities_info: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub eme_request_access: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_MEDIA_LINKS: OnceLock<JsMediaLinks> = OnceLock::new();
+
+pub fn set_js_media_links(links: JsMediaLinks) {
+    let _ = JS_MEDIA_LINKS.set(links);
+}
+
+fn js_media_links() -> &'static JsMediaLinks {
+    JS_MEDIA_LINKS
+        .get()
+        .expect("southstar-js-media installs its links before the first page")
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_target_dispatchEvent(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().target_dispatch_event)(scope, this, args)
+}
+
+pub(crate) fn nsr_media_capabilities_info(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().media_capabilities_info)(scope, this, args)
+}
+
+pub(crate) fn nsr_eme_request_access(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().eme_request_access)(scope, this, args)
 }

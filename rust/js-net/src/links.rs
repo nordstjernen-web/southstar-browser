@@ -11,6 +11,7 @@ pub type JsFormDataSerializeFn = fn(&mut Scope<'_>, &Value) -> (Vec<u8>, Vec<u8>
 pub struct JsDispatchLinks {
     pub xhr_fire_progress_event: fn(&mut Scope<'_>, &Value, &str, f64, f64, bool),
     pub target_fire_event: fn(&mut Scope<'_>, &Value, &str),
+    pub target_dispatch_event: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_DISPATCH_LINKS: OnceLock<JsDispatchLinks> = OnceLock::new();
@@ -31,6 +32,10 @@ pub struct JsEventsLinks {
     pub event_new: fn(&mut Scope<'_>) -> Result<Value, Value>,
     pub make_abort_error: fn(&mut Scope<'_>) -> Value,
     pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
+    pub event_composed_path: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub event_stop_immediate: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub event_stop_propagation: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub event_prevent_default: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_EVENTS_LINKS: OnceLock<JsEventsLinks> = OnceLock::new();
@@ -135,4 +140,45 @@ pub(crate) fn nsr_net_install_form_data(scope: &mut Scope<'_>, global: &Value) {
 
 pub(crate) fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value) {
     (js_workers_links().net_install_ports)(scope, global)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_target_dispatchEvent(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().target_dispatch_event)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_composed_path(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_composed_path)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_stop_immediate(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_stop_immediate)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_stop_propagation(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_stop_propagation)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_prevent_default(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_prevent_default)(scope, this, args)
 }

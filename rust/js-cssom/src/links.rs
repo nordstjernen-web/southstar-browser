@@ -45,3 +45,36 @@ pub(crate) fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -
 pub(crate) fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value> {
     (js_events_links().event_new)(scope)
 }
+
+pub struct JsWorkersLinks {
+    pub port_remove_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub port_add_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_WORKERS_LINKS: OnceLock<JsWorkersLinks> = OnceLock::new();
+
+pub fn set_js_workers_links(links: JsWorkersLinks) {
+    let _ = JS_WORKERS_LINKS.set(links);
+}
+
+fn js_workers_links() -> &'static JsWorkersLinks {
+    JS_WORKERS_LINKS
+        .get()
+        .expect("southstar-js-workers installs its links before the first page")
+}
+
+pub(crate) fn nsr_port_remove_event_listener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().port_remove_event_listener)(scope, this, args)
+}
+
+pub(crate) fn nsr_port_add_event_listener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().port_add_event_listener)(scope, this, args)
+}

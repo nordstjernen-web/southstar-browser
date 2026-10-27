@@ -79,12 +79,10 @@ pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, messag
     api::dom_exception(scope, name, code, message)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_get_selection(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::selection::get_selection(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_create_range(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::range::create_range(scope, this, args)
 }
@@ -102,7 +100,6 @@ pub fn nsr_static_range_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     crate::static_range::construct(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_create_tree_walker(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -111,7 +108,6 @@ pub fn nsr_document_create_tree_walker(
     crate::walker::create(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_create_node_iterator(
     scope: &mut Scope<'_>,
     this: &Value,

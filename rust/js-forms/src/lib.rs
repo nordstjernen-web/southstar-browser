@@ -34,6 +34,8 @@ pub use ffi::nsr_form_controls_snapshot;
 pub use ffi::nsr_js_request_submit_form;
 pub use ffi::nsr_js_reset_form;
 
+pub use ffi::nsr_submit_event_ctor;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
@@ -178,6 +180,10 @@ pub fn install_runtime_hooks() {
         net_install_form_data: crate::ffi::nsr_net_install_form_data,
     });
     southstar_js_runtime::links::set_js_forms_links(southstar_js_runtime::links::JsFormsLinks {
+        radio_node_list_set_value: crate::ffi::nsr_radio_node_list_set_value,
+        radio_node_list_get_value: crate::ffi::nsr_radio_node_list_get_value,
+        custom_state_set_ctor: crate::ffi::nsr_custom_state_set_ctor,
+        window_form_data_ctor: crate::ffi::nsr_window_form_data_ctor,
         form_named_control: crate::ffi::nsr_form_named_control,
         form_indexed_control: crate::ffi::nsr_form_indexed_control,
     });

@@ -9,6 +9,8 @@ use super::NsJs;
 
 pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_element_get_shadowRoot;
+pub(crate) use crate::links::nsr_event_ctor;
+pub(crate) use crate::links::nsr_namedmap_item;
 pub(crate) use southstar_js_collections::nsr_live_owner;
 pub(crate) use southstar_js_collections::nsr_live_snapshot;
 pub(crate) use southstar_js_collections::nsr_make_live;
@@ -28,14 +30,4 @@ unsafe extern "Rust" {
         kind: &str,
         event: Value,
     ) -> (bool, bool);
-    pub(crate) safe fn nsr_event_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_namedmap_item(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
 }

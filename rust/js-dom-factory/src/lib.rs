@@ -77,11 +77,34 @@ pub(crate) fn split_prefix(qname: &[u8]) -> (Option<&[u8]>, &[u8]) {
 pub fn install_runtime_hooks() {
     southstar_js_document::links::set_js_dom_factory_links(
         southstar_js_document::links::JsDomFactoryLinks {
+            document_adopt_node: crate::ffi::nsr_document_adopt_node,
+            document_import_node: crate::ffi::nsr_document_import_node,
+            document_create_event: crate::ffi::nsr_document_createEvent,
+            document_create_attribute_n_s: crate::ffi::nsr_document_createAttributeNS,
+            document_create_attribute: crate::ffi::nsr_document_createAttribute,
+            document_create_processing_instruction:
+                crate::ffi::nsr_document_createProcessingInstruction,
+            document_create_c_d_a_t_a_section: crate::ffi::nsr_document_createCDATASection,
+            document_create_document_fragment: crate::ffi::nsr_document_createDocumentFragment,
+            document_create_comment: crate::ffi::nsr_document_createComment,
+            document_create_text_node: crate::ffi::nsr_document_createTextNode,
+            document_create_element_n_s: crate::ffi::nsr_document_createElementNS,
+            document_create_element: crate::ffi::nsr_document_createElement,
             document_implementation: crate::ffi::nsr_document_implementation,
         },
     );
     southstar_js_runtime::links::set_js_dom_factory_links(
         southstar_js_runtime::links::JsDomFactoryLinks {
+            window_close_watcher_ctor: crate::ffi::nsr_window_close_watcher_ctor,
+            dom_parser_parse_from_string: crate::ffi::nsr_dom_parser_parseFromString,
+            window_dom_parser_ctor: crate::ffi::nsr_window_dom_parser_ctor,
+            window_option_ctor: crate::ffi::nsr_window_option_ctor,
+            window_comment_ctor: crate::ffi::nsr_window_comment_ctor,
+            window_text_ctor: crate::ffi::nsr_window_text_ctor,
+            window_document_fragment_ctor: crate::ffi::nsr_window_document_fragment_ctor,
+            window_audio_ctor: crate::ffi::nsr_window_audio_ctor,
+            window_image_ctor: crate::ffi::nsr_window_image_ctor,
+            attr_clone_node: crate::ffi::nsr_attr_cloneNode,
             tag_owner_document: crate::ffi::nsr_tag_owner_document,
         },
     );

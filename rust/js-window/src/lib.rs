@@ -34,6 +34,8 @@ pub use ffi::nsr_make_window_event;
 pub use ffi::nsr_window_document_for;
 pub use ffi::nsr_window_make_location;
 
+pub use ffi::nsr_window_open_method;
+
 pub(crate) struct Entry {
     pub url: Vec<u8>,
     pub state: Value,

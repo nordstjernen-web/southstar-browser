@@ -199,30 +199,14 @@ unsafe extern "C" {
     fn g_get_num_processors() -> c_uint;
 }
 
+use crate::links::nsr_eme_request_access;
 use crate::links::nsr_event_adopt_interface;
+use crate::links::nsr_media_capabilities_info;
 use crate::links::nsr_target_dispatch_with_event;
+use crate::links::nsr_target_dispatchEvent;
 use crate::links::nsr_target_fire_event;
 use crate::links::nsr_target_make_event;
 use southstar_js_net::nsr_navigator_sendBeacon;
-
-unsafe extern "Rust" {
-    #[allow(non_snake_case)]
-    safe fn nsr_target_dispatchEvent(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_eme_request_access(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_media_capabilities_info(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
 
 fn c_string(text: &str) -> CString {
     CString::new(text.replace('\0', "")).unwrap_or_default()
@@ -461,7 +445,6 @@ pub(crate) fn physical_memory_bytes() -> Option<u64> {
 macro_rules! export_native {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
                 $f(scope, this, args)
             }
@@ -473,9 +456,6 @@ export_native! {
     nsr_services_alert => console::alert,
     nsr_services_confirm => commands::confirm,
     nsr_services_prompt => commands::prompt,
-    nsr_services_exec_command => commands::exec_command,
-    nsr_services_query_command_supported => commands::query_command_supported,
-    nsr_services_query_command_enabled => commands::query_command_enabled,
     nsr_services_queue_microtask => window::queue_microtask,
     nsr_services_notification_ctor => window::notification,
     nsr_services_match_media => media::match_media,
@@ -577,6 +557,22 @@ pub fn install_runtime_hooks() {
     });
     southstar_js_runtime::links::set_js_services_links(
         southstar_js_runtime::links::JsServicesLinks {
+            cache_open: crate::ffi::nsr_cache_open,
+            services_notification_ctor: crate::ffi::nsr_services_notification_ctor,
+            services_queue_microtask: crate::ffi::nsr_services_queue_microtask,
+            services_request_idle_callback: crate::ffi::nsr_services_request_idle_callback,
+            services_match_media: crate::ffi::nsr_services_match_media,
+            services_prompt: crate::ffi::nsr_services_prompt,
+            services_confirm: crate::ffi::nsr_services_confirm,
+            services_camera_enumerate: crate::ffi::nsr_services_camera_enumerate,
+            services_camera_label: crate::ffi::nsr_services_camera_label,
+            services_mic_release: crate::ffi::nsr_services_mic_release,
+            services_camera_release: crate::ffi::nsr_services_camera_release,
+            services_camera_request: crate::ffi::nsr_services_camera_request,
+            services_clear_timer: crate::ffi::nsr_services_clear_timer,
+            services_set_interval: crate::ffi::nsr_services_set_interval,
+            services_set_timeout: crate::ffi::nsr_services_set_timeout,
+            services_alert: crate::ffi::nsr_services_alert,
             services_worker_navigator: crate::ffi::nsr_services_worker_navigator,
             services_window_navigator: crate::ffi::nsr_services_window_navigator,
             install_idle_deadline: crate::ffi::nsr_install_idle_deadline,

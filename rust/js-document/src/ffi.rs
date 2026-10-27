@@ -276,7 +276,6 @@ pub(crate) fn local_now_formatted(format: &CStr) -> Option<Vec<u8>> {
 macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
@@ -515,6 +514,11 @@ pub fn install_runtime_hooks() {
     southstar_js_frames::links::set_js_document_links(
         southstar_js_frames::links::JsDocumentLinks {
             realmdoc_deny_cookie: crate::ffi::nsr_realmdoc_deny_cookie,
+        },
+    );
+    southstar_js_runtime::links::set_js_document_links(
+        southstar_js_runtime::links::JsDocumentLinks {
+            document_ctor: crate::ffi::nsr_document_ctor,
         },
     );
 }

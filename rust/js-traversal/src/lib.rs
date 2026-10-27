@@ -19,6 +19,11 @@ use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 pub use ffi::nsr_native_range;
 pub use ffi::nsr_tree_walker_install_proto;
 
+pub use ffi::nsr_document_create_node_iterator;
+pub use ffi::nsr_document_create_range;
+pub use ffi::nsr_document_create_tree_walker;
+pub use ffi::nsr_window_get_selection;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

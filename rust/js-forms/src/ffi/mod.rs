@@ -380,7 +380,6 @@ impl Page {
 macro_rules! methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
@@ -392,7 +391,6 @@ macro_rules! methods {
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
                 $f(scope, this, &[])
@@ -404,7 +402,6 @@ macro_rules! getters {
 macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
                 $f(scope, this, core::slice::from_ref(value)).map(drop)
@@ -415,72 +412,15 @@ macro_rules! setters {
 
 methods! {
     nsr_window_form_data_ctor => crate::form_data::construct,
-    nsr_element_attachInternals => crate::internals::attach_internals,
     nsr_custom_state_set_ctor => crate::internals::custom_state_set,
-    nsr_element_check_validity => crate::validity::check_validity,
-    nsr_element_setCustomValidity => crate::validity::set_custom_validity,
-    nsr_element_form_requestSubmit => crate::submit::request_submit_method,
-    nsr_element_form_submit => crate::submit::submit_method,
-    nsr_element_form_reset => crate::submit::reset_method,
     nsr_submit_event_ctor => crate::submit::submit_event_ctor,
-    nsr_input_select => crate::selection::select,
-    nsr_input_setSelectionRange => crate::selection::set_selection_range,
-    nsr_input_setRangeText => crate::selection::set_range_text,
-    nsr_input_stepUp => crate::selection::step_up,
-    nsr_input_stepDown => crate::selection::step_down,
-    nsr_options_item => crate::select::item,
-    nsr_options_namedItem => crate::select::named_item,
-    nsr_select_add => crate::select::add,
     nsr_radio_node_list_get_value => crate::collection::radio_list_value,
     nsr_radio_node_list_set_value => crate::collection::set_radio_list_value,
-    nsr_element_show_picker => crate::picker::show_picker,
 }
 
-getters! {
-    nsr_element_get_internals => crate::internals::internals,
-    nsr_validity_get_valid => crate::validity::valid,
-    nsr_element_get_validity => crate::validity::validity,
-    nsr_element_get_validation_message => crate::validity::validation_message,
-    nsr_element_get_will_validate => crate::validity::will_validate_getter,
-    nsr_element_get_label_control => crate::labels::control,
-    nsr_element_get_selection_dir => crate::selection::selection_direction,
-    nsr_element_get_default_value => crate::value::default_value,
-    nsr_element_get_default_checked => crate::checkable::default_checked,
-    nsr_element_get_default_selected => crate::select::default_selected,
-    nsr_element_get_selected => crate::select::selected,
-    nsr_element_get_value_as_number => crate::value::value_as_number,
-    nsr_element_get_value_as_date => crate::value::value_as_date,
-    nsr_element_get_checked => crate::checkable::checked,
-    nsr_element_get_indeterminate => crate::checkable::indeterminate,
-    nsr_element_get_progress_position => crate::value::progress_position,
-    nsr_element_get_value_prop => crate::value::get_value,
-    nsr_element_get_label_prop => crate::value::label,
-    nsr_element_get_selectedIndex => crate::select::selected_index,
-    nsr_element_get_options => crate::select::options_getter,
-    nsr_element_get_selectedOptions => crate::select::selected_options,
-    nsr_element_get_selection_start => crate::selection::selection_start,
-    nsr_element_get_selection_end => crate::selection::selection_end,
-    nsr_text_control_get_text_length => crate::selection::text_length,
-    nsr_input_get_files => crate::files::get_files,
-    nsr_element_get_form_elements => crate::collection::form_elements,
-}
+getters! {}
 
-setters! {
-    nsr_element_set_default_value => crate::value::set_default_value,
-    nsr_element_set_default_checked => crate::checkable::set_default_checked,
-    nsr_element_set_default_selected => crate::select::set_default_selected,
-    nsr_element_set_selected => crate::select::set_selected,
-    nsr_element_set_value_as_number => crate::value::set_value_as_number,
-    nsr_element_set_value_as_date => crate::value::set_value_as_date,
-    nsr_element_set_checked => crate::checkable::set_checked,
-    nsr_element_set_indeterminate => crate::checkable::set_indeterminate_prop,
-    nsr_element_set_value_prop => crate::value::set_value,
-    nsr_element_set_label_prop => crate::value::set_label,
-    nsr_element_set_selectedIndex => crate::select::set_selected_index,
-    nsr_element_set_selection_start => crate::selection::set_selection_start,
-    nsr_element_set_selection_end => crate::selection::set_selection_end,
-    nsr_element_set_selection_dir => crate::selection::set_selection_direction,
-}
+setters! {}
 
 pub fn nsr_net_install_form_data(scope: &mut Scope<'_>, global: &Value) {
     crate::form_data::install(scope, global);

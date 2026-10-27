@@ -141,43 +141,13 @@ use southstar_js_traversal::nsr_tree_walker_install_proto;
 use southstar_js_window::nsr_document_expose_legacy_named;
 use southstar_js_window::nsr_window_make_location;
 
-unsafe extern "Rust" {
-    safe fn nsr_window_event_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_xml_serializer_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_live_length_get(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_document_open(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_document_close(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_document_write(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_document_writeln(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_collections::nsr_live_length_get;
+use southstar_js_document::nsr_document_close;
+use southstar_js_document::nsr_document_open;
+use southstar_js_document::nsr_document_write;
+use southstar_js_document::nsr_document_writeln;
+use southstar_js_events::nsr_window_event_ctor;
+use southstar_js_html::nsr_xml_serializer_ctor;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(*mut NsJs);

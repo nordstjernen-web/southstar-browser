@@ -7,40 +7,24 @@ use southstar_js_engine::{Scope, Value};
 
 use super::NsJs;
 
-type Native = Result<Value, Value>;
-
-macro_rules! natives {
-    ($($name:ident),* $(,)?) => {
-        unsafe extern "Rust" {
-            $(
-                #[allow(non_snake_case)]
-                pub(crate) safe fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Native;
-            )*
-        }
-    };
-}
-
-natives! {
-    nsr_window_addEventListener,
-    nsr_window_removeEventListener,
-    nsr_window_dispatchEvent,
-    nsr_element_addEventListener,
-    nsr_element_removeEventListener,
-    nsr_element_dispatchEvent,
-    nsr_services_set_timeout,
-    nsr_services_set_interval,
-    nsr_services_clear_timer,
-    nsr_services_queue_microtask,
-    nsr_window_requestAnimationFrame,
-    nsr_window_cancelAnimationFrame,
-}
-
+pub(crate) use crate::links::nsr_element_addEventListener;
+pub(crate) use crate::links::nsr_element_dispatchEvent;
+pub(crate) use crate::links::nsr_element_removeEventListener;
 pub(crate) use crate::links::nsr_is_window_named;
 pub(crate) use crate::links::nsr_js_new_window_named;
 pub(crate) use crate::links::nsr_realmdoc_deny_cookie;
+pub(crate) use crate::links::nsr_window_addEventListener;
 pub(crate) use crate::links::nsr_window_bind_post_message;
+pub(crate) use crate::links::nsr_window_cancelAnimationFrame;
 pub(crate) use crate::links::nsr_window_current_document_for;
+pub(crate) use crate::links::nsr_window_dispatchEvent;
 pub(crate) use crate::links::nsr_window_make_post_message;
+pub(crate) use crate::links::nsr_window_removeEventListener;
+pub(crate) use crate::links::nsr_window_requestAnimationFrame;
+pub(crate) use southstar_js_services::nsr_services_clear_timer;
+pub(crate) use southstar_js_services::nsr_services_queue_microtask;
+pub(crate) use southstar_js_services::nsr_services_set_interval;
+pub(crate) use southstar_js_services::nsr_services_set_timeout;
 pub(crate) use southstar_js_storage::nsr_storage_area_of;
 pub(crate) use southstar_js_storage::nsr_storage_new;
 

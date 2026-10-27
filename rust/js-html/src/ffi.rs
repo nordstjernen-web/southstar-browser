@@ -11,7 +11,7 @@ use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-use crate::{Element, JsResult, markup, microdata, text};
+use crate::{Element, JsResult, markup};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
 
@@ -243,7 +243,6 @@ impl Drop for NameSet {
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
                 $f(scope, this)
@@ -255,7 +254,6 @@ macro_rules! getters {
 macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
                 $f(scope, this, value)
@@ -267,7 +265,6 @@ macro_rules! setters {
 macro_rules! methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
@@ -276,36 +273,10 @@ macro_rules! methods {
     };
 }
 
-getters! {
-    nsr_element_get_textContent => text::text_content_get,
-    nsr_element_get_text => text::text_get,
-    nsr_element_get_innerHTML => markup::inner_html_get,
-    nsr_element_get_outerHTML => markup::outer_html_get,
-    nsr_element_get_itemScope => microdata::item_scope_get,
-    nsr_element_get_itemId => microdata::item_id_get,
-    nsr_element_get_itemType => microdata::item_type_get,
-    nsr_element_get_itemProp => microdata::item_prop_get,
-    nsr_element_get_itemRef => microdata::item_ref_get,
-    nsr_element_get_itemValue => microdata::item_value_get,
-    nsr_element_get_properties => microdata::properties_get,
-}
+getters! {}
 
-setters! {
-    nsr_element_set_textContent => text::text_content_set,
-    nsr_element_set_text => text::text_set,
-    nsr_element_set_innerHTML => markup::inner_html_set,
-    nsr_element_set_outerHTML => markup::outer_html_set,
-    nsr_element_set_itemScope => microdata::item_scope_set,
-    nsr_element_set_itemId => microdata::item_id_set,
-    nsr_element_set_itemValue => microdata::item_value_set,
-}
+setters! {}
 
 methods! {
-    nsr_element_getHTML => markup::get_html,
-    nsr_element_setHTMLUnsafe => markup::set_html_unsafe,
-    nsr_element_insertAdjacentHTML => markup::insert_adjacent_html,
-    nsr_element_insertAdjacentElement => text::insert_adjacent_element,
-    nsr_element_insertAdjacentText => text::insert_adjacent_text,
-    nsr_document_getItems => microdata::get_items,
     nsr_xml_serializer_ctor => markup::xml_serializer_ctor,
 }

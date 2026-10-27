@@ -186,7 +186,6 @@ pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
             }
@@ -273,6 +272,18 @@ pub fn install_runtime_hooks() {
         teardown,
     });
     southstar_js_runtime::links::set_js_url_links(southstar_js_runtime::links::JsUrlLinks {
+        window_filereader_ctor: crate::ffi::nsr_window_filereader_ctor,
+        window_text_decoder_ctor: crate::ffi::nsr_window_text_decoder_ctor,
+        window_text_encoder_ctor: crate::ffi::nsr_window_text_encoder_ctor,
+        window_usp_ctor: crate::ffi::nsr_window_usp_ctor,
+        window_url_revoke_object: crate::ffi::nsr_window_url_revoke_object,
+        window_url_update_object: crate::ffi::nsr_window_url_update_object,
+        window_url_create_object: crate::ffi::nsr_window_url_create_object,
+        window_url_parse_static: crate::ffi::nsr_window_url_parse_static,
+        window_url_can_parse: crate::ffi::nsr_window_url_can_parse,
+        window_url_ctor: crate::ffi::nsr_window_url_ctor,
+        window_atob: crate::ffi::nsr_window_atob,
+        window_btoa: crate::ffi::nsr_window_btoa,
         net_install_text_codecs: crate::ffi::nsr_net_install_text_codecs,
         usp_install_interface: crate::ffi::nsr_usp_install_interface,
         url_install_interface: crate::ffi::nsr_url_install_interface,

@@ -18,6 +18,8 @@ use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
 use crate::links::nsr_event_new;
 use crate::links::nsr_js_element_is_rendered;
+use crate::links::nsr_port_add_event_listener;
+use crate::links::nsr_port_remove_event_listener;
 use crate::{computed, css};
 
 #[repr(C)]
@@ -59,19 +61,6 @@ impl AnimList {
 
 pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
     lossy(&css_engine::timing_serialize(Some(&entry.timing)))
-}
-
-unsafe extern "Rust" {
-    safe fn nsr_port_add_event_listener(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_port_remove_event_listener(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
 }
 
 unsafe extern "C" {

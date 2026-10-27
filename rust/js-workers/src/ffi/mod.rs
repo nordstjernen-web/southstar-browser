@@ -178,7 +178,6 @@ pub fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value) {
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
             }
@@ -883,6 +882,15 @@ pub fn install_runtime_hooks() {
     });
     southstar_js_runtime::links::set_js_workers_links(
         southstar_js_runtime::links::JsWorkersLinks {
+            worker_performance_clear: crate::ffi::nsr_worker_performance_clear,
+            worker_performance_entries: crate::ffi::nsr_worker_performance_entries,
+            worker_performance_now: crate::ffi::nsr_worker_performance_now,
+            worker_report_error: crate::ffi::nsr_worker_report_error,
+            worker_import_scripts: crate::ffi::nsr_worker_import_scripts,
+            worker_global_close: crate::ffi::nsr_worker_global_close,
+            worker_global_post_message: crate::ffi::nsr_worker_global_post_message,
+            window_broadcast_channel: crate::ffi::nsr_window_broadcast_channel,
+            window_message_channel: crate::ffi::nsr_window_message_channel,
             sw_install_scope: crate::ffi::nsr_sw_install_scope,
             worker_install_console: crate::ffi::nsr_worker_install_console,
             worker_install_constructor: crate::ffi::nsr_worker_install_constructor,
@@ -894,5 +902,9 @@ pub fn install_runtime_hooks() {
     southstar_js_window::links::set_js_workers_links(southstar_js_window::links::JsWorkersLinks {
         port_transfer_commit: crate::ffi::nsr_port_transfer_commit,
         port_transfer_prepare: crate::ffi::nsr_port_transfer_prepare,
+    });
+    southstar_js_cssom::links::set_js_workers_links(southstar_js_cssom::links::JsWorkersLinks {
+        port_remove_event_listener: crate::ffi::nsr_port_remove_event_listener,
+        port_add_event_listener: crate::ffi::nsr_port_add_event_listener,
     });
 }

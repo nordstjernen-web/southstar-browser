@@ -11,6 +11,9 @@ pub(crate) use crate::links::nsr_event_define_cancel_bubble;
 pub(crate) use crate::links::nsr_event_define_source;
 pub(crate) use crate::links::nsr_event_mark_default_prevented;
 pub(crate) use crate::links::nsr_event_new;
+pub(crate) use crate::links::nsr_event_prevent_default;
+pub(crate) use crate::links::nsr_event_stop_immediate;
+pub(crate) use crate::links::nsr_event_stop_propagation;
 pub(crate) use crate::links::nsr_worker_report_exception;
 pub(crate) use southstar_js_services::nsr_services_console_emit;
 pub(crate) use southstar_js_window::nsr_window_document_for;
@@ -21,19 +24,4 @@ unsafe extern "Rust" {
         kind: &str,
         target: *const NsNode,
     ) -> Value;
-    pub(crate) safe fn nsr_event_prevent_default(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_event_stop_propagation(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_event_stop_immediate(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
 }

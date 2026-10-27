@@ -11,9 +11,7 @@ use southstar_js_dispatch as dispatch;
 use southstar_js_document as document;
 use southstar_js_dom_factory as dom_factory;
 use southstar_js_elements as elements;
-use southstar_js_engine::{
-    NativeFn, Prop, Scope, Value, accessor, accessor_magic, method, method_enumerable,
-};
+use southstar_js_engine::{NativeFn, Prop, accessor, accessor_magic, method, method_enumerable};
 use southstar_js_focus as focus;
 use southstar_js_forms as forms;
 use southstar_js_frames as frames;
@@ -35,56 +33,17 @@ use super::{adapt, natives};
 use southstar_js_reflect::nsr_element_attr_getter;
 use southstar_js_reflect::nsr_element_attr_setter;
 
-unsafe extern "Rust" {
-    safe fn nsr_tlist_contains(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_add(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_remove(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_toggle(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_replace(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_item(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_supports(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    #[allow(non_snake_case)]
-    safe fn nsr_tlist_toString(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_tlist_get_length(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value>;
-    safe fn nsr_tlist_get_value(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value>;
-    safe fn nsr_tlist_set_value(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        value: &Value,
-    ) -> Result<(), Value>;
-}
+use southstar_js_attrs::nsr_tlist_add;
+use southstar_js_attrs::nsr_tlist_contains;
+use southstar_js_attrs::nsr_tlist_get_length;
+use southstar_js_attrs::nsr_tlist_get_value;
+use southstar_js_attrs::nsr_tlist_item;
+use southstar_js_attrs::nsr_tlist_remove;
+use southstar_js_attrs::nsr_tlist_replace;
+use southstar_js_attrs::nsr_tlist_set_value;
+use southstar_js_attrs::nsr_tlist_supports;
+use southstar_js_attrs::nsr_tlist_toString;
+use southstar_js_attrs::nsr_tlist_toggle;
 
 pub(crate) static TLIST_PROTO: [Prop; 10] = [
     method("contains", 1, nsr_tlist_contains),

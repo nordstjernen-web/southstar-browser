@@ -4,9 +4,10 @@
 
 use std::sync::OnceLock;
 
+use southstar_js_engine::{ContextHandle, Scope, Value};
+
 use core::ffi::c_int;
 use southstar_dom::AttrView;
-use southstar_js_engine::{ContextHandle, Scope, Value};
 
 pub type JsCompileModuleCachedFn = fn(&mut Scope<'_>, &[u8], &[u8]) -> Result<Value, Value>;
 
@@ -112,6 +113,13 @@ pub struct JsDispatchLinks {
     pub target_handler_realm: fn(&mut Scope<'_>, &Value, &str, &str) -> ContextHandle,
     pub js_promise_rejection_tracker: fn(&mut Scope<'_>, &Value, &Value, bool),
     pub install_body_reflected_handlers: fn(&mut Scope<'_>, &Value),
+    pub window_report_error: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub target_dispatch_event: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_dispatch_event: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_remove_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_add_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub target_remove_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub target_add_event_listener: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_DISPATCH_LINKS: OnceLock<JsDispatchLinks> = OnceLock::new();
@@ -128,6 +136,16 @@ fn js_dispatch_links() -> &'static JsDispatchLinks {
 
 pub struct JsDomFactoryLinks {
     pub tag_owner_document: fn(&mut Scope<'_>, &Value, &Value),
+    pub window_close_watcher_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub dom_parser_parse_from_string: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_dom_parser_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_option_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_comment_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_text_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_document_fragment_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_audio_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_image_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub attr_clone_node: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_DOM_FACTORY_LINKS: OnceLock<JsDomFactoryLinks> = OnceLock::new();
@@ -149,6 +167,7 @@ pub struct JsEventsLinks {
     pub events_install_worker: fn(&mut Scope<'_>, &Value),
     pub events_install_window: fn(&mut Scope<'_>, &Value),
     pub events_install_window_base: fn(&mut Scope<'_>, &Value),
+    pub window_event_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_EVENTS_LINKS: OnceLock<JsEventsLinks> = OnceLock::new();
@@ -166,6 +185,10 @@ fn js_events_links() -> &'static JsEventsLinks {
 pub struct JsFormsLinks {
     pub form_named_control: fn(&mut Scope<'_>, &Value, &[u8]) -> Result<Value, Value>,
     pub form_indexed_control: fn(&mut Scope<'_>, &Value, u32) -> Result<Value, Value>,
+    pub radio_node_list_set_value: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub radio_node_list_get_value: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub custom_state_set_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_form_data_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_FORMS_LINKS: OnceLock<JsFormsLinks> = OnceLock::new();
@@ -254,6 +277,15 @@ fn js_loader_links() -> &'static JsLoaderLinks {
 
 pub struct JsMediaLinks {
     pub media_install_audio: fn(&mut Scope<'_>, &Value),
+    pub vtt_cue_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub media_source_is_type_supported:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_bytes: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_remove: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_buffered_start: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_buffered: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_eos: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_mse_append: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_MEDIA_LINKS: OnceLock<JsMediaLinks> = OnceLock::new();
@@ -317,6 +349,23 @@ pub struct JsServicesLinks {
     pub services_install_screen: fn(&mut Scope<'_>, &Value),
     pub services_install_clipboard_item: fn(&mut Scope<'_>, &Value),
     pub services_install_console: fn(&mut Scope<'_>, &Value),
+    pub cache_open: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_notification_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_queue_microtask: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_request_idle_callback:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_match_media: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_prompt: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_confirm: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_camera_enumerate: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_camera_label: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_mic_release: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_camera_release: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_camera_request: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_clear_timer: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_set_interval: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_set_timeout: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub services_alert: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_SERVICES_LINKS: OnceLock<JsServicesLinks> = OnceLock::new();
@@ -369,6 +418,18 @@ pub struct JsUrlLinks {
     pub usp_install_interface: fn(&mut Scope<'_>),
     pub url_install_interface: fn(&mut Scope<'_>),
     pub blob_bytes: fn(&mut Scope<'_>, &Value) -> Vec<u8>,
+    pub window_filereader_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_text_decoder_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_text_encoder_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_usp_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_revoke_object: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_update_object: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_create_object: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_parse_static: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_can_parse: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_url_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_atob: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_btoa: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_URL_LINKS: OnceLock<JsUrlLinks> = OnceLock::new();
@@ -412,6 +473,15 @@ pub struct JsWorkersLinks {
     pub sw_install_container: fn(&mut Scope<'_>, &Value),
     pub worker_promise_rejection_tracker: fn(&mut Scope<'_>, &Value, &Value, bool),
     pub worker_install_location: fn(&mut Scope<'_>, &Value, &str),
+    pub worker_performance_clear: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_performance_entries: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_performance_now: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_report_error: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_import_scripts: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_global_close: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub worker_global_post_message: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_broadcast_channel: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_message_channel: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_WORKERS_LINKS: OnceLock<JsWorkersLinks> = OnceLock::new();
@@ -828,4 +898,768 @@ pub(crate) fn nsr_worker_install_location(scope: &mut Scope<'_>, global: &Value,
 
 pub(crate) fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     (webgl_links().webgl_install)(scope, global)
+}
+
+pub struct JsDocumentLinks {
+    pub document_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_DOCUMENT_LINKS: OnceLock<JsDocumentLinks> = OnceLock::new();
+
+pub fn set_js_document_links(links: JsDocumentLinks) {
+    let _ = JS_DOCUMENT_LINKS.set(links);
+}
+
+fn js_document_links() -> &'static JsDocumentLinks {
+    JS_DOCUMENT_LINKS
+        .get()
+        .expect("southstar-js-document installs its links before the first page")
+}
+
+pub struct JsGeometryLinks {
+    pub window_scroll_by_pages: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_scroll_by_lines: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_scroll_by: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub window_scroll_to: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_GEOMETRY_LINKS: OnceLock<JsGeometryLinks> = OnceLock::new();
+
+pub fn set_js_geometry_links(links: JsGeometryLinks) {
+    let _ = JS_GEOMETRY_LINKS.set(links);
+}
+
+fn js_geometry_links() -> &'static JsGeometryLinks {
+    JS_GEOMETRY_LINKS
+        .get()
+        .expect("southstar-js-geometry installs its links before the first page")
+}
+
+pub struct JsObserversLinks {
+    pub resize_observer_disconnect: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub resize_observer_unobserve: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub resize_observer_observe: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub resize_observer_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub intersection_observer_take_records:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub intersection_observer_disconnect:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub intersection_observer_unobserve:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub intersection_observer_observe: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub intersection_observer_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub mutation_observer_take_records:
+        fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub mutation_observer_disconnect: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub mutation_observer_observe: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub mutation_observer_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_OBSERVERS_LINKS: OnceLock<JsObserversLinks> = OnceLock::new();
+
+pub fn set_js_observers_links(links: JsObserversLinks) {
+    let _ = JS_OBSERVERS_LINKS.set(links);
+}
+
+fn js_observers_links() -> &'static JsObserversLinks {
+    JS_OBSERVERS_LINKS
+        .get()
+        .expect("southstar-js-observers installs its links before the first page")
+}
+
+pub(crate) fn nsr_window_report_error(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().window_report_error)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_target_dispatchEvent(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().target_dispatch_event)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_dispatchEvent(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().window_dispatch_event)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_removeEventListener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().window_remove_event_listener)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_addEventListener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().window_add_event_listener)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_target_removeEventListener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().target_remove_event_listener)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_target_addEventListener(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dispatch_links().target_add_event_listener)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_document_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_document_links().document_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_close_watcher_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_close_watcher_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_dom_parser_parseFromString(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().dom_parser_parse_from_string)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_dom_parser_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_dom_parser_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_option_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_option_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_comment_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_comment_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_text_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_text_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_document_fragment_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_document_fragment_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_audio_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_audio_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_window_image_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().window_image_ctor)(scope, this, args)
+}
+
+#[allow(non_snake_case)]
+pub(crate) fn nsr_attr_cloneNode(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_dom_factory_links().attr_clone_node)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_event_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().window_event_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_radio_node_list_set_value(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_forms_links().radio_node_list_set_value)(scope, this, args)
+}
+
+pub(crate) fn nsr_radio_node_list_get_value(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_forms_links().radio_node_list_get_value)(scope, this, args)
+}
+
+pub(crate) fn nsr_custom_state_set_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_forms_links().custom_state_set_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_form_data_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_forms_links().window_form_data_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_scroll_by_pages(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_geometry_links().window_scroll_by_pages)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_scroll_by_lines(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_geometry_links().window_scroll_by_lines)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_scroll_by(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_geometry_links().window_scroll_by)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_scroll_to(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_geometry_links().window_scroll_to)(scope, this, args)
+}
+
+pub(crate) fn nsr_vtt_cue_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().vtt_cue_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_media_source_is_type_supported(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().media_source_is_type_supported)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_bytes(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_bytes)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_remove(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_remove)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_buffered_start(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_buffered_start)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_buffered(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_buffered)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_eos(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_eos)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_mse_append(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_media_links().window_mse_append)(scope, this, args)
+}
+
+pub(crate) fn nsr_resize_observer_disconnect(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().resize_observer_disconnect)(scope, this, args)
+}
+
+pub(crate) fn nsr_resize_observer_unobserve(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().resize_observer_unobserve)(scope, this, args)
+}
+
+pub(crate) fn nsr_resize_observer_observe(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().resize_observer_observe)(scope, this, args)
+}
+
+pub(crate) fn nsr_resize_observer_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().resize_observer_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_intersection_observer_take_records(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().intersection_observer_take_records)(scope, this, args)
+}
+
+pub(crate) fn nsr_intersection_observer_disconnect(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().intersection_observer_disconnect)(scope, this, args)
+}
+
+pub(crate) fn nsr_intersection_observer_unobserve(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().intersection_observer_unobserve)(scope, this, args)
+}
+
+pub(crate) fn nsr_intersection_observer_observe(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().intersection_observer_observe)(scope, this, args)
+}
+
+pub(crate) fn nsr_intersection_observer_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().intersection_observer_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_mutation_observer_take_records(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().mutation_observer_take_records)(scope, this, args)
+}
+
+pub(crate) fn nsr_mutation_observer_disconnect(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().mutation_observer_disconnect)(scope, this, args)
+}
+
+pub(crate) fn nsr_mutation_observer_observe(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().mutation_observer_observe)(scope, this, args)
+}
+
+pub(crate) fn nsr_mutation_observer_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_observers_links().mutation_observer_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_cache_open(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().cache_open)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_notification_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_notification_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_queue_microtask(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_queue_microtask)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_request_idle_callback(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_request_idle_callback)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_match_media(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_match_media)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_prompt(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_prompt)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_confirm(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_confirm)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_camera_enumerate(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_camera_enumerate)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_camera_label(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_camera_label)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_mic_release(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_mic_release)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_camera_release(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_camera_release)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_camera_request(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_camera_request)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_clear_timer(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_clear_timer)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_set_interval(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_set_interval)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_set_timeout(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_set_timeout)(scope, this, args)
+}
+
+pub(crate) fn nsr_services_alert(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_services_links().services_alert)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_filereader_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_filereader_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_text_decoder_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_text_decoder_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_text_encoder_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_text_encoder_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_usp_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_usp_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_revoke_object(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_revoke_object)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_update_object(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_update_object)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_create_object(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_create_object)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_parse_static(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_parse_static)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_can_parse(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_can_parse)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_url_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_url_ctor)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_atob(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_atob)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_btoa(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_url_links().window_btoa)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_performance_clear(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_performance_clear)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_performance_entries(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_performance_entries)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_performance_now(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_performance_now)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_report_error(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_report_error)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_import_scripts(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_import_scripts)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_global_close(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_global_close)(scope, this, args)
+}
+
+pub(crate) fn nsr_worker_global_post_message(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().worker_global_post_message)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_broadcast_channel(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().window_broadcast_channel)(scope, this, args)
+}
+
+pub(crate) fn nsr_window_message_channel(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_workers_links().window_message_channel)(scope, this, args)
 }

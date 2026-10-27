@@ -13,13 +13,7 @@ pub(crate) struct NsJs {
     _private: [u8; 0],
 }
 
-unsafe extern "Rust" {
-    safe fn nsr_submit_event_ctor(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_forms::nsr_submit_event_ctor;
 
 fn js_of(scope: &Scope<'_>) -> *mut NsJs {
     scope.context_opaque().cast()
@@ -74,7 +68,6 @@ pub fn nsr_event_new(scope: &mut Scope<'_>) -> JsResult {
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
             }

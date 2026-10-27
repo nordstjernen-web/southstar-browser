@@ -355,7 +355,6 @@ macro_rules! capture_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
             #[allow(non_snake_case)]
-            #[unsafe(no_mangle)]
             pub fn $name(
                 scope: &mut Scope<'_>,
                 this: &Value,
@@ -367,11 +366,7 @@ macro_rules! capture_methods {
     };
 }
 
-capture_methods! {
-    nsr_element_setPointerCapture => crate::capture::set,
-    nsr_element_releasePointerCapture => crate::capture::release,
-    nsr_element_hasPointerCapture => crate::capture::has,
-}
+capture_methods! {}
 
 fn teardown(js: *const NsJs) {
     crate::teardown(Js::of(js));

@@ -350,7 +350,6 @@ impl CallbackScope {
 }
 
 #[allow(non_snake_case)]
-#[unsafe(no_mangle)]
 pub fn nsr_window_requestAnimationFrame(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -360,7 +359,6 @@ pub fn nsr_window_requestAnimationFrame(
 }
 
 #[allow(non_snake_case)]
-#[unsafe(no_mangle)]
 pub fn nsr_window_cancelAnimationFrame(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -479,6 +477,12 @@ pub fn install_runtime_hooks() {
     });
     southstar_js_runtime::links::set_js_lifecycle_links(
         southstar_js_runtime::links::JsLifecycleLinks {
+            window_cancel_animation_frame: crate::ffi::nsr_window_cancelAnimationFrame,
+            window_request_animation_frame: crate::ffi::nsr_window_requestAnimationFrame,
+        },
+    );
+    southstar_js_frames::links::set_js_lifecycle_links(
+        southstar_js_frames::links::JsLifecycleLinks {
             window_cancel_animation_frame: crate::ffi::nsr_window_cancelAnimationFrame,
             window_request_animation_frame: crate::ffi::nsr_window_requestAnimationFrame,
         },
