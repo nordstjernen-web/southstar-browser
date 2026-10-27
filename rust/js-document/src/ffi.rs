@@ -10,23 +10,22 @@ use southstar_dom::{Node, NsNode, Tree};
 use southstar_glib as glib;
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult};
 
 mod imports;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     pub fn key(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 }
 
@@ -55,7 +54,7 @@ fn c_bytes(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -105,8 +104,8 @@ pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame:
     southstar_js_frames::iframe_realm_window(scope, element, frame)
 }
 
-pub fn doc_base_url(js: *const NsJs) -> Option<Vec<u8>> {
-    crate::base_url::page_base_url(Js(js.cast_mut()))
+pub fn doc_base_url(js: Option<Page>) -> Option<Vec<u8>> {
+    crate::base_url::page_base_url(Js(js))
 }
 
 pub(crate) fn current_url(js: Js) -> Option<Vec<u8>> {
@@ -276,9 +275,9 @@ rust_methods! {
     nsr_document_ctor => crate::realm::document_ctor,
 }
 
-pub fn seed_cookies_from_jar(js: *const NsJs) {
-    if !js.is_null() {
-        crate::cookie::seed_from_jar(Js(js.cast_mut()));
+pub fn seed_cookies_from_jar(js: Option<Page>) {
+    if js.is_some() {
+        crate::cookie::seed_from_jar(Js(js));
     }
 }
 
@@ -453,21 +452,21 @@ pub fn nsr_document_define_doctype_getter(scope: &mut Scope<'_>, document: &Valu
     crate::realm::define_getter(scope, document, "doctype", crate::realm::get_doctype);
 }
 
-fn flush_write(js: *const NsJs) {
-    if !js.is_null() {
-        crate::write::flush(Js(js.cast_mut()));
+fn flush_write(js: Option<Page>) {
+    if js.is_some() {
+        crate::write::flush(Js(js));
     }
 }
 
-fn write_teardown(js: *const NsJs) {
-    crate::write::teardown(Js(js.cast_mut()));
+fn write_teardown(js: Option<Page>) {
+    crate::write::teardown(Js(js));
 }
 
 pub fn install_runtime_hooks() {
     southstar_js_runtime::api::set_document_hooks(southstar_js_runtime::api::DocumentHooks {
         base_url: doc_base_url,
-        flush_write,
-        write_teardown,
+        flush_write: |js| flush_write(Some(js)),
+        write_teardown: |js| write_teardown(Some(js)),
         node_base_url: node_document_base_url,
         make_realm_document,
     });
@@ -483,8 +482,8 @@ pub fn install_runtime_hooks() {
     );
 }
 
-fn node_document_base_url(js: *const NsJs, node: Node<'_>) -> Option<Vec<u8>> {
-    crate::base_url::node_base_url(Js(js.cast_mut()), node.downgrade().get())
+fn node_document_base_url(js: Option<Page>, node: Node<'_>) -> Option<Vec<u8>> {
+    crate::base_url::node_base_url(Js(js), node.downgrade().get())
 }
 
 pub fn make_realm_document(

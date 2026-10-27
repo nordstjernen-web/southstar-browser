@@ -3,19 +3,17 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 
 use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 const LIVE_LABELS: c_int = 13;
 
@@ -25,13 +23,12 @@ use southstar_js_reflect::nsr_element_int_attr_getter;
 use southstar_js_reflect::nsr_element_int_attr_setter;
 use southstar_js_reflect::nsr_element_reflect_str_set;
 
-fn raw_js(js: Option<Js>) -> *mut NsJs {
-    js.map_or(ptr::null_mut(), |js| js.0)
+fn raw_js(js: Option<Js>) -> Option<Page> {
+    js.map(|js| js.0)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = scope.context_opaque().cast();
-    (!js.is_null()).then_some(Js(js))
+    Page::current(scope).map(Js)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -47,7 +44,7 @@ pub(crate) fn make_labels(scope: &mut Scope<'_>, owner: &Value) -> JsResult {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.0);
+    api::mark_mutated(Some(js.0));
 }
 
 pub(crate) fn orphan(js: Option<Js>, node: Element) {
@@ -55,7 +52,7 @@ pub(crate) fn orphan(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn qcache_invalidate(js: Js) {
-    southstar_js_collections::qcache_invalidate(js.0);
+    southstar_js_collections::qcache_invalidate(Some(js.0));
 }
 
 pub(crate) fn record_child_change(
@@ -67,9 +64,14 @@ pub(crate) fn record_child_change(
     next: Option<Element>,
 ) {
     match parent {
-        Some(parent) => {
-            southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next)
-        }
+        Some(parent) => southstar_js_mutation::record_child_change(
+            Some(js.0),
+            parent,
+            added,
+            removed,
+            previous,
+            next,
+        ),
         None => qcache_invalidate(js),
     }
 }
@@ -99,7 +101,7 @@ pub(crate) fn replace_text(node: Element, text: &[u8]) {
 }
 
 pub(crate) fn record_character_data(js: Js, node: Element, old: &[u8]) {
-    southstar_js_mutation::record_character_data(js.0, node, old);
+    southstar_js_mutation::record_character_data(Some(js.0), node, old);
 }
 
 pub(crate) fn schedule_iframe_load(js: Option<Js>, node: Element) {
@@ -127,7 +129,7 @@ pub(crate) fn has_assigned_slot(node: Element) -> bool {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    api::current_document(js.0)
+    api::current_document(Some(js.0))
 }
 
 pub(crate) fn image_for_node(js: Option<Js>, node: Element) -> Option<ImageRef<'static>> {
@@ -144,7 +146,7 @@ pub(crate) fn resolve_against_doc_base(
     href: &[u8],
 ) -> Option<Vec<u8>> {
     let js = js?;
-    let base = api::node_doc_base(js.0, Some(node))?;
+    let base = api::node_doc_base(Some(js.0), Some(node))?;
     let document_url = base.to_bytes();
     let base = southstar_dom::base_url::owning_document(node)
         .and_then(|doc| southstar_dom::base_url::document_base(doc, Some(document_url)))

@@ -8,10 +8,10 @@ use std::sync::OnceLock;
 use southstar_dom::Node;
 use southstar_js_engine::{NativeFn, Scope, Value};
 
-use super::{NavigationTiming, NsJs, ResourceInfo};
+use super::{NavigationTiming, Page, ResourceInfo};
 
 pub type AddResourceTimedFn = fn(
-    *const NsJs,
+    Page,
     Option<&ResourceInfo>,
     &CStr,
     Option<&CStr>,
@@ -20,11 +20,11 @@ pub type AddResourceTimedFn = fn(
 );
 
 pub struct PerfHooks {
-    pub init: fn(*const NsJs),
-    pub teardown: fn(*const NsJs),
-    pub clear_frame_clocks: fn(*const NsJs, bool),
+    pub init: fn(Page),
+    pub teardown: fn(Page),
+    pub clear_frame_clocks: fn(Page, bool),
     pub coarsen_navigation_timing: fn(&mut NavigationTiming),
-    pub make_performance_object: fn(&mut Scope<'_>, *const NsJs, bool) -> Value,
+    pub make_performance_object: fn(&mut Scope<'_>, Page, bool) -> Value,
     pub supported_entry_types: fn(&mut Scope<'_>) -> Value,
     pub extend_event_target: fn(&mut Scope<'_>, &Value, &Value),
     pub install_entry_list: fn(&mut Scope<'_>, &Value),
@@ -47,9 +47,9 @@ pub(crate) fn perf_hooks() -> &'static PerfHooks {
 }
 
 pub struct ImagesHooks {
-    pub start_image_load: fn(*const NsJs, Node<'_>, Option<&CStr>),
-    pub forget_node: fn(*const NsJs, Node<'_>),
-    pub teardown: fn(*const NsJs),
+    pub start_image_load: fn(Option<Page>, Node<'_>, Option<&CStr>),
+    pub forget_node: fn(Page, Node<'_>),
+    pub teardown: fn(Page),
 }
 
 static IMAGES: OnceLock<ImagesHooks> = OnceLock::new();
@@ -66,8 +66,8 @@ pub(crate) fn images_hooks() -> &'static ImagesHooks {
 
 pub struct CustomElementsHooks {
     pub name_valid: fn(&[u8]) -> bool,
-    pub attribute_changed: fn(*const NsJs, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
-    pub teardown: fn(*const NsJs),
+    pub attribute_changed: fn(Option<Page>, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
+    pub teardown: fn(Page),
     pub define: NativeFn,
     pub get: NativeFn,
     pub when_defined: NativeFn,

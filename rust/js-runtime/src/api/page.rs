@@ -20,55 +20,55 @@ use crate::{scheduling, worker};
 
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
 
-fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
+fn state<R>(js: Option<Page>, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
     Js::of(js).map_or(fallback, |js| f(js.st()))
 }
 
-fn add(js: *const NsJs, depth: impl FnOnce(&PageState) -> &Cell<c_int>, delta: i32) -> i32 {
+fn add(js: Option<Page>, depth: impl FnOnce(&PageState) -> &Cell<c_int>, delta: i32) -> i32 {
     state(js, 0, |state| scheduling::add_depth(depth(state), delta))
 }
 
-pub fn active() -> *mut NsJs {
+pub fn active() -> Option<Page> {
     record::active()
 }
 
-pub fn halted(js: *const NsJs) -> bool {
+pub fn halted(js: Option<Page>) -> bool {
     Js::of(js).is_some_and(Js::halted)
 }
 
-pub fn halt(js: *const NsJs) {
+pub fn halt(js: Option<Page>) {
     if let Some(js) = Js::of(js) {
         js.halt();
     }
 }
 
-pub fn in_pump(js: *const NsJs) -> bool {
+pub fn in_pump(js: Option<Page>) -> bool {
     state(js, false, |state| state.in_pump.get())
 }
 
-pub fn is_worker(js: *const NsJs) -> bool {
+pub fn is_worker(js: Option<Page>) -> bool {
     state(js, false, |state| !state.worker_host.get().is_null())
 }
 
-pub fn worker_host(js: *const NsJs) -> *mut c_void {
+pub fn worker_host(js: Option<Page>) -> *mut c_void {
     state(js, ptr::null_mut(), |state| state.worker_host.get().cast())
 }
 
-pub fn log_enabled(js: *const NsJs) -> bool {
+pub fn log_enabled(js: Option<Page>) -> bool {
     state(js, false, |state| state.log.is_set())
 }
 
-pub fn log_line(js: *const NsJs, line: &CStr) {
+pub fn log_line(js: Option<Page>, line: &CStr) {
     if let Some(js) = Js::of(js) {
         glue::log_line(js, line);
     }
 }
 
-pub fn main_context(js: *const NsJs) -> ContextHandle {
+pub fn main_context(js: Option<Page>) -> ContextHandle {
     Js::of(js).map_or(ContextHandle::NULL, Js::ctx)
 }
 
-pub fn main_realm(js: *const NsJs) -> ContextHandle {
+pub fn main_realm(js: Option<Page>) -> ContextHandle {
     Js::of(js).map_or(ContextHandle::NULL, Js::main_realm)
 }
 
@@ -76,41 +76,41 @@ pub fn pattern_context() -> ContextHandle {
     glue::active_js().map_or(ContextHandle::NULL, Js::main_or_current)
 }
 
-pub fn module_context(js: *const NsJs) -> ContextHandle {
+pub fn module_context(js: Option<Page>) -> ContextHandle {
     Js::of(js).map_or(ContextHandle::NULL, |js| {
         js.st().module_ctx.get().or(js.ctx())
     })
 }
 
-pub fn swap_module_context(js: *const NsJs, ctx: ContextHandle) -> ContextHandle {
+pub fn swap_module_context(js: Option<Page>, ctx: ContextHandle) -> ContextHandle {
     state(js, ContextHandle::NULL, |state| {
         state.module_ctx.replace(ctx)
     })
 }
 
-pub fn set_realm(js: *const NsJs, ctx: ContextHandle, doc: Option<Node<'_>>) {
+pub fn set_realm(js: Option<Page>, ctx: ContextHandle, doc: Option<Node<'_>>) {
     if let Some(js) = Js::of(js) {
         js.set_ctx(ctx);
         js.set_current_doc(Node::ptr_or_null(doc).cast_mut());
     }
 }
 
-pub fn current_document(js: *const NsJs) -> Option<Node<'static>> {
+pub fn current_document(js: Option<Page>) -> Option<Node<'static>> {
     record::node(Js::of(js)?.current_doc())
 }
 
-pub fn swap_current_document(js: *const NsJs, doc: Option<Node<'_>>) -> Option<Node<'static>> {
+pub fn swap_current_document(js: Option<Page>, doc: Option<Node<'_>>) -> Option<Node<'static>> {
     let js = Js::of(js)?;
     let previous = js.current_doc();
     js.set_current_doc(Node::ptr_or_null(doc).cast_mut());
     record::node(previous)
 }
 
-pub fn current_script(js: *const NsJs) -> Option<Node<'static>> {
+pub fn current_script(js: Option<Page>) -> Option<Node<'static>> {
     record::node(Js::of(js)?.st().current_script.get())
 }
 
-pub fn swap_current_script(js: *const NsJs, script: Option<Node<'_>>) -> Option<Node<'static>> {
+pub fn swap_current_script(js: Option<Page>, script: Option<Node<'_>>) -> Option<Node<'static>> {
     let previous = Js::of(js)?
         .st()
         .current_script
@@ -118,11 +118,11 @@ pub fn swap_current_script(js: *const NsJs, script: Option<Node<'_>>) -> Option<
     record::node(previous)
 }
 
-pub fn ce_main_doc(js: *const NsJs) -> Option<Node<'static>> {
+pub fn ce_main_doc(js: Option<Page>) -> Option<Node<'static>> {
     record::ce_main_doc(js)
 }
 
-pub fn iframe_document_node(js: *const NsJs) -> Option<Node<'static>> {
+pub fn iframe_document_node(js: Option<Page>) -> Option<Node<'static>> {
     Js::of(js)?
         .st()
         .iframe_doc
@@ -131,35 +131,35 @@ pub fn iframe_document_node(js: *const NsJs) -> Option<Node<'static>> {
         .and_then(wrapper::unwrap)
 }
 
-pub fn current_url(js: *const NsJs) -> CString {
+pub fn current_url(js: Option<Page>) -> CString {
     page_url(js).unwrap_or_default()
 }
 
-pub fn page_url(js: *const NsJs) -> Option<CString> {
+pub fn page_url(js: Option<Page>) -> Option<CString> {
     Js::of(js)?.current_url()
 }
 
-pub fn set_current_url(js: *const NsJs, url: Option<&CStr>) {
+pub fn set_current_url(js: Option<Page>, url: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
         js.replace_current_url(url.map(CStr::to_owned));
     }
 }
 
-pub fn top_url(js: *const NsJs) -> CString {
+pub fn top_url(js: Option<Page>) -> CString {
     Js::of(js).map(scopes::top_url).unwrap_or_default()
 }
 
-pub fn set_top_url(js: *const NsJs, url: Option<&CStr>) {
+pub fn set_top_url(js: Option<Page>, url: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
         scopes::set_top_url(js, url);
     }
 }
 
-pub fn document_origin(js: *const NsJs) -> Option<CString> {
+pub fn document_origin(js: Option<Page>) -> Option<CString> {
     Js::of(js)?.st().document_origin.borrow().clone()
 }
 
-pub fn set_document(js: *const NsJs, doc: Option<Node<'_>>, origin: Option<&CStr>) {
+pub fn set_document(js: Option<Page>, doc: Option<Node<'_>>, origin: Option<&CStr>) {
     let Some(js) = Js::of(js) else {
         return;
     };
@@ -172,11 +172,11 @@ pub fn set_document(js: *const NsJs, doc: Option<Node<'_>>, origin: Option<&CStr
     state.document_origin.replace(origin.map(CStr::to_owned));
 }
 
-pub fn realm_url(js: *const NsJs, realm: ContextHandle) -> Option<CString> {
+pub fn realm_url(js: Option<Page>, realm: ContextHandle) -> Option<CString> {
     scopes::realm_url(Js::of(js)?, realm)
 }
 
-pub fn realm_document_url(js: *const NsJs, realm: ContextHandle) -> Option<CString> {
+pub fn realm_document_url(js: Option<Page>, realm: ContextHandle) -> Option<CString> {
     let js = Js::of(js)?;
     if !realm.is_null() && realm != js.main_realm() {
         let url = record::frame_url(js, scopes::frame_of_realm(js, realm));
@@ -191,11 +191,11 @@ pub fn node_frame_url(node: Node<'_>) -> Option<CString> {
     record::node_frame_url(node).map(CStr::to_owned)
 }
 
-pub fn node_doc_base(js: *const NsJs, node: Option<Node<'_>>) -> Option<CString> {
+pub fn node_doc_base(js: Option<Page>, node: Option<Node<'_>>) -> Option<CString> {
     node.and_then(node_frame_url).or_else(|| page_url(js))
 }
 
-pub fn node_in_page(js: *const NsJs, node: Option<Node<'_>>) -> bool {
+pub fn node_in_page(js: Option<Page>, node: Option<Node<'_>>) -> bool {
     let (Some(js), Some(node)) = (Js::of(js), node) else {
         return false;
     };
@@ -203,71 +203,71 @@ pub fn node_in_page(js: *const NsJs, node: Option<Node<'_>>) -> bool {
     !top.is_null() && scopes::top_document(node.as_mut_ptr()) == top
 }
 
-pub fn url_parses(js: *const NsJs, url: &CStr) -> bool {
+pub fn url_parses(js: Option<Page>, url: &CStr) -> bool {
     record::url_parses(js, url)
 }
 
-pub fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
+pub fn csp_allows_worker(js: Option<Page>, url: &CStr) -> bool {
     record::csp_allows_worker(js, url)
 }
 
-pub fn csp_form_action_allowed(js: *const NsJs, url: Option<&CStr>) -> bool {
+pub fn csp_form_action_allowed(js: Option<Page>, url: Option<&CStr>) -> bool {
     record::csp_form_action_allowed(js, url)
 }
 
-pub fn csp_allows_connect(js: *const NsJs, url: &CStr, page: Option<&CStr>) -> bool {
+pub fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
     record::csp_allows_connect(js, url, page)
 }
 
-pub fn inline_handlers_allowed(js: *const NsJs) -> bool {
+pub fn inline_handlers_allowed(js: Option<Page>) -> bool {
     record::inline_handlers_allowed(js)
 }
 
-pub fn with_page_csp<R>(js: *const NsJs, f: impl FnOnce(Option<&southstar_csp::Csp>) -> R) -> R {
+pub fn with_page_csp<R>(js: Option<Page>, f: impl FnOnce(Option<&southstar_csp::Csp>) -> R) -> R {
     record::with_page_csp(js, f)
 }
 
-pub fn cookie_value(js: *const NsJs) -> Option<CString> {
+pub fn cookie_value(js: Option<Page>) -> Option<CString> {
     record::cookie_value(js)
 }
 
-pub fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
+pub fn set_cookie_value(js: Option<Page>, value: Option<&CStr>) {
     record::set_cookie_value(js, value);
 }
 
-pub fn cookie_version(js: *const NsJs) -> u64 {
+pub fn cookie_version(js: Option<Page>) -> u64 {
     record::cookie_version(js)
 }
 
-pub fn set_cookie_version(js: *const NsJs, version: u64) {
+pub fn set_cookie_version(js: Option<Page>, version: u64) {
     record::set_cookie_version(js, version);
 }
 
-pub fn partition_key(js: *const NsJs) -> Option<CString> {
+pub fn partition_key(js: Option<Page>) -> Option<CString> {
     record::partition_key(js)
 }
 
-pub fn time_origin_us(js: *const NsJs) -> i64 {
+pub fn time_origin_us(js: Option<Page>) -> i64 {
     record::time_origin_us(js)
 }
 
-pub fn time_origin_real_ms(js: *const NsJs) -> f64 {
+pub fn time_origin_real_ms(js: Option<Page>) -> f64 {
     record::time_origin_real_ms(js)
 }
 
-pub fn navigation_timing(js: *const NsJs) -> Option<NavigationTiming> {
+pub fn navigation_timing(js: Option<Page>) -> Option<NavigationTiming> {
     record::navigation_timing(js)
 }
 
-pub fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
+pub fn set_navigation_timing(js: Option<Page>, timing: NavigationTiming) {
     record::set_navigation_timing(js, timing);
 }
 
-pub fn layout_root(js: *const NsJs) -> Option<BoxRef<'static>> {
+pub fn layout_root(js: Option<Page>) -> Option<BoxRef<'static>> {
     record::layout_root(js)
 }
 
-pub fn style_table(js: *const NsJs) -> *const StyleMap {
+pub fn style_table(js: Option<Page>) -> *const StyleMap {
     state(js, ptr::null(), |state| {
         state
             .style_table
@@ -277,30 +277,30 @@ pub fn style_table(js: *const NsJs) -> *const StyleMap {
     })
 }
 
-pub fn image_cache(js: *const NsJs) -> *mut c_void {
+pub fn image_cache(js: Option<Page>) -> *mut c_void {
     state(js, ptr::null_mut(), |state| state.image_cache.get())
 }
 
-pub fn glib_context(js: *const NsJs) -> *mut c_void {
+pub fn glib_context(js: Option<Page>) -> *mut c_void {
     state(js, ptr::null_mut(), |state| state.main_context.get().cast())
 }
 
-pub fn ready_state(js: *const NsJs) -> i32 {
+pub fn ready_state(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.ready_state.get())
 }
 
-pub fn set_ready_state(js: *const NsJs, ready_state: i32) {
+pub fn set_ready_state(js: Option<Page>, ready_state: i32) {
     state(js, (), |state| state.ready_state.set(ready_state));
 }
 
-pub fn doc_ready_state(js: *const NsJs, doc: Node<'_>) -> i32 {
+pub fn doc_ready_state(js: Option<Page>, doc: Node<'_>) -> i32 {
     state(js, -1, |state| {
         let states = state.doc_ready_states.borrow();
         states.get(&(doc.as_ptr() as usize)).copied().unwrap_or(-1)
     })
 }
 
-pub fn set_doc_ready_state(js: *const NsJs, doc: Node<'_>, ready_state: i32) {
+pub fn set_doc_ready_state(js: Option<Page>, doc: Node<'_>, ready_state: i32) {
     state(js, (), |state| {
         state
             .doc_ready_states
@@ -309,75 +309,75 @@ pub fn set_doc_ready_state(js: *const NsJs, doc: Node<'_>, ready_state: i32) {
     });
 }
 
-pub fn clear_doc_ready_states(js: *const NsJs) {
+pub fn clear_doc_ready_states(js: Option<Page>) {
     state(js, (), |state| state.doc_ready_states.borrow_mut().clear());
 }
 
-pub fn eval_depth(js: *const NsJs) -> i32 {
+pub fn eval_depth(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.eval_depth.get())
 }
 
-pub fn eval_depth_add(js: *const NsJs, delta: i32) -> i32 {
+pub fn eval_depth_add(js: Option<Page>, delta: i32) -> i32 {
     add(js, |state| &state.eval_depth, delta)
 }
 
-pub fn callback_depth(js: *const NsJs) -> i32 {
+pub fn callback_depth(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.callback_depth.get())
 }
 
-pub fn callback_depth_add(js: *const NsJs, delta: i32) {
+pub fn callback_depth_add(js: Option<Page>, delta: i32) {
     add(js, |state| &state.callback_depth, delta);
 }
 
-pub fn dispatch_depth(js: *const NsJs) -> i32 {
+pub fn dispatch_depth(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.dispatch_depth.get())
 }
 
-pub fn dispatch_depth_add(js: *const NsJs, delta: i32) {
+pub fn dispatch_depth_add(js: Option<Page>, delta: i32) {
     add(js, |state| &state.dispatch_depth, delta);
 }
 
-pub fn ignore_destructive_writes(js: *const NsJs) -> i32 {
+pub fn ignore_destructive_writes(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.ignore_destructive_writes.get())
 }
 
-pub fn ignore_destructive_writes_add(js: *const NsJs, delta: i32) {
+pub fn ignore_destructive_writes_add(js: Option<Page>, delta: i32) {
     add(js, |state| &state.ignore_destructive_writes, delta);
 }
 
-pub fn iframe_load_depth(js: *const NsJs) -> i32 {
+pub fn iframe_load_depth(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.iframe_load_depth.get())
 }
 
-pub fn in_frame_load(js: *const NsJs) -> bool {
+pub fn in_frame_load(js: Option<Page>) -> bool {
     iframe_load_depth(js) > 0
 }
 
-pub fn mutated(js: *const NsJs) -> bool {
+pub fn mutated(js: Option<Page>) -> bool {
     state(js, false, |state| state.mutated.get())
 }
 
-pub fn mark_mutated(js: *const NsJs) {
+pub fn mark_mutated(js: Option<Page>) {
     state(js, (), |state| state.mutated.set(true));
 }
 
-pub fn consume_mutated(js: *const NsJs) -> bool {
+pub fn consume_mutated(js: Option<Page>) -> bool {
     state(js, false, |state| state.mutated.replace(false))
 }
 
-pub fn autofocus_processed(js: *const NsJs) -> bool {
+pub fn autofocus_processed(js: Option<Page>) -> bool {
     state(js, false, |state| state.autofocus_processed.get())
 }
 
-pub fn set_autofocus_processed(js: *const NsJs) {
+pub fn set_autofocus_processed(js: Option<Page>) {
     state(js, (), |state| state.autofocus_processed.set(true));
 }
 
-pub fn active_modal(js: *const NsJs) -> Option<Node<'static>> {
+pub fn active_modal(js: Option<Page>) -> Option<Node<'static>> {
     record::node(state(js, ptr::null(), |state| state.active_modal.get()))
 }
 
-pub fn set_active_modal(js: *const NsJs, modal: Option<Node<'_>>) {
+pub fn set_active_modal(js: Option<Page>, modal: Option<Node<'_>>) {
     let modal = Node::ptr_or_null(modal);
     state(js, (), |state| {
         state.active_modal.set(modal);
@@ -385,50 +385,50 @@ pub fn set_active_modal(js: *const NsJs, modal: Option<Node<'_>>) {
     });
 }
 
-pub fn note_user_activation(js: *const NsJs) {
+pub fn note_user_activation(js: Option<Page>) {
     state(js, (), |state| {
         state.user_activation_us.set(ffi::monotonic_us());
         state.user_ever_activated.set(true);
     });
 }
 
-pub fn has_transient_activation(js: *const NsJs) -> bool {
+pub fn has_transient_activation(js: Option<Page>) -> bool {
     state(js, false, |state| {
         let at = state.user_activation_us.get();
         at != 0 && ffi::monotonic_us() - at <= TRANSIENT_ACTIVATION_US
     })
 }
 
-pub fn user_activation_state(js: *const NsJs) -> (bool, bool) {
+pub fn user_activation_state(js: Option<Page>) -> (bool, bool) {
     let ever = state(js, false, |state| state.user_ever_activated.get());
     (has_transient_activation(js), ever)
 }
 
-pub fn consume_user_activation(js: *const NsJs) {
+pub fn consume_user_activation(js: Option<Page>) {
     state(js, (), |state| state.user_activation_us.set(0));
 }
 
-pub fn events_suspended(js: *const NsJs) -> bool {
+pub fn events_suspended(js: Option<Page>) -> bool {
     Js::of(js).is_some_and(|js| js.halted() || js.st().in_pump.get())
 }
 
-pub fn window_events_blocked(js: *const NsJs) -> bool {
+pub fn window_events_blocked(js: Option<Page>) -> bool {
     Js::of(js).is_none_or(|js| js.current_doc().is_null() || js.halted() || js.st().in_pump.get())
 }
 
-pub fn wpt_hooks_enabled(js: *const NsJs) -> bool {
+pub fn wpt_hooks_enabled(js: Option<Page>) -> bool {
     state(js, false, |state| state.early_inject_src.borrow().is_some())
 }
 
-pub fn early_inject_src(js: *const NsJs) -> Option<CString> {
+pub fn early_inject_src(js: Option<Page>) -> Option<CString> {
     state(js, None, |state| state.early_inject_src.borrow().clone())
 }
 
-pub fn message_tasks_pending(js: *const NsJs) -> bool {
+pub fn message_tasks_pending(js: Option<Page>) -> bool {
     state(js, false, |state| !state.message_tasks.borrow().is_empty())
 }
 
-pub fn observer_tick_pending(js: *const NsJs) -> bool {
+pub fn observer_tick_pending(js: Option<Page>) -> bool {
     state(js, false, |state| state.observer_tick_source.get() != 0)
 }
 
@@ -436,15 +436,15 @@ pub fn eval_budget_us() -> i64 {
     budget::eval_budget_us()
 }
 
-pub fn wrapper_pinned(js: *const NsJs, node: Node<'_>) -> bool {
+pub fn wrapper_pinned(js: Option<Page>, node: Node<'_>) -> bool {
     record::wrapper_pinned(js, node)
 }
 
-pub fn node_unpinned(js: *const NsJs, node: Node<'_>) -> bool {
+pub fn node_unpinned(js: Option<Page>, node: Node<'_>) -> bool {
     record::node_unpinned(js, node)
 }
 
-pub fn context_frame(js: *const NsJs, ctx: ContextHandle) -> Option<Node<'static>> {
+pub fn context_frame(js: Option<Page>, ctx: ContextHandle) -> Option<Node<'static>> {
     let js = Js::of(js)?;
     if ctx.is_null() || ctx == js.main_realm() {
         return None;
@@ -453,7 +453,7 @@ pub fn context_frame(js: *const NsJs, ctx: ContextHandle) -> Option<Node<'static
     record::node(if frame.is_null() { js.frame() } else { frame })
 }
 
-pub fn forget_frame_context(js: *const NsJs, frame: Node<'_>) {
+pub fn forget_frame_context(js: Option<Page>, frame: Node<'_>) {
     if let Some(js) = Js::of(js)
         && js.frame().cast_const() == frame.as_ptr()
     {
@@ -461,27 +461,27 @@ pub fn forget_frame_context(js: *const NsJs, frame: Node<'_>) {
     }
 }
 
-pub fn image_load_realm(js: *const NsJs) -> ContextHandle {
+pub fn image_load_realm(js: Option<Page>) -> ContextHandle {
     record::image_load_realm(js)
 }
 
-pub fn frame_context_count(js: *const NsJs) -> u32 {
+pub fn frame_context_count(js: Option<Page>) -> u32 {
     record::frame_context_count(js)
 }
 
-pub fn free_frame_contexts(js: *const NsJs) {
+pub fn free_frame_contexts(js: Option<Page>) {
     record::free_frame_contexts(js);
 }
 
-pub fn new_frame_context(js: *const NsJs) -> ContextHandle {
+pub fn new_frame_context(js: Option<Page>) -> ContextHandle {
     record::new_frame_context(js)
 }
 
-pub fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
+pub fn platform_global_names(js: Option<Page>) -> Vec<Vec<u8>> {
     record::platform_global_names(js)
 }
 
-pub fn snapshot_platform_globals(js: *const NsJs) {
+pub fn snapshot_platform_globals(js: Option<Page>) {
     record::snapshot_platform_globals(js);
 }
 
@@ -495,7 +495,7 @@ pub struct WorkerOptions<'a> {
     pub service_worker: bool,
 }
 
-pub fn new_worker(options: &WorkerOptions<'_>) -> *mut NsJs {
+pub fn new_worker(options: &WorkerOptions<'_>) -> Option<Page> {
     ffi::new_worker(&ffi::WorkerSetup {
         host: options.host.cast(),
         context: options.context.cast(),
@@ -508,7 +508,7 @@ pub fn new_worker(options: &WorkerOptions<'_>) -> *mut NsJs {
 }
 
 pub fn worker_eval(
-    js: *const NsJs,
+    js: Option<Page>,
     source: &CStr,
     url: &CStr,
     module: bool,
@@ -525,58 +525,86 @@ pub fn worker_eval(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Page(NonNull<NsJs>);
 
 impl Page {
+    pub(crate) fn from_record(record: NonNull<NsJs>) -> Page {
+        Page(record)
+    }
+
     pub fn from_ptr(js: *const NsJs) -> Option<Page> {
-        if record::is_live(js) {
-            NonNull::new(js.cast_mut()).map(Page)
-        } else {
-            None
-        }
+        record::live_page(js.addr())
+    }
+
+    pub fn from_addr(addr: usize) -> Option<Page> {
+        record::live_page(addr)
     }
 
     pub fn of_scope(scope: &Scope<'_>) -> Option<Page> {
         Page::from_ptr(scope.context_opaque().cast())
     }
 
+    pub fn current(scope: &Scope<'_>) -> Option<Page> {
+        NonNull::new(scope.context_opaque().cast()).map(Page)
+    }
+
+    pub fn of_context(ctx: ContextHandle) -> Option<Page> {
+        NonNull::new(ctx.opaque().cast()).map(Page)
+    }
+
+    pub fn is_live(self) -> bool {
+        record::live_page(self.addr()).is_some()
+    }
+
+    pub fn addr(self) -> usize {
+        self.0.as_ptr().addr()
+    }
+
+    pub fn from_raw(data: *const c_void) -> Option<Page> {
+        Page::from_ptr(data.cast())
+    }
+
     pub fn as_ptr(self) -> *const NsJs {
         self.0.as_ptr().cast_const()
+    }
+
+    pub fn as_raw(self) -> *mut c_void {
+        self.0.as_ptr().cast()
     }
 }
 
 pub fn new_page(callbacks: ffi::Callbacks, timing: Option<NavigationTiming>) -> Option<Page> {
-    Page::from_ptr(ffi::new_page(callbacks, timing))
+    ffi::new_page(callbacks, timing)
 }
 
-pub fn free(js: *const NsJs) {
+pub fn free(js: Page) {
     ffi::free(js);
 }
 
-pub fn set_style_table(js: *const NsJs, styles: Option<Rc<StyleMap>>) {
+pub fn set_style_table(js: Option<Page>, styles: Option<Rc<StyleMap>>) {
     state(js, (), |state| drop(state.style_table.replace(styles)));
 }
 
-pub fn set_image_cache(js: *const NsJs, cache: *mut c_void) {
+pub fn set_image_cache(js: Option<Page>, cache: *mut c_void) {
     if let Some(js) = Js::of(js) {
         js.st().image_cache.set(cache);
         glue::blob_registry(js, !cache.is_null());
     }
 }
 
-pub fn anim(js: *const NsJs) -> *mut c_void {
+pub fn anim(js: Option<Page>) -> *mut c_void {
     state(js, ptr::null_mut(), |state| state.anim.get())
 }
 
-pub fn set_anim(js: *const NsJs, anim: *mut c_void) {
+pub fn set_anim(js: Option<Page>, anim: *mut c_void) {
     if let Some(js) = Js::of(js) {
         js.st().anim.set(anim);
         glue::raf_set_host_driven(js);
     }
 }
 
-pub fn set_early_inject_src(js: *const NsJs, src: Option<&CStr>) {
+pub fn set_early_inject_src(js: Option<Page>, src: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
         js.st().early_inject_src.replace(src.map(CStr::to_owned));
     }

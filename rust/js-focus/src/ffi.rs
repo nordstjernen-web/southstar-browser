@@ -12,30 +12,29 @@ use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 use southstar_js_runtime::api::Page;
 use southstar_js_runtime::events;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 use southstar_js_window::nsr_make_window_event;
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     fn of_page(page: Page) -> Js {
-        Js::of(page.as_ptr())
+        Js(Some(page))
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -67,7 +66,7 @@ impl Js {
     }
 
     pub fn commit_change(self, el: Element) {
-        if let Some(page) = Page::from_ptr(self.ptr()) {
+        if let Some(page) = self.ptr().filter(|page| page.is_live()) {
             southstar_js_mutation::commit_change(page, el);
         }
     }
@@ -173,7 +172,7 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
@@ -341,26 +340,26 @@ pub fn focus_from_pointer(js: Page, target: Option<Node<'_>>) {
     crate::focus::focus_from_pointer(Js::of_page(js), target.and_then(element));
 }
 
-pub fn focused_node(js: *const NsJs) -> Option<Element> {
+pub fn focused_node(js: Option<Page>) -> Option<Element> {
     crate::focused(Js::of(js))
 }
 
-pub fn focused_doc(js: *const NsJs) -> Option<Element> {
+pub fn focused_doc(js: Option<Page>) -> Option<Element> {
     crate::peek(Js::of(js), |page| page.focused_doc)
 }
 
-pub fn clear_focused_node(js: *const NsJs) {
+pub fn clear_focused_node(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::with(js, |page| page.focused = None);
     }
 }
 
-pub fn reset_focus(js: *const NsJs) {
+pub fn reset_focus(js: Option<Page>) {
     crate::reset(Js::of(js));
 }
 
-pub fn synthetic_activation(js: *const NsJs, act: Node<'_>, target: Node<'_>) {
+pub fn synthetic_activation(js: Option<Page>, act: Node<'_>, target: Node<'_>) {
     let (js, Some(act), Some(target)) = (Js::of(js), element(act), element(target)) else {
         return;
     };
@@ -401,20 +400,20 @@ pub fn window_action_applied(js: Page) {
     crate::fullscreen::window_action_applied(Js::of_page(js));
 }
 
-fn update_focus_visible(js: *const NsJs) {
+fn update_focus_visible(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::focus::update_focus_visible(js);
     }
 }
 
-fn forget_node(js: *const NsJs, n: Node<'_>) {
+fn forget_node(js: Option<Page>, n: Node<'_>) {
     if let Some(n) = n.downgrade().get() {
         crate::forget_node(Js::of(js), n);
     }
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::teardown(Js::of(js));
 }
 
@@ -422,13 +421,13 @@ pub fn install_runtime_hooks() {
     api::set_focus_hooks(api::FocusHooks {
         focused_node,
         update_focus_visible,
-        forget_node,
-        teardown,
+        forget_node: |js, a1| forget_node(Some(js), a1),
+        teardown: |js| teardown(Some(js)),
         forget_subtree,
     });
 }
 
-fn forget_subtree(js: *const NsJs, root: Node<'_>) {
+fn forget_subtree(js: Option<Page>, root: Node<'_>) {
     if let Some(root) = root.downgrade().get() {
         crate::forget_subtree(Js::of(js), root);
     }

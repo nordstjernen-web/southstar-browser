@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use core::ptr;
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -12,24 +11,23 @@ use southstar_js_runtime::api;
 use crate::attrs::QualifiedName;
 use crate::{Element, attribute_maps, attrs, change, orphans};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 impl Js {
-    pub(crate) fn of(js: *mut NsJs) -> Option<Js> {
-        (!js.is_null()).then_some(Js(js))
+    pub(crate) fn of(js: Option<Page>) -> Option<Js> {
+        js.map(Js)
     }
 
     pub(crate) fn of_page(page: Page) -> Js {
-        Js(page.as_ptr().cast_mut())
+        Js(page)
     }
 }
 
-fn raw_js(js: Option<Js>) -> *mut NsJs {
-    js.map_or(ptr::null_mut(), |js| js.0)
+fn raw_js(js: Option<Js>) -> Option<Page> {
+    js.map(|js| js.0)
 }
 
 pub(crate) fn qcache_invalidate(js: Option<Js>) {
@@ -41,11 +39,11 @@ pub(crate) fn is_shadow_root(node: Element) -> bool {
 }
 
 fn page_context(js: Js) -> ContextHandle {
-    api::main_context(js.0).or(api::main_realm(js.0))
+    api::main_context(Some(js.0)).or(api::main_realm(Some(js.0)))
 }
 
 pub(crate) fn has_main_context(js: Js) -> bool {
-    !api::main_context(js.0).is_null()
+    !api::main_context(Some(js.0)).is_null()
 }
 
 pub(crate) fn with_page_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
@@ -73,7 +71,7 @@ pub(crate) fn mark_restyle_dirty(node: Option<Element>) {
 }
 
 pub(crate) fn link_resource_changed(js: Js, link: Element) {
-    southstar_js_loader::link_resource_changed(js.0, link);
+    southstar_js_loader::link_resource_changed(Some(js.0), link);
 }
 
 pub(crate) fn attr_may_affect_style(target: Element, name: &CStr) -> bool {
@@ -140,19 +138,19 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    api::ce_attr_changed(js.0, node, name, old, new);
+    api::ce_attr_changed(Some(js.0), node, name, old, new);
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
-    southstar_js_custom_elements::disconnect_subtree(js.0, root);
+    southstar_js_custom_elements::disconnect_subtree(Some(js.0), root);
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.0);
+    api::mark_mutated(Some(js.0));
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    api::request_repaint(js.0);
+    api::request_repaint(Some(js.0));
 }
 
 pub(crate) fn attr_detach_matching(
@@ -195,11 +193,11 @@ pub(crate) fn remove_attr_ns(el: Element, namespace_uri: Option<&CStr>, local_na
 }
 
 pub(crate) fn purge_subtree_rafs(js: Js, root: Element) {
-    api::purge_subtree_rafs(js.0, root);
+    api::purge_subtree_rafs(Some(js.0), root);
 }
 
 pub(crate) fn images_forget_node(js: Js, node: Element) {
-    southstar_js_images::forget_node(js.0, node);
+    southstar_js_images::forget_node(Some(js.0), node);
 }
 
 pub(crate) fn dispatch_forget_node(js: Js, node: Element) {
@@ -207,11 +205,11 @@ pub(crate) fn dispatch_forget_node(js: Js, node: Element) {
 }
 
 pub(crate) fn purge_media_rafs(js: Js, root: Element) {
-    (api::lifecycle_hooks().purge_media_rafs)(js.0, root);
+    (api::lifecycle_hooks().purge_media_rafs)(Some(js.0), root);
 }
 
 pub(crate) fn focus_forget_subtree(js: Js, root: Element) {
-    (api::focus_hooks().forget_subtree)(js.0, root);
+    (api::focus_hooks().forget_subtree)(Some(js.0), root);
 }
 
 pub(crate) fn editable_value<'a>(el: Element) -> Option<&'a CStr> {
@@ -219,7 +217,7 @@ pub(crate) fn editable_value<'a>(el: Element) -> Option<&'a CStr> {
 }
 
 pub(crate) fn dispatch_event(js: Js, target: Element, kind: &CStr) {
-    southstar_js_runtime::events::dispatch_event(js.0, target, &kind.to_string_lossy());
+    southstar_js_runtime::events::dispatch_event(Some(js.0), target, &kind.to_string_lossy());
 }
 
 pub(crate) fn arm_js_invalidate(el: Element) {
@@ -240,104 +238,104 @@ fn element(node: Node<'_>) -> Option<Element> {
     node.downgrade().get()
 }
 
-fn init(js: *const NsJs) {
-    if let Some(js) = Js::of(js.cast_mut()) {
+fn init(js: Option<Page>) {
+    if let Some(js) = Js::of(js) {
         crate::init(js);
     }
 }
 
-fn teardown(js: *const NsJs) {
-    if let Some(js) = Js::of(js.cast_mut()) {
+fn teardown(js: Option<Page>) {
+    if let Some(js) = Js::of(js) {
         orphans::destroy(js);
     }
 }
 
-fn orphan_count(js: *const NsJs) -> usize {
-    Js::of(js.cast_mut()).map_or(0, orphans::count)
+fn orphan_count(js: Option<Page>) -> usize {
+    Js::of(js).map_or(0, orphans::count)
 }
 
-fn collect_orphans(js: *const NsJs) -> Vec<Element> {
-    Js::of(js.cast_mut())
+fn collect_orphans(js: Option<Page>) -> Vec<Element> {
+    Js::of(js)
         .and_then(orphans::collect_unreachable)
         .unwrap_or_default()
 }
 
-fn orphans_snapshot(js: *const NsJs) -> Option<Vec<Element>> {
-    Js::of(js.cast_mut()).and_then(orphans::snapshot)
+fn orphans_snapshot(js: Option<Page>) -> Option<Vec<Element>> {
+    Js::of(js).and_then(orphans::snapshot)
 }
 
-fn orphan_tracked(js: *const NsJs, node: Node<'_>) -> bool {
-    match (Js::of(js.cast_mut()), element(node)) {
+fn orphan_tracked(js: Option<Page>, node: Node<'_>) -> bool {
+    match (Js::of(js), element(node)) {
         (Some(js), Some(node)) => orphans::tracked(js, node),
         _ => false,
     }
 }
 
-fn track_orphan(js: *const NsJs, node: Node<'_>) {
-    crate::track_orphan(js.cast_mut(), node);
+fn track_orphan(js: Option<Page>, node: Node<'_>) {
+    crate::track_orphan(js, node);
 }
 
-fn unorphan_node(js: *const NsJs, node: Node<'_>) {
+fn unorphan_node(js: Option<Page>, node: Node<'_>) {
     if let Some(node) = element(node) {
-        crate::unorphan_node(js.cast_mut(), node);
+        crate::unorphan_node(js, node);
     }
 }
 
-fn purge_subtree_node_refs(js: *const NsJs, root: Node<'_>) {
-    if let (Some(js), Some(root)) = (Js::of(js.cast_mut()), element(root)) {
+fn purge_subtree_node_refs(js: Option<Page>, root: Node<'_>) {
+    if let (Some(js), Some(root)) = (Js::of(js), element(root)) {
         orphans::purge_node_refs(js, root);
     }
 }
 
-fn forget_pending_change(js: *const NsJs) {
-    crate::forget_pending_change(js.cast_mut());
+fn forget_pending_change(js: Option<Page>) {
+    crate::forget_pending_change(js);
 }
 
-fn forget_pending_change_for(js: *const NsJs, el: Node<'_>) {
-    if let (Some(js), Some(el)) = (Js::of(js.cast_mut()), element(el)) {
+fn forget_pending_change_for(js: Option<Page>, el: Node<'_>) {
+    if let (Some(js), Some(el)) = (Js::of(js), element(el)) {
         change::forget_node(js, el);
     }
 }
 
-fn attribute_map_release_owner(js: *const NsJs, owner: Node<'_>) {
-    if let (Some(js), Some(owner)) = (Js::of(js.cast_mut()), element(owner)) {
+fn attribute_map_release_owner(js: Option<Page>, owner: Node<'_>) {
+    if let (Some(js), Some(owner)) = (Js::of(js), element(owner)) {
         attribute_maps::release_owner(js, owner);
     }
 }
 
-fn attribute_maps_teardown(js: *const NsJs) {
-    if let Some(js) = Js::of(js.cast_mut()) {
+fn attribute_maps_teardown(js: Option<Page>) {
+    if let Some(js) = Js::of(js) {
         attribute_maps::teardown(js);
     }
 }
 
-fn set_attr_recorded(js: *const NsJs, node: Node<'_>, name: &CStr, value: &[u8]) {
+fn set_attr_recorded(js: Option<Page>, node: Node<'_>, name: &CStr, value: &[u8]) {
     if let Some(node) = element(node) {
-        crate::set_attr_recorded(js.cast_mut(), node, name, value);
+        crate::set_attr_recorded(js, node, name, value);
     }
 }
 
-fn set_attr_recorded_paint_only(js: *const NsJs, node: Node<'_>, name: &CStr, value: &CStr) {
+fn set_attr_recorded_paint_only(js: Option<Page>, node: Node<'_>, name: &CStr, value: &CStr) {
     if let Some(node) = element(node) {
-        attrs::set_recorded_paint_only(Js::of(js.cast_mut()), node, name, value);
+        attrs::set_recorded_paint_only(Js::of(js), node, name, value);
     }
 }
 
 pub fn install_runtime_hooks() {
     api::set_mutation_hooks(api::MutationHooks {
-        init,
-        teardown,
-        orphan_count,
-        collect_orphans,
-        orphans_snapshot,
-        orphan_tracked,
+        init: |js| init(Some(js)),
+        teardown: |js| teardown(Some(js)),
+        orphan_count: |js| orphan_count(Some(js)),
+        collect_orphans: |js| collect_orphans(Some(js)),
+        orphans_snapshot: |js| orphans_snapshot(Some(js)),
+        orphan_tracked: |js, a1| orphan_tracked(Some(js), a1),
         track_orphan,
-        unorphan_node,
-        purge_subtree_node_refs,
-        forget_pending_change,
-        forget_pending_change_for,
+        unorphan_node: |js, a1| unorphan_node(Some(js), a1),
+        purge_subtree_node_refs: |js, a1| purge_subtree_node_refs(Some(js), a1),
+        forget_pending_change: |js| forget_pending_change(Some(js)),
+        forget_pending_change_for: |js, a1| forget_pending_change_for(Some(js), a1),
         attribute_map_release_owner,
-        attribute_maps_teardown,
+        attribute_maps_teardown: |js| attribute_maps_teardown(Some(js)),
         set_attr_recorded,
         set_attr_recorded_paint_only,
         index_child_removed,
@@ -345,28 +343,28 @@ pub fn install_runtime_hooks() {
     });
 }
 
-fn index_child_removed(js: *const NsJs, parent: Option<Node<'_>>, removed: Node<'_>) {
+fn index_child_removed(js: Option<Page>, parent: Option<Node<'_>>, removed: Node<'_>) {
     match parent.and_then(element) {
-        Some(parent) => crate::index_child_change(js.cast_mut(), parent, None, element(removed)),
-        None => qcache_invalidate(Js::of(js.cast_mut())),
+        Some(parent) => crate::index_child_change(js, parent, None, element(removed)),
+        None => qcache_invalidate(Js::of(js)),
     }
 }
 
 fn record_child_added(
-    js: *const NsJs,
+    js: Option<Page>,
     parent: Node<'_>,
     added: Node<'_>,
     previous: Option<Node<'_>>,
 ) {
     match element(parent) {
         Some(parent) => crate::record_child_change(
-            js.cast_mut(),
+            js,
             parent,
             element(added),
             None,
             previous.and_then(element),
             None,
         ),
-        None => qcache_invalidate(Js::of(js.cast_mut())),
+        None => qcache_invalidate(Js::of(js)),
     }
 }

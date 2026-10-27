@@ -3504,6 +3504,7 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-images",
+ "southstar-js-runtime",
  "southstar-layout",
  "southstar-layout-geom",
  "southstar-mat4",

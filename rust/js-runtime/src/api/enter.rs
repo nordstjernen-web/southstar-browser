@@ -8,7 +8,8 @@ use core::ptr;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use crate::ffi::{Js, NsJs, glue, scopes};
+use crate::api::Page;
+use crate::ffi::{Js, glue, scopes};
 use crate::{budget, scheduling};
 
 #[must_use]
@@ -26,18 +27,18 @@ pub struct RafScope(Box<scopes::RafScope>);
 #[must_use]
 pub struct HandlerRealm(Box<scopes::RealmScope>);
 
-pub fn in_realm<R>(js: *const NsJs, realm: ContextHandle, f: impl FnOnce() -> R) -> R {
+pub fn in_realm<R>(js: Option<Page>, realm: ContextHandle, f: impl FnOnce() -> R) -> R {
     scopes::in_realm(Js::of(js), realm, f)
 }
 
-pub fn in_main_realm<R>(js: *const NsJs, f: impl FnOnce() -> R) -> R {
+pub fn in_main_realm<R>(js: Option<Page>, f: impl FnOnce() -> R) -> R {
     let js = Js::of(js);
     let realm = js.map_or(ContextHandle::NULL, Js::main_realm);
     scopes::in_realm(js, realm, f)
 }
 
 pub fn in_frame_scope<R>(
-    js: *const NsJs,
+    js: Option<Page>,
     realm: ContextHandle,
     frame: Node<'_>,
     f: impl FnOnce() -> R,
@@ -53,7 +54,7 @@ pub fn in_frame_scope<R>(
 }
 
 pub fn in_dispatch_scope<R>(
-    js: *const NsJs,
+    js: Option<Page>,
     ctx: ContextHandle,
     frame: Option<(Node<'_>, Node<'_>)>,
     f: impl FnOnce() -> R,
@@ -68,7 +69,7 @@ pub fn in_dispatch_scope<R>(
 }
 
 pub fn during_frame_load<R>(
-    js: *const NsJs,
+    js: Option<Page>,
     frame: Node<'_>,
     doc: Node<'_>,
     url: &CStr,
@@ -91,13 +92,13 @@ pub fn during_frame_load<R>(
     result
 }
 
-pub fn enter_frame_url(js: *const NsJs, url: Option<&CStr>) -> Option<UrlScope> {
+pub fn enter_frame_url(js: Option<Page>, url: Option<&CStr>) -> Option<UrlScope> {
     let js = Js::of(js)?;
     let url = scopes::frame_url_begin(js, url);
     Some(UrlScope { js, url })
 }
 
-pub fn enter_realm_url(js: *const NsJs, realm: ContextHandle) -> Option<UrlScope> {
+pub fn enter_realm_url(js: Option<Page>, realm: ContextHandle) -> Option<UrlScope> {
     let js = Js::of(js)?;
     let url = scopes::realm_url_begin(js, realm)?;
     Some(UrlScope { js, url })
@@ -110,7 +111,7 @@ impl UrlScope {
 }
 
 pub fn enter_timer_scope(
-    js: *const NsJs,
+    js: Option<Page>,
     ctx: ContextHandle,
     frame: Option<Node<'_>>,
 ) -> Option<TimerScope> {
@@ -158,7 +159,7 @@ fn finish_timer(scope: &mut scopes::TimerScope, exception: Option<Value>) {
 }
 
 pub fn enter_raf_scope(
-    js: *const NsJs,
+    js: Option<Page>,
     ctx: ContextHandle,
     frame: Option<Node<'_>>,
 ) -> Option<RafScope> {

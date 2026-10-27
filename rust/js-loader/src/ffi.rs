@@ -3,16 +3,17 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_long, c_uint, c_void};
+use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{blocking, compile, eval, hold, import_map, page, schedule};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
@@ -24,7 +25,7 @@ unsafe extern "C" {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(
@@ -120,16 +121,20 @@ pub(crate) struct Fetched {
 }
 
 impl Js {
-    pub(crate) fn of(js: *mut NsJs) -> Js {
+    pub(crate) fn of(js: Option<Page>) -> Js {
         Js(js)
     }
 
     pub(crate) fn key(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 
     pub(crate) fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
+    }
+
+    fn raw(self) -> *mut c_void {
+        self.0.map_or(ptr::null_mut(), Page::as_raw)
     }
 
     pub(crate) fn halted(self) -> bool {
@@ -199,7 +204,7 @@ impl Js {
     }
 
     pub(crate) fn attach_drain_timer(self) -> u32 {
-        api::attach_timeout(self.0, 4, async_script_timer, self.0.cast())
+        api::attach_timeout(self.0, 4, async_script_timer, self.raw())
     }
 
     pub(crate) fn index_child_removed(self, parent: Option<Node>, removed: Node) {
@@ -262,7 +267,10 @@ impl Js {
     }
 
     pub(crate) fn node_realm(self, n: Node) -> Option<Realm> {
-        (api::frames_hooks().node_realm_context)(self.0, n)
+        self.0
+            .map_or(ContextHandle::NULL, |js| {
+                (api::frames_hooks().node_realm_context)(js, n)
+            })
             .non_null()
             .map(Realm)
     }
@@ -290,7 +298,9 @@ impl Js {
     }
 
     pub(crate) fn flush_document_write(self) {
-        (api::document_hooks().flush_write)(self.0);
+        if let Some(js) = self.0 {
+            (api::document_hooks().flush_write)(js);
+        }
     }
 
     pub(crate) fn report_uncaught(self, exception: &Value, origin: Option<&CStr>) {
@@ -414,32 +424,32 @@ impl Realm {
 }
 
 unsafe extern "C" fn async_script_timer(data: *mut c_void) -> GBoolean {
-    let js = Js(data.cast());
+    let js = Js(Page::from_raw(data));
     if !js.is_null() {
         schedule::drain_timer_fired(js);
     }
     glib::FALSE
 }
 
-fn eval_source(js: *const NsJs, source: &[u8], origin: Option<&CStr>) {
-    eval::eval(Js(js.cast_mut()), source, origin);
+fn eval_source(js: Option<Page>, source: &[u8], origin: Option<&CStr>) {
+    eval::eval(Js(js), source, origin);
 }
 
-fn parser_hold_forget(js: *const NsJs, n: Node<'_>) {
-    if !js.is_null() {
-        hold::forget(Js(js.cast_mut()), n);
+fn parser_hold_forget(js: Option<Page>, n: Node<'_>) {
+    if js.is_some() {
+        hold::forget(Js(js), n);
     }
 }
 
-fn teardown(js: *const NsJs) {
-    if !js.is_null() {
-        page::teardown(Js(js.cast_mut()));
+fn teardown(js: Option<Page>) {
+    if js.is_some() {
+        page::teardown(Js(js));
     }
 }
 
-fn purge_subtree_script_refs(js: *const NsJs, root: Node<'_>) {
-    if !js.is_null() {
-        eval::purge_subtree_script_refs(Js(js.cast_mut()), root);
+fn purge_subtree_script_refs(js: Option<Page>, root: Node<'_>) {
+    if js.is_some() {
+        eval::purge_subtree_script_refs(Js(js), root);
     }
 }
 
@@ -447,10 +457,10 @@ pub fn install_runtime_hooks() {
     api::set_loader_hooks(api::LoaderHooks {
         eval: eval_source,
         script_needs_prepare: crate::script_needs_prepare,
-        schedule_pending_script_drain: crate::schedule_pending_script_drain,
-        purge_subtree_script_refs,
-        parser_hold_forget,
-        teardown,
+        schedule_pending_script_drain: |js| crate::schedule_pending_script_drain(Some(js)),
+        purge_subtree_script_refs: |js, a1| purge_subtree_script_refs(Some(js), a1),
+        parser_hold_forget: |js, a1| parser_hold_forget(Some(js), a1),
+        teardown: |js| teardown(Some(js)),
         element_perf_info: crate::api::element_perf_info,
     });
     southstar_js_runtime::links::set_js_loader_links(southstar_js_runtime::links::JsLoaderLinks {
@@ -465,12 +475,12 @@ pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }
 
-pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut PerfInfo) {
+pub(crate) fn fill_element_perf_info(js: Option<Page>, el: Option<Node>, info: &mut PerfInfo) {
     let frame = el.and_then(blocking::content_frame);
     let frame_ptr = Node::ptr_or_null(frame);
-    let has_js = !js.is_null();
-    let frame_ctx = match frame {
-        Some(frame) if has_js => (api::frames_hooks().frame_context)(js, frame),
+    let has_js = js.is_some();
+    let frame_ctx = match (frame, js) {
+        (Some(frame), Some(_)) => (api::frames_hooks().frame_context)(js, frame),
         _ => ContextHandle::default(),
     };
     info.timeline = if frame_ctx.is_null() {
@@ -478,10 +488,9 @@ pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut
     } else {
         frame_ctx.as_ptr().cast_const().cast()
     };
-    let frame_url = if frame.is_some() && has_js {
-        (api::frames_hooks().frame_url)(js, frame)
-    } else {
-        None
+    let frame_url = match js {
+        Some(js) if frame.is_some() => (api::frames_hooks().frame_url)(js, frame),
+        _ => None,
     };
     info.document_url = if frame_url.is_some() {
         frame_url
@@ -515,7 +524,7 @@ pub fn nsr_js_module_normalize(
     base: &str,
     name: &str,
 ) -> Result<String, Value> {
-    let js = Js(scope.context_opaque().cast());
+    let js = Js(Page::current(scope));
     let base = CString::new(base.replace('\0', "")).unwrap_or_default();
     let base = Some(base.as_c_str()).filter(|base| !base.is_empty());
     let name = CString::new(name.replace('\0', "")).unwrap_or_default();
@@ -530,7 +539,7 @@ pub fn nsr_js_module_load(
     name: &str,
     attributes: &Value,
 ) -> Result<Value, Value> {
-    let js = Js(scope.context_opaque().cast());
+    let js = Js(Page::current(scope));
     let json = compile::attributes_type_is(scope, attributes, b"json");
     let name = CString::new(name.replace('\0', "")).unwrap_or_default();
     eval::load_module(js, scope, &name, json)

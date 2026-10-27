@@ -7,6 +7,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
+use southstar_js_runtime::api::Page;
+
 use crate::consts::*;
 use crate::ffi::gl;
 use crate::ffi::host::{self, GlContext, Surface};
@@ -56,7 +58,7 @@ pub(crate) struct State {
 
 pub(crate) struct WebGl {
     pub(crate) gl: GlContext,
-    pub(crate) js: usize,
+    pub(crate) js: Option<Page>,
     pub(crate) canvas: usize,
     pub(crate) version: i32,
     pub(crate) attrs: Attributes,
@@ -439,7 +441,7 @@ fn transform_feedback_active(version: i32) -> bool {
 impl WebGl {
     pub(crate) fn make(
         gl: GlContext,
-        js: usize,
+        js: Option<Page>,
         canvas: usize,
         version: i32,
         mut attrs: Attributes,

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_js_engine::{Attributes, ContextHandle, HostClass, PropertyDescriptor, Scope, Value};
@@ -79,8 +79,8 @@ impl Ctx {
         self.0
     }
 
-    pub fn opaque(self) -> *mut c_void {
-        self.0.opaque()
+    pub fn page(self) -> Option<southstar_js_runtime::api::Page> {
+        southstar_js_runtime::api::Page::of_context(self.0)
     }
 
     pub fn enter<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {

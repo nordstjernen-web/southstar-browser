@@ -6,13 +6,12 @@ use core::ffi::CStr;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult, numeric, strings};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 use crate::links::nsr_make_token_list;
 use southstar_js_events::nsr_dom_exception;
@@ -20,7 +19,7 @@ use southstar_js_events::nsr_dom_exception;
 use southstar_js_services::nsr_element_async_method;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {

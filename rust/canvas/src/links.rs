@@ -7,10 +7,11 @@ use std::sync::OnceLock;
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 
 pub type WebglGetContextFn =
-    fn(&mut Scope<'_>, usize, &Value, usize, i32, &Value) -> Result<Value, Value>;
+    fn(&mut Scope<'_>, Option<Page>, &Value, usize, i32, &Value) -> Result<Value, Value>;
 
 pub type ResourceOriginCleanFn = unsafe fn(&Scope<'_>, *const c_char, *const c_char) -> bool;
 
@@ -155,7 +156,7 @@ pub(crate) fn resource_origin_clean() -> ResourceOriginCleanFn {
 
 pub(crate) fn nsr_webgl_get_context(
     scope: &mut Scope<'_>,
-    js: usize,
+    js: Option<Page>,
     canvas_obj: &Value,
     canvas: usize,
     version: i32,

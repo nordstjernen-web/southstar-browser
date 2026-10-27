@@ -5,18 +5,14 @@
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, JsResult};
 
-#[repr(C)]
-pub(crate) struct NsJs {
-    _private: [u8; 0],
-}
-
 use southstar_js_forms::nsr_submit_event_ctor;
 
-fn js_of(scope: &Scope<'_>) -> *mut NsJs {
-    scope.context_opaque().cast()
+fn js_of(scope: &Scope<'_>) -> Option<Page> {
+    Page::current(scope)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -40,7 +36,7 @@ pub(crate) fn new_event_with_proto(scope: &mut Scope<'_>, proto: &Value) -> JsRe
 }
 
 pub(crate) fn has_page(scope: &Scope<'_>) -> bool {
-    !js_of(scope).is_null()
+    !js_of(scope).is_none()
 }
 
 pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {

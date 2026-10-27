@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr;
-
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::Element;
 
@@ -14,18 +13,15 @@ pub(crate) mod query;
 
 pub(crate) use query::*;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
-fn raw_js(js: Option<Js>) -> *mut NsJs {
-    js.map_or(ptr::null_mut(), |js| js.0)
+fn raw_js(js: Option<Js>) -> Option<Page> {
+    js.map(|js| js.0)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = scope.context_opaque().cast();
-    (!js.is_null()).then_some(Js(js))
+    Page::current(scope).map(Js)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -46,15 +42,15 @@ pub(crate) fn new_text(text: &[u8]) -> Element {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.0);
+    api::mark_mutated(Some(js.0));
 }
 
 pub(crate) fn orphan(js: Js, node: Element) {
-    southstar_js_mutation::track_orphan(js.0, node);
+    southstar_js_mutation::track_orphan(Some(js.0), node);
 }
 
 pub(crate) fn unorphan(js: Js, node: Element) {
-    southstar_js_mutation::unorphan_node(js.0, node);
+    southstar_js_mutation::unorphan_node(Some(js.0), node);
 }
 
 pub(crate) fn record_child_change(
@@ -65,7 +61,7 @@ pub(crate) fn record_child_change(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    southstar_js_mutation::record_child_change(js.0, parent, added, removed, previous, next);
+    southstar_js_mutation::record_child_change(Some(js.0), parent, added, removed, previous, next);
 }
 
 pub(crate) fn index_child_change(
@@ -74,7 +70,7 @@ pub(crate) fn index_child_change(
     added: Option<Element>,
     removed: Option<Element>,
 ) {
-    southstar_js_mutation::index_child_change(js.0, parent, added, removed);
+    southstar_js_mutation::index_child_change(Some(js.0), parent, added, removed);
 }
 
 pub(crate) fn emit_child_list(
@@ -85,7 +81,7 @@ pub(crate) fn emit_child_list(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    southstar_js_observers::record_child_list(js.0, target, added, removed, previous, next);
+    southstar_js_observers::record_child_list(Some(js.0), target, added, removed, previous, next);
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
@@ -93,19 +89,19 @@ pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
 }
 
 pub(crate) fn ce_disconnect_subtree(js: Js, root: Element) {
-    southstar_js_custom_elements::disconnect_subtree(js.0, root);
+    southstar_js_custom_elements::disconnect_subtree(Some(js.0), root);
 }
 
 pub(crate) fn ce_upgrade_subtree_all(js: Js, root: Element) {
-    southstar_js_custom_elements::upgrade_subtree_all(js.0, root);
+    southstar_js_custom_elements::upgrade_subtree_all(Some(js.0), root);
 }
 
 pub(crate) fn iters_pre_remove(js: Js, node: Element) {
-    southstar_js_traversal::iters_pre_remove(js.0, node);
+    southstar_js_traversal::iters_pre_remove(Some(js.0), node);
 }
 
 pub(crate) fn run_inserted_scripts(js: Js, root: Element) {
-    southstar_js_loader::run_inserted_scripts(js.0, root);
+    southstar_js_loader::run_inserted_scripts(Some(js.0), root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {

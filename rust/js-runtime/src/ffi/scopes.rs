@@ -178,13 +178,13 @@ pub(crate) fn node_root(node: *const NsNode) -> *const NsNode {
 }
 
 pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> *mut NsNode {
-    (crate::api::frames_hooks().frame_of_realm)(js.ptr(), realm)
+    (crate::api::frames_hooks().frame_of_realm)(js.page(), realm)
         .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
 pub(crate) fn node_realm_context(js: Js, node: *const NsNode) -> ContextHandle {
     super::record::node(node).map_or(ContextHandle::NULL, |node| {
-        (crate::api::frames_hooks().node_realm_context)(js.ptr(), node)
+        (crate::api::frames_hooks().node_realm_context)(js.page(), node)
     })
 }
 

@@ -15,10 +15,11 @@ mod scan;
 mod schedule;
 
 use core::ffi::CStr;
+use southstar_js_runtime::api::Page;
 
 use southstar_dom::Node;
 
-use crate::ffi::{Js, NsJs};
+use crate::ffi::Js;
 
 pub use api::*;
 pub use ffi::install_runtime_hooks;
@@ -140,7 +141,7 @@ pub(crate) fn link_has_pending_load(n: Node) -> bool {
             .is_some_and(|as_| as_.to_bytes().eq_ignore_ascii_case(b"style"))
 }
 
-pub fn link_resource_changed(js: *mut NsJs, link: Node) {
+pub fn link_resource_changed(js: Option<Page>, link: Node) {
     link.remove_flags(FLAG_LINK_LOAD_FIRED);
     let js = Js::of(js);
     if !js.is_null() && link_has_pending_load(link) && js.in_page(link) {
@@ -148,7 +149,7 @@ pub fn link_resource_changed(js: *mut NsJs, link: Node) {
     }
 }
 
-pub fn fire_parsed_stylesheet_loads(js: *mut NsJs, doc: Node) {
+pub fn fire_parsed_stylesheet_loads(js: Option<Page>, doc: Node) {
     let js = Js::of(js);
     if !js.is_null() {
         fetch::fire_parsed_stylesheet_loads(js, doc);

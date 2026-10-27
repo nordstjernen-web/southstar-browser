@@ -26,7 +26,7 @@ pub(crate) fn dom_exception(
 
 pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {
     let js = js_of(scope);
-    api::is_worker(js.ptr())
+    api::is_worker(js.page())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Node {
@@ -42,7 +42,7 @@ pub(crate) fn webgl_context(
     options: &Value,
 ) -> Result<Value, Value> {
     let js = js_of(scope);
-    imports::nsr_webgl_get_context(scope, js.addr(), canvas, el.addr(), version, options)
+    imports::nsr_webgl_get_context(scope, js.page(), canvas, el.addr(), version, options)
 }
 
 #[cfg(feature = "webgpu")]

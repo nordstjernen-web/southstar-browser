@@ -15,11 +15,10 @@ use southstar_layout::BoxRef;
 use crate::transfer::DragSession;
 use crate::{Element, Pointer};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 unsafe extern "C" {
     fn g_content_type_guess(
@@ -40,20 +39,20 @@ fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
 }
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     fn of_page(page: Page) -> Js {
-        Js::of(page.as_ptr())
+        Js(Some(page))
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     fn page(self) -> Option<Page> {
-        Page::from_ptr(self.ptr())
+        self.ptr().filter(|page| page.is_live())
     }
 
     pub fn ctx(self) -> ContextHandle {
@@ -170,7 +169,7 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
@@ -332,14 +331,14 @@ macro_rules! capture_methods {
 
 capture_methods! {}
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::teardown(Js::of(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_input_hooks(api::PageStateHooks {
         init: |_| {},
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_input_links(southstar_js_runtime::links::JsInputLinks {
         js_input_install_wpt: crate::ffi::nsr_js_input_install_wpt,

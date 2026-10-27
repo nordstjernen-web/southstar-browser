@@ -10,27 +10,26 @@ use core::ffi::{CStr, c_int};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{Element, get, set};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 const DLOG_ERROR: c_int = 2;
 
 impl Js {
-    pub fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    pub fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
     pub fn ctx(self) -> ContextHandle {
@@ -139,7 +138,7 @@ impl Js {
     }
 
     pub fn worker_report_exception(self, exception: &Value) -> bool {
-        imports::nsr_worker_report_exception(self.ptr().cast(), exception)
+        imports::nsr_worker_report_exception(self.ptr(), exception)
     }
 
     pub fn checkable_pre_click(self, el: Element, kind: i32) -> ClickState {
@@ -160,7 +159,7 @@ impl Js {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::of(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn ctx_of(scope: &Scope<'_>) -> ContextHandle {

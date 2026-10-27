@@ -9,10 +9,10 @@ use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::BoxRef;
 
-use super::NsJs;
+use super::Page;
 use super::hooks_tree::hook_table;
 
-pub type PageFn = fn(*const NsJs);
+pub type PageFn = fn(Page);
 
 pub struct StorageHooks {
     pub init: PageFn,
@@ -21,8 +21,8 @@ pub struct StorageHooks {
     pub schedule_flush: PageFn,
     pub drain_deferred_events: PageFn,
     pub free_deferred_events: PageFn,
-    pub switch_session: fn(*const NsJs, Option<&CStr>, &CStr),
-    pub load_local: fn(*const NsJs, Option<&CStr>),
+    pub switch_session: fn(Option<Page>, Option<&CStr>, &CStr),
+    pub load_local: fn(Option<Page>, Option<&CStr>),
 }
 
 impl StorageHooks {
@@ -61,14 +61,14 @@ impl UrlHooks {
 hook_table!(UrlHooks, URL, set_url_hooks, url_hooks);
 
 pub struct WindowHooks {
-    pub note_viewport_scroll: fn(*const NsJs, f64, f64),
+    pub note_viewport_scroll: fn(Page, f64, f64),
     pub sync_metrics: PageFn,
     pub history_teardown: PageFn,
     pub links_clear: PageFn,
-    pub link_outward: fn(*const NsJs, &Value, &Value),
+    pub link_outward: fn(Option<Page>, &Value, &Value),
     pub child_frame: fn(Node<'_>, u32, Option<&CStr>) -> Option<Node<'static>>,
-    pub fire_page_transition: fn(*const NsJs, &CStr, bool),
-    pub install_state: fn(*const NsJs, &mut Scope<'_>, &Value),
+    pub fire_page_transition: fn(Option<Page>, &CStr, bool),
+    pub install_state: fn(Page, &mut Scope<'_>, &Value),
 }
 
 impl WindowHooks {
@@ -89,7 +89,7 @@ hook_table!(WindowHooks, WINDOW, set_window_hooks, window_hooks);
 pub struct ServicesHooks {
     pub chrome_compat: fn() -> bool,
     pub run_due_timers: PageFn,
-    pub purge_frame_timers: fn(*const NsJs, Node<'_>),
+    pub purge_frame_timers: fn(Option<Page>, Node<'_>),
     pub teardown: PageFn,
 }
 
@@ -122,10 +122,10 @@ pub struct WorkersHooks {
     pub log_line: WorkerLogFn,
     pub shape_global: fn(&mut Scope<'_>, bool),
     pub teardown: PageFn,
-    pub sw_controller_for: fn(*const NsJs, &str) -> Option<ServiceWorkerController>,
+    pub sw_controller_for: fn(Option<Page>, &str) -> Option<ServiceWorkerController>,
     pub sw_post_fetch: fn(&ServiceWorkerController, &ServiceWorkerFetch<'_>),
-    pub host_base_url: fn(*const NsJs) -> Option<CString>,
-    pub pending: fn(*const NsJs) -> bool,
+    pub host_base_url: fn(Option<Page>) -> Option<CString>,
+    pub pending: fn(Option<Page>) -> bool,
 }
 
 impl WorkersHooks {
@@ -145,12 +145,12 @@ hook_table!(WorkersHooks, WORKERS, set_workers_hooks, workers_hooks);
 
 pub struct LifecycleHooks {
     pub raf_set_host_driven: PageFn,
-    pub purge_frame_rafs: fn(*const NsJs, Node<'_>),
+    pub purge_frame_rafs: fn(Option<Page>, Node<'_>),
     pub teardown: PageFn,
-    pub idle_frame_end: fn(*const NsJs, i64, i64) -> i64,
-    pub purge_media_rafs: fn(*const NsJs, Node<'_>),
-    pub queue_scrollend: fn(*const NsJs, Node<'_>),
-    pub queue_scrollend_document: fn(*const NsJs),
+    pub idle_frame_end: fn(Option<Page>, i64, i64) -> i64,
+    pub purge_media_rafs: fn(Option<Page>, Node<'_>),
+    pub queue_scrollend: fn(Option<Page>, Node<'_>),
+    pub queue_scrollend_document: fn(Option<Page>),
 }
 
 impl LifecycleHooks {

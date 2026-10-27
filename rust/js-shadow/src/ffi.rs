@@ -2,24 +2,20 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr;
-
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::Element;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 use southstar_js_geometry::nsr_document_element_from_point;
 use southstar_js_geometry::nsr_document_elements_from_point;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = scope.context_opaque().cast();
-    (!js.is_null()).then_some(Js(js))
+    Page::current(scope).map(Js)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -35,12 +31,11 @@ pub(crate) fn not_supported(scope: &mut Scope<'_>, message: &str) -> Value {
 }
 
 pub(crate) fn custom_element_class(_scope: &mut Scope<'_>, js: Js, node: Element) -> Value {
-    southstar_js_custom_elements::class_for_node(js.0, node)
+    southstar_js_custom_elements::class_for_node(Some(js.0), node)
 }
 
 pub(crate) fn clear_children(js: Option<Js>, node: Element) {
-    let js = js.map_or(ptr::null_mut(), |js| js.0);
-    southstar_js_mutation::clear_children(js, node);
+    southstar_js_mutation::clear_children(js.map(|js| js.0), node);
 }
 
 pub(crate) fn append_child(parent: Element, child: Element) {
@@ -52,11 +47,11 @@ pub(crate) fn arm_js_invalidate(node: Element) {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    api::current_document(js.0)
+    api::current_document(Some(js.0))
 }
 
 pub(crate) fn focused_node(js: Js) -> Option<Element> {
-    southstar_js_focus::focused_node(js.0)
+    southstar_js_focus::focused_node(Some(js.0))
 }
 
 pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, Value); 2] {

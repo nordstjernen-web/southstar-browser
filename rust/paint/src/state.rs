@@ -3,16 +3,16 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::c_void;
 use core::ptr;
 use std::time::{Duration, Instant};
 
 use southstar_anim::AnimHandle;
+use southstar_js_runtime::api::Page;
 use southstar_layout::NsBox;
 
 struct PaintState {
     anim: Cell<Option<AnimHandle>>,
-    js: Cell<*mut c_void>,
+    js: Cell<Option<Page>>,
     search_case_sensitive: Cell<bool>,
     search_active: Cell<*const NsBox>,
     caret_visible: Cell<bool>,
@@ -24,7 +24,7 @@ impl PaintState {
     fn new() -> PaintState {
         PaintState {
             anim: Cell::new(None),
-            js: Cell::new(ptr::null_mut()),
+            js: Cell::new(None),
             search_case_sensitive: Cell::new(false),
             search_active: Cell::new(ptr::null()),
             caret_visible: Cell::new(true),
@@ -46,11 +46,11 @@ pub fn set_anim(anim: Option<AnimHandle>) {
     STATE.with(|s| s.anim.set(anim));
 }
 
-pub fn js() -> *mut c_void {
+pub fn js() -> Option<Page> {
     STATE.with(|s| s.js.get())
 }
 
-pub fn set_js(js: *mut c_void) {
+pub fn set_js(js: Option<Page>) {
     STATE.with(|s| s.js.set(js));
 }
 

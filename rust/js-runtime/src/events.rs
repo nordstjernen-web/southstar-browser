@@ -5,17 +5,17 @@
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 
-use crate::api::NsJs;
+use crate::api::Page;
 
 pub struct EventHooks {
-    pub dispatch_event: fn(*const NsJs, Node<'_>, &str) -> (bool, bool),
-    pub dispatch_built_event: fn(*const NsJs, Node<'_>, &str, Value) -> (bool, bool),
-    pub dispatch_window_only_event: fn(*const NsJs, Option<Node<'_>>, &str, Value) -> bool,
-    pub dispatch_resource_event: fn(*const NsJs, Node<'_>, &str) -> bool,
-    pub window_for_document: fn(*const NsJs, &mut Scope<'_>, Option<Node<'_>>) -> Value,
-    pub fire_element_handlers: fn(*const NsJs, Node<'_>, &str, &Value),
-    pub report_uncaught: fn(*const NsJs, &Value, Option<&str>),
-    pub report_handler_exception: fn(*const NsJs, &mut Scope<'_>, Option<&str>, &Value),
+    pub dispatch_event: fn(Option<Page>, Node<'_>, &str) -> (bool, bool),
+    pub dispatch_built_event: fn(Option<Page>, Node<'_>, &str, Value) -> (bool, bool),
+    pub dispatch_window_only_event: fn(Option<Page>, Option<Node<'_>>, &str, Value) -> bool,
+    pub dispatch_resource_event: fn(Option<Page>, Node<'_>, &str) -> bool,
+    pub window_for_document: fn(Option<Page>, &mut Scope<'_>, Option<Node<'_>>) -> Value,
+    pub fire_element_handlers: fn(Option<Page>, Node<'_>, &str, &Value),
+    pub report_uncaught: fn(Option<Page>, &Value, Option<&str>),
+    pub report_handler_exception: fn(Option<Page>, &mut Scope<'_>, Option<&str>, &Value),
     pub init_flags: fn(&str, bool) -> (bool, bool),
 }
 
@@ -52,12 +52,12 @@ crate::api::hook_table!(
     object_hooks
 );
 
-pub fn dispatch_event(js: *const NsJs, target: Node<'_>, kind: &str) -> (bool, bool) {
+pub fn dispatch_event(js: Option<Page>, target: Node<'_>, kind: &str) -> (bool, bool) {
     (hooks().dispatch_event)(js, target, kind)
 }
 
 pub fn dispatch_built_event(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     kind: &str,
     event: Value,
@@ -66,7 +66,7 @@ pub fn dispatch_built_event(
 }
 
 pub fn dispatch_window_only_event(
-    js: *const NsJs,
+    js: Option<Page>,
     document: Option<Node<'_>>,
     kind: &str,
     event: Value,
@@ -74,28 +74,28 @@ pub fn dispatch_window_only_event(
     (hooks().dispatch_window_only_event)(js, document, kind, event)
 }
 
-pub fn dispatch_resource_event(js: *const NsJs, target: Node<'_>, kind: &str) -> bool {
+pub fn dispatch_resource_event(js: Option<Page>, target: Node<'_>, kind: &str) -> bool {
     (hooks().dispatch_resource_event)(js, target, kind)
 }
 
 pub fn window_for_document(
-    js: *const NsJs,
+    js: Option<Page>,
     scope: &mut Scope<'_>,
     document: Option<Node<'_>>,
 ) -> Value {
     (hooks().window_for_document)(js, scope, document)
 }
 
-pub fn fire_element_handlers(js: *const NsJs, element: Node<'_>, kind: &str, event: &Value) {
+pub fn fire_element_handlers(js: Option<Page>, element: Node<'_>, kind: &str, event: &Value) {
     (hooks().fire_element_handlers)(js, element, kind, event)
 }
 
-pub fn report_uncaught(js: *const NsJs, exception: &Value, origin: Option<&str>) {
+pub fn report_uncaught(js: Option<Page>, exception: &Value, origin: Option<&str>) {
     (hooks().report_uncaught)(js, exception, origin)
 }
 
 pub fn report_handler_exception(
-    js: *const NsJs,
+    js: Option<Page>,
     scope: &mut Scope<'_>,
     kind: Option<&str>,
     exception: &Value,

@@ -11,25 +11,24 @@ use std::rc::Rc;
 use southstar_dom::{AttrView, Node};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::attr::{self, AttrState};
 use crate::{Element, c_string};
 
-pub use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 }
 
 const LIVE_ATTRIBUTES: i32 = 12;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -92,12 +91,12 @@ pub(crate) fn attribute_map_lookup(
     js: Js,
     owner: Element,
 ) -> Option<Value> {
-    imports::nsr_attribute_map_lookup(api::Page::from_ptr(js.0)?, owner)
+    imports::nsr_attribute_map_lookup(js.0.filter(|page| page.is_live())?, owner)
         .filter(|map| !map.is_undefined())
 }
 
 pub(crate) fn attribute_map_remember(_scope: &mut Scope<'_>, js: Js, owner: Element, map: &Value) {
-    if let Some(page) = api::Page::from_ptr(js.0) {
+    if let Some(page) = js.0.filter(|page| page.is_live()) {
         imports::nsr_attribute_map_remember(page, owner, map);
     }
 }
@@ -219,7 +218,7 @@ pub fn nsr_attr_to_js(
     attr::to_js(scope, owner, attr, include_base)
 }
 
-pub fn detach_all(js: *mut NsJs) {
+pub fn detach_all(js: Option<Page>) {
     attr::detach_all(Js(js));
 }
 
@@ -227,21 +226,21 @@ fn class_id() -> u32 {
     crate::class::ATTR_CLASS.id()
 }
 
-fn detach_owner(js: *const NsJs, owner: Node<'_>) {
+fn detach_owner(js: Option<Page>, owner: Node<'_>) {
     if let Some(owner) = owner.downgrade().get() {
-        attr::detach_owner(Js(js.cast_mut()), owner);
+        attr::detach_owner(Js(js), owner);
     }
 }
 
-fn detach_page(js: *const NsJs) {
-    detach_all(js.cast_mut());
+fn detach_page(js: Option<Page>) {
+    detach_all(js);
 }
 
 pub fn install_runtime_hooks() {
     api::set_attrs_hooks(api::AttrsHooks {
         class_id,
         detach_owner,
-        detach_all: detach_page,
+        detach_all: |js| detach_page(Some(js)),
         detach_matching,
     });
     southstar_js_dom_factory::links::set_js_attrs_links(
@@ -261,12 +260,12 @@ pub fn install_runtime_hooks() {
 }
 
 fn detach_matching(
-    js: *const NsJs,
+    js: Option<Page>,
     owner: Node<'_>,
     namespace_uri: Option<&CStr>,
     local_name: &CStr,
 ) {
     if let Some(owner) = owner.downgrade().get() {
-        attr::detach_matching(Js(js.cast_mut()), owner, namespace_uri, local_name);
+        attr::detach_matching(Js(js), owner, namespace_uri, local_name);
     }
 }

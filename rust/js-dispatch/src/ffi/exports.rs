@@ -3,8 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::Page;
 
-use super::{Js, NsJs};
+use super::Js;
 use crate::JsResult;
 
 macro_rules! natives {
@@ -112,28 +113,28 @@ pub fn nsr_js_promise_rejection_tracker(
     crate::errors::track_rejection(scope, promise, reason, handled);
 }
 
-fn report_pending_rejections(js: *const NsJs) {
+fn report_pending_rejections(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::errors::report_pending_rejections(js);
     }
 }
 
-fn forget_node(js: *const NsJs, node: southstar_dom::Node<'_>) {
+fn forget_node(js: Option<Page>, node: southstar_dom::Node<'_>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::forget_node(js, node.as_ptr());
     }
 }
 
-fn teardown_listeners(js: *const NsJs) {
+fn teardown_listeners(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::teardown_listeners(js);
     }
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         crate::teardown(js);
@@ -153,11 +154,11 @@ pub fn install_runtime_hooks() {
         init_flags: crate::api::init_flags,
     });
     southstar_js_runtime::api::set_dispatch_hooks(southstar_js_runtime::api::DispatchHooks {
-        report_pending_rejections,
-        drop_pending_rejections: crate::drop_pending_rejections,
-        forget_node,
-        teardown_listeners,
-        teardown,
+        report_pending_rejections: |js| report_pending_rejections(Some(js)),
+        drop_pending_rejections: |js| crate::drop_pending_rejections(Some(js)),
+        forget_node: |js, a1| forget_node(Some(js), a1),
+        teardown_listeners: |js| teardown_listeners(Some(js)),
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_net::links::set_js_dispatch_links(southstar_js_net::links::JsDispatchLinks {
         target_dispatch_event: crate::ffi::exports::nsr_target_dispatchEvent,

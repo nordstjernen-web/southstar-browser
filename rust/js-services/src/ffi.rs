@@ -8,14 +8,13 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::Page;
 use southstar_js_runtime::api::{self, TimerGate};
 
 use crate::screen;
 use crate::{
     caches, camera, clipboard_item, commands, console, media, navigator, rtc, timers, window,
 };
-
-pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Realm(ContextHandle);
@@ -41,7 +40,7 @@ pub(crate) enum Gate {
 }
 
 struct TimerTag {
-    js: *const NsJs,
+    js: Option<Page>,
     id: i32,
 }
 
@@ -165,15 +164,15 @@ pub(crate) fn source_remove(js: Js, source: Source) {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*const NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     pub fn key(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 
     pub fn camera_permission(self) -> Option<bool> {
@@ -300,7 +299,7 @@ pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
@@ -488,21 +487,21 @@ pub fn nsr_services_install_screen(scope: &mut Scope<'_>, global: &Value) {
     screen::install(scope, global);
 }
 
-pub fn timers_pending(js: *const NsJs, include_idle: bool) -> bool {
+pub fn timers_pending(js: Option<Page>, include_idle: bool) -> bool {
     timers::pending(Js(js), include_idle)
 }
 
-pub fn timer_count(js: *const NsJs) -> u32 {
+pub fn timer_count(js: Option<Page>) -> u32 {
     timers::count(Js(js)) as u32
 }
 
-pub fn purge_frame_timers(js: *const NsJs, frame: Node<'_>) {
+pub fn purge_frame_timers(js: Option<Page>, frame: Node<'_>) {
     if let Some(frame) = frame.downgrade().get() {
         timers::purge_frame(Js(js), Frame(Some(frame)));
     }
 }
 
-pub fn timer_remove(js: *const NsJs, id: i32) {
+pub fn timer_remove(js: Option<Page>, id: i32) {
     timers::remove(Js(js), id);
 }
 
@@ -511,11 +510,11 @@ pub fn screen_size() -> (i32, i32) {
     (metrics.width, metrics.height)
 }
 
-pub fn reeval_media_queries(js: *const NsJs) {
+pub fn reeval_media_queries(js: Option<Page>) {
     media::reevaluate(Js(js));
 }
 
-pub fn reset_page(js: *const NsJs) {
+pub fn reset_page(js: Option<Page>) {
     crate::reset(Js(js));
 }
 
@@ -528,7 +527,7 @@ pub fn nsr_services_worker_navigator(scope: &mut Scope<'_>) -> Value {
 }
 
 pub fn nsr_services_console_emit(
-    js: *const NsJs,
+    js: Option<Page>,
     scope: &mut Scope<'_>,
     prefix: &str,
     args: &[Value],
@@ -536,20 +535,20 @@ pub fn nsr_services_console_emit(
     console::emit(scope, Js(js), prefix, args);
 }
 
-fn run_due_timers(js: *const NsJs) {
+fn run_due_timers(js: Option<Page>) {
     timers::run_due(Js(js));
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::teardown(Js(js));
 }
 
 pub fn install_runtime_hooks() {
     southstar_js_runtime::api::set_services_hooks(southstar_js_runtime::api::ServicesHooks {
         chrome_compat: navigator::chrome_compat,
-        run_due_timers,
+        run_due_timers: |js| run_due_timers(Some(js)),
         purge_frame_timers,
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_services_links(
         southstar_js_runtime::links::JsServicesLinks {

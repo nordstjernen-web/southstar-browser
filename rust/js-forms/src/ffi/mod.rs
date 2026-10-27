@@ -18,10 +18,8 @@ use self::imports::*;
 use crate::checkable::ClickState;
 use crate::{Element, JsResult};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Page(*mut NsJs);
+pub(crate) struct Page(api::Page);
 
 unsafe extern "C" {
     fn g_regex_new(
@@ -247,28 +245,27 @@ pub(crate) fn event_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
 
 impl Page {
     pub(crate) fn of(scope: &Scope<'_>) -> Option<Page> {
-        let js = scope.context_opaque().cast::<NsJs>();
-        (!js.is_null()).then_some(Page(js))
+        api::Page::current(scope).map(Page)
     }
 
-    fn raw(page: Option<Page>) -> *mut NsJs {
-        page.map_or(ptr::null_mut(), |p| p.0)
+    fn raw(page: Option<Page>) -> Option<api::Page> {
+        page.map(|p| p.0)
     }
 
     pub(crate) fn current_document(self) -> Option<Element> {
-        api::current_document(self.0)
+        api::current_document(Some(self.0))
     }
 
     pub(crate) fn node_in_page(self, node: Element) -> bool {
-        api::node_in_page(self.0, Some(node))
+        api::node_in_page(Some(self.0), Some(node))
     }
 
     pub(crate) fn log_line(self, line: &CStr) {
-        api::log_line(self.0, line);
+        api::log_line(Some(self.0), line);
     }
 
     pub(crate) fn submit_form(self, form: Element, submitter: Option<Element>) {
-        api::submit_form(self.0, form, submitter);
+        api::submit_form(Some(self.0), form, submitter);
     }
 
     pub(crate) fn close_dialog(page: Option<Page>, dialog: Element, return_value: Option<&CStr>) {
@@ -294,25 +291,25 @@ impl Page {
     }
 
     pub(crate) fn has_transient_activation(self) -> bool {
-        api::has_transient_activation(self.0)
+        api::has_transient_activation(Some(self.0))
     }
 
     pub(crate) fn consume_user_activation(self) {
-        api::consume_user_activation(self.0);
+        api::consume_user_activation(Some(self.0));
     }
 
     pub(crate) fn halted(self) -> bool {
-        api::halted(self.0)
+        api::halted(Some(self.0))
     }
 
     pub(crate) fn in_pump(self) -> bool {
-        api::in_pump(self.0)
+        api::in_pump(Some(self.0))
     }
 
     pub(crate) fn dispatch_select(self, scope: &mut Scope<'_>, target: Element) {
         let event = southstar_js_runtime::events::make_event(scope, "select", Some(target));
         let _ = scope.set(&event, "cancelable", Value::boolean(false));
-        southstar_js_runtime::events::dispatch_built_event(self.0, target, "select", event);
+        southstar_js_runtime::events::dispatch_built_event(Some(self.0), target, "select", event);
     }
 
     pub(crate) fn mark_mutated(page: Option<Page>) {
@@ -324,14 +321,15 @@ impl Page {
     }
 
     pub(crate) fn dispatch_event(self, target: Element, kind: &CStr) -> bool {
-        southstar_js_runtime::events::dispatch_event(self.0, target, &kind.to_string_lossy()).1
+        southstar_js_runtime::events::dispatch_event(Some(self.0), target, &kind.to_string_lossy())
+            .1
     }
 
     pub(crate) fn dispatch_submit(self, form: Element, submitter: Option<Element>) -> (bool, bool) {
-        if api::events_suspended(self.0) {
+        if api::events_suspended(Some(self.0)) {
             return (false, false);
         }
-        let main = api::main_context(self.0);
+        let main = api::main_context(Some(self.0));
         let event = main.with(|scope| {
             let event = southstar_js_runtime::events::make_event(scope, "submit", Some(form));
             let submitter = wrap(scope, submitter);
@@ -341,7 +339,7 @@ impl Page {
         let Some(event) = event else {
             return (false, false);
         };
-        southstar_js_runtime::events::dispatch_built_event(self.0, form, "submit", event)
+        southstar_js_runtime::events::dispatch_built_event(Some(self.0), form, "submit", event)
     }
 }
 
@@ -420,12 +418,12 @@ pub fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResu
 
 impl Page {
     fn of_page(js: api::Page) -> Page {
-        Page(js.as_ptr().cast_mut())
+        Page(js)
     }
 }
 
-fn page_of(js: *mut NsJs) -> Option<Page> {
-    (!js.is_null()).then_some(Page(js))
+fn page_of(js: Option<api::Page>) -> Option<Page> {
+    js.map(Page)
 }
 
 pub fn is_submit_trigger(el: Node<'_>) -> bool {
@@ -458,21 +456,21 @@ pub fn checkable_input_kind(el: Node<'_>) -> i32 {
     live(el).map_or(0, crate::checkable::kind)
 }
 
-pub fn checkable_pre_click(js: *const NsJs, el: Node<'_>, kind: i32) -> ClickState {
+pub fn checkable_pre_click(js: Option<api::Page>, el: Node<'_>, kind: i32) -> ClickState {
     live(el).map_or_else(ClickState::default, |el| {
-        crate::checkable::pre_click(page_of(js.cast_mut()), el, kind)
+        crate::checkable::pre_click(page_of(js), el, kind)
     })
 }
 
 pub fn checkable_post_click(
-    js: *const NsJs,
+    js: Option<api::Page>,
     el: Node<'_>,
     kind: i32,
     state: &ClickState,
     prevented: bool,
 ) {
     if let Some(el) = live(el) {
-        crate::checkable::post_click(page_of(js.cast_mut()), el, kind, state, prevented);
+        crate::checkable::post_click(page_of(js), el, kind, state, prevented);
     }
 }
 

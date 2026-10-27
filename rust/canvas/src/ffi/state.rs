@@ -8,6 +8,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_js_engine::ContextHandle;
+use southstar_js_runtime::api::Page;
 
 use super::cairo::{Context, Pattern, Surface};
 
@@ -35,29 +36,27 @@ pub struct CanvasState {
     context_kind: Cell<i32>,
 }
 
-pub use southstar_js_runtime::api::NsJs;
-
 #[repr(C)]
 pub struct NsNode {
     _private: [u8; 0],
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 #[derive(Clone, Copy)]
 pub(crate) struct Node(*const NsNode);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     pub fn addr(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 
-    pub fn ptr(self) -> *mut NsJs {
+    pub fn page(self) -> Option<Page> {
         self.0
     }
 }
@@ -196,7 +195,7 @@ impl CanvasState {
         }
         self.ctx2d.set(scope.retain_identity(obj));
         self.jsctx
-            .set(southstar_js_runtime::api::main_context(js_of(scope).ptr()));
+            .set(southstar_js_runtime::api::main_context(js_of(scope).page()));
         self.context_kind.set(kind);
     }
 
@@ -261,7 +260,7 @@ pub(crate) fn canvas_surface(js: Js, el: Node) -> Option<Surface> {
 }
 
 pub(crate) fn js_of(scope: &southstar_js_engine::Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn transfer_to_image_bitmap(
@@ -296,14 +295,14 @@ pub(crate) fn transfer_to_image_bitmap(
 }
 
 pub fn canvas_surface_for(
-    js: *mut c_void,
+    js: Page,
     el: southstar_dom::Node<'_>,
 ) -> Option<southstar_cairo::Surface> {
-    canvas_surface(Js(js.cast()), Node(el.as_ptr().cast())).map(Surface::into_shared)
+    canvas_surface(Js(Some(js)), Node(el.as_ptr().cast())).map(Surface::into_shared)
 }
 
-fn teardown(js: *const NsJs) {
-    crate::state::teardown(Js(js.cast_mut()));
+fn teardown(js: Page) {
+    crate::state::teardown(Js(Some(js)));
 }
 
 pub fn install_runtime_hooks() {

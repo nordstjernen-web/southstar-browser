@@ -4,30 +4,33 @@
 
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::{font_face, ready};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn from_ptr(js: *mut NsJs) -> Js {
-        Js(js as usize)
+    fn from_ptr(js: Option<Page>) -> Js {
+        Js(js)
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
+    }
+
+    fn key(self) -> usize {
+        self.0.map_or(0, Page::addr)
     }
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn flush_layout(js: Js) {
@@ -47,7 +50,7 @@ pub(crate) fn pending_font_count() -> u32 {
 }
 
 fn fonts_idle(data: usize) {
-    let js = Js(data);
+    let js = Js(Page::from_addr(data));
     if js.is_null() || !ready::has_waiting(js) {
         return;
     }
@@ -55,11 +58,11 @@ fn fonts_idle(data: usize) {
 }
 
 pub(crate) fn wait_for_fonts(js: Js) {
-    southstar_font::add_idle_waiter(fonts_idle, js.0);
+    southstar_font::add_idle_waiter(fonts_idle, js.key());
 }
 
 pub(crate) fn stop_waiting_for_fonts(js: Js) {
-    southstar_font::remove_idle_waiter(fonts_idle, js.0);
+    southstar_font::remove_idle_waiter(fonts_idle, js.key());
 }
 
 pub fn nsr_window_fontface_ctor(
@@ -70,13 +73,13 @@ pub fn nsr_window_fontface_ctor(
     font_face::construct(scope, this, args)
 }
 
-fn teardown(js: *const NsJs) {
-    ready::teardown(Js::from_ptr(js.cast_mut()));
+fn teardown(js: Option<Page>) {
+    ready::teardown(Js::from_ptr(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_fonts_hooks(api::PageStateHooks {
         init: |_| {},
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
 }

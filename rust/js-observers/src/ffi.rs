@@ -8,27 +8,26 @@ use std::ffi::CString;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 
 use crate::mutation::{self, Emit};
 use crate::{intersection, page, resize};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *const NsJs {
-        self.0 as *const NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -38,7 +37,7 @@ use southstar_js_geometry::nsr_box_for_this;
 use southstar_js_geometry::nsr_make_dom_rect;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque() as usize)
+    Js(Page::current(scope))
 }
 
 pub(crate) fn with_main_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -139,12 +138,12 @@ fn addresses(nodes: &[Node<'_>]) -> Option<Vec<usize>> {
     (!nodes.is_empty()).then(|| nodes.iter().map(|&n| address(Some(n))).collect())
 }
 
-fn emit(js: *const NsJs, emit: &Emit<'_>) {
+fn emit(js: Option<Page>, emit: &Emit<'_>) {
     mutation::emit(Js::of(js), emit);
 }
 
 pub fn record_attributes(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     name: Option<&[u8]>,
     namespace: Option<&[u8]>,
@@ -166,7 +165,7 @@ pub fn record_attributes(
     );
 }
 
-pub fn record_character_data(js: *const NsJs, target: Node<'_>, old_value: Option<&[u8]>) {
+pub fn record_character_data(js: Option<Page>, target: Node<'_>, old_value: Option<&[u8]>) {
     emit(
         js,
         &Emit {
@@ -184,7 +183,7 @@ pub fn record_character_data(js: *const NsJs, target: Node<'_>, old_value: Optio
 }
 
 pub fn record_child(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     added: Option<Node<'_>>,
     removed: Option<Node<'_>>,
@@ -208,7 +207,7 @@ pub fn record_child(
 }
 
 pub fn record_child_list(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     added: &[Node<'_>],
     removed: &[Node<'_>],
@@ -225,11 +224,11 @@ pub fn record_child_list(
     );
 }
 
-pub fn mutation_drain_pending(js: *const NsJs) -> bool {
+pub fn mutation_drain_pending(js: Option<Page>) -> bool {
     page(Js::of(js)).is_some_and(|page| page.drain_scheduled.get())
 }
 
-pub fn reset_observers(js: *const NsJs) {
+pub fn reset_observers(js: Option<Page>) {
     crate::reset(Js::of(js));
 }
 
@@ -263,28 +262,28 @@ nsr_natives! {
     nsr_resize_observer_disconnect => resize::disconnect,
 }
 
-fn scrub_node(js: *const NsJs, node: Node<'_>) {
+fn scrub_node(js: Option<Page>, node: Node<'_>) {
     mutation::scrub_node(Js::of(js), node.as_ptr() as usize);
 }
 
-fn intersection_tick(js: *const NsJs) {
+fn intersection_tick(js: Option<Page>) {
     intersection::tick(Js::of(js));
 }
 
-fn resize_tick(js: *const NsJs) {
+fn resize_tick(js: Option<Page>) {
     resize::tick(Js::of(js));
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     crate::teardown(Js::of(js));
 }
 
 pub fn install_runtime_hooks() {
     southstar_js_runtime::api::set_observers_hooks(southstar_js_runtime::api::ObserversHooks {
-        intersection_tick,
-        resize_tick,
+        intersection_tick: |js| intersection_tick(Some(js)),
+        resize_tick: |js| resize_tick(Some(js)),
         scrub_node,
-        teardown,
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_observers_links(
         southstar_js_runtime::links::JsObserversLinks {

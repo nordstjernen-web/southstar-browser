@@ -21,7 +21,7 @@ pub(crate) fn attr_owner(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    api::current_document(js.0)
+    api::current_document(Some(js.0))
 }
 
 pub(crate) fn doc_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
@@ -29,7 +29,7 @@ pub(crate) fn doc_is_xml(scope: &mut Scope<'_>, doc: &Value) -> bool {
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<Vec<u8>> {
-    southstar_js_document::doc_base_url(js.0)
+    southstar_js_document::doc_base_url(Some(js.0))
 }
 
 pub(crate) fn reflect_str_get(scope: &mut Scope<'_>, this: &Value, attr: &CStr) -> JsResult {
@@ -120,11 +120,11 @@ pub(crate) fn attr_may_affect_style(node: Element, name: &CStr) -> bool {
 }
 
 pub(crate) fn request_repaint(js: Js) {
-    api::request_repaint(js.0);
+    api::request_repaint(Some(js.0));
 }
 
 pub(crate) fn record_attr_change(js: Js, node: Element, name: &CStr, old: Option<&CStr>) {
-    southstar_js_mutation::record_attr_change(js.0, node, name, old);
+    southstar_js_mutation::record_attr_change(Some(js.0), node, name, old);
 }
 
 pub(crate) fn ce_attr_changed(
@@ -134,7 +134,7 @@ pub(crate) fn ce_attr_changed(
     old: Option<&CStr>,
     new: Option<&CStr>,
 ) {
-    api::ce_attr_changed(js.0, node, name, old, new);
+    api::ce_attr_changed(Some(js.0), node, name, old, new);
 }
 
 pub(crate) fn with_text<R>(

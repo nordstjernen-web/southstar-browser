@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_char};
 use core::ptr;
+use southstar_js_runtime::api::Page;
 use std::rc::Rc;
 
 use southstar_dom::Node;
@@ -14,7 +15,6 @@ use southstar_video::BoxVideo;
 
 use super::cairo::Surface;
 use super::objects::NsNode;
-use super::state::NsJs;
 use crate::bitmap::{ImageBitmap, Source};
 
 struct Found<'a> {
@@ -88,8 +88,8 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
     }
     let element = unsafe { Node::from_ptr(node.cast()) }?;
     let name = element.name()?.to_bytes();
-    let js: *mut NsJs = scope.context_opaque().cast();
-    if js.is_null() {
+    let js = Page::current(scope);
+    if js.is_none() {
         return None;
     }
     if name == b"canvas" {

@@ -8,8 +8,9 @@ use std::rc::Rc;
 
 use southstar_dom::Node;
 
+use crate::api::Page;
 use crate::ffi::state::PageState;
-use crate::ffi::{Js, NsJs, glue};
+use crate::ffi::{Js, glue};
 
 pub use crate::ffi::state::{
     DataFn, DelayFn, DownloadFn, FormSubmitFn, LogFn, NavigateFn, NodeFn, TextQueryFn, UrlFn,
@@ -22,13 +23,13 @@ pub struct Selection {
     pub has_range: bool,
 }
 
-fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
+fn state<R>(js: Option<Page>, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
     Js::of(js).map_or(fallback, |js| f(js.st()))
 }
 
 macro_rules! hook_setter {
     ($name:ident, $field:ident, $ty:ty) => {
-        pub fn $name(js: *const NsJs, hook: Option<Rc<$ty>>) {
+        pub fn $name(js: Option<Page>, hook: Option<Rc<$ty>>) {
             state(js, (), |state| state.$field.set(hook));
         }
     };
@@ -46,7 +47,7 @@ hook_setter!(set_viewport_scroll_hook, viewport_scroll, ViewportScrollFn);
 hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
 hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
-pub fn navigate(js: *const NsJs, url: &CStr, reload: bool) -> bool {
+pub fn navigate(js: Option<Page>, url: &CStr, reload: bool) -> bool {
     match state(js, None, |state| state.navigate.get()) {
         Some(navigate) => {
             navigate(url, reload);
@@ -56,23 +57,23 @@ pub fn navigate(js: *const NsJs, url: &CStr, reload: bool) -> bool {
     }
 }
 
-pub fn can_navigate(js: *const NsJs) -> bool {
+pub fn can_navigate(js: Option<Page>) -> bool {
     state(js, false, |state| state.navigate.is_set())
 }
 
-pub fn soft_navigate(js: *const NsJs, url: &CStr, replace: bool) {
+pub fn soft_navigate(js: Option<Page>, url: &CStr, replace: bool) {
     if let Some(navigate) = state(js, None, |state| state.soft_nav.get()) {
         navigate(url, replace);
     }
 }
 
-pub fn fragment_navigated(js: *const NsJs, url: &CStr) {
+pub fn fragment_navigated(js: Option<Page>, url: &CStr) {
     if let Some(navigated) = state(js, None, |state| state.fragment_nav.get()) {
         navigated(url);
     }
 }
 
-pub fn request_download(js: *const NsJs, url: &CStr, filename: Option<&CStr>) -> bool {
+pub fn request_download(js: Option<Page>, url: &CStr, filename: Option<&CStr>) -> bool {
     match state(js, None, |state| state.download.get()) {
         Some(download) => {
             download(url, filename);
@@ -82,29 +83,29 @@ pub fn request_download(js: *const NsJs, url: &CStr, filename: Option<&CStr>) ->
     }
 }
 
-pub fn window_action(js: *const NsJs, action: &CStr) {
+pub fn window_action(js: Option<Page>, action: &CStr) {
     if let Some(window_action) = state(js, None, |state| state.window_action.get()) {
         window_action(action);
     }
 }
 
-pub fn has_window_action(js: *const NsJs) -> bool {
+pub fn has_window_action(js: Option<Page>) -> bool {
     state(js, false, |state| state.window_action.is_set())
 }
 
-pub fn request_repaint(js: *const NsJs) {
+pub fn request_repaint(js: Option<Page>) {
     if let Some(repaint) = state(js, None, |state| state.repaint.get()) {
         repaint();
     }
 }
 
-pub fn notify_scroll_to(js: *const NsJs, target: Node<'_>) {
+pub fn notify_scroll_to(js: Option<Page>, target: Node<'_>) {
     if let Some(scroll) = state(js, None, |state| state.scroll_to.get()) {
         scroll(target);
     }
 }
 
-pub fn scroll_viewport(js: *const NsJs, x: f64, y: f64) {
+pub fn scroll_viewport(js: Option<Page>, x: f64, y: f64) {
     let Some(js) = Js::of(js) else {
         return;
     };
@@ -117,7 +118,7 @@ pub fn scroll_viewport(js: *const NsJs, x: f64, y: f64) {
     glue::note_viewport_scroll(js, x, y);
 }
 
-pub fn flush_layout(js: *const NsJs) {
+pub fn flush_layout(js: Option<Page>) {
     state(js, (), |state| {
         let Some(flush) = state.layout_flush.get() else {
             return;
@@ -131,7 +132,7 @@ pub fn flush_layout(js: *const NsJs) {
     });
 }
 
-pub fn submit_form(js: *const NsJs, form: Node<'_>, submitter: Option<Node<'_>>) {
+pub fn submit_form(js: Option<Page>, form: Node<'_>, submitter: Option<Node<'_>>) {
     if (super::frames_hooks().submit_form)(js, form, submitter) {
         return;
     }
@@ -140,22 +141,22 @@ pub fn submit_form(js: *const NsJs, form: Node<'_>, submitter: Option<Node<'_>>)
     }
 }
 
-pub fn load_delayed(js: *const NsJs) -> bool {
+pub fn load_delayed(js: Option<Page>) -> bool {
     state(js, None, |state| state.load_delay.get()).is_some_and(|delayed| delayed())
 }
 
-pub fn clipboard_write(js: *const NsJs, text: &CStr) -> Option<bool> {
+pub fn clipboard_write(js: Option<Page>, text: &CStr) -> Option<bool> {
     let write = state(js, None, |state| state.clipboard_write.get())?;
     Some(write(text))
 }
 
-pub fn selection_copyable(js: *const NsJs) -> bool {
+pub fn selection_copyable(js: Option<Page>) -> bool {
     state(js, false, |state| {
         state.selection_has_range.get() && state.clipboard_write.is_set()
     })
 }
 
-pub fn copy_selection(js: *const NsJs) -> bool {
+pub fn copy_selection(js: Option<Page>) -> bool {
     if !selection_copyable(js) {
         return false;
     }
@@ -171,15 +172,15 @@ pub fn copy_selection(js: *const NsJs) -> bool {
     write(&text)
 }
 
-pub fn has_selection_commands(js: *const NsJs) -> bool {
+pub fn has_selection_commands(js: Option<Page>) -> bool {
     state(js, false, |state| state.selection_cmd.is_set())
 }
 
-pub fn selection_command(js: *const NsJs, cmd: &CStr) -> bool {
+pub fn selection_command(js: Option<Page>, cmd: &CStr) -> bool {
     state(js, None, |state| state.selection_cmd.get()).is_some_and(|command| command(cmd))
 }
 
-pub fn selection_state(js: *const NsJs) -> Selection {
+pub fn selection_state(js: Option<Page>) -> Selection {
     state(
         js,
         Selection {
@@ -195,7 +196,7 @@ pub fn selection_state(js: *const NsJs) -> Selection {
     )
 }
 
-pub fn set_selection(js: *const NsJs, text: Option<&CStr>, has_range: bool, rect: [f64; 4]) {
+pub fn set_selection(js: Option<Page>, text: Option<&CStr>, has_range: bool, rect: [f64; 4]) {
     state(js, (), |state| {
         state
             .selection_text

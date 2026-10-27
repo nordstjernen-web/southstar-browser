@@ -3,7 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_void};
+
 use core::ptr;
+use southstar_js_runtime::api::Page;
 use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
@@ -82,10 +84,7 @@ pub fn set_anim(anim: Option<AnimHandle>) {
     state::set_anim(anim);
 }
 
-/// # Safety
-///
-/// `js` is null or a live script engine that stays alive until it is replaced here.
-pub unsafe fn set_js(js: *mut c_void) {
+pub fn set_js(js: Option<Page>) {
     state::set_js(js);
 }
 

@@ -4,7 +4,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page;
 use southstar_texture::TextureRef;
 
 #[cfg(target_os = "linux")]
@@ -383,7 +383,7 @@ fn active() -> MutexGuard<'static, Active> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-pub fn page_permission(js: *const NsJs) -> Option<bool> {
+pub fn page_permission(js: Option<Page>) -> Option<bool> {
     let url = southstar_js_runtime::api::current_url(js);
     let url = url.to_bytes();
     match crate::permission(Some(url), southstar_url::bytes::origin_from(url)) {

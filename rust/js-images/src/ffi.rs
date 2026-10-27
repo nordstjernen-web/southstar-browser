@@ -10,18 +10,17 @@ use std::rc::Rc;
 use southstar_dom::Node;
 use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
+use southstar_js_runtime::api::Page;
 use southstar_js_runtime::api::{self};
 
 use crate::{Element, Load};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 }
 
@@ -213,60 +212,60 @@ unsafe extern "C" fn ready_idle(data: *mut c_void) -> GBoolean {
     0
 }
 
-fn js_arg(js: *const NsJs) -> Js {
-    Js(js.cast_mut())
+fn js_arg(js: Option<Page>) -> Js {
+    Js(js)
 }
 
 fn element(node: Node<'_>) -> Option<Element> {
     node.downgrade().get()
 }
 
-pub fn start_image_load(js: *const NsJs, el: Node<'_>, src: Option<&CStr>) {
+pub fn start_image_load(js: Option<Page>, el: Node<'_>, src: Option<&CStr>) {
     if let Some(el) = element(el) {
         crate::start_load(js_arg(js), el, src);
     }
 }
 
-pub fn image_for_node(js: *const NsJs, el: Node<'_>) -> Option<ImageRef<'static>> {
+pub fn image_for_node(js: Option<Page>, el: Node<'_>) -> Option<ImageRef<'static>> {
     element(el).and_then(|el| crate::image_of(js_arg(js), el))
 }
 
-pub fn image_natural_size(js: *const NsJs, el: Node<'_>) -> Option<(c_int, c_int)> {
+pub fn image_natural_size(js: Option<Page>, el: Node<'_>) -> Option<(c_int, c_int)> {
     image_for_node(js, el).map(|image| image.natural_size())
 }
 
-pub fn fire_img_load_once(js: *const NsJs, node: Node<'_>, failed: bool) {
+pub fn fire_img_load_once(js: Option<Page>, node: Node<'_>, failed: bool) {
     if let Some(node) = element(node) {
         crate::fire_load_once(js_arg(js), node, failed);
     }
 }
 
-pub fn image_loads_pending(js: *const NsJs) -> bool {
-    !js.is_null() && crate::loads_pending(js_arg(js))
+pub fn image_loads_pending(js: Option<Page>) -> bool {
+    js.is_some() && crate::loads_pending(js_arg(js))
 }
 
-pub fn flush_ready_images(js: *const NsJs) {
+pub fn flush_ready_images(js: Option<Page>) {
     crate::flush_ready(js_arg(js));
 }
 
-pub fn rescan_pending_images(js: *const NsJs, root: Option<Node<'_>>) {
+pub fn rescan_pending_images(js: Option<Page>, root: Option<Node<'_>>) {
     crate::rescan_pending(js_arg(js), root.and_then(element));
 }
 
-pub fn image_load_tracked(js: *const NsJs, el: Node<'_>) -> bool {
-    !js.is_null() && element(el).is_some_and(|el| crate::is_tracked(js_arg(js), el))
+pub fn image_load_tracked(js: Option<Page>, el: Node<'_>) -> bool {
+    js.is_some() && element(el).is_some_and(|el| crate::is_tracked(js_arg(js), el))
 }
 
-pub fn forget_node(js: *const NsJs, node: Node<'_>) {
-    if !js.is_null()
+pub fn forget_node(js: Option<Page>, node: Node<'_>) {
+    if js.is_some()
         && let Some(node) = element(node)
     {
         crate::forget(js_arg(js), node);
     }
 }
 
-fn teardown(js: *const NsJs) {
-    if !js.is_null() {
+fn teardown(js: Option<Page>) {
+    if js.is_some() {
         crate::teardown(js_arg(js));
     }
 }
@@ -274,7 +273,7 @@ fn teardown(js: *const NsJs) {
 pub fn install_runtime_hooks() {
     api::set_images_hooks(api::ImagesHooks {
         start_image_load,
-        forget_node,
-        teardown,
+        forget_node: |js, a1| forget_node(Some(js), a1),
+        teardown: |js| teardown(Some(js)),
     });
 }

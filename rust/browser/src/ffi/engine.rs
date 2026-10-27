@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
@@ -35,13 +34,13 @@ impl NsBrowser {
             viewport_height: self.vh.get(),
             images: self.images.get(),
             anim: self.anim.get(),
-            js: self.js.get().map_or(ptr::null_mut(), Js::raw),
+            js: self.js.get().map(Js::handle),
             focused,
             hover: self.hover_node.get(),
             caret_byte: self.caret_byte.get(),
             sel_anchor_byte: self.sel_anchor_byte.get(),
         };
-        // SAFETY: the page's script engine slot is null or holds its live engine.
+        // SAFETY: the layout slot holds null or a box of this thread's layout store.
         let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout.0) };
         self.styles.replace(styles);
     }
@@ -178,8 +177,7 @@ pub fn paint_3d_invalidate() {
 }
 
 pub fn paint_set_js(js: Option<Js>) {
-    // SAFETY: the page's script engine outlives the paint passes it is set for, and the caller resets it to null when they end.
-    unsafe { southstar_paint::set_js(js.map_or(ptr::null_mut(), Js::raw)) };
+    southstar_paint::set_js(js.map(Js::handle));
 }
 
 pub fn paint_set_anim(anim: Option<Anim>) {

@@ -154,7 +154,7 @@ pub fn warning(message: &[u8]) {
 }
 
 pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {
-    api::partition_key(scope.context_opaque().cast()).map(CString::into_bytes)
+    api::partition_key(api::Page::current(scope)).map(CString::into_bytes)
 }
 
 pub fn nsr_idb_install(scope: &mut Scope<'_>, global: &Value) {

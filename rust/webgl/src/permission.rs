@@ -3,6 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::collections::HashMap;
+
+use southstar_js_runtime::api::Page;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use crate::ffi::host;
@@ -39,7 +41,7 @@ pub fn set_decision(origin: &[u8], allow: bool) {
     }
 }
 
-pub(crate) fn permitted(js: usize) -> bool {
+pub(crate) fn permitted(js: Option<Page>) -> bool {
     let (url, origin) = host::page_url_and_origin(js);
     let origin = origin
         .filter(|origin| !origin.is_empty())

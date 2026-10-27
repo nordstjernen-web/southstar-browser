@@ -3,10 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_js_runtime::api::Page;
 
 use southstar_dom::Node;
 
-use crate::ffi::{Js, NsJs, PerfInfo};
+use crate::ffi::{Js, PerfInfo};
 use crate::{Schedule, Task, compile, eval, fetch, hold, import_map, page, scan, schedule};
 
 #[derive(Clone, Default)]
@@ -18,8 +19,8 @@ impl ScriptTasks {
     }
 }
 
-fn live(js: *const NsJs) -> Option<Js> {
-    let js = Js::of(js.cast_mut());
+fn live(js: Option<Page>) -> Option<Js> {
+    let js = Js::of(js);
     (!js.is_null()).then_some(js)
 }
 
@@ -37,14 +38,14 @@ pub fn collect_script_tasks(root: Node<'_>) -> ScriptTasks {
     )
 }
 
-pub fn run_parser_blocking_scripts(js: *const NsJs, tasks: &ScriptTasks, origin: Option<&CStr>) {
+pub fn run_parser_blocking_scripts(js: Option<Page>, tasks: &ScriptTasks, origin: Option<&CStr>) {
     if let Some(js) = live(js) {
         hold::run_parser_blocking_scripts(js, &tasks.0, origin);
     }
 }
 
 pub fn run_script_schedule(
-    js: *const NsJs,
+    js: Option<Page>,
     tasks: &ScriptTasks,
     which: Schedule,
     origin: Option<&CStr>,
@@ -54,20 +55,20 @@ pub fn run_script_schedule(
     }
 }
 
-pub fn set_lifecycle_tasks(js: *const NsJs, tasks: Option<ScriptTasks>) {
+pub fn set_lifecycle_tasks(js: Option<Page>, tasks: Option<ScriptTasks>) {
     if let Some(js) = live(js) {
         page::with_page(js, |page| page.lifecycle_tasks = tasks.map(|tasks| tasks.0));
     }
 }
 
-pub fn has_lifecycle_tasks(js: *const NsJs) -> bool {
+pub fn has_lifecycle_tasks(js: Option<Page>) -> bool {
     live(js).is_some_and(|js| {
         page::peek_page(js, |page| page.lifecycle_tasks.is_some()).unwrap_or(false)
     })
 }
 
 pub fn run_next_lifecycle_schedule(
-    js: *const NsJs,
+    js: Option<Page>,
     which: Schedule,
     origin: Option<&CStr>,
 ) -> bool {
@@ -80,13 +81,13 @@ pub fn run_next_lifecycle_schedule(
     schedule::run_next(js, &tasks, which, origin)
 }
 
-pub fn register_import_maps(js: *const NsJs, root: Node<'_>) {
+pub fn register_import_maps(js: Option<Page>, root: Node<'_>) {
     if let Some(js) = live(js) {
         import_map::register_in(js, root);
     }
 }
 
-pub fn run_script_element(js: *const NsJs, script: Node<'_>, origin: Option<&CStr>) {
+pub fn run_script_element(js: Option<Page>, script: Node<'_>, origin: Option<&CStr>) {
     if let Some(js) = live(js) {
         fetch::run_script_element(js, script, origin);
     }
@@ -108,39 +109,39 @@ pub fn script_skipped_by_nomodule(script: Node<'_>) -> bool {
     crate::skipped_by_nomodule(script)
 }
 
-pub fn schedule_pending_script_drain(js: *const NsJs) {
+pub fn schedule_pending_script_drain(js: Option<Page>) {
     if let Some(js) = live(js) {
         schedule::schedule_pending_drain(js);
     }
 }
 
-pub fn drain_load_event_scripts(js: *const NsJs) {
+pub fn drain_load_event_scripts(js: Option<Page>) {
     if let Some(js) = live(js) {
         schedule::drain_load_event_scripts(js);
     }
 }
 
-pub fn has_pending_script_roots(js: *const NsJs) -> bool {
+pub fn has_pending_script_roots(js: Option<Page>) -> bool {
     live(js).is_some_and(page::has_pending_roots)
 }
 
-pub fn async_scripts_pending(js: *const NsJs) -> bool {
+pub fn async_scripts_pending(js: Option<Page>) -> bool {
     live(js).is_some_and(page::async_pending)
 }
 
-pub fn cancel_async_scripts(js: *const NsJs) {
+pub fn cancel_async_scripts(js: Option<Page>) {
     if let Some(js) = live(js) {
         page::cancel_async(js);
     }
 }
 
-pub fn script_needs_prepare(js: *const NsJs, script: Node<'_>) {
+pub fn script_needs_prepare(js: Option<Page>, script: Node<'_>) {
     if let Some(js) = live(js) {
         schedule::script_needs_prepare(js, script);
     }
 }
 
-pub fn run_inserted_scripts(js: *const NsJs, root: Node<'_>) {
+pub fn run_inserted_scripts(js: Option<Page>, root: Node<'_>) {
     if let Some(js) = live(js) {
         schedule::run_inserted_scripts(js, root);
     }
@@ -150,11 +151,11 @@ pub fn profile_enabled() -> bool {
     compile::profile_enabled()
 }
 
-pub fn run_content_scripts(js: *const NsJs, url: Option<&CStr>, document_start: bool) {
-    eval::run_content_scripts(Js::of(js.cast_mut()), url, document_start);
+pub fn run_content_scripts(js: Option<Page>, url: Option<&CStr>, document_start: bool) {
+    eval::run_content_scripts(Js::of(js), url, document_start);
 }
 
-pub fn eval_source(js: *const NsJs, src: &CStr, origin: Option<&CStr>) -> Option<Vec<u8>> {
+pub fn eval_source(js: Option<Page>, src: &CStr, origin: Option<&CStr>) -> Option<Vec<u8>> {
     eval::eval_source(live(js)?, src, origin)
 }
 
@@ -162,8 +163,8 @@ pub fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {
     crate::ffi::decode_data_url(url)
 }
 
-pub fn element_perf_info(js: *const NsJs, element: Option<Node<'_>>) -> PerfInfo {
+pub fn element_perf_info(js: Option<Page>, element: Option<Node<'_>>) -> PerfInfo {
     let mut info = PerfInfo::default();
-    crate::ffi::fill_element_perf_info(js.cast_mut(), element, &mut info);
+    crate::ffi::fill_element_perf_info(js, element, &mut info);
     info
 }

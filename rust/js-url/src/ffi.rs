@@ -9,6 +9,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_url::bytes::Parts;
 
 use crate::JsResult;
@@ -18,22 +19,25 @@ pub(crate) const HO_TEXT_ENCODER: HostKind = HostKind::TextEncoder;
 pub(crate) const HO_TEXT_DECODER: HostKind = HostKind::TextDecoder;
 
 use crate::links::nsr_xhr_fire_progress_event;
-pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub(crate) fn of(scope: &Scope<'_>) -> Js {
-        Js(scope.context_opaque() as usize)
+        Js(Page::current(scope))
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn page(self) -> Option<Page> {
+        self.0
+    }
+
+    pub(crate) fn key(self) -> usize {
+        self.0.map_or(0, Page::addr)
     }
 
     pub(crate) fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
@@ -86,7 +90,7 @@ pub(crate) fn page_origin(js: Js) -> Option<Vec<u8>> {
     if js.is_null() {
         return None;
     }
-    southstar_url::bytes::origin_from(api::current_url(js.ptr()).to_bytes())
+    southstar_url::bytes::origin_from(api::current_url(js.page()).to_bytes())
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {
@@ -94,7 +98,7 @@ pub(crate) fn random_uuid() -> Vec<u8> {
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.ptr());
+    api::mark_mutated(js.page());
 }
 
 unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
@@ -104,7 +108,7 @@ unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
 
 pub(crate) fn attach_read_idle(js: Js, id: u64) -> Source {
     Source(api::attach_idle(
-        js.ptr(),
+        js.page(),
         read_ready,
         id as usize as *mut c_void,
     ))
@@ -112,7 +116,7 @@ pub(crate) fn attach_read_idle(js: Js, id: u64) -> Source {
 
 pub(crate) fn attach_read_retry(js: Js, id: u64, ms: u32) -> Source {
     Source(api::attach_timeout(
-        js.ptr(),
+        js.page(),
         ms,
         read_ready,
         id as usize as *mut c_void,
@@ -120,15 +124,15 @@ pub(crate) fn attach_read_retry(js: Js, id: u64, ms: u32) -> Source {
 }
 
 pub(crate) fn source_remove(js: Js, source: Source) {
-    api::source_remove(js.ptr(), source.0);
+    api::source_remove(js.page(), source.0);
 }
 
 pub(crate) fn in_pump(js: Js) -> bool {
-    api::in_pump(js.ptr())
+    api::in_pump(js.page())
 }
 
 pub(crate) fn in_main_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
-    api::main_context(js.ptr()).with(f);
+    api::main_context(js.page()).with(f);
 }
 
 pub(crate) fn fire_progress(
@@ -224,52 +228,52 @@ pub fn nsr_net_install_file_reader(scope: &mut Scope<'_>, global: &Value) {
     crate::file_reader::install(scope, global);
 }
 
-pub fn filereader_pending(js: *const NsJs) -> bool {
-    crate::file_reader::pending(Js(js as usize))
+pub fn filereader_pending(js: Option<Page>) -> bool {
+    crate::file_reader::pending(Js(js))
 }
 
-pub fn blob_url_lookup(js: *const NsJs, url: &[u8]) -> Option<crate::registry::Blob> {
-    if js.is_null() {
+pub fn blob_url_lookup(js: Option<Page>, url: &[u8]) -> Option<crate::registry::Blob> {
+    if js.is_none() {
         return None;
     }
-    crate::registry::lookup(Js(js as usize), url)
+    crate::registry::lookup(Js(js), url)
 }
 
 pub fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {
     crate::blob::blob_bytes(scope, blob)
 }
 
-fn file_reader_teardown(js: *const NsJs) {
-    crate::file_reader::teardown(Js(js as usize));
+fn file_reader_teardown(js: Option<Page>) {
+    crate::file_reader::teardown(Js(js));
 }
 
-fn blob_registry_add(js: *const NsJs) {
-    if !js.is_null() && crate::registry::add_page(Js(js as usize)) {
+fn blob_registry_add(js: Option<Page>) {
+    if js.is_some() && crate::registry::add_page(Js(js)) {
         southstar_net::set_blob_resolver(crate::registry::resolve);
     }
 }
 
-fn blob_registry_remove(js: *const NsJs) {
-    if !js.is_null() {
-        crate::registry::remove_page(Js(js as usize));
+fn blob_registry_remove(js: Option<Page>) {
+    if js.is_some() {
+        crate::registry::remove_page(Js(js));
     }
 }
 
-fn blob_urls_free(js: *const NsJs) {
-    crate::registry::free_page(Js(js as usize));
+fn blob_urls_free(js: Option<Page>) {
+    crate::registry::free_page(Js(js));
 }
 
-fn teardown(js: *const NsJs) {
-    crate::teardown(Js(js as usize));
+fn teardown(js: Option<Page>) {
+    crate::teardown(Js(js));
 }
 
 pub fn install_runtime_hooks() {
     southstar_js_runtime::api::set_url_hooks(southstar_js_runtime::api::UrlHooks {
-        blob_registry_add,
-        blob_registry_remove,
-        blob_urls_free,
-        file_reader_teardown,
-        teardown,
+        blob_registry_add: |js| blob_registry_add(Some(js)),
+        blob_registry_remove: |js| blob_registry_remove(Some(js)),
+        blob_urls_free: |js| blob_urls_free(Some(js)),
+        file_reader_teardown: |js| file_reader_teardown(Some(js)),
+        teardown: |js| teardown(Some(js)),
     });
     southstar_js_runtime::links::set_js_url_links(southstar_js_runtime::links::JsUrlLinks {
         window_filereader_ctor: crate::ffi::nsr_window_filereader_ctor,

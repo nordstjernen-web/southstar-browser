@@ -14,6 +14,7 @@ use southstar_dom::{Node, NsNode};
 use southstar_js_bind::bind_native;
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 
 use self::imports::*;
@@ -21,26 +22,24 @@ use crate::page::{self, Frame};
 use crate::{cloner, globals, origin, owner, queue, realm};
 use ctx::{Ctx, PropertyKey};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    pub(crate) fn of(js: *const NsJs) -> Js {
-        Js(js as usize)
+    pub(crate) fn of(js: Option<Page>) -> Js {
+        Js(js)
     }
 
     pub fn of_ctx(ctx: Ctx) -> Js {
-        Js(ctx.opaque() as usize)
+        Js(ctx.page())
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn ptr(self) -> Option<Page> {
+        self.0
     }
 }
 
@@ -377,15 +376,15 @@ pub(crate) fn realm_clone_function(ctx: Ctx) -> Value {
 }
 
 fn realm_for_node(scope: &Scope<'_>, node: Node<'_>) -> ContextHandle {
-    crate::node_realm_context(scope.context_opaque().cast(), node)
+    crate::node_realm_context(Page::current(scope), node)
 }
 
-fn cloners_made(js: *const NsJs) -> bool {
+fn cloners_made(js: Option<Page>) -> bool {
     let js = Js::of(js);
     !js.is_null() && page::peek(js, |page| page.cloners_made).unwrap_or(false)
 }
 
-fn frame_url(js: *const NsJs, frame: Option<Node<'_>>) -> Option<CString> {
+fn frame_url(js: Option<Page>, frame: Option<Node<'_>>) -> Option<CString> {
     let js = Js::of(js);
     if js.is_null() {
         return None;
@@ -396,7 +395,7 @@ fn frame_url(js: *const NsJs, frame: Option<Node<'_>>) -> Option<CString> {
     .flatten()
 }
 
-fn realms_same_origin(js: *const NsJs, a: ContextHandle, b: ContextHandle) -> bool {
+fn realms_same_origin(js: Option<Page>, a: ContextHandle, b: ContextHandle) -> bool {
     let js = Js::of(js);
     match (Ctx::from_handle(a), Ctx::from_handle(b)) {
         (Some(a), Some(b)) if !js.is_null() => crate::origin::realms_same_origin(js, a, b),
@@ -404,7 +403,7 @@ fn realms_same_origin(js: *const NsJs, a: ContextHandle, b: ContextHandle) -> bo
     }
 }
 
-fn forget_node(js: *const NsJs, node: Node<'_>) {
+fn forget_node(js: Option<Page>, node: Node<'_>) {
     let js = Js::of(js);
     if js.is_null() {
         return;
@@ -417,7 +416,7 @@ fn forget_node(js: *const NsJs, node: Node<'_>) {
     });
 }
 
-fn teardown(js: *const NsJs) {
+fn teardown(js: Option<Page>) {
     let js = Js::of(js);
     let cloners = cloner::clear(js);
     drop(cloners);
@@ -425,11 +424,11 @@ fn teardown(js: *const NsJs) {
     drop(page);
 }
 
-fn pending_count(js: *const NsJs) -> u32 {
+fn pending_count(js: Option<Page>) -> u32 {
     crate::pending_iframe_count(js) as u32
 }
 
-fn pending_first(js: *const NsJs) -> Option<Node<'static>> {
+fn pending_first(js: Option<Page>) -> Option<Node<'static>> {
     let js = Js::of(js);
     if js.is_null() {
         return None;
@@ -437,29 +436,29 @@ fn pending_first(js: *const NsJs) -> Option<Node<'static>> {
     queue::first_pending(js).and_then(frame_node)
 }
 
-fn pending_remove_first(js: *const NsJs) {
+fn pending_remove_first(js: Option<Page>) {
     let js = Js::of(js);
     if !js.is_null() {
         queue::remove_first_pending(js);
     }
 }
 
-fn purge_subtree_pending(js: *const NsJs, root: Node<'_>) {
+fn purge_subtree_pending(js: Option<Page>, root: Node<'_>) {
     let js = Js::of(js);
     if !js.is_null() {
         queue::purge_subtree(js, root);
     }
 }
 
-fn scrub_globals(js: *const NsJs, iframe: Node<'_>) {
+fn scrub_globals(js: Option<Page>, iframe: Node<'_>) {
     globals::scrub(Js::of(js), iframe);
 }
 
-fn submit_form(js: *const NsJs, form: Node<'_>, submitter: Option<Node<'_>>) -> bool {
+fn submit_form(js: Option<Page>, form: Node<'_>, submitter: Option<Node<'_>>) -> bool {
     crate::submit::submit_into_frame(Js::of(js), form, submitter)
 }
 
-fn load_now(js: *const NsJs, iframe: Node<'_>) {
+fn load_now(js: Option<Page>, iframe: Node<'_>) {
     crate::load::load_now(Js::of(js), iframe);
 }
 
@@ -469,45 +468,45 @@ pub fn install_runtime_hooks() {
     });
     api::set_frames_hooks(api::FramesHooks {
         submit_form,
-        purge_subtree_pending,
-        pending_count,
-        pending_first,
-        pending_remove_first,
-        load_now,
-        clear_initial_blank: crate::clear_initial_blank_frames,
-        teardown,
+        purge_subtree_pending: |js, a1| purge_subtree_pending(Some(js), a1),
+        pending_count: |js| pending_count(Some(js)),
+        pending_first: |js| pending_first(Some(js)),
+        pending_remove_first: |js| pending_remove_first(Some(js)),
+        load_now: |js, a1| load_now(Some(js), a1),
+        clear_initial_blank: |js| crate::clear_initial_blank_frames(Some(js)),
+        teardown: |js| teardown(Some(js)),
         schedule_load: crate::schedule_iframe_load,
         scrub_globals,
         promote_deferred: crate::promote_deferred_iframes,
         frame_context: crate::frame_context,
-        frame_url,
+        frame_url: |js, a1| frame_url(Some(js), a1),
         document_node: crate::iframe_document_node,
-        frame_of_realm: crate::frame_of_realm,
-        node_realm_context: crate::node_realm_context,
-        cloners_made,
-        forget_node,
-        realms_same_origin,
+        frame_of_realm: |js, a1| crate::frame_of_realm(Some(js), a1),
+        node_realm_context: |js, a1| crate::node_realm_context(Some(js), a1),
+        cloners_made: |js| cloners_made(Some(js)),
+        forget_node: |js, a1| forget_node(Some(js), a1),
+        realms_same_origin: |js, a1, a2| realms_same_origin(Some(js), a1, a2),
         schedule_static_iframes,
-        realm_proto_for,
+        realm_proto_for: |js, a1, a2| realm_proto_for(Some(js), a1, a2),
         frame_realm_window,
     });
 }
 
-fn schedule_static_iframes(js: *const NsJs, root: Node<'_>) {
+fn schedule_static_iframes(js: Option<Page>, root: Node<'_>) {
     if let Some(root) = root.downgrade().get() {
-        crate::schedule_static_iframes(js.cast_mut(), root);
+        crate::schedule_static_iframes(js, root);
     }
 }
 
-fn realm_proto_for(js: *const NsJs, realm: ContextHandle, proto: &Value) -> Value {
-    let (Some(cx), js) = (Ctx::from_handle(realm), Js::of(js.cast_mut())) else {
+fn realm_proto_for(js: Option<Page>, realm: ContextHandle, proto: &Value) -> Value {
+    let (Some(cx), js) = (Ctx::from_handle(realm), Js::of(js)) else {
         return proto.clone();
     };
     cloner::proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
 }
 
-fn frame_realm_window(js: *const NsJs, frame: Node<'_>) -> Value {
-    let js = Js::of(js.cast_mut());
+fn frame_realm_window(js: Option<Page>, frame: Node<'_>) -> Value {
+    let js = Js::of(js);
     frame
         .downgrade()
         .get()

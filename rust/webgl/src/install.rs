@@ -5,6 +5,7 @@
 use std::rc::Rc;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+use southstar_js_runtime::api::Page;
 
 use crate::args::{JsResult, context};
 use crate::consts::{RGB8, RGBA8};
@@ -587,7 +588,7 @@ fn attribute(s: &mut Scope<'_>, attrs: &Value, name: &str, default: bool) -> boo
 
 pub(crate) fn new_context(
     s: &mut Scope<'_>,
-    js: usize,
+    js: Option<Page>,
     canvas: usize,
     version: i32,
     attrs: &Value,

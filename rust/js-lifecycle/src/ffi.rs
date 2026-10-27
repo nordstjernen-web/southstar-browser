@@ -17,27 +17,30 @@ use southstar_js_loader::{Schedule, ScriptTasks};
 
 use crate::{events, frames, lifecycle, scrollend};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
 use southstar_js_runtime::api::Page;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn from_data(data: *mut c_void) -> Js {
-        Js(data.cast())
+        Js(Page::from_raw(data))
     }
 
     pub fn of_page(page: Page) -> Js {
-        Js(page.as_ptr().cast_mut())
+        Js(Some(page))
+    }
+
+    fn raw(self) -> *mut c_void {
+        self.0.map_or(core::ptr::null_mut(), Page::as_raw)
     }
 
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 
     pub fn key(self) -> usize {
-        self.0 as usize
+        self.0.map_or(0, Page::addr)
     }
 
     pub fn halted(self) -> bool {
@@ -179,7 +182,7 @@ impl Js {
     }
 
     pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
-        api::attach_timeout(self.0, ms, func, self.0.cast())
+        api::attach_timeout(self.0, ms, func, self.raw())
     }
 
     pub fn source_remove(self, id: c_uint) {
@@ -187,7 +190,7 @@ impl Js {
     }
 
     pub fn timeout_add(self, ms: c_uint, func: SourceFunc) -> c_uint {
-        unsafe { g_timeout_add(ms, func, self.0.cast()) }
+        unsafe { g_timeout_add(ms, func, self.raw()) }
     }
 
     pub fn set_ready_state(self, state: c_int) {
@@ -231,7 +234,7 @@ impl Js {
     }
 
     pub fn fire_page_transition(self, kind: &CStr) {
-        if let Some(page) = Page::from_ptr(self.0) {
+        if let Some(page) = self.0.filter(|page| page.is_live()) {
             southstar_js_window::fire_page_transition(page, kind, false);
         }
     }
@@ -296,7 +299,7 @@ pub(crate) fn source_remove_default(id: c_uint) {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: *const NsNode) -> Value {
@@ -386,45 +389,45 @@ pub fn fire_media_load_events(js: Page, layout: Option<BoxRef<'_>>) {
     events::fire_media_load_events(Js::of_page(js), layout.map_or(ptr::null(), BoxRef::as_ptr));
 }
 
-pub fn raf_count(js: *const NsJs) -> usize {
-    frames::count(Js(js.cast_mut()))
+pub fn raf_count(js: Option<Page>) -> usize {
+    frames::count(Js(js))
 }
 
-pub fn clear_lifecycle(js: *const NsJs) {
-    lifecycle::clear(Js(js.cast_mut()));
+pub fn clear_lifecycle(js: Option<Page>) {
+    lifecycle::clear(Js(js));
 }
 
-pub fn reset_lifecycle(js: *const NsJs) {
-    crate::reset(Js(js.cast_mut()));
+pub fn reset_lifecycle(js: Option<Page>) {
+    crate::reset(Js(js));
 }
 
 pub fn start_lifecycle(
-    js: *const NsJs,
+    js: Option<Page>,
     doc: Node<'_>,
     tasks: ScriptTasks,
     origin: Option<&CStr>,
     start_us: i64,
 ) {
-    lifecycle::start(Js(js.cast_mut()), doc.as_mut_ptr(), tasks, origin, start_us);
+    lifecycle::start(Js(js), doc.as_mut_ptr(), tasks, origin, start_us);
 }
 
-fn raf_set_host_driven(js: *const NsJs) {
-    frames::set_host_driven(Js(js.cast_mut()));
+fn raf_set_host_driven(js: Option<Page>) {
+    frames::set_host_driven(Js(js));
 }
 
-pub fn purge_frame_rafs(js: *const NsJs, frame: Node<'_>) {
-    frames::purge_frame(Js(js.cast_mut()), frame.as_ptr());
+pub fn purge_frame_rafs(js: Option<Page>, frame: Node<'_>) {
+    frames::purge_frame(Js(js), frame.as_ptr());
 }
 
-fn teardown(js: *const NsJs) {
-    crate::teardown(Js(js.cast_mut()));
+fn teardown(js: Option<Page>) {
+    crate::teardown(Js(js));
 }
 
 pub fn install_runtime_hooks() {
     api::set_lifecycle_hooks(api::LifecycleHooks {
-        raf_set_host_driven,
+        raf_set_host_driven: |js| raf_set_host_driven(Some(js)),
         purge_frame_rafs,
-        teardown,
+        teardown: |js| teardown(Some(js)),
         idle_frame_end,
         purge_media_rafs,
         queue_scrollend,
@@ -444,18 +447,18 @@ pub fn install_runtime_hooks() {
     );
 }
 
-fn idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64 {
-    frames::idle_frame_end(Js(js.cast_mut()), now, end)
+fn idle_frame_end(js: Option<Page>, now: i64, end: i64) -> i64 {
+    frames::idle_frame_end(Js(js), now, end)
 }
 
-fn purge_media_rafs(js: *const NsJs, root: Node<'_>) {
-    frames::purge_media(Js(js.cast_mut()), root.as_ptr());
+fn purge_media_rafs(js: Option<Page>, root: Node<'_>) {
+    frames::purge_media(Js(js), root.as_ptr());
 }
 
-fn queue_scrollend(js: *const NsJs, el: Node<'_>) {
-    scrollend::queue(Js(js.cast_mut()), el.as_ptr());
+fn queue_scrollend(js: Option<Page>, el: Node<'_>) {
+    scrollend::queue(Js(js), el.as_ptr());
 }
 
-fn queue_scrollend_document(js: *const NsJs) {
-    scrollend::queue_document(Js(js.cast_mut()));
+fn queue_scrollend_document(js: Option<Page>) {
+    scrollend::queue_document(Js(js));
 }

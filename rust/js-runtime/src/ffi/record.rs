@@ -4,7 +4,7 @@
 
 use core::cell::{Cell, OnceCell, RefCell};
 use core::ffi::CStr;
-use core::ptr;
+use core::ptr::{self, NonNull};
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 
@@ -19,6 +19,7 @@ use southstar_layout::BoxRef;
 use super::NavigationTiming;
 use super::imports;
 use super::state::PageState;
+use crate::api::Page;
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 const FLAG_IMG_LOAD_FIRED: u32 = 1 << 3;
@@ -174,12 +175,12 @@ pub(crate) struct Record {
 }
 
 thread_local! {
-    static ACTIVE: Cell<*mut NsJs> = const { Cell::new(ptr::null_mut()) };
-    static LIVE: RefCell<HashSet<usize>> = RefCell::new(HashSet::new());
+    static ACTIVE: Cell<Option<Page>> = const { Cell::new(None) };
+    static LIVE: RefCell<HashMap<usize, Page>> = RefCell::new(HashMap::new());
 }
 
-pub(crate) fn is_live(js: *const NsJs) -> bool {
-    LIVE.with_borrow(|live| live.contains(&js.addr()))
+pub(crate) fn live_page(addr: usize) -> Option<Page> {
+    LIVE.with_borrow(|live| live.get(&addr).copied())
 }
 
 pub(crate) fn node<'a>(n: *const NsNode) -> Option<Node<'a>> {
@@ -195,17 +196,18 @@ fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
     n.attr(name)
 }
 
-pub(crate) fn record<'a>(js: *const NsJs) -> Option<&'a Record> {
-    // SAFETY: a page pointer is null or a record alloc leaked, which stays live until free_engine reclaims it.
-    unsafe { js.cast::<Record>().as_ref() }
+pub(crate) fn record<'a>(js: Option<Page>) -> Option<&'a Record> {
+    let js = js?.as_ptr().cast::<Record>();
+    // SAFETY: a page names a record alloc leaked, which stays live until free_engine reclaims it.
+    Some(unsafe { &*js })
 }
 
 fn main_context(js: &Record) -> ContextHandle {
     js.main_realm_ctx.get().or(js.ctx.get())
 }
 
-fn page_of(scope: &Scope<'_>) -> *mut NsJs {
-    scope.context_opaque().cast()
+fn page_of(scope: &Scope<'_>) -> Option<Page> {
+    Page::current(scope)
 }
 
 fn cstring(bytes: &[u8]) -> CString {
@@ -213,7 +215,7 @@ fn cstring(bytes: &[u8]) -> CString {
     CString::new(&bytes[..end]).unwrap_or_default()
 }
 
-pub(crate) fn alloc() -> *mut NsJs {
+pub(crate) fn alloc() -> Page {
     let record = Box::new(Record {
         rt: Cell::new(RuntimeHandle::NULL),
         ctx: Cell::new(ContextHandle::NULL),
@@ -243,8 +245,8 @@ pub(crate) fn alloc() -> *mut NsJs {
         state: OnceCell::new(),
     });
     drop(record.state.set(Box::new(PageState::new())));
-    let js: *mut NsJs = Box::into_raw(record).cast();
-    LIVE.with_borrow_mut(|live| live.insert(js.addr()));
+    let js = Page::from_record(NonNull::from(Box::leak(record)).cast());
+    LIVE.with_borrow_mut(|live| live.insert(js.addr(), js));
     js
 }
 
@@ -259,13 +261,13 @@ pub(crate) fn set_time_origin(js: &Record, origin_us: i64, origin_real_ms: f64) 
     js.time_origin_real_ms.set(origin_real_ms);
 }
 
-pub(crate) fn set_navigation_timing(js: *const NsJs, timing: NavigationTiming) {
+pub(crate) fn set_navigation_timing(js: Option<Page>, timing: NavigationTiming) {
     if let Some(js) = record(js) {
         js.navigation_timing.set(timing);
     }
 }
 
-pub(crate) fn navigation_timing(js: *const NsJs) -> Option<NavigationTiming> {
+pub(crate) fn navigation_timing(js: Option<Page>) -> Option<NavigationTiming> {
     record(js).map(|js| js.navigation_timing.get())
 }
 
@@ -275,15 +277,15 @@ pub(crate) fn create_runtime(js: &Record, options: &RuntimeOptions) -> bool {
     !rt.is_null()
 }
 
-pub(crate) fn create_context(page: *mut NsJs, js: &Record) -> bool {
+pub(crate) fn create_context(page: Page, js: &Record) -> bool {
     let rt = js.rt.get();
-    let ctx = rt.new_context(page.cast());
+    let ctx = rt.new_context(page.as_ptr().cast_mut().cast());
     if ctx.is_null() {
         return false;
     }
     js.ctx.set(ctx);
     js.main_realm_ctx.set(ctx);
-    rt.set_opaque(page.cast());
+    rt.set_opaque(page.as_ptr().cast_mut().cast());
     true
 }
 
@@ -300,11 +302,11 @@ pub(crate) fn set_partition_key(js: &Record, partition_key: Option<&CStr>) {
         .replace(partition_key.map(|key| cstring(key.to_bytes())));
 }
 
-pub(crate) fn has_pinned_set(js: *const NsJs) -> bool {
+pub(crate) fn has_pinned_set(js: Option<Page>) -> bool {
     record(js).is_some_and(|js| js.pinned_wrappers_set.borrow().is_some())
 }
 
-pub(crate) fn pin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
+pub(crate) fn pin_wrapper(js: Option<Page>, n: *const NsNode) -> bool {
     record(js).is_some_and(|js| {
         js.pinned_wrappers_set
             .borrow_mut()
@@ -314,7 +316,7 @@ pub(crate) fn pin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
     })
 }
 
-pub(crate) fn unpin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
+pub(crate) fn unpin_wrapper(js: Option<Page>, n: *const NsNode) -> bool {
     record(js).is_some_and(|js| {
         js.pinned_wrappers_set
             .borrow_mut()
@@ -323,7 +325,7 @@ pub(crate) fn unpin_wrapper(js: *const NsJs, n: *const NsNode) -> bool {
     })
 }
 
-pub(crate) fn take_pinned_wrappers(js: *const NsJs) -> Vec<usize> {
+pub(crate) fn take_pinned_wrappers(js: Option<Page>) -> Vec<usize> {
     record(js).map_or_else(Vec::new, |js| {
         js.pinned_wrappers_set
             .borrow_mut()
@@ -332,7 +334,7 @@ pub(crate) fn take_pinned_wrappers(js: *const NsJs) -> Vec<usize> {
     })
 }
 
-fn pinned_wrapper_nodes(js: *const NsJs) -> Vec<usize> {
+fn pinned_wrapper_nodes(js: Option<Page>) -> Vec<usize> {
     record(js).map_or_else(Vec::new, |js| {
         js.pinned_wrappers_set
             .borrow()
@@ -385,12 +387,12 @@ pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, release: bool) {
     }
 }
 
-fn eval_bundled(js: *const NsJs, source: &str, origin: &CStr) {
+fn eval_bundled(js: Option<Page>, source: &str, origin: &CStr) {
     let source = source.strip_suffix('\0').unwrap_or(source);
     (crate::api::loader_hooks().eval)(js, source.as_bytes(), Some(origin));
 }
 
-pub(crate) fn eval_worker_polyfills(js: *mut NsJs) {
+pub(crate) fn eval_worker_polyfills(js: Option<Page>) {
     eval_bundled(js, POLYFILLS, c"<worker-polyfills>");
 }
 
@@ -428,8 +430,8 @@ pub(crate) fn free_window_values(js: &Record) {
 /// # Safety
 ///
 /// `js` is a page alloc returned that nothing uses afterwards.
-pub(crate) unsafe fn free_engine(js: *mut NsJs) {
-    let Some(record) = record(js) else {
+pub(crate) unsafe fn free_engine(js: Page) {
+    let Some(record) = record(Some(js)) else {
         return;
     };
     LIVE.with_borrow_mut(|live| live.remove(&js.addr()));
@@ -443,8 +445,8 @@ pub(crate) unsafe fn free_engine(js: *mut NsJs) {
     unsafe { record.ctx.get().free() };
     // SAFETY: the page owns its runtime, whose contexts were all freed above.
     unsafe { record.rt.get().free() };
-    // SAFETY: the record came from Box::into_raw in alloc, and the caller guarantees it is not used again.
-    drop(unsafe { Box::from_raw(js.cast::<Record>()) });
+    // SAFETY: the record came from Box::leak in alloc, and the caller guarantees it is not used again.
+    drop(unsafe { Box::from_raw(js.as_ptr().cast_mut().cast::<Record>()) });
 }
 
 pub(crate) fn worker_compile(
@@ -475,7 +477,7 @@ pub(crate) fn worker_compile(
     (Ok(compiled), false)
 }
 
-fn partition_apply(page: *mut NsJs, js: &Record, new_url: Option<&CStr>) {
+fn partition_apply(page: Option<Page>, js: &Record, new_url: Option<&CStr>) {
     let origin = new_url
         .and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
         .filter(|origin| !origin.is_empty())
@@ -581,7 +583,7 @@ fn kind_proto(js: &Record, n: Node<'_>) -> Option<Value> {
     )
 }
 
-pub(crate) fn kind_proto_value(js: *const NsJs, n: *const NsNode) -> Option<Value> {
+pub(crate) fn kind_proto_value(js: Option<Page>, n: *const NsNode) -> Option<Value> {
     match (record(js), node(n)) {
         (Some(js), Some(n)) => kind_proto(js, n),
         _ => None,
@@ -619,11 +621,11 @@ fn adopt_frame_window_events(js: &Record, fctx: ContextHandle, frame_global: &Va
     });
 }
 
-pub(crate) fn active() -> *mut NsJs {
+pub(crate) fn active() -> Option<Page> {
     ACTIVE.with(Cell::get)
 }
 
-pub(crate) fn set_active(js: *mut NsJs) {
+pub(crate) fn set_active(js: Option<Page>) {
     ACTIVE.with(|active| active.set(js));
 }
 
@@ -634,11 +636,10 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
         .map_or(0, |length| length as u32)
 }
 
-pub(crate) fn storage_load_for(js: *const NsJs, new_url: Option<&CStr>) {
+pub(crate) fn storage_load_for(js: Option<Page>, new_url: Option<&CStr>) {
     let Some(record) = record(js) else {
         return;
     };
-    let js = js.cast_mut();
     partition_apply(js, record, new_url);
     (crate::api::storage_hooks().load_local)(js, new_url);
 }
@@ -649,8 +650,7 @@ pub(crate) fn img_src_layout_neutral(n: Node<'_>) -> bool {
         && attr(n, c"height").is_some_and(|h| !h.is_empty())
 }
 
-pub(crate) fn set_src_recorded(js: *const NsJs, el: Node<'_>, src: &[u8]) {
-    let js = js.cast_mut();
+pub(crate) fn set_src_recorded(js: Option<Page>, el: Node<'_>, src: &[u8]) {
     let mut terminated = Vec::with_capacity(src.len() + 1);
     terminated.extend_from_slice(src);
     terminated.push(0);
@@ -710,13 +710,13 @@ pub(crate) fn media_native_formats() -> u32 {
     formats
 }
 
-pub(crate) fn url_parses(js: *const NsJs, url: &CStr) -> bool {
+pub(crate) fn url_parses(js: Option<Page>, url: &CStr) -> bool {
     let base = (crate::api::document_hooks().base_url)(js);
     let base = base.as_deref().filter(|base| !base.is_empty());
     southstar_url::bytes::resolve(base, url.to_bytes()).is_some()
 }
 
-pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
+pub(crate) fn csp_allows_worker(js: Option<Page>, url: &CStr) -> bool {
     let page = super::Js::of(js).and_then(super::Js::current_url);
     let Some(js) = record(js) else {
         return true;
@@ -727,8 +727,8 @@ pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
         .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page.as_deref(), None, true))
 }
 
-pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
-    if js.is_null() {
+pub(crate) fn purge_subtree_rafs(js: Option<Page>, root: *mut NsNode) {
+    if js.is_none() {
         return;
     }
     let mut n = root;
@@ -744,17 +744,17 @@ pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
     }
 }
 
-pub(crate) fn insert_before_single(js: *const NsJs, child: Node<'_>, reference_node: Node<'_>) {
+pub(crate) fn insert_before_single(js: Option<Page>, child: Node<'_>, reference_node: Node<'_>) {
     if child == reference_node {
         return;
     }
     if child.parent().is_some() {
-        if !js.is_null() {
+        if js.is_some() {
             (crate::api::traversal_hooks().pre_remove)(js, child);
         }
         child.detach();
     }
-    if !js.is_null() {
+    if let Some(js) = js {
         (crate::api::mutation_hooks().unorphan_node)(js, child);
     }
     reference_node.insert_before(child);
@@ -774,23 +774,23 @@ pub(crate) fn attr_apply_proto(scope: &mut Scope<'_>, obj: &Value) {
     bind_native(scope, obj, "isSameNode", 1, imports::nsr_element_isSameNode);
 }
 
-pub(crate) fn set_layout_root(js: *const NsJs, root: Option<BoxRef<'_>>) {
-    let Some(record) = record(js) else {
+pub(crate) fn set_layout_root(js: Option<Page>, root: Option<BoxRef<'_>>) {
+    let Some(page) = super::Js::of(js) else {
         return;
     };
-    let js = js.cast_mut();
+    let record = page.rec();
     let root = root.map(BoxRef::into_static);
     if record.layout_root.get().map(BoxRef::as_ptr) != root.map(BoxRef::as_ptr) {
-        (crate::api::geometry_hooks().forget_box_lookup)(js);
+        (crate::api::geometry_hooks().forget_box_lookup)(page.page());
     }
     record.layout_root.set(root);
-    (crate::api::window_hooks().sync_metrics)(js);
+    (crate::api::window_hooks().sync_metrics)(page.page());
     if root.is_some() {
         (crate::api::frames_hooks().promote_deferred)(js);
-        if super::glue::is_running_script(super::Js(js).ctx()) {
+        if super::glue::is_running_script(page.ctx()) {
             crate::api::observer_schedule_tick(js);
         } else {
-            super::glue::observers_tick(super::Js(js));
+            super::glue::observers_tick(page);
         }
     }
 }
@@ -827,14 +827,14 @@ pub(crate) fn is_disabled_form_control(el: Node<'_>) -> bool {
         && southstar_dom::controls::effectively_disabled(el)
 }
 
-pub(crate) fn form_reset(js: *const NsJs, form: Node<'_>) {
+pub(crate) fn form_reset(js: Option<Page>, form: Node<'_>) {
     let Some(ctx) = record(js).map(|js| js.ctx.get()) else {
         return;
     };
     ctx.with(|scope| (crate::api::forms_hooks().reset_form)(scope, form));
 }
 
-pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {
+pub(crate) fn image_load_realm(js: Option<Page>) -> ContextHandle {
     let Some(record) = record(js) else {
         return ContextHandle::NULL;
     };
@@ -845,7 +845,7 @@ pub(crate) fn image_load_realm(js: *const NsJs) -> ContextHandle {
 }
 
 pub(crate) fn frame_url(js: super::Js, frame: *const NsNode) -> Option<CString> {
-    (crate::api::frames_hooks().frame_url)(js.ptr(), node(frame))
+    (crate::api::frames_hooks().frame_url)(js.page(), node(frame))
 }
 
 pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
@@ -854,24 +854,27 @@ pub(crate) fn node_frame_url<'a>(el: Node<'a>) -> Option<&'a CStr> {
         .find_map(|p| attr(p, c"data-nd-frame-url").filter(|url| !url.is_empty()))
 }
 
-pub(crate) fn platform_global_names(js: *const NsJs) -> Vec<Vec<u8>> {
+pub(crate) fn platform_global_names(js: Option<Page>) -> Vec<Vec<u8>> {
     let Some(record) = record(js) else {
         return Vec::new();
     };
     if record.platform_globals.borrow().is_none() {
         let saved = record.ctx.replace(main_context(record));
-        let globals = super::exports::snapshot_globals(super::Js(js.cast_mut()));
+        let globals = super::Js::of(js).map(super::exports::snapshot_globals);
         record.ctx.set(saved);
-        record.platform_globals.replace(Some(globals));
+        record.platform_globals.replace(globals);
     }
     record.platform_globals.borrow().clone().unwrap_or_default()
 }
 
-pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
+pub(crate) fn new_frame_context(js: Option<Page>) -> ContextHandle {
     let Some(record) = record(js) else {
         return ContextHandle::NULL;
     };
-    let fctx = record.rt.get().new_context(js.cast_mut().cast());
+    let fctx = record
+        .rt
+        .get()
+        .new_context(super::Js::of(js).map_or(ptr::null_mut(), super::Js::raw));
     if fctx.is_null() {
         return fctx;
     }
@@ -886,14 +889,14 @@ pub(crate) fn new_frame_context(js: *const NsJs) -> ContextHandle {
 }
 
 pub(crate) fn frame_realm_finish(
-    js: *mut NsJs,
+    js: Page,
     fctx: ContextHandle,
     frame_global: &Value,
     parent_global: &Value,
 ) {
     let interfaces = crate::api::interfaces_hooks();
     (interfaces.install_pdf_plugins)(fctx);
-    if let Some(record) = record(js) {
+    if let Some(record) = record(Some(js)) {
         adopt_frame_window_events(record, fctx, frame_global);
     }
     (interfaces.link_interface_ctors)(fctx);
@@ -926,7 +929,7 @@ pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<N
     node(record(page_of(scope))?.current_doc.get())
 }
 
-pub(crate) fn ce_main_doc(js: *const NsJs) -> Option<Node<'static>> {
+pub(crate) fn ce_main_doc(js: Option<Page>) -> Option<Node<'static>> {
     node(record(js)?.ce_main_doc.get())
 }
 
@@ -935,7 +938,7 @@ pub(crate) fn node_wrapper(scope: &mut Scope<'_>, n: *const NsNode) -> Option<Va
     Some(scope.object_from_identity(wrapper))
 }
 
-pub(crate) fn node_unpinned(js: *const NsJs, n: Node<'_>) -> bool {
+pub(crate) fn node_unpinned(js: Option<Page>, n: Node<'_>) -> bool {
     record(js).is_some_and(|js| {
         js.pinned_wrappers_set
             .borrow()
@@ -944,7 +947,7 @@ pub(crate) fn node_unpinned(js: *const NsJs, n: Node<'_>) -> bool {
     })
 }
 
-pub(crate) fn wrapper_pinned(js: *const NsJs, n: Node<'_>) -> bool {
+pub(crate) fn wrapper_pinned(js: Option<Page>, n: Node<'_>) -> bool {
     record(js).is_some_and(|js| {
         n.has_js_wrapper()
             && js
@@ -967,7 +970,7 @@ pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<V
 }
 
 pub(crate) fn ce_attr_changed(
-    js: *const NsJs,
+    js: Option<Page>,
     el: Node<'_>,
     attr_name: &CStr,
     old: Option<&CStr>,
@@ -984,7 +987,7 @@ pub(crate) fn ce_attr_changed(
     }
     let is_plain_script =
         is_named(el, c"script") && el.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS) == 0;
-    if !js.is_null()
+    if js.is_some()
         && attr_bytes.eq_ignore_ascii_case(b"src")
         && old.is_none()
         && new.is_some()
@@ -1099,7 +1102,7 @@ pub(crate) fn tag_caller_document(scope: &mut Scope<'_>, node_val: &Value) {
     }
 }
 
-pub(crate) fn free_frame_contexts(js: *const NsJs) {
+pub(crate) fn free_frame_contexts(js: Option<Page>) {
     let Some(record) = record(js) else {
         return;
     };
@@ -1110,26 +1113,26 @@ pub(crate) fn free_frame_contexts(js: *const NsJs) {
     }
 }
 
-pub(crate) fn frame_context_count(js: *const NsJs) -> u32 {
+pub(crate) fn frame_context_count(js: Option<Page>) -> u32 {
     record(js)
         .and_then(|js| js.frame_ctxs.borrow().as_ref().map(Vec::len))
         .map_or(0, |frames| frames as u32)
 }
 
-pub(crate) fn eval_polyfills(js: *const NsJs) {
-    if js.is_null() {
+pub(crate) fn eval_polyfills(js: Option<Page>) {
+    if js.is_none() {
         return;
     }
     eval_bundled(js, POLYFILLS, c"<polyfills>");
     eval_bundled(js, STREAMING, c"<streaming>");
 }
 
-pub(crate) fn snapshot_platform_globals(js: *const NsJs) {
+pub(crate) fn snapshot_platform_globals(js: Option<Page>) {
     let Some(record) = record(js) else {
         return;
     };
-    let globals = super::exports::snapshot_globals(super::Js(js.cast_mut()));
-    record.platform_globals.replace(Some(globals));
+    let globals = super::Js::of(js).map(super::exports::snapshot_globals);
+    record.platform_globals.replace(globals);
 }
 
 pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {
@@ -1138,7 +1141,7 @@ pub(crate) fn exception_message(scope: &mut Scope<'_>, ex: &Value) -> Vec<u8> {
         .unwrap_or_else(|_| b"Script error.".to_vec())
 }
 
-pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
+pub(crate) fn add_csp_header(js: Option<Page>, header_value: Option<&CStr>) {
     let Some(header_value) = header_value.filter(|header| !header.is_empty()) else {
         return;
     };
@@ -1154,7 +1157,7 @@ pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
     }
 }
 
-pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>) -> bool {
+pub(crate) fn csp_form_action_allowed(js: Option<Page>, action_url: Option<&CStr>) -> bool {
     let page = super::Js::of(js).and_then(super::Js::current_url);
     let Some(js) = record(js) else {
         return true;
@@ -1172,35 +1175,35 @@ pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>
     )
 }
 
-pub(crate) fn inline_handlers_allowed(js: *const NsJs) -> bool {
+pub(crate) fn inline_handlers_allowed(js: Option<Page>) -> bool {
     with_page_csp(js, |csp| csp.is_none_or(Csp::inline_event_handler_allowed))
 }
 
-pub(crate) fn time_origin_us(js: *const NsJs) -> i64 {
+pub(crate) fn time_origin_us(js: Option<Page>) -> i64 {
     record(js).map_or(0, |js| js.time_origin_us.get())
 }
 
-pub(crate) fn time_origin_real_ms(js: *const NsJs) -> f64 {
+pub(crate) fn time_origin_real_ms(js: Option<Page>) -> f64 {
     record(js).map_or(0.0, |js| js.time_origin_real_ms.get())
 }
 
-pub(crate) fn navigator_brand(js: *const NsJs) -> Value {
+pub(crate) fn navigator_brand(js: Option<Page>) -> Value {
     record(js).map_or_else(Value::undefined, |js| js.navigator_brand.borrow().clone())
 }
 
-pub(crate) fn pristine_promise(js: *const NsJs) -> Value {
+pub(crate) fn pristine_promise(js: Option<Page>) -> Value {
     record(js).map_or_else(Value::undefined, |js| js.pristine_promise.borrow().clone())
 }
 
-pub(crate) fn layout_root(js: *const NsJs) -> Option<BoxRef<'static>> {
+pub(crate) fn layout_root(js: Option<Page>) -> Option<BoxRef<'static>> {
     record(js)?.layout_root.get()
 }
 
-pub(crate) fn cookie_value(js: *const NsJs) -> Option<CString> {
+pub(crate) fn cookie_value(js: Option<Page>) -> Option<CString> {
     record(js)?.cookie_value.borrow().clone()
 }
 
-pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
+pub(crate) fn set_cookie_value(js: Option<Page>, value: Option<&CStr>) {
     let Some(record) = record(js) else {
         return;
     };
@@ -1208,28 +1211,28 @@ pub(crate) fn set_cookie_value(js: *const NsJs, value: Option<&CStr>) {
     record.cookie_value.replace(value);
 }
 
-pub(crate) fn cookie_version(js: *const NsJs) -> u64 {
+pub(crate) fn cookie_version(js: Option<Page>) -> u64 {
     record(js).map_or(0, |js| js.cookie_version.get())
 }
 
-pub(crate) fn set_cookie_version(js: *const NsJs, version: u64) {
+pub(crate) fn set_cookie_version(js: Option<Page>, version: u64) {
     if let Some(js) = record(js) {
         js.cookie_version.set(version);
     }
 }
 
-pub(crate) fn partition_key(js: *const NsJs) -> Option<CString> {
+pub(crate) fn partition_key(js: Option<Page>) -> Option<CString> {
     record(js)?.partition_key.borrow().clone()
 }
 
-pub(crate) fn with_page_csp<R>(js: *const NsJs, f: impl FnOnce(Option<&Csp>) -> R) -> R {
+pub(crate) fn with_page_csp<R>(js: Option<Page>, f: impl FnOnce(Option<&Csp>) -> R) -> R {
     match record(js) {
         Some(js) => f(js.csp.borrow().as_ref()),
         None => f(None),
     }
 }
 
-pub(crate) fn csp_allows_connect(js: *const NsJs, url: &CStr, page: Option<&CStr>) -> bool {
+pub(crate) fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
     with_page_csp(js, |csp| {
         csp.is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
     })

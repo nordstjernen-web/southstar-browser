@@ -13,7 +13,8 @@ use southstar_dom::Node;
 use southstar_js_collections as collections;
 use southstar_js_dispatch as dispatch;
 use southstar_js_engine::{ContextHandle, Scope, Value};
-use southstar_js_runtime::api::{self, NsJs};
+use southstar_js_runtime::api::Page;
+use southstar_js_runtime::api::{self};
 
 pub(crate) use api::AdoptedProtos as DomProtos;
 pub use installers::{
@@ -63,13 +64,13 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: DomProtos) {
     api::adopt_dom_protos(scope, protos);
 }
 
-fn page_record(scope: &Scope<'_>) -> *const NsJs {
-    scope.context_opaque().cast::<NsJs>().cast_const()
+fn page_record(scope: &Scope<'_>) -> Option<Page> {
+    Page::current(scope)
 }
 
 pub(crate) fn navigator_brand(scope: &Scope<'_>) -> Value {
     let js = page_record(scope);
-    if js.is_null() {
+    if js.is_none() {
         return Value::undefined();
     }
     api::navigator_brand(js)

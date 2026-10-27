@@ -7,18 +7,17 @@ use std::ffi::CString;
 
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 use southstar_style::StyleTable;
 
 use crate::Element;
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Option<Page>);
 
 impl Js {
     pub fn is_null(self) -> bool {
-        self.0.is_null()
+        self.0.is_none()
     }
 }
 
@@ -27,7 +26,7 @@ unsafe extern "C" {}
 use southstar_js_events::nsr_dom_exception;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js(scope.context_opaque().cast())
+    Js(Page::current(scope))
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {

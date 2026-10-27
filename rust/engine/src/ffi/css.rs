@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -97,7 +97,6 @@ pub struct Relayout<'a> {
     pub viewport_height: f64,
     pub images: Option<southstar_image::ImageCache>,
     pub anim: Option<southstar_anim::AnimHandle>,
-    pub js: *mut c_void,
     pub focused: *const NsNode,
     pub hover: *const NsNode,
     pub caret_byte: usize,
@@ -151,7 +150,6 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
         images: r.images,
         base_url: ptr_or_null(r.base),
         anim: r.anim,
-        js: r.js,
         focused_input: r.focused,
         hover_node: r.hover,
         caret_byte: r.caret_byte,
@@ -162,10 +160,14 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
     }
 }
 
-pub fn publish_to_page(js: *mut c_void, styles: Option<&Rc<StyleMap>>, layout: &Cell<*mut NsBox>) {
-    if !js.is_null() {
-        api::set_style_table(js.cast(), styles.cloned());
-        api::set_layout_root(js.cast(), layout_box(layout));
+pub fn publish_to_page(
+    js: Option<api::Page>,
+    styles: Option<&Rc<StyleMap>>,
+    layout: &Cell<*mut NsBox>,
+) {
+    if js.is_some() {
+        api::set_style_table(js, styles.cloned());
+        api::set_layout_root(js, layout_box(layout));
     }
 }
 
@@ -221,10 +223,14 @@ pub fn table_size(table: Option<&StyleMap>) -> c_uint {
     table.map_or(0, |table| table.len() as c_uint)
 }
 
-pub fn discard_layout(js: *mut c_void, styles: Option<Rc<StyleMap>>, layout: &Cell<*mut NsBox>) {
-    if !js.is_null() {
-        api::set_layout_root(js.cast(), None);
-        api::set_style_table(js.cast(), None);
+pub fn discard_layout(
+    js: Option<api::Page>,
+    styles: Option<Rc<StyleMap>>,
+    layout: &Cell<*mut NsBox>,
+) {
+    if js.is_some() {
+        api::set_layout_root(js, None);
+        api::set_style_table(js, None);
     }
     if let Some(root) = layout_box(layout) {
         BoxPool::free_tree(Some(root));

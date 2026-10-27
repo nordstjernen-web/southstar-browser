@@ -7,7 +7,8 @@ use core::ffi::CStr;
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 
-use crate::ffi::{NsJs, record, wrapper};
+use crate::api::Page;
+use crate::ffi::{record, wrapper};
 
 pub fn arm_js_invalidate(node: Node<'_>) {
     wrapper::arm_js_invalidate(node);
@@ -25,12 +26,12 @@ pub fn is_disabled_form_control(node: Node<'_>) -> bool {
     record::is_disabled_form_control(node)
 }
 
-pub fn insert_before_single(js: *const NsJs, child: Node<'_>, reference: Node<'_>) {
+pub fn insert_before_single(js: Option<Page>, child: Node<'_>, reference: Node<'_>) {
     record::insert_before_single(js, child, reference);
 }
 
 pub fn ce_attr_changed(
-    js: *const NsJs,
+    js: Option<Page>,
     node: Node<'_>,
     name: &CStr,
     old: Option<&CStr>,
@@ -39,7 +40,7 @@ pub fn ce_attr_changed(
     record::ce_attr_changed(js, node, name, old, new);
 }
 
-pub fn set_src_recorded(js: *const NsJs, node: Node<'_>, src: &[u8]) {
+pub fn set_src_recorded(js: Option<Page>, node: Node<'_>, src: &[u8]) {
     record::set_src_recorded(js, node, src);
 }
 
@@ -47,14 +48,14 @@ pub fn media_native_formats() -> u32 {
     record::media_native_formats()
 }
 
-pub fn form_reset(js: *const NsJs, form: Node<'_>) {
+pub fn form_reset(js: Option<Page>, form: Node<'_>) {
     record::form_reset(js, form);
 }
 
-pub fn set_layout_root(js: *const NsJs, root: Option<BoxRef<'_>>) {
+pub fn set_layout_root(js: Option<Page>, root: Option<BoxRef<'_>>) {
     record::set_layout_root(js, root);
 }
 
-pub fn add_csp_header(js: *const NsJs, header: Option<&CStr>) {
+pub fn add_csp_header(js: Option<Page>, header: Option<&CStr>) {
     record::add_csp_header(js, header);
 }

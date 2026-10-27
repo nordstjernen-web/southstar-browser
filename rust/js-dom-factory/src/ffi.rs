@@ -5,20 +5,18 @@
 mod imports;
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{AttrView, Node, Tree};
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
+use southstar_js_runtime::api::Page;
 
 use crate::names::{self, NameError};
 use crate::{Element, JsResult, adopt, constructors, factories, hyperlink, implementation};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
-
 #[derive(Clone, Copy)]
-pub(crate) struct Js(*mut NsJs);
+pub(crate) struct Js(Page);
 
 #[repr(C)]
 pub(crate) enum TargetMethod {
@@ -29,13 +27,12 @@ pub(crate) enum TargetMethod {
 
 unsafe extern "C" {}
 
-fn raw_js(js: Option<Js>) -> *mut NsJs {
-    js.map_or(ptr::null_mut(), |js| js.0)
+fn raw_js(js: Option<Js>) -> Option<Page> {
+    js.map(|js| js.0)
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
-    let js: *mut NsJs = scope.context_opaque().cast();
-    (!js.is_null()).then_some(Js(js))
+    Page::current(scope).map(Js)
 }
 
 pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
@@ -61,16 +58,16 @@ pub(crate) fn name_error(scope: &mut Scope<'_>, error: NameError) -> Value {
 
 pub(crate) fn track_orphan(js: Option<Js>, node: Element) {
     if let Some(js) = js {
-        southstar_js_mutation::track_orphan(js.0, node);
+        southstar_js_mutation::track_orphan(Some(js.0), node);
     }
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Element> {
-    api::current_document(js.0)
+    api::current_document(Some(js.0))
 }
 
 pub(crate) fn mark_mutated(js: Js) {
-    api::mark_mutated(js.0);
+    api::mark_mutated(Some(js.0));
 }
 
 pub(crate) fn record_removal(
@@ -80,7 +77,14 @@ pub(crate) fn record_removal(
     previous: Option<Element>,
     next: Option<Element>,
 ) {
-    southstar_js_mutation::record_child_change(js.0, parent, None, Some(node), previous, next);
+    southstar_js_mutation::record_child_change(
+        Some(js.0),
+        parent,
+        None,
+        Some(node),
+        previous,
+        next,
+    );
 }
 
 pub(crate) fn ce_upgrade_element(js: Option<Js>, node: Element) {
@@ -88,7 +92,7 @@ pub(crate) fn ce_upgrade_element(js: Option<Js>, node: Element) {
 }
 
 pub(crate) fn ce_upgrade_subtree_detached(js: Js, root: Element) {
-    southstar_js_custom_elements::upgrade_subtree_detached(js.0, root);
+    southstar_js_custom_elements::upgrade_subtree_detached(Some(js.0), root);
 }
 
 pub(crate) fn in_template_content(node: Element) -> bool {
@@ -165,7 +169,7 @@ pub(crate) fn synth_xml_document(scope: &mut Scope<'_>) -> Value {
 }
 
 pub(crate) fn doc_base_url(js: Option<Js>) -> Option<Vec<u8>> {
-    southstar_js_document::doc_base_url(js?.0)
+    southstar_js_document::doc_base_url(Some(js?.0))
 }
 
 pub(crate) fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
@@ -302,8 +306,8 @@ pub fn nsr_tag_owner_document(scope: &mut Scope<'_>, document: &Value, node: &Va
     adopt::tag_owner_document(scope, document, node);
 }
 
-pub(crate) fn anchor_resolved_href(js: *const NsJs, node: Node<'_>) -> Option<Vec<u8>> {
-    let js = (!js.is_null()).then_some(Js(js.cast_mut()));
+pub(crate) fn anchor_resolved_href(js: Option<Page>, node: Node<'_>) -> Option<Vec<u8>> {
+    let js = js.map(Js);
     node.downgrade()
         .get()
         .and_then(|node| hyperlink::resolved_href(node, js))

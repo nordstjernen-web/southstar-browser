@@ -4,13 +4,14 @@
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
+use southstar_js_runtime::api::Page;
 
 pub use crate::ui_events::{KeyPress, Modifiers, Toggle};
 
 use crate::Element;
-use crate::ffi::{Js, NsJs, js_of};
+use crate::ffi::{Js, js_of};
 
-fn live(js: *const NsJs) -> Option<Js> {
+fn live(js: Option<Page>) -> Option<Js> {
     let js = Js::of(js);
     (!js.is_null()).then_some(js)
 }
@@ -19,21 +20,21 @@ fn element(node: Node<'_>) -> Option<Element> {
     node.downgrade().get()
 }
 
-fn on_page<R: Default>(js: *const NsJs, target: Node<'_>, f: impl FnOnce(Js, Element) -> R) -> R {
+fn on_page<R: Default>(js: Option<Page>, target: Node<'_>, f: impl FnOnce(Js, Element) -> R) -> R {
     match (live(js), element(target)) {
         (Some(js), Some(target)) => f(js, target),
         _ => R::default(),
     }
 }
 
-pub fn dispatch_event(js: *const NsJs, target: Node<'_>, kind: &str) -> (bool, bool) {
+pub fn dispatch_event(js: Option<Page>, target: Node<'_>, kind: &str) -> (bool, bool) {
     on_page(js, target, |js, target| {
         crate::dispatch::dispatch_event(js, target, kind)
     })
 }
 
 pub fn dispatch_built_event(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     kind: &str,
     event: Value,
@@ -45,7 +46,7 @@ pub fn dispatch_built_event(
 }
 
 pub fn dispatch_window_only_event(
-    js: *const NsJs,
+    js: Option<Page>,
     document: Option<Node<'_>>,
     kind: &str,
     event: Value,
@@ -53,35 +54,35 @@ pub fn dispatch_window_only_event(
     crate::dispatch::dispatch_window_only(Js::of(js), document.and_then(element), kind, event)
 }
 
-pub fn dispatch_resource_event(js: *const NsJs, target: Node<'_>, kind: &str) -> bool {
+pub fn dispatch_resource_event(js: Option<Page>, target: Node<'_>, kind: &str) -> bool {
     on_page(js, target, |js, target| {
         crate::ui_events::resource_event(js, target, kind)
     })
 }
 
 pub fn window_for_document(
-    js: *const NsJs,
+    js: Option<Page>,
     scope: &mut Scope<'_>,
     document: Option<Node<'_>>,
 ) -> Value {
     crate::dispatch::window_for_document(Js::of(js), scope, document.and_then(element))
 }
 
-pub fn fire_element_handlers(js: *const NsJs, target: Node<'_>, kind: &str, event: &Value) {
+pub fn fire_element_handlers(js: Option<Page>, target: Node<'_>, kind: &str, event: &Value) {
     on_page(js, target, |js, target| {
         crate::handlers::fire_inline(js, target, kind, event);
         crate::handlers::fire_property(js, target, kind, event);
     })
 }
 
-pub fn report_uncaught(js: *const NsJs, exception: &Value, origin: Option<&str>) {
+pub fn report_uncaught(js: Option<Page>, exception: &Value, origin: Option<&str>) {
     if let Some(js) = live(js) {
         crate::errors::report_exception_at(js, exception, origin, 0, 0);
     }
 }
 
 pub fn report_handler_exception(
-    js: *const NsJs,
+    js: Option<Page>,
     scope: &mut Scope<'_>,
     kind: Option<&str>,
     exception: &Value,
@@ -94,7 +95,7 @@ pub fn init_flags(kind: &str, at_document: bool) -> (bool, bool) {
 }
 
 pub fn dispatch_key_event(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     kind: &str,
     press: &KeyPress<'_>,
@@ -105,7 +106,7 @@ pub fn dispatch_key_event(
 }
 
 pub fn dispatch_input_event(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     kind: &str,
     input_type: Option<&str>,
@@ -117,7 +118,7 @@ pub fn dispatch_input_event(
 }
 
 pub fn dispatch_toggle_event(
-    js: *const NsJs,
+    js: Option<Page>,
     target: Node<'_>,
     kind: &str,
     toggle: &Toggle<'_>,
@@ -127,13 +128,13 @@ pub fn dispatch_toggle_event(
     })
 }
 
-pub fn path_has_active_listener(js: *const NsJs, target: Node<'_>, kind: &str) -> bool {
+pub fn path_has_active_listener(js: Option<Page>, target: Node<'_>, kind: &str) -> bool {
     on_page(js, target, |js, target| {
         crate::dispatch::path_has_active_listener(js, target, kind)
     })
 }
 
-pub fn node_has_click_handler(js: *const NsJs, target: Node<'_>) -> bool {
+pub fn node_has_click_handler(js: Option<Page>, target: Node<'_>) -> bool {
     on_page(js, target, |js, target| {
         ["click", "pointerdown", "mousedown", "touchstart"]
             .iter()
@@ -165,7 +166,7 @@ pub fn forward_body_content_handler(
 }
 
 pub fn report_error_event_in(
-    js: *const NsJs,
+    js: Option<Page>,
     ctx: ContextHandle,
     message: Option<&str>,
     filename: Option<&str>,
@@ -180,13 +181,13 @@ pub fn report_error_event_in(
     });
 }
 
-pub fn drop_pending_rejections(js: *const NsJs) {
+pub fn drop_pending_rejections(js: Option<Page>) {
     if let Some(js) = live(js) {
         crate::errors::drop_rejections(js);
     }
 }
 
-pub fn reset(js: *const NsJs) {
+pub fn reset(js: Option<Page>) {
     let Some(js) = live(js) else {
         return;
     };
@@ -205,7 +206,7 @@ pub fn reset(js: *const NsJs) {
     drop(reported);
 }
 
-pub fn listener_count(js: *const NsJs) -> usize {
+pub fn listener_count(js: Option<Page>) -> usize {
     live(js).map_or(0, |js| {
         crate::peek(js, |page| page.listeners.values().map(Vec::len).sum())
     })

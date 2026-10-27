@@ -16,7 +16,7 @@ use southstar_js_runtime::api;
 use crate::store::{Area, Items, Snapshot};
 use crate::{Page, binding, class, events};
 
-pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::api::Page as JsPage;
 
 #[repr(C)]
 struct GKeyFile {
@@ -24,19 +24,19 @@ struct GKeyFile {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Js(usize);
+pub(crate) struct Js(Option<JsPage>);
 
 impl Js {
-    fn from_ptr(js: *mut NsJs) -> Js {
-        Js(js as usize)
+    fn page(self) -> Option<JsPage> {
+        self.0
     }
 
-    fn ptr(self) -> *mut NsJs {
-        self.0 as *mut NsJs
+    fn raw(self) -> *mut c_void {
+        self.0.map_or(ptr::null_mut(), JsPage::as_raw)
     }
 
     pub fn is_null(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
@@ -103,7 +103,7 @@ fn taken(text: *mut c_char) -> Option<String> {
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
-    Js::from_ptr(scope.context_opaque().cast())
+    Js(JsPage::current(scope))
 }
 
 pub(crate) fn area_of(value: &Value) -> Option<Area> {
@@ -115,23 +115,23 @@ pub(crate) fn new_storage(scope: &mut Scope<'_>, area: i32) -> Value {
 }
 
 pub(crate) fn halted(js: Js) -> bool {
-    api::halted(js.ptr())
+    api::halted(js.page())
 }
 
 pub(crate) fn in_frame_load(js: Js) -> bool {
-    api::in_frame_load(js.ptr())
+    api::in_frame_load(js.page())
 }
 
 pub(crate) fn current_url(js: Js) -> Option<String> {
-    Some(api::current_url(js.ptr()).to_string_lossy().into_owned())
+    Some(api::current_url(js.page()).to_string_lossy().into_owned())
 }
 
 pub(crate) fn current_document(js: Js) -> Option<Node<'static>> {
-    api::current_document(js.ptr())
+    api::current_document(js.page())
 }
 
 pub(crate) fn in_page_context<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
-    api::main_context(js.ptr()).with(f)
+    api::main_context(js.page()).with(f)
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
@@ -139,11 +139,11 @@ pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
 }
 
 pub(crate) fn frame_realm_window(js: Js, frame: Node<'_>) -> Value {
-    (api::frames_hooks().frame_realm_window)(js.ptr(), frame)
+    (api::frames_hooks().frame_realm_window)(js.page(), frame)
 }
 
 pub(crate) fn inline_handlers_allowed(js: Js) -> bool {
-    api::inline_handlers_allowed(js.ptr())
+    api::inline_handlers_allowed(js.page())
 }
 
 pub(crate) fn fire_element_handlers(
@@ -153,23 +153,23 @@ pub(crate) fn fire_element_handlers(
     kind: &str,
     event: &Value,
 ) {
-    southstar_js_runtime::events::fire_element_handlers(js.ptr(), element, kind, event);
+    southstar_js_runtime::events::fire_element_handlers(js.page(), element, kind, event);
 }
 
 pub(crate) fn dispatch_window_event(_scope: &mut Scope<'_>, js: Js, kind: &str, event: &Value) {
-    api::dispatch_document_window_event(js.ptr(), kind, event.clone());
+    api::dispatch_document_window_event(js.page(), kind, event.clone());
 }
 
 pub(crate) fn drain_microtasks(js: Js) {
-    api::drain_microtasks(js.ptr());
+    api::drain_microtasks(js.page());
 }
 
 pub(crate) fn log_line(js: Js, line: &str) {
-    api::log_line(js.ptr(), &c_text(line));
+    api::log_line(js.page(), &c_text(line));
 }
 
 pub(crate) fn in_main_realm(js: Js, f: impl FnMut()) {
-    api::in_main_realm(js.ptr(), f);
+    api::in_main_realm(js.page(), f);
 }
 
 fn warn(message: &str) {
@@ -335,7 +335,7 @@ fn flush(page: &Page) {
 }
 
 unsafe extern "C" fn flush_timer(data: *mut c_void) -> GBoolean {
-    if let Some(page) = crate::page(Js(data as usize)) {
+    if let Some(page) = crate::page(Js(JsPage::from_raw(data))) {
         page.flush_source.set(0);
         flush(&page);
     }
@@ -346,7 +346,7 @@ fn schedule_flush(js: Js, page: &Page) {
     if !page.storage.borrow().wants_flush() || page.flush_source.get() != 0 {
         return;
     }
-    let source = unsafe { g_timeout_add(1000, flush_timer, js.ptr().cast()) };
+    let source = unsafe { g_timeout_add(1000, flush_timer, js.raw()) };
     page.flush_source.set(source);
 }
 
@@ -363,8 +363,8 @@ fn load_local(page: &Rc<Page>, url: Option<String>) {
     page.storage.borrow_mut().adopt_origin(origin);
 }
 
-pub fn free_deferred_events(js: *const NsJs) {
-    events::discard(Js::from_ptr(js.cast_mut()));
+pub fn free_deferred_events(js: Option<JsPage>) {
+    events::discard(Js(js));
 }
 
 pub fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value) {
@@ -381,33 +381,33 @@ pub fn nsr_storage_new(scope: &mut Scope<'_>, area: i32) -> Result<Value, Value>
     class::new_storage(scope, area)
 }
 
-fn init(js: *const NsJs) {
-    crate::init(Js::from_ptr(js.cast_mut()));
+fn init(js: JsPage) {
+    crate::init(Js(Some(js)));
 }
 
-fn teardown(js: *const NsJs) {
-    crate::teardown(Js::from_ptr(js.cast_mut()));
+fn teardown(js: JsPage) {
+    crate::teardown(Js(Some(js)));
 }
 
-fn flush_page(js: *const NsJs) {
-    if let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) {
+fn flush_page(js: JsPage) {
+    if let Some(page) = crate::page(Js(Some(js))) {
         flush(&page);
     }
 }
 
-fn schedule_page_flush(js: *const NsJs) {
-    let js = Js::from_ptr(js.cast_mut());
+fn schedule_page_flush(js: JsPage) {
+    let js = Js(Some(js));
     if let Some(page) = crate::page(js) {
         schedule_flush(js, &page);
     }
 }
 
-fn drain_deferred_events(js: *const NsJs) {
-    events::drain(Js::from_ptr(js.cast_mut()));
+fn drain_deferred_events(js: JsPage) {
+    events::drain(Js(Some(js)));
 }
 
-fn switch_session(js: *const NsJs, old_partition: Option<&CStr>, new_partition: &CStr) {
-    let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) else {
+fn switch_session(js: Option<JsPage>, old_partition: Option<&CStr>, new_partition: &CStr) {
+    let Some(page) = crate::page(Js(js)) else {
         return;
     };
     let old = old_partition.map(|old| old.to_string_lossy().into_owned());
@@ -417,8 +417,8 @@ fn switch_session(js: *const NsJs, old_partition: Option<&CStr>, new_partition: 
         .switch_session(old.as_deref(), &new);
 }
 
-fn load_page_local(js: *const NsJs, url: Option<&CStr>) {
-    if let Some(page) = crate::page(Js::from_ptr(js.cast_mut())) {
+fn load_page_local(js: Option<JsPage>, url: Option<&CStr>) {
+    if let Some(page) = crate::page(Js(js)) {
         load_local(&page, url.map(|url| url.to_string_lossy().into_owned()));
     }
 }
@@ -430,7 +430,7 @@ pub fn install_runtime_hooks() {
         flush: flush_page,
         schedule_flush: schedule_page_flush,
         drain_deferred_events,
-        free_deferred_events,
+        free_deferred_events: |js| free_deferred_events(Some(js)),
         switch_session,
         load_local: load_page_local,
     });
