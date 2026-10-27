@@ -147,10 +147,6 @@ impl Drop for StrBufOwned {
     }
 }
 
-pub unsafe fn append_to(s: *mut GString, bytes: &[u8]) {
-    unsafe { g_string_append_len(s, bytes.as_ptr().cast(), bytes.len() as isize) };
-}
-
 pub fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
 }

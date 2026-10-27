@@ -2249,7 +2249,6 @@ name = "southstar-html-parser"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-html5",
  "southstar-xml",
 ]

@@ -679,9 +679,8 @@ pub fn set_blob_resolver(resolver: BlobResolver) {
 /// `body` holds `body_len` readable bytes or is null, `extra_headers` is null or a
 /// NULL-terminated array of NUL-terminated lines, and `cancellable` is null or a live
 /// GCancellable; `callback` receives `user_data` on the main context.
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_net_request_async(
+pub unsafe fn ns_net_request_async(
     url: *const c_char,
     top_url: *const c_char,
     method: *const c_char,
@@ -719,9 +718,8 @@ pub unsafe extern "C" fn ns_net_request_async(
     submit_request(&req, cancellable, callback, user_data);
 }
 
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_net_request_blocking(
+pub unsafe fn ns_net_request_blocking(
     url: *const c_char,
     top_url: *const c_char,
     method: *const c_char,
@@ -768,11 +766,7 @@ pub fn fetch_blocking(url: &CStr) -> Option<Response> {
 ///
 /// `result` is the GAsyncResult a request callback received, and `error` is null or
 /// points to a null GError slot.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_fetch_finish(
-    result: *mut c_void,
-    error: *mut *mut GError,
-) -> *mut NsResponse {
+pub unsafe fn ns_net_fetch_finish(result: *mut c_void, error: *mut *mut GError) -> *mut NsResponse {
     if unsafe { g_task_is_valid(result, ptr::null_mut()) } == 0 {
         unsafe {
             g_return_if_fail_warning(

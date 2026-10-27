@@ -31,6 +31,12 @@ Southstar Browser 1.0.3:
 
 Southstar Browser 1.0.2:
 ======
+* Leftover C ABI from the port removed: nine `ns_browser_*` exports the
+  embedding header no longer declares, the HTML parser's C entry points
+  (the crate now forbids unsafe code), the IPC crate's `json_escape` and
+  the iframe-sandbox exports nothing called, and 28 `#[no_mangle]` network,
+  render, layout and mutation functions that only their own crate calls,
+  which are now ordinary Rust functions.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

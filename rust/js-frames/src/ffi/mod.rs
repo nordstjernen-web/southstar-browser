@@ -7,7 +7,7 @@ pub(crate) mod form;
 mod imports;
 pub(crate) mod load;
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
@@ -18,7 +18,7 @@ use southstar_layout::BoxRef;
 
 use self::imports::*;
 use crate::page::{self, Frame};
-use crate::{cloner, globals, origin, owner, queue, realm, sandbox};
+use crate::{cloner, globals, origin, owner, queue, realm};
 use ctx::{Ctx, PropertyKey};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
@@ -509,11 +509,6 @@ pub fn install_runtime_hooks() {
         forget_node,
         realms_same_origin,
     });
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_iframe_effective_sandbox(node: *const NsNode) -> c_uint {
-    unsafe { Node::from_ptr(node) }.map_or(0, sandbox::effective)
 }
 
 #[unsafe(no_mangle)]

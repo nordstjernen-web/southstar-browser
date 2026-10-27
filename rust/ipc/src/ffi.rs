@@ -1,14 +1,9 @@
-//! Southstar — the C ABI of the renderer protocol's framing, and the descriptor calls behind it.
+//! Southstar — the descriptor calls behind the renderer protocol's framing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::c_int;
 use std::io;
-
-unsafe extern "C" {
-    fn malloc(size: usize) -> *mut c_void;
-}
 
 #[cfg(unix)]
 mod sys {
@@ -292,28 +287,4 @@ pub(crate) fn read(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
 
 pub(crate) fn write(fd: c_int, buf: &[u8]) -> io::Result<usize> {
     sys::write_fd(fd, buf)
-}
-
-unsafe fn bytes<'a>(s: *const c_char) -> Option<&'a [u8]> {
-    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) }.to_bytes())
-}
-
-fn malloc_string(text: &[u8]) -> *mut c_char {
-    let out = unsafe { malloc(text.len() + 1) }.cast::<u8>();
-    if !out.is_null() {
-        unsafe {
-            ptr::copy_nonoverlapping(text.as_ptr(), out, text.len());
-            *out.add(text.len()) = 0;
-        }
-    }
-    out.cast()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn json_escape(s: *const c_char) -> *mut c_char {
-    let s = unsafe { bytes(s) }.unwrap_or_default();
-    if s.len() > (usize::MAX - 1) / 6 {
-        return ptr::null_mut();
-    }
-    malloc_string(&crate::json_escape(s))
 }

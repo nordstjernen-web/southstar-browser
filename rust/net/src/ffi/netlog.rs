@@ -23,9 +23,8 @@ pub fn set_log_fetches(on: bool) {
     netlog::LOG_FETCHES.store(on, Ordering::Relaxed);
 }
 
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn ns_net_log_record(
+pub unsafe fn ns_net_log_record(
     method: *const c_char,
     url: *const c_char,
     status: c_long,
@@ -55,13 +54,11 @@ pub unsafe extern "C" fn ns_net_log_record(
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_perf_record(start_us: i64, end_us: i64, bytes: u64) {
+pub fn ns_net_perf_record(start_us: i64, end_us: i64, bytes: u64) {
     netlog::record_timing(start_us, end_us, bytes);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_net_conn_stat_record(
+pub unsafe fn ns_net_conn_stat_record(
     url: *const c_char,
     http_version: c_long,
     new_connections: c_long,
@@ -74,7 +71,6 @@ pub unsafe extern "C" fn ns_net_conn_stat_record(
     southstar_debuglog::emit(DLOG_NET, b"conn", &message);
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ns_net_http_version_name(version: c_long) -> *const c_char {
+pub fn ns_net_http_version_name(version: c_long) -> *const c_char {
     netlog::version_name(version).as_ptr()
 }
