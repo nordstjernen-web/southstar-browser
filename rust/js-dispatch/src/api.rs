@@ -53,6 +53,46 @@ pub fn dispatch_window_only_event(
     crate::dispatch::dispatch_window_only(Js::of(js), document.and_then(element), kind, event)
 }
 
+pub fn dispatch_resource_event(js: *const NsJs, target: Node<'_>, kind: &str) -> bool {
+    on_page(js, target, |js, target| {
+        crate::ui_events::resource_event(js, target, kind)
+    })
+}
+
+pub fn window_for_document(
+    js: *const NsJs,
+    scope: &mut Scope<'_>,
+    document: Option<Node<'_>>,
+) -> Value {
+    crate::dispatch::window_for_document(Js::of(js), scope, document.and_then(element))
+}
+
+pub fn fire_element_handlers(js: *const NsJs, target: Node<'_>, kind: &str, event: &Value) {
+    on_page(js, target, |js, target| {
+        crate::handlers::fire_inline(js, target, kind, event);
+        crate::handlers::fire_property(js, target, kind, event);
+    })
+}
+
+pub fn report_uncaught(js: *const NsJs, exception: &Value, origin: Option<&str>) {
+    if let Some(js) = live(js) {
+        crate::errors::report_exception_at(js, exception, origin, 0, 0);
+    }
+}
+
+pub fn report_handler_exception(
+    js: *const NsJs,
+    scope: &mut Scope<'_>,
+    kind: Option<&str>,
+    exception: &Value,
+) {
+    crate::errors::report_handler_exception(Js::of(js), scope, kind, exception);
+}
+
+pub fn init_flags(kind: &str, at_document: bool) -> (bool, bool) {
+    crate::dispatch::init_flags(kind, at_document)
+}
+
 pub fn dispatch_key_event(
     js: *const NsJs,
     target: Node<'_>,

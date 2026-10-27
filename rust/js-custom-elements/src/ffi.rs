@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -28,10 +28,6 @@ impl Js {
     fn ptr(self) -> *mut NsJs {
         self.0 as *mut NsJs
     }
-}
-
-unsafe extern "C" {
-    fn ns_js_popover_removing(js: *mut NsJs, node: *mut NsNode);
 }
 
 fn c_string(text: &str) -> CString {
@@ -89,7 +85,7 @@ pub(crate) fn realm_document(scope: &mut Scope<'_>) -> Option<Element> {
 }
 
 pub(crate) fn popover_removing(js: Js, node: Element) {
-    unsafe { ns_js_popover_removing(js.ptr(), node.as_mut_ptr()) }
+    (api::top_layer_hooks().popover_removing)(js.ptr(), node)
 }
 
 pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &str) -> Value {

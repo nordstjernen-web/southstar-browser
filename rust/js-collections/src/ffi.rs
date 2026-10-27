@@ -9,7 +9,6 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -36,11 +35,6 @@ impl Js {
 }
 
 const SYNTAX_ERR: i32 = 12;
-
-unsafe extern "C" {
-    fn ns_form_listed_controls(form: *const NsNode, include_image: GBoolean, out: *mut GPtrArray);
-    fn g_ptr_array_new() -> *mut GPtrArray;
-}
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js::of(scope.context_opaque().cast())
@@ -111,8 +105,7 @@ pub(crate) fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
 }
 
 pub(crate) fn build_labels(scope: &mut Scope<'_>, control: Element) -> Value {
-    unsafe { imports::nsr_live_build_labels(scope, control.as_ptr()) }
-        .unwrap_or_else(|_| Value::undefined())
+    (api::elements_hooks().build_labels)(scope, control).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn form_elements_named(scope: &mut Scope<'_>, snapshot: &Value, name: &CStr) -> Value {
@@ -121,16 +114,8 @@ pub(crate) fn form_elements_named(scope: &mut Scope<'_>, snapshot: &Value, name:
 }
 
 pub(crate) fn form_listed_controls(form: Element, mut visit: impl FnMut(Element)) {
-    unsafe {
-        let array = g_ptr_array_new();
-        ns_form_listed_controls(form.as_ptr(), glib::FALSE, array);
-        let raw = &*array;
-        for i in 0..raw.len as usize {
-            if let Some(control) = node((*raw.pdata.add(i)).cast()) {
-                visit(control);
-            }
-        }
-        glib::g_ptr_array_free(array, glib::TRUE);
+    for control in (api::forms_hooks().listed_controls)(form, false) {
+        visit(control);
     }
 }
 

@@ -75,6 +75,9 @@ pub(crate) fn split_prefix(qname: &[u8]) -> (Option<&[u8]>, &[u8]) {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_dom_factory_hooks(southstar_js_runtime::api::DomFactoryHooks {
+        anchor_resolved_href: crate::ffi::anchor_resolved_href,
+    });
     southstar_js_document::links::set_js_dom_factory_links(
         southstar_js_document::links::JsDomFactoryLinks {
             document_adopt_node: crate::ffi::nsr_document_adopt_node,

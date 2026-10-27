@@ -2,34 +2,21 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode, Tree};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::{Node, Tree};
 use southstar_js_engine::Value;
 use southstar_js_runtime::api::{self, ResourceInfo, Upload};
 
 use super::ctx::Ctx;
-use super::imports::{nsr_realmdoc_deny_cookie, nsr_window_link_outward};
-use super::{Js, NsJs, c_string};
+use super::imports::nsr_realmdoc_deny_cookie;
+use super::{Js, c_string};
 
 pub(crate) use southstar_net::Response;
 
 unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
-    fn ns_js_dispatch_resource_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-    ) -> GBoolean;
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_fire_page_transition(js: *mut NsJs, kind: *const c_char, persisted: GBoolean);
 }
 
 pub(crate) fn monotonic_time() -> i64 {
@@ -246,22 +233,19 @@ pub(crate) fn mark_attr_dirty(node: Node<'_>, name: &CStr) {
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, target: Node<'_>, kind: &CStr) {
-    unsafe { ns_js_dispatch_resource_event(js.ptr(), target.as_ptr(), kind.as_ptr()) };
+    southstar_js_runtime::events::dispatch_resource_event(
+        js.ptr(),
+        target,
+        &kind.to_string_lossy(),
+    );
 }
 
 pub(crate) fn dispatch_event(js: Js, target: Node<'_>, kind: &CStr) {
-    unsafe {
-        ns_js_dispatch_event(
-            js.ptr(),
-            target.as_ptr(),
-            kind.as_ptr(),
-            core::ptr::null_mut(),
-        )
-    };
+    southstar_js_runtime::events::dispatch_event(js.ptr(), target, &kind.to_string_lossy());
 }
 
 pub(crate) fn fire_page_transition(js: Js, kind: &CStr) {
-    unsafe { ns_js_fire_page_transition(js.ptr(), kind.as_ptr(), glib::FALSE) };
+    (api::window_hooks().fire_page_transition)(js.ptr(), kind, false);
 }
 
 pub(crate) fn mark_scripts_already_started(root: Node<'_>) {
@@ -311,7 +295,7 @@ pub(crate) fn deny_cookie(ctx: Ctx, doc: &Value) {
 }
 
 pub(crate) fn link_outward(js: Js, outward: &Value, realm_window: &Value) {
-    unsafe { nsr_window_link_outward(js.ptr(), outward, realm_window) };
+    (api::window_hooks().link_outward)(js.ptr(), outward, realm_window);
 }
 
 pub(crate) fn eval_budget_us() -> i64 {

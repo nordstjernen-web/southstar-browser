@@ -18,9 +18,9 @@ pub use ffi::{doc_base_url, seed_cookies_from_jar};
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
 
+pub use ffi::make_realm_document;
 pub use ffi::nsr_document_define_doctype_getter;
 pub use ffi::nsr_document_lift_methods_to_proto;
-pub use ffi::nsr_make_realm_document;
 pub use ffi::nsr_make_synth_xml_document;
 
 pub use ffi::nsr_document_close;

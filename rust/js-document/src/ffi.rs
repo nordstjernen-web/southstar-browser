@@ -36,10 +36,6 @@ unsafe extern "C" {
     fn g_date_time_unref(datetime: *mut c_void);
 }
 
-fn node_of(raw: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(raw) }
-}
-
 fn raw(node: Option<Element>) -> *mut NsNode {
     node.map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
@@ -109,20 +105,8 @@ pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame:
     southstar_js_frames::iframe_realm_window(scope, element, frame)
 }
 
-fn glib_bytes(bytes: Option<Vec<u8>>) -> *mut c_char {
-    bytes.map_or(ptr::null_mut(), |bytes| glib::strdup(&bytes))
-}
-
 pub fn doc_base_url(js: *const NsJs) -> Option<Vec<u8>> {
     crate::base_url::page_base_url(Js(js.cast_mut()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_node_document_base_url(
-    js: *mut NsJs,
-    node: *const NsNode,
-) -> *mut c_char {
-    glib_bytes(crate::base_url::node_base_url(Js(js), node_of(node)))
 }
 
 pub(crate) fn current_url(js: Js) -> Option<Vec<u8>> {
@@ -453,32 +437,6 @@ fn text_arg(text: Option<&[u8]>) -> Option<&[u8]> {
     text.filter(|t| !t.is_empty())
 }
 
-/// # Safety
-///
-/// `doc_node` is null or points at a live document node.
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_make_realm_document(
-    scope: &mut Scope<'_>,
-    doc_node: *mut NsNode,
-    url: Option<&[u8]>,
-    charset: Option<&[u8]>,
-    content_type: Option<&[u8]>,
-    is_xml: bool,
-    inert: bool,
-) -> Value {
-    let Some(doc) = node_of(doc_node) else {
-        return Value::null();
-    };
-    let options = crate::realm::RealmDocument {
-        url: text_arg(url).unwrap_or(b"about:blank"),
-        charset: text_arg(charset).unwrap_or(b"UTF-8"),
-        content_type: text_arg(content_type),
-        is_xml,
-        inert,
-    };
-    crate::realm::make(scope, doc, &options)
-}
-
 pub fn nsr_make_synth_xml_document(scope: &mut Scope<'_>) -> Value {
     crate::realm::synth_xml(scope)
 }
@@ -510,6 +468,8 @@ pub fn install_runtime_hooks() {
         base_url: doc_base_url,
         flush_write,
         write_teardown,
+        node_base_url: node_document_base_url,
+        make_realm_document,
     });
     southstar_js_frames::links::set_js_document_links(
         southstar_js_frames::links::JsDocumentLinks {
@@ -521,4 +481,30 @@ pub fn install_runtime_hooks() {
             document_ctor: crate::ffi::nsr_document_ctor,
         },
     );
+}
+
+fn node_document_base_url(js: *const NsJs, node: Node<'_>) -> Option<Vec<u8>> {
+    crate::base_url::node_base_url(Js(js.cast_mut()), node.downgrade().get())
+}
+
+pub fn make_realm_document(
+    scope: &mut Scope<'_>,
+    doc: Node<'_>,
+    url: Option<&[u8]>,
+    charset: Option<&[u8]>,
+    content_type: Option<&[u8]>,
+    is_xml: bool,
+    inert: bool,
+) -> Value {
+    let Some(doc) = doc.downgrade().get() else {
+        return Value::null();
+    };
+    let options = crate::realm::RealmDocument {
+        url: text_arg(url).unwrap_or(b"about:blank"),
+        charset: text_arg(charset).unwrap_or(b"UTF-8"),
+        content_type: text_arg(content_type),
+        is_xml,
+        inert,
+    };
+    crate::realm::make(scope, doc, &options)
 }

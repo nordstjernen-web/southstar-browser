@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_long, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -66,16 +66,6 @@ unsafe extern "C" {
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
 
-    fn ns_sw_controller_for(js: *mut NsJs, abs_url: *const c_char) -> *mut c_void;
-    fn ns_sw_post_fetch_request(
-        host: *mut c_void,
-        id: c_uint,
-        url: *const c_char,
-        method: *const c_char,
-        headers: *const *const c_char,
-        body: *const u8,
-        body_len: usize,
-    );
 }
 
 #[allow(clippy::unnecessary_cast)]
@@ -561,9 +551,8 @@ impl Js {
         if self.is_null() || self.is_worker() {
             return None;
         }
-        let url = cstring(url);
-        let host = unsafe { ns_sw_controller_for(self.ptr(), url.as_ptr()) };
-        (!host.is_null()).then_some(ServiceWorker(host))
+        (api::workers_hooks().sw_controller_for)(self.ptr(), &String::from_utf8_lossy(url))
+            .map(ServiceWorker)
     }
 
     pub fn attach_idle(self, func: GSourceFunc, data: *mut c_void) {
@@ -588,22 +577,23 @@ pub(crate) struct Timing<'a> {
     pub end_us: i64,
 }
 
-pub(crate) struct ServiceWorker(*mut c_void);
+pub(crate) struct ServiceWorker(api::ServiceWorkerController);
 
 impl ServiceWorker {
     pub fn post_fetch(&self, id: u32, request: &Request) {
-        let headers = request.header_pointers();
-        unsafe {
-            ns_sw_post_fetch_request(
-                self.0,
-                id,
-                request.url.as_ptr(),
-                request.method.as_ptr(),
-                headers.as_ptr(),
-                request.body.as_ptr(),
-                request.body.len(),
-            )
+        let headers: Vec<String> = request
+            .headers
+            .iter()
+            .map(|h| h.to_string_lossy().into_owned())
+            .collect();
+        let fetch = api::ServiceWorkerFetch {
+            id,
+            url: &request.url.to_string_lossy(),
+            method: &request.method.to_string_lossy(),
+            headers: &headers,
+            body: &request.body,
         };
+        (api::workers_hooks().sw_post_fetch)(&self.0, &fetch);
     }
 }
 
@@ -620,14 +610,6 @@ pub(crate) struct Request {
 }
 
 impl Request {
-    fn header_pointers(&self) -> Vec<*const c_char> {
-        self.headers
-            .iter()
-            .map(|h| h.as_ptr())
-            .chain(core::iter::once(ptr::null()))
-            .collect()
-    }
-
     pub fn send(
         &self,
         cancellable: Option<&Cancellable>,

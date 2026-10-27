@@ -8,8 +8,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
+use southstar_dom::Node;
+use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -24,13 +24,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 pub(crate) struct Page(*mut NsJs);
 
 unsafe extern "C" {
-    fn ns_js_dialog_close(js: *mut NsJs, dialog: *mut NsNode, return_value: *const c_char);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
     fn g_regex_new(
         pattern: *const c_char,
         compile_options: c_uint,
@@ -64,16 +57,8 @@ pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
 }
 
-fn node(ptr: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(ptr) }
-}
-
 fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()
-}
-
-fn mut_ptr(node: Element) -> *mut NsNode {
-    node.as_ptr().cast_mut()
 }
 
 pub(crate) fn element(value: &Value) -> Option<Element> {
@@ -301,8 +286,7 @@ impl Page {
     }
 
     pub(crate) fn close_dialog(page: Option<Page>, dialog: Element, return_value: Option<&CStr>) {
-        let value = return_value.map_or(ptr::null(), CStr::as_ptr);
-        unsafe { ns_js_dialog_close(Page::raw(page), mut_ptr(dialog), value) };
+        (api::top_layer_hooks().dialog_close)(Page::raw(page), dialog, return_value);
     }
 
     pub(crate) fn set_attr_recorded(page: Option<Page>, node: Element, name: &CStr, value: &[u8]) {
@@ -340,9 +324,9 @@ impl Page {
     }
 
     pub(crate) fn dispatch_select(self, scope: &mut Scope<'_>, target: Element) {
-        let event = unsafe { nsr_make_event(scope, "select", target.as_ptr()) };
+        let event = southstar_js_runtime::events::make_event(scope, "select", Some(target));
         let _ = scope.set(&event, "cancelable", Value::boolean(false));
-        unsafe { nsr_js_dispatch_built_event(self.0, target.as_ptr(), "select", event) };
+        southstar_js_runtime::events::dispatch_built_event(self.0, target, "select", event);
     }
 
     pub(crate) fn mark_mutated(page: Option<Page>) {
@@ -354,9 +338,7 @@ impl Page {
     }
 
     pub(crate) fn dispatch_event(self, target: Element, kind: &CStr) -> bool {
-        let mut prevented: GBoolean = 0;
-        unsafe { ns_js_dispatch_event(self.0, target.as_ptr(), kind.as_ptr(), &mut prevented) };
-        prevented != 0
+        southstar_js_runtime::events::dispatch_event(self.0, target, &kind.to_string_lossy()).1
     }
 
     pub(crate) fn dispatch_submit(self, form: Element, submitter: Option<Element>) -> (bool, bool) {
@@ -365,7 +347,7 @@ impl Page {
         }
         let main = api::main_context(self.0);
         let event = main.with(|scope| {
-            let event = unsafe { nsr_make_event(scope, "submit", form.as_ptr()) };
+            let event = southstar_js_runtime::events::make_event(scope, "submit", Some(form));
             let submitter = wrap(scope, submitter);
             let _ = scope.set(&event, "submitter", submitter);
             event
@@ -373,7 +355,7 @@ impl Page {
         let Some(event) = event else {
             return (false, false);
         };
-        unsafe { nsr_js_dispatch_built_event(self.0, form.as_ptr(), "submit", event) }
+        southstar_js_runtime::events::dispatch_built_event(self.0, form, "submit", event)
     }
 }
 
@@ -430,25 +412,6 @@ pub fn nsr_js_form_data_serialize(scope: &mut Scope<'_>, fd: &Value) -> (Vec<u8>
     crate::form_data::serialize(scope, fd)
 }
 
-/// # Safety
-///
-/// `form` and `submitter` are null or point at live nodes.
-pub unsafe fn nsr_js_request_submit_form(
-    scope: &mut Scope<'_>,
-    form: *const NsNode,
-    submitter: *const NsNode,
-) {
-    crate::submit::request_submit(scope, node(form), node(submitter));
-}
-
-/// # Safety
-///
-/// `form` is null or points at a live node.
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode) {
-    crate::submit::reset_form(scope, node(form));
-}
-
 pub fn nsr_form_elements_named_lookup(
     scope: &mut Scope<'_>,
     elements: &Value,
@@ -467,20 +430,6 @@ pub fn nsr_form_named_control(scope: &mut Scope<'_>, form: &Value, name: &[u8]) 
 
 pub fn nsr_form_controls_snapshot(scope: &mut Scope<'_>, form: &Value) -> JsResult {
     crate::collection::controls_snapshot(scope, form)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_form_listed_controls(
-    form: *const NsNode,
-    include_image: GBoolean,
-    out: *mut GPtrArray,
-) {
-    let (Some(form), false) = (node(form), out.is_null()) else {
-        return;
-    };
-    for control in crate::listed_controls(form, include_image != 0) {
-        unsafe { glib::g_ptr_array_add(out, mut_ptr(control).cast()) };
-    }
 }
 
 fn page_of(js: *mut NsJs) -> Option<Page> {
@@ -607,4 +556,22 @@ pub unsafe fn select_typeahead(js: *mut c_void, select: Node<'_>, key: &[u8]) ->
         return false;
     };
     crate::select::typeahead(page, select, key)
+}
+
+pub fn request_submit_form(scope: &mut Scope<'_>, form: Node<'_>, submitter: Option<Node<'_>>) {
+    crate::submit::request_submit(
+        scope,
+        form.downgrade().get(),
+        submitter.and_then(|submitter| submitter.downgrade().get()),
+    );
+}
+
+pub fn reset_form(scope: &mut Scope<'_>, form: Node<'_>) {
+    crate::submit::reset_form(scope, form.downgrade().get());
+}
+
+pub(crate) fn listed_controls(form: Node<'_>, include_image: bool) -> Vec<Node<'static>> {
+    form.downgrade()
+        .get()
+        .map_or_else(Vec::new, |form| crate::listed_controls(form, include_image))
 }

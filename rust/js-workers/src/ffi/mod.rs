@@ -4,7 +4,7 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 use std::sync::Arc;
 
@@ -278,14 +278,6 @@ fn without_nul(text: &str) -> String {
 
 fn lossy(bytes: Vec<u8>) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
-}
-
-unsafe fn borrowed(p: *const c_char) -> Option<String> {
-    if p.is_null() {
-        None
-    } else {
-        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
-    }
 }
 
 pub(crate) struct MainContext(usize);
@@ -739,68 +731,6 @@ pub fn nsr_sw_install_container(scope: &mut Scope<'_>, navigator: &Value) {
     service::install_container(scope, navigator);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_sw_controller_for(
-    js: *mut c_void,
-    url: *const c_char,
-) -> *const c_void {
-    let Some(url) = (unsafe { borrowed(url) }) else {
-        return core::ptr::null();
-    };
-    match service::controller_for(Js(js as usize), &url) {
-        Some(host) => Arc::as_ptr(&host).cast(),
-        None => core::ptr::null(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_sw_post_fetch_request(
-    host: *const c_void,
-    id: core::ffi::c_uint,
-    url: *const c_char,
-    method: *const c_char,
-    headers: *const *const c_char,
-    body: *const u8,
-    body_len: usize,
-) {
-    let Some(host) = host_from_ptr(host) else {
-        return;
-    };
-    let mut list = Vec::new();
-    if !headers.is_null() {
-        let mut at = headers;
-        while let Some(header) = unsafe { borrowed(*at) } {
-            list.push(header);
-            at = unsafe { at.add(1) };
-        }
-    }
-    let request = FetchRequest {
-        id,
-        url: unsafe { borrowed(url) }.unwrap_or_default(),
-        method: unsafe { borrowed(method) }.unwrap_or_default(),
-        headers: list,
-        body: if body.is_null() || body_len == 0 {
-            Vec::new()
-        } else {
-            unsafe { core::slice::from_raw_parts(body, body_len) }.to_vec()
-        },
-    };
-    service::post_fetch_request(&host, request);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_worker_host_base_url(host: *const c_void) -> *const c_char {
-    match unsafe { host.cast::<Host>().as_ref() } {
-        Some(host) => host.base_url.as_ptr(),
-        None => core::ptr::null(),
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_workers_pending(js: *mut c_void) -> c_int {
-    c_int::from(worker::pending(Js(js as usize)))
-}
-
 pub fn nsr_worker_install_console(scope: &mut Scope<'_>, global: &Value) {
     worker_scope::install_console(scope, global);
 }
@@ -867,6 +797,10 @@ pub fn install_runtime_hooks() {
         log_line: host_log_line,
         shape_global: worker_scope::shape_global,
         teardown,
+        sw_controller_for,
+        sw_post_fetch,
+        host_base_url,
+        pending: workers_pending,
     });
     southstar_js_clone::links::set_js_workers_links(southstar_js_clone::links::JsWorkersLinks {
         port_transfer_commit: crate::ffi::nsr_port_transfer_commit,
@@ -907,4 +841,33 @@ pub fn install_runtime_hooks() {
         port_remove_event_listener: crate::ffi::nsr_port_remove_event_listener,
         port_add_event_listener: crate::ffi::nsr_port_add_event_listener,
     });
+}
+
+fn sw_controller_for(js: *const NsJs, url: &str) -> Option<api::ServiceWorkerController> {
+    service::controller_for(Js(js as usize), url)
+        .map(|host| api::ServiceWorkerController(Box::new(host)))
+}
+
+fn sw_post_fetch(controller: &api::ServiceWorkerController, fetch: &api::ServiceWorkerFetch<'_>) {
+    let Some(host) = controller.0.downcast_ref::<Arc<Host>>() else {
+        return;
+    };
+    let request = FetchRequest {
+        id: fetch.id,
+        url: fetch.url.to_owned(),
+        method: fetch.method.to_owned(),
+        headers: fetch.headers.to_vec(),
+        body: fetch.body.to_vec(),
+    };
+    service::post_fetch_request(host, request);
+}
+
+fn host_base_url(js: *const NsJs) -> Option<CString> {
+    let host = api::worker_host(js.cast_mut()).cast::<Host>();
+    // SAFETY: a worker page's host slot holds null or its live Host, which outlives the page.
+    unsafe { host.as_ref() }.map(|host| host.base_url.clone())
+}
+
+fn workers_pending(js: *const NsJs) -> bool {
+    worker::pending(Js(js as usize))
 }

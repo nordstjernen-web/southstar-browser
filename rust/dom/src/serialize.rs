@@ -59,7 +59,7 @@ impl Node<'_> {
     }
 }
 
-fn is_shadow_root_marked(node: Node) -> bool {
+pub fn is_shadow_root_marked(node: Node) -> bool {
     node.is_element() && node.attr(SHADOW_ATTR).is_some()
 }
 

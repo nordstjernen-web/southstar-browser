@@ -4,6 +4,7 @@
 
 pub mod api;
 mod budget;
+pub mod events;
 mod ffi;
 mod interrupt;
 pub mod links;

@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_int};
 use core::ptr;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -196,11 +196,6 @@ pub(crate) fn int_attr_set(
     nsr_element_int_attr_setter(scope, this, value, index).map(|()| Value::undefined())
 }
 
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_live_build_labels(scope: &mut Scope<'_>, node: *const NsNode) -> JsResult {
-    crate::element::build_labels(scope, unsafe { Node::from_ptr(node) })
-}
-
 pub fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
     crate::node_value::is_rendered(scope, value)
 }
@@ -219,4 +214,8 @@ pub fn nsr_element_set_node_value(
     value: &Value,
 ) -> JsResult<()> {
     crate::node_value::set_node_value(scope, this, value)
+}
+
+pub(crate) fn build_labels(scope: &mut Scope<'_>, node: Node<'_>) -> JsResult {
+    crate::element::build_labels(scope, node.downgrade().get())
 }

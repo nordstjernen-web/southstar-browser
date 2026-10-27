@@ -180,7 +180,7 @@ pub(crate) fn run_due_timers(js: Js) {
 
 pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: *const c_char) {
     let origin = text(origin).map(|origin| origin.to_string_lossy().into_owned());
-    unsafe { imports::nsr_js_report_uncaught(js.ptr(), exception, origin.as_deref()) };
+    crate::events::report_uncaught(js.ptr(), exception, origin.as_deref());
 }
 
 pub(crate) fn observers_tick(js: Js) {
@@ -222,7 +222,7 @@ pub(crate) fn dispatch_window_only_event(
     event: Value,
 ) {
     let kind = text(kind).map_or_else(String::new, |kind| kind.to_string_lossy().into_owned());
-    unsafe { imports::nsr_js_dispatch_window_only_event(js.ptr(), doc, &kind, event) };
+    crate::events::dispatch_window_only_event(js.ptr(), super::record::node(doc), &kind, event);
 }
 
 pub(crate) fn active_js() -> Option<Js> {
@@ -267,8 +267,8 @@ pub(crate) fn call_observer(
     match (returned, report_type) {
         (Err(exception), Some(kind)) => {
             let page = js.map_or(ptr::null_mut(), Js::ptr);
-            ctx.with(|scope| unsafe {
-                imports::nsr_target_report_exception(page, scope, Some(kind), &exception)
+            ctx.with(|scope| {
+                crate::events::report_handler_exception(page, scope, Some(kind), &exception)
             });
             Ok(Value::undefined())
         }

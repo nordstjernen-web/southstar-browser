@@ -21,6 +21,7 @@ southstar-js-intl = { path = "../js-intl", default-features = false }
 southstar-js-realm = { path = "../js-realm", default-features = false }
 southstar-js-temporal = { path = "../js-temporal", default-features = false }
 southstar-js-wasm = { path = "../js-wasm", optional = true }
+southstar-layout = { path = "../layout" }
 southstar-net = { path = "../net" }
 southstar-url = { path = "../url" }
 

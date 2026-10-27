@@ -242,20 +242,18 @@ impl Js {
     }
 
     pub fn has_pending_work(self) -> bool {
-        unsafe {
-            southstar_js_services::timers_pending(self.0, false)
-                || frames::has_pending(self)
-                || southstar_js_net::pending_fetch_count(self.0) > 0
-                || southstar_js_net::pending_xhr_count(self.0) > 0
-                || southstar_js_net::pending_socket_count(self.0) > 0
-                || southstar_js_url::filereader_pending(self.0)
-                || southstar_js_frames::pending_iframe_count(self.0) > 0
-                || southstar_js_observers::mutation_drain_pending(self.0)
-                || api::observer_tick_pending(self.0)
-                || southstar_js_loader::async_scripts_pending(self.0)
-                || southstar_js_custom_elements::has_pending(self.0)
-                || ns_workers_pending(self.0) != 0
-        }
+        southstar_js_services::timers_pending(self.0, false)
+            || frames::has_pending(self)
+            || southstar_js_net::pending_fetch_count(self.0) > 0
+            || southstar_js_net::pending_xhr_count(self.0) > 0
+            || southstar_js_net::pending_socket_count(self.0) > 0
+            || southstar_js_url::filereader_pending(self.0)
+            || southstar_js_frames::pending_iframe_count(self.0) > 0
+            || southstar_js_observers::mutation_drain_pending(self.0)
+            || api::observer_tick_pending(self.0)
+            || southstar_js_loader::async_scripts_pending(self.0)
+            || southstar_js_custom_elements::has_pending(self.0)
+            || (api::workers_hooks().pending)(self.0)
     }
 
     pub fn needs_tick(self) -> bool {
@@ -275,10 +273,7 @@ unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
     fn g_get_monotonic_time() -> i64;
-    fn ns_workers_pending(js: *const NsJs) -> GBoolean;
 }
-
-use southstar_js_events::nsr_make_event;
 
 pub(crate) fn monotonic_us() -> i64 {
     unsafe { g_get_monotonic_time() }
@@ -299,7 +294,7 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: *const NsNode) -> Value {
-    unsafe { nsr_make_event(scope, &kind.to_string_lossy(), target) }
+    southstar_js_events::make_event(scope, &kind.to_string_lossy(), node(target))
 }
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
@@ -393,26 +388,6 @@ pub unsafe fn needs_tick(js: *mut c_void) -> bool {
     !js.is_null() && js.needs_tick()
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64 {
-    frames::idle_frame_end(Js(js.cast_mut()), now, end)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_purge_media_rafs(js: *mut NsJs, root: *const NsNode) {
-    frames::purge_media(Js(js), root);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_queue_scrollend(js: *mut NsJs, el: *const NsNode) {
-    scrollend::queue(Js(js), el);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_queue_scrollend_document(js: *mut NsJs) {
-    scrollend::queue_document(Js(js));
-}
-
 /// # Safety
 ///
 /// `js` is null or a live script engine.
@@ -469,6 +444,10 @@ pub fn install_runtime_hooks() {
         raf_set_host_driven,
         purge_frame_rafs,
         teardown,
+        idle_frame_end,
+        purge_media_rafs,
+        queue_scrollend,
+        queue_scrollend_document,
     });
     southstar_js_runtime::links::set_js_lifecycle_links(
         southstar_js_runtime::links::JsLifecycleLinks {
@@ -482,4 +461,20 @@ pub fn install_runtime_hooks() {
             window_request_animation_frame: crate::ffi::nsr_window_requestAnimationFrame,
         },
     );
+}
+
+fn idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64 {
+    frames::idle_frame_end(Js(js.cast_mut()), now, end)
+}
+
+fn purge_media_rafs(js: *const NsJs, root: Node<'_>) {
+    frames::purge_media(Js(js.cast_mut()), root.as_ptr());
+}
+
+fn queue_scrollend(js: *const NsJs, el: Node<'_>) {
+    scrollend::queue(Js(js.cast_mut()), el.as_ptr());
+}
+
+fn queue_scrollend_document(js: *const NsJs) {
+    scrollend::queue_document(Js(js.cast_mut()));
 }

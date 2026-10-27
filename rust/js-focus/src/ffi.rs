@@ -6,8 +6,8 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::Node;
+use southstar_glib::{self as glib};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
@@ -15,60 +15,16 @@ use southstar_js_runtime::api;
 use crate::{Element, JsResult};
 
 pub(crate) use southstar_js_runtime::api::NsJs;
+use southstar_js_runtime::events;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(usize);
 
 unsafe extern "C" {
-    fn ns_event_type_init_flags(
-        kind: *const c_char,
-        at_document: GBoolean,
-        bubbles: *mut GBoolean,
-        cancelable: *mut GBoolean,
-    );
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
-    fn ns_js_activate_summary(js: *const NsJs, el: *const NsNode) -> GBoolean;
-    fn ns_button_activation(js: *mut NsJs, button: *mut NsNode, event_target: *const NsNode);
-    fn ns_popover_target_activation(js: *mut NsJs, el: *mut NsNode, event_target: *const NsNode);
-    fn ns_element_anchor_resolved_href(n: *const NsNode, js: *mut NsJs) -> *mut c_char;
     fn g_uri_unescape_string(escaped: *const c_char, illegal: *const c_char) -> *mut c_char;
-    fn ns_summary_toggle_target(el: *const NsNode) -> *mut NsNode;
-    fn ns_node_is_button(el: *const NsNode) -> GBoolean;
 }
 
-use southstar_js_forms::nsr_js_request_submit_form;
-use southstar_js_forms::nsr_js_reset_form;
 use southstar_js_window::nsr_make_window_event;
-
-unsafe extern "Rust" {
-    unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value;
-    unsafe fn nsr_js_dispatch_built_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> (bool, bool);
-    unsafe fn nsr_js_dispatch_window_only_event(
-        js: *mut NsJs,
-        target_doc: *const NsNode,
-        kind: &str,
-        event: Value,
-    ) -> bool;
-    unsafe fn nsr_js_event_window_for_document(
-        js: *mut NsJs,
-        scope: &mut Scope<'_>,
-        doc: *const NsNode,
-    ) -> Value;
-}
-
-pub(crate) fn node(ptr: *const NsNode) -> Option<Element> {
-    unsafe { Node::from_ptr(ptr) }
-}
 
 impl Js {
     fn of(js: *const NsJs) -> Js {
@@ -132,15 +88,12 @@ impl Js {
     }
 
     pub fn dispatch(self, target: Element, kind: &CStr) {
-        unsafe {
-            ns_js_dispatch_event(self.ptr(), target.as_ptr(), kind.as_ptr(), ptr::null_mut())
-        };
+        events::dispatch_event(self.ptr(), target, &kind.to_string_lossy());
     }
 
     pub fn dispatch_built(self, target: Element, kind: &CStr, event: Value) -> bool {
-        let (_, prevented) = unsafe {
-            nsr_js_dispatch_built_event(self.ptr(), target.as_ptr(), &kind.to_string_lossy(), event)
-        };
+        let (_, prevented) =
+            events::dispatch_built_event(self.ptr(), target, &kind.to_string_lossy(), event);
         prevented
     }
 
@@ -169,21 +122,12 @@ impl Js {
     }
 
     pub fn dispatch_window_only(self, doc: Element, kind: &CStr, event: Value) {
-        unsafe {
-            nsr_js_dispatch_window_only_event(
-                self.ptr(),
-                doc.as_ptr(),
-                &kind.to_string_lossy(),
-                event,
-            )
-        };
+        events::dispatch_window_only_event(self.ptr(), Some(doc), &kind.to_string_lossy(), event);
     }
 
     pub fn event_window_for_document(self, doc: Element) -> Value {
-        self.scope(|scope| unsafe {
-            nsr_js_event_window_for_document(self.ptr(), scope, doc.as_ptr())
-        })
-        .unwrap_or_else(Value::undefined)
+        self.scope(|scope| events::window_for_document(self.ptr(), scope, Some(doc)))
+            .unwrap_or_else(Value::undefined)
     }
 
     pub fn checkable_pre_click(self, el: Element, kind: i32) -> ClickState {
@@ -191,15 +135,15 @@ impl Js {
     }
 
     pub fn activate_summary(self, el: Element) {
-        unsafe { ns_js_activate_summary(self.ptr(), el.as_ptr()) };
+        (api::top_layer_hooks().activate_summary)(self.ptr(), el);
     }
 
     pub fn button_activation(self, button: Element, target: Element) {
-        unsafe { ns_button_activation(self.ptr(), button.as_mut_ptr(), target.as_ptr()) };
+        (api::top_layer_hooks().button_activation)(self.ptr(), button, Some(target));
     }
 
     pub fn popover_target_activation(self, el: Element, target: Element) {
-        unsafe { ns_popover_target_activation(self.ptr(), el.as_mut_ptr(), target.as_ptr()) };
+        (api::top_layer_hooks().popover_target_activation)(self.ptr(), el, Some(target));
     }
 
     pub fn form_owner_for(self, el: Element) -> Option<Element> {
@@ -251,13 +195,11 @@ pub(crate) fn make_window_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {
-    unsafe { nsr_make_event(scope, &kind.to_string_lossy(), target.as_ptr()) }
+    events::make_event(scope, &kind.to_string_lossy(), Some(target))
 }
 
 pub(crate) fn event_flags(kind: &CStr) -> (bool, bool) {
-    let (mut bubbles, mut cancelable): (GBoolean, GBoolean) = (0, 0);
-    unsafe { ns_event_type_init_flags(kind.as_ptr(), glib::FALSE, &mut bubbles, &mut cancelable) };
-    (bubbles != 0, cancelable != 0)
+    events::init_flags(&kind.to_string_lossy(), false)
 }
 
 fn c_string(bytes: &[u8]) -> CString {
@@ -279,11 +221,11 @@ pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: E
 }
 
 pub(crate) fn request_submit_form(scope: &mut Scope<'_>, form: Element, submitter: Element) {
-    unsafe { nsr_js_request_submit_form(scope, form.as_ptr(), submitter.as_ptr()) };
+    southstar_js_forms::request_submit_form(scope, form, Some(submitter));
 }
 
 pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Element) {
-    unsafe { nsr_js_reset_form(scope, form.as_mut_ptr()) };
+    southstar_js_forms::reset_form(scope, form);
 }
 
 pub(crate) fn is_labelable(el: Element) -> bool {
@@ -303,7 +245,7 @@ pub(crate) fn is_reset_trigger(el: Element) -> bool {
 }
 
 pub(crate) fn anchor_resolved_href(js: Js, el: Element) -> Option<Vec<u8>> {
-    owned_text(unsafe { ns_element_anchor_resolved_href(el.as_ptr(), js.ptr()) })
+    (api::dom_factory_hooks().anchor_resolved_href)(js.ptr(), el)
 }
 
 pub(crate) fn uri_unescape(text: &[u8]) -> Option<Vec<u8>> {
@@ -332,11 +274,11 @@ pub(crate) fn checkable_kind(el: Option<Element>) -> i32 {
 }
 
 pub(crate) fn summary_toggle_target(el: Element) -> Option<Element> {
-    node(unsafe { ns_summary_toggle_target(el.as_ptr()) })
+    (api::top_layer_hooks().summary_toggle_target)(el)
 }
 
 pub(crate) fn is_button(el: Element) -> bool {
-    unsafe { ns_node_is_button(el.as_ptr()) != 0 }
+    (api::top_layer_hooks().is_button)(el)
 }
 
 macro_rules! methods {
@@ -498,13 +440,6 @@ pub unsafe fn window_action_applied(js: *mut c_void) {
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_focus_forget_subtree(js: *const NsJs, root: *const NsNode) {
-    if let Some(root) = node(root) {
-        crate::forget_subtree(Js::of(js), root);
-    }
-}
-
 fn update_focus_visible(js: *const NsJs) {
     let js = Js::of(js);
     if !js.is_null() {
@@ -528,5 +463,12 @@ pub fn install_runtime_hooks() {
         update_focus_visible,
         forget_node,
         teardown,
+        forget_subtree,
     });
+}
+
+fn forget_subtree(js: *const NsJs, root: Node<'_>) {
+    if let Some(root) = root.downgrade().get() {
+        crate::forget_subtree(Js::of(js), root);
+    }
 }

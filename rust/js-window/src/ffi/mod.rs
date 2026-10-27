@@ -6,7 +6,6 @@ use core::ffi::{CStr, c_char, c_void};
 use std::ffi::CString;
 
 use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -120,14 +119,7 @@ pub(crate) fn dispatch_main_window_event(js: Js, kind: &str, event: Value) {
     let main_ctx = main_realm(js).map_or(saved_ctx, |realm| realm.0);
     let main_doc = crate::window_events::top_document(saved_doc);
     api::set_realm(js.ptr(), main_ctx, main_doc);
-    unsafe {
-        imports::nsr_js_dispatch_window_only_event(
-            js.ptr(),
-            Node::ptr_or_null(main_doc),
-            kind,
-            event,
-        )
-    };
+    southstar_js_runtime::events::dispatch_window_only_event(js.ptr(), main_doc, kind, event);
     api::set_realm(js.ptr(), saved_ctx, saved_doc);
 }
 
@@ -179,11 +171,6 @@ pub fn with_named_access_suspended<R>(f: impl FnOnce() -> R) -> R {
 
 pub fn anchor_fragment_navigate(js: *const NsJs, abs_url: &[u8]) -> bool {
     page::anchor_fragment_navigate(Js::of(js), abs_url)
-}
-
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_window_link_outward(js: *const NsJs, outward: &Value, realm_window: &Value) {
-    message::link_outward(Js::of(js), outward, realm_window);
 }
 
 pub(crate) use southstar_js_runtime::api::NsJs;
@@ -275,7 +262,7 @@ pub(crate) fn make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value {
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &str) -> Value {
-    unsafe { imports::nsr_make_event(scope, kind, core::ptr::null()) }
+    southstar_js_runtime::events::make_event(scope, kind, None)
 }
 
 pub fn nsr_make_window_event(scope: &mut Scope<'_>, kind: &str) -> Value {
@@ -501,19 +488,6 @@ pub unsafe fn sync_window_metrics(js: *mut c_void) {
     sync_metrics(Js::of(js.cast()));
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_window_child_frame(
-    doc: *const NsNode,
-    index: u32,
-    name: *const c_char,
-) -> *const NsNode {
-    let Some(doc) = (unsafe { Node::from_ptr(doc) }) else {
-        return core::ptr::null();
-    };
-    let name = (!name.is_null()).then(|| unsafe { CStr::from_ptr(name) });
-    Node::ptr_or_null(named::child_frame(doc, index, name))
-}
-
 /// # Safety
 ///
 /// `root` is null or points at a live node.
@@ -525,16 +499,6 @@ pub unsafe fn nsr_document_expose_legacy_named(
     if let Some(root) = unsafe { Node::from_ptr(root) } {
         named::expose_legacy_named(scope, root, document);
     }
-}
-
-unsafe extern "C" {
-    fn ns_js_queue_scrollend_document(js: *mut NsJs);
-    fn ns_js_dispatch_event(
-        js: *mut NsJs,
-        target: *const NsNode,
-        kind: *const c_char,
-        default_prevented: *mut GBoolean,
-    ) -> GBoolean;
 }
 
 pub(crate) fn halted(js: Js) -> bool {
@@ -550,7 +514,7 @@ pub(crate) fn window_scroll_prop(scope: &mut Scope<'_>, prop: &CStr) -> f64 {
 }
 
 pub(crate) fn queue_scrollend_document(js: Js) {
-    unsafe { ns_js_queue_scrollend_document(js.ptr()) };
+    (api::lifecycle_hooks().queue_scrollend_document)(js.ptr());
 }
 
 pub(crate) fn set_hit_viewport(x: f64, y: f64) {
@@ -558,21 +522,12 @@ pub(crate) fn set_hit_viewport(x: f64, y: f64) {
 }
 
 pub(crate) fn dispatch_node_event(js: Js, target: Node<'_>, kind: &CStr) {
-    unsafe {
-        ns_js_dispatch_event(
-            js.ptr(),
-            target.as_ptr(),
-            kind.as_ptr(),
-            core::ptr::null_mut(),
-        )
-    };
+    southstar_js_runtime::events::dispatch_event(js.ptr(), target, &kind.to_string_lossy());
 }
 
 pub(crate) fn dispatch_window_only_event(js: Js, doc: Option<Node<'_>>, kind: &CStr, event: Value) {
     let kind = kind.to_string_lossy();
-    unsafe {
-        imports::nsr_js_dispatch_window_only_event(js.ptr(), Node::ptr_or_null(doc), &kind, event)
-    };
+    southstar_js_runtime::events::dispatch_window_only_event(js.ptr(), doc, &kind, event);
 }
 
 pub(crate) fn make_node_event(
@@ -581,7 +536,7 @@ pub(crate) fn make_node_event(
     target: Option<Node<'_>>,
 ) -> Value {
     let kind = kind.to_string_lossy();
-    unsafe { imports::nsr_make_event(scope, &kind, Node::ptr_or_null(target)) }
+    southstar_js_runtime::events::make_event(scope, &kind, target)
 }
 
 pub(crate) fn schedule_observer_tick(js: Js) {
@@ -655,19 +610,6 @@ pub unsafe fn fire_page_transition(js: *mut c_void, kind: &CStr, persisted: bool
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_js_fire_page_transition(
-    js: *mut NsJs,
-    kind: *const c_char,
-    persisted: GBoolean,
-) {
-    if js.is_null() || kind.is_null() {
-        return;
-    }
-    let kind = unsafe { CStr::from_ptr(kind) };
-    page::fire_page_transition(Js::of(js), kind, persisted != 0);
-}
-
 /// # Safety
 ///
 /// `url` and `cors_allow_origin` are null or NUL-terminated strings that live for the call.
@@ -695,11 +637,6 @@ pub fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Result<Value, Value> {
     crate::class::new_window_named(scope)
 }
 
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_window_install_state(js: *const NsJs, scope: &mut Scope<'_>, global: &Value) {
-    context::install_state(scope, Js::of(js), global);
-}
-
 pub fn nsr_is_window_named(value: &Value) -> bool {
     value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
 }
@@ -722,6 +659,10 @@ pub fn install_runtime_hooks() {
         sync_metrics: sync_page_metrics,
         history_teardown,
         links_clear: clear_window_links,
+        link_outward,
+        child_frame,
+        fire_page_transition: page_transition,
+        install_state,
     });
     southstar_canvas::links::set_js_window_links(southstar_canvas::links::JsWindowLinks {
         resource_origin_clean,
@@ -742,4 +683,22 @@ pub fn install_runtime_hooks() {
         window_bind_post_message: crate::ffi::nsr_window_bind_post_message,
         js_new_window_named: crate::ffi::nsr_js_new_window_named,
     });
+}
+
+fn link_outward(js: *const NsJs, outward: &Value, realm_window: &Value) {
+    message::link_outward(Js::of(js), outward, realm_window);
+}
+
+fn child_frame(doc: Node<'_>, index: u32, name: Option<&CStr>) -> Option<Node<'static>> {
+    named::child_frame(doc, index, name).and_then(|frame| frame.downgrade().get())
+}
+
+fn page_transition(js: *const NsJs, kind: &CStr, persisted: bool) {
+    if !js.is_null() {
+        page::fire_page_transition(Js::of(js), kind, persisted);
+    }
+}
+
+fn install_state(js: *const NsJs, scope: &mut Scope<'_>, global: &Value) {
+    context::install_state(scope, Js::of(js), global);
 }

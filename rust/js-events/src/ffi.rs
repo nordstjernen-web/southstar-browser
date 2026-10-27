@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -92,12 +92,8 @@ pub fn nsr_event_mark_default_prevented(scope: &mut Scope<'_>, event: &Value) {
     crate::event::mark_default_prevented(scope, event);
 }
 
-/// # Safety
-///
-/// `target` is null or points at a live node.
-#[unsafe(no_mangle)]
-pub unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const NsNode) -> Value {
-    crate::event::make_event(scope, kind, unsafe { Node::from_ptr(target) })
+pub fn make_event(scope: &mut Scope<'_>, kind: &str, target: Option<Node<'_>>) -> Value {
+    crate::event::make_event(scope, kind, target.and_then(|node| node.downgrade().get()))
 }
 
 pub fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {

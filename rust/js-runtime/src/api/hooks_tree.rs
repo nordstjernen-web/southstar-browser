@@ -6,9 +6,9 @@ use core::ffi::{CStr, c_char};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_js_engine::ContextHandle;
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use super::NsJs;
+use super::{NsJs, ResourceInfo};
 
 macro_rules! hook_table {
     ($table:ident, $slot:ident, $set:ident, $get:ident) => {
@@ -46,6 +46,9 @@ pub struct FramesHooks {
     pub cloners_made: fn(*const NsJs) -> bool,
     pub forget_node: fn(*const NsJs, Node<'_>),
     pub realms_same_origin: fn(*const NsJs, ContextHandle, ContextHandle) -> bool,
+    pub schedule_static_iframes: fn(*const NsJs, Node<'_>),
+    pub realm_proto_for: fn(*const NsJs, ContextHandle, &Value) -> Value,
+    pub frame_realm_window: fn(*const NsJs, Node<'_>) -> Value,
 }
 
 impl FramesHooks {
@@ -69,6 +72,9 @@ impl FramesHooks {
         cloners_made: |_| false,
         forget_node: |_, _| {},
         realms_same_origin: |_, _, _| true,
+        schedule_static_iframes: |_, _| {},
+        realm_proto_for: |_, _, proto| proto.clone(),
+        frame_realm_window: |_, _| Value::null(),
     };
 }
 
@@ -90,6 +96,8 @@ pub struct MutationHooks {
     pub attribute_maps_teardown: fn(*const NsJs),
     pub set_attr_recorded: fn(*const NsJs, Node<'_>, &CStr, &[u8]),
     pub set_attr_recorded_paint_only: fn(*const NsJs, Node<'_>, &CStr, &CStr),
+    pub index_child_removed: fn(*const NsJs, Option<Node<'_>>, Node<'_>),
+    pub record_child_added: fn(*const NsJs, Node<'_>, Node<'_>, Option<Node<'_>>),
 }
 
 impl MutationHooks {
@@ -109,6 +117,8 @@ impl MutationHooks {
         attribute_maps_teardown: |_| {},
         set_attr_recorded: |_, _, _, _| {},
         set_attr_recorded_paint_only: |_, _, _, _| {},
+        index_child_removed: |_, _, _| {},
+        record_child_added: |_, _, _, _| {},
     };
 }
 
@@ -121,6 +131,7 @@ pub struct LoaderHooks {
     pub purge_subtree_script_refs: fn(*const NsJs, Node<'_>),
     pub parser_hold_forget: fn(*const NsJs, Node<'_>),
     pub teardown: fn(*const NsJs),
+    pub element_perf_info: fn(*const NsJs, Option<Node<'_>>) -> ResourceInfo,
 }
 
 impl LoaderHooks {
@@ -131,6 +142,7 @@ impl LoaderHooks {
         purge_subtree_script_refs: |_, _| {},
         parser_hold_forget: |_, _| {},
         teardown: |_| {},
+        element_perf_info: |_, _| ResourceInfo::default(),
     };
 }
 
@@ -161,6 +173,7 @@ pub struct FocusHooks {
     pub update_focus_visible: fn(*const NsJs),
     pub forget_node: fn(*const NsJs, Node<'_>),
     pub teardown: fn(*const NsJs),
+    pub forget_subtree: fn(*const NsJs, Node<'_>),
 }
 
 impl FocusHooks {
@@ -169,6 +182,7 @@ impl FocusHooks {
         update_focus_visible: |_| {},
         forget_node: |_, _| {},
         teardown: |_| {},
+        forget_subtree: |_, _| {},
     };
 }
 
@@ -178,6 +192,13 @@ pub struct TopLayerHooks {
     pub popover_attr_changed: fn(*const NsJs, Node<'_>, &CStr, Option<&CStr>, Option<&CStr>),
     pub forget_node: fn(*const NsJs, Node<'_>),
     pub clear: fn(*const NsJs),
+    pub popover_removing: fn(*const NsJs, Node<'_>),
+    pub dialog_close: fn(*const NsJs, Node<'_>, Option<&CStr>),
+    pub activate_summary: fn(*const NsJs, Node<'_>) -> bool,
+    pub summary_toggle_target: fn(Node<'_>) -> Option<Node<'static>>,
+    pub is_button: fn(Node<'_>) -> bool,
+    pub button_activation: fn(*const NsJs, Node<'_>, Option<Node<'_>>),
+    pub popover_target_activation: fn(*const NsJs, Node<'_>, Option<Node<'_>>),
 }
 
 impl TopLayerHooks {
@@ -185,6 +206,13 @@ impl TopLayerHooks {
         popover_attr_changed: |_, _, _, _, _| {},
         forget_node: |_, _| {},
         clear: |_| {},
+        popover_removing: |_, _| {},
+        dialog_close: |_, _, _| {},
+        activate_summary: |_, _| false,
+        summary_toggle_target: |_| None,
+        is_button: |_| false,
+        button_activation: |_, _, _| {},
+        popover_target_activation: |_, _, _| {},
     };
 }
 
@@ -199,6 +227,7 @@ pub struct AttrsHooks {
     pub class_id: fn() -> u32,
     pub detach_owner: fn(*const NsJs, Node<'_>),
     pub detach_all: fn(*const NsJs),
+    pub detach_matching: fn(*const NsJs, Node<'_>, Option<&CStr>, &CStr),
 }
 
 impl AttrsHooks {
@@ -206,6 +235,7 @@ impl AttrsHooks {
         class_id: || 0,
         detach_owner: |_, _| {},
         detach_all: |_| {},
+        detach_matching: |_, _, _, _| {},
     };
 }
 
@@ -257,6 +287,8 @@ pub struct DocumentHooks {
     pub base_url: fn(*const NsJs) -> Option<Vec<u8>>,
     pub flush_write: fn(*const NsJs),
     pub write_teardown: fn(*const NsJs),
+    pub node_base_url: fn(*const NsJs, Node<'_>) -> Option<Vec<u8>>,
+    pub make_realm_document: MakeRealmDocumentFn,
 }
 
 impl DocumentHooks {
@@ -264,6 +296,8 @@ impl DocumentHooks {
         base_url: |_| None,
         flush_write: |_| {},
         write_teardown: |_| {},
+        node_base_url: |_, _| None,
+        make_realm_document: |_, _, _, _, _, _, _| Value::null(),
     };
 }
 
@@ -289,3 +323,49 @@ hook_table!(
     set_interfaces_hooks,
     interfaces_hooks
 );
+
+pub type MakeRealmDocumentFn =
+    fn(&mut Scope<'_>, Node<'_>, Option<&[u8]>, Option<&[u8]>, Option<&[u8]>, bool, bool) -> Value;
+
+pub struct DomFactoryHooks {
+    pub anchor_resolved_href: fn(*const NsJs, Node<'_>) -> Option<Vec<u8>>,
+}
+
+impl DomFactoryHooks {
+    const NONE: DomFactoryHooks = DomFactoryHooks {
+        anchor_resolved_href: |_, _| None,
+    };
+}
+
+hook_table!(
+    DomFactoryHooks,
+    DOM_FACTORY,
+    set_dom_factory_hooks,
+    dom_factory_hooks
+);
+
+pub struct ElementsHooks {
+    pub build_labels: fn(&mut Scope<'_>, Node<'_>) -> Result<Value, Value>,
+}
+
+impl ElementsHooks {
+    const NONE: ElementsHooks = ElementsHooks {
+        build_labels: |_, _| Ok(Value::undefined()),
+    };
+}
+
+hook_table!(ElementsHooks, ELEMENTS, set_elements_hooks, elements_hooks);
+
+pub struct FormsHooks {
+    pub reset_form: fn(&mut Scope<'_>, Node<'_>),
+    pub listed_controls: fn(Node<'_>, bool) -> Vec<Node<'static>>,
+}
+
+impl FormsHooks {
+    const NONE: FormsHooks = FormsHooks {
+        reset_form: |_, _| {},
+        listed_controls: |_, _| Vec::new(),
+    };
+}
+
+hook_table!(FormsHooks, FORMS, set_forms_hooks, forms_hooks);

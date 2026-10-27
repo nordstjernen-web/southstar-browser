@@ -11,7 +11,7 @@ use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
@@ -63,13 +63,6 @@ pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
 }
 
 unsafe extern "C" {
-    fn ns_js_set_attr_recorded(
-        js: *mut NsJs,
-        node: *mut NsNode,
-        name: *const c_char,
-        value: *const c_char,
-    );
-    fn ns_box_find_by_dom(root: *const NsBox, target: *const NsNode) -> *const NsBox;
 
     fn g_ascii_strtod(text: *const c_char, end: *mut *mut c_char) -> f64;
 }
@@ -150,7 +143,7 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
 
 pub(crate) fn find_box(js: Js, node: Node<'_>) -> Option<BoxRef<'static>> {
     let root = layout_root(js)?;
-    unsafe { BoxRef::from_ptr(ns_box_find_by_dom(root.as_ptr(), node.as_ptr())) }
+    (api::geometry_hooks().find_box_by_dom)(root, node)
 }
 
 pub(crate) fn flush_layout(js: Js) {
@@ -181,14 +174,7 @@ pub(crate) fn anim(js: Js) -> Option<AnimHandle> {
 
 pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8]) {
     let value = c_string(value);
-    unsafe {
-        ns_js_set_attr_recorded(
-            js.mut_ptr(),
-            node.as_mut_ptr(),
-            name.as_ptr(),
-            value.as_ptr(),
-        )
-    };
+    (api::mutation_hooks().set_attr_recorded)(js.mut_ptr().cast(), node, name, value.to_bytes());
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {

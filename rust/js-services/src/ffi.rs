@@ -50,7 +50,6 @@ const G_PRIORITY_DEFAULT: c_int = 0;
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn ns_js_idle_frame_end(js: *const NsJs, now: i64, end: i64) -> i64;
     fn g_get_monotonic_time() -> i64;
     fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
     fn g_source_set_callback(
@@ -87,7 +86,7 @@ pub(crate) fn this_is_detached_window(scope: &mut Scope<'_>, js: Js, this: &Valu
 }
 
 pub(crate) fn idle_frame_end(js: Js, now: i64, end: i64) -> i64 {
-    unsafe { ns_js_idle_frame_end(js.0, now, end) }
+    (api::lifecycle_hooks().idle_frame_end)(js.0, now, end)
 }
 
 pub(crate) fn due_timers_allowed(js: Js) -> bool {

@@ -3012,6 +3012,7 @@ dependencies = [
  "southstar-js-realm",
  "southstar-js-temporal",
  "southstar-js-wasm",
+ "southstar-layout",
  "southstar-net",
  "southstar-url",
 ]

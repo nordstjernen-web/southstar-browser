@@ -4,12 +4,11 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{AttrView, Node, NsNode, Tree};
-use southstar_glib as glib;
+use southstar_dom::{AttrView, Node, Tree};
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
 
@@ -150,17 +149,15 @@ pub(crate) fn realm_document(
     doc: Element,
     info: RealmDocument<'_>,
 ) -> Value {
-    unsafe {
-        imports::nsr_make_realm_document(
-            scope,
-            doc.as_mut_ptr(),
-            info.url.map(c_prefix),
-            info.charset.map(c_prefix),
-            info.content_type.map(c_prefix),
-            info.is_xml,
-            true,
-        )
-    }
+    southstar_js_document::make_realm_document(
+        scope,
+        doc,
+        info.url.map(c_prefix),
+        info.charset.map(c_prefix),
+        info.content_type.map(c_prefix),
+        info.is_xml,
+        true,
+    )
 }
 
 pub(crate) fn synth_xml_document(scope: &mut Scope<'_>) -> Value {
@@ -305,13 +302,9 @@ pub fn nsr_tag_owner_document(scope: &mut Scope<'_>, document: &Value, node: &Va
     adopt::tag_owner_document(scope, document, node);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_element_anchor_resolved_href(
-    node: *const NsNode,
-    js: *mut NsJs,
-) -> *mut c_char {
-    let js = (!js.is_null()).then_some(Js(js));
-    unsafe { Node::from_ptr(node) }
+pub(crate) fn anchor_resolved_href(js: *const NsJs, node: Node<'_>) -> Option<Vec<u8>> {
+    let js = (!js.is_null()).then_some(Js(js.cast_mut()));
+    node.downgrade()
+        .get()
         .and_then(|node| hyperlink::resolved_href(node, js))
-        .map_or(ptr::null_mut(), |href| glib::strdup(&href))
 }

@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 pub mod element;
 pub(crate) mod ffi;
 pub mod image;
@@ -70,6 +72,9 @@ pub(crate) fn descendants_named(root: Element, tag: &[u8]) -> Vec<Element> {
 }
 
 pub fn install_runtime_hooks() {
+    southstar_js_runtime::api::set_elements_hooks(southstar_js_runtime::api::ElementsHooks {
+        build_labels: crate::ffi::build_labels,
+    });
     southstar_js_cssom::links::set_js_elements_links(southstar_js_cssom::links::JsElementsLinks {
         js_element_is_rendered: crate::ffi::nsr_js_element_is_rendered,
     });
