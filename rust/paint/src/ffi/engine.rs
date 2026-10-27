@@ -7,7 +7,7 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_anim::AnimatedColor;
-use southstar_cairo::{ContextRef, Surface, SurfaceRef};
+use southstar_cairo::{ContextRef, Surface};
 use southstar_dom::Node;
 use southstar_glib::GBoolean;
 use southstar_image::ImageRef;
@@ -329,9 +329,7 @@ pub fn canvas_surface(b: BoxRef<'_>) -> Option<Surface> {
     if js.is_null() {
         return None;
     }
-    let surface = southstar_canvas::canvas_surface_for(js, b.dom()?);
-    // SAFETY: the canvas keeps its surface alive while the page paints, and it is referenced here before anything can replace it.
-    unsafe { SurfaceRef::from_raw(surface) }.map(|s| s.reference())
+    southstar_canvas::canvas_surface_for(js, b.dom()?)
 }
 
 pub fn unichar_isalpha(c: u32) -> bool {

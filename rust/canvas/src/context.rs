@@ -78,7 +78,7 @@ fn attrs_2d(scope: &mut Scope<'_>, options: &Value) -> (Value, bool) {
 
 fn get_2d(
     scope: &mut Scope<'_>,
-    st: *mut CanvasState,
+    st: &CanvasState,
     el: Node,
     canvas: &Value,
     offscreen: bool,
@@ -87,21 +87,21 @@ fn get_2d(
     if let Some(existing) = host::ctx2d_of(scope, st) {
         return existing;
     }
-    if host::context_kind(st) != 0 {
+    if st.context_kind() != 0 {
         return Value::null();
     }
     let (attrs, opaque) = attrs_2d(scope, options);
-    if opaque && let Some(surface) = host::surface_of(st) {
-        surface.fill_opaque_black();
+    if opaque {
+        st.surface().fill_opaque_black();
     }
     let obj = crate::ffi::ctx2d_new(scope, el.addr(), canvas, offscreen, attrs);
-    host::attach_ctx2d(scope, st, &obj, KIND_2D);
+    st.attach_ctx2d(scope, &obj, KIND_2D);
     obj
 }
 
 fn get_by_type(
     scope: &mut Scope<'_>,
-    st: *mut CanvasState,
+    st: &CanvasState,
     el: Node,
     canvas: &Value,
     offscreen: bool,
@@ -111,19 +111,19 @@ fn get_by_type(
     match kind {
         ContextType::TwoD => Ok(get_2d(scope, st, el, canvas, offscreen, options)),
         ContextType::WebGl | ContextType::WebGl2 => {
-            let current = host::context_kind(st);
+            let current = st.context_kind();
             if current == KIND_2D || current == KIND_WEBGPU || host::is_worker(scope) {
                 return Ok(Value::null());
             }
             let version = if kind == ContextType::WebGl { 1 } else { 2 };
             let gl = host::webgl_context(scope, canvas, el, version, options)?;
             if !gl.is_null() {
-                host::set_context_kind(st, KIND_WEBGL);
+                st.set_context_kind(KIND_WEBGL);
             }
             Ok(gl)
         }
         ContextType::WebGpu => {
-            let current = host::context_kind(st);
+            let current = st.context_kind();
             if current != 0 && current != KIND_WEBGPU {
                 return Ok(Value::null());
             }
@@ -131,7 +131,7 @@ fn get_by_type(
                 return Ok(Value::null());
             };
             if !gpu.is_null() {
-                host::set_context_kind(st, KIND_WEBGPU);
+                st.set_context_kind(KIND_WEBGPU);
             }
             Ok(gpu)
         }
@@ -164,7 +164,7 @@ fn get_context(
     let undefined = Value::undefined();
     let kind = context_type(scope, args.first().unwrap_or(&undefined))?;
     let options = args.get(1).unwrap_or(&undefined);
-    get_by_type(scope, st, el, canvas, offscreen, kind, options)
+    get_by_type(scope, &st, el, canvas, offscreen, kind, options)
 }
 
 pub fn element_get_context(
@@ -262,14 +262,14 @@ pub(crate) fn convert_to_blob(
         && !js.is_null()
         && let Some(st) = crate::state::state_for(js, el)
     {
-        if !host::origin_clean(st) {
+        if !st.origin_clean.get() {
             outcome = Err(crate::api::throw_dom(
                 scope,
                 "SecurityError",
                 "Tainted canvases may not be exported.",
             ));
-        } else if let Some(surface) = host::surface_of(st) {
-            outcome = png_blob(scope, &surface);
+        } else {
+            outcome = png_blob(scope, &st.surface());
         }
     }
     let (settle, value) = match outcome {
@@ -308,8 +308,8 @@ pub fn element_to_blob(
     } else {
         crate::state::state_for(js, el)
     };
-    if let Some(st) = state
-        && !host::origin_clean(st)
+    if let Some(st) = &state
+        && !st.origin_clean.get()
     {
         return Err(host::dom_exception(
             scope,
@@ -319,7 +319,7 @@ pub fn element_to_blob(
         ));
     }
     let mut blob = Value::null();
-    if let Some(surface) = state.and_then(host::surface_of)
+    if let Some(surface) = state.map(|st| st.surface())
         && let Some(png) = surface.png()
     {
         blob = png_bytes_object(scope, &png).unwrap_or_else(|_| Value::null());
@@ -341,10 +341,8 @@ pub fn element_to_data_url(
     let Some(st) = crate::state::state_for(js, el) else {
         return Ok(scope.string("data:,"));
     };
-    let Some(surface) = host::surface_of(st) else {
-        return Ok(scope.string("data:,"));
-    };
-    if !host::origin_clean(st) {
+    let surface = st.surface();
+    if !st.origin_clean.get() {
         return Err(crate::api::throw_dom(
             scope,
             "SecurityError",

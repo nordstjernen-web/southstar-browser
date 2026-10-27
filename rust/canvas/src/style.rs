@@ -4,15 +4,9 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use crate::ffi::cairo::Context;
+use crate::ffi::cairo::{Context, LineCap, LineJoin, Pattern};
 use crate::ffi::state::CanvasState;
 
-const LINE_CAP_BUTT: i32 = 0;
-const LINE_CAP_ROUND: i32 = 1;
-const LINE_CAP_SQUARE: i32 = 2;
-const LINE_JOIN_MITER: i32 = 0;
-const LINE_JOIN_ROUND: i32 = 1;
-const LINE_JOIN_BEVEL: i32 = 2;
 const MAX_DASHES: u32 = 64;
 
 fn attr(scope: &mut Scope<'_>, this: &Value, name: &str) -> Value {
@@ -40,7 +34,7 @@ pub(crate) fn global_alpha(scope: &mut Scope<'_>, this: &Value) -> f64 {
     ga.clamp(0.0, 1.0)
 }
 
-pub(crate) fn apply_composite(scope: &mut Scope<'_>, this: &Value, cr: Context) {
+pub(crate) fn apply_composite(scope: &mut Scope<'_>, this: &Value, cr: &Context) {
     let v = attr(scope, this, "globalCompositeOperation");
     let name = text(scope, &v);
     cr.set_operator(crate::raster::composite_operator(name.as_deref()));
@@ -58,24 +52,24 @@ fn style(
     scope: &mut Scope<'_>,
     this: &Value,
     name: &str,
-    st: &mut CanvasState,
+    st: &CanvasState,
     color: &mut [f64; 4],
-) -> *mut core::ffi::c_void {
+) -> Option<Pattern> {
     let v = attr(scope, this, name);
     if let Some(css) = text(scope, &v) {
         if let Some(rgba) = crate::color::parse(&css) {
             *color = rgba;
         }
-        return core::ptr::null_mut();
+        return None;
     }
     if v.is_object() {
         let (pattern, clean) = crate::gradient::build_pattern(scope, &v);
         if !clean {
-            st.origin_clean = 0;
+            st.origin_clean.set(false);
         }
         return pattern;
     }
-    core::ptr::null_mut()
+    None
 }
 
 fn dashes(scope: &mut Scope<'_>, this: &Value) -> Option<Vec<f64>> {
@@ -100,70 +94,68 @@ fn dashes(scope: &mut Scope<'_>, this: &Value) -> Option<Vec<f64>> {
     Some(out)
 }
 
-pub(crate) fn sync(scope: &mut Scope<'_>, this: &Value, st: &mut CanvasState) {
-    crate::ffi::state::clear_patterns(st);
-    let cr = unsafe { Context::from_raw(st.cr) };
-    let mut fill = st.fill;
-    st.fill_pattern = style(scope, this, "fillStyle", st, &mut fill);
-    st.fill = fill;
-    let mut stroke = st.stroke;
-    st.stroke_pattern = style(scope, this, "strokeStyle", st, &mut stroke);
-    st.stroke = stroke;
+pub(crate) fn sync(scope: &mut Scope<'_>, this: &Value, st: &CanvasState) {
+    st.clear_patterns();
+    let cr = st.context();
+    let mut fill = st.fill.get();
+    let fill_pattern = style(scope, this, "fillStyle", st, &mut fill);
+    st.fill.set(fill);
+    let mut stroke = st.stroke.get();
+    let stroke_pattern = style(scope, this, "strokeStyle", st, &mut stroke);
+    st.stroke.set(stroke);
+    st.set_patterns(fill_pattern, stroke_pattern);
     let v = attr(scope, this, "lineWidth");
     if let Some(lw) = number(scope, &v).filter(|&lw| lw > 0.0) {
-        st.line_width = lw;
+        st.line_width.set(lw);
     }
     let v = attr(scope, this, "font");
     if let Some(font) = text(scope, &v) {
-        crate::ffi::state::set_font(st, &font);
+        st.set_font(&font);
     }
     let v = attr(scope, this, "lineCap");
-    if let (Some(cap), Some(cr)) = (text(scope, &v), cr) {
+    if let Some(cap) = text(scope, &v) {
         cr.set_line_cap(match cap.as_slice() {
-            b"round" => LINE_CAP_ROUND,
-            b"square" => LINE_CAP_SQUARE,
-            _ => LINE_CAP_BUTT,
+            b"round" => LineCap::Round,
+            b"square" => LineCap::Square,
+            _ => LineCap::Butt,
         });
     }
     let v = attr(scope, this, "lineJoin");
-    if let (Some(join), Some(cr)) = (text(scope, &v), cr) {
+    if let Some(join) = text(scope, &v) {
         cr.set_line_join(match join.as_slice() {
-            b"round" => LINE_JOIN_ROUND,
-            b"bevel" => LINE_JOIN_BEVEL,
-            _ => LINE_JOIN_MITER,
+            b"round" => LineJoin::Round,
+            b"bevel" => LineJoin::Bevel,
+            _ => LineJoin::Miter,
         });
     }
     let v = attr(scope, this, "miterLimit");
-    if let (Some(ml), Some(cr)) = (number(scope, &v).filter(|&ml| ml > 0.0), cr) {
+    if let Some(ml) = number(scope, &v).filter(|&ml| ml > 0.0) {
         cr.set_miter_limit(ml);
     }
-    st.shadow = [0.0; 4];
-    st.shadow_blur = 0.0;
-    st.shadow_ox = 0.0;
-    st.shadow_oy = 0.0;
+    st.shadow.set([0.0; 4]);
+    st.shadow_blur.set(0.0);
+    st.shadow_ox.set(0.0);
+    st.shadow_oy.set(0.0);
     let v = attr(scope, this, "shadowColor");
     if let Some(css) = text(scope, &v)
         && let Some(rgba) = crate::color::parse(&css)
     {
-        st.shadow = rgba;
+        st.shadow.set(rgba);
     }
     let v = attr(scope, this, "shadowBlur");
     if let Some(blur) = number(scope, &v).filter(|&b| b >= 0.0) {
-        st.shadow_blur = blur;
+        st.shadow_blur.set(blur);
     }
     let v = attr(scope, this, "shadowOffsetX");
     if let Some(ox) = number(scope, &v) {
-        st.shadow_ox = ox;
+        st.shadow_ox.set(ox);
     }
     let v = attr(scope, this, "shadowOffsetY");
     if let Some(oy) = number(scope, &v) {
-        st.shadow_oy = oy;
+        st.shadow_oy.set(oy);
     }
     let v = attr(scope, this, "lineDashOffset");
     let offset = scope.to_number(&v).unwrap_or(f64::NAN);
-    let Some(cr) = cr else {
-        return;
-    };
     match dashes(scope, this) {
         Some(d) if !d.is_empty() && d.iter().sum::<f64>() > 0.0 => cr.set_dash(&d, offset),
         _ => cr.set_dash(&[], 0.0),
@@ -171,8 +163,8 @@ pub(crate) fn sync(scope: &mut Scope<'_>, this: &Value, st: &mut CanvasState) {
 }
 
 pub(crate) fn has_shadow(st: &CanvasState) -> bool {
-    if st.shadow[3] <= 0.0 {
+    if st.shadow.get()[3] <= 0.0 {
         return false;
     }
-    st.shadow_ox != 0.0 || st.shadow_oy != 0.0 || st.shadow_blur > 0.0
+    st.shadow_ox.get() != 0.0 || st.shadow_oy.get() != 0.0 || st.shadow_blur.get() > 0.0
 }

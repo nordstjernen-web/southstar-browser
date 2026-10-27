@@ -4,16 +4,17 @@
 
 use southstar_js_engine::{Scope, Value};
 
+use std::rc::Rc;
+
 use super::state::CanvasState;
 
-pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<&'static mut CanvasState> {
+pub(crate) fn ctx_state(scope: &Scope<'_>, this: &Value) -> Option<Rc<CanvasState>> {
     let js = super::state::js_of(scope);
     if js.is_null() || !crate::hidden::is_ctx2d(this) {
         return None;
     }
     let el = super::state::Node::from_addr(crate::hidden::ptr(this));
-    let st = crate::state::state_for(js, el)?;
-    Some(unsafe { &mut *st })
+    crate::state::state_for(js, el)
 }
 
 pub(crate) fn mark_mutated(scope: &Scope<'_>) {

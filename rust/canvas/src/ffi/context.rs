@@ -7,29 +7,12 @@ use core::ffi::CStr;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-use super::cairo::Surface;
 use super::imports;
 use super::state::{CanvasState, Node, js_of};
 
-fn state(st: *mut CanvasState) -> &'static mut CanvasState {
-    unsafe { &mut *st }
-}
-
-pub(crate) fn ctx2d_of(scope: &mut Scope<'_>, st: *mut CanvasState) -> Option<Value> {
-    let identity = state(st).ctx2d;
+pub(crate) fn ctx2d_of(scope: &mut Scope<'_>, st: &CanvasState) -> Option<Value> {
+    let identity = st.ctx2d();
     (!identity.is_null()).then(|| scope.object_from_identity(identity))
-}
-
-pub(crate) fn context_kind(st: *mut CanvasState) -> i32 {
-    state(st).context_kind
-}
-
-pub(crate) fn set_context_kind(st: *mut CanvasState, kind: i32) {
-    state(st).context_kind = kind;
-}
-
-pub(crate) fn origin_clean(st: *mut CanvasState) -> bool {
-    state(st).origin_clean != 0
 }
 
 pub(crate) fn dom_exception(
@@ -39,21 +22,6 @@ pub(crate) fn dom_exception(
     message: &CStr,
 ) -> Value {
     imports::nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
-}
-
-pub(crate) fn surface_of(st: *mut CanvasState) -> Option<Surface> {
-    unsafe { Surface::from_borrowed(state(st).surf) }
-}
-
-pub(crate) fn attach_ctx2d(scope: &mut Scope<'_>, st: *mut CanvasState, obj: &Value, kind: i32) {
-    let st = state(st);
-    let js = js_of(scope);
-    if !st.ctx2d.is_null() {
-        unsafe { scope.release_identity(st.ctx2d) };
-    }
-    st.ctx2d = scope.retain_identity(obj);
-    st.jsctx = api::main_context(js.ptr());
-    st.context_kind = kind;
 }
 
 pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {
