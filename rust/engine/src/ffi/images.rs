@@ -3,13 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_void};
-use core::ptr::NonNull;
+use core::ffi::CStr;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use super::net::{self, Dest, NestedLoop, Response};
+use super::net::{self, Dest, NestedLoop, Outcome, Response};
 
 pub use southstar_layout_query::collect_images;
 
@@ -77,97 +76,58 @@ impl Wanted {
 }
 
 struct BlockingFetch {
-    main_loop: *mut c_void,
+    main_loop: NestedLoop,
     pending: Cell<usize>,
     cache: ImageCache,
 }
 
-struct BlockingItem {
-    state: *const BlockingFetch,
-    abs: CString,
-}
-
-unsafe extern "C" fn on_image_fetched(_src: *mut c_void, result: *mut c_void, ud: *mut c_void) {
-    let item = unsafe { Box::from_raw(ud.cast::<BlockingItem>()) };
-    let st = unsafe { &*item.state };
-    if let Some(resp) = unsafe { net::finish(result) } {
-        st.cache.store(&item.abs, &resp);
-    }
-    st.pending.set(st.pending.get() - 1);
-    if st.pending.get() == 0 {
-        unsafe { net::quit_loop(st.main_loop) };
-    }
-}
-
 pub fn fetch_images_blocking(wanted: &Wanted, base: &CStr, cache: ImageCache) {
-    let main_loop = NestedLoop::new();
-    let state = BlockingFetch {
-        main_loop: main_loop.raw(),
+    let state = Rc::new(BlockingFetch {
+        main_loop: NestedLoop::new(),
         pending: Cell::new(wanted.len()),
         cache,
-    };
+    });
     for key in wanted.keys() {
-        let item = Box::new(BlockingItem {
-            state: &state,
-            abs: key,
+        let st = Rc::clone(&state);
+        net::request_async(&key.clone(), base, Dest::Image, move |outcome| {
+            if let Ok(resp) = outcome {
+                st.cache.store(&key, &resp);
+            }
+            st.pending.set(st.pending.get() - 1);
+            if st.pending.get() == 0 {
+                st.main_loop.quit();
+            }
         });
-        let abs = item.abs.as_ptr();
-        net::request_async(
-            abs,
-            base,
-            Dest::Image,
-            on_image_fetched,
-            Box::into_raw(item).cast(),
-        );
     }
-    main_loop.run_blocking();
+    state.main_loop.run_blocking();
 }
 
 pub type Arrived = Rc<dyn Fn()>;
 
 pub struct Session {
-    refs: Cell<i32>,
     dead: Cell<bool>,
     outstanding: Cell<i32>,
     cache: ImageCache,
     arrived: RefCell<Option<Arrived>>,
 }
 
-struct SessionItem {
-    session: *const Session,
-    abs: CString,
-}
-
-unsafe fn session_unref(s: *const Session) {
-    let session = unsafe { &*s };
-    session.refs.set(session.refs.get() - 1);
-    if session.refs.get() == 0 {
-        drop(unsafe { Box::from_raw(s.cast_mut()) });
-    }
-}
-
-unsafe extern "C" fn on_session_image_fetched(
-    _src: *mut c_void,
-    result: *mut c_void,
-    ud: *mut c_void,
-) {
-    let item = unsafe { Box::from_raw(ud.cast::<SessionItem>()) };
-    let s = unsafe { &*item.session };
-    if let Some(resp) = unsafe { net::finish(result) }
-        && !s.dead.get()
-    {
-        s.cache.store(&item.abs, &resp);
-    }
-    if s.outstanding.get() > 0 {
-        s.outstanding.set(s.outstanding.get() - 1);
-    }
-    if !s.dead.get() {
-        let arrived = s.arrived.borrow().clone();
-        if let Some(arrived) = arrived {
-            arrived();
+impl Session {
+    fn image_fetched(&self, abs: &CStr, outcome: Outcome) {
+        if let Ok(resp) = outcome
+            && !self.dead.get()
+        {
+            self.cache.store(abs, &resp);
+        }
+        if self.outstanding.get() > 0 {
+            self.outstanding.set(self.outstanding.get() - 1);
+        }
+        if !self.dead.get() {
+            let arrived = self.arrived.borrow().clone();
+            if let Some(arrived) = arrived {
+                arrived();
+            }
         }
     }
-    unsafe { session_unref(item.session) };
 }
 
 pub fn start_session(
@@ -176,39 +136,26 @@ pub fn start_session(
     cache: ImageCache,
     arrived: Arrived,
 ) -> ImageSession {
-    let session = Box::into_raw(Box::new(Session {
-        refs: Cell::new(1),
+    let session = Rc::new(Session {
         dead: Cell::new(false),
         outstanding: Cell::new(wanted.len() as i32),
         cache,
         arrived: RefCell::new(Some(arrived)),
-    }));
+    });
     for key in wanted.keys() {
-        let item = Box::new(SessionItem { session, abs: key });
-        let s = unsafe { &*session };
-        s.refs.set(s.refs.get() + 1);
-        let abs = item.abs.as_ptr();
-        net::request_async(
-            abs,
-            base,
-            Dest::Image,
-            on_session_image_fetched,
-            Box::into_raw(item).cast(),
-        );
+        let s = Rc::clone(&session);
+        net::request_async(&key.clone(), base, Dest::Image, move |outcome| {
+            s.image_fetched(&key, outcome);
+        });
     }
-    ImageSession(NonNull::new(session).expect("Box::into_raw"))
+    ImageSession(session)
 }
 
-pub struct ImageSession(NonNull<Session>);
+pub struct ImageSession(Rc<Session>);
 
 impl ImageSession {
-    fn session(&self) -> &Session {
-        // SAFETY: this handle holds one of the session's references, so the session is alive.
-        unsafe { self.0.as_ref() }
-    }
-
     pub fn outstanding(&self) -> i32 {
-        self.session().outstanding.get()
+        self.0.outstanding.get()
     }
 
     pub fn close(self) {
@@ -218,10 +165,7 @@ impl ImageSession {
 
 impl Drop for ImageSession {
     fn drop(&mut self) {
-        let session = self.session();
-        session.dead.set(true);
-        drop(session.arrived.replace(None));
-        // SAFETY: this handle's reference is released exactly once, here.
-        unsafe { session_unref(self.0.as_ptr()) };
+        self.0.dead.set(true);
+        drop(self.0.arrived.replace(None));
     }
 }
