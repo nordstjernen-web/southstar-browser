@@ -4,7 +4,6 @@
 
 use southstar_js_engine::{Scope, Value};
 
-#[unsafe(no_mangle)]
 pub fn nsr_canvas_install(scope: &mut Scope<'_>, global: &Value, window: bool) {
     crate::api::install(scope, global, window);
 }

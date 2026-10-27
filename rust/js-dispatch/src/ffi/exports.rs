@@ -59,7 +59,6 @@ pub fn nsr_listeners_compact_dead(scope: &mut Scope<'_>, owner: &Value) {
     crate::target::compact_dead(scope, owner);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_target_handler_realm(
     scope: &mut Scope<'_>,
     obj: &Value,
@@ -69,12 +68,10 @@ pub fn nsr_target_handler_realm(
     crate::target::handler_realm(scope, obj, kind, listener_key)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_target_dispatch_with_event(scope: &mut Scope<'_>, obj: &Value, kind: &str, ev: &Value) {
     crate::target::dispatch_with_event(scope, obj, kind, ev);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str) {
     if !crate::target::has_handlers(scope, obj, kind) {
         return;
@@ -83,12 +80,10 @@ pub fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str) {
     crate::target::dispatch_with_event(scope, obj, kind, &ev);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_target_make_event(scope: &mut Scope<'_>, target: &Value, kind: &str) -> Value {
     crate::target::make_event(scope, target, kind)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_xhr_fire_progress_event(
     scope: &mut Scope<'_>,
     target: &Value,
@@ -104,7 +99,6 @@ pub fn nsr_js_dispatch_engine_event(scope: &mut Scope<'_>, target: &Value, ev: &
     crate::target::dispatch_engine_event(scope, target, ev);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_install_event_target(scope: &mut Scope<'_>, global: &Value) {
     crate::target::install_event_target(scope, global);
 }
@@ -163,12 +157,10 @@ pub fn nsr_install_event_handler_accessors(scope: &mut Scope<'_>, proto: &Value)
     crate::handlers::install_accessors(scope, proto);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_body_reflected_handlers(scope: &mut Scope<'_>, wrapper: &Value) {
     crate::body_handlers::install(scope, wrapper);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_promise_rejection_tracker(
     scope: &mut Scope<'_>,
     promise: &Value,
@@ -287,4 +279,33 @@ pub fn install_runtime_hooks() {
         teardown_listeners,
         teardown,
     });
+    southstar_js_net::links::set_js_dispatch_links(southstar_js_net::links::JsDispatchLinks {
+        xhr_fire_progress_event: crate::ffi::exports::nsr_xhr_fire_progress_event,
+        target_fire_event: crate::ffi::exports::nsr_target_fire_event,
+    });
+    southstar_js_runtime::links::set_js_dispatch_links(
+        southstar_js_runtime::links::JsDispatchLinks {
+            js_install_event_target: crate::ffi::exports::nsr_js_install_event_target,
+            target_handler_realm: crate::ffi::exports::nsr_target_handler_realm,
+            js_promise_rejection_tracker: crate::ffi::exports::nsr_js_promise_rejection_tracker,
+            install_body_reflected_handlers:
+                crate::ffi::exports::nsr_install_body_reflected_handlers,
+        },
+    );
+    southstar_js_services::links::set_js_dispatch_links(
+        southstar_js_services::links::JsDispatchLinks {
+            target_dispatch_with_event: crate::ffi::exports::nsr_target_dispatch_with_event,
+            target_make_event: crate::ffi::exports::nsr_target_make_event,
+            target_fire_event: crate::ffi::exports::nsr_target_fire_event,
+        },
+    );
+    southstar_js_url::links::set_js_dispatch_links(southstar_js_url::links::JsDispatchLinks {
+        xhr_fire_progress_event: crate::ffi::exports::nsr_xhr_fire_progress_event,
+    });
+    southstar_js_window::links::set_js_dispatch_links(
+        southstar_js_window::links::JsDispatchLinks {
+            target_dispatch_with_event: crate::ffi::exports::nsr_target_dispatch_with_event,
+            target_make_event: crate::ffi::exports::nsr_target_make_event,
+        },
+    );
 }

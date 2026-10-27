@@ -16,6 +16,8 @@ use southstar_layout::{BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
 
+use crate::links::nsr_event_new;
+use crate::links::nsr_js_element_is_rendered;
 use crate::{computed, css};
 
 #[repr(C)]
@@ -60,7 +62,6 @@ pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
 }
 
 unsafe extern "Rust" {
-    safe fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value>;
     safe fn nsr_port_add_event_listener(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -71,7 +72,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool;
 }
 
 unsafe extern "C" {
@@ -584,12 +584,10 @@ pub fn computed_text(scope: &mut Scope<'_>, node: Node<'_>, name: &str) -> Optio
     computed::lookup(js_of(scope), node, name)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_cssom_install_window(scope: &mut Scope<'_>, global: &Value) {
     css::install_window(scope, global).ok();
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_cssom_install_css(scope: &mut Scope<'_>, global: &Value) {
     css::install_css(scope, global).ok();
 }
@@ -617,5 +615,9 @@ pub fn install_runtime_hooks() {
     api::set_cssom_hooks(api::PageStateHooks {
         init: |_| {},
         teardown,
+    });
+    southstar_js_runtime::links::set_js_cssom_links(southstar_js_runtime::links::JsCssomLinks {
+        cssom_install_css: crate::ffi::nsr_cssom_install_css,
+        cssom_install_window: crate::ffi::nsr_cssom_install_window,
     });
 }

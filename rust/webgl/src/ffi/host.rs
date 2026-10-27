@@ -205,7 +205,6 @@ pub(crate) fn forget_context(canvas: usize) {
     });
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_webgl_get_context(
     scope: &mut Scope<'_>,
     js: usize,
@@ -234,7 +233,6 @@ pub fn nsr_webgl_get_context(
     Ok(obj)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_webgl_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install(scope, global);
 }

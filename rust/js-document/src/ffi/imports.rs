@@ -44,14 +44,8 @@ natives! {
     nsr_window_open_method,
 }
 
+pub(crate) use crate::links::nsr_document_implementation;
+pub(crate) use crate::links::nsr_document_install_funcs;
 pub(crate) use southstar_js_collections::nsr_make_live;
 pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_window::nsr_document_expose_legacy_named;
-
-unsafe extern "Rust" {
-    pub(crate) safe fn nsr_document_implementation(
-        scope: &mut Scope<'_>,
-        this: &Value,
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_document_install_funcs(scope: &mut Scope<'_>, doc: &Value);
-}

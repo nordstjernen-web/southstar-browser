@@ -115,12 +115,10 @@ pub fn nsr_install_dom_hierarchy(scope: &mut Scope<'_>, global: &Value) {
     crate::install_dom_hierarchy(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_window_chrome(scope: &mut Scope<'_>, global: &Value) {
     crate::install_window_chrome(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_window_compat(scope: &mut Scope<'_>, global: &Value) {
     crate::compat::install_window_compat(scope, global);
 }
@@ -135,7 +133,6 @@ pub fn nsr_install_namespace_object(
     crate::install_namespace_object(scope, global, name, object, tag);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_install_funcs(scope: &mut Scope<'_>, doc: &Value) {
     document_install_funcs(scope, doc);
 }
@@ -144,12 +141,10 @@ pub fn nsr_js_host_class_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
     host_class_proto(scope, which)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_register_class(scope: &mut Scope<'_>, which: c_int) -> Value {
     register_class(scope, which)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_install_proto_table(scope: &mut Scope<'_>, proto: &Value, table: c_int) {
     install_proto_table(scope, proto, table);
 }
@@ -172,4 +167,17 @@ pub fn install_runtime_hooks() {
         link_interface_ctors,
         lock_global_prototypes,
     });
+    southstar_js_document::links::set_js_interfaces_links(
+        southstar_js_document::links::JsInterfacesLinks {
+            document_install_funcs: crate::ffi::nsr_document_install_funcs,
+        },
+    );
+    southstar_js_runtime::links::set_js_interfaces_links(
+        southstar_js_runtime::links::JsInterfacesLinks {
+            js_install_proto_table: crate::ffi::nsr_js_install_proto_table,
+            install_window_compat: crate::ffi::nsr_install_window_compat,
+            install_window_chrome: crate::ffi::nsr_install_window_chrome,
+            js_register_class: crate::ffi::nsr_js_register_class,
+        },
+    );
 }

@@ -2,7 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+pub(crate) mod ffi;
+pub mod links;
 pub mod numeric;
 pub mod strings;
 mod tables;
@@ -63,4 +64,12 @@ pub fn normalize(attr: &[u8], value: Option<&[u8]>) -> Option<&'static CStr> {
         None => def.missing,
         Some(v) => keyword_match(def.keywords, v).or(def.invalid),
     }
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_geometry::links::set_js_reflect_links(
+        southstar_js_geometry::links::JsReflectLinks {
+            element_int_attr_getter: crate::ffi::nsr_element_int_attr_getter,
+        },
+    );
 }

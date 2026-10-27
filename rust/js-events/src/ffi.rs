@@ -67,7 +67,6 @@ pub(crate) fn dispatch_path(scope: &mut Scope<'_>) -> Option<(Vec<Element>, bool
     southstar_js_dispatch::current_dispatch_path(scope)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_event_new(scope: &mut Scope<'_>) -> JsResult {
     crate::class::new_event(scope, None)
 }
@@ -92,12 +91,10 @@ natives! {
     nsr_event_composed_path => crate::event::composed_path,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_event_define_cancel_bubble(scope: &mut Scope<'_>, event: &Value) {
     crate::event::define_cancel_bubble(scope, event);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_event_mark_default_prevented(scope: &mut Scope<'_>, event: &Value) {
     crate::event::mark_default_prevented(scope, event);
 }
@@ -110,42 +107,34 @@ pub unsafe fn nsr_make_event(scope: &mut Scope<'_>, kind: &str, target: *const N
     crate::event::make_event(scope, kind, unsafe { Node::from_ptr(target) })
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str) {
     crate::event::adopt_interface(scope, event, iface);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value) {
     crate::event::define_source(scope, event, source);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_attribute_getters(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_events_install_window_base(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_window_base(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_events_install_window(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_window(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_events_install_worker(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_worker(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_dom_exception(scope: &mut Scope<'_>, name: &[u8], code: i32, message: &[u8]) -> Value {
     crate::exceptions::dom_exception(scope, name, code, message)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value {
     crate::exceptions::abort_error(scope)
 }

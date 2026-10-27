@@ -286,7 +286,6 @@ rust_methods! {
     nsr_window_close_watcher_ctor => constructors::close_watcher,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_document_implementation(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     implementation::of_document(scope, this)
 }
@@ -303,7 +302,6 @@ pub fn nsr_validate_attr_ns(
     names::validate_attr_ns(namespace, qname).map_err(|error| name_error(scope, error))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_tag_owner_document(scope: &mut Scope<'_>, document: &Value, node: &Value) {
     adopt::tag_owner_document(scope, document, node);
 }

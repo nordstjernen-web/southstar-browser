@@ -2,7 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+pub(crate) mod ffi;
+pub mod links;
 pub mod wire;
 
 use std::collections::HashMap;
@@ -665,4 +666,10 @@ pub(crate) fn structured_clone(scope: &mut Scope<'_>, _this: &Value, args: &[Val
     let clone = clone_transfer(scope, value, &transfer, (&old_ports, &ports))?;
     ffi::port_transfer_commit(scope, &old_ports, &ports);
     Ok(clone)
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::links::set_js_clone_links(southstar_js_runtime::links::JsCloneLinks {
+        window_structured_clone: crate::ffi::nsr_window_structured_clone,
+    });
 }

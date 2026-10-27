@@ -6,7 +6,7 @@ pub mod attr;
 pub mod class;
 mod dataset;
 pub mod element;
-mod ffi;
+pub(crate) mod ffi;
 pub mod named_map;
 mod token_list;
 

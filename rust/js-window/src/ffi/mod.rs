@@ -158,12 +158,10 @@ pub(crate) fn queue_delivery(scope: &mut Scope<'_>, target: &Value, event: &Valu
     let _ = api::queue_message_task(scope, deliver_task, &[target.clone(), event.clone()]);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value) {
     message::bind_post_message(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value) -> Value {
     message::make_post_message(scope, window)
 }
@@ -408,7 +406,6 @@ pub(crate) fn url_parts(url: &[u8]) -> Option<UrlOrigin> {
     })
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_install_history(scope: &mut Scope<'_>, global: &Value) {
     let history = history::make_history(scope);
     set(scope, global, "history", history);
@@ -433,7 +430,6 @@ pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Opt
     crate::documents::current_document_for(scope, window)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_current_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut NsNode {
     Node::ptr_or_null(crate::documents::current_document_for(scope, window)).cast_mut()
 }
@@ -442,7 +438,6 @@ pub fn nsr_window_document_for(scope: &mut Scope<'_>, window: &Value) -> *mut Ns
     Node::ptr_or_null(crate::documents::document_for(scope, window)).cast_mut()
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_find(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -485,12 +480,10 @@ pub(crate) fn screen_size() -> (i32, i32) {
     southstar_js_services::screen_size()
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_install_browsing_context(scope: &mut Scope<'_>, global: &Value) {
     context::install_browsing_context(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_install_actions(scope: &mut Scope<'_>, global: &Value) {
     context::install_actions(scope, global);
 }
@@ -704,7 +697,6 @@ pub unsafe extern "C" fn ns_js_resource_origin_clean(
     ))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Result<Value, Value> {
     crate::class::new_window_named(scope)
 }
@@ -714,7 +706,6 @@ pub unsafe fn nsr_window_install_state(js: *const NsJs, scope: &mut Scope<'_>, g
     context::install_state(scope, Js::of(js), global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_is_window_named(value: &Value) -> bool {
     value.is_instance_of_class(&crate::class::WINDOW_NAMED_CLASS)
 }
@@ -737,5 +728,21 @@ pub fn install_runtime_hooks() {
         sync_metrics: sync_page_metrics,
         history_teardown,
         links_clear: clear_window_links,
+    });
+    southstar_js_frames::links::set_js_window_links(southstar_js_frames::links::JsWindowLinks {
+        js_new_window_named: crate::ffi::nsr_js_new_window_named,
+        is_window_named: crate::ffi::nsr_is_window_named,
+        window_current_document_for: crate::ffi::nsr_window_current_document_for,
+        window_make_post_message: crate::ffi::nsr_window_make_post_message,
+        window_bind_post_message: crate::ffi::nsr_window_bind_post_message,
+    });
+    southstar_js_runtime::links::set_js_window_links(southstar_js_runtime::links::JsWindowLinks {
+        window_open_method: crate::ffi::nsr_window_open_method,
+        window_install_history: crate::ffi::nsr_window_install_history,
+        window_install_browsing_context: crate::ffi::nsr_window_install_browsing_context,
+        window_install_actions: crate::ffi::nsr_window_install_actions,
+        window_find: crate::ffi::nsr_window_find,
+        window_bind_post_message: crate::ffi::nsr_window_bind_post_message,
+        js_new_window_named: crate::ffi::nsr_js_new_window_named,
     });
 }

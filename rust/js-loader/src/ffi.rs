@@ -519,6 +519,12 @@ pub fn install_runtime_hooks() {
         parser_hold_forget,
         teardown,
     });
+    southstar_js_runtime::links::set_js_loader_links(southstar_js_runtime::links::JsLoaderLinks {
+        js_module_load: crate::ffi::nsr_js_module_load,
+        js_module_normalize: crate::ffi::nsr_js_module_normalize,
+        js_module_set_import_meta: crate::ffi::nsr_js_module_set_import_meta,
+        js_compile_module_cached: crate::ffi::nsr_js_compile_module_cached,
+    });
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -565,7 +571,6 @@ pub unsafe extern "C" fn ns_js_element_perf_info(
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_compile_module_cached(
     scope: &mut Scope<'_>,
     src: &[u8],
@@ -574,7 +579,6 @@ pub fn nsr_js_compile_module_cached(
     eval::compile_module_cached(scope, src, name)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_module_set_import_meta(
     scope: &mut Scope<'_>,
     module: &Value,
@@ -583,7 +587,6 @@ pub fn nsr_js_module_set_import_meta(
     compile::set_import_meta(scope, module, is_main)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_module_normalize(
     scope: &mut Scope<'_>,
     base: &str,
@@ -599,7 +602,6 @@ pub fn nsr_js_module_normalize(
     Ok(String::from_utf8_lossy(&resolved).into_owned())
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_module_load(
     scope: &mut Scope<'_>,
     name: &str,

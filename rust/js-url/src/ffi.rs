@@ -17,6 +17,7 @@ pub(crate) const HO_FILE_READER: HostKind = HostKind::FileReader;
 pub(crate) const HO_TEXT_ENCODER: HostKind = HostKind::TextEncoder;
 pub(crate) const HO_TEXT_DECODER: HostKind = HostKind::TextDecoder;
 
+use crate::links::nsr_xhr_fire_progress_event;
 pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -41,17 +42,6 @@ pub(crate) struct Source(c_uint);
 
 unsafe extern "C" {
     fn g_uuid_string_random() -> *mut c_char;
-}
-
-unsafe extern "Rust" {
-    safe fn nsr_xhr_fire_progress_event(
-        scope: &mut Scope<'_>,
-        target: &Value,
-        kind: &str,
-        loaded: f64,
-        total: f64,
-        length_computable: bool,
-    );
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
@@ -219,17 +209,14 @@ natives! {
     nsr_window_filereader_ctor => crate::file_reader::ctor,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_url_install_interface(scope: &mut Scope<'_>) {
     crate::url::install_interface(scope);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_usp_install_interface(scope: &mut Scope<'_>) {
     crate::search_params::install_interface(scope);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_text_codecs(scope: &mut Scope<'_>, global: &Value) {
     crate::text_codec::install(scope, global);
 }
@@ -249,7 +236,6 @@ pub fn blob_url_lookup(js: *const NsJs, url: &[u8]) -> Option<crate::registry::B
     crate::registry::lookup(Js(js as usize), url)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_blob_bytes(scope: &mut Scope<'_>, blob: &Value) -> Vec<u8> {
     crate::blob::blob_bytes(scope, blob)
 }
@@ -285,5 +271,11 @@ pub fn install_runtime_hooks() {
         blob_urls_free,
         file_reader_teardown,
         teardown,
+    });
+    southstar_js_runtime::links::set_js_url_links(southstar_js_runtime::links::JsUrlLinks {
+        net_install_text_codecs: crate::ffi::nsr_net_install_text_codecs,
+        usp_install_interface: crate::ffi::nsr_usp_install_interface,
+        url_install_interface: crate::ffi::nsr_url_install_interface,
+        blob_bytes: crate::ffi::nsr_blob_bytes,
     });
 }

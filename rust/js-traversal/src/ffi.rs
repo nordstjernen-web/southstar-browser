@@ -98,7 +98,6 @@ pub fn nsr_native_range(
     crate::range::native_range(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_static_range_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::static_range::construct(scope, this, args)
 }
@@ -144,4 +143,10 @@ pub fn install_runtime_hooks() {
         pre_remove,
         teardown,
     });
+    southstar_js_runtime::links::set_js_traversal_links(
+        southstar_js_runtime::links::JsTraversalLinks {
+            window_get_selection: crate::ffi::nsr_window_get_selection,
+            static_range_ctor: crate::ffi::nsr_static_range_ctor,
+        },
+    );
 }

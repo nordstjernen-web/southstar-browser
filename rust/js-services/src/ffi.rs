@@ -199,6 +199,10 @@ unsafe extern "C" {
     fn g_get_num_processors() -> c_uint;
 }
 
+use crate::links::nsr_event_adopt_interface;
+use crate::links::nsr_target_dispatch_with_event;
+use crate::links::nsr_target_fire_event;
+use crate::links::nsr_target_make_event;
 use southstar_js_net::nsr_navigator_sendBeacon;
 
 unsafe extern "Rust" {
@@ -218,15 +222,6 @@ unsafe extern "Rust" {
         this: &Value,
         args: &[Value],
     ) -> Result<Value, Value>;
-    safe fn nsr_target_fire_event(scope: &mut Scope<'_>, obj: &Value, kind: &str);
-    safe fn nsr_target_make_event(scope: &mut Scope<'_>, target: &Value, kind: &str) -> Value;
-    safe fn nsr_target_dispatch_with_event(
-        scope: &mut Scope<'_>,
-        obj: &Value,
-        kind: &str,
-        ev: &Value,
-    );
-    safe fn nsr_event_adopt_interface(scope: &mut Scope<'_>, event: &Value, iface: &str);
 }
 
 fn c_string(text: &str) -> CString {
@@ -497,27 +492,22 @@ export_native! {
     nsr_services_camera_enumerate => camera::enumerate,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_idle_deadline(scope: &mut Scope<'_>, global: &Value) {
     timers::install_idle_deadline_interface(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_install_console(scope: &mut Scope<'_>, global: &Value) {
     console::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_install_rtc(scope: &mut Scope<'_>, global: &Value) {
     rtc::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_install_clipboard_item(scope: &mut Scope<'_>, global: &Value) {
     clipboard_item::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_install_screen(scope: &mut Scope<'_>, global: &Value) {
     screen::install(scope, global);
 }
@@ -553,12 +543,10 @@ pub fn reset_page(js: *const NsJs) {
     crate::reset(Js(js));
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_window_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::window(scope)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_services_worker_navigator(scope: &mut Scope<'_>) -> Value {
     navigator::worker(scope)
 }
@@ -587,4 +575,15 @@ pub fn install_runtime_hooks() {
         purge_frame_timers,
         teardown,
     });
+    southstar_js_runtime::links::set_js_services_links(
+        southstar_js_runtime::links::JsServicesLinks {
+            services_worker_navigator: crate::ffi::nsr_services_worker_navigator,
+            services_window_navigator: crate::ffi::nsr_services_window_navigator,
+            install_idle_deadline: crate::ffi::nsr_install_idle_deadline,
+            services_install_rtc: crate::ffi::nsr_services_install_rtc,
+            services_install_screen: crate::ffi::nsr_services_install_screen,
+            services_install_clipboard_item: crate::ffi::nsr_services_install_clipboard_item,
+            services_install_console: crate::ffi::nsr_services_install_console,
+        },
+    );
 }

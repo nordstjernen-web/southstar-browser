@@ -5,9 +5,10 @@
 pub mod adopt;
 mod constructors;
 pub mod factories;
-mod ffi;
+pub(crate) mod ffi;
 pub mod hyperlink;
 pub mod implementation;
+pub mod links;
 mod names;
 pub mod namespaces;
 
@@ -71,4 +72,17 @@ pub(crate) fn split_prefix(qname: &[u8]) -> (Option<&[u8]>, &[u8]) {
         Some(colon) => (Some(&qname[..colon]), &qname[colon + 1..]),
         None => (None, qname),
     }
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_document::links::set_js_dom_factory_links(
+        southstar_js_document::links::JsDomFactoryLinks {
+            document_implementation: crate::ffi::nsr_document_implementation,
+        },
+    );
+    southstar_js_runtime::links::set_js_dom_factory_links(
+        southstar_js_runtime::links::JsDomFactoryLinks {
+            tag_owner_document: crate::ffi::nsr_tag_owner_document,
+        },
+    );
 }

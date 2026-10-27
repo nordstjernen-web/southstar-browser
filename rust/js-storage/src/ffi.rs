@@ -369,7 +369,6 @@ pub fn free_deferred_events(js: *const NsJs) {
     events::discard(Js::from_ptr(js.cast_mut()));
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_storage_install_window(scope: &mut Scope<'_>, global: &Value) {
     binding::install_window(scope, global);
 }
@@ -437,4 +436,9 @@ pub fn install_runtime_hooks() {
         switch_session,
         load_local: load_page_local,
     });
+    southstar_js_runtime::links::set_js_storage_links(
+        southstar_js_runtime::links::JsStorageLinks {
+            storage_install_window: crate::ffi::nsr_storage_install_window,
+        },
+    );
 }

@@ -16,9 +16,11 @@ southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-frames = { path = "../js-frames" }
+southstar-js-net = { path = "../js-net" }
 southstar-js-runtime = { path = "../js-runtime" }
 southstar-js-services = { path = "../js-services" }
 southstar-js-shadow = { path = "../js-shadow" }
+southstar-js-url = { path = "../js-url" }
 southstar-js-window = { path = "../js-window" }
 
 [lints]

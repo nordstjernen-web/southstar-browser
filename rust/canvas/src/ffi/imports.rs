@@ -2,24 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use crate::links::nsr_dom_exception;
+pub(crate) use crate::links::nsr_webgl_get_context;
 use southstar_js_engine::{Scope, Value};
-
-unsafe extern "Rust" {
-    pub(crate) safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-    pub(crate) safe fn nsr_webgl_get_context(
-        scope: &mut Scope<'_>,
-        js: usize,
-        canvas_obj: &Value,
-        canvas: usize,
-        version: i32,
-        attrs: &Value,
-    ) -> Result<Value, Value>;
-}
 
 #[cfg(feature = "webgpu")]
 unsafe extern "Rust" {

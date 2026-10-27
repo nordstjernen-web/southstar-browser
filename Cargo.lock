@@ -2455,9 +2455,11 @@ dependencies = [
  "southstar-js-focus",
  "southstar-js-forms",
  "southstar-js-frames",
+ "southstar-js-net",
  "southstar-js-runtime",
  "southstar-js-services",
  "southstar-js-shadow",
+ "southstar-js-url",
  "southstar-js-window",
 ]
 
@@ -2510,10 +2512,12 @@ dependencies = [
  "southstar-glib",
  "southstar-image",
  "southstar-js-collections",
+ "southstar-js-cssom",
  "southstar-js-document",
  "southstar-js-engine",
  "southstar-js-forms",
  "southstar-js-frames",
+ "southstar-js-geometry",
  "southstar-js-images",
  "southstar-js-mutation",
  "southstar-js-reflect",
@@ -2536,13 +2540,20 @@ dependencies = [
 name = "southstar-js-events"
 version = "1.0.2-dev"
 dependencies = [
+ "southstar-canvas",
  "southstar-dom",
  "southstar-glib",
+ "southstar-js-clone",
+ "southstar-js-collections",
+ "southstar-js-cssom",
  "southstar-js-custom-elements",
  "southstar-js-dispatch",
  "southstar-js-engine",
+ "southstar-js-forms",
+ "southstar-js-net",
  "southstar-js-perf",
  "southstar-js-runtime",
+ "southstar-js-services",
 ]
 
 [[package]]
@@ -2584,6 +2595,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-frames",
  "southstar-js-mutation",
+ "southstar-js-net",
  "southstar-js-runtime",
  "southstar-js-url",
  "southstar-net",
@@ -2896,16 +2908,20 @@ dependencies = [
  "southstar-js-attrs",
  "southstar-js-bind",
  "southstar-js-brand",
+ "southstar-js-clone",
  "southstar-js-collections",
  "southstar-js-compression",
  "southstar-js-cssom",
  "southstar-js-custom-elements",
  "southstar-js-dispatch",
  "southstar-js-document",
+ "southstar-js-dom-factory",
+ "southstar-js-elements",
  "southstar-js-engine",
  "southstar-js-events",
  "southstar-js-focus",
  "southstar-js-fonts",
+ "southstar-js-forms",
  "southstar-js-frames",
  "southstar-js-geometry",
  "southstar-js-images",
@@ -2916,8 +2932,10 @@ dependencies = [
  "southstar-js-media",
  "southstar-js-mutation",
  "southstar-js-net",
+ "southstar-js-node",
  "southstar-js-observers",
  "southstar-js-perf",
+ "southstar-js-reflect",
  "southstar-js-runtime",
  "southstar-js-services",
  "southstar-js-shadow",
@@ -2928,6 +2946,7 @@ dependencies = [
  "southstar-js-window",
  "southstar-js-workers",
  "southstar-url",
+ "southstar-webgl",
 ]
 
 [[package]]
@@ -2957,6 +2976,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-events",
  "southstar-js-forms",
+ "southstar-js-geometry",
  "southstar-js-images",
  "southstar-js-mutation",
  "southstar-js-runtime",
@@ -3011,6 +3031,7 @@ dependencies = [
  "southstar-js-custom-elements",
  "southstar-js-engine",
  "southstar-js-focus",
+ "southstar-js-forms",
  "southstar-js-mutation",
  "southstar-js-runtime",
 ]
@@ -3142,6 +3163,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-js-url",
+ "southstar-js-window",
  "southstar-net",
  "southstar-url",
 ]

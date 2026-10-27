@@ -35,24 +35,21 @@ natives! {
     nsr_window_cancelAnimationFrame,
 }
 
+pub(crate) use crate::links::nsr_is_window_named;
+pub(crate) use crate::links::nsr_js_new_window_named;
+pub(crate) use crate::links::nsr_realmdoc_deny_cookie;
+pub(crate) use crate::links::nsr_window_bind_post_message;
+pub(crate) use crate::links::nsr_window_current_document_for;
+pub(crate) use crate::links::nsr_window_make_post_message;
 pub(crate) use southstar_js_storage::nsr_storage_area_of;
 pub(crate) use southstar_js_storage::nsr_storage_new;
 
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value);
-    pub(crate) safe fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value)
-    -> Value;
     pub(crate) unsafe fn nsr_window_link_outward(
         js: *const NsJs,
         outward: &Value,
         realm_window: &Value,
     );
-    pub(crate) safe fn nsr_window_current_document_for(
-        scope: &mut Scope<'_>,
-        window: &Value,
-    ) -> *mut NsNode;
-    pub(crate) safe fn nsr_is_window_named(value: &Value) -> bool;
-    pub(crate) safe fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Native;
     pub(crate) unsafe fn nsr_make_realm_document(
         scope: &mut Scope<'_>,
         doc_node: *mut NsNode,
@@ -62,5 +59,4 @@ unsafe extern "Rust" {
         is_xml: bool,
         inert: bool,
     ) -> Value;
-    pub(crate) safe fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value);
 }

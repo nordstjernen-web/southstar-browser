@@ -218,7 +218,6 @@ pub fn nsr_live_owner(obj: &Value) -> Value {
     live_of(obj).map_or_else(Value::undefined, |back| back.owner().clone())
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_live_proto(scope: &mut Scope<'_>, which: c_int) -> Value {
     live::proto(js_of(scope), which).unwrap_or_else(Value::undefined)
 }
@@ -258,4 +257,9 @@ pub fn install_runtime_hooks() {
         init: |_| {},
         teardown,
     });
+    southstar_js_runtime::links::set_js_collections_links(
+        southstar_js_runtime::links::JsCollectionsLinks {
+            live_proto: crate::ffi::nsr_live_proto,
+        },
+    );
 }

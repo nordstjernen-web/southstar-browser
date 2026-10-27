@@ -301,4 +301,7 @@ pub fn install_runtime_hooks() {
         init: |_| {},
         teardown,
     });
+    southstar_js_runtime::links::set_canvas_links(southstar_js_runtime::links::CanvasLinks {
+        canvas_install: crate::ffi::exports::nsr_canvas_install,
+    });
 }

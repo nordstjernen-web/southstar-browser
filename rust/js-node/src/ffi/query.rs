@@ -148,7 +148,6 @@ pub(crate) fn with_text<R>(
     Ok(f(scope, &bytes, &text))
 }
 
-#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub fn nsr_element_isSameNode(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::attributes::is_same_node(scope, this, args)

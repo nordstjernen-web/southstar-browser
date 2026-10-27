@@ -10,7 +10,7 @@ use southstar_js_runtime::api;
 use crate::Element;
 
 mod imports;
-mod query;
+pub(crate) mod query;
 
 pub(crate) use query::*;
 

@@ -482,12 +482,10 @@ setters! {
     nsr_element_set_selection_dir => crate::selection::set_selection_direction,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_form_data(scope: &mut Scope<'_>, global: &Value) {
     crate::form_data::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_form_data_serialize(scope: &mut Scope<'_>, fd: &Value) -> (Vec<u8>, Vec<u8>) {
     crate::form_data::serialize(scope, fd)
 }
@@ -511,7 +509,6 @@ pub unsafe fn nsr_js_reset_form(scope: &mut Scope<'_>, form: *mut NsNode) {
     crate::submit::reset_form(scope, node(form));
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_form_elements_named_lookup(
     scope: &mut Scope<'_>,
     elements: &Value,
@@ -520,12 +517,10 @@ pub fn nsr_form_elements_named_lookup(
     crate::collection::named_lookup(scope, elements, name)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_form_indexed_control(scope: &mut Scope<'_>, form: &Value, index: u32) -> JsResult {
     crate::collection::indexed_control(scope, form, index)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_form_named_control(scope: &mut Scope<'_>, form: &Value, name: &[u8]) -> JsResult {
     crate::collection::named_control(scope, form, name)
 }

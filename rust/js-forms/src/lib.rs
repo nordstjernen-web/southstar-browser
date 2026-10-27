@@ -4,11 +4,12 @@
 
 pub mod checkable;
 pub mod collection;
-mod ffi;
+pub(crate) mod ffi;
 pub mod files;
 mod form_data;
 pub mod internals;
 pub mod labels;
+pub mod links;
 pub mod picker;
 pub mod select;
 pub mod selection;
@@ -164,4 +165,20 @@ pub(crate) fn parent_select(option: Element) -> Option<Element> {
         parent = parent.parent()?;
     }
     named(parent, "select").then_some(parent)
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_collections::links::set_js_forms_links(
+        southstar_js_collections::links::JsFormsLinks {
+            form_elements_named_lookup: crate::ffi::nsr_form_elements_named_lookup,
+        },
+    );
+    southstar_js_net::links::set_js_forms_links(southstar_js_net::links::JsFormsLinks {
+        js_form_data_serialize: crate::ffi::nsr_js_form_data_serialize,
+        net_install_form_data: crate::ffi::nsr_net_install_form_data,
+    });
+    southstar_js_runtime::links::set_js_forms_links(southstar_js_runtime::links::JsFormsLinks {
+        form_named_control: crate::ffi::nsr_form_named_control,
+        form_indexed_control: crate::ffi::nsr_form_indexed_control,
+    });
 }

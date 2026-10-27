@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub mod element;
-mod ffi;
+pub(crate) mod ffi;
 pub mod image;
 pub mod node_value;
 pub mod table;
@@ -67,4 +67,16 @@ pub(crate) fn descendants_named(root: Element, tag: &[u8]) -> Vec<Element> {
     let mut out = Vec::new();
     walk(root, tag, &mut out, 0);
     out
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_cssom::links::set_js_elements_links(southstar_js_cssom::links::JsElementsLinks {
+        js_element_is_rendered: crate::ffi::nsr_js_element_is_rendered,
+    });
+    southstar_js_geometry::links::set_js_elements_links(
+        southstar_js_geometry::links::JsElementsLinks {
+            element_img_natural_height: crate::ffi::nsr_element_img_natural_height,
+            element_img_natural_width: crate::ffi::nsr_element_img_natural_width,
+        },
+    );
 }
