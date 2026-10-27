@@ -7,7 +7,10 @@
     "web-browser",
     "rust",
     "gtk",
-    "gtk4"
+    "gtk4",
+    "html",
+    "javascript",
+    "css"
   ],
   "homepage": "https://github.com/nordstjernen-web/southstar-browser",
   "bugs": "https://github.com/nordstjernen-web/southstar-browser/issues",
