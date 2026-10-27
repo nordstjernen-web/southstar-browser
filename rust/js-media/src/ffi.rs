@@ -376,7 +376,6 @@ pub fn video_event(js: *const NsJs, node: Node<'_>, kind: &CStr, value: f64) {
     handle.with(|scope| element::video_event(scope, js, node, &kind, value));
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_media_install_audio(scope: &mut Scope<'_>, global: &Value) {
     audio::install(scope, global);
 }
@@ -391,4 +390,7 @@ fn teardown(js: *const NsJs) {
 
 pub fn install_runtime_hooks() {
     api::set_media_hooks(api::PageStateHooks { init, teardown });
+    southstar_js_runtime::links::set_js_media_links(southstar_js_runtime::links::JsMediaLinks {
+        media_install_audio: crate::ffi::nsr_media_install_audio,
+    });
 }

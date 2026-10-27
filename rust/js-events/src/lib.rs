@@ -7,7 +7,7 @@ mod class;
 mod ctors;
 mod event;
 mod exceptions;
-mod ffi;
+pub(crate) mod ffi;
 mod install;
 
 use southstar_dom::Node;
@@ -89,4 +89,54 @@ pub(crate) fn interface_prototype(scope: &mut Scope<'_>, global: &Value, name: &
     } else {
         Value::undefined()
     }
+}
+
+pub fn install_runtime_hooks() {
+    southstar_canvas::links::set_js_events_links(southstar_canvas::links::JsEventsLinks {
+        dom_exception: crate::ffi::nsr_dom_exception,
+    });
+    southstar_js_clone::links::set_js_events_links(southstar_js_clone::links::JsEventsLinks {
+        dom_exception: crate::ffi::nsr_dom_exception,
+    });
+    southstar_js_collections::links::set_js_events_links(
+        southstar_js_collections::links::JsEventsLinks {
+            dom_exception: crate::ffi::nsr_dom_exception,
+        },
+    );
+    southstar_js_cssom::links::set_js_events_links(southstar_js_cssom::links::JsEventsLinks {
+        event_new: crate::ffi::nsr_event_new,
+    });
+    southstar_js_dispatch::links::set_js_events_links(
+        southstar_js_dispatch::links::JsEventsLinks {
+            dom_exception: crate::ffi::nsr_dom_exception,
+            event_define_source: crate::ffi::nsr_event_define_source,
+            event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
+            event_mark_default_prevented: crate::ffi::nsr_event_mark_default_prevented,
+            event_define_cancel_bubble: crate::ffi::nsr_event_define_cancel_bubble,
+            event_new: crate::ffi::nsr_event_new,
+        },
+    );
+    southstar_js_forms::links::set_js_events_links(southstar_js_forms::links::JsEventsLinks {
+        dom_exception: crate::ffi::nsr_dom_exception,
+    });
+    southstar_js_net::links::set_js_events_links(southstar_js_net::links::JsEventsLinks {
+        event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
+        event_define_cancel_bubble: crate::ffi::nsr_event_define_cancel_bubble,
+        event_new: crate::ffi::nsr_event_new,
+        make_abort_error: crate::ffi::nsr_make_abort_error,
+        dom_exception: crate::ffi::nsr_dom_exception,
+    });
+    southstar_js_runtime::links::set_js_events_links(southstar_js_runtime::links::JsEventsLinks {
+        make_abort_error: crate::ffi::nsr_make_abort_error,
+        dom_exception: crate::ffi::nsr_dom_exception,
+        install_event_attribute_getters: crate::ffi::nsr_install_event_attribute_getters,
+        events_install_worker: crate::ffi::nsr_events_install_worker,
+        events_install_window: crate::ffi::nsr_events_install_window,
+        events_install_window_base: crate::ffi::nsr_events_install_window_base,
+    });
+    southstar_js_services::links::set_js_events_links(
+        southstar_js_services::links::JsEventsLinks {
+            event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
+        },
+    );
 }

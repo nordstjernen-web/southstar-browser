@@ -774,7 +774,6 @@ impl Response {
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::fetch::fetch(scope, this, args)
 }
@@ -784,22 +783,18 @@ pub fn nsr_navigator_sendBeacon(scope: &mut Scope<'_>, this: &Value, args: &[Val
     crate::beacon::send_beacon(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_response_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::body::response_ctor(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_request_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::body::request_ctor(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_xhr_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     crate::xhr::construct(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_abort_controller_ctor(
     scope: &mut Scope<'_>,
     this: &Value,
@@ -808,27 +803,22 @@ pub fn nsr_window_abort_controller_ctor(
     crate::abort::controller_ctor(scope, this, args)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
     crate::body::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_xhr_install_interface(scope: &mut Scope<'_>, global: &Value) {
     crate::xhr::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_net_install_sockets(scope: &mut Scope<'_>, global: &Value) {
     crate::socket::install(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
     crate::install_interfaces(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_install_abort_signal_interface(scope: &mut Scope<'_>, global: &Value) {
     crate::abort::install(scope, global);
 }
@@ -911,5 +901,17 @@ pub fn install_runtime_hooks() {
     api::set_net_hooks(api::PageStateHooks {
         init: |_| {},
         teardown,
+    });
+    southstar_js_runtime::links::set_js_net_links(southstar_js_runtime::links::JsNetLinks {
+        net_install_interfaces: crate::ffi::nsr_net_install_interfaces,
+        js_net_install_sockets: crate::ffi::nsr_js_net_install_sockets,
+        fetch_install_interfaces: crate::ffi::nsr_fetch_install_interfaces,
+        install_abort_signal_interface: crate::ffi::nsr_install_abort_signal_interface,
+        xhr_install_interface: crate::ffi::nsr_xhr_install_interface,
+        window_request_ctor: crate::ffi::nsr_window_request_ctor,
+        window_response_ctor: crate::ffi::nsr_window_response_ctor,
+        window_abort_controller_ctor: crate::ffi::nsr_window_abort_controller_ctor,
+        window_xhr_ctor: crate::ffi::nsr_window_xhr_ctor,
+        js_fetch: crate::ffi::nsr_js_fetch,
     });
 }

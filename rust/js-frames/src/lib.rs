@@ -8,6 +8,7 @@ mod cloner;
 mod exposed;
 mod ffi;
 mod globals;
+pub mod links;
 mod load;
 mod origin;
 pub mod owner;

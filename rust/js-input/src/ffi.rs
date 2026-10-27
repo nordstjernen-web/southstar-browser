@@ -347,7 +347,6 @@ pub unsafe fn dispatch_drag_event(
     crate::transfer::drag_event(js, session, target, &kind, input, related.and_then(live))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_input_install_wpt(scope: &mut Scope<'_>, global: &Value) {
     crate::wpt::install(scope, global);
 }
@@ -382,5 +381,8 @@ pub fn install_runtime_hooks() {
     api::set_input_hooks(api::PageStateHooks {
         init: |_| {},
         teardown,
+    });
+    southstar_js_runtime::links::set_js_input_links(southstar_js_runtime::links::JsInputLinks {
+        js_input_install_wpt: crate::ffi::nsr_js_input_install_wpt,
     });
 }

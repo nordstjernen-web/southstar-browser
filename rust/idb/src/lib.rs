@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+pub(crate) mod ffi;
 
 use core::ffi::CStr;
 use std::collections::HashMap;
@@ -964,4 +964,10 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
         set(scope, &backend, name, function);
     }
     let _ = scope.define(global, "__nd_idb", backend, Attributes::CONFIGURABLE);
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::links::set_idb_links(southstar_js_runtime::links::IdbLinks {
+        idb_install: crate::ffi::nsr_idb_install,
+    });
 }

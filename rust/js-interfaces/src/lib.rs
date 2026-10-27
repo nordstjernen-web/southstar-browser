@@ -4,7 +4,7 @@
 
 mod chrome;
 mod compat;
-mod ffi;
+pub(crate) mod ffi;
 mod global;
 mod hierarchy;
 mod instof;

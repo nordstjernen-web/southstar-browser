@@ -9,26 +9,13 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 const DATA_CLONE_ERR: i32 = 25;
 const HIDDEN_IMAGEDATA: i32 = 4;
 
+use crate::links::nsr_dom_exception;
+use crate::links::nsr_port_transfer_commit;
+use crate::links::nsr_port_transfer_prepare;
 use southstar_canvas::nsr_canvas_clone_object;
 use southstar_canvas::nsr_canvas_hidden_get;
 use southstar_canvas::nsr_canvas_hidden_is;
 use southstar_canvas::nsr_image_bitmap_is;
-
-unsafe extern "Rust" {
-    safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
-    safe fn nsr_port_transfer_prepare(
-        scope: &mut Scope<'_>,
-        transfer: &Value,
-        source_port: &Value,
-        realm: ContextHandle,
-    ) -> Result<(Value, Value), Value>;
-    safe fn nsr_port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_ports: &Value);
-}
 
 pub(crate) fn port_transfer_prepare(
     scope: &mut Scope<'_>,
@@ -100,7 +87,6 @@ pub fn nsr_structured_clone_transfer(
     crate::clone_transfer(scope, value, transfer, (seed_from, seed_to))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_structured_clone(
     scope: &mut Scope<'_>,
     this: &Value,

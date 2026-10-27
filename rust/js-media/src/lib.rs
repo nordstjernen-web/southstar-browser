@@ -5,7 +5,7 @@
 mod audio;
 pub mod element;
 pub mod eme;
-mod ffi;
+pub(crate) mod ffi;
 mod hooks;
 mod mse;
 pub mod support;

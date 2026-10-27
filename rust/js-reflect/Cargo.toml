@@ -14,6 +14,7 @@ southstar-js-document = { path = "../js-document" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-events = { path = "../js-events" }
 southstar-js-forms = { path = "../js-forms" }
+southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }

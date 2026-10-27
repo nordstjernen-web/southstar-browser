@@ -93,7 +93,6 @@ pub unsafe extern "C" fn ns_node_is_shadow_root(n: *const NsNode) -> GBoolean {
     GBoolean::from(node_of(n).is_some_and(crate::is_shadow_root))
 }
 
-#[unsafe(no_mangle)]
 #[allow(non_snake_case)]
 pub fn nsr_element_get_shadowRoot(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
     crate::root::get_shadow_root(scope, this, &[])

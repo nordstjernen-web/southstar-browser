@@ -42,6 +42,12 @@ Southstar Browser 1.0.2:
   time are now ordinary Rust calls through Cargo dependencies, so the
   compiler checks their signatures: about 100 fewer imported symbols and
   57 fewer exports.
+* The 121 remaining Rust-ABI symbol links between binding crates that
+  depend on each other in a cycle are now typed link tables: the lower
+  crate holds a `OnceLock` of plain `fn` pointers and a wrapper per
+  function, and the crate above fills it from `install_runtime_hooks`
+  before the first page, as the runtime hooks already did. Signature
+  mismatches are now compile errors instead of undefined behaviour.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

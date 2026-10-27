@@ -484,7 +484,6 @@ pub fn nsr_make_synth_xml_document(scope: &mut Scope<'_>) -> Value {
     crate::realm::synth_xml(scope)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_realmdoc_deny_cookie(scope: &mut Scope<'_>, doc: &Value) {
     crate::realm::deny_cookie(scope, doc);
 }
@@ -513,4 +512,9 @@ pub fn install_runtime_hooks() {
         flush_write,
         write_teardown,
     });
+    southstar_js_frames::links::set_js_document_links(
+        southstar_js_frames::links::JsDocumentLinks {
+            realmdoc_deny_cookie: crate::ffi::nsr_realmdoc_deny_cookie,
+        },
+    );
 }

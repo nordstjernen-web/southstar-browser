@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+pub(crate) mod ffi;
 pub mod root;
 pub mod slot;
 
@@ -32,4 +32,10 @@ pub(crate) fn is_closed(root: Element) -> bool {
 pub(crate) fn is_slot(node: Option<Element>) -> bool {
     node.and_then(Node::element_name)
         .is_some_and(|name| name.eq_ignore_ascii_case(b"slot"))
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_forms::links::set_js_shadow_links(southstar_js_forms::links::JsShadowLinks {
+        element_get_shadow_root: crate::ffi::nsr_element_get_shadowRoot,
+    });
 }

@@ -14,14 +14,10 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
+use crate::links::nsr_make_token_list;
 use southstar_js_events::nsr_dom_exception;
 
 unsafe extern "Rust" {
-    safe fn nsr_make_token_list(
-        scope: &mut Scope<'_>,
-        element: &Value,
-        attr: &'static CStr,
-    ) -> Result<Value, Value>;
     safe fn nsr_element_async_method(
         scope: &mut Scope<'_>,
         this: &Value,
@@ -161,7 +157,6 @@ pub fn nsr_element_attr_setter(
     strings::attr_set(scope, this, value, magic)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_int_attr_getter(scope: &mut Scope<'_>, this: &Value, magic: i32) -> JsResult {
     numeric::int_get(scope, this, magic)
 }

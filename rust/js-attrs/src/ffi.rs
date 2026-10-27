@@ -208,7 +208,6 @@ rust_setters! {
     nsr_tlist_set_value => crate::token_list::set_value,
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_make_token_list(
     scope: &mut Scope<'_>,
     element: &Value,
@@ -221,7 +220,6 @@ pub fn nsr_attr_owner(value: &Value) -> *mut NsNode {
     attr_owner_node(value)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_attr_to_js(
     scope: &mut Scope<'_>,
     owner: &Value,
@@ -267,5 +265,16 @@ pub fn install_runtime_hooks() {
         class_id,
         detach_owner,
         detach_all: detach_page,
+    });
+    southstar_js_dom_factory::links::set_js_attrs_links(
+        southstar_js_dom_factory::links::JsAttrsLinks {
+            attr_to_js: crate::ffi::nsr_attr_to_js,
+        },
+    );
+    southstar_js_reflect::links::set_js_attrs_links(southstar_js_reflect::links::JsAttrsLinks {
+        make_token_list: crate::ffi::nsr_make_token_list,
+    });
+    southstar_js_runtime::links::set_js_attrs_links(southstar_js_runtime::links::JsAttrsLinks {
+        attr_to_js: crate::ffi::nsr_attr_to_js,
     });
 }

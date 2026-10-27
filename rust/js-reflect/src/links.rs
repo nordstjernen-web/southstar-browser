@@ -1,0 +1,32 @@
+//! Southstar — the entry points of the crates above this one that it calls back into, as typed tables those crates install once before the first page.
+//! Copyright 2026 Andreas Røsdal
+//! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
+
+use std::sync::OnceLock;
+
+use core::ffi::CStr;
+use southstar_js_engine::{Scope, Value};
+
+pub struct JsAttrsLinks {
+    pub make_token_list: fn(&mut Scope<'_>, &Value, &'static CStr) -> Result<Value, Value>,
+}
+
+static JS_ATTRS_LINKS: OnceLock<JsAttrsLinks> = OnceLock::new();
+
+pub fn set_js_attrs_links(links: JsAttrsLinks) {
+    let _ = JS_ATTRS_LINKS.set(links);
+}
+
+fn js_attrs_links() -> &'static JsAttrsLinks {
+    JS_ATTRS_LINKS
+        .get()
+        .expect("southstar-js-attrs installs its links before the first page")
+}
+
+pub(crate) fn nsr_make_token_list(
+    scope: &mut Scope<'_>,
+    element: &Value,
+    attr: &'static CStr,
+) -> Result<Value, Value> {
+    (js_attrs_links().make_token_list)(scope, element, attr)
+}

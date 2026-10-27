@@ -128,7 +128,6 @@ pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {
     api::partition_key(scope.context_opaque().cast()).map(CString::into_bytes)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_idb_install(scope: &mut Scope<'_>, global: &Value) {
     crate::install(scope, global);
 }

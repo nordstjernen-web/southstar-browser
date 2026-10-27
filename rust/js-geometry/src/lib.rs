@@ -5,6 +5,7 @@
 mod boxes;
 mod ffi;
 pub mod hit;
+pub mod links;
 mod lookup;
 pub mod metrics;
 pub mod scroll;

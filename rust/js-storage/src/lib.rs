@@ -5,7 +5,7 @@
 pub mod binding;
 pub mod class;
 mod events;
-mod ffi;
+pub(crate) mod ffi;
 mod store;
 
 pub use ffi::free_deferred_events;

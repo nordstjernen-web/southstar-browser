@@ -2,23 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use crate::links::nsr_dom_exception;
+pub(crate) use crate::links::nsr_form_elements_named_lookup;
 use southstar_dom::NsNode;
 use southstar_js_engine::{Scope, Value};
 
 unsafe extern "Rust" {
-    pub(crate) safe fn nsr_dom_exception(
-        scope: &mut Scope<'_>,
-        name: &[u8],
-        code: i32,
-        message: &[u8],
-    ) -> Value;
     pub(crate) unsafe fn nsr_live_build_labels(
         scope: &mut Scope<'_>,
         n: *const NsNode,
-    ) -> Result<Value, Value>;
-    pub(crate) safe fn nsr_form_elements_named_lookup(
-        scope: &mut Scope<'_>,
-        elements: &Value,
-        name: &[u8],
     ) -> Result<Value, Value>;
 }

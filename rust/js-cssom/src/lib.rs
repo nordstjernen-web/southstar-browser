@@ -8,7 +8,8 @@ pub mod class;
 mod computed;
 mod css;
 pub mod declaration;
-mod ffi;
+pub(crate) mod ffi;
+pub mod links;
 
 pub use ffi::computed_text;
 pub use ffi::install_runtime_hooks;

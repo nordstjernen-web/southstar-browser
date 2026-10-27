@@ -146,7 +146,6 @@ pub(crate) fn with_port_realm<R>(
     realm.with(f).expect("a live realm")
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_port_transfer_prepare(
     scope: &mut Scope<'_>,
     transfer: &Value,
@@ -164,7 +163,6 @@ pub fn nsr_port_transfer_prepare(
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_ports: &Value) {
     let moved = ports::Transfer {
         old: old_ports.clone(),
@@ -173,7 +171,6 @@ pub fn nsr_port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new_po
     ports::transfer_commit(scope, &moved);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_net_install_ports(scope: &mut Scope<'_>, global: &Value) {
     ports::install(scope, global);
 }
@@ -735,12 +732,10 @@ pub(crate) fn net_get(url: &str, top_url: &str, header: &str) -> NetResponse {
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_worker_install_constructor(scope: &mut Scope<'_>, global: &Value) {
     worker::install_constructor(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_sw_install_container(scope: &mut Scope<'_>, navigator: &Value) {
     service::install_container(scope, navigator);
 }
@@ -807,12 +802,10 @@ pub unsafe extern "C" fn ns_workers_pending(js: *mut c_void) -> c_int {
     c_int::from(worker::pending(Js(js as usize)))
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_worker_install_console(scope: &mut Scope<'_>, global: &Value) {
     worker_scope::install_console(scope, global);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_sw_install_scope(scope: &mut Scope<'_>, global: &Value) {
     let Some(host) = worker_host_of(js_of(scope)) else {
         return;
@@ -820,12 +813,10 @@ pub fn nsr_sw_install_scope(scope: &mut Scope<'_>, global: &Value) {
     service::install_scope(scope, global, &host);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_worker_install_location(scope: &mut Scope<'_>, global: &Value, url: &str) {
     worker_scope::install_location(scope, global, url);
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_worker_promise_rejection_tracker(
     scope: &mut Scope<'_>,
     _promise: &Value,
@@ -837,7 +828,6 @@ pub fn nsr_worker_promise_rejection_tracker(
     }
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
     worker::report_exception(Js(js as usize), exception)
 }
@@ -878,5 +868,31 @@ pub fn install_runtime_hooks() {
         log_line: host_log_line,
         shape_global: worker_scope::shape_global,
         teardown,
+    });
+    southstar_js_clone::links::set_js_workers_links(southstar_js_clone::links::JsWorkersLinks {
+        port_transfer_commit: crate::ffi::nsr_port_transfer_commit,
+        port_transfer_prepare: crate::ffi::nsr_port_transfer_prepare,
+    });
+    southstar_js_dispatch::links::set_js_workers_links(
+        southstar_js_dispatch::links::JsWorkersLinks {
+            worker_report_exception: crate::ffi::nsr_worker_report_exception,
+        },
+    );
+    southstar_js_net::links::set_js_workers_links(southstar_js_net::links::JsWorkersLinks {
+        net_install_ports: crate::ffi::nsr_net_install_ports,
+    });
+    southstar_js_runtime::links::set_js_workers_links(
+        southstar_js_runtime::links::JsWorkersLinks {
+            sw_install_scope: crate::ffi::nsr_sw_install_scope,
+            worker_install_console: crate::ffi::nsr_worker_install_console,
+            worker_install_constructor: crate::ffi::nsr_worker_install_constructor,
+            sw_install_container: crate::ffi::nsr_sw_install_container,
+            worker_promise_rejection_tracker: crate::ffi::nsr_worker_promise_rejection_tracker,
+            worker_install_location: crate::ffi::nsr_worker_install_location,
+        },
+    );
+    southstar_js_window::links::set_js_workers_links(southstar_js_window::links::JsWorkersLinks {
+        port_transfer_commit: crate::ffi::nsr_port_transfer_commit,
+        port_transfer_prepare: crate::ffi::nsr_port_transfer_prepare,
     });
 }

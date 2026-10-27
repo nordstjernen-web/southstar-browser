@@ -5,7 +5,8 @@
 mod base_url;
 pub mod cookie;
 pub mod elements;
-mod ffi;
+pub(crate) mod ffi;
+pub mod links;
 pub mod props;
 mod realm;
 pub mod view;

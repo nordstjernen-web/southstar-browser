@@ -50,22 +50,6 @@ unsafe extern "C" {
 
 use southstar_canvas::nsr_dommatrix_make;
 
-unsafe extern "Rust" {
-    safe fn nsr_element_int_attr_getter(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        magic: i32,
-    ) -> Result<Value, Value>;
-    safe fn nsr_element_img_natural_width(
-        scope: &mut Scope<'_>,
-        this: &Value,
-    ) -> Result<Value, Value>;
-    safe fn nsr_element_img_natural_height(
-        scope: &mut Scope<'_>,
-        this: &Value,
-    ) -> Result<Value, Value>;
-}
-
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(scope.context_opaque().cast())
 }
@@ -192,6 +176,9 @@ pub(crate) fn inline_rect_for_dom(root: BoxRef<'_>, node: Element) -> Option<Rec
     Some(Rect { x, y, w, h })
 }
 
+use crate::links::nsr_element_img_natural_height;
+use crate::links::nsr_element_img_natural_width;
+use crate::links::nsr_element_int_attr_getter;
 pub(crate) use southstar_layout_query::scroll_snap;
 
 pub(crate) fn effective_transform_matrix(style: StyleRef<'_>, bw: f64, bh: f64) -> Option<Mat4> {

@@ -201,17 +201,14 @@ pub unsafe fn nsr_live_build_labels(scope: &mut Scope<'_>, node: *const NsNode) 
     crate::element::build_labels(scope, unsafe { Node::from_ptr(node) })
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_js_element_is_rendered(scope: &mut Scope<'_>, value: &Value) -> bool {
     crate::node_value::is_rendered(scope, value)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_img_natural_width(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     crate::image::natural_width(scope, this)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_element_img_natural_height(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     crate::image::natural_height(scope, this)
 }

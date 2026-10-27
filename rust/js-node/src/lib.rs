@@ -4,7 +4,7 @@
 
 pub mod attributes;
 pub mod child;
-mod ffi;
+pub(crate) mod ffi;
 pub mod names;
 pub mod owner;
 pub mod sequence;
@@ -118,4 +118,10 @@ pub(crate) fn detach_recorded(js: Option<Js>, node: Element) {
         ffi::orphan(js, node);
         ffi::record_child_change(js, parent, None, Some(node), previous, next);
     }
+}
+
+pub fn install_runtime_hooks() {
+    southstar_js_runtime::links::set_js_node_links(southstar_js_runtime::links::JsNodeLinks {
+        element_is_same_node: crate::ffi::query::nsr_element_isSameNode,
+    });
 }

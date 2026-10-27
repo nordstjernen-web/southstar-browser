@@ -17,16 +17,20 @@ southstar-idb = { path = "../idb" }
 southstar-js-attrs = { path = "../js-attrs" }
 southstar-js-bind = { path = "../js-bind", default-features = false }
 southstar-js-brand = { path = "../js-brand" }
+southstar-js-clone = { path = "../js-clone" }
 southstar-js-collections = { path = "../js-collections" }
 southstar-js-compression = { path = "../js-compression" }
 southstar-js-cssom = { path = "../js-cssom" }
 southstar-js-custom-elements = { path = "../js-custom-elements" }
 southstar-js-dispatch = { path = "../js-dispatch" }
 southstar-js-document = { path = "../js-document" }
+southstar-js-dom-factory = { path = "../js-dom-factory" }
+southstar-js-elements = { path = "../js-elements" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-events = { path = "../js-events" }
 southstar-js-focus = { path = "../js-focus" }
 southstar-js-fonts = { path = "../js-fonts" }
+southstar-js-forms = { path = "../js-forms" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-images = { path = "../js-images" }
@@ -37,8 +41,10 @@ southstar-js-loader = { path = "../js-loader" }
 southstar-js-media = { path = "../js-media" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-net = { path = "../js-net" }
+southstar-js-node = { path = "../js-node" }
 southstar-js-observers = { path = "../js-observers" }
 southstar-js-perf = { path = "../js-perf" }
+southstar-js-reflect = { path = "../js-reflect" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
 southstar-js-services = { path = "../js-services" }
 southstar-js-shadow = { path = "../js-shadow" }
@@ -49,6 +55,7 @@ southstar-js-url = { path = "../js-url" }
 southstar-js-window = { path = "../js-window" }
 southstar-js-workers = { path = "../js-workers" }
 southstar-url = { path = "../url" }
+southstar-webgl = { path = "../webgl" }
 
 [lints]
 workspace = true

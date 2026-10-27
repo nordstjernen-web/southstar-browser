@@ -4,8 +4,9 @@
 
 mod base64;
 mod blob;
-mod ffi;
+pub(crate) mod ffi;
 mod file_reader;
+pub mod links;
 mod registry;
 mod search_params;
 mod text_codec;

@@ -7,7 +7,7 @@ mod blocking;
 mod compile;
 mod eval;
 mod fetch;
-mod ffi;
+pub(crate) mod ffi;
 mod hold;
 mod import_map;
 mod page;

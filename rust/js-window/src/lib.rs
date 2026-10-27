@@ -5,8 +5,9 @@
 pub mod class;
 mod context;
 mod documents;
-mod ffi;
+pub(crate) mod ffi;
 mod history;
+pub mod links;
 mod location;
 mod message;
 mod named;
