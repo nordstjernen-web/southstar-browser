@@ -97,6 +97,14 @@ Southstar Browser 1.0.2:
   engine, js-runtime and headless: 761 to 352). Eleven more crates forbid
   unsafe code. Fixes a reused box slot returning the wrong DOM node and a
   resource-timing URL pointer that could dangle across a navigation.
+* The JavaScript binding crates take a checked `Page` handle and `Node`
+  values instead of `unsafe fn` raw page and node pointers, and images,
+  textures, videos, SVG and canvas surfaces cross between crates as typed
+  reference-counted handles (generation-stamped, so a stale image or video
+  reads as empty instead of pointing at freed memory). canvas: 130 `unsafe`
+  to 6; svg, texture and six more binding and layout crates now forbid
+  unsafe code. Script element bookkeeping keeps weak node references, so a
+  reused node slot is no longer mistaken for the freed node.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,
