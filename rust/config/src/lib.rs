@@ -7,26 +7,55 @@ pub mod util;
 
 pub use ffi::{ConfigLock, dump, init, lock, reload, save, shutdown};
 
-use core::ffi::{c_char, c_int};
+use core::ffi::{CStr, c_int};
+use std::ffi::CString;
+
 use southstar_glib::{FALSE, GBoolean};
 
 pub const DEFAULT_SEARCH_ENGINE: &str = "https://duckduckgo.com/?q=%s";
 const OLD_SEARCH_ENGINE: &[u8] = b"https://lite.duckduckgo.com/lite/?q=%s";
 const MAX_REDIRECTS: i32 = 10;
 
-#[repr(C)]
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Text(Option<CString>);
+
+impl Text {
+    pub const NONE: Text = Text(None);
+
+    pub fn c_str(&self) -> Option<&CStr> {
+        self.0.as_deref()
+    }
+
+    pub fn bytes(&self) -> Option<&[u8]> {
+        self.0.as_deref().map(CStr::to_bytes)
+    }
+
+    pub fn to_vec(&self) -> Option<Vec<u8>> {
+        self.bytes().map(<[u8]>::to_vec)
+    }
+
+    pub fn non_empty(&self) -> Option<&[u8]> {
+        self.bytes().filter(|value| !value.is_empty())
+    }
+
+    pub fn set(&mut self, value: &[u8]) {
+        let end = value.iter().position(|&c| c == 0).unwrap_or(value.len());
+        self.0 = CString::new(&value[..end]).ok();
+    }
+}
+
 pub struct NsConfig {
-    pub home_url: *mut c_char,
-    pub user_agent: *mut c_char,
-    pub compat_mode: *mut c_char,
-    pub accept_language: *mut c_char,
-    pub search_engine: *mut c_char,
-    pub ai_model_mirror: *mut c_char,
-    pub http_proxy: *mut c_char,
-    pub https_proxy: *mut c_char,
-    pub no_proxy: *mut c_char,
-    pub doh_url: *mut c_char,
-    pub gsk_renderer: *mut c_char,
+    pub home_url: Text,
+    pub user_agent: Text,
+    pub compat_mode: Text,
+    pub accept_language: Text,
+    pub search_engine: Text,
+    pub ai_model_mirror: Text,
+    pub http_proxy: Text,
+    pub https_proxy: Text,
+    pub no_proxy: Text,
+    pub doh_url: Text,
+    pub gsk_renderer: Text,
     pub referer_policy: c_int,
     pub cookie_policy: c_int,
     pub color_scheme: c_int,
@@ -205,23 +234,23 @@ const VALUE_ENV: [(&str, &str); 8] = [
 ];
 
 enum Slot<'a> {
-    Text(&'a mut *mut c_char),
+    Text(&'a mut Text),
     Number(&'a mut c_int),
 }
 
 impl NsConfig {
     pub const ZERO: NsConfig = NsConfig {
-        home_url: core::ptr::null_mut(),
-        user_agent: core::ptr::null_mut(),
-        compat_mode: core::ptr::null_mut(),
-        accept_language: core::ptr::null_mut(),
-        search_engine: core::ptr::null_mut(),
-        ai_model_mirror: core::ptr::null_mut(),
-        http_proxy: core::ptr::null_mut(),
-        https_proxy: core::ptr::null_mut(),
-        no_proxy: core::ptr::null_mut(),
-        doh_url: core::ptr::null_mut(),
-        gsk_renderer: core::ptr::null_mut(),
+        home_url: Text::NONE,
+        user_agent: Text::NONE,
+        compat_mode: Text::NONE,
+        accept_language: Text::NONE,
+        search_engine: Text::NONE,
+        ai_model_mirror: Text::NONE,
+        http_proxy: Text::NONE,
+        https_proxy: Text::NONE,
+        no_proxy: Text::NONE,
+        doh_url: Text::NONE,
+        gsk_renderer: Text::NONE,
         referer_policy: 0,
         cookie_policy: 0,
         color_scheme: 0,
@@ -298,7 +327,7 @@ impl NsConfig {
 
     fn text(&mut self, key: &str) -> Option<Vec<u8>> {
         match self.slot(key)? {
-            Slot::Text(p) => ffi::text(*p),
+            Slot::Text(p) => p.to_vec(),
             Slot::Number(_) => None,
         }
     }
@@ -376,7 +405,7 @@ fn apply_pair(config: &mut NsConfig, key: &[u8], value: &[u8]) {
         return;
     };
     match config.slot(field.key) {
-        Some(Slot::Text(p)) => ffi::set_text(p, &single_line(value)),
+        Some(Slot::Text(p)) => p.set(&single_line(value)),
         Some(Slot::Number(n)) => {
             *n = match field.kind {
                 Kind::Bool => parse_choice(value, &BOOL_NAMES, *n),
@@ -398,7 +427,7 @@ fn apply_pair(config: &mut NsConfig, key: &[u8], value: &[u8]) {
 fn apply_defaults(config: &mut NsConfig) {
     for field in &FIELDS {
         match config.slot(field.key) {
-            Some(Slot::Text(p)) => ffi::set_text(p, field.text.as_bytes()),
+            Some(Slot::Text(p)) => p.set(field.text.as_bytes()),
             Some(Slot::Number(n)) => *n = field.number,
             None => {}
         }
@@ -452,7 +481,7 @@ fn load(config: &mut NsConfig, contents: Option<&[u8]>, env: impl Fn(&str) -> Op
         apply_file(config, contents);
     }
     if config.text("search_engine").as_deref() == Some(OLD_SEARCH_ENGINE) {
-        ffi::set_text(&mut config.search_engine, DEFAULT_SEARCH_ENGINE.as_bytes());
+        config.search_engine.set(DEFAULT_SEARCH_ENGINE.as_bytes());
     }
     apply_env(config, env);
 }
@@ -460,7 +489,11 @@ fn load(config: &mut NsConfig, contents: Option<&[u8]>, env: impl Fn(&str) -> Op
 fn adopt(config: &mut NsConfig, fresh: &mut NsConfig) {
     for field in &FIELDS {
         match (config.slot(field.key), fresh.slot(field.key)) {
-            (Some(Slot::Text(to)), Some(Slot::Text(from))) => ffi::adopt_text(to, from),
+            (Some(Slot::Text(to)), Some(Slot::Text(from))) => {
+                if to != from {
+                    *to = core::mem::take(from);
+                }
+            }
             (Some(Slot::Number(to)), Some(Slot::Number(from))) => *to = *from,
             _ => {}
         }
@@ -554,7 +587,8 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>, default_language: &[u
         out.extend_from_slice(value);
         out.push(b'\n');
     };
-    let text = |config: &mut NsConfig, key: &str| config.text(key).unwrap_or_else(ffi::null_text);
+    let text =
+        |config: &mut NsConfig, key: &str| config.text(key).unwrap_or_else(|| b"(null)".to_vec());
     line("# southstar effective config", b"");
     line("# file: ", path.unwrap_or(b"(none)"));
     line("home_url              = ", &text(config, "home_url"));
@@ -577,11 +611,11 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>, default_language: &[u
     let none = || b"(none)".to_vec();
     line(
         "http_proxy            = ",
-        &non_empty(ffi::text(config.http_proxy).map(|p| proxy_mask(&p))).unwrap_or_else(none),
+        &non_empty(config.http_proxy.to_vec().map(|p| proxy_mask(&p))).unwrap_or_else(none),
     );
     line(
         "https_proxy           = ",
-        &non_empty(ffi::text(config.https_proxy).map(|p| proxy_mask(&p))).unwrap_or_else(none),
+        &non_empty(config.https_proxy.to_vec().map(|p| proxy_mask(&p))).unwrap_or_else(none),
     );
     line(
         "no_proxy              = ",

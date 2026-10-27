@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -368,15 +368,16 @@ pub(crate) struct UserAgentConfig {
     pub global_privacy_control: bool,
 }
 
-fn optional_text(p: *const c_char) -> Option<String> {
-    unsafe { glib::bytes(p) }.map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+fn optional_text(text: &southstar_config::Text) -> Option<String> {
+    text.bytes()
+        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
 }
 
 pub(crate) fn user_agent_config() -> UserAgentConfig {
     match southstar_config::get() {
         Some(config) => UserAgentConfig {
-            configured: optional_text(config.user_agent).filter(|ua| !ua.is_empty()),
-            compat_mode: optional_text(config.compat_mode),
+            configured: optional_text(&config.user_agent).filter(|ua| !ua.is_empty()),
+            compat_mode: optional_text(&config.compat_mode),
             do_not_track: config.do_not_track != 0,
             global_privacy_control: config.global_privacy_control != 0,
         },

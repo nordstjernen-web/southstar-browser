@@ -17,7 +17,6 @@ use southstar_js_engine::{
 };
 
 use super::NavigationTiming;
-use super::glue;
 use super::imports;
 use super::state::Slots;
 
@@ -150,7 +149,6 @@ struct Record {
     ctx: ContextHandle,
     main_realm_ctx: ContextHandle,
     frame_ctxs: Option<Vec<ContextHandle>>,
-    current_url: *mut c_char,
     current_doc: *mut NsNode,
     raf_frame_ctx: *mut NsNode,
     pristine_promise: Value,
@@ -218,7 +216,6 @@ pub(crate) fn alloc() -> *mut NsJs {
         ctx: ContextHandle::NULL,
         main_realm_ctx: ContextHandle::NULL,
         frame_ctxs: None,
-        current_url: ptr::null_mut(),
         current_doc: ptr::null_mut(),
         raf_frame_ctx: ptr::null_mut(),
         pristine_promise: Value::undefined(),
@@ -251,7 +248,6 @@ pub(crate) unsafe fn slots_of(js: *mut NsJs) -> Slots {
             rt: &raw mut (*rec(js)).rt,
             ctx: &raw mut (*rec(js)).ctx,
             main_realm_ctx: &raw mut (*rec(js)).main_realm_ctx,
-            current_url: &raw mut (*rec(js)).current_url,
             current_doc: &raw mut (*rec(js)).current_doc,
             raf_frame_ctx: &raw mut (*rec(js)).raf_frame_ctx,
             ce_main_doc: &raw mut (*rec(js)).ce_main_doc,
@@ -421,8 +417,6 @@ pub(crate) unsafe fn free_page_strings(js: *mut NsJs) {
         (*rec(js)).csp = None;
         (*rec(js)).cookie_value = None;
         (*rec(js)).cookie_version.set(0);
-        glib::g_free((*rec(js)).current_url.cast());
-        (*rec(js)).current_url = ptr::null_mut();
     }
 }
 
@@ -735,13 +729,13 @@ pub(crate) fn url_parses(js: *const NsJs, url: &CStr) -> bool {
 }
 
 pub(crate) fn csp_allows_worker(js: *const NsJs, url: &CStr) -> bool {
+    let page = super::Js::of(js).and_then(super::Js::current_url);
     let Some(js) = record(js) else {
         return true;
     };
-    let page = glue::text(js.current_url);
     js.csp
         .as_ref()
-        .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page, None, true))
+        .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page.as_deref(), None, true))
 }
 
 pub(crate) fn purge_subtree_rafs(js: *const NsJs, root: *mut NsNode) {
@@ -1186,14 +1180,20 @@ pub(crate) fn add_csp_header(js: *const NsJs, header_value: Option<&CStr>) {
 }
 
 pub(crate) fn csp_form_action_allowed(js: *const NsJs, action_url: Option<&CStr>) -> bool {
+    let page = super::Js::of(js).and_then(super::Js::current_url);
     let Some(js) = record(js) else {
         return true;
     };
     let (Some(csp), Some(action_url)) = (js.csp.as_ref(), action_url) else {
         return true;
     };
-    let page = glue::text(js.current_url);
-    csp.allows(southstar_csp::FORM_ACTION, action_url, page, None, true)
+    csp.allows(
+        southstar_csp::FORM_ACTION,
+        action_url,
+        page.as_deref(),
+        None,
+        true,
+    )
 }
 
 pub(crate) fn inline_handlers_allowed(js: *const NsJs) -> bool {

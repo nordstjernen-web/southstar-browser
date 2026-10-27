@@ -6,9 +6,10 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GHashTable};
 use southstar_js_engine::{ContextHandle, Value};
 
 use crate::budget;
@@ -17,10 +18,6 @@ use crate::ffi::{self, Js, NavigationTiming, NsJs, glue, record, scopes, wrapper
 use crate::{scheduling, worker};
 
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
-
-fn owned(text: *const c_char) -> Option<CString> {
-    glue::text(text).map(CStr::to_owned)
-}
 
 fn state<R>(js: *const NsJs, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
     Js::of(js).map_or(fallback, |js| f(js.st()))
@@ -134,44 +131,35 @@ pub fn iframe_document_node(js: *const NsJs) -> Option<Node<'static>> {
 }
 
 pub fn current_url(js: *const NsJs) -> CString {
-    Js::of(js)
-        .and_then(|js| owned(js.current_url_raw()))
-        .unwrap_or_default()
+    page_url(js).unwrap_or_default()
 }
 
 pub fn page_url(js: *const NsJs) -> Option<CString> {
-    owned(page_url_ptr(js))
+    Js::of(js)?.current_url()
 }
 
 pub fn page_url_ptr(js: *const NsJs) -> *const c_char {
-    Js::of(js).map_or(ptr::null(), |js| js.current_url_raw().cast_const())
+    Js::of(js).map_or(ptr::null(), Js::current_url_ptr)
 }
 
 pub fn set_current_url(js: *const NsJs, url: Option<&CStr>) {
-    let Some(js) = Js::of(js) else {
-        return;
-    };
-    let copy = url.map_or(ptr::null_mut(), |url| glib::strdup(url.to_bytes()));
-    let previous = js.current_url_raw();
-    js.set_current_url_raw(copy);
-    // SAFETY: the page's URL slot holds null or a string the page allocated with g_malloc, and nothing else frees it.
-    unsafe { glib::g_free(previous.cast()) };
+    if let Some(js) = Js::of(js) {
+        js.replace_current_url(url.map(CStr::to_owned));
+    }
 }
 
 pub fn top_url(js: *const NsJs) -> CString {
-    Js::of(js)
-        .and_then(|js| owned(scopes::top_url(js)))
-        .unwrap_or_default()
+    Js::of(js).map(scopes::top_url).unwrap_or_default()
 }
 
 pub fn set_top_url(js: *const NsJs, url: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
-        scopes::set_top_url(js, url.map_or(ptr::null(), CStr::as_ptr));
+        scopes::set_top_url(js, url);
     }
 }
 
 pub fn document_origin(js: *const NsJs) -> Option<CString> {
-    owned(Js::of(js)?.st().document_origin.get())
+    Js::of(js)?.st().document_origin.borrow().clone()
 }
 
 pub fn set_document(js: *const NsJs, doc: Option<Node<'_>>, origin: Option<&CStr>) {
@@ -184,12 +172,11 @@ pub fn set_document(js: *const NsJs, doc: Option<Node<'_>>, origin: Option<&CStr
     let state = js.st();
     state.autofocus_processed.set(false);
     state.active_modal.set(ptr::null());
-    let origin = origin.map_or(ptr::null_mut(), |origin| glib::strdup(origin.to_bytes()));
-    PageState::replace_owned(&state.document_origin, origin);
+    state.document_origin.replace(origin.map(CStr::to_owned));
 }
 
 pub fn realm_url(js: *const NsJs, realm: ContextHandle) -> Option<CString> {
-    owned(scopes::realm_url(Js::of(js)?, realm))
+    scopes::realm_url(Js::of(js)?, realm)
 }
 
 pub fn realm_document_url_ptr(js: *const NsJs, realm: ContextHandle) -> *const c_char {
@@ -202,7 +189,7 @@ pub fn realm_document_url_ptr(js: *const NsJs, realm: ContextHandle) -> *const c
             return url;
         }
     }
-    js.current_url_raw()
+    js.current_url_ptr()
 }
 
 pub fn node_frame_url(node: Node<'_>) -> Option<CString> {
@@ -285,8 +272,14 @@ pub fn layout_root(js: *const NsJs) -> *const c_void {
     record::layout_root(js)
 }
 
-pub fn style_table(js: *const NsJs) -> *mut GHashTable {
-    state(js, ptr::null_mut(), |state| state.style_table.get())
+pub fn style_table(js: *const NsJs) -> *const StyleMap {
+    state(js, ptr::null(), |state| {
+        state
+            .style_table
+            .borrow()
+            .as_ref()
+            .map_or(ptr::null(), Rc::as_ptr)
+    })
 }
 
 pub fn image_cache(js: *const NsJs) -> *mut c_void {
@@ -429,13 +422,11 @@ pub fn window_events_blocked(js: *const NsJs) -> bool {
 }
 
 pub fn wpt_hooks_enabled(js: *const NsJs) -> bool {
-    state(js, false, |state| !state.early_inject_src.get().is_null())
+    state(js, false, |state| state.early_inject_src.borrow().is_some())
 }
 
 pub fn early_inject_src(js: *const NsJs) -> Option<CString> {
-    owned(state(js, ptr::null_mut(), |state| {
-        state.early_inject_src.get()
-    }))
+    state(js, None, |state| state.early_inject_src.borrow().clone())
 }
 
 pub fn message_tasks_pending(js: *const NsJs) -> bool {
@@ -547,8 +538,8 @@ pub fn free(js: *const NsJs) {
     ffi::free(js);
 }
 
-pub fn set_style_table(js: *const NsJs, styles: *mut GHashTable) {
-    state(js, (), |state| state.style_table.set(styles));
+pub fn set_style_table(js: *const NsJs, styles: Option<Rc<StyleMap>>) {
+    state(js, (), |state| drop(state.style_table.replace(styles)));
 }
 
 pub fn set_image_cache(js: *const NsJs, cache: *mut c_void) {
@@ -571,7 +562,6 @@ pub fn set_anim(js: *const NsJs, anim: *mut c_void) {
 
 pub fn set_early_inject_src(js: *const NsJs, src: Option<&CStr>) {
     if let Some(js) = Js::of(js) {
-        let src = src.map_or(ptr::null_mut(), |src| glib::strdup(src.to_bytes()));
-        PageState::replace_owned(&js.st().early_inject_src, src);
+        js.st().early_inject_src.replace(src.map(CStr::to_owned));
     }
 }

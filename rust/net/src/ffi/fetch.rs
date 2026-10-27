@@ -10,7 +10,7 @@ use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_http_cache as http_cache;
 
 use super::hop::{self, HopOut, HopReq};
-use super::proxy::{ns_net_configured_no_proxy, ns_net_pick_configured_proxy};
+use super::proxy::{configured_no_proxy, pick_configured_proxy};
 use super::sinks::{NsHeaderCtx, NsWriteCtx};
 use super::{GByteArray, NsResponse};
 use crate::request::{self, DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S};
@@ -463,13 +463,11 @@ fn accept_language() -> Vec<u8> {
 }
 
 fn user_agent(cfg: Option<&southstar_config::NsConfig>) -> Vec<u8> {
-    let configured = cfg
-        .and_then(|c| text(c.user_agent))
-        .filter(|ua| !ua.is_empty());
+    let configured = cfg.and_then(|c| c.user_agent.non_empty());
     configured.map_or_else(
         || {
             without_nul(url::user_agent_for_mode(
-                cfg.and_then(|c| text(c.compat_mode)),
+                cfg.and_then(|c| c.compat_mode.bytes()),
             ))
             .to_vec()
         },
@@ -772,7 +770,8 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let js_jar = cookie_jar
         .as_ref()
         .and_then(|_| storage::cookie_jar_path(Some(&partition), true));
-    let proxy = text(unsafe { ns_net_pick_configured_proxy(url_c.as_ptr()) });
+    let proxy = pick_configured_proxy(&url);
+    let no_proxy = configured_no_proxy();
     let req = HopReq {
         url: &url,
         method: f.method,
@@ -786,8 +785,8 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         } else {
             request::SUBRESOURCE_CONNECT_TIMEOUT_S
         } as c_long,
-        proxy,
-        no_proxy: text(ns_net_configured_no_proxy()),
+        proxy: proxy.as_deref(),
+        no_proxy: no_proxy.as_deref(),
         cookie_jar_path: cookie_jar.as_deref(),
         cookie_js_path: js_jar.as_deref(),
         cookie_context: request::cookie_context(is_navigation, f.method, initiator, &url),

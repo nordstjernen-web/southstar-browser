@@ -6,11 +6,12 @@ use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode, WeakNode, ancestors_and_self};
-use southstar_glib::GHashTable;
 use southstar_layout::{BoxRef, NsBox};
 
 use crate::ffi::{
@@ -116,7 +117,7 @@ pub struct Ctx {
     pub video_cache: Option<VideoCache>,
     pub anim: Option<Anim>,
     pub css_cache: CssCache,
-    pub styles: Cell<*mut GHashTable>,
+    pub styles: RefCell<Option<Rc<StyleMap>>>,
     pub layout: Cell<*mut NsBox>,
     pub focused: Cell<Option<WeakNode>>,
     pub caret: Cell<usize>,
@@ -162,12 +163,10 @@ pub fn relayout(c: &Ctx) {
     if !c.layout.get().is_null() {
         ffi::free_layout(c.layout.replace(ptr::null_mut()));
     }
-    if let (Some(js), false) = (c.js, c.styles.get().is_null()) {
-        js.set_style_table(ptr::null_mut());
+    if let (Some(js), true) = (c.js, c.styles.borrow().is_some()) {
+        js.set_style_table(None);
     }
-    if !c.styles.get().is_null() {
-        ffi::destroy_table(c.styles.replace(ptr::null_mut()));
-    }
+    drop(c.styles.take());
     let args = Relayout {
         doc: c.doc(),
         base: c.base.as_deref(),
@@ -181,7 +180,7 @@ pub fn relayout(c: &Ctx) {
         caret: c.caret.get(),
         anchor: c.anchor.get(),
     };
-    c.styles.set(ffi::relayout(&args, &c.layout));
+    c.styles.replace(ffi::relayout(&args, &c.layout));
     c.relaying.set(false);
 }
 
@@ -645,7 +644,7 @@ pub fn run_one(
 
     let anim = Anim::create();
     ffi::load_keyframes(anim, &doc, page_url.as_deref(), css_cache);
-    ffi::anim_observe(anim, styles, ffi::monotonic_us());
+    ffi::anim_observe(anim, Some(&styles), ffi::monotonic_us());
     let anim = Some(anim);
 
     let nav = NavCapture::default();
@@ -686,7 +685,7 @@ pub fn run_one(
         video_cache,
         anim,
         css_cache,
-        styles: Cell::new(styles),
+        styles: RefCell::new(Some(styles)),
         layout: Cell::new(ptr::null_mut()),
         focused: Cell::new(None),
         caret: Cell::new(0),
@@ -694,7 +693,7 @@ pub fn run_one(
         relaying: Cell::new(false),
     };
     if let Some(js) = js {
-        js.set_style_table(ctx.styles.get());
+        js.set_style_table(ctx.styles.borrow().clone());
         js.set_image_cache(image_cache);
         js.set_anim(anim);
         js.bind_layout_flush(&ctx);
@@ -733,7 +732,7 @@ pub fn run_one(
         if let Some(js) = js {
             js.unbind_layout_flush();
             js.set_layout_root(ptr::null());
-            js.set_style_table(ptr::null_mut());
+            js.set_style_table(None);
         }
         if let Some(anim) = anim {
             // SAFETY: this page's run is over: script and the layout flush were detached above and the next page creates its own engine.
@@ -742,9 +741,7 @@ pub fn run_one(
         if !ctx.layout.get().is_null() {
             ffi::free_layout(ctx.layout.get());
         }
-        if !ctx.styles.get().is_null() {
-            ffi::destroy_table(ctx.styles.get());
-        }
+        drop(ctx.styles.take());
         css_cache.free();
         if let Some(js) = js {
             js.free();
@@ -858,10 +855,11 @@ pub fn run_one(
         Dump::None | Dump::Unknown => {}
     }
 
+    let styles = ctx.styles.borrow().clone();
     if let Some(report) = crate::inspect::report(
         ctx.layout(),
         ctx.doc(),
-        ffi::StyleTable::from_table(ctx.styles.get()),
+        ffi::StyleTable::new(styles.as_deref()),
         o.inspect,
         o.inspect_at,
     ) {
@@ -878,14 +876,13 @@ pub fn run_one(
     }
     if let Some(js) = js {
         js.set_layout_root(ptr::null());
-        js.set_style_table(ptr::null_mut());
+        js.set_style_table(None);
     }
     if !ctx.layout.get().is_null() {
         ffi::free_layout(ctx.layout.get());
     }
-    if !ctx.styles.get().is_null() {
-        ffi::destroy_table(ctx.styles.get());
-    }
+    drop(styles);
+    drop(ctx.styles.take());
     css_cache.free();
     if let Some(js) = js {
         js.free();

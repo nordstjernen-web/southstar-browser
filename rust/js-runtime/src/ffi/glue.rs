@@ -178,8 +178,8 @@ pub(crate) fn run_due_timers(js: Js) {
     (api::services_hooks().run_due_timers)(js.ptr());
 }
 
-pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: *const c_char) {
-    let origin = text(origin).map(|origin| origin.to_string_lossy().into_owned());
+pub(crate) fn report_uncaught(js: Js, exception: &Value, origin: Option<&CStr>) {
+    let origin = origin.map(|origin| origin.to_string_lossy().into_owned());
     crate::events::report_uncaught(js.ptr(), exception, origin.as_deref());
 }
 

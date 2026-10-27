@@ -116,7 +116,7 @@ fn cursor_keyword(keyword: &CStr) -> Option<&'static [u8]> {
 
 pub fn cursor_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<&'static [u8]> {
     let layout = b.layout()?;
-    if b.styles_raw().is_null() {
+    if !b.has_styles() {
         return None;
     }
     let node = hit_node(b, x, y);

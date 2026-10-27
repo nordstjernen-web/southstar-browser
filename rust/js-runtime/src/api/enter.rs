@@ -83,7 +83,7 @@ pub fn during_frame_load<R>(
         js,
         frame.as_mut_ptr(),
         doc.as_mut_ptr(),
-        url.as_ptr(),
+        Some(url),
         realm_doc,
     );
     let result = f();
@@ -93,7 +93,7 @@ pub fn during_frame_load<R>(
 
 pub fn enter_frame_url(js: *const NsJs, url: Option<&CStr>) -> Option<UrlScope> {
     let js = Js::of(js)?;
-    let url = scopes::frame_url_begin(js, url.map_or(ptr::null(), CStr::as_ptr));
+    let url = scopes::frame_url_begin(js, url);
     Some(UrlScope { js, url })
 }
 
@@ -151,7 +151,7 @@ fn finish_timer(scope: &mut scopes::TimerScope, exception: Option<Value>) {
             let line = glue::c_line(&line);
             glue::log_line(js, line.as_ptr());
         }
-        glue::report_uncaught(js, &exception, js.current_url_raw());
+        glue::report_uncaught(js, &exception, js.current_url().as_deref());
     }
     scheduling::drain_mutations(js);
     scope.leave();

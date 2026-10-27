@@ -18,7 +18,7 @@ fn cstring(bytes: &[u8]) -> CString {
 
 pub(crate) fn configured_search_engine() -> Option<Vec<u8>> {
     let config = southstar_config::get()?;
-    unsafe { glib::bytes(config.search_engine) }.map(<[u8]>::to_vec)
+    config.search_engine.to_vec()
 }
 
 pub(crate) fn uri_escape(text: &[u8]) -> Vec<u8> {
@@ -102,8 +102,7 @@ fn default_accept_language_c() -> &'static CStr {
 
 pub fn effective_accept_language() -> Vec<u8> {
     southstar_config::get()
-        .and_then(|c| unsafe { glib::bytes(c.accept_language) })
-        .filter(|v| !v.is_empty())
+        .and_then(|c| c.accept_language.non_empty())
         .unwrap_or_else(default_accept_language)
         .to_vec()
 }

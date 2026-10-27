@@ -168,23 +168,13 @@ pub fn atoi_of(text: &[u8]) -> i32 {
     util::ascii_strtoll(text).unwrap_or(0) as i32
 }
 
-pub fn config_text(p: *const c_char) -> Option<Vec<u8>> {
-    borrowed(p)
-}
-
-pub fn set_config_text(field: &mut *mut c_char, value: &[u8]) {
-    unsafe { glib::g_free((*field).cast()) };
-    *field = glib::strdup(value);
-}
-
 pub fn unlocked_config() -> Option<&'static NsConfig> {
     southstar_config::get()
 }
 
-pub fn user_agent_for_mode(compat_mode: *const c_char) -> Option<Vec<u8>> {
-    let mode = borrowed(compat_mode);
+pub fn user_agent_for_mode(compat_mode: Option<&[u8]>) -> Option<Vec<u8>> {
     Some(
-        super::url::user_agent_for_mode(mode.as_deref())
+        super::url::user_agent_for_mode(compat_mode)
             .as_bytes()
             .to_vec(),
     )
