@@ -16,6 +16,7 @@ southstar-unicode = { path = "../unicode" }
 southstar-bookmarks = { path = "../bookmarks" }
 southstar-browser = { path = "../browser" }
 southstar-bytecode-cache = { path = "../bytecode-cache" }
+southstar-cairo = { path = "../cairo" }
 southstar-config = { path = "../config" }
 southstar-debuglog = { path = "../debuglog" }
 southstar-dom = { path = "../dom" }

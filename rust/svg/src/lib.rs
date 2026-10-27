@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod ffi;
 mod measure;
 mod parse;
@@ -17,8 +19,8 @@ pub use ffi::{Canvas, Matrix, SvgGeometry, SvgSize};
 pub use measure::node_geometry;
 
 use ffi::{
-    EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, OwnedCanvas, PANGO_SCALE,
-    Pattern, Segment, Surface, TextLayout,
+    EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, PANGO_SCALE, Pattern,
+    Segment, Surface, TextLayout,
 };
 use parse::{eq_ci, is_ws};
 use southstar_dom::{Kind, Node, Tree, children};
@@ -205,11 +207,32 @@ fn switch_choice(n: Node<'_>) -> Option<Node<'_>> {
     })
 }
 
-fn extend_of(s: Option<&CStr>) -> i32 {
+fn extend_of(s: Option<&CStr>) -> southstar_cairo::Extend {
     match s.map(CStr::to_bytes) {
         Some(s) if eq_ci(s, b"reflect") => EXTEND_REFLECT,
         Some(s) if eq_ci(s, b"repeat") => EXTEND_REPEAT,
         _ => EXTEND_PAD,
+    }
+}
+
+fn luminance_to_alpha(
+    src: &[u8],
+    sstride: usize,
+    dst: &mut [u8],
+    dstride: usize,
+    w: usize,
+    h: usize,
+) {
+    for y in 0..h {
+        for x in 0..w {
+            let o = y * sstride + x * 4;
+            let px = u32::from_ne_bytes([src[o], src[o + 1], src[o + 2], src[o + 3]]);
+            let r = f64::from((px >> 16) & 0xff) / 255.0;
+            let g = f64::from((px >> 8) & 0xff) / 255.0;
+            let b = f64::from(px & 0xff) / 255.0;
+            let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            dst[y * dstride + x] = clamp(lum * 255.0, 0.0, 255.0) as u8;
+        }
     }
 }
 
@@ -247,7 +270,7 @@ fn vertex_link(out: &mut [Vertex], fx: f64, fy: f64, tx: f64, ty: f64) {
     }
 }
 
-fn path_vertices(cr: Canvas) -> Option<Vec<Vertex>> {
+fn path_vertices(cr: &Canvas) -> Option<Vec<Vertex>> {
     let path = cr.copy_path()?;
     if !path.ok() {
         return None;
@@ -297,7 +320,6 @@ fn path_vertices(cr: Canvas) -> Option<Vec<Vertex>> {
                 }
                 (cx, cy) = (sx, sy);
             }
-            Segment::Other => {}
         }
     }
     Some(out)
@@ -455,7 +477,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn rounded_corner(&self, x: f64, y: f64, rx: f64, ry: f64, a1: f64, a2: f64) {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         cr.save();
         cr.translate(x, y);
         cr.scale(rx, ry);
@@ -476,7 +498,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn shape_path(&self, n: Node<'a>, st: &State) -> bool {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         let fs = st.font_size;
         let tag = tag(n);
         match tag {
@@ -708,7 +730,7 @@ impl<'a> Ctx<'a> {
                 m = Matrix::multiply(&t, &m);
             }
         }
-        if !m.invert() {
+        if m.invert().is_err() {
             return None;
         }
         pat.set_matrix(&m);
@@ -716,7 +738,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn set_paint(&mut self, paint: &state::Paint, st: &State, opacity: f64) -> bool {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         match paint.kind {
             PaintKind::None => return false,
             PaintKind::Color => {
@@ -751,7 +773,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn apply_stroke_params(&self, st: &State) {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         cr.set_line_width(st.stroke_width);
         cr.set_line_cap(st.line_cap);
         cr.set_line_join(st.line_join);
@@ -763,7 +785,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn paint_current_path(&mut self, st: &State) {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         let do_stroke = st.stroke.kind != PaintKind::None && st.stroke_width > 0.0;
         for pass in 0..2 {
             let stroking = if st.stroke_first {
@@ -857,12 +879,11 @@ impl<'a> Ctx<'a> {
             return None;
         }
         self.mask_pixels += pixels;
-        let mut rgb = Surface::image(FORMAT_ARGB32, w, h)?;
+        let rgb = Surface::image(FORMAT_ARGB32, w, h)?;
         {
-            let mcr = OwnedCanvas::on(&rgb);
-            mcr.canvas().set_matrix(&ctm);
-            let saved = self.cr;
-            self.cr = mcr.canvas();
+            let mcr = Canvas::on(&rgb);
+            mcr.set_matrix(&ctm);
+            let saved = core::mem::replace(&mut self.cr, mcr);
             self.depth += 1;
             let mut ms = st.clone();
             ms.fill.set_color([1.0; 4]);
@@ -874,24 +895,11 @@ impl<'a> Ctx<'a> {
             self.depth -= 1;
             self.cr = saved;
         }
-        rgb.flush();
-        let mut a8 = Surface::image(FORMAT_A8, w, h)?;
-        let (sstride, dstride) = (rgb.stride(), a8.stride());
+        let a8 = Surface::image(FORMAT_A8, w, h)?;
         let (w, h) = (w as usize, h as usize);
-        let src = rgb.data(h)?.to_vec();
-        let dst = a8.data(h)?;
-        for y in 0..h {
-            for x in 0..w {
-                let o = y * sstride + x * 4;
-                let px = u32::from_ne_bytes([src[o], src[o + 1], src[o + 2], src[o + 3]]);
-                let r = f64::from((px >> 16) & 0xff) / 255.0;
-                let g = f64::from((px >> 8) & 0xff) / 255.0;
-                let b = f64::from(px & 0xff) / 255.0;
-                let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                dst[y * dstride + x] = clamp(lum * 255.0, 0.0, 255.0) as u8;
-            }
-        }
-        a8.mark_dirty();
+        rgb.with_data(|src, sstride| {
+            a8.with_data_mut(|dst, dstride| luminance_to_alpha(src, sstride, dst, dstride, w, h))
+        })?;
         Some(a8)
     }
 
@@ -903,7 +911,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         self.depth += 1;
-        let cr = self.cr;
+        let cr = self.cr.clone();
         cr.save();
         if attr_ci(clip, c"clipPathUnits", b"objectBoundingBox") {
             cr.transform(&Matrix::scaling(self.vw, self.vh));
@@ -967,7 +975,7 @@ impl<'a> Ctx<'a> {
         if self.depth >= MAX_DEPTH {
             return;
         }
-        let cr = self.cr;
+        let cr = self.cr.clone();
         let fs = st.font_size;
         let mw = attr_length(marker, c"markerWidth", self.vw, fs, 3.0);
         let mh = attr_length(marker, c"markerHeight", self.vh, fs, 3.0);
@@ -1033,7 +1041,7 @@ impl<'a> Ctx<'a> {
         if ms.is_none() && mm.is_none() && me.is_none() {
             return;
         }
-        let Some(verts) = path_vertices(self.cr) else {
+        let Some(verts) = path_vertices(&self.cr) else {
             return;
         };
         let last = verts.len().saturating_sub(1);
@@ -1104,7 +1112,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn render_nested_svg(&mut self, n: Node<'a>, st: &State) {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         let fs = st.font_size;
         let x = attr_length(n, c"x", self.vw, fs, 0.0);
         let y = attr_length(n, c"y", self.vh, fs, 0.0);
@@ -1137,7 +1145,7 @@ impl<'a> Ctx<'a> {
         let Some(t) = self.href_target(n).filter(|t| t.as_ptr() != n.as_ptr()) else {
             return;
         };
-        let cr = self.cr;
+        let cr = self.cr.clone();
         let fs = st.font_size;
         let x = attr_length(n, c"x", self.vw, fs, 0.0);
         let y = attr_length(n, c"y", self.vh, fs, 0.0);
@@ -1160,7 +1168,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn render_shape(&mut self, n: Node<'a>, st: &State) {
-        let cr = self.cr;
+        let cr = self.cr.clone();
         cr.new_path();
         if self.shape_path(n, st) {
             let markable = matches!(tag(n), b"path" | b"line" | b"polyline" | b"polygon");
@@ -1190,7 +1198,7 @@ impl<'a> Ctx<'a> {
         if opacity <= 0.0 {
             return;
         }
-        let cr = self.cr;
+        let cr = self.cr.clone();
         cr.save();
         self.apply_transform_attr(n);
         let Ok(mask) = self.mask_surface(n, &st) else {
@@ -1317,7 +1325,7 @@ pub fn render_node(
     if width <= 0.0 || height <= 0.0 {
         return;
     }
-    let mut ctx = Ctx::new(cr, svg, styles, width, height);
+    let mut ctx = Ctx::new(cr.clone(), svg, styles, width, height);
     let mut st = State::inherited(inherited);
     cr.save();
     cr.rectangle(0.0, 0.0, width, height);
@@ -1409,9 +1417,8 @@ pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
     let ih = clamp((h - 0.001).ceil(), 1.0, MAX_DIM_PX) as i32;
     let surf = Surface::image(FORMAT_ARGB32, iw, ih)?;
     {
-        let cr = OwnedCanvas::on(&surf);
         render_node(
-            cr.canvas(),
+            Canvas::on(&surf),
             root,
             f64::from(iw),
             f64::from(ih),

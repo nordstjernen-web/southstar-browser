@@ -4,7 +4,6 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use crate::ffi::cairo::Context;
 use crate::ffi::state::CanvasState;
 use crate::ffi::text_layout::{FontDescription, Layout, PANGO_SCALE};
 
@@ -58,7 +57,7 @@ pub(crate) fn font_parts(css: &[u8]) -> (Vec<u8>, f64) {
 
 fn font_description(st: &CanvasState) -> FontDescription {
     let css = crate::ffi::state_font(st);
-    let (families, size_px) = font_parts(css);
+    let (families, size_px) = font_parts(&css);
     FontDescription::new(&families, size_px)
 }
 
@@ -118,11 +117,9 @@ fn paint(
     at: Placement,
     stroke: bool,
 ) {
-    let Some(cr) = (unsafe { Context::from_raw(st.cr) }) else {
-        return;
-    };
+    let cr = st.context();
     let desc = font_description(st);
-    let layout = Layout::new(cr, &desc, text);
+    let layout = Layout::new(&cr, &desc, text);
     let extents = layout.extents();
     let baseline_offset = f64::from(extents.baseline) / PANGO_SCALE;
     let logical_bottom = f64::from(extents.logical.y + extents.logical.height) / PANGO_SCALE;
@@ -138,21 +135,21 @@ fn paint(
         1.0
     };
     cr.save();
-    crate::style::apply_composite(scope, this, cr);
+    crate::style::apply_composite(scope, this, &cr);
     cr.translate(at.x + dx * xscale, at.y + dy);
     if xscale < 1.0 {
         cr.scale(xscale, 1.0);
     }
     if stroke {
         crate::draw::set_stroke_source(scope, this, st);
-        cr.set_line_width(st.line_width);
+        cr.set_line_width(st.line_width.get());
         cr.move_to(0.0, 0.0);
-        layout.path(cr);
+        layout.path(&cr);
         cr.stroke();
     } else {
         crate::draw::set_fill_source(scope, this, st);
         cr.move_to(0.0, 0.0);
-        layout.show(cr);
+        layout.show(&cr);
     }
     cr.restore();
 }
@@ -164,7 +161,7 @@ fn draw_text(scope: &mut Scope<'_>, this: &Value, args: &[Value], stroke: bool) 
     let Some(st) = crate::draw::state(scope, this) else {
         return Ok(Value::undefined());
     };
-    crate::style::sync(scope, this, st);
+    crate::style::sync(scope, this, &st);
     let text = text_arg(scope, &args[0])?;
     let at = Placement {
         x: number(scope, args, 1),
@@ -175,7 +172,7 @@ fn draw_text(scope: &mut Scope<'_>, this: &Value, args: &[Value], stroke: bool) 
             0.0
         },
     };
-    paint(scope, this, st, &text, at, stroke);
+    paint(scope, this, &st, &text, at, stroke);
     crate::ffi::mark_mutated(scope);
     Ok(Value::undefined())
 }
@@ -204,11 +201,9 @@ fn pack(width: f64, ascent: f64, descent: f64, font_ascent: f64, font_descent: f
 }
 
 fn metrics(st: &CanvasState, text: &[u8]) -> [f64; 10] {
-    let Some(cr) = (unsafe { Context::from_raw(st.cr) }) else {
-        return pack(0.0, 0.0, 0.0, 0.0, 0.0);
-    };
+    let cr = st.context();
     let desc = font_description(st);
-    let layout = Layout::new(cr, &desc, text);
+    let layout = Layout::new(&cr, &desc, text);
     let extents = layout.extents();
     let baseline_y = f64::from(extents.baseline);
     let ink = extents.ink;
@@ -229,8 +224,8 @@ pub(crate) fn measure_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
         let st = crate::draw::state(scope, this);
         let text = text_arg(scope, first)?;
         if let Some(st) = st {
-            crate::style::sync(scope, this, st);
-            values = metrics(st, &text);
+            crate::style::sync(scope, this, &st);
+            values = metrics(&st, &text);
         }
     }
     Ok(crate::ffi::new_textmetrics(scope, this, &values))

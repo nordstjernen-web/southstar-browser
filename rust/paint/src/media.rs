@@ -3,13 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::PI;
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_cairo::{ContextRef, Filter, Format, Operator, Surface};
 use southstar_dom::Node;
 use southstar_image::ImageRef;
-use southstar_layout::{BoxKind, BoxRef};
+use southstar_layout::{BoxKind, BoxRef, MediaHandle};
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 use southstar_video::BoxVideo;
 
@@ -24,20 +24,18 @@ use crate::text;
 use crate::text_layout::{self, FontDescription};
 use crate::util::{Rgba, UNIT_PERCENT, cmin, get, length_or, style_of};
 
+#[derive(Default)]
 pub struct TextureSurfaces {
     plain: Option<Surface>,
     filter: Option<Vec<u8>>,
     filtered: Option<Surface>,
 }
 
-unsafe extern "C" fn texture_surfaces_free(data: *mut c_void) {
-    if !data.is_null() {
-        drop(unsafe { Box::from_raw(data.cast::<TextureSurfaces>()) });
-    }
-}
+// SAFETY: the surfaces are cairo image surfaces only paint draws from, on the paint thread; another thread only ever drops them with the last texture reference, and cairo's reference count is atomic.
+unsafe impl Send for TextureSurfaces {}
 
 fn texture_surface_create(
-    tex: Texture,
+    tex: &Texture,
     iw: i32,
     ih: i32,
     filter: Option<&CStr>,
@@ -52,35 +50,27 @@ fn texture_surface_create(
     Some(surf)
 }
 
-pub fn texture_surface_cached(tex: Texture, filter: Option<&CStr>) -> Option<Surface> {
+pub fn texture_surface_cached(tex: &Texture, filter: Option<&CStr>) -> Option<Surface> {
     let iw = tex.width();
     let ih = tex.height();
     if iw <= 0 || ih <= 0 {
         return None;
     }
-    let mut ts = tex.user_data().cast::<TextureSurfaces>();
-    if ts.is_null() {
-        ts = Box::into_raw(Box::new(TextureSurfaces {
-            plain: None,
-            filter: None,
-            filtered: None,
-        }));
-        unsafe { tex.set_user_data(ts.cast(), texture_surfaces_free) };
-    }
-    let ts = unsafe { &mut *ts };
-    let Some(filter) = filter else {
-        if ts.plain.is_none() {
-            ts.plain = texture_surface_create(tex, iw, ih, None);
+    tex.with_cache(TextureSurfaces::default, |ts| {
+        let Some(filter) = filter else {
+            if ts.plain.is_none() {
+                ts.plain = texture_surface_create(tex, iw, ih, None);
+            }
+            return ts.plain.clone();
+        };
+        if ts.filtered.is_some() && ts.filter.as_deref() == Some(filter.to_bytes()) {
+            return ts.filtered.clone();
         }
-        return ts.plain.clone();
-    };
-    if ts.filtered.is_some() && ts.filter.as_deref() == Some(filter.to_bytes()) {
-        return ts.filtered.clone();
-    }
-    let surf = texture_surface_create(tex, iw, ih, Some(filter))?;
-    ts.filtered = Some(surf);
-    ts.filter = Some(filter.to_bytes().to_vec());
-    ts.filtered.clone()
+        let surf = texture_surface_create(tex, iw, ih, Some(filter))?;
+        ts.filtered = Some(surf);
+        ts.filter = Some(filter.to_bytes().to_vec());
+        ts.filtered.clone()
+    })
 }
 
 fn strtod(text: &[u8], pos: usize) -> Option<(f64, usize)> {
@@ -142,9 +132,8 @@ fn object_position_offset(
     delta * 0.5
 }
 
-fn video_of(b: BoxRef<'_>) -> Option<Video<'_>> {
-    b.media()
-        .and_then(|m| unsafe { Video::from_ptr(m.video()) })
+fn video_of(b: BoxRef<'_>) -> Option<Video> {
+    Video::of(b)
 }
 
 pub fn paint_texture(cr: ContextRef, b: BoxRef<'_>, tex: Texture) -> bool {
@@ -161,7 +150,7 @@ pub fn paint_texture(cr: ContextRef, b: BoxRef<'_>, tex: Texture) -> bool {
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text);
     let surface_filter = filter_kw.filter(|f| filter_has_bitmap_effect(Some(f)));
-    let Some(surface) = texture_surface_cached(tex, surface_filter) else {
+    let Some(surface) = texture_surface_cached(&tex, surface_filter) else {
         return false;
     };
     let surf = surface.as_ref();
@@ -204,7 +193,7 @@ pub fn paint_texture(cr: ContextRef, b: BoxRef<'_>, tex: Texture) -> bool {
     cr.translate(cx + ox, cy + oy);
     cr.scale(sx, sy);
     cr.set_source_surface(surf, 0.0, 0.0);
-    if video_of(b).is_some_and(|v| v.playing() && v.frame_texture() == Some(tex)) {
+    if video_of(b).is_some_and(|v| v.playing() && v.frame_texture().is_some_and(|f| f.same(&tex))) {
         cr.set_source_filter(Filter::Fast);
     }
     if crate::decor::style_pixelated(st) {
@@ -300,12 +289,10 @@ pub fn paint_image(cr: ContextRef, b: BoxRef<'_>) {
     if img.is_none() {
         img = b
             .media()
-            .and_then(|m| unsafe { ImageRef::from_ptr(m.image()) });
+            .and_then(|m| m.image().and_then(ImageRef::from_media));
     }
     cr.save();
-    let tex = img
-        .filter(|i| i.loaded())
-        .and_then(|i| unsafe { Texture::from_raw(i.texture()) });
+    let tex = img.filter(|i| i.loaded()).and_then(engine::image_texture);
     if let Some(tex) = tex {
         paint_texture(cr, b, tex);
     } else if img.is_some_and(|i| i.failed()) {
@@ -480,7 +467,7 @@ fn paint_audio_control(cr: ContextRef, b: BoxRef<'_>) {
     cr.restore();
 }
 
-fn debug_composite(v: Video<'_>, punched: bool, has_tex: bool, b: BoxRef<'_>) {
+fn debug_composite(v: Video, punched: bool, has_tex: bool, b: BoxRef<'_>) {
     if std::env::var_os("NS_DBG_COMPOSITE").is_none() {
         return;
     }
@@ -527,8 +514,10 @@ pub fn paint_video(cr: ContextRef, b: BoxRef<'_>) {
             paint_video_note_rects(cr, b, fit_mode);
         }
     }
-    let loaded = |raw: *mut c_void| {
-        unsafe { ImageRef::from_ptr(raw) }.is_some_and(|i| i.loaded() && !i.texture().is_null())
+    let loaded = |handle: Option<MediaHandle>| {
+        handle
+            .and_then(ImageRef::from_media)
+            .is_some_and(|i| i.loaded() && i.has_texture())
     };
     let mut bg_painted = b.media().is_some_and(|m| loaded(m.bg_image()));
     if !bg_painted && let Some(images) = b.media().and_then(|m| m.bg_layer_images()) {

@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -205,7 +205,7 @@ impl<'a> BoxRef<'a> {
         b.paint_layout.set(None);
     }
 
-    pub fn set_bg_image_if_unset(self, src: &CStr, image: *mut c_void) {
+    pub fn set_bg_image_if_unset(self, src: &CStr, image: Option<super::MediaHandle>) {
         self.ensure_media().set_bg_image_if_unset(src, image);
     }
 }

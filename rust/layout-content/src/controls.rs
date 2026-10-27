@@ -428,7 +428,7 @@ pub fn emit_form_attr_sized(
     let mut s = None;
     let mut fs = 16.0;
     let mut bg_src = None;
-    let mut bg_image = ptr::null_mut();
+    let mut bg_image = None;
     if let Some(d) = dom.filter(|_| !styles.as_ptr().is_null()) {
         s = styles.get(d);
         if let Some(st) = s {

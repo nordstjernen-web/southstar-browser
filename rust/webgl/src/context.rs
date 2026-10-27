@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
 use core::ptr;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -548,18 +547,18 @@ impl WebGl {
         self.sync_size();
     }
 
-    pub(crate) fn canvas_surface(self: &Rc<Self>) -> *mut c_void {
+    pub(crate) fn canvas_surface(self: &Rc<Self>) -> Option<southstar_cairo::Surface> {
         self.gl.make_current();
         self.sync_size();
         let mut st = self.st.borrow_mut();
         let (w, h) = (st.w, st.h);
         if w <= 0 || h <= 0 {
-            return ptr::null_mut();
+            return None;
         }
         if !st.dirty
             && let Some(surf) = &st.surf
         {
-            return surf.as_ptr();
+            return Some(surf.shared());
         }
         if st.samples > 1 {
             let (draw_fbo, fbo) = (st.draw_fbo, st.fbo);
@@ -572,14 +571,11 @@ impl WebGl {
         if st.surf.is_none() {
             match Surface::new(w, h) {
                 Some(surf) => st.surf = Some(surf),
-                None => return ptr::null_mut(),
+                None => return None,
             }
         }
         let st = &mut *st;
-        let Some(surf) = st.surf.as_mut() else {
-            return ptr::null_mut();
-        };
-        surf.flush();
+        let surf = st.surf.as_ref()?;
         let need = w as usize * h as usize * 4;
         if st.readback.len() < need {
             st.readback.resize(need, 0);
@@ -589,17 +585,16 @@ impl WebGl {
         gl::read_pixels((0, 0, w, h), RGBA, UNSIGNED_BYTE, rgba);
         pack.restore();
         let alpha = self.attrs.alpha;
-        if let Some((dst, stride)) = surf.pixels() {
+        surf.with_pixels_mut(|dst, stride| {
             for y in 0..h as usize {
                 let src = &rgba[(h as usize - 1 - y) * w as usize * 4..][..w as usize * 4];
                 let row = &mut dst[y * stride..][..w as usize * 4];
                 copy_row(row, src, alpha);
             }
-        }
-        surf.mark_dirty();
+        });
         st.dirty = false;
         st.repaint_queued = false;
-        surf.as_ptr()
+        Some(surf.shared())
     }
 }
 

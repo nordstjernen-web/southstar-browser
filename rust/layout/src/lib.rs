@@ -14,8 +14,8 @@ mod utf8;
 
 pub use boxes::{
     BoxKind, BoxPool, BoxRef, Edges, GridTrack, InlineAtomic, InlineAttr, LinkRange, LinkVec,
-    MediaRef, NsBox, NsBoxMedia, Shared, Style, TableColHint, Text, choose_img, image_map_area,
-    img_chosen_density, img_chosen_url, inline_kind,
+    MediaHandle, MediaRef, NsBox, NsBoxMedia, Shared, Style, TableColHint, Text, choose_img,
+    image_map_area, img_chosen_density, img_chosen_url, inline_kind,
 };
 pub use image_source::Chosen;
 pub use utf8::utf8_get_char;

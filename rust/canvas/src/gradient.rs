@@ -2,17 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
-
 use southstar_js_engine::{Scope, Value};
 
-use crate::ffi::cairo::Pattern;
+use crate::ffi::cairo::{Extend, Pattern};
 use crate::raster::ConicStop;
 
 type Result = core::result::Result<Value, Value>;
-
-const EXTEND_NONE: i32 = 0;
-const EXTEND_REPEAT: i32 = 1;
 
 fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
     args.get(i)
@@ -98,11 +93,11 @@ fn image_pattern(scope: &mut Scope<'_>, obj: &Value, origin_clean: &mut bool) ->
     let rep = crate::hidden::get(scope, obj, "_rep").unwrap_or_else(|_| Value::undefined());
     let extend = if rep.is_string() {
         match scope.to_bytes(&rep).map(c_text).as_deref() {
-            Ok(b"no-repeat") => EXTEND_NONE,
-            _ => EXTEND_REPEAT,
+            Ok(b"no-repeat") => Extend::None,
+            _ => Extend::Repeat,
         }
     } else {
-        EXTEND_REPEAT
+        Extend::Repeat
     };
     pattern.set_extend(extend);
     let matrix = crate::hidden::get(scope, obj, "_matrix").unwrap_or_else(|_| Value::undefined());
@@ -120,17 +115,17 @@ fn image_pattern(scope: &mut Scope<'_>, obj: &Value, origin_clean: &mut bool) ->
     Some(pattern)
 }
 
-pub(crate) fn build_pattern(scope: &mut Scope<'_>, obj: &Value) -> (*mut c_void, bool) {
+pub(crate) fn build_pattern(scope: &mut Scope<'_>, obj: &Value) -> (Option<Pattern>, bool) {
     let mut origin_clean = true;
     if !obj.is_object() {
-        return (core::ptr::null_mut(), origin_clean);
+        return (None, origin_clean);
     }
     let kind = crate::hidden::get(scope, obj, "_type").unwrap_or_else(|_| Value::undefined());
     if !kind.is_string() {
-        return (core::ptr::null_mut(), origin_clean);
+        return (None, origin_clean);
     }
     let Ok(kind) = scope.to_bytes(&kind).map(c_text) else {
-        return (core::ptr::null_mut(), origin_clean);
+        return (None, origin_clean);
     };
     let pattern = match kind.as_slice() {
         b"linear" => {
@@ -151,24 +146,18 @@ pub(crate) fn build_pattern(scope: &mut Scope<'_>, obj: &Value) -> (*mut c_void,
         }
         b"pattern" => {
             let pattern = image_pattern(scope, obj, &mut origin_clean);
-            return (
-                pattern.map_or(core::ptr::null_mut(), Pattern::into_raw),
-                origin_clean,
-            );
+            return (pattern, origin_clean);
         }
         b"conic" => {
             let pattern = conic(scope, obj);
-            return (
-                pattern.map_or(core::ptr::null_mut(), Pattern::into_raw),
-                origin_clean,
-            );
+            return (pattern, origin_clean);
         }
-        _ => return (core::ptr::null_mut(), origin_clean),
+        _ => return (None, origin_clean),
     };
     for stop in stops(scope, obj) {
         pattern.add_color_stop(stop.pos, [stop.r, stop.g, stop.b, stop.a]);
     }
-    (pattern.into_raw(), origin_clean)
+    (Some(pattern), origin_clean)
 }
 
 pub(crate) fn add_color_stop(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result {

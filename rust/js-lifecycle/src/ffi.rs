@@ -311,9 +311,8 @@ pub(crate) fn unwrap_element(value: &Value) -> *mut NsNode {
     Node::ptr_or_null(api::unwrap_element(value)).cast_mut()
 }
 
-pub(crate) fn image_settled(image: *const c_void) -> Option<bool> {
-    // SAFETY: image is null or an image its page's cache still holds.
-    let image = unsafe { southstar_image::ImageRef::from_ptr(image) }?;
+pub(crate) fn image_settled(image: southstar_layout::MediaHandle) -> Option<bool> {
+    let image = southstar_image::ImageRef::from_media(image)?;
     (image.loaded() || image.failed()).then_some(image.failed())
 }
 

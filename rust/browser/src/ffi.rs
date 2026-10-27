@@ -365,8 +365,7 @@ impl NsBrowser {
             unsafe { videos.free() };
         }
         if let Some(images) = self.images.take() {
-            // SAFETY: the handle is out of the page's slot, and script, layout and every image session that held a copy were released above.
-            unsafe { images.free() };
+            images.free();
         }
         for text in [
             &self.base_url,

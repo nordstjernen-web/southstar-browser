@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-cairo = { path = "../cairo" }
 southstar-config = { path = "../config" }
 southstar-dom = { path = "../dom" }
 southstar-glctx = { path = "../glctx" }

@@ -498,7 +498,7 @@ fn fill_tiles(
 
 fn loaded_texture(img: Option<ImageRef<'_>>) -> Option<(Texture, f64, f64)> {
     let img = img?;
-    let tex = unsafe { Texture::from_raw(img.texture()) }?;
+    let tex = engine::image_texture(img)?;
     if !img.loaded() || tex.width() <= 0 || tex.height() <= 0 {
         return None;
     }
@@ -518,7 +518,7 @@ pub fn paint_bg_image_core(
         return;
     };
     let tile = bg_tile((iwf, ihf), p, area);
-    let Some(surf) = texture_surface_cached(tex, None) else {
+    let Some(surf) = texture_surface_cached(&tex, None) else {
         return;
     };
     let (cx, cy, cw, ch) = clip;
@@ -544,7 +544,7 @@ fn paint_masked_background(
     let Some((tex, iwf, ihf)) = loaded_texture(img) else {
         return false;
     };
-    let Some(surf) = texture_surface_cached(tex, None) else {
+    let Some(surf) = texture_surface_cached(&tex, None) else {
         return false;
     };
     let tile = bg_tile((iwf, ihf), p, area);
@@ -890,7 +890,7 @@ fn inline_bg_image(
     rect: (f64, f64, f64, f64),
     radii: CornerRadii,
 ) {
-    let Some(img) = (unsafe { ImageRef::from_ptr(r.bg_image()) }) else {
+    let Some(img) = r.bg_image().and_then(ImageRef::from_media) else {
         return;
     };
     let p = BgImage {
@@ -1089,12 +1089,11 @@ fn paint_border_image(
     let surf = if src.kind() == Kind::Url {
         let Some(img) = b
             .media()
-            .and_then(|m| unsafe { ImageRef::from_ptr(m.border_image()) })
+            .and_then(|m| m.border_image().and_then(ImageRef::from_media))
         else {
             return false;
         };
-        let Some(tex) = (unsafe { Texture::from_raw(img.texture()) }).filter(|_| img.loaded())
-        else {
+        let Some(tex) = engine::image_texture(img).filter(|_| img.loaded()) else {
             return false;
         };
         iw = f64::from(tex.width());
@@ -1102,7 +1101,7 @@ fn paint_border_image(
         if iw <= 0.0 || ih <= 0.0 {
             return false;
         }
-        let Some(s) = texture_surface_cached(tex, None) else {
+        let Some(s) = texture_surface_cached(&tex, None) else {
             return false;
         };
         s
@@ -1374,11 +1373,11 @@ fn bg_layer_origin_area(
 
 fn layer_image(b: BoxRef<'_>, li: i32) -> Option<ImageRef<'_>> {
     let media = b.media()?;
-    let raw = match media.bg_layer_images() {
+    let handle = match media.bg_layer_images() {
         Some(images) if (li as usize) < images.len() => images[li as usize],
         _ => media.bg_image(),
     };
-    unsafe { ImageRef::from_ptr(raw) }
+    handle.and_then(ImageRef::from_media)
 }
 
 pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
@@ -1462,7 +1461,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
 
     let media_bg = b
         .media()
-        .and_then(|m| unsafe { ImageRef::from_ptr(m.bg_image()) });
+        .and_then(|m| m.bg_image().and_then(ImageRef::from_media));
     let mask_params = BgImage {
         repeat: get(s, P::MaskRepeat),
         size: get(s, P::MaskSize),

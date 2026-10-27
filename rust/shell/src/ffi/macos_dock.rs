@@ -85,13 +85,17 @@ fn render_icon_png() -> Option<std::ffi::CString> {
         let mut len = 0usize;
         let data = gtk::g_bytes_get_data(bytes, &mut len);
         let cr = gtk::cairo_create(surf);
+        let canvas =
+            southstar_cairo::ContextRef::from_raw(cr.cast()).map(southstar_svg::Canvas::from);
         let rendered = !data.is_null()
-            && southstar_svg::render_bytes(
-                southstar_svg::Canvas::from_raw(cr.cast()),
-                core::slice::from_raw_parts(data.cast::<u8>(), len),
-                f64::from(DOCK_ICON_DIM),
-                f64::from(DOCK_ICON_DIM),
-            );
+            && canvas.is_some_and(|canvas| {
+                southstar_svg::render_bytes(
+                    canvas,
+                    core::slice::from_raw_parts(data.cast::<u8>(), len),
+                    f64::from(DOCK_ICON_DIM),
+                    f64::from(DOCK_ICON_DIM),
+                )
+            });
         gtk::cairo_destroy(cr);
         gtk::g_bytes_unref(bytes);
         if !rendered {

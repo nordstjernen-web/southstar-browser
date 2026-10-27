@@ -2,35 +2,37 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_double, c_int, c_void};
+use core::cell::{Cell, Ref, RefCell};
+use core::ffi::c_void;
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_js_engine::ContextHandle;
 
-use super::cairo::{Cairo, Surface};
+use super::cairo::{Context, Pattern, Surface};
 
-#[repr(C)]
+const DEFAULT_FONT: &[u8] = b"10px sans-serif";
+
 pub struct CanvasState {
-    pub w: c_int,
-    pub h: c_int,
-    pub surf: *mut c_void,
-    pub cr: *mut Cairo,
-    pub fill: [c_double; 4],
-    pub stroke: [c_double; 4],
-    pub line_width: c_double,
-    pub font: Vec<u8>,
-    pub fill_pattern: *mut c_void,
-    pub stroke_pattern: *mut c_void,
-    pub shadow: [c_double; 4],
-    pub shadow_blur: c_double,
-    pub shadow_ox: c_double,
-    pub shadow_oy: c_double,
-    pub origin_clean: c_int,
-    pub ctx2d: *mut c_void,
-    pub jsctx: ContextHandle,
-    pub owned_node: *mut c_void,
-    pub context_kind: c_int,
+    w: Cell<i32>,
+    h: Cell<i32>,
+    surf: RefCell<Surface>,
+    cr: RefCell<Context>,
+    pub fill: Cell<[f64; 4]>,
+    pub stroke: Cell<[f64; 4]>,
+    pub line_width: Cell<f64>,
+    font: RefCell<Vec<u8>>,
+    fill_pattern: RefCell<Option<Pattern>>,
+    stroke_pattern: RefCell<Option<Pattern>>,
+    pub shadow: Cell<[f64; 4]>,
+    pub shadow_blur: Cell<f64>,
+    pub shadow_ox: Cell<f64>,
+    pub shadow_oy: Cell<f64>,
+    pub origin_clean: Cell<bool>,
+    ctx2d: Cell<*mut c_void>,
+    jsctx: Cell<ContextHandle>,
+    owned_node: Cell<Option<southstar_dom::Node<'static>>>,
+    context_kind: Cell<i32>,
 }
 
 pub use southstar_js_runtime::api::NsJs;
@@ -78,21 +80,8 @@ impl Node {
     }
 }
 
-unsafe extern "C" {
-    fn cairo_create(target: *mut c_void) -> *mut Cairo;
-    fn cairo_destroy(cr: *mut Cairo);
-    fn cairo_pattern_destroy(pattern: *mut c_void);
-    fn cairo_set_operator(cr: *mut Cairo, op: c_int);
-    fn cairo_paint(cr: *mut Cairo);
-}
-
-const OPERATOR_CLEAR: c_int = 0;
-
 pub(crate) fn element_attr(el: Node, name: &str) -> Option<Vec<u8>> {
-    let name = CString::new(name).ok()?;
-    // SAFETY: a canvas state's node is null or an element of this thread's DOM store.
-    let el = unsafe { southstar_dom::Node::from_ptr(el.0.cast()) }?;
-    el.attr(&name).map(|value| value.to_bytes().to_vec())
+    super::element_attr(el.addr(), name)
 }
 
 pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
@@ -100,131 +89,175 @@ pub(crate) fn parse_int(text: &[u8], default: i32, min: i32, max: i32) -> i32 {
     southstar_dom::controls::parse_int(Some(&text), default, min, max)
 }
 
-pub(crate) fn size(st: *mut CanvasState) -> (i32, i32) {
-    let st = unsafe { &*st };
-    (st.w, st.h)
-}
-
-fn release_drawing(st: &mut CanvasState) {
-    unsafe {
-        if !st.fill_pattern.is_null() {
-            cairo_pattern_destroy(st.fill_pattern);
-            st.fill_pattern = ptr::null_mut();
-        }
-        if !st.stroke_pattern.is_null() {
-            cairo_pattern_destroy(st.stroke_pattern);
-            st.stroke_pattern = ptr::null_mut();
-        }
-        if !st.cr.is_null() {
-            cairo_destroy(st.cr);
-        }
-        if !st.surf.is_null() {
-            drop(Surface::from_raw(st.surf));
+impl CanvasState {
+    pub(crate) fn new(w: i32, h: i32) -> CanvasState {
+        let surf = Surface::image(w, h);
+        let cr = Context::on(&surf);
+        CanvasState {
+            w: Cell::new(w),
+            h: Cell::new(h),
+            surf: RefCell::new(surf),
+            cr: RefCell::new(cr),
+            fill: Cell::new([0.0, 0.0, 0.0, 1.0]),
+            stroke: Cell::new([0.0, 0.0, 0.0, 1.0]),
+            line_width: Cell::new(1.0),
+            font: RefCell::new(DEFAULT_FONT.to_vec()),
+            fill_pattern: RefCell::new(None),
+            stroke_pattern: RefCell::new(None),
+            shadow: Cell::new([0.0; 4]),
+            shadow_blur: Cell::new(0.0),
+            shadow_ox: Cell::new(0.0),
+            shadow_oy: Cell::new(0.0),
+            origin_clean: Cell::new(true),
+            ctx2d: Cell::new(ptr::null_mut()),
+            jsctx: Cell::new(ContextHandle::NULL),
+            owned_node: Cell::new(None),
+            context_kind: Cell::new(0),
         }
     }
-    st.font = Vec::new();
-}
 
-pub(crate) fn reset(st: *mut CanvasState, w: i32, h: i32) {
-    let st = unsafe { &mut *st };
-    release_drawing(st);
-    st.w = w;
-    st.h = h;
-    st.surf = Surface::image(w, h).into_raw();
-    st.cr = unsafe { cairo_create(st.surf) };
-    st.fill = [0.0, 0.0, 0.0, 1.0];
-    st.stroke = [0.0, 0.0, 0.0, 1.0];
-    st.line_width = 1.0;
-    st.font = b"10px sans-serif".to_vec();
-    st.shadow = [0.0; 4];
-    st.shadow_blur = 0.0;
-    st.shadow_ox = 0.0;
-    st.shadow_oy = 0.0;
-    st.origin_clean = 1;
-    if !st.ctx2d.is_null() {
-        let ctx2d = st.ctx2d;
-        st.jsctx.with(|scope| {
-            let obj = scope.object_from_identity(ctx2d);
-            crate::api::ctx2d_init_state(scope, &obj);
-        });
+    pub(crate) fn size(&self) -> (i32, i32) {
+        (self.w.get(), self.h.get())
     }
-}
 
-pub(crate) fn new_state(w: i32, h: i32) -> Box<CanvasState> {
-    let mut st = Box::new(CanvasState {
-        w: 0,
-        h: 0,
-        surf: ptr::null_mut(),
-        cr: ptr::null_mut(),
-        fill: [0.0; 4],
-        stroke: [0.0; 4],
-        line_width: 0.0,
-        font: Vec::new(),
-        fill_pattern: ptr::null_mut(),
-        stroke_pattern: ptr::null_mut(),
-        shadow: [0.0; 4],
-        shadow_blur: 0.0,
-        shadow_ox: 0.0,
-        shadow_oy: 0.0,
-        origin_clean: 0,
-        ctx2d: ptr::null_mut(),
-        jsctx: ContextHandle::NULL,
-        owned_node: ptr::null_mut(),
-        context_kind: 0,
-    });
-    reset(&mut *st, w, h);
-    st
+    pub(crate) fn surface(&self) -> Surface {
+        self.surf.borrow().reference()
+    }
+
+    pub(crate) fn context(&self) -> Context {
+        self.cr.borrow().clone()
+    }
+
+    pub(crate) fn is_main(&self, cr: &Context) -> bool {
+        self.cr.borrow().same(cr)
+    }
+
+    pub(crate) fn font(&self) -> Ref<'_, [u8]> {
+        Ref::map(self.font.borrow(), Vec::as_slice)
+    }
+
+    pub(crate) fn set_font(&self, font: &[u8]) {
+        let font = &font[..font.iter().position(|&b| b == 0).unwrap_or(font.len())];
+        *self.font.borrow_mut() = font.to_vec();
+    }
+
+    pub(crate) fn clear_patterns(&self) {
+        self.fill_pattern.take();
+        self.stroke_pattern.take();
+    }
+
+    pub(crate) fn set_patterns(&self, fill: Option<Pattern>, stroke: Option<Pattern>) {
+        *self.fill_pattern.borrow_mut() = fill;
+        *self.stroke_pattern.borrow_mut() = stroke;
+    }
+
+    pub(crate) fn apply_fill_pattern(&self, cr: &Context) -> bool {
+        self.fill_pattern
+            .borrow()
+            .as_ref()
+            .map(|p| cr.set_source_pattern(p))
+            .is_some()
+    }
+
+    pub(crate) fn apply_stroke_pattern(&self, cr: &Context) -> bool {
+        self.stroke_pattern
+            .borrow()
+            .as_ref()
+            .map(|p| cr.set_source_pattern(p))
+            .is_some()
+    }
+
+    pub(crate) fn ctx2d(&self) -> *mut c_void {
+        self.ctx2d.get()
+    }
+
+    pub(crate) fn context_kind(&self) -> i32 {
+        self.context_kind.get()
+    }
+
+    pub(crate) fn set_context_kind(&self, kind: i32) {
+        self.context_kind.set(kind);
+    }
+
+    pub(crate) fn set_owned_node(&self, node: southstar_dom::Node<'static>) {
+        self.owned_node.set(Some(node));
+    }
+
+    pub(crate) fn attach_ctx2d(
+        &self,
+        scope: &mut southstar_js_engine::Scope<'_>,
+        obj: &southstar_js_engine::Value,
+        kind: i32,
+    ) {
+        let old = self.ctx2d.replace(ptr::null_mut());
+        if !old.is_null() {
+            // SAFETY: old is the identity this state retained for its previous 2D context and releases once, here.
+            unsafe { scope.release_identity(old) };
+        }
+        self.ctx2d.set(scope.retain_identity(obj));
+        self.jsctx
+            .set(southstar_js_runtime::api::main_context(js_of(scope).ptr()));
+        self.context_kind.set(kind);
+    }
+
+    pub(crate) fn reset(&self, w: i32, h: i32) {
+        self.clear_patterns();
+        let surf = Surface::image(w, h);
+        *self.cr.borrow_mut() = Context::on(&surf);
+        *self.surf.borrow_mut() = surf;
+        self.w.set(w);
+        self.h.set(h);
+        self.fill.set([0.0, 0.0, 0.0, 1.0]);
+        self.stroke.set([0.0, 0.0, 0.0, 1.0]);
+        self.line_width.set(1.0);
+        self.set_font(DEFAULT_FONT);
+        self.shadow.set([0.0; 4]);
+        self.shadow_blur.set(0.0);
+        self.shadow_ox.set(0.0);
+        self.shadow_oy.set(0.0);
+        self.origin_clean.set(true);
+        let ctx2d = self.ctx2d.get();
+        if !ctx2d.is_null() {
+            self.jsctx.get().with(|scope| {
+                let obj = scope.object_from_identity(ctx2d);
+                crate::api::ctx2d_init_state(scope, &obj);
+            });
+        }
+    }
 }
 
 impl Drop for CanvasState {
     fn drop(&mut self) {
-        release_drawing(self);
-        let ctx2d = core::mem::replace(&mut self.ctx2d, ptr::null_mut());
+        let ctx2d = self.ctx2d.replace(ptr::null_mut());
         if !ctx2d.is_null() {
-            self.jsctx
-                .with(|scope| unsafe { scope.release_identity(ctx2d) });
+            self.jsctx.get().with(|scope| {
+                // SAFETY: ctx2d is the identity this state retained for its 2D context and releases once, here.
+                unsafe { scope.release_identity(ctx2d) }
+            });
         }
-        // SAFETY: owned_node is null or the offscreen canvas element this state created and owns.
-        if let Some(node) = unsafe { southstar_dom::Node::from_ptr(self.owned_node.cast()) } {
+        if let Some(node) = self.owned_node.take() {
             node.free_tree();
         }
     }
 }
 
-fn clear_surface(st: &CanvasState) {
-    if st.surf.is_null() {
-        return;
-    }
-    unsafe {
-        let cr = cairo_create(st.surf);
-        cairo_set_operator(cr, OPERATOR_CLEAR);
-        cairo_paint(cr);
-        cairo_destroy(cr);
-    }
-}
-
-pub(crate) fn canvas_surface(js: Js, el: Node) -> *mut c_void {
+pub(crate) fn canvas_surface(js: Js, el: Node) -> Option<Surface> {
     if el.is_null() {
-        return ptr::null_mut();
+        return None;
     }
-    let gl = crate::links::webgl_canvas_surface(el.addr());
-    if !gl.is_null() {
-        return gl;
+    if let Some(gl) = crate::links::webgl_canvas_surface(el.addr()) {
+        return Some(Surface::of(gl));
     }
     #[cfg(feature = "webgpu")]
     {
-        let gpu = crate::links::webgpu_canvas_surface(el.addr());
-        if !gpu.is_null() {
-            return gpu;
+        if let Some(gpu) = crate::links::webgpu_canvas_surface(el.addr()) {
+            return Some(Surface::of(gpu));
         }
     }
     if js.is_null() {
-        return ptr::null_mut();
+        return None;
     }
-    match crate::state::lookup(js, el) {
-        Some(st) => unsafe { (*st).surf },
-        None => ptr::null_mut(),
-    }
+    crate::state::lookup(js, el).map(|st| st.surface())
 }
 
 pub(crate) fn js_of(scope: &southstar_js_engine::Scope<'_>) -> Js {
@@ -242,7 +275,7 @@ pub(crate) fn transfer_to_image_bitmap(
     if js.is_null() || el.is_null() {
         return Ok(Value::null());
     }
-    let Some(src) = (unsafe { Surface::from_borrowed(canvas_surface(js, el)) }) else {
+    let Some(src) = canvas_surface(js, el) else {
         return Ok(Value::null());
     };
     let (w, h) = src.size();
@@ -255,32 +288,18 @@ pub(crate) fn transfer_to_image_bitmap(
     }
     src.paint_onto(&copy, (0.0, 0.0), true);
     let st = crate::state::lookup(js, el);
-    if let Some(st) = st {
-        clear_surface(unsafe { &*st });
+    if let Some(st) = &st {
+        st.surface().clear();
     }
-    let origin_clean = st.is_none_or(|st| unsafe { (*st).origin_clean } != 0);
+    let origin_clean = st.is_none_or(|st| st.origin_clean.get());
     Ok(crate::bitmap::make(scope, Some(copy), (w, h), origin_clean))
 }
 
-pub fn canvas_surface_for(js: *mut c_void, el: southstar_dom::Node<'_>) -> *mut c_void {
-    canvas_surface(Js(js.cast()), Node(el.as_ptr().cast()))
-}
-
-pub(crate) fn clear_patterns(st: &mut CanvasState) {
-    unsafe {
-        if !st.fill_pattern.is_null() {
-            cairo_pattern_destroy(st.fill_pattern);
-            st.fill_pattern = ptr::null_mut();
-        }
-        if !st.stroke_pattern.is_null() {
-            cairo_pattern_destroy(st.stroke_pattern);
-            st.stroke_pattern = ptr::null_mut();
-        }
-    }
-}
-
-pub(crate) fn set_font(st: &mut CanvasState, font: &[u8]) {
-    st.font = font[..font.iter().position(|&b| b == 0).unwrap_or(font.len())].to_vec();
+pub fn canvas_surface_for(
+    js: *mut c_void,
+    el: southstar_dom::Node<'_>,
+) -> Option<southstar_cairo::Surface> {
+    canvas_surface(Js(js.cast()), Node(el.as_ptr().cast())).map(Surface::into_shared)
 }
 
 fn teardown(js: *const NsJs) {

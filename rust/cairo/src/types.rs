@@ -88,7 +88,7 @@ const OPERATORS: [Operator; 29] = [
 ];
 
 impl Operator {
-    pub(crate) fn from_raw(op: c_int) -> Operator {
+    pub fn from_raw(op: c_int) -> Operator {
         usize::try_from(op)
             .ok()
             .and_then(|i| OPERATORS.get(i).copied())
@@ -104,7 +104,7 @@ pub enum FillRule {
 }
 
 impl FillRule {
-    pub(crate) fn from_raw(rule: c_int) -> FillRule {
+    pub fn from_raw(rule: c_int) -> FillRule {
         if rule == FillRule::EvenOdd as c_int {
             FillRule::EvenOdd
         } else {

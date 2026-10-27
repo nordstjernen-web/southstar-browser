@@ -1038,21 +1038,34 @@ fn source_pixels(
     flip_y: bool,
     premultiply: bool,
 ) -> Result<Option<SourcePixels>, Value> {
-    let Some(mut image) = host::drawimage_source(s, src)? else {
+    let Some(image) = host::drawimage_source(s, src)? else {
         return Ok(None);
     };
     let (w, h) = (image.w, image.h);
-    let Some((data, stride)) = image.pixels() else {
-        return Ok(None);
-    };
     if w <= 0 || h <= 0 {
         return Ok(None);
     }
+    let data = image.with_pixels(|data, stride| {
+        convert_source(data, stride, (w, h), format, flip_y, premultiply)
+    });
+    Ok(data
+        .flatten()
+        .map(|data| SourcePixels { size: (w, h), data }))
+}
+
+fn convert_source(
+    data: &[u8],
+    stride: usize,
+    (w, h): (i32, i32),
+    format: u32,
+    flip_y: bool,
+    premultiply: bool,
+) -> Option<Vec<u8>> {
     let (wu, hu) = (w as usize, h as usize);
     let comps = limits::components(format);
     let total = wu as u64 * hu as u64 * comps as u64;
     if total == 0 || total > MAX_ALLOC as u64 || (hu - 1) * stride + wu * 4 > data.len() {
-        return Ok(None);
+        return None;
     }
     let mut out = vec![0u8; total as usize];
     for y in 0..hu {
@@ -1081,10 +1094,7 @@ fn source_pixels(
             }
         }
     }
-    Ok(Some(SourcePixels {
-        size: (w, h),
-        data: out,
-    }))
+    Some(out)
 }
 
 struct UnpackState {

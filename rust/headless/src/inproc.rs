@@ -748,8 +748,7 @@ pub fn run_one(
         }
         doc.free();
         if let Some(cache) = image_cache {
-            // SAFETY: script, the layout and the document that held copies were released above and the next page creates its own cache.
-            unsafe { cache.free() };
+            cache.free();
         }
         if let Some(cache) = video_cache {
             // SAFETY: script, whose media callbacks hold a copy, was released above and the next page creates its own cache.
@@ -889,8 +888,7 @@ pub fn run_one(
     }
     doc.free();
     if let Some(cache) = image_cache {
-        // SAFETY: the run is over and script, the layout and the document that held copies were released above.
-        unsafe { cache.free() };
+        cache.free();
     }
     if let Some(cache) = video_cache {
         // SAFETY: the run is over and script, whose media callbacks hold a copy, was released above.

@@ -41,13 +41,12 @@ pub struct Extents {
     pub baseline: c_int,
 }
 
-fn text_cairo(cr: Context) -> Option<CairoContext> {
-    // SAFETY: a canvas Context wraps the canvas's live cairo_t.
-    unsafe { CairoContext::from_raw(cr.raw().cast()) }
+fn text_cairo(cr: &Context) -> Option<CairoContext> {
+    Some(CairoContext::from_cairo(cr.cairo()))
 }
 
 impl Layout {
-    pub fn new(cr: Context, desc: &FontDescription, text: &[u8]) -> Layout {
+    pub fn new(cr: &Context, desc: &FontDescription, text: &[u8]) -> Layout {
         let context = match text_cairo(cr) {
             Some(cr) => TextContext::create_for_cairo(&cr),
             None => FontMap::default_for_thread().create_context(),
@@ -79,13 +78,13 @@ impl Layout {
         Some((metrics.ascent(), metrics.descent()))
     }
 
-    pub fn show(&self, cr: Context) {
+    pub fn show(&self, cr: &Context) {
         if let Some(cr) = text_cairo(cr) {
             southstar_text::render::show_layout(&cr, &mut self.0.borrow_mut());
         }
     }
 
-    pub fn path(&self, cr: Context) {
+    pub fn path(&self, cr: &Context) {
         if let Some(cr) = text_cairo(cr) {
             southstar_text::render::layout_path(&cr, &mut self.0.borrow_mut());
         }
