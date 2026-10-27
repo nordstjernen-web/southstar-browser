@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_uint};
-use core::ptr;
 
 use southstar_glib::{self as glib, GBoolean};
 
@@ -21,14 +20,6 @@ pub struct NsWriteCtx {
     exceeded: GBoolean,
 }
 
-#[repr(C)]
-pub struct GString {
-    str_: *mut c_char,
-    len: usize,
-    allocated_len: usize,
-}
-
-#[repr(C)]
 pub struct NsHeaderCtx {
     content_type_out: *mut *mut c_char,
     content_disposition_out: *mut *mut c_char,
@@ -38,22 +29,18 @@ pub struct NsHeaderCtx {
     cors_allow_origin_out: *mut *mut c_char,
     refresh_out: *mut *mut c_char,
     content_language_out: *mut *mut c_char,
-    etag: *mut c_char,
-    last_modified: *mut c_char,
-    cache_control: *mut c_char,
-    vary: *mut c_char,
-    expires: *mut c_char,
-    location: *mut c_char,
-    raw: *mut GString,
-    set_cookie_seen: GBoolean,
+    etag: Option<Vec<u8>>,
+    last_modified: Option<Vec<u8>>,
+    cache_control: Option<Vec<u8>>,
+    vary: Option<Vec<u8>>,
+    expires: Option<Vec<u8>>,
+    location: Option<Vec<u8>>,
+    raw: Option<Vec<u8>>,
+    set_cookie_seen: bool,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(
-    core::mem::size_of::<NsWriteCtx>() == 40
-        && core::mem::size_of::<NsHeaderCtx>() == 128
-        && core::mem::offset_of!(NsHeaderCtx, set_cookie_seen) == 120
-);
+const _: () = assert!(core::mem::size_of::<NsWriteCtx>() == 40);
 
 impl NsWriteCtx {
     pub fn new(body: *mut GByteArray) -> NsWriteCtx {
@@ -87,29 +74,13 @@ pub struct Captured {
     pub expires: Option<Vec<u8>>,
     pub location: Option<Vec<u8>>,
     pub set_cookie_seen: bool,
-    raw: *mut GString,
+    raw: Option<Vec<u8>>,
 }
 
 impl Captured {
     pub fn take_raw(&mut self) -> Option<*mut c_char> {
-        let raw = core::mem::replace(&mut self.raw, ptr::null_mut());
-        (!raw.is_null()).then(|| unsafe { g_string_free(raw, 0) })
+        self.raw.take().map(|raw| glib::strdup(&raw))
     }
-}
-
-impl Drop for Captured {
-    fn drop(&mut self) {
-        if !self.raw.is_null() {
-            unsafe { g_string_free(self.raw, 1) };
-        }
-    }
-}
-
-fn take_text(slot: &mut *mut c_char) -> Option<Vec<u8>> {
-    let value = unsafe { glib::bytes(*slot) }.map(<[u8]>::to_vec);
-    unsafe { glib::g_free((*slot).cast()) };
-    *slot = ptr::null_mut();
-    value
 }
 
 impl NsHeaderCtx {
@@ -133,27 +104,27 @@ impl NsHeaderCtx {
             cors_allow_origin_out,
             refresh_out,
             content_language_out,
-            etag: ptr::null_mut(),
-            last_modified: ptr::null_mut(),
-            cache_control: ptr::null_mut(),
-            vary: ptr::null_mut(),
-            expires: ptr::null_mut(),
-            location: ptr::null_mut(),
-            raw: ptr::null_mut(),
-            set_cookie_seen: 0,
+            etag: None,
+            last_modified: None,
+            cache_control: None,
+            vary: None,
+            expires: None,
+            location: None,
+            raw: None,
+            set_cookie_seen: false,
         }
     }
 
     pub fn take(&mut self) -> Captured {
         Captured {
-            etag: take_text(&mut self.etag),
-            last_modified: take_text(&mut self.last_modified),
-            cache_control: take_text(&mut self.cache_control),
-            vary: take_text(&mut self.vary),
-            expires: take_text(&mut self.expires),
-            location: take_text(&mut self.location),
-            set_cookie_seen: self.set_cookie_seen != 0,
-            raw: core::mem::replace(&mut self.raw, ptr::null_mut()),
+            etag: self.etag.take(),
+            last_modified: self.last_modified.take(),
+            cache_control: self.cache_control.take(),
+            vary: self.vary.take(),
+            expires: self.expires.take(),
+            location: self.location.take(),
+            set_cookie_seen: self.set_cookie_seen,
+            raw: self.raw.take(),
         }
     }
 }
@@ -161,14 +132,6 @@ impl NsHeaderCtx {
 unsafe extern "C" {
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
-    fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_set_size(string: *mut GString, len: usize) -> *mut GString;
-    fn g_string_append_len(string: *mut GString, val: *const c_char, len: isize) -> *mut GString;
-}
-
-pub fn gstring_append(out: *mut GString, bytes: &[u8]) {
-    unsafe { g_string_append_len(out, bytes.as_ptr().cast(), bytes.len() as isize) };
 }
 
 pub fn write(ctx: &mut NsWriteCtx, data: &[u8]) -> usize {
@@ -202,6 +165,14 @@ fn header_value(line: &[u8], prefix_len: usize) -> Vec<u8> {
 
 fn has_name(line: &[u8], name: &[u8]) -> bool {
     line.len() >= name.len() && line[..name.len()].eq_ignore_ascii_case(name)
+}
+
+fn keep(line: &[u8], name: &[u8], slot: &mut Option<Vec<u8>>) -> bool {
+    if !has_name(line, name) {
+        return false;
+    }
+    *slot = Some(header_value(line, name.len()));
+    true
 }
 
 unsafe fn capture(line: &[u8], name: &[u8], slot: *mut *mut c_char) -> bool {
@@ -240,19 +211,17 @@ unsafe fn append(line: &[u8], name: &[u8], slot: *mut *mut c_char) -> bool {
 
 fn keep_raw(hc: &mut NsHeaderCtx, line: &[u8]) {
     if has_name(line, b"HTTP/") {
-        if !hc.raw.is_null() {
-            unsafe { g_string_set_size(hc.raw, 0) };
+        if let Some(raw) = hc.raw.as_mut() {
+            raw.clear();
         }
         return;
     }
     if line.len() <= 2 || has_name(line, b"Set-Cookie:") || has_name(line, b"Set-Cookie2:") {
         return;
     }
-    if hc.raw.is_null() {
-        hc.raw = unsafe { g_string_new(ptr::null()) };
-    }
-    if unsafe { (*hc.raw).len } + line.len() <= MAX_RAW_HEADER_BYTES {
-        gstring_append(hc.raw, line);
+    let raw = hc.raw.get_or_insert_with(Vec::new);
+    if raw.len() + line.len() <= MAX_RAW_HEADER_BYTES {
+        raw.extend_from_slice(line);
     }
 }
 
@@ -260,11 +229,11 @@ pub fn feed(hc: &mut NsHeaderCtx, line: &[u8]) {
     keep_raw(hc, line);
     let captured = unsafe {
         capture(line, b"Content-Type:", hc.content_type_out)
-            || capture(line, b"ETag:", &mut hc.etag)
-            || capture(line, b"Last-Modified:", &mut hc.last_modified)
-            || capture(line, b"Cache-Control:", &mut hc.cache_control)
-            || capture(line, b"Vary:", &mut hc.vary)
-            || capture(line, b"Expires:", &mut hc.expires)
+            || keep(line, b"ETag:", &mut hc.etag)
+            || keep(line, b"Last-Modified:", &mut hc.last_modified)
+            || keep(line, b"Cache-Control:", &mut hc.cache_control)
+            || keep(line, b"Vary:", &mut hc.vary)
+            || keep(line, b"Expires:", &mut hc.expires)
             || append(line, b"Content-Security-Policy:", hc.csp_out)
             || capture(line, b"X-Frame-Options:", hc.xframe_options_out)
             || capture(
@@ -280,9 +249,9 @@ pub fn feed(hc: &mut NsHeaderCtx, line: &[u8]) {
             || capture(line, b"Content-Disposition:", hc.content_disposition_out)
             || capture(line, b"Content-Language:", hc.content_language_out)
             || capture(line, b"Refresh:", hc.refresh_out)
-            || capture(line, b"Location:", &mut hc.location)
+            || keep(line, b"Location:", &mut hc.location)
     };
     if !captured && has_name(line, b"Set-Cookie:") {
-        hc.set_cookie_seen = 1;
+        hc.set_cookie_seen = true;
     }
 }

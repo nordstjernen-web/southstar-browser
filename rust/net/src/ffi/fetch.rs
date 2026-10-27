@@ -34,9 +34,6 @@ unsafe extern "C" {
     fn g_io_error_quark() -> u32;
     fn g_error_new_literal(domain: u32, code: c_int, message: *const c_char) -> *mut GError;
     fn g_set_error_literal(err: *mut *mut GError, domain: u32, code: c_int, message: *const c_char);
-    fn g_get_monotonic_time() -> i64;
-    fn g_get_real_time() -> i64;
-    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
     fn g_byte_array_new() -> *mut GByteArray;
     fn g_byte_array_append(array: *mut GByteArray, data: *const u8, len: c_uint)
     -> *mut GByteArray;
@@ -451,7 +448,14 @@ pub fn is_cancelled(cancellable: *mut c_void) -> bool {
 }
 
 fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    super::sys::monotonic_us()
+}
+
+fn real_time_ms() -> f64 {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(after) => after.as_micros() as f64 / 1000.0,
+        Err(before) => -(before.duration().as_micros() as f64) / 1000.0,
+    }
 }
 
 fn accept_language() -> Vec<u8> {
@@ -484,8 +488,7 @@ fn cache_partition(url: &[u8], top_url: Option<&[u8]>) -> Vec<u8> {
 
 fn timeout_seconds(headers: &[Vec<u8>]) -> c_long {
     let requested = request::timeout_header(headers).map_or(DEFAULT_TIMEOUT_S as c_long, |v| {
-        let v = cstr(v);
-        unsafe { g_ascii_strtoll(v.as_ptr(), ptr::null_mut(), 10) as c_long }
+        southstar_config::util::ascii_strtoll(v).unwrap_or(0) as c_long
     });
     requested.clamp(1, MAX_TIMEOUT_S as c_long)
 }
@@ -793,7 +796,8 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
 
     let mut out = HopOut::new();
     let start_us = monotonic_us();
-    let start_real_ms = unsafe { g_get_real_time() } as f64 / 1000.0;
+    let start_real_ms = real_time_ms();
+
     let produced = hop::transport(&req, &mut wctx, &mut hctx, &mut out, f.cancellable);
     let mut captured = hctx.take();
 

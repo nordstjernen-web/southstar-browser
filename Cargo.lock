@@ -2240,9 +2240,11 @@ name = "southstar-history"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-about-style",
+ "southstar-config",
  "southstar-glib",
  "southstar-sqlite",
  "southstar-unicode",
+ "southstar-url",
 ]
 
 [[package]]
@@ -3599,6 +3601,7 @@ dependencies = [
 name = "southstar-safebrowsing"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-config",
  "southstar-digest",
  "southstar-glib",
 ]

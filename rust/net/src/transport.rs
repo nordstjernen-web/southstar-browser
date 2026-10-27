@@ -4,16 +4,16 @@
 
 use std::collections::HashMap;
 use std::sync::{Condvar, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::ffi::sys;
 
-const DEAD_HOST_TTL_US: i64 = 120 * 1_000_000;
+const DEAD_HOST_TTL: Duration = Duration::from_secs(120);
 const MAX_PER_ORIGIN: usize = 6;
 const SLOT_WAIT: Duration = Duration::from_millis(250);
 const MIN_RESPONSE_BUDGET: u64 = 64 * 1024 * 1024;
 
-static DEAD_HOSTS: Mutex<Option<HashMap<Vec<u8>, i64>>> = Mutex::new(None);
+static DEAD_HOSTS: Mutex<Option<HashMap<Vec<u8>, Instant>>> = Mutex::new(None);
 static ORIGIN_SLOTS: Mutex<Option<HashMap<Vec<u8>, usize>>> = Mutex::new(None);
 static ORIGIN_FREED: Condvar = Condvar::new();
 
@@ -29,7 +29,7 @@ pub fn host_recently_dead(origin: &[u8]) -> bool {
     let Some(&expiry) = hosts.get(origin) else {
         return false;
     };
-    if sys::monotonic_us() < expiry {
+    if Instant::now() < expiry {
         return true;
     }
     hosts.remove(origin);
@@ -37,7 +37,8 @@ pub fn host_recently_dead(origin: &[u8]) -> bool {
 }
 
 pub fn mark_host_dead(origin: &[u8]) {
-    let expiry = sys::monotonic_us() + DEAD_HOST_TTL_US;
+    let expiry = Instant::now() + DEAD_HOST_TTL;
+
     lock(&DEAD_HOSTS)
         .get_or_insert_with(HashMap::new)
         .insert(origin.to_vec(), expiry);

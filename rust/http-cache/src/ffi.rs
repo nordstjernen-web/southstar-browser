@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
-use std::ffi::CString;
 use std::path::PathBuf;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_config::util as fs;
+use southstar_glib as glib;
 
 #[repr(C)]
 struct GDateTime {
@@ -19,23 +19,10 @@ struct GTimeZone {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct GError {
-    domain: u32,
-    code: c_int,
-    message: *mut c_char,
-}
-
 const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
-const G_FILE_SET_CONTENTS_CONSISTENT: c_int = 1;
 
 unsafe extern "C" {
     fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
-    #[cfg(not(windows))]
-    fn g_chmod(filename: *const c_char, mode: c_int) -> c_int;
-    fn g_get_real_time() -> i64;
-    fn g_ascii_strtoll(nptr: *const c_char, endptr: *mut *mut c_char, base: c_uint) -> i64;
     fn g_date_time_new_from_iso8601(
         text: *const c_char,
         default_tz: *mut GTimeZone,
@@ -53,15 +40,6 @@ unsafe extern "C" {
     fn g_date_time_unref(datetime: *mut GDateTime);
     fn g_time_zone_new_utc() -> *mut GTimeZone;
     fn g_time_zone_unref(tz: *mut GTimeZone);
-    fn g_file_set_contents_full(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        flags: c_int,
-        mode: c_int,
-        error: *mut *mut GError,
-    ) -> GBoolean;
-    fn g_error_free(error: *mut GError);
     fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
 }
 
@@ -78,15 +56,7 @@ pub(crate) fn warn(message: &[u8]) {
 }
 
 pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
-    let owned: Vec<CString> = parts.iter().map(|part| crate::cstring(part)).collect();
-    let mut pointers: Vec<*mut c_char> = owned.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    pointers.push(ptr::null_mut());
-    unsafe {
-        let joined = glib::g_build_filenamev(pointers.as_mut_ptr());
-        let bytes = CStr::from_ptr(joined).to_bytes().to_vec();
-        glib::g_free(joined.cast());
-        bytes
-    }
+    fs::build_filename(parts)
 }
 
 pub(crate) fn user_cache_dir() -> Vec<u8> {
@@ -96,14 +66,14 @@ pub(crate) fn user_cache_dir() -> Vec<u8> {
 }
 
 pub(crate) fn mkdir_with_parents(path: &[u8]) -> bool {
-    let path = crate::cstring(path);
-    unsafe { g_mkdir_with_parents(path.as_ptr(), 0o700) == 0 }
+    fs::os_path(path).is_some_and(|path| fs::make_dirs(&path, 0o700).is_ok())
 }
 
 #[cfg(not(windows))]
 pub(crate) fn restrict_to_owner(path: &[u8], is_dir: bool) {
-    let path = crate::cstring(path);
-    unsafe { g_chmod(path.as_ptr(), if is_dir { 0o700 } else { 0o600 }) };
+    if let Some(path) = fs::os_path(path) {
+        let _ = fs::set_mode(&path, if is_dir { 0o700 } else { 0o600 });
+    }
 }
 
 #[cfg(windows)]
@@ -285,48 +255,21 @@ pub(crate) fn read_file(file: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn write_file_consistent(file: &[u8], body: &[u8]) -> Result<(), Vec<u8>> {
-    let name = crate::cstring(file);
-    let mut error: *mut GError = ptr::null_mut();
-    let contents = if body.is_empty() {
-        c"".as_ptr()
-    } else {
-        body.as_ptr().cast()
+    let Some(target) = fs::os_path(file) else {
+        return Err(b"invalid file name".to_vec());
     };
-    let ok = unsafe {
-        g_file_set_contents_full(
-            name.as_ptr(),
-            contents,
-            body.len() as isize,
-            G_FILE_SET_CONTENTS_CONSISTENT,
-            0o600,
-            &mut error,
-        )
-    };
-    if ok != 0 {
-        return Ok(());
-    }
-    let message = unsafe {
-        let message = error
-            .as_ref()
-            .and_then(|e| glib::bytes(e.message))
-            .unwrap_or_default()
-            .to_vec();
-        if !error.is_null() {
-            g_error_free(error);
-        }
-        message
-    };
-    Err(message)
+    fs::write_atomic(&target, body, 0o600).map_err(|e| e.to_string().into_bytes())
 }
 
 pub(crate) fn now_seconds() -> i64 {
-    let micros = unsafe { g_get_real_time() };
-    micros / 1_000_000
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(after) => after.as_secs() as i64,
+        Err(before) => -(before.duration().as_secs() as i64),
+    }
 }
 
 pub(crate) fn ascii_strtoll(text: &[u8]) -> i64 {
-    let text = crate::cstring(text);
-    unsafe { g_ascii_strtoll(text.as_ptr(), ptr::null_mut(), 10) }
+    fs::ascii_strtoll(text).unwrap_or(0)
 }
 
 fn month_from_name(m: &[u8]) -> c_int {
