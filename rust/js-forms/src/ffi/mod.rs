@@ -135,11 +135,11 @@ pub(crate) fn live_owner(_scope: &mut Scope<'_>, live: &Value) -> Value {
 }
 
 pub(crate) fn qcache_get(scope: &mut Scope<'_>, root: Option<Element>, kind: u8) -> Value {
-    nsr_qcache_get(scope, Node::ptr_or_null(root).cast(), kind, b"")
+    nsr_qcache_get(scope, root, kind, b"")
 }
 
 pub(crate) fn qcache_put(scope: &mut Scope<'_>, root: Option<Element>, kind: u8, value: &Value) {
-    nsr_qcache_put(scope, Node::ptr_or_null(root).cast(), kind, b"", value);
+    nsr_qcache_put(scope, root, kind, b"", value);
 }
 
 pub(crate) struct FileBytes {

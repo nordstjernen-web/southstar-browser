@@ -5,13 +5,13 @@
 use core::ffi::c_char;
 use std::sync::OnceLock;
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 
 pub type WebglGetContextFn =
-    fn(&mut Scope<'_>, Option<Page>, &Value, usize, i32, &Value) -> Result<Value, Value>;
+    fn(&mut Scope<'_>, Option<Page>, &Value, Option<WeakNode>, i32, &Value) -> Result<Value, Value>;
 
 pub type ResourceOriginCleanFn = unsafe fn(&Scope<'_>, *const c_char, *const c_char) -> bool;
 
@@ -97,7 +97,7 @@ fn js_window_links() -> &'static JsWindowLinks {
 
 pub struct WebglLinks {
     pub webgl_get_context: WebglGetContextFn,
-    pub canvas_surface: fn(usize) -> Option<southstar_cairo::Surface>,
+    pub canvas_surface: fn(Option<WeakNode>) -> Option<southstar_cairo::Surface>,
 }
 
 static WEBGL_LINKS: OnceLock<WebglLinks> = OnceLock::new();
@@ -114,8 +114,8 @@ fn webgl_links() -> &'static WebglLinks {
 
 #[cfg(feature = "webgpu")]
 pub struct WebgpuLinks {
-    pub get_context: fn(&mut Scope<'_>, &Value, usize) -> Value,
-    pub canvas_surface: fn(usize) -> Option<southstar_cairo::Surface>,
+    pub get_context: fn(&mut Scope<'_>, &Value, Option<WeakNode>) -> Value,
+    pub canvas_surface: fn(Option<WeakNode>) -> Option<southstar_cairo::Surface>,
 }
 
 #[cfg(feature = "webgpu")]
@@ -158,14 +158,14 @@ pub(crate) fn nsr_webgl_get_context(
     scope: &mut Scope<'_>,
     js: Option<Page>,
     canvas_obj: &Value,
-    canvas: usize,
+    canvas: Option<WeakNode>,
     version: i32,
     attrs: &Value,
 ) -> Result<Value, Value> {
     (webgl_links().webgl_get_context)(scope, js, canvas_obj, canvas, version, attrs)
 }
 
-pub(crate) fn webgl_canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+pub(crate) fn webgl_canvas_surface(canvas: Option<WeakNode>) -> Option<southstar_cairo::Surface> {
     (webgl_links().canvas_surface)(canvas)
 }
 
@@ -173,13 +173,13 @@ pub(crate) fn webgl_canvas_surface(canvas: usize) -> Option<southstar_cairo::Sur
 pub(crate) fn webgpu_get_context(
     scope: &mut Scope<'_>,
     canvas_obj: &Value,
-    canvas: usize,
+    canvas: Option<WeakNode>,
 ) -> Value {
     (webgpu_links().get_context)(scope, canvas_obj, canvas)
 }
 
 #[cfg(feature = "webgpu")]
-pub(crate) fn webgpu_canvas_surface(canvas: usize) -> Option<southstar_cairo::Surface> {
+pub(crate) fn webgpu_canvas_surface(canvas: Option<WeakNode>) -> Option<southstar_cairo::Surface> {
     (webgpu_links().canvas_surface)(canvas)
 }
 

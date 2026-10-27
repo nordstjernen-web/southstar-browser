@@ -13,7 +13,7 @@ pub mod fullscreen;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use southstar_dom::{Kind, MAX_DEPTH, Node, ancestors_and_self};
+use southstar_dom::{Kind, MAX_DEPTH, Node, WeakNode, ancestors_and_self};
 use southstar_js_engine::Value;
 
 use crate::ffi::Js;
@@ -42,7 +42,7 @@ pub(crate) struct Page {
     pub nav_start: Option<Element>,
     pub guards: Vec<Guard>,
     pub pointer_input: bool,
-    pub pointer_lock: usize,
+    pub pointer_lock: Option<WeakNode>,
     pub fullscreen_target: Option<Element>,
     pub fullscreen_resolve: Option<Value>,
     pub synthetic_clicks: i32,

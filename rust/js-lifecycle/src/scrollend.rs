@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::NsNode;
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -10,7 +10,7 @@ use crate::{Page, page, page_or_new};
 
 #[derive(Default)]
 pub(crate) struct Scrollend {
-    targets: Vec<*const NsNode>,
+    targets: Vec<WeakNode>,
     document: bool,
 }
 
@@ -20,10 +20,11 @@ pub(crate) fn clear(page: &Page) {
     scrollend.document = false;
 }
 
-pub(crate) fn queue(js: Js, el: *const NsNode) {
-    if js.is_null() || el.is_null() {
+pub(crate) fn queue(js: Js, el: Node<'_>) {
+    if js.is_null() {
         return;
     }
+    let el = el.downgrade();
     let page = page_or_new(js);
     let mut scrollend = page.scrollend.borrow_mut();
     if !scrollend.targets.contains(&el) {
@@ -60,6 +61,7 @@ pub(crate) fn flush(js: Js) {
         )
     };
     for el in targets {
+        let el = el.get();
         if !js.node_in_page(el) {
             continue;
         }
@@ -78,7 +80,7 @@ pub(crate) fn flush(js: Js) {
     }
     let Some(event) = ctx.with(|scope| {
         let global = scope.global();
-        let event = ffi::make_event(scope, c"scrollend", core::ptr::null());
+        let event = ffi::make_event(scope, c"scrollend", None);
         not_cancelable(scope, &event);
         let _ = scope.set(&event, "target", global);
         event
@@ -87,7 +89,7 @@ pub(crate) fn flush(js: Js) {
     };
     js.dispatch_window_only(js.current_document(), c"scrollend", event);
     let doc = js.current_document();
-    if !doc.is_null() {
+    if doc.is_some() {
         let Some(event) = ctx.with(|scope| {
             let event = ffi::make_event(scope, c"scrollend", doc);
             not_cancelable(scope, &event);

@@ -68,8 +68,8 @@ pub(crate) fn current_document(js: Js) -> Option<Element> {
     api::current_document(js.ptr())
 }
 
-pub(crate) fn main_document(js: Js) -> usize {
-    Node::ptr_or_null(api::ce_main_doc(js.ptr())) as usize
+pub(crate) fn main_document(js: Js) -> Option<Element> {
+    api::ce_main_doc(js.ptr())
 }
 
 pub(crate) fn realm_document(scope: &mut Scope<'_>) -> Option<Element> {

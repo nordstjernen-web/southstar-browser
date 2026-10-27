@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
@@ -86,20 +86,17 @@ pub(crate) fn call_observer(
     )
 }
 
-pub(crate) fn make_element(scope: &mut Scope<'_>, node: usize) -> Value {
-    api::make_element(scope, node as *const NsNode).unwrap_or_else(|_| Value::undefined())
+pub(crate) fn make_element(scope: &mut Scope<'_>, node: Option<WeakNode>) -> Value {
+    let node = node.and_then(WeakNode::get);
+    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     api::unwrap_element(value)
 }
 
-pub(crate) fn node_address(value: &Value) -> usize {
-    Node::ptr_or_null(api::unwrap_element(value)) as usize
-}
-
-pub(crate) fn arm_invalidate(node: usize) {
-    if let Some(node) = unsafe { Node::from_ptr(node as *const NsNode) } {
+pub(crate) fn arm_invalidate(node: Option<WeakNode>) {
+    if let Some(node) = node.and_then(WeakNode::get) {
         api::arm_js_invalidate(node);
     }
 }
@@ -116,8 +113,8 @@ pub(crate) fn box_for(scope: &mut Scope<'_>, value: &Value) -> Option<BoxRef<'st
     nsr_box_for_this(scope, value)
 }
 
-pub(crate) fn find_by_dom(root: BoxRef<'_>, node: usize) -> Option<BoxRef<'_>> {
-    southstar_js_geometry::find_box_by_dom(root, node as *const c_void)
+pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Node<'_>) -> Option<BoxRef<'a>> {
+    southstar_js_geometry::find_box_by_dom(root, node.as_ptr().cast())
 }
 
 pub(crate) use southstar_js_geometry::{
@@ -130,12 +127,12 @@ pub(crate) fn style_keyword<'a>(b: BoxRef<'a>, property: &CStr) -> Option<&'a CS
     southstar_style::box_style(b)?.keyword_of(prop)
 }
 
-fn address(node: Option<Node<'_>>) -> usize {
-    Node::ptr_or_null(node) as usize
+fn address(node: Option<Node<'_>>) -> Option<WeakNode> {
+    node.map(Node::downgrade)
 }
 
-fn addresses(nodes: &[Node<'_>]) -> Option<Vec<usize>> {
-    (!nodes.is_empty()).then(|| nodes.iter().map(|&n| address(Some(n))).collect())
+fn addresses(nodes: &[Node<'_>]) -> Option<Vec<WeakNode>> {
+    (!nodes.is_empty()).then(|| nodes.iter().map(|&n| n.downgrade()).collect())
 }
 
 fn emit(js: Option<Page>, emit: &Emit<'_>) {
@@ -156,8 +153,8 @@ pub fn record_attributes(
             target: address(Some(target)),
             added: None,
             removed: None,
-            previous_sibling: 0,
-            next_sibling: 0,
+            previous_sibling: None,
+            next_sibling: None,
             attribute_name: name,
             attribute_namespace: namespace,
             old_value,
@@ -173,8 +170,8 @@ pub fn record_character_data(js: Option<Page>, target: Node<'_>, old_value: Opti
             target: address(Some(target)),
             added: None,
             removed: None,
-            previous_sibling: 0,
-            next_sibling: 0,
+            previous_sibling: None,
+            next_sibling: None,
             attribute_name: None,
             attribute_namespace: None,
             old_value,
@@ -195,8 +192,8 @@ pub fn record_child(
         &Emit {
             kind: Some(b"childList"),
             target: address(Some(target)),
-            added: added.map(|n| vec![address(Some(n))]),
-            removed: removed.map(|n| vec![address(Some(n))]),
+            added: added.map(|n| vec![n.downgrade()]),
+            removed: removed.map(|n| vec![n.downgrade()]),
             previous_sibling: address(previous_sibling),
             next_sibling: address(next_sibling),
             attribute_name: None,
@@ -263,7 +260,7 @@ nsr_natives! {
 }
 
 fn scrub_node(js: Option<Page>, node: Node<'_>) {
-    mutation::scrub_node(Js::of(js), node.as_ptr() as usize);
+    mutation::scrub_node(Js::of(js), node.downgrade());
 }
 
 fn intersection_tick(js: Option<Page>) {

@@ -123,7 +123,7 @@ fn report_pending_rejections(js: Option<Page>) {
 fn forget_node(js: Option<Page>, node: southstar_dom::Node<'_>) {
     let js = Js::of(js);
     if !js.is_null() {
-        crate::forget_node(js, node.as_ptr());
+        crate::forget_node(js, node);
     }
 }
 

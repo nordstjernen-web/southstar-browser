@@ -1,10 +1,12 @@
-//! Southstar — the hidden-state objects behind every canvas interface: a kind, a null-prototype state object and a node pointer.
+//! Southstar — the hidden-state objects behind every canvas interface: a kind, a null-prototype state object and the canvas node it belongs to.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::cell::Cell;
 
 use southstar_js_engine::{Scope, Trace, Value};
+
+use crate::ffi::state::Node;
 
 pub(crate) const KIND_CTX2D: i32 = 0;
 pub(crate) const KIND_OFFSCREEN_CTX2D: i32 = 1;
@@ -17,7 +19,7 @@ pub(crate) const KIND_OFFSCREEN: i32 = 6;
 pub(crate) struct Hidden {
     pub kind: i32,
     pub state: Value,
-    pub ptr: Cell<usize>,
+    pub node: Cell<Node>,
 }
 
 impl Trace for Hidden {
@@ -31,7 +33,7 @@ pub(crate) fn new(realm: &mut Scope<'_>, kind: i32, proto: &Value) -> Value {
     let hidden = Hidden {
         kind,
         state,
-        ptr: Cell::new(0),
+        node: Cell::new(Node::NONE),
     };
     let proto = proto.is_object().then_some(proto);
     realm.new_traced_host_object(proto, hidden)
@@ -49,12 +51,12 @@ pub(crate) fn is_ctx2d(value: &Value) -> bool {
     matches!(kind_of(value), Some(KIND_CTX2D | KIND_OFFSCREEN_CTX2D))
 }
 
-pub(crate) fn ptr(value: &Value) -> usize {
-    crate::ffi::with_hidden(value, |h| h.ptr.get()).unwrap_or(0)
+pub(crate) fn node(value: &Value) -> Node {
+    crate::ffi::with_hidden(value, |h| h.node.get()).unwrap_or(Node::NONE)
 }
 
-pub(crate) fn set_ptr(value: &Value, ptr: usize) {
-    crate::ffi::with_hidden(value, |h| h.ptr.set(ptr));
+pub(crate) fn set_node(value: &Value, node: Node) {
+    crate::ffi::with_hidden(value, |h| h.node.set(node));
 }
 
 pub(crate) fn state(value: &Value) -> Option<Value> {

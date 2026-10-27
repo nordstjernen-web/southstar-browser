@@ -4,6 +4,7 @@
 
 use std::cell::RefCell;
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::Value;
 
 use crate::ffi::Js;
@@ -11,7 +12,7 @@ use crate::ffi::Js;
 const QCACHE_SLOTS: usize = 16;
 
 struct Entry {
-    root: usize,
+    root: Option<WeakNode>,
     kind: u8,
     key: Box<[u8]>,
     generation: u64,
@@ -83,7 +84,7 @@ pub(crate) fn invalidate(js: Js) {
     }
 }
 
-pub(crate) fn qcache_get(js: Js, root: usize, kind: u8, key: &[u8]) -> Option<Value> {
+pub(crate) fn qcache_get(js: Js, root: Option<WeakNode>, kind: u8, key: &[u8]) -> Option<Value> {
     if js.is_null() {
         return None;
     }
@@ -99,7 +100,7 @@ pub(crate) fn qcache_get(js: Js, root: usize, kind: u8, key: &[u8]) -> Option<Va
     .flatten()
 }
 
-pub(crate) fn qcache_put(js: Js, root: usize, kind: u8, key: &[u8], value: &Value) {
+pub(crate) fn qcache_put(js: Js, root: Option<WeakNode>, kind: u8, key: &[u8], value: &Value) {
     if js.is_null() || value.is_undefined() || value.is_null() {
         return;
     }

@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -13,7 +13,7 @@ use crate::{bind, bind_if_not_callable, page, page_or_new, set, set_index};
 
 #[derive(Default)]
 struct Target {
-    node: usize,
+    node: Option<WeakNode>,
     subtree: bool,
     child_list: bool,
     attributes: bool,
@@ -24,19 +24,22 @@ struct Target {
 }
 
 impl Target {
-    fn covers(&self, node: usize) -> bool {
-        if self.node == 0 || node == 0 {
+    fn covers(&self, node: Option<WeakNode>) -> bool {
+        let (Some(watched), Some(node)) = (self.node, node) else {
             return false;
-        }
-        if self.node == node {
+        };
+        if watched == node {
             return true;
         }
         if !self.subtree {
             return false;
         }
-        let mut parent = unsafe { Node::from_ptr(node as *const _) }.and_then(Node::parent);
+        let Some(watched) = watched.get() else {
+            return false;
+        };
+        let mut parent = node.get().and_then(Node::parent);
         while let Some(p) = parent {
-            if p.as_ptr() as usize == self.node {
+            if p == watched {
                 return true;
             }
             parent = p.parent();
@@ -57,11 +60,11 @@ impl Target {
 
 struct Record {
     kind: Vec<u8>,
-    target: usize,
-    added: Option<Vec<usize>>,
-    removed: Option<Vec<usize>>,
-    previous_sibling: usize,
-    next_sibling: usize,
+    target: Option<WeakNode>,
+    added: Option<Vec<WeakNode>>,
+    removed: Option<Vec<WeakNode>>,
+    previous_sibling: Option<WeakNode>,
+    next_sibling: Option<WeakNode>,
     attribute_name: Option<Vec<u8>>,
     attribute_namespace: Option<Vec<u8>>,
     old_value: Option<Vec<u8>>,
@@ -120,11 +123,11 @@ impl Observer {
 
 pub(crate) struct Emit<'a> {
     pub kind: Option<&'a [u8]>,
-    pub target: usize,
-    pub added: Option<Vec<usize>>,
-    pub removed: Option<Vec<usize>>,
-    pub previous_sibling: usize,
-    pub next_sibling: usize,
+    pub target: Option<WeakNode>,
+    pub added: Option<Vec<WeakNode>>,
+    pub removed: Option<Vec<WeakNode>>,
+    pub previous_sibling: Option<WeakNode>,
+    pub next_sibling: Option<WeakNode>,
     pub attribute_name: Option<&'a [u8]>,
     pub attribute_namespace: Option<&'a [u8]>,
     pub old_value: Option<&'a [u8]>,
@@ -137,14 +140,20 @@ fn observers(js: Js) -> Option<Vec<Rc<Observer>>> {
     Some(list.iter().filter_map(Weak::upgrade).collect())
 }
 
-fn arm(nodes: &[usize]) {
+fn arm(nodes: &[Option<WeakNode>]) {
     for &node in nodes {
         ffi::arm_invalidate(node);
     }
 }
 
+fn arm_list(nodes: Option<&[WeakNode]>) {
+    for &node in nodes.unwrap_or_default() {
+        ffi::arm_invalidate(Some(node));
+    }
+}
+
 pub(crate) fn emit(js: Js, emit: &Emit<'_>) {
-    if emit.target == 0 {
+    if emit.target.is_none() {
         return;
     }
     let Some(observers) = observers(js) else {
@@ -158,8 +167,8 @@ pub(crate) fn emit(js: Js, emit: &Emit<'_>) {
         return;
     }
     arm(&[emit.target]);
-    arm(emit.added.as_deref().unwrap_or_default());
-    arm(emit.removed.as_deref().unwrap_or_default());
+    arm_list(emit.added.as_deref());
+    arm_list(emit.removed.as_deref());
     arm(&[emit.previous_sibling, emit.next_sibling]);
     for observer in &observers {
         let mut state = observer.state.borrow_mut();
@@ -195,13 +204,13 @@ pub(crate) fn emit(js: Js, emit: &Emit<'_>) {
 
 pub(crate) fn emit_child_list(
     js: Js,
-    target: usize,
-    added: Option<Vec<usize>>,
-    removed: Option<Vec<usize>>,
-    previous_sibling: usize,
-    next_sibling: usize,
+    target: Option<WeakNode>,
+    added: Option<Vec<WeakNode>>,
+    removed: Option<Vec<WeakNode>>,
+    previous_sibling: Option<WeakNode>,
+    next_sibling: Option<WeakNode>,
 ) {
-    if target == 0 {
+    if target.is_none() {
         return;
     }
     let Some(observers) = observers(js) else {
@@ -211,8 +220,8 @@ pub(crate) fn emit_child_list(
         return;
     }
     arm(&[target]);
-    arm(added.as_deref().unwrap_or_default());
-    arm(removed.as_deref().unwrap_or_default());
+    arm_list(added.as_deref());
+    arm_list(removed.as_deref());
     arm(&[previous_sibling, next_sibling]);
     for observer in &observers {
         let mut state = observer.state.borrow_mut();
@@ -241,16 +250,16 @@ pub(crate) fn emit_child_list(
     schedule_drain(js);
 }
 
-pub(crate) fn scrub_node(js: Js, node: usize) {
+pub(crate) fn scrub_node(js: Js, node: WeakNode) {
     let Some(observers) = observers(js) else {
         return;
     };
-    let clear = |slot: &mut usize| {
-        if *slot == node {
-            *slot = 0;
+    let clear = |slot: &mut Option<WeakNode>| {
+        if *slot == Some(node) {
+            *slot = None;
         }
     };
-    let remove = |list: &mut Option<Vec<usize>>| {
+    let remove = |list: &mut Option<Vec<WeakNode>>| {
         if let Some(list) = list
             && let Some(index) = list.iter().position(|&n| n == node)
         {
@@ -290,8 +299,8 @@ fn schedule_drain(js: Js) {
     });
 }
 
-fn node_or_null(scope: &mut Scope<'_>, node: usize) -> Value {
-    if node == 0 {
+fn node_or_null(scope: &mut Scope<'_>, node: Option<WeakNode>) -> Value {
+    if node.is_none() {
         Value::null()
     } else {
         ffi::make_element(scope, node)
@@ -302,10 +311,10 @@ fn text_or_null(scope: &mut Scope<'_>, text: Option<&[u8]>) -> Value {
     text.map_or_else(Value::null, |text| scope.string_from_bytes(text))
 }
 
-fn node_array(scope: &mut Scope<'_>, nodes: Option<&[usize]>) -> Value {
+fn node_array(scope: &mut Scope<'_>, nodes: Option<&[WeakNode]>) -> Value {
     let array = scope.new_array();
     for (i, &node) in nodes.unwrap_or_default().iter().enumerate() {
-        let element = ffi::make_element(scope, node);
+        let element = ffi::make_element(scope, Some(node));
         set_index(scope, &array, i as u32, element);
     }
     array
@@ -427,12 +436,11 @@ pub(crate) fn observe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
     let Some(target) = args.first() else {
         return Ok(Value::undefined());
     };
-    let node = ffi::node_address(target);
-    if node == 0 {
+    let Some(node) = ffi::unwrap_element(target).map(Node::downgrade) else {
         return Ok(Value::undefined());
-    }
+    };
     let mut t = Target {
-        node,
+        node: Some(node),
         child_list: true,
         ..Target::default()
     };
@@ -479,7 +487,7 @@ pub(crate) fn observe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
         ));
     }
     let mut state = observer.state.borrow_mut();
-    if let Some(index) = state.targets.iter().position(|e| e.node == node) {
+    if let Some(index) = state.targets.iter().position(|e| e.node == Some(node)) {
         state.targets.remove(index);
     }
     state.targets.push(t);

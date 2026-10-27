@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use core::ptr;
 use std::rc::Rc;
 
@@ -16,8 +16,8 @@ use crate::ffi::engine::{self, SelectionRun};
 use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
-    self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, UpperFn, VpCapture, box_clip_hides,
-    box_is_hidden, box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
+    self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, VpCapture, box_clip_hides, box_is_hidden,
+    box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
 };
 
 pub const VP_FIXED: i32 = 1;
@@ -311,32 +311,26 @@ pub fn plan_layers(cr: ContextRef, root: Option<BoxRef<'_>>, plan: &mut LayerPla
     }
 }
 
-pub struct DocLayers {
-    pub upper: Option<UpperFn>,
-    pub upper_data: *mut c_void,
-}
-
 pub fn doc_layers(
     cr: ContextRef,
-    up: DocLayers,
+    upper: &[Option<ContextRef<'_>>],
     root: BoxRef<'_>,
     highlight: Option<&CStr>,
     sel: Option<&NsSelection>,
     plan: &LayerPlan,
-) -> bool {
+) -> (bool, Vec<bool>) {
     let mut layers = Layers::off();
     layers.mode = LAYERS_DOC;
     layers.root = root.as_ptr();
-    layers.doc = cr.as_raw();
+    layers.doc = Some(cr.reference());
     layers.kinds = Some(Rc::clone(&plan.kinds));
-    layers.upper = up.upper;
-    layers.upper_data = up.upper_data;
+    layers.upper = upper.iter().map(|cr| cr.map(|cr| cr.reference())).collect();
+    layers.upper_used = vec![false; upper.len()];
     layers.n_upper = plan.vp.len() as i32;
     set_layers(layers);
     paint_document(cr, root, highlight, sel);
-    let ok = !walk::with(|w| w.layers.borrow().video_above);
-    set_layers(Layers::off());
-    ok
+    let finished = walk::with(|w| core::mem::replace(&mut *w.layers.borrow_mut(), Layers::off()));
+    (!finished.video_above, finished.upper_used)
 }
 
 pub fn vp_layer(

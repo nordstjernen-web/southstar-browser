@@ -285,7 +285,7 @@ fn snapshot_own(
     window_level: bool,
 ) -> Vec<Rc<Listener>> {
     let mut snapshot = crate::take_snapshot(js);
-    let key = cur.as_ptr() as usize;
+    let key = cur.downgrade();
     crate::with(js, |page| {
         if let Some(own) = page.listeners.get(&key) {
             snapshot.extend(
@@ -549,8 +549,8 @@ pub(crate) fn path_has_active_listener(js: Js, target: Element, kind: &str) -> b
                 if l.is_dead() || l.passive || *l.kind != *kind {
                     continue;
                 }
-                let hit = l.window_level
-                    || ancestors_and_self(target).any(|n| n.as_ptr() as usize == l.target);
+                let hit =
+                    l.window_level || ancestors_and_self(target).any(|n| n.downgrade() == l.target);
                 if !hit {
                     continue;
                 }

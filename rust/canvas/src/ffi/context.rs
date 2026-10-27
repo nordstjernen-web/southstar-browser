@@ -30,8 +30,7 @@ pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Node {
-    let node = southstar_js_runtime::api::unwrap_element(value);
-    Node::from_addr(node.map_or(0, |node| node.as_ptr() as usize))
+    Node::of(southstar_js_runtime::api::unwrap_element(value))
 }
 
 pub(crate) fn webgl_context(
@@ -42,7 +41,7 @@ pub(crate) fn webgl_context(
     options: &Value,
 ) -> Result<Value, Value> {
     let js = js_of(scope);
-    imports::nsr_webgl_get_context(scope, js.page(), canvas, el.addr(), version, options)
+    imports::nsr_webgl_get_context(scope, js.page(), canvas, el.key(), version, options)
 }
 
 #[cfg(feature = "webgpu")]
@@ -54,7 +53,7 @@ pub(crate) fn webgpu_context(
     Ok(Some(crate::links::webgpu_get_context(
         scope,
         canvas,
-        el.addr(),
+        el.key(),
     )))
 }
 

@@ -55,6 +55,10 @@ pub(crate) fn remove_deferred(js: Js, frame: Frame) {
 }
 
 pub(crate) fn promote_deferred(js: Js) {
+    page::peek_mut(js, |page| {
+        page.deferred_loads
+            .retain(|frame| ffi::frame_node(*frame).is_some());
+    });
     let mut index = 0;
     loop {
         let Some(frame) = page::peek(js, |page| page.deferred_loads.get(index).copied()).flatten()

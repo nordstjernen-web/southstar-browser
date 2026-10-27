@@ -297,7 +297,7 @@ pub fn set_ready_state(js: Option<Page>, ready_state: i32) {
 pub fn doc_ready_state(js: Option<Page>, doc: Node<'_>) -> i32 {
     state(js, -1, |state| {
         let states = state.doc_ready_states.borrow();
-        states.get(&(doc.as_ptr() as usize)).copied().unwrap_or(-1)
+        states.get(&doc.downgrade()).copied().unwrap_or(-1)
     })
 }
 
@@ -306,7 +306,7 @@ pub fn set_doc_ready_state(js: Option<Page>, doc: Node<'_>, ready_state: i32) {
         state
             .doc_ready_states
             .borrow_mut()
-            .insert(doc.as_ptr() as usize, ready_state);
+            .insert(doc.downgrade(), ready_state);
     });
 }
 
