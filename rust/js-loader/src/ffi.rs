@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_long, c_uint, c_void};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -358,7 +357,7 @@ impl Js {
     pub(crate) fn module_perf_info(self, ctx: ContextHandle) -> PerfInfo {
         PerfInfo {
             timeline: ctx.as_ptr().cast_const(),
-            document_url: api::realm_document_url_ptr(self.0, ctx),
+            document_url: api::realm_document_url(self.0, ctx),
             cors_mode: glib::TRUE,
             ..PerfInfo::default()
         }
@@ -482,14 +481,14 @@ pub(crate) fn fill_element_perf_info(js: *mut NsJs, el: Option<Node>, info: &mut
     let frame_url = if frame.is_some() && has_js {
         (api::frames_hooks().frame_url)(js, frame)
     } else {
-        ptr::null()
+        None
     };
-    info.document_url = if !frame_url.is_null() {
+    info.document_url = if frame_url.is_some() {
         frame_url
     } else if has_js {
-        api::page_url_ptr(js)
+        api::page_url(js)
     } else {
-        ptr::null()
+        None
     };
     info.render_blocking = glib::boolean(el.is_some_and(blocking::render_blocking));
     info.cors_mode = glib::boolean(el.is_some_and(|el| el.attr(c"crossorigin").is_some()));

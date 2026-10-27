@@ -11,8 +11,7 @@ use std::rc::Rc;
 
 use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode};
-use southstar_glib::GBoolean;
-use southstar_js_engine::{ContextHandle, RuntimeHandle, Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::scopes::RealmScope;
 use super::{GMainContext, WorkerHost};
@@ -29,17 +28,6 @@ pub type TextQueryFn = dyn Fn(&CStr) -> bool;
 pub type DelayFn = dyn Fn() -> bool;
 pub(crate) type TaskRun = Box<dyn FnOnce(&mut Scope<'_>) -> Result<Value, Value>>;
 pub(crate) type UrlCell = Rc<RefCell<Option<CString>>>;
-
-#[repr(C)]
-pub(crate) struct Slots {
-    pub rt: *mut RuntimeHandle,
-    pub ctx: *mut ContextHandle,
-    pub main_realm_ctx: *mut ContextHandle,
-    pub current_doc: *mut *mut NsNode,
-    pub raf_frame_ctx: *mut *mut NsNode,
-    pub ce_main_doc: *mut *const NsNode,
-    pub halted: *mut GBoolean,
-}
 
 pub(crate) struct Hook<F: ?Sized>(RefCell<Option<Rc<F>>>);
 
@@ -67,7 +55,6 @@ pub(crate) struct MessageTask {
 }
 
 pub(crate) struct PageState {
-    pub slots: Slots,
     pub log: Hook<LogFn>,
     pub mutated_hook: Hook<DataFn>,
     pub navigate: Hook<NavigateFn>,
@@ -123,9 +110,8 @@ pub(crate) struct PageState {
 }
 
 impl PageState {
-    pub fn new(slots: Slots) -> PageState {
+    pub fn new() -> PageState {
         PageState {
-            slots,
             log: Hook::new(),
             mutated_hook: Hook::new(),
             navigate: Hook::new(),

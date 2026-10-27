@@ -174,17 +174,7 @@ pub(crate) fn add_resource_timing(
     span: (i64, i64),
     resp: Option<&Response>,
 ) {
-    // SAFETY: the info's strings and the response are the caller's and outlive the call.
-    unsafe {
-        southstar_js_perf::add_resource_timed(
-            js.ptr(),
-            Some(info),
-            url,
-            Some(initiator),
-            span,
-            resp,
-        )
-    };
+    southstar_js_perf::add_resource_timed(js.ptr(), Some(info), url, Some(initiator), span, resp);
 }
 
 pub(crate) fn header_is_nosniff(value: Option<&CStr>) -> bool {

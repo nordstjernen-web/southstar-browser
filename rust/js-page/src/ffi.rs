@@ -252,17 +252,14 @@ impl Js {
             let mut info = southstar_js_loader::element_perf_info(self.0, Some(doc));
             info.render_blocking = glib::boolean(timing.render_blocking);
             let span = (timing.start_us, timing.end_us);
-            // SAFETY: the element's perf strings and the timing's response stay live for the call.
-            unsafe {
-                southstar_js_perf::add_resource_timed(
-                    self.0,
-                    Some(&info),
-                    &timing.url,
-                    Some(timing.initiator),
-                    span,
-                    Some(&timing.response),
-                )
-            };
+            southstar_js_perf::add_resource_timed(
+                self.0,
+                Some(&info),
+                &timing.url,
+                Some(timing.initiator),
+                span,
+                Some(&timing.response),
+            );
         }
     }
 

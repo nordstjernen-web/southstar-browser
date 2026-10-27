@@ -15,8 +15,8 @@ use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean};
+use southstar_dom::NsNode;
+use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
 use crate::worker;
@@ -133,11 +133,11 @@ pub(crate) struct Js(*mut NsJs);
 
 impl Js {
     fn alloc() -> Js {
-        let js = Js(record::alloc());
-        let slots = unsafe { record::slots_of(js.0) };
-        let state = Box::into_raw(Box::new(PageState::new(slots)));
-        unsafe { record::set_runtime_state(js.0, state.cast()) };
-        js
+        Js(record::alloc())
+    }
+
+    fn rec(self) -> &'static record::Record {
+        record::record(self.0).expect("a Js handle names a live page")
     }
 
     pub(crate) fn of(js: *const NsJs) -> Option<Js> {
@@ -153,19 +153,19 @@ impl Js {
     }
 
     pub(crate) fn st(self) -> &'static PageState {
-        unsafe { &*record::runtime_state(self.0).cast::<PageState>() }
+        self.rec().state()
     }
 
     pub fn ctx(self) -> ContextHandle {
-        unsafe { *self.st().slots.ctx }
+        self.rec().ctx.get()
     }
 
     pub fn set_ctx(self, ctx: ContextHandle) {
-        unsafe { *self.st().slots.ctx = ctx };
+        self.rec().ctx.set(ctx);
     }
 
     pub fn main_realm(self) -> ContextHandle {
-        unsafe { *self.st().slots.main_realm_ctx }
+        self.rec().main_realm_ctx.get()
     }
 
     pub fn main_or_current(self) -> ContextHandle {
@@ -173,19 +173,11 @@ impl Js {
     }
 
     pub fn rt(self) -> RuntimeHandle {
-        unsafe { *self.st().slots.rt }
+        self.rec().rt.get()
     }
 
     pub fn current_url(self) -> Option<CString> {
         self.st().current_url.borrow().clone()
-    }
-
-    pub fn current_url_ptr(self) -> *const c_char {
-        self.st()
-            .current_url
-            .borrow()
-            .as_deref()
-            .map_or(ptr::null(), CStr::as_ptr)
     }
 
     pub fn replace_current_url(self, url: Option<CString>) -> Option<CString> {
@@ -193,23 +185,27 @@ impl Js {
     }
 
     pub fn current_doc(self) -> *mut NsNode {
-        unsafe { *self.st().slots.current_doc }
+        self.rec().current_doc.get()
     }
 
     pub fn set_current_doc(self, doc: *mut NsNode) {
-        unsafe { *self.st().slots.current_doc = doc };
+        self.rec().current_doc.set(doc);
     }
 
     pub fn frame(self) -> *mut NsNode {
-        unsafe { *self.st().slots.raf_frame_ctx }
+        self.rec().raf_frame_ctx.get()
     }
 
     pub fn set_frame(self, frame: *mut NsNode) {
-        unsafe { *self.st().slots.raf_frame_ctx = frame };
+        self.rec().raf_frame_ctx.set(frame);
+    }
+
+    pub fn ce_main_doc(self) -> *const NsNode {
+        self.rec().ce_main_doc.get()
     }
 
     pub fn set_ce_main_doc(self, doc: *const NsNode) {
-        unsafe { *self.st().slots.ce_main_doc = doc };
+        self.rec().ce_main_doc.set(doc);
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -222,7 +218,7 @@ impl Js {
     }
 
     pub fn set_time_origin(self, origin_us: i64, origin_real_ms: f64) {
-        unsafe { record::set_time_origin(self.0, origin_us, origin_real_ms) };
+        record::set_time_origin(self.rec(), origin_us, origin_real_ms);
     }
 
     pub fn perf_init(self) {
@@ -254,11 +250,11 @@ impl Js {
             module_load: Some(imports::nsr_js_module_load),
             ..RuntimeOptions::default()
         };
-        unsafe { record::create_runtime(self.0, &options) }
+        record::create_runtime(self.rec(), &options)
     }
 
     pub fn create_context(self) -> bool {
-        unsafe { record::create_context(self.0) }
+        record::create_context(self.0, self.rec())
     }
 
     pub fn set_callbacks(self, callbacks: Callbacks) {
@@ -270,7 +266,7 @@ impl Js {
 
     pub fn init_tables(self, main_context: *mut GMainContext, page: bool) {
         self.st().main_context.set(main_context);
-        unsafe { record::init_tables(self.0, page) };
+        record::init_tables(self.rec(), page);
     }
 
     pub fn init_page_states(self) {
@@ -280,12 +276,9 @@ impl Js {
     }
 
     pub fn adopt_worker_host(self, setup: &WorkerSetup<'_>) {
-        let partition = setup
-            .origin
-            .filter(|origin| !origin.is_empty())
-            .map_or(ptr::null(), CStr::as_ptr);
+        let partition = setup.origin.filter(|origin| !origin.is_empty());
         self.st().worker_host.set(setup.host);
-        unsafe { record::set_partition_key(self.0, partition) };
+        record::set_partition_key(self.rec(), partition);
         let host = setup.host.cast::<c_void>();
         self.set_callbacks(Callbacks {
             log: Some(Rc::new(move |line: &CStr| {
@@ -298,11 +291,11 @@ impl Js {
     }
 
     pub fn halted(self) -> bool {
-        unsafe { *self.st().slots.halted != 0 }
+        self.rec().halted.get()
     }
 
     pub fn halt(self) {
-        unsafe { *self.st().slots.halted = glib::TRUE };
+        self.rec().halted.set(true);
     }
 
     pub fn worker_closing(self) -> bool {
@@ -312,15 +305,15 @@ impl Js {
     }
 
     pub fn set_proto_document(self, proto: Value) {
-        unsafe { record::set_proto_document(self.0, proto) };
+        record::set_proto_document(self.rec(), proto);
     }
 
     pub fn set_navigator_brand(self, brand: Value) {
-        unsafe { record::set_navigator_brand(self.0, brand) };
+        record::set_navigator_brand(self.rec(), brand);
     }
 
     pub fn set_pristine_promise(self, promise: Value) {
-        unsafe { record::set_pristine_promise(self.0, promise) };
+        record::set_pristine_promise(self.rec(), promise);
     }
 
     pub fn make_performance_object(self, scope: &mut Scope<'_>, include_memory: bool) -> Value {
@@ -355,12 +348,12 @@ impl Js {
     pub fn take_pinned_wrappers(self) -> Vec<Element> {
         record::take_pinned_wrappers(self.0)
             .into_iter()
-            .filter_map(|key| unsafe { Node::from_ptr(key as *const NsNode) })
+            .filter_map(|key| record::node(key as *const NsNode))
             .collect()
     }
 
     pub fn detach_wrapper(self, node: Element, release: bool) {
-        unsafe { record::detach_wrapper(self.0, node.as_mut_ptr(), release) };
+        record::detach_wrapper(self.rec(), node, release);
     }
 
     pub fn current_document(self) -> Option<*const NsNode> {
@@ -398,7 +391,7 @@ impl Js {
     }
 
     pub fn free_page_strings(self) {
-        unsafe { record::free_page_strings(self.0) };
+        record::free_page_strings(self.rec());
         self.replace_current_url(None);
     }
 
@@ -432,7 +425,7 @@ impl Js {
     }
 
     pub fn free_pinned_set(self) {
-        unsafe { record::free_pinned_set(self.0) };
+        record::free_pinned_set(self.rec());
     }
 
     pub fn teardown_input_states(self) {
@@ -442,20 +435,19 @@ impl Js {
     }
 
     pub fn free_realm_values(self) {
-        unsafe { record::free_realm_values(self.0) };
+        record::free_realm_values(self.rec());
     }
 
     pub fn teardown_registries(self) {
         (api::observers_hooks().teardown)(self.0);
         (api::custom_elements_hooks().teardown)(self.0);
-        // SAFETY: the page is live until free_engine, which runs after this teardown phase.
-        unsafe { record::free_platform_globals(self.0) };
+        record::free_platform_globals(self.rec());
         (api::storage_hooks().teardown)(self.0);
         (api::media_hooks().teardown)(self.0);
     }
 
     pub fn free_partition(self) {
-        unsafe { record::free_partition(self.0) };
+        record::free_partition(self.rec());
     }
 
     pub fn teardown_style_states(self) {
@@ -473,7 +465,7 @@ impl Js {
     }
 
     pub fn free_window_values(self) {
-        unsafe { record::free_window_values(self.0) };
+        record::free_window_values(self.rec());
     }
 
     pub fn teardown_dispatch(self) {
@@ -482,11 +474,8 @@ impl Js {
     }
 
     pub fn free_engine(self) {
-        let state = unsafe { record::runtime_state(self.0) }.cast::<PageState>();
+        // SAFETY: teardown frees the engine last, and the page is not used afterwards.
         unsafe { record::free_engine(self.0) };
-        if !state.is_null() {
-            drop(unsafe { Box::from_raw(state) });
-        }
     }
 }
 
@@ -607,7 +596,7 @@ pub(crate) fn worker_compile(
     url: &CStr,
     module: bool,
 ) -> (Result<Value, Value>, bool) {
-    unsafe { record::worker_compile(scope, source, len, url, module) }
+    record::worker_compile(scope, source, len, url, module)
 }
 
 pub(crate) fn coarsen_navigation_timing(timing: &mut NavigationTiming) {

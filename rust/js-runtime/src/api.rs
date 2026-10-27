@@ -215,8 +215,8 @@ pub fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
     record::array_length(scope, arr)
 }
 
-pub unsafe fn kind_proto(js: *const NsJs, node: *const NsNode) -> Option<Value> {
-    unsafe { record::kind_proto_value(js, node) }
+pub fn kind_proto(js: *const NsJs, node: *const NsNode) -> Option<Value> {
+    record::kind_proto_value(js, node)
 }
 
 pub fn bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value) {
@@ -238,7 +238,7 @@ pub fn frame_realm_finish(
     parent_global: &Value,
 ) {
     if !js.is_null() {
-        unsafe { record::frame_realm_finish(js.cast_mut(), frame, frame_global, parent_global) };
+        record::frame_realm_finish(js.cast_mut(), frame, frame_global, parent_global);
     }
 }
 
