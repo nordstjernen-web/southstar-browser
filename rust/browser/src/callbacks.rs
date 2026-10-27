@@ -4,7 +4,7 @@
 
 use core::ffi::{CStr, c_void};
 
-use southstar_glib::GStr;
+use std::ffi::CString;
 
 use crate::ffi::{self, NsBrowser};
 use crate::open::UNSAFE_CONTINUE_SCHEME;
@@ -55,7 +55,7 @@ pub fn allows_navigation_url(b: &NsBrowser, url: Option<&CStr>) -> bool {
     true
 }
 
-pub fn resolve_navigation(b: &NsBrowser, href: &CStr) -> Option<GStr> {
+pub fn resolve_navigation(b: &NsBrowser, href: &CStr) -> Option<CString> {
     let abs = ffi::url_resolve(b.base_url.get().as_deref(), href);
     if !allows_navigation_url(b, abs.as_deref()) {
         return None;
@@ -84,7 +84,7 @@ pub fn js_download(b: &NsBrowser, url: &CStr, filename: Option<&CStr>) {
     let mut entry = target.to_bytes().to_vec();
     entry.push(b'\t');
     entry.extend_from_slice(filename.map_or(&b""[..], CStr::to_bytes));
-    b.pending_download.adopt(ffi::gstr_from(&entry));
+    b.pending_download.adopt(ffi::owned_text(&entry));
 }
 
 pub fn window_action(b: &NsBrowser, action: &CStr) {

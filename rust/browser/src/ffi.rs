@@ -21,7 +21,6 @@ use std::rc::Rc;
 use southstar_css::StyleMap;
 use southstar_dom::{Node, Tree, WeakNode};
 use southstar_engine::CssCache;
-use southstar_glib::GStr;
 use southstar_layout::{BoxRef, NsBox};
 use southstar_selection::{NsSelection, Selection};
 
@@ -72,7 +71,7 @@ impl Text {
         drop(self.0.replace(value));
     }
 
-    pub fn adopt(&self, value: Option<GStr>) {
+    pub fn adopt(&self, value: Option<CString>) {
         self.set(value.as_deref());
     }
 
@@ -449,23 +448,19 @@ fn malloc_or_null(s: Option<Rc<CStr>>) -> *mut c_char {
     s.map_or(ptr::null_mut(), |s| malloc_dup(s.to_bytes()))
 }
 
-fn take_or_null(s: Option<GStr>) -> *mut c_char {
-    s.map_or(ptr::null_mut(), |s| {
-        let raw = s.as_ptr().cast_mut();
-        core::mem::forget(s);
-        raw
-    })
+fn take_or_null(s: Option<CString>) -> *mut c_char {
+    s.map_or(ptr::null_mut(), |s| southstar_glib::strdup(s.as_bytes()))
 }
 
 pub struct Created<'a> {
     pub doc: ParsedDoc,
-    pub base: Option<GStr>,
+    pub base: Option<CString>,
     pub view: &'a open::Viewport,
     pub bfcache_ok: bool,
-    pub refresh_header: Option<GStr>,
-    pub doc_language: Option<GStr>,
-    pub csp_header: Option<GStr>,
-    pub doc_charset: Option<GStr>,
+    pub refresh_header: Option<CString>,
+    pub doc_language: Option<CString>,
+    pub csp_header: Option<CString>,
+    pub doc_charset: Option<CString>,
     pub url: Option<&'a CStr>,
     pub timing: Option<&'a NavigationTiming>,
 }
@@ -1074,7 +1069,7 @@ pub extern "C" fn ns_browser_snap_document(
 }
 
 fn gstrdup(bytes: &[u8]) -> *mut c_char {
-    take_or_null(gstr_from(bytes))
+    take_or_null(owned_text(bytes))
 }
 
 #[unsafe(no_mangle)]

@@ -7,8 +7,6 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use std::ffi::CString;
 use std::sync::Mutex;
 
-use southstar_glib::GStr;
-
 use crate::api::Page;
 use crate::ffi::{self, Post, Response};
 
@@ -138,7 +136,7 @@ fn headers_have_no_store(raw: Option<&CStr>) -> bool {
     })
 }
 
-fn resolve_local_path(url: &CStr) -> Option<GStr> {
+fn resolve_local_path(url: &CStr) -> Option<CString> {
     let u = url.to_bytes();
     if contains(url, b"://")
         || u.starts_with(b"about:")
@@ -304,7 +302,7 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
     prepare_document_response(&mut resp);
     let content_type = resp.content_type().map(CStr::to_bytes);
     let (decoded, doc_charset) = southstar_html_util::decode_body(resp.body(), content_type);
-    let doc_charset = doc_charset.and_then(|c| ffi::gstr_from(&c));
+    let doc_charset = doc_charset.and_then(|c| ffi::owned_text(&c));
     let scripting = southstar_config::get().is_none_or(|c| c.javascript_enabled != 0);
     let doc = ffi::html_parse_bytes(&decoded, scripting);
     drop(decoded);

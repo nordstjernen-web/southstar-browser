@@ -133,7 +133,7 @@ fn dump_frame(surface: &Surface) {
     if frame.is_multiple_of(FRAME_DUMP_EVERY) {
         let mut path = dir;
         path.extend_from_slice(format!("/frame-{frame:05}.png").as_bytes());
-        if let Some(path) = ffi::gstr_from(&path) {
+        if let Some(path) = ffi::owned_text(&path) {
             surface.write_png(&path);
         }
     }

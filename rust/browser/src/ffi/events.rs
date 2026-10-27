@@ -6,8 +6,8 @@ use core::ffi::{CStr, c_int, c_long, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
-use southstar_glib::GStr;
 use southstar_layout::BoxRef;
+use std::ffi::CString;
 
 use super::{Js, NsBrowser};
 
@@ -240,7 +240,7 @@ impl Js {
         southstar_js_dispatch::node_has_click_handler(self.page(), node)
     }
 
-    pub fn eval_console(self, src: &CStr) -> Option<GStr> {
+    pub fn eval_console(self, src: &CStr) -> Option<CString> {
         self.eval(src, c"devtools-console")
     }
 }
@@ -315,8 +315,8 @@ pub fn set_editable_value(n: Node<'_>, value: &CStr) {
     southstar_dom::controls::set_editable_value(n, value);
 }
 
-pub fn option_label(option: Node<'_>) -> Option<GStr> {
-    super::gstr_from(&southstar_dom::select::option_label(option))
+pub fn option_label(option: Node<'_>) -> Option<CString> {
+    super::owned_text(&southstar_dom::select::option_label(option))
 }
 
 pub fn effectively_inert(el: Node<'_>) -> bool {

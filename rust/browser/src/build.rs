@@ -5,7 +5,7 @@
 use core::ffi::{CStr, c_int};
 
 use southstar_dom::{Kind, Node, children};
-use southstar_glib::GStr;
+use std::ffi::CString;
 
 use crate::callbacks;
 use crate::ffi::{self, NavigationTiming, NsBrowser, StrBufOwned};
@@ -19,8 +19,8 @@ pub struct Setup<'a> {
     pub viewport_height: f64,
     pub settle_ms: c_int,
     pub bfcache_ok: bool,
-    pub refresh_header: Option<GStr>,
-    pub csp_header: Option<GStr>,
+    pub refresh_header: Option<CString>,
+    pub csp_header: Option<CString>,
     pub url: Option<&'a CStr>,
     pub navigation_timing: Option<NavigationTiming>,
 }
@@ -213,7 +213,7 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
         full.push(if action.contains(&b'?') { b'&' } else { b'?' });
         full.extend_from_slice(&body);
     }
-    b.pending_nav.adopt(ffi::gstr_from(&full));
+    b.pending_nav.adopt(ffi::owned_text(&full));
 }
 
 pub fn js_form_submit(b: &NsBrowser, form: Node<'_>, submitter: Option<Node<'_>>) {

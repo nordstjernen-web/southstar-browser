@@ -9,9 +9,9 @@ use std::rc::Rc;
 use southstar_css::StyleMap;
 
 use southstar_dom::Node;
-use southstar_glib::GStr;
 use southstar_js_runtime::api::{self, NsJs};
 use southstar_layout::BoxRef;
+use std::ffi::CString;
 
 use super::engine::{Anim, Images};
 use super::glib::StrBufOwned;
@@ -125,9 +125,9 @@ impl Js {
         out.append(southstar_js_page::dump_stats(self.page()).as_bytes());
     }
 
-    pub fn eval(self, src: &CStr, origin: &CStr) -> Option<GStr> {
+    pub fn eval(self, src: &CStr, origin: &CStr) -> Option<CString> {
         southstar_js_loader::eval_source(self.page(), src, Some(origin))
-            .and_then(|out| super::glib::gstr_from(&out))
+            .and_then(|out| super::glib::owned_text(&out))
     }
 
     pub fn fire_page_transition(self, kind: &CStr, persisted: bool) {
