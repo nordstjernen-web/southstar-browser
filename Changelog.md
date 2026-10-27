@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: `bind`, `listen`, `accept` and `accept4` are no longer on the
+  renderer and media helper seccomp allow-list. Those processes only
+  connect out, so a compromised one can no longer open a loopback service
+  for other processes or other tabs to reach.
 * Security: on Linux the renderer's Landlock ruleset no longer grants
   write access to the whole of `~/.config/southstar`, only to its
   `cookies/` directory; `southstar.conf`, `bookmarks.txt` and

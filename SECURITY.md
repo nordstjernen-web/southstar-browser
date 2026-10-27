@@ -130,13 +130,16 @@ socket, so it normally needs no `/dev/shm` name at all.
 - **seccomp-bpf (syscalls).** Default-deny allow-list: the filter is
   built with `SCMP_ACT_ERRNO(EPERM)` as the default action and then
   permits only the ~266 syscalls the browser actually needs
-  (`ns_seccomp_allowed_names[]` in `src/security.c`); every other
+  (`SECCOMP_ALLOWED` in `rust/sandbox/src/lib.rs`); every other
   syscall returns `EPERM`. `execve` / `execveat` are not on the list, so
   a compromised renderer cannot pivot to another interpreter or binary
   even if Landlock would have allowed reading it. `ptrace`, `bpf`,
   `keyctl`, `mount`, `unshare`, `userfaultfd`, the `io_uring_*` family,
   `perf_event_open`, `kexec_load`, and the module syscalls are likewise
-  absent from the allow-list. TSYNC propagates the filter to every
+  absent from the allow-list, and so are `bind`, `listen`, `accept` and
+  `accept4`: the renderer and the media helpers only ever connect out,
+  so a compromised one cannot open a loopback service for other
+  processes or other tabs to reach. TSYNC propagates the filter to every
   thread. The renderer also gets an argument filter: `mmap` and
   `mprotect` (and `pkey_mprotect`) fail when asked for memory that is
   writable and executable at once, so W^X is enforced by the kernel

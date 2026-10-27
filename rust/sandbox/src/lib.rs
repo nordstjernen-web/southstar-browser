@@ -182,11 +182,8 @@ pub const DEV_ROOT_MARKERS: [&str; 3] = [
 ];
 
 pub const SECCOMP_ALLOWED: &[&str] = &[
-    "accept",
-    "accept4",
     "access",
     "arch_prctl",
-    "bind",
     "brk",
     "capget",
     "chdir",
@@ -285,7 +282,6 @@ pub const SECCOMP_ALLOWED: &[&str] = &[
     "lgetxattr",
     "link",
     "linkat",
-    "listen",
     "listxattr",
     "_llseek",
     "llistxattr",
