@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: the renderer protocol's JSON reader refuses a string with a
+  `\u0000` escape and replaces a lone surrogate escape with U+FFFD, so a
+  renderer cannot plant a NUL byte in a string the shell later hands to C
+  as a NUL-terminated string.
 * Security: downloads started by a page are capped at 1 GiB, are fetched
   with the page as the cookie partition instead of as a first-party
   request, and get a file name made safe for one path component (no

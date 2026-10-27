@@ -562,6 +562,12 @@ pub fn json_string(v: &[u8]) -> Option<Vec<u8>> {
                         cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
                         i += 6;
                     }
+                    if cp == 0 {
+                        return None;
+                    }
+                    if (0xD800..=0xDFFF).contains(&cp) {
+                        cp = 0xFFFD;
+                    }
                     utf8_encode(cp, &mut out);
                 }
             }
