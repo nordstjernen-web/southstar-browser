@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: on Linux the renderer's Landlock ruleset no longer grants
+  write access to the whole of `~/.config/southstar`, only to its
+  `cookies/` directory; `southstar.conf`, `bookmarks.txt` and
+  `safebrowsing.list` are read-only for it. A compromised renderer could
+  rewrite the configuration that every later renderer reads before
+  confining itself — enabling WebGL to get the GPU device nodes, or
+  setting a proxy, home page or user agent for the whole browser.
 * Security: on Windows a renderer process now inherits only its own
   pipe ends, its own framebuffer mapping and the shell's stderr, through a
   `PROC_THREAD_ATTRIBUTE_HANDLE_LIST`, instead of every inheritable handle

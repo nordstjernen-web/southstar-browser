@@ -463,7 +463,15 @@ mod linux {
                 rules.allow(fs_rw, &runtime);
             }
         }
-        for base in [&config, &data, &cache].into_iter().flatten() {
+        if let Some(config) = &config {
+            if renderer {
+                rules.allow(fs_read, &own_dir(config, &[b"southstar"]));
+                rules.allow(fs_rw, &own_dir(config, &[b"southstar", b"cookies"]));
+            } else {
+                rules.allow(fs_rw, &own_dir(config, &[b"southstar"]));
+            }
+        }
+        for base in [&data, &cache].into_iter().flatten() {
             rules.allow(fs_rw, &own_dir(base, &[b"southstar"]));
         }
         if let Some(cache) = &cache {
