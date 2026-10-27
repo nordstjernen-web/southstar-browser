@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+pub(crate) mod ffi;
 pub mod markup;
 pub mod microdata;
 pub mod positional;
@@ -11,6 +11,8 @@ pub mod text;
 
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, MAX_DEPTH, Node};
 use southstar_js_engine::Value;
+
+pub use ffi::nsr_xml_serializer_ctor;
 
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;

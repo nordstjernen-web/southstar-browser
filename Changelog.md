@@ -48,6 +48,11 @@ Southstar Browser 1.0.2:
   function, and the crate above fills it from `install_runtime_hooks`
   before the first page, as the runtime hooks already did. Signature
   mismatches are now compile errors instead of undefined behaviour.
+* The binding crates' `natives!`/`getters!`/`setters!` macros no longer
+  export what they generate as linker symbols, and the importing macros in
+  js-document, js-frames and js-runtime are gone: their 170 functions are
+  reached through Rust paths or link tables, and 163 generated wrappers
+  nothing used any more are deleted.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,

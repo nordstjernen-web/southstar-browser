@@ -23,6 +23,11 @@ pub use ffi::nsr_document_lift_methods_to_proto;
 pub use ffi::nsr_make_realm_document;
 pub use ffi::nsr_make_synth_xml_document;
 
+pub use ffi::nsr_document_close;
+pub use ffi::nsr_document_open;
+pub use ffi::nsr_document_write;
+pub use ffi::nsr_document_writeln;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

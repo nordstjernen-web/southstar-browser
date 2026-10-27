@@ -154,7 +154,6 @@ pub(crate) fn attr_owner_node(value: &Value) -> *mut NsNode {
 macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
                 $f(scope, this, args)
@@ -166,7 +165,6 @@ macro_rules! rust_methods {
 macro_rules! rust_getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
                 $f(scope, this, &[])
@@ -178,7 +176,6 @@ macro_rules! rust_getters {
 macro_rules! rust_setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> Result<(), Value> {
                 $f(scope, this, core::slice::from_ref(value)).map(drop)
@@ -276,5 +273,8 @@ pub fn install_runtime_hooks() {
     });
     southstar_js_runtime::links::set_js_attrs_links(southstar_js_runtime::links::JsAttrsLinks {
         attr_to_js: crate::ffi::nsr_attr_to_js,
+    });
+    southstar_js_forms::links::set_js_attrs_links(southstar_js_forms::links::JsAttrsLinks {
+        namedmap_item: crate::ffi::nsr_namedmap_item,
     });
 }

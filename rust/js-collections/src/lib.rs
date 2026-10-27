@@ -28,6 +28,12 @@ pub use ffi::nsr_nodelist_from_array;
 pub use ffi::nsr_qcache_get;
 pub use ffi::nsr_qcache_put;
 
+pub use ffi::nsr_element_getElementsByClassName;
+pub use ffi::nsr_element_getElementsByTagName;
+pub use ffi::nsr_element_querySelector;
+pub use ffi::nsr_element_querySelectorAll;
+pub use ffi::nsr_live_length_get;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

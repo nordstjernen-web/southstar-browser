@@ -35,6 +35,10 @@ pub use ffi::exports::nsr_target_dispatch_with_event;
 pub use ffi::exports::nsr_target_fire_event;
 pub use ffi::exports::nsr_target_handler_realm;
 
+pub use ffi::exports::nsr_target_addEventListener;
+pub use ffi::exports::nsr_target_dispatchEvent;
+pub use ffi::exports::nsr_target_removeEventListener;
+
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

@@ -342,7 +342,6 @@ pub(crate) fn is_button(el: Element) -> bool {
 macro_rules! methods {
     ($($name:ident => $f:path),* $(,)?) => {$(
         #[allow(non_snake_case)]
-        #[unsafe(no_mangle)]
         pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             $f(scope, this, args)
         }
@@ -352,7 +351,6 @@ macro_rules! methods {
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {$(
         #[allow(non_snake_case)]
-        #[unsafe(no_mangle)]
         pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
             $f(scope, this, &[])
         }
@@ -360,22 +358,10 @@ macro_rules! getters {
 }
 
 methods! {
-    nsr_element_focus => crate::focus::focus_method,
-    nsr_element_blur => crate::focus::blur_method,
     nsr_document_has_focus => crate::focus::has_focus,
-    nsr_element_click => crate::click::click_method,
-    nsr_element_request_fullscreen => crate::fullscreen::request_fullscreen,
-    nsr_document_exit_fullscreen => crate::fullscreen::exit_fullscreen,
-    nsr_element_requestPointerLock => crate::fullscreen::request_pointer_lock,
-    nsr_document_exitPointerLock => crate::fullscreen::exit_pointer_lock,
 }
 
-getters! {
-    nsr_document_get_fullscreen_element => crate::fullscreen::get_fullscreen_element,
-    nsr_document_get_fullscreen_enabled => crate::fullscreen::get_fullscreen_enabled,
-    nsr_document_get_is_fullscreen => crate::fullscreen::get_is_fullscreen,
-    nsr_document_get_pointerLockElement => crate::fullscreen::get_pointer_lock_element,
-}
+getters! {}
 
 fn element(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()

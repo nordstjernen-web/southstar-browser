@@ -8,6 +8,7 @@ use southstar_js_engine::{Scope, Value};
 
 pub struct JsEventsLinks {
     pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
+    pub event_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_EVENTS_LINKS: OnceLock<JsEventsLinks> = OnceLock::new();
@@ -53,4 +54,36 @@ pub(crate) fn nsr_element_get_shadowRoot(
     this: &Value,
 ) -> Result<Value, Value> {
     (js_shadow_links().element_get_shadow_root)(scope, this)
+}
+
+pub struct JsAttrsLinks {
+    pub namedmap_item: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+}
+
+static JS_ATTRS_LINKS: OnceLock<JsAttrsLinks> = OnceLock::new();
+
+pub fn set_js_attrs_links(links: JsAttrsLinks) {
+    let _ = JS_ATTRS_LINKS.set(links);
+}
+
+fn js_attrs_links() -> &'static JsAttrsLinks {
+    JS_ATTRS_LINKS
+        .get()
+        .expect("southstar-js-attrs installs its links before the first page")
+}
+
+pub(crate) fn nsr_namedmap_item(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_attrs_links().namedmap_item)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_ctor(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_ctor)(scope, this, args)
 }

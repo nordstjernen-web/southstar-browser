@@ -33,6 +33,7 @@ southstar-js-fonts = { path = "../js-fonts" }
 southstar-js-forms = { path = "../js-forms" }
 southstar-js-frames = { path = "../js-frames" }
 southstar-js-geometry = { path = "../js-geometry" }
+southstar-js-html = { path = "../js-html" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-input = { path = "../js-input" }
 southstar-js-interfaces = { path = "../js-interfaces" }

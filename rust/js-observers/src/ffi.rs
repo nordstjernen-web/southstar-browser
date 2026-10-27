@@ -236,7 +236,6 @@ pub fn reset_observers(js: *const NsJs) {
 macro_rules! nsr_natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             pub fn $name(
                 scope: &mut Scope<'_>,
                 this: &Value,
@@ -287,4 +286,21 @@ pub fn install_runtime_hooks() {
         scrub_node,
         teardown,
     });
+    southstar_js_runtime::links::set_js_observers_links(
+        southstar_js_runtime::links::JsObserversLinks {
+            resize_observer_disconnect: crate::ffi::nsr_resize_observer_disconnect,
+            resize_observer_unobserve: crate::ffi::nsr_resize_observer_unobserve,
+            resize_observer_observe: crate::ffi::nsr_resize_observer_observe,
+            resize_observer_ctor: crate::ffi::nsr_resize_observer_ctor,
+            intersection_observer_take_records: crate::ffi::nsr_intersection_observer_take_records,
+            intersection_observer_disconnect: crate::ffi::nsr_intersection_observer_disconnect,
+            intersection_observer_unobserve: crate::ffi::nsr_intersection_observer_unobserve,
+            intersection_observer_observe: crate::ffi::nsr_intersection_observer_observe,
+            intersection_observer_ctor: crate::ffi::nsr_intersection_observer_ctor,
+            mutation_observer_take_records: crate::ffi::nsr_mutation_observer_take_records,
+            mutation_observer_disconnect: crate::ffi::nsr_mutation_observer_disconnect,
+            mutation_observer_observe: crate::ffi::nsr_mutation_observer_observe,
+            mutation_observer_ctor: crate::ffi::nsr_mutation_observer_ctor,
+        },
+    );
 }

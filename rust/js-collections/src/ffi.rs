@@ -171,7 +171,6 @@ pub(crate) fn live_item(
 macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
                 $f(scope, this, args)

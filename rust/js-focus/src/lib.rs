@@ -4,7 +4,7 @@
 
 mod activation;
 pub mod click;
-mod ffi;
+pub(crate) mod ffi;
 pub mod focus;
 pub mod fullscreen;
 
@@ -23,6 +23,8 @@ pub use crate::ffi::{
     note_pointer_input, reset_focus, sequential_focus_target, set_focus, set_focused_node,
     synthetic_activation, tabindex, window_action_applied,
 };
+
+pub use ffi::nsr_document_has_focus;
 
 pub(crate) type Element = Node<'static>;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;

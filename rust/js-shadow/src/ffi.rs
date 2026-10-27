@@ -16,18 +16,8 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
 
-unsafe extern "Rust" {
-    safe fn nsr_document_element_from_point(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-    safe fn nsr_document_elements_from_point(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_geometry::nsr_document_element_from_point;
+use southstar_js_geometry::nsr_document_elements_from_point;
 
 fn node_of(raw: *const NsNode) -> Option<Element> {
     unsafe { Node::from_ptr(raw) }

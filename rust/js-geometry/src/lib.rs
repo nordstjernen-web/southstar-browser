@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod boxes;
-mod ffi;
+pub(crate) mod ffi;
 pub mod hit;
 pub mod links;
 mod lookup;
@@ -23,6 +23,9 @@ use southstar_js_engine::Value;
 
 pub use ffi::nsr_box_for_this;
 pub use ffi::nsr_make_dom_rect;
+
+pub use ffi::nsr_document_element_from_point;
+pub use ffi::nsr_document_elements_from_point;
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;

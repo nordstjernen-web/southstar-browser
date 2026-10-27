@@ -21,6 +21,12 @@ pub use ffi::nsr_event_new;
 pub use ffi::nsr_install_event_attribute_getters;
 pub use ffi::nsr_make_event;
 
+pub use ffi::nsr_event_composed_path;
+pub use ffi::nsr_event_prevent_default;
+pub use ffi::nsr_event_stop_immediate;
+pub use ffi::nsr_event_stop_propagation;
+pub use ffi::nsr_window_event_ctor;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 
@@ -108,6 +114,9 @@ pub fn install_runtime_hooks() {
     });
     southstar_js_dispatch::links::set_js_events_links(
         southstar_js_dispatch::links::JsEventsLinks {
+            event_stop_immediate: crate::ffi::nsr_event_stop_immediate,
+            event_stop_propagation: crate::ffi::nsr_event_stop_propagation,
+            event_prevent_default: crate::ffi::nsr_event_prevent_default,
             dom_exception: crate::ffi::nsr_dom_exception,
             event_define_source: crate::ffi::nsr_event_define_source,
             event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
@@ -117,9 +126,14 @@ pub fn install_runtime_hooks() {
         },
     );
     southstar_js_forms::links::set_js_events_links(southstar_js_forms::links::JsEventsLinks {
+        event_ctor: crate::ffi::nsr_event_ctor,
         dom_exception: crate::ffi::nsr_dom_exception,
     });
     southstar_js_net::links::set_js_events_links(southstar_js_net::links::JsEventsLinks {
+        event_composed_path: crate::ffi::nsr_event_composed_path,
+        event_stop_immediate: crate::ffi::nsr_event_stop_immediate,
+        event_stop_propagation: crate::ffi::nsr_event_stop_propagation,
+        event_prevent_default: crate::ffi::nsr_event_prevent_default,
         event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
         event_define_cancel_bubble: crate::ffi::nsr_event_define_cancel_bubble,
         event_new: crate::ffi::nsr_event_new,
@@ -127,6 +141,7 @@ pub fn install_runtime_hooks() {
         dom_exception: crate::ffi::nsr_dom_exception,
     });
     southstar_js_runtime::links::set_js_events_links(southstar_js_runtime::links::JsEventsLinks {
+        window_event_ctor: crate::ffi::nsr_window_event_ctor,
         make_abort_error: crate::ffi::nsr_make_abort_error,
         dom_exception: crate::ffi::nsr_dom_exception,
         install_event_attribute_getters: crate::ffi::nsr_install_event_attribute_getters,

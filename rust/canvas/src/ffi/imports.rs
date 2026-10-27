@@ -1,9 +1,10 @@
-//! Southstar — the Rust-ABI entry points of the crates the canvas calls back into, resolved at link time because those crates sit above this one.
+//! Southstar — the entry points of the crates above the canvas that it calls back into.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_webgl_get_context;
+#[cfg(feature = "webgpu")]
 use southstar_js_engine::{Scope, Value};
 
 #[cfg(feature = "webgpu")]

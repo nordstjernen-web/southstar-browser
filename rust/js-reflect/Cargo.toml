@@ -18,6 +18,7 @@ southstar-js-geometry = { path = "../js-geometry" }
 southstar-js-images = { path = "../js-images" }
 southstar-js-mutation = { path = "../js-mutation" }
 southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-js-services = { path = "../js-services" }
 southstar-js-top-layer = { path = "../js-top-layer" }
 southstar-url = { path = "../url" }
 

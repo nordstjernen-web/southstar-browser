@@ -15,7 +15,6 @@ macro_rules! natives {
     ($($name:ident => $f:path;)*) => {
         $(
             #[allow(non_snake_case)]
-            #[unsafe(no_mangle)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
             }
@@ -26,14 +25,11 @@ macro_rules! natives {
 natives! {
     nsr_element_addEventListener => crate::listeners::element_add;
     nsr_element_removeEventListener => crate::listeners::element_remove;
-    nsr_document_addEventListener => crate::listeners::document_add;
-    nsr_document_removeEventListener => crate::listeners::document_remove;
     nsr_window_addEventListener => crate::listeners::window_add;
     nsr_window_removeEventListener => crate::listeners::window_remove;
     nsr_target_addEventListener => crate::target::add;
     nsr_target_removeEventListener => crate::target::remove;
     nsr_element_dispatchEvent => crate::target::element_dispatch;
-    nsr_document_dispatchEvent => crate::target::document_dispatch;
     nsr_window_dispatchEvent => crate::target::window_dispatch;
     nsr_target_dispatchEvent => crate::target::dispatch;
     nsr_window_report_error => crate::errors::report_error;
@@ -280,11 +276,19 @@ pub fn install_runtime_hooks() {
         teardown,
     });
     southstar_js_net::links::set_js_dispatch_links(southstar_js_net::links::JsDispatchLinks {
+        target_dispatch_event: crate::ffi::exports::nsr_target_dispatchEvent,
         xhr_fire_progress_event: crate::ffi::exports::nsr_xhr_fire_progress_event,
         target_fire_event: crate::ffi::exports::nsr_target_fire_event,
     });
     southstar_js_runtime::links::set_js_dispatch_links(
         southstar_js_runtime::links::JsDispatchLinks {
+            window_report_error: crate::ffi::exports::nsr_window_report_error,
+            target_dispatch_event: crate::ffi::exports::nsr_target_dispatchEvent,
+            window_dispatch_event: crate::ffi::exports::nsr_window_dispatchEvent,
+            window_remove_event_listener: crate::ffi::exports::nsr_window_removeEventListener,
+            window_add_event_listener: crate::ffi::exports::nsr_window_addEventListener,
+            target_remove_event_listener: crate::ffi::exports::nsr_target_removeEventListener,
+            target_add_event_listener: crate::ffi::exports::nsr_target_addEventListener,
             js_install_event_target: crate::ffi::exports::nsr_js_install_event_target,
             target_handler_realm: crate::ffi::exports::nsr_target_handler_realm,
             js_promise_rejection_tracker: crate::ffi::exports::nsr_js_promise_rejection_tracker,
@@ -294,6 +298,7 @@ pub fn install_runtime_hooks() {
     );
     southstar_js_services::links::set_js_dispatch_links(
         southstar_js_services::links::JsDispatchLinks {
+            target_dispatch_event: crate::ffi::exports::nsr_target_dispatchEvent,
             target_dispatch_with_event: crate::ffi::exports::nsr_target_dispatch_with_event,
             target_make_event: crate::ffi::exports::nsr_target_make_event,
             target_fire_event: crate::ffi::exports::nsr_target_fire_event,
@@ -306,6 +311,16 @@ pub fn install_runtime_hooks() {
         southstar_js_window::links::JsDispatchLinks {
             target_dispatch_with_event: crate::ffi::exports::nsr_target_dispatch_with_event,
             target_make_event: crate::ffi::exports::nsr_target_make_event,
+        },
+    );
+    southstar_js_frames::links::set_js_dispatch_links(
+        southstar_js_frames::links::JsDispatchLinks {
+            element_dispatch_event: crate::ffi::exports::nsr_element_dispatchEvent,
+            element_remove_event_listener: crate::ffi::exports::nsr_element_removeEventListener,
+            element_add_event_listener: crate::ffi::exports::nsr_element_addEventListener,
+            window_dispatch_event: crate::ffi::exports::nsr_window_dispatchEvent,
+            window_remove_event_listener: crate::ffi::exports::nsr_window_removeEventListener,
+            window_add_event_listener: crate::ffi::exports::nsr_window_addEventListener,
         },
     );
 }

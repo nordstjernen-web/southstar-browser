@@ -21,6 +21,18 @@ use southstar_js_engine::{Scope, Value};
 pub use ffi::nsr_attr_owner;
 pub use ffi::nsr_make_token_list;
 
+pub use ffi::nsr_tlist_add;
+pub use ffi::nsr_tlist_contains;
+pub use ffi::nsr_tlist_get_length;
+pub use ffi::nsr_tlist_get_value;
+pub use ffi::nsr_tlist_item;
+pub use ffi::nsr_tlist_remove;
+pub use ffi::nsr_tlist_replace;
+pub use ffi::nsr_tlist_set_value;
+pub use ffi::nsr_tlist_supports;
+pub use ffi::nsr_tlist_toString;
+pub use ffi::nsr_tlist_toggle;
+
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 

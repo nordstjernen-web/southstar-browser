@@ -4,8 +4,9 @@
 
 use std::sync::OnceLock;
 
-use core::ffi::c_void;
 use southstar_js_engine::{Scope, Value};
+
+use core::ffi::c_void;
 
 pub struct JsEventsLinks {
     pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
@@ -14,6 +15,9 @@ pub struct JsEventsLinks {
     pub event_mark_default_prevented: fn(&mut Scope<'_>, &Value),
     pub event_define_cancel_bubble: fn(&mut Scope<'_>, &Value),
     pub event_new: fn(&mut Scope<'_>) -> Result<Value, Value>,
+    pub event_stop_immediate: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub event_stop_propagation: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
+    pub event_prevent_default: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
 static JS_EVENTS_LINKS: OnceLock<JsEventsLinks> = OnceLock::new();
@@ -75,4 +79,28 @@ pub(crate) fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value> {
 
 pub(crate) fn nsr_worker_report_exception(js: *mut c_void, exception: &Value) -> bool {
     (js_workers_links().worker_report_exception)(js, exception)
+}
+
+pub(crate) fn nsr_event_stop_immediate(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_stop_immediate)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_stop_propagation(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_stop_propagation)(scope, this, args)
+}
+
+pub(crate) fn nsr_event_prevent_default(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    (js_events_links().event_prevent_default)(scope, this, args)
 }

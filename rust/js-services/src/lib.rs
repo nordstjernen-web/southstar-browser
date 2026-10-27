@@ -33,6 +33,13 @@ use crate::ffi::Js;
 
 pub use ffi::nsr_services_console_emit;
 
+pub use ffi::nsr_cache_open;
+pub use ffi::nsr_element_async_method;
+pub use ffi::nsr_services_clear_timer;
+pub use ffi::nsr_services_queue_microtask;
+pub use ffi::nsr_services_set_interval;
+pub use ffi::nsr_services_set_timeout;
+
 const PROTOTYPE_ONLY_WRITABLE: Attributes = Attributes {
     writable: true,
     enumerable: false,

@@ -243,7 +243,6 @@ pub fn nsr_box_for_this(scope: &mut Scope<'_>, this: &Value) -> *const NsBox {
 macro_rules! natives {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)
@@ -255,7 +254,6 @@ macro_rules! natives {
 macro_rules! getters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value) -> JsResult {
                 $f(scope, this, &[])
@@ -267,7 +265,6 @@ macro_rules! getters {
 macro_rules! setters {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<()> {
                 $f(scope, this, core::slice::from_ref(value)).map(drop)
@@ -277,52 +274,17 @@ macro_rules! setters {
 }
 
 natives! {
-    nsr_element_getBoundingClientRect => crate::metrics::get_bounding_client_rect,
-    nsr_element_getClientRects => crate::metrics::get_client_rects,
-    nsr_element_scroll_to => crate::scroll::element_scroll_to,
-    nsr_element_scroll_by => crate::scroll::element_scroll_by,
-    nsr_element_scrollIntoView => crate::scroll::scroll_into_view,
     nsr_window_scroll_to => crate::scroll::window_scroll_to,
     nsr_window_scroll_by => crate::scroll::window_scroll_by,
     nsr_window_scroll_by_lines => crate::scroll::window_scroll_by_lines,
     nsr_window_scroll_by_pages => crate::scroll::window_scroll_by_pages,
-    nsr_element_getBBox => crate::svg::get_bbox,
-    nsr_element_getCTM => crate::svg::get_ctm,
-    nsr_element_getScreenCTM => crate::svg::get_screen_ctm,
-    nsr_element_getTotalLength => crate::svg::get_total_length,
-    nsr_element_getPointAtLength => crate::svg::get_point_at_length,
-    nsr_element_createSVGPoint => crate::svg::create_svg_point,
-    nsr_element_createSVGRect => crate::svg::create_svg_rect,
-    nsr_element_createSVGMatrix => crate::svg::create_svg_matrix,
-    nsr_element_createSVGTransform => crate::svg::create_svg_transform,
-    nsr_element_checkVisibility => crate::visibility::check_visibility,
-    nsr_svg_beginElement => crate::svg::begin_element,
-    nsr_svg_setCurrentTime => crate::svg::set_current_time,
     nsr_document_element_from_point => crate::hit::element_from_point,
     nsr_document_elements_from_point => crate::hit::elements_from_point,
 }
 
-getters! {
-    nsr_element_get_offsetWidth => crate::metrics::get_offset_width,
-    nsr_element_get_offsetHeight => crate::metrics::get_offset_height,
-    nsr_element_get_offsetTop => crate::metrics::get_offset_top,
-    nsr_element_get_offsetLeft => crate::metrics::get_offset_left,
-    nsr_element_get_offsetParent => crate::metrics::get_offset_parent,
-    nsr_element_get_clientWidth => crate::metrics::get_client_width,
-    nsr_element_get_clientHeight => crate::metrics::get_client_height,
-    nsr_element_get_clientTop => crate::metrics::get_client_top,
-    nsr_element_get_clientLeft => crate::metrics::get_client_left,
-    nsr_element_get_scrollTop => crate::metrics::get_scroll_top,
-    nsr_element_get_scrollLeft => crate::metrics::get_scroll_left,
-    nsr_element_get_scrollWidth => crate::metrics::get_scroll_width,
-    nsr_element_get_scrollHeight => crate::metrics::get_scroll_height,
-    nsr_element_get_ownerSVGElement => crate::svg::get_owner_svg_element,
-}
+getters! {}
 
-setters! {
-    nsr_element_set_scrollTop => crate::scroll::set_scroll_top,
-    nsr_element_set_scrollLeft => crate::scroll::set_scroll_left,
-}
+setters! {}
 
 pub fn nsr_make_dom_rect(scope: &mut Scope<'_>, x: f64, y: f64, w: f64, h: f64) -> Value {
     crate::boxes::make_dom_rect(scope, Rect { x, y, w, h })
@@ -356,4 +318,12 @@ fn forget_box_lookup(js: *const NsJs) {
 
 pub fn install_runtime_hooks() {
     api::set_geometry_hooks(api::GeometryHooks { forget_box_lookup });
+    southstar_js_runtime::links::set_js_geometry_links(
+        southstar_js_runtime::links::JsGeometryLinks {
+            window_scroll_by_pages: crate::ffi::nsr_window_scroll_by_pages,
+            window_scroll_by_lines: crate::ffi::nsr_window_scroll_by_lines,
+            window_scroll_by: crate::ffi::nsr_window_scroll_by,
+            window_scroll_to: crate::ffi::nsr_window_scroll_to,
+        },
+    );
 }

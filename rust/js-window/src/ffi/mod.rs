@@ -417,7 +417,6 @@ pub fn nsr_window_make_location(scope: &mut Scope<'_>) -> Value {
     location::make_location(scope)
 }
 
-#[unsafe(no_mangle)]
 pub fn nsr_window_open_method(
     scope: &mut Scope<'_>,
     this: &Value,

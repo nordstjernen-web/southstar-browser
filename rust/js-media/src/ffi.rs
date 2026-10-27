@@ -69,14 +69,7 @@ const FORMAT_OPUS: c_uint = 4;
 use southstar_js_events::nsr_event_adopt_interface;
 use southstar_js_events::nsr_event_new;
 
-unsafe extern "Rust" {
-    #[allow(non_snake_case)]
-    safe fn nsr_target_dispatchEvent(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_dispatch::nsr_target_dispatchEvent;
 
 fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -254,7 +247,6 @@ fn hook<F: Copy>(f: Option<F>, data: *mut c_void) -> Option<Hook<F>> {
 macro_rules! methods {
     ($($name:ident => $f:path;)*) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
                 $f(scope, this, args)
@@ -266,7 +258,6 @@ macro_rules! methods {
 macro_rules! getters {
     ($($name:ident => $f:path;)*) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
                 $f(scope, this, &[])
@@ -278,7 +269,6 @@ macro_rules! getters {
 macro_rules! setters {
     ($($name:ident => $f:path;)*) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, value: &Value) -> Result<(), Value> {
                 $f(scope, this, core::slice::from_ref(value)).map(drop)
@@ -300,15 +290,8 @@ macro_rules! hook_setters {
 
 methods! {
     nsr_eme_request_access => eme::request_access;
-    nsr_media_set_media_keys => eme::set_media_keys;
-    nsr_media_canPlayType => support::can_play_type;
     nsr_media_source_is_type_supported => support::is_type_supported;
     nsr_media_capabilities_info => support::decoding_info;
-    nsr_media_play => element::play;
-    nsr_media_pause => element::pause;
-    nsr_media_load => element::load;
-    nsr_media_fast_seek => element::fast_seek;
-    nsr_media_get_video_playback_quality => element::video_playback_quality;
     nsr_window_mse_append => mse::append;
     nsr_window_mse_eos => mse::end_of_stream;
     nsr_window_mse_buffered => mse::buffered;
@@ -316,37 +299,11 @@ methods! {
     nsr_window_mse_remove => mse::remove;
     nsr_window_mse_bytes => mse::bytes;
     nsr_vtt_cue_ctor => tracks::vtt_cue;
-    nsr_media_addTextTrack => tracks::add_text_track;
 }
 
-getters! {
-    nsr_media_get_paused => element::paused;
-    nsr_media_get_ended => element::ended;
-    nsr_media_get_seeking => element::seeking;
-    nsr_media_get_readyState => element::ready_state;
-    nsr_media_get_networkState => element::network_state;
-    nsr_media_get_current_time => element::current_time;
-    nsr_media_get_duration => element::duration;
-    nsr_media_get_error => element::error;
-    nsr_media_get_seekable_ranges => element::seekable;
-    nsr_media_get_buffered_ranges => element::buffered;
-    nsr_media_get_played_ranges => element::played;
-    nsr_media_get_playbackRate => element::playback_rate;
-    nsr_media_get_defaultPlaybackRate => element::default_playback_rate;
-    nsr_media_get_volume => element::volume;
-    nsr_media_get_muted => element::muted;
-    nsr_media_get_srcObject => element::src_object;
-    nsr_media_get_textTracks => tracks::text_tracks;
-}
+getters! {}
 
-setters! {
-    nsr_media_set_current_time => element::set_current_time;
-    nsr_media_set_playbackRate => element::set_playback_rate;
-    nsr_media_set_defaultPlaybackRate => element::set_default_playback_rate;
-    nsr_media_set_volume => element::set_volume;
-    nsr_media_set_muted => element::set_muted;
-    nsr_media_set_srcObject => element::set_src_object;
-}
+setters! {}
 
 hook_setters! {
     ns_js_set_audio_cb: AudioFn => audio;
@@ -391,6 +348,18 @@ fn teardown(js: *const NsJs) {
 pub fn install_runtime_hooks() {
     api::set_media_hooks(api::PageStateHooks { init, teardown });
     southstar_js_runtime::links::set_js_media_links(southstar_js_runtime::links::JsMediaLinks {
+        vtt_cue_ctor: crate::ffi::nsr_vtt_cue_ctor,
+        media_source_is_type_supported: crate::ffi::nsr_media_source_is_type_supported,
+        window_mse_bytes: crate::ffi::nsr_window_mse_bytes,
+        window_mse_remove: crate::ffi::nsr_window_mse_remove,
+        window_mse_buffered_start: crate::ffi::nsr_window_mse_buffered_start,
+        window_mse_buffered: crate::ffi::nsr_window_mse_buffered,
+        window_mse_eos: crate::ffi::nsr_window_mse_eos,
+        window_mse_append: crate::ffi::nsr_window_mse_append,
         media_install_audio: crate::ffi::nsr_media_install_audio,
+    });
+    southstar_js_services::links::set_js_media_links(southstar_js_services::links::JsMediaLinks {
+        media_capabilities_info: crate::ffi::nsr_media_capabilities_info,
+        eme_request_access: crate::ffi::nsr_eme_request_access,
     });
 }

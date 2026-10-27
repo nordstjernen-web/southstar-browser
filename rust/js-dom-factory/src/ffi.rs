@@ -252,7 +252,6 @@ pub(crate) fn mark_scripts_already_started(root: Element) {
 macro_rules! rust_methods {
     ($($name:ident => $f:path),* $(,)?) => {
         $(
-            #[unsafe(no_mangle)]
             #[allow(non_snake_case)]
             pub fn $name(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 $f(scope, this, args)

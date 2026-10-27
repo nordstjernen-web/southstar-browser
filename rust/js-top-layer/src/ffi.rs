@@ -24,13 +24,7 @@ use southstar_js_events::nsr_make_event;
 use southstar_js_forms::nsr_js_request_submit_form;
 use southstar_js_forms::nsr_js_reset_form;
 
-unsafe extern "Rust" {
-    safe fn nsr_services_set_timeout(
-        scope: &mut Scope<'_>,
-        this: &Value,
-        args: &[Value],
-    ) -> Result<Value, Value>;
-}
+use southstar_js_services::nsr_services_set_timeout;
 
 fn c_string(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
