@@ -72,6 +72,14 @@ Southstar Browser 1.0.2:
   an owned handle instead of an unreferenced `Arc` pointer. No `ns_*`/`nsr_*`
   symbol is imported between Southstar's own crates any more, and ten
   binding crates now forbid unsafe code.
+* GLib utility calls left from the C port are replaced by std and in-tree
+  Rust across the network, storage, engine, layout, image, CSS and binding
+  crates: GHashTable/GPtrArray/GArray/GString/GBytes become HashMap, Vec
+  and String; file, directory, permission and atomic-write handling uses
+  std::fs; GLib URI parsing uses rust/url; g_ascii_strtod is a Rust parser
+  over the correctly rounded `f64::from_str`. GLib stays for the main loop,
+  GIO, local time, platform folders, charset conversion and regular
+  expressions. About 500 fewer `unsafe` and 180 fewer GLib imports.
 * Web fonts are indexed in Rust: the fontconfig patterns for a downloaded
   font (default instance, named instances and the variable pattern of each
   face, names, weight, width, slant, charset, languages, spacing,
