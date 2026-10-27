@@ -114,7 +114,7 @@ pub fn utf8_strlen(s: &[u8]) -> c_long {
     c_long::try_from(chars).unwrap_or(c_long::MAX)
 }
 
-fn leading_integer(s: &CStr) -> i64 {
+fn leading_integer(s: &CStr) -> i128 {
     let bytes = s.to_bytes();
     let start = bytes
         .iter()
@@ -128,8 +128,8 @@ fn leading_integer(s: &CStr) -> i64 {
     let magnitude = digits
         .iter()
         .take_while(|b| b.is_ascii_digit())
-        .fold(0i64, |n, d| {
-            n.saturating_mul(10).saturating_add(i64::from(d - b'0'))
+        .fold(0i128, |n, d| {
+            n.saturating_mul(10).saturating_add(i128::from(d - b'0'))
         });
     if negative {
         magnitude.saturating_neg()
@@ -139,9 +139,11 @@ fn leading_integer(s: &CStr) -> i64 {
 }
 
 pub fn c_atol(s: &CStr) -> c_long {
-    leading_integer(s).clamp(c_long::MIN.into(), c_long::MAX.into()) as c_long
+    let n = leading_integer(s);
+    c_long::try_from(n).unwrap_or(if n < 0 { c_long::MIN } else { c_long::MAX })
 }
 
 pub fn c_atoi(s: &CStr) -> c_int {
-    leading_integer(s).clamp(c_int::MIN.into(), c_int::MAX.into()) as c_int
+    let n = leading_integer(s);
+    c_int::try_from(n).unwrap_or(if n < 0 { c_int::MIN } else { c_int::MAX })
 }
