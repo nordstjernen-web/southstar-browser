@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_image::ImageRef;
 
 use ffi::{Js, Realm};
@@ -30,7 +30,7 @@ const PUMP_RETRY_MS: c_uint = 4;
 pub(crate) struct Load {
     js: Js,
     realm: Realm,
-    el: Element,
+    el: WeakNode,
     img: Cell<Option<ImageRef<'static>>>,
     requested_url: CString,
     ready_idle: Cell<c_uint>,
@@ -49,7 +49,7 @@ impl Drop for Load {
 
 #[derive(Default)]
 struct Page {
-    loads: HashMap<usize, Rc<Load>>,
+    loads: HashMap<WeakNode, Rc<Load>>,
     next_seq: u64,
 }
 
@@ -81,16 +81,20 @@ fn peek_page<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
     })
 }
 
-fn key(el: Element) -> usize {
-    el.as_ptr() as usize
+fn key(el: Element) -> WeakNode {
+    el.downgrade()
+}
+
+fn lookup_key(js: Js, key: WeakNode) -> Option<Rc<Load>> {
+    peek_page(js, |page| page.loads.get(&key).cloned()).flatten()
 }
 
 fn lookup(js: Js, el: Element) -> Option<Rc<Load>> {
-    peek_page(js, |page| page.loads.get(&key(el)).cloned()).flatten()
+    lookup_key(js, key(el))
 }
 
 fn is_current(load: &Rc<Load>) -> bool {
-    lookup(load.js, load.el).is_some_and(|cur| Rc::ptr_eq(&cur, load))
+    lookup_key(load.js, load.el).is_some_and(|cur| Rc::ptr_eq(&cur, load))
 }
 
 fn remove(js: Js, el: Element) {
@@ -151,7 +155,7 @@ pub(crate) fn start_load(js: Js, el: Element, src: Option<&CStr>) {
     let load = Rc::new(Load {
         js,
         realm,
-        el,
+        el: key(el),
         img: Cell::new(None),
         requested_url: abs_url,
         ready_idle: Cell::new(0),
@@ -201,7 +205,9 @@ pub(crate) fn ready_idle(load: Rc<Load>) {
     if ffi::halted(js) || !is_current(&load) {
         return;
     }
-    let el = load.el;
+    let Some(el) = load.el.get() else {
+        return;
+    };
     let cur_src = el.attr(c"src");
     let abs_url = match (nonempty(cur_src), ffi::base_url(js, el)) {
         (Some(src), Some(base)) => ffi::url_resolve(&base, src),
@@ -264,7 +270,8 @@ pub(crate) fn loads_pending(js: Js) -> bool {
     peek_page(js, |page| {
         page.loads
             .values()
-            .any(|load| load.el.flags() & IMG_LOAD_FIRED == 0)
+            .filter_map(|load| load.el.get())
+            .any(|el| el.flags() & IMG_LOAD_FIRED == 0)
     })
     .unwrap_or(false)
 }
@@ -276,10 +283,9 @@ pub(crate) fn flush_ready(js: Js) {
     let mut ready = peek_page(js, |page| {
         page.loads
             .values()
-            .filter(|load| {
-                load.el.flags() & IMG_LOAD_FIRED == 0 && load.img.get().is_some_and(settled)
-            })
-            .map(|load| (load.seq, load.el))
+            .filter(|load| load.img.get().is_some_and(settled))
+            .filter_map(|load| Some((load.seq, load.el.get()?)))
+            .filter(|(_, el)| el.flags() & IMG_LOAD_FIRED == 0)
             .collect::<Vec<_>>()
     })
     .unwrap_or_default();

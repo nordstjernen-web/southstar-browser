@@ -4,7 +4,7 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -206,18 +206,24 @@ pub fn nsr_nodelist_from_array(scope: &mut Scope<'_>, array: Value) -> Value {
     nodelist::finish(scope, array)
 }
 
-pub fn nsr_qcache_get(scope: &mut Scope<'_>, root: *const c_void, kind: u8, key: &[u8]) -> Value {
-    page::qcache_get(js_of(scope), root as usize, kind, key).unwrap_or_else(Value::undefined)
+pub fn nsr_qcache_get(
+    scope: &mut Scope<'_>,
+    root: Option<Node<'_>>,
+    kind: u8,
+    key: &[u8],
+) -> Value {
+    page::qcache_get(js_of(scope), root.map(Node::downgrade), kind, key)
+        .unwrap_or_else(Value::undefined)
 }
 
 pub fn nsr_qcache_put(
     scope: &mut Scope<'_>,
-    root: *const c_void,
+    root: Option<Node<'_>>,
     kind: u8,
     key: &[u8],
     value: &Value,
 ) {
-    page::qcache_put(js_of(scope), root as usize, kind, key, value);
+    page::qcache_put(js_of(scope), root.map(Node::downgrade), kind, key, value);
 }
 
 pub fn qcache_invalidate(js: Option<Page>) {

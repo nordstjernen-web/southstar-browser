@@ -12,7 +12,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::Js;
@@ -35,14 +35,14 @@ pub(crate) const MAX_DEPTH: i32 = 512;
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Key {
     pub name: String,
-    pub document: usize,
+    pub document: Option<WeakNode>,
 }
 
 #[derive(Default)]
 pub(crate) struct Page {
     pub registry: RefCell<Vec<(Key, Value)>>,
     pub pending: RefCell<HashMap<Key, Vec<Value>>>,
-    pub under_construction: RefCell<HashSet<usize>>,
+    pub under_construction: RefCell<HashSet<WeakNode>>,
     pub upgrading: RefCell<Option<Value>>,
     pub in_attr_callback: Cell<i32>,
 }

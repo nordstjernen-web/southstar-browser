@@ -179,7 +179,7 @@ pub fn request_pointer_lock(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
     let Some(el) = ffi::unwrap(this) else {
         return Ok(Value::undefined());
     };
-    let key = el.as_ptr() as usize;
+    let key = Some(el.downgrade());
     if !js.is_null() && crate::peek(js, |page| page.pointer_lock) != key {
         crate::with(js, |page| page.pointer_lock = key);
         pointer_lock_changed(js);
@@ -189,8 +189,8 @@ pub fn request_pointer_lock(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
 
 pub fn exit_pointer_lock(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     let js = ffi::js_of(scope);
-    if !js.is_null() && crate::peek(js, |page| page.pointer_lock) != 0 {
-        crate::with(js, |page| page.pointer_lock = 0);
+    if !js.is_null() && crate::peek(js, |page| page.pointer_lock).is_some() {
+        crate::with(js, |page| page.pointer_lock = None);
         pointer_lock_changed(js);
     }
     Ok(Value::undefined())
@@ -202,17 +202,17 @@ pub fn get_pointer_lock_element(scope: &mut Scope<'_>, _this: &Value, _args: &[V
         return Ok(Value::null());
     }
     let key = crate::peek(js, |page| page.pointer_lock);
-    let Some(doc) = js.current_document().filter(|_| key != 0) else {
+    let Some(doc) = js.current_document().filter(|_| key.is_some()) else {
         return Ok(Value::null());
     };
     let top = root(doc);
     let mut cur = Some(top);
     while let Some(n) = cur {
-        if n.as_ptr() as usize == key {
+        if Some(n.downgrade()) == key {
             return Ok(ffi::wrap(scope, n));
         }
         cur = next_in_subtree(n, Some(top), true);
     }
-    crate::with(js, |page| page.pointer_lock = 0);
+    crate::with(js, |page| page.pointer_lock = None);
     Ok(Value::null())
 }

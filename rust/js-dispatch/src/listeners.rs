@@ -5,13 +5,14 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use southstar_dom::WeakNode;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::{Element, FLAG_HAS_LISTENERS, JsResult, arg, get, is_named, same_object};
 
 pub(crate) struct Listener {
-    pub target: usize,
+    pub target: WeakNode,
     pub kind: Box<str>,
     pub callback: Value,
     pub signal: Option<Value>,
@@ -92,7 +93,7 @@ pub(crate) fn is_passive_default(kind: &str) -> bool {
     matches!(kind, "touchstart" | "touchmove" | "wheel" | "mousewheel")
 }
 
-pub(crate) fn own_listener(js: Js, target: usize, index: usize) -> Option<Rc<Listener>> {
+pub(crate) fn own_listener(js: Js, target: WeakNode, index: usize) -> Option<Rc<Listener>> {
     crate::with(js, |page| page.listeners.get(&target)?.get(index).cloned())
 }
 
@@ -108,7 +109,7 @@ pub(crate) fn retire(js: Js, listener: &Rc<Listener>) {
     });
 }
 
-fn drop_dead(js: Js, target: usize) {
+fn drop_dead(js: Js, target: WeakNode) {
     crate::with(js, |page| {
         if let Some(own) = page.listeners.get_mut(&target) {
             own.retain(|listener| !listener.is_dead());
@@ -128,7 +129,7 @@ struct Registration<'a> {
 }
 
 fn is_duplicate(scope: &mut Scope<'_>, js: Js, reg: &Registration<'_>) -> bool {
-    let target = reg.target.as_ptr() as usize;
+    let target = reg.target.downgrade();
     let mut found = false;
     let mut index = 0;
     while let Some(existing) = own_listener(js, target, index) {
@@ -159,7 +160,7 @@ fn is_duplicate(scope: &mut Scope<'_>, js: Js, reg: &Registration<'_>) -> bool {
 }
 
 fn register(js: Js, reg: Registration<'_>, passive: bool) {
-    let target = reg.target.as_ptr() as usize;
+    let target = reg.target.downgrade();
     let listener = Rc::new(Listener {
         target,
         kind: reg.kind.into(),
@@ -266,7 +267,7 @@ fn remove_listener(
     let Some(request) = read_request(scope, args, false)? else {
         return Ok(Value::undefined());
     };
-    let key = target.as_ptr() as usize;
+    let key = target.downgrade();
     crate::with(js, |page| {
         let Some(own) = page.listeners.get_mut(&key) else {
             return;

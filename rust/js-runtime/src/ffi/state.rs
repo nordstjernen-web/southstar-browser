@@ -10,7 +10,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, NsNode, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::scopes::RealmScope;
@@ -88,7 +88,7 @@ pub(crate) struct PageState {
     pub image_cache: Cell<*mut c_void>,
     pub anim: Cell<Option<southstar_anim::AnimHandle>>,
     pub ready_state: Cell<c_int>,
-    pub doc_ready_states: RefCell<HashMap<usize, c_int>>,
+    pub doc_ready_states: RefCell<HashMap<WeakNode, c_int>>,
     pub message_tasks: RefCell<VecDeque<MessageTask>>,
     pub message_task_source: Cell<c_uint>,
     pub eval_deadline_us: Cell<i64>,
