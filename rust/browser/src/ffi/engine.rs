@@ -35,14 +35,14 @@ impl NsBrowser {
             viewport_height: self.vh.get(),
             images: self.images.get(),
             anim: self.anim.get(),
-            js: self.js.get(),
+            js: self.js.get().map_or(ptr::null_mut(), Js::raw),
             focused,
             hover: self.hover_node.get(),
             caret_byte: self.caret_byte.get(),
             sel_anchor_byte: self.sel_anchor_byte.get(),
         };
         // SAFETY: the page's script engine slot is null or holds its live engine.
-        let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout) };
+        let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout.0) };
         self.styles.replace(styles);
     }
 

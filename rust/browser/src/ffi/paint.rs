@@ -482,7 +482,7 @@ impl NsBrowser {
     }
 
     pub fn selection_if_range(&self) -> Option<NsSelection> {
-        self.selection_has_range().then(|| self.selection.get())
+        self.selection_has_range().then(|| self.selection.0.get())
     }
 
     pub fn flush_video_composites(&self, now_us: i64) {
