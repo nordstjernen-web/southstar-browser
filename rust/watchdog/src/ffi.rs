@@ -43,8 +43,6 @@ unsafe extern "C" {
     fn g_spawn_close_pid(pid: GPid);
     fn g_uuid_string_random() -> *mut c_char;
     fn g_get_user_runtime_dir() -> *const c_char;
-    fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
-    fn g_unlink(filename: *const c_char) -> c_int;
     fn _exit(status: c_int) -> !;
 }
 
@@ -178,7 +176,7 @@ mod os {
 
 #[cfg(windows)]
 mod os {
-    use core::ffi::{c_char, c_int, c_void};
+    use core::ffi::{c_int, c_void};
     use core::{mem, ptr};
     use std::ffi::CString;
 
@@ -263,10 +261,6 @@ mod os {
         fn MessageBoxW(window: Handle, text: *const u16, caption: *const u16, kind: u32) -> i32;
     }
 
-    unsafe extern "C" {
-        fn g_win32_error_message(error: c_int) -> *mut c_char;
-    }
-
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain(Some(0)).collect()
     }
@@ -280,9 +274,9 @@ mod os {
         };
         command.push(0);
         let name = wide("NS_WATCHDOG_RECOVER");
-        let old = unsafe { glib::bytes(glib::g_getenv(c"NS_WATCHDOG_RECOVER".as_ptr())) }
-            .and_then(|old| core::str::from_utf8(old).ok())
-            .map(wide);
+        let old = glib::env_bytes("NS_WATCHDOG_RECOVER")
+            .and_then(|old| String::from_utf8(old).ok())
+            .map(|old| wide(&old));
         let one = wide("1");
         unsafe {
             SetEnvironmentVariableW(
@@ -320,12 +314,10 @@ mod os {
             )
         };
         if ok == 0 {
-            let message = unsafe { g_win32_error_message(error as c_int) };
-            let text = unsafe { glib::bytes(message) }.map_or_else(
-                || "unknown error".to_owned(),
-                |m| String::from_utf8_lossy(m).into_owned(),
-            );
-            unsafe { glib::g_free(message.cast()) };
+            let text = std::io::Error::from_raw_os_error(error as i32).to_string();
+            let text = text
+                .rsplit_once(" (os error ")
+                .map_or(text.as_str(), |(detail, _)| detail);
             return Err(format!("CreateProcessW failed: {text}"));
         }
         unsafe { CloseHandle(info.thread) };
@@ -582,27 +574,27 @@ unsafe extern "C" fn stop_signal(data: *mut c_void) -> GBoolean {
 }
 
 fn session_path() -> Vec<u8> {
-    unsafe {
-        let uuid = g_uuid_string_random();
-        let name = CString::new(
-            [
-                b"southstar-watchdog-",
-                CStr::from_ptr(uuid).to_bytes(),
-                b".session",
-            ]
-            .concat(),
-        )
-        .unwrap_or_default();
-        glib::g_free(uuid.cast());
-        let path = g_build_filename(
-            g_get_user_runtime_dir(),
-            name.as_ptr(),
-            ptr::null::<c_char>(),
-        );
-        let bytes = CStr::from_ptr(path).to_bytes().to_vec();
-        glib::g_free(path.cast());
-        bytes
-    }
+    // SAFETY: g_uuid_string_random has no preconditions and returns a new string the caller owns.
+    let uuid = unsafe { g_uuid_string_random() };
+    // SAFETY: uuid is null or the NUL-terminated string just allocated by GLib, freed once when it drops.
+    let uuid = unsafe { glib::GStr::take(uuid) };
+    let name = [
+        &b"southstar-watchdog-"[..],
+        uuid.as_deref().map_or(&b""[..], CStr::to_bytes),
+        b".session",
+    ]
+    .concat();
+    // SAFETY: g_get_user_runtime_dir has no preconditions and returns a string GLib keeps.
+    let runtime_dir = unsafe { g_get_user_runtime_dir() };
+    // SAFETY: runtime_dir is null or a NUL-terminated string GLib keeps for the process.
+    let runtime_dir = unsafe { glib::bytes(runtime_dir) }.unwrap_or_default();
+    let Some(dir) = glib::path_from_bytes(runtime_dir) else {
+        return name;
+    };
+    let Some(name) = glib::path_from_bytes(&name) else {
+        return Vec::new();
+    };
+    glib::path_bytes(&dir.join(name))
 }
 
 pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
@@ -651,7 +643,8 @@ pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
         unsafe { g_spawn_close_pid(sup.pid) };
     }
     unsafe { g_main_loop_unref(sup.main_loop) };
-    let session = CString::new(session).unwrap_or_default();
-    unsafe { g_unlink(session.as_ptr()) };
+    if let Some(session) = glib::path_from_bytes(&session) {
+        let _ = std::fs::remove_file(session);
+    }
     sup.exit_status
 }

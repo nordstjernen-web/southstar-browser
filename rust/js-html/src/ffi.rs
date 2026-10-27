@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_uint, c_void};
+use core::ffi::CStr;
 use core::ptr;
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::ffi::CString;
 
 use southstar_dom::Tree;
-use southstar_glib::{self as glib, GBoolean, GHashTable, GHashTableIter};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -17,11 +18,6 @@ pub(crate) use southstar_js_runtime::api::NsJs;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Js(*mut NsJs);
-
-unsafe extern "C" {
-    fn g_str_hash(v: *const c_void) -> c_uint;
-    fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
-}
 
 use southstar_js_attrs::nsr_make_token_list;
 use southstar_js_collections::nsr_nodelist_from_array;
@@ -196,47 +192,28 @@ pub(crate) fn convert_declarative_shadow(root: Element) {
     southstar_html_parser::attach_declarative_shadow_roots(root);
 }
 
-pub(crate) struct NameSet(*mut GHashTable);
+#[derive(Default)]
+pub(crate) struct NameSet {
+    seen: RefCell<HashSet<Vec<u8>>>,
+    order: RefCell<Vec<Vec<u8>>>,
+}
 
 impl NameSet {
     pub(crate) fn new() -> NameSet {
-        NameSet(unsafe {
-            glib::g_hash_table_new_full(
-                Some(g_str_hash),
-                Some(g_str_equal),
-                Some(glib::g_free),
-                None,
-            )
-        })
+        NameSet::default()
     }
 
     pub(crate) fn insert(&self, name: &[u8]) -> bool {
-        let key = glib::strdup(name);
-        if unsafe { glib::g_hash_table_contains(self.0, key.cast()) } != 0 {
-            unsafe { glib::g_free(key.cast()) };
+        let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
+        if !self.seen.borrow_mut().insert(name.to_vec()) {
             return false;
         }
-        unsafe { glib::g_hash_table_add(self.0, key.cast()) };
+        self.order.borrow_mut().push(name.to_vec());
         true
     }
 
     pub(crate) fn names(&self) -> Vec<Vec<u8>> {
-        let mut out = Vec::new();
-        let mut iter = GHashTableIter::new();
-        let mut key: *mut c_void = ptr::null_mut();
-        unsafe {
-            glib::g_hash_table_iter_init(&mut iter, self.0);
-            while glib::g_hash_table_iter_next(&mut iter, &mut key, ptr::null_mut()) != 0 {
-                out.push(CStr::from_ptr(key.cast()).to_bytes().to_vec());
-            }
-        }
-        out
-    }
-}
-
-impl Drop for NameSet {
-    fn drop(&mut self) {
-        unsafe { glib::g_hash_table_destroy(self.0) };
+        self.order.borrow().clone()
     }
 }
 

@@ -4,7 +4,7 @@
 
 use core::ffi::c_void;
 
-use southstar_glib::{GBoolean, GHashTable};
+use southstar_glib::GBoolean;
 
 use super::Js;
 use super::glue;
@@ -26,7 +26,7 @@ pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean
     }
 }
 
-pub(crate) fn snapshot_globals(js: Js) -> *mut GHashTable {
+pub(crate) fn snapshot_globals(js: Js) -> Vec<Vec<u8>> {
     let names = js
         .scope(|scope| {
             let global = scope.global();

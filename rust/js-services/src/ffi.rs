@@ -194,10 +194,6 @@ pub(crate) enum CMethod {
     MediaCapabilitiesInfo,
 }
 
-unsafe extern "C" {
-    fn g_get_num_processors() -> c_uint;
-}
-
 use crate::links::nsr_eme_request_access;
 use crate::links::nsr_event_adopt_interface;
 use crate::links::nsr_media_capabilities_info;
@@ -402,7 +398,7 @@ pub(crate) fn has_client_hints(user_agent: &str) -> bool {
 }
 
 pub(crate) fn processor_count() -> u32 {
-    unsafe { g_get_num_processors() }
+    std::thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(u32::MAX))
 }
 
 #[cfg(windows)]

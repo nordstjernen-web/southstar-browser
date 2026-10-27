@@ -5,6 +5,10 @@
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
+mod strtod;
+#[cfg(test)]
+mod tests;
+
 pub type GBoolean = c_int;
 pub const TRUE: GBoolean = 1;
 pub const FALSE: GBoolean = 0;
@@ -157,7 +161,6 @@ unsafe extern "C" {
     );
     pub fn g_str_hash(v: *const c_void) -> c_uint;
     pub fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
-    pub fn g_ascii_strtod(nptr: *const c_char, endptr: *mut *mut c_char) -> f64;
 }
 
 pub struct GStr(core::ptr::NonNull<c_char>);
@@ -225,38 +228,59 @@ pub fn strdup(bytes: &[u8]) -> *mut c_char {
 }
 
 pub fn ascii_strtod(text: &[u8]) -> f64 {
-    let mut terminated = Vec::with_capacity(text.len() + 1);
-    terminated.extend_from_slice(text);
-    terminated.push(0);
-    unsafe { g_ascii_strtod(terminated.as_ptr().cast(), ptr::null_mut()) }
+    ascii_strtod_prefix(text).0
 }
 
 pub fn ascii_strtod_prefix(text: &[u8]) -> (f64, usize) {
-    let mut terminated = Vec::with_capacity(text.len() + 1);
-    terminated.extend_from_slice(text);
-    terminated.push(0);
-    let start = terminated.as_ptr().cast::<c_char>();
-    let mut end: *mut c_char = ptr::null_mut();
-    let value = unsafe { g_ascii_strtod(start, &mut end) };
-    let consumed = if end.is_null() {
-        0
-    } else {
-        (end.cast_const() as usize).saturating_sub(start as usize)
-    };
-    (value, consumed.min(text.len()))
+    let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];
+    strtod::parse_prefix(text)
 }
 
 pub fn ascii_strtod_at(text: &CStr, pos: usize) -> (f64, usize) {
-    let pos = pos.min(text.to_bytes().len());
-    let start = unsafe { text.as_ptr().add(pos) };
-    let mut end: *mut c_char = ptr::null_mut();
-    let value = unsafe { g_ascii_strtod(start, &mut end) };
-    let consumed = if end.is_null() {
-        0
-    } else {
-        (end.cast_const() as usize).saturating_sub(start as usize)
-    };
-    (value, pos + consumed.min(text.to_bytes().len() - pos))
+    let bytes = text.to_bytes();
+    let pos = pos.min(bytes.len());
+    let (value, consumed) = strtod::parse_prefix(&bytes[pos..]);
+    (value, pos + consumed)
+}
+
+#[cfg(unix)]
+pub fn path_from_bytes(bytes: &[u8]) -> Option<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    Some(std::ffi::OsStr::from_bytes(bytes).into())
+}
+
+#[cfg(not(unix))]
+pub fn path_from_bytes(bytes: &[u8]) -> Option<std::path::PathBuf> {
+    core::str::from_utf8(bytes).ok().map(Into::into)
+}
+
+#[cfg(unix)]
+pub fn path_bytes(path: &std::path::Path) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    path.as_os_str().as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+pub fn path_bytes(path: &std::path::Path) -> Vec<u8> {
+    path.to_string_lossy().into_owned().into_bytes()
+}
+
+#[cfg(unix)]
+pub fn env_bytes(name: &str) -> Option<Vec<u8>> {
+    use std::os::unix::ffi::OsStringExt;
+    std::env::var_os(name).map(OsStringExt::into_vec)
+}
+
+#[cfg(not(unix))]
+pub fn env_bytes(name: &str) -> Option<Vec<u8>> {
+    std::env::var_os(name)?
+        .into_string()
+        .ok()
+        .map(String::into_bytes)
+}
+
+pub fn file_get_contents(path: &[u8]) -> Option<Vec<u8>> {
+    std::fs::read(path_from_bytes(path)?).ok()
 }
 
 pub unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
