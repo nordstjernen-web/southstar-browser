@@ -2,49 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint};
+use core::ffi::{CStr, c_uint};
 use core::marker::PhantomData;
 use core::ptr::NonNull;
 
-use southstar_css::StyleMap;
+use southstar_css::{StyleData, StyleMap, ValueKind};
 use southstar_dom::Node;
 use southstar_layout::{BoxRef, Style};
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct Length {
-    v: f64,
-    unit: c_uint,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct CalcHead {
-    pct: f64,
-    px: f64,
-}
-
-#[repr(C)]
-union ValueHead {
-    keyword: *const c_char,
-    length: Length,
-    color: [u8; 4],
-    calc: CalcHead,
-    url: *const c_char,
-}
-
-#[repr(C)]
-struct NsCssValue {
-    kind: c_uint,
-    _ref: c_int,
-    u: ValueHead,
-}
-
-const KIND_KEYWORD: c_uint = 0;
-const KIND_LENGTH: c_uint = 1;
-const KIND_COLOR: c_uint = 3;
-const KIND_CALC: c_uint = 4;
-const KIND_URL: c_uint = 8;
 
 pub enum Value<'a> {
     Keyword(Option<&'a CStr>),
@@ -53,10 +17,6 @@ pub enum Value<'a> {
     Color([u8; 4]),
     Url(Option<&'a CStr>),
     Other,
-}
-
-fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
 #[derive(Clone, Copy)]
@@ -69,17 +29,18 @@ impl<'a> StyleRef<'a> {
 
     pub fn value(self, name: &CStr) -> Option<Value<'a>> {
         let prop = southstar_css::Prop::from_name(name.to_bytes())?.id();
-        let slot = unsafe { *self.0.as_ptr().cast::<*const NsCssValue>().add(prop) };
-        let v = unsafe { slot.as_ref() }?;
-        Some(unsafe {
-            match v.kind {
-                KIND_KEYWORD => Value::Keyword(c_str(v.u.keyword)),
-                KIND_LENGTH => Value::Length(v.u.length.v, v.u.length.unit),
-                KIND_COLOR => Value::Color(v.u.color),
-                KIND_CALC => Value::Calc(v.u.calc.pct, v.u.calc.px),
-                KIND_URL => Value::Url(c_str(v.u.url)),
-                _ => Value::Other,
-            }
+        // SAFETY: a StyleRef points at a computed style made by rust/css that lives for 'a.
+        let style = unsafe { self.0.cast::<StyleData>().as_ref() };
+        let v = style.value_at(prop)?;
+        Some(match v.value_kind() {
+            ValueKind::Keyword => Value::Keyword(v.keyword()),
+            ValueKind::Length => v
+                .length()
+                .map_or(Value::Other, |(len, unit)| Value::Length(len, unit)),
+            ValueKind::Color => v.color_rgba().map_or(Value::Other, Value::Color),
+            ValueKind::Calc => v.calc().map_or(Value::Other, |c| Value::Calc(c.pct, c.px)),
+            ValueKind::Url => Value::Url(v.url()),
+            _ => Value::Other,
         })
     }
 }

@@ -3,12 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 
 pub use southstar_css::Keyframes;
 use southstar_css::{
     AnimationEntry, Declaration, Declarations, NsCssValue, OwnedValue, Prop as CssProp, Sheet,
-    StyleMap, ValueKind,
+    StyleData, StyleMap, ValueKind,
 };
 use southstar_dom::{Node, NsNode};
 use southstar_layout::Style;
@@ -23,7 +23,7 @@ pub struct Val(OwnedValue);
 
 impl Val {
     pub fn retain(v: Borrowed) -> Option<Val> {
-        v.get().map(|v| Val(OwnedValue::retain(v)))
+        v.0.map(Val)
     }
 
     pub fn into_owned(self) -> OwnedValue {
@@ -35,71 +35,88 @@ impl Val {
     }
 
     pub fn borrow(&self) -> Borrowed {
-        Borrowed(self.0.as_ptr())
+        Borrowed(Some(self.0.clone()))
     }
 
     pub fn font_units_resolved(&self, font_px: f64, root_px: f64) -> Option<Val> {
         southstar_css::value_resolve_font_units(&self.0, font_px, root_px).map(Val)
     }
 
-    pub fn interpolate(prop: i32, a: Borrowed, b: Borrowed, t: f64, keywords: bool) -> Option<Val> {
+    pub fn interpolate(
+        prop: i32,
+        a: &Borrowed,
+        b: &Borrowed,
+        t: f64,
+        keywords: bool,
+    ) -> Option<Val> {
         southstar_css::value_interpolate(prop_at(prop), a.get()?, b.get()?, t, keywords).map(Val)
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Borrowed(*const NsCssValue);
+#[derive(Clone)]
+pub struct Borrowed(Option<OwnedValue>);
 
-impl From<&NsCssValue> for Borrowed {
-    fn from(v: &NsCssValue) -> Borrowed {
-        Borrowed(ptr::from_ref(v))
+impl PartialEq for Borrowed {
+    fn eq(&self, other: &Borrowed) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => OwnedValue::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Borrowed {}
+
+impl From<&OwnedValue> for Borrowed {
+    fn from(v: &OwnedValue) -> Borrowed {
+        Borrowed(Some(v.clone()))
     }
 }
 
 impl Borrowed {
-    pub const NULL: Borrowed = Borrowed(ptr::null());
+    pub const NULL: Borrowed = Borrowed(None);
 
     pub fn of(v: Option<&Val>) -> Borrowed {
         v.map_or(Borrowed::NULL, Val::borrow)
     }
 
-    pub fn is_null(self) -> bool {
-        self.0.is_null()
+    pub fn is_null(&self) -> bool {
+        self.0.is_none()
     }
 
-    fn get(self) -> Option<&'static NsCssValue> {
-        // SAFETY: a Borrowed is null or a value a style, a declaration block or a Val keeps alive while the engine reads it.
-        unsafe { self.0.as_ref() }
+    fn get(&self) -> Option<&NsCssValue> {
+        self.0.as_deref()
     }
 
-    pub fn equal(self, other: Borrowed) -> bool {
+    pub fn equal(&self, other: &Borrowed) -> bool {
         southstar_css::values_equal(self.get(), other.get())
     }
 
-    pub fn is_placeholder(self) -> bool {
+    pub fn is_placeholder(&self) -> bool {
         self.get()
             .is_some_and(|v| v.value_kind() == ValueKind::Keyword && v.keyword().is_none())
     }
 
-    pub fn keyword(self) -> Option<&'static CStr> {
+    pub fn keyword(&self) -> Option<&CStr> {
         self.get()?.keyword()
     }
 
-    pub fn px(self) -> Option<f64> {
+    pub fn px(&self) -> Option<f64> {
         let (v, unit) = self.get()?.length()?;
         (unit == UNIT_PX).then_some(v)
     }
 
-    pub fn opacity(self) -> Option<f64> {
+    pub fn opacity(&self) -> Option<f64> {
         let (v, unit) = self.get()?.length()?;
         Some(if unit == UNIT_PERCENT { v / 100.0 } else { v })
     }
 
-    pub fn color(self) -> Option<[u8; 4]> {
+    pub fn color(&self) -> Option<[u8; 4]> {
         self.get()?.color_rgba()
     }
 
-    pub fn transform(self) -> Option<southstar_style::Transform> {
+    pub fn transform(&self) -> Option<southstar_style::Transform> {
         let transform = self.get()?.transform()?;
         (transform.n_ops != 0).then_some(*transform)
     }
@@ -161,7 +178,7 @@ impl Decls {
         self.0
             .iter()
             .rfind(|d| d.prop() == prop)
-            .map_or(Borrowed::NULL, |d| Borrowed::from(d.value()))
+            .map_or(Borrowed::NULL, |d| Borrowed::from(d.value_handle()))
     }
 
     pub fn drop_important(&mut self) {
@@ -293,10 +310,12 @@ impl RetainedStyle {
 }
 
 pub fn style_value(style: StyleRef<'_>, prop: i32) -> Borrowed {
-    usize::try_from(prop)
-        .ok()
-        .and_then(|i| style.value_at(i))
-        .map_or(Borrowed::NULL, |v| Borrowed(v.as_ptr()))
+    Borrowed(
+        usize::try_from(prop)
+            .ok()
+            .and_then(|i| style.data().value_handle(i))
+            .cloned(),
+    )
 }
 
 pub fn interpolates_keywords(style: StyleRef<'_>) -> bool {
@@ -313,48 +332,44 @@ pub fn may_animate(style: StyleRef<'_>) -> bool {
     southstar_css::style_may_animate(style.data())
 }
 
-pub struct StyleMut(NonNull<Style>);
+pub struct StyleMut(NonNull<StyleData>);
 
 impl StyleMut {
     pub fn of(style: StyleRef<'_>) -> StyleMut {
-        StyleMut(NonNull::new(style.as_ptr().cast_mut()).expect("a live style"))
+        StyleMut(NonNull::new(style.as_ptr().cast::<StyleData>().cast_mut()).expect("a live style"))
+    }
+
+    fn with<R>(&self, f: impl FnOnce(&mut StyleData) -> R) -> R {
+        // SAFETY: a StyleMut is made from a live computed style, which the engine alone writes during a pass, and no reference into it outlives this call.
+        f(unsafe { &mut *self.0.as_ptr() })
     }
 
     pub fn value(&self, prop: i32) -> Borrowed {
-        let Some(slot) = self.slot(prop) else {
+        let Ok(index) = usize::try_from(prop) else {
             return Borrowed::NULL;
         };
-        // SAFETY: slot is one of a live style's value slots.
-        Borrowed(unsafe { *slot })
-    }
-
-    fn slot(&self, prop: i32) -> Option<*mut *mut NsCssValue> {
-        let index = usize::try_from(prop).ok()?;
-        // SAFETY: a StyleMut is made from a live computed style, which the engine alone writes during a pass.
-        unsafe { southstar_style::value_slot(self.0.as_ptr(), index) }
+        Borrowed(self.with(|style| style.value_handle(index).cloned()))
     }
 
     pub fn replace(&self, prop: i32, value: Val) -> Option<Val> {
-        let slot = self.slot(prop)?;
-        // SAFETY: slot is one of a live style's value slots, which nothing else touches during the call.
-        let old = unsafe { core::mem::replace(&mut *slot, value.0.into_raw()) };
-        // SAFETY: the slot held one reference on its old value, which it hands over here.
-        unsafe { OwnedValue::from_raw(old) }.map(Val)
+        let index = usize::try_from(prop).ok()?;
+        self.with(|style| style.replace_value(index, Some(value.0)))
+            .map(Val)
     }
 
     pub fn set_retained(&self, prop: i32, value: &Val) {
-        let Some(slot) = self.slot(prop) else {
+        let Ok(index) = usize::try_from(prop) else {
             return;
         };
-        // SAFETY: slot is one of a live style's value slots.
-        let current = unsafe { *slot };
-        if current.cast_const() == value.0.as_ptr() {
-            return;
-        }
-        // SAFETY: the slot held one reference on its current value, which it gives up here.
-        drop(unsafe { OwnedValue::from_raw(current) });
-        // SAFETY: slot is one of a live style's value slots, which nothing else touches during the call.
-        unsafe { *slot = value.0.clone().into_raw() };
+        self.with(|style| {
+            if style
+                .value_handle(index)
+                .is_some_and(|current| OwnedValue::ptr_eq(current, &value.0))
+            {
+                return;
+            }
+            style.replace_value(index, Some(value.0.clone()));
+        });
     }
 }
 

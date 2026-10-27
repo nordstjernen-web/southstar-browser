@@ -17,6 +17,7 @@ const URL_SHEETS_MAX: usize = 256;
 
 struct Sheet(OwnedSheet);
 
+// SAFETY: the caches are only used by the thread that runs the style engine; the lock never hands a sheet to another thread.
 unsafe impl Send for Sheet {}
 
 impl Sheet {

@@ -8,7 +8,6 @@ use core::hash::BuildHasherDefault;
 use core::ptr;
 use core::slice;
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex, PoisonError};
 
 use southstar_dom::{Node, attrs};
 use southstar_glib::{self as glib, GBoolean};
@@ -274,7 +273,7 @@ impl Output {
                     important: glib::boolean(d.important()),
                     inline_style: self.inline_style,
                     rule: rule_ptr,
-                    value: d.value_ptr(),
+                    value: d.value_handle().clone(),
                     prop: d.prop(),
                 };
                 dst.decls.push(entry);
@@ -294,8 +293,8 @@ impl Output {
                         important: glib::boolean(important),
                         inline_style: self.inline_style,
                         rule: rule_ptr,
-                        name: k,
-                        text: v,
+                        name: k.clone(),
+                        text: v.clone(),
                     };
                     dst.vars.push(entry);
                 }
@@ -313,7 +312,7 @@ impl Output {
                     decl_order_base: pd.decl_slot(),
                     inline_style: self.inline_style,
                     rule: rule_ptr,
-                    pd,
+                    pd: pd.clone(),
                 };
                 dst.pending.push(entry);
             }
@@ -472,14 +471,8 @@ pub(super) fn gather_matches(
     });
 }
 
-struct DeclSheet(OwnedSheet);
-
-unsafe impl Send for DeclSheet {}
-
-static DECL_SHEETS: LazyLock<Mutex<HashMap<Vec<u8>, DeclSheet>>> = LazyLock::new(Mutex::default);
-
-fn decl_sheets() -> std::sync::MutexGuard<'static, HashMap<Vec<u8>, DeclSheet>> {
-    DECL_SHEETS.lock().unwrap_or_else(PoisonError::into_inner)
+thread_local! {
+    static DECL_SHEETS: RefCell<HashMap<Vec<u8>, OwnedSheet>> = RefCell::new(HashMap::new());
 }
 
 fn emit_decl_sheet(
@@ -492,20 +485,17 @@ fn emit_decl_sheet(
     if decls.is_empty() {
         return;
     }
-    if !decl_sheets().contains_key(decls) {
-        let wrapped = [&b"* { "[..], decls, b" }"].concat();
-        let sheet = OwnedSheet::parse(&wrapped);
-        decl_sheets().insert(decls.to_vec(), DeclSheet(sheet));
-    }
-    let sheets = decl_sheets();
-    let Some(sheet) = sheets.get(decls) else {
-        return;
-    };
-    let mut acc = Accum::default();
-    acc.note(0, specificity, 0);
-    for rule in sheet.0.rules() {
-        output.emit(slice::from_mut(out), rule, &acc, LAYER_NONE);
-    }
+    DECL_SHEETS.with_borrow_mut(|sheets| {
+        let sheet = sheets.entry(decls.to_vec()).or_insert_with(|| {
+            let wrapped = [&b"* { "[..], decls, b" }"].concat();
+            OwnedSheet::parse(&wrapped)
+        });
+        let mut acc = Accum::default();
+        acc.note(0, specificity, 0);
+        for rule in sheet.rules() {
+            output.emit(slice::from_mut(out), rule, &acc, LAYER_NONE);
+        }
+    });
 }
 
 pub(super) fn gather_element_declarations(node: Node<'_>, out: &mut Matches) {
@@ -530,13 +520,12 @@ pub(super) fn gather_element_declarations(node: Node<'_>, out: &mut Matches) {
 }
 
 pub(super) fn decl_sheet_cache_trim() {
-    let dropped = {
-        let mut sheets = decl_sheets();
+    let dropped = DECL_SHEETS.with_borrow_mut(|sheets| {
         if sheets.len() >= DECL_SHEETS_MAX {
-            core::mem::take(&mut *sheets)
+            core::mem::take(sheets)
         } else {
             HashMap::new()
         }
-    };
+    });
     drop(dropped);
 }

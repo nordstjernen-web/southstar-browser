@@ -2,13 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::ffi::{c_int, c_uint};
 use core::ops::Deref;
-use core::ptr;
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 
 use southstar_dom::{Kind, Node, NsNode, children};
@@ -30,20 +29,19 @@ use super::gather::{
 };
 use super::layers::{LayerRanks, layer_ranks_build};
 use super::matcher::{active_node, focus_node, fullscreen_node, hover_node};
-use super::pending::{Resolved, resolve_pending};
+use super::pending::resolve_pending;
 use super::registry::{
     RegisteredProps, registered_property_serial, registered_props_begin, registered_props_end,
 };
 use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
 use super::sheet::{Sheet, SheetData};
-use super::style_alloc::{RetainedStyle, style_alloc, style_clone_shared, style_free};
+use super::style_alloc::{RetainedStyle, style_alloc};
 use super::style_map::StyleMap;
 use super::style_share::{
     Shared, style_share_begin, style_share_end, style_share_find, style_share_insert,
 };
 use super::ua::ua_sheet;
-use super::value::{KIND_LENGTH, OwnedValue};
 use super::values::values_equal;
 use super::viewport;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
@@ -78,16 +76,12 @@ fn pseudo_slot(pe: c_uint) -> usize {
 
 struct Scratch {
     matches: Vec<Matches>,
-    owned: Vec<OwnedValue>,
-    pseudo_owned: Vec<OwnedValue>,
 }
 
 impl Scratch {
     fn new() -> Self {
         Scratch {
             matches: Vec::new(),
-            owned: Vec::new(),
-            pseudo_owned: Vec::new(),
         }
     }
 }
@@ -107,36 +101,19 @@ thread_local! {
     static SCRATCH: Cell<Option<Box<Scratch>>> = const { Cell::new(None) };
 }
 
-struct StyleRef(*mut RawStyle);
-
-unsafe impl Send for StyleRef {}
-
-impl Drop for StyleRef {
-    fn drop(&mut self) {
-        unsafe { style_free(self.0) };
-    }
-}
-
-impl StyleRef {
-    fn get(&self) -> &RawStyle {
-        // SAFETY: a StyleRef holds a reference on a live style, so the style outlives it.
-        unsafe { &*self.0 }
-    }
-}
-
 fn same_value(before: &RawStyle, after: &RawStyle, prop: usize) -> bool {
     values_equal(before.value_at(prop), after.value_at(prop))
 }
 
 fn keeps_children(before: &RawStyle, after: &RawStyle, variables_may_differ: bool) -> bool {
     before.display == after.display
-        && (!variables_may_differ || ptr::eq(before.vars, after.vars))
+        && (!variables_may_differ || before.same_vars(after))
         && (0..PROP_COUNT).all(|prop| {
             !super::cascade::passed_to_children(prop) || same_value(before, after, prop)
         })
 }
 
-type Styles = HashMap<usize, StyleRef>;
+type Styles = HashMap<usize, RetainedStyle>;
 
 struct Previous {
     key: PassKey,
@@ -148,17 +125,22 @@ struct Incremental {
     before_change: Option<Styles>,
 }
 
-static INCREMENTAL: Mutex<Incremental> = Mutex::new(Incremental {
-    previous: None,
-    before_change: None,
-});
+thread_local! {
+    static INCREMENTAL: RefCell<Incremental> = const {
+        RefCell::new(Incremental {
+            previous: None,
+            before_change: None,
+        })
+    };
+}
+
 static EXCLUDED: Mutex<Option<HashSet<usize>>> = Mutex::new(None);
 static EXCLUDED_COUNT: AtomicUsize = AtomicUsize::new(0);
 static ZOOM: AtomicU64 = AtomicU64::new(1f64.to_bits());
 static NEXT_SHARE_ID: AtomicU64 = AtomicU64::new(0);
 
-fn incremental_state() -> MutexGuard<'static, Incremental> {
-    INCREMENTAL.lock().unwrap_or_else(PoisonError::into_inner)
+fn incremental_state<R>(f: impl FnOnce(&mut Incremental) -> R) -> R {
+    INCREMENTAL.with_borrow_mut(f)
 }
 
 fn set_excluded(node: usize, exclude: bool) {
@@ -186,9 +168,8 @@ fn zoom() -> f64 {
 }
 
 fn font_size_px(style: &RawStyle) -> Option<f64> {
-    let value = unsafe { style.values[Prop::FontSize.id()].as_ref() }?;
-    let length = unsafe { value.u.length };
-    (value.kind == KIND_LENGTH && length.unit == PX).then_some(length.v)
+    let (v, unit) = style.value_at(Prop::FontSize.id())?.length()?;
+    (unit == PX).then_some(v)
 }
 
 fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f64)> {
@@ -232,8 +213,8 @@ impl<'a> Walk<'a> {
         &mut self,
         node: Node<'_>,
         author: &Sheets<'a>,
-        parent: *const RawStyle,
-        layout_parent: *const RawStyle,
+        parent: Option<&RawStyle>,
+        layout_parent: Option<&RawStyle>,
         under_dirty: bool,
     ) {
         if self.depth >= MAX_DEPTH {
@@ -244,7 +225,7 @@ impl<'a> Walk<'a> {
         let is_document = node.kind() == Kind::Document;
         let saved_viewport = if is_document {
             node.parent()
-                .and_then(|frame| frame_viewport(frame, unsafe { parent.as_ref() }))
+                .and_then(|frame| frame_viewport(frame, parent))
         } else {
             None
         };
@@ -258,10 +239,11 @@ impl<'a> Walk<'a> {
         };
         let nested_document = is_document && node.parent().is_some();
         let (mut child_parent, mut child_layout_parent) = if nested_document {
-            (ptr::null(), ptr::null())
+            (None, None)
         } else {
             (parent, layout_parent)
         };
+        let own_style: RetainedStyle;
         let outer_root_px = if nested_document {
             core::mem::replace(&mut self.root_px, 0.0)
         } else {
@@ -276,16 +258,11 @@ impl<'a> Walk<'a> {
             let mut dirty = restyled || own_only;
             let reuse = self.reuse;
             let before = reuse.and_then(|styles| styles.get(&(ptr as usize)));
-            let previous = if dirty {
-                None
-            } else {
-                before.map(|style| style.0)
-            };
-            let style = match previous {
+            let previous = if dirty { None } else { before };
+            own_style = match previous {
                 Some(style) => {
-                    unsafe { (*style).retain() };
                     self.reused += 1;
-                    style
+                    style.clone()
                 }
                 None => {
                     self.recomputed += 1;
@@ -293,14 +270,11 @@ impl<'a> Walk<'a> {
                     self.compute_element(node, author, parent, layout_parent)
                 }
             };
-            // SAFETY: style is a live computed style whose reference this pass hands to the table.
-            if let Some(owned) = unsafe { RetainedStyle::adopt(style) } {
-                self.out.insert(ptr as usize, owned);
-            }
-            let computed = unsafe { &*style };
-            child_parent = style;
+            self.out.insert(ptr as usize, own_style.clone());
+            let computed = own_style.get();
+            child_parent = Some(computed);
             if computed.display.box_ != BOX_CONTENTS {
-                child_layout_parent = style;
+                child_layout_parent = Some(computed);
             }
             if self.root_px <= 0.0
                 && let Some(px) = font_size_px(computed)
@@ -350,9 +324,9 @@ impl<'a> Walk<'a> {
         &mut self,
         node: Node<'_>,
         author: &Sheets<'a>,
-        parent: *const RawStyle,
-        layout_parent: *const RawStyle,
-    ) -> *mut RawStyle {
+        parent: Option<&RawStyle>,
+        layout_parent: Option<&RawStyle>,
+    ) -> RetainedStyle {
         let mask = author.iter().fold(pseudo_mask(self.ua), |mask, &sheet| {
             mask | pseudo_mask(sheet)
         });
@@ -368,12 +342,7 @@ impl<'a> Walk<'a> {
             }
         }
         let pes = &pes[..n];
-        let Scratch {
-            matches,
-            owned,
-            pseudo_owned,
-        } = &mut *self.scratch;
-        owned.clear();
+        let Scratch { matches } = &mut *self.scratch;
         let outs = targets(matches, n);
         ancestor_filter_subject(node);
         if let Some(ua) = self.ua {
@@ -393,22 +362,19 @@ impl<'a> Walk<'a> {
             }
         }
         gather_element_declarations(node, &mut outs[0]);
-        let parent_style = unsafe { parent.as_ref() };
+        let parent_style = parent;
         let shared = style_share_find(parent_style, self.root_px, pes, outs);
         let mut keyed = !matches!(shared, Shared::Unkeyed);
         if !keyed {
             set_excluded(node.as_ptr() as usize, true);
         }
-        if let Shared::Hit(shared) = shared {
-            let style = style_clone_shared(unsafe { &*shared });
-            display_contents_to_none(node, unsafe { &mut *style });
+        if let Shared::Hit(mut style) = shared {
+            display_contents_to_none(node, &mut style);
             outs[0].clear();
-            owned.clear();
-            return style;
+            return RetainedStyle::new(style);
         }
-        let style_ptr = style_alloc();
-        let style = unsafe { &mut *style_ptr };
-        let parent_vars = parent_style.map_or(ptr::null_mut(), |p| p.vars);
+        let mut style = style_alloc();
+        let parent_vars = parent_style.and_then(|p| p.vars.as_ref());
         let is_root = node.parent().is_some_and(|p| p.kind() == Kind::Document);
         let pass = Pass {
             registered: self.registered,
@@ -423,66 +389,61 @@ impl<'a> Walk<'a> {
             pending,
         } = &mut element[0];
         style.vars = build_vars(parent_vars, vars, pass.registered, Some(pass.adjust_cache));
-        let resolved = Resolved {
-            matches: decls,
-            owned,
-        };
-        resolve_pending(pending, style.vars, pass.registered, resolved, node);
+        resolve_pending(pending, style.vars.as_deref(), pass.registered, decls, node);
         let parents = Parents {
             style: parent_style,
-            layout: unsafe { layout_parent.as_ref() },
+            layout: layout_parent,
         };
-        cascade_apply(decls, style, &parents, is_root, pass.root_px);
-        compute_registered_vars(style, parent_style, pass.registered, pass.root_px);
-        strip_native_widget_decorations(node, style);
-        if display_contents_to_none(node, style) {
+        cascade_apply(decls, &mut style, &parents, is_root, pass.root_px);
+        compute_registered_vars(&style, parent_style, pass.registered, pass.root_px);
+        strip_native_widget_decorations(node, &mut style);
+        if display_contents_to_none(node, &mut style) {
             keyed = false;
         }
         element[0].clear();
-        owned.clear();
         for (&pe, dest) in pes[1..].iter().zip(pseudo.iter_mut()) {
-            pseudo_style(&pass, node, style, pe, dest, pseudo_owned);
+            pseudo_style(&pass, node, &mut style, pe, dest);
         }
+        let style = RetainedStyle::new(style);
         if keyed {
-            style_share_insert(style_ptr);
+            style_share_insert(&style);
         }
-        style_ptr
+        style
     }
 }
 
-fn pseudo_style(
-    pass: &Pass,
-    node: Node<'_>,
-    style: &mut RawStyle,
-    pe: c_uint,
-    dest: &mut Matches,
-    owned: &mut Vec<OwnedValue>,
-) {
+fn pseudo_style(pass: &Pass, node: Node<'_>, style: &mut RawStyle, pe: c_uint, dest: &mut Matches) {
     if dest.decls.is_empty() && dest.pending.is_empty() {
         return;
     }
     let generated = pe == PE_BEFORE || pe == PE_AFTER;
-    let pseudo_ptr = style_alloc();
-    let pseudo = unsafe { &mut *pseudo_ptr };
+    let mut pseudo = style_alloc();
     let Matches {
         decls,
         vars,
         pending,
     } = dest;
-    pseudo.vars = build_vars(style.vars, vars, pass.registered, Some(pass.adjust_cache));
-    let resolved = Resolved {
-        matches: decls,
-        owned,
-    };
-    resolve_pending(pending, pseudo.vars, pass.registered, resolved, node);
+    pseudo.vars = build_vars(
+        style.vars.as_ref(),
+        vars,
+        pass.registered,
+        Some(pass.adjust_cache),
+    );
+    resolve_pending(
+        pending,
+        pseudo.vars.as_deref(),
+        pass.registered,
+        decls,
+        node,
+    );
     let parent: &RawStyle = style;
     let parents = Parents {
         style: Some(parent),
         layout: generated.then_some(parent),
     };
-    cascade_apply(decls, pseudo, &parents, false, pass.root_px);
-    compute_registered_vars(pseudo, Some(parent), pass.registered, pass.root_px);
-    let keep = !generated || !pseudo.values[Prop::Content.id()].is_null();
+    cascade_apply(decls, &mut pseudo, &parents, false, pass.root_px);
+    compute_registered_vars(&pseudo, Some(parent), pass.registered, pass.root_px);
+    let keep = !generated || pseudo.values[Prop::Content.id()].is_some();
     let slot = if !keep {
         None
     } else if generated && pseudo.display.box_ == BOX_NONE {
@@ -494,19 +455,14 @@ fn pseudo_style(
     } else {
         Some(pseudo_slot(pe))
     };
-    match slot {
-        Some(slot) => style.pseudo_styles[slot] = pseudo_ptr,
-        None => unsafe { style_free(pseudo_ptr) },
+    if let Some(slot) = slot {
+        style.pseudo_styles[slot] = Some(RetainedStyle::new(pseudo));
     }
-    owned.clear();
 }
 
 fn retained(out: &StyleMap) -> Styles {
-    out.entries()
-        .map(|(node, style)| {
-            unsafe { (*style).retain() };
-            (node, StyleRef(style))
-        })
+    out.styles()
+        .map(|(node, style)| (node, style.clone()))
         .collect()
 }
 
@@ -575,7 +531,7 @@ fn compute(
         && incremental::zoom_allows_reuse(zoom());
     let containers = container_map_signature();
     let key = interaction_key(doc as usize, sig, containers);
-    let previous = incremental_state().previous.take();
+    let previous = incremental_state(|state| state.previous.take());
     let active = usable && previous.as_ref().is_some_and(|p| p.key == key);
 
     ancestor_filter_begin(attr_ancestor_hashes());
@@ -605,7 +561,7 @@ fn compute(
         recomputed: 0,
     };
     if let Some(doc) = doc_node {
-        walk.walk(doc, authors, ptr::null(), ptr::null(), false);
+        walk.walk(doc, authors, None, None, false);
     }
     let (reused, recomputed) = (walk.reused, walk.recomputed);
     let out = core::mem::take(&mut walk.out);
@@ -617,11 +573,12 @@ fn compute(
             key: interaction_key(doc as usize, sig, containers),
             styles: retained(&out),
         };
-        let mut state = incremental_state();
-        let stale = state.before_change.take();
-        state.before_change = previous.map(|p| p.styles);
-        state.previous = Some(current);
-        drop(state);
+        let stale = incremental_state(|state| {
+            let stale = state.before_change.take();
+            state.before_change = previous.map(|p| p.styles);
+            state.previous = Some(current);
+            stale
+        });
         drop(stale);
         if profile {
             glib::stderr_write(
@@ -633,7 +590,7 @@ fn compute(
             );
         }
     } else if let Some(previous) = previous {
-        let stale = incremental_state().before_change.take();
+        let stale = incremental_state(|state| state.before_change.take());
         drop(previous);
         drop(stale);
     }
@@ -664,13 +621,13 @@ pub fn incremental_exclude(node: *const NsNode, exclude: bool) {
 }
 
 pub fn style_before_change(node: Node<'_>) -> Option<RetainedStyle> {
-    let state = incremental_state();
-    let style = state
-        .before_change
-        .as_ref()?
-        .get(&(node.as_ptr() as usize))?;
-    // SAFETY: the before-change styles each hold a reference on a live style, and the lock keeps them.
-    unsafe { RetainedStyle::retain(style.0) }
+    incremental_state(|state| {
+        state
+            .before_change
+            .as_ref()?
+            .get(&(node.as_ptr() as usize))
+            .cloned()
+    })
 }
 
 pub fn set_render_zoom(zoom: f64) {

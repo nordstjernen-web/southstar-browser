@@ -3,11 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{OnceCell, RefCell};
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::mem::size_of;
-use core::ptr;
+use core::ffi::{CStr, c_int, c_void};
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_css_prop_syntax::{self as prop_syntax, Context};
 use southstar_glib::GBoolean;
@@ -18,13 +17,12 @@ use super::font::relative_unit_px;
 use super::registry::RegisteredProps;
 use super::sheet::PropertyRule;
 use super::values::text_of;
-use super::vars::{RawVarMap, VarTable, chain_lookup, map_ref, new_map, var_map_unref};
+use super::vars::{VarMap, VarTable, chain_lookup, new_map};
 use crate::computed_units::{self, Font};
 use crate::custom_props::{self, Inherited, Own, Registered, Registry, VarMatch};
 use crate::prop::Prop;
 use crate::units::{self, CAP, CH, EX, IC, VH, VW};
 
-#[repr(C)]
 pub(super) struct RawVarMatch {
     pub(super) origin: c_int,
     pub(super) spec_a: c_int,
@@ -38,16 +36,13 @@ pub(super) struct RawVarMatch {
     pub(super) important: GBoolean,
     pub(super) inline_style: GBoolean,
     pub(super) rule: *const c_void,
-    pub(super) name: *const c_char,
-    pub(super) text: *const c_char,
+    pub(super) name: Rc<CStr>,
+    pub(super) text: Rc<CStr>,
 }
-
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(size_of::<RawVarMatch>() == 72);
 
 struct Props<'a>(&'a RegisteredProps);
 
-struct Parent<'a>(&'a RawVarMap);
+struct Parent<'a>(&'a VarMap);
 
 fn registered(rule: &PropertyRule) -> Registered<'_> {
     Registered {
@@ -89,7 +84,6 @@ impl Inherited for Parent<'_> {
 
 fn views(raw: &[RawVarMatch]) -> Vec<VarMatch<'_>> {
     raw.iter()
-        .filter(|m| !m.name.is_null() && !m.text.is_null())
         .map(|m| VarMatch {
             origin: m.origin,
             specificity: (m.spec_a, m.spec_b, m.spec_c),
@@ -101,8 +95,8 @@ fn views(raw: &[RawVarMatch]) -> Vec<VarMatch<'_>> {
             important: m.important != 0,
             inline_style: m.inline_style != 0,
             rule: m.rule as usize,
-            name: unsafe { CStr::from_ptr(m.name) }.to_bytes(),
-            text: unsafe { CStr::from_ptr(m.text) }.to_bytes(),
+            name: m.name.to_bytes(),
+            text: m.text.to_bytes(),
         })
         .collect()
 }
@@ -117,32 +111,23 @@ fn own_table(own: Own) -> VarTable {
         .collect()
 }
 
-#[derive(Default)]
-pub(super) struct AdjustCache(RefCell<HashMap<*mut RawVarMap, *mut RawVarMap>>);
+type Adjusted = (Rc<VarMap>, Rc<VarMap>);
 
-impl Drop for AdjustCache {
-    fn drop(&mut self) {
-        for (parent, built) in self.0.get_mut().drain() {
-            // SAFETY: the cache holds one reference on each parent and each built map.
-            unsafe { var_map_unref(parent) };
-            // SAFETY: the cache holds one reference on each parent and each built map.
-            unsafe { var_map_unref(built) };
-        }
-    }
-}
+#[derive(Default)]
+pub(super) struct AdjustCache(RefCell<HashMap<*const VarMap, Adjusted>>);
 
 pub(super) fn build_vars(
-    parent: *mut RawVarMap,
+    parent: Option<&Rc<VarMap>>,
     raw: &[RawVarMatch],
     registered_props: &RegisteredProps,
     adjust_cache: Option<&AdjustCache>,
-) -> *mut RawVarMap {
+) -> Option<Rc<VarMap>> {
     let have_regs = !registered_props.is_empty();
     let have_local = !raw.is_empty();
-    let inherited = unsafe { parent.as_ref() }.map(Parent);
+    let inherited = parent.map(|p| Parent(p));
     let inherited = inherited.as_ref().map(|p| p as &dyn Inherited);
-    if parent.is_null() && !have_regs && !have_local {
-        return ptr::null_mut();
+    if parent.is_none() && !have_regs && !have_local {
+        return None;
     }
     let mut matches = views(raw);
     if have_local {
@@ -150,31 +135,32 @@ pub(super) fn build_vars(
     }
     if !have_regs {
         if !have_local {
-            return unsafe { map_ref(parent) };
+            return parent.cloned();
         }
         let own = custom_props::unregistered(&matches, inherited);
-        return new_map(own_table(own), unsafe { map_ref(parent) });
+        return Some(new_map(own_table(own), parent.cloned()));
     }
-    let adjust_cache = adjust_cache.filter(|_| !parent.is_null() && !have_local);
+    let adjust_cache = adjust_cache.filter(|_| parent.is_some() && !have_local);
+    let key = parent.map_or(core::ptr::null(), Rc::as_ptr);
     if let Some(cache) = adjust_cache
-        && let Some(&hit) = cache.0.borrow().get(&parent)
+        && let Some((_, hit)) = cache.0.borrow().get(&key)
     {
-        return unsafe { map_ref(hit) };
+        return Some(hit.clone());
     }
     let own = custom_props::registered(&matches, inherited, &Props(registered_props));
-    let built = if !parent.is_null() && !have_local && own.is_empty() {
-        unsafe { map_ref(parent) }
-    } else {
-        new_map(own_table(own), unsafe { map_ref(parent) })
+    let built = match parent {
+        Some(parent) if !have_local && own.is_empty() => parent.clone(),
+        _ => new_map(own_table(own), parent.cloned()),
     };
-    if let Some(cache) = adjust_cache {
-        // SAFETY: parent is a live map the caller holds a reference on, and the cache keeps the new one.
-        let key = unsafe { map_ref(parent) };
-        // SAFETY: built is the live map just made or referenced above, and the cache keeps the new reference.
-        let value = unsafe { map_ref(built) };
-        cache.0.borrow_mut().insert(key, value);
+    if let Some(cache) = adjust_cache
+        && let Some(parent) = parent
+    {
+        cache
+            .0
+            .borrow_mut()
+            .insert(key, (parent.clone(), built.clone()));
     }
-    built
+    Some(built)
 }
 
 fn relative(unit: u32, px: f64, font: &Font<'_>) -> f64 {
@@ -215,19 +201,19 @@ pub(super) fn compute_registered_vars(
     registered_props: &RegisteredProps,
     root_px: f64,
 ) {
-    // SAFETY: vars is null or a map this style holds a reference on, and no reference into it is live during the cascade step.
-    let Some(vars) = (unsafe { style.vars.as_mut() }) else {
+    let Some(vars) = style.vars.as_deref() else {
         return;
     };
-    if parent_style.is_some_and(|p| p.vars == style.vars) {
+    if parent_style.is_some_and(|p| p.same_vars(style)) {
         return;
     }
-    if registered_props.is_empty() {
+    if registered_props.is_empty() || vars.computed() {
         return;
     }
     let current_color = OnceCell::new();
     let mut ctx: Option<Context<'_>> = None;
-    for (name, value) in &mut vars.own {
+    let mut replaced = Vec::new();
+    for (name, value) in vars.table() {
         let Some(syntax) = registered_props
             .get(name.to_bytes())
             .and_then(PropertyRule::typed_syntax)
@@ -235,12 +221,17 @@ pub(super) fn compute_registered_vars(
             continue;
         };
         let ctx = ctx.get_or_insert_with(|| {
-            let color = current_color
-                .get_or_init(|| unsafe { text_of(style.value(Prop::Color as usize), false) });
+            let color =
+                current_color.get_or_init(|| text_of(style.value_at(Prop::Color as usize), false));
             syntax_ctx(&StyleView(style), root_px, color)
         });
         if let Some(computed) = prop_syntax::compute(syntax, value.to_bytes(), Some(ctx)) {
-            *value = c_text(&computed);
+            replaced.push((name.clone(), c_text(&computed)));
         }
+    }
+    if !replaced.is_empty() {
+        let mut table = vars.table().clone();
+        table.extend(replaced);
+        vars.set_computed(table);
     }
 }

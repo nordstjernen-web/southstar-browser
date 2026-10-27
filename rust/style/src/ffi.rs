@@ -527,14 +527,6 @@ impl StyleTable {
     }
 }
 
-/// # Safety
-///
-/// `style` is null or a live computed style made by rust/css that nothing else is reading or writing.
-pub unsafe fn value_slot(style: *mut Style, index: usize) -> Option<*mut *mut NsCssValue> {
-    // SAFETY: the caller's obligations are value_slot's.
-    unsafe { southstar_css::style_value_slot(style, index) }
-}
-
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
     // SAFETY: a box's style pointer is null or the computed style the box holds for as long as it lives.
     unsafe { StyleRef::from_ptr(b.style()) }

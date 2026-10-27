@@ -57,13 +57,17 @@ pub(crate) fn regex_matches_whole(pattern: Option<&[u8]>, value: &[u8]) -> bool 
     };
     let anchored = c_string(&[b"^(?:".as_slice(), pattern, b")$"].concat());
     let mut error = ptr::null_mut();
+    // SAFETY: anchored is a NUL-terminated pattern and error a null GError slot, as g_regex_new takes them.
     let regex = unsafe { g_regex_new(anchored.as_ptr(), 0, 0, &mut error) };
     if regex.is_null() {
+        // SAFETY: error is the slot g_regex_new filled in when it failed.
         unsafe { g_clear_error(&mut error) };
         return true;
     }
     let value = c_string(value);
+    // SAFETY: regex is the live regex made above and value a NUL-terminated string.
     let matched = unsafe { g_regex_match(regex, value.as_ptr(), 0, ptr::null_mut()) != 0 };
+    // SAFETY: regex is the live regex made above, whose one reference is given up here.
     unsafe { g_regex_unref(regex) };
     matched
 }

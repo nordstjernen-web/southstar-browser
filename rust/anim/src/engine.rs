@@ -190,9 +190,8 @@ impl KfStop {
     }
 
     fn timing(&self) -> Option<Timing> {
-        let keyword = self
-            .value(props::known().animation_timing_function)
-            .keyword()?;
+        let value = self.value(props::known().animation_timing_function);
+        let keyword = value.keyword()?;
         let mut timing = Timing::default();
         timing.parse_into(keyword.to_bytes()).then_some(timing)
     }
@@ -416,7 +415,7 @@ impl Run {
                         let to_wide = wide_resolved(prop, n.value(prop));
                         let from = from_wide.as_ref().map_or(p.value(prop), Val::borrow);
                         let to = to_wide.as_ref().map_or(n.value(prop), Val::borrow);
-                        out = Val::interpolate(prop, from, to, t, self.keywords)
+                        out = Val::interpolate(prop, &from, &to, t, self.keywords)
                             .or_else(|| Val::retain(if t < 0.5 { from } else { to }));
                     }
                     (Some(p), _) if p.pct >= 100.0 - 1e-9 => out = Val::retain(p.value(prop)),
@@ -685,13 +684,13 @@ impl Shared {
         };
         let eased = ch.timing.apply(t);
         let (from, to) = (Borrowed::of(ch.from.as_ref()), Borrowed::of(ch.to.as_ref()));
-        let nearest = if eased < 0.5 { from } else { to };
+        let nearest = if eased < 0.5 { &from } else { &to };
         let next = if ch.discrete {
-            Val::retain(nearest)
+            Val::retain(nearest.clone())
         } else {
-            Val::interpolate(ch.prop, from, to, eased, ch.keywords)
+            Val::interpolate(ch.prop, &from, &to, eased, ch.keywords)
         };
-        ch.current = next.or_else(|| Val::retain(nearest));
+        ch.current = next.or_else(|| Val::retain(nearest.clone()));
         true
     }
 
@@ -708,7 +707,7 @@ impl Shared {
     ) {
         let mut duration_ms = e.duration_ms();
         let mut delay_ms = e.delay_ms();
-        if ch.active && ch.to.is_some() && to.equal(Borrowed::of(ch.from.as_ref())) {
+        if ch.active && ch.to.is_some() && to.equal(&Borrowed::of(ch.from.as_ref())) {
             let elapsed = ch.elapsed_ms(now_us);
             let p = if ch.duration_ms > 0.0 {
                 gclamp(elapsed / ch.duration_ms, 0.0, 1.0)
@@ -727,7 +726,7 @@ impl Shared {
         if ch.active {
             self.chan_cancel(node, ch, now_us);
         }
-        let new_from = Val::retain(from);
+        let new_from = Val::retain(from.clone());
         let new_to = Val::retain(to);
         let new_current = Val::retain(from);
         ch.from = new_from;
@@ -973,7 +972,7 @@ fn ancestor_transitions_to(
     states: &BTreeMap<usize, State>,
     node: NodePtr,
     prop: i32,
-    cur: Borrowed,
+    cur: &Borrowed,
 ) -> bool {
     node.ancestors().any(|p| {
         let Some(ps) = states.get(&p.key()) else {
@@ -1028,7 +1027,7 @@ fn apply_animated_value(
         if base.is_null() {
             Val::placeholder()
         } else {
-            Val::retain(base).unwrap_or_else(Val::placeholder)
+            Val::retain(base.clone()).unwrap_or_else(Val::placeholder)
         }
     });
     let font_size = props::known().font_size;
@@ -1294,16 +1293,16 @@ impl Anim {
             ch.has_last = true;
         }
         if !ch.has_last {
-            ch.last = Val::retain(cur);
+            ch.last = Val::retain(cur.clone());
             ch.last_currentcolor = css::from_currentcolor(style, prop);
             ch.has_last = true;
             return;
         }
         let cur_currentcolor = css::from_currentcolor(style, prop);
         let last = Borrowed::of(ch.last.as_ref());
-        if cur.equal(last) || (cur_currentcolor && ch.last_currentcolor) {
+        if cur.equal(&last) || (cur_currentcolor && ch.last_currentcolor) {
             ch.last_currentcolor = cur_currentcolor;
-            if !cur.equal(last) {
+            if !cur.equal(&last) {
                 ch.last = Val::retain(cur);
             }
             return;
@@ -1321,7 +1320,7 @@ impl Anim {
         let cur_eff = if cur.is_null() {
             Borrowed::of(cur_init.as_ref())
         } else {
-            cur
+            cur.clone()
         };
         let last_eff = if ch.last.is_some() {
             last
@@ -1343,8 +1342,8 @@ impl Anim {
                 } else {
                     last_eff
                 };
-                let interpolable = Val::interpolate(prop, from, cur_eff, 0.0, keywords).is_some();
-                if interpolable && ancestor_transitions_to(&self.states, node, prop, cur_eff) {
+                let interpolable = Val::interpolate(prop, &from, &cur_eff, 0.0, keywords).is_some();
+                if interpolable && ancestor_transitions_to(&self.states, node, prop, &cur_eff) {
                     if ch.active {
                         self.shared.chan_cancel(node, ch, now_us);
                     }
@@ -1633,10 +1632,10 @@ impl Anim {
                         .map_or(Borrowed::NULL, |ps| css::style_value(ps, prop));
                     let endpoint = |v: Option<&Val>| -> (Option<Val>, Borrowed) {
                         let Some(v) = v else {
-                            return (None, fallback);
+                            return (None, fallback.clone());
                         };
                         if inherits_from_parent(prop, v.borrow()) && !parent.is_null() {
-                            return (None, parent);
+                            return (None, parent.clone());
                         }
                         match wide_resolved(prop, v.borrow()) {
                             Some(resolved) => {
@@ -1650,7 +1649,7 @@ impl Anim {
                     let (_to_owned, to) = endpoint(pa.to.as_ref());
                     let both = !from.is_null() && !to.is_null();
                     let mut out = if both {
-                        Val::interpolate(prop, from, to, pa.t, *keywords)
+                        Val::interpolate(prop, &from, &to, pa.t, *keywords)
                     } else {
                         None
                     };
