@@ -7,7 +7,7 @@ minimal, secure web browser written from scratch in Rust with GTK 4.
 
 ```sh
 npm install -g southstar-browser
-southstar https://example.com
+southstar https://nordstjernen.org
 ```
 
 Installing builds Southstar from the release source on your machine, with

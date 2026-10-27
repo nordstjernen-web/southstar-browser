@@ -79,7 +79,7 @@ npm builds it from source for you:
 
 ```sh
 npm install -g southstar-browser
-southstar https://example.com
+southstar https://nordstjernen.org
 ```
 
 The package builds the release on Linux, macOS, the BSDs and Windows (with
@@ -183,7 +183,7 @@ instructions are in
 
 `meson install` puts `internet-browser-southstar` beside `southstar` in the binary
 directory, a symbolic link to it, so `internet-browser-southstar
-https://example.com` starts Southstar. The name is Southstar's own, so it
+https://nordstjernen.org` starts Southstar. The name is Southstar's own, so it
 never starts Nordstjernen or Northstar installed beside it. The `.deb` and
 `.rpm` packages register it with `update-alternatives` instead of shipping
 the link, and drop the shared `internet-browser` alternative earlier
