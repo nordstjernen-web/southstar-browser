@@ -2,14 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_long, c_void};
+use core::ffi::{c_char, c_long};
 use std::ffi::CString;
 use std::time::Duration;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
 use southstar_netstore::cookies::Context;
 
+use super::queue::Cancellable;
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
 use super::transport::{ca_bundle_path, ns_net_aborting, ns_net_ec_curves};
 use crate::response::cstr;
@@ -17,10 +18,6 @@ use crate::{cookies, hsts, url};
 
 const HTTP_VERSION_1_1: c_long = 2;
 const HTTP_VERSION_2_0: c_long = 3;
-
-unsafe extern "C" {
-    fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
-}
 
 pub struct HopReq<'a> {
     pub url: &'a [u8],
@@ -66,15 +63,13 @@ struct Sinks<'a> {
     context: Context,
     wctx: &'a mut NsWriteCtx,
     hctx: &'a mut NsHeaderCtx,
-    cancellable: *mut c_void,
+    cancellable: Option<&'a Cancellable>,
     sts: Option<Vec<u8>>,
 }
 
 impl Handler for Sinks<'_> {
     fn should_abort(&self) -> bool {
-        ns_net_aborting() != 0
-            || (!self.cancellable.is_null()
-                && unsafe { g_cancellable_is_cancelled(self.cancellable) } != 0)
+        ns_net_aborting() != 0 || self.cancellable.is_some_and(Cancellable::is_cancelled)
     }
 
     fn status_line(&mut self, line: &[u8]) {
@@ -111,7 +106,7 @@ pub fn transport(
     wctx: &mut NsWriteCtx,
     hctx: &mut NsHeaderCtx,
     out: &mut HopOut,
-    cancellable: *mut c_void,
+    cancellable: Option<&Cancellable>,
 ) -> bool {
     let url_bytes = hop.url;
     crate::route::apply_dns_over_https();

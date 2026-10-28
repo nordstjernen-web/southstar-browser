@@ -1,14 +1,17 @@
-//! Southstar — the C ABI of the request queue: asynchronous and blocking fetches over GTask, the limits of 32 fetches at once and 6 per host, sharing in-flight and preloaded responses, preconnects, blob: URLs, idling and shutdown.
+//! Southstar — the request queue: asynchronous fetches on their own threads with the result handed back to the caller's main context, blocking fetches, the limits of 32 fetches at once and 6 per host, sharing in-flight and preloaded responses, preconnects, blob: URLs, idling and shutdown.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
-use std::collections::{BTreeMap, VecDeque};
+use core::cell::RefCell;
+use core::ffi::{CStr, c_int};
+use core::mem::ManuallyDrop;
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::thread;
 use std::time::{Duration, Instant};
 
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::MainContext;
 
 use super::fetch::{self, Failure, Fetch};
 use super::hop;
@@ -28,93 +31,66 @@ const PRECONNECT_CONNECT_TIMEOUT_S: i64 = 6;
 const PRECONNECT_TIMEOUT_S: i64 = 10;
 const DLOG_NET: c_int = 4;
 
-pub type ReadyCallback =
-    Option<unsafe extern "C" fn(source: *mut c_void, result: *mut c_void, user_data: *mut c_void)>;
-type ThreadFunc = unsafe extern "C" fn(
-    task: *mut c_void,
-    source: *mut c_void,
-    task_data: *mut c_void,
-    cancellable: *mut c_void,
-);
 pub type BlobResolver = fn(url: &[u8]) -> Option<(Arc<[u8]>, Option<Vec<u8>>)>;
+pub type Outcome = Result<Response, Vec<u8>>;
 
-unsafe extern "C" {
-    fn g_task_new(
-        source_object: *mut c_void,
-        cancellable: *mut c_void,
-        callback: ReadyCallback,
-        callback_data: *mut c_void,
-    ) -> *mut c_void;
-    fn g_task_set_source_tag(task: *mut c_void, source_tag: *const c_void);
-    fn g_task_get_name(task: *mut c_void) -> *const c_char;
-    fn g_task_set_name(task: *mut c_void, name: *const c_char);
-    fn g_task_set_task_data(task: *mut c_void, data: *mut c_void, destroy: glib::GDestroyNotify);
-    fn g_task_get_task_data(task: *mut c_void) -> *mut c_void;
-    fn g_task_run_in_thread(task: *mut c_void, func: ThreadFunc);
-    fn g_task_return_pointer(task: *mut c_void, result: *mut c_void, destroy: glib::GDestroyNotify);
-    fn g_task_return_error(task: *mut c_void, error: *mut GError);
-    fn g_task_return_boolean(task: *mut c_void, result: GBoolean);
-    fn g_task_is_valid(result: *mut c_void, source_object: *mut c_void) -> GBoolean;
-    fn g_task_propagate_pointer(task: *mut c_void, error: *mut *mut GError) -> *mut c_void;
-    fn g_object_unref(object: *mut c_void);
-    fn g_object_ref(object: *mut c_void) -> *mut c_void;
-    fn g_cancellable_new() -> *mut c_void;
-    fn g_cancellable_cancel(cancellable: *mut c_void);
-    fn g_return_if_fail_warning(
-        log_domain: *const c_char,
-        pretty_function: *const c_char,
-        expression: *const c_char,
-    );
+type Done = Box<dyn FnOnce(Outcome)>;
+
+thread_local! {
+    static CALLBACKS: RefCell<HashMap<u64, ManuallyDrop<Done>>> = RefCell::new(HashMap::new());
 }
 
-struct Task(*mut c_void);
+static NEXT_CALLBACK: AtomicU64 = AtomicU64::new(1);
 
-unsafe impl Send for Task {}
+struct Callback {
+    id: u64,
+    context: MainContext,
+}
 
-impl Task {
-    fn new(cancellable: *mut c_void, callback: ReadyCallback, user_data: *mut c_void) -> Task {
-        Task(unsafe { g_task_new(ptr::null_mut(), cancellable, callback, user_data) })
-    }
-
-    fn tagged(self, tag: *const c_void, name: &CStr) -> Task {
-        unsafe {
-            g_task_set_source_tag(self.0, tag);
-            if g_task_get_name(self.0).is_null() {
-                g_task_set_name(self.0, name.as_ptr());
-            }
+impl Callback {
+    fn register(done: Done) -> Callback {
+        let id = NEXT_CALLBACK.fetch_add(1, Ordering::Relaxed);
+        let _ = CALLBACKS.try_with(|callbacks| {
+            callbacks.borrow_mut().insert(id, ManuallyDrop::new(done));
+        });
+        Callback {
+            id,
+            context: MainContext::thread_default(),
         }
-        self
     }
 
-    fn context(&self) -> &FetchCtx {
-        unsafe { &*g_task_get_task_data(self.0).cast::<FetchCtx>() }
-    }
-}
-
-impl Drop for Task {
-    fn drop(&mut self) {
-        unsafe { g_object_unref(self.0) };
+    fn complete(self, outcome: Result<Response, Failure>) {
+        let id = self.id;
+        let outcome = outcome.map_err(|failure| failure.message().to_vec());
+        self.context.defer(move || run_callback(id, outcome));
     }
 }
 
-unsafe extern "C" fn response_free(data: *mut c_void) {
-    // SAFETY: GLib hands back the boxed response return_outcome gave the task, exactly once.
-    drop(unsafe { Box::from_raw(data.cast::<Response>()) });
-}
-
-fn return_outcome(task: *mut c_void, outcome: Result<Response, Failure>) {
-    match outcome {
-        Ok(resp) => {
-            let boxed = Box::into_raw(Box::new(resp));
-            // SAFETY: the task is live and takes ownership of the box, freed with response_free.
-            unsafe { g_task_return_pointer(task, boxed.cast(), Some(response_free)) }
-        }
-        Err(failure) => unsafe { g_task_return_error(task, failure.into_error()) },
+fn run_callback(id: u64, outcome: Outcome) {
+    let done = CALLBACKS
+        .try_with(|callbacks| callbacks.borrow_mut().remove(&id))
+        .ok()
+        .flatten();
+    if let Some(done) = done {
+        ManuallyDrop::into_inner(done)(outcome);
     }
 }
 
-fn fetch_async_tag(task: Task) -> Task {
-    task.tagged(fetch_async_tag as *const c_void, c"net_fetch_shared")
+#[derive(Clone, Default)]
+pub struct Cancellable(Arc<AtomicBool>);
+
+impl Cancellable {
+    pub fn new() -> Cancellable {
+        Cancellable::default()
+    }
+
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
 }
 
 struct FetchCtx {
@@ -129,8 +105,10 @@ struct FetchCtx {
     max_bytes: Option<u64>,
 }
 
-unsafe extern "C" fn fetch_ctx_free(data: *mut c_void) {
-    drop(unsafe { Box::from_raw(data.cast::<FetchCtx>()) });
+struct Pending {
+    ctx: FetchCtx,
+    cancellable: Option<Cancellable>,
+    callback: Callback,
 }
 
 impl Shareable for Response {
@@ -149,7 +127,7 @@ impl Shareable for Response {
 }
 
 enum Waiter {
-    Task(Task),
+    Async(Callback),
     Blocking(u64),
 }
 
@@ -169,7 +147,7 @@ static SHARED_DONE: Condvar = Condvar::new();
 struct Throttle {
     active: usize,
     preconnects: usize,
-    queue: VecDeque<Task>,
+    queue: VecDeque<Pending>,
     per_host: BTreeMap<Vec<u8>, usize>,
 }
 
@@ -185,10 +163,6 @@ static BLOB_RESOLVER: Mutex<Option<BlobResolver>> = Mutex::new(None);
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
 }
 
 fn aborting() -> bool {
@@ -207,11 +181,11 @@ fn deliver(key: &[u8], outcome: Result<&Response, &Failure>) {
     let Some(waiters) = shared.coalescer.deliver(key, outcome.ok()) else {
         return;
     };
-    let mut tasks = Vec::new();
+    let mut callbacks = Vec::new();
     let mut woke = false;
     for waiter in waiters {
         match waiter {
-            Waiter::Task(task) => tasks.push(task),
+            Waiter::Async(callback) => callbacks.push(callback),
             Waiter::Blocking(id) => {
                 shared.finished.insert(id, copy_outcome(outcome));
                 woke = true;
@@ -222,19 +196,24 @@ fn deliver(key: &[u8], outcome: Result<&Response, &Failure>) {
         SHARED_DONE.notify_all();
     }
     drop(shared);
-    for task in tasks {
-        return_outcome(task.0, copy_outcome(outcome));
+    for callback in callbacks {
+        callback.complete(copy_outcome(outcome));
     }
 }
 
-fn join_async(key: &[u8], callback: ReadyCallback, user_data: *mut c_void) -> Claim<Response> {
-    lock(&SHARED).coalescer.claim(key, || {
-        Waiter::Task(fetch_async_tag(Task::new(
-            ptr::null_mut(),
-            callback,
-            user_data,
-        )))
-    })
+fn join_async(key: &[u8], callback: Callback) -> Option<Callback> {
+    let mut joiner = Some(callback);
+    let claim = lock(&SHARED).coalescer.claim(key, || {
+        Waiter::Async(joiner.take().expect("the coalescer calls the joiner once"))
+    });
+    match (claim, joiner) {
+        (Claim::Lead, Some(callback)) => Some(callback),
+        (Claim::Preloaded(resp), Some(callback)) => {
+            callback.complete(Ok(resp));
+            None
+        }
+        _ => None,
+    }
 }
 
 fn join_blocking(key: &[u8]) -> Option<Result<Response, Failure>> {
@@ -285,37 +264,60 @@ fn adjust_host(per_host: &mut BTreeMap<Vec<u8>, usize>, host: Option<&[u8]>, add
     }
 }
 
+fn release_slot(host: Option<&[u8]>) {
+    let mut throttle = lock(&THROTTLE);
+    throttle.active = throttle.active.saturating_sub(1);
+    adjust_host(&mut throttle.per_host, host, false);
+    IDLE.notify_all();
+}
+
 fn dispatch() {
     loop {
-        let task = {
-            let mut guard = lock(&THROTTLE);
-            let throttle = &mut *guard;
-            if throttle.active >= MAX_CONCURRENT_FETCHES || throttle.queue.is_empty() {
-                return;
-            }
-            let per_host = &throttle.per_host;
-            let Some(at) = throttle.queue.iter().position(|task| {
-                task.context()
-                    .host
-                    .as_ref()
-                    .is_none_or(|h| per_host.get(h).copied().unwrap_or(0) < MAX_FETCHES_PER_HOST)
-            }) else {
-                return;
+        let pending =
+            {
+                let mut guard = lock(&THROTTLE);
+                let throttle = &mut *guard;
+                if throttle.active >= MAX_CONCURRENT_FETCHES || throttle.queue.is_empty() {
+                    return;
+                }
+                let per_host = &throttle.per_host;
+                let Some(at) = throttle.queue.iter().position(|pending| {
+                    pending.ctx.host.as_ref().is_none_or(|h| {
+                        per_host.get(h).copied().unwrap_or(0) < MAX_FETCHES_PER_HOST
+                    })
+                }) else {
+                    return;
+                };
+                let Some(pending) = throttle.queue.remove(at) else {
+                    return;
+                };
+                throttle.active += 1;
+                adjust_host(&mut throttle.per_host, pending.ctx.host.as_deref(), true);
+                pending
             };
-            let Some(task) = throttle.queue.remove(at) else {
-                return;
-            };
-            throttle.active += 1;
-            let host = task.context().host.clone();
-            adjust_host(&mut throttle.per_host, host.as_deref(), true);
-            task
-        };
-        unsafe { g_task_run_in_thread(task.0, fetch_thread) };
+        let handed = Arc::new(Mutex::new(Some(pending)));
+        let taken = Arc::clone(&handed);
+        let spawned = thread::Builder::new()
+            .name("net-fetch".into())
+            .spawn(move || {
+                if let Some(pending) = lock(&taken).take() {
+                    run_fetch(pending);
+                }
+            });
+        if spawned.is_err()
+            && let Some(pending) = lock(&handed).take()
+        {
+            release_slot(pending.ctx.host.as_deref());
+            fail_pending(
+                pending,
+                Failure::Net(1, b"cannot start a fetch thread".to_vec()),
+            );
+        }
     }
 }
 
-fn submit(task: Task) {
-    lock(&THROTTLE).queue.push_back(task);
+fn submit(pending: Pending) {
+    lock(&THROTTLE).queue.push_back(pending);
     dispatch();
 }
 
@@ -339,13 +341,15 @@ fn log_outcome(url: &[u8], outcome: Result<&Response, &Failure>) {
     }
 }
 
-unsafe extern "C" fn fetch_thread(
-    task: *mut c_void,
-    _source: *mut c_void,
-    task_data: *mut c_void,
-    cancellable: *mut c_void,
-) {
-    let ctx = unsafe { &*task_data.cast::<FetchCtx>() };
+fn fail_pending(pending: Pending, failure: Failure) {
+    if let Some(key) = &pending.ctx.coalesce_key {
+        deliver(key, Err(&failure));
+    }
+    pending.callback.complete(Err(failure));
+}
+
+fn run_fetch(pending: Pending) {
+    let ctx = &pending.ctx;
     let outcome = fetch::fetch(&Fetch {
         url: &ctx.url,
         top_url: ctx.top_url.as_deref(),
@@ -353,7 +357,7 @@ unsafe extern "C" fn fetch_thread(
         body: ctx.body.as_deref(),
         content_type: ctx.content_type.as_deref(),
         headers: &ctx.headers,
-        cancellable,
+        cancellable: pending.cancellable.as_ref(),
         max_bytes: ctx.max_bytes,
     });
     if let Some(key) = &ctx.coalesce_key {
@@ -362,25 +366,17 @@ unsafe extern "C" fn fetch_thread(
     if netlog::logging() {
         log_outcome(&ctx.url, outcome.as_ref());
     }
-    return_outcome(task, outcome);
-    {
-        let mut throttle = lock(&THROTTLE);
-        throttle.active = throttle.active.saturating_sub(1);
-        adjust_host(&mut throttle.per_host, ctx.host.as_deref(), false);
-        IDLE.notify_all();
-    }
+    let host = ctx.host.clone();
+    pending.callback.complete(outcome);
+    release_slot(host.as_deref());
     dispatch();
 }
 
 fn drain(timeout: Duration) -> bool {
     ns_net_begin_abort();
-    let dropped: Vec<Task> = lock(&THROTTLE).queue.drain(..).collect();
-    for task in dropped {
-        let failure = Failure::Net(1, b"shutting down".to_vec());
-        if let Some(key) = &task.context().coalesce_key {
-            deliver(key, Err(&failure));
-        }
-        return_outcome(task.0, Err(failure));
+    let dropped: Vec<Pending> = lock(&THROTTLE).queue.drain(..).collect();
+    for pending in dropped {
+        fail_pending(pending, Failure::Net(1, b"shutting down".to_vec()));
     }
     let deadline = Instant::now() + timeout;
     let mut throttle = lock(&THROTTLE);
@@ -418,8 +414,8 @@ fn blob_response(url: &[u8]) -> Option<Response> {
     Some(resp)
 }
 
-fn coalescing_key(req: &FetchRequest<'_>, cancellable: *mut c_void) -> Option<Vec<u8>> {
-    if !cancellable.is_null() || req.body.is_some() || req.max_bytes.is_some() {
+fn coalescing_key(req: &FetchRequest<'_>, cancellable: Option<&Cancellable>) -> Option<Vec<u8>> {
+    if cancellable.is_some() || req.body.is_some() || req.max_bytes.is_some() {
         return None;
     }
     fetch::request_key(req.url, req.top_url, req.method, req.headers)
@@ -436,109 +432,25 @@ pub struct FetchRequest<'a> {
     pub max_bytes: Option<u64>,
 }
 
-pub struct Cancellable(ptr::NonNull<c_void>);
-
-impl Cancellable {
-    pub fn new() -> Cancellable {
-        // SAFETY: g_cancellable_new has no preconditions and never returns null.
-        let raw = unsafe { g_cancellable_new() };
-        Cancellable(ptr::NonNull::new(raw).expect("g_cancellable_new"))
-    }
-
-    pub fn cancel(&self) {
-        // SAFETY: the handle holds a reference to a live GCancellable.
-        unsafe { g_cancellable_cancel(self.0.as_ptr()) };
-    }
-
-    fn as_ptr(&self) -> *mut c_void {
-        self.0.as_ptr()
-    }
-}
-
-impl Default for Cancellable {
-    fn default() -> Cancellable {
-        Cancellable::new()
-    }
-}
-
-impl Clone for Cancellable {
-    fn clone(&self) -> Cancellable {
-        // SAFETY: the handle holds a reference to a live GCancellable, and the copy owns a new one.
-        unsafe { g_object_ref(self.0.as_ptr()) };
-        Cancellable(self.0)
-    }
-}
-
-impl Drop for Cancellable {
-    fn drop(&mut self) {
-        // SAFETY: the handle owns one reference, given up here.
-        unsafe { g_object_unref(self.0.as_ptr()) };
-    }
-}
-
-// SAFETY: GCancellable is thread-safe and its reference count is atomic.
-unsafe impl Send for Cancellable {}
-
-pub type Outcome = Result<Response, Vec<u8>>;
-
-type Done = Box<dyn FnOnce(Outcome)>;
-
-unsafe extern "C" fn request_done(_source: *mut c_void, result: *mut c_void, data: *mut c_void) {
-    // SAFETY: data is the boxed callback request_with leaked for this request, reclaimed once.
-    let done = unsafe { Box::from_raw(data.cast::<Done>()) };
-    let mut error: *mut GError = ptr::null_mut();
-    // SAFETY: result is the GAsyncResult of a request task, and error is a null local slot.
-    let resp = unsafe { ns_net_fetch_finish(result, &mut error) };
-    // SAFETY: the error, if any, is the GError the finish call handed over.
-    let message = unsafe { error.as_ref() }
-        .map(|e| text(e.message).unwrap_or_default().to_vec())
-        .unwrap_or_default();
-    if !error.is_null() {
-        // SAFETY: the error is owned here and freed once.
-        unsafe { glib::g_error_free(error) };
-    }
-    let outcome = resp.ok_or(message);
-    (*done)(outcome);
-}
-
 pub fn request_with(
     req: &FetchRequest<'_>,
     cancellable: Option<&Cancellable>,
     done: impl FnOnce(Outcome) + 'static,
 ) {
-    let done: Box<Done> = Box::new(Box::new(done));
-    submit_request(
-        req,
-        cancellable.map_or(ptr::null_mut(), Cancellable::as_ptr),
-        Some(request_done),
-        Box::into_raw(done).cast(),
-    );
-}
-
-fn submit_request(
-    req: &FetchRequest<'_>,
-    cancellable: *mut c_void,
-    callback: ReadyCallback,
-    user_data: *mut c_void,
-) {
+    let callback = Callback::register(Box::new(done));
     if let Some(resp) = blob_response(req.url) {
-        let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
-        return_outcome(task.0, Ok(resp));
+        callback.complete(Ok(resp));
         return;
     }
     let key = coalescing_key(req, cancellable);
-    if let Some(key) = &key {
-        match join_async(key, callback, user_data) {
-            Claim::Preloaded(resp) => {
-                let task = fetch_async_tag(Task::new(cancellable, callback, user_data));
-                return_outcome(task.0, Ok(resp));
-                return;
-            }
-            Claim::Joined => return,
-            Claim::Lead => {}
-        }
-    }
-    let ctx = Box::new(FetchCtx {
+    let callback = match &key {
+        Some(key) => match join_async(key, callback) {
+            Some(callback) => callback,
+            None => return,
+        },
+        None => callback,
+    };
+    let ctx = FetchCtx {
         url: req.url.to_vec(),
         host: url::host_from(req.url),
         top_url: req.top_url.map(<[u8]>::to_vec),
@@ -551,23 +463,21 @@ fn submit_request(
         headers: req.headers.to_vec(),
         coalesce_key: key,
         max_bytes: req.max_bytes,
+    };
+    submit(Pending {
+        ctx,
+        cancellable: cancellable.cloned(),
+        callback,
     });
-    let task = Task::new(cancellable, callback, user_data).tagged(
-        ns_net_request_async as *const c_void,
-        c"ns_net_request_async",
-    );
-    // SAFETY: the task is live, and it takes ownership of the context and frees it with fetch_ctx_free.
-    unsafe { g_task_set_task_data(task.0, Box::into_raw(ctx).cast(), Some(fetch_ctx_free)) };
-    submit(task);
 }
 
 pub fn request_blocking(req: &FetchRequest<'_>) -> Result<Response, Failure> {
-    blocking(req, ptr::null_mut())
+    blocking(req, None)
 }
 
 pub(crate) fn blocking(
     req: &FetchRequest<'_>,
-    cancellable: *mut c_void,
+    cancellable: Option<&Cancellable>,
 ) -> Result<Response, Failure> {
     let key = coalescing_key(req, cancellable);
     if let Some(shared) = key.as_deref().and_then(join_blocking) {
@@ -638,88 +548,33 @@ fn preconnect(url: &[u8]) {
     southstar_http::preconnect(&request, &aborting);
 }
 
-unsafe extern "C" fn preconnect_thread(
-    task: *mut c_void,
-    _source: *mut c_void,
-    task_data: *mut c_void,
-    _cancellable: *mut c_void,
-) {
-    let url = task_data.cast::<c_char>().cast_const();
-    lock(&THROTTLE).preconnects += 1;
-    if let Some(url) = text(url).filter(|_| !aborting()) {
-        preconnect(url);
+fn run_preconnect(url: Vec<u8>) {
+    if !aborting() {
+        preconnect(&url);
     }
-    {
-        let mut throttle = lock(&THROTTLE);
-        throttle.preconnects = throttle.preconnects.saturating_sub(1);
-        IDLE.notify_all();
-    }
-    unsafe { g_task_return_boolean(task, 1) };
+    let mut throttle = lock(&THROTTLE);
+    throttle.preconnects = throttle.preconnects.saturating_sub(1);
+    IDLE.notify_all();
 }
 
 pub fn preconnect_async(url: &CStr) {
     if !url::is_http_or_https(url.to_bytes()) {
         return;
     }
-    let task = Task::new(ptr::null_mut(), None, ptr::null_mut());
-    unsafe {
-        g_task_set_task_data(
-            task.0,
-            glib::g_strdup(url.as_ptr()).cast(),
-            Some(glib::g_free),
-        );
-        g_task_run_in_thread(task.0, preconnect_thread);
+    let url = url.to_bytes().to_vec();
+    lock(&THROTTLE).preconnects += 1;
+    let spawned = thread::Builder::new()
+        .name("net-preconnect".into())
+        .spawn(move || run_preconnect(url));
+    if spawned.is_err() {
+        let mut throttle = lock(&THROTTLE);
+        throttle.preconnects = throttle.preconnects.saturating_sub(1);
+        IDLE.notify_all();
     }
 }
 
 pub fn set_blob_resolver(resolver: BlobResolver) {
     *lock(&BLOB_RESOLVER) = Some(resolver);
-}
-
-/// # Safety
-///
-/// `url` and every non-null `top_url`, `method` and `content_type` are NUL-terminated,
-/// `body` holds `body_len` readable bytes or is null, `extra_headers` is null or a
-/// NULL-terminated array of NUL-terminated lines, and `cancellable` is null or a live
-/// GCancellable; `callback` receives `user_data` on the main context.
-#[allow(clippy::too_many_arguments)]
-pub unsafe fn ns_net_request_async(
-    url: *const c_char,
-    top_url: *const c_char,
-    method: *const c_char,
-    body: *const c_void,
-    body_len: usize,
-    content_type: *const c_char,
-    extra_headers: *const *const c_char,
-    cancellable: *mut c_void,
-    callback: ReadyCallback,
-    user_data: *mut c_void,
-) {
-    let Some(url_bytes) = text(url) else {
-        unsafe {
-            g_return_if_fail_warning(
-                ptr::null(),
-                c"ns_net_request_async".as_ptr(),
-                c"url != NULL".as_ptr(),
-            )
-        };
-        return;
-    };
-    // SAFETY: the caller passes extra_headers as null or a NULL-terminated array of C strings.
-    let headers = unsafe { fetch::header_lines(extra_headers) };
-    let body = (!body.is_null() && body_len > 0)
-        // SAFETY: a non-null body holds body_len readable bytes.
-        .then(|| unsafe { glib::slice(body.cast(), body_len) });
-    let req = FetchRequest {
-        url: url_bytes,
-        top_url: text(top_url),
-        method: text(method),
-        body,
-        content_type: text(content_type),
-        headers: &headers,
-        max_bytes: None,
-    };
-    submit_request(&req, cancellable, callback, user_data);
 }
 
 pub fn fetch_blocking(url: &CStr) -> Option<Response> {
@@ -740,31 +595,4 @@ pub fn download_blocking(url: &CStr, top_url: Option<&CStr>, max_bytes: u64) -> 
         ..FetchRequest::default()
     })
     .ok()
-}
-
-/// # Safety
-///
-/// `result` is the GAsyncResult a request callback received, and `error` is null or
-/// points to a null GError slot.
-pub unsafe fn ns_net_fetch_finish(
-    result: *mut c_void,
-    error: *mut *mut GError,
-) -> Option<Response> {
-    if unsafe { g_task_is_valid(result, ptr::null_mut()) } == 0 {
-        unsafe {
-            g_return_if_fail_warning(
-                ptr::null(),
-                c"ns_net_fetch_finish".as_ptr(),
-                c"g_task_is_valid(result, NULL)".as_ptr(),
-            )
-        };
-        return None;
-    }
-    // SAFETY: result is a valid GTask, checked above, and error is null or a null GError slot.
-    let raw = unsafe { g_task_propagate_pointer(result, error) }.cast::<Response>();
-    if raw.is_null() {
-        return None;
-    }
-    // SAFETY: a request task's pointer is the box return_outcome leaked, and propagating hands it over once.
-    Some(*unsafe { Box::from_raw(raw) })
 }

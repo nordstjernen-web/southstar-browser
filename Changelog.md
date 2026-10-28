@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Networking: the request queue no longer runs on GLib's GTask. Each
+  asynchronous fetch runs on its own thread and hands its result back to
+  the caller's main context through a single idle source; the cancel
+  handle is a plain atomic flag instead of a GCancellable, and the C-ABI
+  request/finish entry points and their GError plumbing are gone. The net
+  crate drops from 101 to 49 `unsafe` keywords.
 * Fix: a headless run that laid out a `<video>` could abort at exit with
   "cannot access a Thread Local Storage value during or after
   destruction": the page's video cache was torn down by one thread-local

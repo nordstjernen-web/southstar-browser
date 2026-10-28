@@ -2,21 +2,20 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_void};
+use core::ffi::{CStr, c_char, c_int, c_long};
 use core::ptr;
-use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib as glib;
 use southstar_http_cache as http_cache;
 
 use super::hop::{self, HopOut, HopReq};
 use super::proxy::{configured_no_proxy, pick_configured_proxy};
+use super::queue::Cancellable;
 use super::sinks::{NsHeaderCtx, NsWriteCtx};
 use crate::request::{self, DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S};
 use crate::response::{Response, cstr, text as field};
 use crate::{hsts, netlog, storage, transport, url};
 
-const IO_ERROR_CANCELLED: c_int = 19;
 const COOKIE_FIRST_PARTY: c_int = 1;
 const COOKIE_NEVER: c_int = 2;
 const REFERER_STRICT_ORIGIN_WHEN_CROSS: c_int = 2;
@@ -28,13 +27,6 @@ const FETCH_DEST_SCRIPT: c_int = 1;
 const FETCH_DEST_STYLE: c_int = 2;
 const FETCH_DEST_IMAGE: c_int = 3;
 const FETCH_DEST_FONT: c_int = 4;
-
-unsafe extern "C" {
-    fn g_quark_from_static_string(string: *const c_char) -> u32;
-    fn g_io_error_quark() -> u32;
-    fn g_error_new_literal(domain: u32, code: c_int, message: *const c_char) -> *mut GError;
-    fn g_cancellable_is_cancelled(cancellable: *mut c_void) -> GBoolean;
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FetchDest {
@@ -119,32 +111,12 @@ pub enum Failure {
 }
 
 impl Failure {
-    fn parts(&self) -> (u32, c_int, CString) {
-        match self {
-            Failure::Cancelled => (
-                unsafe { g_io_error_quark() },
-                IO_ERROR_CANCELLED,
-                c"fetch cancelled".to_owned(),
-            ),
-            Failure::Net(code, message) => (net_error_domain(), *code, cstr(message)),
-        }
-    }
-
-    pub(crate) fn into_error(self) -> *mut GError {
-        let (domain, code, message) = self.parts();
-        unsafe { g_error_new_literal(domain, code, message.as_ptr()) }
-    }
-
     pub fn message(&self) -> &[u8] {
         match self {
             Failure::Cancelled => b"fetch cancelled",
             Failure::Net(_, message) => message,
         }
     }
-}
-
-pub fn net_error_domain() -> u32 {
-    unsafe { g_quark_from_static_string(c"nd-net-error".as_ptr()) }
 }
 
 struct OriginSlot(Vec<u8>);
@@ -162,12 +134,8 @@ pub struct Fetch<'a> {
     pub body: Option<&'a [u8]>,
     pub content_type: Option<&'a [u8]>,
     pub headers: &'a [Vec<u8>],
-    pub cancellable: *mut c_void,
+    pub cancellable: Option<&'a Cancellable>,
     pub max_bytes: Option<u64>,
-}
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
 }
 
 pub fn widen<T: Into<i64>>(value: T) -> i64 {
@@ -178,8 +146,8 @@ fn without_nul(s: &'static str) -> &'static [u8] {
     s.trim_end_matches('\0').as_bytes()
 }
 
-pub fn is_cancelled(cancellable: *mut c_void) -> bool {
-    !cancellable.is_null() && unsafe { g_cancellable_is_cancelled(cancellable) } != 0
+pub fn is_cancelled(cancellable: Option<&Cancellable>) -> bool {
+    cancellable.is_some_and(Cancellable::is_cancelled)
 }
 
 fn monotonic_us() -> i64 {
@@ -714,19 +682,6 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             return Err(Failure::Cancelled);
         }
     }
-}
-
-pub unsafe fn header_lines(list: *const *const c_char) -> Vec<Vec<u8>> {
-    let mut lines = Vec::new();
-    if list.is_null() {
-        return lines;
-    }
-    let mut p = list;
-    while let Some(line) = text(unsafe { *p }) {
-        lines.push(line.to_vec());
-        p = unsafe { p.add(1) };
-    }
-    lines
 }
 
 pub fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char {
