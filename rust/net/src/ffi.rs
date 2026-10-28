@@ -15,7 +15,6 @@ pub mod sys;
 pub mod transport;
 pub mod url;
 
-use core::ffi::c_void;
 use core::sync::atomic::Ordering;
 
 use crate::budget::{Budgeted, Sink, exhausted_error};
@@ -127,7 +126,7 @@ pub fn synthesize_about_response(
 pub fn synthesize_view_source_response(
     url: &[u8],
     top_url: Option<&[u8]>,
-    cancellable: *mut c_void,
+    cancellable: Option<&queue::Cancellable>,
     resp: &mut Response,
 ) -> bool {
     let Some(inner) = url.strip_prefix(view_source::PREFIX) else {

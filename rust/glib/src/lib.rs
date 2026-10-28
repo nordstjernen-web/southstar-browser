@@ -5,9 +5,12 @@
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
+mod main_context;
 mod strtod;
 #[cfg(test)]
 mod tests;
+
+pub use main_context::MainContext;
 
 pub type GBoolean = c_int;
 pub const TRUE: GBoolean = 1;

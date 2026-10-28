@@ -41,10 +41,9 @@ pub use ffi::host::set_self_exe;
 pub use ffi::netlog::set_log_fetches;
 pub use ffi::proxy::{http_proxy, https_proxy, no_proxy, proxy_override, set_proxy_override};
 pub use ffi::queue::{
-    BlobResolver, Cancellable, FetchRequest, Outcome, ReadyCallback, download_blocking,
-    fetch_blocking, idle, ns_net_fetch_finish as fetch_finish,
-    ns_net_request_async as request_async, preconnect_async, preload_clear, preload_expect,
-    request_blocking, request_with, set_blob_resolver, shutdown,
+    BlobResolver, Cancellable, FetchRequest, Outcome, download_blocking, fetch_blocking, idle,
+    preconnect_async, preload_clear, preload_expect, request_blocking, request_with,
+    set_blob_resolver, shutdown,
 };
 pub use ffi::storage::hsts_should_upgrade;
 pub use ffi::sys::monotonic_us;
