@@ -88,6 +88,26 @@ pub fn until_nul(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 
+pub fn chunk_size(line: &[u8]) -> Option<u64> {
+    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    let digits = line
+        .iter()
+        .take_while(|byte| byte.is_ascii_hexdigit())
+        .count();
+    if digits == 0 || digits > 15 {
+        return None;
+    }
+    let mut rest = &line[digits..];
+    while let [b' ' | b'\t', tail @ ..] = rest {
+        rest = tail;
+    }
+    if !rest.is_empty() && rest[0] != b';' {
+        return None;
+    }
+    let digits = core::str::from_utf8(&line[..digits]).ok()?;
+    u64::from_str_radix(digits, 16).ok()
+}
+
 enum ChunkState {
     Size(Vec<u8>),
     Data(u64),
@@ -133,11 +153,13 @@ impl Chunked {
                         line.push(byte);
                         continue;
                     }
-                    let size = strtoll(until_nul(line), 16);
-                    self.state = if size <= 0 {
+                    let Some(size) = chunk_size(line) else {
+                        return Err(ChunkError);
+                    };
+                    self.state = if size == 0 {
                         ChunkState::Trailer(Vec::new())
                     } else {
-                        ChunkState::Data(size as u64)
+                        ChunkState::Data(size)
                     };
                 }
                 ChunkState::Data(remaining) => {

@@ -16,6 +16,13 @@ Southstar Browser 1.0.4-dev:
   and `URL.createObjectURL` stamps the creating frame's own origin instead
   of the top page's. Before, any frame in the renderer that learned a blob
   URL could read it.
+* Security: the HTTP/1.1 chunked decoder now accepts only what RFC 9112
+  allows as a chunk size, hexadecimal digits followed by an optional
+  `;extension`, and fails the response on anything else. It used to read
+  the size with a lenient number parser that took a sign, leading
+  whitespace and an `0x` prefix, and treated a negative size as the last
+  chunk; lenient size parsing is what makes a client disagree with the
+  proxies in front of it about where a response ends.
 * Fix: a headless run that laid out a `<video>` could abort at exit with
   "cannot access a Thread Local Storage value during or after
   destruction": the page's video cache was torn down by one thread-local
