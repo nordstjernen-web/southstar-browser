@@ -1211,14 +1211,14 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
     let mut inline_script = None;
     let mut fails = false;
     let mut opaque = false;
+    let base = ffi::doc_base_url(js).filter(|b| !b.is_empty());
     let url = if raw.starts_with("blob:") {
-        match ffi::blob_url_lookup(js, &raw) {
+        match ffi::blob_url_lookup(js, &raw, base.as_deref()) {
             Some(bytes) => inline_script = Some(script_text(&bytes)),
             None => fails = true,
         }
         Some(raw)
     } else {
-        let base = ffi::doc_base_url(js).filter(|b| !b.is_empty());
         ffi::url_resolve(base.as_deref(), &raw)
     };
     let Some(url) = url else {

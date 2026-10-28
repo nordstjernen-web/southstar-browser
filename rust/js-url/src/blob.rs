@@ -60,7 +60,7 @@ fn register(scope: &mut Scope<'_>, js: Js, url: &[u8], object: &Value) {
 
 pub(crate) fn create_object_url(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let js = Js::of(scope);
-    let origin = ffi::page_origin(js).filter(|o| !o.is_empty());
+    let origin = ffi::document_origin(scope, js).filter(|o| !o.is_empty());
     let mut url = b"blob:".to_vec();
     url.extend_from_slice(origin.as_deref().unwrap_or(b"null"));
     url.push(b'/');

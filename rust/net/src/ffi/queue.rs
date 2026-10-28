@@ -396,11 +396,14 @@ fn drain(timeout: Duration) -> bool {
     true
 }
 
-fn blob_response(url: &[u8]) -> Option<Response> {
+fn blob_response(url: &[u8], requester: Option<&[u8]>) -> Option<Response> {
     let resolve = lock(&BLOB_RESOLVER).filter(|_| url.starts_with(b"blob:"))?;
     let mut resp = Response::new();
     resp.final_url = Some(cstr(url));
-    match resolve(url) {
+    let reachable = requester
+        .filter(|requester| !requester.is_empty())
+        .is_none_or(|requester| southstar_url::bytes::blob_url_reachable(url, requester));
+    match resolve(url).filter(|_| reachable) {
         Some((bytes, content_type)) => {
             resp.body.extend_from_slice(&bytes);
             resp.status = 200;
@@ -438,7 +441,7 @@ pub fn request_with(
     done: impl FnOnce(Outcome) + 'static,
 ) {
     let callback = Callback::register(Box::new(done));
-    if let Some(resp) = blob_response(req.url) {
+    if let Some(resp) = blob_response(req.url, req.top_url) {
         callback.complete(Ok(resp));
         return;
     }

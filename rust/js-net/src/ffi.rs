@@ -533,9 +533,13 @@ impl Js {
         api::drain_mutations(self.ptr());
     }
 
-    pub fn blob_url(self, url: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
+    pub fn blob_url(
+        self,
+        url: &[u8],
+        requester: Option<&[u8]>,
+    ) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
         let url = cstring(url);
-        southstar_js_url::blob_url_lookup(self.ptr(), url.to_bytes())
+        southstar_js_url::blob_url_lookup(self.ptr(), url.to_bytes(), requester)
             .map(|(bytes, kind)| (bytes.to_vec(), kind))
     }
 

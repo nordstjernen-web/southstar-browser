@@ -414,7 +414,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     if url.starts_with(b"blob:") {
         let mut resp = Response::synthesized();
-        match js.blob_url(&url) {
+        match js.blob_url(&url, top.as_deref()) {
             Some((bytes, kind)) => {
                 resp.set_status(200);
                 resp.set_final_url(&url);

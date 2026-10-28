@@ -86,11 +86,11 @@ pub(crate) fn url_parts(url: &[u8]) -> Option<Parts> {
     southstar_url::bytes::parts(until_nul(url))
 }
 
-pub(crate) fn page_origin(js: Js) -> Option<Vec<u8>> {
-    if js.is_null() {
-        return None;
-    }
-    southstar_url::bytes::origin_from(api::current_url(js.page()).to_bytes())
+pub(crate) fn document_origin(scope: &Scope<'_>, js: Js) -> Option<Vec<u8>> {
+    let page = js.page()?;
+    let url =
+        api::realm_url(Some(page), scope.handle()).unwrap_or_else(|| api::current_url(Some(page)));
+    southstar_url::bytes::origin_from(url.to_bytes())
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {
@@ -232,8 +232,16 @@ pub fn filereader_pending(js: Option<Page>) -> bool {
     crate::file_reader::pending(Js(js))
 }
 
-pub fn blob_url_lookup(js: Option<Page>, url: &[u8]) -> Option<crate::registry::Blob> {
+pub fn blob_url_lookup(
+    js: Option<Page>,
+    url: &[u8],
+    requester: Option<&[u8]>,
+) -> Option<crate::registry::Blob> {
     js?;
+    let requester = requester.filter(|requester| !requester.is_empty())?;
+    if !southstar_url::bytes::blob_url_reachable(url, requester) {
+        return None;
+    }
     crate::registry::lookup(Js(js), url)
 }
 
