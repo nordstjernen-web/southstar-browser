@@ -160,6 +160,16 @@ pub fn same_origin(a: &[u8], b: &[u8]) -> bool {
     }
 }
 
+pub fn blob_url_reachable(blob_url: &[u8], requester: &[u8]) -> bool {
+    if blob_inner(blob_url).is_none() {
+        return false;
+    }
+    match origin_from(blob_url) {
+        Some(_) => same_origin(blob_url, requester),
+        None => origin_from(requester).is_none(),
+    }
+}
+
 pub struct Parts {
     pub href: Vec<u8>,
     pub protocol: Vec<u8>,

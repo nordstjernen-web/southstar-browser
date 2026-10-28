@@ -9,6 +9,13 @@ Southstar Browser 1.0.4-dev:
   handle is a plain atomic flag instead of a GCancellable, and the C-ABI
   request/finish entry points and their GError plumbing are gone. The net
   crate drops from 101 to 49 `unsafe` keywords.
+* Security: a `blob:` URL can now be fetched only by documents of the
+  origin it was created in, as the File API requires: the fetch path, the
+  script loader, worker creation and the network queue all compare the
+  URL's embedded origin with the requesting document before answering,
+  and `URL.createObjectURL` stamps the creating frame's own origin instead
+  of the top page's. Before, any frame in the renderer that learned a blob
+  URL could read it.
 * Fix: a headless run that laid out a `<video>` could abort at exit with
   "cannot access a Thread Local Storage value during or after
   destruction": the page's video cache was torn down by one thread-local

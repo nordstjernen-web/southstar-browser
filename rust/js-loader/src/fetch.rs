@@ -66,7 +66,8 @@ fn run_external(
         return;
     }
     if starts_with(src, b"blob:") {
-        match js.with_blob(src, <[u8]>::to_vec) {
+        let base = js.base_url(n);
+        match js.with_blob(src, base.as_deref(), <[u8]>::to_vec) {
             Some(body) => {
                 js.eval_script_source(n, &body, Some(src), ScriptKind::of(is_module, true));
                 js.dispatch_resource_event(n, c"load");
@@ -337,7 +338,8 @@ pub(crate) fn module_source(
         return Ok(body);
     }
     if starts_with(name, b"blob:") {
-        let Some(body) = js.with_blob(name, <[u8]>::to_vec) else {
+        let requester = js.document_url(scope);
+        let Some(body) = js.with_blob(name, requester.as_deref(), <[u8]>::to_vec) else {
             let message = line(&[b"blob module URL not found: ", name.to_bytes()]);
             return Err(reference_error(scope, &message));
         };

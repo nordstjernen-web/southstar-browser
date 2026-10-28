@@ -176,3 +176,28 @@ fn serialization_reparses_to_itself() {
         assert_eq!(href(&first).as_deref(), Some(first.as_str()), "{input}");
     }
 }
+
+#[test]
+fn blob_urls_are_reachable_from_their_own_origin_only() {
+    use crate::bytes::blob_url_reachable;
+    let blob = b"blob:https://a.example/9b2c";
+    assert!(blob_url_reachable(blob, b"https://a.example/page"));
+    assert!(blob_url_reachable(blob, b"https://A.example:443/other"));
+    assert!(blob_url_reachable(blob, b"blob:https://a.example/other"));
+    assert!(!blob_url_reachable(blob, b"https://b.example/page"));
+    assert!(!blob_url_reachable(blob, b"http://a.example/page"));
+    assert!(!blob_url_reachable(blob, b"https://sub.a.example/page"));
+    assert!(!blob_url_reachable(blob, b""));
+    assert!(blob_url_reachable(
+        b"blob:null/9b2c",
+        b"file:///tmp/page.html"
+    ));
+    assert!(!blob_url_reachable(
+        b"blob:null/9b2c",
+        b"https://a.example/page"
+    ));
+    assert!(!blob_url_reachable(
+        b"https://a.example/9b2c",
+        b"https://a.example/page"
+    ));
+}

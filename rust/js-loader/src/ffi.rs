@@ -333,8 +333,19 @@ impl Js {
         });
     }
 
-    pub(crate) fn with_blob<R>(self, url: &CStr, f: impl FnOnce(&[u8]) -> R) -> Option<R> {
-        southstar_js_url::blob_url_lookup(self.0, url.to_bytes()).map(|(bytes, _)| f(&bytes))
+    pub(crate) fn with_blob<R>(
+        self,
+        url: &CStr,
+        requester: Option<&CStr>,
+        f: impl FnOnce(&[u8]) -> R,
+    ) -> Option<R> {
+        let requester = requester.map(CStr::to_bytes);
+        southstar_js_url::blob_url_lookup(self.0, url.to_bytes(), requester)
+            .map(|(bytes, _)| f(&bytes))
+    }
+
+    pub(crate) fn document_url(self, scope: &Scope<'_>) -> Option<CString> {
+        api::realm_url(self.0, scope.handle()).or_else(|| api::page_url(self.0))
     }
 
     pub(crate) fn csp_allows(

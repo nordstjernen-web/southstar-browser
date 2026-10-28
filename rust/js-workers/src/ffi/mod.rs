@@ -607,9 +607,11 @@ pub(crate) fn queue_fail_job(scope: &mut Scope<'_>, object: &Value) {
     let _ = api::queue_message_task(scope, worker_fail_job, core::slice::from_ref(object));
 }
 
-pub(crate) fn blob_url_lookup(js: Js, url: &str) -> Option<Vec<u8>> {
+pub(crate) fn blob_url_lookup(js: Js, url: &str, requester: Option<&str>) -> Option<Vec<u8>> {
     let url = c_string(url);
-    southstar_js_url::blob_url_lookup(js.page(), url.to_bytes()).map(|(bytes, _)| bytes.to_vec())
+    let requester = requester.map(str::as_bytes);
+    southstar_js_url::blob_url_lookup(js.page(), url.to_bytes(), requester)
+        .map(|(bytes, _)| bytes.to_vec())
 }
 
 pub(crate) fn doc_base_url(js: Js) -> Option<String> {
