@@ -270,3 +270,33 @@ fn field_lines_reject_line_breaks() {
     assert!(!h1::field_is_one_line(b"x\na", b"v"));
     assert!(!h1::field_is_one_line(b"x-a", b"v\0"));
 }
+
+#[test]
+fn chunk_sizes_are_hex_digits_with_an_optional_extension() {
+    assert_eq!(h1::chunk_size(b"E"), Some(14));
+    assert_eq!(h1::chunk_size(b"1a\r"), Some(26));
+    assert_eq!(h1::chunk_size(b"5;ext=1"), Some(5));
+    assert_eq!(h1::chunk_size(b"5 ;ext=1\r"), Some(5));
+    assert_eq!(h1::chunk_size(b"0\r"), Some(0));
+    for bad in [
+        &b""[..],
+        b"\r",
+        b" 5",
+        b"+5",
+        b"-1",
+        b"0x5",
+        b"5 x",
+        b"5g",
+        b"ffffffffffffffff",
+    ] {
+        assert_eq!(h1::chunk_size(bad), None, "{bad:?}");
+    }
+    for wire in [
+        &b"+4\r\nWiki\r\n0\r\n\r\n"[..],
+        b" 4\r\nWiki\r\n0\r\n\r\n",
+        b"-1\r\n\r\n",
+    ] {
+        let mut chunked = h1::Chunked::new();
+        assert!(chunked.feed(wire, &mut Vec::new()).is_err(), "{wire:?}");
+    }
+}
