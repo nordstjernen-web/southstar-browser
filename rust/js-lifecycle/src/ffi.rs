@@ -249,6 +249,7 @@ impl Js {
 
     pub fn has_pending_work(self) -> bool {
         southstar_js_services::timers_pending(self.0, false)
+            || lifecycle::in_progress(self)
             || frames::has_pending(self)
             || southstar_js_net::pending_fetch_count(self.0) > 0
             || southstar_js_net::pending_xhr_count(self.0) > 0
