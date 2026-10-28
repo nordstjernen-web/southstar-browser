@@ -12,6 +12,13 @@ Southstar Browser 1.0.4-dev:
   chess.com's engine worker, which runs a 27 MB module, brought the page
   down this way. With the feature wasmi falls back to its portable
   dispatch loop whenever it cannot count on tail calls.
+* Fix: a page whose lifecycle is still running, with deferred scripts
+  left to run and DOMContentLoaded and load still to fire, now counts as
+  having pending work. The settle loop that headless captures and the
+  renderer's post-load ticks use stopped as soon as timers, fetches and
+  frames were quiet, which on a page with a long module graph (chess.com)
+  was before DOMContentLoaded, so dumps and probes saw the half-loaded
+  page.
 * Networking: the request queue no longer runs on GLib's GTask. Each
   asynchronous fetch runs on its own thread and hands its result back to
   the caller's main context through a single idle source; the cancel

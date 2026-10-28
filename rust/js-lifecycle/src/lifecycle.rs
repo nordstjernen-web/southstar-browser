@@ -97,6 +97,13 @@ fn advance(js: Js, page: &Page, phase: Phase) {
     schedule(js, page);
 }
 
+pub(crate) fn in_progress(js: Js) -> bool {
+    page(js).is_some_and(|page| {
+        let lifecycle = page.lifecycle.borrow();
+        lifecycle.source != 0 || (lifecycle.doc.is_some() && lifecycle.phase != Phase::Complete)
+    })
+}
+
 fn load_blocked(js: Js) -> bool {
     js.eval_depth() > 0 || js.iframe_load_depth() > 0 || js.in_pump() || js.load_blocked()
 }
