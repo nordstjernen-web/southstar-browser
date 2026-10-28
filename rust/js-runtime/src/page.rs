@@ -149,8 +149,6 @@ pub(crate) fn create(js: Js, timing: Option<NavigationTiming>, callbacks: Callba
     }
     js.scope(|scope| {
         crate::add_engine_private_names(scope);
-        ffi::add_engine_private_name(scope, "__ndRealmDoc");
-        ffi::add_engine_private_name(scope, "__ndRealmWindow");
     });
     js.set_callbacks(callbacks);
     js.init_tables(ffi::default_main_context(), true);

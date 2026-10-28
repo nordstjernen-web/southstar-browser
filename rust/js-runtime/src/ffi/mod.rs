@@ -541,10 +541,6 @@ pub(crate) fn is_engine_function_native(scope: &mut Scope<'_>) -> Value {
     scope.function("__ndIsEngineFunction", 1, is_engine_function)
 }
 
-pub(crate) fn add_engine_private_name(scope: &mut Scope<'_>, name: &str) {
-    scope.add_engine_private_name(name);
-}
-
 pub(crate) fn register_class(scope: &mut Scope<'_>, class: Class) -> Value {
     imports::nsr_js_register_class(scope, class as c_int)
 }

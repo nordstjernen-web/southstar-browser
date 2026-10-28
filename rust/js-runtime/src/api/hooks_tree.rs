@@ -49,6 +49,7 @@ pub struct FramesHooks {
     pub schedule_static_iframes: fn(Option<Page>, Node<'_>),
     pub realm_proto_for: fn(Page, ContextHandle, &Value) -> Value,
     pub frame_realm_window: fn(Option<Page>, Node<'_>) -> Value,
+    pub frame_realm_document: fn(Option<Page>, Node<'_>) -> Value,
 }
 
 impl FramesHooks {
@@ -75,6 +76,7 @@ impl FramesHooks {
         schedule_static_iframes: |_, _| {},
         realm_proto_for: |_, _, proto| proto.clone(),
         frame_realm_window: |_, _| Value::null(),
+        frame_realm_document: |_, _| Value::null(),
     };
 }
 

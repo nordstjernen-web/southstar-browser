@@ -31,10 +31,7 @@ pub fn default_view(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsR
         return Ok(page_window(scope, js));
     };
     match doc.parent().filter(|&owner| is_frame_element(owner)) {
-        Some(owner) => {
-            let element = ffi::wrap_node(scope, Some(owner));
-            Ok(ffi::iframe_realm_window(scope, &element, owner))
-        }
+        Some(owner) => Ok(ffi::iframe_realm_window(scope, owner)),
         None => Ok(Value::null()),
     }
 }

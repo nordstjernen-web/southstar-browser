@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_runtime::api;
 
 use crate::names;
 use crate::{Element, JsResult, ffi, is_document};
@@ -44,12 +45,9 @@ pub fn owner_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
         if Some(doc) == current {
             return Ok(ffi::make_node(scope, current));
         }
-        if let Some(host) = doc
-            .parent()
-            .filter(|&h| h.has_js_wrapper() && is_frame_host(h))
-        {
-            let wrapper = ffi::make_node(scope, Some(host));
-            if let Some(realm) = object_property(scope, &wrapper, "__ndRealmDoc") {
+        if let Some(host) = doc.parent().filter(|&h| is_frame_host(h)) {
+            let realm = (api::frames_hooks().frame_realm_document)(Some(js.page()), host);
+            if realm.is_object() {
                 return Ok(realm);
             }
         }

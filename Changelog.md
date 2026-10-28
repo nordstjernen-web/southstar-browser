@@ -23,6 +23,13 @@ Southstar Browser 1.0.4-dev:
   whitespace and an `0x` prefix, and treated a negative size as the last
   chunk; lenient size parsing is what makes a client disagree with the
   proxies in front of it about where a response ends.
+* Hardening: a frame's realm window and document were kept as
+  `__ndRealmWindow` / `__ndRealmDoc` engine-state properties on the
+  `<iframe>` element's script wrapper, hidden from page script only by the
+  element wrapper's property hook. Both now live in the page's frame table
+  on the Rust side and are reached through the frames hooks, so a
+  cross-origin frame's real window no longer depends on that hook, and
+  the two dead private-name registrations are gone.
 * Fix: a headless run that laid out a `<video>` could abort at exit with
   "cannot access a Thread Local Storage value during or after
   destruction": the page's video cache was torn down by one thread-local

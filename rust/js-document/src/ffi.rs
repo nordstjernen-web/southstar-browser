@@ -100,8 +100,8 @@ pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) 
     })
 }
 
-pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, frame: Element) -> Value {
-    southstar_js_frames::iframe_realm_window(scope, element, frame)
+pub(crate) fn iframe_realm_window(scope: &mut Scope<'_>, frame: Element) -> Value {
+    southstar_js_frames::iframe_realm_window(scope, frame)
 }
 
 pub fn doc_base_url(js: Option<Page>) -> Option<Vec<u8>> {

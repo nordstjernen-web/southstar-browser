@@ -175,6 +175,10 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
 }
 
+pub(crate) fn frame_realm_window(scope: &Scope<'_>, iframe: Element) -> Value {
+    (api::frames_hooks().frame_realm_window)(Page::current(scope), iframe)
+}
+
 pub(crate) fn unwrap(value: &Value) -> Option<Element> {
     if !value.is_object() {
         return None;

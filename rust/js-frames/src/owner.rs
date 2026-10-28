@@ -133,15 +133,8 @@ fn build_content_document(scope: &mut Scope<'_>, iframe: Node<'_>) -> JsResult {
     Ok(document)
 }
 
-pub(crate) fn content_document_of(
-    scope: &mut Scope<'_>,
-    element: &Value,
-    node: Node<'_>,
-) -> JsResult {
-    let realm_doc = scope
-        .get(element, "__ndRealmDoc")
-        .unwrap_or_else(|_| Value::undefined());
-    if realm_doc.is_object() {
+pub(crate) fn content_document_of(scope: &mut Scope<'_>, node: Node<'_>) -> JsResult {
+    if let Some(realm_doc) = realm::stored_document(Js::of_ctx(ffi::scope_ctx(scope)), node) {
         return Ok(realm_doc);
     }
     if let Some(doc) = document_node(node).filter(|doc| doc.has_js_wrapper()) {
@@ -164,7 +157,7 @@ pub fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     if !has_browsing_context(js, node) || ffi::is_cross_origin(js, node) {
         return Ok(Value::null());
     }
-    content_document_of(scope, this, node)
+    content_document_of(scope, node)
 }
 
 pub fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
@@ -180,7 +173,7 @@ pub fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
         return Ok(Value::null());
     }
     ensure_content_root(node);
-    let window = realm::realm_window(ctx, this, node);
+    let window = realm::realm_window(ctx, node);
     if !window.is_object() || !ffi::is_cross_origin(js, node) {
         return Ok(window);
     }
@@ -227,7 +220,7 @@ pub(crate) fn child_frame_window(
     }
     if named(frame, b"iframe") {
         ensure_content_root(frame);
-        return Ok(realm::realm_window(ctx, &element, frame));
+        return Ok(realm::realm_window(ctx, frame));
     }
     Ok(Value::undefined())
 }
