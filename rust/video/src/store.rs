@@ -158,7 +158,9 @@ thread_local! {
 
 fn open_slot(video: &Video) -> MediaHandle {
     let slot = VACANT_SLOTS
-        .with(|v| v.borrow_mut().pop())
+        .try_with(|v| v.borrow_mut().pop())
+        .ok()
+        .flatten()
         .unwrap_or_else(|| {
             Box::leak(Box::new(VideoSlot {
                 stamp: Cell::new(0),
@@ -186,7 +188,7 @@ fn close_slot(handle: MediaHandle) {
     if let Some(slot) = slot_of(handle) {
         slot.stamp.set(0);
         let released = slot.video.replace(None);
-        VACANT_SLOTS.with(|v| v.borrow_mut().push(slot));
+        let _ = VACANT_SLOTS.try_with(|v| v.borrow_mut().push(slot));
         drop(released);
     }
 }

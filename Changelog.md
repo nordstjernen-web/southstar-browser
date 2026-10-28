@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Fix: a headless run that laid out a `<video>` could abort at exit with
+  "cannot access a Thread Local Storage value during or after
+  destruction": the page's video cache was torn down by one thread-local
+  destructor and handed its slots back through another thread-local that
+  was already gone. The slot bookkeeping now tolerates teardown and leaves
+  the slot leaked instead (issue #141).
 * Docs: `SECURITY.md`'s known gaps no longer list the cookie-jar locking
   and `HttpOnly` collision entries, both fixed earlier, and describe the
   real residual gaps instead: renderers share the cookie, cache and
