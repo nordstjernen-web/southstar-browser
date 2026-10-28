@@ -483,6 +483,7 @@ pub fn install_runtime_hooks() {
         schedule_static_iframes,
         realm_proto_for: |js, a1, a2| realm_proto_for(Some(js), a1, a2),
         frame_realm_window,
+        frame_realm_document,
     });
 }
 
@@ -505,5 +506,14 @@ fn frame_realm_window(js: Option<Page>, frame: Node<'_>) -> Value {
         .downgrade()
         .get()
         .and_then(|frame| realm::stored_window(js, frame))
+        .unwrap_or_else(Value::null)
+}
+
+fn frame_realm_document(js: Option<Page>, frame: Node<'_>) -> Value {
+    let js = Js::of(js);
+    frame
+        .downgrade()
+        .get()
+        .and_then(|frame| realm::stored_document(js, frame))
         .unwrap_or_else(Value::null)
 }

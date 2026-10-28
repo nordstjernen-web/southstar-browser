@@ -265,15 +265,10 @@ pub(crate) fn log_exception(js: Js, scope: &mut Scope<'_>, exception: &Value, or
     load::log_line(js, &line);
 }
 
-fn outward_window(js: Js, ctx: Ctx, iframe: Node<'_>) -> Value {
-    if let Some(stored) = realm::stored_window(js, iframe).filter(Value::is_object) {
-        return stored;
-    }
-    if iframe.has_js_wrapper() {
-        let element = ffi::make_element(ctx, iframe);
-        return ctx.get(&element, "__ndRealmWindow");
-    }
-    Value::null()
+fn outward_window(js: Js, iframe: Node<'_>) -> Value {
+    realm::stored_window(js, iframe)
+        .filter(Value::is_object)
+        .unwrap_or_else(Value::null)
 }
 
 fn publish_realm_window(
@@ -285,7 +280,7 @@ fn publish_realm_window(
 ) {
     let ctx = ffi::current_realm(js);
     let outward = match iframe {
-        Some(iframe) if sandbox & CROSS_ORIGIN != 0 => outward_window(js, ctx, iframe),
+        Some(iframe) if sandbox & CROSS_ORIGIN != 0 => outward_window(js, iframe),
         _ => Value::null(),
     };
     let preserve_outward = outward.is_object() && !outward.same_object(window);
@@ -300,10 +295,6 @@ fn publish_realm_window(
         return;
     };
     realm::store_window(js, iframe, shown);
-    if iframe.has_js_wrapper() {
-        let element = ffi::make_element(ctx, iframe);
-        ctx.set(&element, "__ndRealmWindow", shown.clone());
-    }
 }
 
 fn run_in_realm(js: Js, made: &FrameRealm, iframe: Option<Node<'_>>, sources: &[ClassicSource]) {

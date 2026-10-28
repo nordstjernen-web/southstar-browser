@@ -220,6 +220,23 @@ pub(crate) fn stored_window(js: Js, iframe: Node<'_>) -> Option<Value> {
     page::frame_entry(js, frame_of(iframe), |entry| entry.window.clone()).flatten()
 }
 
+pub(crate) fn store_document(js: Js, iframe: Node<'_>, document: &Value) {
+    if js.is_null() || !document.is_object() {
+        return;
+    }
+    let old = page::update_frame(js, frame_of(iframe), |entry| {
+        entry.document.replace(document.clone())
+    });
+    drop(old);
+}
+
+pub(crate) fn stored_document(js: Js, iframe: Node<'_>) -> Option<Value> {
+    if js.is_null() {
+        return None;
+    }
+    page::frame_entry(js, frame_of(iframe), |entry| entry.document.clone()).flatten()
+}
+
 fn frame_doc_url(iframe: Node<'_>) -> Option<Vec<u8>> {
     iframe
         .attr(c"data-nd-frame-doc-url")
@@ -227,13 +244,13 @@ fn frame_doc_url(iframe: Node<'_>) -> Option<Vec<u8>> {
         .filter(|url| !url.is_empty())
 }
 
-fn build_lite_window(ctx: Ctx, element: &Value, iframe: Node<'_>) -> Value {
+fn build_lite_window(ctx: Ctx, iframe: Node<'_>) -> Value {
     let js = Js::of_ctx(ctx);
     if js.is_null() {
         return ctx.global();
     }
     let document = ctx
-        .enter(|scope| owner::content_document_of(scope, element, iframe))
+        .enter(|scope| owner::content_document_of(scope, iframe))
         .unwrap_or_else(|_| Value::null());
     if !document.is_object() {
         return ctx.global();
@@ -264,24 +281,18 @@ fn build_lite_window(ctx: Ctx, element: &Value, iframe: Node<'_>) -> Value {
     }
     ctx.set(&document, "defaultView", realm.window.clone());
     store_window(js, iframe, &realm.window);
-    ctx.set(element, "__ndRealmWindow", realm.window.clone());
-    ctx.set(element, "__ndRealmDoc", document);
+    store_document(js, iframe, &document);
     page::with(js, |page| {
         page.initial_blank.insert(frame_of(iframe), realm.ctx)
     });
     realm.window
 }
 
-pub(crate) fn realm_window(ctx: Ctx, element: &Value, iframe: Node<'_>) -> Value {
-    let realm = ctx.get(element, "__ndRealmWindow");
-    if realm.is_object() {
-        return realm;
-    }
-    let js = Js::of_ctx(ctx);
-    if let Some(stored) = stored_window(js, iframe) {
+pub(crate) fn realm_window(ctx: Ctx, iframe: Node<'_>) -> Value {
+    if let Some(stored) = stored_window(Js::of_ctx(ctx), iframe) {
         return stored;
     }
-    build_lite_window(ctx, element, iframe)
+    build_lite_window(ctx, iframe)
 }
 
 const SWAPPED_GLOBALS: [&str; 8] = [

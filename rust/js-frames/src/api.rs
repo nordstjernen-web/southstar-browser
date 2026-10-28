@@ -70,8 +70,8 @@ pub fn frame_realm_window(js: Option<Page>, frame: Node<'_>) -> Option<Value> {
     realm::stored_window(Js::of(js), frame)
 }
 
-pub fn iframe_realm_window(scope: &mut Scope<'_>, element: &Value, iframe: Node<'_>) -> Value {
-    realm::realm_window(scope_ctx(scope), element, iframe)
+pub fn iframe_realm_window(scope: &mut Scope<'_>, iframe: Node<'_>) -> Value {
+    realm::realm_window(scope_ctx(scope), iframe)
 }
 
 pub fn iframe_cross_origin_window(scope: &mut Scope<'_>, target: &Value) -> Value {

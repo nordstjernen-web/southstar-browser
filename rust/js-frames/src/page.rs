@@ -32,6 +32,7 @@ pub(crate) enum FramePolicy {
 pub(crate) struct FrameEntry {
     pub realm: Option<Ctx>,
     pub window: Option<Value>,
+    pub document: Option<Value>,
     pub url: Option<CString>,
     pub referrer: Option<CString>,
     pub navigation: Option<Navigation>,
@@ -42,6 +43,7 @@ impl FrameEntry {
     fn is_empty(&self) -> bool {
         self.realm.is_none()
             && self.window.is_none()
+            && self.document.is_none()
             && self.url.is_none()
             && self.referrer.is_none()
             && self.navigation.is_none()

@@ -107,10 +107,7 @@ fn follow_in_iframe(scope: &mut Scope<'_>, el: Element, href: &[u8]) -> bool {
     if !iframe.has_js_wrapper() || href.is_empty() {
         return false;
     }
-    let wrapper = ffi::wrap(scope, iframe);
-    let Ok(window) = scope.get(&wrapper, "__ndRealmWindow") else {
-        return false;
-    };
+    let window = ffi::frame_realm_window(scope, iframe);
     if !window.is_object() {
         return false;
     }

@@ -16,6 +16,12 @@ pub(crate) use query::*;
 #[derive(Clone, Copy)]
 pub(crate) struct Js(Page);
 
+impl Js {
+    pub(crate) fn page(self) -> Page {
+        self.0
+    }
+}
+
 fn raw_js(js: Option<Js>) -> Option<Page> {
     js.map(|js| js.0)
 }

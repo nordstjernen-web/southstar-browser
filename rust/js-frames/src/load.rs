@@ -509,13 +509,10 @@ fn make_realm_document(
         }
     }
     if realm_doc.is_object() {
-        let element = ffi::make_element(ctx, iframe);
-        ctx.set(&element, "__ndRealmDoc", realm_doc.clone());
+        crate::realm::store_document(js, iframe, &realm_doc);
         if realm_scope.is_object() {
             let window = ctx.get(&realm_scope, "window");
-            if window.is_object() {
-                ctx.set(&element, "__ndRealmWindow", window);
-            }
+            crate::realm::store_window(js, iframe, &window);
         }
     }
     Shown {
@@ -601,7 +598,7 @@ fn run_written_scripts(js: Js, iframe: Node<'_>) {
         return;
     }
     let ctx = ffi::current_realm(js);
-    let mut realm_doc = ctx.get(&ffi::make_element(ctx, iframe), "__ndRealmDoc");
+    let mut realm_doc = crate::realm::stored_document(js, iframe).unwrap_or_else(Value::null);
     if !realm_doc.is_object() && doc.has_js_wrapper() {
         realm_doc = ffi::make_element(ctx, doc);
     }
