@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* WebAssembly: wasmi is built with its `auto-dispatch` feature. Without
+  it the interpreter always used its tail-call dispatch backend, which
+  relies on the compiler turning each handler's tail call into a jump; in
+  a build where that does not happen (debug builds, development builds
+  without LTO) every executed instruction consumed native stack and the
+  renderer died with a stack overflow after a few thousand instructions.
+  chess.com's engine worker, which runs a 27 MB module, brought the page
+  down this way. With the feature wasmi falls back to its portable
+  dispatch loop whenever it cannot count on tail calls.
 * Networking: the request queue no longer runs on GLib's GTask. Each
   asynchronous fetch runs on its own thread and hands its result back to
   the caller's main context through a single idle source; the cancel
