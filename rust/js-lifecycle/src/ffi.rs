@@ -2,12 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_anim::AnimHandle;
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::SourceId;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::BoxRef;
@@ -22,16 +22,8 @@ use southstar_js_runtime::api::Page;
 pub(crate) struct Js(Option<Page>);
 
 impl Js {
-    pub fn from_data(data: *mut c_void) -> Js {
-        Js(Page::from_raw(data))
-    }
-
     pub fn of_page(page: Page) -> Js {
         Js(Some(page))
-    }
-
-    fn raw(self) -> *mut c_void {
-        self.0.map_or(core::ptr::null_mut(), Page::as_raw)
     }
 
     pub fn is_null(self) -> bool {
@@ -178,11 +170,11 @@ impl Js {
         southstar_js_perf::relative_ms(now_us, southstar_js_perf::time_origin_us(self.0, realm))
     }
 
-    pub fn attach_timeout(self, ms: c_uint, func: SourceFunc) -> c_uint {
-        api::attach_timeout(self.0, ms, func, self.raw())
+    pub fn attach_timeout(self, ms: u32, func: fn(Js)) -> SourceId {
+        api::attach_timeout_once(self.0, ms, move || func(self))
     }
 
-    pub fn source_remove(self, id: c_uint) {
+    pub fn source_remove(self, id: SourceId) {
         api::source_remove(self.0, id);
     }
 
@@ -266,10 +258,6 @@ impl Js {
             || southstar_js_images::image_loads_pending(self.0)
     }
 }
-
-pub(crate) type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
-pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 
 pub(crate) fn monotonic_us() -> i64 {
     southstar_glib::monotonic_us()

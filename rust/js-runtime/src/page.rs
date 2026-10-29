@@ -151,7 +151,7 @@ pub(crate) fn create(js: Js, timing: Option<NavigationTiming>, callbacks: Callba
         crate::add_engine_private_names(scope);
     });
     js.set_callbacks(callbacks);
-    js.init_tables(ffi::default_main_context(), true);
+    js.init_tables(southstar_glib::MainContext::global(), true);
     js.init_page_states();
     js.scope(|scope| install_window(js, scope));
     ffi::set_active(js);

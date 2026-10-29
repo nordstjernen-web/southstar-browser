@@ -2,11 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_uint, c_void};
+#[cfg(windows)]
+use core::ffi::{c_int, c_uint};
+use core::ops::ControlFlow;
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::SourceId;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api::Page;
 use southstar_js_runtime::api::{self, TimerGate};
@@ -23,13 +25,13 @@ pub(crate) struct Realm(ContextHandle);
 pub(crate) struct Frame(Option<Node<'static>>);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Source(c_uint);
+pub(crate) struct Source(Option<SourceId>);
 
 impl Source {
-    pub const NONE: Source = Source(0);
+    pub const NONE: Source = Source(None);
 
     pub fn is_none(self) -> bool {
-        self.0 == 0
+        self.0.is_none()
     }
 }
 
@@ -37,34 +39,6 @@ pub(crate) enum Gate {
     Run,
     Wait,
     Drop,
-}
-
-struct TimerTag {
-    js: Option<Page>,
-    id: i32,
-}
-
-const G_PRIORITY_DEFAULT: c_int = 0;
-
-type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
-unsafe extern "C" {
-    fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
-    fn g_source_set_callback(
-        source: *mut c_void,
-        func: SourceFunc,
-        data: *mut c_void,
-        notify: glib::GDestroyNotify,
-    );
-    fn g_source_attach(source: *mut c_void, context: *mut c_void) -> c_uint;
-    fn g_source_unref(source: *mut c_void);
-    fn g_timeout_add_full(
-        priority: c_int,
-        interval: c_uint,
-        func: SourceFunc,
-        data: *mut c_void,
-        notify: glib::GDestroyNotify,
-    ) -> c_uint;
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -115,50 +89,23 @@ pub(crate) fn in_timer_scope(
     timer_scope.leave(result.err());
 }
 
-unsafe extern "C" fn timer_source_fired(data: *mut c_void) -> GBoolean {
-    let tag = unsafe { &*data.cast::<TimerTag>() };
-    let (js, id) = (Js(tag.js), tag.id);
-    glib::boolean(timers::fire(js, id))
-}
-
-unsafe extern "C" fn timer_tag_free(data: *mut c_void) {
-    drop(unsafe { Box::from_raw(data.cast::<TimerTag>()) });
-}
-
-fn timer_tag(js: Js, id: i32) -> *mut c_void {
-    Box::into_raw(Box::new(TimerTag { js: js.0, id })).cast()
-}
-
 pub(crate) fn attach_timeout(js: Js, ms: u32, id: i32) -> Source {
-    unsafe {
-        let source = g_timeout_source_new(ms);
-        g_source_set_callback(
-            source,
-            timer_source_fired,
-            timer_tag(js, id),
-            Some(timer_tag_free),
-        );
-        let attached = g_source_attach(source, api::glib_context(js.0));
-        g_source_unref(source);
-        Source(attached)
-    }
+    Source(Some(api::attach_timeout(js.0, ms, move || {
+        if timers::fire(js, id) {
+            ControlFlow::Continue(())
+        } else {
+            ControlFlow::Break(())
+        }
+    })))
 }
 
 pub(crate) fn attach_default_timeout(ms: u32, js: Js, id: i32) -> Source {
-    Source(unsafe {
-        g_timeout_add_full(
-            G_PRIORITY_DEFAULT,
-            ms,
-            timer_source_fired,
-            timer_tag(js, id),
-            Some(timer_tag_free),
-        )
-    })
+    attach_timeout(js, ms, id)
 }
 
 pub(crate) fn source_remove(js: Js, source: Source) {
-    if !source.is_none() {
-        api::source_remove(js.0, source.0);
+    if let Some(source) = source.0 {
+        api::source_remove(js.0, source);
     }
 }
 

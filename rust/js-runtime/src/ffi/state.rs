@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use std::collections::{HashMap, VecDeque};
 use std::ffi::CString;
@@ -13,8 +13,8 @@ use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
+use super::WorkerHost;
 use super::scopes::RealmScope;
-use super::{GMainContext, WorkerHost};
 
 pub type LogFn = dyn Fn(&CStr);
 pub type DataFn = dyn Fn();
@@ -78,7 +78,7 @@ pub(crate) struct PageState {
     pub current_script: Cell<*mut NsNode>,
     pub early_inject_src: RefCell<Option<CString>>,
     pub mutated: Cell<bool>,
-    pub main_context: Cell<*mut GMainContext>,
+    pub main_context: RefCell<Option<southstar_glib::MainContext>>,
     pub worker_host: Cell<*mut WorkerHost>,
     pub style_table: RefCell<Option<Rc<StyleMap>>>,
     pub autofocus_processed: Cell<bool>,
@@ -90,7 +90,7 @@ pub(crate) struct PageState {
     pub ready_state: Cell<c_int>,
     pub doc_ready_states: RefCell<HashMap<WeakNode, c_int>>,
     pub message_tasks: RefCell<VecDeque<MessageTask>>,
-    pub message_task_source: Cell<c_uint>,
+    pub message_task_source: Cell<Option<southstar_glib::SourceId>>,
     pub eval_deadline_us: Cell<i64>,
     pub monitor_deadline_us: Cell<i64>,
     pub in_pump: Cell<bool>,
@@ -135,7 +135,7 @@ impl PageState {
             current_script: Cell::new(ptr::null_mut()),
             early_inject_src: RefCell::new(None),
             mutated: Cell::new(false),
-            main_context: Cell::new(ptr::null_mut()),
+            main_context: RefCell::new(None),
             worker_host: Cell::new(ptr::null_mut()),
             style_table: RefCell::new(None),
             autofocus_processed: Cell::new(false),
@@ -147,7 +147,7 @@ impl PageState {
             ready_state: Cell::new(0),
             doc_ready_states: RefCell::new(HashMap::new()),
             message_tasks: RefCell::new(VecDeque::new()),
-            message_task_source: Cell::new(0),
+            message_task_source: Cell::new(None),
             eval_deadline_us: Cell::new(0),
             monitor_deadline_us: Cell::new(0),
             in_pump: Cell::new(false),

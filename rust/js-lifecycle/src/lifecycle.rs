@@ -2,18 +2,18 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_uint, c_void};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_dom::{Node, WeakNode};
-use southstar_glib::GBoolean;
+use southstar_glib::SourceId;
 
 use southstar_js_loader::{Schedule, ScriptTasks};
 
-use crate::ffi::{self, Js, SOURCE_REMOVE};
+use crate::ffi::{self, Js};
 use crate::{Page, page, page_or_new};
 
-const BUSY_RETRY_MS: c_uint = 4;
+const BUSY_RETRY_MS: u32 = 4;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
@@ -24,7 +24,7 @@ enum Phase {
 }
 
 pub(crate) struct Lifecycle {
-    source: c_uint,
+    source: Option<SourceId>,
     doc: Option<WeakNode>,
     origin: Option<CString>,
     phase: Phase,
@@ -34,7 +34,7 @@ pub(crate) struct Lifecycle {
 impl Default for Lifecycle {
     fn default() -> Lifecycle {
         Lifecycle {
-            source: 0,
+            source: None,
             doc: None,
             origin: None,
             phase: Phase::Interactive,
@@ -44,8 +44,7 @@ impl Default for Lifecycle {
 }
 
 fn release(js: Js, page: &Page) {
-    let source = core::mem::take(&mut *page.lifecycle.borrow_mut()).source;
-    if source != 0 {
+    if let Some(source) = core::mem::take(&mut *page.lifecycle.borrow_mut()).source {
         js.source_remove(source);
     }
     js.set_lifecycle_tasks(None);
@@ -75,7 +74,7 @@ pub(crate) fn start(
     release(js, &page);
     js.set_lifecycle_tasks(Some(tasks));
     *page.lifecycle.borrow_mut() = Lifecycle {
-        source: 0,
+        source: None,
         doc: Some(doc.downgrade()),
         origin: origin.map(CStr::to_owned),
         phase: Phase::Interactive,
@@ -85,11 +84,11 @@ pub(crate) fn start(
 }
 
 fn schedule(js: Js, page: &Page) {
-    if page.lifecycle.borrow().source != 0 {
+    if page.lifecycle.borrow().source.is_some() {
         return;
     }
     let source = js.attach_timeout(0, tick);
-    page.lifecycle.borrow_mut().source = source;
+    page.lifecycle.borrow_mut().source = Some(source);
 }
 
 fn advance(js: Js, page: &Page, phase: Phase) {
@@ -100,7 +99,8 @@ fn advance(js: Js, page: &Page, phase: Phase) {
 pub(crate) fn in_progress(js: Js) -> bool {
     page(js).is_some_and(|page| {
         let lifecycle = page.lifecycle.borrow();
-        lifecycle.source != 0 || (lifecycle.doc.is_some() && lifecycle.phase != Phase::Complete)
+        lifecycle.source.is_some()
+            || (lifecycle.doc.is_some() && lifecycle.phase != Phase::Complete)
     })
 }
 
@@ -131,25 +131,24 @@ fn complete(js: Js, page: &Page, doc: Option<Node<'_>>) {
     release(js, page);
 }
 
-unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
-    let js = Js::from_data(data);
+fn tick(js: Js) {
     let Some(page) = page(js) else {
-        return SOURCE_REMOVE;
+        return;
     };
-    page.lifecycle.borrow_mut().source = 0;
+    page.lifecycle.borrow_mut().source = None;
     let (doc, origin, phase) = {
         let lifecycle = page.lifecycle.borrow();
         (lifecycle.doc, lifecycle.origin.clone(), lifecycle.phase)
     };
     if js.halted() || doc.is_none() || !js.has_lifecycle_tasks() {
         release(js, &page);
-        return SOURCE_REMOVE;
+        return;
     }
     let doc = doc.and_then(WeakNode::get);
     if js.eval_depth() > 0 || js.callback_depth() > 0 || js.in_pump() {
         let source = js.attach_timeout(BUSY_RETRY_MS, tick);
-        page.lifecycle.borrow_mut().source = source;
-        return SOURCE_REMOVE;
+        page.lifecycle.borrow_mut().source = Some(source);
+        return;
     }
     let origin = origin
         .filter(|origin| !origin.is_empty())
@@ -164,7 +163,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
         Phase::Deferred => {
             if js.run_next_script_schedule(Schedule::Deferred, &origin) {
                 schedule(js, &page);
-                return SOURCE_REMOVE;
+                return;
             }
             js.mark_navigation("domContentLoadedEventStart");
             js.dispatch(doc, c"DOMContentLoaded");
@@ -176,7 +175,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
         Phase::Async => {
             if js.run_next_script_schedule(Schedule::Async, &origin) {
                 schedule(js, &page);
-                return SOURCE_REMOVE;
+                return;
             }
             js.drain_load_event_scripts();
             js.process_pending_iframes();
@@ -190,10 +189,9 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
             js.drain_microtasks();
             if load_blocked(js) {
                 schedule(js, &page);
-                return SOURCE_REMOVE;
+                return;
             }
             complete(js, &page, doc);
         }
     }
-    SOURCE_REMOVE
 }

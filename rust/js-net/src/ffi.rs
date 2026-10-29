@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_long};
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_bind::{bind_constructor, bind_native};
 use southstar_js_engine::{ContextHandle, NativeFn, Scope, Value};
@@ -57,13 +57,6 @@ pub(crate) const HO_ABORT_CONTROLLER: HostKind = HostKind::AbortController;
 pub(crate) const HO_ABORT_SIGNAL: HostKind = HostKind::AbortSignal;
 pub(crate) const HO_XHR: HostKind = HostKind::Xhr;
 pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
-
-type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
-unsafe extern "C" {
-    fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
-
-}
 
 #[allow(clippy::unnecessary_cast)]
 fn long(value: c_long) -> i64 {
@@ -550,17 +543,13 @@ impl Js {
             .map(ServiceWorker)
     }
 
-    pub fn attach_idle(self, func: GSourceFunc, data: *mut c_void) {
-        api::attach_idle(self.ptr(), func, data);
+    pub fn attach_idle(self, func: impl FnOnce() + 'static) {
+        api::attach_idle(self.ptr(), func);
     }
 
-    pub fn attach_timeout(self, ms: u32, func: GSourceFunc, data: *mut c_void) {
-        api::attach_timeout(self.ptr(), ms, func, data);
+    pub fn attach_timeout(self, ms: u32, func: impl FnOnce() + 'static) {
+        api::attach_timeout_once(self.ptr(), ms, func);
     }
-}
-
-pub(crate) fn timeout_add(ms: u32, func: GSourceFunc, data: *mut c_void) {
-    unsafe { g_timeout_add(ms, func, data) };
 }
 
 pub(crate) struct Timing<'a> {
@@ -825,54 +814,31 @@ pub fn service_worker_fetch_result(
     crate::fetch::service_worker_result(Js::of_ptr(js), id, outcome);
 }
 
-pub(crate) unsafe extern "C" fn on_fetch_idle(data: *mut c_void) -> GBoolean {
-    let delivery = unsafe { Box::from_raw(data.cast::<crate::fetch::Delivery>()) };
-    crate::fetch::deliver_idle(*delivery);
-    glib::FALSE
-}
-
 pub(crate) fn schedule_fetch_idle(js: Js, delivery: crate::fetch::Delivery, retry: bool) {
-    let data = Box::into_raw(Box::new(delivery)).cast();
+    let deliver = move || crate::fetch::deliver_idle(delivery);
     if retry {
-        timeout_add(4, on_fetch_idle, data);
+        js.attach_timeout(4, deliver);
     } else {
-        js.attach_idle(on_fetch_idle, data);
+        js.attach_idle(deliver);
     }
 }
 
-unsafe extern "C" fn on_xhr_idle(data: *mut c_void) -> GBoolean {
-    let delivery = unsafe { Box::from_raw(data.cast::<crate::xhr::Delivery>()) };
-    crate::xhr::deliver_idle(*delivery);
-    glib::FALSE
-}
-
 pub(crate) fn schedule_xhr_delivery(delivery: crate::xhr::Delivery) {
-    timeout_add(4, on_xhr_idle, Box::into_raw(Box::new(delivery)).cast());
-}
-
-unsafe extern "C" fn on_xhr_blocked(data: *mut c_void) -> GBoolean {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::xhr::Ticket>()) };
-    crate::xhr::blocked(*ticket);
-    glib::FALSE
+    let js = delivery.js;
+    js.attach_timeout(4, move || crate::xhr::deliver_idle(delivery));
 }
 
 pub(crate) fn schedule_xhr_blocked(js: Js, ticket: crate::xhr::Ticket) {
-    js.attach_idle(on_xhr_blocked, Box::into_raw(Box::new(ticket)).cast());
+    js.attach_idle(move || crate::xhr::blocked(ticket));
 }
 
 pub(crate) fn schedule_xhr_blocked_retry(ticket: crate::xhr::Ticket) {
-    timeout_add(4, on_xhr_blocked, Box::into_raw(Box::new(ticket)).cast());
-}
-
-pub(crate) unsafe extern "C" fn on_abort_timeout(data: *mut c_void) -> GBoolean {
-    let ticket = unsafe { Box::from_raw(data.cast::<crate::abort::TimeoutTicket>()) };
-    crate::abort::timeout_fired(*ticket);
-    glib::FALSE
+    let js = ticket.js;
+    js.attach_timeout(4, move || crate::xhr::blocked(ticket));
 }
 
 pub(crate) fn schedule_abort_timeout(js: Js, ms: u32, ticket: crate::abort::TimeoutTicket) {
-    let data = Box::into_raw(Box::new(ticket)).cast();
-    js.attach_timeout(ms, on_abort_timeout, data);
+    js.attach_timeout(ms, move || crate::abort::timeout_fired(ticket));
 }
 
 fn teardown(js: Option<Page>) {

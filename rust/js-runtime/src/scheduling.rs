@@ -152,10 +152,8 @@ pub(crate) fn observer_tick(js: Js) -> bool {
 
 pub(crate) fn drop_message_tasks(js: Js) {
     let state = js.st();
-    let source = state.message_task_source.get();
-    if source != 0 {
+    if let Some(source) = state.message_task_source.take() {
         glue::source_remove(Some(js), source);
-        state.message_task_source.set(0);
     }
     let tasks = core::mem::take(&mut *state.message_tasks.borrow_mut());
     drop(tasks);
@@ -164,13 +162,13 @@ pub(crate) fn drop_message_tasks(js: Js) {
 pub(crate) fn queue_message_task(js: Js, task: MessageTask) -> bool {
     let state = js.st();
     state.message_tasks.borrow_mut().push_back(task);
-    state.message_task_source.get() == 0
+    state.message_task_source.get().is_none()
 }
 
 pub(crate) fn run_message_tasks(js: Js) -> RunTasks {
     let state = js.st();
     if js.halted() {
-        state.message_task_source.set(0);
+        state.message_task_source.set(None);
         drop_message_tasks(js);
         return RunTasks::Done;
     }
@@ -194,7 +192,7 @@ pub(crate) fn run_message_tasks(js: Js) -> RunTasks {
     if !state.message_tasks.borrow().is_empty() {
         return RunTasks::Continue;
     }
-    state.message_task_source.set(0);
+    state.message_task_source.set(None);
     RunTasks::Done
 }
 

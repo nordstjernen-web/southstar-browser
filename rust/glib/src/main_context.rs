@@ -1,11 +1,14 @@
-//! Southstar — a reference to a GLib main context and the deferred, always-asynchronous hand-off of a closure to the thread that iterates it.
+//! Southstar — a reference to a GLib main context: iterating it, handing a closure to the thread that iterates it, and attaching timeout and idle sources to it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_int, c_void};
+use core::ops::ControlFlow;
 use core::ptr::NonNull;
+use std::thread;
 
 use crate::GDestroyNotify;
+use crate::source::{self, Kind, SourceId};
 
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 type Deferred = Box<dyn FnOnce() + Send>;
@@ -14,6 +17,19 @@ const PRIORITY_DEFAULT: c_int = 0;
 
 unsafe extern "C" {
     fn g_main_context_ref_thread_default() -> *mut c_void;
+    fn g_main_context_new() -> *mut c_void;
+    fn g_main_context_default() -> *mut c_void;
+    fn g_main_context_invoke_full(
+        context: *mut c_void,
+        priority: c_int,
+        function: SourceFunc,
+        data: *mut c_void,
+        notify: GDestroyNotify,
+    );
+    fn g_main_context_pending(context: *mut c_void) -> c_int;
+    fn g_main_context_iteration(context: *mut c_void, may_block: c_int) -> c_int;
+    fn g_main_context_push_thread_default(context: *mut c_void);
+    fn g_main_context_pop_thread_default(context: *mut c_void);
     fn g_main_context_ref(context: *mut c_void) -> *mut c_void;
     fn g_main_context_unref(context: *mut c_void);
     fn g_idle_source_new() -> *mut c_void;
@@ -50,6 +66,86 @@ unsafe extern "C" fn drop_deferred(data: *mut c_void) {
 }
 
 impl MainContext {
+    pub fn create() -> MainContext {
+        // SAFETY: g_main_context_new has no preconditions and returns a new context, never null.
+        let raw = unsafe { g_main_context_new() };
+        MainContext(NonNull::new(raw).expect("g_main_context_new"))
+    }
+
+    pub fn global() -> MainContext {
+        // SAFETY: the default context lives for the whole process.
+        let raw = unsafe { g_main_context_default() };
+        // SAFETY: as above; the handle owns the reference taken here.
+        unsafe { g_main_context_ref(raw) };
+        MainContext(NonNull::new(raw).expect("g_main_context_default"))
+    }
+
+    pub fn as_ptr(&self) -> *mut c_void {
+        self.0.as_ptr()
+    }
+
+    pub fn invoke(&self, task: impl FnOnce() + Send + 'static) {
+        let slot: Box<Option<Deferred>> = Box::new(Some(Box::new(task)));
+        // SAFETY: the context is live; GLib owns the leaked slot from here and frees it with drop_deferred.
+        unsafe {
+            g_main_context_invoke_full(
+                self.0.as_ptr(),
+                PRIORITY_DEFAULT,
+                run_deferred,
+                Box::into_raw(slot).cast(),
+                Some(drop_deferred),
+            )
+        };
+    }
+
+    pub fn pending(&self) -> bool {
+        // SAFETY: the context is live while this handle holds it.
+        unsafe { g_main_context_pending(self.0.as_ptr()) != 0 }
+    }
+
+    pub fn iteration(&self, may_block: bool) -> bool {
+        // SAFETY: the context is live while this handle holds it.
+        unsafe { g_main_context_iteration(self.0.as_ptr(), c_int::from(may_block)) != 0 }
+    }
+
+    pub fn push_thread_default(&self) {
+        // SAFETY: the context is live while this handle holds it; GLib takes its own reference.
+        unsafe { g_main_context_push_thread_default(self.0.as_ptr()) };
+    }
+
+    pub fn pop_thread_default(&self) {
+        // SAFETY: the context is live while this handle holds it.
+        unsafe { g_main_context_pop_thread_default(self.0.as_ptr()) };
+    }
+
+    pub fn timeout_add_local(
+        &self,
+        ms: u32,
+        func: impl FnMut() -> ControlFlow<()> + 'static,
+    ) -> SourceId {
+        let owner = Some(thread::current().id());
+        source::attach(self.0.as_ptr(), Kind::Timeout(ms), owner, Box::new(func))
+    }
+
+    pub fn timeout_add_local_once(&self, ms: u32, func: impl FnOnce() + 'static) -> SourceId {
+        let owner = Some(thread::current().id());
+        source::attach(
+            self.0.as_ptr(),
+            Kind::Timeout(ms),
+            owner,
+            source::once(func),
+        )
+    }
+
+    pub fn idle_add_local_once(&self, func: impl FnOnce() + 'static) -> SourceId {
+        let owner = Some(thread::current().id());
+        source::attach(self.0.as_ptr(), Kind::Idle, owner, source::once(func))
+    }
+
+    pub fn remove(&self, id: SourceId) {
+        source::remove_from(self.0.as_ptr(), id);
+    }
+
     pub fn thread_default() -> MainContext {
         // SAFETY: g_main_context_ref_thread_default has no preconditions and returns a new reference, never null.
         let raw = unsafe { g_main_context_ref_thread_default() };

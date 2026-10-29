@@ -15,6 +15,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::NsNode;
+use southstar_glib::MainContext;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
 use crate::api::Page;
@@ -26,11 +27,6 @@ pub use record::NsJs;
 
 #[repr(C)]
 pub(crate) struct WorkerHost {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-pub(crate) struct GMainContext {
     _private: [u8; 0],
 }
 
@@ -71,7 +67,7 @@ impl NavigationTiming {
 
 pub(crate) struct WorkerSetup<'a> {
     pub host: *mut WorkerHost,
-    pub context: *mut GMainContext,
+    pub context: MainContext,
     pub url: Option<&'a CStr>,
     pub base_url: Option<&'a CStr>,
     pub origin: Option<&'a CStr>,
@@ -106,9 +102,7 @@ pub(crate) enum Class {
 
 const PROTO_TABLE_ELEMENT: c_int = 13;
 
-unsafe extern "C" {
-    fn g_main_context_default() -> *mut GMainContext;
-}
+unsafe extern "C" {}
 
 #[cfg(windows)]
 #[link(name = "kernel32")]
@@ -270,8 +264,8 @@ impl Js {
         state.navigate.set(callbacks.navigate);
     }
 
-    pub fn init_tables(self, main_context: *mut GMainContext, page: bool) {
-        self.st().main_context.set(main_context);
+    pub fn init_tables(self, main_context: MainContext, page: bool) {
+        *self.st().main_context.borrow_mut() = Some(main_context);
         record::init_tables(self.rec(), page);
     }
 
@@ -293,7 +287,7 @@ impl Js {
             })),
             ..Callbacks::default()
         });
-        self.init_tables(setup.context, false);
+        self.init_tables(setup.context.clone(), false);
     }
 
     pub fn halted(self) -> bool {
@@ -602,10 +596,6 @@ pub(crate) fn worker_compile(
 
 pub(crate) fn coarsen_navigation_timing(timing: &mut NavigationTiming) {
     (crate::api::perf_hooks().coarsen_navigation_timing)(timing);
-}
-
-pub(crate) fn default_main_context() -> *mut GMainContext {
-    unsafe { g_main_context_default() }
 }
 
 pub(crate) fn set_active(js: Js) {

@@ -134,8 +134,7 @@ pub fn reject_with_message(scope: &mut Scope<'_>, reject: &Value, message: &[u8]
 pub(crate) fn queue_task(js: Js, ctx: ContextHandle, run: TaskRun) {
     let task = glue::message_task(ctx, run);
     if scheduling::queue_message_task(js, task) {
-        let source = glue::attach_timeout(Some(js), 0, ffi::exports::run_message_tasks, js.raw());
-        js.st().message_task_source.set(source);
+        ffi::exports::schedule_message_tasks(js, 0);
     }
 }
 

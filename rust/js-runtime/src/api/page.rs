@@ -286,10 +286,6 @@ pub fn image_cache(js: Option<Page>) -> *mut c_void {
     state(js, ptr::null_mut(), |state| state.image_cache.get())
 }
 
-pub fn glib_context(js: Option<Page>) -> *mut c_void {
-    state(js, ptr::null_mut(), |state| state.main_context.get().cast())
-}
-
 pub fn ready_state(js: Option<Page>) -> i32 {
     state(js, 0, |state| state.ready_state.get())
 }
@@ -494,7 +490,7 @@ pub fn snapshot_platform_globals(js: Option<Page>) {
 
 pub struct WorkerOptions<'a> {
     pub host: *mut c_void,
-    pub context: *mut c_void,
+    pub context: southstar_glib::MainContext,
     pub url: Option<&'a CStr>,
     pub base_url: Option<&'a CStr>,
     pub origin: Option<&'a CStr>,
@@ -505,7 +501,7 @@ pub struct WorkerOptions<'a> {
 pub fn new_worker(options: &WorkerOptions<'_>) -> Option<Page> {
     ffi::new_worker(&ffi::WorkerSetup {
         host: options.host.cast(),
-        context: options.context.cast(),
+        context: options.context.clone(),
         url: options.url,
         base_url: options.base_url,
         origin: options.origin,

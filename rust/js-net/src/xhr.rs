@@ -44,12 +44,12 @@ pub(crate) struct XhrState {
 }
 
 pub(crate) struct Ticket {
-    js: Js,
+    pub(crate) js: Js,
     id: u32,
 }
 
 pub(crate) struct Delivery {
-    js: Js,
+    pub(crate) js: Js,
     id: u32,
     resp: Response,
     failed: bool,

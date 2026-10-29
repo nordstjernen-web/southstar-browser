@@ -40,6 +40,12 @@ impl MainLoop {
         MainLoop(NonNull::new(raw).expect("g_main_loop_new"))
     }
 
+    pub fn on(context: &crate::MainContext) -> MainLoop {
+        // SAFETY: the context is live while the caller holds it, and the new loop takes its own reference to it.
+        let raw = unsafe { g_main_loop_new(context.as_ptr(), 0) };
+        MainLoop(NonNull::new(raw).expect("g_main_loop_new"))
+    }
+
     pub fn run(&self) {
         // SAFETY: the loop is live while this reference holds it.
         unsafe { g_main_loop_run(self.0.as_ptr()) };

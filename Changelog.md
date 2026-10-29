@@ -19,6 +19,17 @@ Southstar Browser 1.0.4-dev:
   loops, blocking fetches and single-process request retries use them
   instead of `extern "C"` trampolines that passed boxed or borrowed data
   through `*mut c_void`.
+* Port: per-page main contexts are `rust/glib` `MainContext` handles.
+  A page records the context it runs on as a counted reference instead of
+  a raw `GMainContext` pointer, workers create and iterate theirs through
+  the same type (dropping their private copy of the GLib context, loop
+  and invoke bindings), and the script runtime's `attach_timeout`,
+  `attach_idle` and `source_remove` take closures and `SourceId`s. Message
+  tasks, the page lifecycle tick, async-script draining, fetch and XHR
+  deliveries, abort timeouts, FileReader completion and `setTimeout`
+  timers are closures on their page's context. Retries that used to go
+  to the default context now stay on the page's own one, so a worker's
+  deliveries are no longer run on the main thread.
 * Security: `navigator.sendBeacon` obeys the page's
   Content-Security-Policy `connect-src` and refuses mixed content, as
   `fetch` and `XMLHttpRequest` already did, so a policy meant to stop

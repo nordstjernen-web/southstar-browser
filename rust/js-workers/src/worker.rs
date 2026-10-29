@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 
 use southstar_js_engine::{ObjectKind, Scope, Value};
 
-use crate::ffi::{self, Ctx, Js, MainContext};
+use crate::ffi::{self, Ctx, Js, MainContext, MainLoop};
 use crate::{JsResult, PLAIN, arg, flag, get, get_index, length, ports, push, set, set_str};
 
 const SCRIPT_BYTES_MAX: usize = 32 * 1024 * 1024;
@@ -21,7 +21,7 @@ const BRIDGE_REGISTRY: &str = "__ns_port_bridge";
 #[derive(Default)]
 pub(crate) struct Inner {
     pub worker_js: Js,
-    pub main_loop: usize,
+    pub main_loop: Option<MainLoop>,
     thread: Option<JoinHandle<()>>,
     joined: bool,
 }
@@ -69,7 +69,7 @@ impl Host {
             sw_active: AtomicBool::new(false),
             terminated: AtomicBool::new(false),
             owner_alive: AtomicBool::new(true),
-            context: MainContext::new(),
+            context: MainContext::create(),
             inner: Mutex::new(Inner::default()),
         })
     }
@@ -157,8 +157,8 @@ pub(crate) fn request_quit(host: &Arc<Host>) {
         if !inner.worker_js.is_null() {
             ffi::halt(inner.worker_js);
         }
-        if inner.main_loop != 0 {
-            ffi::quit_loop(inner.main_loop);
+        if let Some(main_loop) = &inner.main_loop {
+            main_loop.quit();
         }
     });
 }
@@ -187,7 +187,12 @@ pub(crate) fn stop(host: &Arc<Host>, join: bool) {
 }
 
 fn drain_context(host: &Host) {
-    host.context.drain(1024);
+    for _ in 0..1024 {
+        if !host.context.pending() {
+            break;
+        }
+        host.context.iteration(false);
+    }
 }
 
 pub(crate) enum Body {
@@ -1156,13 +1161,12 @@ fn run(host: Arc<Host>) {
         crate::service::fire_lifecycle(js, &host);
     }
     if runs && !host.closing() {
-        let main_loop = context.new_loop();
-        host.inner().main_loop = main_loop;
+        let main_loop = MainLoop::on(&context);
+        host.inner().main_loop = Some(main_loop.clone());
         if !host.closing() {
-            ffi::run_loop(main_loop);
+            main_loop.run();
         }
-        host.inner().main_loop = 0;
-        ffi::unref_loop(main_loop);
+        host.inner().main_loop = None;
     }
     host.inner().worker_js = Js::default();
     ffi::js_free(js);
