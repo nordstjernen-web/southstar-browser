@@ -315,7 +315,7 @@ impl Policy {
             if clause.is_empty() {
                 continue;
             }
-            let mut tokens = clause.split(|&c| c == b' ' || c == b'\t');
+            let mut tokens = clause.split(u8::is_ascii_whitespace);
             let Some(kind) = tokens.next().and_then(directive_kind) else {
                 continue;
             };

@@ -156,7 +156,9 @@ fn potentially_trustworthy(url: &str) -> bool {
     host == "localhost"
         || host.ends_with(".localhost")
         || host == "::1"
-        || host.split('.').next() == Some("127") && host.split('.').count() == 4
+        || host
+            .parse::<std::net::Ipv4Addr>()
+            .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn path_of(url: &str) -> &str {
