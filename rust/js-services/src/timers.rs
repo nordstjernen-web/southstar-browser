@@ -102,8 +102,8 @@ fn schedule(scope: &mut Scope<'_>, this: &Value, args: &[Value], is_interval: bo
         None
     } else {
         match scope.to_string(handler) {
-            Ok(code) => Some(code),
-            Err(_) => return Value::int(0),
+            Ok(code) if js.string_compilation_allowed(scope) => Some(code),
+            Ok(_) | Err(_) => return Value::int(0),
         }
     };
     let mut ms = to_int32(scope, args.get(1)).max(0);

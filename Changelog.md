@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: Content-Security-Policy enforcement fixes. `setTimeout` and
+  `setInterval` with a string handler now need `'unsafe-eval'` like
+  `eval` does; the string was compiled by the host and never reached the
+  engine's check. Directives are split on any ASCII whitespace, so a
+  policy written with line breaks (common in `<meta>` tags) no longer
+  loses the directive the break sits in. A script inside a frame is
+  checked against `script-src` again after a redirect, as the page's own
+  scripts already were. The service-worker secure-context check accepts
+  only real `127.0.0.0/8` addresses as loopback, not any four-label host
+  name that starts with `127`.
 * Security: a response served from the HTTP cache keeps its
   Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
   Content-Disposition, Refresh and Content-Language headers. The cache
