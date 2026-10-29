@@ -16,9 +16,12 @@ mod tests;
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;
 pub use main_loop::{MainLoop, default_context_iteration, default_context_pending};
+#[cfg(unix)]
+pub use source::unix_signal_add_local;
 pub use source::{
-    Scope, SourceId, idle_add_local, idle_add_local_once, idle_add_once, scope, timeout_add_local,
-    timeout_add_local_once, timeout_add_once, timeout_add_seconds_local,
+    Pid, RawPid, Scope, SourceId, child_watch_add_local, idle_add_local, idle_add_local_once,
+    idle_add_once, scope, timeout_add_local, timeout_add_local_once, timeout_add_once,
+    timeout_add_seconds_local,
 };
 
 pub type GBoolean = c_int;
