@@ -287,15 +287,13 @@ fn drain_deferred_events(js: JsPage) {
     events::drain(Js(Some(js)));
 }
 
-fn switch_session(js: Option<JsPage>, old_partition: Option<&CStr>, new_partition: &CStr) {
+fn switch_session(js: Option<JsPage>, _old_partition: Option<&CStr>, new_partition: &CStr) {
     let Some(page) = crate::page(Js(js)) else {
         return;
     };
-    let old = old_partition.map(|old| old.to_string_lossy().into_owned());
-    let new = new_partition.to_string_lossy();
     page.storage
         .borrow_mut()
-        .switch_session(old.as_deref(), &new);
+        .switch_session(&new_partition.to_string_lossy());
 }
 
 fn load_page_local(js: Option<JsPage>, url: Option<&CStr>) {
