@@ -4,12 +4,10 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -20,16 +18,6 @@ use crate::{Element, JsResult};
 
 #[derive(Clone, Copy)]
 pub(crate) struct Page(api::Page);
-
-unsafe extern "C" {
-    fn g_content_type_guess(
-        filename: *const c_char,
-        data: *const u8,
-        data_size: usize,
-        result_uncertain: *mut GBoolean,
-    ) -> *mut c_char;
-    fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
-}
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
@@ -134,34 +122,9 @@ pub(crate) struct FileBytes {
 }
 
 pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
-    let bytes = southstar_glib::file_get_contents(path.to_bytes())?;
-    let content_type = unsafe {
-        g_content_type_guess(
-            path.as_ptr(),
-            bytes.as_ptr(),
-            bytes.len().min(4096),
-            ptr::null_mut(),
-        )
-    };
-    let mime = if content_type.is_null() {
-        None
-    } else {
-        let mime = unsafe { g_content_type_get_mime_type(content_type) };
-        let text = (!mime.is_null()).then(|| {
-            unsafe { CStr::from_ptr(mime) }
-                .to_string_lossy()
-                .into_owned()
-        });
-        unsafe {
-            glib::g_free(mime.cast());
-            glib::g_free(content_type.cast());
-        }
-        text
-    };
-    Some(FileBytes {
-        contents: bytes,
-        mime,
-    })
+    let contents = southstar_glib::file_get_contents(path.to_bytes())?;
+    let mime = southstar_mime::guess(path.to_bytes(), Some(&contents)).map(str::to_owned);
+    Some(FileBytes { contents, mime })
 }
 
 pub(crate) fn is_form_data(_scope: &mut Scope<'_>, value: &Value) -> bool {

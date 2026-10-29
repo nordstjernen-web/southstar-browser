@@ -63,12 +63,12 @@ js-engine	38	0	0	0	30	0	6
 js-events	0	0	0	0	0	0	0
 js-focus	0	0	0	0	0	0	0
 js-fonts	0	0	0	0	0	0	0
-js-forms	5	2	0	0	4	1	0
+js-forms	0	0	0	0	0	0	0
 js-frames	2	1	0	0	1	0	0
 js-geometry	2	0	0	0	2	0	0
 js-html	0	0	0	0	0	0	0
 js-images	4	0	0	0	2	1	0
-js-input	5	2	0	0	4	1	0
+js-input	0	0	0	0	0	0	0
 js-interfaces	0	0	0	0	0	0	0
 js-intl	12	9	0	0	0	2	0
 js-lifecycle	0	0	0	0	0	0	0
@@ -116,8 +116,9 @@ mat4	0	0	0	0	0	0	0
 mathml	0	0	0	0	0	0	0
 media-shm	0	0	0	0	0	0	0
 mic	9	5	0	0	0	0	0
+mime	0	0	0	0	0	0	0
 minimp3	0	0	0	0	0	0	0
-net	39	25	0	0	18	1	0
+net	36	23	0	0	15	1	0
 netstore	0	0	0	0	0	0	0
 netutil	2	1	0	0	0	0	0
 numfmt	0	0	0	0	0	0	0

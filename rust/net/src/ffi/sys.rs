@@ -4,13 +4,13 @@
 
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+
 use std::ffi::CString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use southstar_config::util;
-use southstar_glib::{self as glib, GBoolean, GStr};
+use southstar_glib::GStr;
 use southstar_netutil::file_uri;
 
 #[repr(C)]
@@ -25,13 +25,6 @@ unsafe extern "C" {
     fn g_date_time_new_from_unix_local(t: i64) -> *mut GDateTime;
     fn g_date_time_format(datetime: *mut GDateTime, format: *const c_char) -> *mut c_char;
     fn g_date_time_unref(datetime: *mut GDateTime);
-    fn g_content_type_guess(
-        filename: *const c_char,
-        data: *const u8,
-        data_size: usize,
-        result_uncertain: *mut GBoolean,
-    ) -> *mut c_char;
-    fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
 
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
@@ -186,18 +179,10 @@ pub fn local_time_label(secs: i64) -> Option<Vec<u8>> {
 }
 
 pub fn mime_type_guess(filename: &[u8], data: Option<&[u8]>) -> Vec<u8> {
-    let filename = c(filename);
-    let (data, len) = data.map_or((ptr::null(), 0), |d| (d.as_ptr(), d.len()));
-    let mut uncertain: GBoolean = 0;
-    let content_type =
-        unsafe { g_content_type_guess(filename.as_ptr(), data, len, &mut uncertain) };
-    let mime = if content_type.is_null() {
-        None
-    } else {
-        take(unsafe { g_content_type_get_mime_type(content_type) })
-    };
-    unsafe { glib::g_free(content_type.cast()) };
-    mime.unwrap_or_else(|| b"application/octet-stream".to_vec())
+    southstar_mime::guess(filename, data)
+        .unwrap_or("application/octet-stream")
+        .as_bytes()
+        .to_vec()
 }
 
 pub fn url_pathname(url: &[u8]) -> Option<Vec<u8>> {
@@ -377,7 +362,7 @@ fn platform_exe() -> Option<Vec<u8>> {
         fn _NSGetExecutablePath(buf: *mut c_char, size: *mut u32) -> c_int;
     }
     let mut size = 0u32;
-    unsafe { _NSGetExecutablePath(ptr::null_mut(), &mut size) };
+    unsafe { _NSGetExecutablePath(core::ptr::null_mut(), &mut size) };
     if size == 0 || size > 32768 {
         return None;
     }
@@ -494,7 +479,7 @@ pub fn available_memory_bytes() -> u64 {
             c"hw.memsize".as_ptr(),
             (&mut mem as *mut u64).cast(),
             &mut len,
-            ptr::null_mut(),
+            core::ptr::null_mut(),
             0,
         )
     };

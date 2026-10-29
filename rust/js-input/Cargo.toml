@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+southstar-mime = { path = "../mime" }
 southstar-dom = { path = "../dom" }
 southstar-glib = { path = "../glib" }
 southstar-js-dispatch = { path = "../js-dispatch" }
