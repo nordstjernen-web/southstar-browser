@@ -49,6 +49,13 @@ Southstar Browser 1.0.4-dev:
   127) when it exits with one open. The connection object asks its worker
   to stop and lets it finish on its own; events still queued for the page
   are dropped as before.
+* CSS Grid: a grid container whose height is `auto` but whose
+  `min-height` (or `max-height`) settles its used height now stretches its
+  `auto` rows into that height and aligns by it, as css-grid's "Stretch
+  auto Tracks" step and `align-content` require. Only a definite `height`
+  counted before, so `display: grid; align-items: center; min-height:
+  64px` left the content at the top (chess.com's "Log In" button label sat
+  at the top of the button while the `<button>` next to it looked right).
 * Port: the `pattern` attribute of form controls and the regular
   expressions in extension blocking rules are matched with `regress`, the
   JavaScript regular-expression engine Boa already uses, instead of

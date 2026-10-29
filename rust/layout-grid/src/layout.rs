@@ -1156,12 +1156,19 @@ pub fn layout_grid(
     }
     let mut total_extra = 0.0;
     let hv = style.get(PropId::Height);
-    if is_length_or_calc(hv) && !grid_rows.is_empty() {
-        let mut eh = clamp_height_minmax_px(Some(style), resolve_used_height(b, hv, cw, -1.0));
-        if style_has(Some(style), PropId::BoxSizing, c"border-box") {
+    if !grid_rows.is_empty() {
+        let frame = if style_has(Some(style), PropId::BoxSizing, c"border-box") {
             let (p, bd) = (b.padding(), b.border());
-            eh -= p.top + p.bottom + bd.top + bd.bottom;
-        }
+            p.top + p.bottom + bd.top + bd.bottom
+        } else {
+            0.0
+        };
+        let specified = if is_length_or_calc(hv) {
+            resolve_used_height(b, hv, cw, -1.0)
+        } else {
+            measured + frame
+        };
+        let eh = clamp_height_minmax_px(Some(style), specified) - frame;
         if eh > measured {
             total_extra = eh - measured;
         }
