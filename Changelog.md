@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: a `WebAssembly.Memory`'s `buffer` now keeps the wasm store
+  behind it alive. The `ArrayBuffer` viewed wasmi's linear memory through
+  a raw pointer and held nothing that owned it, so once the `Memory`, its
+  instances and the realm's WebAssembly state had all been garbage
+  collected (a same-origin frame removed while its parent still held the
+  frame's `memory.buffer`, for one) the store was freed and the buffer
+  read and wrote freed heap. The Boa fork's external `ArrayBuffer` takes
+  an owner that it drops when the buffer is detached or collected.
 * Security: activating a `javascript:` link (a click or `click()`) now
   runs its code only where it belongs. In the page's own document it
   obeys the Content-Security-Policy, so a policy without

@@ -102,13 +102,16 @@ impl JsArrayBuffer {
     /// ```
     /// Creates a fixed-length `ArrayBuffer` that views `len` bytes of embedder memory at `ptr`
     /// instead of owning its bytes. Detaching it drops the view; it cannot be transferred.
+    /// `owner`, when given, is kept alive until the buffer is detached or collected.
     ///
     /// # Safety
     ///
-    /// `ptr` must stay valid for reads and writes of `len` bytes until the buffer is detached.
+    /// `ptr` must stay valid for reads and writes of `len` bytes until the buffer is detached,
+    /// or for as long as `owner` lives when one is given.
     pub unsafe fn from_external_bytes(
         ptr: *mut u8,
         len: usize,
+        owner: Option<std::rc::Rc<dyn std::any::Any>>,
         context: &mut Context,
     ) -> JsResult<Self> {
         let prototype = context
@@ -117,7 +120,7 @@ impl JsArrayBuffer {
             .array_buffer()
             .prototype();
         let obj = JsObject::new(context.root_shape(), prototype, unsafe {
-            ArrayBuffer::from_external(ptr, len)
+            ArrayBuffer::from_external(ptr, len, owner)
         });
         Ok(Self { inner: obj })
     }

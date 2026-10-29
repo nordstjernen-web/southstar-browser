@@ -606,7 +606,7 @@ impl Buffer {
         if data.is_null() {
             return None;
         }
-        Some(unsafe { scope.external_array_buffer(data.cast(), size) })
+        Some(unsafe { scope.external_array_buffer(data.cast(), size, None) })
     }
 
     pub(crate) fn with_const_mapped<R>(

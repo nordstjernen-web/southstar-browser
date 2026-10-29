@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -171,7 +172,11 @@ impl Realm {
         }
     }
 
-    pub fn view_buffer(&self, scope: &mut Scope<'_>, view: usize) -> Result<Value, Value> {
+    pub fn view_buffer(
+        self: &Rc<Self>,
+        scope: &mut Scope<'_>,
+        view: usize,
+    ) -> Result<Value, Value> {
         self.sync_views(scope);
         let existing = self
             .views
@@ -188,7 +193,8 @@ impl Realm {
             let data = memory.data_mut(&mut ctx);
             (data.as_mut_ptr(), data.len())
         });
-        let buffer = ffi::memory_buffer(scope, base, len)?;
+        let store: Rc<dyn Any> = self.clone();
+        let buffer = ffi::memory_buffer(scope, base, len, store)?;
         if let Some(entry) = self.views.borrow_mut().get_mut(view) {
             entry.buffer = Some(buffer.clone());
             entry.base = base as usize;

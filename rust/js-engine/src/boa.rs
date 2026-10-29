@@ -865,8 +865,9 @@ impl Scope<'_> {
         &mut self,
         data: *mut u8,
         len: usize,
+        owner: Option<std::rc::Rc<dyn std::any::Any>>,
     ) -> Result<Value, Value> {
-        unsafe { JsArrayBuffer::from_external_bytes(data, len, self.cx()) }
+        unsafe { JsArrayBuffer::from_external_bytes(data, len, owner, self.cx()) }
             .map(|buffer| Value(buffer.into()))
             .map_err(|e| self.error(e))
     }
