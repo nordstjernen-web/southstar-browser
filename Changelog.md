@@ -30,6 +30,11 @@ Southstar Browser 1.0.4-dev:
   loops, blocking fetches and single-process request retries use them
   instead of `extern "C"` trampolines that passed boxed or borrowed data
   through `*mut c_void`.
+* Port: localStorage files are read and written by `rust/keyfile`, a
+  small pure-Rust reader and writer for the GLib key-file format they
+  have always used (same groups, escapes and key rules), instead of
+  GLib's `GKeyFile`. Existing files load unchanged; js-storage drops
+  seven GLib imports and their `unsafe` blocks.
 * Port: the HTTP cache reads `Expires` dates with the pure-Rust parser
   `rust/netstore` already uses for cookies, which gains an ISO 8601 form,
   instead of `sscanf` and GLib's `GDateTime`.

@@ -2,26 +2,21 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GError, GStr};
+use southstar_glib as glib;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
+use southstar_keyfile as keyfile;
 
 use crate::store::{Area, Items, Snapshot};
 use crate::{Page, binding, class, events};
 
 use southstar_js_runtime::api::Page as JsPage;
-
-#[repr(C)]
-struct GKeyFile {
-    _private: [u8; 0],
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(Option<JsPage>);
@@ -36,43 +31,6 @@ impl Js {
     }
 }
 
-const KEY_FILE_NONE: c_int = 0;
-
-unsafe extern "C" {
-
-    fn g_key_file_new() -> *mut GKeyFile;
-    fn g_key_file_free(key_file: *mut GKeyFile);
-    fn g_key_file_load_from_file(
-        key_file: *mut GKeyFile,
-        file: *const c_char,
-        flags: c_int,
-        error: *mut *mut GError,
-    ) -> GBoolean;
-    fn g_key_file_to_data(
-        key_file: *mut GKeyFile,
-        length: *mut usize,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-    fn g_key_file_get_keys(
-        key_file: *mut GKeyFile,
-        group: *const c_char,
-        length: *mut usize,
-        error: *mut *mut GError,
-    ) -> *mut *mut c_char;
-    fn g_key_file_get_string(
-        key_file: *mut GKeyFile,
-        group: *const c_char,
-        key: *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-    fn g_key_file_set_string(
-        key_file: *mut GKeyFile,
-        group: *const c_char,
-        key: *const c_char,
-        value: *const c_char,
-    );
-}
-
 fn c_text(text: &str) -> CString {
     let bytes = text.as_bytes();
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -85,10 +43,6 @@ fn owned(text: *const c_char) -> Option<String> {
             .to_string_lossy()
             .into_owned()
     })
-}
-
-fn taken(text: *mut c_char) -> Option<String> {
-    unsafe { GStr::take(text) }.map(|text| text.to_string_lossy().into_owned())
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -187,80 +141,28 @@ pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {
     Some(format!("{dir}{separator}{hash}.ini"))
 }
 
-struct KeyFile(*mut GKeyFile);
-
-impl KeyFile {
-    fn new() -> KeyFile {
-        KeyFile(unsafe { g_key_file_new() })
-    }
-}
-
-impl Drop for KeyFile {
-    fn drop(&mut self) {
-        unsafe { g_key_file_free(self.0) };
-    }
-}
-
 pub(crate) fn read_items(path: &str) -> Items {
-    let mut items = Items::new();
-    let key_file = KeyFile::new();
-    let path = c_text(path);
-    let group = c"storage";
-    let loaded = unsafe {
-        g_key_file_load_from_file(key_file.0, path.as_ptr(), KEY_FILE_NONE, ptr::null_mut())
-    };
-    if loaded == 0 {
-        return items;
-    }
-    let mut n = 0usize;
-    let keys = unsafe { g_key_file_get_keys(key_file.0, group.as_ptr(), &mut n, ptr::null_mut()) };
-    if keys.is_null() {
-        return items;
-    }
-    for i in 0..n {
-        let key = unsafe { *keys.add(i) };
-        let value = taken(unsafe {
-            g_key_file_get_string(key_file.0, group.as_ptr(), key, ptr::null_mut())
-        });
-        if let (Some(key), Some(value)) = (owned(key), value) {
-            items.insert(key, value);
-        }
-    }
-    unsafe { glib::g_strfreev(keys) };
-    items
+    std::fs::read(path)
+        .ok()
+        .and_then(|data| keyfile::read_group(&data, "storage"))
+        .map(|entries| entries.into_iter().collect())
+        .unwrap_or_default()
 }
 
 fn write_snapshot(snapshot: &Snapshot) {
-    let key_file = KeyFile::new();
-    if let Some(origin) = &snapshot.origin {
-        let origin = c_text(origin);
-        unsafe {
-            g_key_file_set_string(
-                key_file.0,
-                c"meta".as_ptr(),
-                c"origin".as_ptr(),
-                origin.as_ptr(),
-            )
-        };
-    }
-    for (key, value) in &snapshot.items {
-        let (key, value) = (c_text(key), c_text(value));
-        unsafe {
-            g_key_file_set_string(
-                key_file.0,
-                c"storage".as_ptr(),
-                key.as_ptr(),
-                value.as_ptr(),
-            )
-        };
-    }
-    let mut len = 0usize;
-    let data = unsafe { g_key_file_to_data(key_file.0, &mut len, ptr::null_mut()) };
-    let Some(data) = (unsafe { GStr::take(data) }) else {
-        return;
-    };
+    let meta = snapshot
+        .origin
+        .iter()
+        .map(|origin| ("origin", origin.as_str()))
+        .collect();
+    let storage = snapshot
+        .items
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let text = keyfile::write_groups([("meta", meta), ("storage", storage)]);
     let path = Path::new(&snapshot.path);
-    let contents = &data.to_bytes()[..len.min(data.to_bytes().len())];
+    let contents = text.as_bytes();
     if let Err(reason) = replace_file(path, contents) {
         warn(&format!(
             "local storage: failed to write {}: {reason}",

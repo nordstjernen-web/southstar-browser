@@ -3070,6 +3070,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
+ "southstar-keyfile",
  "southstar-url",
 ]
 
@@ -3203,6 +3204,10 @@ dependencies = [
  "southstar-js-intl",
  "southstar-js-temporal",
 ]
+
+[[package]]
+name = "southstar-keyfile"
+version = "1.0.4-dev"
 
 [[package]]
 name = "southstar-launcher"
