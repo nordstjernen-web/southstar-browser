@@ -5,7 +5,6 @@
 use core::ffi::c_int;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use southstar_http::{Received, Request, Upgraded};
@@ -35,7 +34,6 @@ struct Socket {
 
 pub struct WebSocket {
     socket: Arc<Socket>,
-    thread: Option<JoinHandle<()>>,
 }
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -343,11 +341,11 @@ impl WebSocket {
             data,
         });
         let worker_socket = Arc::clone(&socket);
-        let thread = std::thread::Builder::new()
+        let _worker = std::thread::Builder::new()
             .name("nd-ws".into())
             .spawn(move || worker(worker_socket))
             .ok();
-        WebSocket { socket, thread }
+        WebSocket { socket }
     }
 
     pub fn send_text(&self, text: &[u8]) -> bool {
@@ -375,10 +373,7 @@ impl WebSocket {
             .clone()
     }
 
-    pub fn free(mut self) {
+    pub fn free(self) {
         self.socket.shared.request_exit();
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
     }
 }
