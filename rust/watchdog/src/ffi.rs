@@ -25,7 +25,6 @@ type GPid = *mut c_void;
 unsafe extern "C" {
     fn g_spawn_close_pid(pid: GPid);
     fn g_uuid_string_random() -> *mut c_char;
-    fn g_get_user_runtime_dir() -> *const c_char;
     fn _exit(status: c_int) -> !;
 }
 
@@ -566,11 +565,8 @@ fn session_path() -> Vec<u8> {
         b".session",
     ]
     .concat();
-    // SAFETY: g_get_user_runtime_dir has no preconditions and returns a string GLib keeps.
-    let runtime_dir = unsafe { g_get_user_runtime_dir() };
-    // SAFETY: runtime_dir is null or a NUL-terminated string GLib keeps for the process.
-    let runtime_dir = unsafe { glib::bytes(runtime_dir) }.unwrap_or_default();
-    let Some(dir) = glib::path_from_bytes(runtime_dir) else {
+    let runtime_dir = glib::user_runtime_dir();
+    let Some(dir) = glib::path_from_bytes(&runtime_dir) else {
         return name;
     };
     let Some(name) = glib::path_from_bytes(&name) else {

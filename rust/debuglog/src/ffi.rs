@@ -25,11 +25,8 @@ pub fn env(name: &str) -> Option<Vec<u8>> {
 }
 
 pub fn default_log_path() -> Option<CString> {
-    // SAFETY: g_get_user_data_dir has no preconditions and returns a string GLib keeps.
-    let data_dir = unsafe { glib::g_get_user_data_dir() };
-    // SAFETY: data_dir is null or a NUL-terminated string GLib keeps for the process.
-    let data_dir = unsafe { glib::bytes(data_dir) }?;
-    let path = glib::path_from_bytes(data_dir)?
+    let data_dir = Some(glib::user_data_dir()).filter(|dir| !dir.is_empty())?;
+    let path = glib::path_from_bytes(&data_dir)?
         .join("Southstar")
         .join("southstar-debug.log");
     CString::new(glib::path_bytes(&path)).ok()

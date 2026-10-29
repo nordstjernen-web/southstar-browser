@@ -32,7 +32,6 @@ unsafe extern "C" {
         result_uncertain: *mut GBoolean,
     ) -> *mut c_char;
     fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
-    fn g_get_tmp_dir() -> *const c_char;
 
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
@@ -239,24 +238,15 @@ impl CFile {
 }
 
 pub fn tmp_dir() -> Vec<u8> {
-    // SAFETY: takes no arguments and returns null or a NUL-terminated path GLib owns for the life of the process.
-    unsafe { glib::bytes(g_get_tmp_dir()) }
-        .map(<[u8]>::to_vec)
-        .unwrap_or_default()
+    southstar_glib::tmp_dir()
 }
 
 pub fn user_config_dir() -> Vec<u8> {
-    // SAFETY: takes no arguments and returns null or a NUL-terminated path GLib owns for the life of the process.
-    unsafe { glib::bytes(glib::g_get_user_config_dir()) }
-        .map(<[u8]>::to_vec)
-        .unwrap_or_default()
+    southstar_glib::user_config_dir()
 }
 
 pub fn user_data_dir() -> Vec<u8> {
-    // SAFETY: takes no arguments and returns null or a NUL-terminated path GLib owns for the life of the process.
-    unsafe { glib::bytes(glib::g_get_user_data_dir()) }
-        .map(<[u8]>::to_vec)
-        .unwrap_or_default()
+    southstar_glib::user_data_dir()
 }
 
 fn tmp_name(prefix: &[u8]) -> Vec<u8> {

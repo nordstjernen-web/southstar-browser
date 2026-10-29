@@ -70,7 +70,7 @@ pub fn self_exe() -> Option<Vec<u8>> {
 }
 
 pub fn user_data_dir() -> Option<Vec<u8>> {
-    borrowed(unsafe { glib::g_get_user_data_dir() })
+    Some(glib::user_data_dir()).filter(|dir| !dir.is_empty())
 }
 
 pub fn system_data_dirs() -> Vec<Vec<u8>> {

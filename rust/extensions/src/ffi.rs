@@ -156,9 +156,7 @@ pub(crate) fn basename(path: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn user_data_dir() -> Vec<u8> {
-    unsafe { glib::bytes(glib::g_get_user_data_dir()) }
-        .unwrap_or_default()
-        .to_vec()
+    southstar_glib::user_data_dir()
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
@@ -167,11 +165,7 @@ pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn language_name() -> Option<Vec<u8>> {
-    let names = unsafe { glib::g_get_language_names() };
-    if names.is_null() {
-        return None;
-    }
-    unsafe { glib::bytes(*names) }.map(<[u8]>::to_vec)
+    glib::language_names().into_iter().next()
 }
 
 pub(crate) fn sha256_hex(text: &[u8]) -> Vec<u8> {

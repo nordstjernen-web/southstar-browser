@@ -346,10 +346,7 @@ mod v4l2 {
     }
 
     pub(super) fn exists(path: &[u8]) -> bool {
-        let Ok(name) = CString::new(path) else {
-            return false;
-        };
-        unsafe { glib::g_file_test(name.as_ptr(), glib::FILE_TEST_EXISTS) != 0 }
+        glib::path_from_bytes(path).is_some_and(|path| path.exists())
     }
 }
 

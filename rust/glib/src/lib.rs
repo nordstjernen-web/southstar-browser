@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
+mod dirs;
 mod log;
 mod main_context;
 mod main_loop;
@@ -13,6 +14,10 @@ mod strtod;
 #[cfg(test)]
 mod tests;
 
+pub use dirs::{
+    home_dir, language_names, tmp_dir, user_cache_dir, user_config_dir, user_data_dir,
+    user_runtime_dir,
+};
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;
 pub use main_loop::{MainLoop, default_context_iteration, default_context_pending};

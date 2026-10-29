@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 
 use southstar_config::util as fs;
-use southstar_glib as glib;
 use southstar_netstore::http_date;
 
 pub(crate) fn warn(message: &[u8]) {
@@ -17,9 +16,7 @@ pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
 }
 
 pub(crate) fn user_cache_dir() -> Vec<u8> {
-    unsafe { glib::bytes(glib::g_get_user_cache_dir()) }
-        .unwrap_or_default()
-        .to_vec()
+    southstar_glib::user_cache_dir()
 }
 
 pub(crate) fn mkdir_with_parents(path: &[u8]) -> bool {

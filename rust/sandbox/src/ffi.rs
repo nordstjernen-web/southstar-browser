@@ -15,10 +15,6 @@ use southstar_glib::{self as glib, LogLevel};
 unsafe extern "C" {
     #[cfg(target_os = "linux")]
     fn g_printerr(format: *const c_char, ...);
-    #[cfg(target_os = "linux")]
-    fn g_get_home_dir() -> *const c_char;
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn g_get_user_runtime_dir() -> *const c_char;
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn g_get_user_special_dir(directory: c_int) -> *const c_char;
 }
@@ -104,8 +100,8 @@ fn is_renderer() -> bool {
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-fn glib_dir(get: unsafe extern "C" fn() -> *const c_char) -> Option<Vec<u8>> {
-    unsafe { glib::bytes(get()) }.map(<[u8]>::to_vec)
+fn glib_dir(get: fn() -> Vec<u8>) -> Option<Vec<u8>> {
+    Some(get()).filter(|dir| !dir.is_empty())
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -429,10 +425,10 @@ mod linux {
             rules.allow(fs_read, &dir);
         }
 
-        let home = glib_dir(super::g_get_home_dir);
-        let config = glib_dir(glib::g_get_user_config_dir);
-        let data = glib_dir(glib::g_get_user_data_dir);
-        let cache = glib_dir(glib::g_get_user_cache_dir);
+        let home = glib_dir(glib::home_dir);
+        let config = glib_dir(glib::user_config_dir);
+        let data = glib_dir(glib::user_data_dir);
+        let cache = glib_dir(glib::user_cache_dir);
         if renderer {
             let readable = [
                 (&config, &crate::RENDERER_CONFIG_SUBDIRS[..]),
@@ -452,7 +448,7 @@ mod linux {
                 rules.allow(fs_read, dir);
             }
         }
-        if let Some(runtime) = glib_dir(super::g_get_user_runtime_dir) {
+        if let Some(runtime) = glib_dir(glib::user_runtime_dir) {
             if renderer {
                 rules.allow(fs_rw, &own_dir(&runtime, &[b"southstar"]));
             } else {
@@ -794,14 +790,11 @@ mod macos {
             return;
         }
         let mut profile = crate::SEATBELT_HEAD.to_vec();
-        subpath(
-            &mut profile,
-            glib_dir(super::g_get_user_runtime_dir).as_deref(),
-        );
+        subpath(&mut profile, glib_dir(glib::user_runtime_dir).as_deref());
         for get in [
-            glib::g_get_user_config_dir as unsafe extern "C" fn() -> *const c_char,
-            glib::g_get_user_data_dir,
-            glib::g_get_user_cache_dir,
+            glib::user_config_dir as fn() -> Vec<u8>,
+            glib::user_data_dir,
+            glib::user_cache_dir,
         ] {
             let base = glib_dir(get).unwrap_or_default();
             subpath(&mut profile, Some(&own_dir(&base, &[b"southstar"])));

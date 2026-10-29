@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 #[cfg(feature = "fontconfig")]
 use core::ffi::{c_int, c_uint, c_void};
 #[cfg(feature = "fontconfig")]
@@ -19,10 +19,6 @@ use crate::Descriptors;
 const DIR_SEPARATOR: u8 = b'\\';
 #[cfg(not(windows))]
 const DIR_SEPARATOR: u8 = b'/';
-
-unsafe extern "C" {
-    fn g_get_home_dir() -> *const c_char;
-}
 
 fn is_dir_separator(c: u8) -> bool {
     c == b'/' || (cfg!(windows) && c == b'\\')
@@ -115,13 +111,7 @@ fn make_private_dir(dir: &Path) {
 }
 
 fn home_dir() -> CString {
-    // SAFETY: g_get_home_dir takes no arguments and returns GLib's own string, which lives for the whole process.
-    let home = unsafe { g_get_home_dir() };
-    if home.is_null() {
-        return CString::default();
-    }
-    // SAFETY: home is a non-null NUL-terminated string owned by GLib for the whole process.
-    unsafe { CStr::from_ptr(home) }.to_owned()
+    CString::new(southstar_glib::home_dir()).unwrap_or_default()
 }
 
 pub fn cache_dir() -> CString {

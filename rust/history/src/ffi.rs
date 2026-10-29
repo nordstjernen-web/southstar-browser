@@ -33,10 +33,6 @@ unsafe fn take(p: *mut c_char) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
-unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
-    unsafe { glib::bytes(p) }.unwrap_or_default().to_vec()
-}
-
 pub(crate) fn warn(message: &[u8]) {
     glib::warning(message);
 }
@@ -46,10 +42,7 @@ pub(crate) fn build_filename(dir: &CStr, name: &CStr) -> CString {
 }
 
 pub(crate) fn user_data_dir() -> CString {
-    // SAFETY: g_get_user_data_dir has no preconditions and returns a string GLib owns.
-    let dir = unsafe { glib::g_get_user_data_dir() };
-    // SAFETY: dir is NULL or the NUL-terminated string GLib keeps for the life of the process.
-    c_string(&unsafe { borrowed(dir) })
+    c_string(&glib::user_data_dir())
 }
 
 pub(crate) fn mkdir_with_parents(path: &CStr, mode: u32) {

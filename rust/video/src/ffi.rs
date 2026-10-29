@@ -5,7 +5,6 @@
 use core::ffi::{CStr, c_int};
 
 use southstar_dom::Node;
-use southstar_glib as glib;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef};
 
@@ -31,12 +30,7 @@ pub fn monotonic_us() -> i64 {
 }
 
 fn user_cache_dir() -> Vec<u8> {
-    // SAFETY: g_get_user_cache_dir takes no arguments and returns a string GLib owns.
-    let dir = unsafe { glib::g_get_user_cache_dir() };
-    // SAFETY: GLib keeps the returned NUL-terminated string, or null, for the life of the process.
-    unsafe { glib::bytes(dir) }
-        .map(<[u8]>::to_vec)
-        .unwrap_or_default()
+    southstar_glib::user_cache_dir()
 }
 
 pub fn env_set(name: &CStr) -> bool {

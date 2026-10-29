@@ -106,11 +106,8 @@ mod enchant {
         if spell.broker.is_null() {
             return;
         }
-        let mut names = unsafe { glib::g_get_language_names() };
-        while !names.is_null() && !unsafe { *names }.is_null() {
-            let name = unsafe { CStr::from_ptr(*names) }.to_bytes();
-            names = unsafe { names.add(1) };
-            if let Some(tag) = crate::normalize_lang(name) {
+        for name in glib::language_names() {
+            if let Some(tag) = crate::normalize_lang(&name) {
                 spell.try_load(&tag);
             }
         }

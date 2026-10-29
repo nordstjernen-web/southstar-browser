@@ -8,8 +8,7 @@ use std::path::{Path, PathBuf};
 use southstar_glib as glib;
 
 pub(crate) fn user_cache_dir() -> PathBuf {
-    let dir = unsafe { glib::bytes(glib::g_get_user_cache_dir()) }.unwrap_or_default();
-    path_from_glib(dir)
+    path_from_glib(&glib::user_cache_dir())
 }
 
 #[cfg(unix)]

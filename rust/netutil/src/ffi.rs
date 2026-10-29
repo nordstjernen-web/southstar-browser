@@ -71,21 +71,7 @@ fn windows_locale() -> Option<Vec<u8>> {
 }
 
 fn language_names() -> Vec<Vec<u8>> {
-    let mut names = Vec::new();
-    let list = unsafe { glib::g_get_language_names() };
-    if list.is_null() {
-        return names;
-    }
-    let mut i = 0;
-    loop {
-        let name = unsafe { *list.add(i) };
-        if name.is_null() {
-            break;
-        }
-        names.push(unsafe { CStr::from_ptr(name) }.to_bytes().to_vec());
-        i += 1;
-    }
-    names
+    glib::language_names()
 }
 
 fn default_accept_language_c() -> &'static CStr {
