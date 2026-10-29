@@ -8,14 +8,12 @@ use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
+use southstar_glib::{GBoolean, SourceId};
 
 use crate::api::Page;
 use crate::ffi::glue;
 use crate::ffi::{self, Js, record};
 use crate::{budget, orphans, scheduling, teardown};
-
-pub use crate::ffi::glue::SourceFn;
 
 #[derive(Clone)]
 pub struct ResourceInfo {
@@ -143,16 +141,34 @@ pub fn purge_subtree_rafs(js: Option<Page>, root: Node<'_>) {
     record::purge_subtree_rafs(js, root.as_mut_ptr());
 }
 
-pub fn source_remove(js: Option<Page>, id: u32) {
+pub fn source_remove(js: Option<Page>, id: SourceId) {
     glue::source_remove(Js::of(js), id);
 }
 
-pub fn attach_timeout(js: Option<Page>, ms: u32, func: SourceFn, data: *mut c_void) -> u32 {
-    glue::attach_timeout(Js::of(js), ms, func, data)
+pub fn attach_timeout(
+    js: Option<Page>,
+    ms: u32,
+    func: impl FnMut() -> ControlFlow<()> + 'static,
+) -> SourceId {
+    glue::attach_timeout(Js::of(js), ms, func)
 }
 
-pub fn attach_idle(js: Option<Page>, func: SourceFn, data: *mut c_void) -> u32 {
-    glue::attach_idle(Js::of(js), func, data)
+pub fn attach_timeout_once(js: Option<Page>, ms: u32, func: impl FnOnce() + 'static) -> SourceId {
+    let mut func = Some(func);
+    glue::attach_timeout(Js::of(js), ms, move || {
+        if let Some(func) = func.take() {
+            func();
+        }
+        ControlFlow::Break(())
+    })
+}
+
+pub fn attach_idle(js: Option<Page>, func: impl FnOnce() + 'static) -> SourceId {
+    glue::attach_idle(Js::of(js), func)
+}
+
+pub fn glib_context(js: Option<Page>) -> southstar_glib::MainContext {
+    glue::context_of(Js::of(js))
 }
 
 pub fn budget_enter(js: Option<Page>) -> i64 {

@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -42,7 +42,7 @@ impl Js {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct Source(c_uint);
+pub(crate) struct Source(glib::SourceId);
 
 unsafe extern "C" {
     fn g_uuid_string_random() -> *mut c_char;
@@ -101,26 +101,16 @@ pub(crate) fn mark_mutated(js: Js) {
     api::mark_mutated(js.page());
 }
 
-unsafe extern "C" fn read_ready(data: *mut c_void) -> GBoolean {
-    crate::file_reader::complete(data as usize as u64);
-    glib::FALSE
-}
-
 pub(crate) fn attach_read_idle(js: Js, id: u64) -> Source {
-    Source(api::attach_idle(
-        js.page(),
-        read_ready,
-        id as usize as *mut c_void,
-    ))
+    Source(api::attach_idle(js.page(), move || {
+        crate::file_reader::complete(id);
+    }))
 }
 
 pub(crate) fn attach_read_retry(js: Js, id: u64, ms: u32) -> Source {
-    Source(api::attach_timeout(
-        js.page(),
-        ms,
-        read_ready,
-        id as usize as *mut c_void,
-    ))
+    Source(api::attach_timeout_once(js.page(), ms, move || {
+        crate::file_reader::complete(id);
+    }))
 }
 
 pub(crate) fn source_remove(js: Js, source: Source) {

@@ -2,28 +2,24 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_void;
-
-use southstar_glib::GBoolean;
+use core::ops::ControlFlow;
 
 use super::Js;
 use super::glue;
 use crate::scheduling::{self, RunTasks};
 
-const SOURCE_REMOVE: GBoolean = 0;
-const SOURCE_CONTINUE: GBoolean = 1;
+pub(crate) fn schedule_message_tasks(js: Js, ms: u32) {
+    let source = glue::attach_timeout(Some(js), ms, move || run_message_tasks(js));
+    js.st().message_task_source.set(Some(source));
+}
 
-pub(crate) unsafe extern "C" fn run_message_tasks(data: *mut c_void) -> GBoolean {
-    let Some(js) = Js::of_raw(data) else {
-        return SOURCE_REMOVE;
-    };
+fn run_message_tasks(js: Js) -> ControlFlow<()> {
     match scheduling::run_message_tasks(js) {
-        RunTasks::Done => SOURCE_REMOVE,
-        RunTasks::Continue => SOURCE_CONTINUE,
+        RunTasks::Done => ControlFlow::Break(()),
+        RunTasks::Continue => ControlFlow::Continue(()),
         RunTasks::Retry => {
-            let source = glue::attach_timeout(Some(js), 4, run_message_tasks, data);
-            js.st().message_task_source.set(source);
-            SOURCE_REMOVE
+            schedule_message_tasks(js, 4);
+            ControlFlow::Break(())
         }
     }
 }

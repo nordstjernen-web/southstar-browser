@@ -7,7 +7,7 @@ use std::ffi::CString;
 
 use southstar_dom::{Kind, Node, WeakNode};
 
-use crate::ffi::{self, Js, is_named};
+use crate::ffi::{Js, is_named};
 use crate::{
     ALREADY_STARTED, EMPTY_SOURCE, FLAG_NOT_PARSER_INSERTED, Schedule, Task, fetch, hold,
     import_map, page, scan, type_is_module,
@@ -38,17 +38,18 @@ pub(crate) fn run_next(js: Js, tasks: &[Task], which: Schedule, origin: Option<&
 
 pub(crate) fn schedule_pending_drain(js: Js) {
     let wanted = page::peek_page(js, |page| {
-        page.async_source == 0 && (!page.deferred_roots.is_empty() || !page.async_roots.is_empty())
+        page.async_source.is_none()
+            && (!page.deferred_roots.is_empty() || !page.async_roots.is_empty())
     })
     .unwrap_or(false);
     if wanted {
         let source = js.attach_drain_timer();
-        page::with_page(js, |page| page.async_source = source);
+        page::with_page(js, |page| page.async_source = Some(source));
     }
 }
 
 pub(crate) fn drain_timer_fired(js: Js) {
-    page::with_existing(js, |page| page.async_source = 0);
+    page::with_existing(js, |page| page.async_source = None);
     if js.eval_depth() > 0 || js.in_pump() {
         schedule_pending_drain(js);
         return;
@@ -164,10 +165,9 @@ pub(crate) fn drain_load_event_scripts(js: Js) {
         js.drain_microtasks();
     }
     if !page::has_pending_roots(js) {
-        let source =
-            page::with_existing(js, |page| core::mem::take(&mut page.async_source)).unwrap_or(0);
-        if source != 0 {
-            ffi::source_remove(source);
+        let source = page::with_existing(js, |page| page.async_source.take()).flatten();
+        if let Some(source) = source {
+            js.source_remove(source);
         }
     }
 }

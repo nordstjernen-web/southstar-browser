@@ -3,93 +3,48 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_char};
+use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::{Node, NsNode};
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{MainContext, SourceId};
 use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 
+use super::Js;
 use super::imports;
 use super::state::MessageTask;
-use super::{GMainContext, Js};
 use crate::api::{self, ResourceInfo};
 
-pub type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 pub(crate) type Fetch = Result<southstar_net::Response, Vec<u8>>;
-
-#[repr(C)]
-pub(crate) struct GSource {
-    _private: [u8; 0],
-}
 
 const NODE_FRAGMENT: u32 = 1 << 2;
 
-unsafe extern "C" {
-    fn g_timeout_source_new(interval: c_uint) -> *mut GSource;
-    fn g_idle_source_new() -> *mut GSource;
-    fn g_source_set_callback(
-        source: *mut GSource,
-        func: SourceFn,
-        data: *mut c_void,
-        notify: Option<unsafe extern "C" fn(*mut c_void)>,
-    );
-    fn g_source_attach(source: *mut GSource, context: *mut GMainContext) -> c_uint;
-    fn g_source_unref(source: *mut GSource);
-    fn g_source_destroy(source: *mut GSource);
-    fn g_main_context_find_source_by_id(context: *mut GMainContext, id: c_uint) -> *mut GSource;
-    fn g_main_context_default() -> *mut GMainContext;
-    fn g_main_context_iteration(context: *mut GMainContext, may_block: GBoolean) -> GBoolean;
-}
-
-fn context_of(js: Option<Js>) -> *mut GMainContext {
-    js.map_or(ptr::null_mut(), |js| js.st().main_context.get())
+pub(crate) fn context_of(js: Option<Js>) -> MainContext {
+    js.and_then(|js| js.st().main_context.borrow().clone())
+        .unwrap_or_else(MainContext::global)
 }
 
 pub(crate) fn attach_timeout(
     js: Option<Js>,
-    ms: c_uint,
-    func: SourceFn,
-    data: *mut c_void,
-) -> c_uint {
-    unsafe {
-        let source = g_timeout_source_new(ms);
-        g_source_set_callback(source, func, data, None);
-        let id = g_source_attach(source, context_of(js));
-        g_source_unref(source);
-        id
-    }
+    ms: u32,
+    func: impl FnMut() -> ControlFlow<()> + 'static,
+) -> SourceId {
+    context_of(js).timeout_add_local(ms, func)
 }
 
-pub(crate) fn attach_idle(js: Option<Js>, func: SourceFn, data: *mut c_void) -> c_uint {
-    unsafe {
-        let source = g_idle_source_new();
-        g_source_set_callback(source, func, data, None);
-        let id = g_source_attach(source, context_of(js));
-        g_source_unref(source);
-        id
-    }
+pub(crate) fn attach_idle(js: Option<Js>, func: impl FnOnce() + 'static) -> SourceId {
+    context_of(js).idle_add_local_once(func)
 }
 
-pub(crate) fn source_remove(js: Option<Js>, id: c_uint) {
-    if id == 0 {
-        return;
-    }
-    let mut context = context_of(js);
-    if context.is_null() {
-        context = unsafe { g_main_context_default() };
-    }
-    let source = unsafe { g_main_context_find_source_by_id(context, id) };
-    if !source.is_null() {
-        unsafe { g_source_destroy(source) };
-    }
+pub(crate) fn source_remove(js: Option<Js>, id: SourceId) {
+    context_of(js).remove(id);
 }
 
 pub(crate) fn pump_iteration(js: Option<Js>) {
-    unsafe { g_main_context_iteration(context_of(js), glib::TRUE) };
+    context_of(js).iteration(true);
 }
 
 pub(crate) fn pending_job_realm(js: Js) -> ContextHandle {
@@ -318,7 +273,7 @@ pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'
                 .map_err(|failure| failure.message().to_vec());
         }
     };
-    let main_loop = glib::MainLoop::new();
+    let main_loop = southstar_glib::MainLoop::new();
     let quit = main_loop.clone();
     let outcome: Rc<RefCell<Option<Fetch>>> = Rc::default();
     let delivered = Rc::clone(&outcome);

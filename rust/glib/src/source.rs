@@ -1,4 +1,4 @@
-//! Southstar — timeout and idle sources on GLib's default main context that run a Rust closure, and removing them by id.
+//! Southstar — timeout and idle sources that run a Rust closure on GLib's default main context or a given one, and removing them by id.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -14,30 +14,18 @@ use crate::GDestroyNotify;
 
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 
-const PRIORITY_DEFAULT: c_int = 0;
-const PRIORITY_DEFAULT_IDLE: c_int = 200;
-
 unsafe extern "C" {
-    fn g_timeout_add_full(
-        priority: c_int,
-        interval: c_uint,
-        function: SourceFunc,
+    fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
+    fn g_timeout_source_new_seconds(interval: c_uint) -> *mut c_void;
+    fn g_idle_source_new() -> *mut c_void;
+    fn g_source_set_callback(
+        source: *mut c_void,
+        func: SourceFunc,
         data: *mut c_void,
         notify: GDestroyNotify,
-    ) -> c_uint;
-    fn g_timeout_add_seconds_full(
-        priority: c_int,
-        interval: c_uint,
-        function: SourceFunc,
-        data: *mut c_void,
-        notify: GDestroyNotify,
-    ) -> c_uint;
-    fn g_idle_add_full(
-        priority: c_int,
-        function: SourceFunc,
-        data: *mut c_void,
-        notify: GDestroyNotify,
-    ) -> c_uint;
+    );
+    fn g_source_attach(source: *mut c_void, context: *mut c_void) -> c_uint;
+    fn g_source_unref(source: *mut c_void);
     fn g_source_remove(tag: c_uint) -> c_int;
     fn g_main_context_find_source_by_id(context: *mut c_void, source_id: c_uint) -> *mut c_void;
     fn g_source_destroy(source: *mut c_void);
@@ -57,16 +45,11 @@ impl SourceId {
     }
 
     fn remove_if_attached(self) {
-        // SAFETY: a null context is the default one; the lookup only reads GLib's id table.
-        let source = unsafe { g_main_context_find_source_by_id(ptr::null_mut(), self.0.get()) };
-        if !source.is_null() {
-            // SAFETY: the source was found attached to the default context, which holds a reference to it.
-            unsafe { g_source_destroy(source) };
-        }
+        remove_from(ptr::null_mut(), self);
     }
 }
 
-type Func = Box<dyn FnMut() -> ControlFlow<()>>;
+pub(crate) type Func = Box<dyn FnMut() -> ControlFlow<()>>;
 
 struct Callback {
     owner: Option<ThreadId>,
@@ -102,32 +85,50 @@ unsafe extern "C" fn destroy(data: *mut c_void) {
     drop(unsafe { Box::from_raw(data.cast::<Callback>()) });
 }
 
-enum Kind {
+pub(crate) enum Kind {
     Timeout(u32),
     TimeoutSeconds(u32),
     Idle,
 }
 
-fn add(kind: Kind, owner: Option<ThreadId>, func: Func) -> SourceId {
-    let data = Box::into_raw(Box::new(Callback { owner, func })).cast::<c_void>();
-    let id = match kind {
-        // SAFETY: the source owns data and frees it with destroy; dispatch reads it as the Callback it is.
-        Kind::Timeout(ms) => unsafe {
-            g_timeout_add_full(PRIORITY_DEFAULT, ms, dispatch, data, Some(destroy))
-        },
+pub(crate) fn remove_from(context: *mut c_void, id: SourceId) {
+    // SAFETY: context is null (the default context) or one the caller holds a reference to; the lookup only reads its id table.
+    let source = unsafe { g_main_context_find_source_by_id(context, id.0.get()) };
+    if !source.is_null() {
+        // SAFETY: the source was found attached to the context, which holds a reference to it.
+        unsafe { g_source_destroy(source) };
+    }
+}
+
+pub(crate) fn attach(
+    context: *mut c_void,
+    kind: Kind,
+    owner: Option<ThreadId>,
+    func: Func,
+) -> SourceId {
+    let source = match kind {
+        // SAFETY: creating a source has no preconditions.
+        Kind::Timeout(ms) => unsafe { g_timeout_source_new(ms) },
         // SAFETY: as above.
-        Kind::TimeoutSeconds(s) => unsafe {
-            g_timeout_add_seconds_full(PRIORITY_DEFAULT, s, dispatch, data, Some(destroy))
-        },
+        Kind::TimeoutSeconds(s) => unsafe { g_timeout_source_new_seconds(s) },
         // SAFETY: as above.
-        Kind::Idle => unsafe {
-            g_idle_add_full(PRIORITY_DEFAULT_IDLE, dispatch, data, Some(destroy))
-        },
+        Kind::Idle => unsafe { g_idle_source_new() },
     };
+    let data = Box::into_raw(Box::new(Callback { owner, func })).cast::<c_void>();
+    // SAFETY: the source takes ownership of data and frees it with destroy; dispatch reads it as the Callback it is.
+    unsafe { g_source_set_callback(source, dispatch, data, Some(destroy)) };
+    // SAFETY: context is null (the default context) or one the caller holds a reference to; attaching adds the context's own reference to the source.
+    let id = unsafe { g_source_attach(source, context) };
+    // SAFETY: this gives up the creating reference; the context keeps the source until it is destroyed.
+    unsafe { g_source_unref(source) };
     SourceId(NonZeroU32::new(id).expect("GLib source ids are never 0"))
 }
 
-fn once(func: impl FnOnce() + 'static) -> Func {
+fn add(kind: Kind, owner: Option<ThreadId>, func: Func) -> SourceId {
+    attach(ptr::null_mut(), kind, owner, func)
+}
+
+pub(crate) fn once(func: impl FnOnce() + 'static) -> Func {
     let mut func = Some(func);
     Box::new(move || {
         if let Some(func) = func.take() {

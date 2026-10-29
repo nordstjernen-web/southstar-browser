@@ -2,12 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_long, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_long};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{self as glib, SourceId};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
@@ -18,10 +17,6 @@ pub(crate) use southstar_js_runtime::api::ResourceInfo as PerfInfo;
 
 pub(crate) const CSP_SCRIPT: usize = southstar_csp::SCRIPT;
 pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
-
-unsafe extern "C" {
-    fn g_source_remove(tag: c_uint) -> GBoolean;
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(Option<Page>);
@@ -80,10 +75,6 @@ pub(crate) fn sri_check(integrity: Option<&CStr>, body: &[u8]) -> bool {
     southstar_sandbox::sri_check(integrity.map_or(&b""[..], CStr::to_bytes), Some(body))
 }
 
-pub(crate) fn source_remove(tag: u32) {
-    unsafe { g_source_remove(tag) };
-}
-
 pub(crate) struct Response(southstar_net::Response);
 
 impl Response {
@@ -130,10 +121,6 @@ impl Js {
 
     pub(crate) fn is_null(self) -> bool {
         self.0.is_none()
-    }
-
-    fn raw(self) -> *mut c_void {
-        self.0.map_or(ptr::null_mut(), Page::as_raw)
     }
 
     pub(crate) fn halted(self) -> bool {
@@ -202,8 +189,16 @@ impl Js {
         southstar_js_images::rescan_pending_images(self.0, Some(root));
     }
 
-    pub(crate) fn attach_drain_timer(self) -> u32 {
-        api::attach_timeout(self.0, 4, async_script_timer, self.raw())
+    pub(crate) fn attach_drain_timer(self) -> SourceId {
+        api::attach_timeout_once(self.0, 4, move || {
+            if !self.is_null() {
+                schedule::drain_timer_fired(self);
+            }
+        })
+    }
+
+    pub(crate) fn source_remove(self, source: SourceId) {
+        api::source_remove(self.0, source);
     }
 
     pub(crate) fn index_child_removed(self, parent: Option<Node>, removed: Node) {
@@ -431,14 +426,6 @@ impl Realm {
     pub(crate) fn enter<R: Default>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
         self.0.with(f).unwrap_or_default()
     }
-}
-
-unsafe extern "C" fn async_script_timer(data: *mut c_void) -> GBoolean {
-    let js = Js(Page::from_raw(data));
-    if !js.is_null() {
-        schedule::drain_timer_fired(js);
-    }
-    glib::FALSE
 }
 
 fn eval_source(js: Option<Page>, source: &[u8], origin: Option<&CStr>) {

@@ -201,39 +201,6 @@ natives! {
     nsr_worker_performance_clear => crate::noop,
 }
 
-#[repr(C)]
-struct GMainContext {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct GMainLoop {
-    _private: [u8; 0],
-}
-
-type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
-type GDestroyNotify = unsafe extern "C" fn(data: *mut c_void);
-unsafe extern "C" {
-    fn g_main_context_new() -> *mut GMainContext;
-    fn g_main_context_ref(context: *mut GMainContext) -> *mut GMainContext;
-    fn g_main_context_unref(context: *mut GMainContext);
-    fn g_main_context_invoke_full(
-        context: *mut GMainContext,
-        priority: c_int,
-        function: GSourceFunc,
-        data: *mut c_void,
-        notify: Option<GDestroyNotify>,
-    );
-    fn g_main_context_pending(context: *mut GMainContext) -> c_int;
-    fn g_main_context_iteration(context: *mut GMainContext, may_block: c_int) -> c_int;
-    fn g_main_context_push_thread_default(context: *mut GMainContext);
-    fn g_main_context_pop_thread_default(context: *mut GMainContext);
-    fn g_main_loop_new(context: *mut GMainContext, is_running: c_int) -> *mut GMainLoop;
-    fn g_main_loop_run(main_loop: *mut GMainLoop);
-    fn g_main_loop_quit(main_loop: *mut GMainLoop);
-    fn g_main_loop_unref(main_loop: *mut GMainLoop);
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Js(usize);
 
@@ -284,99 +251,10 @@ fn lossy(bytes: Vec<u8>) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-pub(crate) struct MainContext(usize);
-
-unsafe impl Send for MainContext {}
-unsafe impl Sync for MainContext {}
-
-type Task = Box<dyn FnOnce() + Send>;
-
-unsafe extern "C" fn run_task(data: *mut c_void) -> c_int {
-    let slot = unsafe { &mut *data.cast::<Option<Task>>() };
-    if let Some(task) = slot.take() {
-        task();
-    }
-    0
-}
-
-unsafe extern "C" fn drop_task(data: *mut c_void) {
-    drop(unsafe { Box::from_raw(data.cast::<Option<Task>>()) });
-}
-
-fn invoke_on(context: *mut GMainContext, task: impl FnOnce() + Send + 'static) {
-    let slot: Box<Option<Task>> = Box::new(Some(Box::new(task)));
-    unsafe {
-        g_main_context_invoke_full(
-            context,
-            0,
-            run_task,
-            Box::into_raw(slot).cast(),
-            Some(drop_task),
-        )
-    };
-}
+pub(crate) use southstar_glib::{MainContext, MainLoop};
 
 pub(crate) fn invoke_default(task: impl FnOnce() + Send + 'static) {
-    invoke_on(core::ptr::null_mut(), task);
-}
-
-impl MainContext {
-    pub(crate) fn new() -> MainContext {
-        MainContext(unsafe { g_main_context_new() } as usize)
-    }
-
-    fn raw(&self) -> *mut GMainContext {
-        self.0 as *mut GMainContext
-    }
-
-    pub(crate) fn invoke(&self, task: impl FnOnce() + Send + 'static) {
-        invoke_on(self.raw(), task);
-    }
-
-    pub(crate) fn drain(&self, limit: usize) {
-        for _ in 0..limit {
-            if unsafe { g_main_context_pending(self.raw()) } == 0 {
-                break;
-            }
-            unsafe { g_main_context_iteration(self.raw(), 0) };
-        }
-    }
-
-    pub(crate) fn push_thread_default(&self) {
-        unsafe { g_main_context_push_thread_default(self.raw()) };
-    }
-
-    pub(crate) fn pop_thread_default(&self) {
-        unsafe { g_main_context_pop_thread_default(self.raw()) };
-    }
-
-    pub(crate) fn new_loop(&self) -> usize {
-        unsafe { g_main_loop_new(self.raw(), 0) as usize }
-    }
-}
-
-impl Clone for MainContext {
-    fn clone(&self) -> MainContext {
-        MainContext(unsafe { g_main_context_ref(self.raw()) } as usize)
-    }
-}
-
-impl Drop for MainContext {
-    fn drop(&mut self) {
-        unsafe { g_main_context_unref(self.raw()) };
-    }
-}
-
-pub(crate) fn run_loop(main_loop: usize) {
-    unsafe { g_main_loop_run(main_loop as *mut GMainLoop) };
-}
-
-pub(crate) fn quit_loop(main_loop: usize) {
-    unsafe { g_main_loop_quit(main_loop as *mut GMainLoop) };
-}
-
-pub(crate) fn unref_loop(main_loop: usize) {
-    unsafe { g_main_loop_unref(main_loop as *mut GMainLoop) };
+    MainContext::global().invoke(task);
 }
 
 fn host_from_ptr(host: *const c_void) -> Option<Arc<Host>> {
@@ -434,7 +312,7 @@ pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
     let name = c_string(&host.name);
     let options = api::WorkerOptions {
         host: Arc::as_ptr(host).cast_mut().cast(),
-        context: host.context.raw().cast(),
+        context: host.context.clone(),
         url: Some(&url),
         base_url: Some(&host.base_url),
         origin: Some(&origin),

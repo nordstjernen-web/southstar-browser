@@ -7,15 +7,16 @@ use std::cell::RefCell;
 use southstar_dom::{Node, WeakNode};
 
 use crate::Task;
-use crate::ffi::{self, Js};
+use crate::ffi::Js;
 use crate::hold::Hold;
+use southstar_glib::SourceId;
 
 #[derive(Default)]
 pub(crate) struct Page {
     pub import_map: Vec<(Vec<u8>, Vec<u8>)>,
     pub deferred_roots: Vec<WeakNode>,
     pub async_roots: Vec<WeakNode>,
-    pub async_source: u32,
+    pub async_source: Option<SourceId>,
     pub holds: Vec<Hold>,
     pub module_load_count: u32,
     pub module_load_bytes: usize,
@@ -70,22 +71,22 @@ pub(crate) fn has_pending_roots(js: Js) -> bool {
 
 pub(crate) fn async_pending(js: Js) -> bool {
     peek_page(js, |page| {
-        page.async_source != 0 || !page.async_roots.is_empty()
+        page.async_source.is_some() || !page.async_roots.is_empty()
     })
     .unwrap_or(false)
 }
 
 pub(crate) fn cancel_async(js: Js) {
-    let source = peek_page(js, |page| page.async_source).unwrap_or(0);
-    if source == 0 && !has_pending_roots(js) {
+    let source = peek_page(js, |page| page.async_source).flatten();
+    if source.is_none() && !has_pending_roots(js) {
         return;
     }
     with_page(js, |page| {
-        page.async_source = 0;
+        page.async_source = None;
         page.async_roots.clear();
     });
-    if source != 0 {
-        ffi::source_remove(source);
+    if let Some(source) = source {
+        js.source_remove(source);
     }
 }
 
@@ -110,8 +111,8 @@ pub(crate) fn teardown(js: Js) {
             .map(|index| pages.swap_remove(index).1)
     });
     if let Some(page) = page {
-        if page.async_source != 0 {
-            ffi::source_remove(page.async_source);
+        if let Some(source) = page.async_source {
+            js.source_remove(source);
         }
         crate::hold::released(page.holds.len());
     }
