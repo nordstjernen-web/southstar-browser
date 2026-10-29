@@ -6,7 +6,7 @@ use core::cell::UnsafeCell;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-use southstar_glib::{self as glib, FALSE, TRUE};
+use southstar_glib::{FALSE, TRUE};
 
 use crate::NsConfig;
 use crate::util as fs;
@@ -86,12 +86,7 @@ fn load(config: &mut NsConfig, path: &Path) {
 }
 
 fn user_config_dir() -> Vec<u8> {
-    // SAFETY: g_get_user_config_dir has no preconditions and returns a string GLib owns.
-    let dir = unsafe { glib::g_get_user_config_dir() };
-    // SAFETY: the directory is null or a NUL-terminated string GLib keeps for the process lifetime.
-    unsafe { glib::bytes(dir) }
-        .map(<[u8]>::to_vec)
-        .unwrap_or_default()
+    southstar_glib::user_config_dir()
 }
 
 pub fn init() {

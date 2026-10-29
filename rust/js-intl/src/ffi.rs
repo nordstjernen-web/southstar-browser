@@ -119,19 +119,7 @@ pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn language_names() -> Vec<Vec<u8>> {
-    let mut names = Vec::new();
-    // SAFETY: GLib returns a NULL-terminated array it owns for the life of the process.
-    let mut entry = unsafe { glib::g_get_language_names() };
-    if entry.is_null() {
-        return names;
-    }
-    // SAFETY: `entry` points into the NULL-terminated array and has not passed its terminator; each entry is null or a NUL-terminated string owned by GLib.
-    while let Some(name) = unsafe { glib::bytes(*entry) } {
-        names.push(name.to_vec());
-        // SAFETY: the current entry was not the terminator, so the next one is in bounds.
-        entry = unsafe { entry.add(1) };
-    }
-    names
+    glib::language_names()
 }
 
 pub(crate) struct LogAttrs(Vec<LogAttr>);

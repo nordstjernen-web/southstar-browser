@@ -38,11 +38,7 @@ pub(crate) fn getenv(name: &CStr) -> Option<CString> {
 }
 
 pub(crate) fn user_config_dir() -> CString {
-    // SAFETY: g_get_user_config_dir has no preconditions and returns a string GLib owns.
-    let dir = unsafe { glib::g_get_user_config_dir() };
-    // SAFETY: dir is NULL or the NUL-terminated string GLib keeps for the life of the process.
-    let dir = unsafe { glib::bytes(dir) };
-    c_string(dir.unwrap_or_default())
+    c_string(&glib::user_config_dir())
 }
 
 pub(crate) fn build_filename(parts: &[&CStr]) -> CString {

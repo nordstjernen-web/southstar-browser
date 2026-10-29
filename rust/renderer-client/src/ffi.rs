@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_uint, c_void};
 use core::ptr::NonNull;
 use std::sync::Mutex;
 
@@ -34,7 +34,6 @@ pub type PrintFn =
 static PRINT: Mutex<Option<PrintFn>> = Mutex::new(None);
 
 unsafe extern "C" {
-    fn g_get_user_runtime_dir() -> *const c_char;
     fn g_ptr_array_new() -> *mut GPtrArray;
     fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     fn g_ptr_array_free(array: *mut GPtrArray, free_segment: c_int) -> *mut *mut c_void;
@@ -51,10 +50,7 @@ pub fn set_print(print: Option<PrintFn>) {
 }
 
 pub fn exchange_dir() -> Vec<u8> {
-    // SAFETY: g_get_user_runtime_dir takes no arguments and returns a string GLib owns.
-    let dir = unsafe { g_get_user_runtime_dir() };
-    // SAFETY: dir is a NUL-terminated string GLib keeps for the life of the process.
-    let mut path = unsafe { glib::bytes(dir) }.unwrap_or_default().to_vec();
+    let mut path = glib::user_runtime_dir();
     path.extend_from_slice(b"/southstar");
     let _ = std::fs::create_dir_all(String::from_utf8_lossy(&path).as_ref());
     path

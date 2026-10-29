@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -35,14 +35,6 @@ fn c_text(text: &str) -> CString {
     let bytes = text.as_bytes();
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-fn owned(text: *const c_char) -> Option<String> {
-    (!text.is_null()).then(|| {
-        unsafe { CStr::from_ptr(text) }
-            .to_string_lossy()
-            .into_owned()
-    })
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -129,7 +121,7 @@ pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {
         return None;
     }
     let hash = southstar_digest::sha256_hex(c_text(origin).as_bytes());
-    let data_dir = owned(unsafe { glib::g_get_user_data_dir() })?;
+    let data_dir = String::from_utf8(glib::user_data_dir()).ok()?;
     let separator = std::path::MAIN_SEPARATOR;
     let dir = format!("{data_dir}{separator}southstar{separator}localstorage");
     let mut builder = std::fs::DirBuilder::new();

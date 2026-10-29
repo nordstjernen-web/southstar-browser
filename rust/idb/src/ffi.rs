@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::time::Instant;
 
-use southstar_glib as glib;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -44,10 +43,7 @@ pub fn sha256_hex(input: &[u8]) -> Vec<u8> {
 }
 
 pub fn user_data_dir() -> Vec<u8> {
-    // SAFETY: g_get_user_data_dir returns GLib's own NUL-terminated string, which lives for the whole process.
-    unsafe { glib::bytes(glib::g_get_user_data_dir()) }
-        .unwrap_or_default()
-        .to_vec()
+    southstar_glib::user_data_dir()
 }
 
 pub fn build_filename(parts: &[&[u8]]) -> Vec<u8> {

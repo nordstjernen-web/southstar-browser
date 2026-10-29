@@ -1,63 +1,51 @@
-//! Southstar — the GLib calls behind UI string translation: environment, language names and reading catalogue files.
+//! Southstar — the operating-system calls behind UI string translation: environment, language names and reading catalogue files.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+use std::path::{Path, PathBuf};
 
 use southstar_glib as glib;
 
-unsafe fn borrow<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
+fn path_of(path: &CStr) -> Option<PathBuf> {
+    glib::path_from_bytes(path.to_bytes())
 }
 
-unsafe fn take(p: *mut c_char) -> CString {
-    let Some(owned) = (unsafe { borrow(p) }).map(CStr::to_owned) else {
-        return CString::default();
-    };
-    unsafe { glib::g_free(p.cast()) };
-    owned
+fn c_path(path: &Path) -> CString {
+    CString::new(glib::path_bytes(path)).unwrap_or_default()
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<CString> {
-    unsafe { borrow(glib::g_getenv(name.as_ptr())) }.map(CStr::to_owned)
+    let value = glib::env_bytes(name.to_str().ok()?)?;
+    CString::new(value).ok()
 }
 
 pub(crate) fn language_names() -> Vec<CString> {
-    let names = unsafe { glib::g_get_language_names() };
-    if names.is_null() {
-        return Vec::new();
-    }
-    (0..)
-        .map_while(|i| unsafe { borrow(*names.add(i)) })
-        .map(CStr::to_owned)
+    glib::language_names()
+        .into_iter()
+        .filter_map(|name| CString::new(name).ok())
         .collect()
 }
 
 pub(crate) fn build_filename(parts: &[&CStr]) -> CString {
-    let mut args: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    args.push(ptr::null_mut());
-    unsafe { take(glib::g_build_filenamev(args.as_mut_ptr())) }
+    let mut path = PathBuf::new();
+    for part in parts.iter().filter_map(|part| path_of(part)) {
+        path.push(part);
+    }
+    c_path(&path)
 }
 
 pub(crate) fn path_get_dirname(path: &CStr) -> CString {
-    unsafe { take(glib::g_path_get_dirname(path.as_ptr())) }
+    match path_of(path).as_deref().and_then(Path::parent) {
+        Some(dir) if !dir.as_os_str().is_empty() => c_path(dir),
+        _ => CString::from(c"."),
+    }
 }
 
 pub(crate) fn is_regular_file(path: &CStr) -> bool {
-    unsafe { glib::g_file_test(path.as_ptr(), glib::FILE_TEST_IS_REGULAR) != glib::FALSE }
+    path_of(path).is_some_and(|path| path.is_file())
 }
 
 pub(crate) fn file_text(path: &CStr) -> Option<Vec<u8>> {
-    let mut contents: *mut c_char = ptr::null_mut();
-    let loaded = unsafe {
-        glib::g_file_get_contents(
-            path.as_ptr(),
-            &mut contents,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        )
-    };
-    (loaded != glib::FALSE).then(|| unsafe { take(contents) }.into_bytes())
+    std::fs::read(path_of(path)?).ok()
 }

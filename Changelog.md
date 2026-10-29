@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: the per-user directories (config, data, cache, runtime, home,
+  temp) and the preferred UI languages GLib works out are read through
+  safe `rust/glib` functions returning owned bytes, instead of each of
+  sixteen crates calling `g_get_user_*_dir` / `g_get_language_names` and
+  walking the returned C strings in `unsafe` blocks. The UI-translation
+  catalogue lookup, the bookmarks file and the camera device probe use
+  `std::fs`/`std::path` instead of GLib's file and path helpers (the
+  bookmarks file is still replaced atomically, with mode 0600). i18n,
+  bookmarks and js-storage are now free of `unsafe`.
 * Port: the `pattern` attribute of form controls and the regular
   expressions in extension blocking rules are matched with `regress`, the
   JavaScript regular-expression engine Boa already uses, instead of
