@@ -9,7 +9,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::ctx::Ctx;
 use crate::ffi::{self, Js};
-use crate::realm;
+use crate::{pristine, realm};
 
 type JsResult<T = Value> = Result<T, Value>;
 
@@ -226,6 +226,11 @@ pub(crate) fn child_frame_window(
 }
 
 pub(crate) fn platform_names(js: Js, ctx: Ctx) -> Value {
+    if let Some(pristine) = pristine::current(js)
+        && pristine.globals().is_object()
+    {
+        return pristine.globals().clone();
+    }
     let names = ffi::platform_global_names(js);
     ctx.enter(|scope| {
         let object = scope.new_object_with_proto(&Value::null());

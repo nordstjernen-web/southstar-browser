@@ -221,6 +221,7 @@ impl Js {
 
     pub fn snapshot_platform_globals(self) {
         api::snapshot_platform_globals(self.0);
+        southstar_js_frames::snapshot_platform(self.0);
     }
 
     pub fn clear_lifecycle(self) {

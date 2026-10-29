@@ -258,8 +258,10 @@ impl HostExoticHooks for ExoticHooks {
     ) -> Option<JsResult<bool>> {
         let hook = class_of(object)?.hooks.delete?;
         let this = Value(object.clone().into());
-        let result = hook(&mut Scope::of(context), &this, &PropertyKey(key.clone()));
-        Some(result.map_err(thrown))
+        match hook(&mut Scope::of(context), &this, &PropertyKey(key.clone())) {
+            Ok(true) => None,
+            result => Some(result.map_err(thrown)),
+        }
     }
 
     fn own_property_keys(&self, object: &JsObject, context: &mut Context) -> JsResult<Vec<BoaKey>> {

@@ -13,6 +13,7 @@ mod load;
 mod origin;
 pub mod owner;
 mod page;
+mod pristine;
 mod queue;
 mod realm;
 mod restore;

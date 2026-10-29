@@ -130,6 +130,26 @@ Southstar Browser 1.0.4-dev:
   device are refused in more spellings: `CONIN$`, `CONOUT$`, `CLOCK$`,
   `COM¹`–`COM³`/`LPT¹`–`LPT³`, and a device name followed by spaces
   before the extension (`CON .txt`).
+* JavaScript: `delete` works on properties a script put on DOM objects.
+  The host-object delete hook answered "deletable" for an ordinary
+  property and the engine took that answer as the whole deletion, so
+  `delete element.foo`, `delete document.write` after overriding it, or
+  deleting an expando on an event or a storage object returned `true`
+  and left the property in place. Scripts that temporarily override a
+  method and restore it with `delete` (ad wrappers on an ad frame's
+  `document.write`) recursed into their own override on every later call.
+* Frames: a frame realm now gets the platform's own prototypes and
+  globals, not the page's patched versions of them. The realm cloner
+  copied the page realm's interface prototypes and window properties as
+  they stood when the frame was created, so a page that wrapped
+  `HTMLDocument.prototype.write`, `Element.prototype.appendChild` or
+  `window.fetch` had its wrapper installed in every frame too. Ad
+  verification scripts wrap `document.write` and inject themselves into
+  each ad creative through it; with the wrapper inherited by the creative
+  frames, every rendered ad nested another layer, until one ad response
+  ran for 60 s and the watchdog halted all of the page's JavaScript
+  (chess.com's live game). The platform properties are now recorded
+  before the page's scripts run, and frames clone from that record.
 * WebAssembly: wasmi is built with its `auto-dispatch` feature. Without
   it the interpreter always used its tail-call dispatch backend, which
   relies on the compiler turning each handler's tail call into a jump; in
