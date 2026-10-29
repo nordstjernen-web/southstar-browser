@@ -584,22 +584,8 @@ fn run_proc_gui(
 }
 
 fn write_stdout(bytes: &[u8]) {
-    #[cfg(windows)]
-    {
-        unsafe extern "C" {
-            fn __acrt_iob_func(index: u32) -> *mut c_void;
-            fn fwrite(data: *const c_void, size: usize, count: usize, stream: *mut c_void)
-            -> usize;
-        }
-        unsafe { fwrite(bytes.as_ptr().cast(), 1, bytes.len(), __acrt_iob_func(1)) };
-    }
-    #[cfg(not(windows))]
-    {
-        use std::io::Write;
-        let mut out = std::io::stdout();
-        let _ = out.write_all(bytes);
-        let _ = out.flush();
-    }
+    southstar_glib::stdout_write(bytes);
+    southstar_glib::stdout_flush();
 }
 
 fn print_config() {
