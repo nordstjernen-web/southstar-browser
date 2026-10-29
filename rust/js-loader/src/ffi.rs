@@ -382,7 +382,7 @@ impl Js {
         if self.is_null() {
             return None;
         }
-        if api::worker_host(self.0).is_null() {
+        if !api::is_worker(self.0) {
             return Some(api::current_url(self.0));
         }
         (api::workers_hooks().host_base_url)(self.0)

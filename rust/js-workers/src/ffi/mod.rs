@@ -4,7 +4,7 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::sync::Arc;
 
@@ -257,22 +257,15 @@ pub(crate) fn invoke_default(task: impl FnOnce() + Send + 'static) {
     MainContext::global().invoke(task);
 }
 
-fn host_from_ptr(host: *const c_void) -> Option<Arc<Host>> {
-    if host.is_null() {
-        return None;
-    }
-    let host = host.cast::<Host>();
-    unsafe {
-        Arc::increment_strong_count(host);
-        Some(Arc::from_raw(host))
-    }
+fn host_of(host: &api::WorkerHost) -> Option<Arc<Host>> {
+    Arc::clone(host).downcast::<Host>().ok()
 }
 
 pub(crate) fn worker_host_of(js: Js) -> Option<Arc<Host>> {
     if js.is_null() {
         return None;
     }
-    host_from_ptr(api::worker_host(js.page()))
+    host_of(&api::worker_host(js.page())?)
 }
 
 pub(crate) fn current_url(js: Js) -> Option<String> {
@@ -311,7 +304,7 @@ pub(crate) fn worker_js_new(host: &Arc<Host>) -> Js {
     let origin = c_string(&host.origin);
     let name = c_string(&host.name);
     let options = api::WorkerOptions {
-        host: Arc::as_ptr(host).cast_mut().cast(),
+        host: Arc::clone(host) as api::WorkerHost,
         context: host.context.clone(),
         url: Some(&url),
         base_url: Some(&host.base_url),
@@ -647,19 +640,12 @@ pub fn nsr_worker_report_exception(js: Option<Page>, exception: &Value) -> bool 
     worker::report_exception(Js::of(js), exception)
 }
 
-/// # Safety
-///
-/// `host` is null or a live worker host.
-unsafe fn host_closing(host: *const c_void) -> bool {
-    // SAFETY: the caller passes null or a live worker host.
-    unsafe { host.cast::<Host>().as_ref() }.is_some_and(Host::closing)
+fn host_closing(host: &api::WorkerHost) -> bool {
+    host.downcast_ref::<Host>().is_some_and(Host::closing)
 }
 
-/// # Safety
-///
-/// `host` is null or a live worker host.
-unsafe fn host_log_line(host: *mut c_void, line: &CStr) {
-    let Some(host) = host_from_ptr(host) else {
+fn host_log_line(host: &api::WorkerHost, line: &CStr) {
+    let Some(host) = host_of(host) else {
         return;
     };
     let line = line.to_string_lossy().into_owned();
@@ -749,9 +735,9 @@ fn sw_post_fetch(controller: &api::ServiceWorkerController, fetch: &api::Service
 }
 
 fn host_base_url(js: Option<Page>) -> Option<CString> {
-    let host = api::worker_host(js).cast::<Host>();
-    // SAFETY: a worker page's host slot holds null or its live Host, which outlives the page.
-    unsafe { host.as_ref() }.map(|host| host.base_url.clone())
+    let host = api::worker_host(js)?;
+    host.downcast_ref::<Host>()
+        .map(|host| host.base_url.clone())
 }
 
 fn workers_pending(js: Option<Page>) -> bool {

@@ -13,7 +13,6 @@ use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use super::WorkerHost;
 use super::scopes::RealmScope;
 
 pub type LogFn = dyn Fn(&CStr);
@@ -79,7 +78,7 @@ pub(crate) struct PageState {
     pub early_inject_src: RefCell<Option<CString>>,
     pub mutated: Cell<bool>,
     pub main_context: RefCell<Option<southstar_glib::MainContext>>,
-    pub worker_host: Cell<*mut WorkerHost>,
+    pub worker_host: RefCell<Option<crate::api::WorkerHost>>,
     pub style_table: RefCell<Option<Rc<StyleMap>>>,
     pub autofocus_processed: Cell<bool>,
     pub active_modal: Cell<*const NsNode>,
@@ -136,7 +135,7 @@ impl PageState {
             early_inject_src: RefCell::new(None),
             mutated: Cell::new(false),
             main_context: RefCell::new(None),
-            worker_host: Cell::new(ptr::null_mut()),
+            worker_host: RefCell::new(None),
             style_table: RefCell::new(None),
             autofocus_processed: Cell::new(false),
             active_modal: Cell::new(ptr::null()),

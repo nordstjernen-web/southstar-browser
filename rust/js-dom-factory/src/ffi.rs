@@ -25,8 +25,6 @@ pub(crate) enum TargetMethod {
     DispatchEvent,
 }
 
-unsafe extern "C" {}
-
 fn raw_js(js: Option<Js>) -> Option<Page> {
     js.map(|js| js.0)
 }

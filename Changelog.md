@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: a worker page refers to its worker host through a counted
+  `Arc<dyn Any + Send + Sync>` handle instead of a raw pointer the
+  script runtime handed back to js-workers, which re-counted it with
+  `Arc::increment_strong_count` or dereferenced it in `unsafe` blocks;
+  js-workers downcasts the handle to its `Host`. Five empty
+  `unsafe extern "C" {}` blocks left over from earlier ports are
+  removed.
 * Port: computed styles are looked up through typed references in more
   places. `StyleMap` gains `retained(node)`, so the window's cursor and
   scroll-snap code hold a counted `RetainedStyle` instead of a raw

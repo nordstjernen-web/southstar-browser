@@ -8,8 +8,6 @@ use std::ffi::CString;
 
 use southstar_gtk_ffi::{self as gtk, GCallback, GtkWidget};
 
-unsafe extern "C" {}
-
 macro_rules! handler {
     ($f:expr) => {{
         #[allow(unused_unsafe)]
