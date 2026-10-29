@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: `navigator.sendBeacon` obeys the page's
+  Content-Security-Policy `connect-src` and refuses mixed content, as
+  `fetch` and `XMLHttpRequest` already did, so a policy meant to stop
+  data leaving the page is no longer a beacon away from being bypassed.
+  A cross-origin beacon whose body type would need a CORS preflight
+  (`application/json` and other non-form types) is refused instead of
+  being posted without one.
 * Security: Content-Security-Policy enforcement fixes. `setTimeout` and
   `setInterval` with a string handler now need `'unsafe-eval'` like
   `eval` does; the string was compiled by the host and never reached the
