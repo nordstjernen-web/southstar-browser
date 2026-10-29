@@ -10,6 +10,11 @@ Southstar Browser 1.0.4-dev:
   A cross-origin beacon whose body type would need a CORS preflight
   (`application/json` and other non-form types) is refused instead of
   being posted without one.
+* Security: the internal hook the MediaSource polyfill uses to refresh a
+  `blob:` URL's bytes accepts only URLs of the calling document's own
+  origin. Page script could call it to register content under any
+  `blob:<origin>/…` URL, including one a cross-origin frame had created
+  and would load later.
 * Security: Content-Security-Policy enforcement fixes. `setTimeout` and
   `setInterval` with a string handler now need `'unsafe-eval'` like
   `eval` does; the string was compiled by the host and never reached the
