@@ -35,6 +35,7 @@ const UPLOAD_HANDLERS: [&str; 7] = [
 
 pub(crate) struct XhrState {
     realm: Realm,
+    csp_realm: Realm,
     timeline: Realm,
     obj: Value,
     url: Vec<u8>,
@@ -357,8 +358,10 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         .as_deref()
         .and_then(|page| ffi::url_resolve(Some(page), &url))
         .unwrap_or(url);
+    let csp_realm = Realm::caller(scope);
     let state = XhrState {
         realm: Realm::of(scope),
+        csp_realm,
         timeline: js.main_context(),
         obj: this.clone(),
         url: resolved.clone(),
@@ -404,7 +407,7 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         .as_deref()
         .is_some_and(|p| crate::ascii_starts_with(p, b"https://"))
         && crate::ascii_starts_with(&resolved, b"http://");
-    let blocked_csp = !js.csp_allows_connect(&resolved, page.as_deref());
+    let blocked_csp = !js.csp_allows_connect(csp_realm, &resolved);
     set(scope, this, "_sendFlag", Value::boolean(true));
     progress(scope, this, "loadstart", 0.0, 0.0, false);
     if let Some(bytes) = body.as_ref().filter(|_| send_body) {
@@ -679,7 +682,7 @@ fn make_document(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>
 fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Response) -> bool {
     let obj = &state.obj;
     let final_url = resp.final_url();
-    let allow = if bool_prop(scope, obj, "withCredentials") {
+    let cors_ok = if bool_prop(scope, obj, "withCredentials") {
         headers::cors_allows_credentials(
             state.origin_url.as_deref(),
             final_url.as_deref(),
@@ -692,7 +695,9 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
             final_url.as_deref(),
             resp.cors_allow_origin().as_deref(),
         )
-    } && !crate::fetch::final_url_connect_blocked(js, final_url.as_deref());
+    };
+    let allow = cors_ok
+        && !crate::fetch::final_url_connect_blocked(js, state.csp_realm, final_url.as_deref());
     let code = if allow { resp.status() as i32 } else { 0 };
     set(scope, obj, "status", Value::int(code));
     set_str(

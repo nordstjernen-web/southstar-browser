@@ -344,6 +344,7 @@ impl Js {
 
     pub(crate) fn csp_allows(
         self,
+        element: Option<Node>,
         kind: usize,
         url: &CStr,
         origin: Option<&CStr>,
@@ -351,14 +352,19 @@ impl Js {
         parser_inserted: bool,
     ) -> bool {
         let nonce = nonce.map(CStr::to_bytes);
-        api::with_page_csp(self.0, |csp| {
+        api::with_node_csp(self.0, element, |csp| {
             csp.is_none_or(|csp| csp.allows(kind, url, origin, nonce, parser_inserted))
         })
     }
 
-    pub(crate) fn inline_script_allowed(self, text: &[u8], nonce: Option<&CStr>) -> bool {
+    pub(crate) fn inline_script_allowed(
+        self,
+        script: Node,
+        text: &[u8],
+        nonce: Option<&CStr>,
+    ) -> bool {
         let nonce = nonce.map(CStr::to_bytes);
-        api::with_page_csp(self.0, |csp| {
+        api::with_node_csp(self.0, Some(script), |csp| {
             csp.is_none_or(|csp| csp.inline_script_allowed(text, nonce))
         })
     }

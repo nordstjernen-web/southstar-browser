@@ -4,7 +4,7 @@
 
 use std::time::Instant;
 
-use crate::decode::{DecodeError, Decoder, Encoding, classify};
+use crate::decode::{DecodeError, Decoder, Encoding, codings};
 use crate::h1::{status_code, until_nul};
 
 pub const MAX_HEADER_BYTES: usize = 1024 * 1024;
@@ -31,7 +31,7 @@ pub struct Transfer<'h> {
     pub proto_error: bool,
     pub header_bytes: usize,
     pub first_byte_ms: Option<f64>,
-    encoding: Encoding,
+    encodings: Vec<Encoding>,
     decoder: Option<Decoder>,
 }
 
@@ -50,7 +50,7 @@ impl<'h> Transfer<'h> {
             proto_error: false,
             header_bytes: 0,
             first_byte_ms: None,
-            encoding: Encoding::Identity,
+            encodings: Vec::new(),
             decoder: None,
         }
     }
@@ -61,7 +61,7 @@ impl<'h> Transfer<'h> {
         self.status_line_fed = false;
         self.got_first_byte = false;
         self.header_bytes = 0;
-        self.encoding = Encoding::Identity;
+        self.encodings.clear();
         self.decoder = None;
     }
 
@@ -74,10 +74,8 @@ impl<'h> Transfer<'h> {
     }
 
     fn note_header(&mut self, name: &[u8], value: &[u8]) {
-        if name.eq_ignore_ascii_case(b"content-encoding")
-            && let Some(e) = classify(value)
-        {
-            self.encoding = e;
+        if name.eq_ignore_ascii_case(b"content-encoding") {
+            codings(value, &mut self.encodings);
         }
     }
 
@@ -162,7 +160,7 @@ impl<'h> Transfer<'h> {
             self.first_byte_ms = Some(self.ms_since_start());
         }
         if self.decoder.is_none() {
-            match Decoder::new(self.encoding) {
+            match Decoder::new(&self.encodings) {
                 Some(d) => self.decoder = Some(d),
                 None => {
                     self.corrupt = true;

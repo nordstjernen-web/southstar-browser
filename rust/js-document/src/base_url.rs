@@ -16,13 +16,13 @@ fn base_elements(doc: Element) -> Vec<Element> {
     .unwrap_or_default()
 }
 
-fn usable_base(js: Js, href: &CStr, current_url: Option<&CStr>) -> Option<Vec<u8>> {
+fn usable_base(js: Js, base: Element, href: &CStr, current_url: Option<&CStr>) -> Option<Vec<u8>> {
     if let Some(current) = current_url.filter(|url| !url.is_empty())
         && let Some(resolved) = ffi::url_resolve(current, href)
     {
-        return ffi::base_uri_allowed(js, &resolved, current_url).then_some(resolved);
+        return ffi::base_uri_allowed(js, base, &resolved, current_url).then_some(resolved);
     }
-    ffi::base_uri_allowed(js, href.to_bytes(), current_url).then(|| href.to_bytes().to_vec())
+    ffi::base_uri_allowed(js, base, href.to_bytes(), current_url).then(|| href.to_bytes().to_vec())
 }
 
 pub(crate) fn document_base_url(
@@ -32,7 +32,7 @@ pub(crate) fn document_base_url(
 ) -> Option<Vec<u8>> {
     let from_base = doc.into_iter().flat_map(base_elements).find_map(|base| {
         let href = base.attr(c"href").filter(|href| !href.is_empty())?;
-        usable_base(js, href, current_url)
+        usable_base(js, base, href, current_url)
     });
     from_base.or_else(|| {
         current_url

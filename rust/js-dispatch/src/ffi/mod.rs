@@ -72,8 +72,8 @@ impl Js {
         api::page_url(self.ptr()).map(|url| url.to_string_lossy().into_owned())
     }
 
-    pub fn inline_handlers_allowed(self) -> bool {
-        api::inline_handlers_allowed(self.ptr())
+    pub fn inline_handlers_allowed(self, target: Option<Element>) -> bool {
+        api::inline_handlers_allowed(self.ptr(), target)
     }
 
     pub fn is_worker(self) -> bool {

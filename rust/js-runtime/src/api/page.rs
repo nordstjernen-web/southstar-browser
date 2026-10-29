@@ -208,28 +208,62 @@ pub fn url_parses(js: Option<Page>, url: &CStr) -> bool {
     record::url_parses(js, url)
 }
 
-pub fn csp_allows_worker(js: Option<Page>, url: &CStr) -> bool {
-    record::csp_allows_worker(js, url)
+pub fn csp_allows_worker(js: Option<Page>, realm: ContextHandle, url: &CStr) -> bool {
+    record::csp_allows_worker(js, realm, url)
 }
 
-pub fn csp_form_action_allowed(js: Option<Page>, url: Option<&CStr>) -> bool {
-    record::csp_form_action_allowed(js, url)
+pub fn csp_form_action_allowed(
+    js: Option<Page>,
+    form: Option<Node<'_>>,
+    url: Option<&CStr>,
+) -> bool {
+    record::csp_form_action_allowed(js, form, url)
 }
 
-pub fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
-    record::csp_allows_connect(js, url, page)
+pub fn csp_allows_connect(
+    js: Option<Page>,
+    realm: ContextHandle,
+    url: &CStr,
+    page: Option<&CStr>,
+) -> bool {
+    record::csp_allows_connect(js, realm, url, page)
 }
 
-pub fn csp_allows_media(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
-    record::csp_allows_media(js, url, page)
+pub fn csp_allows_media(
+    js: Option<Page>,
+    element: Option<Node<'_>>,
+    url: &CStr,
+    page: Option<&CStr>,
+) -> bool {
+    record::csp_allows_media(js, element, url, page)
 }
 
-pub fn inline_handlers_allowed(js: Option<Page>) -> bool {
-    record::inline_handlers_allowed(js)
+pub fn inline_handlers_allowed(js: Option<Page>, target: Option<Node<'_>>) -> bool {
+    record::inline_handlers_allowed(js, target)
 }
 
 pub fn with_page_csp<R>(js: Option<Page>, f: impl FnOnce(Option<&southstar_csp::Csp>) -> R) -> R {
     record::with_page_csp(js, f)
+}
+
+pub fn calling_realm(js: Option<Page>, scope: &mut Scope<'_>) -> ContextHandle {
+    record::calling_realm(js, scope.calling_frame_handle())
+}
+
+pub fn with_realm_csp<R>(
+    js: Option<Page>,
+    realm: ContextHandle,
+    f: impl FnOnce(Option<&southstar_csp::Csp>) -> R,
+) -> R {
+    record::with_realm_csp(js, realm, f)
+}
+
+pub fn with_node_csp<R>(
+    js: Option<Page>,
+    node: Option<Node<'_>>,
+    f: impl FnOnce(Option<&southstar_csp::Csp>) -> R,
+) -> R {
+    record::with_node_csp(js, node, f)
 }
 
 pub fn cookie_value(js: Option<Page>) -> Option<CString> {

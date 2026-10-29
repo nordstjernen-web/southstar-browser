@@ -92,7 +92,14 @@ fn run_external(
         return;
     }
     let parser_inserted = n.flags() & FLAG_NOT_PARSER_INSERTED == 0;
-    if !js.csp_allows(CSP_SCRIPT, &abs_url, origin, nonce, parser_inserted) {
+    if !js.csp_allows(
+        Some(n),
+        CSP_SCRIPT,
+        &abs_url,
+        origin,
+        nonce,
+        parser_inserted,
+    ) {
         js.log(&line(&[b"CSP blocked: script ", abs_url.to_bytes()]));
         js.dispatch_resource_event(n, c"error");
         return;
@@ -108,7 +115,16 @@ fn run_external(
     if let Some(final_url) = &redirected {
         let mixed = origin.is_some_and(|origin| starts_with(origin, b"https://"))
             && starts_with(final_url, b"http://");
-        if mixed || !js.csp_allows(CSP_SCRIPT, final_url, origin, nonce, parser_inserted) {
+        if mixed
+            || !js.csp_allows(
+                Some(n),
+                CSP_SCRIPT,
+                final_url,
+                origin,
+                nonce,
+                parser_inserted,
+            )
+        {
             js.log(&line(&[
                 b"CSP blocked: script ",
                 abs_url.to_bytes(),
@@ -207,7 +223,7 @@ pub(crate) fn run_script_element(js: Js, n: Node, origin: Option<&CStr>) {
             continue;
         };
         let text = text.to_bytes();
-        if !js.inline_script_allowed(text, nonce.as_deref()) {
+        if !js.inline_script_allowed(n, text, nonce.as_deref()) {
             js.log(&line(&[b"CSP blocked: inline <script> on ", shown(origin)]));
             continue;
         }
@@ -238,7 +254,7 @@ pub(crate) fn load_stylesheet_element(js: Js, n: Node, origin: Option<&CStr>) {
         return;
     };
     let mut loaded = false;
-    if !js.csp_allows(CSP_STYLE, &abs_url, origin, None, true) {
+    if !js.csp_allows(Some(n), CSP_STYLE, &abs_url, origin, None, true) {
         js.log(&line(&[b"CSP blocked: stylesheet ", abs_url.to_bytes()]));
     } else {
         let info = js.element_perf_info(n);

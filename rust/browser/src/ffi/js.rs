@@ -135,8 +135,8 @@ impl Js {
         api::submit_form(self.page(), form, Some(submitter));
     }
 
-    pub fn csp_form_action_allowed(self, url: &CStr) -> bool {
-        api::csp_form_action_allowed(self.page(), Some(url))
+    pub fn csp_form_action_allowed(self, form: Node<'_>, url: &CStr) -> bool {
+        api::csp_form_action_allowed(self.page(), Some(form), Some(url))
     }
 
     pub fn dispatch_event(self, target: Node<'_>, kind: &CStr) {

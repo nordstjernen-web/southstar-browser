@@ -155,7 +155,7 @@ pub(crate) fn imports(scope: &mut Scope<'_>, src: &[u8], name: &[u8]) {
         };
         if !ffi::url_is_http_or_https(&url)
             || (secure_page && url.to_bytes().starts_with(b"http://"))
-            || !js.csp_allows(CSP_SCRIPT, &url, top_url.as_deref(), None, false)
+            || !js.csp_allows(None, CSP_SCRIPT, &url, top_url.as_deref(), None, false)
             || !claim(js, &url)
         {
             continue;

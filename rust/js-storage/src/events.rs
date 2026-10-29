@@ -103,7 +103,7 @@ fn fire_body_attribute(
     let Some(source) = body.attr(c"onstorage") else {
         return;
     };
-    if source.is_empty() || !ffi::inline_handlers_allowed(js) {
+    if source.is_empty() || !ffi::inline_handlers_allowed(js, body) {
         return;
     }
     let code = format!(

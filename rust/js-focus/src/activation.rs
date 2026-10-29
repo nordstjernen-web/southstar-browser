@@ -125,12 +125,12 @@ fn follow_in_iframe(scope: &mut Scope<'_>, el: Element, href: &[u8]) -> bool {
 fn run_javascript_url(js: Js, act: Element, code: &[u8]) {
     match ancestors(act).find(|&p| named(p, "iframe")) {
         None => {
-            if js.inline_scripts_allowed() {
+            if js.inline_scripts_allowed(act) {
                 js.eval_source(code, c"javascript-url");
             }
         }
         Some(iframe) => {
-            if !ffi::frame_sandbox_blocks_scripts(act) {
+            if !ffi::frame_sandbox_blocks_scripts(act) && js.inline_scripts_allowed(act) {
                 js.eval_in_frame(iframe, code, c"javascript-url");
             }
         }

@@ -28,6 +28,7 @@ const DRAIN_SOURCE: &str = "(function(stream){\
 
 pub(crate) struct FetchState {
     realm: Realm,
+    csp_realm: Realm,
     timeline: Realm,
     resolve: Value,
     reject: Value,
@@ -386,8 +387,10 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         content_type = Some(b"text/plain;charset=UTF-8".to_vec());
     }
     let top = base.filter(|b| !b.is_empty()).or_else(|| js.page_url());
+    let csp_realm = Realm::caller(scope);
     let mut state = FetchState {
         realm: Realm::of(scope),
+        csp_realm,
         timeline: js.main_context(),
         resolve,
         reject,
@@ -462,7 +465,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         .as_deref()
         .is_some_and(|top| crate::ascii_starts_with(top, b"https://"))
         && crate::ascii_starts_with(&send_url, b"http://");
-    let blocked_csp = !js.csp_allows_connect(&send_url, top.as_deref());
+    let blocked_csp = !js.csp_allows_connect(csp_realm, &send_url);
     if blocked_mixed || blocked_csp {
         let mut resp = Response::synthesized();
         resp.set_error(if blocked_mixed {
@@ -574,7 +577,7 @@ pub(crate) fn deliver_idle(delivery: Delivery) {
     deliver(delivery);
 }
 
-pub(crate) fn final_url_connect_blocked(js: Js, final_url: Option<&[u8]>) -> bool {
+pub(crate) fn final_url_connect_blocked(js: Js, realm: Realm, final_url: Option<&[u8]>) -> bool {
     let Some(final_url) = final_url.filter(|u| !u.is_empty()) else {
         return false;
     };
@@ -583,7 +586,7 @@ pub(crate) fn final_url_connect_blocked(js: Js, final_url: Option<&[u8]>) -> boo
         .as_deref()
         .is_some_and(|p| crate::ascii_starts_with(p, b"https://"))
         && crate::ascii_starts_with(final_url, b"http://");
-    mixed || !js.csp_allows_connect(final_url, page.as_deref())
+    mixed || !js.csp_allows_connect(realm, final_url)
 }
 
 fn add_raw_headers(scope: &mut Scope<'_>, init: &Value, raw: &[u8]) {
@@ -764,7 +767,7 @@ fn deliver(delivery: Delivery) {
         );
         if !resp.is_null()
             && resp.error().is_none()
-            && final_url_connect_blocked(js, resp.final_url().as_deref())
+            && final_url_connect_blocked(js, state.csp_realm, resp.final_url().as_deref())
         {
             resp.set_error(b"blocked after redirect (mixed content or connect-src CSP)");
         }

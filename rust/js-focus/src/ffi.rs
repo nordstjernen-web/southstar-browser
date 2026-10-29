@@ -154,8 +154,8 @@ impl Js {
         let _ = southstar_js_loader::eval_source(self.ptr(), &c_string(code), Some(origin));
     }
 
-    pub fn inline_scripts_allowed(self) -> bool {
-        api::with_page_csp(self.ptr(), |csp| {
+    pub fn inline_scripts_allowed(self, el: Element) -> bool {
+        api::with_node_csp(self.ptr(), Some(el), |csp| {
             csp.is_none_or(|csp| csp.inline_event_handler_allowed())
         })
     }

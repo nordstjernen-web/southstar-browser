@@ -263,7 +263,7 @@ fn fire_inline_in_realm(js: Js, target: Element, kind: &str, event: &Value) -> b
     let Some(body) = body.filter(|body| !body.is_empty()) else {
         return false;
     };
-    if !js.inline_handlers_allowed() {
+    if !js.inline_handlers_allowed(Some(target)) {
         js.log(&format!("CSP blocked: inline event handler {attr_name}"));
         return false;
     }
@@ -505,7 +505,8 @@ pub(crate) fn on_get(scope: &mut Scope<'_>, this: &Value, index: usize) -> JsRes
     let Some(name) = HANDLER_NAMES.get(index) else {
         return Ok(Value::null());
     };
-    let body = ffi::unwrap(this).and_then(|el| {
+    let element = ffi::unwrap(this);
+    let body = element.and_then(|el| {
         with_c_key(&[name], |attr| {
             el.attr(attr)
                 .map(|body| body.to_string_lossy().into_owned())
@@ -530,7 +531,7 @@ pub(crate) fn on_get(scope: &mut Scope<'_>, this: &Value, index: usize) -> JsRes
         return Ok(Value::null());
     };
     let js = ffi::js_of(scope);
-    if !js.is_null() && !js.inline_handlers_allowed() {
+    if !js.is_null() && !js.inline_handlers_allowed(element) {
         return Ok(Value::null());
     }
     let Ok(function) = compile_inline(scope, &body) else {
