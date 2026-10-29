@@ -21,8 +21,6 @@ impl Js {
     }
 }
 
-unsafe extern "C" {}
-
 use southstar_js_events::nsr_dom_exception;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {

@@ -26,11 +26,6 @@ use state::{DataFn, LogFn, NavigateFn, PageState};
 pub use record::NsJs;
 
 #[repr(C)]
-pub(crate) struct WorkerHost {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct NavigationTiming {
     pub origin_us: i64,
@@ -66,7 +61,7 @@ impl NavigationTiming {
 }
 
 pub(crate) struct WorkerSetup<'a> {
-    pub host: *mut WorkerHost,
+    pub host: api::WorkerHost,
     pub context: MainContext,
     pub url: Option<&'a CStr>,
     pub base_url: Option<&'a CStr>,
@@ -101,8 +96,6 @@ pub(crate) enum Class {
 }
 
 const PROTO_TABLE_ELEMENT: c_int = 13;
-
-unsafe extern "C" {}
 
 #[cfg(windows)]
 #[link(name = "kernel32")]
@@ -277,13 +270,12 @@ impl Js {
 
     pub fn adopt_worker_host(self, setup: &WorkerSetup<'_>) {
         let partition = setup.origin.filter(|origin| !origin.is_empty());
-        self.st().worker_host.set(setup.host);
+        *self.st().worker_host.borrow_mut() = Some(setup.host.clone());
         record::set_partition_key(self.rec(), partition);
-        let host = setup.host.cast::<c_void>();
+        let host = setup.host.clone();
         self.set_callbacks(Callbacks {
             log: Some(Rc::new(move |line: &CStr| {
-                // SAFETY: the log hook of a worker page is set from its worker host, alive as long as the page.
-                unsafe { (api::workers_hooks().log_line)(host, line) };
+                (api::workers_hooks().log_line)(&host, line);
             })),
             ..Callbacks::default()
         });
@@ -299,9 +291,11 @@ impl Js {
     }
 
     pub fn worker_closing(self) -> bool {
-        let host = self.st().worker_host.get();
-        // SAFETY: a worker page's host stays alive for as long as the page, which is the host_closing hook's obligation.
-        !host.is_null() && unsafe { (api::workers_hooks().host_closing)(host.cast()) }
+        self.st()
+            .worker_host
+            .borrow()
+            .as_ref()
+            .is_some_and(api::workers_hooks().host_closing)
     }
 
     pub fn set_proto_document(self, proto: Value) {

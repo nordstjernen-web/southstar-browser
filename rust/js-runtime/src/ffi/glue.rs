@@ -267,7 +267,7 @@ pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
 
 pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'_>) -> Fetch {
     let js = match js {
-        Some(js) if js.st().worker_host.get().is_null() => js,
+        Some(js) if js.st().worker_host.borrow().is_none() => js,
         _ => {
             return southstar_net::request_blocking(req)
                 .map_err(|failure| failure.message().to_vec());

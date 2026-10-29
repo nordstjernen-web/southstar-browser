@@ -281,8 +281,6 @@ pub fn seed_cookies_from_jar(js: Option<Page>) {
     }
 }
 
-unsafe extern "C" {}
-
 pub(crate) const REALM_DOCUMENT_METHODS: [(&str, u32, NativeFn); 13] = [
     ("createElement", 1, imports::nsr_document_createElement),
     ("createElementNS", 2, imports::nsr_document_createElementNS),

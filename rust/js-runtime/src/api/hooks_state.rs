@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -104,8 +104,9 @@ impl ServicesHooks {
 
 hook_table!(ServicesHooks, SERVICES, set_services_hooks, services_hooks);
 
-pub type WorkerHostClosingFn = unsafe fn(*const c_void) -> bool;
-pub type WorkerLogFn = unsafe fn(*mut c_void, &CStr);
+pub type WorkerHost = std::sync::Arc<dyn core::any::Any + Send + Sync>;
+pub type WorkerHostClosingFn = fn(&WorkerHost) -> bool;
+pub type WorkerLogFn = fn(&WorkerHost, &CStr);
 
 pub struct ServiceWorkerController(pub Box<dyn core::any::Any>);
 

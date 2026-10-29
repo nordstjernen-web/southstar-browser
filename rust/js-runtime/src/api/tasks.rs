@@ -107,7 +107,7 @@ pub fn observer_schedule_tick(js: Option<Page>) {
     };
     let state = js.st();
     if js.ctx().is_null()
-        || !state.worker_host.get().is_null()
+        || state.worker_host.borrow().is_some()
         || state.observer_tick_source.get().is_some()
     {
         return;
@@ -280,7 +280,7 @@ pub fn fetch_subresource(
     let start = ffi::monotonic_us();
     let fetched = fetch(Js::of(js), url, top_url, headers, None);
     if let Some(js) = Js::of(js)
-        && js.st().worker_host.get().is_null()
+        && js.st().worker_host.borrow().is_none()
         && let Some(initiator) = initiator
     {
         glue::add_resource_timing(js, info, url, initiator, start, fetched.response.as_ref());

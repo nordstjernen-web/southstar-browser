@@ -48,11 +48,11 @@ pub fn in_pump(js: Option<Page>) -> bool {
 }
 
 pub fn is_worker(js: Option<Page>) -> bool {
-    state(js, false, |state| !state.worker_host.get().is_null())
+    state(js, false, |state| state.worker_host.borrow().is_some())
 }
 
-pub fn worker_host(js: Option<Page>) -> *mut c_void {
-    state(js, ptr::null_mut(), |state| state.worker_host.get().cast())
+pub fn worker_host(js: Option<Page>) -> Option<crate::api::WorkerHost> {
+    state(js, None, |state| state.worker_host.borrow().clone())
 }
 
 pub fn log_enabled(js: Option<Page>) -> bool {
@@ -489,7 +489,7 @@ pub fn snapshot_platform_globals(js: Option<Page>) {
 }
 
 pub struct WorkerOptions<'a> {
-    pub host: *mut c_void,
+    pub host: crate::api::WorkerHost,
     pub context: southstar_glib::MainContext,
     pub url: Option<&'a CStr>,
     pub base_url: Option<&'a CStr>,
@@ -500,7 +500,7 @@ pub struct WorkerOptions<'a> {
 
 pub fn new_worker(options: &WorkerOptions<'_>) -> Option<Page> {
     ffi::new_worker(&ffi::WorkerSetup {
-        host: options.host.cast(),
+        host: options.host.clone(),
         context: options.context.clone(),
         url: options.url,
         base_url: options.base_url,
