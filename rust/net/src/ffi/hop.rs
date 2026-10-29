@@ -34,6 +34,7 @@ pub struct HopReq<'a> {
     pub cookie_js_path: Option<&'a [u8]>,
     pub cookie_context: Context,
     pub request_ftp: bool,
+    pub navigation: bool,
 }
 
 #[derive(Default)]
@@ -90,6 +91,10 @@ impl Handler for Sinks<'_> {
 
     fn body(&mut self, data: &[u8]) -> bool {
         sinks::write(self.wctx, data) == data.len()
+    }
+
+    fn tls_unverified(&mut self) {
+        self.jar = None;
     }
 }
 
@@ -199,7 +204,7 @@ pub fn transport(
         body: hop.body.unwrap_or_default(),
         timeout: seconds(hop.timeout_s, 30),
         connect_timeout: seconds(hop.connect_timeout_s, 10).min(seconds(hop.timeout_s, 30)),
-        allow_insecure: insecure_opt_in && !pinned,
+        allow_insecure: insecure_opt_in && !pinned && hop.navigation,
         tls: TlsSettings {
             ca_bundle: ca_bundle_path(),
             curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),

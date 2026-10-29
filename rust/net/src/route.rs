@@ -1,4 +1,4 @@
-//! Southstar — how a URL reaches the network through rust/http: the TLS settings, DNS over HTTPS, the configured proxy unless the no-proxy list exempts the host, and the insecure-certificate override.
+//! Southstar — how a URL reaches the network through rust/http: the TLS settings, DNS over HTTPS and the configured proxy unless the no-proxy list exempts the host; a route never skips certificate verification.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,7 +9,7 @@ use southstar_http::{Route, TlsSettings};
 
 use crate::ffi::proxy::{configured_no_proxy, pick_configured_proxy};
 use crate::ffi::transport::{ca_bundle_path, ns_net_ec_curves};
-use crate::{hsts, url};
+use crate::url;
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
     unsafe { glib::bytes(p) }
@@ -38,12 +38,10 @@ pub fn route(target: &[u8], host: &str) -> Route {
                 host,
             )
         });
-    let opt_in = southstar_config::get().is_some_and(|c| c.tls_allow_insecure_override != 0);
-    let pinned = url::host_from(target).is_some_and(|h| hsts::should_upgrade(&h));
     Route {
         tls: tls_settings(),
         proxy,
-        allow_insecure: opt_in && !pinned,
+        allow_insecure: false,
     }
 }
 

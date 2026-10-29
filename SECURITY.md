@@ -299,7 +299,13 @@ verification enabled: OpenSSL checks the peer chain against the CA bundle
 initial scheme is HTTPS, there are at most ten redirects, and responses
 have an explicit size cap. HSTS state is recorded and persisted by
 `rust/net/src/hsts.rs`. Mixed-content sub-resources (http inside an https
-document) are blocked.
+document) are blocked. The `tls_allow_insecure_override` setting, off by
+default, lets the user proceed past a certificate error only for the
+top-level navigation itself, never for an HSTS host; that retried
+navigation sends no cookies, stores none from the reply, and its
+connection is never kept in the HTTP/2 pool for later requests. A
+subresource, frame, `fetch()`, worker, media, WebSocket or EventSource
+request that fails verification is never retried without it.
 
 ### Origin isolation
 
