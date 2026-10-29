@@ -388,6 +388,29 @@ impl Js {
         (api::workers_hooks().host_base_url)(self.0)
     }
 
+    pub(crate) fn prefetch_script(self, url: &CStr, top_url: Option<&CStr>) {
+        let headers: Vec<Vec<u8>> = script_accept_headers()
+            .iter()
+            .map(|line| line.to_bytes().to_vec())
+            .collect();
+        let request = southstar_net::FetchRequest {
+            url: url.to_bytes(),
+            top_url: top_url.map(CStr::to_bytes),
+            method: Some(b"GET"),
+            headers: &headers,
+            ..southstar_net::FetchRequest::default()
+        };
+        if let Some(key) = southstar_net::request_key(
+            request.url,
+            request.top_url,
+            request.method,
+            request.headers,
+        ) {
+            southstar_net::preload_expect(&key);
+        }
+        southstar_net::request_with(&request, None, drop);
+    }
+
     pub(crate) fn fetch(
         self,
         url: &CStr,

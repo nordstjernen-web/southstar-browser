@@ -16,6 +16,15 @@ Southstar Browser 1.0.4-dev:
   js-workers downcasts the handle to its `Host`. Five empty
   `unsafe extern "C" {}` blocks left over from earlier ports are
   removed.
+* Performance: the module loader starts fetching a module's static
+  imports as soon as it has the module's source, instead of discovering
+  them one at a time while linking. Boa asks for each import
+  synchronously, so a module graph was fetched strictly in sequence; the
+  static `import`/`export … from` specifiers of each fetched module (after
+  import-map and URL resolution, CSP and mixed-content checks, at most 512
+  per page) are now requested in parallel through the network layer's
+  preload coalescer, and the loader's own request joins the one already
+  in flight.
 * Port: computed styles are looked up through typed references in more
   places. `StyleMap` gains `retained(node)`, so the window's cursor and
   scroll-snap code hold a counted `RetainedStyle` instead of a raw
