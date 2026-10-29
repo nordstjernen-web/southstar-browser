@@ -31,7 +31,6 @@ pub const ENTRY_ICON_SECONDARY: c_int = 1;
 pub const ACCESSIBLE_PROPERTY_LABEL: c_int = 4;
 pub const STATE_FLAG_FOCUS_WITHIN: c_uint = 1 << 14;
 pub const STYLE_PROVIDER_PRIORITY_APPLICATION: c_uint = 600;
-pub const USER_DIRECTORY_DOWNLOAD: c_int = 2;
 pub const APPLICATION_NON_UNIQUE: c_uint = 1 << 5;
 pub const FILE_TEST_IS_REGULAR: c_uint = 1 << 0;
 pub const FILE_TEST_IS_SYMLINK: c_uint = 1 << 1;
@@ -72,9 +71,6 @@ unsafe extern "C" {
     pub fn g_thread_new(name: *const c_char, func: GThreadFunc, data: *mut c_void) -> *mut c_void;
     pub fn g_thread_unref(thread: *mut c_void);
 
-    pub fn g_get_user_special_dir(directory: c_int) -> *const c_char;
-    pub fn g_get_home_dir() -> *const c_char;
-    pub fn g_get_user_cache_dir() -> *const c_char;
     pub fn g_get_monotonic_time() -> i64;
     pub fn g_get_real_time() -> i64;
     pub fn g_get_num_processors() -> c_uint;

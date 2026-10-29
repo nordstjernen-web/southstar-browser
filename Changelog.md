@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: the remaining direct GLib directory lookups — the download
+  directory (for the downloads list and the sandbox's writable paths),
+  the system data directories, and the shell's cache and home
+  directories — go through `rust/glib`'s safe `download_dir`,
+  `system_data_dirs`, `user_cache_dir` and `home_dir`, and gtk-ffi drops
+  its copies of those bindings.
 * Port: a worker page refers to its worker host through a counted
   `Arc<dyn Any + Send + Sync>` handle instead of a raw pointer the
   script runtime handed back to js-workers, which re-counted it with

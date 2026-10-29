@@ -14,7 +14,6 @@ use southstar_glib::{self as glib, GStr};
 const OPENSSL_VERSION: c_int = 0;
 
 unsafe extern "C" {
-    fn g_get_system_data_dirs() -> *const *const c_char;
     fn g_get_os_info(key: *const c_char) -> *mut c_char;
     fn psl_builtin() -> *const c_void;
     fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
@@ -74,16 +73,7 @@ pub fn user_data_dir() -> Option<Vec<u8>> {
 }
 
 pub fn system_data_dirs() -> Vec<Vec<u8>> {
-    let mut dirs = Vec::new();
-    let mut p = unsafe { g_get_system_data_dirs() };
-    if p.is_null() {
-        return dirs;
-    }
-    while let Some(dir) = borrowed(unsafe { *p }) {
-        dirs.push(dir);
-        p = unsafe { p.add(1) };
-    }
-    dirs
+    glib::system_data_dirs()
 }
 
 pub fn markup_escape(text: &[u8]) -> Vec<u8> {

@@ -15,8 +15,6 @@ use southstar_glib::{self as glib, LogLevel};
 unsafe extern "C" {
     #[cfg(target_os = "linux")]
     fn g_printerr(format: *const c_char, ...);
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn g_get_user_special_dir(directory: c_int) -> *const c_char;
 }
 
 fn log(level: LogLevel, message: &str) {
@@ -184,8 +182,7 @@ fn own_dir(base: &[u8], rest: &[&[u8]]) -> Vec<u8> {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn download_dir() -> Option<Vec<u8>> {
-    const G_USER_DIRECTORY_DOWNLOAD: c_int = 2;
-    unsafe { glib::bytes(g_get_user_special_dir(G_USER_DIRECTORY_DOWNLOAD)) }.map(<[u8]>::to_vec)
+    glib_dir(glib::download_dir)
 }
 
 #[cfg(target_os = "linux")]

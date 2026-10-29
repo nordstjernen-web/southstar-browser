@@ -527,11 +527,8 @@ fn stream_url_allowed(url: &[u8], subdir: &CStr) -> bool {
     let Some(dir) = path_from(dir).filter(|d| d.is_absolute()) else {
         return false;
     };
-    // SAFETY: GLib computes the user cache directory once and returns a string it never frees.
-    let cache = unsafe { glib::g_get_user_cache_dir() };
-    // SAFETY: the pointer is GLib's non-null, NUL-terminated, process-lifetime cache path.
-    let cache = unsafe { CStr::from_ptr(cache) };
-    let streams = build_filename(&[cache, c"southstar", subdir]);
+    let cache = CString::new(glib::user_cache_dir()).unwrap_or_default();
+    let streams = build_filename(&[&cache, c"southstar", subdir]);
     let Some(streams) = path_from(streams.to_bytes()) else {
         return false;
     };

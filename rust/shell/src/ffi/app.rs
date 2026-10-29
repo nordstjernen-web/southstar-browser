@@ -113,8 +113,8 @@ fn mtime_seconds(path: &CStr) -> Option<i64> {
 }
 
 fn clear_cache_dir(name: &CStr, min_age_s: i64) {
-    let cache = unsafe { borrowed(gtk::g_get_user_cache_dir()) }.unwrap_or(c"");
-    let dir = build_filename(&[cache, c"southstar", name]);
+    let cache = CString::new(southstar_glib::user_cache_dir()).unwrap_or_default();
+    let dir = build_filename(&[&cache, c"southstar", name]);
     let cutoff = unsafe { gtk::g_get_real_time() } / 1_000_000 - min_age_s;
     let mut stack: Vec<CString> = vec![dir];
     let mut dirs: Vec<CString> = Vec::new();
