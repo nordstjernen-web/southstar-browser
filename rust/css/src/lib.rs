@@ -39,6 +39,7 @@ mod lex;
 mod matcher;
 mod math;
 mod nesting;
+mod pattern;
 mod pending;
 mod position;
 mod prop;
@@ -132,6 +133,7 @@ pub use inline::{
 };
 pub use matcher::{clear_defined_elements, register_defined_element};
 pub use nesting::has_container_units as text_has_container_units;
+pub use pattern::pattern_matches;
 pub use prop::Prop;
 pub use restyle::{
     attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_restyle_dirty,

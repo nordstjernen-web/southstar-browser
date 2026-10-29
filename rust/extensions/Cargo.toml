@@ -12,6 +12,7 @@ southstar-config = { path = "../config" }
 southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
 southstar-js-engine = { path = "../js-engine", default-features = false }
+regress = "0.12.0"
 
 [lints]
 workspace = true

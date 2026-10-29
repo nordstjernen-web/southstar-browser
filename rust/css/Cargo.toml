@@ -20,6 +20,7 @@ southstar-mat4 = { path = "../mat4" }
 southstar-numfmt = { path = "../numfmt" }
 southstar-selector-text = { path = "../selector-text" }
 southstar-url = { path = "../url" }
+regress = "0.12.0"
 
 [features]
 avif = []

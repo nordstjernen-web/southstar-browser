@@ -1908,6 +1908,7 @@ dependencies = [
 name = "southstar-css"
 version = "1.0.4-dev"
 dependencies = [
+ "regress",
  "southstar-css-color",
  "southstar-css-grammar",
  "southstar-css-media",
@@ -2024,6 +2025,7 @@ dependencies = [
 name = "southstar-extensions"
 version = "1.0.4-dev"
 dependencies = [
+ "regress",
  "southstar-config",
  "southstar-digest",
  "southstar-glib",
@@ -2171,8 +2173,8 @@ dependencies = [
 name = "southstar-forms"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-net",
  "southstar-url",
 ]

@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: the `pattern` attribute of form controls and the regular
+  expressions in extension blocking rules are matched with `regress`, the
+  JavaScript regular-expression engine Boa already uses, instead of
+  GLib's PCRE-based `GRegex`. Patterns are now compiled as the HTML
+  Standard asks — a whole-value JavaScript expression with the `v` flag —
+  for `:valid`/`:invalid`, constraint validation and form submission
+  alike, so set operations like `[\p{L}--[a-z]]` work and PCRE-only
+  syntax no longer slips through. The css, forms, js-forms and
+  extensions crates drop their GRegex bindings; forms is now free of
+  `unsafe`.
 * Port: a page's layout tree is held as a `BoxRef` everywhere instead of
   a raw `*mut NsBox`: `layout_build` and the render pipeline return
   one, the window keeps its layout, scrollbar and find-in-page boxes in
