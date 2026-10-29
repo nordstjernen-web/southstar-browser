@@ -1,10 +1,11 @@
-//! Southstar — per-page frame state: the frame table (each frame's realm, window, URL and referrer), the realm cloners, the initial about:blank realms and the frame load queues.
+//! Southstar — per-page frame state: the frame table (each frame's realm, window, URL and referrer), the realm cloners and the pristine platform snapshot, the initial about:blank realms and the frame load queues.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::WeakNode;
 use southstar_js_engine::Value;
@@ -12,6 +13,7 @@ use southstar_js_engine::Value;
 use crate::cloner::Shared;
 use crate::ffi::Js;
 use crate::ffi::ctx::Ctx;
+use crate::pristine::Pristine;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Frame(pub WeakNode);
@@ -60,6 +62,7 @@ pub(crate) struct Page {
     pub pending_loads: Vec<Frame>,
     pub deferred_loads: Vec<Frame>,
     pub iframe_globals: HashMap<Frame, Vec<CString>>,
+    pub pristine: Option<Rc<Pristine>>,
 }
 
 thread_local! {

@@ -11,7 +11,7 @@ use southstar_js_runtime::api::Page;
 use crate::ffi::ctx::Ctx;
 use crate::ffi::{Js, frame_node, scope_ctx};
 use crate::realm::frame_of;
-use crate::{cloner, origin, owner, page, queue, realm, sandbox, schedule};
+use crate::{cloner, origin, owner, page, pristine, queue, realm, sandbox, schedule};
 
 fn live(js: Option<Page>) -> Option<Js> {
     let js = Js::of(js);
@@ -86,6 +86,10 @@ pub fn child_frame_window(
     raw: bool,
 ) -> Result<Value, Value> {
     owner::child_frame_window(scope, doc, index, name, raw)
+}
+
+pub fn snapshot_platform(js: Option<Page>) {
+    pristine::snapshot(Js::of(js));
 }
 
 pub fn clear_initial_blank_frames(js: Option<Page>) {

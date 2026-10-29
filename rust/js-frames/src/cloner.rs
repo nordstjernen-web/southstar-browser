@@ -11,6 +11,7 @@ use southstar_js_engine::{Attributes, Value};
 use crate::ffi::ctx::{Ctx, Descriptor, Key, Keys};
 use crate::ffi::{self, Js};
 use crate::page;
+use crate::pristine::{self, Pristine};
 
 const INTRINSIC_NAMES: &[&str] = &[
     "Object",
@@ -103,6 +104,7 @@ pub(crate) struct Cloner {
     src: Ctx,
     dst: Ctx,
     memo: HashMap<usize, (Value, Value)>,
+    pristine: Option<Rc<Pristine>>,
 }
 
 fn identity(value: &Value) -> usize {
@@ -122,11 +124,12 @@ fn data_descriptor(value: Value, like: &Descriptor) -> Descriptor {
 }
 
 impl Cloner {
-    fn new(src: Ctx, main: Ctx, dst: Ctx) -> Cloner {
+    fn new(src: Ctx, main: Ctx, dst: Ctx, pristine: Option<Rc<Pristine>>) -> Cloner {
         let mut cloner = Cloner {
             src,
             dst,
             memo: HashMap::new(),
+            pristine,
         };
         cloner.seed(src);
         if main != src {
@@ -268,6 +271,14 @@ impl Cloner {
     }
 
     fn clone_own_properties(&mut self, from: &Value, to: &Value, depth: u32) {
+        if let Some(pristine) = self.pristine.clone()
+            && let Some(properties) = pristine.own_properties(from)
+        {
+            for (key, desc) in properties {
+                self.clone_descriptor_into(to, key, desc, depth);
+            }
+            return;
+        }
         let src = self.src;
         let Some(keys) = src.own_keys(from, Keys::StringsAndSymbols) else {
             return;
@@ -614,7 +625,12 @@ fn cloner_for(js: Js, dst: Ctx) -> Shared {
         return found;
     }
     let main = ffi::main_realm(js);
-    let cloner = Rc::new(RefCell::new(Cloner::new(main, main, dst)));
+    let cloner = Rc::new(RefCell::new(Cloner::new(
+        main,
+        main,
+        dst,
+        pristine::current(js),
+    )));
     let replaced = page::with(js, |page| {
         page.cloners_made = true;
         page.cloners.insert(dst, cloner.clone())
