@@ -368,7 +368,9 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let vary_origin = [b"Origin: ", request_origin].concat();
     let cache_headers: [&[u8]; 4] = [&vary_accept, &vary_language, &vary_agent, &vary_origin];
 
-    let cookies_allowed = request_http && credentials::cookies_allowed(&url, f.top_url, &partition);
+    let cookies_allowed = request_http
+        && request::credentials_permit(f.headers, &url, f.top_url)
+        && credentials::cookies_allowed(&url, f.top_url, &partition);
     let cookie_jar = if cookies_allowed {
         storage::cookie_jar_path(Some(&partition), false)
     } else {

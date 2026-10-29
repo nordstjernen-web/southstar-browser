@@ -585,6 +585,32 @@ impl ServiceWorker {
 
 pub(crate) use southstar_net::Cancellable;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Credentials {
+    Omit,
+    SameOrigin,
+    Include,
+}
+
+impl Credentials {
+    pub fn parse(mode: &[u8]) -> Option<Credentials> {
+        match mode {
+            b"omit" => Some(Credentials::Omit),
+            b"same-origin" => Some(Credentials::SameOrigin),
+            b"include" => Some(Credentials::Include),
+            _ => None,
+        }
+    }
+
+    fn header(self) -> &'static [u8] {
+        match self {
+            Credentials::Omit => b"X-ND-Credentials: omit",
+            Credentials::SameOrigin => b"X-ND-Credentials: same-origin",
+            Credentials::Include => b"X-ND-Credentials: include",
+        }
+    }
+}
+
 pub(crate) struct Request {
     pub url: CString,
     pub top: Option<CString>,
@@ -593,6 +619,7 @@ pub(crate) struct Request {
     pub has_body: bool,
     pub content_type: Option<CString>,
     pub headers: Vec<CString>,
+    pub credentials: Credentials,
 }
 
 impl Request {
@@ -601,7 +628,9 @@ impl Request {
         cancellable: Option<&Cancellable>,
         done: impl FnOnce(Response, Option<Vec<u8>>) + 'static,
     ) {
-        let headers: Vec<Vec<u8>> = self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
+        let mut headers: Vec<Vec<u8>> =
+            self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
+        headers.push(self.credentials.header().to_vec());
         let request = southstar_net::FetchRequest {
             url: self.url.to_bytes(),
             top_url: self.top.as_deref().map(CStr::to_bytes),

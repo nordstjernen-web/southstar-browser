@@ -23,6 +23,17 @@ Southstar Browser 1.0.4-dev:
   engine, the headless driver's style table and the video crate borrow
   `StyleRef`s from the map or the box with the map's lifetime instead of
   manufacturing `'static` ones from raw pointers.
+* Security: `fetch()` honours its `credentials` option and XHR its
+  `withCredentials` flag. Cookies were sent and stored on every request
+  the cookie policy allowed, whatever the page asked for: `credentials:
+  "omit"` still sent them, and a same-site, cross-origin request in the
+  default `same-origin` mode carried the user's cookies to the other
+  origin. Each hop now sends and stores cookies only for `include`, or
+  for `same-origin` when the hop's URL is same-origin with the page;
+  CORS preflights never carry them, `sendBeacon` always may. A
+  credentialed cross-origin response is readable only when
+  `Access-Control-Allow-Origin` names the page's origin (not `*`) and
+  `Access-Control-Allow-Credentials` is `true`.
 * Port: the per-user directories (config, data, cache, runtime, home,
   temp) and the preferred UI languages GLib works out are read through
   safe `rust/glib` functions returning owned bytes, instead of each of

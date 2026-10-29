@@ -172,15 +172,34 @@ pub(crate) fn raw_headers_have(raw: Option<&[u8]>, name: &[u8]) -> bool {
     })
 }
 
-pub fn cors_allows(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>, header: Option<&[u8]>) -> bool {
-    if let Some(resp) = resp_url
-        && [&b"data:"[..], b"blob:", b"about:"]
+fn local_or_same_origin(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>) -> bool {
+    resp_url.is_some_and(|resp| {
+        [&b"data:"[..], b"blob:", b"about:"]
             .iter()
             .any(|p| resp.starts_with(p))
-    {
+    }) || ffi::url_same_origin(doc_url, resp_url)
+}
+
+pub fn cors_allows_credentials(
+    doc_url: Option<&[u8]>,
+    resp_url: Option<&[u8]>,
+    allow_origin: Option<&[u8]>,
+    raw_headers: Option<&[u8]>,
+) -> bool {
+    if local_or_same_origin(doc_url, resp_url) {
         return true;
     }
-    if ffi::url_same_origin(doc_url, resp_url) {
+    let wildcard = allow_origin.is_some_and(|origin| origin.trim_ascii() == b"*");
+    let credentials_allowed = raw_headers.is_some_and(|raw| {
+        raw_header_lines(raw).any(|(name, value)| {
+            name.eq_ignore_ascii_case(b"access-control-allow-credentials") && value == b"true"
+        })
+    });
+    !wildcard && credentials_allowed && cors_allows(doc_url, resp_url, allow_origin)
+}
+
+pub fn cors_allows(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>, header: Option<&[u8]>) -> bool {
+    if local_or_same_origin(doc_url, resp_url) {
         return true;
     }
     let Some(header) = header.filter(|h| !h.is_empty()) else {
