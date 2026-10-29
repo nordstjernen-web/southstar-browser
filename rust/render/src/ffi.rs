@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_uint, c_void};
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -11,34 +10,28 @@ use std::sync::{Mutex, MutexGuard};
 
 use southstar_anim::AnimHandle;
 use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData, StyleMap};
-use southstar_dom::{Node, NsNode};
-use southstar_glib::{self as glib, GBoolean, GStr};
-use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_dom::Node;
+use southstar_glib::{self as glib, GBoolean};
+use southstar_layout::{BoxPool, BoxRef};
 use southstar_layout_position::BuildInput;
-use southstar_style::{Prop, StyleRef, StyleTable, display_of, styles_equal};
+use southstar_style::{Prop, StyleRef, StyleTable, box_style, display_of, styles_equal};
 
 use crate::fonts::{self, Usage};
 
-type ResolveUrl = unsafe extern "C" fn(href: *const c_char, user_data: *mut c_void) -> *mut c_char;
-type FontAllowed = unsafe extern "C" fn(abs_url: *const c_char, user_data: *mut c_void) -> GBoolean;
-
 pub struct RenderCtx<'a> {
-    pub doc: *mut NsNode,
+    pub doc: Option<Node<'a>>,
     pub sheets: &'a [OwnedSheet],
     pub sheet_docs: &'a [Node<'a>],
     pub viewport_width: f64,
     pub viewport_height: f64,
     pub zoom: f64,
     pub images: Option<southstar_image::ImageCache>,
-    pub base_url: *const c_char,
+    pub base_url: Option<&'a [u8]>,
     pub anim: Option<AnimHandle>,
-    pub focused_input: *const NsNode,
-    pub hover_node: *const NsNode,
+    pub focused_input: Option<Node<'a>>,
+    pub hover_node: Option<Node<'a>>,
     pub caret_byte: usize,
     pub sel_anchor_byte: usize,
-    pub resolve_url: Option<ResolveUrl>,
-    pub font_allowed: Option<FontAllowed>,
-    pub cb_ud: *mut c_void,
 }
 
 #[repr(C)]
@@ -94,17 +87,17 @@ fn now_us() -> i64 {
     southstar_glib::monotonic_us()
 }
 
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
-}
-
 impl RenderCtx<'_> {
     fn style_sheets(&self) -> impl Iterator<Item = &Sheet> {
         self.sheets.iter().map(|sheet| &**sheet)
     }
 
     fn doc(&self) -> Option<Node<'_>> {
-        unsafe { Node::from_ptr(self.doc) }
+        self.doc
+    }
+
+    fn doc_key(&self) -> usize {
+        self.doc.map_or(0, |doc| doc.as_ptr() as usize)
     }
 
     fn zoom(&self) -> f64 {
@@ -190,29 +183,14 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
             if !fonts::range_matches(range, families.get(family.to_bytes())) {
                 continue;
             }
-            let abs = match c.resolve_url {
-                Some(resolve) => unsafe { resolve(src_url.as_ptr(), c.cb_ud) },
-                None => southstar_url::bytes::resolve(text(c.base_url), src_url.to_bytes())
-                    .map_or(ptr::null_mut(), |abs| glib::strdup(&abs)),
-            };
-            let Some(abs) = (unsafe { GStr::take(abs) }) else {
+            let Some(abs) = southstar_url::bytes::resolve(c.base_url, src_url.to_bytes()) else {
                 continue;
             };
-            if let Some(allowed) = c.font_allowed
-                && unsafe { allowed(abs.as_ptr(), c.cb_ud) } == 0
-            {
-                continue;
-            }
             let descriptors = southstar_font::Descriptors {
                 weight: face.weight,
                 slant: face.slant,
             };
-            southstar_font::request(
-                family.to_bytes(),
-                abs.to_bytes(),
-                text(c.base_url),
-                descriptors,
-            );
+            southstar_font::request(family.to_bytes(), &abs, c.base_url, descriptors);
         }
     }
 }
@@ -251,14 +229,11 @@ fn styles_tables_equal(a: &StyleMap, b: &StyleMap) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.entries().all(|(node, style)| {
-        let other = b.lookup(node as *const c_void);
-        unsafe {
-            styles_equal(
-                StyleRef::from_ptr(style.cast()),
-                StyleRef::from_ptr(other.cast()),
-            )
-        }
+    a.iter().all(|(node, style)| {
+        styles_equal(
+            Some(StyleRef::from_data(style)),
+            b.get(node as *const c_void).map(StyleRef::from_data),
+        )
     })
 }
 
@@ -285,8 +260,7 @@ fn collect_containers(b: Option<BoxRef<'_>>, map: &mut ContainerMap, mut sig: Op
     let Some(b) = b else {
         return;
     };
-    let style = unsafe { StyleRef::from_ptr(b.style()) };
-    if let (Some(style), Some(node)) = (style, b.dom()) {
+    if let (Some(style), Some(node)) = (box_style(b), b.dom()) {
         let kind = style
             .value(&CONTAINER_TYPE)
             .and_then(|v| v.keyword_text())
@@ -317,9 +291,9 @@ fn collect_containers(b: Option<BoxRef<'_>>, map: &mut ContainerMap, mut sig: Op
     }
 }
 
-fn predicted_map(doc: *mut NsNode, viewport_width: f64, want: bool) -> Option<ContainerMap> {
+fn predicted_map(doc: usize, viewport_width: f64, want: bool) -> Option<ContainerMap> {
     let mut cq = lock(&CONTAINERS);
-    let matches = want && cq.doc == doc as usize && cq.width == viewport_width;
+    let matches = want && cq.doc == doc && cq.width == viewport_width;
     cq.map.take().filter(|_| matches)
 }
 
@@ -329,7 +303,7 @@ fn settled(predicted: Option<&ContainerMap>, measured: &ContainerMap) -> bool {
     settled
 }
 
-fn remember(doc: *mut NsNode, viewport_width: f64, layout: *mut NsBox, want: bool) {
+fn remember(doc: usize, viewport_width: f64, layout: Option<BoxRef<'_>>, want: bool) {
     let mut cq = lock(&CONTAINERS);
     cq.map = None;
     cq.doc = 0;
@@ -337,10 +311,9 @@ fn remember(doc: *mut NsNode, viewport_width: f64, layout: *mut NsBox, want: boo
         return;
     }
     let mut map = ContainerMap::new();
-    // SAFETY: layout is null or the box tree this relayout just built.
-    collect_containers(unsafe { BoxRef::from_ptr(layout) }, &mut map, None);
+    collect_containers(layout, &mut map, None);
     cq.map = Some(map);
-    cq.doc = doc as usize;
+    cq.doc = doc;
     cq.width = viewport_width;
 }
 
@@ -382,19 +355,18 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
         .any(|sheet| sheet.has_container_rules() || sheet.has_container_units())
 }
 
-fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> *mut NsBox {
+fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> Option<BoxRef<'static>> {
     southstar_paint::list_ordinals_begin();
     let layout = southstar_layout_position::layout_build(BuildInput {
         doc: c.doc(),
         // SAFETY: styles is the style table this relayout computed for the context's document.
         styles: unsafe { StyleTable::from_ptr(styles) },
         viewport_width,
-        // SAFETY: the focused input is null or a live node of the context's document.
-        focused_input: unsafe { Node::from_ptr(c.focused_input) },
+        focused_input: c.focused_input,
         caret_byte: c.caret_byte,
         anchor_byte: c.sel_anchor_byte,
         image_cache: c.images,
-        base_url: text(c.base_url),
+        base_url: c.base_url,
     });
     southstar_paint::list_ordinals_end();
     layout
@@ -413,11 +385,10 @@ fn record_page_state(c: &RenderCtx) {
     USES_ACTIVE.store(uses_active, Ordering::Relaxed);
 }
 
-fn relayout(
+pub fn relayout(
     c: &RenderCtx,
-    out_layout: &mut *mut NsBox,
     mut profile: Option<&mut RenderProfile>,
-) -> Rc<StyleMap> {
+) -> (Rc<StyleMap>, Option<BoxRef<'static>>) {
     if let Some(p) = profile.as_deref_mut() {
         *p = RenderProfile::default();
     }
@@ -426,16 +397,14 @@ fn relayout(
 
     let viewport_width = c.viewport_width;
     southstar_css_media::set_base_viewport(viewport_width, c.viewport_height);
-    unsafe {
-        southstar_css::set_focus_node(Node::from_ptr(c.focused_input));
-        southstar_css::set_hover_node(Node::from_ptr(c.hover_node));
-    }
+    southstar_css::set_focus_node(c.focused_input);
+    southstar_css::set_hover_node(c.hover_node);
     record_page_state(c);
 
     let t0 = clock();
     southstar_css::set_render_zoom(c.zoom());
     let (want_cq, uses_cq_units) = containers_wanted(c);
-    let predicted = predicted_map(c.doc, viewport_width, want_cq);
+    let predicted = predicted_map(c.doc_key(), viewport_width, want_cq);
     let cache_selectors = selector_cache_wanted(c, predicted.as_ref());
     if cache_selectors {
         southstar_css::selector_cache_begin();
@@ -466,11 +435,7 @@ fn relayout(
     let mut container_sig = 0u64;
     let tc0 = clock();
     if want_cq {
-        collect_containers(
-            unsafe { BoxRef::from_ptr(layout) },
-            &mut containers,
-            Some(&mut container_sig),
-        );
+        collect_containers(layout, &mut containers, Some(&mut container_sig));
     }
     let tc1 = clock();
     let mut n_containers = containers.len();
@@ -510,9 +475,7 @@ fn relayout(
             p.style2_us += t6 - t5;
             p.layout2_us += t7 - t6;
         }
-        unsafe {
-            BoxPool::free_tree(BoxRef::from_ptr(layout));
-        }
+        BoxPool::free_tree(layout);
         layout = layout2;
         styles = styles2;
         stale = false;
@@ -520,11 +483,7 @@ fn relayout(
             containers.clear();
             let tr0 = clock();
             let mut next_sig = 0u64;
-            collect_containers(
-                unsafe { BoxRef::from_ptr(layout) },
-                &mut containers,
-                Some(&mut next_sig),
-            );
+            collect_containers(layout, &mut containers, Some(&mut next_sig));
             let tr1 = clock();
             n_containers = containers.len();
             if let Some(p) = profile.as_deref_mut() {
@@ -540,14 +499,13 @@ fn relayout(
     }
     drop(containers);
     drop(predicted);
-    remember(c.doc, viewport_width, layout, want_cq);
+    remember(c.doc_key(), viewport_width, layout, want_cq);
     if cache_selectors {
         southstar_css::selector_cache_end();
     }
     southstar_css::set_focus_node(None);
     southstar_css::set_hover_node(None);
-    *out_layout = layout;
-    styles
+    (styles, layout)
 }
 
 pub fn page_uses_hover() -> bool {
@@ -560,22 +518,4 @@ pub fn page_uses_active() -> bool {
 
 pub fn page_rule() -> Option<PageRule> {
     *lock(&PAGE_RULE)
-}
-
-pub unsafe fn ns_render_relayout_profile(
-    c: *const RenderCtx,
-    out_layout: *mut *mut NsBox,
-    profile: *mut RenderProfile,
-) -> Option<Rc<StyleMap>> {
-    let out_layout = unsafe { out_layout.as_mut() }?;
-    *out_layout = ptr::null_mut();
-    let c = unsafe { c.as_ref() }?;
-    Some(relayout(c, out_layout, unsafe { profile.as_mut() }))
-}
-
-pub unsafe fn ns_render_relayout(
-    c: *const RenderCtx,
-    out_layout: *mut *mut NsBox,
-) -> Option<Rc<StyleMap>> {
-    unsafe { ns_render_relayout_profile(c, out_layout, ptr::null_mut()) }
 }

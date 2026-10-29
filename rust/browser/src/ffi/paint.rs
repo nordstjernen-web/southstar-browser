@@ -461,7 +461,10 @@ impl NsBrowser {
     }
 
     pub fn paint_search(&self) {
-        set_search(self.search_case.get(), self.search_active.0.get());
+        set_search(
+            self.search_case.get(),
+            self.search_active.get().map_or(ptr::null(), BoxRef::as_ptr),
+        );
     }
 
     pub fn style_for(&self, node: southstar_dom::Node<'_>) -> *const Style {

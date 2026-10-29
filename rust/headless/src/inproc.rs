@@ -4,7 +4,6 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -12,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use southstar_css::StyleMap;
 use southstar_dom::{Node, WeakNode, ancestors_and_self};
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 use crate::ffi::{
     self, Anim, CssCache, Document, ImageCache, Js, NavigationTiming, PrintSetup, Relayout,
@@ -118,7 +117,7 @@ pub struct Ctx {
     pub anim: Option<Anim>,
     pub css_cache: CssCache,
     pub styles: RefCell<Option<Rc<StyleMap>>>,
-    pub layout: Cell<*mut NsBox>,
+    pub layout: Cell<Option<BoxRef<'static>>>,
     pub focused: Cell<Option<WeakNode>>,
     pub caret: Cell<usize>,
     pub anchor: Cell<usize>,
@@ -131,7 +130,7 @@ impl Ctx {
     }
 
     pub fn layout(&self) -> Option<BoxRef<'_>> {
-        ffi::box_from_ptr(self.layout.get())
+        self.layout.get()
     }
 
     pub fn focused(&self) -> Option<Node<'_>> {
@@ -157,12 +156,10 @@ pub fn relayout(c: &Ctx) {
     if std::env::var_os("NS_ANIM_DEBUG").is_some() {
         err(b"[anim] headless_relayout\n");
     }
-    if let (Some(js), false) = (c.js, c.layout.get().is_null()) {
+    if let (Some(js), false) = (c.js, c.layout.get().is_none()) {
         js.clear_layout_root();
     }
-    if !c.layout.get().is_null() {
-        ffi::free_layout(c.layout.replace(ptr::null_mut()));
-    }
+    ffi::free_layout(c.layout.take());
     if let (Some(js), true) = (c.js, c.styles.borrow().is_some()) {
         js.set_style_table(None);
     }
@@ -189,7 +186,7 @@ pub fn flush_layout(c: &Ctx) {
         return;
     };
     let mutated = ffi::consume_mutated(Some(js));
-    let dirty = c.layout.get().is_null()
+    let dirty = c.layout.get().is_none()
         || mutated
         || LAYOUT_DIRTY.load(Ordering::Relaxed)
         || STYLES_STALE.load(Ordering::Relaxed);
@@ -686,7 +683,7 @@ pub fn run_one(
         anim,
         css_cache,
         styles: RefCell::new(Some(styles)),
-        layout: Cell::new(ptr::null_mut()),
+        layout: Cell::new(None),
         focused: Cell::new(None),
         caret: Cell::new(0),
         anchor: Cell::new(0),
@@ -738,9 +735,7 @@ pub fn run_one(
             // SAFETY: this page's run is over: script and the layout flush were detached above and the next page creates its own engine.
             unsafe { anim.free() };
         }
-        if !ctx.layout.get().is_null() {
-            ffi::free_layout(ctx.layout.get());
-        }
+        ffi::free_layout(ctx.layout.take());
         drop(ctx.styles.take());
         css_cache.free();
         if let Some(js) = js {
@@ -876,9 +871,7 @@ pub fn run_one(
         js.clear_layout_root();
         js.set_style_table(None);
     }
-    if !ctx.layout.get().is_null() {
-        ffi::free_layout(ctx.layout.get());
-    }
+    ffi::free_layout(ctx.layout.take());
     drop(styles);
     drop(ctx.styles.take());
     css_cache.free();

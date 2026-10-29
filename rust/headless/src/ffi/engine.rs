@@ -11,7 +11,7 @@ use std::rc::Rc;
 use southstar_css::StyleMap;
 use southstar_dom::{Node, Tree};
 use southstar_engine::Page;
-use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef};
 
 pub use southstar_engine::{CssCache, PrintSetup};
 
@@ -208,7 +208,7 @@ pub struct Relayout<'a> {
     pub anchor: usize,
 }
 
-pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
+pub fn relayout(r: &Relayout, layout: &Cell<Option<BoxRef<'static>>>) -> Option<Rc<StyleMap>> {
     let req = southstar_engine::Relayout {
         page: Page {
             doc: r.doc,
@@ -225,14 +225,14 @@ pub fn relayout(r: &Relayout, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>>
         caret_byte: r.caret,
         sel_anchor_byte: r.anchor,
     };
-    // SAFETY: the layout slot holds null or a box of this thread's layout store.
-    unsafe { southstar_engine::relayout(&req, layout) }
+    southstar_engine::relayout(&req, layout)
 }
 
-pub fn free_layout(layout: *mut NsBox) {
-    southstar_paint::invalidate_3d();
-    // SAFETY: the run passes its own layout tree, which nothing reads after this.
-    BoxPool::free_tree(unsafe { BoxRef::from_ptr(layout) });
+pub fn free_layout(layout: Option<BoxRef<'static>>) {
+    if layout.is_some() {
+        southstar_paint::invalidate_3d();
+        BoxPool::free_tree(layout);
+    }
 }
 
 pub fn fetch_images(root: Option<BoxRef<'_>>, base: Option<&CStr>, cache: Option<ImageCache>) {

@@ -8,7 +8,7 @@ mod net;
 
 use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -18,7 +18,7 @@ use southstar_anim::AnimHandle;
 use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_glib as glib;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::BoxRef;
 
 pub use css::{
     CssScope, SheetList, is_self_contained, layout_frame_viewport, layout_frame_viewport_raw,
@@ -300,22 +300,21 @@ pub struct Relayout<'a> {
     pub sel_anchor_byte: usize,
 }
 
-/// # Safety
-///
-/// `layout` holds null or a box of this thread's layout store.
-pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<Rc<StyleMap>> {
+pub fn relayout(
+    req: &Relayout<'_>,
+    layout: &Cell<Option<BoxRef<'static>>>,
+) -> Option<Rc<StyleMap>> {
     let viewport_width = req.viewport_width;
     let js = req.js;
-    let out_layout = layout.as_ptr();
     let r = css::Relayout {
-        doc: req.page.doc.map_or(ptr::null_mut(), Node::as_mut_ptr),
+        doc: req.page.doc,
         base: req.page.base,
         viewport_width,
         viewport_height: req.viewport_height,
         images: req.images,
         anim: req.anim,
-        focused: Node::ptr_or_null(req.focused),
-        hover: Node::ptr_or_null(req.hover),
+        focused: req.focused,
+        hover: req.hover,
         caret_byte: req.caret_byte,
         sel_anchor_byte: req.sel_anchor_byte,
     };
@@ -325,25 +324,28 @@ pub unsafe fn relayout(req: &Relayout<'_>, layout: &Cell<*mut NsBox>) -> Option<
     let mut sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
     let ctx = css::render_ctx(&r, &sheets);
     let t0 = monotonic_us();
-    let mut styles = if profile_enabled() {
-        css::render_relayout_profiled(&ctx, out_layout, viewport_width)
+    let (mut styles, root) = if profile_enabled() {
+        css::render_relayout_profiled(&ctx, viewport_width)
     } else {
-        css::render_relayout(&ctx, out_layout)
+        css::render_relayout(&ctx)
     };
-    css::publish_to_page(js, styles.as_ref(), layout);
+    layout.set(root);
+    css::publish_to_page(js, Some(&styles), root);
     if crate::styles::frame_viewports_disagree_with_layout() {
-        css::discard_layout(js, styles, layout);
+        css::discard_layout(js, Some(styles), layout);
         drop(sheets);
         scope.cache_begin();
         sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
         let ctx = css::render_ctx(&r, &sheets);
-        styles = css::render_relayout(&ctx, out_layout);
-        css::publish_to_page(js, styles.as_ref(), layout);
+        let root;
+        (styles, root) = css::render_relayout(&ctx);
+        layout.set(root);
+        css::publish_to_page(js, Some(&styles), root);
     }
     crate::styles::add_relayout(monotonic_us() - t0);
-    css::log_relayout(styles.as_deref(), viewport_width);
+    css::log_relayout(Some(&styles), viewport_width);
     drop(sheets);
-    styles
+    Some(styles)
 }
 
 fn profile_enabled() -> bool {

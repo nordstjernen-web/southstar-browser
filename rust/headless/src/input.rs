@@ -366,7 +366,7 @@ fn seed_drag_data(fc: &Ctx, session: &ffi::DragSession, source: Node) {
 }
 
 fn drag(fc: &Ctx, (x0, y0): (f64, f64), (x1, y1): (f64, f64)) {
-    let (Some(js), false) = (fc.js, fc.layout.get().is_null()) else {
+    let (Some(js), false) = (fc.js, fc.layout.get().is_none()) else {
         return;
     };
     let Some(source) = drag_source(fc, x0, y0) else {

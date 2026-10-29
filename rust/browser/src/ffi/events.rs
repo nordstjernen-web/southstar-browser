@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_long, c_uint};
-use core::ptr;
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
@@ -449,16 +448,14 @@ impl NsBrowser {
     }
 
     pub fn sb_box(&self) -> Option<BoxRef<'_>> {
-        unsafe { BoxRef::from_ptr(self.sb_box.0.get()) }
+        self.sb_box.get()
     }
 
     pub fn set_sb_box(&self, b: Option<BoxRef<'_>>) {
-        self.sb_box
-            .0
-            .set(b.map_or(ptr::null_mut(), |b| b.as_ptr().cast_mut()));
+        self.sb_box.set(b);
     }
 
     pub fn search_active_y(&self) -> Option<f64> {
-        unsafe { BoxRef::from_ptr(self.search_active.0.get()) }.map(BoxRef::y)
+        self.search_active.get().map(BoxRef::y)
     }
 }

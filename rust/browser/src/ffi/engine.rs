@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use southstar_css::StyleMap;
 use southstar_dom::Node;
-use southstar_layout::{BoxPool, BoxRef, NsBox, Style};
+use southstar_layout::{BoxRef, Style};
 
 use super::glib::StrBufOwned;
 use super::{Js, NsBrowser};
@@ -40,8 +40,7 @@ impl NsBrowser {
             caret_byte: self.caret_byte.get(),
             sel_anchor_byte: self.sel_anchor_byte.get(),
         };
-        // SAFETY: the layout slot holds null or a box of this thread's layout store.
-        let styles = unsafe { southstar_engine::relayout(&relayout, &self.layout.0) };
+        let styles = southstar_engine::relayout(&relayout, &self.layout);
         self.styles.replace(styles);
     }
 
@@ -76,11 +75,6 @@ impl NsBrowser {
     pub fn set_open_select_for_layout(&self) {
         southstar_layout_build::set_open_select(self.open_select.get());
     }
-}
-
-pub unsafe fn box_free(b: *mut NsBox) {
-    // SAFETY: the caller hands over null or a layout tree it owns and no longer reads.
-    BoxPool::free_tree(unsafe { BoxRef::from_ptr(b) });
 }
 
 pub use southstar_engine::in_blocking_fetch as engine_in_blocking_fetch;
