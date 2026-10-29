@@ -29,6 +29,14 @@ Southstar Browser 1.0.4-dev:
   syntax no longer slips through. The css, forms, js-forms and
   extensions crates drop their GRegex bindings; forms is now free of
   `unsafe`.
+* Port: the headless runner no longer calls the C library to print and
+  to parse its scripted actions. `printf`/`putchar`/`fflush` give way to
+  `southstar_glib::stdout_write`/`stdout_flush` (one C-runtime stream
+  writer on Windows, shared with `stderr_write` and the shell's
+  `--print-config`, and `std::io` elsewhere), and the six `sscanf` calls
+  that read click points, sizes, drags and holds are a small Rust
+  scanner. headless drops from 26 to 16 `unsafe` keywords and from 12 to
+  8 C imports, the shell by 2 of each.
 * Port: a page's layout tree is held as a `BoxRef` everywhere instead of
   a raw `*mut NsBox`: `layout_build` and the render pipeline return
   one, the window keeps its layout, scrollbar and find-in-page boxes in

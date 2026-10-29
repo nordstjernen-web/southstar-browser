@@ -222,11 +222,43 @@ pub unsafe fn slice<'a>(p: *const u8, len: usize) -> &'a [u8] {
 unsafe extern "C" {
     fn __acrt_iob_func(index: c_uint) -> *mut c_void;
     fn fwrite(data: *const c_void, size: usize, count: usize, stream: *mut c_void) -> usize;
+    fn fflush(stream: *mut c_void) -> c_int;
+}
+
+#[cfg(windows)]
+fn crt_write(stream_index: c_uint, bytes: &[u8]) {
+    // SAFETY: indices 1 and 2 name the C runtime's stdout and stderr streams, which stay valid for the process.
+    let stream = unsafe { __acrt_iob_func(stream_index) };
+    // SAFETY: the pointer and length describe `bytes`, which outlives the call, and `stream` is an open stream.
+    unsafe { fwrite(bytes.as_ptr().cast(), 1, bytes.len(), stream) };
 }
 
 #[cfg(windows)]
 pub fn stderr_write(bytes: &[u8]) {
-    unsafe { fwrite(bytes.as_ptr().cast(), 1, bytes.len(), __acrt_iob_func(2)) };
+    crt_write(2, bytes);
+}
+
+#[cfg(windows)]
+pub fn stdout_write(bytes: &[u8]) {
+    crt_write(1, bytes);
+}
+
+#[cfg(windows)]
+pub fn stdout_flush() {
+    // SAFETY: a null stream asks the C runtime to flush every open output stream.
+    unsafe { fflush(ptr::null_mut()) };
+}
+
+#[cfg(not(windows))]
+pub fn stdout_write(bytes: &[u8]) {
+    use std::io::Write;
+    let _ = std::io::stdout().write_all(bytes);
+}
+
+#[cfg(not(windows))]
+pub fn stdout_flush() {
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
 }
 
 #[cfg(not(windows))]
