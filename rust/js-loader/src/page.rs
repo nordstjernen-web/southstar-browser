@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 
 use southstar_dom::{Node, WeakNode};
 
@@ -22,6 +23,7 @@ pub(crate) struct Page {
     pub module_load_bytes: usize,
     pub module_load_capped: bool,
     pub lifecycle_tasks: Option<Vec<Task<'static>>>,
+    pub prefetched: HashSet<Vec<u8>>,
 }
 
 thread_local! {

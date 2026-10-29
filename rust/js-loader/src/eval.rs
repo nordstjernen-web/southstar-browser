@@ -210,6 +210,7 @@ pub(crate) fn compile_module_cached(
     src: &[u8],
     name: &[u8],
 ) -> Result<Value, Value> {
+    crate::prefetch::imports(scope, src, name);
     if let Some(cached) = compile::cached_module(scope, name, src) {
         return cached;
     }

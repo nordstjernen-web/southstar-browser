@@ -11,6 +11,7 @@ pub(crate) mod ffi;
 mod hold;
 mod import_map;
 mod page;
+mod prefetch;
 mod scan;
 mod schedule;
 
