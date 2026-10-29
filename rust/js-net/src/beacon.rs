@@ -45,6 +45,14 @@ fn payload(scope: &mut Scope<'_>, data: &Value) -> Option<Payload> {
     Some(Payload { body, content_type })
 }
 
+fn beacon_allowed(js: Js, page: Option<&[u8]>, url: &[u8], content_type: Option<&[u8]>) -> bool {
+    let mixed = page.is_some_and(|page| crate::ascii_starts_with(page, b"https://"))
+        && crate::ascii_starts_with(url, b"http://");
+    let needs_preflight = !ffi::url_same_origin(page, Some(url))
+        && crate::preflight::needed(b"POST", content_type, &[]).is_some();
+    !mixed && !needs_preflight && js.csp_allows_connect(url, page)
+}
+
 pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
     let Some(url) = args.first().filter(|url| url.is_string()) else {
         return Ok(Value::boolean(false));
@@ -71,6 +79,14 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
         Some(payload) => (true, payload.body, payload.content_type),
         None => (false, Vec::new(), None),
     };
+    if !beacon_allowed(
+        Js::of(scope),
+        page.as_deref(),
+        &url,
+        content_type.as_deref(),
+    ) {
+        return Ok(Value::boolean(false));
+    }
     let request = ffi::Request {
         url: ffi::cstring(&url),
         top: page.as_deref().map(ffi::cstring),

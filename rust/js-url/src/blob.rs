@@ -81,7 +81,9 @@ pub(crate) fn update_object_url(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     let Ok(url) = scope.to_bytes(&url) else {
         return Ok(Value::boolean(false));
     };
-    if !url.starts_with(b"blob:") {
+    let origin = ffi::document_origin(scope, js).filter(|o| !o.is_empty());
+    let own_prefix = [b"blob:", origin.as_deref().unwrap_or(b"null"), b"/"].concat();
+    if !url.starts_with(&own_prefix) {
         return Ok(Value::boolean(false));
     }
     register(scope, js, &url, &object);
