@@ -67,6 +67,30 @@ fn parses_http_dates() {
 }
 
 #[test]
+fn parses_iso8601_dates() {
+    assert_eq!(http_date::parse_iso8601(b"1970-01-01T00:00:00Z"), Some(0));
+    assert_eq!(
+        http_date::parse_iso8601(b"1994-11-06T08:49:37Z"),
+        Some(784_111_777)
+    );
+    assert_eq!(
+        http_date::parse_iso8601(b"1994-11-06T09:49:37.250+01:00"),
+        Some(784_111_777)
+    );
+    assert_eq!(
+        http_date::parse_iso8601(b"1994-11-06 03:49:37-0500"),
+        Some(784_111_777)
+    );
+    assert_eq!(http_date::parse_iso8601(b"1994-11-06T08:49:37"), None);
+    assert_eq!(http_date::parse_iso8601(b"1994-13-06T08:49:37Z"), None);
+    assert_eq!(http_date::parse_iso8601(b"1994-11-06T08:49:37Zjunk"), None);
+    assert_eq!(
+        http_date::parse_iso8601(b"Sun, 06 Nov 1994 08:49:37 GMT"),
+        None
+    );
+}
+
+#[test]
 fn stores_and_sends_cookies() {
     let jar = store_all(
         "https://www.example.com/docs/page",

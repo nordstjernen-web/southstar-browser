@@ -11,6 +11,7 @@ publish.workspace = true
 southstar-config = { path = "../config" }
 southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
+southstar-netstore = { path = "../netstore" }
 southstar-sqlite = { path = "../sqlite" }
 southstar-url = { path = "../url" }
 
