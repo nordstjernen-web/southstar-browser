@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: activating a `javascript:` link (a click or `click()`) now
+  runs its code only where it belongs. In the page's own document it
+  obeys the Content-Security-Policy, so a policy without
+  `'unsafe-inline'` blocks it as it blocks inline event handlers; before,
+  injected `<a href="javascript:…">` markup ran regardless of
+  `script-src`. A link inside an iframe runs in that frame's realm, and
+  not at all when the frame is sandboxed without `allow-scripts`; before,
+  the code was handed to the page's current realm whichever document the
+  link was in.
 * Security: downloads that wait for the user's Save before they are
   written now cover the rest of the file types the desktop runs or
   installs on a double click: Control Panel items, MMC consoles, Windows

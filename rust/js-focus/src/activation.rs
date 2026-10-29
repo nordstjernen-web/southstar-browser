@@ -122,6 +122,21 @@ fn follow_in_iframe(scope: &mut Scope<'_>, el: Element, href: &[u8]) -> bool {
     true
 }
 
+fn run_javascript_url(js: Js, act: Element, code: &[u8]) {
+    match ancestors(act).find(|&p| named(p, "iframe")) {
+        None => {
+            if js.inline_scripts_allowed() {
+                js.eval_source(code, c"javascript-url");
+            }
+        }
+        Some(iframe) => {
+            if !ffi::frame_sandbox_blocks_scripts(act) {
+                js.eval_in_frame(iframe, code, c"javascript-url");
+            }
+        }
+    }
+}
+
 fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
     let href = act.attr(c"href").map(|h| h.to_bytes().to_vec());
     if let Some(code) = href
@@ -129,7 +144,7 @@ fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
         .and_then(|h| h.strip_prefix(JAVASCRIPT_SCHEME))
     {
         let code = ffi::uri_unescape(code).unwrap_or_else(|| code.to_vec());
-        js.eval_source(&code, c"javascript-url");
+        run_javascript_url(js, act, &code);
         return;
     }
     let href = href.unwrap_or_default();
