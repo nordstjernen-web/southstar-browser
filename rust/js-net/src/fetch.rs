@@ -252,14 +252,6 @@ fn url_source(scope: &mut Scope<'_>, input: &Value) -> Value {
     input.clone()
 }
 
-fn base_url(scope: &Scope<'_>, js: Js) -> Option<Vec<u8>> {
-    let realm = Realm::of(scope);
-    if js.is_null() || realm == js.main_context() {
-        return None;
-    }
-    js.realm_url(realm)
-}
-
 fn reject_with_abort(scope: &mut Scope<'_>, reject: &Value, signal: Option<&Value>) {
     let mut reason = signal
         .filter(|s| s.is_object())
@@ -334,7 +326,6 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     let mut method: Option<Vec<u8>> = None;
     let mut body: Option<Vec<u8>> = None;
     let mut content_type: Option<Vec<u8>> = None;
-    let base = base_url(scope, js);
     let mut extras: Vec<Vec<u8>> = Vec::new();
     let init_has_headers = init.is_some_and(|init| has_prop(scope, init, "headers"));
     if input.is_object() {
@@ -386,8 +377,9 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     if body.is_some() && content_type.is_none() {
         content_type = Some(b"text/plain;charset=UTF-8".to_vec());
     }
-    let top = base.filter(|b| !b.is_empty()).or_else(|| js.page_url());
     let csp_realm = Realm::caller(scope);
+    let top = js.document_url(csp_realm);
+    let partition = js.partition_url();
     let mut state = FetchState {
         realm: Realm::of(scope),
         csp_realm,
@@ -487,7 +479,8 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     let request = Request {
         url: cstring(&send_url),
-        top: top.as_deref().map(cstring),
+        top: partition.as_deref().map(cstring),
+        document: top.as_deref().map(cstring),
         method: cstring(&use_method),
         has_body: body.is_some(),
         body: body.unwrap_or_default(),
@@ -498,7 +491,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     if let Some(worker) = js.service_worker_for(&send_url) {
         worker.post_fetch(id, &request);
         let fallback = Request {
-            top: Some(cstring(top.as_deref().unwrap_or_default())),
+            top: Some(cstring(partition.as_deref().unwrap_or_default())),
             has_body: request.has_body && !request.body.is_empty(),
             ..request
         };
@@ -532,7 +525,11 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         done(Ticket { js, id }, resp, None);
         return Ok(promise);
     }
-    let check = preflight.request(&request.url, request.top.as_ref());
+    let check = preflight.request(
+        &request.url,
+        request.top.as_ref(),
+        request.document.as_ref(),
+    );
     check.send(cancellable.clone().as_ref(), move |resp, _error| {
         if preflight.passed(&resp, top.as_deref(), request.url.as_bytes()) {
             request.send(cancellable.as_ref(), move |resp, error| {
@@ -690,7 +687,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
     }
     let init = scope.new_object();
     if allow {
-        let same_origin = ffi::url_same_origin(js.page_url().as_deref(), final_url.as_deref());
+        let same_origin = ffi::url_same_origin(origin_url.as_deref(), final_url.as_deref());
         let raw = if same_origin {
             resp.raw_headers()
         } else {

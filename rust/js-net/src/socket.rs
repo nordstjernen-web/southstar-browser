@@ -369,8 +369,8 @@ fn replace_prefix(url: &[u8], prefix: &[u8], with: &[u8]) -> Option<Vec<u8>> {
     })
 }
 
-fn page_origin(js: Js) -> Option<Vec<u8>> {
-    let page = js.page_url()?;
+fn page_origin(js: Js, realm: Realm) -> Option<Vec<u8>> {
+    let page = js.document_url(realm)?;
     (crate::ascii_starts_with(&page, b"http://") || crate::ascii_starts_with(&page, b"https://"))
         .then(|| ffi::url_origin_from(Some(&page)))
         .flatten()
@@ -472,10 +472,10 @@ pub(crate) fn websocket_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value
     let listeners = scope.new_array();
     set(scope, &wrapper, "_listeners", listeners);
     ffi::bind_event_target(scope, &wrapper);
-    let origin = page_origin(js)
+    let origin = page_origin(js, Realm::caller(scope))
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
-    let top_url = js.page_url();
+    let top_url = js.partition_url();
     let transport = Transport::websocket(
         &target,
         &origin,
@@ -553,7 +553,7 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     let listeners = scope.new_array();
     set(scope, &wrapper, "_listeners", listeners);
     ffi::bind_event_target(scope, &wrapper);
-    let origin = page_origin(js)
+    let origin = page_origin(js, Realm::caller(scope))
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
     let allow_url = js.connect_check(Realm::caller(scope));

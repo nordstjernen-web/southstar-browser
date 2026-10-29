@@ -124,7 +124,12 @@ fn header_value(raw: &[u8], name: &[u8]) -> Vec<u8> {
 }
 
 impl Preflight {
-    pub(crate) fn request(&self, url: &CString, top: Option<&CString>) -> Request {
+    pub(crate) fn request(
+        &self,
+        url: &CString,
+        top: Option<&CString>,
+        document: Option<&CString>,
+    ) -> Request {
         let mut lines = vec![[&b"Access-Control-Request-Method: "[..], &self.method].concat()];
         if !self.header_names.is_empty() {
             lines.push(
@@ -138,6 +143,7 @@ impl Preflight {
         Request {
             url: url.clone(),
             top: top.cloned(),
+            document: document.cloned(),
             method: cstring(b"OPTIONS"),
             body: Vec::new(),
             has_body: false,

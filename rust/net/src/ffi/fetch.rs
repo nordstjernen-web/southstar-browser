@@ -357,19 +357,22 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let vary_language = [b"Accept-Language: ", &language[..]].concat();
     let vary_agent = [b"User-Agent: ", &ua[..]].concat();
     let initiator = request::site_initiator(is_navigation, f.headers, f.top_url);
+    let document = request::requesting_document(f.headers, f.top_url);
     let initiator_origin = if is_navigation {
         initiator.and_then(url::origin_from)
     } else {
-        top_origin.clone()
+        document
+            .and_then(url::origin_from)
+            .or_else(|| top_origin.clone())
     };
-    let origin_top = if is_navigation { None } else { f.top_url };
+    let origin_top = if is_navigation { None } else { document };
     let request_origin =
         request::request_origin(&url, origin_top, initiator_origin.as_deref(), f.method);
     let vary_origin = [b"Origin: ", request_origin].concat();
     let cache_headers: [&[u8]; 4] = [&vary_accept, &vary_language, &vary_agent, &vary_origin];
 
     let cookies_allowed = request_http
-        && request::credentials_permit(f.headers, &url, f.top_url)
+        && request::credentials_permit(f.headers, &url, document)
         && credentials::cookies_allowed(&url, f.top_url, &partition);
     let cookie_jar = if cookies_allowed {
         storage::cookie_jar_path(Some(&partition), false)
@@ -388,7 +391,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
                 || entry
                     .final_url
                     .as_deref()
-                    .is_some_and(|fu| url::same_origin(effective_top, fu));
+                    .is_some_and(|fu| url::same_origin(document.unwrap_or(effective_top), fu));
             if has_cors {
                 return Ok(Response::from_cache(entry));
             }
@@ -397,7 +400,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     }
 
     let referer_policy = cfg.map_or(REFERER_STRICT_ORIGIN_WHEN_CROSS, |c| c.referer_policy);
-    let referer = url::referer_for(Some(&url), f.top_url, referer_policy);
+    let referer = url::referer_for(Some(&url), document, referer_policy);
     let _slot = match url::origin_from(&url) {
         Some(origin) => {
             if !transport::acquire_origin_slot(&origin, || is_cancelled(f.cancellable)) {
