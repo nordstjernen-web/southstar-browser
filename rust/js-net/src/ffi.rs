@@ -243,6 +243,7 @@ impl Transport {
     pub fn websocket(
         url: &[u8],
         origin: &[u8],
+        top_url: Option<&[u8]>,
         protocols: Option<&[Vec<u8>]>,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
@@ -262,6 +263,7 @@ impl Transport {
         Transport::WebSocket(southstar_websocket::WebSocket::open(
             crate::until_nul(url.to_vec()).as_slice(),
             Some(crate::until_nul(origin.to_vec()).as_slice()),
+            top_url,
             protocols,
             events,
             socket_addr(socket),

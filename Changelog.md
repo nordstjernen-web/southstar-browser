@@ -32,6 +32,26 @@ Southstar Browser 1.0.4-dev:
   every script and session on every site. Those requests now keep
   failing, and a connection made without verification is never kept in
   the HTTP/2 pool for later requests.
+* WebSocket: the opening handshake sends the page's cookies and stores
+  the cookies its response sets, under the same cookie policy, partition
+  and SameSite rules as a subresource fetch (`southstar_net::credentials`).
+  The HTTP/1.1 upgrade request dropped the `Cookie` field and the
+  WebSocket client never filled it, so servers that authenticate the
+  socket by session cookie rejected every connection: chess.com's live
+  server answered each subscription with 401 and the page reported
+  "You have been disconnected", so no live game could start.
+* Web Storage: `sessionStorage` survives navigations within a tab, and
+  `localStorage` writes are visible to the next page at once. Each
+  document got a fresh storage object, so session items were lost on
+  every navigation, and local items reached the next page only through
+  the disk flush, which runs on a one-second timer and after the next
+  page had already loaded (in private mode, never). The areas now live
+  in the renderer, per partition and per origin, and each page holds
+  them.
+* Headless: a followed navigation is always resolved against the page
+  URL. A relative URL whose query held an absolute one
+  (`/guest/login?returnUrl=https://…`) was taken for absolute and failed
+  to load.
 * Port: the GLib monotonic clock and message log are reached through two
   safe functions in `rust/glib` (`monotonic_us`, `log`/`warning`)
   instead of every crate declaring `g_get_monotonic_time` and the

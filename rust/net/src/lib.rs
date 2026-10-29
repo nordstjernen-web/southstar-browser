@@ -8,6 +8,7 @@ mod budget;
 mod build_info;
 mod coalesce;
 mod cookies;
+pub mod credentials;
 mod data_url;
 mod error_page;
 mod ffi;

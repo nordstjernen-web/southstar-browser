@@ -14,10 +14,8 @@ use super::queue::Cancellable;
 use super::sinks::{NsHeaderCtx, NsWriteCtx};
 use crate::request::{self, DEFAULT_TIMEOUT_S, MAX_TIMEOUT_S};
 use crate::response::{Response, cstr, text as field};
-use crate::{hsts, netlog, storage, transport, url};
+use crate::{credentials, hsts, netlog, storage, transport, url};
 
-const COOKIE_FIRST_PARTY: c_int = 1;
-const COOKIE_NEVER: c_int = 2;
 const REFERER_STRICT_ORIGIN_WHEN_CROSS: c_int = 2;
 const SECURITY_SECURE: c_int = 1;
 const SECURITY_INVALID: c_int = 2;
@@ -370,18 +368,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     let vary_origin = [b"Origin: ", request_origin].concat();
     let cache_headers: [&[u8]; 4] = [&vary_accept, &vary_language, &vary_agent, &vary_origin];
 
-    let cookie_policy = cfg.map_or(COOKIE_FIRST_PARTY, |c| c.cookie_policy);
-    let mut cookies_allowed = request_http && cookie_policy != COOKIE_NEVER;
-    if cookies_allowed
-        && cookie_policy == COOKIE_FIRST_PARTY
-        && f.top_url.is_some()
-        && !url::is_same_site(&url, effective_top)
-    {
-        cookies_allowed = false;
-    }
-    if partition.is_empty() {
-        cookies_allowed = false;
-    }
+    let cookies_allowed = request_http && credentials::cookies_allowed(&url, f.top_url, &partition);
     let cookie_jar = if cookies_allowed {
         storage::cookie_jar_path(Some(&partition), false)
     } else {

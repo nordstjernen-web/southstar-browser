@@ -28,6 +28,7 @@ pub struct Events {
 
 struct Socket {
     shared: Shared,
+    top_url: Option<Vec<u8>>,
     events: Events,
     data: usize,
 }
@@ -161,6 +162,8 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
             .concat(),
         );
     }
+    let credentials =
+        southstar_net::credentials::for_subresource(&http_url, socket.top_url.as_deref());
     let route = southstar_net::route::route(&http_url, &target.host);
     let request = Request {
         url: &http_url,
@@ -172,7 +175,7 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
         method: b"GET",
         user_agent: Some(southstar_net::route::user_agent()),
         referer: None,
-        cookie: None,
+        cookie: credentials.as_ref().and_then(|c| c.cookie_header()),
         extra_headers: lines.iter().map(Vec::as_slice).collect(),
         body: b"",
         timeout: Duration::MAX,
@@ -183,6 +186,13 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
     };
     let mut stream =
         southstar_http::upgrade(&request, &|| shared.exiting()).map_err(String::into_bytes)?;
+    if let Some(credentials) = &credentials {
+        stream
+            .headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case(b"set-cookie"))
+            .for_each(|(_, value)| credentials.store(value));
+    }
     if stream.status != 101 {
         return Err(format!("WebSocket handshake failed (HTTP {})", stream.status).into_bytes());
     }
@@ -321,12 +331,14 @@ impl WebSocket {
     pub fn open(
         url: &[u8],
         origin: Option<&[u8]>,
+        top_url: Option<&[u8]>,
         protocols: Vec<Vec<u8>>,
         events: Events,
         data: usize,
     ) -> WebSocket {
         let socket = Arc::new(Socket {
             shared: Shared::new(url.to_vec(), origin.map(<[u8]>::to_vec), protocols),
+            top_url: top_url.map(<[u8]>::to_vec),
             events,
             data,
         });

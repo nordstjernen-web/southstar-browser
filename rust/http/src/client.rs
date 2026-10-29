@@ -1390,10 +1390,13 @@ pub fn upgrade(req: &Request, abort: &dyn Fn() -> bool) -> Result<Upgraded, Stri
     })
 }
 
-fn h1_head_upgrade(req: &Request) -> Vec<u8> {
+pub(crate) fn h1_head_upgrade(req: &Request) -> Vec<u8> {
     let mut fields: Vec<(&[u8], &[u8])> = Vec::new();
     if let Some(ua) = req.user_agent {
         fields.push((b"User-Agent", ua));
+    }
+    if let Some(cookie) = req.cookie.as_deref().filter(|c| !c.is_empty()) {
+        fields.push((b"Cookie", cookie));
     }
     let forward = forward_proxy(req);
     let auth = forward
