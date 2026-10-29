@@ -1,4 +1,4 @@
-//! Southstar — parsing the dates HTTP headers and cookies carry (RFC 1123, RFC 850, asctime and the looser forms servers send) into seconds since the epoch, with the rules curl_getdate applied.
+//! Southstar — parsing the dates HTTP headers and cookies carry (RFC 1123, RFC 850, asctime, ISO 8601 and the looser forms servers send) into seconds since the epoch, with the rules curl_getdate applied.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -237,4 +237,71 @@ pub fn parse(text: &[u8]) -> Option<i64> {
     let days = days_from_civil(year, month, day);
     let local = days * 86_400 + hour * 3600 + minute * 60 + second;
     Some(local - offset.unwrap_or(0))
+}
+
+fn fixed(s: &[u8], at: usize, len: usize) -> Option<(i64, usize)> {
+    let field = s.get(at..at + len)?;
+    field.iter().all(u8::is_ascii_digit).then(|| {
+        let value = field
+            .iter()
+            .fold(0i64, |v, &d| v * 10 + i64::from(d - b'0'));
+        (value, at + len)
+    })
+}
+
+fn expect(s: &[u8], at: usize, byte: u8) -> Option<usize> {
+    (s.get(at) == Some(&byte)).then_some(at + 1)
+}
+
+fn iso_offset(s: &[u8], at: usize) -> Option<(i64, usize)> {
+    match s.get(at)? {
+        b'Z' | b'z' => Some((0, at + 1)),
+        &sign @ (b'+' | b'-') => {
+            let (hours, mut p) = fixed(s, at + 1, 2)?;
+            let mut minutes = 0;
+            if let Some(q) = expect(s, p, b':') {
+                (minutes, p) = fixed(s, q, 2)?;
+            } else if let Some((m, q)) = fixed(s, p, 2) {
+                (minutes, p) = (m, q);
+            }
+            if hours > 23 || minutes > 59 {
+                return None;
+            }
+            let seconds = hours * 3600 + minutes * 60;
+            Some((if sign == b'-' { -seconds } else { seconds }, p))
+        }
+        _ => None,
+    }
+}
+
+pub fn parse_iso8601(text: &[u8]) -> Option<i64> {
+    let (year, p) = fixed(text, 0, 4)?;
+    let (month, p) = fixed(text, expect(text, p, b'-')?, 2)?;
+    let (day, p) = fixed(text, expect(text, p, b'-')?, 2)?;
+    let p = match text.get(p)? {
+        b'T' | b't' | b' ' => p + 1,
+        _ => return None,
+    };
+    let (hour, p) = fixed(text, p, 2)?;
+    let (minute, p) = fixed(text, expect(text, p, b':')?, 2)?;
+    let (second, mut p) = fixed(text, expect(text, p, b':')?, 2)?;
+    if let Some(q) = expect(text, p, b'.').or_else(|| expect(text, p, b',')) {
+        let digits = text[q..].iter().take_while(|c| c.is_ascii_digit()).count();
+        if digits == 0 {
+            return None;
+        }
+        p = q + digits;
+    }
+    let (offset, p) = iso_offset(text, p)?;
+    if p != text.len()
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 60
+    {
+        return None;
+    }
+    let days = days_from_civil(year, month, day);
+    Some(days * 86_400 + hour * 3600 + minute * 60 + second - offset)
 }

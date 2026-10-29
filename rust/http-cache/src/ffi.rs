@@ -2,43 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::path::PathBuf;
 
 use southstar_config::util as fs;
 use southstar_glib as glib;
-
-#[repr(C)]
-struct GDateTime {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct GTimeZone {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    fn g_date_time_new_from_iso8601(
-        text: *const c_char,
-        default_tz: *mut GTimeZone,
-    ) -> *mut GDateTime;
-    fn g_date_time_new(
-        tz: *mut GTimeZone,
-        year: c_int,
-        month: c_int,
-        day: c_int,
-        hour: c_int,
-        minute: c_int,
-        seconds: f64,
-    ) -> *mut GDateTime;
-    fn g_date_time_to_unix(datetime: *mut GDateTime) -> i64;
-    fn g_date_time_unref(datetime: *mut GDateTime);
-    fn g_time_zone_new_utc() -> *mut GTimeZone;
-    fn g_time_zone_unref(tz: *mut GTimeZone);
-    fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
-}
+use southstar_netstore::http_date;
 
 pub(crate) fn warn(message: &[u8]) {
     southstar_glib::warning(message);
@@ -261,116 +229,11 @@ pub(crate) fn ascii_strtoll(text: &[u8]) -> i64 {
     fs::ascii_strtoll(text).unwrap_or(0)
 }
 
-fn month_from_name(m: &[u8]) -> c_int {
-    const MONTHS: [&[u8]; 12] = [
-        b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov",
-        b"Dec",
-    ];
-    MONTHS
-        .iter()
-        .position(|name| m.len() >= 3 && m[..3].eq_ignore_ascii_case(name))
-        .map_or(0, |i| i as c_int + 1)
-}
-
-fn unix_from(dt: *mut GDateTime) -> i64 {
-    if dt.is_null() {
-        return 0;
-    }
-    unsafe {
-        let r = g_date_time_to_unix(dt);
-        g_date_time_unref(dt);
-        r
-    }
-}
+const LAST_SECOND_OF_9999: i64 = 253_402_300_799;
 
 pub(crate) fn parse_http_date(text: &[u8]) -> i64 {
-    if text.is_empty() {
-        return 0;
-    }
-    let s = crate::cstring(text);
-    let iso = unsafe { g_date_time_new_from_iso8601(s.as_ptr(), ptr::null_mut()) };
-    if !iso.is_null() {
-        return unix_from(iso);
-    }
-    let bytes = s.as_bytes();
-    let mut p = bytes
-        .iter()
-        .position(|&c| c == b',')
-        .map_or(0, |comma| comma + 1);
-    while bytes.get(p) == Some(&b' ') {
-        p += 1;
-    }
-    let rest = crate::cstring(&bytes[p..]);
-    let (mut day, mut year, mut hh, mut mm, mut ss) =
-        (0 as c_int, 0 as c_int, 0 as c_int, 0 as c_int, 0 as c_int);
-    let mut mon = [0 as c_char; 4];
-    let mut sep: c_char = 0;
-    let scanned = unsafe {
-        sscanf(
-            rest.as_ptr(),
-            c"%d %3s %d %d:%d:%d".as_ptr(),
-            &mut day as *mut c_int,
-            mon.as_mut_ptr(),
-            &mut year as *mut c_int,
-            &mut hh as *mut c_int,
-            &mut mm as *mut c_int,
-            &mut ss as *mut c_int,
-        )
-    };
-    if scanned != 6 {
-        let scanned = unsafe {
-            sscanf(
-                rest.as_ptr(),
-                c"%d%c%3s%c%d %d:%d:%d".as_ptr(),
-                &mut day as *mut c_int,
-                &mut sep as *mut c_char,
-                mon.as_mut_ptr(),
-                &mut sep as *mut c_char,
-                &mut year as *mut c_int,
-                &mut hh as *mut c_int,
-                &mut mm as *mut c_int,
-                &mut ss as *mut c_int,
-            )
-        };
-        if scanned == 8 {
-            if year < 100 {
-                year += if year < 70 { 2000 } else { 1900 };
-            }
-        } else {
-            let scanned = unsafe {
-                sscanf(
-                    rest.as_ptr(),
-                    c"%3s %d %d:%d:%d %d".as_ptr(),
-                    mon.as_mut_ptr(),
-                    &mut day as *mut c_int,
-                    &mut hh as *mut c_int,
-                    &mut mm as *mut c_int,
-                    &mut ss as *mut c_int,
-                    &mut year as *mut c_int,
-                )
-            };
-            if scanned != 6 {
-                return 0;
-            }
-        }
-    }
-    let mon = unsafe { CStr::from_ptr(mon.as_ptr()) }.to_bytes();
-    let month = month_from_name(mon);
-    if month == 0 {
-        return 0;
-    }
-    if !(1970..=9999).contains(&year)
-        || !(1..=31).contains(&day)
-        || !(0..=23).contains(&hh)
-        || !(0..=59).contains(&mm)
-        || !(0..=60).contains(&ss)
-    {
-        return 0;
-    }
-    unsafe {
-        let utc = g_time_zone_new_utc();
-        let dt = g_date_time_new(utc, year, month, day, hh, mm, f64::from(ss));
-        g_time_zone_unref(utc);
-        unix_from(dt)
-    }
+    http_date::parse_iso8601(text)
+        .or_else(|| http_date::parse(text))
+        .filter(|seconds| (0..=LAST_SECOND_OF_9999).contains(seconds))
+        .unwrap_or(0)
 }

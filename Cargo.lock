@@ -2288,6 +2288,7 @@ dependencies = [
  "southstar-config",
  "southstar-digest",
  "southstar-glib",
+ "southstar-netstore",
  "southstar-sqlite",
  "southstar-url",
 ]

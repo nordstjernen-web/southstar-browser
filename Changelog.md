@@ -30,6 +30,9 @@ Southstar Browser 1.0.4-dev:
   loops, blocking fetches and single-process request retries use them
   instead of `extern "C"` trampolines that passed boxed or borrowed data
   through `*mut c_void`.
+* Port: the HTTP cache reads `Expires` dates with the pure-Rust parser
+  `rust/netstore` already uses for cookies, which gains an ISO 8601 form,
+  instead of `sscanf` and GLib's `GDateTime`.
 * Port: per-page main contexts are `rust/glib` `MainContext` handles.
   A page records the context it runs on as a counted reference instead of
   a raw `GMainContext` pointer, workers create and iterate theirs through
