@@ -475,7 +475,14 @@ pub(crate) fn websocket_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value
     let origin = page_origin(js)
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
-    let transport = Transport::websocket(&target, &origin, protocol_list.as_deref(), &socket);
+    let top_url = js.page_url();
+    let transport = Transport::websocket(
+        &target,
+        &origin,
+        top_url.as_deref(),
+        protocol_list.as_deref(),
+        &socket,
+    );
     if transport.is_none() {
         socket.pin.borrow_mut().take();
         return Err(scope.type_error("WebSocket: failed to start"));

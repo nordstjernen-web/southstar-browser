@@ -208,3 +208,33 @@ fn an_unparsable_proxy_fails_closed() {
         "bogus://p.example"
     )])));
 }
+
+#[test]
+fn an_upgrade_request_carries_its_cookies() {
+    let request = crate::client::Request {
+        url: b"https://live.example/ws",
+        https: true,
+        host: "live.example",
+        port: 443,
+        authority: b"live.example",
+        path: b"/ws",
+        method: b"GET",
+        user_agent: Some(b"UA"),
+        referer: None,
+        cookie: Some(b"session=abc; theme=dark".to_vec()),
+        extra_headers: vec![b"Upgrade: websocket"],
+        body: b"",
+        timeout: std::time::Duration::MAX,
+        connect_timeout: std::time::Duration::from_secs(1),
+        allow_insecure: false,
+        tls: crate::tls::Settings {
+            ca_bundle: None,
+            curves: Vec::new(),
+        },
+        proxy: None,
+    };
+    let head = crate::client::h1_head_upgrade(&request);
+    let text = String::from_utf8_lossy(&head);
+    assert!(text.contains("\r\nCookie: session=abc; theme=dark\r\n"));
+    assert!(text.ends_with("Connection: Upgrade\r\n\r\n"));
+}
