@@ -2,9 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::any::Any;
 use core::cell::Cell;
 use core::ffi::c_void;
 use core::ptr;
+use std::rc::Rc;
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use wasmi::{AsContextMut, Caller, StoreContextMut};
@@ -61,6 +63,7 @@ pub(crate) fn memory_buffer(
     scope: &mut Scope<'_>,
     data: *mut u8,
     len: usize,
+    store: Rc<dyn Any>,
 ) -> Result<Value, Value> {
-    unsafe { scope.external_array_buffer(data, len) }
+    unsafe { scope.external_array_buffer(data, len, Some(store)) }
 }

@@ -16,7 +16,9 @@ pub(crate) mod utils;
 #[cfg(test)]
 mod tests;
 
+use std::any::Any;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
 use aligned_vec::{ABox, AVec, ConstAlign};
 pub use shared::SharedArrayBuffer;
@@ -226,11 +228,23 @@ pub struct ArrayBuffer {
     immutable: bool,
 }
 
-/// A view of embedder-owned memory backing an `ArrayBuffer`.
-#[derive(Debug, Clone, Copy)]
+/// A view of embedder-owned memory backing an `ArrayBuffer`, with the embedder object that keeps
+/// that memory alive for as long as the view exists.
+#[derive(Clone)]
 struct ExternalBytes {
     ptr: *mut u8,
     len: usize,
+    owner: Option<Rc<dyn Any>>,
+}
+
+impl std::fmt::Debug for ExternalBytes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExternalBytes")
+            .field("ptr", &self.ptr)
+            .field("len", &self.len)
+            .field("owned", &self.owner.is_some())
+            .finish()
+    }
 }
 
 impl ArrayBuffer {
@@ -244,23 +258,29 @@ impl ArrayBuffer {
         }
     }
 
-    /// Creates a fixed-length buffer over `len` bytes of embedder memory at `ptr`.
+    /// Creates a fixed-length buffer over `len` bytes of embedder memory at `ptr`, holding `owner`
+    /// until the buffer is detached or collected.
     ///
     /// # Safety
     ///
-    /// `ptr` must be valid for reads and writes of `len` bytes until the buffer is detached.
-    pub(crate) unsafe fn from_external(ptr: *mut u8, len: usize) -> Self {
+    /// `ptr` must be valid for reads and writes of `len` bytes until the buffer is detached, or
+    /// for as long as `owner` lives when one is given.
+    pub(crate) unsafe fn from_external(
+        ptr: *mut u8,
+        len: usize,
+        owner: Option<Rc<dyn Any>>,
+    ) -> Self {
         Self {
             data: None,
             max_byte_len: None,
             detach_key: JsValue::undefined(),
-            external: Some(ExternalBytes { ptr, len }),
+            external: Some(ExternalBytes { ptr, len, owner }),
             immutable: false,
         }
     }
 
     fn external_bytes(&self) -> Option<&[u8]> {
-        let external = self.external?;
+        let external = self.external.as_ref()?;
         if external.len == 0 {
             return Some(&[]);
         }
@@ -268,7 +288,7 @@ impl ArrayBuffer {
     }
 
     fn external_bytes_mut(&mut self) -> Option<&mut [u8]> {
-        let external = self.external?;
+        let external = self.external.as_ref()?;
         if external.len == 0 {
             return Some(&mut []);
         }
@@ -276,7 +296,7 @@ impl ArrayBuffer {
     }
 
     pub(crate) fn len(&self) -> usize {
-        match self.external {
+        match &self.external {
             Some(external) => external.len,
             None => self.data.as_ref().map_or(0, AlignedVec::len),
         }
