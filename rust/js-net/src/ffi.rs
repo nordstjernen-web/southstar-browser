@@ -48,6 +48,11 @@ impl Realm {
         Realm(scope.handle())
     }
 
+    pub fn caller(scope: &mut Scope<'_>) -> Realm {
+        let js = Js::of(scope);
+        Realm(api::calling_realm(js.ptr(), scope))
+    }
+
     pub fn enter(self, f: impl FnOnce(&mut Scope<'_>)) {
         let _ = self.0.with(f);
     }
@@ -449,9 +454,9 @@ impl Js {
         api::credit_pumped_time(self.ptr(), start_us);
     }
 
-    pub fn connect_check(self, page: Option<&[u8]>) -> southstar_eventsource::UrlCheck {
-        let csp = api::with_page_csp(self.ptr(), |csp| csp.cloned());
-        let page = page.map(cstring);
+    pub fn connect_check(self, realm: Realm) -> southstar_eventsource::UrlCheck {
+        let csp = api::with_realm_csp(self.ptr(), realm.0, |csp| csp.cloned());
+        let page = self.realm_self_url(realm);
         Box::new(move |url| {
             csp.as_ref().is_none_or(|csp| {
                 csp.allows(
@@ -465,9 +470,13 @@ impl Js {
         })
     }
 
-    pub fn csp_allows_connect(self, url: &[u8], page: Option<&[u8]>) -> bool {
-        let page = page.map(cstring);
-        api::csp_allows_connect(self.ptr(), &cstring(url), page.as_deref())
+    fn realm_self_url(self, realm: Realm) -> Option<CString> {
+        api::realm_url(self.ptr(), realm.0).or_else(|| api::page_url(self.ptr()))
+    }
+
+    pub fn csp_allows_connect(self, realm: Realm, url: &[u8]) -> bool {
+        let page = self.realm_self_url(realm);
+        api::csp_allows_connect(self.ptr(), realm.0, &cstring(url), page.as_deref())
     }
 
     pub fn main_context(self) -> Realm {

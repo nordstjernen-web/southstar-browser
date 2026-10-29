@@ -90,12 +90,17 @@ pub(crate) fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
-pub(crate) fn base_uri_allowed(js: Js, url: &[u8], document_url: Option<&CStr>) -> bool {
+pub(crate) fn base_uri_allowed(
+    js: Js,
+    base: Element,
+    url: &[u8],
+    document_url: Option<&CStr>,
+) -> bool {
     if js.is_null() {
         return true;
     }
     let url = c_bytes(url);
-    api::with_page_csp(js.0, |csp| {
+    api::with_node_csp(js.0, Some(base), |csp| {
         csp.is_none_or(|csp| csp.allows(southstar_csp::BASE_URI, &url, document_url, None, true))
     })
 }

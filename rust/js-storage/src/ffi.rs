@@ -77,8 +77,8 @@ pub(crate) fn frame_realm_window(js: Js, frame: Node<'_>) -> Value {
     (api::frames_hooks().frame_realm_window)(js.page(), frame)
 }
 
-pub(crate) fn inline_handlers_allowed(js: Js) -> bool {
-    api::inline_handlers_allowed(js.page())
+pub(crate) fn inline_handlers_allowed(js: Js, target: Node<'_>) -> bool {
+    api::inline_handlers_allowed(js.page(), Some(target))
 }
 
 pub(crate) fn fire_element_handlers(

@@ -3,6 +3,23 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: an iframe runs under the Content-Security-Policy its own
+  document was served with. The frame table already kept each frame's
+  policy (the response header, an explicit empty policy for a fetched
+  document without one, inherited for about:blank and srcdoc frames),
+  but only the frame's parser-inserted scripts were checked against it;
+  every later check used the top page's policy with `'self'` meaning the
+  frame's URL. A cross-origin frame therefore had requests refused that
+  its own `connect-src` allowed, while its own `script-src`,
+  `connect-src` and the rest were never enforced. The policy is now
+  parsed once when the frame loads and resolved for the calling realm
+  (fetch, XHR and its post-redirect recheck, WebSocket, EventSource,
+  sendBeacon, eval and string timers, Worker and service-worker
+  registration) or for the element concerned (script elements and
+  their redirects, inline scripts, `<link>` stylesheets, inline event
+  handlers, `javascript:` URLs, `<base>`, form actions, media fetches
+  and nested frames' `frame-src`/`object-src`). Frame realms are no
+  longer exempt from the eval check; they follow their own policy.
 * Port: the media type of a local file, an untyped FTP download, and a
   file picked for `<input type=file>` or dropped on the page comes from
   the new `rust/mime` crate (a file name extension table, then magic

@@ -111,13 +111,13 @@ pub(crate) fn url_resolve(base: &str, href: &str) -> Option<String> {
     Some(String::from_utf8_lossy(until_nul(&resolved)).into_owned())
 }
 
-pub(crate) fn helper_may_fetch(js: Js, url: &str) -> bool {
-    let page = current_url(js).map(|page| c_text(&page));
+pub(crate) fn helper_may_fetch(js: Js, element: Element, url: &str) -> bool {
+    let page = api::node_frame_url(element).or_else(|| current_url(js).map(|page| c_text(&page)));
     let mixed = page
         .as_deref()
         .is_some_and(|page| page.to_bytes().starts_with(b"https://"))
         && url.starts_with("http://");
-    !mixed && api::csp_allows_media(js.ptr(), &c_text(url), page.as_deref())
+    !mixed && api::csp_allows_media(js.ptr(), Some(element), &c_text(url), page.as_deref())
 }
 
 pub(crate) fn video_url_is_inline(url: &str) -> bool {

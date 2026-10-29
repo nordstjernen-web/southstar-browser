@@ -716,15 +716,11 @@ pub(crate) fn url_parses(js: Option<Page>, url: &CStr) -> bool {
     southstar_url::bytes::resolve(base, url.to_bytes()).is_some()
 }
 
-pub(crate) fn csp_allows_worker(js: Option<Page>, url: &CStr) -> bool {
-    let page = super::Js::of(js).and_then(super::Js::current_url);
-    let Some(js) = record(js) else {
-        return true;
-    };
-    js.csp
-        .borrow()
-        .as_ref()
-        .is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page.as_deref(), None, true))
+pub(crate) fn csp_allows_worker(js: Option<Page>, realm: ContextHandle, url: &CStr) -> bool {
+    let page = crate::api::realm_url(js, realm).or_else(|| crate::api::page_url(js));
+    with_realm_csp(js, realm, |csp| {
+        csp.is_none_or(|csp| csp.allows(southstar_csp::WORKER, url, page.as_deref(), None, true))
+    })
 }
 
 pub(crate) fn purge_subtree_rafs(js: Option<Page>, root: *mut NsNode) {
@@ -1157,26 +1153,35 @@ pub(crate) fn add_csp_header(js: Option<Page>, header_value: Option<&CStr>) {
     }
 }
 
-pub(crate) fn csp_form_action_allowed(js: Option<Page>, action_url: Option<&CStr>) -> bool {
-    let page = super::Js::of(js).and_then(super::Js::current_url);
-    let Some(js) = record(js) else {
+pub(crate) fn csp_form_action_allowed(
+    js: Option<Page>,
+    form: Option<Node<'_>>,
+    action_url: Option<&CStr>,
+) -> bool {
+    let Some(action_url) = action_url else {
         return true;
     };
-    let csp = js.csp.borrow();
-    let (Some(csp), Some(action_url)) = (csp.as_ref(), action_url) else {
-        return true;
-    };
-    csp.allows(
-        southstar_csp::FORM_ACTION,
-        action_url,
-        page.as_deref(),
-        None,
-        true,
-    )
+    let page = form
+        .and_then(node_frame_url)
+        .map(CStr::to_owned)
+        .or_else(|| super::Js::of(js).and_then(super::Js::current_url));
+    with_node_csp(js, form, |csp| {
+        csp.is_none_or(|csp| {
+            csp.allows(
+                southstar_csp::FORM_ACTION,
+                action_url,
+                page.as_deref(),
+                None,
+                true,
+            )
+        })
+    })
 }
 
-pub(crate) fn inline_handlers_allowed(js: Option<Page>) -> bool {
-    with_page_csp(js, |csp| csp.is_none_or(Csp::inline_event_handler_allowed))
+pub(crate) fn inline_handlers_allowed(js: Option<Page>, target: Option<Node<'_>>) -> bool {
+    with_node_csp(js, target, |csp| {
+        csp.is_none_or(Csp::inline_event_handler_allowed)
+    })
 }
 
 pub(crate) fn time_origin_us(js: Option<Page>) -> i64 {
@@ -1232,14 +1237,76 @@ pub(crate) fn with_page_csp<R>(js: Option<Page>, f: impl FnOnce(Option<&Csp>) ->
     }
 }
 
-pub(crate) fn csp_allows_connect(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
-    with_page_csp(js, |csp| {
+fn with_frame_csp<R>(
+    js: Option<Page>,
+    frame: Option<Node<'_>>,
+    f: impl FnOnce(Option<&Csp>) -> R,
+) -> R {
+    let own = js
+        .zip(frame)
+        .and_then(|(page, frame)| (crate::api::frames_hooks().frame_csp)(page, frame));
+    match own {
+        Some(own) => f(own.as_deref()),
+        None => with_page_csp(js, f),
+    }
+}
+
+pub(crate) fn calling_realm(js: Option<Page>, caller: ContextHandle) -> ContextHandle {
+    match super::Js::of(js) {
+        Some(js) if caller == js.main_or_current() && !js.ctx().is_null() => js.ctx(),
+        _ => caller,
+    }
+}
+
+fn realm_frame(js: Option<Page>, realm: ContextHandle) -> Option<Node<'static>> {
+    let page = js?;
+    let main = super::Js::of(js)?.main_or_current();
+    if realm.is_null() || realm == main {
+        return None;
+    }
+    (crate::api::frames_hooks().frame_of_realm)(page, realm)
+}
+
+fn containing_frame(node: Node<'_>) -> Option<Node<'_>> {
+    southstar_dom::ancestors_and_self(node)
+        .find(|n| n.kind() == Kind::Document)
+        .and_then(|doc| doc.parent())
+}
+
+pub(crate) fn with_realm_csp<R>(
+    js: Option<Page>,
+    realm: ContextHandle,
+    f: impl FnOnce(Option<&Csp>) -> R,
+) -> R {
+    with_frame_csp(js, realm_frame(js, realm), f)
+}
+
+pub(crate) fn with_node_csp<R>(
+    js: Option<Page>,
+    node: Option<Node<'_>>,
+    f: impl FnOnce(Option<&Csp>) -> R,
+) -> R {
+    with_frame_csp(js, node.and_then(containing_frame), f)
+}
+
+pub(crate) fn csp_allows_connect(
+    js: Option<Page>,
+    realm: ContextHandle,
+    url: &CStr,
+    page: Option<&CStr>,
+) -> bool {
+    with_realm_csp(js, realm, |csp| {
         csp.is_none_or(|csp| csp.allows(southstar_csp::CONNECT, url, page, None, true))
     })
 }
 
-pub(crate) fn csp_allows_media(js: Option<Page>, url: &CStr, page: Option<&CStr>) -> bool {
-    with_page_csp(js, |csp| {
+pub(crate) fn csp_allows_media(
+    js: Option<Page>,
+    element: Option<Node<'_>>,
+    url: &CStr,
+    page: Option<&CStr>,
+) -> bool {
+    with_node_csp(js, element, |csp| {
         csp.is_none_or(|csp| csp.allows(southstar_csp::MEDIA, url, page, None, true))
     })
 }

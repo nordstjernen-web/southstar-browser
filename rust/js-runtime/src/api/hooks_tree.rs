@@ -4,7 +4,9 @@
 
 use core::ffi::CStr;
 use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_csp::Csp;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
@@ -43,6 +45,7 @@ pub struct FramesHooks {
     pub document_node: fn(Node<'_>) -> Option<Node<'_>>,
     pub frame_of_realm: fn(Page, ContextHandle) -> Option<Node<'static>>,
     pub node_realm_context: fn(Page, Node<'_>) -> ContextHandle,
+    pub frame_csp: fn(Page, Node<'_>) -> Option<Option<Rc<Csp>>>,
     pub cloners_made: fn(Page) -> bool,
     pub forget_node: fn(Page, Node<'_>),
     pub realms_same_origin: fn(Page, ContextHandle, ContextHandle) -> bool,
@@ -70,6 +73,7 @@ impl FramesHooks {
         document_node: |_| None,
         frame_of_realm: |_, _| None,
         node_realm_context: |_, _| ContextHandle::NULL,
+        frame_csp: |_, _| None,
         cloners_made: |_| false,
         forget_node: |_, _| {},
         realms_same_origin: |_, _, _| true,

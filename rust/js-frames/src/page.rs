@@ -7,13 +7,15 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::WeakNode;
+use southstar_csp::Csp;
+use southstar_dom::{Kind, MAX_DEPTH, Node, WeakNode};
 use southstar_js_engine::Value;
 
 use crate::cloner::Shared;
 use crate::ffi::Js;
 use crate::ffi::ctx::Ctx;
 use crate::pristine::Pristine;
+use crate::realm::frame_of;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Frame(pub WeakNode);
@@ -27,7 +29,7 @@ pub(crate) struct Navigation {
 pub(crate) enum FramePolicy {
     #[default]
     Inherit,
-    Own(Option<Vec<u8>>),
+    Own(Option<Rc<Csp>>),
 }
 
 #[derive(Default)]
@@ -144,4 +146,27 @@ pub(crate) fn realms(js: Js) -> Vec<(Frame, Ctx)> {
             .collect()
     })
     .unwrap_or_default()
+}
+
+fn embedding_frame(frame: Node<'_>) -> Option<Node<'_>> {
+    southstar_dom::ancestors(frame)
+        .find(|holder| holder.kind() == Kind::Document)
+        .and_then(|doc| doc.parent())
+}
+
+pub(crate) fn own_policy(js: Js, frame: Node<'_>) -> Option<Option<Rc<Csp>>> {
+    let mut frame = Some(frame);
+    for _ in 0..MAX_DEPTH {
+        let node = frame?;
+        let own = frame_entry(js, frame_of(node), |entry| match &entry.policy {
+            FramePolicy::Own(csp) => Some(csp.clone()),
+            FramePolicy::Inherit => None,
+        })
+        .flatten();
+        if own.is_some() {
+            return own;
+        }
+        frame = embedding_frame(node);
+    }
+    None
 }

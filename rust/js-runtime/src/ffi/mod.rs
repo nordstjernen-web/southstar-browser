@@ -489,10 +489,8 @@ fn compile_strings_allowed(
     {
         return false;
     }
-    let main = js.main_realm();
-    (caller != main && callee != main)
-        || scope.is_host_access()
-        || record::with_page_csp(js.some(), |csp| {
+    scope.is_host_access()
+        || record::with_realm_csp(js.some(), callee, |csp| {
             csp.is_none_or(southstar_csp::Csp::eval_allowed)
         })
 }

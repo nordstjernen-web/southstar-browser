@@ -477,6 +477,7 @@ pub fn install_runtime_hooks() {
         document_node: crate::iframe_document_node,
         frame_of_realm: |js, a1| crate::frame_of_realm(Some(js), a1),
         node_realm_context: |js, a1| crate::node_realm_context(Some(js), a1),
+        frame_csp: |js, a1| crate::frame_csp(Some(js), a1),
         cloners_made: |js| cloners_made(Some(js)),
         forget_node: |js, a1| forget_node(Some(js), a1),
         realms_same_origin: |js, a1, a2| realms_same_origin(Some(js), a1, a2),

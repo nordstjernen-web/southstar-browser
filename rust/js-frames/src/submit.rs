@@ -137,7 +137,9 @@ fn navigation_for(
         }
         None => document_url(js, doc)?,
     };
-    if !load::is_http_or_https(Some(&action)) || !form::csp_form_action_allowed(js, &action) {
+    if !load::is_http_or_https(Some(&action))
+        || !form::csp_form_action_allowed(js, form_node, &action)
+    {
         return None;
     }
     let charset = non_empty(form_node.attr(c"accept-charset"));

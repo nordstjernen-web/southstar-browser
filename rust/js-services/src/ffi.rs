@@ -125,9 +125,11 @@ impl Js {
         southstar_camera::page_permission(self.0)
     }
 
-    pub fn string_compilation_allowed(self, scope: &Scope<'_>) -> bool {
-        scope.handle() != api::main_realm(self.0)
-            || api::with_page_csp(self.0, |csp| csp.is_none_or(|csp| csp.eval_allowed()))
+    pub fn string_compilation_allowed(self, scope: &mut Scope<'_>) -> bool {
+        let realm = api::calling_realm(self.0, scope);
+        api::with_realm_csp(self.0, realm, |csp| {
+            csp.is_none_or(|csp| csp.eval_allowed())
+        })
     }
 }
 

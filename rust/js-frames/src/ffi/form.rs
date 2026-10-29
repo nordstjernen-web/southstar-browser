@@ -21,6 +21,6 @@ pub(crate) fn urlencoded(
     bytes
 }
 
-pub(crate) fn csp_form_action_allowed(js: Js, url: &CStr) -> bool {
-    api::csp_form_action_allowed(js.ptr(), Some(url))
+pub(crate) fn csp_form_action_allowed(js: Js, form: Node<'_>, url: &CStr) -> bool {
+    api::csp_form_action_allowed(js.ptr(), Some(form), Some(url))
 }

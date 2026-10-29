@@ -187,7 +187,7 @@ fn perform_form_navigation(b: &NsBrowser, form: Node<'_>, clicked: Option<Node<'
         return;
     }
     if b.js()
-        .is_some_and(|js| !js.csp_form_action_allowed(&abs_action))
+        .is_some_and(|js| !js.csp_form_action_allowed(form, &abs_action))
     {
         return;
     }

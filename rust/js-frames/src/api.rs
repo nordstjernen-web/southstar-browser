@@ -3,7 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::CStr;
+use std::rc::Rc;
 
+use southstar_csp::Csp;
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api::Page;
@@ -28,6 +30,10 @@ pub fn frame_of_realm(js: Option<Page>, realm: ContextHandle) -> Option<Node<'st
     let js = live(js)?;
     let realm = Ctx::from_handle(realm)?;
     page::frame_of_realm(js, realm).and_then(frame_node)
+}
+
+pub fn frame_csp(js: Option<Page>, frame: Node<'_>) -> Option<Option<Rc<Csp>>> {
+    page::own_policy(live(js)?, frame)
 }
 
 pub fn frame_of_window(js: Option<Page>, window: &Value) -> Option<Node<'static>> {

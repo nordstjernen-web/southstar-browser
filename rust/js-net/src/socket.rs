@@ -438,7 +438,7 @@ pub(crate) fn websocket_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value
     {
         return Err(scope.type_error("WebSocket: mixed content (ws:// not allowed from https://)"));
     }
-    if !js.csp_allows_connect(&target, page.as_deref()) {
+    if !js.csp_allows_connect(Realm::caller(scope), &target) {
         return Err(scope.type_error("WebSocket: blocked by Content-Security-Policy connect-src"));
     }
     let protocol_list = match args.get(1).filter(|p| !p.is_undefined()) {
@@ -523,7 +523,7 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
             scope.type_error("EventSource: mixed content (http:// not allowed from https://)")
         );
     }
-    if !js.csp_allows_connect(&target, page.as_deref()) {
+    if !js.csp_allows_connect(Realm::caller(scope), &target) {
         return Err(scope.type_error("EventSource: blocked by Content-Security-Policy connect-src"));
     }
     let with_credentials = args
@@ -556,7 +556,7 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     let origin = page_origin(js)
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
-    let allow_url = js.connect_check(page.as_deref());
+    let allow_url = js.connect_check(Realm::caller(scope));
     let transport = Transport::event_source(&target, &origin, allow_url, &socket);
     if transport.is_none() {
         socket.pin.borrow_mut().take();

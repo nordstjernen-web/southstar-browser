@@ -5,7 +5,7 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::JsResult;
-use crate::ffi::{self, Js};
+use crate::ffi::{self, Js, Realm};
 
 const TEXT_PLAIN: &[u8] = b"text/plain;charset=UTF-8";
 
@@ -45,12 +45,18 @@ fn payload(scope: &mut Scope<'_>, data: &Value) -> Option<Payload> {
     Some(Payload { body, content_type })
 }
 
-fn beacon_allowed(js: Js, page: Option<&[u8]>, url: &[u8], content_type: Option<&[u8]>) -> bool {
+fn beacon_allowed(
+    js: Js,
+    realm: Realm,
+    page: Option<&[u8]>,
+    url: &[u8],
+    content_type: Option<&[u8]>,
+) -> bool {
     let mixed = page.is_some_and(|page| crate::ascii_starts_with(page, b"https://"))
         && crate::ascii_starts_with(url, b"http://");
     let needs_preflight = !ffi::url_same_origin(page, Some(url))
         && crate::preflight::needed(b"POST", content_type, &[]).is_some();
-    !mixed && !needs_preflight && js.csp_allows_connect(url, page)
+    !mixed && !needs_preflight && js.csp_allows_connect(realm, url)
 }
 
 pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> JsResult {
@@ -81,6 +87,7 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
     };
     if !beacon_allowed(
         Js::of(scope),
+        Realm::caller(scope),
         page.as_deref(),
         &url,
         content_type.as_deref(),

@@ -1260,7 +1260,7 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
         }
         fails = true;
     }
-    if !fails && !ffi::csp_allows_worker(js, &url) {
+    if !fails && !ffi::csp_allows_worker(js, scope, &url) {
         fails = true;
     }
     let proto = if new_target.is_object() {

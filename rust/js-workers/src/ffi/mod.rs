@@ -493,8 +493,9 @@ pub(crate) fn decode_data_url(url: &str) -> Option<Vec<u8>> {
     southstar_js_loader::decode_data_url(&c_string(url))
 }
 
-pub(crate) fn csp_allows_worker(js: Js, url: &str) -> bool {
-    api::csp_allows_worker(js.page(), &c_string(url))
+pub(crate) fn csp_allows_worker(js: Js, scope: &mut Scope<'_>, url: &str) -> bool {
+    let realm = api::calling_realm(js.page(), scope);
+    api::csp_allows_worker(js.page(), realm, &c_string(url))
 }
 
 pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {

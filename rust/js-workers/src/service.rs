@@ -241,7 +241,7 @@ pub(crate) fn register(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
         let error = if error.is_empty() { "blocked" } else { &error };
         return rejected(scope, "SecurityError", error);
     }
-    if !ffi::csp_allows_worker(js, &url) {
+    if !ffi::csp_allows_worker(js, scope, &url) {
         return rejected(
             scope,
             "SecurityError",

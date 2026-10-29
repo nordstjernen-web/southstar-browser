@@ -79,12 +79,18 @@ pub(crate) enum FrameKind {
     Object,
 }
 
-pub(crate) fn page_csp_allows(js: Js, kind: FrameKind, url: &CStr, page: &CStr) -> bool {
+pub(crate) fn embedder_csp_allows(
+    js: Js,
+    iframe: Node<'_>,
+    kind: FrameKind,
+    url: &CStr,
+    page: &CStr,
+) -> bool {
     let kind = match kind {
         FrameKind::Frame => southstar_csp::FRAME,
         FrameKind::Object => southstar_csp::OBJECT,
     };
-    api::with_page_csp(js.ptr(), |csp| {
+    api::with_node_csp(js.ptr(), Some(iframe), |csp| {
         csp.is_none_or(|csp| csp.allows(kind, url, Some(page), None, true))
     })
 }

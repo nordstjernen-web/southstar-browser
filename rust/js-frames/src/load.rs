@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::{CStr, CString};
+use std::rc::Rc;
 
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::Value;
@@ -90,8 +91,15 @@ fn kind_name(kind: FrameKind) -> (&'static [u8], &'static [u8]) {
     }
 }
 
-fn csp_blocks(js: Js, kind: FrameKind, url: &CStr, origin: &CStr, redirected: bool) -> bool {
-    if load::page_csp_allows(js, kind, url, origin) {
+fn csp_blocks(
+    js: Js,
+    iframe: Node<'_>,
+    kind: FrameKind,
+    url: &CStr,
+    origin: &CStr,
+    redirected: bool,
+) -> bool {
+    if load::embedder_csp_allows(js, iframe, kind, url, origin) {
         return false;
     }
     if load::log_enabled(js) {
@@ -213,7 +221,7 @@ fn fetch_source(
         FrameKind::Frame
     };
     if let Some(url) = &fetched.abs_url
-        && csp_blocks(js, kind, url, origin, false)
+        && csp_blocks(js, iframe, kind, url, origin, false)
     {
         fetched.abs_url = None;
     }
@@ -257,7 +265,7 @@ fn fetch_source(
         .map(CStr::to_owned);
     if let Some(final_url) = redirected {
         abs_url = final_url;
-        if csp_blocks(js, kind, &abs_url, origin, true) {
+        if csp_blocks(js, iframe, kind, &abs_url, origin, true) {
             resp = None;
         }
     }
@@ -679,9 +687,11 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
         url.starts_with(b"data:") || url.starts_with(b"blob:") || url.starts_with(b"about:")
     });
     let policy = match &resp {
-        Some(resp) if !local_scheme => {
-            FramePolicy::Own(non_empty(resp.csp_header()).map(|header| header.to_bytes().to_vec()))
-        }
+        Some(resp) if !local_scheme => FramePolicy::Own(
+            non_empty(resp.csp_header())
+                .and_then(|header| southstar_csp::Csp::parse(header.to_bytes()))
+                .map(Rc::new),
+        ),
         _ => FramePolicy::Inherit,
     };
     page::update_frame(js, frame_of(iframe), |entry| entry.policy = policy);

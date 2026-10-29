@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::CStr;
+use std::rc::Rc;
 
 use southstar_csp::Csp;
 use southstar_dom::{Kind, MAX_DEPTH, Node};
@@ -13,7 +14,7 @@ use crate::ffi::ctx::Ctx;
 use crate::ffi::load;
 use crate::ffi::{self, Js};
 use crate::origin::{self, CROSS_ORIGIN};
-use crate::page::{self, FramePolicy};
+use crate::page;
 use crate::realm::{self, FrameRealm, frame_of};
 use crate::restore;
 
@@ -24,7 +25,7 @@ const WRAPPER_HEAD: &str =
 
 enum ScriptPolicy {
     Page,
-    Own(Option<Csp>),
+    Own(Option<Rc<Csp>>),
 }
 
 impl ScriptPolicy {
@@ -47,34 +48,10 @@ impl ScriptPolicy {
     }
 }
 
-fn embedding_frame(iframe: Node<'_>) -> Option<Node<'_>> {
-    let mut node = iframe.parent();
-    while let Some(holder) = node {
-        if holder.kind() == Kind::Document {
-            return holder.parent();
-        }
-        node = holder.parent();
-    }
-    None
-}
-
 fn script_policy(js: Js, iframe: Option<Node<'_>>) -> ScriptPolicy {
-    let mut frame = iframe;
-    for _ in 0..MAX_DEPTH {
-        let Some(node) = frame else {
-            return ScriptPolicy::Page;
-        };
-        let own = page::frame_entry(js, frame_of(node), |entry| match &entry.policy {
-            FramePolicy::Own(header) => Some(header.clone()),
-            FramePolicy::Inherit => None,
-        })
-        .flatten();
-        if let Some(header) = own {
-            return ScriptPolicy::Own(header.as_deref().and_then(Csp::parse));
-        }
-        frame = embedding_frame(node);
-    }
-    ScriptPolicy::Page
+    iframe
+        .and_then(|iframe| page::own_policy(js, iframe))
+        .map_or(ScriptPolicy::Page, ScriptPolicy::Own)
 }
 
 fn log_blocked(js: Js, what: &[u8], url: &[u8], reason: &[u8]) {

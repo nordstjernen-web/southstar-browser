@@ -138,7 +138,7 @@ pub fn play(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
                     && !(is_video && ffi::video_url_is_inline(&url))
                     && plays_through_helper(&url) =>
             {
-                if !ffi::helper_may_fetch(js, &url) {
+                if !ffi::helper_may_fetch(js, element, &url) {
                     set(scope, this, "_nd_playing", Value::boolean(false));
                     hooks.notify_play(element, false);
                     ffi::dispatch(js, element, "error");
