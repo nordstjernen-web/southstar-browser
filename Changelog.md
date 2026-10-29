@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: downloads that wait for the user's Save before they are
+  written now cover the rest of the file types the desktop runs or
+  installs on a double click: Control Panel items, MMC consoles, Windows
+  Installer patches and transforms, PowerShell modules, CHM and HLP help,
+  INF and SCF files, ClickOnce and Windows shell link types, disk images,
+  macOS `.command`/`.tool`/`.terminal`/`.workflow`, Flatpak and Snap
+  packages and more shells. Download names that Windows would open as a
+  device are refused in more spellings: `CONIN$`, `CONOUT$`, `CLOCK$`,
+  `COM¹`–`COM³`/`LPT¹`–`LPT³`, and a device name followed by spaces
+  before the extension (`CON .txt`).
 * WebAssembly: wasmi is built with its `auto-dispatch` feature. Without
   it the interpreter always used its tail-call dispatch backend, which
   relies on the compiler turning each handler's tail call into a jump; in

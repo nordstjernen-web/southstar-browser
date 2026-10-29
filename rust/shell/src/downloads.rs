@@ -9,45 +9,93 @@ pub const RECENT_SHOWN_LIMIT: usize = 25;
 pub const MAX_BYTES: u64 = 1 << 30;
 const MAX_NAME_LEN: usize = 200;
 
-const RESERVED_DEVICE_NAMES: [&[u8]; 4] = [b"con", b"prn", b"aux", b"nul"];
+const RESERVED_DEVICE_NAMES: [&[u8]; 7] = [
+    b"con", b"prn", b"aux", b"nul", b"conin$", b"conout$", b"clock$",
+];
 
-const CONSENT_EXTENSIONS: [&[u8]; 36] = [
+const CONSENT_EXTENSIONS: [&[u8]; 82] = [
     b"exe",
     b"msi",
     b"msix",
+    b"msixbundle",
+    b"appx",
+    b"appxbundle",
+    b"msp",
+    b"mst",
     b"bat",
     b"cmd",
     b"com",
     b"scr",
     b"pif",
+    b"cpl",
+    b"msc",
     b"ps1",
+    b"psm1",
+    b"psd1",
+    b"ps1xml",
+    b"vb",
     b"vbs",
     b"vbe",
     b"js",
     b"jse",
     b"wsf",
     b"wsh",
+    b"wsc",
+    b"sct",
     b"hta",
+    b"chm",
+    b"hlp",
+    b"inf",
+    b"ins",
+    b"isp",
+    b"scf",
     b"lnk",
     b"url",
     b"reg",
     b"dll",
+    b"ocx",
+    b"sys",
+    b"xll",
     b"jar",
+    b"jnlp",
+    b"application",
+    b"appref-ms",
+    b"gadget",
+    b"settingcontent-ms",
+    b"library-ms",
+    b"search-ms",
+    b"searchconnector-ms",
+    b"diagcab",
+    b"cab",
+    b"vhd",
+    b"vhdx",
+    b"img",
+    b"iso",
     b"sh",
     b"bash",
+    b"csh",
+    b"ksh",
+    b"zsh",
+    b"command",
+    b"tool",
+    b"terminal",
+    b"workflow",
     b"run",
     b"desktop",
     b"appimage",
+    b"flatpakref",
+    b"snap",
     b"deb",
     b"rpm",
     b"apk",
     b"dmg",
     b"pkg",
+    b"mpkg",
     b"app",
     b"py",
+    b"pyw",
     b"pl",
     b"rb",
-    b"iso",
 ];
 
 pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
@@ -79,12 +127,18 @@ pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
         .iter()
         .position(|&c| c == b'.')
         .map_or(&out[..], |dot| &out[..dot]);
-    let lowered = stem.to_ascii_lowercase();
+    let lowered = stem.trim_ascii_end().to_ascii_lowercase();
     let reserved = RESERVED_DEVICE_NAMES.contains(&&lowered[..])
         || ((lowered.starts_with(b"com") || lowered.starts_with(b"lpt"))
-            && lowered.len() == 4
-            && lowered[3].is_ascii_digit());
+            && is_port_number(&lowered[3..]));
     (!out.is_empty() && !reserved).then_some(out)
+}
+
+fn is_port_number(rest: &[u8]) -> bool {
+    matches!(rest, [b'0'..=b'9'])
+        || ["\u{b9}", "\u{b2}", "\u{b3}"]
+            .iter()
+            .any(|d| rest == d.as_bytes())
 }
 
 pub fn strip_query(base: &[u8]) -> &[u8] {
