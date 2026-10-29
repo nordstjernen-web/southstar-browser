@@ -353,12 +353,12 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         }
     }
     let js = Js::of(scope);
-    let page = js.page_url();
+    let csp_realm = Realm::caller(scope);
+    let page = js.document_url(csp_realm);
     let resolved = page
         .as_deref()
         .and_then(|page| ffi::url_resolve(Some(page), &url))
         .unwrap_or(url);
-    let csp_realm = Realm::caller(scope);
     let state = XhrState {
         realm: Realm::of(scope),
         csp_realm,
@@ -432,7 +432,8 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     } else {
         let request = Request {
             url: cstring(&resolved),
-            top: page.as_deref().map(cstring),
+            top: js.partition_url().as_deref().map(cstring),
+            document: page.as_deref().map(cstring),
             method: cstring(method.as_deref().unwrap_or(b"GET")),
             has_body: body.is_some(),
             body: body.unwrap_or_default(),
@@ -462,7 +463,11 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
                 done(Ticket { js, id }, resp, error.is_some());
             }),
             Some(preflight) => {
-                let check = preflight.request(&request.url, request.top.as_ref());
+                let check = preflight.request(
+                    &request.url,
+                    request.top.as_ref(),
+                    request.document.as_ref(),
+                );
                 check.send(None, move |resp, _error| {
                     if preflight.passed(&resp, page.as_deref(), request.url.as_bytes()) {
                         request.send(None, move |resp, error| {

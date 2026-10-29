@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Networking: a request made from inside an iframe — `fetch`, XHR,
+  `sendBeacon`, `EventSource` and `WebSocket` — is made by the frame's
+  document, not the embedding page. The frame's URL is now the request's
+  origin (the `Origin` header, the CORS decision and the same-origin
+  check on the response, `credentials: 'same-origin'`), its referrer and
+  its `Sec-Fetch-Site` initiator, while cookies and the HTTP cache stay
+  partitioned on the top-level site. A frame's request to its own origin
+  was treated as cross-origin and its response thrown away whenever the
+  server's `Access-Control-Allow-Origin` did not name the parent (the
+  BankID client's Gateway calls failed with BID-20B0), simple requests
+  set off CORS preflights, and a frame's request to the parent's origin
+  went out without an `Origin` header and passed as same-origin.
 * Networking: response bodies with stacked codings
   (`Content-Encoding: deflate, gzip`, or the codings split over several
   header lines) are decoded in reverse order, as listed, instead of

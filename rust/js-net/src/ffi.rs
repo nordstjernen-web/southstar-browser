@@ -474,6 +474,21 @@ impl Js {
         api::realm_url(self.ptr(), realm.0).or_else(|| api::page_url(self.ptr()))
     }
 
+    pub fn document_url(self, realm: Realm) -> Option<Vec<u8>> {
+        self.realm_self_url(realm)
+            .map(CString::into_bytes)
+            .filter(|url| !url.is_empty())
+    }
+
+    pub fn partition_url(self) -> Option<Vec<u8>> {
+        let top = api::top_url(self.ptr()).into_bytes();
+        if top.is_empty() {
+            self.page_url()
+        } else {
+            Some(top)
+        }
+    }
+
     pub fn csp_allows_connect(self, realm: Realm, url: &[u8]) -> bool {
         let page = self.realm_self_url(realm);
         api::csp_allows_connect(self.ptr(), realm.0, &cstring(url), page.as_deref())
@@ -489,10 +504,6 @@ impl Js {
 
     pub fn in_pump(self) -> bool {
         api::in_pump(self.ptr())
-    }
-
-    pub fn realm_url(self, realm: Realm) -> Option<Vec<u8>> {
-        api::realm_url(self.ptr(), realm.0).map(CString::into_bytes)
     }
 
     pub fn perf_now_ms(self) -> f64 {
@@ -623,6 +634,7 @@ impl Credentials {
 pub(crate) struct Request {
     pub url: CString,
     pub top: Option<CString>,
+    pub document: Option<CString>,
     pub method: CString,
     pub body: Vec<u8>,
     pub has_body: bool,
@@ -640,6 +652,9 @@ impl Request {
         let mut headers: Vec<Vec<u8>> =
             self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
         headers.push(self.credentials.header().to_vec());
+        if let Some(document) = &self.document {
+            headers.push([&b"X-ND-Document: "[..], document.to_bytes()].concat());
+        }
         let request = southstar_net::FetchRequest {
             url: self.url.to_bytes(),
             top_url: self.top.as_deref().map(CStr::to_bytes),

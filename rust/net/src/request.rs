@@ -84,6 +84,17 @@ pub fn navigation_initiator(headers: &[Vec<u8>]) -> Option<&[u8]> {
         .filter(|initiator| !initiator.is_empty())
 }
 
+pub fn requesting_document<'a>(
+    headers: &'a [Vec<u8>],
+    top_url: Option<&'a [u8]>,
+) -> Option<&'a [u8]> {
+    const PREFIX: &[u8] = b"X-ND-Document:";
+    find_header(headers, PREFIX)
+        .map(|h| skip_blanks(&h[PREFIX.len()..]))
+        .filter(|document| !document.is_empty())
+        .or(top_url)
+}
+
 pub fn site_initiator<'a>(
     is_navigation: bool,
     headers: &'a [Vec<u8>],
@@ -92,7 +103,7 @@ pub fn site_initiator<'a>(
     if is_navigation {
         navigation_initiator(headers)
     } else {
-        top_url
+        requesting_document(headers, top_url)
     }
 }
 

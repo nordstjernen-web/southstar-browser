@@ -66,7 +66,8 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
     let Ok(raw_url) = scope.to_bytes(url) else {
         return Ok(Value::boolean(false));
     };
-    let page = Js::of(scope).page_url();
+    let realm = Realm::caller(scope);
+    let page = Js::of(scope).document_url(realm);
     let resolved = match &page {
         Some(page) => ffi::url_resolve(Some(page), &raw_url),
         None => Some(raw_url),
@@ -87,7 +88,7 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
     };
     if !beacon_allowed(
         Js::of(scope),
-        Realm::caller(scope),
+        realm,
         page.as_deref(),
         &url,
         content_type.as_deref(),
@@ -96,7 +97,8 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
     }
     let request = ffi::Request {
         url: ffi::cstring(&url),
-        top: page.as_deref().map(ffi::cstring),
+        top: Js::of(scope).partition_url().as_deref().map(ffi::cstring),
+        document: page.as_deref().map(ffi::cstring),
         method: ffi::cstring(b"POST"),
         body,
         has_body,
