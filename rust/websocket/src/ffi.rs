@@ -2,13 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::c_int;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
-
-use southstar_glib::{FALSE, GBoolean};
 
 use southstar_http::{Received, Request, Upgraded};
 
@@ -39,15 +37,11 @@ pub struct WebSocket {
     thread: Option<JoinHandle<()>>,
 }
 
-type SourceFn = unsafe extern "C" fn(*mut c_void) -> GBoolean;
-
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 unsafe extern "C" {
     fn SHA1(data: *const u8, len: usize, digest: *mut u8) -> *mut u8;
     fn RAND_bytes(buf: *mut u8, num: c_int) -> c_int;
-    fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
 }
 
 struct Dispatch {
@@ -55,16 +49,14 @@ struct Dispatch {
     post: Post,
 }
 
-unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
-    let dispatch = data.cast::<Dispatch>();
-    let socket = unsafe { &(*dispatch).socket };
+fn dispatch_run(dispatch: Box<Dispatch>) {
+    let socket = &dispatch.socket;
     let detached = socket.shared.detached.load(Ordering::SeqCst);
     let data_arg = socket.data;
     if !detached && (socket.events.busy)(data_arg) {
-        unsafe { g_timeout_add(4, dispatch_run, data) };
-        return FALSE;
+        southstar_glib::timeout_add_once(4, move || dispatch_run(dispatch));
+        return;
     }
-    let dispatch = unsafe { Box::from_raw(dispatch) };
     if !detached {
         let events = dispatch.socket.events;
         match &dispatch.post {
@@ -84,7 +76,6 @@ unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
         .shared
         .pending
         .fetch_sub(1, Ordering::SeqCst);
-    FALSE
 }
 
 fn post(socket: &Arc<Socket>, post: Post) {
@@ -96,7 +87,7 @@ fn post(socket: &Arc<Socket>, post: Post) {
         socket: Arc::clone(socket),
         post,
     });
-    unsafe { g_idle_add(dispatch_run, Box::into_raw(dispatch).cast()) };
+    southstar_glib::idle_add_once(move || dispatch_run(dispatch));
 }
 
 fn post_close(socket: &Arc<Socket>, code: i32, reason: &[u8], clean: bool) {

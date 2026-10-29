@@ -186,10 +186,6 @@ impl Js {
         api::source_remove(self.0, id);
     }
 
-    pub fn timeout_add(self, ms: c_uint, func: SourceFunc) -> c_uint {
-        unsafe { g_timeout_add(ms, func, self.raw()) }
-    }
-
     pub fn set_ready_state(self, state: c_int) {
         api::set_ready_state(self.0, state);
     }
@@ -273,13 +269,7 @@ impl Js {
 
 pub(crate) type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
-pub(crate) const SOURCE_CONTINUE: GBoolean = glib::TRUE;
 pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
-
-unsafe extern "C" {
-    fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
-    fn g_source_remove(id: c_uint) -> GBoolean;
-}
 
 pub(crate) fn monotonic_us() -> i64 {
     southstar_glib::monotonic_us()
@@ -289,10 +279,6 @@ pub(crate) use southstar_engine::in_blocking_fetch;
 
 pub(crate) fn profile_enabled() -> bool {
     southstar_js_loader::profile_enabled()
-}
-
-pub(crate) fn source_remove_default(id: c_uint) {
-    unsafe { g_source_remove(id) };
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {

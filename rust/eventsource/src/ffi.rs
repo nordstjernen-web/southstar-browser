@@ -3,13 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{c_uint, c_void};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use southstar_glib::{FALSE, GBoolean};
 use southstar_http::{Fetch, Handler};
 
 use crate::{Parser, Post, Shared};
@@ -36,28 +34,19 @@ pub struct EventSource {
     thread: Option<JoinHandle<()>>,
 }
 
-type SourceFn = unsafe extern "C" fn(*mut c_void) -> GBoolean;
-
-unsafe extern "C" {
-    fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
-}
-
 struct Dispatch {
     source: Arc<Source>,
     post: Post,
 }
 
-unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
-    let dispatch = data.cast::<Dispatch>();
-    let source = unsafe { &(*dispatch).source };
+fn dispatch_run(dispatch: Box<Dispatch>) {
+    let source = &dispatch.source;
     let detached = source.shared.detached.load(Ordering::SeqCst);
     let data_arg = source.data;
     if !detached && (source.events.busy)(data_arg) {
-        unsafe { g_timeout_add(4, dispatch_run, data) };
-        return FALSE;
+        southstar_glib::timeout_add_once(4, move || dispatch_run(dispatch));
+        return;
     }
-    let dispatch = unsafe { Box::from_raw(dispatch) };
     if !detached {
         let events = dispatch.source.events;
         match &dispatch.post {
@@ -76,7 +65,6 @@ unsafe extern "C" fn dispatch_run(data: *mut c_void) -> GBoolean {
         .shared
         .pending
         .fetch_sub(1, Ordering::SeqCst);
-    FALSE
 }
 
 fn post(source: &Arc<Source>, post: Post) {
@@ -87,7 +75,7 @@ fn post(source: &Arc<Source>, post: Post) {
         source: Arc::clone(source),
         post,
     });
-    unsafe { g_idle_add(dispatch_run, Box::into_raw(dispatch).cast()) };
+    southstar_glib::idle_add_once(move || dispatch_run(dispatch));
 }
 
 struct Transfer {

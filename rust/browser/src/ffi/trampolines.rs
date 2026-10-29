@@ -2,18 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_void};
+use core::ops::ControlFlow;
 use std::rc::Rc;
 
 use southstar_dom::Node;
-use southstar_glib::GBoolean;
+use southstar_glib::{self as glib, SourceId};
 use southstar_js_runtime::api::{self, NavigationTiming};
 
-use super::glib::{
-    g_main_loop_new, g_main_loop_quit, g_main_loop_run, g_main_loop_unref, g_timeout_add,
-};
-use super::{Js, NsBrowser, Session, Videos, browser_for, monotonic_us, source_remove};
+use super::{Js, NsBrowser, Session, Videos, browser_for, monotonic_us};
 use crate::{build, callbacks, images, page, scroll, settle};
 
 #[derive(Clone, Copy)]
@@ -53,13 +50,6 @@ fn video_event(page: PageRef, node: *const c_void, kind: &CStr, value: f64) {
     if let (Some(js), Some(node)) = (page.get().and_then(NsBrowser::js), node) {
         southstar_js_media::video_event(js.page(), node, kind, value);
     }
-}
-
-unsafe extern "C" fn on_fire_media_events(ud: *mut c_void) -> GBoolean {
-    if let Some(b) = browser_for(ud) {
-        images::fire_media_events(b);
-    }
-    0
 }
 
 pub fn new_js(b: &NsBrowser, timing: Option<NavigationTiming>) -> Option<Js> {
@@ -223,8 +213,9 @@ pub fn wire_videos(b: &NsBrowser, videos: Videos) {
     videos.set_audio_sink(Some(Rc::new(move |command| audio_command(page, command))));
 }
 
-pub fn add_media_events_timeout(b: &NsBrowser) -> c_uint {
-    unsafe { g_timeout_add(0, on_fire_media_events, b.as_ptr().cast()) }
+pub fn add_media_events_timeout(b: &NsBrowser) -> SourceId {
+    let page = PageRef::of(b);
+    glib::timeout_add_local_once(0, move || page.with(images::fire_media_events))
 }
 
 pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, bool) {
@@ -244,36 +235,20 @@ pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, 
     southstar_engine::start_image_session(&fetch, &mut b.requested_images(), arrived)
 }
 
-struct SettleCtx<'a> {
-    b: &'a NsBrowser,
-    main_loop: *mut c_void,
-    state: settle::SettleState,
-}
-
-unsafe extern "C" fn on_settle_quit(main_loop: *mut c_void) -> GBoolean {
-    unsafe { g_main_loop_quit(main_loop) };
-    1
-}
-
-unsafe extern "C" fn on_settle_tick(ud: *mut c_void) -> GBoolean {
-    let ctx = unsafe { &mut *ud.cast::<SettleCtx<'_>>() };
-    if settle::settle_tick(ctx.b, &mut ctx.state) {
-        unsafe { g_main_loop_quit(ctx.main_loop) };
-    }
-    1
-}
-
 pub fn run_settle_loop(b: &NsBrowser, settle_ms: c_int) {
-    let main_loop = unsafe { g_main_loop_new(ptr::null_mut(), 0) };
-    let mut ctx = SettleCtx {
-        b,
-        main_loop,
-        state: settle::SettleState::new(monotonic_us() + i64::from(settle_ms) * 1000),
-    };
-    let quit = unsafe { g_timeout_add(settle_ms as c_uint, on_settle_quit, main_loop) };
-    let tick = unsafe { g_timeout_add(16, on_settle_tick, ptr::from_mut(&mut ctx).cast()) };
-    unsafe { g_main_loop_run(main_loop) };
-    source_remove(tick);
-    source_remove(quit);
-    unsafe { g_main_loop_unref(main_loop) };
+    let main_loop = glib::MainLoop::new();
+    let mut state = settle::SettleState::new(monotonic_us() + i64::from(settle_ms) * 1000);
+    glib::scope(|scope| {
+        scope.timeout_add(settle_ms.max(0).unsigned_abs(), || {
+            main_loop.quit();
+            ControlFlow::Continue(())
+        });
+        scope.timeout_add(16, || {
+            if settle::settle_tick(b, &mut state) {
+                main_loop.quit();
+            }
+            ControlFlow::Continue(())
+        });
+        main_loop.run();
+    });
 }

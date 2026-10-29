@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_int, c_void};
+use core::ops::ControlFlow;
 use core::ptr;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -34,7 +35,6 @@ unsafe extern "C" {
     );
     fn g_source_attach(source: *mut GSource, context: *mut c_void) -> u32;
     fn g_source_unref(source: *mut GSource);
-    fn g_timeout_add(interval: u32, function: SourceFn, data: *mut c_void) -> u32;
     fn g_atomic_rc_box_acquire(mem_block: *mut c_void) -> *mut c_void;
     fn g_atomic_rc_box_release(mem_block: *mut c_void);
     #[cfg(unix)]
@@ -137,7 +137,7 @@ fn schedule_retry() {
         return;
     }
     RETRY_SCHEDULED.set(true);
-    unsafe { g_timeout_add(5, retry_tick, ptr::null_mut()) };
+    southstar_glib::timeout_add_local(5, retry_tick);
 }
 
 fn run_queue() {
@@ -158,19 +158,19 @@ fn run_queue() {
     }
 }
 
-unsafe extern "C" fn retry_tick(_data: *mut c_void) -> GBoolean {
+fn retry_tick() -> ControlFlow<()> {
     if HANDLING.get() {
-        return 1;
+        return ControlFlow::Continue(());
     }
     let head = head_busy();
     if head == Some(true) {
-        return 1;
+        return ControlFlow::Continue(());
     }
     RETRY_SCHEDULED.set(false);
     if head.is_some() {
         run_queue();
     }
-    0
+    ControlFlow::Break(())
 }
 
 unsafe extern "C" fn dispatch(data: *mut c_void) -> GBoolean {

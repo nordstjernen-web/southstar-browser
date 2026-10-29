@@ -10,12 +10,11 @@ pub(crate) mod scopes;
 pub(crate) mod state;
 pub(crate) mod wrapper;
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::NsNode;
-use southstar_glib::GBoolean;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
 use crate::api::Page;
@@ -109,8 +108,6 @@ const PROTO_TABLE_ELEMENT: c_int = 13;
 
 unsafe extern "C" {
     fn g_main_context_default() -> *mut GMainContext;
-    fn g_source_remove(id: c_uint) -> GBoolean;
-
 }
 
 #[cfg(windows)]
@@ -420,9 +417,8 @@ impl Js {
     }
 
     pub fn stop_observer_tick(self) {
-        let source = self.st().observer_tick_source.replace(0);
-        if source != 0 {
-            unsafe { g_source_remove(source) };
+        if let Some(source) = self.st().observer_tick_source.take() {
+            source.remove();
         }
     }
 

@@ -3,21 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_int};
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 pub use southstar_net::{Outcome, Response};
-
-#[repr(C)]
-struct GMainLoop {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -28,41 +22,24 @@ pub enum Dest {
     Image = 3,
 }
 
-unsafe extern "C" {
-    fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
-    fn g_main_loop_run(main_loop: *mut GMainLoop);
-    fn g_main_loop_quit(main_loop: *mut GMainLoop);
-    fn g_main_loop_unref(main_loop: *mut GMainLoop);
-}
-
 pub fn monotonic_us() -> i64 {
     southstar_glib::monotonic_us()
 }
 
-pub struct NestedLoop(NonNull<GMainLoop>);
+pub struct NestedLoop(glib::MainLoop);
 
 impl NestedLoop {
     pub fn new() -> NestedLoop {
-        NestedLoop(
-            NonNull::new(unsafe { g_main_loop_new(ptr::null_mut(), glib::FALSE) })
-                .expect("g_main_loop_new"),
-        )
+        NestedLoop(glib::MainLoop::new())
     }
 
     pub fn run_blocking(&self) {
         let _blocking = southstar_net::BlockingFetch::enter();
-        unsafe { g_main_loop_run(self.0.as_ptr()) };
+        self.0.run();
     }
 
     pub fn quit(&self) {
-        // SAFETY: the loop is live while this handle owns its reference.
-        unsafe { g_main_loop_quit(self.0.as_ptr()) };
-    }
-}
-
-impl Drop for NestedLoop {
-    fn drop(&mut self) {
-        unsafe { g_main_loop_unref(self.0.as_ptr()) };
+        self.0.quit();
     }
 }
 

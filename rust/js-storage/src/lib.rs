@@ -34,7 +34,7 @@ pub(crate) struct Page {
     pub storage: RefCell<Storage>,
     pub events: RefCell<VecDeque<PendingEvent>>,
     pub draining: Cell<bool>,
-    pub flush_source: Cell<u32>,
+    pub flush_source: Cell<Option<southstar_glib::SourceId>>,
 }
 
 thread_local! {
@@ -57,7 +57,7 @@ pub(crate) fn init(js: Js) {
         storage: RefCell::new(Storage::new(disabled)),
         events: RefCell::new(VecDeque::new()),
         draining: Cell::new(false),
-        flush_source: Cell::new(0),
+        flush_source: Cell::new(None),
     });
     PAGES.with(|pages| pages.borrow_mut().insert(js, page));
 }

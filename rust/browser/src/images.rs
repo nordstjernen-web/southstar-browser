@@ -12,7 +12,7 @@ const WAIT_IMAGES_US: i64 = 15 * 1_000_000;
 const DISPATCH_BATCH: u32 = 64;
 
 pub fn fire_media_events(b: &NsBrowser) {
-    b.media_events_source.set(0);
+    b.media_events_source.set(None);
     if let (Some(js), Some(layout)) = (b.js(), b.layout()) {
         js.fire_media_load_events(layout);
     }
@@ -22,7 +22,7 @@ pub fn load_waits_for_images(b: &NsBrowser) -> bool {
     if ffi::monotonic_us() >= b.load_delay_deadline_us.get() {
         return false;
     }
-    b.media_events_source.get() != 0
+    b.media_events_source.get().is_some()
         || b.images_arrived_since_layout.get()
         || images_outstanding(b) > 0
 }

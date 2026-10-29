@@ -26,11 +26,6 @@ pub(crate) struct GSource {
     _private: [u8; 0],
 }
 
-#[repr(C)]
-struct GMainLoop {
-    _private: [u8; 0],
-}
-
 const NODE_FRAGMENT: u32 = 1 << 2;
 
 unsafe extern "C" {
@@ -48,11 +43,6 @@ unsafe extern "C" {
     fn g_main_context_find_source_by_id(context: *mut GMainContext, id: c_uint) -> *mut GSource;
     fn g_main_context_default() -> *mut GMainContext;
     fn g_main_context_iteration(context: *mut GMainContext, may_block: GBoolean) -> GBoolean;
-    fn g_timeout_add(interval: c_uint, func: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_main_loop_new(context: *mut GMainContext, running: GBoolean) -> *mut GMainLoop;
-    fn g_main_loop_run(lp: *mut GMainLoop);
-    fn g_main_loop_quit(lp: *mut GMainLoop);
-    fn g_main_loop_unref(lp: *mut GMainLoop);
 }
 
 fn context_of(js: Option<Js>) -> *mut GMainContext {
@@ -96,10 +86,6 @@ pub(crate) fn source_remove(js: Option<Js>, id: c_uint) {
     if !source.is_null() {
         unsafe { g_source_destroy(source) };
     }
-}
-
-pub(crate) fn timeout_add(ms: c_uint, func: SourceFn, js: Js) -> c_uint {
-    unsafe { g_timeout_add(ms, func, js.raw()) }
 }
 
 pub(crate) fn pump_iteration(js: Option<Js>) {
@@ -324,27 +310,6 @@ pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
     false
 }
 
-struct PumpedLoop(*mut GMainLoop);
-
-impl PumpedLoop {
-    fn new() -> PumpedLoop {
-        // SAFETY: a null context selects the default one, and the new loop is owned by this value.
-        PumpedLoop(unsafe { g_main_loop_new(ptr::null_mut(), glib::FALSE) })
-    }
-
-    fn run(&self) {
-        // SAFETY: the loop is live until this value drops.
-        unsafe { g_main_loop_run(self.0) };
-    }
-}
-
-impl Drop for PumpedLoop {
-    fn drop(&mut self) {
-        // SAFETY: the loop was created by new and is released once, here.
-        unsafe { g_main_loop_unref(self.0) };
-    }
-}
-
 pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'_>) -> Fetch {
     let js = match js {
         Some(js) if js.st().worker_host.get().is_null() => js,
@@ -353,14 +318,13 @@ pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'
                 .map_err(|failure| failure.message().to_vec());
         }
     };
-    let main_loop = PumpedLoop::new();
-    let quit = main_loop.0;
+    let main_loop = glib::MainLoop::new();
+    let quit = main_loop.clone();
     let outcome: Rc<RefCell<Option<Fetch>>> = Rc::default();
     let delivered = Rc::clone(&outcome);
     southstar_net::request_with(req, None, move |result| {
         *delivered.borrow_mut() = Some(result);
-        // SAFETY: the loop stays alive until the outcome it waits for has been delivered.
-        unsafe { g_main_loop_quit(quit) };
+        quit.quit();
     });
     let state = js.st();
     let saved = state.in_pump.replace(true);

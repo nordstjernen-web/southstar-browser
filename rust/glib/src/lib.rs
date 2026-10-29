@@ -7,12 +7,19 @@ use core::ptr;
 
 mod log;
 mod main_context;
+mod main_loop;
+mod source;
 mod strtod;
 #[cfg(test)]
 mod tests;
 
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;
+pub use main_loop::{MainLoop, default_context_iteration, default_context_pending};
+pub use source::{
+    Scope, SourceId, idle_add_local, idle_add_local_once, idle_add_once, scope, timeout_add_local,
+    timeout_add_local_once, timeout_add_once, timeout_add_seconds_local,
+};
 
 pub type GBoolean = c_int;
 pub const TRUE: GBoolean = 1;
