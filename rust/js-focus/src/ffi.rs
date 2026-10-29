@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{Scope, ScriptOptions, Value};
 use southstar_js_forms::ClickState;
 use southstar_js_runtime::api;
 
@@ -154,6 +154,30 @@ impl Js {
         let _ = southstar_js_loader::eval_source(self.ptr(), &c_string(code), Some(origin));
     }
 
+    pub fn inline_scripts_allowed(self) -> bool {
+        api::with_page_csp(self.ptr(), |csp| {
+            csp.is_none_or(|csp| csp.inline_event_handler_allowed())
+        })
+    }
+
+    pub fn eval_in_frame(self, iframe: Element, code: &[u8], origin: &CStr) {
+        let realm = southstar_js_frames::frame_context(self.ptr(), iframe);
+        if realm.is_null() || self.halted() || self.in_pump() {
+            return;
+        }
+        let budget = api::budget_enter(self.ptr());
+        realm.with(|scope| {
+            let options = ScriptOptions {
+                name: Some(origin.to_bytes()),
+                line: 1,
+                ..ScriptOptions::default()
+            };
+            let _ = scope.eval_script_bytes(code, &options);
+        });
+        api::drain_microtasks(self.ptr());
+        api::budget_leave(self.ptr(), budget);
+    }
+
     pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {
         api::request_download(self.ptr(), &c_string(url), Some(filename))
     }
@@ -173,6 +197,10 @@ impl Js {
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
+}
+
+pub(crate) fn frame_sandbox_blocks_scripts(node: Element) -> bool {
+    southstar_js_frames::sandbox_blocks_scripts(node)
 }
 
 pub(crate) fn frame_realm_window(scope: &Scope<'_>, iframe: Element) -> Value {

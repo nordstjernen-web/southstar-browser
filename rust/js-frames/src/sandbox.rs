@@ -58,6 +58,11 @@ pub(crate) fn origin_is_opaque(node: Node<'_>) -> bool {
     flags & ACTIVE != 0 && flags & ALLOW_SAME_ORIGIN == 0
 }
 
+pub(crate) fn blocks_scripts(node: Node<'_>) -> bool {
+    let flags = effective(node);
+    flags & ACTIVE != 0 && flags & ALLOW_SCRIPTS == 0
+}
+
 pub(crate) fn blocks_forms(node: Node<'_>) -> bool {
     let flags = effective(node);
     flags & ACTIVE != 0 && flags & ALLOW_FORMS == 0

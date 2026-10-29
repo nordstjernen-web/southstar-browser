@@ -108,6 +108,10 @@ pub fn sandbox_blocks_forms(node: Node<'_>) -> bool {
     sandbox::blocks_forms(node)
 }
 
+pub fn sandbox_blocks_scripts(node: Node<'_>) -> bool {
+    sandbox::blocks_scripts(node)
+}
+
 pub fn pending_iframe_count(js: Option<Page>) -> usize {
     live(js).map_or(0, queue::pending_count)
 }
