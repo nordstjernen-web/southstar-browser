@@ -1,0 +1,11 @@
+[package]
+name = "southstar-mime"
+description = "Guessing the media type of a local file or untyped download from its name and first bytes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

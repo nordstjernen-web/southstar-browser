@@ -2,12 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
-use std::borrow::Cow;
+use core::ffi::CStr;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_runtime::api;
 use southstar_layout::BoxRef;
@@ -20,22 +17,8 @@ use southstar_js_runtime::api::Page;
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(Option<Page>);
 
-unsafe extern "C" {
-    fn g_content_type_guess(
-        filename: *const c_char,
-        data: *const u8,
-        data_size: usize,
-        result_uncertain: *mut GBoolean,
-    ) -> *mut c_char;
-    fn g_content_type_get_mime_type(content_type: *const c_char) -> *mut c_char;
-}
-
 fn live(n: Node<'_>) -> Option<Element> {
     n.downgrade().get()
-}
-
-fn opt_text<'a>(text: *const c_char) -> Option<Cow<'a, str>> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_string_lossy())
 }
 
 impl Js {
@@ -208,30 +191,9 @@ pub(crate) struct FileBytes {
 }
 
 pub(crate) fn read_file(path: &CStr) -> Option<FileBytes> {
-    let bytes = southstar_glib::file_get_contents(path.to_bytes())?;
-    let content_type = unsafe {
-        g_content_type_guess(
-            path.as_ptr(),
-            bytes.as_ptr(),
-            bytes.len().min(4096),
-            ptr::null_mut(),
-        )
-    };
-    let mime = if content_type.is_null() {
-        None
-    } else {
-        let mime = unsafe { g_content_type_get_mime_type(content_type) };
-        let text = opt_text(mime).map(Cow::into_owned);
-        unsafe {
-            glib::g_free(mime.cast());
-            glib::g_free(content_type.cast());
-        }
-        text
-    };
-    Some(FileBytes {
-        contents: bytes,
-        mime,
-    })
+    let contents = southstar_glib::file_get_contents(path.to_bytes())?;
+    let mime = southstar_mime::guess(path.to_bytes(), Some(&contents)).map(str::to_owned);
+    Some(FileBytes { contents, mime })
 }
 
 pub fn dispatch_mouse_event(

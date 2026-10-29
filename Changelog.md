@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: the media type of a local file, an untyped FTP download, and a
+  file picked for `<input type=file>` or dropped on the page comes from
+  the new `rust/mime` crate (a file name extension table, then magic
+  bytes and a UTF-8 text check) instead of GIO's `g_content_type_guess`.
+  On Windows GIO answered from the registry, so the same file got
+  different types on different machines; files of no known type now have
+  an empty `File.type`, as in other browsers, rather than
+  `application/octet-stream`. js-forms and js-input are now free of
+  unsafe code; net drops from 39 to 36 `unsafe` keywords.
 * Port: the remaining direct GLib directory lookups — the download
   directory (for the downloads list and the sandbox's writable paths),
   the system data directories, and the shell's cache and home

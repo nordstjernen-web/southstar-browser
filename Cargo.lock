@@ -2611,6 +2611,7 @@ dependencies = [
  "southstar-js-net",
  "southstar-js-runtime",
  "southstar-js-url",
+ "southstar-mime",
  "southstar-net",
  "southstar-numfmt",
  "southstar-unicode",
@@ -2716,6 +2717,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-top-layer",
  "southstar-layout",
+ "southstar-mime",
 ]
 
 [[package]]
@@ -3460,6 +3462,10 @@ name = "southstar-mic"
 version = "1.0.4-dev"
 
 [[package]]
+name = "southstar-mime"
+version = "1.0.4-dev"
+
+[[package]]
 name = "southstar-minimp3"
 version = "1.0.4-dev"
 
@@ -3478,6 +3484,7 @@ dependencies = [
  "southstar-http",
  "southstar-http-cache",
  "southstar-js-engine",
+ "southstar-mime",
  "southstar-netstore",
  "southstar-netutil",
  "southstar-sandbox",
