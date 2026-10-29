@@ -228,10 +228,8 @@ pub(crate) fn pixel_storei(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRe
         UNPACK_FLIP_Y_WEBGL => g.st.borrow_mut().unpack_flip_y = param != 0,
         UNPACK_PREMULTIPLY_ALPHA_WEBGL => g.st.borrow_mut().premultiply = param != 0,
         UNPACK_COLORSPACE_CONVERSION_WEBGL => {}
-        _ if g.version < 2 && pname != PACK_ALIGNMENT && pname != UNPACK_ALIGNMENT => {
-            gl::pixel_storei(0, 0)
-        }
-        _ => gl::pixel_storei(pname, param),
+        _ if limits::pixel_store_ok(g.version, pname) => gl::pixel_storei(pname, param),
+        _ => g.st.borrow_mut().injected_error = INVALID_ENUM,
     }
     undefined()
 }
@@ -635,10 +633,18 @@ pub(crate) fn bind_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
     undefined()
 }
 
+fn stored_buffer_size(target: u32) -> usize {
+    gl::get_target_parameter(gl::TargetQuery::Buffer, target, BUFFER_SIZE).max(0) as usize
+}
+
 pub(crate) fn buffer_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     let target = uint(s, a, 0);
     let usage = uint(s, a, 2);
+    if !limits::buffer_usage_ok(g.version, usage) {
+        g.st.borrow_mut().injected_error = INVALID_ENUM;
+        return undefined();
+    }
     let bn = limits::bound_buffer(target);
     let is_elem = target == ELEMENT_ARRAY_BUFFER;
     g.st.borrow_mut().elem_clear(bn);
@@ -652,11 +658,14 @@ pub(crate) fn buffer_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
         if is_elem {
             let zero = (size > 0).then(|| vec![0u8; size]);
             gl::buffer_data(target, size, zero.as_deref(), usage);
-            st.elem_set(bn, None, size);
         } else {
             gl::buffer_data(target, size, None, usage);
         }
-        st.set_buffer_size(bn, size);
+        let stored = stored_buffer_size(target);
+        st.set_buffer_size(bn, stored);
+        if is_elem && stored == size {
+            st.elem_set(bn, None, size);
+        }
         return undefined();
     }
     let source = arg(a, 1);
@@ -668,8 +677,9 @@ pub(crate) fn buffer_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
         }
         gl::buffer_data(target, len, data, usage);
         let mut st = g.st.borrow_mut();
-        st.set_buffer_size(bn, len);
-        if is_elem {
+        let stored = stored_buffer_size(target);
+        st.set_buffer_size(bn, stored);
+        if is_elem && stored == len {
             st.elem_set(bn, data, len);
         }
     };
@@ -707,7 +717,7 @@ pub(crate) fn buffer_sub_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> J
 }
 
 pub(crate) fn vertex_attrib_pointer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
-    let _g = current(s, this)?;
+    let g = current(s, this)?;
     let index = uint(s, a, 0);
     let size = int(s, a, 1);
     let kind = uint(s, a, 2);
@@ -715,6 +725,10 @@ pub(crate) fn vertex_attrib_pointer(s: &mut Scope<'_>, this: &Value, a: &[Value]
     let stride = int(s, a, 4);
     let offset = int(s, a, 5);
     if size < 0 || stride < 0 || offset < 0 {
+        return undefined();
+    }
+    if offset != 0 && limits::bound_buffer(ARRAY_BUFFER) == 0 {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
         return undefined();
     }
     gl::vertex_attrib_pointer(index, size, kind, normalized, stride, offset as usize);

@@ -56,11 +56,6 @@ simple! {
     begin_query(|s, a| gl::begin_query(uint(s, a, 0), name(a, 1)));
     end_query(|s, a| gl::end_query(uint(s, a, 0)));
     delete_transform_feedback(|_s, a| gl::delete_transform_feedback(name(a, 0)));
-    bind_transform_feedback(|s, a| gl::bind_transform_feedback(
-        uint(s, a, 0), if a.len() >= 2 { name(a, 1) } else { 0 }));
-    begin_transform_feedback(|s, a| gl::begin_transform_feedback(uint(s, a, 0)));
-    pause_transform_feedback(|_s, _a| gl::pause_transform_feedback());
-    resume_transform_feedback(|_s, _a| gl::resume_transform_feedback());
 }
 
 pub(crate) fn create_vertex_array(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
@@ -142,8 +137,6 @@ pub(crate) fn draw_elements_instanced(s: &mut Scope<'_>, this: &Value, a: &[Valu
 pub(crate) fn draw_range_elements(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     let mode = uint(s, a, 0);
-    let start = uint(s, a, 1);
-    let end = uint(s, a, 2);
     let count = int(s, a, 3);
     let kind = uint(s, a, 4);
     let offset = int(s, a, 5) as isize;
@@ -154,7 +147,7 @@ pub(crate) fn draw_range_elements(s: &mut Scope<'_>, this: &Value, a: &[Value]) 
     {
         return undefined();
     }
-    gl::draw_range_elements(mode, (start, end), count, kind, offset as usize);
+    gl::draw_elements(mode, count, kind, offset as usize);
     g.mark_dirty();
     undefined()
 }
@@ -174,11 +167,15 @@ pub(crate) fn draw_buffers(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRe
 }
 
 pub(crate) fn vertex_attrib_i_pointer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
-    let _g = current(s, this)?;
+    let g = current(s, this)?;
     let size = int(s, a, 1);
     let stride = int(s, a, 3);
     let offset = int(s, a, 4);
     if size < 0 || stride < 0 || offset < 0 {
+        return undefined();
+    }
+    if offset != 0 && limits::bound_buffer(ARRAY_BUFFER) == 0 {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
         return undefined();
     }
     let index = uint(s, a, 0);
@@ -588,6 +585,36 @@ pub(crate) fn get_query(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResul
 pub(crate) fn end_transform_feedback(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     gl::end_transform_feedback();
+    g.st.borrow_mut().elem_data.clear();
+    undefined()
+}
+
+pub(crate) fn bind_transform_feedback(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let target = uint(s, a, 0);
+    gl::bind_transform_feedback(target, if a.len() >= 2 { name(a, 1) } else { 0 });
+    g.st.borrow_mut().elem_data.clear();
+    undefined()
+}
+
+pub(crate) fn begin_transform_feedback(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let mode = uint(s, a, 0);
+    gl::begin_transform_feedback(mode);
+    g.st.borrow_mut().elem_data.clear();
+    undefined()
+}
+
+pub(crate) fn pause_transform_feedback(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    gl::pause_transform_feedback();
+    g.st.borrow_mut().elem_data.clear();
+    undefined()
+}
+
+pub(crate) fn resume_transform_feedback(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    gl::resume_transform_feedback();
     g.st.borrow_mut().elem_data.clear();
     undefined()
 }

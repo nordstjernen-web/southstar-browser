@@ -3,6 +3,26 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: WebGL draws are validated in the cases the checks missed,
+  which matter most where the GL context has no robust buffer access
+  (Windows' compatibility context, macOS). A draw needs a current
+  program whose last link succeeded: a failed relink keeps the old
+  executable running while it reports no active attributes, and drawing
+  with no program skipped the vertex-range and uniform-buffer checks
+  altogether. A program that uses a desktop GLSL built-in attribute
+  (`gl_Vertex` and the like, which WebGL shaders cannot declare and the
+  range check cannot see) does not draw. `vertexAttribPointer` and
+  `vertexAttribIPointer` refuse a non-zero offset with no `ARRAY_BUFFER`
+  bound, as WebGL requires, instead of handing the driver a client
+  pointer. `bufferData` checks `usage` and records the size GL actually
+  stored, so a call GL rejects no longer leaves a size and index shadow
+  that do not match the buffer. Binding, beginning, pausing or resuming
+  transform feedback drops the index shadows it may have made stale.
+  WebGL 2's `pixelStorei` accepts only the WebGL pixel-store parameters,
+  so a driver's own (Apple's row-bytes and client-storage extensions)
+  cannot reach the byte counts `readPixels` and `texImage*` rely on, and
+  `drawRangeElements` no longer passes the page's unchecked index range
+  to the driver.
 * Security: a `WebAssembly.Memory`'s `buffer` now keeps the wasm store
   behind it alive. The `ArrayBuffer` viewed wasmi's linear memory through
   a raw pointer and held nothing that owned it, so once the `Memory`, its
