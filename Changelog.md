@@ -30,6 +30,12 @@ Southstar Browser 1.0.4-dev:
   loops, blocking fetches and single-process request retries use them
   instead of `extern "C"` trampolines that passed boxed or borrowed data
   through `*mut c_void`.
+* Port: the crash-restart watchdog keeps its supervisor state in an
+  `Rc<RefCell<…>>` shared by Rust closures for the child watch, the
+  respawn and force-kill timers and the SIGINT/SIGTERM handlers, instead
+  of passing a leaked `Box` through `*mut c_void` to `extern "C"`
+  callbacks. `rust/glib` gains `child_watch_add_local` and
+  `unix_signal_add_local` for it.
 * Port: localStorage files are read and written by `rust/keyfile`, a
   small pure-Rust reader and writer for the GLib key-file format they
   have always used (same groups, escapes and key rules), instead of

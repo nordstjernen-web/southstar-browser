@@ -14,6 +14,29 @@ use crate::GDestroyNotify;
 
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> c_int;
 
+#[cfg(unix)]
+pub type RawPid = c_int;
+#[cfg(windows)]
+pub type RawPid = *mut c_void;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Pid(RawPid);
+
+impl Pid {
+    pub fn from_raw(raw: RawPid) -> Pid {
+        Pid(raw)
+    }
+
+    pub fn raw(self) -> RawPid {
+        self.0
+    }
+}
+
+type ChildWatchFunc = unsafe extern "C" fn(pid: RawPid, status: c_int, data: *mut c_void);
+
+const PRIORITY_DEFAULT: c_int = 0;
+
 unsafe extern "C" {
     fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
     fn g_timeout_source_new_seconds(interval: c_uint) -> *mut c_void;
@@ -29,6 +52,21 @@ unsafe extern "C" {
     fn g_source_remove(tag: c_uint) -> c_int;
     fn g_main_context_find_source_by_id(context: *mut c_void, source_id: c_uint) -> *mut c_void;
     fn g_source_destroy(source: *mut c_void);
+    fn g_child_watch_add_full(
+        priority: c_int,
+        pid: RawPid,
+        function: ChildWatchFunc,
+        data: *mut c_void,
+        notify: GDestroyNotify,
+    ) -> c_uint;
+    #[cfg(unix)]
+    fn g_unix_signal_add_full(
+        priority: c_int,
+        signum: c_int,
+        handler: SourceFunc,
+        data: *mut c_void,
+        notify: GDestroyNotify,
+    ) -> c_uint;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -226,4 +264,68 @@ pub fn scope<'env, R>(body: impl FnOnce(&Scope<'env>) -> R) -> R {
     };
     let _end = ScopeEnd(&scope);
     body(&scope)
+}
+
+struct ChildCallback {
+    owner: ThreadId,
+    func: Option<Box<dyn FnOnce(i32)>>,
+}
+
+impl Drop for ChildCallback {
+    fn drop(&mut self) {
+        if self.owner != thread::current().id() {
+            std::process::abort();
+        }
+    }
+}
+
+unsafe extern "C" fn child_exited(_pid: RawPid, status: c_int, data: *mut c_void) {
+    // SAFETY: data is the ChildCallback the watch was added with; GLib keeps it alive through the dispatch.
+    let callback = unsafe { &mut *data.cast::<ChildCallback>() };
+    if callback.owner != thread::current().id() {
+        std::process::abort();
+    }
+    if let Some(func) = callback.func.take() {
+        func(status);
+    }
+}
+
+unsafe extern "C" fn drop_child_callback(data: *mut c_void) {
+    // SAFETY: GLib hands back the ChildCallback the watch was added with, exactly once, when the watch is destroyed.
+    drop(unsafe { Box::from_raw(data.cast::<ChildCallback>()) });
+}
+
+pub fn child_watch_add_local(pid: Pid, func: impl FnOnce(i32) + 'static) -> SourceId {
+    let callback = ChildCallback {
+        owner: thread::current().id(),
+        func: Some(Box::new(func)),
+    };
+    let data = Box::into_raw(Box::new(callback)).cast::<c_void>();
+    // SAFETY: the watch owns data and frees it with drop_child_callback; child_exited reads it as the ChildCallback it is.
+    let id = unsafe {
+        g_child_watch_add_full(
+            PRIORITY_DEFAULT,
+            pid.0,
+            child_exited,
+            data,
+            Some(drop_child_callback),
+        )
+    };
+    SourceId(NonZeroU32::new(id).expect("GLib source ids are never 0"))
+}
+
+#[cfg(unix)]
+pub fn unix_signal_add_local(
+    signal: i32,
+    func: impl FnMut() -> ControlFlow<()> + 'static,
+) -> SourceId {
+    let callback = Callback {
+        owner: Some(thread::current().id()),
+        func: Box::new(func),
+    };
+    let data = Box::into_raw(Box::new(callback)).cast::<c_void>();
+    // SAFETY: the source owns data and frees it with destroy; dispatch reads it as the Callback it is.
+    let id =
+        unsafe { g_unix_signal_add_full(PRIORITY_DEFAULT, signal, dispatch, data, Some(destroy)) };
+    SourceId(NonZeroU32::new(id).expect("GLib source ids are never 0"))
 }

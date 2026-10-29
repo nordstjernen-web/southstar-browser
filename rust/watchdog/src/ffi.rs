@@ -2,44 +2,36 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::cell::RefCell;
+#[cfg(windows)]
+use core::ffi::c_void;
+use core::ffi::{CStr, c_char, c_int};
+use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::io::Write;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::Instant;
 
-use southstar_glib::{self as glib, FALSE, GBoolean, LogLevel, TRUE};
+use southstar_glib::{self as glib, LogLevel, SourceId};
 
 use crate::{Burst, ChildExit, HangMonitor, Restart};
-
-type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 #[cfg(unix)]
 type GPid = c_int;
 #[cfg(windows)]
 type GPid = *mut c_void;
 
-type ChildWatchFn = unsafe extern "C" fn(pid: GPid, status: c_int, data: *mut c_void);
-
-#[repr(C)]
-struct GMainLoop {
-    _private: [u8; 0],
-}
-
 unsafe extern "C" {
-    fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_timeout_add_seconds(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_source_remove(tag: c_uint) -> GBoolean;
-    fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
-    fn g_main_loop_run(main_loop: *mut GMainLoop);
-    fn g_main_loop_quit(main_loop: *mut GMainLoop);
-    fn g_main_loop_unref(main_loop: *mut GMainLoop);
-    fn g_child_watch_add(pid: GPid, function: ChildWatchFn, data: *mut c_void) -> c_uint;
     fn g_spawn_close_pid(pid: GPid);
     fn g_uuid_string_random() -> *mut c_char;
     fn g_get_user_runtime_dir() -> *const c_char;
     fn _exit(status: c_int) -> !;
+}
+
+fn close_pid(pid: GPid) {
+    // SAFETY: pid is a child this supervisor spawned, closed once after its watch fired or it was killed.
+    unsafe { g_spawn_close_pid(pid) };
 }
 
 fn log(level: LogLevel, message: &str) {
@@ -64,7 +56,6 @@ mod os {
 
     use super::GPid;
 
-    pub(super) const NO_PID: GPid = 0;
     const G_SPAWN_DO_NOT_REAP_CHILD: c_int = 1 << 1;
     const SIGKILL: c_int = 9;
     const SIGTERM: c_int = 15;
@@ -90,11 +81,6 @@ mod os {
             child_pid: *mut GPid,
             error: *mut *mut GError,
         ) -> GBoolean;
-        pub(super) fn g_unix_signal_add(
-            signum: c_int,
-            function: super::SourceFn,
-            data: *mut c_void,
-        ) -> u32;
         fn kill(pid: GPid, signal: c_int) -> c_int;
         fn getppid() -> c_int;
         #[cfg(target_os = "linux")]
@@ -180,8 +166,6 @@ mod os {
     use super::GPid;
 
     type Handle = *mut c_void;
-
-    pub(super) const NO_PID: GPid = ptr::null_mut();
 
     #[repr(C)]
     struct StartupInfo {
@@ -373,11 +357,6 @@ static BEAT: AtomicI32 = AtomicI32::new(0);
 static HANG_SECS: AtomicI32 = AtomicI32::new(0);
 static IS_CHILD: AtomicBool = AtomicBool::new(false);
 
-unsafe extern "C" fn beat(_data: *mut c_void) -> GBoolean {
-    BEAT.fetch_add(1, Ordering::SeqCst);
-    TRUE
-}
-
 fn watch_for_hangs() {
     let mut monitor = HangMonitor::new(BEAT.load(Ordering::SeqCst), Instant::now());
     loop {
@@ -414,7 +393,10 @@ pub fn child_arm_hang_monitor(js_budget_ms: c_int) {
     message(&format!(
         "ns_watchdog: hang monitor armed, exit after {secs}s unresponsive"
     ));
-    unsafe { g_timeout_add_seconds(crate::BEAT_SECS, beat, ptr::null_mut()) };
+    glib::timeout_add_seconds_local(crate::BEAT_SECS, || {
+        BEAT.fetch_add(1, Ordering::SeqCst);
+        ControlFlow::Continue(())
+    });
     let _ = std::thread::Builder::new()
         .name("nd-watchdog".to_owned())
         .spawn(watch_for_hangs);
@@ -426,146 +408,151 @@ pub fn child_is_recovery() -> bool {
 
 struct Supervisor {
     child_argv: Vec<CString>,
-    main_loop: *mut GMainLoop,
-    pid: GPid,
-    have_pid: bool,
+    main_loop: glib::MainLoop,
+    child: Option<GPid>,
     stopping: bool,
-    watch_id: c_uint,
-    respawn_id: c_uint,
-    force_kill_id: c_uint,
+    watch: Option<SourceId>,
+    respawn: Option<SourceId>,
+    force_kill: Option<SourceId>,
     burst: Burst,
     exit_status: c_int,
 }
 
+type Shared = Rc<RefCell<Supervisor>>;
+
 impl Supervisor {
     fn quit(&mut self, status: c_int) {
         self.exit_status = status;
-        unsafe { g_main_loop_quit(self.main_loop) };
+        self.main_loop.quit();
     }
 
-    fn data(&mut self) -> *mut c_void {
-        (self as *mut Supervisor).cast()
-    }
-
-    fn spawn(&mut self, recover: bool) -> bool {
-        match os::spawn(&self.child_argv, recover) {
-            Ok(pid) => {
-                self.pid = pid;
-                self.have_pid = true;
-                self.watch_id = unsafe { g_child_watch_add(pid, child_exited, self.data()) };
-                true
-            }
-            Err(error) => {
-                warning(&format!("ns_watchdog: failed to launch browser: {error}"));
-                os::report_failure(&format!("Failed to launch the browser process: {error}"));
-                self.quit(1);
-                false
-            }
+    fn remove_sources(&mut self) {
+        for source in [
+            self.watch.take(),
+            self.respawn.take(),
+            self.force_kill.take(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            source.remove();
         }
     }
+}
 
-    fn schedule_restart(&mut self) {
-        match self.burst.record(Instant::now()) {
-            Restart::GiveUp(count) => {
-                warning(&format!(
-                    "ns_watchdog: child failed {count} times in under {}s — giving up",
-                    crate::BURST_SECS
-                ));
-                os::report_failure("The browser repeatedly exited during startup.");
-                self.quit(1);
-            }
-            Restart::Attempt(count) => {
-                message(&format!(
-                    "ns_watchdog: restarting browser (attempt {count})"
-                ));
-                self.respawn_id = unsafe { g_timeout_add(crate::BACKOFF_MS, respawn, self.data()) };
-            }
+fn spawn(sup: &Shared, recover: bool) -> bool {
+    let argv = sup.borrow().child_argv.clone();
+    match os::spawn(&argv, recover) {
+        Ok(pid) => {
+            let watcher = Rc::clone(sup);
+            let watch = glib::child_watch_add_local(glib::Pid::from_raw(pid), move |status| {
+                child_exited(&watcher, status);
+            });
+            let mut state = sup.borrow_mut();
+            state.child = Some(pid);
+            state.watch = Some(watch);
+            true
+        }
+        Err(error) => {
+            warning(&format!("ns_watchdog: failed to launch browser: {error}"));
+            os::report_failure(&format!("Failed to launch the browser process: {error}"));
+            sup.borrow_mut().quit(1);
+            false
         }
     }
+}
 
-    fn exited(&mut self, status: c_int) {
-        if self.stopping {
-            unsafe { g_main_loop_quit(self.main_loop) };
+fn schedule_restart(sup: &Shared) {
+    let restart = sup.borrow_mut().burst.record(Instant::now());
+    match restart {
+        Restart::GiveUp(count) => {
+            warning(&format!(
+                "ns_watchdog: child failed {count} times in under {}s — giving up",
+                crate::BURST_SECS
+            ));
+            os::report_failure("The browser repeatedly exited during startup.");
+            sup.borrow_mut().quit(1);
+        }
+        Restart::Attempt(count) => {
+            message(&format!(
+                "ns_watchdog: restarting browser (attempt {count})"
+            ));
+            let target = Rc::clone(sup);
+            let respawn = glib::timeout_add_local_once(crate::BACKOFF_MS, move || {
+                target.borrow_mut().respawn = None;
+                if !target.borrow().stopping {
+                    spawn(&target, true);
+                }
+            });
+            sup.borrow_mut().respawn = Some(respawn);
+        }
+    }
+}
+
+fn child_exited(sup: &Shared, status: c_int) {
+    let pid = {
+        let mut state = sup.borrow_mut();
+        state.watch = None;
+        state.child.take()
+    };
+    if let Some(pid) = pid {
+        close_pid(pid);
+    }
+    if sup.borrow().stopping {
+        sup.borrow().main_loop.quit();
+        return;
+    }
+    match crate::classify_exit(status) {
+        ChildExit::Clean => {
+            sup.borrow_mut().quit(0);
             return;
         }
-        match crate::classify_exit(status) {
-            ChildExit::Clean => {
-                self.quit(0);
-                return;
-            }
-            ChildExit::StoppedBySignal(signal) => {
-                message(&format!(
-                    "ns_watchdog: browser terminated by signal {signal} — stopping"
-                ));
-                self.quit(0);
-                return;
-            }
-            ChildExit::KilledBySignal(signal) => {
-                warning(&format!("ns_watchdog: browser stopped by signal {signal}"));
-            }
-            ChildExit::Failed(code) if cfg!(windows) => {
-                warning(&format!(
-                    "ns_watchdog: browser exited abnormally (code {code})"
-                ));
-            }
-            ChildExit::Failed(code) => {
-                warning(&format!("ns_watchdog: browser exited with code {code}"));
-            }
-        }
-        self.schedule_restart();
-    }
-
-    #[cfg_attr(windows, allow(dead_code))]
-    fn stop(&mut self) {
-        if self.stopping {
+        ChildExit::StoppedBySignal(signal) => {
+            message(&format!(
+                "ns_watchdog: browser terminated by signal {signal} — stopping"
+            ));
+            sup.borrow_mut().quit(0);
             return;
         }
-        self.stopping = true;
-        self.exit_status = 0;
-        if self.have_pid {
-            os::kill_child(self.pid, false);
-            self.force_kill_id =
-                unsafe { g_timeout_add_seconds(crate::STOP_GRACE_SECS, force_kill, self.data()) };
-        } else {
-            unsafe { g_main_loop_quit(self.main_loop) };
+        ChildExit::KilledBySignal(signal) => {
+            warning(&format!("ns_watchdog: browser stopped by signal {signal}"));
+        }
+        ChildExit::Failed(code) if cfg!(windows) => {
+            warning(&format!(
+                "ns_watchdog: browser exited abnormally (code {code})"
+            ));
+        }
+        ChildExit::Failed(code) => {
+            warning(&format!("ns_watchdog: browser exited with code {code}"));
         }
     }
-}
-
-unsafe fn supervisor<'a>(data: *mut c_void) -> &'a mut Supervisor {
-    unsafe { &mut *data.cast::<Supervisor>() }
-}
-
-unsafe extern "C" fn child_exited(pid: GPid, status: c_int, data: *mut c_void) {
-    unsafe { g_spawn_close_pid(pid) };
-    let sup = unsafe { supervisor(data) };
-    sup.have_pid = false;
-    sup.watch_id = 0;
-    sup.exited(status);
-}
-
-unsafe extern "C" fn respawn(data: *mut c_void) -> GBoolean {
-    let sup = unsafe { supervisor(data) };
-    sup.respawn_id = 0;
-    if !sup.stopping {
-        sup.spawn(true);
-    }
-    FALSE
-}
-
-unsafe extern "C" fn force_kill(data: *mut c_void) -> GBoolean {
-    let sup = unsafe { supervisor(data) };
-    sup.force_kill_id = 0;
-    if sup.have_pid {
-        os::kill_child(sup.pid, true);
-    }
-    FALSE
+    schedule_restart(sup);
 }
 
 #[cfg_attr(windows, allow(dead_code))]
-unsafe extern "C" fn stop_signal(data: *mut c_void) -> GBoolean {
-    unsafe { supervisor(data) }.stop();
-    TRUE
+fn stop(sup: &Shared) {
+    let mut state = sup.borrow_mut();
+    if state.stopping {
+        return;
+    }
+    state.stopping = true;
+    state.exit_status = 0;
+    let Some(pid) = state.child else {
+        state.main_loop.quit();
+        return;
+    };
+    os::kill_child(pid, false);
+    let target = Rc::clone(sup);
+    state.force_kill = Some(glib::timeout_add_local_once(
+        crate::STOP_GRACE_SECS * 1000,
+        move || {
+            let mut state = target.borrow_mut();
+            state.force_kill = None;
+            if let Some(pid) = state.child {
+                os::kill_child(pid, true);
+            }
+        },
+    ));
 }
 
 fn session_path() -> Vec<u8> {
@@ -598,53 +585,49 @@ pub fn run_supervisor(self_exe: &[u8], args: &[&[u8]]) -> c_int {
         .into_iter()
         .map(|arg| CString::new(arg).unwrap_or_default())
         .collect();
-    let sup = Box::into_raw(Box::new(Supervisor {
+    let main_loop = glib::MainLoop::new();
+    let sup: Shared = Rc::new(RefCell::new(Supervisor {
         child_argv,
-        main_loop: unsafe { g_main_loop_new(ptr::null_mut(), FALSE) },
-        pid: os::NO_PID,
-        have_pid: false,
+        main_loop: main_loop.clone(),
+        child: None,
         stopping: false,
-        watch_id: 0,
-        respawn_id: 0,
-        force_kill_id: 0,
+        watch: None,
+        respawn: None,
+        force_kill: None,
         burst: Burst::new(Instant::now()),
         exit_status: 0,
     }));
 
     #[cfg(unix)]
-    let signal_sources: Vec<c_uint> = os::STOP_SIGNALS
+    let signal_sources: Vec<SourceId> = os::STOP_SIGNALS
         .iter()
-        .map(|&signal| unsafe { os::g_unix_signal_add(signal, stop_signal, sup.cast()) })
+        .map(|&signal| {
+            let target = Rc::clone(&sup);
+            glib::unix_signal_add_local(signal, move || {
+                stop(&target);
+                ControlFlow::Continue(())
+            })
+        })
         .collect();
 
     message("ns_watchdog: supervising browser");
 
-    // SAFETY: `sup` points at the supervisor allocated above, which lives until this function frees it below.
-    if unsafe { (*sup).spawn(false) } {
-        // SAFETY: as above, and its main loop is not unreffed until after the loop returns.
-        unsafe { g_main_loop_run((*sup).main_loop) };
+    if spawn(&sup, false) {
+        main_loop.run();
     }
 
     #[cfg(unix)]
-    for id in signal_sources {
-        unsafe { g_source_remove(id) };
+    for source in signal_sources {
+        source.remove();
     }
-    let sup = unsafe { Box::from_raw(sup) };
-    for id in [sup.watch_id, sup.respawn_id, sup.force_kill_id] {
-        if id != 0 {
-            // SAFETY: `id` is a source this supervisor attached and has not removed.
-            unsafe { g_source_remove(id) };
-        }
+    let mut state = sup.borrow_mut();
+    state.remove_sources();
+    if let Some(pid) = state.child.take() {
+        os::kill_child(pid, true);
+        close_pid(pid);
     }
-    if sup.have_pid {
-        os::kill_child(sup.pid, true);
-        // SAFETY: `pid` is the child this supervisor spawned and has not closed.
-        unsafe { g_spawn_close_pid(sup.pid) };
-    }
-    // SAFETY: drops the main loop reference created at startup; nothing uses it afterwards.
-    unsafe { g_main_loop_unref(sup.main_loop) };
     if let Some(session) = glib::path_from_bytes(&session) {
         let _ = std::fs::remove_file(session);
     }
-    sup.exit_status
+    state.exit_status
 }
