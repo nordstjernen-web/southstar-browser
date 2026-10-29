@@ -114,6 +114,16 @@ pub fn cookie_context(
     }
 }
 
+pub fn credentials_permit(headers: &[Vec<u8>], target: &[u8], top_url: Option<&[u8]>) -> bool {
+    const PREFIX: &[u8] = b"X-ND-Credentials:";
+    let mode = find_header(headers, PREFIX).map(|h| skip_blanks(&h[PREFIX.len()..]));
+    match mode {
+        Some(b"omit") => false,
+        Some(b"same-origin") => top_url.is_none_or(|top| url::same_origin(top, target)),
+        _ => true,
+    }
+}
+
 pub fn has_user_activation(headers: &[Vec<u8>]) -> bool {
     find_header(headers, b"X-ND-User-Activated:").is_some()
 }

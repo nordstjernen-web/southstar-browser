@@ -6,7 +6,7 @@ use std::ffi::CString;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, Cancellable, Js, Realm, Request, Response, cstring};
+use crate::ffi::{self, Cancellable, Credentials, Js, Realm, Request, Response, cstring};
 use crate::headers;
 use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str, string_prop};
 
@@ -38,6 +38,7 @@ pub(crate) struct FetchState {
     abort_handler: Option<Value>,
     settled: bool,
     no_cors: bool,
+    credentials: Credentials,
     start_ms: f64,
     fallback: Option<Request>,
 }
@@ -294,6 +295,12 @@ fn on_signal_abort(
     Ok(Value::undefined())
 }
 
+fn credentials_of(scope: &mut Scope<'_>, object: &Value, current: Credentials) -> Credentials {
+    string_prop(scope, object, "credentials")
+        .and_then(|mode| Credentials::parse(&mode))
+        .unwrap_or(current)
+}
+
 fn mode_is_no_cors(scope: &mut Scope<'_>, object: &Value, current: bool) -> bool {
     match string_prop(scope, object, "mode") {
         Some(mode) => mode == b"no-cors",
@@ -356,6 +363,13 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     if let Some(init) = init {
         no_cors = mode_is_no_cors(scope, init, no_cors);
     }
+    let mut credentials = Credentials::SameOrigin;
+    if input.is_object() {
+        credentials = credentials_of(scope, input, credentials);
+    }
+    if let Some(init) = init {
+        credentials = credentials_of(scope, init, credentials);
+    }
     if let Some(m) = method
         .as_deref()
         .filter(|m| headers::is_forbidden_method(m))
@@ -384,6 +398,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         abort_handler: None,
         settled: false,
         no_cors,
+        credentials,
         start_ms: js.perf_now_ms(),
         fallback: None,
     };
@@ -475,6 +490,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         body: body.unwrap_or_default(),
         content_type: content_type.as_deref().map(cstring),
         headers: extras.iter().map(|h| cstring(h)).collect::<Vec<CString>>(),
+        credentials,
     };
     if let Some(worker) = js.service_worker_for(&send_url) {
         worker.post_fetch(id, &request);
@@ -604,11 +620,20 @@ pub(crate) fn make_headers(scope: &mut Scope<'_>, init: &Value) -> Value {
 fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Response) {
     let origin_url = state.origin_url.clone().or_else(|| js.page_url());
     let final_url = resp.final_url();
-    let allow = headers::cors_allows(
-        origin_url.as_deref(),
-        final_url.as_deref(),
-        resp.cors_allow_origin().as_deref(),
-    );
+    let allow = if state.credentials == Credentials::Include {
+        headers::cors_allows_credentials(
+            origin_url.as_deref(),
+            final_url.as_deref(),
+            resp.cors_allow_origin().as_deref(),
+            resp.raw_headers().as_deref(),
+        )
+    } else {
+        headers::cors_allows(
+            origin_url.as_deref(),
+            final_url.as_deref(),
+            resp.cors_allow_origin().as_deref(),
+        )
+    };
     if !allow && !state.no_cors {
         let error = scope.type_error("Failed to fetch: CORS request blocked");
         crate::call_ignoring(scope, &state.reject, &Value::undefined(), &[error]);

@@ -6,7 +6,7 @@ use std::ffi::CString;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::ffi::{self, HO_XHR, HO_XHR_UPLOAD, Js, Realm, Request, Response, cstring};
+use crate::ffi::{self, Credentials, HO_XHR, HO_XHR_UPLOAD, Js, Realm, Request, Response, cstring};
 use crate::headers;
 use crate::{JsResult, bool_prop, c_bytes, int_prop, is_nullish, prop, set, set_str};
 
@@ -435,6 +435,11 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             body: body.unwrap_or_default(),
             content_type: effective_content_type.as_deref().map(cstring),
             headers: lines.iter().map(|h| cstring(h)).collect::<Vec<CString>>(),
+            credentials: if bool_prop(scope, this, "withCredentials") {
+                Credentials::Include
+            } else {
+                Credentials::SameOrigin
+            },
         };
         let cross_origin = (crate::ascii_starts_with(&resolved, b"http://")
             || crate::ascii_starts_with(&resolved, b"https://"))
@@ -674,11 +679,20 @@ fn make_document(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>
 fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Response) -> bool {
     let obj = &state.obj;
     let final_url = resp.final_url();
-    let allow = headers::cors_allows(
-        state.origin_url.as_deref(),
-        final_url.as_deref(),
-        resp.cors_allow_origin().as_deref(),
-    ) && !crate::fetch::final_url_connect_blocked(js, final_url.as_deref());
+    let allow = if bool_prop(scope, obj, "withCredentials") {
+        headers::cors_allows_credentials(
+            state.origin_url.as_deref(),
+            final_url.as_deref(),
+            resp.cors_allow_origin().as_deref(),
+            resp.raw_headers().as_deref(),
+        )
+    } else {
+        headers::cors_allows(
+            state.origin_url.as_deref(),
+            final_url.as_deref(),
+            resp.cors_allow_origin().as_deref(),
+        )
+    } && !crate::fetch::final_url_connect_blocked(js, final_url.as_deref());
     let code = if allow { resp.status() as i32 } else { 0 };
     set(scope, obj, "status", Value::int(code));
     set_str(

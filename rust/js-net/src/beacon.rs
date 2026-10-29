@@ -95,6 +95,7 @@ pub(crate) fn send_beacon(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> J
         has_body,
         content_type: content_type.as_deref().map(ffi::cstring),
         headers: Vec::new(),
+        credentials: ffi::Credentials::Include,
     };
     request.send(None, |_, _| {});
     Ok(Value::boolean(true))

@@ -6,7 +6,7 @@ use std::ffi::CString;
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use crate::ffi::{self, Request, Response, cstring};
+use crate::ffi::{self, Credentials, Request, Response, cstring};
 use crate::headers;
 
 const SIMPLE_METHODS: [&[u8]; 3] = [b"GET", b"HEAD", b"POST"];
@@ -143,6 +143,7 @@ impl Preflight {
             has_body: false,
             content_type: None,
             headers: lines.iter().map(|line| cstring(line)).collect(),
+            credentials: Credentials::Omit,
         }
     }
 
