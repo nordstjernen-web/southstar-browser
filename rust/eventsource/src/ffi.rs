@@ -5,7 +5,6 @@
 use core::cell::Cell;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use southstar_http::{Fetch, Handler};
@@ -31,7 +30,6 @@ struct Source {
 
 pub struct EventSource {
     source: Arc<Source>,
-    thread: Option<JoinHandle<()>>,
 }
 
 struct Dispatch {
@@ -209,11 +207,11 @@ impl EventSource {
             data,
         });
         let worker_source = Arc::clone(&source);
-        let thread = std::thread::Builder::new()
+        let _worker = std::thread::Builder::new()
             .name("nd-eventsource".into())
             .spawn(move || worker(worker_source))
             .ok();
-        EventSource { source, thread }
+        EventSource { source }
     }
 
     pub fn close(&self) {
@@ -223,11 +221,8 @@ impl EventSource {
             .store(true, Ordering::SeqCst);
     }
 
-    pub fn free(mut self) {
+    pub fn free(self) {
         self.source.shared.detached.store(true, Ordering::SeqCst);
         self.close();
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
     }
 }

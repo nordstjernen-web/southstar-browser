@@ -32,6 +32,12 @@ Southstar Browser 1.0.4-dev:
   `std::fs`/`std::path` instead of GLib's file and path helpers (the
   bookmarks file is still replaced atomically, with mode 0600). i18n,
   bookmarks and js-storage are now free of `unsafe`.
+* Fix: closing a page that still has a WebSocket or EventSource open no
+  longer waits for the connection's thread, and the process no longer
+  panics with "threads should not terminate unexpectedly" (exit status
+  127) when it exits with one open. The connection object asks its worker
+  to stop and lets it finish on its own; events still queued for the page
+  are dropped as before.
 * Port: the `pattern` attribute of form controls and the regular
   expressions in extension blocking rules are matched with `regress`, the
   JavaScript regular-expression engine Boa already uses, instead of
