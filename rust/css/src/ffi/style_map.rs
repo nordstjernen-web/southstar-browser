@@ -37,6 +37,10 @@ impl StyleMap {
             .map_or(core::ptr::null_mut(), |style| style.as_ptr().cast_mut())
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (usize, &RawStyle)> + '_ {
+        self.0.iter().map(|(&node, style)| (node, style.get()))
+    }
+
     pub(super) fn styles(&self) -> impl Iterator<Item = (usize, &RetainedStyle)> + '_ {
         self.0.iter().map(|(&node, style)| (node, style))
     }

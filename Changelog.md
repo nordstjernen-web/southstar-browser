@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: a page's layout tree is held as a `BoxRef` everywhere instead of
+  a raw `*mut NsBox`: `layout_build` and the render pipeline return
+  one, the window keeps its layout, scrollbar and find-in-page boxes in
+  `Option<BoxRef>` cells, and the headless driver does the same. The
+  render context takes `Node`s and the base URL as typed values instead
+  of raw node and C-string pointers, and its unused URL-resolve and
+  font-permission C callbacks are gone. Profile output is written with
+  `eprintln!` rather than the variadic `g_printerr`.
 * Security: the `tls_allow_insecure_override` setting now lets only the
   page being navigated to proceed past a certificate error, and that
   retried navigation sends no cookies and stores none from the reply.

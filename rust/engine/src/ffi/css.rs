@@ -3,27 +3,18 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint};
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::{OwnedSheet, StyleMap};
 use southstar_dom::{Node, NsNode};
 use southstar_js_runtime::api;
-use southstar_layout::{BoxPool, BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef};
 
 use super::net::Bytes;
 
 pub use southstar_render::{RenderCtx, RenderProfile};
-
-unsafe extern "C" {
-    fn g_printerr(format: *const c_char, ...);
-}
-
-fn ptr_or_null(s: Option<&CStr>) -> *const c_char {
-    s.map_or(ptr::null(), CStr::as_ptr)
-}
 
 #[derive(Default)]
 pub struct SheetList<'a> {
@@ -91,14 +82,14 @@ pub fn layout_frame_viewport(frame: Node) -> Option<(f64, f64)> {
 }
 
 pub struct Relayout<'a> {
-    pub doc: *mut NsNode,
+    pub doc: Option<Node<'a>>,
     pub base: Option<&'a CStr>,
     pub viewport_width: c_int,
     pub viewport_height: f64,
     pub images: Option<southstar_image::ImageCache>,
     pub anim: Option<southstar_anim::AnimHandle>,
-    pub focused: *const NsNode,
-    pub hover: *const NsNode,
+    pub focused: Option<Node<'a>>,
+    pub hover: Option<Node<'a>>,
     pub caret_byte: usize,
     pub sel_anchor_byte: usize,
 }
@@ -135,7 +126,7 @@ pub fn css_compute(doc: Option<Node>, sheets: &SheetList) -> StyleMap {
     southstar_css::compute_styles(doc, &sheets.sheets, &sheets.docs, None)
 }
 
-pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> {
+pub fn render_ctx<'a>(r: &Relayout<'a>, sheets: &'a SheetList<'a>) -> RenderCtx<'a> {
     RenderCtx {
         doc: r.doc,
         sheets: &sheets.sheets,
@@ -148,75 +139,60 @@ pub fn render_ctx<'a>(r: &Relayout, sheets: &'a SheetList<'a>) -> RenderCtx<'a> 
         },
         zoom: 1.0,
         images: r.images,
-        base_url: ptr_or_null(r.base),
+        base_url: r.base.map(CStr::to_bytes),
         anim: r.anim,
         focused_input: r.focused,
         hover_node: r.hover,
         caret_byte: r.caret_byte,
         sel_anchor_byte: r.sel_anchor_byte,
-        resolve_url: None,
-        font_allowed: None,
-        cb_ud: ptr::null_mut(),
     }
 }
 
 pub fn publish_to_page(
     js: Option<api::Page>,
     styles: Option<&Rc<StyleMap>>,
-    layout: &Cell<*mut NsBox>,
+    layout: Option<BoxRef<'static>>,
 ) {
     if js.is_some() {
         api::set_style_table(js, styles.cloned());
-        api::set_layout_root(js, layout_box(layout));
+        api::set_layout_root(js, layout);
     }
 }
 
-fn layout_box(layout: &Cell<*mut NsBox>) -> Option<BoxRef<'static>> {
-    // SAFETY: relayout's caller keeps the layout slot null or holding a box of this thread's layout store.
-    unsafe { BoxRef::from_ptr(layout.get()) }
-}
-
-pub fn render_relayout(ctx: &RenderCtx, out_layout: *mut *mut NsBox) -> Option<Rc<StyleMap>> {
-    unsafe { southstar_render::ns_render_relayout(ctx, out_layout) }
+pub fn render_relayout(ctx: &RenderCtx) -> (Rc<StyleMap>, Option<BoxRef<'static>>) {
+    southstar_render::relayout(ctx, None)
 }
 
 pub fn render_relayout_profiled(
     ctx: &RenderCtx,
-    out_layout: *mut *mut NsBox,
     viewport_width: c_int,
-) -> Option<Rc<StyleMap>> {
+) -> (Rc<StyleMap>, Option<BoxRef<'static>>) {
     let mut prof = RenderProfile::default();
     let t0 = super::net::monotonic_us();
-    let styles =
-        unsafe { southstar_render::ns_render_relayout_profile(ctx, out_layout, &mut prof) };
+    let (styles, layout) = southstar_render::relayout(ctx, Some(&mut prof));
     let total = super::net::monotonic_us() - t0;
-    let nstyles = table_size(styles.as_deref());
-    unsafe {
-        g_printerr(
-            c"[profile] relayout vw=%d nodes=%u total=%.2fms css=%.2f style=%.2f layout=%.2f"
-                .as_ptr(),
-            viewport_width,
-            nstyles,
-            total as f64 / 1000.0,
-            prof.css1_us as f64 / 1000.0,
-            prof.style1_us as f64 / 1000.0,
-            prof.layout1_us as f64 / 1000.0,
-        );
-        if prof.container_pass != 0 {
-            g_printerr(
-                c" | containers=%u passes=%u cq_collect=%.2f css2=%.2f style2=%.2f layout2=%.2f"
-                    .as_ptr(),
-                prof.containers,
-                prof.container_passes,
-                prof.container_us as f64 / 1000.0,
-                prof.css2_us as f64 / 1000.0,
-                prof.style2_us as f64 / 1000.0,
-                prof.layout2_us as f64 / 1000.0,
-            );
-        }
-        g_printerr(c"\n".as_ptr());
+    let ms = |us: i64| us as f64 / 1000.0;
+    let mut line = format!(
+        "[profile] relayout vw={viewport_width} nodes={} total={:.2}ms css={:.2} style={:.2} layout={:.2}",
+        table_size(Some(&styles)),
+        ms(total),
+        ms(prof.css1_us),
+        ms(prof.style1_us),
+        ms(prof.layout1_us),
+    );
+    if prof.container_pass != 0 {
+        line.push_str(&format!(
+            " | containers={} passes={} cq_collect={:.2} css2={:.2} style2={:.2} layout2={:.2}",
+            prof.containers,
+            prof.container_passes,
+            ms(prof.container_us),
+            ms(prof.css2_us),
+            ms(prof.style2_us),
+            ms(prof.layout2_us),
+        ));
     }
-    styles
+    eprintln!("{line}");
+    (styles, layout)
 }
 
 pub fn table_size(table: Option<&StyleMap>) -> c_uint {
@@ -226,16 +202,13 @@ pub fn table_size(table: Option<&StyleMap>) -> c_uint {
 pub fn discard_layout(
     js: Option<api::Page>,
     styles: Option<Rc<StyleMap>>,
-    layout: &Cell<*mut NsBox>,
+    layout: &Cell<Option<BoxRef<'static>>>,
 ) {
     if js.is_some() {
         api::set_layout_root(js, None);
         api::set_style_table(js, None);
     }
-    if let Some(root) = layout_box(layout) {
-        BoxPool::free_tree(Some(root));
-        layout.set(ptr::null_mut());
-    }
+    BoxPool::free_tree(layout.take());
     drop(styles);
 }
 

@@ -21,7 +21,7 @@ use std::rc::Rc;
 use southstar_css::StyleMap;
 use southstar_dom::{Node, Tree, WeakNode};
 use southstar_engine::CssCache;
-use southstar_layout::{BoxRef, NsBox};
+use southstar_layout::{BoxPool, BoxRef};
 use southstar_selection::{NsSelection, Selection};
 
 pub use dom::*;
@@ -110,25 +110,16 @@ impl NodeSlot {
     }
 }
 
-pub struct BoxSlot(Cell<*const NsBox>);
-
-impl Default for BoxSlot {
-    fn default() -> BoxSlot {
-        BoxSlot(Cell::new(ptr::null()))
-    }
-}
+#[derive(Default)]
+pub struct BoxSlot(Cell<Option<BoxRef<'static>>>);
 
 impl BoxSlot {
     pub fn set(&self, b: Option<BoxRef<'_>>) {
-        self.0.set(b.map_or(ptr::null(), |b| b.as_ptr()));
+        self.0.set(b.map(BoxRef::into_static));
     }
-}
 
-pub struct LayoutSlot(Cell<*mut NsBox>);
-
-impl Default for LayoutSlot {
-    fn default() -> LayoutSlot {
-        LayoutSlot(Cell::new(ptr::null_mut()))
+    pub fn get(&self) -> Option<BoxRef<'static>> {
+        self.0.get()
     }
 }
 
@@ -143,7 +134,7 @@ impl Default for SelectionSlot {
 #[derive(Default)]
 pub struct NsBrowser {
     doc: RefCell<Option<Tree>>,
-    layout: LayoutSlot,
+    layout: Cell<Option<BoxRef<'static>>>,
     styles: RefCell<Option<Rc<StyleMap>>>,
     js: Cell<Option<Js>>,
     anim: Cell<Option<Anim>>,
@@ -220,7 +211,7 @@ pub struct NsBrowser {
     pub hover_relayout_us: Cell<i64>,
     pub relayout_cost_us: Cell<i64>,
     pub hover_restyle_pending: Flag,
-    sb_box: LayoutSlot,
+    sb_box: BoxSlot,
     pub sb_node: NodeSlot,
     pub sb_grab: Cell<f64>,
     pub sb_dragging: Flag,
@@ -234,8 +225,7 @@ impl NsBrowser {
     }
 
     pub fn layout(&self) -> Option<BoxRef<'_>> {
-        // SAFETY: the layout slot is null or holds the page's live box tree, which is freed only after it leaves the slot.
-        unsafe { BoxRef::from_ptr(self.layout.0.get()) }
+        self.layout.get()
     }
 
     pub fn js(&self) -> Option<Js> {
@@ -256,17 +246,15 @@ impl NsBrowser {
 
     pub fn take_layout(&self) {
         self.free_layout();
-        self.sb_box.0.set(ptr::null_mut());
+        self.sb_box.set(None);
         self.sb_node.set(None);
         self.sb_dragging.set(false);
     }
 
     fn free_layout(&self) {
-        let layout = self.layout.0.replace(ptr::null_mut());
-        if !layout.is_null() {
+        if let Some(layout) = self.layout.take() {
             paint_3d_invalidate();
-            // SAFETY: the pointer came out of the page's layout slot, which owned the tree, and nothing else frees it.
-            unsafe { box_free(layout) };
+            BoxPool::free_tree(Some(layout));
         }
     }
 

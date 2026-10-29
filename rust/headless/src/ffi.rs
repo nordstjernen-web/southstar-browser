@@ -17,7 +17,6 @@ use core::ffi::{c_uint, c_void};
 use core::ops::ControlFlow;
 
 use southstar_glib as glib;
-use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{Selectors, StyleRef, StyleTable, Value, box_dom, box_style, hit_test};
 pub use dom_api::{
@@ -76,10 +75,6 @@ pub fn console_setup() {
 
 #[cfg(not(windows))]
 pub fn console_setup() {}
-
-pub fn box_from_ptr<'a>(p: *const NsBox) -> Option<BoxRef<'a>> {
-    unsafe { BoxRef::from_ptr(p) }
-}
 
 pub fn javascript_enabled() -> bool {
     southstar_config::get().is_none_or(|cfg| cfg.javascript_enabled != 0)

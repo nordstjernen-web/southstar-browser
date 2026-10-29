@@ -7,9 +7,9 @@ use std::sync::Once;
 
 use southstar_css::StyleData;
 use southstar_dom::Node;
+use southstar_layout::BoxRef;
 use southstar_layout::dispatch::Dispatch;
 use southstar_layout::paint_links::PaintLinks;
-use southstar_layout::{BoxRef, NsBox};
 use southstar_layout_build::{BuildInput, Passes};
 use southstar_layout_sizing::Measures;
 use southstar_paint::{LayoutLinks, LegendGap};
@@ -202,7 +202,7 @@ fn install_layout_hooks() {
     });
 }
 
-pub fn layout_build(input: BuildInput<'_>) -> *mut NsBox {
+pub fn layout_build(input: BuildInput<'_>) -> Option<BoxRef<'static>> {
     install_layout_hooks();
-    southstar_layout_build::layout_build(input).map_or(core::ptr::null_mut(), BoxRef::as_mut_ptr)
+    southstar_layout_build::layout_build(input)
 }
