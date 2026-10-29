@@ -6,7 +6,7 @@ use core::ffi::{CStr, c_int};
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
-use southstar_style::{Kind, PropId, StyleRef};
+use southstar_style::{Kind, PropId};
 
 pub use southstar_texture::TextureRef as Texture;
 
@@ -161,8 +161,7 @@ pub fn collect_videos(root: BoxRef<'_>) -> Vec<BoxRef<'_>> {
 }
 
 pub fn box_fit(b: BoxRef<'_>) -> c_int {
-    // SAFETY: a box's style pointer is null or the computed style the box tree keeps alive while the box exists.
-    let style = unsafe { StyleRef::from_ptr(b.style()) };
+    let style = southstar_style::box_style(b);
     let fit = match style.and_then(|s| s.get(PropId::ObjectFit)) {
         Some(v) if v.kind() == Kind::Keyword => v.keyword_text().map(CStr::to_bytes),
         _ => Some(&b"contain"[..]),

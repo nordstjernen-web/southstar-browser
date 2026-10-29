@@ -5,9 +5,9 @@
 use core::ffi::{CStr, c_int};
 use std::rc::Rc;
 
-use southstar_css::StyleMap;
+use southstar_css::{RetainedStyle, StyleMap};
 use southstar_dom::Node;
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 
 use super::glib::StrBufOwned;
 use super::{Js, NsBrowser};
@@ -150,8 +150,8 @@ pub fn style_keyword(b: BoxRef<'_>, prop: c_int) -> Option<&CStr> {
     keyword_in(southstar_style::box_style(b), prop)
 }
 
-pub fn style_keyword_raw<'a>(style: *const Style, prop: c_int) -> Option<&'a CStr> {
-    keyword_in(unsafe { southstar_style::StyleRef::from_ptr(style) }, prop)
+pub fn retained_keyword(style: &RetainedStyle, prop: c_int) -> Option<&CStr> {
+    keyword_in(Some(southstar_style::StyleRef::retained(style)), prop)
 }
 
 pub fn layout_set_datalist_open(open: bool) {

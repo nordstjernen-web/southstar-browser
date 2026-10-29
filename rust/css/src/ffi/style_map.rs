@@ -31,6 +31,10 @@ impl StyleMap {
         self.0.get(&(node as usize)).map(RetainedStyle::get)
     }
 
+    pub fn retained<T>(&self, node: *const T) -> Option<RetainedStyle> {
+        self.0.get(&(node as usize)).cloned()
+    }
+
     pub fn lookup<T>(&self, node: *const T) -> *mut RawStyle {
         self.0
             .get(&(node as usize))

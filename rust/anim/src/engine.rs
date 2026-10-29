@@ -1549,7 +1549,7 @@ impl Anim {
         if self.shared.now_us == 0 || self.active.is_empty() {
             self.shared.now_us = now_us;
         }
-        let mut items: Vec<(NodePtr, StyleRef<'static>, usize)> = styles
+        let mut items: Vec<(NodePtr, StyleRef<'_>, usize)> = styles
             .entries()
             .into_iter()
             .filter(|(node, style)| match self.states.get(&node.key()) {

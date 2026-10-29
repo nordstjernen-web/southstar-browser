@@ -415,8 +415,8 @@ impl NodePtr {
         core::iter::successors(self.parent(), |p| p.parent())
     }
 
-    pub fn style_in(self, styles: StylesTable<'_>) -> Option<StyleRef<'static>> {
-        unsafe { StyleRef::from_ptr(styles.0.lookup(self.0).cast()) }
+    pub fn style_in<'a>(self, styles: StylesTable<'a>) -> Option<StyleRef<'a>> {
+        styles.0.get(self.0).map(StyleRef::from_data)
     }
 
     pub fn style_before_change(self) -> Option<RetainedStyle> {
@@ -440,14 +440,10 @@ impl<'a> StylesTable<'a> {
         self.0.contains(node.0)
     }
 
-    pub fn entries(self) -> Vec<(NodePtr, StyleRef<'static>)> {
+    pub fn entries(self) -> Vec<(NodePtr, StyleRef<'a>)> {
         self.0
-            .entries()
-            .filter_map(|(k, v)| {
-                Some((NodePtr::new(k as *const NsNode)?, unsafe {
-                    StyleRef::from_ptr(v.cast())
-                }?))
-            })
+            .iter()
+            .filter_map(|(k, v)| Some((NodePtr::new(k as *const NsNode)?, StyleRef::from_data(v))))
             .collect()
     }
 }

@@ -6,8 +6,9 @@ use core::cell::Cell;
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
+use southstar_css::RetainedStyle;
 use southstar_glib::{self as glib, GBoolean, GPtrArray};
-use southstar_layout::{BoxRef, Style};
+use southstar_layout::BoxRef;
 
 use southstar_cairo::ContextRef;
 use southstar_engine::Sheet;
@@ -406,16 +407,13 @@ pub use southstar_layout_position::sticky_offset;
 
 pub fn scroll_snap_viewport(
     layout: BoxRef<'_>,
-    style: *const Style,
+    style: &RetainedStyle,
     viewport: (f64, f64),
     max: (f64, f64),
     prev: (f64, f64),
     pos: &mut (f64, f64),
 ) -> bool {
-    // SAFETY: `style` is null or an entry of the page's style table, which outlives this call.
-    let Some(style) = (unsafe { southstar_style::StyleRef::from_ptr(style) }) else {
-        return false;
-    };
+    let style = southstar_style::StyleRef::retained(style);
     let port = southstar_layout_query::SnapViewport {
         size: viewport,
         max,
@@ -430,10 +428,10 @@ pub fn scroll_snap_viewport(
     }
 }
 
-pub fn snap_type_is_set(style: *const Style) -> bool {
+pub fn snap_type_is_set(style: &RetainedStyle) -> bool {
     static PROP: std::sync::OnceLock<c_int> = std::sync::OnceLock::new();
     let prop = *PROP.get_or_init(|| super::css_prop_id(c"scroll-snap-type"));
-    super::style_keyword_raw(style, prop).is_some_and(|kw| kw.to_bytes() != b"none")
+    super::retained_keyword(style, prop).is_some_and(|kw| kw.to_bytes() != b"none")
 }
 
 impl NsBrowser {
@@ -467,9 +465,7 @@ impl NsBrowser {
         );
     }
 
-    pub fn style_for(&self, node: southstar_dom::Node<'_>) -> *const Style {
-        self.styles.borrow().as_ref().map_or(ptr::null(), |styles| {
-            styles.lookup(node.as_ptr()).cast_const().cast()
-        })
+    pub fn style_for(&self, node: southstar_dom::Node<'_>) -> Option<RetainedStyle> {
+        self.styles.borrow().as_ref()?.retained(node.as_ptr())
     }
 }

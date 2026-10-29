@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: computed styles are looked up through typed references in more
+  places. `StyleMap` gains `retained(node)`, so the window's cursor and
+  scroll-snap code hold a counted `RetainedStyle` instead of a raw
+  `*const Style` read back with `StyleRef::from_ptr`; the animation
+  engine, the headless driver's style table and the video crate borrow
+  `StyleRef`s from the map or the box with the map's lifetime instead of
+  manufacturing `'static` ones from raw pointers.
 * Port: the per-user directories (config, data, cache, runtime, home,
   temp) and the preferred UI languages GLib works out are read through
   safe `rust/glib` functions returning owned bytes, instead of each of

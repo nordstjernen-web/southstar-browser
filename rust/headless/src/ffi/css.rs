@@ -60,10 +60,9 @@ impl<'a> StyleTable<'a> {
         StyleTable(table)
     }
 
-    pub fn get(self, node: Node<'_>) -> Option<StyleRef<'_>> {
-        let style = self.0?.lookup(node.as_ptr());
-        // SAFETY: the table holds a reference on each of its computed styles for as long as it lives.
-        unsafe { southstar_style::StyleRef::from_ptr(style.cast()) }.map(StyleRef)
+    pub fn get(self, node: Node<'_>) -> Option<StyleRef<'a>> {
+        let style = self.0?.get(node.as_ptr())?;
+        Some(StyleRef(southstar_style::StyleRef::from_data(style)))
     }
 }
 
