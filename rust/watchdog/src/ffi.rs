@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_char, c_int};
 #[cfg(windows)]
 use core::ffi::c_void;
+use core::ffi::{CStr, c_char, c_int};
 use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::io::Write;
