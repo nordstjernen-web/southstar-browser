@@ -180,15 +180,24 @@ fn attr_type_cols(kind: u32) -> i32 {
     }
 }
 
-pub(crate) fn program_attrib_mask() -> u64 {
+pub(crate) fn current_program_linked() -> bool {
+    let program = gl::get_integer(CURRENT_PROGRAM);
+    program > 0 && gl::get_programiv(program as u32, LINK_STATUS) != 0
+}
+
+fn shader_language_input(name: &[u8]) -> bool {
+    matches!(name, b"gl_VertexID" | b"gl_InstanceID")
+}
+
+pub(crate) fn program_attrib_mask() -> Option<u64> {
     let program = gl::get_integer(CURRENT_PROGRAM);
     if program <= 0 {
-        return 0;
+        return Some(0);
     }
     let program = program as u32;
     let count = gl::get_programiv(program, ACTIVE_ATTRIBUTES);
     if count <= 0 {
-        return 0;
+        return Some(0);
     }
     let mut max = gl::get_programiv(program, ACTIVE_ATTRIBUTE_MAX_LENGTH);
     if max <= 0 {
@@ -198,7 +207,10 @@ pub(crate) fn program_attrib_mask() -> u64 {
     for i in 0..count {
         let active = gl::active_variable(gl::ActiveKind::Attrib, program, i as u32, max);
         if active.name.starts_with(b"gl_") {
-            continue;
+            if shader_language_input(&active.name) {
+                continue;
+            }
+            return None;
         }
         let loc = gl::get_attrib_location(program, &active.name);
         if loc < 0 {
@@ -212,7 +224,28 @@ pub(crate) fn program_attrib_mask() -> u64 {
             }
         }
     }
-    mask
+    Some(mask)
+}
+
+pub(crate) fn buffer_usage_ok(version: i32, usage: u32) -> bool {
+    match usage {
+        STREAM_DRAW | STATIC_DRAW | DYNAMIC_DRAW => true,
+        STREAM_READ | STREAM_COPY | STATIC_READ | STATIC_COPY | DYNAMIC_READ | DYNAMIC_COPY => {
+            version >= 2
+        }
+        _ => false,
+    }
+}
+
+pub(crate) fn pixel_store_ok(version: i32, pname: u32) -> bool {
+    match pname {
+        PACK_ALIGNMENT | UNPACK_ALIGNMENT => true,
+        PACK_ROW_LENGTH | PACK_SKIP_ROWS | PACK_SKIP_PIXELS | UNPACK_ROW_LENGTH
+        | UNPACK_SKIP_ROWS | UNPACK_SKIP_PIXELS | UNPACK_SKIP_IMAGES | UNPACK_IMAGE_HEIGHT => {
+            version >= 2
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn index_bytes(kind: u32) -> usize {

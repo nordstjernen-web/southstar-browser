@@ -333,10 +333,15 @@ impl State {
         if vertex_last < 0 {
             return true;
         }
+        if !limits::current_program_linked() {
+            return false;
+        }
         if version >= 2 && !limits::uniform_blocks_bound(|buffer| self.buffer_size(buffer)) {
             return false;
         }
-        let used = limits::program_attrib_mask();
+        let Some(used) = limits::program_attrib_mask() else {
+            return false;
+        };
         for i in 0..64u32 {
             if used & (1u64 << i) == 0 {
                 continue;

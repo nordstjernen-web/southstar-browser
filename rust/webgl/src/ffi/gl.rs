@@ -254,8 +254,6 @@ gl_entry_points! {
             mode: u32, count: i32, kind: u32, offset: *const c_void);
         raw_draw_elements_instanced = epoxy_glDrawElementsInstanced(
             mode: u32, count: i32, kind: u32, offset: *const c_void, instances: i32);
-        raw_draw_range_elements = epoxy_glDrawRangeElements(
-            mode: u32, start: u32, end: u32, count: i32, kind: u32, offset: *const c_void);
         raw_uniform1fv = epoxy_glUniform1fv(location: i32, count: i32, v: *const f32);
         raw_uniform2fv = epoxy_glUniform2fv(location: i32, count: i32, v: *const f32);
         raw_uniform3fv = epoxy_glUniform3fv(location: i32, count: i32, v: *const f32);
@@ -738,18 +736,6 @@ pub(crate) fn draw_elements_instanced(
     instances: i32,
 ) {
     unsafe { raw_draw_elements_instanced(mode, count, kind, offset as *const c_void, instances) };
-}
-
-pub(crate) fn draw_range_elements(
-    mode: u32,
-    range: (u32, u32),
-    count: i32,
-    kind: u32,
-    offset: usize,
-) {
-    unsafe {
-        raw_draw_range_elements(mode, range.0, range.1, count, kind, offset as *const c_void)
-    };
 }
 
 pub(crate) fn uniform_fv(n: i32, location: i32, count: i32, v: &[f32]) {
