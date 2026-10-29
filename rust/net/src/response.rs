@@ -198,13 +198,53 @@ impl Response {
     }
 
     pub(crate) fn from_cache(entry: &http_cache::Entry) -> Response {
-        Response {
+        let mut response = Response {
             status: entry.status as c_long,
             final_url: entry.final_url.as_deref().map(cstr),
             content_type: entry.content_type.as_deref().map(cstr),
             cors_allow_origin: entry.cors_allow_origin.as_deref().map(cstr),
             body: entry.body.to_vec(),
             ..Response::default()
+        };
+        response.restore_cached_headers(entry.headers.as_deref().unwrap_or_default());
+        response
+    }
+
+    fn cached_header_slots(&mut self) -> [(&'static [u8], &mut Option<CString>); 6] {
+        [
+            (b"content-security-policy", &mut self.csp_header),
+            (b"x-frame-options", &mut self.xframe_options),
+            (b"x-content-type-options", &mut self.x_content_type_options),
+            (b"content-disposition", &mut self.content_disposition),
+            (b"refresh", &mut self.refresh),
+            (b"content-language", &mut self.content_language),
+        ]
+    }
+
+    pub(crate) fn cached_headers(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        for (name, value) in self.cached_header_slots() {
+            if let Some(value) = value.as_deref() {
+                out.extend_from_slice(name);
+                out.push(b':');
+                out.extend_from_slice(value.to_bytes());
+                out.push(b'\n');
+            }
+        }
+        out
+    }
+
+    pub(crate) fn restore_cached_headers(&mut self, block: &[u8]) {
+        for line in block.split(|&c| c == b'\n') {
+            let Some(colon) = line.iter().position(|&c| c == b':') else {
+                continue;
+            };
+            let (name, value) = (&line[..colon], &line[colon + 1..]);
+            for (slot_name, slot) in self.cached_header_slots() {
+                if slot_name == name && slot.is_none() {
+                    *slot = Some(cstr(value));
+                }
+            }
         }
     }
 }

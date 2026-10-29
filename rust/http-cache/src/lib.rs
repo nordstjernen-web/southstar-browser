@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use southstar_sqlite::{Db, Step};
 
 const MAX_AGE_SECONDS: i64 = 30 * 24 * 60 * 60;
-const SCHEMA_VERSION: i32 = 2;
+const SCHEMA_VERSION: i32 = 3;
 
 struct Cache {
     dir: Option<Vec<u8>>,
@@ -33,6 +33,7 @@ pub struct Entry {
     pub status: i64,
     pub content_type: Option<Vec<u8>>,
     pub cors_allow_origin: Option<Vec<u8>>,
+    pub headers: Option<Vec<u8>>,
     pub etag: Option<Vec<u8>>,
     pub last_modified: Option<Vec<u8>>,
     pub expires_at: i64,
@@ -45,6 +46,7 @@ pub struct Response<'a> {
     pub status: i64,
     pub content_type: Option<&'a [u8]>,
     pub cors_allow_origin: Option<&'a [u8]>,
+    pub headers: Option<&'a [u8]>,
     pub etag: Option<&'a [u8]>,
     pub last_modified: Option<&'a [u8]>,
     pub cache_control: Option<&'a [u8]>,
@@ -219,6 +221,7 @@ final_url TEXT,\
 status INTEGER NOT NULL,\
 content_type TEXT,\
 cors_allow_origin TEXT,\
+headers TEXT,\
 etag TEXT,\
 last_modified TEXT,\
 vary TEXT,\
@@ -228,7 +231,7 @@ last_used INTEGER NOT NULL,\
 body_size INTEGER NOT NULL DEFAULT 0)",
         ) && self.exec(c"CREATE INDEX IF NOT EXISTS idx_entries_last_used ON entries(last_used)")
             && self.exec(c"CREATE INDEX IF NOT EXISTS idx_entries_base_key ON entries(base_key)")
-            && self.exec(c"PRAGMA user_version=2")
+            && self.exec(c"PRAGMA user_version=3")
     }
 
     fn find_row_key(&self, base_key: &[u8], headers: &[&[u8]]) -> Option<Vec<u8>> {
@@ -384,7 +387,7 @@ pub fn get(url: &[u8], partition: Option<&[u8]>, headers: &[&[u8]]) -> Option<En
     let base = base_key_for_url(url, partition);
     let key = cache.find_row_key(&base, headers)?;
     let st = cache.db.as_ref()?.prepare(
-        c"SELECT final_url,status,content_type,cors_allow_origin,etag,last_modified,expires_at,fetched_at,body_size FROM entries WHERE key=?",
+        c"SELECT final_url,status,content_type,cors_allow_origin,etag,last_modified,expires_at,fetched_at,body_size,headers FROM entries WHERE key=?",
     )?;
     st.bind_text(1, Some(&cstring(&key)));
     if !st.step() {
@@ -405,6 +408,7 @@ pub fn get(url: &[u8], partition: Option<&[u8]>, headers: &[&[u8]]) -> Option<En
         status,
         content_type: st.column_text(2),
         cors_allow_origin: st.column_text(3),
+        headers: st.column_text(9),
         etag: st.column_text(4),
         last_modified: st.column_text(5),
         expires_at: st.column_int64(6),
@@ -436,7 +440,8 @@ pub fn is_fresh(expires_at: i64) -> bool {
 }
 
 fn freshness(cache_control: Option<&[u8]>, expires_header: Option<&[u8]>) -> i64 {
-    if let Some(cc) = cache_control {
+    if let Some(cc) = cache_control.map(<[u8]>::to_ascii_lowercase) {
+        let cc = cc.as_slice();
         if contains(cc, b"no-store") {
             return -1;
         }
@@ -471,10 +476,10 @@ pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, header
     if !cache.enabled() || !url_should_cache(url) {
         return;
     }
-    if response
-        .cache_control
-        .is_some_and(|cc| contains(cc, b"no-store") || contains(cc, b"private"))
-    {
+    if response.cache_control.is_some_and(|cc| {
+        let cc = cc.to_ascii_lowercase();
+        contains(&cc, b"no-store") || contains(&cc, b"private")
+    }) {
         return;
     }
     let body_len = response.body.len();
@@ -495,7 +500,7 @@ pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, header
     let key = row_key_for(&base, &selector);
     let Some(st) = cache.db.as_ref().and_then(|db| {
         db.prepare(
-            c"INSERT INTO entries(key,base_key,url,final_url,status,content_type,cors_allow_origin,etag,last_modified,vary,expires_at,fetched_at,last_used,body_size) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET url=excluded.url,final_url=excluded.final_url,status=excluded.status,content_type=excluded.content_type,cors_allow_origin=excluded.cors_allow_origin,etag=excluded.etag,last_modified=excluded.last_modified,vary=excluded.vary,expires_at=excluded.expires_at,fetched_at=excluded.fetched_at,last_used=excluded.last_used,body_size=excluded.body_size",
+            c"INSERT INTO entries(key,base_key,url,final_url,status,content_type,cors_allow_origin,etag,last_modified,vary,expires_at,fetched_at,last_used,body_size,headers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET url=excluded.url,final_url=excluded.final_url,status=excluded.status,content_type=excluded.content_type,cors_allow_origin=excluded.cors_allow_origin,headers=excluded.headers,etag=excluded.etag,last_modified=excluded.last_modified,vary=excluded.vary,expires_at=excluded.expires_at,fetched_at=excluded.fetched_at,last_used=excluded.last_used,body_size=excluded.body_size",
         )
     }) else {
         return;
@@ -516,6 +521,7 @@ pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, header
     st.bind_int64(12, now);
     st.bind_int64(13, now);
     st.bind_int64(14, body_len as i64);
+    st.bind_text(15, text(response.headers).as_deref());
     let done = st.step_result() == Step::Done;
     drop(st);
     if !done {

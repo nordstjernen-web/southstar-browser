@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: a response served from the HTTP cache keeps its
+  Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+  Content-Disposition, Refresh and Content-Language headers. The cache
+  stored only the status, content type, CORS header and body, so the
+  second visit to a cacheable page ran with no CSP at all, a cached
+  `Content-Disposition: attachment` HTML file rendered inline, and a
+  cached frame lost its framing headers; a 304 revalidation paired the
+  stored body with the 304's headers, which usually carry none of these.
+  The cache keeps them in a new column (the cache schema moves to
+  version 3, so the existing cache is dropped once), and a 304 restores
+  the stored ones it does not repeat. `Cache-Control` directives are now
+  matched case-insensitively, so `No-Store` keeps a response off disk.
 * Security: WebGL draws are validated in the cases the checks missed,
   which matter most where the GL context has no robust buffer access
   (Windows' compatibility context, macOS). A draw needs a current

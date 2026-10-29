@@ -559,13 +559,16 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
                 r.status = entry.status as c_long;
                 r.content_type = entry.content_type.as_deref().map(cstr);
                 r.cors_allow_origin = entry.cors_allow_origin.as_deref().map(cstr);
+                r.restore_cached_headers(entry.headers.as_deref().unwrap_or_default());
             }
             None if r.status > 0 && r.status < 300 && !r.body.is_empty() => {
+                let headers = r.cached_headers();
                 let stored = http_cache::Response {
                     final_url: field(&r.final_url),
                     status: widen(r.status),
                     content_type: field(&r.content_type),
                     cors_allow_origin: field(&r.cors_allow_origin),
+                    headers: Some(&headers),
                     etag: captured.etag.as_deref(),
                     last_modified: captured.last_modified.as_deref(),
                     cache_control: captured.cache_control.as_deref(),
