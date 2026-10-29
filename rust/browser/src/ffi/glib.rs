@@ -3,26 +3,16 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::time::Duration;
 use std::ffi::{CString, OsString};
 
-use southstar_glib::{self as glib, GBoolean};
-
-pub type SourceFunc = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
+use southstar_glib as glib;
 
 const DLOG_JS: c_int = 5;
 
 unsafe extern "C" {
-    fn g_main_context_pending(context: *mut c_void) -> GBoolean;
-    fn g_main_context_iteration(context: *mut c_void, may_block: GBoolean) -> GBoolean;
-    fn g_source_remove(tag: c_uint) -> GBoolean;
-    pub fn g_timeout_add(interval: c_uint, function: SourceFunc, data: *mut c_void) -> c_uint;
-    pub fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut c_void;
-    pub fn g_main_loop_run(main_loop: *mut c_void);
-    pub fn g_main_loop_quit(main_loop: *mut c_void);
-    pub fn g_main_loop_unref(main_loop: *mut c_void);
     fn g_printerr(format: *const c_char, ...);
     fn malloc(size: usize) -> *mut c_void;
 }
@@ -104,19 +94,15 @@ pub fn monotonic_us() -> i64 {
 }
 
 pub fn main_context_pending() -> bool {
-    unsafe { g_main_context_pending(ptr::null_mut()) != 0 }
+    glib::default_context_pending()
 }
 
 pub fn main_context_iteration() {
-    unsafe { g_main_context_iteration(ptr::null_mut(), glib::FALSE) };
+    glib::default_context_iteration(false);
 }
 
 pub fn usleep(us: u64) {
     std::thread::sleep(Duration::from_micros(us));
-}
-
-pub fn source_remove(tag: c_uint) {
-    unsafe { g_source_remove(tag) };
 }
 
 pub fn log_message(text: &CStr) {

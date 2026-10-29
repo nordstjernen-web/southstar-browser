@@ -5,12 +5,13 @@
 mod ffi;
 
 use core::cell::{Cell, RefCell};
-use core::ffi::{CStr, c_uint};
+use core::ffi::CStr;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_dom::{Node, WeakNode};
+use southstar_glib::SourceId;
 use southstar_image::ImageRef;
 
 use ffi::{Js, Realm};
@@ -25,7 +26,7 @@ type Element = Node<'static>;
 
 const IMG_LOAD_FIRED: u32 = 1 << 3;
 const MAX_DEPTH: usize = 512;
-const PUMP_RETRY_MS: c_uint = 4;
+const PUMP_RETRY_MS: u32 = 4;
 
 pub(crate) struct Load {
     js: Js,
@@ -33,15 +34,14 @@ pub(crate) struct Load {
     el: WeakNode,
     img: Cell<Option<ImageRef<'static>>>,
     requested_url: CString,
-    ready_idle: Cell<c_uint>,
+    ready_idle: Cell<Option<SourceId>>,
     seq: u64,
 }
 
 impl Drop for Load {
     fn drop(&mut self) {
-        let idle = self.ready_idle.replace(0);
-        if idle != 0 {
-            ffi::source_remove(idle);
+        if let Some(idle) = self.ready_idle.take() {
+            idle.remove();
         }
         ffi::cancel_image_cb(self.js, self);
     }
@@ -130,8 +130,8 @@ fn settled(img: ImageRef<'_>) -> bool {
 }
 
 fn schedule_ready(load: &Rc<Load>) {
-    if load.ready_idle.get() == 0 {
-        load.ready_idle.set(ffi::idle_add_ready(load));
+    if load.ready_idle.get().is_none() {
+        load.ready_idle.set(Some(ffi::idle_add_ready(load)));
     }
 }
 
@@ -158,7 +158,7 @@ pub(crate) fn start_load(js: Js, el: Element, src: Option<&CStr>) {
         el: key(el),
         img: Cell::new(None),
         requested_url: abs_url,
-        ready_idle: Cell::new(0),
+        ready_idle: Cell::new(None),
         seq,
     });
     let old = with_page(js, |page| page.loads.insert(key(el), load.clone()));
@@ -198,10 +198,10 @@ pub(crate) fn ready_idle(load: Rc<Load>) {
     let js = load.js;
     if !ffi::halted(js) && (ffi::in_pump(js) || ffi::in_blocking_fetch()) {
         load.ready_idle
-            .set(ffi::timeout_add_ready(PUMP_RETRY_MS, &load));
+            .set(Some(ffi::timeout_add_ready(PUMP_RETRY_MS, &load)));
         return;
     }
-    load.ready_idle.set(0);
+    load.ready_idle.set(None);
     if ffi::halted(js) || !is_current(&load) {
         return;
     }

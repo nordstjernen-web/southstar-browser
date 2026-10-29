@@ -2,17 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_uint, c_void};
+use core::ops::ControlFlow;
 
 use southstar_dom::{Node, WeakNode};
-use southstar_glib::GBoolean;
+use southstar_glib::SourceId;
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use crate::ffi::{self, CallbackScope, Js, SOURCE_CONTINUE, SOURCE_REMOVE};
+use crate::ffi::{self, CallbackScope, Js};
 use crate::{Page, page, page_or_new, scrollend};
 
 const FIRST_ID: i32 = 0x4000_0000;
-const TICK_MS: c_uint = 16;
+const TICK_MS: u32 = 16;
 const FRAME_US: i64 = 16667;
 
 struct Request {
@@ -30,7 +30,7 @@ pub(crate) struct Frames {
     requested: bool,
     next_id: i32,
     last_us: i64,
-    tick_source: c_uint,
+    tick_source: Option<SourceId>,
     host_driven: bool,
 }
 
@@ -41,9 +41,8 @@ pub(crate) fn clear(page: &Page) {
 
 pub(crate) fn teardown(page: &Page) {
     clear(page);
-    let source = core::mem::take(&mut page.frames.borrow_mut().tick_source);
-    if source != 0 {
-        ffi::source_remove_default(source);
+    if let Some(source) = page.frames.borrow_mut().tick_source.take() {
+        source.remove();
     }
 }
 
@@ -126,20 +125,19 @@ pub(crate) fn purge_media(js: Js, root: Node<'_>) {
     });
 }
 
-unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
-    let js = Js::from_data(data);
+fn tick(js: Js) -> ControlFlow<()> {
     let Some(page) = page(js) else {
-        return SOURCE_REMOVE;
+        return ControlFlow::Break(());
     };
     let stop = || {
-        page.frames.borrow_mut().tick_source = 0;
-        SOURCE_REMOVE
+        page.frames.borrow_mut().tick_source = None;
+        ControlFlow::Break(())
     };
     if !js.has_ctx() || js.halted() {
         return stop();
     }
     if js.in_pump() || js.dispatch_depth() > 0 || ffi::in_blocking_fetch() {
-        return SOURCE_CONTINUE;
+        return ControlFlow::Continue(());
     }
     {
         let frames = page.frames.borrow();
@@ -150,7 +148,7 @@ unsafe extern "C" fn tick(data: *mut c_void) -> GBoolean {
     }
     run(js);
     if !page.frames.borrow().pending.is_empty() {
-        return SOURCE_CONTINUE;
+        return ControlFlow::Continue(());
     }
     stop()
 }
@@ -160,10 +158,10 @@ fn schedule_tick(js: Js, page: &Page) {
         return;
     }
     let mut frames = page.frames.borrow_mut();
-    if frames.tick_source != 0 || frames.host_driven {
+    if frames.tick_source.is_some() || frames.host_driven {
         return;
     }
-    frames.tick_source = js.timeout_add(TICK_MS, tick);
+    frames.tick_source = Some(southstar_glib::timeout_add_local(TICK_MS, move || tick(js)));
 }
 
 fn request(

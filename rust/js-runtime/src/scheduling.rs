@@ -138,13 +138,13 @@ pub(crate) fn timer_gate(js: Js, frame: *mut southstar_dom::NsNode, idle_expired
 pub(crate) fn observer_tick(js: Js) -> bool {
     let state = js.st();
     if js.ctx().is_null() {
-        state.observer_tick_source.set(0);
+        state.observer_tick_source.set(None);
         return false;
     }
     if state.in_pump.get() || state.dispatch_depth.get() > 0 {
         return true;
     }
-    state.observer_tick_source.set(0);
+    state.observer_tick_source.set(None);
     glue::observers_tick(js);
     drain_microtasks(js);
     false

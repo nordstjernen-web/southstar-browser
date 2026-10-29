@@ -11,10 +11,12 @@ mod stdio;
 mod util;
 
 use core::cell::Cell;
-use core::ffi::{c_int, c_uint, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::c_int;
+#[cfg(windows)]
+use core::ffi::{c_uint, c_void};
+use core::ops::ControlFlow;
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 use southstar_layout::{BoxRef, NsBox};
 
 pub use css::{Selectors, StyleRef, StyleTable, Value, box_dom, box_style, hit_test};
@@ -48,22 +50,6 @@ pub use util::{
 };
 
 use crate::inproc::{Settle, WptWait};
-
-#[repr(C)]
-struct GMainLoop {
-    _private: [u8; 0],
-}
-
-type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
-unsafe extern "C" {
-    fn g_main_loop_new(context: *mut c_void, is_running: GBoolean) -> *mut GMainLoop;
-    fn g_main_loop_run(main_loop: *mut GMainLoop);
-    fn g_main_loop_quit(main_loop: *mut GMainLoop);
-    fn g_main_loop_unref(main_loop: *mut GMainLoop);
-    fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
-    fn g_source_remove(tag: c_uint) -> GBoolean;
-}
 
 #[cfg(windows)]
 unsafe extern "system" {
@@ -112,74 +98,38 @@ pub fn subscribe_dlog(mask: u32) -> Option<southstar_debuglog::Subscription> {
     (mask != 0).then(|| southstar_debuglog::subscribe(move |e| on_dlog(mask, e)))
 }
 
-unsafe extern "C" fn quit_loop(data: *mut c_void) -> GBoolean {
-    unsafe { g_main_loop_quit(data.cast()) };
-    glib::FALSE
-}
-
-unsafe extern "C" fn raf_tick(data: *mut c_void) -> GBoolean {
-    if let Some(state) = unsafe { data.cast::<Settle>().as_ref() } {
-        state.tick();
-    }
-    glib::TRUE
-}
-
-struct WptPoll<'a> {
-    main_loop: NonNull<GMainLoop>,
-    wait: &'a WptWait<'a>,
-    done: Cell<bool>,
-}
-
-unsafe extern "C" fn wpt_poll(data: *mut c_void) -> GBoolean {
-    let Some(poll) = (unsafe { data.cast::<WptPoll>().as_ref() }) else {
-        return glib::FALSE;
-    };
-    if !poll.wait.ready() {
-        return glib::TRUE;
-    }
-    poll.done.set(true);
-    unsafe { g_main_loop_quit(poll.main_loop.as_ptr()) };
-    glib::FALSE
-}
-
-fn new_loop() -> NonNull<GMainLoop> {
-    NonNull::new(unsafe { g_main_loop_new(ptr::null_mut(), glib::FALSE) }).expect("g_main_loop_new")
-}
-
-fn ud<T>(value: &T) -> *mut c_void {
-    (value as *const T).cast_mut().cast()
-}
-
 pub fn run_loop_for(ms: c_int, state: &Settle) {
-    let main_loop = new_loop();
-    unsafe {
-        g_timeout_add(ms as c_uint, quit_loop, main_loop.as_ptr().cast());
-        let raf = g_timeout_add(16, raf_tick, ud(state));
-        g_main_loop_run(main_loop.as_ptr());
-        g_source_remove(raf);
-        g_main_loop_unref(main_loop.as_ptr());
-    }
+    let main_loop = glib::MainLoop::new();
+    glib::scope(|scope| {
+        let quit = main_loop.clone();
+        scope.timeout_add_once(ms.max(0).unsigned_abs(), move || quit.quit());
+        scope.timeout_add(16, || {
+            state.tick();
+            ControlFlow::Continue(())
+        });
+        main_loop.run();
+    });
 }
 
 pub fn run_wpt_wait(timeout_ms: c_int, wait: &WptWait) -> bool {
-    let main_loop = new_loop();
-    let poll = WptPoll {
-        main_loop,
-        wait,
-        done: Cell::new(false),
-    };
-    unsafe {
-        let raf = g_timeout_add(16, raf_tick, ud(&wait.settle));
-        let poll_id = g_timeout_add(50, wpt_poll, ud(&poll));
-        let stop_id = g_timeout_add(timeout_ms as c_uint, quit_loop, main_loop.as_ptr().cast());
-        g_main_loop_run(main_loop.as_ptr());
-        g_source_remove(raf);
-        if poll.done.get() {
-            g_source_remove(stop_id);
-        } else {
-            g_source_remove(poll_id);
-        }
-        g_main_loop_unref(main_loop.as_ptr());
-    }
-    poll.done.get()
+    let main_loop = glib::MainLoop::new();
+    let done = Cell::new(false);
+    glib::scope(|scope| {
+        scope.timeout_add(16, || {
+            wait.settle.tick();
+            ControlFlow::Continue(())
+        });
+        scope.timeout_add(50, || {
+            if !wait.ready() {
+                return ControlFlow::Continue(());
+            }
+            done.set(true);
+            main_loop.quit();
+            ControlFlow::Break(())
+        });
+        let quit = main_loop.clone();
+        scope.timeout_add_once(timeout_ms.max(0).unsigned_abs(), move || quit.quit());
+        main_loop.run();
+    });
+    done.get()
 }

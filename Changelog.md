@@ -8,6 +8,17 @@ Southstar Browser 1.0.4-dev:
   instead of every crate declaring `g_get_monotonic_time` and the
   variadic `g_log` itself and calling them in `unsafe` blocks. Twenty-nine
   crates drop their copies of these imports.
+* Port: timeouts and idle callbacks on GLib's default main context are
+  Rust closures. `rust/glib` gains `SourceId`, `timeout_add_local`,
+  `idle_add_once` and friends (each callback checks that it runs and is
+  dropped on the thread that added it), a scoped variant whose sources
+  may borrow from the caller's stack and are all destroyed when the scope
+  ends, and a counted `MainLoop`. The EventSource and WebSocket
+  dispatchers, image load retries, `requestAnimationFrame` ticks,
+  localStorage flushing, observer ticks, the headless and browser settle
+  loops, blocking fetches and single-process request retries use them
+  instead of `extern "C"` trampolines that passed boxed or borrowed data
+  through `*mut c_void`.
 * Security: `navigator.sendBeacon` obeys the page's
   Content-Security-Policy `connect-src` and refuses mixed content, as
   `fetch` and `XMLHttpRequest` already did, so a policy meant to stop

@@ -171,7 +171,7 @@ pub struct NsBrowser {
     pub scroll_anchor_y: Cell<c_int>,
     img_sessions: RefCell<Vec<Session>>,
     pub image_arrivals_since_layout: Cell<c_uint>,
-    pub media_events_source: Cell<c_uint>,
+    pub media_events_source: Cell<Option<southstar_glib::SourceId>>,
     pub images_arrived_since_layout: Flag,
     pub load_delay_deadline_us: Cell<i64>,
     img_requested: RefCell<HashSet<CString>>,
@@ -229,10 +229,6 @@ pub struct NsBrowser {
 }
 
 impl NsBrowser {
-    pub fn as_ptr(&self) -> *mut NsBrowser {
-        ptr::from_ref(self).cast_mut()
-    }
-
     pub fn doc(&self) -> Option<Node<'_>> {
         self.doc.borrow().as_ref().map(Tree::root)
     }
@@ -335,9 +331,8 @@ impl NsBrowser {
     }
 
     pub fn release(&self) {
-        let source = self.media_events_source.get();
-        if source != 0 {
-            source_remove(source);
+        if let Some(source) = self.media_events_source.take() {
+            source.remove();
         }
         self.sessions().close_all();
         self.img_requested.borrow_mut().clear();
@@ -508,9 +503,9 @@ pub fn wire_video_callbacks(b: &NsBrowser, videos: Videos) {
 }
 
 pub fn schedule_media_events(b: &NsBrowser) {
-    if b.media_events_source.get() == 0 {
+    if b.media_events_source.get().is_none() {
         b.media_events_source
-            .set(trampolines::add_media_events_timeout(b));
+            .set(Some(trampolines::add_media_events_timeout(b)));
     }
 }
 

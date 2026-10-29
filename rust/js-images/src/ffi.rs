@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use southstar_dom::Node;
+use southstar_glib::SourceId;
 use southstar_image::{ImageCache, ImageRef};
 use southstar_js_engine::ContextHandle;
 use southstar_js_runtime::api::Page;
@@ -26,15 +27,6 @@ impl Js {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Realm(ContextHandle);
-
-type GBoolean = c_int;
-type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
-unsafe extern "C" {
-    fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_source_remove(id: c_uint) -> GBoolean;
-}
 
 pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
@@ -109,16 +101,20 @@ pub(crate) fn cancel_image_cb(js: Js, load: &Load) {
     }
 }
 
-pub(crate) fn source_remove(id: c_uint) {
-    unsafe { g_source_remove(id) };
+pub(crate) fn idle_add_ready(load: &Rc<Load>) -> SourceId {
+    let load = Rc::downgrade(load);
+    southstar_glib::idle_add_local_once(move || run_ready(&load))
 }
 
-pub(crate) fn idle_add_ready(load: &Rc<Load>) -> c_uint {
-    unsafe { g_idle_add(ready_idle, load_ptr(load)) }
+pub(crate) fn timeout_add_ready(ms: u32, load: &Rc<Load>) -> SourceId {
+    let load = Rc::downgrade(load);
+    southstar_glib::timeout_add_local_once(ms, move || run_ready(&load))
 }
 
-pub(crate) fn timeout_add_ready(ms: c_uint, load: &Rc<Load>) -> c_uint {
-    unsafe { g_timeout_add(ms, ready_idle, load_ptr(load)) }
+fn run_ready(load: &Weak<Load>) {
+    if let Some(load) = load.upgrade() {
+        crate::ready_idle(load);
+    }
 }
 
 pub(crate) fn image_load_realm(js: Js) -> Realm {
@@ -202,13 +198,6 @@ fn on_image_ready(img: ImageRef<'static>, load: usize) {
     if let Some(load) = unsafe { retain(load as *mut c_void) } {
         crate::on_image_ready(load, Some(img));
     }
-}
-
-unsafe extern "C" fn ready_idle(data: *mut c_void) -> GBoolean {
-    if let Some(load) = unsafe { retain(data) } {
-        crate::ready_idle(load);
-    }
-    0
 }
 
 fn js_arg(js: Option<Page>) -> Js {

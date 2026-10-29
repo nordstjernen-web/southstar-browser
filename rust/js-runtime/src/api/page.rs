@@ -434,7 +434,9 @@ pub fn message_tasks_pending(js: Option<Page>) -> bool {
 }
 
 pub fn observer_tick_pending(js: Option<Page>) -> bool {
-    state(js, false, |state| state.observer_tick_source.get() != 0)
+    state(js, false, |state| {
+        state.observer_tick_source.get().is_some()
+    })
 }
 
 pub fn eval_budget_us() -> i64 {

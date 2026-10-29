@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_long, c_void};
+use core::ops::ControlFlow;
 use core::ptr;
 use std::ffi::CString;
 
@@ -102,13 +103,6 @@ pub fn drop_message_tasks(js: Option<Page>) {
     each(js, scheduling::drop_message_tasks);
 }
 
-unsafe extern "C" fn observer_tick(data: *mut c_void) -> GBoolean {
-    let Some(js) = Js::of_raw(data) else {
-        return 0;
-    };
-    GBoolean::from(scheduling::observer_tick(js))
-}
-
 pub fn observer_schedule_tick(js: Option<Page>) {
     let Some(js) = Js::of(js) else {
         return;
@@ -116,13 +110,18 @@ pub fn observer_schedule_tick(js: Option<Page>) {
     let state = js.st();
     if js.ctx().is_null()
         || !state.worker_host.get().is_null()
-        || state.observer_tick_source.get() != 0
+        || state.observer_tick_source.get().is_some()
     {
         return;
     }
-    state
-        .observer_tick_source
-        .set(glue::timeout_add(4, observer_tick, js));
+    let tick = southstar_glib::timeout_add_local(4, move || {
+        if scheduling::observer_tick(js) {
+            ControlFlow::Continue(())
+        } else {
+            ControlFlow::Break(())
+        }
+    });
+    state.observer_tick_source.set(Some(tick));
 }
 
 pub fn process_pending_iframes(js: Option<Page>) {

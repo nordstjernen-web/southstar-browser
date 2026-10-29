@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
@@ -31,23 +31,14 @@ impl Js {
         self.0
     }
 
-    fn raw(self) -> *mut c_void {
-        self.0.map_or(ptr::null_mut(), JsPage::as_raw)
-    }
-
     pub fn is_null(self) -> bool {
         self.0.is_none()
     }
 }
 
-type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-
 const KEY_FILE_NONE: c_int = 0;
 
 unsafe extern "C" {
-
-    fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
-    fn g_source_remove(tag: c_uint) -> GBoolean;
 
     fn g_key_file_new() -> *mut GKeyFile;
     fn g_key_file_free(key_file: *mut GKeyFile);
@@ -310,9 +301,8 @@ fn restrict_mode(path: &Path, mode: u32) {
 fn restrict_mode(_path: &Path, _mode: u32) {}
 
 pub(crate) fn cancel_flush(page: &Page) {
-    let source = page.flush_source.replace(0);
-    if source != 0 {
-        unsafe { g_source_remove(source) };
+    if let Some(source) = page.flush_source.take() {
+        source.remove();
     }
 }
 
@@ -324,20 +314,19 @@ fn flush(page: &Page) {
     }
 }
 
-unsafe extern "C" fn flush_timer(data: *mut c_void) -> GBoolean {
-    if let Some(page) = crate::page(Js(JsPage::from_raw(data))) {
-        page.flush_source.set(0);
+fn flush_timer(js: Js) {
+    if let Some(page) = crate::page(js) {
+        page.flush_source.set(None);
         flush(&page);
     }
-    glib::FALSE
 }
 
 fn schedule_flush(js: Js, page: &Page) {
-    if !page.storage.borrow().wants_flush() || page.flush_source.get() != 0 {
+    if !page.storage.borrow().wants_flush() || page.flush_source.get().is_some() {
         return;
     }
-    let source = unsafe { g_timeout_add(1000, flush_timer, js.raw()) };
-    page.flush_source.set(source);
+    let source = glib::timeout_add_local_once(1000, move || flush_timer(js));
+    page.flush_source.set(Some(source));
 }
 
 fn load_local(page: &Rc<Page>, url: Option<String>) {
