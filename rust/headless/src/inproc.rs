@@ -717,11 +717,7 @@ pub fn run_one(
     let pending = nav.pending_url.borrow_mut().take();
     if let (Some(pending), true) = (pending, hop < 4 && !o.wpt) {
         let base = final_url.clone().unwrap_or_else(|| fetch_url.to_owned());
-        let next = if pending.windows(3).any(|w| w == b"://") {
-            pending.clone()
-        } else {
-            ffi::url_resolve(&base, &cstring(&pending)).unwrap_or_else(|| pending.clone())
-        };
+        let next = ffi::url_resolve(&base, &cstring(&pending)).unwrap_or_else(|| pending.clone());
         let next_post = nav.post_body.borrow_mut().take();
         let next_ct = nav.post_ct.borrow_mut().take();
         let marker: &[u8] = if next_post.is_some() { b" POST" } else { b"" };
