@@ -37,10 +37,6 @@ impl Js {
 #[derive(Clone, Copy)]
 pub(crate) struct RawObject(usize);
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 #[allow(clippy::unnecessary_cast)]
 fn long(value: c_long) -> i64 {
     value as i64
@@ -51,7 +47,7 @@ fn bytes(text: Option<&CStr>) -> Option<&[u8]> {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn real_us() -> i64 {

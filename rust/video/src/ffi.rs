@@ -26,13 +26,8 @@ impl Response {
     }
 }
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 pub fn monotonic_us() -> i64 {
-    // SAFETY: g_get_monotonic_time takes no arguments and only reads the system clock.
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 fn user_cache_dir() -> Vec<u8> {

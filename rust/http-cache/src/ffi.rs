@@ -19,10 +19,7 @@ struct GTimeZone {
     _private: [u8; 0],
 }
 
-const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
-
 unsafe extern "C" {
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_date_time_new_from_iso8601(
         text: *const c_char,
         default_tz: *mut GTimeZone,
@@ -44,15 +41,7 @@ unsafe extern "C" {
 }
 
 pub(crate) fn warn(message: &[u8]) {
-    let message = crate::cstring(message);
-    unsafe {
-        g_log(
-            ptr::null(),
-            G_LOG_LEVEL_WARNING,
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    southstar_glib::warning(message);
 }
 
 pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {

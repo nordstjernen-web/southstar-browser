@@ -13,6 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 southstar-av = { path = "../av" }
+southstar-glib = { path = "../glib" }
 southstar-helper-ffi = { path = "../helper-ffi" }
 southstar-http = { path = "../http" }
 southstar-media-shm = { path = "../media-shm" }

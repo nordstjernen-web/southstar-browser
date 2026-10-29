@@ -61,7 +61,6 @@ pub(crate) const HO_XHR_UPLOAD: HostKind = HostKind::XhrUpload;
 type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
     fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
 
 }
@@ -76,7 +75,7 @@ pub(crate) fn cstring(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 fn before_nul(bytes: &[u8]) -> &[u8] {

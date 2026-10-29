@@ -12,10 +12,6 @@ use southstar_media_shm::{
 
 const BYTES: usize = core::mem::size_of::<Header>();
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 pub struct Sample<'a> {
     pub playing: bool,
     pub position: f64,
@@ -58,6 +54,7 @@ impl Clock {
         if seq & 1 != 0 {
             seq = seq.wrapping_add(1);
         }
+        let now_us = southstar_glib::monotonic_us();
         sequence.store(seq.wrapping_add(1), Ordering::Release);
         unsafe {
             match sample {
@@ -76,7 +73,7 @@ impl Clock {
                     ptr::write_volatile(&raw mut (*slot).token, token);
                 }
             }
-            ptr::write_volatile(&raw mut (*slot).monotonic_us, g_get_monotonic_time());
+            ptr::write_volatile(&raw mut (*slot).monotonic_us, now_us);
         }
         sequence.store(seq.wrapping_add(2), Ordering::Release);
     }

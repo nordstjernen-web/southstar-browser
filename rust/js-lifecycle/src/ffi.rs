@@ -279,11 +279,10 @@ pub(crate) const SOURCE_REMOVE: GBoolean = glib::FALSE;
 unsafe extern "C" {
     fn g_timeout_add(interval: c_uint, func: SourceFunc, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
-    fn g_get_monotonic_time() -> i64;
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) use southstar_engine::in_blocking_fetch;

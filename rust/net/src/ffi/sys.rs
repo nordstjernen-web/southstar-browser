@@ -18,7 +18,6 @@ struct GDateTime {
     _private: [u8; 0],
 }
 
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
 const TMP_NAME_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 unsafe extern "C" {
@@ -37,8 +36,6 @@ unsafe extern "C" {
 
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
-    fn g_get_monotonic_time() -> i64;
 }
 
 fn c(bytes: &[u8]) -> CString {
@@ -364,25 +361,20 @@ pub fn is_public_suffix(domain: &[u8]) -> bool {
 }
 
 pub fn warn_read_failure(what: &CStr, path: &[u8], message: &[u8]) {
-    let (path, message) = (c(path), c(message));
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"%s: failed to read %s: %s".as_ptr(),
-            what.as_ptr(),
-            path.as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    let mut text = what.to_bytes().to_vec();
+    text.extend_from_slice(b": failed to read ");
+    text.extend_from_slice(path);
+    text.extend_from_slice(b": ");
+    text.extend_from_slice(message);
+    southstar_glib::warning(text);
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub fn info(message: &CStr) {
-    unsafe { g_log(ptr::null(), 1 << 6, c"%s".as_ptr(), message.as_ptr()) };
+    southstar_glib::log(southstar_glib::LogLevel::Info, message.to_bytes());
 }
 
 pub fn exists(path: &[u8]) -> bool {

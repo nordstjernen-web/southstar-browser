@@ -21,7 +21,6 @@ unsafe extern "C" {
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
     fn g_idle_add(function: GSourceFunc, data: *mut c_void) -> c_uint;
-    fn g_get_monotonic_time() -> i64;
 }
 
 pub struct MainLoop(NonNull<GMainLoop>);
@@ -63,7 +62,7 @@ impl Quitter {
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub fn usleep(us: u64) {

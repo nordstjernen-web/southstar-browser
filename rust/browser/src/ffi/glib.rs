@@ -12,11 +12,9 @@ use southstar_glib::{self as glib, GBoolean};
 
 pub type SourceFunc = unsafe extern "C" fn(ud: *mut c_void) -> GBoolean;
 
-const LOG_LEVEL_MESSAGE: c_int = 1 << 5;
 const DLOG_JS: c_int = 5;
 
 unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
     fn g_main_context_pending(context: *mut c_void) -> GBoolean;
     fn g_main_context_iteration(context: *mut c_void, may_block: GBoolean) -> GBoolean;
     fn g_source_remove(tag: c_uint) -> GBoolean;
@@ -25,7 +23,6 @@ unsafe extern "C" {
     pub fn g_main_loop_run(main_loop: *mut c_void);
     pub fn g_main_loop_quit(main_loop: *mut c_void);
     pub fn g_main_loop_unref(main_loop: *mut c_void);
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_printerr(format: *const c_char, ...);
     fn malloc(size: usize) -> *mut c_void;
 }
@@ -103,7 +100,7 @@ impl StrBufOwned {
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub fn main_context_pending() -> bool {
@@ -123,14 +120,7 @@ pub fn source_remove(tag: c_uint) {
 }
 
 pub fn log_message(text: &CStr) {
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_MESSAGE,
-            c"%s".as_ptr(),
-            text.as_ptr(),
-        )
-    };
+    southstar_glib::log(southstar_glib::LogLevel::Message, text.to_bytes());
 }
 
 pub fn printerr(text: &[u8]) {

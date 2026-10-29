@@ -49,7 +49,6 @@ const G_PRIORITY_DEFAULT: c_int = 0;
 type SourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
     fn g_timeout_source_new(interval: c_uint) -> *mut c_void;
     fn g_source_set_callback(
         source: *mut c_void,
@@ -69,7 +68,7 @@ unsafe extern "C" {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn realm_of(scope: &Scope<'_>) -> Realm {

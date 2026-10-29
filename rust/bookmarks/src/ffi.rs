@@ -11,7 +11,6 @@ use southstar_glib::{self as glib, FALSE, GBoolean, GError};
 const APP_DIR_NAME: &CStr = c"southstar";
 const BOOKMARKS_FILE: &CStr = c"bookmarks.txt";
 const SET_CONTENTS_CONSISTENT: c_int = 1;
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
     fn g_build_filename(first_element: *const c_char, ...) -> *mut c_char;
@@ -24,7 +23,6 @@ unsafe extern "C" {
         mode: c_int,
         error: *mut *mut GError,
     ) -> GBoolean;
-    fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
 }
 
 fn take_path(path: *mut c_char) -> CString {
@@ -83,16 +81,13 @@ pub fn write(path: &CStr, contents: &[u8]) {
     }
     // SAFETY: err is the GError the failed call set.
     let message = unsafe { (*err).message };
-    // SAFETY: the format takes two strings, and path and message are NUL-terminated.
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"bookmarks: failed to write %s: %s".as_ptr(),
-            path.as_ptr(),
-            message,
-        )
-    };
+    // SAFETY: a GError's message is a NUL-terminated string that lives as long as the error.
+    let message = unsafe { glib::bytes(message) }.unwrap_or_default();
+    let mut text = b"bookmarks: failed to write ".to_vec();
+    text.extend_from_slice(path.to_bytes());
+    text.extend_from_slice(b": ");
+    text.extend_from_slice(message);
+    glib::warning(text);
     // SAFETY: err was set by the call above and is freed once.
     unsafe { glib::g_error_free(err) };
 }

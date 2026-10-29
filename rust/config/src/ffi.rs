@@ -3,9 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::UnsafeCell;
-use core::ffi::{c_char, c_int};
-use core::ptr;
-use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
@@ -13,8 +10,6 @@ use southstar_glib::{self as glib, FALSE, TRUE};
 
 use crate::NsConfig;
 use crate::util as fs;
-
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 struct Global {
     config: UnsafeCell<NsConfig>,
@@ -28,15 +23,6 @@ static GLOBAL: Global = Global {
 
 static PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 static LOCK: Mutex<()> = Mutex::new(());
-
-unsafe extern "C" {
-    fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
-}
-
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 fn global_config() -> &'static mut NsConfig {
     unsafe { &mut *GLOBAL.config.get() }
@@ -75,18 +61,11 @@ fn getenv(name: &str) -> Option<Vec<u8>> {
 }
 
 fn warn_unreadable(path: &Path, message: &str) {
-    let path = c_string(&fs::path_bytes(path));
-    let message = c_string(message.as_bytes());
-    // SAFETY: the format takes two NUL-terminated strings, and path and message are CStrings.
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"config: failed to read %s: %s".as_ptr(),
-            path.as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    let mut text = b"config: failed to read ".to_vec();
+    text.extend_from_slice(&fs::path_bytes(path));
+    text.extend_from_slice(b": ");
+    text.extend_from_slice(message.as_bytes());
+    southstar_glib::warning(text);
 }
 
 fn read_config_file(path: &Path) -> Option<Vec<u8>> {

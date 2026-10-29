@@ -33,11 +33,10 @@ unsafe extern "C" {
     fn g_main_loop_run(main_loop: *mut GMainLoop);
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
-    fn g_get_monotonic_time() -> i64;
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub struct NestedLoop(NonNull<GMainLoop>);

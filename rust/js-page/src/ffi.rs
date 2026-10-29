@@ -93,10 +93,6 @@ pub(crate) enum ValueInstaller {
     LiftDocumentMethods,
 }
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 use southstar_idb::nsr_idb_install;
 use southstar_js_collections::nsr_live_wire_constructors;
 use southstar_js_compression::nsr_compression_install;
@@ -309,7 +305,7 @@ pub(crate) fn profile_enabled() -> bool {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn url_host(url: &CStr) -> Option<Vec<u8>> {

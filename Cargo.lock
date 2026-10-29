@@ -1767,6 +1767,7 @@ name = "southstar-audio-helper"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-av",
+ "southstar-glib",
  "southstar-helper-ffi",
  "southstar-http",
  "southstar-media-shm",
@@ -2686,6 +2687,7 @@ name = "southstar-js-images"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-dom",
+ "southstar-glib",
  "southstar-image",
  "southstar-js-engine",
  "southstar-js-perf",
@@ -2969,6 +2971,7 @@ name = "southstar-js-perf"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-dom",
+ "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-net",

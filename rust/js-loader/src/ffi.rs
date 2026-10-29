@@ -21,7 +21,6 @@ pub(crate) const CSP_STYLE: usize = southstar_csp::STYLE;
 
 unsafe extern "C" {
     fn g_source_remove(tag: c_uint) -> GBoolean;
-    fn g_get_monotonic_time() -> i64;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -483,7 +482,7 @@ pub fn install_runtime_hooks() {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn fill_element_perf_info(js: Option<Page>, el: Option<Node>, info: &mut PerfInfo) {

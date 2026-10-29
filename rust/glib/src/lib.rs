@@ -5,11 +5,13 @@
 use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
 use core::ptr;
 
+mod log;
 mod main_context;
 mod strtod;
 #[cfg(test)]
 mod tests;
 
+pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;
 
 pub type GBoolean = c_int;

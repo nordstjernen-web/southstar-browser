@@ -9,7 +9,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::Instant;
 
-use southstar_glib::{self as glib, FALSE, GBoolean, TRUE};
+use southstar_glib::{self as glib, FALSE, GBoolean, LogLevel, TRUE};
 
 use crate::{Burst, ChildExit, HangMonitor, Restart};
 
@@ -27,11 +27,7 @@ struct GMainLoop {
     _private: [u8; 0],
 }
 
-const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
-const G_LOG_LEVEL_MESSAGE: c_int = 1 << 5;
-
 unsafe extern "C" {
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add_seconds(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(tag: c_uint) -> GBoolean;
@@ -46,17 +42,16 @@ unsafe extern "C" {
     fn _exit(status: c_int) -> !;
 }
 
-fn log(level: c_int, message: &str) {
-    let message = CString::new(message.replace('\0', "")).unwrap_or_default();
-    unsafe { g_log(ptr::null(), level, c"%s".as_ptr(), message.as_ptr()) };
+fn log(level: LogLevel, message: &str) {
+    southstar_glib::log(level, message.as_bytes());
 }
 
 fn message(text: &str) {
-    log(G_LOG_LEVEL_MESSAGE, text);
+    log(LogLevel::Message, text);
 }
 
 fn warning(text: &str) {
-    log(G_LOG_LEVEL_WARNING, text);
+    log(LogLevel::Warning, text);
 }
 
 #[cfg(unix)]
