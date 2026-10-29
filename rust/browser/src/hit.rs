@@ -121,12 +121,8 @@ pub fn cursor_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<&'static [u8]> {
     }
     let node = hit_node(b, x, y);
     let form_node = ffi::hit_form_dom(layout, f64::from(x), f64::from(y));
-    let style = node.and_then(|n| {
-        ancestors_and_self(n)
-            .map(|a| b.style_for(a))
-            .find(|s| !s.is_null())
-    })?;
-    if let Some(kw) = ffi::style_keyword_raw(style, ffi::css_prop_id(c"cursor"))
+    let style = node.and_then(|n| ancestors_and_self(n).find_map(|a| b.style_for(a)))?;
+    if let Some(kw) = ffi::retained_keyword(&style, ffi::css_prop_id(c"cursor"))
         && let Some(found) = cursor_keyword(kw)
     {
         return Some(found);

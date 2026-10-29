@@ -185,15 +185,15 @@ pub fn snap_document(
     let layout = b.layout()?;
     let doc = b.doc()?;
     let style = [c"html", c"body"].into_iter().find_map(|tag| {
-        let style = ffi::find_first_element(doc, tag).map_or(core::ptr::null(), |n| b.style_for(n));
-        (!style.is_null() && ffi::snap_type_is_set(style)).then_some(style)
+        let style = ffi::find_first_element(doc, tag).and_then(|n| b.style_for(n))?;
+        ffi::snap_type_is_set(&style).then_some(style)
     })?;
     let (page_w, page_h) = page::page_size(b)?;
     let max_x = non_negative(f64::from(page_w) - viewport.0);
     let max_y = non_negative(f64::from(page_h) - viewport.1);
     let mut snapped = (f64::from(pos.0), f64::from(pos.1));
     let prev = (f64::from(prev.0), f64::from(prev.1));
-    if !ffi::scroll_snap_viewport(layout, style, viewport, (max_x, max_y), prev, &mut snapped) {
+    if !ffi::scroll_snap_viewport(layout, &style, viewport, (max_x, max_y), prev, &mut snapped) {
         return None;
     }
     let next = ((snapped.0 + 0.5) as c_int, (snapped.1 + 0.5) as c_int);
