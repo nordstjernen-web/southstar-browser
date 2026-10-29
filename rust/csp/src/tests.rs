@@ -140,3 +140,14 @@ fn eval_needs_unsafe_eval() {
     assert!(csp("script-src 'self' 'UNSAFE-EVAL'").eval_allowed());
     assert!(csp("default-src 'none'; script-src 'unsafe-eval'").eval_allowed());
 }
+
+#[test]
+fn directives_split_on_any_ascii_whitespace() {
+    let policy = csp("script-src\n'self'\r\n'nonce-abc';\x0cimg-src\t'none'");
+    assert!(allows(&policy, SCRIPT, "https://example.com/a.js"));
+    assert!(!allows(&policy, SCRIPT, "https://cdn.example.com/a.js"));
+    assert!(!allows(&policy, IMG, "https://example.com/a.png"));
+    assert!(!policy.inline_script_allowed(b"x()", None));
+    assert!(policy.inline_script_allowed(b"x()", Some(b"abc")));
+    assert!(!policy.eval_allowed());
+}
