@@ -83,9 +83,9 @@ impl Inflate {
         })
     }
 
-    pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<(), Failure> {
+    pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<usize, Failure> {
         if self.finished {
-            return Ok(());
+            return Ok(input.len());
         }
         let mut out = [0u8; OUT_CHUNK];
         let mut rest = input;
@@ -105,11 +105,11 @@ impl Inflate {
             match rc {
                 Z_STREAM_END => {
                     self.finished = true;
-                    return Ok(());
+                    return Ok(rest.len());
                 }
                 Z_OK | Z_BUF_ERROR => {
                     if rest.is_empty() && produced < OUT_CHUNK {
-                        return Ok(());
+                        return Ok(0);
                     }
                     if consumed == 0 && produced == 0 {
                         return Err(Failure::Corrupt);

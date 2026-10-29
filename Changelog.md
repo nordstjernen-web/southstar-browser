@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Networking: response bodies with stacked codings
+  (`Content-Encoding: deflate, gzip`, or the codings split over several
+  header lines) are decoded in reverse order, as listed, instead of
+  being handed over still compressed because the whole header value was
+  not one known token. A multi-member gzip body is decoded to the end
+  rather than stopping after the first member; anything after the last
+  member that is not another gzip header is ignored. `identity` and
+  unknown tokens are skipped, so an unrecognised coding such as
+  `Content-Encoding: ISO-8859-1` still passes the body through, and more
+  than five codings fail the response.
 * Security: an iframe runs under the Content-Security-Policy its own
   document was served with. The frame table already kept each frame's
   policy (the response header, an explicit empty policy for a fetched
