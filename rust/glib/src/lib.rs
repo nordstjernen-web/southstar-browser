@@ -15,8 +15,8 @@ mod strtod;
 mod tests;
 
 pub use dirs::{
-    home_dir, language_names, tmp_dir, user_cache_dir, user_config_dir, user_data_dir,
-    user_runtime_dir,
+    download_dir, home_dir, language_names, system_data_dirs, tmp_dir, user_cache_dir,
+    user_config_dir, user_data_dir, user_runtime_dir,
 };
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;

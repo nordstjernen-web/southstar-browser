@@ -37,14 +37,14 @@ struct Download {
 }
 
 fn downloads_dir() -> &'static CStr {
-    let d = unsafe { borrowed(gtk::g_get_user_special_dir(gtk::USER_DIRECTORY_DOWNLOAD)) };
-    if let Some(d) = d.filter(|d| !d.is_empty()) {
-        return d;
-    }
-    static FALLBACK: OnceLock<CString> = OnceLock::new();
-    FALLBACK.get_or_init(|| {
-        let home = unsafe { borrowed(gtk::g_get_home_dir()) }.unwrap_or(c"");
-        build_filename(&[home, c"Downloads"])
+    static DIR: OnceLock<CString> = OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = southstar_glib::download_dir();
+        if !dir.is_empty() {
+            return CString::new(dir).unwrap_or_default();
+        }
+        let home = CString::new(southstar_glib::home_dir()).unwrap_or_default();
+        build_filename(&[&home, c"Downloads"])
     })
 }
 
