@@ -429,3 +429,19 @@ fn calc_size_flattens_nested_bases_and_interpolates() {
     let other = crate::calc_size::of_body(&parse("calc-size(min-content, size)").body).unwrap();
     assert!(crate::calc_size::interpolate(a, other, 0.5).is_none());
 }
+
+#[test]
+fn matches_patterns_as_javascript_regexps() {
+    use crate::pattern_matches;
+    assert_eq!(pattern_matches(b"[a-z]+", b"abc"), Some(true));
+    assert_eq!(pattern_matches(b"[a-z]+", b"abc1"), Some(false));
+    assert_eq!(pattern_matches(b"a|b", b"ab"), Some(false));
+    assert_eq!(pattern_matches(br"\d{3}", b"123"), Some(true));
+    assert_eq!(
+        pattern_matches(br"[\p{L}--[a-z]]+", "ÅB".as_bytes()),
+        Some(true)
+    );
+    assert_eq!(pattern_matches(br"[\p{L}--[a-z]]+", b"aB"), Some(false));
+    assert_eq!(pattern_matches(b"(", b"x"), None);
+    assert_eq!(pattern_matches(br"x\", b"x"), None);
+}

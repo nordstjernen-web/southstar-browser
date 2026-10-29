@@ -84,8 +84,7 @@ fn value_matches_pattern(value: &[u8], pattern: Option<&[u8]>) -> bool {
     if let Some(matched) = ffi::with_pattern_scope(|scope| regexp_test(scope, value, pattern)) {
         return matched;
     }
-    let anchored = [&b"^(?:"[..], pattern, b")$"].concat();
-    ffi::regex_matches(&anchored, value).unwrap_or(true)
+    southstar_css::pattern_matches(pattern, value).unwrap_or(true)
 }
 
 fn is_radio(node: Element) -> bool {

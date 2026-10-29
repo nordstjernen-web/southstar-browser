@@ -4,12 +4,12 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int};
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
-use southstar_glib::{self as glib, GBoolean, GError};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_js_bind::host::{self, HostKind};
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -22,20 +22,6 @@ use crate::{Element, JsResult};
 pub(crate) struct Page(api::Page);
 
 unsafe extern "C" {
-    fn g_regex_new(
-        pattern: *const c_char,
-        compile_options: c_uint,
-        match_options: c_uint,
-        error: *mut *mut GError,
-    ) -> *mut c_void;
-    fn g_regex_match(
-        regex: *const c_void,
-        string: *const c_char,
-        match_options: c_uint,
-        match_info: *mut *mut c_void,
-    ) -> GBoolean;
-    fn g_regex_unref(regex: *mut c_void);
-
     fn g_content_type_guess(
         filename: *const c_char,
         data: *const u8,
@@ -196,22 +182,6 @@ pub(crate) fn multipart_boundary() -> Vec<u8> {
 
 pub(crate) fn with_pattern_scope<R>(f: impl FnOnce(&mut Scope<'_>) -> Option<R>) -> Option<R> {
     api::pattern_context().with(f).flatten()
-}
-
-pub(crate) fn regex_matches(pattern: &[u8], value: &[u8]) -> Option<bool> {
-    let pattern = cstring(pattern);
-    let value = cstring(value);
-    let mut error = ptr::null_mut();
-    let regex = unsafe { g_regex_new(pattern.as_ptr(), 0, 0, &mut error) };
-    if regex.is_null() {
-        if !error.is_null() {
-            unsafe { glib::g_error_free(error) };
-        }
-        return None;
-    }
-    let matched = unsafe { g_regex_match(regex, value.as_ptr(), 0, ptr::null_mut()) != 0 };
-    unsafe { g_regex_unref(regex) };
-    Some(matched)
 }
 
 pub(crate) fn url_is_valid_absolute(url: &[u8]) -> bool {

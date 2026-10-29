@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod ffi;
 
 use core::ffi::{CStr, c_long};
@@ -199,11 +201,7 @@ fn pattern_matches(value: &CStr, pattern: Option<&CStr>) -> bool {
     {
         return false;
     }
-    let mut anchored = b"^(?:".to_vec();
-    anchored.extend_from_slice(pattern.to_bytes());
-    anchored.extend_from_slice(b")$");
-    let anchored = CString::new(anchored).unwrap_or_default();
-    ffi::regex_matches(&anchored, value).unwrap_or(true)
+    southstar_css::pattern_matches(pattern.to_bytes(), value.to_bytes()).unwrap_or(true)
 }
 
 fn type_matches(node: Node, value: &CStr, ty: Option<&CStr>) -> bool {

@@ -1,14 +1,13 @@
-//! Southstar — the C ABI of the extension host, and the file, GLib, GRegex and libpsl calls behind it.
+//! Southstar — the C ABI of the extension host, its rule regexes, and the file, GLib and libpsl calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_char};
 use std::ffi::{CString, OsStr};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib as glib;
 
 #[cfg(windows)]
 pub(crate) const SEARCHPATH_SEPARATOR: u8 = b';';
@@ -20,58 +19,29 @@ const DIR_SEPARATOR: u8 = b'\\';
 #[cfg(not(windows))]
 const DIR_SEPARATOR: u8 = b'/';
 
-const G_REGEX_CASELESS: c_int = 1 << 0;
-
-#[repr(C)]
-struct GRegex {
-    _private: [u8; 0],
-}
-
 #[repr(C)]
 struct PslContext {
     _private: [u8; 0],
 }
 
 unsafe extern "C" {
-    fn g_regex_new(
-        pattern: *const c_char,
-        compile_options: c_int,
-        match_options: c_int,
-        error: *mut *mut glib::GError,
-    ) -> *mut GRegex;
-    fn g_regex_match(
-        regex: *const GRegex,
-        string: *const c_char,
-        match_options: c_int,
-        match_info: *mut *mut c_void,
-    ) -> GBoolean;
-    fn g_regex_unref(regex: *mut GRegex);
     fn psl_builtin() -> *const PslContext;
     fn psl_registrable_domain(psl: *const PslContext, domain: *const c_char) -> *const c_char;
 }
 
-pub(crate) struct Regex(NonNull<GRegex>);
-
-unsafe impl Send for Regex {}
-unsafe impl Sync for Regex {}
+pub(crate) struct Regex(regress::Regex);
 
 impl Regex {
     pub(crate) fn new(pattern: &[u8], case_sensitive: bool) -> Option<Regex> {
-        let pattern = cstring(pattern);
-        let options = if case_sensitive { 0 } else { G_REGEX_CASELESS };
-        let regex = unsafe { g_regex_new(pattern.as_ptr(), options, 0, ptr::null_mut()) };
-        NonNull::new(regex).map(Regex)
+        let pattern = core::str::from_utf8(until_nul(pattern)).ok()?;
+        let flags = if case_sensitive { "" } else { "i" };
+        regress::Regex::with_flags(pattern, flags).ok().map(Regex)
     }
 
     pub(crate) fn is_match(&self, text: &[u8]) -> bool {
-        let text = cstring(text);
-        unsafe { g_regex_match(self.0.as_ptr(), text.as_ptr(), 0, ptr::null_mut()) != 0 }
-    }
-}
-
-impl Drop for Regex {
-    fn drop(&mut self) {
-        unsafe { g_regex_unref(self.0.as_ptr()) };
+        self.0
+            .find(&String::from_utf8_lossy(until_nul(text)))
+            .is_some()
     }
 }
 
