@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Port: the GLib monotonic clock and message log are reached through two
+  safe functions in `rust/glib` (`monotonic_us`, `log`/`warning`)
+  instead of every crate declaring `g_get_monotonic_time` and the
+  variadic `g_log` itself and calling them in `unsafe` blocks. Twenty-nine
+  crates drop their copies of these imports.
 * Security: `navigator.sendBeacon` obeys the page's
   Content-Security-Policy `connect-src` and refuses mixed content, as
   `fetch` and `XMLHttpRequest` already did, so a policy meant to stop

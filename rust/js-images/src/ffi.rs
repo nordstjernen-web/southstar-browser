@@ -31,7 +31,6 @@ type GBoolean = c_int;
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
 unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
     fn g_idle_add(function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(id: c_uint) -> GBoolean;
@@ -161,7 +160,7 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     info.timing_allow_origin = c_str(img.timing_allow_origin()).map(CStr::to_owned);
     info.status = img.http_status();
     info.body_size = img.body_size();
-    let now = unsafe { g_get_monotonic_time() };
+    let now = southstar_glib::monotonic_us();
     let (request_us, response_us) = img.fetch_times_us();
     let origin_us = api::time_origin_us(js.0);
     let start = if request_us >= origin_us {

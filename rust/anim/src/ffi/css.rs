@@ -373,12 +373,8 @@ impl StyleMut {
     }
 }
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

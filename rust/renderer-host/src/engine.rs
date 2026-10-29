@@ -25,7 +25,6 @@ const CAIRO_FORMAT_RGB24: c_int = 1;
 const CAIRO_STATUS_SUCCESS: c_int = 0;
 
 unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
 
     fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut CairoSurface;
     fn cairo_create(target: *mut CairoSurface) -> *mut Cairo;
@@ -48,7 +47,7 @@ pub fn net_idle() -> bool {
 }
 
 pub fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub fn net_log_clear() {

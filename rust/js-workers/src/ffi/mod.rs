@@ -232,7 +232,6 @@ unsafe extern "C" {
     fn g_main_loop_run(main_loop: *mut GMainLoop);
     fn g_main_loop_quit(main_loop: *mut GMainLoop);
     fn g_main_loop_unref(main_loop: *mut GMainLoop);
-    fn g_get_monotonic_time() -> i64;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -645,7 +644,7 @@ pub(crate) fn sw_fetch_deliver(js: Js, result: &FetchResult) {
 
 pub(crate) fn worker_now_ms(js: Js) -> f64 {
     let origin_us = api::time_origin_us(js.page());
-    southstar_js_perf::relative_ms(unsafe { g_get_monotonic_time() }, origin_us)
+    southstar_js_perf::relative_ms(southstar_glib::monotonic_us(), origin_us)
 }
 
 pub(crate) fn url_resolve(base: Option<&str>, href: &str) -> Option<String> {

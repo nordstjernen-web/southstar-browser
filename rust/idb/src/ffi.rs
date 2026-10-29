@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::CStr;
 use std::ffi::{CString, OsStr};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -13,19 +12,9 @@ use southstar_glib as glib;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
-
-unsafe extern "C" {
-    fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
-}
-
 fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     &bytes[..end]
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 #[cfg(unix)]
@@ -141,16 +130,7 @@ pub fn env(name: &CStr) -> Option<Vec<u8>> {
 }
 
 pub fn warning(message: &[u8]) {
-    let message = cstring(message);
-    // SAFETY: the format is "%s" and its one argument is a NUL-terminated string that outlives the call.
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    southstar_glib::warning(message);
 }
 
 pub fn partition(scope: &Scope<'_>) -> Option<Vec<u8>> {

@@ -2,20 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
+use core::ffi::CStr;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use core::ffi::{c_char, c_int};
 use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use southstar_glib as glib;
+use southstar_glib::{self as glib, LogLevel};
 
-const G_LOG_LEVEL_WARNING: c_int = 1 << 4;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-const G_LOG_LEVEL_INFO: c_int = 1 << 6;
-
 unsafe extern "C" {
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
     #[cfg(target_os = "linux")]
     fn g_printerr(format: *const c_char, ...);
     #[cfg(target_os = "linux")]
@@ -26,18 +23,17 @@ unsafe extern "C" {
     fn g_get_user_special_dir(directory: c_int) -> *const c_char;
 }
 
-fn log(level: c_int, message: &str) {
-    let message = CString::new(message.replace('\0', "")).unwrap_or_default();
-    unsafe { g_log(ptr::null(), level, c"%s".as_ptr(), message.as_ptr()) };
+fn log(level: LogLevel, message: &str) {
+    southstar_glib::log(level, message.as_bytes());
 }
 
 fn warning(message: &str) {
-    log(G_LOG_LEVEL_WARNING, message);
+    log(LogLevel::Warning, message);
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn info(message: &str) {
-    log(G_LOG_LEVEL_INFO, message);
+    log(LogLevel::Info, message);
 }
 
 #[cfg(target_os = "linux")]

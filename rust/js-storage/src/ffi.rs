@@ -42,14 +42,12 @@ impl Js {
 
 type SourceFn = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
 const KEY_FILE_NONE: c_int = 0;
 
 unsafe extern "C" {
 
     fn g_timeout_add(interval: c_uint, function: SourceFn, data: *mut c_void) -> c_uint;
     fn g_source_remove(tag: c_uint) -> GBoolean;
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 
     fn g_key_file_new() -> *mut GKeyFile;
     fn g_key_file_free(key_file: *mut GKeyFile);
@@ -173,15 +171,7 @@ pub(crate) fn in_main_realm(js: Js, f: impl FnMut()) {
 }
 
 fn warn(message: &str) {
-    let message = c_text(message);
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    southstar_glib::warning(message);
 }
 
 fn url_origin(url: &str) -> Option<String> {

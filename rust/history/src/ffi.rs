@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int};
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_config::util;
@@ -14,10 +13,7 @@ struct GDateTime {
     _private: [u8; 0],
 }
 
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
-
 unsafe extern "C" {
-    fn g_log(log_domain: *const c_char, log_level: c_int, format: *const c_char, ...);
     fn g_date_time_new_now_local() -> *mut GDateTime;
     fn g_date_time_new_from_unix_local(t: i64) -> *mut GDateTime;
     fn g_date_time_get_day_of_year(datetime: *mut GDateTime) -> c_int;
@@ -42,15 +38,7 @@ unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
 }
 
 pub(crate) fn warn(message: &[u8]) {
-    let message = c_string(message);
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    glib::warning(message);
 }
 
 pub(crate) fn build_filename(dir: &CStr, name: &CStr) -> CString {

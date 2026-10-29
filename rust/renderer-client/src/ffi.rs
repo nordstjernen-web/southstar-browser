@@ -35,7 +35,6 @@ static PRINT: Mutex<Option<PrintFn>> = Mutex::new(None);
 
 unsafe extern "C" {
     fn g_get_user_runtime_dir() -> *const c_char;
-    fn g_get_monotonic_time() -> i64;
     fn g_ptr_array_new() -> *mut GPtrArray;
     fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
     fn g_ptr_array_free(array: *mut GPtrArray, free_segment: c_int) -> *mut *mut c_void;
@@ -63,8 +62,7 @@ pub fn exchange_dir() -> Vec<u8> {
 
 fn print_prefix() -> Vec<u8> {
     let mut prefix = exchange_dir();
-    // SAFETY: g_get_monotonic_time takes no arguments and only reads the clock.
-    let now = unsafe { g_get_monotonic_time() };
+    let now = southstar_glib::monotonic_us();
     prefix.extend_from_slice(
         format!("/southstar-print-{now}-{}", os::next_print_counter()).as_bytes(),
     );

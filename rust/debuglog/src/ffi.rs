@@ -9,13 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use southstar_glib as glib;
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 pub fn monotonic_us() -> i64 {
-    // SAFETY: g_get_monotonic_time has no preconditions.
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub fn real_time_us() -> i64 {

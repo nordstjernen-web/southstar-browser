@@ -62,10 +62,6 @@ const _: () = assert!(
         && core::mem::offset_of!(RenderProfile, container_pass) == 64
 );
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 static FONT_FAMILY: Prop = Prop::new(c"font-family");
 static CONTENT: Prop = Prop::new(c"content");
 static CONTAINER_TYPE: Prop = Prop::new(c"container-type");
@@ -95,7 +91,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 fn now_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {

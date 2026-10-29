@@ -10,8 +10,7 @@ pub(crate) mod scopes;
 pub(crate) mod state;
 pub(crate) mod wrapper;
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_uint, c_void};
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -107,14 +106,11 @@ pub(crate) enum Class {
 }
 
 const PROTO_TABLE_ELEMENT: c_int = 13;
-const LOG_LEVEL_WARNING: c_int = 1 << 4;
 
 unsafe extern "C" {
     fn g_main_context_default() -> *mut GMainContext;
     fn g_source_remove(id: c_uint) -> GBoolean;
 
-    fn g_get_monotonic_time() -> i64;
-    fn g_log(domain: *const c_char, level: c_int, format: *const c_char, ...);
 }
 
 #[cfg(windows)]
@@ -621,7 +617,7 @@ pub(crate) fn set_active(js: Js) {
 }
 
 pub(crate) fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn real_time_us() -> i64 {
@@ -634,16 +630,7 @@ pub(crate) fn real_time_us() -> i64 {
 }
 
 pub(crate) fn warn(message: &str) {
-    let message = glue::c_line(message.as_bytes());
-    // SAFETY: the format is "%s" and its one argument is a NUL-terminated string alive for the call.
-    unsafe {
-        g_log(
-            ptr::null(),
-            LOG_LEVEL_WARNING,
-            c"%s".as_ptr(),
-            message.as_ptr(),
-        )
-    };
+    southstar_glib::warning(message);
 }
 
 #[cfg(target_os = "macos")]
