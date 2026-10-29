@@ -464,6 +464,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
         cookie_js_path: js_jar.as_deref(),
         cookie_context: request::cookie_context(is_navigation, f.method, initiator, &url),
         request_ftp,
+        navigation: is_navigation,
     };
 
     let mut out = HopOut::default();

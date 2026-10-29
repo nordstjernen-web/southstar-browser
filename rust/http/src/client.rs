@@ -126,7 +126,7 @@ fn request_method<'a>(req: &Request<'a>) -> &'a [u8] {
     req.method
 }
 
-fn common_fields<'a>(req: &'a Request<'a>) -> Vec<(&'a [u8], &'a [u8])> {
+fn common_fields<'a>(req: &'a Request<'a>, with_cookie: bool) -> Vec<(&'a [u8], &'a [u8])> {
     let mut fields: Vec<(&[u8], &[u8])> = Vec::new();
     if let Some(ua) = req.user_agent {
         fields.push((b"user-agent", ua));
@@ -135,13 +135,13 @@ fn common_fields<'a>(req: &'a Request<'a>) -> Vec<(&'a [u8], &'a [u8])> {
     if let Some(r) = req.referer.filter(|r| !r.is_empty()) {
         fields.push((b"referer", r));
     }
-    if let Some(c) = &req.cookie {
+    if let Some(c) = req.cookie.as_ref().filter(|_| with_cookie) {
         fields.push((b"cookie", c));
     }
     fields
 }
 
-fn h2_fields(req: &Request) -> Vec<(Vec<u8>, Vec<u8>)> {
+fn h2_fields(req: &Request, with_cookie: bool) -> Vec<(Vec<u8>, Vec<u8>)> {
     let scheme: &[u8] = if req.https { b"https" } else { b"http" };
     let mut fields = vec![
         (b":method".to_vec(), request_method(req).to_vec()),
@@ -149,7 +149,7 @@ fn h2_fields(req: &Request) -> Vec<(Vec<u8>, Vec<u8>)> {
         (b":authority".to_vec(), req.authority.to_vec()),
         (b":path".to_vec(), req.path.to_vec()),
     ];
-    for (n, v) in common_fields(req) {
+    for (n, v) in common_fields(req, with_cookie) {
         fields.push((n.to_vec(), v.to_vec()));
     }
     for line in &req.extra_headers {
@@ -164,8 +164,8 @@ fn h2_fields(req: &Request) -> Vec<(Vec<u8>, Vec<u8>)> {
     fields
 }
 
-fn h1_head(req: &Request) -> Vec<u8> {
-    let titled: Vec<(&[u8], &[u8])> = common_fields(req)
+fn h1_head(req: &Request, with_cookie: bool) -> Vec<u8> {
+    let titled: Vec<(&[u8], &[u8])> = common_fields(req, with_cookie)
         .into_iter()
         .map(|(n, v)| {
             let name: &[u8] = match n {
@@ -302,6 +302,7 @@ struct Connected {
     stream: Stream,
     remote: SocketAddr,
     h2: bool,
+    verified: bool,
 }
 
 fn tcp_connect(
@@ -406,6 +407,7 @@ fn open(
             stream: Stream::Plain(tcp),
             remote,
             h2: false,
+            verified: true,
         });
     }
     let abort = || t.should_abort();
@@ -420,6 +422,7 @@ fn open(
                     stream: Stream::Tls(Box::new(session)),
                     remote,
                     h2,
+                    verified: verify,
                 });
             }
             Err(Handshake::Cancelled) => {
@@ -485,8 +488,8 @@ pub(crate) fn read_line(
     }
 }
 
-fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer) -> bool {
-    let head = h1_head(req);
+fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: bool) -> bool {
+    let head = h1_head(req, with_cookie);
     let deadline = t.deadline;
     let ok = {
         let h: &dyn Handler = &*t.handler;
@@ -1138,7 +1141,7 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
     let connect_deadline = (start + req.connect_timeout).min(deadline);
     let mut t = Transfer::new(handler, start, deadline);
     let origin = origin_key(req);
-    let fields = h2_fields(req);
+    let fields = h2_fields(req, true);
 
     let mut ok = false;
     let mut reused = false;
@@ -1146,6 +1149,7 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
     let mut rst = false;
     let mut connects = 1;
     for attempt in 0..2 {
+        let mut pooled = true;
         let (conn, token) = match attach(&origin, &fields, req.body, &t) {
             Attach::Reused(conn, token) => {
                 reused = true;
@@ -1167,11 +1171,14 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
                     mut stream,
                     remote,
                     h2,
-                    ..
+                    verified,
                 } = connected;
+                if !verified {
+                    t.handler.tls_unverified();
+                }
                 if !h2 {
                     connect_done(&origin, None);
-                    ok = run_http1(req, &mut stream, &mut t);
+                    ok = run_http1(req, &mut stream, &mut t, verified);
                     break;
                 }
                 let Some(conn) = start_h2(stream, remote) else {
@@ -1181,11 +1188,17 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
                     return out;
                 };
                 via_h2 = true;
+                pooled = verified;
                 let token = {
                     let mut s = lock(&conn);
-                    conn.enqueue(&mut s, fields.clone(), req.body.to_vec())
+                    let fields = if verified {
+                        fields.clone()
+                    } else {
+                        h2_fields(req, false)
+                    };
+                    conn.enqueue(&mut s, fields, req.body.to_vec())
                 };
-                connect_done(&origin, Some(conn.clone()));
+                connect_done(&origin, if verified { Some(conn.clone()) } else { None });
                 (conn, token)
             }
             Attach::GaveUp => {
@@ -1198,6 +1211,10 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
             }
         };
         let result = wait_stream(&conn, token, &mut t);
+        if !pooled {
+            lock(&conn).stopping = true;
+            conn.wake.signal();
+        }
         ok = result.ok;
         rst = result.rst;
         if reused && attempt == 0 && !t.got_first_byte && (!result.submitted || result.refused) {
@@ -1426,7 +1443,7 @@ pub fn preconnect(req: &Request, abort: &dyn Fn() -> bool) {
     let t = Transfer::new(&mut quiet, start, connect_deadline);
     let mut out = Outcome::new();
     let conn = open(req, &t, connect_deadline, &mut out, true)
-        .filter(|c| c.h2)
+        .filter(|c| c.h2 && c.verified)
         .and_then(|c| start_h2(c.stream, c.remote));
     connect_done(&origin, conn);
 }

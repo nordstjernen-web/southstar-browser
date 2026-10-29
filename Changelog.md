@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Security: the `tls_allow_insecure_override` setting now lets only the
+  page being navigated to proceed past a certificate error, and that
+  retried navigation sends no cookies and stores none from the reply.
+  Every HTTPS request that failed verification — scripts, stylesheets,
+  frames, `fetch()`, workers, media, WebSocket and EventSource
+  connections, even connections opened ahead of time — was retried with
+  verification off and with the site's cookies, so a user who turned the
+  setting on for one broken intranet host handed an on-path attacker
+  every script and session on every site. Those requests now keep
+  failing, and a connection made without verification is never kept in
+  the HTTP/2 pool for later requests.
 * Port: the GLib monotonic clock and message log are reached through two
   safe functions in `rust/glib` (`monotonic_us`, `log`/`warning`)
   instead of every crate declaring `g_get_monotonic_time` and the

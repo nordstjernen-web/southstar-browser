@@ -15,6 +15,7 @@ pub trait Handler {
     fn header(&mut self, line: &[u8], name: &[u8], value: &[u8]);
     fn body(&mut self, data: &[u8]) -> bool;
     fn headers_done(&mut self) {}
+    fn tls_unverified(&mut self) {}
 }
 
 pub struct Transfer<'h> {
