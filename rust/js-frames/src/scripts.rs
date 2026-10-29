@@ -140,6 +140,19 @@ fn fetch_external(
     let Some(resp) = load::fetch_script(js, script, &abs_url, origin) else {
         return;
     };
+    if let Some(final_url) = resp.final_url().filter(|url| *url != abs_url.as_c_str()) {
+        let mixed = origin.to_bytes().starts_with(b"https://")
+            && final_url.to_bytes().starts_with(b"http://");
+        if mixed || !policy.allows_url(js, final_url, origin, nonce) {
+            log_blocked(
+                js,
+                b"script",
+                final_url.to_bytes(),
+                b"Content-Security-Policy script-src after a redirect",
+            );
+            return;
+        }
+    }
     let nosniff_blocked = load::header_is_nosniff(resp.x_content_type_options())
         && !load::content_type_is_javascript(resp.content_type());
     let ok_status = resp.status() == 200 || resp.status() == 0;
