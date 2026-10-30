@@ -7,6 +7,7 @@ av	8	40	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
 browser	117	1	79	0	0	0	0
+build	0	0	0	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	8	3	0	0	0	0	0
@@ -136,6 +137,7 @@ sandbox	55	38	0	0	0	0	0
 selection	0	0	0	0	0	0	0
 selector-text	0	0	0	0	0	0	0
 shell	229	33	1	0	0	0	0
+southstar	0	0	0	0	0	0	0
 southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	21	0	0	0	0	0

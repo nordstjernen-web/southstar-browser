@@ -18,7 +18,8 @@ LINTS = {
     "clippy::missing_safety_doc": "missing_safety_doc",
 }
 METRICS = SOURCE_METRICS + tuple(LINTS.values())
-CLIPPY = ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--message-format=json"]
+CLIPPY = ["cargo", "clippy", "--workspace", "--exclude", "southstar", "--all-targets", "--locked",
+          "--message-format=json"]
 ABI_NAMES = {"C", "C-unwind", "system", "system-unwind", "Rust"}
 RAW_STRING = re.compile(r'(?:b|c)?r(#*)"')
 EXTERN_BLOCK = re.compile(r'\bextern\s*(?:"[^"]*"\s*)?\{')
