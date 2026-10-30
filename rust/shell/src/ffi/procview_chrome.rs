@@ -2,23 +2,30 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ops::ControlFlow;
 use core::ptr;
 use core::sync::atomic::{AtomicI32, Ordering};
+use std::ffi::CString;
 
 use southstar_cairo::Surface;
-use southstar_glib::{self as glib, GBoolean, GError};
-use southstar_gtk_ffi::{self as gtk, GtkWidget};
+use southstar_glib::{self as glib, GBoolean};
+use southstar_gtk::{
+    self as gtk, Button, Entry, FileDialog, Frame, Label, Overlay, PageSetup, PrintContext,
+    PrintOperation, Revealer, ScrolledWindow, SearchEntry, TextView, Widget, Window,
+};
+use southstar_gtk_ffi::{self as sys, GtkWidget};
 
-use super::gtk::{connect, cstring, handler, set_accessible_label, tr};
-use super::procview_input::{push_req, run_edit_op, start_select};
+use super::gtk::{build_filename, connect, cstring, handler, tr};
+use super::procview_input::{area, new_req, push_req, run_edit_op, start_select, view};
 use super::procview_result::{
     ns_proc_view_back, ns_proc_view_can_back, ns_proc_view_can_forward, ns_proc_view_forward,
-    ns_proc_view_load, ns_proc_view_reload, ns_pv_page_may_open, perm_resolve, post_emit,
+    ns_proc_view_load, ns_proc_view_reload, ns_pv_page_may_open, post_emit,
 };
-use super::procview_state::{NsProcView, PrintSetup, Req};
+use super::procview_state::{Console, FindBar, NsProcView, PermBar, PrintSetup};
 use super::procview_view::{ns_proc_view_ref, ns_proc_view_unref};
 use crate::procview::input::EditOp;
+use crate::procview::nav;
 
 const EVT_STATUS: c_int = 2;
 const EVT_NEWTAB: c_int = 3;
@@ -41,43 +48,49 @@ const DEV_TAB_PERFORMANCE: c_int = 2;
 const DEV_TAB_LAYOUT: c_int = 3;
 const DEV_TAB_ELEMENTS: c_int = 4;
 
-const CONSOLE_POLL_MS: c_uint = 250;
+const CONSOLE_POLL_MS: u32 = 250;
 
 static EXPORT_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 unsafe extern "C" {
-    fn g_malloc0(n_bytes: usize) -> *mut c_void;
     fn g_simple_action_group_new() -> *mut c_void;
-    fn g_strescape(source: *const c_char, exceptions: *const c_char) -> *mut c_char;
 }
 
-fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
-    unsafe { &mut *v }
-}
-
-fn nonempty(s: *const c_char) -> bool {
-    !s.is_null() && unsafe { *s } != 0
-}
-
-fn new_req(kind: c_int) -> *mut Req {
-    let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
-    unsafe { (*req).r#type = kind };
-    req
-}
-
-fn is_window(widget: *mut GtkWidget) -> bool {
-    !widget.is_null()
-        && unsafe { gtk::g_type_check_instance_is_a(widget.cast(), gtk::gtk_window_get_type()) }
-            != 0
-}
-
-fn page_title(v: *mut NsProcView) -> &'static [u8] {
-    let title = view(v).current_title;
-    if nonempty(title) {
-        unsafe { CStr::from_ptr(title) }.to_bytes()
-    } else {
-        b"page"
+fn page_title(v: *mut NsProcView) -> Vec<u8> {
+    match &view(v).ui().current_title {
+        Some(title) if !title.is_empty() => title.to_bytes().to_vec(),
+        _ => b"page".to_vec(),
     }
+}
+
+fn find_bar(v: *mut NsProcView) -> Option<(Revealer, SearchEntry, Label)> {
+    let find = view(v).ui().find.as_ref()?;
+    Some((
+        find.revealer.clone(),
+        find.entry.clone(),
+        find.label.clone(),
+    ))
+}
+
+fn console_window(v: *mut NsProcView) -> Option<(Window, Entry)> {
+    let console = view(v).ui().console.as_ref()?;
+    Some((console.window.clone(), console.entry.clone()))
+}
+
+fn console_text(v: *mut NsProcView, tab: c_int) -> Option<TextView> {
+    let console = view(v).ui().console.as_ref()?;
+    match tab {
+        DEV_TAB_CONSOLE => Some(console.log.clone()),
+        DEV_TAB_NETWORK => Some(console.network.clone()),
+        DEV_TAB_PERFORMANCE => Some(console.performance.clone()),
+        DEV_TAB_LAYOUT => Some(console.layout.clone()),
+        DEV_TAB_ELEMENTS => Some(console.elements.clone()),
+        _ => None,
+    }
+}
+
+pub(super) fn ns_pv_console_text(v: *mut NsProcView, tab: c_int) -> Option<TextView> {
+    console_text(v, tab)
 }
 
 struct PrintJob {
@@ -86,49 +99,28 @@ struct PrintJob {
     raster_scale: f64,
 }
 
-unsafe extern "C" fn print_job_free(data: *mut c_void) {
-    // SAFETY: data is the PrintJob print_run boxed for the print operation, which frees it once, here.
-    drop(unsafe { Box::from_raw(data.cast::<PrintJob>()) });
-}
-
-unsafe extern "C" fn on_print_begin(
-    op: *mut gtk::GtkPrintOperation,
-    _ctx: *mut c_void,
-    data: *mut c_void,
-) {
-    let job = unsafe { &*data.cast::<PrintJob>() };
-    unsafe { gtk::gtk_print_operation_set_n_pages(op, job.pages.len() as c_int) };
-}
-
-unsafe extern "C" fn on_print_draw(
-    _op: *mut c_void,
-    ctx: *mut gtk::GtkPrintContext,
-    page_nr: c_int,
-    data: *mut c_void,
-) {
-    let job = unsafe { &*data.cast::<PrintJob>() };
+fn draw_sheet(job: &PrintJob, context: &PrintContext<'_>, page_nr: c_int) {
     let Some(page) = usize::try_from(page_nr).ok().and_then(|i| job.pages.get(i)) else {
         return;
     };
-    unsafe {
-        let cr = gtk::gtk_print_context_get_cairo_context(ctx);
-        let surface_w = gtk::gtk_print_context_get_width(ctx);
-        let mut scale = if job.setup.width > 0.0 {
-            surface_w / job.setup.width
-        } else {
-            1.0
-        };
-        scale /= if job.raster_scale > 0.0 {
-            job.raster_scale
-        } else {
-            1.0
-        };
-        gtk::cairo_save(cr);
-        gtk::cairo_scale(cr, scale, scale);
-        gtk::cairo_set_source_surface(cr, page.as_raw().cast(), 0.0, 0.0);
-        gtk::cairo_paint(cr);
-        gtk::cairo_restore(cr);
-    }
+    let Some(cr) = context.cairo_context() else {
+        return;
+    };
+    let mut scale = if job.setup.width > 0.0 {
+        context.width() / job.setup.width
+    } else {
+        1.0
+    };
+    scale /= if job.raster_scale > 0.0 {
+        job.raster_scale
+    } else {
+        1.0
+    };
+    cr.save();
+    cr.scale(scale, scale);
+    cr.set_source_surface(page.as_ref(), 0.0, 0.0);
+    cr.paint();
+    cr.restore();
 }
 
 pub(super) fn print_run(
@@ -137,7 +129,7 @@ pub(super) fn print_run(
     setup: &PrintSetup,
     raster_scale: f64,
 ) {
-    let job = Box::into_raw(Box::new(PrintJob {
+    let job = PrintJob {
         pages,
         setup: *setup,
         raster_scale: if raster_scale > 0.0 {
@@ -145,152 +137,101 @@ pub(super) fn print_run(
         } else {
             1.0
         },
-    }));
+    };
+    let n_pages = c_int::try_from(job.pages.len()).unwrap_or(c_int::MAX);
     let title = cstring(page_title(v));
-    unsafe {
-        let page_setup = gtk::gtk_page_setup_new();
-        let paper = gtk::gtk_paper_size_new_custom(
-            c"southstar".as_ptr(),
-            c"Southstar".as_ptr(),
-            setup.width * 72.0 / 96.0,
-            setup.height * 72.0 / 96.0,
-            gtk::UNIT_POINTS,
-        );
-        gtk::gtk_page_setup_set_paper_size(page_setup, paper);
-        gtk::gtk_page_setup_set_orientation(
-            page_setup,
-            if setup.width > setup.height {
-                gtk::PAGE_ORIENTATION_LANDSCAPE
-            } else {
-                gtk::PAGE_ORIENTATION_PORTRAIT
-            },
-        );
-        gtk::gtk_paper_size_free(paper);
 
-        let op = gtk::gtk_print_operation_new();
-        gtk::gtk_print_operation_set_default_page_setup(op, page_setup);
-        gtk::gtk_print_operation_set_use_full_page(op, 1);
-        gtk::gtk_print_operation_set_unit(op, gtk::UNIT_POINTS);
-        gtk::gtk_print_operation_set_job_name(op, title.as_ptr());
-        gtk::gtk_print_operation_set_embed_page_setup(op, 1);
-        connect(op, c"begin-print", handler!(on_print_begin), job.cast());
-        connect(op, c"draw-page", handler!(on_print_draw), job.cast());
-        gtk::g_object_set_data_full(
-            op.cast(),
-            c"ns-print-job".as_ptr(),
-            job.cast(),
-            Some(print_job_free),
-        );
+    let page_setup = PageSetup::new();
+    page_setup.set_custom_paper_size(
+        c"southstar",
+        c"Southstar",
+        setup.width * 72.0 / 96.0,
+        setup.height * 72.0 / 96.0,
+        gtk::UNIT_POINTS,
+    );
+    page_setup.set_orientation(if setup.width > setup.height {
+        gtk::PAGE_ORIENTATION_LANDSCAPE
+    } else {
+        gtk::PAGE_ORIENTATION_PORTRAIT
+    });
 
-        let area = view(v).area;
-        let root = if area.is_null() {
-            ptr::null_mut()
-        } else {
-            gtk::gtk_widget_get_root(area)
-        };
-        let mut err: *mut GError = ptr::null_mut();
-        gtk::gtk_print_operation_run(
-            op,
-            gtk::PRINT_OPERATION_ACTION_PRINT_DIALOG,
-            root,
-            (&raw mut err).cast(),
-        );
-        if !err.is_null() {
-            post_emit(v, EVT_STATUS, (*err).message);
-            glib::g_error_free(err);
-        }
-        gtk::g_object_unref(page_setup.cast());
-        gtk::g_object_unref(op.cast());
+    let op = PrintOperation::new();
+    op.set_default_page_setup(&page_setup);
+    op.set_use_full_page(true);
+    op.set_unit(gtk::UNIT_POINTS);
+    op.set_job_name(&title);
+    op.set_embed_page_setup(true);
+    op.connect_begin_print(move |op| op.set_n_pages(n_pages));
+    op.connect_draw_page(move |context, page_nr| draw_sheet(&job, context, page_nr));
+
+    let root = area(v).and_then(|area| area.root());
+    if let Err(message) = op.run(gtk::PRINT_OPERATION_ACTION_PRINT_DIALOG, root.as_ref()) {
+        post_emit(v, EVT_STATUS, Some(&message));
     }
 }
 
-struct ExportCtx {
-    view: *mut NsProcView,
-    pdf: bool,
-}
-
-unsafe extern "C" fn on_save_dialog_done(src: *mut c_void, res: *mut c_void, ud: *mut c_void) {
-    let ctx = unsafe { Box::from_raw(ud.cast::<ExportCtx>()) };
-    let v = ctx.view;
-    let mut err: *mut GError = ptr::null_mut();
-    let file = unsafe { gtk::gtk_file_dialog_save_finish(src.cast(), res, (&raw mut err).cast()) };
-    if !file.is_null() {
-        unsafe {
-            let dest = gtk::g_file_get_path(file);
-            if !dest.is_null() && view(v).opened != 0 {
-                let counter = EXPORT_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-                let base = cstring(format!(
-                    "southstar-export-{}-{}.{}",
-                    gtk::g_get_monotonic_time(),
-                    counter,
-                    if ctx.pdf { "pdf" } else { "png" }
-                ));
-                let req = new_req(REQ_EXPORT);
-                let exchange = cstring(southstar_renderer_client::exchange_dir());
-                let mut parts = [
-                    exchange.as_ptr().cast_mut(),
-                    base.as_ptr().cast_mut(),
-                    ptr::null_mut(),
-                ];
-                (*req).url = glib::g_build_filenamev(parts.as_mut_ptr());
-                (*req).export_dest = glib::g_strdup(dest);
-                push_req(v, req);
-            }
-            glib::g_free(dest.cast());
-            gtk::g_object_unref(file);
-        }
+fn export_to(v: *mut NsProcView, dest: &[u8], pdf: bool) {
+    if view(v).opened == 0 {
+        return;
     }
-    if !err.is_null() {
-        unsafe { glib::g_error_free(err) };
-    }
-    ns_proc_view_unref(v);
+    let counter = EXPORT_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+    let base = cstring(format!(
+        "southstar-export-{}-{}.{}",
+        glib::monotonic_us(),
+        counter,
+        if pdf { "pdf" } else { "png" }
+    ));
+    let exchange = cstring(southstar_renderer_client::exchange_dir());
+    let file = build_filename(&[&exchange, &base]);
+    push_req(
+        v,
+        new_req(REQ_EXPORT, |r| {
+            r.url = glib::strdup(file.to_bytes());
+            r.export_dest = glib::strdup(dest);
+        }),
+    );
 }
 
 pub(super) fn view_save(v: *mut NsProcView, pdf: bool) {
-    let state = view(v);
-    if state.opened == 0 || state.area.is_null() {
+    if view(v).opened == 0 {
         return;
     }
-    let mut name = page_title(v).to_vec();
+    let Some(area) = area(v) else {
+        return;
+    };
+    let mut name = page_title(v);
     name.extend_from_slice(if pdf { b".pdf" } else { b".png" });
     for b in &mut name {
         if *b == b'/' {
             *b = b'_';
         }
     }
-    let name = cstring(name);
-    unsafe {
-        let root = gtk::gtk_widget_get_root(state.area);
-        let dialog = gtk::gtk_file_dialog_new();
-        let title = if pdf {
-            tr(c"Save page as PDF")
-        } else {
-            tr(c"Save page as PNG")
-        };
-        gtk::gtk_file_dialog_set_title(dialog, title.as_ptr());
-        gtk::gtk_file_dialog_set_initial_name(dialog, name.as_ptr());
-        let ctx = Box::into_raw(Box::new(ExportCtx {
-            view: ns_proc_view_ref(v),
-            pdf,
-        }));
-        gtk::gtk_file_dialog_save(
-            dialog,
-            root,
-            ptr::null_mut(),
-            Some(on_save_dialog_done),
-            ctx.cast(),
-        );
-        gtk::g_object_unref(dialog.cast());
-    }
+    let dialog = FileDialog::new();
+    dialog.set_title(if pdf {
+        tr(c"Save page as PDF")
+    } else {
+        tr(c"Save page as PNG")
+    });
+    dialog.set_initial_name(&cstring(name));
+    let held = ns_proc_view_ref(v);
+    dialog.save(area.root().as_ref(), move |dest| {
+        if let Some(dest) = dest {
+            export_to(held, &dest, pdf);
+        }
+        ns_proc_view_unref(held);
+    });
 }
 
-fn ctx_set_clipboard(v: *mut NsProcView, text: *const c_char, status: &CStr) {
-    let area = view(v).area;
-    if !nonempty(text) || area.is_null() {
+fn ctx_link(v: *mut NsProcView) -> Option<CString> {
+    view(v).ui().ctx_link.clone()
+}
+
+fn ctx_set_clipboard(v: *mut NsProcView, text: Option<CString>, status: &CStr) {
+    let (Some(text), Some(area)) = (text.filter(|t| !t.is_empty()), area(v)) else {
         return;
-    }
-    unsafe { gtk::gdk_clipboard_set_text(gtk::gtk_widget_get_clipboard(area), text) };
-    post_emit(v, EVT_STATUS, tr(status).as_ptr());
+    };
+    area.set_clipboard_text(&text);
+    post_emit(v, EVT_STATUS, Some(tr(status)));
 }
 
 unsafe extern "C" fn on_ctx_back(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
@@ -307,26 +248,31 @@ unsafe extern "C" fn on_ctx_reload(_a: *mut c_void, _p: *mut c_void, ud: *mut c_
 
 unsafe extern "C" fn on_ctx_copy_url(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    ctx_set_clipboard(v, view(v).current_url, c"Copied page address");
+    let url = view(v).ui().current_url.clone();
+    ctx_set_clipboard(v, url, c"Copied page address");
 }
 
 unsafe extern "C" fn on_ctx_open_newtab(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    if nonempty(view(v).ctx_link) && ns_pv_page_may_open(v, view(v).ctx_link) {
-        post_emit(v, EVT_NEWTAB, view(v).ctx_link);
+    if let Some(link) = ctx_link(v)
+        && ns_pv_page_may_open(v, &link)
+    {
+        post_emit(v, EVT_NEWTAB, Some(&link));
     }
 }
 
 unsafe extern "C" fn on_ctx_open_link(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    if nonempty(view(v).ctx_link) && ns_pv_page_may_open(v, view(v).ctx_link) {
-        ns_proc_view_load(v, view(v).ctx_link);
+    if let Some(link) = ctx_link(v)
+        && ns_pv_page_may_open(v, &link)
+    {
+        ns_proc_view_load(v, &link);
     }
 }
 
 unsafe extern "C" fn on_ctx_copy_link(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
     let v = ud.cast::<NsProcView>();
-    ctx_set_clipboard(v, view(v).ctx_link, c"Copied link address");
+    ctx_set_clipboard(v, ctx_link(v), c"Copied link address");
 }
 
 unsafe extern "C" fn on_ctx_cut(_a: *mut c_void, _p: *mut c_void, ud: *mut c_void) {
@@ -374,63 +320,82 @@ const CTX_ACTIONS: [(&CStr, ActionFn); 13] = [
 ];
 
 fn ctx_action_enable(v: *mut NsProcView, name: &CStr, on: bool) {
-    unsafe {
-        let act = gtk::g_action_map_lookup_action(view(v).ctx_actions, name.as_ptr());
-        if !act.is_null() {
-            gtk::g_simple_action_set_enabled(act, glib::boolean(on));
-        }
+    // SAFETY: ctx_actions is the view's live action group and name is NUL-terminated.
+    let act = unsafe { sys::g_action_map_lookup_action(view(v).ctx_actions, name.as_ptr()) };
+    if !act.is_null() {
+        // SAFETY: act is a GSimpleAction of the group, alive while the group is.
+        unsafe { sys::g_simple_action_set_enabled(act, glib::boolean(on)) };
     }
 }
 
 pub(super) fn ctx_install_actions(v: *mut NsProcView) {
-    unsafe {
-        let group = g_simple_action_group_new();
-        view(v).ctx_actions = group;
-        for (name, activate) in CTX_ACTIONS {
-            let action = gtk::g_simple_action_new(name.as_ptr(), ptr::null());
-            connect(action, c"activate", handler!(activate), v.cast());
-            gtk::g_action_map_add_action(group, action);
-            gtk::g_object_unref(action);
-        }
-        gtk::gtk_widget_insert_action_group(view(v).area, c"ctx".as_ptr(), group);
+    // SAFETY: g_simple_action_group_new has no preconditions; the view keeps the reference it returns.
+    let group = unsafe { g_simple_action_group_new() };
+    view(v).ctx_actions = group;
+    for (name, activate) in CTX_ACTIONS {
+        // SAFETY: name is NUL-terminated and a null parameter type makes a plain action.
+        let action = unsafe { sys::g_simple_action_new(name.as_ptr(), ptr::null()) };
+        let callback = handler!(activate);
+        // SAFETY: action is live and activate takes (action, parameter, data) with the view as data, which outlives its actions.
+        unsafe { connect(action, c"activate", callback, v.cast()) };
+        // SAFETY: group and action are live; the group takes its own reference to the action.
+        unsafe { sys::g_action_map_add_action(group, action) };
+        // SAFETY: drops the reference g_simple_action_new returned.
+        unsafe { sys::g_object_unref(action) };
     }
+    // SAFETY: area is the view's live drawing area and group a live action group it references.
+    unsafe { sys::gtk_widget_insert_action_group(view(v).area, c"ctx".as_ptr(), group) };
 }
 
 unsafe extern "C" fn popover_present_idle(data: *mut c_void) -> GBoolean {
     let pop = data.cast::<GtkWidget>();
-    unsafe {
-        if gtk::gtk_widget_get_mapped(pop) != 0 {
-            gtk::gtk_popover_present(pop);
-        }
-        gtk::g_object_unref(pop.cast());
+    // SAFETY: data is the popover on_popover_menu_mapped holds a reference to.
+    if unsafe { sys::gtk_widget_get_mapped(pop) } != 0 {
+        // SAFETY: pop is a live, mapped GtkPopover.
+        unsafe { sys::gtk_popover_present(pop) };
     }
-    gtk::SOURCE_REMOVE
+    // SAFETY: drops the reference on_popover_menu_mapped took for this idle source.
+    unsafe { sys::g_object_unref(pop.cast()) };
+    sys::SOURCE_REMOVE
 }
 
 unsafe extern "C" fn on_popover_menu_mapped(pop: *mut GtkWidget, _ud: *mut c_void) {
-    unsafe { gtk::g_idle_add(popover_present_idle, gtk::g_object_ref(pop.cast())) };
+    // SAFETY: GTK emits map on the live popover; the idle source owns the reference taken here.
+    let held = unsafe { sys::g_object_ref(pop.cast()) };
+    // SAFETY: popover_present_idle releases held exactly once.
+    unsafe { sys::g_idle_add(popover_present_idle, held) };
 }
 
 pub(super) fn ns_popover_menu_fit(popover: *mut GtkWidget) {
-    if popover.is_null()
-        || unsafe { gtk::g_type_check_instance_is_a(popover.cast(), gtk::gtk_popover_get_type()) }
-            == 0
-    {
+    if popover.is_null() {
+        return;
+    }
+    // SAFETY: the type getter registers the class if needed and has no preconditions.
+    let popover_type = unsafe { sys::gtk_popover_get_type() };
+    // SAFETY: the caller passes a live widget.
+    if unsafe { sys::g_type_check_instance_is_a(popover.cast(), popover_type) } == 0 {
         return;
     }
     let on_mapped = handler!(on_popover_menu_mapped);
+    // SAFETY: popover is live and map takes (widget, data), as on_popover_menu_mapped does.
     unsafe { connect(popover, c"map", on_mapped, ptr::null_mut()) };
 }
 
+fn new_menu() -> *mut c_void {
+    // SAFETY: g_menu_new has no preconditions and returns a new menu the caller owns.
+    unsafe { sys::g_menu_new() }
+}
+
 fn menu_section(menu: *mut c_void, items: &[(&CStr, &CStr)]) {
-    unsafe {
-        let section = gtk::g_menu_new();
-        for (label, action) in items {
-            gtk::g_menu_append(section, tr(label).as_ptr(), action.as_ptr());
-        }
-        gtk::g_menu_append_section(menu, ptr::null(), section);
-        gtk::g_object_unref(section);
+    let section = new_menu();
+    for (label, action) in items {
+        // SAFETY: section is the live menu above and both strings are NUL-terminated; GLib copies them.
+        unsafe { sys::g_menu_append(section, tr(label).as_ptr(), action.as_ptr()) };
     }
+    // SAFETY: menu and section are live menus; menu takes its own reference to section.
+    unsafe { sys::g_menu_append_section(menu, ptr::null(), section) };
+    // SAFETY: drops the reference g_menu_new returned.
+    unsafe { sys::g_object_unref(section) };
 }
 
 fn ctx_field_menu(v: *mut NsProcView, edit: c_int) -> *mut c_void {
@@ -439,7 +404,7 @@ fn ctx_field_menu(v: *mut NsProcView, edit: c_int) -> *mut c_void {
     ctx_action_enable(v, c"cut", writable && selected);
     ctx_action_enable(v, c"copy-sel", selected);
     ctx_action_enable(v, c"paste", writable);
-    let menu = unsafe { gtk::g_menu_new() };
+    let menu = new_menu();
     menu_section(
         menu,
         &[
@@ -453,7 +418,7 @@ fn ctx_field_menu(v: *mut NsProcView, edit: c_int) -> *mut c_void {
 }
 
 fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
-    let has_link = !view(v).ctx_link.is_null();
+    let has_link = view(v).ui().ctx_link.is_some();
     let has_selection = view(v).has_selection != 0;
     ctx_action_enable(v, c"back", ns_proc_view_can_back(v));
     ctx_action_enable(v, c"forward", ns_proc_view_can_forward(v));
@@ -461,7 +426,7 @@ fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
     ctx_action_enable(v, c"open-newtab", has_link);
     ctx_action_enable(v, c"copy-link", has_link);
     ctx_action_enable(v, c"copy-sel", has_selection);
-    let menu = unsafe { gtk::g_menu_new() };
+    let menu = new_menu();
     if has_link {
         let mut items = vec![(c"Open Link", c"ctx.open-link")];
         if !southstar_renderer_host::single_process_enabled() {
@@ -493,92 +458,94 @@ fn ctx_page_menu(v: *mut NsProcView) -> *mut c_void {
     menu
 }
 
-pub(super) fn ns_pv_show_context_menu(v: *mut NsProcView, href: *const c_char, edit: c_int) {
-    let state = view(v);
-    unsafe { glib::g_free(state.ctx_link.cast()) };
-    state.ctx_link = if nonempty(href) {
-        unsafe { glib::g_strdup(href) }
-    } else {
-        ptr::null_mut()
-    };
+pub(super) fn ns_pv_show_context_menu(v: *mut NsProcView, href: Option<&CStr>, edit: c_int) {
+    view(v).ui().ctx_link = href.filter(|h| !h.is_empty()).map(CStr::to_owned);
     let menu = if edit & EDIT_FIELD != 0 {
         ctx_field_menu(v, edit)
     } else {
         ctx_page_menu(v)
     };
     let state = view(v);
-    unsafe {
-        if !state.ctx_popover.is_null() {
-            gtk::gtk_widget_unparent(state.ctx_popover);
-        }
-        state.ctx_popover = gtk::gtk_popover_menu_new_from_model(menu);
-        gtk::g_object_unref(menu);
-        gtk::gtk_widget_set_parent(state.ctx_popover, state.area);
-        ns_popover_menu_fit(state.ctx_popover);
-        gtk::gtk_popover_set_has_arrow(state.ctx_popover, 0);
-        let rect = gtk::GdkRectangle {
-            x: state.ctx_x as c_int,
-            y: state.ctx_y as c_int,
-            width: 1,
-            height: 1,
-        };
-        gtk::gtk_popover_set_pointing_to(state.ctx_popover, &rect);
-        gtk::gtk_popover_popup(state.ctx_popover);
+    if !state.ctx_popover.is_null() {
+        // SAFETY: ctx_popover is the live popover parented to the area.
+        unsafe { sys::gtk_widget_unparent(state.ctx_popover) };
     }
+    // SAFETY: menu is a live menu model; the popover takes its own reference.
+    state.ctx_popover = unsafe { sys::gtk_popover_menu_new_from_model(menu) };
+    // SAFETY: drops the reference g_menu_new returned.
+    unsafe { sys::g_object_unref(menu) };
+    // SAFETY: the popover is new and unparented, and area is the view's live drawing area.
+    unsafe { sys::gtk_widget_set_parent(state.ctx_popover, state.area) };
+    ns_popover_menu_fit(state.ctx_popover);
+    // SAFETY: ctx_popover is the live popover just created.
+    unsafe { sys::gtk_popover_set_has_arrow(state.ctx_popover, 0) };
+    let rect = sys::GdkRectangle {
+        x: state.ctx_x as c_int,
+        y: state.ctx_y as c_int,
+        width: 1,
+        height: 1,
+    };
+    // SAFETY: ctx_popover is live and rect is valid for the call; GTK copies it.
+    unsafe { sys::gtk_popover_set_pointing_to(state.ctx_popover, &rect) };
+    // SAFETY: ctx_popover is a live popover parented to the view's widget tree.
+    unsafe { sys::gtk_popover_popup(state.ctx_popover) };
 }
 
 pub(super) fn request_find(v: *mut NsProcView, direction: c_int) {
-    let state = view(v);
-    if state.opened == 0 || state.search_entry.is_null() {
+    if view(v).opened == 0 {
         return;
     }
-    let query = unsafe { gtk::gtk_editable_get_text(state.search_entry) };
-    let req = new_req(REQ_FIND);
+    let Some((_, entry, _)) = find_bar(v) else {
+        return;
+    };
+    let query = entry.text();
+    let state = view(v);
     state.find_seq += 1;
-    unsafe {
-        let r = &mut *req;
-        r.seq = state.find_seq;
-        r.query = glib::g_strdup(if query.is_null() { c"".as_ptr() } else { query });
-        r.find_dir = direction;
-        r.find_from_y = state.scroll_y;
-        r.find_case = state.find_case;
-    }
-    push_req(v, req);
+    let (seq, from_y, case) = (state.find_seq, state.scroll_y, state.find_case);
+    push_req(
+        v,
+        new_req(REQ_FIND, |r| {
+            r.seq = seq;
+            r.query = glib::strdup(&query);
+            r.find_dir = direction;
+            r.find_from_y = from_y;
+            r.find_case = case;
+        }),
+    );
 }
 
 pub(super) fn search_open(v: *mut NsProcView) {
-    let state = view(v);
-    if state.search_revealer.is_null() {
+    let Some((revealer, entry, _)) = find_bar(v) else {
         return;
-    }
-    unsafe {
-        gtk::gtk_revealer_set_reveal_child(state.search_revealer, 1);
-        gtk::gtk_widget_grab_focus(state.search_entry);
-        gtk::gtk_editable_select_region(state.search_entry, 0, -1);
-        if nonempty(gtk::gtk_editable_get_text(state.search_entry)) {
-            request_find(v, 0);
-        }
+    };
+    revealer.set_reveal_child(true);
+    entry.grab_focus();
+    entry.select_region(0, -1);
+    if !entry.text().is_empty() {
+        request_find(v, 0);
     }
 }
 
 fn search_close(v: *mut NsProcView) {
-    let state = view(v);
-    if state.search_revealer.is_null() {
+    let Some((revealer, _, label)) = find_bar(v) else {
         return;
-    }
-    unsafe {
-        gtk::gtk_revealer_set_reveal_child(state.search_revealer, 0);
-        gtk::gtk_label_set_text(state.search_label, c"".as_ptr());
-    }
-    let req = new_req(REQ_FIND);
+    };
+    revealer.set_reveal_child(false);
+    label.set_text(c"");
+    let state = view(v);
     state.find_seq += 1;
-    unsafe {
-        (*req).seq = state.find_seq;
-        (*req).query = glib::g_strdup(c"".as_ptr());
-        (*req).find_from_y = state.scroll_y;
+    let (seq, from_y) = (state.find_seq, state.scroll_y);
+    push_req(
+        v,
+        new_req(REQ_FIND, |r| {
+            r.seq = seq;
+            r.query = glib::strdup(b"");
+            r.find_from_y = from_y;
+        }),
+    );
+    if let Some(area) = area(v) {
+        area.grab_focus();
     }
-    push_req(v, req);
-    unsafe { gtk::gtk_widget_grab_focus(view(v).area) };
 }
 
 pub(super) fn ns_proc_view_find_open(v: *mut NsProcView) {
@@ -586,10 +553,7 @@ pub(super) fn ns_proc_view_find_open(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_proc_view_find_close(v: *mut NsProcView) -> bool {
-    if v.is_null()
-        || view(v).search_revealer.is_null()
-        || unsafe { gtk::gtk_revealer_get_reveal_child(view(v).search_revealer) } == 0
-    {
+    if v.is_null() || !find_bar(v).is_some_and(|(revealer, _, _)| revealer.reveals_child()) {
         return false;
     }
     search_close(v);
@@ -600,286 +564,211 @@ pub(super) fn ns_proc_view_set_color_scheme(v: *mut NsProcView, dark: bool) {
     if v.is_null() {
         return;
     }
-    let req = new_req(REQ_COLOR_SCHEME);
-    unsafe { (*req).mods = c_int::from(dark) };
-    push_req(v, req);
+    push_req(v, new_req(REQ_COLOR_SCHEME, |r| r.mods = c_int::from(dark)));
 }
 
-unsafe extern "C" fn on_search_changed(_e: *mut GtkWidget, data: *mut c_void) {
-    request_find(data.cast(), 0);
+fn icon_button(icon: &CStr, tooltip: Option<&CStr>, label: &CStr) -> Button {
+    let button = Button::from_icon_name(icon);
+    button.set_tooltip_text(tooltip.map(tr));
+    button.set_accessible_label(tr(label));
+    button
 }
 
-unsafe extern "C" fn on_search_next(_w: *mut GtkWidget, data: *mut c_void) {
-    request_find(data.cast(), 1);
+pub(super) fn build_search_bar(v: *mut NsProcView, overlay: &Overlay) {
+    let bx = gtk::Box::new(gtk::ORIENTATION_HORIZONTAL, 4);
+    bx.add_css_class(c"toolbar");
+
+    let entry = SearchEntry::new();
+    entry.set_size_request(220, -1);
+    entry.set_accessible_label(tr(c"Find in page"));
+    entry.connect_search_changed(move || request_find(v, 0));
+    entry.connect_activate(move || request_find(v, 1));
+    entry.connect_next_match(move || request_find(v, 1));
+    entry.connect_previous_match(move || request_find(v, 2));
+    entry.connect_stop_search(move || search_close(v));
+
+    let label = Label::new(c"");
+    label.set_size_request(56, -1);
+
+    let prev = icon_button(
+        c"go-up-symbolic",
+        Some(c"Previous match (Shift+Enter)"),
+        c"Previous match",
+    );
+    let next = icon_button(
+        c"go-down-symbolic",
+        Some(c"Next match (Enter)"),
+        c"Next match",
+    );
+    let close = icon_button(
+        c"window-close-symbolic",
+        Some(c"Close (Esc)"),
+        c"Close search",
+    );
+    prev.connect_clicked(move || request_find(v, 2));
+    next.connect_clicked(move || request_find(v, 1));
+    close.connect_clicked(move || search_close(v));
+
+    bx.append(&entry);
+    bx.append(&label);
+    bx.append(&prev);
+    bx.append(&next);
+    bx.append(&close);
+
+    let frame = Frame::new();
+    frame.add_css_class(c"ns-findbar");
+    frame.set_child(&bx);
+
+    let revealer = Revealer::new();
+    revealer.set_transition_type(gtk::REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+    revealer.set_child(&frame);
+    revealer.set_halign(sys::ALIGN_END);
+    revealer.set_valign(sys::ALIGN_START);
+    revealer.set_margins(0, 20, 8, 0);
+    overlay.add_overlay(&revealer);
+
+    view(v).ui().find = Some(FindBar {
+        revealer,
+        entry,
+        label,
+    });
 }
 
-unsafe extern "C" fn on_search_prev(_w: *mut GtkWidget, data: *mut c_void) {
-    request_find(data.cast(), 2);
+pub(super) fn build_perm_bar(v: *mut NsProcView) -> Revealer {
+    let bar = gtk::Box::new(gtk::ORIENTATION_HORIZONTAL, 8);
+    bar.set_margins(8, 8, 4, 4);
+
+    let icon = gtk::Image::from_icon_name(c"dialog-question-symbolic");
+
+    let label = Label::new(c"");
+    label.set_xalign(0.0);
+    label.set_ellipsize(sys::ELLIPSIZE_MIDDLE);
+    label.set_hexpand(true);
+
+    let allow = Button::with_label(tr(c"Allow"));
+    allow.add_css_class(c"suggested-action");
+    allow.set_tooltip_text(Some(tr(c"Allow and trust this site")));
+    let deny = Button::with_label(tr(c"Not now"));
+    let close = Button::from_icon_name(c"window-close-symbolic");
+    close.set_has_frame(false);
+    close.set_accessible_label(tr(c"Dismiss"));
+    allow.connect_clicked(move || super::procview_result::perm_resolve(v, true));
+    deny.connect_clicked(move || super::procview_result::perm_resolve(v, false));
+    close.connect_clicked(move || super::procview_result::perm_resolve(v, false));
+
+    bar.append(&icon);
+    bar.append(&label);
+    bar.append(&allow);
+    bar.append(&deny);
+    bar.append(&close);
+
+    let frame = Frame::new();
+    frame.set_child(&bar);
+
+    let revealer = Revealer::new();
+    revealer.set_transition_type(gtk::REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+    revealer.set_child(&frame);
+    view(v).ui().perm = Some(PermBar {
+        revealer: revealer.clone(),
+        label,
+    });
+    revealer
 }
 
-unsafe extern "C" fn on_search_stop(_e: *mut GtkWidget, data: *mut c_void) {
-    search_close(data.cast());
-}
-
-pub(super) fn build_search_bar(v: *mut NsProcView) {
-    let data = v.cast::<c_void>();
-    let state = view(v);
-    unsafe {
-        let bx = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 4);
-        gtk::gtk_widget_add_css_class(bx, c"toolbar".as_ptr());
-
-        state.search_entry = gtk::gtk_search_entry_new();
-        gtk::gtk_widget_set_size_request(state.search_entry, 220, -1);
-        set_accessible_label(state.search_entry, tr(c"Find in page"));
-        connect(
-            state.search_entry,
-            c"search-changed",
-            handler!(on_search_changed),
-            data,
-        );
-        connect(
-            state.search_entry,
-            c"activate",
-            handler!(on_search_next),
-            data,
-        );
-        connect(
-            state.search_entry,
-            c"next-match",
-            handler!(on_search_next),
-            data,
-        );
-        connect(
-            state.search_entry,
-            c"previous-match",
-            handler!(on_search_prev),
-            data,
-        );
-        connect(
-            state.search_entry,
-            c"stop-search",
-            handler!(on_search_stop),
-            data,
-        );
-
-        state.search_label = gtk::gtk_label_new(c"".as_ptr());
-        gtk::gtk_widget_set_size_request(state.search_label, 56, -1);
-
-        let prev = gtk::gtk_button_new_from_icon_name(c"go-up-symbolic".as_ptr());
-        let next = gtk::gtk_button_new_from_icon_name(c"go-down-symbolic".as_ptr());
-        let close = gtk::gtk_button_new_from_icon_name(c"window-close-symbolic".as_ptr());
-        gtk::gtk_widget_set_tooltip_text(prev, tr(c"Previous match (Shift+Enter)").as_ptr());
-        gtk::gtk_widget_set_tooltip_text(next, tr(c"Next match (Enter)").as_ptr());
-        gtk::gtk_widget_set_tooltip_text(close, tr(c"Close (Esc)").as_ptr());
-        set_accessible_label(prev, tr(c"Previous match"));
-        set_accessible_label(next, tr(c"Next match"));
-        set_accessible_label(close, tr(c"Close search"));
-        connect(prev, c"clicked", handler!(on_search_prev), data);
-        connect(next, c"clicked", handler!(on_search_next), data);
-        connect(close, c"clicked", handler!(on_search_stop), data);
-
-        gtk::gtk_box_append(bx, state.search_entry);
-        gtk::gtk_box_append(bx, state.search_label);
-        gtk::gtk_box_append(bx, prev);
-        gtk::gtk_box_append(bx, next);
-        gtk::gtk_box_append(bx, close);
-
-        let frame = gtk::gtk_frame_new(ptr::null());
-        gtk::gtk_widget_add_css_class(frame, c"ns-findbar".as_ptr());
-        gtk::gtk_frame_set_child(frame, bx);
-
-        state.search_revealer = gtk::gtk_revealer_new();
-        gtk::gtk_revealer_set_transition_type(
-            state.search_revealer,
-            gtk::REVEALER_TRANSITION_TYPE_SLIDE_DOWN,
-        );
-        gtk::gtk_revealer_set_child(state.search_revealer, frame);
-        gtk::gtk_widget_set_halign(state.search_revealer, gtk::ALIGN_END);
-        gtk::gtk_widget_set_valign(state.search_revealer, gtk::ALIGN_START);
-        gtk::gtk_widget_set_margin_top(state.search_revealer, 8);
-        gtk::gtk_widget_set_margin_end(state.search_revealer, 20);
-        gtk::gtk_overlay_add_overlay(state.overlay, state.search_revealer);
-    }
-}
-
-unsafe extern "C" fn on_perm_allow(_btn: *mut GtkWidget, data: *mut c_void) {
-    perm_resolve(data.cast(), true);
-}
-
-unsafe extern "C" fn on_perm_deny(_btn: *mut GtkWidget, data: *mut c_void) {
-    perm_resolve(data.cast(), false);
-}
-
-pub(super) fn build_perm_bar(v: *mut NsProcView) {
-    let data = v.cast::<c_void>();
-    let state = view(v);
-    unsafe {
-        let bar = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 8);
-        gtk::gtk_widget_set_margin_top(bar, 4);
-        gtk::gtk_widget_set_margin_bottom(bar, 4);
-        gtk::gtk_widget_set_margin_start(bar, 8);
-        gtk::gtk_widget_set_margin_end(bar, 8);
-
-        let icon = gtk::gtk_image_new_from_icon_name(c"dialog-question-symbolic".as_ptr());
-
-        state.perm_label = gtk::gtk_label_new(c"".as_ptr());
-        gtk::gtk_label_set_xalign(state.perm_label, 0.0);
-        gtk::gtk_label_set_ellipsize(state.perm_label, gtk::ELLIPSIZE_MIDDLE);
-        gtk::gtk_widget_set_hexpand(state.perm_label, 1);
-
-        let allow = gtk::gtk_button_new_with_label(tr(c"Allow").as_ptr());
-        gtk::gtk_widget_add_css_class(allow, c"suggested-action".as_ptr());
-        gtk::gtk_widget_set_tooltip_text(allow, tr(c"Allow and trust this site").as_ptr());
-        let deny = gtk::gtk_button_new_with_label(tr(c"Not now").as_ptr());
-        let close = gtk::gtk_button_new_from_icon_name(c"window-close-symbolic".as_ptr());
-        gtk::gtk_button_set_has_frame(close, 0);
-        set_accessible_label(close, tr(c"Dismiss"));
-        connect(allow, c"clicked", handler!(on_perm_allow), data);
-        connect(deny, c"clicked", handler!(on_perm_deny), data);
-        connect(close, c"clicked", handler!(on_perm_deny), data);
-
-        gtk::gtk_box_append(bar, icon);
-        gtk::gtk_box_append(bar, state.perm_label);
-        gtk::gtk_box_append(bar, allow);
-        gtk::gtk_box_append(bar, deny);
-        gtk::gtk_box_append(bar, close);
-
-        let frame = gtk::gtk_frame_new(ptr::null());
-        gtk::gtk_frame_set_child(frame, bar);
-
-        state.perm_revealer = gtk::gtk_revealer_new();
-        gtk::gtk_revealer_set_transition_type(
-            state.perm_revealer,
-            gtk::REVEALER_TRANSITION_TYPE_SLIDE_DOWN,
-        );
-        gtk::gtk_revealer_set_child(state.perm_revealer, frame);
-    }
-}
-
-pub(super) fn ns_pv_console_append(v: *mut NsProcView, text: *const c_char) {
-    let state = view(v);
-    if state.console_buffer.is_null() || !nonempty(text) {
+pub(super) fn ns_pv_console_append(v: *mut NsProcView, text: &[u8]) {
+    if text.is_empty() {
         return;
     }
-    unsafe {
-        let mut end: gtk::GtkTextIter = core::mem::zeroed();
-        gtk::gtk_text_buffer_get_end_iter(state.console_buffer, &mut end);
-        gtk::gtk_text_buffer_insert(state.console_buffer, &mut end, text, -1);
-        if !state.console_view.is_null() {
-            gtk::gtk_text_buffer_get_end_iter(state.console_buffer, &mut end);
-            let mark = gtk::gtk_text_buffer_create_mark(state.console_buffer, ptr::null(), &end, 0);
-            gtk::gtk_text_view_scroll_mark_onscreen(state.console_view, mark);
-            gtk::gtk_text_buffer_delete_mark(state.console_buffer, mark);
-        }
+    if let Some(log) = console_text(v, DEV_TAB_CONSOLE) {
+        log.append(text);
+        log.scroll_to_end();
     }
 }
 
-unsafe extern "C" fn console_poll_cb(data: *mut c_void) -> GBoolean {
-    let v = data.cast::<NsProcView>();
-    if view(v).console_open != 0 && view(v).opened != 0 {
-        push_req(v, new_req(REQ_CONSOLE));
+fn console_poll(v: *mut NsProcView) -> ControlFlow<()> {
+    let state = view(v);
+    if state.console_open != 0 && state.opened != 0 {
+        push_req(v, new_req(REQ_CONSOLE, |_| {}));
     }
-    gtk::SOURCE_CONTINUE
+    ControlFlow::Continue(())
 }
 
-unsafe extern "C" fn on_console_eval(entry: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    let src = unsafe { gtk::gtk_editable_get_text(entry) };
-    if !nonempty(src) || view(v).opened == 0 {
+fn on_console_eval(v: *mut NsProcView, entry: &Entry) {
+    let src = entry.text().into_bytes();
+    if src.is_empty() || view(v).opened == 0 {
         return;
     }
     let mut echo = b"> ".to_vec();
-    echo.extend_from_slice(unsafe { CStr::from_ptr(src) }.to_bytes());
+    echo.extend_from_slice(&src);
     echo.push(b'\n');
-    let echo = cstring(echo);
-    ns_pv_console_append(v, echo.as_ptr());
-    let req = new_req(REQ_EVAL);
-    unsafe { (*req).query = glib::g_strdup(src) };
-    push_req(v, req);
-    unsafe { gtk::gtk_editable_set_text(entry, c"".as_ptr()) };
+    ns_pv_console_append(v, &echo);
+    push_req(v, new_req(REQ_EVAL, |r| r.query = glib::strdup(&src)));
+    entry.set_text(c"");
 }
 
 pub(super) fn ns_pv_console_set_open(v: *mut NsProcView, open: bool) {
-    if open && view(v).console_window.is_null() {
+    if open && view(v).ui().console.is_none() {
         build_console_window(v);
     }
-    let state = view(v);
-    if state.console_window.is_null() {
+    let Some((window, entry)) = console_window(v) else {
         return;
-    }
-    state.console_open = GBoolean::from(open);
-    unsafe {
-        if open {
-            let root = gtk::gtk_widget_get_root(state.area);
-            if is_window(root) {
-                gtk::gtk_window_set_transient_for(state.console_window, root);
-            }
-            gtk::gtk_window_present(state.console_window);
-            if state.console_poll_id == 0 {
-                state.console_poll_id =
-                    gtk::g_timeout_add(CONSOLE_POLL_MS, console_poll_cb, v.cast());
-            }
-            gtk::gtk_widget_grab_focus(state.console_entry);
-        } else {
-            gtk::gtk_widget_set_visible(state.console_window, 0);
-            if state.console_poll_id != 0 {
-                gtk::g_source_remove(state.console_poll_id);
-                state.console_poll_id = 0;
-            }
-            if !state.area.is_null() {
-                gtk::gtk_widget_grab_focus(state.area);
-            }
+    };
+    view(v).console_open = GBoolean::from(open);
+    if open {
+        if let Some(root) = area(v).and_then(|area| area.root())
+            && Window::cast(&root).is_some()
+        {
+            window.set_transient_for(Some(&root));
+        }
+        window.present();
+        if view(v).ui().console_poll.is_none() {
+            let poll = glib::timeout_add_local(CONSOLE_POLL_MS, move || console_poll(v));
+            view(v).ui().console_poll = Some(poll);
+        }
+        entry.grab_focus();
+    } else {
+        window.set_visible(false);
+        if let Some(poll) = view(v).ui().console_poll.take() {
+            poll.remove();
+        }
+        if let Some(area) = area(v) {
+            area.grab_focus();
         }
     }
 }
 
 fn console_request_dump(v: *mut NsProcView, tab: c_int) {
-    let kind = match tab {
-        DEV_TAB_NETWORK => c"network",
-        DEV_TAB_PERFORMANCE => c"performance",
-        DEV_TAB_LAYOUT => c"layout",
-        DEV_TAB_ELEMENTS => c"dom",
+    let kind: &[u8] = match tab {
+        DEV_TAB_NETWORK => b"network",
+        DEV_TAB_PERFORMANCE => b"performance",
+        DEV_TAB_LAYOUT => b"layout",
+        DEV_TAB_ELEMENTS => b"dom",
         _ => return,
     };
     if view(v).opened == 0 {
         return;
     }
-    let req = new_req(REQ_DUMP);
-    unsafe {
-        (*req).dump_tab = tab;
-        (*req).query = glib::g_strdup(kind.as_ptr());
-    }
-    push_req(v, req);
+    push_req(
+        v,
+        new_req(REQ_DUMP, |r| {
+            r.dump_tab = tab;
+            r.query = glib::strdup(kind);
+        }),
+    );
 }
 
 fn console_current_tab(v: *mut NsProcView) -> c_int {
-    let notebook = view(v).console_notebook;
-    if notebook.is_null() {
-        DEV_TAB_CONSOLE
-    } else {
-        unsafe { gtk::gtk_notebook_get_current_page(notebook) }
+    match view(v).ui().console.as_ref() {
+        // SAFETY: the console's notebook is a live GtkNotebook its handle keeps alive.
+        Some(console) => unsafe { sys::gtk_notebook_get_current_page(console.notebook.as_ptr()) },
+        None => DEV_TAB_CONSOLE,
     }
 }
 
-unsafe extern "C" fn on_console_clear(_b: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    let state = view(v);
-    let buf = match console_current_tab(v) {
-        DEV_TAB_CONSOLE => state.console_buffer,
-        DEV_TAB_NETWORK => state.net_buffer,
-        DEV_TAB_PERFORMANCE => state.perf_buffer,
-        DEV_TAB_LAYOUT => state.layout_buffer,
-        DEV_TAB_ELEMENTS => state.elements_buffer,
-        _ => ptr::null_mut(),
-    };
-    if !buf.is_null() {
-        unsafe { gtk::gtk_text_buffer_set_text(buf, c"".as_ptr(), 0) };
+fn on_console_clear(v: *mut NsProcView) {
+    if let Some(text) = console_text(v, console_current_tab(v)) {
+        text.set_text("");
     }
-}
-
-unsafe extern "C" fn on_console_refresh(_b: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    console_request_dump(v, console_current_tab(v));
 }
 
 unsafe extern "C" fn on_console_notebook_switch(
@@ -891,173 +780,140 @@ unsafe extern "C" fn on_console_notebook_switch(
     console_request_dump(data.cast(), num as c_int);
 }
 
-const INSPECT_HEAD: &str = r#"(function(){try{var e=document.querySelector(""#;
-const INSPECT_TAIL: &str = r#"");if(!e)return "";var s=e.outerHTML;return s.length>20000?s.slice(0,20000)+"\n…(truncated)":s;}catch(err){return "Error: "+err;}})()"#;
-
-unsafe extern "C" fn on_inspect_activate(entry: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    let sel = unsafe { gtk::gtk_editable_get_text(entry) };
-    if !nonempty(sel) || view(v).opened == 0 {
+fn on_inspect_activate(v: *mut NsProcView, entry: &Entry) {
+    let selector = entry.text().into_bytes();
+    if selector.is_empty() || view(v).opened == 0 {
         return;
     }
-    let mut src = INSPECT_HEAD.as_bytes().to_vec();
-    unsafe {
-        let esc = g_strescape(sel, ptr::null());
-        src.extend_from_slice(CStr::from_ptr(esc).to_bytes());
-        glib::g_free(esc.cast());
-    }
-    src.extend_from_slice(INSPECT_TAIL.as_bytes());
-    let req = new_req(REQ_EVAL);
-    unsafe {
-        (*req).inspect = 1;
-        (*req).dump_tab = DEV_TAB_ELEMENTS;
-        (*req).query = glib::strdup(&src);
-    }
-    push_req(v, req);
+    let src = nav::inspect_script(&selector);
+    push_req(
+        v,
+        new_req(REQ_EVAL, |r| {
+            r.inspect = 1;
+            r.dump_tab = DEV_TAB_ELEMENTS;
+            r.query = glib::strdup(&src);
+        }),
+    );
 }
 
-unsafe extern "C" fn on_console_close_request(_win: *mut GtkWidget, data: *mut c_void) -> GBoolean {
-    ns_pv_console_set_open(data.cast(), false);
-    1
+fn console_make_view(wrap: bool) -> (ScrolledWindow, TextView) {
+    let text = TextView::new();
+    text.set_editable(false);
+    text.set_monospace(true);
+    text.set_cursor_visible(false);
+    text.set_wrap_mode(if wrap {
+        sys::WRAP_WORD_CHAR
+    } else {
+        sys::WRAP_NONE
+    });
+    let scroll = ScrolledWindow::new();
+    scroll.set_child(&text);
+    scroll.set_vexpand(true);
+    (scroll, text)
 }
 
-fn console_make_view(wrap: bool) -> (*mut GtkWidget, *mut GtkWidget, *mut c_void) {
+fn console_add_tab(notebook: &Widget, child: &impl AsRef<Widget>, title: &CStr) {
+    let label = Label::new(tr(title));
+    // SAFETY: notebook is a live GtkNotebook and both widgets are live; the notebook takes its own references.
     unsafe {
-        let text = gtk::gtk_text_view_new();
-        gtk::gtk_text_view_set_editable(text, 0);
-        gtk::gtk_text_view_set_monospace(text, 1);
-        gtk::gtk_text_view_set_cursor_visible(text, 0);
-        gtk::gtk_text_view_set_wrap_mode(
-            text,
-            if wrap {
-                gtk::WRAP_WORD_CHAR
-            } else {
-                gtk::WRAP_NONE
-            },
-        );
-        let buffer = gtk::gtk_text_view_get_buffer(text);
-        let scroll = gtk::gtk_scrolled_window_new();
-        gtk::gtk_scrolled_window_set_child(scroll, text);
-        gtk::gtk_widget_set_vexpand(scroll, 1);
-        (scroll, text, buffer)
-    }
+        sys::gtk_notebook_append_page(notebook.as_ptr(), child.as_ref().as_ptr(), label.as_ptr())
+    };
 }
 
-fn console_add_tab(v: *mut NsProcView, child: *mut GtkWidget, title: &CStr) {
-    unsafe {
-        gtk::gtk_notebook_append_page(
-            view(v).console_notebook,
-            child,
-            gtk::gtk_label_new(tr(title).as_ptr()),
-        );
-    }
+fn new_notebook() -> Widget {
+    // SAFETY: gtk_notebook_new has no preconditions and returns a new floating widget.
+    let notebook = unsafe { sys::gtk_notebook_new() };
+    // SAFETY: notebook is the live widget just created; the handle sinks its floating reference.
+    unsafe { Widget::from_ptr(notebook) }.expect("gtk_notebook_new never returns null")
 }
 
 fn build_console_window(v: *mut NsProcView) {
-    let data = v.cast::<c_void>();
-    let state = view(v);
-    unsafe {
-        let bx = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 0);
+    let bx = gtk::Box::new(gtk::ORIENTATION_VERTICAL, 0);
 
-        let header = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 4);
-        gtk::gtk_widget_add_css_class(header, c"toolbar".as_ptr());
-        let spacer = gtk::gtk_label_new(c"".as_ptr());
-        gtk::gtk_widget_set_hexpand(spacer, 1);
-        let refresh = gtk::gtk_button_new_from_icon_name(c"view-refresh-symbolic".as_ptr());
-        gtk::gtk_widget_set_tooltip_text(refresh, tr(c"Refresh").as_ptr());
-        set_accessible_label(refresh, tr(c"Refresh"));
-        connect(refresh, c"clicked", handler!(on_console_refresh), data);
-        let clear = gtk::gtk_button_new_from_icon_name(c"edit-clear-symbolic".as_ptr());
-        gtk::gtk_widget_set_tooltip_text(clear, tr(c"Clear").as_ptr());
-        set_accessible_label(clear, tr(c"Clear"));
-        connect(clear, c"clicked", handler!(on_console_clear), data);
-        gtk::gtk_box_append(header, spacer);
-        gtk::gtk_box_append(header, refresh);
-        gtk::gtk_box_append(header, clear);
+    let header = gtk::Box::new(gtk::ORIENTATION_HORIZONTAL, 4);
+    header.add_css_class(c"toolbar");
+    let spacer = Label::new(c"");
+    spacer.set_hexpand(true);
+    let refresh = icon_button(c"view-refresh-symbolic", Some(c"Refresh"), c"Refresh");
+    refresh.connect_clicked(move || console_request_dump(v, console_current_tab(v)));
+    let clear = icon_button(c"edit-clear-symbolic", Some(c"Clear"), c"Clear");
+    clear.connect_clicked(move || on_console_clear(v));
+    header.append(&spacer);
+    header.append(&refresh);
+    header.append(&clear);
 
-        state.console_notebook = gtk::gtk_notebook_new();
-        gtk::gtk_widget_set_vexpand(state.console_notebook, 1);
+    let notebook = new_notebook();
+    notebook.set_vexpand(true);
 
-        let console_page = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 0);
-        let (console_scroll, console_view, console_buffer) = console_make_view(true);
-        state.console_view = console_view;
-        state.console_buffer = console_buffer;
-        state.console_entry = gtk::gtk_entry_new();
-        gtk::gtk_entry_set_placeholder_text(
-            state.console_entry,
-            tr(c"Evaluate JavaScript and press Enter").as_ptr(),
-        );
-        connect(
-            state.console_entry,
-            c"activate",
-            handler!(on_console_eval),
-            data,
-        );
-        gtk::gtk_box_append(console_page, console_scroll);
-        gtk::gtk_box_append(console_page, state.console_entry);
-        console_add_tab(v, console_page, c"Console");
+    let console_page = gtk::Box::new(gtk::ORIENTATION_VERTICAL, 0);
+    let (console_scroll, log) = console_make_view(true);
+    let entry = Entry::new();
+    entry.set_placeholder_text(tr(c"Evaluate JavaScript and press Enter"));
+    let weak = entry.downgrade();
+    entry.connect_activate(move || {
+        if let Some(entry) = weak.upgrade().as_ref().and_then(Entry::cast) {
+            on_console_eval(v, &entry);
+        }
+    });
+    console_page.append(&console_scroll);
+    console_page.append(&entry);
+    console_add_tab(&notebook, &console_page, c"Console");
 
-        let (net_scroll, net_view, net_buffer) = console_make_view(false);
-        state.net_view = net_view;
-        state.net_buffer = net_buffer;
-        console_add_tab(v, net_scroll, c"Network");
-        let (perf_scroll, perf_view, perf_buffer) = console_make_view(false);
-        state.perf_view = perf_view;
-        state.perf_buffer = perf_buffer;
-        console_add_tab(v, perf_scroll, c"Performance");
-        let (layout_scroll, layout_view, layout_buffer) = console_make_view(false);
-        state.layout_view = layout_view;
-        state.layout_buffer = layout_buffer;
-        console_add_tab(v, layout_scroll, c"Layout");
+    let (net_scroll, network) = console_make_view(false);
+    console_add_tab(&notebook, &net_scroll, c"Network");
+    let (perf_scroll, performance) = console_make_view(false);
+    console_add_tab(&notebook, &perf_scroll, c"Performance");
+    let (layout_scroll, layout) = console_make_view(false);
+    console_add_tab(&notebook, &layout_scroll, c"Layout");
 
-        let elements_page = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 0);
-        let (elements_scroll, elements_view, elements_buffer) = console_make_view(false);
-        state.elements_view = elements_view;
-        state.elements_buffer = elements_buffer;
-        state.inspect_entry = gtk::gtk_entry_new();
-        gtk::gtk_entry_set_placeholder_text(
-            state.inspect_entry,
-            tr(c"Inspect: CSS selector, then Enter").as_ptr(),
-        );
-        connect(
-            state.inspect_entry,
-            c"activate",
-            handler!(on_inspect_activate),
-            data,
-        );
-        gtk::gtk_box_append(elements_page, elements_scroll);
-        gtk::gtk_box_append(elements_page, state.inspect_entry);
-        console_add_tab(v, elements_page, c"Elements");
+    let elements_page = gtk::Box::new(gtk::ORIENTATION_VERTICAL, 0);
+    let (elements_scroll, elements) = console_make_view(false);
+    let inspect = Entry::new();
+    inspect.set_placeholder_text(tr(c"Inspect: CSS selector, then Enter"));
+    let weak = inspect.downgrade();
+    inspect.connect_activate(move || {
+        if let Some(entry) = weak.upgrade().as_ref().and_then(Entry::cast) {
+            on_inspect_activate(v, &entry);
+        }
+    });
+    elements_page.append(&elements_scroll);
+    elements_page.append(&inspect);
+    console_add_tab(&notebook, &elements_page, c"Elements");
 
-        connect(
-            state.console_notebook,
-            c"switch-page",
-            handler!(on_console_notebook_switch),
-            data,
-        );
+    let on_switch = handler!(on_console_notebook_switch);
+    // SAFETY: the notebook is live and switch-page passes (notebook, page, number, data), which the handler takes.
+    unsafe { connect(notebook.as_ptr(), c"switch-page", on_switch, v.cast()) };
 
-        gtk::gtk_box_append(bx, header);
-        gtk::gtk_box_append(bx, state.console_notebook);
+    bx.append(&header);
+    bx.append(&notebook);
 
-        state.console_window = gtk::gtk_window_new();
-        gtk::gtk_window_set_title(state.console_window, tr(c"Developer Tools").as_ptr());
-        gtk::gtk_window_set_default_size(state.console_window, 720, 420);
-        gtk::gtk_window_set_destroy_with_parent(state.console_window, 1);
-        gtk::gtk_window_set_child(state.console_window, bx);
-        connect(
-            state.console_window,
-            c"close-request",
-            handler!(on_console_close_request),
-            data,
-        );
-    }
+    let window = Window::new();
+    window.set_title(tr(c"Developer Tools"));
+    window.set_default_size(720, 420);
+    window.set_destroy_with_parent(true);
+    window.set_child(&bx);
+    window.connect_close_request(move || {
+        ns_pv_console_set_open(v, false);
+        true
+    });
+
+    view(v).ui().console = Some(Console {
+        window,
+        notebook,
+        entry,
+        log,
+        network,
+        performance,
+        layout,
+        elements,
+    });
 }
 
 pub(super) fn ns_proc_view_print(v: *mut NsProcView) {
     if v.is_null() || view(v).opened == 0 {
         return;
     }
-    push_req(v, new_req(REQ_PRINT));
+    push_req(v, new_req(REQ_PRINT, |_| {}));
 }
 
 pub(super) fn ns_proc_view_save_pdf(v: *mut NsProcView) {

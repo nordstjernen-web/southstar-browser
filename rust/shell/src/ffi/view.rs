@@ -33,10 +33,6 @@ pub const PAGE_VIEW_KEY: &CStr = c"ns-proc-view";
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct View(NonNull<NsProcView>);
 
-fn owned(p: *const c_char) -> Option<CString> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_owned())
-}
-
 impl View {
     pub unsafe fn from_raw(p: *mut c_void) -> Option<View> {
         NonNull::new(p.cast()).map(View)
@@ -78,7 +74,7 @@ impl View {
     }
 
     pub fn load(self, url: &CStr) {
-        ns_proc_view_load(self.p(), url.as_ptr());
+        ns_proc_view_load(self.p(), url);
     }
 
     pub fn back(self) {
@@ -114,7 +110,7 @@ impl View {
     }
 
     pub fn url(self) -> Option<CString> {
-        owned(ns_proc_view_url(self.p()))
+        ns_proc_view_url(self.p())
     }
 
     pub fn is_local_page(self) -> bool {
@@ -122,7 +118,7 @@ impl View {
     }
 
     pub fn title(self) -> Option<CString> {
-        owned(ns_proc_view_title(self.p()))
+        ns_proc_view_title(self.p())
     }
 
     pub fn is_loading(self) -> bool {
@@ -134,7 +130,7 @@ impl View {
     }
 
     pub fn remote_ip(self) -> Option<CString> {
-        owned(ns_proc_view_remote_ip(self.p()))
+        ns_proc_view_remote_ip(self.p())
     }
 
     pub fn favicon(self) -> Option<southstar_gtk::Texture> {

@@ -4,11 +4,12 @@
 
 use core::ffi::{c_int, c_void};
 use core::ptr;
+use core::sync::atomic::Ordering;
 
 use southstar_glib::{self as glib, GBoolean};
-use southstar_gtk_ffi::{self as gtk, GtkWidget};
+use southstar_gtk::{self as gtk, Overlay, Widget};
+use southstar_gtk_ffi::{self as sys, GtkWidget};
 
-use super::gtk::{connect, handler};
 use super::pagelayers::{ns_page_layers_free, ns_page_layers_new};
 use super::procview_chrome::{build_perm_bar, build_search_bar, ctx_install_actions};
 use super::procview_draw::{
@@ -16,7 +17,8 @@ use super::procview_draw::{
     ns_pv_install_scroll, ns_pv_install_view_signals,
 };
 use super::procview_input::{
-    ns_pv_input_install_keys, ns_pv_input_install_pointer, ns_pv_input_install_secondary, push_req,
+    new_req, ns_pv_input_install_keys, ns_pv_input_install_pointer, ns_pv_input_install_secondary,
+    push_req, view,
 };
 use super::procview_media::{ns_pv_media_free, ns_pv_media_new};
 use super::procview_state::{NotifyFn, NsProcView, Req};
@@ -27,10 +29,6 @@ use super::procview_worker::{
 const ACT_HOVER: c_int = 0;
 
 unsafe extern "C" {
-    fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    fn g_ref_count_init(rc: *mut c_int);
-    fn g_ref_count_inc(rc: *mut c_int);
-    fn g_ref_count_dec(rc: *mut c_int) -> GBoolean;
     fn g_mutex_init(mutex: *mut c_void);
     fn g_mutex_clear(mutex: *mut c_void);
     fn g_async_queue_new() -> *mut c_void;
@@ -38,62 +36,52 @@ unsafe extern "C" {
     fn g_async_queue_try_pop(queue: *mut c_void) -> *mut c_void;
 }
 
-fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
-    unsafe { &mut *v }
-}
-
 fn unref_object(object: *mut c_void) {
     if !object.is_null() {
-        unsafe { gtk::g_object_unref(object) };
+        // SAFETY: object is a reference the view owns and drops once, here.
+        unsafe { sys::g_object_unref(object) };
     }
 }
 
 fn free_view(v: *mut NsProcView) {
     let state = view(v);
+    // SAFETY: media is null or the view's own Media, freed once here.
     unsafe { ns_pv_media_free(state.media.cast()) };
     state.media = ptr::null_mut();
     if !state.queue.is_null() {
         loop {
+            // SAFETY: the queue is the view's own and only the main loop is left using it.
             let req = unsafe { g_async_queue_try_pop(state.queue) }.cast::<Req>();
             if req.is_null() {
                 break;
             }
             free_req(req);
         }
+        // SAFETY: drops the view's reference to its queue.
         unsafe { g_async_queue_unref(state.queue) };
     }
     unref_object(state.frame);
     state.frame = ptr::null_mut();
+    // SAFETY: layers is null or the view's own PageLayers, freed once here.
     unsafe { ns_page_layers_free(state.layers.cast()) };
     unref_object(state.favicon);
     state.favicon = ptr::null_mut();
-    unsafe {
-        if !state.ctx_popover.is_null() {
-            gtk::gtk_widget_unparent(state.ctx_popover);
-        }
-        unref_object(state.ctx_actions);
-        glib::g_free(state.ctx_link.cast());
-        if !state.history.is_null() {
-            glib::g_ptr_array_unref(state.history.cast());
-        }
-        for s in [
-            state.renderer_path,
-            state.current_url,
-            state.current_title,
-            state.remote_ip,
-            state.deferred_url,
-            state.perm_origin,
-        ] {
-            glib::g_free(s.cast());
-        }
-        unref_object(state.hourglass_cursor);
-        g_mutex_clear((&raw mut state.proc_lock).cast());
-        glib::g_free(v.cast());
+    if !state.ctx_popover.is_null() {
+        // SAFETY: ctx_popover is the live popover parented to the area.
+        unsafe { sys::gtk_widget_unparent(state.ctx_popover) };
     }
+    unref_object(state.ctx_actions);
+    state.ui = None;
+    // SAFETY: renderer_path is null or the view's own GLib string.
+    unsafe { glib::g_free(state.renderer_path.cast()) };
+    unref_object(state.hourglass_cursor);
+    // SAFETY: the worker has been joined, so nothing holds the lock any more.
+    unsafe { g_mutex_clear((&raw mut state.proc_lock).cast()) };
+    // SAFETY: the view was allocated with g_malloc0 and nothing refers to it any more.
+    unsafe { glib::g_free(v.cast()) };
 }
 
-unsafe extern "C" fn on_area_destroy(_widget: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_area_destroy(v: *mut NsProcView) {
     ns_pv_area_detach(v);
     let state = view(v);
     state.closed = 1;
@@ -101,44 +89,29 @@ unsafe extern "C" fn on_area_destroy(_widget: *mut GtkWidget, data: *mut c_void)
     state.im = ptr::null_mut();
     disarm_anim(v);
     let state = view(v);
-    unsafe {
-        if state.hover_after_scroll_id != 0 {
-            gtk::g_source_remove(state.hover_after_scroll_id);
-            state.hover_after_scroll_id = 0;
-        }
-        if state.console_poll_id != 0 {
-            gtk::g_source_remove(state.console_poll_id);
-            state.console_poll_id = 0;
-        }
-        if !state.console_window.is_null() {
-            let win = state.console_window;
-            state.console_window = ptr::null_mut();
-            state.console_notebook = ptr::null_mut();
-            state.console_entry = ptr::null_mut();
-            state.console_view = ptr::null_mut();
-            state.console_buffer = ptr::null_mut();
-            state.net_view = ptr::null_mut();
-            state.net_buffer = ptr::null_mut();
-            state.perf_view = ptr::null_mut();
-            state.perf_buffer = ptr::null_mut();
-            state.layout_view = ptr::null_mut();
-            state.layout_buffer = ptr::null_mut();
-            state.elements_view = ptr::null_mut();
-            state.elements_buffer = ptr::null_mut();
-            state.inspect_entry = ptr::null_mut();
-            gtk::gtk_window_destroy(win);
-        }
-        if !state.ctx_popover.is_null() {
-            gtk::gtk_widget_unparent(state.ctx_popover);
-            state.ctx_popover = ptr::null_mut();
-        }
+    if state.hover_after_scroll_id != 0 {
+        // SAFETY: the id is the view's pending hover source, still attached.
+        unsafe { sys::g_source_remove(state.hover_after_scroll_id) };
+        state.hover_after_scroll_id = 0;
+    }
+    let ui = state.ui();
+    if let Some(poll) = ui.console_poll.take() {
+        poll.remove();
+    }
+    let console = ui.console.take();
+    ui.perm = None;
+    ui.find = None;
+    if let Some(console) = console {
+        console.window.destroy();
+    }
+    let state = view(v);
+    if !state.ctx_popover.is_null() {
+        // SAFETY: ctx_popover is the live popover parented to the area.
+        unsafe { sys::gtk_widget_unparent(state.ctx_popover) };
+        state.ctx_popover = ptr::null_mut();
     }
     state.area = ptr::null_mut();
-    state.perm_revealer = ptr::null_mut();
-    state.perm_label = ptr::null_mut();
-    let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
-    unsafe { (*req).r#type = REQ_QUIT };
-    push_req(v, req);
+    push_req(v, new_req(REQ_QUIT, |_| {}));
     lock_proc(v);
     if let Some(remote) = view(v).remote {
         remote.interrupt();
@@ -149,12 +122,12 @@ unsafe extern "C" fn on_area_destroy(_widget: *mut GtkWidget, data: *mut c_void)
 }
 
 pub(super) fn ns_proc_view_ref(v: *mut NsProcView) -> *mut NsProcView {
-    unsafe { g_ref_count_inc(&raw mut (*v).rc) };
+    view(v).rc.fetch_add(1, Ordering::Relaxed);
     v
 }
 
 pub(super) fn ns_proc_view_unref(v: *mut NsProcView) {
-    if unsafe { g_ref_count_dec(&raw mut (*v).rc) } != 0 {
+    if view(v).rc.fetch_sub(1, Ordering::AcqRel) == 1 {
         free_view(v);
     }
 }
@@ -171,67 +144,83 @@ pub(super) fn ns_proc_view_media(v: *mut NsProcView) -> *mut c_void {
     }
 }
 
-pub(super) fn ns_proc_view_new() -> *mut NsProcView {
-    let v = unsafe { g_malloc0(core::mem::size_of::<NsProcView>()) }.cast::<NsProcView>();
+fn build_grid(v: *mut NsProcView, area: &Widget) -> Widget {
     let state = view(v);
-    unsafe {
-        g_ref_count_init(&raw mut state.rc);
-        g_mutex_init((&raw mut state.proc_lock).cast());
+    // SAFETY: gtk_grid_new has no preconditions and returns a new floating widget.
+    let grid = unsafe { sys::gtk_grid_new() };
+    // SAFETY: grid is the live widget just created; the handle sinks its floating reference.
+    let grid = unsafe { Widget::from_ptr(grid) }.expect("gtk_grid_new never returns null");
+    // SAFETY: vadj is the view's live adjustment; the scrollbar sinks its floating reference.
+    state.vscroll = unsafe { sys::gtk_scrollbar_new(gtk::ORIENTATION_VERTICAL, state.vadj.cast()) };
+    // SAFETY: hadj is the view's live adjustment; the scrollbar sinks its floating reference.
+    state.hscroll =
+        unsafe { sys::gtk_scrollbar_new(gtk::ORIENTATION_HORIZONTAL, state.hadj.cast()) };
+    for (child, column, row) in [
+        (area.as_ptr(), 0, 0),
+        (state.vscroll, 1, 0),
+        (state.hscroll, 0, 1),
+    ] {
+        // SAFETY: grid and child are live widgets; the grid takes its own reference to child.
+        unsafe { sys::gtk_grid_attach(grid.as_ptr(), child, column, row, 1, 1) };
     }
+    for scrollbar in [state.vscroll, state.hscroll] {
+        // SAFETY: scrollbar is a live widget the grid holds.
+        unsafe { sys::gtk_widget_set_visible(scrollbar, 0) };
+    }
+    grid
+}
+
+pub(super) fn ns_proc_view_new() -> *mut NsProcView {
+    // SAFETY: g_malloc0 aborts rather than return null; every field of NsProcView may be zero.
+    let v = unsafe { glib::g_malloc0(core::mem::size_of::<NsProcView>()) }.cast::<NsProcView>();
+    let state = view(v);
+    state.rc.store(1, Ordering::Relaxed);
+    // SAFETY: proc_lock is the zeroed mutex inside the new view, initialized once here.
+    unsafe { g_mutex_init((&raw mut state.proc_lock).cast()) };
     state.remote = None;
     state.media = ns_pv_media_new().cast();
     state.renderer_path = ns_proc_renderer_path();
+    // SAFETY: g_async_queue_new has no preconditions.
     state.queue = unsafe { g_async_queue_new() };
-    state.history = unsafe { glib::g_ptr_array_new_with_free_func(Some(glib::g_free)) }.cast();
     state.hist_index = -1;
     state.link_pending_action = ACT_HOVER;
     state.pending_record = 1;
     state.scale = 1.0;
 
-    unsafe {
-        state.hadj = gtk::gtk_adjustment_new(0.0, 0.0, 1.0, 60.0, 60.0, 1.0).cast();
-        state.vadj = gtk::gtk_adjustment_new(0.0, 0.0, 1.0, 60.0, 60.0, 1.0).cast();
-        ns_pv_install_view_signals(v);
+    // SAFETY: the adjustment constructor takes plain numbers and returns a new floating object.
+    state.hadj = unsafe { sys::gtk_adjustment_new(0.0, 0.0, 1.0, 60.0, 60.0, 1.0) }.cast();
+    // SAFETY: the adjustment constructor takes plain numbers and returns a new floating object.
+    state.vadj = unsafe { sys::gtk_adjustment_new(0.0, 0.0, 1.0, 60.0, 60.0, 1.0) }.cast();
+    ns_pv_install_view_signals(v);
 
-        state.layers = ns_page_layers_new().cast();
-        let area = ns_pv_area_new(v);
-        state.area = area.as_ptr();
-        gtk::gtk_widget_set_hexpand(state.area, 1);
-        gtk::gtk_widget_set_vexpand(state.area, 1);
-        gtk::gtk_widget_set_focusable(state.area, 1);
-        ns_pv_install_area_signals(v);
-
-        let grid = gtk::gtk_grid_new();
-        state.vscroll = gtk::gtk_scrollbar_new(gtk::ORIENTATION_VERTICAL, state.vadj.cast());
-        state.hscroll = gtk::gtk_scrollbar_new(gtk::ORIENTATION_HORIZONTAL, state.hadj.cast());
-        gtk::gtk_grid_attach(grid, state.area, 0, 0, 1, 1);
-        gtk::gtk_grid_attach(grid, state.vscroll, 1, 0, 1, 1);
-        gtk::gtk_grid_attach(grid, state.hscroll, 0, 1, 1, 1);
-        gtk::gtk_widget_set_visible(state.vscroll, 0);
-        gtk::gtk_widget_set_visible(state.hscroll, 0);
-
-        state.overlay = gtk::gtk_overlay_new();
-        gtk::gtk_overlay_set_child(state.overlay, grid);
-        gtk::gtk_widget_set_vexpand(state.overlay, 1);
-    }
-    build_perm_bar(v);
     let state = view(v);
-    unsafe {
-        state.root = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 0);
-        gtk::gtk_box_append(state.root, state.perm_revealer);
-        gtk::gtk_box_append(state.root, state.overlay);
-        gtk::gtk_widget_set_vexpand(state.root, 1);
-    }
-    build_search_bar(v);
+    state.layers = ns_page_layers_new().cast();
+    let area = ns_pv_area_new(v);
+    state.area = area.as_ptr();
+    area.set_hexpand(true);
+    area.set_vexpand(true);
+    // SAFETY: area is a live widget.
+    unsafe { sys::gtk_widget_set_focusable(area.as_ptr(), 1) };
+    ns_pv_install_area_signals(v);
+
+    let grid = build_grid(v, &area);
+    let overlay = Overlay::new();
+    overlay.set_child(&grid);
+    overlay.set_vexpand(true);
+
+    let perm = build_perm_bar(v);
+    let root = gtk::Box::new(gtk::ORIENTATION_VERTICAL, 0);
+    root.append(&perm);
+    root.append(&overlay);
+    root.set_vexpand(true);
+    view(v).root = Widget::from(root).into_floating();
+    build_search_bar(v, &overlay);
     ns_pv_input_install_pointer(v);
     ctx_install_actions(v);
     ns_pv_input_install_secondary(v);
     ns_pv_install_scroll(v);
     ns_pv_input_install_keys(v);
-    let on_destroy = handler!(on_area_destroy);
-    unsafe {
-        connect(view(v).area, c"destroy", on_destroy, v.cast());
-    }
+    area.connect_destroy(move || on_area_destroy(v));
     start_worker(v);
     v
 }

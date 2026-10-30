@@ -788,15 +788,14 @@ pub(super) fn disarm_anim(v: *mut NsProcView) {
 
 fn on_resize(v: *mut NsProcView, width: c_int, height: c_int) {
     let state = view(v);
-    if !state.deferred_url.is_null() && width > 1 && height > 1 {
-        let url = state.deferred_url;
+    if width > 1
+        && height > 1
+        && let Some(url) = state.ui().deferred_url.take()
+    {
         let record = state.deferred_record;
         let history = state.deferred_history;
         let activated = state.deferred_user_activated;
-        state.deferred_url = ptr::null_mut();
-        do_load(v, url, record != 0, history != 0, activated != 0);
-        // SAFETY: url was the view's g_strdup'd deferred URL, detached above and freed once here.
-        unsafe { glib::g_free(url.cast()) };
+        do_load(v, &url, record != 0, history != 0, activated != 0);
         return;
     }
     if state.opened != 0 {

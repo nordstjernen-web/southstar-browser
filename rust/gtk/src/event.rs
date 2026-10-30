@@ -154,7 +154,7 @@ unsafe extern "C" fn on_key<R: Reply, F: Fn(c_uint, c_uint, GdkModifierType) -> 
     f(keyval, keycode, state).into_c()
 }
 
-fn take_path(file: *mut c_void) -> Option<Vec<u8>> {
+pub(crate) fn take_path(file: *mut c_void) -> Option<Vec<u8>> {
     // SAFETY: file is a live GFile of the dropped list; the path is a new string or null.
     let path = unsafe { sys::g_file_get_path(file) };
     if path.is_null() {

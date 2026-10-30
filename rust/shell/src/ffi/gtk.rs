@@ -71,17 +71,6 @@ pub fn file_test(path: &CStr, test: core::ffi::c_uint) -> bool {
     unsafe { gtk::g_file_test(path.as_ptr(), test) != 0 }
 }
 
-pub unsafe fn set_accessible_label(w: *mut GtkWidget, label: &CStr) {
-    unsafe {
-        gtk::gtk_accessible_update_property(
-            w,
-            gtk::ACCESSIBLE_PROPERTY_LABEL,
-            label.as_ptr(),
-            -1 as c_int,
-        )
-    };
-}
-
 pub fn open_path(path: &CStr) {
     unsafe {
         if let Some(uri) = take_gstring(gtk::g_filename_to_uri(

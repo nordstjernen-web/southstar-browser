@@ -113,6 +113,42 @@ pub fn same_document_url_ok(current: Option<&[u8]>, next: &[u8], local_page: boo
     }
 }
 
+const INSPECT_HEAD: &[u8] = br#"(function(){try{var e=document.querySelector(""#;
+const INSPECT_TAIL: &[u8] = r#"");if(!e)return "";var s=e.outerHTML;return s.length>20000?s.slice(0,20000)+"\n…(truncated)":s;}catch(err){return "Error: "+err;}})()"#.as_bytes();
+
+fn c_escape(text: &[u8], out: &mut Vec<u8>) {
+    for &b in text {
+        let named = match b {
+            0x08 => Some(b'b'),
+            0x0c => Some(b'f'),
+            b'\n' => Some(b'n'),
+            b'\r' => Some(b'r'),
+            b'\t' => Some(b't'),
+            0x0b => Some(b'v'),
+            b'\\' => Some(b'\\'),
+            b'"' => Some(b'"'),
+            _ => None,
+        };
+        match named {
+            Some(c) => out.extend_from_slice(&[b'\\', c]),
+            None if !(b' '..0x7f).contains(&b) => out.extend_from_slice(&[
+                b'\\',
+                b'0' + ((b >> 6) & 7),
+                b'0' + ((b >> 3) & 7),
+                b'0' + (b & 7),
+            ]),
+            None => out.push(b),
+        }
+    }
+}
+
+pub fn inspect_script(selector: &[u8]) -> Vec<u8> {
+    let mut src = INSPECT_HEAD.to_vec();
+    c_escape(selector, &mut src);
+    src.extend_from_slice(INSPECT_TAIL);
+    src
+}
+
 pub fn find_scroll_target(match_y: i32) -> f64 {
     f64::from(if match_y > FIND_MARGIN {
         match_y - FIND_MARGIN
