@@ -23,6 +23,7 @@ BUNDLED = ["License.md", "COPYING", "THIRD-PARTY-LICENSES.md", "data/safebrowsin
 RETRY_AFTER = re.compile(r"try again after (\w{3}, \d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} GMT)")
 CRATE_IDENT = re.compile(r"(::)?\bsouthstar_[a-z0-9_]+\b")
 SELF_PATH = re.compile(r"(\$?)\bcrate::")
+IDENT_CHAR = re.compile(r"[A-Za-z0-9_>]")
 CARGO = os.environ.get("CARGO") or shutil.which("cargo") or "cargo"
 USER_AGENT = "southstar-crates-io (github.com/nordstjernen-web/southstar-browser)"
 
@@ -132,7 +133,8 @@ def rewrite_source(text, plan, group, module):
     def crate_ident(match):
         token = match.group(0).lstrip(":")
         name = token.replace("_", "-")
-        if short(name) not in plan.members:
+        start = match.start()
+        if short(name) not in plan.members or (match.group(1) and start and IDENT_CHAR.match(text[start - 1])):
             return match.group(0)
         target = plan.path_to(name, group)
         rest = text[match.end():match.end() + 8]
