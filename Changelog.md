@@ -8,10 +8,13 @@ Southstar Browser 1.0.5:
   the new `rust/southstar` package. Its build script links the system
   libraries through pkg-config and compiles the icon bundle. On first start
   the browser writes its translations and license texts to `share/southstar`
-  beside its install prefix. Every crate in the tree is published with it, at
-  the same version, with each internal dependency pinned to it;
-  `scripts/set-version.py` bumps all of them and `scripts/publish-crates.py`
-  uploads a release.
+  beside its install prefix. The workspace's ~160 crates are published as 18
+  merged crates (`southstar-engine`, `-css`, `-dom`, `-platform`, …) plus the
+  six Boa forks: `scripts/crates-io.py` builds each merged crate from the
+  workspace crates `scripts/crates-io-groups.toml` assigns to it, as modules
+  with their paths rewritten, and publishes them in dependency order. CI checks
+  that the merged crates build. `scripts/set-version.py` sets the version
+  everywhere it is written.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each
