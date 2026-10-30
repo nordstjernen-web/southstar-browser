@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: WebGL's GL calls go through checked wrappers. Each call into
+  libepoxy is one documented `unsafe` operation, and the wrappers check
+  every pointer-and-length pair themselves: texture uploads and
+  `readPixels` against the bytes GL will unpack or pack, uniform arrays
+  against the slice, buffer uploads against the data, `glGet` results
+  against a buffer sized for list parameters such as
+  `COMPRESSED_TEXTURE_FORMATS`, and attribute and element offsets only
+  when a buffer is bound.
 * Internals: the browser window and the tab view's chrome run on
   `southstar-gtk`. The window record is an `Rc` whose closures hold only a
   weak reference; tabs, toolbar, address bar, status pill, actions, menu,
