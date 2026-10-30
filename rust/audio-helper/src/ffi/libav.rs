@@ -130,8 +130,7 @@ impl<'a> Avio<'a> {
 
 impl Drop for Avio<'_> {
     fn drop(&mut self) {
-        // SAFETY: self.context is a live I/O context and the offset of its buffer field comes from the installed headers.
-        let buffer = unsafe { io_context::BUFFER.ptr(self.context.as_ptr()) };
+        let buffer = io_context::BUFFER.ptr(self.context.as_ptr());
         // SAFETY: buffer points at the context's current I/O buffer, which libav allocated; av_freep frees it and nulls the field.
         unsafe { av::av_freep(buffer.cast()) };
         let mut context = self.context.as_ptr();
@@ -381,8 +380,7 @@ impl Resampler {
     pub fn to_float(codec: &Codec, rate: c_int, sample_fmt: c_int) -> Option<Resampler> {
         // SAFETY: allocates an unconfigured resampler or returns null.
         let resampler = Resampler(NonNull::new(unsafe { av::swr_alloc() })?);
-        // SAFETY: codec.0 is an open codec context and the offset of its channel layout comes from the installed headers.
-        let layout = unsafe { codec_context::CH_LAYOUT.ptr(codec.0.as_ptr()) };
+        let layout = codec_context::CH_LAYOUT.ptr(codec.0.as_ptr());
         let layout = layout.cast::<AVChannelLayout>().cast_const();
         resampler.set_layout(c"in_chlayout", layout);
         resampler.set_layout(c"out_chlayout", layout);

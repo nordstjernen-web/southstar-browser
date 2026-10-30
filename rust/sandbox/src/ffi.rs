@@ -220,7 +220,7 @@ mod linux {
     use core::ffi::{c_char, c_int, c_long, c_void};
     use core::ptr;
     use southstar_glib as glib;
-    use std::os::fd::AsRawFd;
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::OpenOptionsExt;
 
@@ -254,7 +254,25 @@ mod linux {
     }
 
     pub(super) fn is_root() -> bool {
-        unsafe { geteuid() == 0 || getuid() == 0 }
+        // SAFETY: geteuid has no preconditions and touches no memory.
+        let effective = unsafe { geteuid() };
+        // SAFETY: getuid has no preconditions and touches no memory.
+        let real = unsafe { getuid() };
+        effective == 0 || real == 0
+    }
+
+    pub(super) fn set_no_new_privs() -> bool {
+        // SAFETY: PR_SET_NO_NEW_PRIVS takes integer arguments only and touches no memory.
+        let status = unsafe {
+            prctl(
+                PR_SET_NO_NEW_PRIVS,
+                1 as c_long,
+                0 as c_long,
+                0 as c_long,
+                0 as c_long,
+            )
+        };
+        status == 0
     }
 
     pub(super) fn errno() -> c_int {
@@ -269,10 +287,10 @@ mod linux {
             "southstar: {what}, but NS_REQUIRE_SANDBOX is set \u{2014} refusing to run untrusted content unconfined.\n"
         );
         let message = std::ffi::CString::new(message).unwrap_or_default();
-        unsafe {
-            super::g_printerr(c"%s".as_ptr(), message.as_ptr());
-            _exit(70);
-        }
+        // SAFETY: the format is a literal "%s" and its one argument is a NUL-terminated string that outlives the call.
+        unsafe { super::g_printerr(c"%s".as_ptr(), message.as_ptr()) };
+        // SAFETY: _exit ends the process at once, so nothing runs unconfined after the message.
+        unsafe { _exit(70) }
     }
 
     fn create_ruleset(attr: Option<&RulesetAttr>, flags: u32) -> c_int {
@@ -283,6 +301,7 @@ mod linux {
             ),
             None => (ptr::null(), 0),
         };
+        // SAFETY: attr is null with size 0 or points at a live RulesetAttr of exactly size bytes, which the kernel only reads during the call.
         unsafe {
             syscall(
                 SYS_LANDLOCK_CREATE_RULESET,
@@ -293,7 +312,7 @@ mod linux {
         }
     }
 
-    struct Ruleset(c_int);
+    struct Ruleset(OwnedFd);
 
     impl Ruleset {
         fn allow(&self, access: u64, path: &[u8]) {
@@ -309,10 +328,11 @@ mod linux {
                 allowed_access: access,
                 parent_fd: file.as_raw_fd(),
             };
+            // SAFETY: rule is a live PathBeneathAttr the kernel only reads during the call, and both descriptors stay open across it.
             unsafe {
                 syscall(
                     SYS_LANDLOCK_ADD_RULE,
-                    c_long::from(self.0),
+                    c_long::from(self.0.as_raw_fd()),
                     c_long::from(LANDLOCK_RULE_PATH_BENEATH),
                     (&raw const rule).cast::<c_void>(),
                     0 as c_long,
@@ -364,17 +384,9 @@ mod linux {
             require_or_die("Landlock filesystem sandbox is unavailable");
             return;
         }
-        let rules = Ruleset(fd);
-        if unsafe {
-            prctl(
-                PR_SET_NO_NEW_PRIVS,
-                1 as c_long,
-                0 as c_long,
-                0 as c_long,
-                0 as c_long,
-            )
-        } != 0
-        {
+        // SAFETY: fd is the ruleset descriptor landlock_create_ruleset just returned, owned by nothing else.
+        let rules = Ruleset(unsafe { OwnedFd::from_raw_fd(fd) });
+        if !set_no_new_privs() {
             info(&format!(
                 "landlock: PR_SET_NO_NEW_PRIVS failed: {}",
                 strerror(errno())
@@ -521,18 +533,18 @@ mod linux {
             rules.allow(fs_read | fs_exec, dir.as_bytes());
         }
 
-        if unsafe { syscall(SYS_LANDLOCK_RESTRICT_SELF, c_long::from(fd), 0 as c_long) } != 0 {
+        let ruleset = c_long::from(rules.0.as_raw_fd());
+        // SAFETY: landlock_restrict_self takes the open ruleset descriptor and integer flags and touches no memory.
+        if unsafe { syscall(SYS_LANDLOCK_RESTRICT_SELF, ruleset, 0 as c_long) } != 0 {
             info(&format!(
                 "landlock: restrict_self failed: {}",
                 strerror(errno())
             ));
             require_or_die("Landlock enforcement (restrict_self) failed");
         }
-        unsafe { close(fd) };
     }
 
     unsafe extern "C" {
-        fn close(fd: c_int) -> c_int;
         fn setxattr(
             path: *const c_char,
             name: *const c_char,
@@ -544,6 +556,7 @@ mod linux {
 
     pub(super) fn mark_download_origin(path: &std::ffi::CStr, url: Option<&[u8]>) {
         if let Some(url) = url.filter(|url| !url.is_empty()) {
+            // SAFETY: path and the name are NUL-terminated strings and url is url.len() readable bytes, all live for the call, which copies them.
             unsafe {
                 setxattr(
                     path.as_ptr(),
@@ -559,9 +572,10 @@ mod linux {
 
 #[cfg(all(target_os = "linux", feature = "seccomp"))]
 mod seccomp {
-    use super::linux::{PR_SET_NO_NEW_PRIVS, errno, prctl, require_or_die};
+    use super::linux::{errno, require_or_die, set_no_new_privs};
     use super::{info, is_renderer, strerror, warning};
-    use core::ffi::{c_char, c_int, c_long, c_uint, c_void};
+    use core::ffi::{c_char, c_int, c_uint, c_void};
+    use core::ptr::{self, NonNull};
     use std::ffi::CString;
 
     const SCMP_ACT_ALLOW: u32 = 0x7fff_0000;
@@ -653,18 +667,51 @@ mod seccomp {
         fn seccomp_release(ctx: *mut c_void);
     }
 
+    struct Filter(NonNull<c_void>);
+
+    impl Filter {
+        fn new(default_action: u32) -> Option<Filter> {
+            // SAFETY: seccomp_init takes an action constant and returns a new filter context or null.
+            NonNull::new(unsafe { seccomp_init(default_action) }).map(Filter)
+        }
+
+        fn synchronize_threads(&self) {
+            // SAFETY: self.0 is a live filter context and the attribute value is a plain integer.
+            unsafe { seccomp_attr_set(self.0.as_ptr(), SCMP_FLTATR_CTL_TSYNC, 1) };
+        }
+
+        fn add(&self, action: u32, syscall: c_int, compare: Option<&ArgCmp>) -> c_int {
+            let (count, compare) =
+                compare.map_or((0, ptr::null()), |compare| (1, compare as *const ArgCmp));
+            // SAFETY: self.0 is a live filter context and compare is null with count 0 or one live ArgCmp with count 1, copied during the call.
+            unsafe { seccomp_rule_add_array(self.0.as_ptr(), action, syscall, count, compare) }
+        }
+
+        fn load(&self) -> c_int {
+            // SAFETY: self.0 is a live filter context.
+            unsafe { seccomp_load(self.0.as_ptr()) }
+        }
+    }
+
+    impl Drop for Filter {
+        fn drop(&mut self) {
+            // SAFETY: self.0 is the context seccomp_init returned, released exactly once; a loaded filter stays in force.
+            unsafe { seccomp_release(self.0.as_ptr()) };
+        }
+    }
+
     fn resolve(name: &str) -> c_int {
         let name = CString::new(name).unwrap_or_default();
+        // SAFETY: name is a NUL-terminated string that outlives the call.
         unsafe { seccomp_syscall_resolve_name(name.as_ptr()) }
     }
 
     fn deny_matching<'a>(rules: impl IntoIterator<Item = &'a Deny>) -> c_int {
         const ENOMEM: c_int = 12;
-        let ctx = unsafe { seccomp_init(SCMP_ACT_ALLOW) };
-        if ctx.is_null() {
+        let Some(filter) = Filter::new(SCMP_ACT_ALLOW) else {
             return -ENOMEM;
-        }
-        unsafe { seccomp_attr_set(ctx, SCMP_FLTATR_CTL_TSYNC, 1) };
+        };
+        filter.synchronize_threads();
         let mut rc = 0;
         for rule in rules {
             if rc != 0 {
@@ -680,26 +727,16 @@ mod seccomp {
                 datum_a: rule.mask,
                 datum_b: rule.value,
             };
-            rc = unsafe { seccomp_rule_add_array(ctx, SCMP_ACT_ERRNO_EPERM, nr, 1, &compare) };
+            rc = filter.add(SCMP_ACT_ERRNO_EPERM, nr, Some(&compare));
         }
         if rc == 0 {
-            rc = unsafe { seccomp_load(ctx) };
+            rc = filter.load();
         }
-        unsafe { seccomp_release(ctx) };
         rc
     }
 
     pub(super) fn init() {
-        if unsafe {
-            prctl(
-                PR_SET_NO_NEW_PRIVS,
-                1 as c_long,
-                0 as c_long,
-                0 as c_long,
-                0 as c_long,
-            )
-        } != 0
-        {
+        if !set_no_new_privs() {
             info(&format!(
                 "seccomp: PR_SET_NO_NEW_PRIVS failed: {}",
                 strerror(errno())
@@ -716,21 +753,20 @@ mod seccomp {
             ));
             require_or_die("seccomp argument filter failed to load");
         }
-        let ctx = unsafe { seccomp_init(SCMP_ACT_ERRNO_EPERM) };
-        if ctx.is_null() {
+        let Some(filter) = Filter::new(SCMP_ACT_ERRNO_EPERM) else {
             info("seccomp: seccomp_init failed");
             require_or_die("seccomp syscall filter could not be created");
             return;
-        }
-        unsafe { seccomp_attr_set(ctx, SCMP_FLTATR_CTL_TSYNC, 1) };
+        };
+        filter.synchronize_threads();
         for name in crate::SECCOMP_ALLOWED {
             let nr = resolve(name);
             if nr == NR_SCMP_ERROR {
                 continue;
             }
-            unsafe { seccomp_rule_add_array(ctx, SCMP_ACT_ALLOW, nr, 0, core::ptr::null()) };
+            filter.add(SCMP_ACT_ALLOW, nr, None);
         }
-        let rc = unsafe { seccomp_load(ctx) };
+        let rc = filter.load();
         if rc != 0 {
             warning(&format!(
                 "seccomp: load failed, process is NOT syscall-sandboxed: {}",
@@ -738,7 +774,6 @@ mod seccomp {
             ));
             require_or_die("seccomp syscall filter failed to load");
         }
-        unsafe { seccomp_release(ctx) };
     }
 }
 
@@ -768,7 +803,11 @@ mod macos {
     }
 
     pub(super) fn is_root() -> bool {
-        unsafe { geteuid() == 0 || getuid() == 0 }
+        // SAFETY: geteuid has no preconditions and touches no memory.
+        let effective = unsafe { geteuid() };
+        // SAFETY: getuid has no preconditions and touches no memory.
+        let real = unsafe { getuid() };
+        effective == 0 || real == 0
     }
 
     fn subpath(profile: &mut Vec<u8>, dir: Option<&[u8]>) {
@@ -803,11 +842,13 @@ mod macos {
         profile.extend_from_slice(b")\n");
         profile.push(0);
         let mut err = ptr::null_mut();
+        // SAFETY: profile is NUL-terminated and outlives the call, and err is a writable local for the error string.
         let rc = unsafe { sandbox_init(profile.as_ptr().cast(), 0, &mut err) };
         if rc != 0 {
             let reason = if err.is_null() {
                 "unknown error".to_owned()
             } else {
+                // SAFETY: a non-null err is the NUL-terminated message sandbox_init allocated, freed only below.
                 unsafe { CStr::from_ptr(err) }
                     .to_string_lossy()
                     .into_owned()
@@ -816,6 +857,7 @@ mod macos {
                 "sandbox: macOS Seatbelt init failed, process is NOT filesystem-confined: {reason}"
             ));
             if !err.is_null() {
+                // SAFETY: err is the message sandbox_init allocated, freed exactly once after reason copied it.
                 unsafe { sandbox_free_error(err) };
             }
         } else {
@@ -828,6 +870,7 @@ mod macos {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs());
         let value = format!("0001;{:08x};Southstar;", now as u32);
+        // SAFETY: path and the name are NUL-terminated strings and value is value.len() readable bytes, all live for the call, which copies them.
         unsafe {
             setxattr(
                 path.as_ptr(),
@@ -847,7 +890,15 @@ mod windows {
     use core::ptr;
 
     type Handle = *mut c_void;
-    type SetMitigationPolicy = unsafe extern "system" fn(c_int, *mut c_void, usize) -> c_int;
+
+    struct Owned(Handle);
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            // SAFETY: Owned only wraps a valid handle this module opened or was given by CreateProcessWithTokenW, closed exactly once here.
+            unsafe { CloseHandle(self.0) };
+        }
+    }
 
     #[repr(C)]
     struct SidAuthority {
@@ -939,28 +990,10 @@ mod windows {
     unsafe extern "system" {
         fn OpenProcess(access: u32, inherit: c_int, process_id: u32) -> Handle;
         fn CloseHandle(handle: Handle) -> c_int;
-        fn GetModuleFileNameW(module: Handle, filename: *mut u16, size: u32) -> u32;
         fn GetCommandLineW() -> *mut u16;
         fn lstrlenW(text: *const u16) -> c_int;
         fn SetEnvironmentVariableW(name: *const u16, value: *const u16) -> c_int;
-        fn GetModuleHandleW(name: *const u16) -> Handle;
-        fn GetProcAddress(module: Handle, name: *const c_char) -> *mut c_void;
-        fn CreateFileW(
-            name: *const u16,
-            access: u32,
-            share: u32,
-            security: *mut c_void,
-            disposition: u32,
-            flags: u32,
-            template: Handle,
-        ) -> Handle;
-        fn WriteFile(
-            file: Handle,
-            buffer: *const c_void,
-            length: u32,
-            written: *mut u32,
-            overlapped: *mut c_void,
-        ) -> c_int;
+        fn SetProcessMitigationPolicy(policy: c_int, buffer: *mut c_void, length: usize) -> c_int;
     }
 
     #[link(name = "bcrypt")]
@@ -974,6 +1007,7 @@ mod windows {
 
     pub(super) fn csprng_fill(buf: &mut [u8]) -> bool {
         const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 2;
+        // SAFETY: buf is an exclusively borrowed buffer of buf.len() writable bytes and a null algorithm is allowed with the system-preferred flag.
         unsafe {
             BCryptGenRandom(
                 ptr::null_mut(),
@@ -991,6 +1025,7 @@ mod windows {
             value: [0, 0, 0, 0, 0, 5],
         };
         let mut sid = ptr::null_mut();
+        // SAFETY: authority is a live SID_IDENTIFIER_AUTHORITY and sid a writable local for the new SID.
         if unsafe {
             AllocateAndInitializeSid(
                 &authority,
@@ -1010,25 +1045,31 @@ mod windows {
             return false;
         }
         let mut member = 0;
+        // SAFETY: sid is the SID just allocated, a null token means the calling thread's, and member is a writable local.
         if unsafe { CheckTokenMembership(ptr::null_mut(), sid, &mut member) } == 0 {
             member = 0;
         }
+        // SAFETY: sid was allocated by AllocateAndInitializeSid above and is freed exactly once.
         unsafe { FreeSid(sid) };
         member != 0
     }
 
     fn launch_with_token(user_token: Handle) -> bool {
-        let mut exe = vec![0u16; 4096];
-        let n = unsafe { GetModuleFileNameW(ptr::null_mut(), exe.as_mut_ptr(), exe.len() as u32) };
-        let app = if n > 0 && (n as usize) < exe.len() {
-            exe.as_ptr()
-        } else {
-            ptr::null()
-        };
+        use std::os::windows::ffi::OsStrExt;
+        let exe: Option<Vec<u16>> = std::env::current_exe()
+            .ok()
+            .map(|exe| exe.as_os_str().encode_wide().chain([0]).collect());
+        let app = exe.as_ref().map_or(ptr::null(), |exe| exe.as_ptr());
+        // SAFETY: GetCommandLineW has no preconditions and returns the process's NUL-terminated command line.
         let source = unsafe { GetCommandLineW() };
+        // SAFETY: source is the NUL-terminated command line, which lives as long as the process.
         let length = unsafe { lstrlenW(source) } as usize + 1;
+        // SAFETY: source holds length units including its NUL, all initialized, and is not modified while copied.
         let mut command = unsafe { core::slice::from_raw_parts(source, length) }.to_vec();
-        unsafe { SetEnvironmentVariableW(wide("NS_DEELEVATED").as_ptr(), wide("1").as_ptr()) };
+        let name = wide("NS_DEELEVATED");
+        let value = wide("1");
+        // SAFETY: name and value are NUL-terminated UTF-16 strings that outlive the call.
+        unsafe { SetEnvironmentVariableW(name.as_ptr(), value.as_ptr()) };
         let startup = StartupInfo {
             cb: core::mem::size_of::<StartupInfo>() as u32,
             reserved: ptr::null_mut(),
@@ -1048,6 +1089,7 @@ mod windows {
             process_id: 0,
             thread_id: 0,
         };
+        // SAFETY: user_token is a live primary token, app is null or a NUL-terminated path, command a writable NUL-terminated copy of the command line, and startup and info are initialized locals the call does not keep.
         let launched = unsafe {
             CreateProcessWithTokenW(
                 user_token,
@@ -1062,10 +1104,8 @@ mod windows {
             )
         } != 0;
         if launched {
-            unsafe {
-                CloseHandle(info.process);
-                CloseHandle(info.thread);
-            }
+            drop(Owned(info.process));
+            drop(Owned(info.thread));
         }
         launched
     }
@@ -1081,31 +1121,38 @@ mod windows {
         const TOKEN_PRIMARY: c_int = 1;
         const TOKEN_ELEVATION: c_int = 20;
 
+        // SAFETY: GetShellWindow has no preconditions and touches no caller memory.
         let shell = unsafe { GetShellWindow() };
         if shell.is_null() {
             return false;
         }
         let mut shell_pid = 0;
+        // SAFETY: shell is a window handle, which may go stale without harm, and shell_pid a writable local.
         unsafe { GetWindowThreadProcessId(shell, &mut shell_pid) };
         if shell_pid == 0 {
             return false;
         }
+        // SAFETY: OpenProcess takes plain access flags and a process id and touches no caller memory.
         let shell_process = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION, 0, shell_pid) };
         if shell_process.is_null() {
             return false;
         }
+        let shell_process = Owned(shell_process);
         let mut relaunched = false;
         let mut shell_token = ptr::null_mut();
-        if unsafe { OpenProcessToken(shell_process, TOKEN_DUPLICATE, &mut shell_token) } != 0 {
+        // SAFETY: shell_process is a live process handle opened with query access and shell_token a writable local.
+        if unsafe { OpenProcessToken(shell_process.0, TOKEN_DUPLICATE, &mut shell_token) } != 0 {
+            let shell_token = Owned(shell_token);
             let mut user_token = ptr::null_mut();
             let access = TOKEN_QUERY
                 | TOKEN_ASSIGN_PRIMARY
                 | TOKEN_DUPLICATE
                 | TOKEN_ADJUST_DEFAULT
                 | TOKEN_ADJUST_SESSIONID;
+            // SAFETY: shell_token is a live token opened for duplication, a null attributes pointer is allowed, and user_token is a writable local.
             if unsafe {
                 DuplicateTokenEx(
-                    shell_token,
+                    shell_token.0,
                     access,
                     ptr::null_mut(),
                     SECURITY_IMPERSONATION,
@@ -1114,11 +1161,13 @@ mod windows {
                 )
             } != 0
             {
+                let user_token = Owned(user_token);
                 let mut elevation = 0u32;
                 let mut got = 0;
+                // SAFETY: user_token is a live token with query access, and elevation is a writable 4-byte TOKEN_ELEVATION as the length says.
                 let shell_elevated = unsafe {
                     GetTokenInformation(
-                        user_token,
+                        user_token.0,
                         TOKEN_ELEVATION,
                         (&raw mut elevation).cast(),
                         4,
@@ -1127,13 +1176,10 @@ mod windows {
                 } != 0
                     && elevation != 0;
                 if !shell_elevated {
-                    relaunched = launch_with_token(user_token);
+                    relaunched = launch_with_token(user_token.0);
                 }
-                unsafe { CloseHandle(user_token) };
             }
-            unsafe { CloseHandle(shell_token) };
         }
-        unsafe { CloseHandle(shell_process) };
         relaunched
     }
 
@@ -1145,6 +1191,7 @@ mod windows {
         const MB_TOPMOST: u32 = 0x40000;
         const IDYES: c_int = 6;
         let text = std::ffi::CString::new(message).unwrap_or_default();
+        // SAFETY: text and the caption are NUL-terminated strings that outlive the call, and a null owner window is allowed.
         unsafe {
             MessageBoxA(
                 ptr::null_mut(),
@@ -1161,18 +1208,11 @@ mod windows {
         const PROCESS_EXTENSION_POINT_DISABLE_POLICY: c_int = 6;
         const PROCESS_IMAGE_LOAD_POLICY: c_int = 10;
         const PROCESS_CHILD_PROCESS_POLICY: c_int = 13;
-        let kernel32 = unsafe { GetModuleHandleW(wide("kernel32.dll").as_ptr()) };
-        if kernel32.is_null() {
-            return;
-        }
-        let address = unsafe { GetProcAddress(kernel32, c"SetProcessMitigationPolicy".as_ptr()) };
-        if address.is_null() {
-            return;
-        }
-        let set: SetMitigationPolicy = unsafe { core::mem::transmute(address) };
         let apply = |policy: c_int, flags: u32| {
             let mut value = flags;
-            unsafe { set(policy, (&raw mut value).cast(), core::mem::size_of::<u32>()) };
+            let buffer = (&raw mut value).cast();
+            // SAFETY: each policy here takes a 32-bit flags structure, and buffer points at a live u32 of exactly the length passed.
+            unsafe { SetProcessMitigationPolicy(policy, buffer, core::mem::size_of::<u32>()) };
         };
         apply(PROCESS_ASLR_POLICY, 0x02);
         apply(PROCESS_STRICT_HANDLE_CHECK_POLICY, 0x03);
@@ -1184,40 +1224,25 @@ mod windows {
     }
 
     pub(super) fn mark_download_origin(path: &[u8], url: Option<&[u8]>) {
-        const GENERIC_WRITE: u32 = 0x4000_0000;
-        const CREATE_ALWAYS: u32 = 2;
+        use std::io::Write;
+        use std::os::windows::fs::OpenOptionsExt;
         const FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         let mut stream = path.to_vec();
         stream.extend_from_slice(b":Zone.Identifier");
         let Ok(stream) = std::str::from_utf8(&stream) else {
             return;
         };
-        let handle = unsafe {
-            CreateFileW(
-                wide(stream).as_ptr(),
-                GENERIC_WRITE,
-                0,
-                ptr::null_mut(),
-                CREATE_ALWAYS,
-                FILE_ATTRIBUTE_NORMAL,
-                ptr::null_mut(),
-            )
-        };
-        if handle as isize == -1 {
+        let Ok(mut file) = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .share_mode(0)
+            .attributes(FILE_ATTRIBUTE_NORMAL)
+            .open(stream)
+        else {
             return;
-        }
-        let zone = crate::zone_identifier(url);
-        let mut wrote = 0;
-        unsafe {
-            WriteFile(
-                handle,
-                zone.as_ptr().cast(),
-                zone.len() as u32,
-                &mut wrote,
-                ptr::null_mut(),
-            );
-            CloseHandle(handle);
-        }
+        };
+        let _ = file.write_all(&crate::zone_identifier(url));
     }
 }
 
@@ -1248,7 +1273,9 @@ fn os_fill(buf: &mut [u8]) -> bool {
     const EINTR: c_int = 4;
     let mut off = 0;
     while off < buf.len() {
-        let n = unsafe { getrandom(buf[off..].as_mut_ptr().cast(), buf.len() - off, 0) };
+        let rest = &mut buf[off..];
+        // SAFETY: rest is an exclusively borrowed buffer of rest.len() writable bytes, and getrandom writes at most that many.
+        let n = unsafe { getrandom(rest.as_mut_ptr().cast(), rest.len(), 0) };
         if n < 0 {
             if linux::errno() == EINTR {
                 continue;
@@ -1272,6 +1299,7 @@ fn os_fill(buf: &mut [u8]) -> bool {
         fn getentropy(buf: *mut c_void, len: usize) -> c_int;
     }
     for chunk in buf.chunks_mut(256) {
+        // SAFETY: chunk is an exclusively borrowed buffer of at most 256 writable bytes, getentropy's limit, and it writes exactly chunk.len().
         if unsafe { getentropy(chunk.as_mut_ptr().cast(), chunk.len()) } != 0 {
             return false;
         }
@@ -1415,6 +1443,7 @@ pub fn harden_allocator() {
             fn mallopt(param: c_int, value: c_int) -> c_int;
         }
         const M_PERTURB: c_int = -6;
+        // SAFETY: mallopt takes two integers and only changes the allocator's tuning.
         unsafe { mallopt(M_PERTURB, 0xAA) };
     }
 }
