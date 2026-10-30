@@ -151,7 +151,7 @@ video	55	0	0	0	0	0	0
 video-helper	67	12	1	0	58	17	0
 watchdog	32	21	0	0	10	1	0
 webaudio	0	0	0	0	0	0	0
-webcrypto	124	122	0	0	119	13	0
+webcrypto	104	118	0	0	0	0	0
 webgl	74	6	0	0	70	8	0
 webgpu	75	73	0	0	64	0	1
 websocket	3	2	0	0	2	0	0

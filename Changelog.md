@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: `rust/webcrypto`'s OpenSSL layer owns every PKCS#8, ECDSA
+  signature, MAC/KDF, BIGNUM and OSSL_PARAM builder handle through an RAII
+  wrapper, builds OSSL_PARAM arrays in Rust, declares OpenSSL's argument-free
+  calls `safe`, and gives each remaining `unsafe` block one operation and a
+  `// SAFETY:` comment.
 * Internals: inline `<video>` identifies its element by `Node` and
   `WeakNode` instead of raw pointers, so media events reach only the live
   element and the browser and headless shells lose their `Node::from_ptr`.
