@@ -34,7 +34,7 @@ Supported platforms:
 CI builds Linux, FreeBSD and NetBSD on every push; the Windows, macOS and
 musl workflows run only when started by hand.
 
-**Version:** 1.0.3.
+**Version:** 1.0.4.
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 
