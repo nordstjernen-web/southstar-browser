@@ -5,13 +5,9 @@
 use core::ffi::{c_char, c_void};
 
 pub type MapCallback = unsafe extern "C" fn(u32, StringView, *mut c_void, *mut c_void);
-pub type AdapterCallback =
+pub type RequestCallback =
     unsafe extern "C" fn(u32, *mut c_void, StringView, *mut c_void, *mut c_void);
-pub type DeviceCallback =
-    unsafe extern "C" fn(u32, *mut c_void, StringView, *mut c_void, *mut c_void);
-pub type ErrorCallback =
-    unsafe extern "C" fn(*const *mut c_void, u32, StringView, *mut c_void, *mut c_void);
-pub type LostCallback =
+pub type DeviceEventCallback =
     unsafe extern "C" fn(*const *mut c_void, u32, StringView, *mut c_void, *mut c_void);
 
 pub const UNDEFINED_U32: u32 = u32::MAX;
@@ -71,8 +67,7 @@ pub const PRIMITIVE_TOPOLOGY_POINT_LIST: u32 = 1;
 pub const PRIMITIVE_TOPOLOGY_TRIANGLE_LIST: u32 = 4;
 pub const PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP: u32 = 5;
 pub const QUERY_TYPE_OCCLUSION: u32 = 1;
-pub const REQUEST_ADAPTER_STATUS_SUCCESS: u32 = 1;
-pub const REQUEST_DEVICE_STATUS_SUCCESS: u32 = 1;
+pub const REQUEST_STATUS_SUCCESS: u32 = 1;
 pub const S_TYPE_SHADER_SOURCE_WGSL: u32 = 2;
 pub const SAMPLER_BINDING_TYPE_COMPARISON: u32 = 4;
 pub const SAMPLER_BINDING_TYPE_FILTERING: u32 = 2;
@@ -182,7 +177,7 @@ pub struct BufferMapCallbackInfo {
 pub struct RequestAdapterCallbackInfo {
     pub next_in_chain: *const ChainedStruct,
     pub mode: u32,
-    pub callback: Option<AdapterCallback>,
+    pub callback: Option<RequestCallback>,
     pub userdata1: *mut c_void,
     pub userdata2: *mut c_void,
 }
@@ -192,7 +187,7 @@ pub struct RequestAdapterCallbackInfo {
 pub struct RequestDeviceCallbackInfo {
     pub next_in_chain: *const ChainedStruct,
     pub mode: u32,
-    pub callback: Option<DeviceCallback>,
+    pub callback: Option<RequestCallback>,
     pub userdata1: *mut c_void,
     pub userdata2: *mut c_void,
 }
@@ -201,7 +196,7 @@ pub struct RequestDeviceCallbackInfo {
 #[derive(Clone, Copy)]
 pub struct UncapturedErrorCallbackInfo {
     pub next_in_chain: *const ChainedStruct,
-    pub callback: Option<ErrorCallback>,
+    pub callback: Option<DeviceEventCallback>,
     pub userdata1: *mut c_void,
     pub userdata2: *mut c_void,
 }
@@ -211,7 +206,7 @@ pub struct UncapturedErrorCallbackInfo {
 pub struct DeviceLostCallbackInfo {
     pub next_in_chain: *const ChainedStruct,
     pub mode: u32,
-    pub callback: Option<LostCallback>,
+    pub callback: Option<DeviceEventCallback>,
     pub userdata1: *mut c_void,
     pub userdata2: *mut c_void,
 }

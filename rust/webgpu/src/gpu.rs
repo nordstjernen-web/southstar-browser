@@ -29,7 +29,7 @@ pub(crate) fn request_adapter(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> 
     let Some(instance) = wgpu::instance() else {
         return resolved(scope, Value::null());
     };
-    match wgpu::request_adapter(instance) {
+    match instance.request_adapter() {
         Some(adapter) => {
             let adapter = make_adapter(scope, adapter);
             resolved(scope, adapter)
@@ -141,14 +141,15 @@ fn range_args(scope: &mut Scope<'_>, args: &[Value], first: usize) -> (i64, i64)
 }
 
 fn range_size(total: u64, offset: i64, size: i64) -> Option<usize> {
-    if offset < 0 || offset as u64 > total {
+    let offset = u64::try_from(offset)
+        .ok()
+        .filter(|&offset| offset <= total)?;
+    let available = total - offset;
+    let size = u64::try_from(size).unwrap_or(available);
+    if size > available {
         return None;
     }
-    Some(if size < 0 {
-        (total - offset as u64) as usize
-    } else {
-        size as usize
-    })
+    usize::try_from(size).ok()
 }
 
 pub(crate) fn buffer_get_mapped_range(

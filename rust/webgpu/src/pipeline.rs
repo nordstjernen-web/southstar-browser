@@ -436,22 +436,21 @@ pub(crate) fn device_create_pipeline_layout(
     let Some((d, desc)) = device_and_descriptor(this, args) else {
         return Err(scope.type_error("createPipelineLayout: descriptor"));
     };
-    let mut layouts = [ptr::null_mut(); MAX_ENTRIES];
     let mut held = Vec::new();
-    let mut n = 0;
     let list = prop(scope, &desc, "bindGroupLayouts");
     if list.is_array() {
-        n = (array_len(scope, &list) as usize).min(MAX_ENTRIES);
-        for (i, slot) in layouts.iter_mut().enumerate().take(n) {
+        let n = (array_len(scope, &list) as usize).min(MAX_ENTRIES);
+        for i in 0..n {
             let e = index(scope, &list, i as u32);
-            if let Some(layout) = host::<BindGroupLayout>(&e) {
-                *slot = layout.raw();
-                held.push(layout);
-            }
+            let Some(layout) = host::<BindGroupLayout>(&e) else {
+                return Err(scope.type_error("createPipelineLayout: bindGroupLayouts"));
+            };
+            held.push(layout);
         }
     }
+    let layouts: Vec<_> = held.iter().map(|layout| layout.raw()).collect();
     let mut descriptor = PipelineLayoutDescriptor::zeroed();
-    descriptor.bind_group_layout_count = n;
+    descriptor.bind_group_layout_count = layouts.len();
     descriptor.bind_group_layouts = layouts.as_ptr();
     let layout = d.device.create_pipeline_layout(&descriptor);
     drop(held);

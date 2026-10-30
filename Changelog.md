@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: WebGPU's unsafe code is documented and smaller. Every wgpu-native
+  call sits in one owned-handle method with its safety argument, the adapter,
+  device and map waits share one callback path whose state is heap-allocated
+  and leaked on timeout (a late callback no longer writes into a dead stack
+  frame), uncaptured errors log through `southstar-glib`, `getMappedRange`
+  and `mapAsync` reject ranges past the buffer's end, and
+  `createPipelineLayout` throws on a non-layout entry instead of passing a null
+  handle.
 * Internals: the media helpers' unsafe code is documented and smaller. The
   `southstar-video` and `southstar-audio` helpers drive libav through small
   owners (format, codec, packet, frame, scaler, resampler, in-memory I/O) whose
