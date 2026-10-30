@@ -434,8 +434,25 @@ def publish_one(name, manifest_path):
         sys.exit(f"crates-io: publishing {name} failed")
 
 
+def fork_order(plan):
+    order, done = [], set()
+
+    def visit(name):
+        if name in done:
+            return
+        done.add(name)
+        for dep in plan.forks[name]["dependencies"]:
+            if dep["kind"] != "dev" and dep["name"] in plan.forks:
+                visit(dep["name"])
+        order.append((name, plan.forks[name]))
+
+    for name in sorted(plan.forks):
+        visit(name)
+    return order
+
+
 def publish(plan, staging):
-    queue = [(name, Path(p["manifest_path"]), p["version"]) for name, p in sorted(plan.forks.items())]
+    queue = [(name, Path(p["manifest_path"]), p["version"]) for name, p in fork_order(plan)]
     queue += [(group, staging / group / "Cargo.toml", plan.version) for group in plan.order]
     for index, (name, manifest_path, version) in enumerate(queue, 1):
         if published(name, version):
