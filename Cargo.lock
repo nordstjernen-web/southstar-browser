@@ -3595,6 +3595,7 @@ dependencies = [
 name = "southstar-renderer-client"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-glib",
  "southstar-ipc",
  "southstar-print",
@@ -3605,6 +3606,7 @@ name = "southstar-renderer-host"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-browser",
+ "southstar-cairo",
  "southstar-glib",
  "southstar-image",
  "southstar-ipc",

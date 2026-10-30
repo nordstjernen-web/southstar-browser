@@ -27,7 +27,7 @@ pub struct Renderer {
     pub(crate) max_w: c_int,
     pub(crate) max_h: c_int,
     pub(crate) dpr_milli: c_int,
-    pub(crate) inproc_conn: *mut core::ffi::c_void,
+    pub(crate) inproc_conn: Option<os::InprocId>,
     pub(crate) linear: (c_int, c_int, c_int),
     pub(crate) head: Box<Head>,
 }

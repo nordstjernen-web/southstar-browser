@@ -7,7 +7,7 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::{self, NonNull};
 
 use southstar_css::RetainedStyle;
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::BoxRef;
 
 use southstar_cairo::ContextRef;
@@ -276,17 +276,15 @@ impl PrintPages {
         self.sheets().get(index).map(Sheet::as_ptr)
     }
 
-    pub fn into_raw(self) -> *mut GPtrArray {
-        let Some(sheets) = self.0 else {
-            return ptr::null_mut();
-        };
-        // SAFETY: g_ptr_array_new has no preconditions.
-        let array = unsafe { glib::g_ptr_array_new() };
-        for sheet in sheets {
-            // SAFETY: `array` is the live array made above, and it takes over the sheet's surface reference.
-            unsafe { glib::g_ptr_array_add(array, sheet.into_raw().as_ptr()) };
-        }
-        array
+    pub fn into_surfaces(self) -> Vec<southstar_cairo::Surface> {
+        self.0
+            .unwrap_or_default()
+            .into_iter()
+            // SAFETY: each sheet hands over its one reference to a live recording surface.
+            .filter_map(|sheet| unsafe {
+                southstar_cairo::Surface::from_raw_full(sheet.into_raw().as_ptr())
+            })
+            .collect()
     }
 }
 

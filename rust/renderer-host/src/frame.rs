@@ -3,11 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ptr::NonNull;
+use std::sync::Arc;
+
+use southstar_renderer_client::SharedFrame;
 
 pub type Release = unsafe fn(NonNull<u8>, usize);
 
 enum Backing {
     Owned(Vec<u8>),
+    Shared(Arc<SharedFrame>),
     Foreign {
         pixels: NonNull<u8>,
         len: usize,
@@ -37,9 +41,14 @@ impl FrameMemory {
         }))
     }
 
+    pub fn shared(frame: Arc<SharedFrame>) -> FrameMemory {
+        FrameMemory(Backing::Shared(frame))
+    }
+
     pub fn len(&self) -> usize {
         match &self.0 {
             Backing::Owned(v) => v.len(),
+            Backing::Shared(frame) => frame.len(),
             Backing::Foreign { len, .. } => *len,
         }
     }
@@ -47,6 +56,10 @@ impl FrameMemory {
     pub fn bytes(&mut self) -> &mut [u8] {
         match &mut self.0 {
             Backing::Owned(v) => v,
+            // SAFETY: the frame's bytes live while the Arc does, and the window only reads them between the paints this session reports.
+            Backing::Shared(frame) => unsafe {
+                core::slice::from_raw_parts_mut(frame.as_ptr(), frame.len())
+            },
             // SAFETY: `foreign`'s contract keeps `len` bytes at `pixels` valid and unaliased while self lives.
             Backing::Foreign { pixels, len, .. } => unsafe {
                 core::slice::from_raw_parts_mut(pixels.as_ptr(), *len)

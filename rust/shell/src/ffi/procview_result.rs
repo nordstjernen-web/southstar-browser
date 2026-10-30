@@ -942,10 +942,9 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             }
         }
         RES_PRINT => {
-            let pages = res.print_pages.cast::<GPtrArray>();
-            if !pages.is_null() && unsafe { (*pages).len } > 0 {
-                print_run(v, pages, &res.print_setup, res.print_scale);
-                res.print_pages = ptr::null_mut();
+            let pages = res.print_pages.take().filter(|p| !p.sheets.is_empty());
+            if let Some(pages) = pages {
+                print_run(v, pages.sheets, &res.print_setup, pages.scale);
             } else {
                 post_emit(v, EVT_STATUS, tr(c"Nothing to print"));
             }
@@ -988,6 +987,7 @@ fn free_res(res: *mut Res) {
         if !r.favicon_bytes.is_null() {
             gtk::g_bytes_unref(r.favicon_bytes);
         }
+        drop(r.print_pages.take());
         ns_proc_view_unref(r.view);
         glib::g_free(res.cast());
     }

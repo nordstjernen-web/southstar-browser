@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: printing and single-process mode no longer go through GLib
+  containers: printed pages are a Rust `Vec` of cairo surfaces from
+  renderer to print dialog, the in-process framebuffer is an `Arc`-owned
+  buffer instead of a `g_atomic_rc_box`, and in-process renderer sessions
+  stay on the main thread, built there from data sent safely across
+  threads, with no `unsafe impl Send` for the session. Pages printed for a
+  tab closed before the reply arrived are freed instead of leaked.
 * Internals: `StyleTable` borrows its `StyleMap` with a lifetime instead
   of wrapping a raw pointer; the page's table is handed out as a shared
   `Rc`, SVG boxes' tables are read through `southstar_style::svg_styles`,
