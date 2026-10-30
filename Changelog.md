@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: more of the shell runs on the safe `southstar-gtk` layer.
+  The SVG toolbar icons are a Rust-implemented `GdkPaintable` /
+  `GtkSymbolicPaintable`, the title-bar row is a custom layout driven by
+  Rust code, and the GtkApplication startup path (activate handler,
+  chrome CSS, icon search paths, session recovery, cache sweep) uses
+  `Application`, `Display`, `IconTheme` and `CssProvider` handles with
+  std for the executable path, environment and files. `icons.rs` and
+  `titlerow.rs` contain no `unsafe` code; the shell's unsafe count drops
+  from 805 to 727.
 * Internals: new `rust/gtk` (`southstar-gtk`) crate of safe,
   reference-counted GTK widget handles — `Widget`, typed `Box`, `Label`,
   `Button`, `ListBox`, `Window`, `ProgressBar` and friends, Rust-closure

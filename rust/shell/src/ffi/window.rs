@@ -12,15 +12,11 @@ use southstar_bookmarks::Bookmarks;
 use southstar_config::NsConfig;
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkRgba, GtkWidget};
 
-use super::appmain::self_exe;
 use super::gtk::{
     borrowed, connect, cstring, handler, set_accessible_label, set_margins, take_gstring,
     toggle_css_class, tr, tr_string,
 };
-use super::icons::{
-    ns_icon_button_new, ns_icon_button_set, ns_icon_entry_set, ns_icon_image_new,
-    ns_icon_image_set, ns_icon_menu_button_set,
-};
+use super::icons;
 use super::procview_chrome::ns_popover_menu_fit;
 use super::titlerow::ns_title_row_new;
 use super::view::{self, View};
@@ -129,46 +125,16 @@ unsafe extern "C" fn procwindow_free(data: *mut c_void) {
     }
 }
 
-pub unsafe fn install_icon_search_paths() {
-    unsafe {
-        let display = gtk::gdk_display_get_default();
-        if display.is_null() {
-            return;
-        }
-        let theme = gtk::gtk_icon_theme_get_for_display(display);
-        if theme.is_null() {
-            return;
-        }
-        gtk::gtk_icon_theme_add_resource_path(theme, c"/org/southstar/WebBrowser/icons".as_ptr());
-        let Some(exe) = borrowed(self_exe()) else {
-            return;
-        };
-        let Some(dir) = take_gstring(gtk::g_path_get_dirname(exe.as_ptr())) else {
-            return;
-        };
-        for rel in rules::ICON_SEARCH_PATHS {
-            let p = super::gtk::build_filename(&[&dir, rel]);
-            gtk::gtk_icon_theme_add_search_path(theme, p.as_ptr());
-        }
-    }
-}
-
-pub unsafe fn install_chrome_css() {
-    unsafe {
-        let display = gtk::gdk_display_get_default();
-        if display.is_null() {
-            return;
-        }
-        let p = gtk::gtk_css_provider_new();
-        let css = cstring(crate::chrome::CHROME_CSS);
-        gtk::gtk_css_provider_load_from_string(p, css.as_ptr());
-        gtk::gtk_style_context_add_provider_for_display(
-            display,
-            p,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-        gtk::g_object_unref(p);
-    }
+/// # Safety
+/// `widget` is null or a live GtkWidget; a floating one stays floating.
+unsafe fn handle<T>(
+    widget: *mut GtkWidget,
+    cast: impl Fn(&southstar_gtk::Widget) -> Option<T>,
+) -> Option<T> {
+    // SAFETY: the caller passes null or a live widget.
+    unsafe { southstar_gtk::Widget::from_ptr_keep_floating(widget) }
+        .as_ref()
+        .and_then(cast)
 }
 
 unsafe fn toolbar_button(
@@ -178,7 +144,7 @@ unsafe fn toolbar_button(
     pw: &ProcWindow,
 ) -> *mut GtkWidget {
     unsafe {
-        let b = ns_icon_button_new(icon);
+        let b = southstar_gtk::Widget::from(icons::button_new(icon)).into_floating();
         gtk::gtk_button_set_has_frame(b, 0);
         gtk::gtk_widget_add_css_class(b, c"ns-nav-button".as_ptr());
         gtk::gtk_widget_set_valign(b, gtk::ALIGN_CENTER);
@@ -227,7 +193,9 @@ impl ProcWindow {
             c"southstar-reload-symbolic"
         };
         unsafe {
-            ns_icon_button_set(self.reload.get().cast(), icon);
+            if let Some(reload) = handle(self.reload.get(), southstar_gtk::Button::cast) {
+                icons::button_set(&reload, icon);
+            }
             gtk::gtk_widget_set_tooltip_text(self.reload.get(), tip.as_ptr());
             set_accessible_label(self.reload.get(), tip);
         }
@@ -276,7 +244,9 @@ impl ProcWindow {
                 } else {
                     c"southstar-globe-symbolic"
                 };
-                ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, page_icon);
+                if let Some(e) = handle(entry, southstar_gtk::Entry::cast) {
+                    icons::entry_set(&e, gtk::ENTRY_ICON_PRIMARY, page_icon);
+                }
                 gtk::gtk_entry_set_icon_activatable(entry, gtk::ENTRY_ICON_PRIMARY, 0);
                 gtk::gtk_entry_set_icon_tooltip_text(
                     entry,
@@ -285,7 +255,9 @@ impl ProcWindow {
                 );
                 return;
             };
-            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_PRIMARY, icon_name);
+            if let Some(e) = handle(entry, southstar_gtk::Entry::cast) {
+                icons::entry_set(&e, gtk::ENTRY_ICON_PRIMARY, icon_name);
+            }
             gtk::gtk_entry_set_icon_activatable(entry, gtk::ENTRY_ICON_PRIMARY, 0);
             let mut tip = label.to_bytes().to_vec();
             let url = url.unwrap_or_default();
@@ -373,7 +345,9 @@ impl ProcWindow {
             } else {
                 c"southstar-star-symbolic"
             };
-            ns_icon_entry_set(entry.cast(), gtk::ENTRY_ICON_SECONDARY, star);
+            if let Some(e) = handle(entry, southstar_gtk::Entry::cast) {
+                icons::entry_set(&e, gtk::ENTRY_ICON_SECONDARY, star);
+            }
             let tip = if saved {
                 tr(c"Remove this bookmark")
             } else {
@@ -628,11 +602,12 @@ impl ProcWindow {
             gtk::gtk_button_set_has_frame(tabbtn, 0);
             gtk::gtk_widget_add_css_class(tabbtn, c"ns-tab-label".as_ptr());
             let tabcontent = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 5);
-            let icon = ns_icon_image_new(if private_mode {
+            let icon = southstar_gtk::Widget::from(icons::image_new(if private_mode {
                 c"southstar-private-symbolic"
             } else {
                 c"southstar-page-symbolic"
-            });
+            }))
+            .into_floating();
             gtk::gtk_image_set_pixel_size(icon, 16);
             let spinner = gtk::gtk_spinner_new();
             gtk::gtk_widget_set_size_request(spinner, 16, 16);
@@ -660,7 +635,8 @@ impl ProcWindow {
             connect(tabbtn, c"clicked", handler!(on_tab_clicked), page.cast());
             gtk::gtk_box_append(wrapper, tabbtn);
 
-            let close = ns_icon_button_new(c"southstar-close-symbolic");
+            let close = southstar_gtk::Widget::from(icons::button_new(c"southstar-close-symbolic"))
+                .into_floating();
             gtk::gtk_button_set_has_frame(close, 0);
             gtk::gtk_widget_add_css_class(close, c"ns-tab-close".as_ptr());
             gtk::gtk_widget_set_valign(close, gtk::ALIGN_CENTER);
@@ -945,7 +921,9 @@ unsafe extern "C" fn on_view_notify(
                 if !icon.is_null() {
                     let fav = v.favicon();
                     if fav.is_null() {
-                        ns_icon_image_set(icon.cast(), c"southstar-page-symbolic");
+                        if let Some(image) = handle(icon, southstar_gtk::Image::cast) {
+                            icons::image_set(&image, c"southstar-page-symbolic");
+                        }
                     } else {
                         southstar_gtk_ffi::gtk_image_set_from_paintable(icon.cast(), fav);
                     }
@@ -1600,11 +1578,9 @@ unsafe fn build_address(pw: &ProcWindow) -> *mut GtkWidget {
         gtk::gtk_widget_set_hexpand(address, 1);
         gtk::gtk_widget_set_valign(address, gtk::ALIGN_CENTER);
         gtk::gtk_widget_add_css_class(address, c"ns-address".as_ptr());
-        ns_icon_entry_set(
-            address.cast(),
-            gtk::ENTRY_ICON_PRIMARY,
-            c"southstar-globe-symbolic",
-        );
+        if let Some(e) = handle(address, southstar_gtk::Entry::cast) {
+            icons::entry_set(&e, gtk::ENTRY_ICON_PRIMARY, c"southstar-globe-symbolic");
+        }
         gtk::gtk_entry_set_icon_tooltip_text(
             address,
             gtk::ENTRY_ICON_PRIMARY,
@@ -1735,7 +1711,8 @@ pub unsafe fn proc_window_new(
         let tabstrip = gtk::gtk_box_new(gtk::ORIENTATION_HORIZONTAL, 2);
         pw.tabstrip.set(tabstrip);
         gtk::gtk_widget_add_css_class(tabstrip, c"ns-tabstrip".as_ptr());
-        let newtab = ns_icon_button_new(c"southstar-new-tab-symbolic");
+        let newtab = southstar_gtk::Widget::from(icons::button_new(c"southstar-new-tab-symbolic"))
+            .into_floating();
         pw.newtab_btn.set(newtab);
         gtk::gtk_button_set_has_frame(newtab, 0);
         gtk::gtk_widget_add_css_class(newtab, c"ns-newtab".as_ptr());
@@ -1747,7 +1724,12 @@ pub unsafe fn proc_window_new(
         if southstar_renderer_host::single_process_enabled() {
             gtk::gtk_widget_set_visible(newtab, 0);
         }
-        gtk::gtk_header_bar_set_title_widget(header, ns_title_row_new(tabstrip));
+        if let Some(tabstrip) = handle(tabstrip, |w| Some(w.clone())) {
+            gtk::gtk_header_bar_set_title_widget(
+                header,
+                ns_title_row_new(&tabstrip).into_floating(),
+            );
+        }
         gtk::gtk_window_set_titlebar(window, header);
 
         let vbox = gtk::gtk_box_new(gtk::ORIENTATION_VERTICAL, 0);
@@ -1811,7 +1793,9 @@ pub unsafe fn proc_window_new(
         );
         let appmenu = build_menu();
         let menu_button = gtk::gtk_menu_button_new();
-        ns_icon_menu_button_set(menu_button.cast(), c"southstar-menu-symbolic");
+        if let Some(button) = handle(menu_button, southstar_gtk::MenuButton::cast) {
+            icons::menu_button_set(&button, c"southstar-menu-symbolic");
+        }
         gtk::gtk_widget_add_css_class(menu_button, c"ns-nav-button".as_ptr());
         gtk::gtk_widget_set_valign(menu_button, gtk::ALIGN_CENTER);
         gtk::gtk_menu_button_set_menu_model(menu_button, appmenu);

@@ -24,6 +24,12 @@ impl Object {
         Some(Object(object))
     }
 
+    /// # Safety
+    /// `object` is a live GObject with no floating reference, and the caller hands one of its references to the handle.
+    pub(crate) unsafe fn from_full(object: *mut c_void) -> Object {
+        Object(NonNull::new(object).expect("GObject constructors never return null"))
+    }
+
     pub fn as_ptr(&self) -> *mut c_void {
         self.0.as_ptr()
     }

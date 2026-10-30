@@ -1,329 +1,150 @@
-//! Southstar — the NsIcon paintable: shell icons from the resource bundle, drawn by the SVG renderer.
+//! Southstar — the shell icon paintable: icons from the resource bundle, drawn by the SVG renderer.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_double, c_int, c_uint, c_void};
-use core::ptr;
+use core::cell::RefCell;
+use core::ffi::{CStr, c_int};
+use core::mem::ManuallyDrop;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::sync::{Mutex, OnceLock};
 
-use southstar_dom::{Node, NsNode};
-use southstar_gtk_ffi::{
-    self as gtk, GObject, GObjectClass, GdkPaintable, GdkPaintableFlags, GdkPaintableInterface,
-    GdkRgba, GtkButton, GtkEntry, GtkImage, GtkMenuButton, GtkSnapshot,
-    GtkSymbolicPaintableInterface, GtkWidget,
-};
+use southstar_cairo::ContextRef;
+use southstar_dom::{Tree, WeakNode};
+use southstar_gtk::sys::{self as gtk_sys, GdkRgba};
+use southstar_gtk::{self as gtk, Paintable, PaintableImpl};
 
 use crate::icons;
 
-#[repr(C)]
-struct NsIcon {
-    parent_instance: GObject,
-    doc: *mut NsNode,
-    root: *const NsNode,
+struct SvgIcon {
+    _doc: Tree,
+    root: WeakNode,
     width: c_int,
     height: c_int,
-    symbolic: c_int,
+    symbolic: bool,
 }
 
-fn icon_type() -> gtk::GType {
-    static TYPE: OnceLock<gtk::GType> = OnceLock::new();
-    *TYPE.get_or_init(|| unsafe {
-        let ty = gtk::g_type_register_static_simple(
-            gtk::g_object_get_type(),
-            c"NsIcon".as_ptr(),
-            size_of::<GObjectClass>() as c_uint,
-            Some(class_init),
-            size_of::<NsIcon>() as c_uint,
-            Some(instance_init),
-            0,
-        );
-        let paintable = gtk::GInterfaceInfo {
-            interface_init: Some(paintable_init),
-            interface_finalize: None,
-            interface_data: ptr::null_mut(),
-        };
-        gtk::g_type_add_interface_static(ty, gtk::gdk_paintable_get_type(), &paintable);
-        let symbolic = gtk::GInterfaceInfo {
-            interface_init: Some(symbolic_paintable_init),
-            interface_finalize: None,
-            interface_data: ptr::null_mut(),
-        };
-        gtk::g_type_add_interface_static(ty, gtk::gtk_symbolic_paintable_get_type(), &symbolic);
-        ty
-    })
-}
-
-unsafe extern "C" fn class_init(klass: *mut c_void, _data: *mut c_void) {
-    unsafe { (*klass.cast::<GObjectClass>()).finalize = Some(finalize) };
-}
-
-unsafe extern "C" fn instance_init(instance: *mut gtk::GTypeInstance, _klass: *mut c_void) {
-    let icon = instance.cast::<NsIcon>();
-    unsafe {
-        (*icon).width = icons::DEFAULT_PX;
-        (*icon).height = icons::DEFAULT_PX;
+impl PaintableImpl for SvgIcon {
+    fn intrinsic_width(&self) -> c_int {
+        self.width
     }
-}
 
-unsafe extern "C" fn finalize(object: *mut GObject) {
-    unsafe {
-        let icon = object.cast::<NsIcon>();
-        if let Some(doc) = Node::from_ptr((*icon).doc) {
-            doc.free_tree();
-        }
-        let parent = gtk::g_type_class_peek(gtk::g_object_get_type()).cast::<GObjectClass>();
-        if let Some(parent_finalize) = (*parent).finalize {
-            parent_finalize(object);
-        }
+    fn intrinsic_height(&self) -> c_int {
+        self.height
     }
-}
 
-unsafe extern "C" fn paintable_init(iface: *mut c_void, _data: *mut c_void) {
-    let iface = iface.cast::<GdkPaintableInterface>();
-    unsafe {
-        (*iface).snapshot = Some(snapshot);
-        (*iface).get_flags = Some(get_flags);
-        (*iface).get_intrinsic_width = Some(intrinsic_width);
-        (*iface).get_intrinsic_height = Some(intrinsic_height);
-    }
-}
-
-unsafe extern "C" fn symbolic_paintable_init(iface: *mut c_void, _data: *mut c_void) {
-    unsafe {
-        (*iface.cast::<GtkSymbolicPaintableInterface>()).snapshot_symbolic = Some(snapshot_symbolic)
-    };
-}
-
-unsafe fn draw(
-    icon: *const NsIcon,
-    snapshot: *mut GtkSnapshot,
-    width: f64,
-    height: f64,
-    color: Option<&GdkRgba>,
-) {
-    if width <= 0.0 || height <= 0.0 {
-        return;
-    }
-    let bounds = gtk::GrapheneRect::new(0.0, 0.0, width as f32, height as f32);
-    unsafe {
-        let Some(root) = Node::from_ptr((*icon).root) else {
+    fn snapshot(&self, cr: ContextRef<'_>, width: f64, height: f64, colors: &[GdkRgba]) {
+        let Some(root) = self.root.get() else {
             return;
         };
-        let cr = gtk::gtk_snapshot_append_cairo(snapshot, &bounds);
-        let Some(canvas) = southstar_cairo::ContextRef::from_raw(cr.cast()) else {
-            return;
-        };
-        let canvas = southstar_svg::Canvas::from(canvas);
-        match color {
+        let canvas = southstar_svg::Canvas::from(cr);
+        match colors.first().filter(|_| self.symbolic) {
             Some(color) => {
-                gtk::cairo_push_group(cr);
+                cr.push_group();
                 southstar_svg::render_root(canvas, root, width, height);
-                let shape = gtk::cairo_pop_group(cr);
-                gtk::cairo_set_source_rgba(
-                    cr,
+                let shape = cr.pop_group();
+                cr.set_source_rgba(
                     f64::from(color.red),
                     f64::from(color.green),
                     f64::from(color.blue),
                     f64::from(color.alpha),
                 );
-                gtk::cairo_mask(cr, shape);
-                gtk::cairo_pattern_destroy(shape);
+                cr.mask(&shape);
             }
             None => southstar_svg::render_root(canvas, root, width, height),
         }
-        gtk::cairo_destroy(cr);
     }
 }
 
-unsafe extern "C" fn snapshot(
-    paintable: *mut GdkPaintable,
-    snapshot: *mut GtkSnapshot,
-    width: c_double,
-    height: c_double,
-) {
-    unsafe { draw(paintable.cast(), snapshot, width, height, None) };
+fn icon_from_resource(name: &[u8]) -> Option<Paintable> {
+    let path = CString::new(icons::resource_path(name)).ok()?;
+    let data = gtk::resource_bytes(&path)?;
+    let doc = southstar_html_parser::parse_document(&data, true);
+    let root = southstar_svg::find_root(doc.root())?;
+    let size = southstar_svg::intrinsic_size(Some(root));
+    Some(Paintable::new(SvgIcon {
+        root: root.downgrade(),
+        _doc: doc,
+        width: icons::intrinsic_px(size.has_width, size.width),
+        height: icons::intrinsic_px(size.has_height, size.height),
+        symbolic: icons::is_symbolic(name),
+    }))
 }
 
-unsafe extern "C" fn snapshot_symbolic(
-    paintable: *mut GdkPaintable,
-    snapshot: *mut GtkSnapshot,
-    width: c_double,
-    height: c_double,
-    colors: *const GdkRgba,
-    n_colors: usize,
-) {
-    unsafe {
-        let icon = paintable.cast::<NsIcon>();
-        let foreground = ((*icon).symbolic != 0 && n_colors > 0).then(|| &*colors);
-        draw(icon, snapshot, width, height, foreground);
-    }
+thread_local! {
+    static ICONS: ManuallyDrop<RefCell<HashMap<Vec<u8>, Paintable>>> =
+        ManuallyDrop::new(RefCell::new(HashMap::new()));
 }
 
-unsafe extern "C" fn get_flags(_paintable: *mut GdkPaintable) -> GdkPaintableFlags {
-    gtk::PAINTABLE_STATIC_SIZE | gtk::PAINTABLE_STATIC_CONTENTS
-}
-
-unsafe extern "C" fn intrinsic_width(paintable: *mut GdkPaintable) -> c_int {
-    unsafe { (*paintable.cast::<NsIcon>()).width }
-}
-
-unsafe extern "C" fn intrinsic_height(paintable: *mut GdkPaintable) -> c_int {
-    unsafe { (*paintable.cast::<NsIcon>()).height }
-}
-
-unsafe fn icon_from_resource(name: &[u8]) -> *mut NsIcon {
-    let Ok(path) = CString::new(icons::resource_path(name)) else {
-        return ptr::null_mut();
-    };
-    unsafe {
-        let bytes = gtk::g_resources_lookup_data(path.as_ptr(), 0, ptr::null_mut());
-        if bytes.is_null() {
-            return ptr::null_mut();
-        }
-        let mut len = 0usize;
-        let data = gtk::g_bytes_get_data(bytes, &mut len);
-        let tree = if data.is_null() {
-            None
-        } else {
-            let input = core::slice::from_raw_parts(data.cast::<u8>(), len);
-            Some(southstar_html_parser::parse_document(input, true))
-        };
-        gtk::g_bytes_unref(bytes);
-        let Some(tree) = tree else {
-            return ptr::null_mut();
-        };
-        let Some(root) = southstar_svg::find_root(tree.root()) else {
-            return ptr::null_mut();
-        };
-        let size = southstar_svg::intrinsic_size(Some(root));
-        let icon = gtk::g_object_new(icon_type(), ptr::null()).cast::<NsIcon>();
-        (*icon).root = root.as_ptr();
-        (*icon).doc = tree.into_raw();
-        (*icon).symbolic = c_int::from(icons::is_symbolic(name));
-        (*icon).width = icons::intrinsic_px(size.has_width, size.width);
-        (*icon).height = icons::intrinsic_px(size.has_height, size.height);
-        icon
-    }
-}
-
-static ICONS: Mutex<Option<HashMap<Vec<u8>, usize>>> = Mutex::new(None);
-
-fn ns_icon_lookup(name: &CStr) -> *mut GdkPaintable {
+fn lookup(name: &CStr) -> Option<Paintable> {
     let name = name.to_bytes();
     if name.is_empty() {
-        return ptr::null_mut();
+        return None;
     }
-    let mut icons = ICONS.lock().unwrap_or_else(|e| e.into_inner());
-    let icons = icons.get_or_insert_with(HashMap::new);
-    if let Some(&icon) = icons.get(name) {
-        return icon as *mut GdkPaintable;
-    }
-    let icon = unsafe { icon_from_resource(name) };
-    if icon.is_null() {
-        return ptr::null_mut();
-    }
-    icons.insert(name.to_vec(), icon as usize);
-    icon.cast()
-}
-
-unsafe fn centered_image(paintable: *mut GdkPaintable) -> *mut GtkWidget {
-    unsafe {
-        let image = gtk::gtk_image_new_from_paintable(paintable);
-        gtk::gtk_widget_set_halign(image, gtk::ALIGN_CENTER);
-        gtk::gtk_widget_set_valign(image, gtk::ALIGN_CENTER);
-        image
-    }
-}
-
-pub(super) fn ns_icon_image_new(name: &CStr) -> *mut GtkWidget {
-    let paintable = ns_icon_lookup(name);
-    unsafe {
-        if paintable.is_null() {
-            gtk::gtk_image_new_from_icon_name(name.as_ptr())
-        } else {
-            centered_image(paintable)
+    ICONS.with(|icons| {
+        if let Some(icon) = icons.borrow().get(name) {
+            return Some(icon.clone());
         }
+        let icon = icon_from_resource(name)?;
+        icons.borrow_mut().insert(name.to_vec(), icon.clone());
+        Some(icon)
+    })
+}
+
+fn centered_image(paintable: &Paintable) -> gtk::Image {
+    let image = gtk::Image::from_paintable(paintable);
+    image.set_halign(gtk_sys::ALIGN_CENTER);
+    image.set_valign(gtk_sys::ALIGN_CENTER);
+    image
+}
+
+pub(super) fn image_new(name: &CStr) -> gtk::Image {
+    match lookup(name) {
+        Some(paintable) => centered_image(&paintable),
+        None => gtk::Image::from_icon_name(name),
     }
 }
 
-pub(super) fn ns_icon_image_set(image: *mut GtkImage, name: &CStr) {
-    let paintable = ns_icon_lookup(name);
-    unsafe {
-        if paintable.is_null() {
-            gtk::gtk_image_set_from_icon_name(image, name.as_ptr());
-        } else {
-            gtk::gtk_image_set_from_paintable(image, paintable);
-        }
+pub(super) fn image_set(image: &gtk::Image, name: &CStr) {
+    match lookup(name) {
+        Some(paintable) => image.set_from_paintable(&paintable),
+        None => image.set_from_icon_name(name),
     }
 }
 
-pub(super) fn ns_icon_button_new(name: &CStr) -> *mut GtkWidget {
-    let button = unsafe { gtk::gtk_button_new() };
-    ns_icon_button_set(button.cast(), name);
+pub(super) fn button_new(name: &CStr) -> gtk::Button {
+    let button = gtk::Button::new();
+    button_set(&button, name);
     button
 }
 
-pub(super) fn ns_icon_button_set(button: *mut GtkButton, name: &CStr) {
-    let paintable = ns_icon_lookup(name);
-    unsafe {
-        if paintable.is_null() {
-            gtk::gtk_button_set_icon_name(button, name.as_ptr());
-            return;
-        }
-        let child = gtk::gtk_button_get_child(button);
-        if gtk::g_type_check_instance_is_a(child.cast(), gtk::gtk_image_get_type()) != 0 {
-            gtk::gtk_image_set_from_paintable(child.cast(), paintable);
-        } else {
-            gtk::gtk_button_set_child(button, centered_image(paintable));
-        }
-        gtk::gtk_widget_add_css_class(button.cast(), c"image-button".as_ptr());
+pub(super) fn button_set(button: &gtk::Button, name: &CStr) {
+    let Some(paintable) = lookup(name) else {
+        button.set_icon_name(name);
+        return;
+    };
+    match button.child().as_ref().and_then(gtk::Image::cast) {
+        Some(image) => image.set_from_paintable(&paintable),
+        None => button.set_child(&centered_image(&paintable)),
+    }
+    button.add_css_class(c"image-button");
+}
+
+pub(super) fn menu_button_set(button: &gtk::MenuButton, name: &CStr) {
+    match lookup(name) {
+        Some(paintable) => button.set_child(&centered_image(&paintable)),
+        None => button.set_icon_name(name),
     }
 }
 
-pub(super) fn ns_icon_menu_button_set(button: *mut GtkMenuButton, name: &CStr) {
-    let paintable = ns_icon_lookup(name);
-    unsafe {
-        if paintable.is_null() {
-            gtk::gtk_menu_button_set_icon_name(button, name.as_ptr());
-        } else {
-            gtk::gtk_menu_button_set_child(button, centered_image(paintable));
-        }
+pub(super) fn entry_set(entry: &gtk::Entry, pos: gtk_sys::GtkEntryIconPosition, name: &CStr) {
+    match lookup(name) {
+        Some(paintable) => entry.set_icon_from_paintable(pos, &paintable),
+        None => entry.set_icon_from_icon_name(pos, name),
     }
 }
 
-pub(super) fn ns_icon_entry_set(entry: *mut GtkEntry, pos: gtk::GtkEntryIconPosition, name: &CStr) {
-    let paintable = ns_icon_lookup(name);
-    unsafe {
-        if paintable.is_null() {
-            gtk::gtk_entry_set_icon_from_icon_name(entry, pos, name.as_ptr());
-        } else {
-            gtk::gtk_entry_set_icon_from_paintable(entry, pos, paintable);
-        }
-    }
-}
-
-unsafe fn pixbuf_loads_svg() -> bool {
-    let mut found = false;
-    unsafe {
-        let formats = gtk::gdk_pixbuf_get_formats();
-        let mut l = formats;
-        while !l.is_null() && !found {
-            let format = gtk::gdk_pixbuf_format_get_name((*l).data.cast());
-            found = !format.is_null() && CStr::from_ptr(format).to_bytes() == b"svg";
-            gtk::g_free(format.cast());
-            l = (*l).next;
-        }
-        gtk::g_slist_free(formats);
-    }
-    found
-}
-
-pub(super) fn ns_icon_install_window_icon(name: &CStr) {
-    unsafe {
-        if pixbuf_loads_svg() {
-            gtk::gtk_window_set_default_icon_name(name.as_ptr());
-        }
+pub(super) fn install_window_icon(name: &CStr) {
+    if gtk::pixbuf_loads_format(b"svg") {
+        gtk::Window::set_default_icon_name(name);
     }
 }

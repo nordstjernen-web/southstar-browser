@@ -5,12 +5,14 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
-use std::ffi::CString;
 
 use southstar_config::{NsConfig, Text};
-use southstar_glib::{GBoolean, GError, GStr, g_free, g_getenv, g_path_get_dirname, g_strdup};
+use southstar_glib::{GBoolean, GError, GStr, g_free, g_path_get_dirname};
 
 use super::app::{ns_procapp_run, ns_procapp_set_window_size};
+#[cfg(any(windows, target_os = "macos"))]
+use super::gtk::build_filename;
+use super::gtk::file_test;
 use super::procview_worker::ns_proc_renderer_path;
 use southstar_headless::{Dump, Opts as HeadlessOpts};
 
@@ -34,8 +36,6 @@ const LOG_WRITER_HANDLED: c_uint = 1;
 const LOG_LEVEL_ERROR: c_uint = 1 << 2;
 const LOG_LEVEL_CRITICAL: c_uint = 1 << 3;
 const LOG_LEVEL_WARNING: c_uint = 1 << 4;
-#[cfg(target_os = "linux")]
-const LOG_LEVEL_MESSAGE: c_uint = 1 << 5;
 const DLOG_INFO: c_int = 0;
 const DLOG_WARN: c_int = 1;
 const DLOG_ERROR: c_int = 2;
@@ -45,10 +45,7 @@ const FILE_TEST_IS_DIR: c_uint = 1 << 2;
 
 unsafe extern "C" {
     fn g_setenv(variable: *const c_char, value: *const c_char, overwrite: GBoolean) -> GBoolean;
-    fn g_file_test(filename: *const c_char, test: c_uint) -> GBoolean;
-    fn g_path_is_absolute(file_name: *const c_char) -> GBoolean;
     fn g_find_program_in_path(program: *const c_char) -> *mut c_char;
-    fn g_mkdir_with_parents(pathname: *const c_char, mode: c_int) -> c_int;
     fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
     fn g_filename_to_uri(
         filename: *const c_char,
@@ -58,7 +55,7 @@ unsafe extern "C" {
     fn g_log_set_writer_func(
         func: GLogWriterFunc,
         user_data: *mut c_void,
-        user_data_free: Option<unsafe extern "C" fn(*mut c_void)>,
+        user_data_free: *const c_void,
     );
     fn g_log_writer_default(
         log_level: c_uint,
@@ -66,8 +63,6 @@ unsafe extern "C" {
         n_fields: usize,
         user_data: *mut c_void,
     ) -> c_uint;
-    fn g_log(log_domain: *const c_char, log_level: c_uint, format: *const c_char, ...);
-    fn g_printerr(format: *const c_char, ...);
     fn fflush(stream: *mut c_void) -> c_int;
     fn _exit(status: c_int) -> !;
 }
@@ -78,7 +73,7 @@ pub(crate) fn self_exe() -> *const c_char {
     SELF_EXE.load(Ordering::Acquire)
 }
 
-fn self_exe_str() -> Option<&'static CStr> {
+pub(super) fn self_exe_str() -> Option<&'static CStr> {
     let exe = self_exe();
     // SAFETY: SELF_EXE is null or a NUL-terminated string kept until clear_self_exe at exit.
     (!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) })
@@ -86,15 +81,16 @@ fn self_exe_str() -> Option<&'static CStr> {
 
 fn clear_self_exe() {
     southstar_net::set_self_exe(None);
+    // SAFETY: SELF_EXE holds null or the GLib string init_self_exe stored, and the swap hands it over exactly once.
     unsafe { g_free(SELF_EXE.swap(ptr::null_mut(), Ordering::AcqRel).cast()) };
 }
 
-fn getenv(name: &CStr) -> Option<&'static CStr> {
-    let value = unsafe { g_getenv(name.as_ptr()) };
-    (!value.is_null()).then(|| unsafe { CStr::from_ptr(value) })
+fn getenv(name: &CStr) -> Option<Vec<u8>> {
+    southstar_glib::env_bytes(name.to_str().ok()?)
 }
 
-fn setenv(name: &CStr, value: &CStr) {
+pub(super) fn setenv(name: &CStr, value: &CStr) {
+    // SAFETY: name and value are NUL-terminated; GLib copies both.
     unsafe { g_setenv(name.as_ptr(), value.as_ptr(), 1) };
 }
 
@@ -104,115 +100,78 @@ fn setenv_unless_set(name: &CStr, value: &CStr) {
     }
 }
 
-fn file_test(path: &CStr, test: c_uint) -> bool {
-    unsafe { g_file_test(path.as_ptr(), test) != 0 }
-}
-
-#[cfg(any(windows, target_os = "macos"))]
-fn build_filename(parts: &[&CStr]) -> GStr {
-    let mut argv: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    argv.push(ptr::null_mut());
-    unsafe { GStr::take(southstar_glib::g_build_filenamev(argv.as_mut_ptr())) }
-        .expect("g_build_filenamev")
-}
-
-fn dirname(path: &CStr) -> Option<GStr> {
-    unsafe { GStr::take(g_path_get_dirname(path.as_ptr())) }
-}
-
-fn log(level: c_uint, message: &str) {
-    let message = CString::new(message).unwrap_or_default();
-    unsafe { g_log(ptr::null(), level, c"%s".as_ptr(), message.as_ptr()) };
+pub(super) fn dirname(path: &CStr) -> Option<GStr> {
+    // SAFETY: path is NUL-terminated.
+    let dir = unsafe { g_path_get_dirname(path.as_ptr()) };
+    // SAFETY: g_path_get_dirname returns a newly allocated string, which GStr takes over.
+    unsafe { GStr::take(dir) }
 }
 
 fn printerr(message: &str) {
-    let message = CString::new(message).unwrap_or_default();
-    unsafe { g_printerr(c"%s".as_ptr(), message.as_ptr()) };
+    southstar_glib::stderr_write(message.as_bytes());
 }
 
 #[cfg(target_os = "linux")]
-fn platform_self_exe() -> *mut c_char {
-    unsafe { southstar_glib::g_file_read_link(c"/proc/self/exe".as_ptr(), ptr::null_mut()) }
+fn platform_self_exe() -> Option<Vec<u8>> {
+    let exe = std::fs::read_link("/proc/self/exe").ok()?;
+    Some(southstar_glib::path_bytes(&exe))
 }
 
 #[cfg(target_os = "macos")]
-fn platform_self_exe() -> *mut c_char {
-    unsafe extern "C" {
-        fn _NSGetExecutablePath(buf: *mut c_char, bufsize: *mut u32) -> c_int;
-        fn realpath(path: *const c_char, resolved: *mut c_char) -> *mut c_char;
-        fn free(p: *mut c_void);
-    }
-    let mut size: u32 = 0;
-    unsafe {
-        _NSGetExecutablePath(ptr::null_mut(), &mut size);
-        if size == 0 || size > 32768 {
-            return ptr::null_mut();
-        }
-        let raw = southstar_glib::g_malloc(size as usize).cast::<c_char>();
-        let mut exe = ptr::null_mut();
-        if _NSGetExecutablePath(raw, &mut size) == 0 {
-            let real = realpath(raw, ptr::null_mut());
-            if real.is_null() {
-                exe = g_strdup(raw);
-            } else {
-                exe = g_strdup(real);
-                free(real.cast());
-            }
-        }
-        g_free(raw.cast());
-        exe
-    }
+fn platform_self_exe() -> Option<Vec<u8>> {
+    let exe = std::env::current_exe().ok()?;
+    let real = std::fs::canonicalize(&exe).unwrap_or(exe);
+    Some(southstar_glib::path_bytes(&real))
 }
 
 #[cfg(windows)]
-fn platform_self_exe() -> *mut c_char {
-    unsafe extern "system" {
-        fn GetModuleFileNameW(module: *mut c_void, filename: *mut u16, size: u32) -> u32;
-    }
-    let mut cap: u32 = 260;
-    let mut buf = vec![0u16; cap as usize];
-    let mut n = unsafe { GetModuleFileNameW(ptr::null_mut(), buf.as_mut_ptr(), cap) };
-    while n >= cap && cap < 32768 {
-        cap *= 2;
-        buf.resize(cap as usize, 0);
-        n = unsafe { GetModuleFileNameW(ptr::null_mut(), buf.as_mut_ptr(), cap) };
-    }
-    if n > 0 && n < cap {
-        unsafe {
-            southstar_glib::g_utf16_to_utf8(
-                buf.as_ptr(),
-                -1,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        }
-    } else {
-        ptr::null_mut()
-    }
+fn platform_self_exe() -> Option<Vec<u8>> {
+    let exe = std::env::current_exe().ok()?;
+    exe.into_os_string()
+        .into_string()
+        .ok()
+        .map(String::into_bytes)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-fn platform_self_exe() -> *mut c_char {
-    ptr::null_mut()
+fn platform_self_exe() -> Option<Vec<u8>> {
+    None
+}
+
+fn is_dir_separator(c: u8) -> bool {
+    c == b'/' || (cfg!(windows) && c == b'\\')
+}
+
+fn path_is_absolute(path: &[u8]) -> bool {
+    match path {
+        [c, ..] if is_dir_separator(*c) => true,
+        [drive, b':', c, ..] => {
+            cfg!(windows) && drive.is_ascii_alphabetic() && is_dir_separator(*c)
+        }
+        _ => false,
+    }
+}
+
+fn argv0_exe(argv0: &CStr) -> *mut c_char {
+    let found = if path_is_absolute(argv0.to_bytes()) {
+        ptr::null_mut()
+    } else {
+        // SAFETY: argv0 is NUL-terminated; GLib returns null or a newly allocated string.
+        unsafe { g_find_program_in_path(argv0.as_ptr()) }
+    };
+    if found.is_null() {
+        southstar_glib::strdup(argv0.to_bytes())
+    } else {
+        found
+    }
 }
 
 fn init_self_exe(argv0: Option<&CStr>) {
-    let mut exe = platform_self_exe();
-    if exe.is_null()
-        && let Some(argv0) = argv0
-    {
-        unsafe {
-            exe = if g_path_is_absolute(argv0.as_ptr()) != 0 {
-                g_strdup(argv0.as_ptr())
-            } else {
-                g_find_program_in_path(argv0.as_ptr())
-            };
-            if exe.is_null() {
-                exe = g_strdup(argv0.as_ptr());
-            }
-        }
-    }
+    let exe = match (platform_self_exe(), argv0) {
+        (Some(exe), _) => southstar_glib::strdup(&exe),
+        (None, Some(argv0)) => argv0_exe(argv0),
+        (None, None) => ptr::null_mut(),
+    };
     SELF_EXE.store(exe, Ordering::Release);
     southstar_net::set_self_exe(self_exe_str().map(CStr::to_bytes));
 }
@@ -238,6 +197,7 @@ unsafe extern "C" fn log_writer(
     let all = if n_fields == 0 || fields.is_null() {
         &[][..]
     } else {
+        // SAFETY: GLib passes n_fields initialized GLogField entries that live for the call.
         unsafe { core::slice::from_raw_parts(fields, n_fields) }
     };
     let mut captured: Option<&CStr> = None;
@@ -246,7 +206,9 @@ unsafe extern "C" fn log_writer(
         if field.key.is_null() || field.value.is_null() {
             continue;
         }
+        // SAFETY: a field key is a NUL-terminated string alive for the call.
         let key = unsafe { CStr::from_ptr(field.key) }.to_bytes();
+        // SAFETY: MESSAGE and GLIB_DOMAIN values, the only ones kept, are NUL-terminated strings alive for the call.
         let value = unsafe { CStr::from_ptr(field.value.cast()) };
         if key == b"MESSAGE" {
             captured = Some(value);
@@ -272,6 +234,7 @@ unsafe extern "C" fn log_writer(
         let category = domain.unwrap_or(c"glib");
         southstar_debuglog::emit(level, category.to_bytes(), message.to_bytes());
     }
+    // SAFETY: the arguments are the ones GLib passed to this writer, forwarded unchanged.
     unsafe { g_log_writer_default(log_level, fields, n_fields, user_data) }
 }
 
@@ -281,7 +244,7 @@ mod win32 {
     use core::ptr;
 
     use super::{FILE_TEST_EXISTS, FILE_TEST_IS_DIR, build_filename, dirname, file_test, getenv};
-    use super::{self_exe, setenv, setenv_unless_set};
+    use super::{self_exe_str, setenv, setenv_unless_set};
 
     unsafe extern "system" {
         fn SetCurrentProcessExplicitAppUserModelID(app_id: *const u16) -> i32;
@@ -311,6 +274,7 @@ mod win32 {
 
     pub fn set_app_id() {
         let id: Vec<u16> = "Southstar.Browser".encode_utf16().chain([0]).collect();
+        // SAFETY: id is a NUL-terminated UTF-16 string alive for the call.
         unsafe { SetCurrentProcessExplicitAppUserModelID(id.as_ptr()) };
     }
 
@@ -333,6 +297,7 @@ mod win32 {
             }
         }
         setenv_unless_set(c"PANGOCAIRO_BACKEND", c"fc");
+        // SAFETY: FcInit has no preconditions and runs before any thread uses fontconfig.
         unsafe { FcInit() };
     }
 
@@ -340,12 +305,7 @@ mod win32 {
     fn use_fontconfig_backend(_dir: Option<&CStr>) {}
 
     pub fn anchor_gtk_data() {
-        let exe = self_exe();
-        if exe.is_null() {
-            use_fontconfig_backend(None);
-            return;
-        }
-        let Some(dir) = dirname(unsafe { CStr::from_ptr(exe) }) else {
+        let Some(dir) = self_exe_str().and_then(dirname) else {
             use_fontconfig_backend(None);
             return;
         };
@@ -371,40 +331,55 @@ mod win32 {
     }
 
     fn fd_is_bound(fd: c_int) -> bool {
+        // SAFETY: _get_osfhandle validates fd and reports -1 for one that is not open.
         let h = unsafe { _get_osfhandle(fd) };
         h != 0 && h != -1
     }
 
+    fn crt_stream(index: u32) -> *mut c_void {
+        // SAFETY: indices 0, 1 and 2 name the C runtime's stdin, stdout and stderr, valid for the process.
+        unsafe { __acrt_iob_func(index) }
+    }
+
+    fn stream_is_bound(stream: *mut c_void) -> bool {
+        // SAFETY: stream is one of the C runtime's standard streams.
+        fd_is_bound(unsafe { _fileno(stream) })
+    }
+
+    fn reopen(stream: *mut c_void, path: &CStr, mode: &CStr) {
+        let mut fp = ptr::null_mut();
+        // SAFETY: fp is a writable out pointer, path and mode are NUL-terminated and stream is a standard stream.
+        unsafe { freopen_s(&mut fp, path.as_ptr(), mode.as_ptr(), stream) };
+    }
+
+    fn unbuffer(stream: *mut c_void) {
+        // SAFETY: stream is a standard stream and a null buffer with _IONBF asks for no buffering.
+        unsafe { setvbuf(stream, ptr::null_mut(), IONBF, 0) };
+    }
+
     pub fn attach_parent_console() {
-        unsafe {
-            if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-                return;
-            }
-            let (stdin, stdout, stderr) =
-                (__acrt_iob_func(0), __acrt_iob_func(1), __acrt_iob_func(2));
-            let mut fp = ptr::null_mut();
-            if !fd_is_bound(_fileno(stdout)) {
-                freopen_s(&mut fp, c"CONOUT$".as_ptr(), c"w".as_ptr(), stdout);
-            }
-            if !fd_is_bound(_fileno(stderr)) {
-                freopen_s(&mut fp, c"CONOUT$".as_ptr(), c"w".as_ptr(), stderr);
-            }
-            if !fd_is_bound(_fileno(stdin)) {
-                freopen_s(&mut fp, c"CONIN$".as_ptr(), c"r".as_ptr(), stdin);
-            }
-            setvbuf(stdout, ptr::null_mut(), IONBF, 0);
-            setvbuf(stderr, ptr::null_mut(), IONBF, 0);
+        // SAFETY: AttachConsole takes a process id and reports failure as zero.
+        if unsafe { AttachConsole(ATTACH_PARENT_PROCESS) } == 0 {
+            return;
         }
+        let (stdin, stdout, stderr) = (crt_stream(0), crt_stream(1), crt_stream(2));
+        if !stream_is_bound(stdout) {
+            reopen(stdout, c"CONOUT$", c"w");
+        }
+        if !stream_is_bound(stderr) {
+            reopen(stderr, c"CONOUT$", c"w");
+        }
+        if !stream_is_bound(stdin) {
+            reopen(stdin, c"CONIN$", c"r");
+        }
+        unbuffer(stdout);
+        unbuffer(stderr);
     }
 }
 
 #[cfg(target_os = "macos")]
 fn macos_anchor_gtk_data() {
-    let exe = self_exe();
-    if exe.is_null() {
-        return;
-    }
-    let Some(macos_dir) = dirname(unsafe { CStr::from_ptr(exe) }) else {
+    let Some(macos_dir) = self_exe_str().and_then(dirname) else {
         return;
     };
     let Some(contents) = dirname(&macos_dir) else {
@@ -449,20 +424,17 @@ fn apply_gsk_renderer(pref: Option<&CStr>) {
             #[cfg(target_os = "linux")]
             if !has_gpu_render_node() {
                 setenv(c"GSK_RENDERER", c"cairo");
-                log(
-                    LOG_LEVEL_MESSAGE,
-                    "no GPU detected; using the software (cairo) renderer",
+                southstar_glib::log(
+                    southstar_glib::LogLevel::Message,
+                    b"no GPU detected; using the software (cairo) renderer",
                 );
             }
         }
         Gsk::Set(renderer) => setenv(c"GSK_RENDERER", renderer),
-        Gsk::Unknown => log(
-            LOG_LEVEL_WARNING,
-            &format!(
-                "ignoring unknown gsk_renderer '{}' (expected one of: auto, gl, ngl, vulkan, cairo)",
-                String::from_utf8_lossy(pref.map_or(&b""[..], CStr::to_bytes))
-            ),
-        ),
+        Gsk::Unknown => southstar_glib::warning(format!(
+            "ignoring unknown gsk_renderer '{}' (expected one of: auto, gl, ngl, vulkan, cairo)",
+            String::from_utf8_lossy(pref.map_or(&b""[..], CStr::to_bytes))
+        )),
     }
 }
 
@@ -474,12 +446,23 @@ fn config_text(field: impl FnOnce(&'static NsConfig) -> &'static Text) -> Option
     config().and_then(|c| field(c).c_str())
 }
 
+fn create_private_dir(dir: &CStr) {
+    let Some(path) = southstar_glib::path_from_bytes(dir.to_bytes()) else {
+        return;
+    };
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    let _ = builder.create(path);
+}
+
 fn add_screenshot_writable_dirs(args: &[&CStr]) {
     for path in appmain::screenshot_paths(args) {
         if let Some(dir) = dirname(path)
             && !dir.is_empty()
         {
-            unsafe { g_mkdir_with_parents(dir.as_ptr(), 0o700) };
+            create_private_dir(&dir);
             southstar_sandbox::add_writable_dir(dir.to_bytes());
         }
     }
@@ -490,14 +473,14 @@ fn file_url_for(target: &CStr) -> Option<GStr> {
     {
         return None;
     }
-    unsafe {
-        let abs_path = GStr::take(g_canonicalize_filename(target.as_ptr(), ptr::null()))?;
-        GStr::take(g_filename_to_uri(
-            abs_path.as_ptr(),
-            ptr::null(),
-            ptr::null_mut(),
-        ))
-    }
+    // SAFETY: target is NUL-terminated and a null base means the current directory.
+    let abs_path = unsafe { g_canonicalize_filename(target.as_ptr(), ptr::null()) };
+    // SAFETY: g_canonicalize_filename returns a newly allocated string, which GStr takes over.
+    let abs_path = unsafe { GStr::take(abs_path) }?;
+    // SAFETY: abs_path is an absolute, NUL-terminated file name; null hostname and error are allowed.
+    let uri = unsafe { g_filename_to_uri(abs_path.as_ptr(), ptr::null(), ptr::null_mut()) };
+    // SAFETY: g_filename_to_uri returns null or a newly allocated string, which GStr takes over.
+    unsafe { GStr::take(uri) }
 }
 
 fn print_perf() {
@@ -633,8 +616,11 @@ fn sandbox_proc_mode(single_process: bool) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let args: Vec<&CStr> = (0..usize::try_from(argc).unwrap_or(0))
-        .map(|i| unsafe { *argv.add(i) })
+        .map(|i| argv.wrapping_add(i))
+        // SAFETY: the C runtime passes argc readable entries in argv, ending with a null pointer, and take_while stops there.
+        .map(|slot| unsafe { *slot })
         .take_while(|a| !a.is_null())
+        // SAFETY: each argument is a NUL-terminated string that lives until the process exits.
         .map(|a| unsafe { CStr::from_ptr(a) })
         .collect();
     #[cfg(windows)]
@@ -645,8 +631,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         return 77;
     }
     init_self_exe(args.first().copied());
-    let exe = self_exe();
-    let exe = (!exe.is_null()).then(|| unsafe { CStr::from_ptr(exe) });
+    let exe = self_exe_str();
     southstar_i18n::init(exe);
     let watchdog_args: Vec<&[u8]> = args.iter().skip(1).map(|a| a.to_bytes()).collect();
     if appmain::flag_given(&args, b"--private") {
@@ -686,7 +671,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
 
     let single_process = proc_mode
         && (appmain::flag_given(&args, b"--single-process")
-            || appmain::env_enabled(getenv(c"NS_SINGLE_PROCESS").map(CStr::to_bytes)));
+            || appmain::env_enabled(getenv(c"NS_SINGLE_PROCESS").as_deref()));
     if single_process {
         southstar_renderer_host::single_process_enable();
     }
@@ -698,10 +683,9 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         southstar_sandbox::seccomp_init();
     }
     southstar_threaddump::install_signal(Some(b"southstar"));
-    unsafe {
-        southstar_debuglog::init();
-        g_log_set_writer_func(log_writer, ptr::null_mut(), None);
-    }
+    southstar_debuglog::init();
+    // SAFETY: log_writer has GLogWriterFunc's signature and needs no user data.
+    unsafe { g_log_set_writer_func(log_writer, ptr::null_mut(), ptr::null()) };
     #[cfg(windows)]
     {
         win32::set_app_id();
@@ -766,10 +750,10 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let opts = headless_opts(&options);
     let headless_rc = run_headless(&opts);
     if !southstar_net::idle() {
-        unsafe {
-            fflush(ptr::null_mut());
-            _exit(headless_rc);
-        }
+        // SAFETY: a null stream asks the C runtime to flush every open output stream.
+        unsafe { fflush(ptr::null_mut()) };
+        // SAFETY: _exit ends the process without running destructors, which is the point while network threads still run.
+        unsafe { _exit(headless_rc) };
     }
     headless_rc
 }
