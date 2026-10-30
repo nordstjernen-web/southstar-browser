@@ -319,3 +319,11 @@ pub fn single_process_enable() {
 pub fn single_process_enabled() -> bool {
     ENABLED.load(Ordering::SeqCst)
 }
+
+pub fn single_process_shutdown() {
+    PENDING.with(|p| p.borrow_mut().clear());
+    let open: Vec<InprocId> = CONNECTIONS.with(|c| c.borrow().keys().copied().collect());
+    for id in open {
+        close_connection(id);
+    }
+}

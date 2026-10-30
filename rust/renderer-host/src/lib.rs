@@ -10,4 +10,4 @@ mod process;
 mod serve;
 mod tiles;
 
-pub use inproc::{single_process_enable, single_process_enabled};
+pub use inproc::{single_process_enable, single_process_enabled, single_process_shutdown};

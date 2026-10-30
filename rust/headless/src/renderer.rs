@@ -41,7 +41,9 @@ pub fn run(opts: &Opts) -> c_int {
             return 2;
         };
         main_loop.run();
-        driver.join().unwrap_or(2)
+        let rc = driver.join().unwrap_or(2);
+        southstar_renderer_host::single_process_shutdown();
+        rc
     })
 }
 

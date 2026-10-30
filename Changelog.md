@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Fix: the headless runner (`--headless --dump=...`) and single-process
+  mode no longer abort at exit with "cannot access a Thread Local Storage
+  value during or after destruction". The in-process renderer connection
+  was closed asynchronously after the client dropped it, so when the main
+  loop quit first the page was torn down by exit-time thread-local
+  destructors, in an order that could reach the geometry box lookup after
+  it was gone. The renderer host now closes its remaining in-process
+  connections explicitly before the process exits, and the box lookup
+  tolerates teardown. This made the Linux CI smoke fail intermittently.
 * Internals: the tab view runs on safe `southstar-gtk` wrappers. Drawing,
   cursors, scrolling and pointer, keyboard, IME and file-drop input go
   through typed event controllers, a Rust-closure snapshot area, memory

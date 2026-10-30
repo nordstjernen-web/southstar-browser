@@ -560,6 +560,7 @@ fn run_proc_gui(
     let file_url = file_url_for(start);
     let start = file_url.as_deref().unwrap_or(start);
     let status = ns_procapp_run(start, session_path, recover, private_mode);
+    southstar_renderer_host::single_process_shutdown();
     drop(file_url);
     clear_self_exe();
     southstar_config::shutdown();

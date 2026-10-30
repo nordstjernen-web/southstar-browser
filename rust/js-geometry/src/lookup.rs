@@ -108,7 +108,8 @@ pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, target: *const c_void) -> Option
 }
 
 pub(crate) fn forget(js: Js) {
-    LOOKUP.with_borrow_mut(|lookup| {
+    let _ = LOOKUP.try_with(|lookup| {
+        let mut lookup = lookup.borrow_mut();
         if lookup.js == js.addr() {
             lookup.forget();
         }
