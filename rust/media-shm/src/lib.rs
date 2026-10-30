@@ -1,10 +1,14 @@
-//! Southstar — the audio-clock and video-frame-ring layouts the media helpers share with the shell.
+//! Southstar — the audio-clock and video-frame-ring layouts the media helpers share with the shell, and the shell's reader of them.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-#![forbid(unsafe_code)]
-
 use core::sync::atomic::AtomicU32;
+
+mod map;
+
+pub use map::{
+    AudioClock, ClockSample, Frame, Geometry, RingSlot, SharedMemory, TokenSample, VideoRing,
+};
 
 pub const AUDIO_CLOCK_MAGIC: u32 = 0x4e53_4143;
 pub const AUDIO_CLOCK_VERSION: u32 = 1;

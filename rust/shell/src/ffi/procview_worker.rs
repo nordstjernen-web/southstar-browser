@@ -2,14 +2,19 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
+use core::cell::RefCell;
+use core::ffi::{c_char, c_int, c_void};
+use core::mem::offset_of;
 use core::ptr;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::thread::JoinHandle;
 
 use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk_ffi as gtk;
 use southstar_renderer_client::{Page, Renderer, TilesRequest, View};
 
-use super::appmain::self_exe;
+use super::appmain::self_exe_str;
 use super::pagelayers::layer_update_parse;
 use super::procview_draw::stage_fill;
 use super::procview_result::on_result;
@@ -66,40 +71,26 @@ pub(super) const RES_PRINT: c_int = 19;
 const ACT_HOVER: c_int = 0;
 const ACT_CONTEXT: c_int = 3;
 
-const FILE_TEST_IS_EXECUTABLE: glib::GFileTest = 1 << 3;
-const FILE_QUERY_INFO_NOFOLLOW_SYMLINKS: c_uint = 1;
-const FILE_TYPE_REGULAR: c_int = 1;
-const FILE_COPY_OVERWRITE: c_uint = 1;
-const FILE_COPY_NOFOLLOW_SYMLINKS: c_uint = 1 << 2;
+const WORKER_STACK_BYTES: usize = 8 << 20;
 
 unsafe extern "C" {
     fn g_async_queue_pop(queue: *mut c_void) -> *mut c_void;
     fn g_mutex_lock(mutex: *mut c_void);
     fn g_mutex_unlock(mutex: *mut c_void);
     fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    fn g_file_new_for_path(path: *const c_char) -> *mut c_void;
-    fn g_file_query_file_type(file: *mut c_void, flags: c_uint, cancellable: *mut c_void) -> c_int;
-    fn g_file_copy(
-        source: *mut c_void,
-        destination: *mut c_void,
-        flags: c_uint,
-        cancellable: *mut c_void,
-        progress_callback: *mut c_void,
-        progress_callback_data: *mut c_void,
-        error: *mut *mut c_void,
-    ) -> GBoolean;
 }
 
-fn dup_or(s: *const c_char, fallback: *const c_char) -> *mut c_char {
-    unsafe { glib::g_strdup(if s.is_null() { fallback } else { s }) }
+struct WorkerView(*mut NsProcView);
+
+// SAFETY: the worker holds a view reference and touches only what the view leaves to it: proc (replaced under proc_lock), the queue, and fields the main thread fixes before the worker starts or only flips as plain flags.
+unsafe impl Send for WorkerView {}
+
+thread_local! {
+    static WORKERS: RefCell<HashMap<usize, JoinHandle<()>>> = RefCell::new(HashMap::new());
 }
 
 fn dup(s: *const c_char) -> *mut c_char {
-    if s.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { glib::g_strdup(s) }
-    }
+    arg(s).map_or(ptr::null_mut(), glib::strdup)
 }
 
 fn text(value: Option<Vec<u8>>) -> *mut c_char {
@@ -132,12 +123,19 @@ fn with_renderer<T>(v: *mut NsProcView, ask: impl FnOnce(&mut Renderer) -> T) ->
     unsafe { p.as_mut() }.map(ask)
 }
 
+fn proc_lock(v: *mut NsProcView) -> *mut c_void {
+    v.wrapping_byte_add(offset_of!(NsProcView, proc_lock))
+        .cast()
+}
+
 pub(super) fn lock_proc(v: *mut NsProcView) {
-    unsafe { g_mutex_lock((&raw mut (*v).proc_lock).cast()) };
+    // SAFETY: v is a live view whose proc_lock is initialized with it and cleared only when it is freed.
+    unsafe { g_mutex_lock(proc_lock(v)) };
 }
 
 pub(super) fn unlock_proc(v: *mut NsProcView) {
-    unsafe { g_mutex_unlock((&raw mut (*v).proc_lock).cast()) };
+    // SAFETY: as in lock_proc; the caller holds the lock.
+    unsafe { g_mutex_unlock(proc_lock(v)) };
 }
 
 fn install(v: *mut NsProcView, next: Option<Renderer>) -> Option<Box<Renderer>> {
@@ -163,39 +161,41 @@ fn spawn(v: *mut NsProcView) -> Option<Renderer> {
 }
 
 fn settle_ms() -> c_int {
-    nav::settle_ms(unsafe { glib::bytes(glib::g_getenv(c"NS_SETTLE_MS".as_ptr())) })
+    nav::settle_ms(glib::env_bytes("NS_SETTLE_MS").as_deref())
 }
 
 pub(super) fn free_req(req: *mut Req) {
-    unsafe {
-        let r = &*req;
-        for s in [
-            r.url,
-            r.key,
-            r.code,
-            r.query,
-            r.export_dest,
-            r.paths,
-            r.have,
-            r.hold,
-        ] {
-            glib::g_free(s.cast());
-        }
-        glib::g_free(req.cast());
+    // SAFETY: req is a whole request nobody else holds any more.
+    let r = unsafe { &*req };
+    for s in [
+        r.url,
+        r.key,
+        r.code,
+        r.query,
+        r.export_dest,
+        r.paths,
+        r.have,
+        r.hold,
+    ] {
+        // SAFETY: each string is null or a GLib allocation the request owns.
+        unsafe { glib::g_free(s.cast()) };
     }
+    // SAFETY: the request was allocated with g_malloc0 and is freed exactly once.
+    unsafe { glib::g_free(req.cast()) };
 }
 
 fn new_res(v: *mut NsProcView, kind: c_int, seq: c_int) -> *mut Res {
+    // SAFETY: g_malloc0 aborts rather than fail, and an all-zero Res is the empty reply.
     let res = unsafe { g_malloc0(core::mem::size_of::<Res>()) }.cast::<Res>();
-    unsafe {
-        (*res).view = ns_proc_view_ref(v);
-        (*res).r#type = kind;
-        (*res).seq = seq;
-    }
+    let out = reply(res);
+    out.view = ns_proc_view_ref(v);
+    out.r#type = kind;
+    out.seq = seq;
     res
 }
 
 fn post(res: *mut Res) {
+    // SAFETY: on_result takes over res on the main loop and frees it there.
     unsafe { gtk::g_idle_add(on_result, res.cast()) };
 }
 
@@ -433,33 +433,20 @@ fn do_export(v: *mut NsProcView, r: &Req) {
     let mut ok = false;
     let exported = !r.export_dest.is_null()
         && arg(r.url).is_some_and(|url| with_renderer(v, |p| p.export(url)).unwrap_or(false));
-    if exported {
-        unsafe {
-            let src = g_file_new_for_path(r.url);
-            let dst = g_file_new_for_path(r.export_dest);
-            if g_file_query_file_type(src, FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, ptr::null_mut())
-                == FILE_TYPE_REGULAR
-            {
-                ok = g_file_copy(
-                    src,
-                    dst,
-                    FILE_COPY_OVERWRITE | FILE_COPY_NOFOLLOW_SYMLINKS,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                ) != 0;
-            }
-            gtk::g_object_unref(src);
-            gtk::g_object_unref(dst);
-        }
+    let src = arg(r.url).and_then(glib::path_from_bytes);
+    let dst = arg(r.export_dest).and_then(glib::path_from_bytes);
+    if exported
+        && let (Some(src), Some(dst)) = (&src, &dst)
+        && std::fs::symlink_metadata(src).is_ok_and(|m| m.file_type().is_file())
+    {
+        ok = std::fs::copy(src, dst).is_ok();
     }
-    if !r.url.is_null() {
-        unsafe { gtk::g_unlink(r.url) };
+    if let Some(src) = &src {
+        let _ = std::fs::remove_file(src);
     }
     let out = reply(res);
     out.ok = glib::boolean(ok);
-    out.url = dup_or(r.export_dest, c"".as_ptr());
+    out.url = glib::strdup(arg(r.export_dest).unwrap_or_default());
     post(res);
 }
 
@@ -512,6 +499,7 @@ fn do_video_event(v: *mut NsProcView, r: &Req) {
             _ => false,
         };
     if sent {
+        // SAFETY: video_event_render releases the view reference taken here, on the main loop.
         unsafe { gtk::g_idle_add(video_event_render, ns_proc_view_ref(v).cast()) };
     }
 }
@@ -609,20 +597,28 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
     }
 }
 
-unsafe extern "C" fn worker_main(data: *mut c_void) -> *mut c_void {
-    let v = data.cast::<NsProcView>();
+fn pop(v: *mut NsProcView) -> *mut Req {
+    // SAFETY: v is a live view this worker holds a reference to, and its queue is set before the worker starts and freed with the view.
+    let queue = unsafe { (*v).queue };
+    // SAFETY: queue is a live GAsyncQueue that carries only Req records.
+    unsafe { g_async_queue_pop(queue) }.cast()
+}
+
+fn worker_main(view: WorkerView) {
+    let v = view.0;
     loop {
-        let req = unsafe { g_async_queue_pop((*v).queue) }.cast::<Req>();
-        if unsafe { (*req).r#type } == REQ_QUIT {
+        let req = pop(v);
+        // SAFETY: a popped request belongs to this worker alone until free_req.
+        let r = unsafe { &*req };
+        if r.r#type == REQ_QUIT {
             free_req(req);
             break;
         }
         if proc_of(v).is_null() && !closed(v) {
             drop(install(v, spawn(v)));
         }
-        let dpr = unsafe { (*req).dpr };
-        if dpr > 0.0 {
-            with_renderer(v, |p| p.set_device_pixel_ratio(dpr));
+        if r.dpr > 0.0 {
+            with_renderer(v, |p| p.set_device_pixel_ratio(r.dpr));
         }
         handle(v, req);
         free_req(req);
@@ -631,52 +627,64 @@ unsafe extern "C" fn worker_main(data: *mut c_void) -> *mut c_void {
         drop(install(v, None));
     }
     ns_proc_view_unref(v);
-    ptr::null_mut()
 }
 
-pub(super) fn start_worker(v: *mut NsProcView) -> *mut c_void {
-    unsafe {
-        gtk::g_thread_new(
-            c"ns-proc-view".as_ptr(),
-            worker_main,
-            ns_proc_view_ref(v).cast(),
-        )
+pub(super) fn start_worker(v: *mut NsProcView) {
+    let view = WorkerView(ns_proc_view_ref(v));
+    let worker = std::thread::Builder::new()
+        .name("ns-proc-view".into())
+        .stack_size(WORKER_STACK_BYTES)
+        .spawn(move || worker_main(view))
+        .expect("ns-proc-view worker thread");
+    WORKERS.with(|workers| workers.borrow_mut().insert(v as usize, worker));
+}
+
+pub(super) fn join_worker(v: *mut NsProcView) {
+    if let Some(worker) = WORKERS.with(|workers| workers.borrow_mut().remove(&(v as usize))) {
+        let _ = worker.join();
     }
+}
+
+#[cfg(unix)]
+pub(super) fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path).is_ok_and(|m| !m.is_dir() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+pub(super) fn is_executable(path: &Path) -> bool {
+    let program = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        ["exe", "com", "bat", "cmd"]
+            .iter()
+            .any(|x| e.eq_ignore_ascii_case(x))
+    });
+    program && std::fs::metadata(path).is_ok_and(|m| !m.is_dir())
+}
+
+pub(super) fn sibling_program(name: &str) -> PathBuf {
+    let exe = self_exe_str().and_then(|exe| glib::path_from_bytes(exe.to_bytes()));
+    if let Some(exe) = exe {
+        let dir = match exe.parent() {
+            Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+            _ => PathBuf::from("."),
+        };
+        for candidate in [dir.join(name), dir.join("..").join(name)] {
+            if is_executable(&candidate) {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from(name)
 }
 
 pub(super) fn ns_proc_renderer_path() -> *mut c_char {
-    let env = unsafe { glib::g_getenv(c"NS_RENDERER".as_ptr()) };
-    if unsafe { glib::bytes(env) }.is_some_and(|e| !e.is_empty()) {
-        return unsafe { glib::g_strdup(env) };
+    if let Some(env) = glib::env_bytes("NS_RENDERER").filter(|e| !e.is_empty()) {
+        return glib::strdup(&env);
     }
     let name = if cfg!(windows) {
-        c"southstar-renderer.exe"
+        "southstar-renderer.exe"
     } else {
-        c"southstar-renderer"
+        "southstar-renderer"
     };
-    let exe = self_exe();
-    if !exe.is_null() {
-        unsafe {
-            let dir = glib::g_path_get_dirname(exe);
-            let parent = build_filename(&[c"..".as_ptr(), name.as_ptr()]);
-            for rel in [name.as_ptr(), parent.cast_const()] {
-                let cand = build_filename(&[dir.cast_const(), rel]);
-                if glib::g_file_test(cand, FILE_TEST_IS_EXECUTABLE) != 0 {
-                    glib::g_free(parent.cast());
-                    glib::g_free(dir.cast());
-                    return cand;
-                }
-                glib::g_free(cand.cast());
-            }
-            glib::g_free(parent.cast());
-            glib::g_free(dir.cast());
-        }
-    }
-    unsafe { glib::g_strdup(name.as_ptr()) }
-}
-
-fn build_filename(parts: &[*const c_char]) -> *mut c_char {
-    let mut args: Vec<*mut c_char> = parts.iter().map(|p| p.cast_mut()).collect();
-    args.push(ptr::null_mut());
-    unsafe { glib::g_build_filenamev(args.as_mut_ptr()) }
+    glib::strdup(&glib::path_bytes(&sibling_program(name)))
 }

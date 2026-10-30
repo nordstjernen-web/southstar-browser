@@ -21,7 +21,7 @@ use super::procview_input::{
 use super::procview_media::{ns_pv_media_free, ns_pv_media_new};
 use super::procview_state::{NotifyFn, NsProcView, Req};
 use super::procview_worker::{
-    REQ_QUIT, free_req, lock_proc, ns_proc_renderer_path, start_worker, unlock_proc,
+    REQ_QUIT, free_req, join_worker, lock_proc, ns_proc_renderer_path, start_worker, unlock_proc,
 };
 
 const ACT_HOVER: c_int = 0;
@@ -36,7 +36,6 @@ unsafe extern "C" {
     fn g_async_queue_new() -> *mut c_void;
     fn g_async_queue_unref(queue: *mut c_void);
     fn g_async_queue_try_pop(queue: *mut c_void) -> *mut c_void;
-    fn g_thread_join(thread: *mut c_void) -> *mut c_void;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -145,11 +144,7 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
         remote.interrupt();
     }
     unlock_proc(v);
-    let state = view(v);
-    if !state.thread.is_null() {
-        unsafe { g_thread_join(state.thread) };
-        state.thread = ptr::null_mut();
-    }
+    join_worker(v);
     ns_proc_view_unref(v);
 }
 
@@ -236,7 +231,7 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
     unsafe {
         connect(view(v).area, c"destroy", on_destroy, v.cast());
     }
-    view(v).thread = start_worker(v);
+    start_worker(v);
     v
 }
 

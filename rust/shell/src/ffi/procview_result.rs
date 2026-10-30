@@ -23,7 +23,7 @@ use super::procview_input::{
     push_req, start_hover, start_link, start_select,
 };
 use super::procview_media::{
-    ns_pv_media_append_stats, ns_pv_media_audio_pid, ns_pv_media_audio_shutdown, ns_pv_media_pump,
+    ns_pv_media_audio_pid, ns_pv_media_audio_shutdown, ns_pv_media_pump, ns_pv_media_stats,
     ns_pv_media_video_pid, ns_pv_media_video_playing, ns_pv_media_video_shutdown,
 };
 use super::procview_state::{NsProcView, Req, Res};
@@ -65,19 +65,10 @@ const DEV_TAB_PERFORMANCE: c_int = 2;
 const DEV_TAB_LAYOUT: c_int = 3;
 const DEV_TAB_ELEMENTS: c_int = 4;
 
-#[repr(C)]
-struct GString {
-    str: *mut c_char,
-    len: usize,
-    allocated_len: usize,
-}
-
 unsafe extern "C" {
     fn g_malloc0(n_bytes: usize) -> *mut c_void;
     fn g_async_queue_push_front(queue: *mut c_void, data: *mut c_void);
     fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
-    fn g_string_new(init: *const c_char) -> *mut GString;
-    fn g_string_free(string: *mut GString, free_segment: GBoolean) -> *mut c_char;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -832,12 +823,12 @@ fn on_dump(v: *mut NsProcView, res: &Res) {
         tr(c"(empty)")
     };
     if buf == state.perf_buffer {
-        unsafe {
-            let out = g_string_new(text);
-            ns_pv_media_append_stats(v, out.cast());
-            gtk::gtk_text_buffer_set_text(buf, (*out).str, -1);
-            g_string_free(out, 1);
-        }
+        // SAFETY: text is the reply's NUL-terminated text or a static translation.
+        let mut out = unsafe { glib::bytes(text) }.unwrap_or_default().to_vec();
+        out.extend_from_slice(&ns_pv_media_stats(v));
+        let out = CString::new(out).unwrap_or_default();
+        // SAFETY: buf is the live performance buffer and out is NUL-terminated.
+        unsafe { gtk::gtk_text_buffer_set_text(buf, out.as_ptr(), -1) };
     } else if !buf.is_null() {
         unsafe { gtk::gtk_text_buffer_set_text(buf, text, -1) };
     }

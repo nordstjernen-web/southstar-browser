@@ -2,374 +2,94 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::cell::{Cell, RefCell};
+use core::ffi::{c_char, c_int};
+use core::ops::ControlFlow;
 use core::sync::atomic::Ordering;
-use std::ffi::CString;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::ffi::{CString, OsString};
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
+use southstar_cairo::{Context, ContextRef, Format, Surface, SurfaceRef};
+use southstar_glib::{self as glib, MainContext};
+use southstar_gtk::{self as gtk, Widget};
+use southstar_gtk_ffi::{GrapheneRect, GtkSnapshot};
 use southstar_media_shm::{
-    AUDIO_CLOCK_MAGIC, AUDIO_CLOCK_SLOTS, AUDIO_CLOCK_VERSION, AudioClockHdr, VIDEO_RING_MAGIC,
-    VIDEO_RING_VERSION, VideoRingHdr,
+    AUDIO_CLOCK_MAGIC, AUDIO_CLOCK_SLOTS, AUDIO_CLOCK_VERSION, Geometry, SharedMemory,
+    VIDEO_RING_MAGIC, VIDEO_RING_VERSION, VideoRing, VideoRingHdr,
 };
 
-use southstar_glib::{self as glib, GBoolean, GError, GStr};
-use southstar_gtk_ffi::{
-    self as gtk, Cairo, CairoSurface, GdkFrameClock, GrapheneRect, GtkSnapshot, GtkWidget,
-};
-
-use super::appmain::self_exe;
 use super::procview_result::{ns_proc_view_local_page, ns_proc_view_push_video_event};
 use super::procview_state::NsProcView;
 use super::procview_view::{
     ns_proc_view_area, ns_proc_view_media, ns_proc_view_ref, ns_proc_view_unref,
 };
+use super::procview_worker::{is_executable, sibling_program};
 use crate::procview::media::{
     self, FrameRing, HelperLine, Rect, SlotView, VideoCommand, clock_position, pick_frame,
 };
 
-macro_rules! opaque {
-    ($($name:ident),* $(,)?) => {
-        $(
-            #[repr(C)]
-            struct $name {
-                _private: [u8; 0],
-            }
-        )*
-    };
-}
-
-opaque!(
-    GSubprocess,
-    GSubprocessLauncher,
-    GOutputStream,
-    GInputStream,
-    GDataInputStream,
-    GAsyncResult,
-    GString,
-);
-
-type AsyncReady =
-    unsafe extern "C" fn(source: *mut c_void, result: *mut GAsyncResult, data: *mut c_void);
-
-const SUBPROCESS_FLAGS: c_uint = (1 << 0) | (1 << 2) | (1 << 5);
-const FILE_TEST_IS_EXECUTABLE: c_uint = 1 << 3;
 const RESYNC_INTERVAL_US: i64 = 950_000;
 
-unsafe extern "C" {
-
-    fn g_subprocess_launcher_new(flags: c_uint) -> *mut GSubprocessLauncher;
-    fn g_subprocess_launcher_setenv(
-        launcher: *mut GSubprocessLauncher,
-        variable: *const c_char,
-        value: *const c_char,
-        overwrite: GBoolean,
-    );
-    fn g_subprocess_launcher_spawnv(
-        launcher: *mut GSubprocessLauncher,
-        argv: *const *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut GSubprocess;
-    fn g_subprocess_get_stdin_pipe(proc_: *mut GSubprocess) -> *mut GOutputStream;
-    fn g_subprocess_get_stdout_pipe(proc_: *mut GSubprocess) -> *mut GInputStream;
-    fn g_subprocess_force_exit(proc_: *mut GSubprocess);
-    fn g_subprocess_get_identifier(proc_: *mut GSubprocess) -> *const c_char;
-    fn g_output_stream_write_all(
-        stream: *mut GOutputStream,
-        buffer: *const c_void,
-        count: usize,
-        bytes_written: *mut usize,
-        cancellable: *mut c_void,
-        error: *mut *mut GError,
-    ) -> GBoolean;
-    fn g_output_stream_flush(
-        stream: *mut GOutputStream,
-        cancellable: *mut c_void,
-        error: *mut *mut GError,
-    ) -> GBoolean;
-    fn g_data_input_stream_new(base: *mut GInputStream) -> *mut GDataInputStream;
-    fn g_data_input_stream_read_line_async(
-        stream: *mut GDataInputStream,
-        io_priority: c_int,
-        cancellable: *mut c_void,
-        callback: AsyncReady,
-        user_data: *mut c_void,
-    );
-    fn g_data_input_stream_read_line_finish(
-        stream: *mut GDataInputStream,
-        result: *mut GAsyncResult,
-        length: *mut usize,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-    fn g_file_test(filename: *const c_char, test: c_uint) -> GBoolean;
-    fn g_path_is_absolute(file_name: *const c_char) -> GBoolean;
-    fn g_find_program_in_path(program: *const c_char) -> *mut c_char;
-    fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
-    fn g_get_monotonic_time() -> i64;
-    fn g_string_append_len(string: *mut GString, val: *const c_char, len: isize) -> *mut GString;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pipe {
+    Audio,
+    Video,
 }
 
-#[cfg(unix)]
-unsafe extern "C" {
-    fn shm_open(name: *const c_char, oflag: c_int, ...) -> c_int;
-    fn mmap(
-        addr: *mut c_void,
-        len: usize,
-        prot: c_int,
-        flags: c_int,
-        fd: c_int,
-        offset: i64,
-    ) -> *mut c_void;
-    fn munmap(addr: *mut c_void, len: usize) -> c_int;
+#[derive(Clone, Copy)]
+struct Reader {
+    view: *mut NsProcView,
+    pipe: Pipe,
 }
 
-#[cfg(target_os = "linux")]
-unsafe extern "C" {
-    fn sysconf(name: c_int) -> core::ffi::c_long;
+thread_local! {
+    static COMPOSITE: Cell<(i64, u32, u32)> = const { Cell::new((0, 0, 0)) };
+    static READERS: RefCell<HashMap<u64, Reader>> = RefCell::new(HashMap::new());
+    static NEXT_READER: Cell<u64> = const { Cell::new(1) };
 }
 
-#[cfg(windows)]
-#[repr(C)]
-struct MemoryBasicInformation {
-    base_address: *mut c_void,
-    allocation_base: *mut c_void,
-    allocation_protect: u32,
-    partition_id: u16,
-    region_size: usize,
-    state: u32,
-    protect: u32,
-    kind: u32,
+struct Helper {
+    child: Child,
+    stdin: ChildStdin,
+    reader: u64,
 }
 
-#[cfg(windows)]
-unsafe extern "system" {
-    fn OpenFileMappingA(access: u32, inherit: c_int, name: *const c_char) -> *mut c_void;
-    fn MapViewOfFile(
-        mapping: *mut c_void,
-        access: u32,
-        offset_high: u32,
-        offset_low: u32,
-        bytes: usize,
-    ) -> *mut c_void;
-    fn VirtualQuery(
-        address: *const c_void,
-        info: *mut MemoryBasicInformation,
-        length: usize,
-    ) -> usize;
-    fn UnmapViewOfFile(address: *const c_void) -> c_int;
-    fn CloseHandle(handle: *mut c_void) -> c_int;
-}
-
-#[cfg(windows)]
-const FILE_MAP_READ: u32 = 4;
-#[cfg(windows)]
-const FILE_MAP_ALL_ACCESS: u32 = 0xF001F;
-
-struct Mapping {
-    base: *mut u8,
-    #[cfg(windows)]
-    handle: *mut c_void,
-    bytes: usize,
-}
-
-impl Mapping {
-    const fn empty() -> Mapping {
-        Mapping {
-            base: ptr::null_mut(),
-            #[cfg(windows)]
-            handle: ptr::null_mut(),
-            bytes: 0,
-        }
-    }
-
-    fn is_mapped(&self) -> bool {
-        !self.base.is_null()
-    }
-
-    #[cfg(windows)]
-    fn open(name: &[u8], writable: bool, min_bytes: usize, strict: bool) -> Option<Mapping> {
-        let name = CString::new(name).ok()?;
-        let access = if writable {
-            FILE_MAP_ALL_ACCESS
-        } else {
-            FILE_MAP_READ
-        };
-        let handle = unsafe { OpenFileMappingA(access, 0, name.as_ptr()) };
-        if handle.is_null() {
-            return None;
-        }
-        let base = unsafe { MapViewOfFile(handle, access, 0, 0, 0) };
-        let mut info = core::mem::MaybeUninit::<MemoryBasicInformation>::zeroed();
-        let bytes = if !base.is_null()
-            && unsafe {
-                VirtualQuery(
-                    base,
-                    info.as_mut_ptr(),
-                    core::mem::size_of::<MemoryBasicInformation>(),
-                )
-            } != 0
-        {
-            unsafe { info.assume_init() }.region_size
-        } else {
-            0
-        };
-        let large_enough = if strict {
-            bytes > min_bytes
-        } else {
-            bytes >= min_bytes
-        };
-        if base.is_null() || !large_enough {
-            if !base.is_null() {
-                unsafe { UnmapViewOfFile(base) };
-            }
-            unsafe { CloseHandle(handle) };
-            return None;
-        }
-        Some(Mapping {
-            base: base.cast(),
-            handle,
-            bytes,
-        })
-    }
-
-    #[cfg(unix)]
-    fn open(name: &[u8], writable: bool, min_bytes: usize, strict: bool) -> Option<Mapping> {
-        use std::os::fd::FromRawFd;
-        let name = CString::new(name).ok()?;
-        let fd = unsafe { shm_open(name.as_ptr(), if writable { 2 } else { 0 }, 0 as c_uint) };
-        if fd < 0 {
-            return None;
-        }
-        let file = unsafe { std::fs::File::from_raw_fd(fd) };
-        let size = file.metadata().ok()?.len() as usize;
-        let large_enough = if strict {
-            size > min_bytes
-        } else {
-            size >= min_bytes
-        };
-        if !large_enough {
-            return None;
-        }
-        let prot = if writable { 1 | 2 } else { 1 };
-        let base = unsafe { mmap(ptr::null_mut(), size, prot, 1, fd, 0) };
-        drop(file);
-        if base as isize == -1 {
-            return None;
-        }
-        Some(Mapping {
-            base: base.cast(),
-            bytes: size,
-        })
-    }
-
-    fn unmap(&mut self) {
-        #[cfg(windows)]
-        unsafe {
-            if !self.base.is_null() {
-                UnmapViewOfFile(self.base.cast());
-            }
-            if !self.handle.is_null() {
-                CloseHandle(self.handle);
-            }
-        }
-        #[cfg(unix)]
-        if !self.base.is_null() {
-            unsafe { munmap(self.base.cast(), self.bytes) };
-        }
-        *self = Mapping::empty();
-    }
-}
-
-struct Ring<'a> {
-    hdr: &'a VideoRingHdr,
-}
-
-impl Ring<'_> {
-    fn field(&self, f: impl FnOnce(*const VideoRingHdr) -> *const u32) -> u32 {
-        unsafe { ptr::read_volatile(f(self.hdr)) }
-    }
-
-    fn magic(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).magic })
-    }
-
-    fn version(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).version })
-    }
-
-    fn width(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).width })
-    }
-
-    fn height(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).height })
-    }
-
-    fn stride(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).stride })
-    }
-
-    fn nslots(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).nslots })
-    }
-
-    fn frame_bytes(&self) -> u32 {
-        self.field(|h| unsafe { &raw const (*h).frame_bytes })
-    }
-
-    fn valid_header(&self, mapped: usize) -> bool {
-        self.magic() == VIDEO_RING_MAGIC
-            && self.version() == VIDEO_RING_VERSION
-            && self.nslots() == media::RING_SLOTS
-            && core::mem::size_of::<VideoRingHdr>()
-                + self.nslots() as usize * self.frame_bytes() as usize
-                <= mapped
-    }
-
-    fn clock(&self, fallback: f64) -> f64 {
-        let seq1 = self.hdr.clock_sequence.load(Ordering::Acquire);
-        if seq1 == 0 || seq1 & 1 != 0 {
-            return fallback;
-        }
-        let flags = self.field(|h| unsafe { &raw const (*h).clock_flags });
-        let sample_us = unsafe { ptr::read_volatile(&raw const self.hdr.clock_monotonic_us) };
-        let position = unsafe { ptr::read_volatile(&raw const self.hdr.clock_position) };
-        let seq2 = self.hdr.clock_sequence.load(Ordering::Acquire);
-        if seq1 != seq2 {
-            return fallback;
-        }
-        clock_position(flags, sample_us, position, monotonic_us(), 500_000).unwrap_or(fallback)
-    }
-}
-
-impl FrameRing for Ring<'_> {
+impl FrameRing for VideoRing<'_> {
     fn slot(&self, index: u32) -> SlotView {
-        let slot = &self.hdr.slots[index as usize];
+        let slot = VideoRing::slot(self, index);
         SlotView {
-            sequence: slot.sequence.load(Ordering::Acquire),
-            generation: unsafe { ptr::read_volatile(&raw const slot.generation) },
-            pts: unsafe { ptr::read_volatile(&raw const slot.pts) },
+            sequence: slot.sequence,
+            generation: slot.generation,
+            pts: slot.pts,
         }
     }
+}
+
+fn valid_header(ring: &VideoRing<'_>) -> bool {
+    ring.magic() == VIDEO_RING_MAGIC
+        && ring.version() == VIDEO_RING_VERSION
+        && ring.nslots() == media::RING_SLOTS
+        && core::mem::size_of::<VideoRingHdr>()
+            + ring.nslots() as usize * ring.geometry().frame_bytes as usize
+            <= ring.mapped_len()
 }
 
 pub struct Media {
-    audio_proc: *mut GSubprocess,
-    audio_in: *mut GOutputStream,
-    audio_clock: Mapping,
+    audio: Option<Helper>,
+    audio_clock: Option<SharedMemory>,
     audio_clock_name: Vec<u8>,
-    video_proc: *mut GSubprocess,
-    video_in: *mut GOutputStream,
-    video_out: *mut GDataInputStream,
-    vring: Mapping,
-    fallback: *mut CairoSurface,
+    video: Option<Helper>,
+    vring: Option<SharedMemory>,
+    fallback: Option<Surface>,
     token: Vec<u8>,
     shm_name: Vec<u8>,
     rect: Rect,
     playing: bool,
-    tick_id: c_uint,
-    tick_count: c_uint,
+    tick_armed: bool,
+    tick_count: u32,
     resync_us: i64,
     sequence: u32,
     generation: u32,
@@ -379,164 +99,202 @@ pub struct Media {
     dropped: u64,
 }
 
-thread_local! {
-    static COMPOSITE: Cell<(i64, u32, u32)> = const { Cell::new((0, 0, 0)) };
-}
-
-fn monotonic_us() -> i64 {
-    unsafe { g_get_monotonic_time() }
-}
-
 fn debug_audio() -> bool {
-    env_set(c"NS_DBG_AUDIO")
+    env_set("NS_DBG_AUDIO")
 }
 
-fn env_set(name: &CStr) -> bool {
-    !unsafe { glib::g_getenv(name.as_ptr()) }.is_null()
-}
-
-fn text(p: *const c_char) -> Option<&'static [u8]> {
-    unsafe { glib::bytes(p) }
+fn env_set(name: &str) -> bool {
+    glib::env_bytes(name).is_some()
 }
 
 fn err_line(bytes: &[u8]) {
     glib::stderr_write(bytes);
 }
 
-fn write_line(stream: *mut GOutputStream, line: &[u8]) {
-    unsafe {
-        g_output_stream_write_all(
-            stream,
-            line.as_ptr().cast(),
-            line.len(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-            ptr::null_mut(),
-        );
-        g_output_stream_flush(stream, ptr::null_mut(), ptr::null_mut());
+fn audio_helper_path() -> PathBuf {
+    sibling_program(if cfg!(windows) {
+        "southstar-audio.exe"
+    } else {
+        "southstar-audio"
+    })
+}
+
+fn video_helper_path() -> PathBuf {
+    sibling_program(if cfg!(windows) {
+        "southstar-video.exe"
+    } else {
+        "southstar-video"
+    })
+}
+
+fn env_value(value: Option<Vec<u8>>) -> Option<OsString> {
+    let value = value.filter(|v| !v.is_empty() && !v.contains(&0))?;
+    glib::path_from_bytes(&value).map(PathBuf::into_os_string)
+}
+
+fn apply_proxy_env(command: &mut Command) {
+    if let Some(proxy) = env_value(southstar_net::proxy_override()) {
+        command.env("all_proxy", &proxy);
+        command.env("http_proxy", &proxy);
+        command.env("https_proxy", &proxy);
+    } else {
+        if let Some(http) = env_value(southstar_net::http_proxy()) {
+            command.env("http_proxy", http);
+        }
+        if let Some(https) = env_value(southstar_net::https_proxy()) {
+            command.env("https_proxy", https);
+        }
+    }
+    if let Some(no_proxy) = env_value(southstar_net::no_proxy()) {
+        command.env("no_proxy", no_proxy);
+    }
+    if let Some(ca) = env_value(southstar_net::ca_bundle_path()) {
+        command.env("CURL_CA_BUNDLE", ca);
     }
 }
 
-fn helper_path(name: &CStr) -> GStr {
-    let exe = self_exe();
-    if !exe.is_null()
-        && let Some(dir) = unsafe { GStr::take(g_path_get_dirname(exe)) }
-    {
-        let parent = build_filename(&[c"..", name]);
-        for rel in [name, &parent] {
-            let candidate = build_filename(&[&dir, rel]);
-            if unsafe { g_file_test(candidate.as_ptr(), FILE_TEST_IS_EXECUTABLE) } != 0 {
-                return candidate;
+fn next_reader() -> u64 {
+    NEXT_READER.with(|next| {
+        let key = next.get();
+        next.set(key + 1);
+        key
+    })
+}
+
+fn read_lines(stdout: ChildStdout, context: &MainContext, key: u64) {
+    let mut input = BufReader::new(stdout);
+    loop {
+        let mut line = Vec::new();
+        if !matches!(input.read_until(b'\n', &mut line), Ok(n) if n > 0) {
+            break;
+        }
+        if line.last() == Some(&b'\n') {
+            line.pop();
+        }
+        if let Some(nul) = line.iter().position(|&b| b == 0) {
+            line.truncate(nul);
+        }
+        context.defer(move || deliver(key, Some(line)));
+    }
+    context.defer(move || deliver(key, None));
+}
+
+fn watch(v: *mut NsProcView, pipe: Pipe, stdout: ChildStdout) -> u64 {
+    let key = next_reader();
+    let view = ns_proc_view_ref(v);
+    READERS.with(|readers| readers.borrow_mut().insert(key, Reader { view, pipe }));
+    let context = MainContext::global();
+    let started = std::thread::Builder::new()
+        .name("ns-media-pipe".into())
+        .spawn(move || read_lines(stdout, &context, key));
+    if started.is_err() {
+        finish(key);
+    }
+    key
+}
+
+fn finish(key: u64) {
+    if let Some(reader) = READERS.with(|readers| readers.borrow_mut().remove(&key)) {
+        ns_proc_view_unref(reader.view);
+    }
+}
+
+fn deliver(key: u64, line: Option<Vec<u8>>) {
+    let Some(reader) = READERS.with(|readers| readers.borrow().get(&key).copied()) else {
+        return;
+    };
+    let v = reader.view;
+    match (reader.pipe, line) {
+        (Pipe::Audio, Some(line)) => audio_feedback(v, &line),
+        (Pipe::Video, Some(line)) => {
+            if let Some(m) = media_of(v)
+                && m.video.as_ref().is_some_and(|helper| helper.reader == key)
+            {
+                video_handle_line(v, m, &line);
             }
         }
-    }
-    unsafe { GStr::take(glib::g_strdup(name.as_ptr())) }.expect("g_strdup")
-}
-
-fn build_filename(parts: &[&CStr]) -> GStr {
-    let mut argv: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    argv.push(ptr::null_mut());
-    unsafe { GStr::take(glib::g_build_filenamev(argv.as_mut_ptr())) }.expect("g_build_filenamev")
-}
-
-fn audio_helper_path() -> GStr {
-    if cfg!(windows) {
-        helper_path(c"southstar-audio.exe")
-    } else {
-        helper_path(c"southstar-audio")
-    }
-}
-
-fn video_helper_path() -> GStr {
-    if cfg!(windows) {
-        helper_path(c"southstar-video.exe")
-    } else {
-        helper_path(c"southstar-video")
-    }
-}
-
-fn apply_proxy_env(launcher: *mut GSubprocessLauncher) {
-    let set = |name: &CStr, value: &CString| unsafe {
-        g_subprocess_launcher_setenv(launcher, name.as_ptr(), value.as_ptr(), glib::TRUE)
-    };
-    let non_empty = |value: Option<Vec<u8>>| {
-        value
-            .filter(|v| !v.is_empty())
-            .and_then(|v| CString::new(v).ok())
-    };
-    if let Some(proxy) = non_empty(southstar_net::proxy_override()) {
-        set(c"all_proxy", &proxy);
-        set(c"http_proxy", &proxy);
-        set(c"https_proxy", &proxy);
-    } else {
-        if let Some(http) = non_empty(southstar_net::http_proxy()) {
-            set(c"http_proxy", &http);
-        }
-        if let Some(https) = non_empty(southstar_net::https_proxy()) {
-            set(c"https_proxy", &https);
+        (pipe, None) => {
+            if pipe == Pipe::Audio
+                && let Some(m) = media_of(v)
+            {
+                m.clock_unmap();
+            }
+            finish(key);
         }
     }
-    if let Some(no_proxy) = non_empty(southstar_net::no_proxy()) {
-        set(c"no_proxy", &no_proxy);
+}
+
+impl Helper {
+    fn spawn(v: *mut NsProcView, path: &Path, proxy: bool, pipe: Pipe) -> Result<Helper, Vec<u8>> {
+        let mut command = Command::new(path);
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        if proxy {
+            apply_proxy_env(&mut command);
+        }
+        let mut child = command
+            .spawn()
+            .map_err(|error| error.to_string().into_bytes())?;
+        let (Some(stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+            let _ = child.kill();
+            return Err(b"no pipes".to_vec());
+        };
+        let reader = watch(v, pipe, stdout);
+        Ok(Helper {
+            child,
+            stdin,
+            reader,
+        })
     }
-    if let Some(ca) = non_empty(southstar_net::ca_bundle_path()) {
-        set(c"CURL_CA_BUNDLE", &ca);
+
+    fn write(&mut self, line: &[u8]) {
+        let _ = self.stdin.write_all(line);
+    }
+
+    fn flush(&mut self) {
+        let _ = self.stdin.flush();
+    }
+
+    fn send(&mut self, line: &[u8]) {
+        self.write(line);
+        self.flush();
+    }
+
+    fn pid(&mut self) -> c_int {
+        match self.child.try_wait() {
+            Ok(None) => c_int::try_from(self.child.id()).unwrap_or(-1),
+            _ => -1,
+        }
+    }
+
+    fn shutdown(mut self) {
+        self.send(b"quit\n");
+        let _ = self.child.kill();
+        let Helper { mut child, .. } = self;
+        let _ = std::thread::Builder::new()
+            .name("ns-media-reap".into())
+            .spawn(move || child.wait());
     }
 }
 
-fn spawn(path: &CStr, proxy: bool) -> Result<*mut GSubprocess, Vec<u8>> {
-    let launcher = unsafe { g_subprocess_launcher_new(SUBPROCESS_FLAGS) };
-    if proxy {
-        apply_proxy_env(launcher);
-    }
-    let argv = [path.as_ptr(), ptr::null()];
-    let mut error: *mut GError = ptr::null_mut();
-    let process = unsafe { g_subprocess_launcher_spawnv(launcher, argv.as_ptr(), &mut error) };
-    unsafe { gtk::g_object_unref(launcher.cast()) };
-    if !process.is_null() {
-        return Ok(process);
-    }
-    let message = if error.is_null() {
-        b"unknown error".to_vec()
-    } else {
-        let message = text(unsafe { (*error).message })
-            .unwrap_or_default()
-            .to_vec();
-        unsafe { glib::g_error_free(error) };
-        message
-    };
-    Err(message)
-}
-
-fn path_from(bytes: &[u8]) -> Option<PathBuf> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::ffi::OsStrExt;
-        Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
-    }
-    #[cfg(not(unix))]
-    {
-        core::str::from_utf8(bytes).ok().map(PathBuf::from)
-    }
-}
-
-fn stream_url_allowed(url: &[u8], subdir: &CStr) -> bool {
+fn stream_url_allowed(url: &[u8], subdir: &str) -> bool {
     let Some((dir, name)) = media::stream_file_parts(url) else {
         return false;
     };
-    let Some(dir) = path_from(dir).filter(|d| d.is_absolute()) else {
+    let Some(dir) = glib::path_from_bytes(dir).filter(|d| d.is_absolute()) else {
         return false;
     };
-    let cache = CString::new(glib::user_cache_dir()).unwrap_or_default();
-    let streams = build_filename(&[&cache, c"southstar", subdir]);
-    let Some(streams) = path_from(streams.to_bytes()) else {
+    let Some(cache) = glib::path_from_bytes(&glib::user_cache_dir()) else {
         return false;
     };
+    let streams = cache.join("southstar").join(subdir);
     let (Ok(streams), Ok(dir)) = (std::fs::canonicalize(streams), std::fs::canonicalize(dir))
     else {
         return false;
     };
-    let Some(name) = path_from(name) else {
+    let Some(name) = glib::path_from_bytes(name) else {
         return false;
     };
     dir == streams
@@ -553,7 +311,7 @@ fn audio_url_allowed(v: *mut NsProcView, url: &[u8]) -> bool {
     if ns_proc_view_local_page(v) {
         return true;
     }
-    stream_url_allowed(url, c"msaudio")
+    stream_url_allowed(url, "msaudio")
 }
 
 fn audio_command_allowed(v: *mut NsProcView, cmd: &[u8]) -> bool {
@@ -561,61 +319,43 @@ fn audio_command_allowed(v: *mut NsProcView, cmd: &[u8]) -> bool {
 }
 
 fn video_command_allowed(cmd: &[u8]) -> bool {
-    media::line_ok(cmd)
-        && media::open_url(cmd).is_none_or(|url| stream_url_allowed(url, c"msvideo"))
+    media::line_ok(cmd) && media::open_url(cmd).is_none_or(|url| stream_url_allowed(url, "msvideo"))
 }
 
 fn media_of(v: *mut NsProcView) -> Option<&'static mut Media> {
+    // SAFETY: the view's media is null or the Box ns_pv_media_new made, freed only with the view; it is used on the main thread alone.
     unsafe { ns_proc_view_media(v).cast::<Media>().as_mut() }
 }
 
-fn area(v: *mut NsProcView) -> *mut GtkWidget {
-    ns_proc_view_area(v)
+fn area(v: *mut NsProcView) -> Option<Widget> {
+    // SAFETY: the view's area is the live drawing area it holds, or null once that was destroyed.
+    unsafe { Widget::from_ptr(ns_proc_view_area(v)) }
 }
 
-fn subprocess_pid(process: *mut GSubprocess) -> c_int {
-    if process.is_null() {
-        return -1;
+fn queue_draw(v: *mut NsProcView) {
+    if let Some(area) = area(v) {
+        area.queue_draw();
     }
-    let id = unsafe { g_subprocess_get_identifier(process) };
-    text(id).map_or(-1, atoi)
 }
 
-fn atoi(bytes: &[u8]) -> c_int {
-    let s = bytes
-        .iter()
-        .skip_while(|b| b.is_ascii_whitespace())
-        .copied()
-        .collect::<Vec<_>>();
-    let (negative, digits) = match s.first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, &s[..]),
-    };
-    let mut value: i64 = 0;
-    for &b in digits.iter().take_while(|b| b.is_ascii_digit()) {
-        value = value.saturating_mul(10).saturating_add(i64::from(b - b'0'));
-    }
-    (if negative { -value } else { value }) as c_int
+fn helper_pid(helper: Option<&mut Helper>) -> c_int {
+    helper.map_or(-1, Helper::pid)
 }
 
 impl Media {
     fn new() -> Media {
         Media {
-            audio_proc: ptr::null_mut(),
-            audio_in: ptr::null_mut(),
-            audio_clock: Mapping::empty(),
+            audio: None,
+            audio_clock: None,
             audio_clock_name: Vec::new(),
-            video_proc: ptr::null_mut(),
-            video_in: ptr::null_mut(),
-            video_out: ptr::null_mut(),
-            vring: Mapping::empty(),
-            fallback: ptr::null_mut(),
+            video: None,
+            vring: None,
+            fallback: None,
             token: Vec::new(),
             shm_name: Vec::new(),
             rect: Rect::default(),
             playing: false,
-            tick_id: 0,
+            tick_armed: false,
             tick_count: 0,
             resync_us: 0,
             sequence: 0,
@@ -627,72 +367,55 @@ impl Media {
         }
     }
 
-    fn ring(&self) -> Option<Ring<'_>> {
-        self.vring.is_mapped().then(|| Ring {
-            hdr: unsafe { &*self.vring.base.cast::<VideoRingHdr>() },
-        })
+    fn ring(&self) -> Option<VideoRing<'_>> {
+        self.vring.as_ref()?.video_ring()
     }
 
     fn clock_unmap(&mut self) {
-        self.audio_clock.unmap();
+        self.audio_clock = None;
         self.audio_clock_name.clear();
     }
 
     fn clock_adopt(&mut self, name: &[u8]) {
         self.clock_unmap();
-        let Some(map) = Mapping::open(name, false, core::mem::size_of::<AudioClockHdr>(), false)
-        else {
+        let Some(map) = SharedMemory::open(name, false) else {
             return;
         };
-        self.audio_clock = map;
-        let hdr = self.audio_clock.base.cast::<AudioClockHdr>();
-        let (magic, version, nslots) = unsafe {
-            (
-                ptr::read_volatile(&raw const (*hdr).magic),
-                ptr::read_volatile(&raw const (*hdr).version),
-                ptr::read_volatile(&raw const (*hdr).nslots),
-            )
-        };
-        if magic != AUDIO_CLOCK_MAGIC
-            || version != AUDIO_CLOCK_VERSION
-            || nslots != AUDIO_CLOCK_SLOTS
-        {
-            self.clock_unmap();
-            return;
+        let valid = map.audio_clock().is_some_and(|clock| {
+            clock.magic() == AUDIO_CLOCK_MAGIC
+                && clock.version() == AUDIO_CLOCK_VERSION
+                && clock.nslots() == AUDIO_CLOCK_SLOTS
+        });
+        if valid {
+            self.audio_clock = Some(map);
+            self.audio_clock_name = media::truncated(name);
         }
-        self.audio_clock_name = media::truncated(name);
     }
 
     fn clock_position(&self, token: &[u8]) -> Option<f64> {
-        if !self.audio_clock.is_mapped() || token.is_empty() {
+        let clock = self.audio_clock.as_ref()?.audio_clock()?;
+        if token.is_empty() {
             return None;
         }
-        let hdr = unsafe { &*self.audio_clock.base.cast::<AudioClockHdr>() };
-        for slot in &hdr.slots {
-            let seq1 = slot.sequence.load(Ordering::Acquire);
-            if seq1 == 0 || seq1 & 1 != 0 {
+        for index in 0..AUDIO_CLOCK_SLOTS {
+            let Some(sample) = clock.sample(index) else {
+                continue;
+            };
+            let mut name = sample.token;
+            name[63] = 0;
+            let len = name.iter().position(|&b| b == 0).unwrap_or(64);
+            if sample.flags & media::CLOCK_USED == 0 || &name[..len] != token {
                 continue;
             }
-            let flags = unsafe { ptr::read_volatile(&raw const slot.flags) };
-            let sample_us = unsafe { ptr::read_volatile(&raw const slot.monotonic_us) };
-            let position = unsafe { ptr::read_volatile(&raw const slot.position) };
-            let mut sample = unsafe { ptr::read_volatile(&raw const slot.token) };
-            sample[63] = 0;
-            let seq2 = slot.sequence.load(Ordering::Acquire);
-            let len = sample.iter().position(|&b| b == 0).unwrap_or(64);
-            if seq1 != seq2 || flags & media::CLOCK_USED == 0 || &sample[..len] != token {
-                continue;
-            }
-            return clock_position(flags, sample_us, position, monotonic_us(), 100_000);
+            return clock_position(
+                sample.flags,
+                sample.monotonic_us,
+                sample.position,
+                glib::monotonic_us(),
+                100_000,
+            );
         }
         None
-    }
-
-    fn fallback_clear(&mut self) {
-        if !self.fallback.is_null() {
-            unsafe { gtk::cairo_surface_destroy(self.fallback) };
-            self.fallback = ptr::null_mut();
-        }
     }
 
     fn snapshot_current(&mut self) {
@@ -702,62 +425,31 @@ impl Media {
         if self.sequence == 0 {
             return;
         }
-        let slot = self.slot;
-        let (width, height, stride, frame_bytes) = (
-            ring.width(),
-            ring.height(),
-            ring.stride(),
-            ring.frame_bytes(),
-        );
-        if ring.magic() != VIDEO_RING_MAGIC
-            || ring.version() != VIDEO_RING_VERSION
-            || slot >= media::RING_SLOTS
-            || width == 0
-            || height == 0
-            || u64::from(stride) < u64::from(width) * 4
-            || u64::from(stride) * u64::from(height) > u64::from(frame_bytes)
-            || core::mem::size_of::<VideoRingHdr>() + (slot as usize + 1) * frame_bytes as usize
-                > self.vring.bytes
-        {
+        let geometry = ring.geometry();
+        if ring.magic() != VIDEO_RING_MAGIC || ring.version() != VIDEO_RING_VERSION {
             return;
         }
-        let meta = ring.slot(slot);
+        let Some(frame) = ring.frame(self.slot, geometry) else {
+            return;
+        };
+        let meta = VideoRing::slot(&ring, self.slot);
         if meta.sequence != self.sequence || meta.generation != self.generation {
             return;
         }
-        let copy = unsafe {
-            gtk::cairo_image_surface_create(
-                gtk::CAIRO_FORMAT_RGB24,
-                width as c_int,
-                height as c_int,
-            )
-        };
-        if unsafe { gtk::cairo_surface_status(copy) } != gtk::CAIRO_STATUS_SUCCESS {
-            unsafe { gtk::cairo_surface_destroy(copy) };
+        let Some(copy) = Surface::image(
+            Format::Rgb24,
+            geometry.width as c_int,
+            geometry.height as c_int,
+        ) else {
             return;
-        }
-        unsafe {
-            let src = self
-                .vring
-                .base
-                .add(core::mem::size_of::<VideoRingHdr>() + slot as usize * frame_bytes as usize);
-            let dst = gtk::cairo_image_surface_get_data(copy);
-            let dst_stride = gtk::cairo_image_surface_get_stride(copy) as usize;
-            for y in 0..height as usize {
-                ptr::copy_nonoverlapping(
-                    src.add(y * stride as usize),
-                    dst.add(y * dst_stride),
-                    width as usize * 4,
-                );
-            }
-            gtk::cairo_surface_mark_dirty(copy);
-        }
-        self.fallback_clear();
-        self.fallback = copy;
+        };
+        copy.as_ref()
+            .with_data_mut(|data, stride| frame.copy_rows(data, stride));
+        self.fallback = Some(copy);
     }
 
     fn vring_unmap(&mut self) {
-        self.vring.unmap();
+        self.vring = None;
         self.shm_name.clear();
         self.rect.valid = false;
         self.playing = false;
@@ -782,171 +474,132 @@ impl Media {
         self.vring_unmap();
         self.playing = was_playing;
         self.rect.valid = had_rect;
-        if let Some(map) = Mapping::open(name, true, core::mem::size_of::<VideoRingHdr>(), true) {
-            let ring = Ring {
-                hdr: unsafe { &*map.base.cast::<VideoRingHdr>() },
-            };
-            if ring.valid_header(map.bytes) {
-                self.vring = map;
-                self.shm_name = media::truncated(name);
-                self.token = media::truncated(token);
-            } else {
-                let mut map = map;
-                map.unmap();
-            }
+        let Some(map) = SharedMemory::open(name, true) else {
+            return;
+        };
+        let valid = map.len() > core::mem::size_of::<VideoRingHdr>()
+            && map.video_ring().is_some_and(|ring| valid_header(&ring));
+        if valid {
+            self.vring = Some(map);
+            self.shm_name = media::truncated(name);
+            self.token = media::truncated(token);
         }
     }
 
     fn audio_shutdown(&mut self) {
-        if self.audio_proc.is_null() {
-            self.clock_unmap();
-            return;
+        if let Some(helper) = self.audio.take() {
+            helper.shutdown();
         }
-        if !self.audio_in.is_null() {
-            write_line(self.audio_in, b"quit\n");
-        }
-        unsafe {
-            g_subprocess_force_exit(self.audio_proc);
-            gtk::g_object_unref(self.audio_proc.cast());
-        }
-        self.audio_proc = ptr::null_mut();
-        self.audio_in = ptr::null_mut();
         self.clock_unmap();
     }
 
     fn video_shutdown(&mut self) {
         self.vring_unmap();
-        self.fallback_clear();
-        if self.video_proc.is_null() {
-            return;
+        self.fallback = None;
+        if let Some(helper) = self.video.take() {
+            helper.shutdown();
         }
-        if !self.video_in.is_null() {
-            write_line(self.video_in, b"quit\n");
-        }
-        unsafe {
-            if !self.video_out.is_null() {
-                gtk::g_object_unref(self.video_out.cast());
-            }
-            self.video_out = ptr::null_mut();
-            g_subprocess_force_exit(self.video_proc);
-            gtk::g_object_unref(self.video_proc.cast());
-        }
-        self.video_proc = ptr::null_mut();
-        self.video_in = ptr::null_mut();
     }
 
     fn video_playing(&self) -> bool {
-        self.vring.is_mapped() && self.playing
+        self.vring.is_some() && self.playing
     }
 
-    fn draw_surface(&self, cr: *mut Cairo, surface: *mut CairoSurface) {
-        let fw = unsafe { gtk::cairo_image_surface_get_width(surface) };
-        let fh = unsafe { gtk::cairo_image_surface_get_height(surface) };
+    fn draw_surface(&self, cr: &ContextRef<'_>, surface: SurfaceRef<'_>) {
+        let fw = surface.width();
+        let fh = surface.height();
         if fw <= 0 || fh <= 0 {
             return;
         }
         let (x, y, w, h) = self.rect.draw_box(fw, fh);
         let r = &self.rect;
-        unsafe {
-            gtk::cairo_save(cr);
-            gtk::cairo_rectangle(cr, r.x, r.y, r.w, r.h);
-            gtk::cairo_clip(cr);
-            gtk::cairo_rectangle(cr, r.clip_x, r.clip_y, r.clip_w, r.clip_h);
-            gtk::cairo_clip(cr);
-            gtk::cairo_translate(cr, x, y);
-            gtk::cairo_scale(cr, w / f64::from(fw), h / f64::from(fh));
-            gtk::cairo_set_source_surface(cr, surface, 0.0, 0.0);
-            gtk::cairo_paint(cr);
-            gtk::cairo_restore(cr);
-        }
+        cr.save();
+        cr.rectangle(r.x, r.y, r.w, r.h);
+        cr.clip();
+        cr.rectangle(r.clip_x, r.clip_y, r.clip_w, r.clip_h);
+        cr.clip();
+        cr.translate(x, y);
+        cr.scale(w / f64::from(fw), h / f64::from(fh));
+        cr.set_source_surface(surface, 0.0, 0.0);
+        cr.paint();
+        cr.restore();
     }
 
-    fn draw(&mut self, cr: *mut Cairo, fs: f64) {
-        if !self.vring.is_mapped() || !self.rect.valid {
+    fn draw_frame(&self, cr: &ContextRef<'_>, slot: u32, geometry: Geometry) -> bool {
+        let Some(frame) = self.ring().and_then(|ring| ring.frame(slot, geometry)) else {
+            return false;
+        };
+        // SAFETY: frame() checked that stride * height pixel bytes lie inside the ring mapping, which self.vring keeps mapped through this call; cairo only reads them as a paint source, and the surface is dropped before returning.
+        let surface = unsafe {
+            Surface::for_data(
+                frame.as_ptr(),
+                Format::Rgb24,
+                frame.width as c_int,
+                frame.height as c_int,
+                frame.stride as c_int,
+            )
+        };
+        if surface.as_ref().status().is_err() {
+            return false;
+        }
+        self.draw_surface(cr, surface.as_ref());
+        true
+    }
+
+    fn draw(&mut self, cr: &ContextRef<'_>, fs: f64) {
+        let Some(ring) = self.ring().filter(|_| self.rect.valid) else {
             return;
-        }
-        let mut frame_drawn = false;
-        unsafe {
-            gtk::cairo_save(cr);
-            gtk::cairo_scale(cr, 1.0 / fs, 1.0 / fs);
-            let r = &self.rect;
-            gtk::cairo_rectangle(cr, r.clip_x, r.clip_y, r.clip_w, r.clip_h);
-            gtk::cairo_clip(cr);
-            gtk::cairo_set_source_rgb(cr, 0.10, 0.10, 0.10);
-            gtk::cairo_rectangle(cr, r.x, r.y, r.w, r.h);
-            gtk::cairo_fill(cr);
-        }
-        let ring = self.ring().expect("mapped ring");
-        let (nslots, fw, fh, fstride, fbytes) = (
-            ring.nslots(),
-            ring.width(),
-            ring.height(),
-            ring.stride(),
-            ring.frame_bytes(),
-        );
+        };
+        let nslots = ring.nslots();
+        let geometry = ring.geometry();
         let magic_ok = ring.magic() == VIDEO_RING_MAGIC;
+        let version_ok = ring.version() == VIDEO_RING_VERSION;
+        let mut frame_drawn = false;
+        cr.save();
+        cr.scale(1.0 / fs, 1.0 / fs);
+        let r = &self.rect;
+        cr.rectangle(r.clip_x, r.clip_y, r.clip_w, r.clip_h);
+        cr.clip();
+        cr.set_source_rgb(0.10, 0.10, 0.10);
+        cr.rectangle(r.x, r.y, r.w, r.h);
+        cr.fill();
         let mut shown = (0u32, 0u32, 0.0f64);
-        let pick = if magic_ok && ring.version() == VIDEO_RING_VERSION {
+        let pick = if magic_ok && version_ok {
             self.pick_frame()
         } else {
             None
         };
         if let Some(pick) = pick {
             shown = (pick.slot, pick.sequence, pick.pts);
-            let fits = pick.slot < nslots
-                && fw > 0
-                && fh > 0
-                && u64::from(fstride) >= u64::from(fw) * 4
-                && u64::from(fstride) * u64::from(fh) <= u64::from(fbytes)
-                && core::mem::size_of::<VideoRingHdr>()
-                    + (pick.slot as usize + 1) * fbytes as usize
-                    <= self.vring.bytes;
-            if fits {
-                let pixels = unsafe {
-                    self.vring.base.add(
-                        core::mem::size_of::<VideoRingHdr>() + pick.slot as usize * fbytes as usize,
-                    )
-                };
-                let surface = unsafe {
-                    gtk::cairo_image_surface_create_for_data(
-                        pixels,
-                        gtk::CAIRO_FORMAT_RGB24,
-                        fw as c_int,
-                        fh as c_int,
-                        fstride as c_int,
-                    )
-                };
-                if unsafe { gtk::cairo_surface_status(surface) } == gtk::CAIRO_STATUS_SUCCESS {
-                    self.draw_surface(cr, surface);
-                    frame_drawn = true;
-                    self.fallback_clear();
-                    if pick.sequence != self.sequence {
-                        let gap = pick.sequence.wrapping_sub(self.sequence);
-                        if self.sequence != 0 && gap > 1 && gap < u32::MAX / 2 {
-                            self.dropped += u64::from(gap - 1);
-                        }
-                        self.sequence = pick.sequence;
-                        self.slot = pick.slot;
-                        self.pts = pick.pts;
-                        self.presented += 1;
+            if pick.slot < nslots && self.draw_frame(cr, pick.slot, geometry) {
+                frame_drawn = true;
+                self.fallback = None;
+                if pick.sequence != self.sequence {
+                    let gap = pick.sequence.wrapping_sub(self.sequence);
+                    if self.sequence != 0 && gap > 1 && gap < u32::MAX / 2 {
+                        self.dropped += u64::from(gap - 1);
                     }
-                    let ring = self.ring().expect("mapped ring");
-                    let released = ring.hdr.released.load(Ordering::Acquire);
+                    self.sequence = pick.sequence;
+                    self.slot = pick.slot;
+                    self.pts = pick.pts;
+                    self.presented += 1;
+                }
+                if let Some(ring) = self.ring() {
+                    let released = ring.released().load(Ordering::Acquire);
                     let target = pick.sequence.wrapping_sub(1);
                     if target > released {
-                        ring.hdr.released.store(target, Ordering::Release);
+                        ring.released().store(target, Ordering::Release);
                     }
                 }
-                unsafe { gtk::cairo_surface_destroy(surface) };
             }
         }
-        if !frame_drawn && !self.fallback.is_null() {
-            self.draw_surface(cr, self.fallback);
+        if !frame_drawn && let Some(fallback) = &self.fallback {
+            self.draw_surface(cr, fallback.as_ref());
             frame_drawn = true;
         }
-        unsafe { gtk::cairo_restore(cr) };
-        if env_set(c"NS_DBG_COMPOSITE") {
-            self.debug_composite(frame_drawn, magic_ok, fw, fh, shown);
+        cr.restore();
+        if env_set("NS_DBG_COMPOSITE") {
+            self.debug_composite(frame_drawn, magic_ok, geometry, shown);
         }
     }
 
@@ -954,8 +607,7 @@ impl Media {
         &self,
         frame_drawn: bool,
         magic_ok: bool,
-        fw: u32,
-        fh: u32,
+        geometry: Geometry,
         shown: (u32, u32, f64),
     ) {
         COMPOSITE.with(|cell| {
@@ -965,7 +617,7 @@ impl Media {
             } else {
                 black += 1;
             }
-            let now = monotonic_us();
+            let now = glib::monotonic_us();
             if now - last_us > 1_000_000 {
                 last_us = now;
                 let line = format!(
@@ -974,8 +626,8 @@ impl Media {
                     black,
                     shown.0,
                     if magic_ok { "ok" } else { "BAD" },
-                    fw,
-                    fh,
+                    geometry.width,
+                    geometry.height,
                     shown.1,
                     shown.2,
                     self.rect.x,
@@ -992,18 +644,27 @@ impl Media {
     }
 
     fn pick_frame(&mut self) -> Option<media::Pick> {
-        let generation = self.ring()?.hdr.generation.load(Ordering::Acquire);
+        let generation = self.ring()?.generation().load(Ordering::Acquire);
         if generation != self.generation {
             self.generation = generation;
             self.sequence = 0;
             self.pts = 0.0;
         }
-        let position = match self.clock_position(&self.token) {
-            Some(position) => position,
-            None => self.ring()?.clock(self.pts),
-        };
         let ring = self.ring()?;
-        let published = ring.hdr.published.load(Ordering::Acquire);
+        let position = self.clock_position(&self.token).unwrap_or_else(|| {
+            ring.clock()
+                .and_then(|clock| {
+                    clock_position(
+                        clock.flags,
+                        clock.monotonic_us,
+                        clock.position,
+                        glib::monotonic_us(),
+                        500_000,
+                    )
+                })
+                .unwrap_or(self.pts)
+        });
+        let published = ring.published().load(Ordering::Acquire);
         let current = (self.sequence != 0).then_some((self.sequence, self.slot));
         pick_frame(
             &ring,
@@ -1016,7 +677,7 @@ impl Media {
     }
 
     fn snapshot(&mut self, fs: f64, snapshot: *mut GtkSnapshot) {
-        if !self.vring.is_mapped() || !self.rect.valid {
+        if self.vring.is_none() || !self.rect.valid {
             return;
         }
         let r = &self.rect;
@@ -1026,116 +687,91 @@ impl Media {
             (r.clip_w.max(0.0) / fs) as f32,
             (r.clip_h.max(0.0) / fs) as f32,
         );
-        let cr = unsafe { gtk::gtk_snapshot_append_cairo(snapshot, &clip) };
-        self.draw(cr, fs);
-        unsafe { gtk::cairo_destroy(cr) };
+        // SAFETY: snapshot is the GtkSnapshot of the snapshot vfunc running now, and GTK copies the bounds.
+        let cr = unsafe { gtk::sys::gtk_snapshot_append_cairo(snapshot, &clip) };
+        // SAFETY: gtk_snapshot_append_cairo returns a new cairo_t reference, handed to the Context and used on this thread only.
+        if let Some(cr) = unsafe { Context::from_raw_full(cr.cast()) } {
+            self.draw(&cr.as_ref(), fs);
+        }
     }
 }
 
 fn ensure_tick(v: *mut NsProcView, m: &mut Media) {
-    if m.tick_id == 0 && m.video_playing() {
-        m.tick_id =
-            unsafe { gtk::gtk_widget_add_tick_callback(area(v), Some(video_tick), v.cast(), None) };
+    if !m.tick_armed
+        && m.video_playing()
+        && let Some(area) = area(v)
+    {
+        m.tick_armed = true;
+        area.add_tick_callback(move |widget| video_tick(v, widget));
     }
 }
 
-unsafe extern "C" fn video_tick(
-    widget: *mut GtkWidget,
-    _clock: *mut GdkFrameClock,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn video_tick(v: *mut NsProcView, widget: &Widget) -> ControlFlow<()> {
     let Some(m) = media_of(v) else {
-        return 0;
+        return ControlFlow::Break(());
     };
     if !m.video_playing() {
-        m.tick_id = 0;
-        return 0;
+        m.tick_armed = false;
+        return ControlFlow::Break(());
     }
-    unsafe { gtk::gtk_widget_queue_draw(widget) };
+    widget.queue_draw();
     m.tick_count = m.tick_count.wrapping_add(1);
     let count = m.tick_count;
-    let audio_in = m.audio_in;
     super::procview_draw::request_tick(v);
     if count % 300 == 0 {
         super::procview_draw::request_render(v);
     }
-    if count % 60 == 0 && !audio_in.is_null() {
-        write_line(audio_in, b"poll\n");
+    if count % 60 == 0
+        && let Some(audio) = media_of(v).and_then(|m| m.audio.as_mut())
+    {
+        audio.send(b"poll\n");
     }
-    1
+    ControlFlow::Continue(())
 }
 
-fn read_line_async(stream: *mut GDataInputStream, callback: AsyncReady, data: *mut c_void) {
-    unsafe { g_data_input_stream_read_line_async(stream, 0, ptr::null_mut(), callback, data) };
-}
-
-unsafe extern "C" fn audio_feedback_line(
-    src: *mut c_void,
-    result: *mut GAsyncResult,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
-    let stream = src.cast::<GDataInputStream>();
-    let line = unsafe {
-        GStr::take(g_data_input_stream_read_line_finish(
-            stream,
-            result,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        ))
-    };
-    let Some(line) = line else {
-        if let Some(m) = media_of(v) {
-            m.clock_unmap();
-        }
-        unsafe { gtk::g_object_unref(stream.cast()) };
-        ns_proc_view_unref(v);
-        return;
-    };
-    let line = line.to_bytes();
+fn audio_feedback(v: *mut NsProcView, line: &[u8]) {
     if line.starts_with(b"error ") || debug_audio() {
         let mut out = b"[audio-helper] ".to_vec();
         out.extend_from_slice(line);
         out.push(b'\n');
         err_line(&out);
     }
-    if let Some(m) = media_of(v) {
-        if let Some(rest) = line.strip_prefix(b"clock ")
-            && let Some((name, _)) = media::scan_token(rest)
-        {
-            m.clock_adopt(name);
-        }
-        if !m.video_proc.is_null()
-            && m.playing
-            && !m.token.is_empty()
-            && let Some(rest) = line.strip_prefix(b"pos ")
-            && let Some((token, rest)) = media::scan_token(rest)
-            && let Some((value, _)) = media::scan_token(rest)
-            && token == m.token.as_slice()
-        {
-            let seconds = glib::ascii_strtod(value);
-            let now = monotonic_us();
-            if seconds >= 0.0 && now - m.resync_us > RESYNC_INTERVAL_US {
-                m.resync_us = now;
-                let mut cmd = b"resync ".to_vec();
-                cmd.extend_from_slice(token);
-                cmd.extend_from_slice(format!(" {seconds:.3}").as_bytes());
-                video_send(v, m, &cmd);
-            }
+    let Some(m) = media_of(v) else {
+        return;
+    };
+    if let Some(rest) = line.strip_prefix(b"clock ")
+        && let Some((name, _)) = media::scan_token(rest)
+    {
+        m.clock_adopt(name);
+    }
+    if m.video.is_some()
+        && m.playing
+        && !m.token.is_empty()
+        && let Some(rest) = line.strip_prefix(b"pos ")
+        && let Some((token, rest)) = media::scan_token(rest)
+        && let Some((value, _)) = media::scan_token(rest)
+        && token == m.token.as_slice()
+    {
+        let seconds = glib::ascii_strtod(value);
+        let now = glib::monotonic_us();
+        if seconds >= 0.0 && now - m.resync_us > RESYNC_INTERVAL_US {
+            m.resync_us = now;
+            let mut cmd = b"resync ".to_vec();
+            cmd.extend_from_slice(token);
+            cmd.extend_from_slice(format!(" {seconds:.3}").as_bytes());
+            video_send(v, m, &cmd);
         }
     }
-    read_line_async(stream, audio_feedback_line, v.cast());
 }
 
 fn audio_pump(v: *mut NsProcView, m: &mut Media, commands: &[&[u8]]) {
-    if m.audio_proc.is_null() {
+    if m.audio.is_none() {
         let path = audio_helper_path();
-        match spawn(&path, true) {
-            Ok(process) => m.audio_proc = process,
+        match Helper::spawn(v, &path, true, Pipe::Audio) {
+            Ok(helper) => m.audio = Some(helper),
             Err(message) => {
                 let mut line = b"southstar: audio helper ".to_vec();
-                line.extend_from_slice(path.to_bytes());
+                line.extend_from_slice(&glib::path_bytes(&path));
                 line.extend_from_slice(b" failed to start: ");
                 line.extend_from_slice(&message);
                 line.push(b'\n');
@@ -1145,19 +781,10 @@ fn audio_pump(v: *mut NsProcView, m: &mut Media, commands: &[&[u8]]) {
         }
         if debug_audio() {
             let mut line = b"[audio-pump] spawn ".to_vec();
-            line.extend_from_slice(path.to_bytes());
+            line.extend_from_slice(&glib::path_bytes(&path));
             line.extend_from_slice(b" -> ok\n");
             err_line(&line);
         }
-        m.audio_in = unsafe { g_subprocess_get_stdin_pipe(m.audio_proc) };
-        let feedback = unsafe { g_subprocess_get_stdout_pipe(m.audio_proc) };
-        if !feedback.is_null() {
-            let stream = unsafe { g_data_input_stream_new(feedback) };
-            read_line_async(stream, audio_feedback_line, ns_proc_view_ref(v).cast());
-        }
-    }
-    if m.audio_in.is_null() {
-        return;
     }
     for cmd in commands {
         if cmd.is_empty() {
@@ -1179,18 +806,13 @@ fn audio_pump(v: *mut NsProcView, m: &mut Media, commands: &[&[u8]]) {
             out.extend_from_slice(&line);
             err_line(&out);
         }
-        unsafe {
-            g_output_stream_write_all(
-                m.audio_in,
-                line.as_ptr().cast(),
-                line.len(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-            )
-        };
+        if let Some(audio) = m.audio.as_mut() {
+            audio.write(&line);
+        }
     }
-    unsafe { g_output_stream_flush(m.audio_in, ptr::null_mut(), ptr::null_mut()) };
+    if let Some(audio) = m.audio.as_mut() {
+        audio.flush();
+    }
 }
 
 fn video_handle_line(v: *mut NsProcView, m: &mut Media, line: &[u8]) {
@@ -1219,7 +841,7 @@ fn video_handle_line(v: *mut NsProcView, m: &mut Media, line: &[u8]) {
         HelperLine::Closed(token) => {
             if token == m.token.as_slice() {
                 m.vring_unmap();
-                m.fallback_clear();
+                m.fallback = None;
             }
         }
         HelperLine::Playing(token) => {
@@ -1231,14 +853,14 @@ fn video_handle_line(v: *mut NsProcView, m: &mut Media, line: &[u8]) {
         HelperLine::Paused(token) => {
             if token == m.token.as_slice() {
                 m.playing = false;
-                unsafe { gtk::gtk_widget_queue_draw(area(v)) };
+                queue_draw(v);
             }
         }
         HelperLine::Waiting { token, event } => {
             if token == m.token.as_slice() {
                 m.playing = true;
                 ensure_tick(v, m);
-                unsafe { gtk::gtk_widget_queue_draw(area(v)) };
+                queue_draw(v);
                 let token = CString::new(token).unwrap_or_default();
                 let event = CString::new(event).unwrap_or_default();
                 ns_proc_view_push_video_event(v, &token, &event);
@@ -1248,63 +870,26 @@ fn video_handle_line(v: *mut NsProcView, m: &mut Media, line: &[u8]) {
     }
 }
 
-unsafe extern "C" fn video_read_line(
-    src: *mut c_void,
-    result: *mut GAsyncResult,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
-    let line = unsafe {
-        GStr::take(g_data_input_stream_read_line_finish(
-            src.cast(),
-            result,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        ))
-    };
-    if let Some(line) = line
-        && let Some(m) = media_of(v)
-        && !m.video_out.is_null()
-    {
-        video_handle_line(v, m, line.to_bytes());
-        video_read_next(v, m);
-    }
-    ns_proc_view_unref(v);
-}
-
-fn video_read_next(v: *mut NsProcView, m: &Media) {
-    if !m.video_out.is_null() {
-        read_line_async(m.video_out, video_read_line, ns_proc_view_ref(v).cast());
-    }
-}
-
 fn video_send(v: *mut NsProcView, m: &mut Media, cmd: &[u8]) {
-    if m.video_proc.is_null() {
+    if m.video.is_none() {
         let path = video_helper_path();
-        let spawned = spawn(&path, false);
+        let spawned = Helper::spawn(v, &path, false, Pipe::Video);
         if debug_audio() {
             let (status, detail) = match &spawned {
                 Ok(_) => ("ok", b"-".to_vec()),
                 Err(message) => ("FAIL", message.clone()),
             };
             let mut line = b"[video-pump] spawn ".to_vec();
-            line.extend_from_slice(path.to_bytes());
+            line.extend_from_slice(&glib::path_bytes(&path));
             line.extend_from_slice(format!(" -> {status} (").as_bytes());
             line.extend_from_slice(&detail);
             line.extend_from_slice(b")\n");
             err_line(&line);
         }
-        let Ok(process) = spawned else {
+        let Ok(helper) = spawned else {
             return;
         };
-        m.video_proc = process;
-        m.video_in = unsafe { g_subprocess_get_stdin_pipe(process) };
-        let out = unsafe { g_subprocess_get_stdout_pipe(process) };
-        m.video_out = unsafe { g_data_input_stream_new(out) };
-        video_read_next(v, m);
-    }
-    if m.video_in.is_null() {
-        return;
+        m.video = Some(helper);
     }
     if debug_audio() {
         let mut line = b"[video-pump] cmd: ".to_vec();
@@ -1314,7 +899,9 @@ fn video_send(v: *mut NsProcView, m: &mut Media, cmd: &[u8]) {
     }
     let mut line = cmd.to_vec();
     line.push(b'\n');
-    write_line(m.video_in, &line);
+    if let Some(video) = m.video.as_mut() {
+        video.send(&line);
+    }
 }
 
 fn video_dispatch(v: *mut NsProcView, m: &mut Media, cmd: &[u8]) {
@@ -1338,7 +925,7 @@ fn video_dispatch(v: *mut NsProcView, m: &mut Media, cmd: &[u8]) {
                     );
                     err_line(line.as_bytes());
                 }
-                unsafe { gtk::gtk_widget_queue_draw(area(v)) };
+                queue_draw(v);
             }
             return;
         }
@@ -1370,7 +957,7 @@ fn append_threads(out: &mut Vec<u8>, pid: c_int) {
     let Ok(entries) = std::fs::read_dir(&taskdir) else {
         return;
     };
-    let mut hz = unsafe { sysconf(2) };
+    let mut hz = southstar_renderer_client::clock_ticks();
     if hz <= 0 {
         hz = 100;
     }
@@ -1413,16 +1000,16 @@ fn append_threads(out: &mut Vec<u8>, pid: c_int) {
 #[cfg(not(target_os = "linux"))]
 fn append_threads(_out: &mut Vec<u8>, _pid: c_int) {}
 
-fn stats(m: &Media) -> Vec<u8> {
+fn stats(m: &mut Media) -> Vec<u8> {
     let mut out = Vec::new();
     let procs = [
         (
             "audio helper (southstar-audio)",
-            subprocess_pid(m.audio_proc),
+            helper_pid(m.audio.as_mut()),
         ),
         (
             "video helper (southstar-video)",
-            subprocess_pid(m.video_proc),
+            helper_pid(m.video.as_mut()),
         ),
     ];
     let mut any = false;
@@ -1442,13 +1029,14 @@ fn stats(m: &Media) -> Vec<u8> {
         append_threads(&mut out, pid);
     }
     if any && let Some(ring) = m.ring() {
-        let published = ring.hdr.published.load(Ordering::Acquire);
-        let released = ring.hdr.released.load(Ordering::Acquire);
+        let published = ring.published().load(Ordering::Acquire);
+        let released = ring.released().load(Ordering::Acquire);
+        let geometry = ring.geometry();
         let line = format!(
             "video queue {}x{} stride {} queued {} frame {} pts {:.2}s shown {} dropped {}\n",
-            ring.width(),
-            ring.height(),
-            ring.stride(),
+            geometry.width,
+            geometry.height,
+            geometry.stride,
             published.wrapping_sub(released),
             m.sequence,
             m.pts,
@@ -1470,13 +1058,15 @@ pub(super) unsafe fn ns_pv_media_free(m: *mut Media) {
     if m.is_null() {
         return;
     }
+    // SAFETY: the caller hands over the Box ns_pv_media_new leaked, exactly once.
     let mut m = unsafe { Box::from_raw(m) };
     m.audio_shutdown();
     m.video_shutdown();
 }
 
 pub(super) fn ns_pv_media_pump(v: *mut NsProcView, commands: *const c_char) {
-    let Some(commands) = text(commands).filter(|c| !c.is_empty()) else {
+    // SAFETY: commands is null or the reply's NUL-terminated audio side channel, alive for this call.
+    let Some(commands) = unsafe { glib::bytes(commands) }.filter(|c| !c.is_empty()) else {
         return;
     };
     let Some(m) = media_of(v) else {
@@ -1518,11 +1108,11 @@ pub(super) fn ns_pv_media_video_shutdown(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_pv_media_audio_pid(v: *mut NsProcView) -> c_int {
-    media_of(v).map_or(-1, |m| subprocess_pid(m.audio_proc))
+    media_of(v).map_or(-1, |m| helper_pid(m.audio.as_mut()))
 }
 
 pub(super) fn ns_pv_media_video_pid(v: *mut NsProcView) -> c_int {
-    media_of(v).map_or(-1, |m| subprocess_pid(m.video_proc))
+    media_of(v).map_or(-1, |m| helper_pid(m.video.as_mut()))
 }
 
 pub(super) fn ns_pv_media_video_playing(v: *mut NsProcView) -> bool {
@@ -1545,20 +1135,15 @@ pub(super) fn ns_pv_media_snapshot(v: *mut NsProcView, fs: f64, snapshot: *mut G
     }
 }
 
-pub(super) fn ns_pv_media_append_stats(v: *mut NsProcView, out: *mut c_void) {
-    let Some(m) = media_of(v) else {
-        return;
-    };
-    let text = stats(m);
-    unsafe { g_string_append_len(out.cast(), text.as_ptr().cast(), text.len() as isize) };
+pub(super) fn ns_pv_media_stats(v: *mut NsProcView) -> Vec<u8> {
+    media_of(v).map(stats).unwrap_or_default()
 }
 
 pub(super) fn ns_proc_video_helper_available() -> bool {
     let path = video_helper_path();
-    let absolute = unsafe { g_path_is_absolute(path.as_ptr()) } != 0;
-    let mut ok = absolute && unsafe { g_file_test(path.as_ptr(), FILE_TEST_IS_EXECUTABLE) } != 0;
-    if !ok && !absolute {
-        ok = unsafe { GStr::take(g_find_program_in_path(path.as_ptr())) }.is_some();
+    if path.is_absolute() {
+        return is_executable(&path);
     }
-    ok
+    std::env::var_os("PATH")
+        .is_some_and(|dirs| std::env::split_paths(&dirs).any(|dir| is_executable(&dir.join(&path))))
 }

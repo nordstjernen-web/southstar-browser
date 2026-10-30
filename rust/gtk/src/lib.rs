@@ -14,6 +14,7 @@ mod object;
 mod paintable;
 mod signal;
 mod style;
+mod tick;
 mod widgets;
 
 pub use application::{APPLICATION_NON_UNIQUE, Application};
@@ -24,6 +25,7 @@ pub use paintable::{
 };
 pub use signal::SignalHandlerId;
 pub use style::{CssProvider, Display, IconTheme, STYLE_PROVIDER_PRIORITY_APPLICATION};
+pub use tick::TickCallbackId;
 pub use widgets::*;
 
 pub use sys::{GtkOrientation, ORIENTATION_HORIZONTAL, ORIENTATION_VERTICAL};

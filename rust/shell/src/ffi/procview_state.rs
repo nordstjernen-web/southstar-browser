@@ -146,7 +146,6 @@ pub struct NsProcView {
     pub hadj: *mut c_void,
     pub vadj: *mut c_void,
     pub closed: GBoolean,
-    pub thread: *mut c_void,
     pub queue: *mut c_void,
     pub proc: *mut Renderer,
     pub remote: Option<Remote>,
