@@ -2,13 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
-use core::ptr;
+use core::ffi::{c_char, c_int, c_uint, c_void};
 
-use southstar_glib::{self as glib, GBoolean, GStr};
-use southstar_gtk_ffi::{
-    self as gtk, GSList, GValue, GdkModifierType, GtkEventController, GtkGesture,
+use southstar_glib::{self as glib, GBoolean};
+use southstar_gtk::{
+    self as gtk, Adjustment, DropTarget, EventControllerKey, EventControllerMotion, GestureClick,
+    GestureDrag, IMContext, Widget,
 };
+use southstar_gtk_ffi::GdkModifierType;
 
 use super::procview_chrome::{ns_pv_console_set_open, request_find, search_open, view_save};
 use super::procview_draw::{scroll_target_x, scroll_target_y};
@@ -42,11 +43,11 @@ const ACT_CONTEXT: c_int = 3;
 
 unsafe extern "C" {
     fn g_async_queue_push(queue: *mut c_void, data: *mut c_void);
-    fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    fn g_slist_free(list: *mut GSList);
+    fn g_async_queue_push_front(queue: *mut c_void, data: *mut c_void);
 }
 
-fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
+pub(super) fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
+    // SAFETY: v is the live view whose widgets and signal handlers call in here; the main loop is its only user.
     unsafe { &mut *v }
 }
 
@@ -54,27 +55,37 @@ fn opened(v: *mut NsProcView) -> bool {
     view(v).opened != 0
 }
 
-fn new_req(kind: c_int) -> *mut Req {
-    let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
-    unsafe { (*req).r#type = kind };
+pub(super) fn area(v: *mut NsProcView) -> Option<Widget> {
+    // SAFETY: area is null or the view's live drawing area; the area's destroy handler clears it.
+    unsafe { gtk::from_borrowed(view(v).area.cast()) }
+}
+
+pub(super) fn hadj(v: *mut NsProcView) -> Option<Adjustment> {
+    // SAFETY: hadj is null or the view's live horizontal adjustment, kept until the view is freed.
+    unsafe { gtk::from_borrowed(view(v).hadj) }
+}
+
+pub(super) fn vadj(v: *mut NsProcView) -> Option<Adjustment> {
+    // SAFETY: vadj is null or the view's live vertical adjustment, kept until the view is freed.
+    unsafe { gtk::from_borrowed(view(v).vadj) }
+}
+
+pub(super) fn new_req(kind: c_int, fill: impl FnOnce(&mut Req)) -> *mut Req {
+    // SAFETY: g_malloc0 aborts rather than return null; the worker frees the request with g_free.
+    let req = unsafe { glib::g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
+    // SAFETY: req is a fresh, zeroed Req (every field of which may be zero) that nothing else sees until it is queued.
+    let r = unsafe { &mut *req };
+    r.r#type = kind;
+    fill(r);
     req
+}
+
+fn send_req(v: *mut NsProcView, kind: c_int, fill: impl FnOnce(&mut Req)) {
+    push_req(v, new_req(kind, fill));
 }
 
 fn dup(bytes: &[u8]) -> *mut c_char {
     glib::strdup(bytes)
-}
-
-fn connect(instance: *mut c_void, signal: &CStr, handler: *const (), v: *mut NsProcView) {
-    unsafe {
-        gtk::g_signal_connect_data(
-            instance,
-            signal.as_ptr(),
-            core::mem::transmute::<*const (), unsafe extern "C" fn()>(handler),
-            v.cast(),
-            None,
-            0,
-        )
-    };
 }
 
 fn page_point(v: *mut NsProcView, x: f64, y: f64) -> (c_int, c_int) {
@@ -87,22 +98,12 @@ fn page_point(v: *mut NsProcView, x: f64, y: f64) -> (c_int, c_int) {
 }
 
 pub(super) fn viewport_w(v: *mut NsProcView) -> c_int {
-    let area = view(v).area;
-    let w = if area.is_null() {
-        0
-    } else {
-        unsafe { gtk::gtk_widget_get_width(area) }
-    };
+    let w = area(v).map_or(0, |area| area.width());
     if w > 0 { w } else { 1 }
 }
 
 pub(super) fn viewport_h(v: *mut NsProcView) -> c_int {
-    let area = view(v).area;
-    let h = if area.is_null() {
-        0
-    } else {
-        unsafe { gtk::gtk_widget_get_height(area) }
-    };
+    let h = area(v).map_or(0, |area| area.height());
     if h > 0 { h } else { 1 }
 }
 
@@ -112,20 +113,13 @@ pub(super) fn cur_scale(v: *mut NsProcView) -> f64 {
 }
 
 fn device_scale(v: *mut NsProcView) -> f64 {
-    let area = view(v).area;
     let mut s = 0.0;
-    if !area.is_null() {
-        let native = unsafe { gtk::gtk_widget_get_native(area) };
-        let surface = if native.is_null() {
-            ptr::null_mut()
-        } else {
-            unsafe { gtk::gtk_native_get_surface(native) }
-        };
-        if !surface.is_null() {
-            s = unsafe { gtk::gdk_surface_get_scale(surface) };
+    if let Some(area) = area(v) {
+        if let Some(surface) = area.surface() {
+            s = surface.scale();
         }
         if s.is_nan() || s <= 0.0 {
-            s = f64::from(unsafe { gtk::gtk_widget_get_scale_factor(area) });
+            s = f64::from(area.scale_factor());
         }
     }
     if (1.0..=8.0).contains(&s) { s } else { 1.0 }
@@ -154,7 +148,13 @@ fn css_viewport(size: c_int, scale: f64) -> c_int {
 }
 
 pub(super) fn push_req(v: *mut NsProcView, req: *mut Req) {
+    // SAFETY: the queue lives until the view is freed and takes over req, which the worker frees.
     unsafe { g_async_queue_push(view(v).queue, req.cast()) };
+}
+
+pub(super) fn push_req_front(v: *mut NsProcView, req: *mut Req) {
+    // SAFETY: the queue lives until the view is freed and takes over req, which the worker frees.
+    unsafe { g_async_queue_push_front(view(v).queue, req.cast()) };
 }
 
 pub(super) fn start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
@@ -164,14 +164,13 @@ pub(super) fn start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) 
     let state = view(v);
     state.link_inflight = 1;
     state.link_seq += 1;
-    let req = new_req(REQ_LINK);
-    unsafe {
-        (*req).seq = state.link_seq;
-        (*req).x = x;
-        (*req).y = y;
-        (*req).action = action;
-    }
-    push_req(v, req);
+    let seq = state.link_seq;
+    send_req(v, REQ_LINK, |r| {
+        r.seq = seq;
+        r.x = x;
+        r.y = y;
+        r.action = action;
+    });
 }
 
 fn request_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
@@ -198,13 +197,12 @@ pub(super) fn start_hover(v: *mut NsProcView, x: c_int, y: c_int) {
     let state = view(v);
     state.hover_inflight = 1;
     state.hover_seq += 1;
-    let req = new_req(REQ_HOVER);
-    unsafe {
-        (*req).seq = state.hover_seq;
-        (*req).x = x;
-        (*req).y = y;
-    }
-    push_req(v, req);
+    let seq = state.hover_seq;
+    send_req(v, REQ_HOVER, |r| {
+        r.seq = seq;
+        r.x = x;
+        r.y = y;
+    });
 }
 
 pub(super) fn request_hover(v: *mut NsProcView, x: c_int, y: c_int) {
@@ -235,27 +233,24 @@ fn start_key_full(
     if kind == 0 {
         view_state.key_seq += 1;
     }
-    let unicode = unsafe { gtk::gdk_keyval_to_unicode(keyval) };
+    let seq = view_state.key_seq;
+    let unicode = gtk::keyval_to_unicode(keyval);
     let key = js_key(keyval, unicode, || {
-        unsafe { glib::bytes(gtk::gdk_keyval_name(keyval)) }
-            .unwrap_or_default()
-            .to_vec()
+        gtk::keyval_name(keyval).unwrap_or_default()
     });
-    let req = new_req(REQ_KEY);
-    unsafe {
-        (*req).seq = view_state.key_seq;
-        (*req).kind = kind;
-        (*req).keycode = js_keycode(keyval);
+    send_req(v, REQ_KEY, |r| {
+        r.seq = seq;
+        r.kind = kind;
+        r.keycode = js_keycode(keyval);
         if let Some((x, y)) = fallback {
-            (*req).fallback_scroll = 1;
-            (*req).fallback_x = x;
-            (*req).fallback_y = y;
+            r.fallback_scroll = 1;
+            r.fallback_x = x;
+            r.fallback_y = y;
         }
-        (*req).mods = modifier_bits(state);
-        (*req).key = dup(&key);
-        (*req).code = dup(js_code(keyval).as_bytes());
-    }
-    push_req(v, req);
+        r.mods = modifier_bits(state);
+        r.key = dup(&key);
+        r.code = dup(js_code(keyval).as_bytes());
+    });
 }
 
 fn start_key(v: *mut NsProcView, kind: c_int, keyval: c_uint, state: GdkModifierType) {
@@ -268,26 +263,23 @@ fn start_key_text(v: *mut NsProcView, kind: c_int, text: &[u8]) {
     }
     let state = view(v);
     state.key_seq += 1;
-    let req = new_req(REQ_KEY);
-    unsafe {
-        (*req).seq = state.key_seq;
-        (*req).kind = kind;
-        (*req).key = dup(text);
-        (*req).code = dup(b"");
-    }
-    push_req(v, req);
+    let seq = state.key_seq;
+    send_req(v, REQ_KEY, |r| {
+        r.seq = seq;
+        r.kind = kind;
+        r.key = dup(text);
+        r.code = dup(b"");
+    });
 }
 
 fn start_release(v: *mut NsProcView, x: c_int, y: c_int) {
     if !opened(v) {
         return;
     }
-    let req = new_req(REQ_RELEASE);
-    unsafe {
-        (*req).x = x;
-        (*req).y = y;
-    }
-    push_req(v, req);
+    send_req(v, REQ_RELEASE, |r| {
+        r.x = x;
+        r.y = y;
+    });
 }
 
 pub(super) fn start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) {
@@ -296,14 +288,13 @@ pub(super) fn start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) 
     }
     let state = view(v);
     state.select_seq += 1;
-    let req = new_req(REQ_SELECT);
-    unsafe {
-        (*req).seq = state.select_seq;
-        (*req).kind = kind;
-        (*req).x = x;
-        (*req).y = y;
-    }
-    push_req(v, req);
+    let seq = state.select_seq;
+    send_req(v, REQ_SELECT, |r| {
+        r.seq = seq;
+        r.kind = kind;
+        r.x = x;
+        r.y = y;
+    });
 }
 
 fn start_click(v: *mut NsProcView, x: c_int, y: c_int, mods: c_int) {
@@ -312,27 +303,24 @@ fn start_click(v: *mut NsProcView, x: c_int, y: c_int, mods: c_int) {
     }
     let state = view(v);
     state.click_seq += 1;
-    let req = new_req(REQ_CLICK);
-    unsafe {
-        (*req).seq = state.click_seq;
-        (*req).x = x;
-        (*req).y = y;
-        (*req).mods = mods;
-    }
-    push_req(v, req);
+    let seq = state.click_seq;
+    send_req(v, REQ_CLICK, |r| {
+        r.seq = seq;
+        r.x = x;
+        r.y = y;
+        r.mods = mods;
+    });
 }
 
 fn start_dropfiles(v: *mut NsProcView, x: c_int, y: c_int, paths: &[u8]) {
     if !opened(v) {
         return;
     }
-    let req = new_req(REQ_DROPFILES);
-    unsafe {
-        (*req).x = x;
-        (*req).y = y;
-        (*req).paths = dup(paths);
-    }
-    push_req(v, req);
+    send_req(v, REQ_DROPFILES, |r| {
+        r.x = x;
+        r.y = y;
+        r.paths = dup(paths);
+    });
 }
 
 fn start_viewport(v: *mut NsProcView, width: c_int, height: c_int) {
@@ -341,14 +329,14 @@ fn start_viewport(v: *mut NsProcView, width: c_int, height: c_int) {
     }
     let state = view(v);
     state.viewport_seq += 1;
-    let req = new_req(REQ_VIEWPORT);
-    unsafe {
-        (*req).seq = state.viewport_seq;
-        (*req).vw = width;
-        (*req).vh = height;
-        (*req).dpr = page_dpr(v);
-    }
-    push_req(v, req);
+    let seq = state.viewport_seq;
+    let dpr = page_dpr(v);
+    send_req(v, REQ_VIEWPORT, |r| {
+        r.seq = seq;
+        r.vw = width;
+        r.vh = height;
+        r.dpr = dpr;
+    });
 }
 
 pub(super) fn maybe_update_viewport(v: *mut NsProcView) -> bool {
@@ -364,7 +352,10 @@ pub(super) fn maybe_update_viewport(v: *mut NsProcView) -> bool {
         return false;
     }
     ns_pv_media_forget_rect(v);
-    unsafe { gtk::gtk_widget_queue_draw(state.area) };
+    if let Some(area) = area(v) {
+        area.queue_draw();
+    }
+    let state = view(v);
     state.last_vp_w = w;
     state.last_vp_h = h;
     state.last_vp_dpr = dpr;
@@ -373,46 +364,28 @@ pub(super) fn maybe_update_viewport(v: *mut NsProcView) -> bool {
 }
 
 fn push_scrollbar(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) {
-    let req = new_req(REQ_SCROLLBAR);
-    unsafe {
-        (*req).kind = kind;
-        (*req).x = x;
-        (*req).y = y;
-    }
-    push_req(v, req);
-}
-
-unsafe extern "C" fn on_paste_text_ready(src: *mut c_void, result: *mut c_void, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    let text = unsafe {
-        GStr::take(gtk::gdk_clipboard_read_text_finish(
-            src.cast(),
-            result,
-            ptr::null_mut(),
-        ))
-    };
-    if let Some(text) = text
-        && !text.is_empty()
-        && opened(v)
-    {
-        start_key_text(v, 4, text.to_bytes());
-    }
-    ns_proc_view_unref(v);
+    send_req(v, REQ_SCROLLBAR, |r| {
+        r.kind = kind;
+        r.x = x;
+        r.y = y;
+    });
 }
 
 fn paste_clipboard(v: *mut NsProcView) {
-    let area = view(v).area;
-    if !opened(v) || area.is_null() {
+    let area = area(v);
+    let Some(area) = area.filter(|_| opened(v)) else {
         return;
-    }
-    unsafe {
-        gtk::gdk_clipboard_read_text_async(
-            gtk::gtk_widget_get_clipboard(area),
-            ptr::null_mut(),
-            Some(on_paste_text_ready),
-            ns_proc_view_ref(v).cast(),
-        )
     };
+    let v = ns_proc_view_ref(v);
+    area.read_clipboard_text(move |text| {
+        if let Some(text) = text
+            && !text.is_empty()
+            && opened(v)
+        {
+            start_key_text(v, 4, &text);
+        }
+        ns_proc_view_unref(v);
+    });
 }
 
 pub(super) fn run_edit_op(v: *mut NsProcView, op: EditOp) {
@@ -425,44 +398,37 @@ pub(super) fn run_edit_op(v: *mut NsProcView, op: EditOp) {
     }
 }
 
-unsafe extern "C" fn on_im_commit(_im: *mut c_void, text: *const c_char, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_im_commit(v: *mut NsProcView, text: &[u8]) {
     if v.is_null() || !opened(v) {
         return;
     }
-    if let Some(text) = unsafe { glib::bytes(text) }
-        && !text.is_empty()
-    {
+    if !text.is_empty() {
         start_key_text(v, 2, text);
     }
 }
 
-unsafe extern "C" fn on_pressed(
-    gesture: *mut GtkGesture,
-    n_press: c_int,
-    x: f64,
-    y: f64,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_pressed(v: *mut NsProcView, gesture: &GestureClick, n_press: c_int, x: f64, y: f64) {
     if !opened(v) {
         return;
     }
-    let mods = unsafe { gtk::gtk_event_controller_get_current_event_state(gesture.cast()) };
-    let button = unsafe { gtk::gtk_gesture_single_get_current_button(gesture) };
-    unsafe { gtk::gtk_widget_grab_focus(view(v).area) };
+    let mods = gesture.current_event_state();
+    let button = gesture.current_button();
+    if let Some(area) = area(v) {
+        area.grab_focus();
+    }
     let (px, py) = page_point(v, x, y);
-    if button == gtk::BUTTON_MIDDLE || mods & gtk::CONTROL_MASK != 0 {
+    if button == gtk::sys::BUTTON_MIDDLE || mods & gtk::sys::CONTROL_MASK != 0 {
         request_link(v, px, py, ACT_NEWTAB);
         return;
     }
     let state = view(v);
-    if mods & gtk::SHIFT_MASK == 0 {
+    if mods & gtk::sys::SHIFT_MASK == 0 {
         state.has_selection = 0;
     }
     start_click(v, px, py, modifier_bits(mods));
+    let state = view(v);
     state.multi_click = GBoolean::from(n_press >= 2);
-    let select = if mods & gtk::SHIFT_MASK != 0 {
+    let select = if mods & gtk::sys::SHIFT_MASK != 0 {
         Some(1)
     } else if n_press == 2 {
         Some(5)
@@ -473,36 +439,22 @@ unsafe extern "C" fn on_pressed(
     };
     if let Some(kind) = select {
         start_select(v, kind, px, py);
-        state.has_selection = 1;
+        view(v).has_selection = 1;
     }
 }
 
-unsafe extern "C" fn on_released(
-    _gesture: *mut GtkGesture,
-    _n_press: c_int,
-    x: f64,
-    y: f64,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_released(v: *mut NsProcView, x: f64, y: f64) {
     if opened(v) {
         let (px, py) = page_point(v, x, y);
         start_release(v, px, py);
     }
 }
 
-unsafe extern "C" fn on_secondary_pressed(
-    gesture: *mut GtkGesture,
-    _n_press: c_int,
-    x: f64,
-    y: f64,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_secondary_pressed(v: *mut NsProcView, gesture: &GestureClick, x: f64, y: f64) {
     if !opened(v) {
         return;
     }
-    unsafe { gtk::gtk_gesture_set_state(gesture, gtk::EVENT_SEQUENCE_CLAIMED) };
+    gesture.claim();
     let state = view(v);
     state.ctx_x = x;
     state.ctx_y = y;
@@ -510,8 +462,7 @@ unsafe extern "C" fn on_secondary_pressed(
     request_link(v, px, py, ACT_CONTEXT);
 }
 
-unsafe extern "C" fn on_motion(_ctrl: *mut GtkEventController, x: f64, y: f64, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_motion(v: *mut NsProcView, x: f64, y: f64) {
     let state = view(v);
     if (x - state.pointer_x).abs() < 0.01 && (y - state.pointer_y).abs() < 0.01 {
         return;
@@ -524,8 +475,7 @@ unsafe extern "C" fn on_motion(_ctrl: *mut GtkEventController, x: f64, y: f64, d
     }
 }
 
-unsafe extern "C" fn on_drag_begin(_gesture: *mut GtkGesture, sx: f64, sy: f64, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_drag_begin(v: *mut NsProcView, sx: f64, sy: f64) {
     let state = view(v);
     state.drag_start_x = sx;
     state.drag_start_y = sy;
@@ -540,13 +490,7 @@ unsafe extern "C" fn on_drag_begin(_gesture: *mut GtkGesture, sx: f64, sy: f64, 
     }
 }
 
-unsafe extern "C" fn on_drag_update(
-    _gesture: *mut GtkGesture,
-    ox: f64,
-    oy: f64,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_drag_update(v: *mut NsProcView, ox: f64, oy: f64) {
     if !opened(v) {
         return;
     }
@@ -572,18 +516,18 @@ unsafe extern "C" fn on_drag_update(
     if state.drag_anchored == 0 {
         let (ax, ay) = page_point(v, state.drag_start_x, state.drag_start_y);
         start_select(v, 0, ax, ay);
-        state.drag_anchored = 1;
+        view(v).drag_anchored = 1;
     }
     let (px, py) = page_point(v, wx, wy);
     start_select(v, 1, px, py);
-    state.has_selection = 1;
+    view(v).has_selection = 1;
 }
 
-unsafe extern "C" fn on_drag_end(_gesture: *mut GtkGesture, _ox: f64, _oy: f64, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_drag_end(v: *mut NsProcView) {
     let state = view(v);
     if state.sb_dragging != 0 || state.sb_probe != 0 {
         push_scrollbar(v, 2, 0, 0);
+        let state = view(v);
         state.sb_dragging = 0;
         state.sb_probe = 0;
         state.sb_have_last = 0;
@@ -594,43 +538,36 @@ fn is_cntrl(c: u32) -> bool {
     southstar_unicode::is_control(c)
 }
 
-unsafe extern "C" fn on_key(
-    _ctrl: *mut GtkEventController,
-    keyval: c_uint,
-    _keycode: c_uint,
-    state: GdkModifierType,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) -> bool {
     if !opened(v) {
-        return 0;
+        return false;
     }
+    let control = gtk::sys::CONTROL_MASK;
+    let shift = gtk::sys::SHIFT_MASK;
+    let alt = gtk::sys::ALT_MASK;
+    let meta = gtk::sys::META_MASK;
     let toggle_console = keyval == input::KEY_F12
-        || (state & gtk::CONTROL_MASK != 0
-            && state & gtk::SHIFT_MASK != 0
+        || (state & control != 0
+            && state & shift != 0
             && (keyval == input::KEY_J || keyval == input::KEY_UPPER_J));
     if toggle_console {
         let open = view(v).console_open == 0;
         ns_pv_console_set_open(v, open);
-        return 1;
+        return true;
     }
-    let edit = edit_op(keyval, state, unsafe { gtk::gdk_keyval_to_lower(keyval) });
+    let edit = edit_op(keyval, state, gtk::keyval_to_lower(keyval));
     if edit != EditOp::None {
         start_key(v, 0, keyval, state);
         run_edit_op(v, edit);
-        return 1;
+        return true;
     }
-    let uc = unsafe { gtk::gdk_keyval_to_unicode(keyval) };
-    if uc != 0
-        && uc != u32::from(b' ')
-        && !is_cntrl(uc)
-        && state & (gtk::CONTROL_MASK | gtk::ALT_MASK | gtk::META_MASK) == 0
-    {
+    let uc = gtk::keyval_to_unicode(keyval);
+    if uc != 0 && uc != u32::from(b' ') && !is_cntrl(uc) && state & (control | alt | meta) == 0 {
         start_key(v, 0, keyval, state);
         start_key(v, 3, keyval, state);
-        return 0;
+        return false;
     }
-    if state & gtk::CONTROL_MASK != 0 {
+    if state & control != 0 {
         start_key(v, 0, keyval, state);
         match input::control_key(keyval, state) {
             ControlKey::ZoomIn => ns_proc_view_zoom_in(v),
@@ -639,15 +576,15 @@ unsafe extern "C" fn on_key(
             ControlKey::Find => search_open(v),
             ControlKey::FindNext { backwards } => request_find(v, if backwards { 2 } else { 1 }),
             ControlKey::Print => view_save(v, true),
-            ControlKey::Other => return 0,
+            ControlKey::Other => return false,
         }
-        return 1;
+        return true;
     }
-    if state & gtk::ALT_MASK != 0 && state & gtk::CONTROL_MASK == 0 && state & gtk::META_MASK == 0 {
-        let a = unsafe { gtk::gdk_keyval_to_unicode(keyval) };
+    if state & alt != 0 && state & control == 0 && state & meta == 0 {
+        let a = gtk::keyval_to_unicode(keyval);
         if a != 0 && !is_cntrl(a) {
             start_key(v, 0, keyval, state);
-            return 1;
+            return true;
         }
     }
     let line = input::LINE_PX;
@@ -656,132 +593,92 @@ unsafe extern "C" fn on_key(
         x: scroll_target_x(v),
         y: scroll_target_y(v),
         page,
-        bottom: unsafe { gtk::gtk_adjustment_get_upper(view(v).vadj.cast()) },
+        bottom: vadj(v).map_or(0.0, |adj| adj.upper()),
     };
     match input::scroll_key(keyval, &frame) {
         ScrollKey::Tab => {
             start_key(v, 0, keyval, state);
-            1
+            true
         }
         ScrollKey::To { x, y } => {
             start_key_full(v, 0, keyval, state, Some((x, y)));
-            1
+            true
         }
         ScrollKey::Unhandled => {
             start_key(v, 0, keyval, state);
-            0
+            false
         }
     }
 }
 
-unsafe extern "C" fn on_key_released(
-    _ctrl: *mut GtkEventController,
-    keyval: c_uint,
-    _keycode: c_uint,
-    state: GdkModifierType,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_key_released(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) {
     if opened(v) {
         start_key(v, 1, keyval, state);
     }
 }
 
-unsafe extern "C" fn on_file_drop(
-    _target: *mut c_void,
-    value: *const GValue,
-    x: f64,
-    y: f64,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
-    if !opened(v)
-        || unsafe { gtk::g_type_check_value_holds(value, gtk::gdk_file_list_get_type()) } == 0
-    {
-        return 0;
+fn on_file_drop(v: *mut NsProcView, files: &[Vec<u8>], x: f64, y: f64) -> bool {
+    if !opened(v) {
+        return false;
     }
-    let list = unsafe { gtk::g_value_get_boxed(value) };
-    if list.is_null() {
-        return 0;
-    }
-    let files = unsafe { gtk::gdk_file_list_get_files(list.cast()) };
-    let mut paths: Vec<u8> = Vec::new();
-    let mut node = files;
-    while let Some(item) = unsafe { node.as_ref() } {
-        if let Some(path) = unsafe { GStr::take(gtk::g_file_get_path(item.data)) } {
-            if !paths.is_empty() {
-                paths.push(b'\n');
-            }
-            paths.extend_from_slice(path.to_bytes());
-        }
-        node = item.next;
-    }
-    unsafe { g_slist_free(files) };
+    let paths = files.join(&b'\n');
     if paths.is_empty() {
-        return 0;
+        return false;
     }
     let (px, py) = page_point(v, x, y);
     start_dropfiles(v, px, py, &paths);
-    1
-}
-
-fn click_gesture(button: c_uint) -> *mut GtkGesture {
-    let gesture = unsafe { gtk::gtk_gesture_click_new() }.cast::<GtkGesture>();
-    unsafe { gtk::gtk_gesture_single_set_button(gesture, button) };
-    gesture
-}
-
-fn add_controller(v: *mut NsProcView, controller: *mut c_void) {
-    unsafe { gtk::gtk_widget_add_controller(view(v).area, controller.cast()) };
+    true
 }
 
 pub(super) fn ns_pv_input_install_pointer(v: *mut NsProcView) {
-    let click = click_gesture(gtk::BUTTON_PRIMARY);
-    connect(click.cast(), c"pressed", on_pressed as *const (), v);
-    connect(click.cast(), c"released", on_released as *const (), v);
-    add_controller(v, click.cast());
+    let Some(area) = area(v) else {
+        return;
+    };
+    let click = GestureClick::new(gtk::sys::BUTTON_PRIMARY);
+    click.connect_pressed(move |gesture, n_press, x, y| on_pressed(v, gesture, n_press, x, y));
+    click.connect_released(move |_, _, x, y| on_released(v, x, y));
+    area.add_controller(click);
 
-    let drag = unsafe { gtk::gtk_gesture_drag_new() };
-    unsafe { gtk::gtk_gesture_single_set_button(drag, gtk::BUTTON_PRIMARY) };
-    connect(drag.cast(), c"drag-begin", on_drag_begin as *const (), v);
-    connect(drag.cast(), c"drag-update", on_drag_update as *const (), v);
-    connect(drag.cast(), c"drag-end", on_drag_end as *const (), v);
-    add_controller(v, drag.cast());
+    let drag = GestureDrag::new(gtk::sys::BUTTON_PRIMARY);
+    drag.connect_drag_begin(move |_, sx, sy| on_drag_begin(v, sx, sy));
+    drag.connect_drag_update(move |_, ox, oy| on_drag_update(v, ox, oy));
+    drag.connect_drag_end(move |_, _, _| on_drag_end(v));
+    area.add_controller(drag);
 
-    let drop = unsafe { gtk::gtk_drop_target_new(gtk::gdk_file_list_get_type(), gtk::ACTION_COPY) };
-    connect(drop.cast(), c"drop", on_file_drop as *const (), v);
-    add_controller(v, drop.cast());
+    let drop = DropTarget::for_files(gtk::sys::ACTION_COPY);
+    drop.connect_drop_files(move |files, x, y| on_file_drop(v, files, x, y));
+    area.add_controller(drop);
 
-    let middle = click_gesture(gtk::BUTTON_MIDDLE);
-    connect(middle.cast(), c"pressed", on_pressed as *const (), v);
-    add_controller(v, middle.cast());
+    let middle = GestureClick::new(gtk::sys::BUTTON_MIDDLE);
+    middle.connect_pressed(move |gesture, n_press, x, y| on_pressed(v, gesture, n_press, x, y));
+    area.add_controller(middle);
 }
 
 pub(super) fn ns_pv_input_install_secondary(v: *mut NsProcView) {
-    let secondary = click_gesture(gtk::BUTTON_SECONDARY);
-    connect(
-        secondary.cast(),
-        c"pressed",
-        on_secondary_pressed as *const (),
-        v,
-    );
-    add_controller(v, secondary.cast());
+    let Some(area) = area(v) else {
+        return;
+    };
+    let secondary = GestureClick::new(gtk::sys::BUTTON_SECONDARY);
+    secondary.connect_pressed(move |gesture, _, x, y| on_secondary_pressed(v, gesture, x, y));
+    area.add_controller(secondary);
 
-    let motion = unsafe { gtk::gtk_event_controller_motion_new() };
-    connect(motion.cast(), c"motion", on_motion as *const (), v);
-    add_controller(v, motion.cast());
+    let motion = EventControllerMotion::new();
+    motion.connect_motion(move |_, x, y| on_motion(v, x, y));
+    area.add_controller(motion);
 }
 
 pub(super) fn ns_pv_input_install_keys(v: *mut NsProcView) {
-    let key = unsafe { gtk::gtk_event_controller_key_new() }.cast::<gtk::GtkEventController>();
-    connect(key.cast(), c"key-pressed", on_key as *const (), v);
-    connect(key.cast(), c"key-released", on_key_released as *const (), v);
-    let im = unsafe { gtk::gtk_im_multicontext_new() };
-    let state = view(v);
-    state.im = im.cast();
-    connect(im.cast(), c"commit", on_im_commit as *const (), v);
-    unsafe { gtk::gtk_event_controller_key_set_im_context(key, im) };
-    add_controller(v, key.cast());
+    let Some(area) = area(v) else {
+        return;
+    };
+    let key = EventControllerKey::new();
+    key.connect_key_pressed(move |keyval, _, state| on_key(v, keyval, state));
+    key.connect_key_released(move |keyval, _, state| on_key_released(v, keyval, state));
+    let im = IMContext::new_multicontext();
+    im.connect_commit(move |text| on_im_commit(v, text));
+    key.set_im_context(&im);
+    view(v).im = im.into_raw();
+    area.add_controller(key);
 }
 
 pub(super) fn ns_pv_css_viewport_w(v: *mut NsProcView) -> c_int {

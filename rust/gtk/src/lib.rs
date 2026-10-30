@@ -8,22 +8,32 @@ pub use southstar_gtk_ffi as sys;
 use southstar_gtk_ffi::GtkWidget;
 
 mod application;
+mod event;
 mod ffi;
 mod layout;
 mod object;
 mod paintable;
 mod signal;
+mod snapshot;
 mod style;
+mod viewport;
 mod widgets;
 
 pub use application::{APPLICATION_NON_UNIQUE, Application};
+pub use event::{
+    DropTarget, EventController, EventControllerKey, EventControllerMotion, EventControllerScroll,
+    GestureClick, GestureDrag, IMContext, ObjectType, from_borrowed, keyval_name, keyval_to_lower,
+    keyval_to_unicode,
+};
 pub use layout::{CustomLayout, HeaderBar, WindowControls, set_custom_layout};
 pub use object::{Object, WeakObject};
 pub use paintable::{
     Entry, MenuButton, Paintable, PaintableImpl, pixbuf_loads_format, resource_bytes,
 };
 pub use signal::SignalHandlerId;
+pub use snapshot::{Cursor, SnapshotRef, Texture};
 pub use style::{CssProvider, Display, IconTheme, STYLE_PROVIDER_PRIORITY_APPLICATION};
+pub use viewport::{Adjustment, Surface};
 pub use widgets::*;
 
 pub use sys::{GtkOrientation, ORIENTATION_HORIZONTAL, ORIENTATION_VERTICAL};

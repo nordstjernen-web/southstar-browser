@@ -12,6 +12,14 @@ use crate::Object;
 pub struct SignalHandlerId(c_ulong);
 
 impl SignalHandlerId {
+    pub fn from_raw(id: c_ulong) -> SignalHandlerId {
+        SignalHandlerId(id)
+    }
+
+    pub fn raw(self) -> c_ulong {
+        self.0
+    }
+
     pub fn disconnect(self, object: &Object) {
         // SAFETY: object is a live GObject; GLib warns rather than misbehaves on a stale id.
         unsafe { sys::g_signal_handler_disconnect(object.as_ptr(), self.0) };
@@ -24,7 +32,7 @@ unsafe extern "C" fn plain<F: Fn() + 'static>(_instance: *mut c_void, data: *mut
     f();
 }
 
-unsafe extern "C" fn drop_closure<F>(data: *mut c_void, _closure: *mut c_void) {
+pub(crate) unsafe extern "C" fn drop_closure<F>(data: *mut c_void, _closure: *mut c_void) {
     // SAFETY: data came from Box::into_raw in connect_plain and GLib calls this once.
     drop(unsafe { Box::from_raw(data.cast::<F>()) });
 }

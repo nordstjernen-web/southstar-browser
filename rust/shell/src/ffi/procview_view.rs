@@ -12,7 +12,7 @@ use super::gtk::{connect, handler};
 use super::pagelayers::{ns_page_layers_free, ns_page_layers_new};
 use super::procview_chrome::{build_perm_bar, build_search_bar, ctx_install_actions};
 use super::procview_draw::{
-    disarm_anim, ns_pv_area_new, ns_pv_area_set_view, ns_pv_install_area_signals,
+    disarm_anim, ns_pv_area_detach, ns_pv_area_new, ns_pv_install_area_signals,
     ns_pv_install_scroll, ns_pv_install_view_signals,
 };
 use super::procview_input::{
@@ -21,7 +21,7 @@ use super::procview_input::{
 use super::procview_media::{ns_pv_media_free, ns_pv_media_new};
 use super::procview_state::{NotifyFn, NsProcView, Req};
 use super::procview_worker::{
-    REQ_QUIT, free_req, lock_proc, ns_proc_renderer_path, start_worker, unlock_proc,
+    REQ_QUIT, free_req, join_worker, lock_proc, ns_proc_renderer_path, start_worker, unlock_proc,
 };
 
 const ACT_HOVER: c_int = 0;
@@ -36,7 +36,6 @@ unsafe extern "C" {
     fn g_async_queue_new() -> *mut c_void;
     fn g_async_queue_unref(queue: *mut c_void);
     fn g_async_queue_try_pop(queue: *mut c_void) -> *mut c_void;
-    fn g_thread_join(thread: *mut c_void) -> *mut c_void;
 }
 
 fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
@@ -93,9 +92,9 @@ fn free_view(v: *mut NsProcView) {
     }
 }
 
-unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) {
+unsafe extern "C" fn on_area_destroy(_widget: *mut GtkWidget, data: *mut c_void) {
     let v = data.cast::<NsProcView>();
-    unsafe { ns_pv_area_set_view(widget, ptr::null_mut()) };
+    ns_pv_area_detach(v);
     let state = view(v);
     state.closed = 1;
     unref_object(state.im);
@@ -145,11 +144,7 @@ unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) 
         remote.interrupt();
     }
     unlock_proc(v);
-    let state = view(v);
-    if !state.thread.is_null() {
-        unsafe { g_thread_join(state.thread) };
-        state.thread = ptr::null_mut();
-    }
+    join_worker(v);
     ns_proc_view_unref(v);
 }
 
@@ -199,7 +194,8 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
         ns_pv_install_view_signals(v);
 
         state.layers = ns_page_layers_new().cast();
-        state.area = ns_pv_area_new(v);
+        let area = ns_pv_area_new(v);
+        state.area = area.as_ptr();
         gtk::gtk_widget_set_hexpand(state.area, 1);
         gtk::gtk_widget_set_vexpand(state.area, 1);
         gtk::gtk_widget_set_focusable(state.area, 1);
@@ -236,7 +232,7 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
     unsafe {
         connect(view(v).area, c"destroy", on_destroy, v.cast());
     }
-    view(v).thread = start_worker(v);
+    start_worker(v);
     v
 }
 

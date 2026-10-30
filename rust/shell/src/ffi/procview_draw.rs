@@ -2,121 +2,49 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{c_int, c_void};
 use core::ptr;
+use std::ffi::CString;
 use std::sync::OnceLock;
 
+use southstar_cairo::{Antialias, Context, Format, LineCap, LineJoin, Pattern, Surface};
 use southstar_glib::{self as glib, GBoolean};
-use southstar_gtk_ffi::{
-    self as gtk, Cairo, GdkCursor, GdkFrameClock, GdkRgba, GdkTexture, GraphenePoint, GrapheneRect,
-    GtkEventController, GtkSnapshot, GtkWidget,
-};
+use southstar_gtk::{self as gtk, Cursor, EventControllerScroll, SnapshotRef, Texture, Widget};
+use southstar_gtk_ffi::{GdkRgba, GdkTexture, GrapheneRect, GtkSnapshot};
 
 use super::pagelayers;
 use super::procview_input::{
-    cur_scale, maybe_update_viewport, page_dpr, push_req, raster_scale, request_hover, viewport_h,
-    viewport_w,
+    area, cur_scale, hadj, maybe_update_viewport, new_req, page_dpr, push_req, push_req_front,
+    raster_scale, request_hover, vadj, view, viewport_h, viewport_w,
 };
 use super::procview_media::{ns_pv_media_on_page, ns_pv_media_snapshot, ns_pv_media_video_playing};
 use super::procview_result::{do_load, ns_proc_view_zoom_in, ns_proc_view_zoom_out};
 use super::procview_state::{NsProcView, Res};
 use crate::pagelayers::{LayerUpdate, PageLayers};
-use crate::procview::draw::{self, Cursor, Glide, PathOp};
+use crate::procview::draw::{self, Cursor as PageCursor, Glide, PathOp};
 
 const REQ_RENDER: c_int = 1;
 const REQ_TICK: c_int = 21;
-const SOURCE_REMOVE: GBoolean = 0;
-const SOURCE_CONTINUE: GBoolean = 1;
-
-unsafe extern "C" {
-    fn g_async_queue_push_front(queue: *mut c_void, data: *mut c_void);
-    fn g_malloc(n_bytes: usize) -> *mut c_void;
-    fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    fn g_timeout_add(
-        interval: c_uint,
-        func: unsafe extern "C" fn(*mut c_void) -> GBoolean,
-        data: *mut c_void,
-    ) -> c_uint;
-    fn g_source_remove(id: c_uint) -> GBoolean;
-    fn g_get_monotonic_time() -> i64;
-}
-
-fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
-    unsafe { &mut *v }
-}
 
 fn flag(value: bool) -> GBoolean {
     GBoolean::from(value)
 }
 
-fn connect(
-    instance: *mut c_void,
-    signal: &CStr,
-    handler: *const (),
-    data: *mut c_void,
-) -> core::ffi::c_ulong {
-    unsafe {
-        gtk::g_signal_connect_data(
-            instance,
-            signal.as_ptr(),
-            core::mem::transmute::<*const (), unsafe extern "C" fn()>(handler),
-            data,
-            None,
-            0,
-        )
-    }
-}
-
 pub(super) fn layers<'a>(v: *mut NsProcView) -> Option<&'a mut PageLayers> {
+    // SAFETY: layers is null or the view's PageLayers, owned by the view and used only on the main loop.
     unsafe { view(v).layers.cast::<PageLayers>().as_mut() }
 }
 
-struct AreaType {
-    type_id: gtk::GType,
-    view_offset: usize,
+fn frame(v: *mut NsProcView) -> Option<Texture> {
+    // SAFETY: frame is null or the live texture the view holds a reference to.
+    unsafe { gtk::from_borrowed(view(v).frame) }
 }
 
-fn area_type() -> &'static AreaType {
-    static TYPE: OnceLock<AreaType> = OnceLock::new();
-    TYPE.get_or_init(|| unsafe {
-        let mut query = gtk::GTypeQuery {
-            type_: 0,
-            type_name: ptr::null(),
-            class_size: 0,
-            instance_size: 0,
-        };
-        gtk::g_type_query(gtk::gtk_drawing_area_get_type(), &mut query);
-        let align = core::mem::align_of::<*mut c_void>();
-        let view_offset = (query.instance_size as usize).div_ceil(align) * align;
-        let type_id = gtk::g_type_register_static_simple(
-            gtk::gtk_drawing_area_get_type(),
-            c"NsProcViewArea".as_ptr(),
-            query.class_size,
-            Some(area_class_init),
-            (view_offset + core::mem::size_of::<*mut c_void>()) as c_uint,
-            None,
-            0,
-        );
-        AreaType {
-            type_id,
-            view_offset,
-        }
+fn frame_covers(frame: Option<&Texture>, fs: f64, width: f32, height: f32) -> bool {
+    frame.is_some_and(|frame| {
+        f64::from(frame.width()) / fs >= f64::from(width) - 0.5
+            && f64::from(frame.height()) / fs >= f64::from(height) - 0.5
     })
-}
-
-unsafe extern "C" fn area_class_init(klass: *mut c_void, _data: *mut c_void) {
-    unsafe { (*klass.cast::<gtk::GtkWidgetClass>()).snapshot = Some(area_snapshot) };
-}
-
-fn area_view_slot(widget: *mut GtkWidget) -> *mut *mut NsProcView {
-    unsafe { widget.cast::<u8>().add(area_type().view_offset).cast() }
-}
-
-fn frame_covers(v: *mut NsProcView, fs: f64, width: f32, height: f32) -> bool {
-    let frame = view(v).frame.cast::<GdkTexture>();
-    !frame.is_null()
-        && f64::from(unsafe { gtk::gdk_texture_get_width(frame) }) / fs >= f64::from(width) - 0.5
-        && f64::from(unsafe { gtk::gdk_texture_get_height(frame) }) / fs >= f64::from(height) - 0.5
 }
 
 unsafe extern "C" fn snapshot_page_video(
@@ -129,31 +57,25 @@ unsafe extern "C" fn snapshot_page_video(
     if !ns_pv_media_on_page(v) {
         return;
     }
+    // SAFETY: the page layers pass the snapshot they are recording into, live for this call.
+    let Some(snapshot) = (unsafe { SnapshotRef::from_raw(snapshot) }) else {
+        return;
+    };
     let fs = raster_scale(v);
-    unsafe {
-        gtk::gtk_snapshot_save(snapshot);
-        let point = GraphenePoint {
-            x: (-offset_x / fs) as f32,
-            y: (-offset_y / fs) as f32,
-        };
-        gtk::gtk_snapshot_translate(snapshot, &point);
-        ns_pv_media_snapshot(v, fs, snapshot);
-        gtk::gtk_snapshot_restore(snapshot);
-    }
+    snapshot.save();
+    snapshot.translate((-offset_x / fs) as f32, (-offset_y / fs) as f32);
+    ns_pv_media_snapshot(v, fs, snapshot.as_ptr());
+    snapshot.restore();
 }
 
-unsafe extern "C" fn area_snapshot(widget: *mut GtkWidget, snapshot: *mut GtkSnapshot) {
-    let v = unsafe { *area_view_slot(widget) };
-    if v.is_null() {
-        return;
-    }
-    let width = unsafe { gtk::gtk_widget_get_width(widget) };
-    let height = unsafe { gtk::gtk_widget_get_height(widget) };
+fn area_snapshot(v: *mut NsProcView, widget: &Widget, snapshot: SnapshotRef<'_>) {
+    let width = widget.width();
+    let height = widget.height();
     let state = view(v);
     if state.tiles_mode != 0 {
         pagelayers::ns_page_layers_snapshot(
             layers(v).as_deref(),
-            snapshot,
+            snapshot.as_ptr(),
             f64::from(width),
             f64::from(height),
             raster_scale(v),
@@ -170,172 +92,143 @@ unsafe extern "C" fn area_snapshot(widget: *mut GtkWidget, snapshot: *mut GtkSna
         1.0
     };
     let area = GrapheneRect::new(0.0, 0.0, width as f32, height as f32);
-    if !frame_covers(v, fs, area.size.width, area.size.height) {
+    let frame = frame(v);
+    if !frame_covers(frame.as_ref(), fs, area.size.width, area.size.height) {
         let white = GdkRgba {
             red: 1.0,
             green: 1.0,
             blue: 1.0,
             alpha: 1.0,
         };
-        unsafe { gtk::gtk_snapshot_append_color(snapshot, &white, &area) };
+        snapshot.append_color(&white, &area);
     }
     if !ns_pv_media_on_page(v) {
-        // SAFETY: snapshot is the live snapshot GTK passed to this draw call and area outlives the call.
-        unsafe { gtk::gtk_snapshot_push_clip(snapshot, &area) };
-        ns_pv_media_snapshot(v, fs, snapshot);
-        // SAFETY: pops the clip pushed just above on the same live snapshot.
-        unsafe { gtk::gtk_snapshot_pop(snapshot) };
+        snapshot.push_clip(&area);
+        ns_pv_media_snapshot(v, fs, snapshot.as_ptr());
+        snapshot.pop();
     }
-    let frame = state.frame.cast::<GdkTexture>();
-    if frame.is_null() {
+    let Some(frame) = frame else {
         return;
-    }
+    };
     let bounds = GrapheneRect::new(
         0.0,
         0.0,
-        (f64::from(unsafe { gtk::gdk_texture_get_width(frame) }) / fs) as f32,
-        (f64::from(unsafe { gtk::gdk_texture_get_height(frame) }) / fs) as f32,
+        (f64::from(frame.width()) / fs) as f32,
+        (f64::from(frame.height()) / fs) as f32,
     );
-    unsafe {
-        gtk::gtk_snapshot_push_clip(snapshot, &area);
-        gtk::gtk_snapshot_append_texture(snapshot, frame, &bounds);
-        gtk::gtk_snapshot_pop(snapshot);
-    }
+    snapshot.push_clip(&area);
+    snapshot.append_texture(&frame, &bounds);
+    snapshot.pop();
 }
 
-fn path(cr: *mut Cairo, ops: &[PathOp]) {
+fn path(cr: &Context, ops: &[PathOp]) {
+    let cr = cr.as_ref();
     for op in ops {
-        unsafe {
-            match *op {
-                PathOp::Move(x, y) => gtk::cairo_move_to(cr, x, y),
-                PathOp::Line(x, y) => gtk::cairo_line_to(cr, x, y),
-                PathOp::Curve(x1, y1, x2, y2, x3, y3) => {
-                    gtk::cairo_curve_to(cr, x1, y1, x2, y2, x3, y3)
-                }
-                PathOp::Close => gtk::cairo_close_path(cr),
-            }
+        match *op {
+            PathOp::Move(x, y) => cr.move_to(x, y),
+            PathOp::Line(x, y) => cr.line_to(x, y),
+            PathOp::Curve(x1, y1, x2, y2, x3, y3) => cr.curve_to(x1, y1, x2, y2, x3, y3),
+            PathOp::Close => cr.close_path(),
         }
     }
 }
 
-fn stroke(cr: *mut Cairo, width: f64, ops: &[PathOp]) {
-    unsafe { gtk::cairo_set_line_width(cr, width) };
+fn stroke(cr: &Context, width: f64, ops: &[PathOp]) {
+    cr.as_ref().set_line_width(width);
     path(cr, ops);
-    unsafe { gtk::cairo_stroke(cr) };
+    cr.as_ref().stroke();
 }
 
-fn hourglass_texture() -> *mut GdkTexture {
+fn hourglass_texture() -> Option<Texture> {
     const SIZE: c_int = 32;
-    unsafe {
-        let surface = gtk::cairo_image_surface_create(gtk::CAIRO_FORMAT_ARGB32, SIZE, SIZE);
-        if gtk::cairo_surface_status(surface) != gtk::CAIRO_STATUS_SUCCESS {
-            gtk::cairo_surface_destroy(surface);
-            return ptr::null_mut();
-        }
-        let cr = gtk::cairo_create(surface);
-        gtk::cairo_set_antialias(cr, gtk::CAIRO_ANTIALIAS_BEST);
-        gtk::cairo_set_line_cap(cr, gtk::CAIRO_LINE_CAP_ROUND);
-        gtk::cairo_set_line_join(cr, gtk::CAIRO_LINE_JOIN_ROUND);
+    let surface = Surface::image(Format::Argb32, SIZE, SIZE)?;
+    let cr = Context::new(surface.as_ref());
+    let c = cr.as_ref();
+    c.set_antialias(Antialias::Best);
+    c.set_line_cap(LineCap::Round);
+    c.set_line_join(LineJoin::Round);
 
-        gtk::cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.22);
-        stroke(cr, 3.0, &draw::hourglass_caps(0.7, 0.9));
-        stroke(cr, 2.6, &draw::hourglass_bulbs(0.7, 0.9));
+    c.set_source_rgba(0.0, 0.0, 0.0, 0.22);
+    stroke(&cr, 3.0, &draw::hourglass_caps(0.7, 0.9));
+    stroke(&cr, 2.6, &draw::hourglass_bulbs(0.7, 0.9));
 
-        let glass = gtk::cairo_pattern_create_linear(16.0, 7.0, 16.0, 26.0);
-        gtk::cairo_pattern_add_color_stop_rgba(glass, 0.0, 0.97, 1.0, 1.0, 0.55);
-        gtk::cairo_pattern_add_color_stop_rgba(glass, 0.5, 0.62, 0.80, 0.95, 0.30);
-        gtk::cairo_pattern_add_color_stop_rgba(glass, 1.0, 0.93, 0.98, 1.0, 0.52);
-        gtk::cairo_set_source(cr, glass);
-        path(cr, &draw::hourglass_bulbs(0.0, 0.0));
-        gtk::cairo_fill(cr);
-        gtk::cairo_pattern_destroy(glass);
+    let glass = Pattern::linear(16.0, 7.0, 16.0, 26.0);
+    glass.add_color_stop_rgba(0.0, 0.97, 1.0, 1.0, 0.55);
+    glass.add_color_stop_rgba(0.5, 0.62, 0.80, 0.95, 0.30);
+    glass.add_color_stop_rgba(1.0, 0.93, 0.98, 1.0, 0.52);
+    c.set_source(&glass);
+    path(&cr, &draw::hourglass_bulbs(0.0, 0.0));
+    c.fill();
+    drop(glass);
 
-        let sand = gtk::cairo_pattern_create_linear(16.0, 7.0, 16.0, 25.0);
-        gtk::cairo_pattern_add_color_stop_rgba(sand, 0.0, 1.0, 0.85, 0.40, 0.98);
-        gtk::cairo_pattern_add_color_stop_rgba(sand, 1.0, 0.90, 0.52, 0.14, 0.98);
-        gtk::cairo_set_source(cr, sand);
-        let grains = draw::hourglass_sand();
-        path(cr, &grains[..5]);
-        gtk::cairo_fill(cr);
-        path(cr, &grains[5..]);
-        gtk::cairo_fill(cr);
-        stroke(
-            cr,
-            1.1,
-            &[PathOp::Move(16.0, 15.3), PathOp::Line(16.0, 20.9)],
-        );
-        gtk::cairo_pattern_destroy(sand);
+    let sand = Pattern::linear(16.0, 7.0, 16.0, 25.0);
+    sand.add_color_stop_rgba(0.0, 1.0, 0.85, 0.40, 0.98);
+    sand.add_color_stop_rgba(1.0, 0.90, 0.52, 0.14, 0.98);
+    c.set_source(&sand);
+    let grains = draw::hourglass_sand();
+    path(&cr, &grains[..5]);
+    c.fill();
+    path(&cr, &grains[5..]);
+    c.fill();
+    stroke(
+        &cr,
+        1.1,
+        &[PathOp::Move(16.0, 15.3), PathOp::Line(16.0, 20.9)],
+    );
+    drop(sand);
 
-        gtk::cairo_set_source_rgba(cr, 1.0, 1.0, 1.0, 0.80);
-        stroke(
-            cr,
-            0.9,
-            &[
-                PathOp::Move(12.6, 8.2),
-                PathOp::Curve(13.7, 10.4, 14.6, 12.2, 15.3, 13.8),
-            ],
-        );
-        gtk::cairo_move_to(cr, 16.7, 18.4);
-        gtk::cairo_curve_to(cr, 17.6, 20.2, 18.7, 22.2, 19.6, 24.0);
-        gtk::cairo_stroke(cr);
+    c.set_source_rgba(1.0, 1.0, 1.0, 0.80);
+    stroke(
+        &cr,
+        0.9,
+        &[
+            PathOp::Move(12.6, 8.2),
+            PathOp::Curve(13.7, 10.4, 14.6, 12.2, 15.3, 13.8),
+        ],
+    );
+    c.move_to(16.7, 18.4);
+    c.curve_to(17.6, 20.2, 18.7, 22.2, 19.6, 24.0);
+    c.stroke();
 
-        gtk::cairo_set_source_rgba(cr, 0.10, 0.12, 0.14, 0.98);
-        stroke(cr, 2.0, &draw::hourglass_caps(0.0, 0.0));
-        stroke(cr, 1.5, &draw::hourglass_bulbs(0.0, 0.0));
+    c.set_source_rgba(0.10, 0.12, 0.14, 0.98);
+    stroke(&cr, 2.0, &draw::hourglass_caps(0.0, 0.0));
+    stroke(&cr, 1.5, &draw::hourglass_bulbs(0.0, 0.0));
 
-        gtk::cairo_set_source_rgba(cr, 0.74, 0.82, 0.90, 0.85);
-        stroke(cr, 0.6, &draw::hourglass_bulbs(0.0, 0.0));
+    c.set_source_rgba(0.74, 0.82, 0.90, 0.85);
+    stroke(&cr, 0.6, &draw::hourglass_bulbs(0.0, 0.0));
 
-        gtk::cairo_destroy(cr);
-        gtk::cairo_surface_flush(surface);
-
-        let stride = gtk::cairo_image_surface_get_stride(surface) as usize;
-        let data = gtk::cairo_image_surface_get_data(surface);
-        let bytes = gtk::g_bytes_new(data.cast(), stride * SIZE as usize);
-        let texture = gtk::gdk_memory_texture_new(SIZE, SIZE, gtk::MEMORY_DEFAULT, bytes, stride);
-        gtk::g_bytes_unref(bytes);
-        gtk::cairo_surface_destroy(surface);
-        texture
-    }
+    drop(cr);
+    surface.as_ref().flush();
+    surface
+        .as_ref()
+        .with_data(|data, stride| Texture::from_bytes(SIZE, SIZE, data, stride))
+        .flatten()
 }
 
-fn busy_cursor(v: *mut NsProcView) -> *mut GdkCursor {
+fn busy_cursor(v: *mut NsProcView) -> Option<Cursor> {
     let state = view(v);
-    if !state.hourglass_cursor.is_null() {
-        return state.hourglass_cursor.cast();
+    // SAFETY: hourglass_cursor is null or the cursor the view holds a reference to until it is freed.
+    if let Some(cursor) = unsafe { gtk::from_borrowed::<Cursor>(state.hourglass_cursor) } {
+        return Some(cursor);
     }
-    let texture = hourglass_texture();
-    if !texture.is_null() {
-        unsafe {
-            let fallback = gtk::gdk_cursor_new_from_name(c"wait".as_ptr(), ptr::null_mut());
-            state.hourglass_cursor =
-                gtk::gdk_cursor_new_from_texture(texture, 16, 16, fallback).cast();
-            if !fallback.is_null() {
-                gtk::g_object_unref(fallback.cast());
-            }
-            gtk::g_object_unref(texture.cast());
-        }
-    }
-    if state.hourglass_cursor.is_null() {
-        state.hourglass_cursor =
-            unsafe { gtk::gdk_cursor_new_from_name(c"wait".as_ptr(), ptr::null_mut()) }.cast();
-    }
-    state.hourglass_cursor.cast()
+    let cursor = hourglass_texture()
+        .and_then(|texture| {
+            let fallback = Cursor::from_name(c"wait", None);
+            Cursor::from_texture(&texture, 16, 16, fallback.as_ref())
+        })
+        .or_else(|| Cursor::from_name(c"wait", None))?;
+    state.hourglass_cursor = cursor.clone().into_raw();
+    Some(cursor)
 }
 
 pub(super) fn set_busy_cursor(v: *mut NsProcView) {
-    let state = view(v);
-    state.busy_cursor = 1;
-    if state.area.is_null() {
+    view(v).busy_cursor = 1;
+    let Some(area) = area(v) else {
         return;
-    }
-    let cursor = busy_cursor(v);
-    unsafe {
-        if cursor.is_null() {
-            gtk::gtk_widget_set_cursor_from_name(state.area, c"wait".as_ptr());
-        } else {
-            gtk::gtk_widget_set_cursor(state.area, cursor);
-        }
+    };
+    match busy_cursor(v) {
+        Some(cursor) => area.set_cursor(Some(&cursor)),
+        None => area.set_cursor_from_name(Some(c"wait")),
     }
 }
 
@@ -345,73 +238,52 @@ pub(super) fn clear_busy_cursor(v: *mut NsProcView) {
         return;
     }
     state.busy_cursor = 0;
-    if !state.area.is_null() {
-        unsafe { gtk::gtk_widget_set_cursor_from_name(state.area, ptr::null()) };
+    if let Some(area) = area(v) {
+        area.set_cursor_from_name(None);
     }
 }
 
-pub(super) fn set_named_cursor(widget: *mut GtkWidget, name: &[u8]) {
-    let Cursor::Named(fallback) = draw::cursor_for(name) else {
-        unsafe { gtk::gtk_widget_set_cursor(widget, ptr::null_mut()) };
+pub(super) fn set_named_cursor(v: *mut NsProcView, name: &[u8]) {
+    let Some(widget) = area(v) else {
         return;
     };
-    let name = std::ffi::CString::new(name).unwrap_or_default();
-    unsafe {
-        let fallback_cursor = match fallback {
-            Some(fallback) => {
-                let fallback = std::ffi::CString::new(fallback).unwrap_or_default();
-                gtk::gdk_cursor_new_from_name(fallback.as_ptr(), ptr::null_mut())
-            }
-            None => ptr::null_mut(),
-        };
-        let cursor = gtk::gdk_cursor_new_from_name(name.as_ptr(), fallback_cursor);
-        gtk::gtk_widget_set_cursor(
-            widget,
-            if cursor.is_null() {
-                fallback_cursor
-            } else {
-                cursor
-            },
-        );
-        if !cursor.is_null() {
-            gtk::g_object_unref(cursor.cast());
-        }
-        if !fallback_cursor.is_null() {
-            gtk::g_object_unref(fallback_cursor.cast());
-        }
-    }
+    let PageCursor::Named(fallback) = draw::cursor_for(name) else {
+        widget.set_cursor(None);
+        return;
+    };
+    let name = CString::new(name).unwrap_or_default();
+    let fallback = fallback.and_then(|fallback| {
+        let fallback = CString::new(fallback).unwrap_or_default();
+        Cursor::from_name(&fallback, None)
+    });
+    let cursor = Cursor::from_name(&name, fallback.as_ref());
+    widget.set_cursor(cursor.as_ref().or(fallback.as_ref()));
 }
 
 pub(super) fn stage_fill(pixels: &[u8], w: c_int, h: c_int, stride: c_int) -> *mut GdkTexture {
-    let row = w as usize * 4;
+    let row = w.max(0) as usize * 4;
     if w <= 0 || h <= 0 || (stride as usize) < row {
         return ptr::null_mut();
     }
-    let needed = (h as usize - 1)
-        .checked_mul(stride as usize)
+    let (rows, stride) = (h as usize, stride as usize);
+    let needed = (rows - 1)
+        .checked_mul(stride)
         .and_then(|n| n.checked_add(row));
     if needed.is_none_or(|n| pixels.len() < n) {
         return ptr::null_mut();
     }
-    let px = pixels.as_ptr();
-    unsafe {
-        let bytes = if stride as usize == row {
-            gtk::g_bytes_new(px.cast(), row * h as usize)
-        } else {
-            let dst = g_malloc(row * h as usize).cast::<u8>();
-            for y in 0..h as usize {
-                ptr::copy_nonoverlapping(px.add(y * stride as usize), dst.add(y * row), row);
-            }
-            gtk::g_bytes_new_take(dst.cast(), row * h as usize)
-        };
-        let texture = gtk::gdk_memory_texture_new(w, h, gtk::MEMORY_DEFAULT, bytes, row);
-        gtk::g_bytes_unref(bytes);
-        texture
-    }
-}
-
-fn adjustment(raw: *mut c_void) -> *mut gtk::GtkAdjustment {
-    raw.cast()
+    let texture = if stride == row {
+        Texture::from_bytes(w, h, &pixels[..row * rows], row)
+    } else {
+        let packed: Vec<u8> = pixels
+            .chunks(stride)
+            .take(rows)
+            .flat_map(|line| &line[..row])
+            .copied()
+            .collect();
+        Texture::from_vec(w, h, packed, row)
+    };
+    texture.map_or(ptr::null_mut(), Texture::into_raw)
 }
 
 pub(super) fn configure_adjustments(v: *mut NsProcView) {
@@ -427,58 +299,47 @@ pub(super) fn configure_adjustments(v: *mut NsProcView) {
     if !can_scroll_y {
         state.scroll_y = 0;
     }
-    unsafe {
-        if !state.hscroll.is_null() {
-            gtk::gtk_widget_set_visible(state.hscroll, flag(can_scroll_x));
-        }
-        if !state.vscroll.is_null() {
-            gtk::gtk_widget_set_visible(state.vscroll, flag(can_scroll_y));
-        }
-        let upper_w = if f64::from(state.page_w) > cw {
-            f64::from(state.page_w)
-        } else {
-            cw
-        };
-        let upper_h = if f64::from(state.page_h) > ch {
-            f64::from(state.page_h)
-        } else {
-            ch
-        };
-        gtk::gtk_adjustment_configure(
-            adjustment(state.hadj),
-            f64::from(state.scroll_x),
-            0.0,
-            upper_w,
-            60.0,
-            cw,
-            cw,
-        );
-        gtk::gtk_adjustment_configure(
-            adjustment(state.vadj),
-            f64::from(state.scroll_y),
-            0.0,
-            upper_h,
-            60.0,
-            ch,
-            ch,
-        );
-        state.scroll_x = gtk::gtk_adjustment_get_value(adjustment(state.hadj)) as c_int;
-        state.scroll_y = gtk::gtk_adjustment_get_value(adjustment(state.vadj)) as c_int;
+    // SAFETY: hscroll is null or the view's live horizontal scrollbar.
+    if let Some(hscroll) = unsafe { gtk::from_borrowed::<Widget>(state.hscroll.cast()) } {
+        hscroll.set_visible(can_scroll_x);
     }
+    // SAFETY: vscroll is null or the view's live vertical scrollbar.
+    if let Some(vscroll) = unsafe { gtk::from_borrowed::<Widget>(state.vscroll.cast()) } {
+        vscroll.set_visible(can_scroll_y);
+    }
+    let upper_w = if f64::from(state.page_w) > cw {
+        f64::from(state.page_w)
+    } else {
+        cw
+    };
+    let upper_h = if f64::from(state.page_h) > ch {
+        f64::from(state.page_h)
+    } else {
+        ch
+    };
+    let (Some(hadj), Some(vadj)) = (hadj(v), vadj(v)) else {
+        return;
+    };
+    hadj.configure(f64::from(state.scroll_x), 0.0, upper_w, 60.0, cw, cw);
+    vadj.configure(f64::from(state.scroll_y), 0.0, upper_h, 60.0, ch, ch);
+    let state = view(v);
+    state.scroll_x = hadj.value() as c_int;
+    state.scroll_y = vadj.value() as c_int;
 }
 
-unsafe extern "C" fn on_adj_changed(_adj: *mut c_void, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
+fn on_adj_changed(v: *mut NsProcView) {
     let state = view(v);
     if state.closed != 0 {
         return;
     }
-    unsafe {
-        state.scroll_x = gtk::gtk_adjustment_get_value(adjustment(state.hadj)) as c_int;
-        state.scroll_y = gtk::gtk_adjustment_get_value(adjustment(state.vadj)) as c_int;
-        if state.tiles_mode != 0 {
-            gtk::gtk_widget_queue_draw(state.area);
-        }
+    if let (Some(hadj), Some(vadj)) = (hadj(v), vadj(v)) {
+        state.scroll_x = hadj.value() as c_int;
+        state.scroll_y = vadj.value() as c_int;
+    }
+    if state.tiles_mode != 0
+        && let Some(area) = area(v)
+    {
+        area.queue_draw();
     }
     if state.opened != 0 && state.adopting_scroll == 0 {
         request_render(v);
@@ -487,9 +348,7 @@ unsafe extern "C" fn on_adj_changed(_adj: *mut c_void, data: *mut c_void) {
 
 fn tiles_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        unsafe { glib::bytes(glib::g_getenv(c"NS_TILES".as_ptr())) }.is_none_or(|v| v != b"0")
-    })
+    *ENABLED.get_or_init(|| glib::env_bytes("NS_TILES").is_none_or(|v| v != b"0"))
 }
 
 fn tiles_range(v: *mut NsProcView) -> (f64, f64) {
@@ -521,18 +380,13 @@ fn adjustments_stale(v: *mut NsProcView) -> bool {
     let cw = f64::from(viewport_w(v)) / s;
     let ch = f64::from(viewport_h(v)) / s;
     let state = view(v);
-    unsafe {
-        (gtk::gtk_adjustment_get_upper(adjustment(state.hadj)) - f64::from(state.page_w).max(cw))
-            .abs()
-            > 0.5
-            || (gtk::gtk_adjustment_get_upper(adjustment(state.vadj))
-                - f64::from(state.page_h).max(ch))
-            .abs()
-                > 0.5
-    }
+    let upper = |adj: Option<gtk::Adjustment>| adj.map_or(0.0, |adj| adj.upper());
+    (upper(hadj(v)) - f64::from(state.page_w).max(cw)).abs() > 0.5
+        || (upper(vadj(v)) - f64::from(state.page_h).max(ch)).abs() > 0.5
 }
 
 pub(super) fn tiles_apply(v: *mut NsProcView, res: &Res) {
+    // SAFETY: a layers reply carries null or the LayerUpdate the worker built for this view, handed to the main loop with the reply.
     let update = unsafe { res.layers.cast::<LayerUpdate>().as_mut() };
     let changed = pagelayers::ns_page_layers_apply(layers(v), update);
     if !pagelayers::ns_page_layers_active(layers(v).as_deref()) {
@@ -542,13 +396,15 @@ pub(super) fn tiles_apply(v: *mut NsProcView, res: &Res) {
     if state.tiles_mode == 0 {
         state.tiles_mode = 1;
         if !state.frame.is_null() {
-            unsafe { gtk::g_object_unref(state.frame) };
+            // SAFETY: frame holds the view's own reference to its texture, released once here and cleared.
+            unsafe { gtk::sys::g_object_unref(state.frame) };
             state.frame = ptr::null_mut();
         }
     }
     state.render_restarts = 0;
     clear_busy_cursor(v);
     let vh = f64::from(viewport_h(v)) / cur_scale(v);
+    let state = view(v);
     let scroll_y = f64::from(state.scroll_y);
     pagelayers::ns_page_layers_evict(layers(v), scroll_y - vh * 1.5, scroll_y + vh * 2.5);
     if res.ph > 0 {
@@ -560,11 +416,14 @@ pub(super) fn tiles_apply(v: *mut NsProcView, res: &Res) {
     if adjustments_stale(v) {
         state.adopting_scroll = 1;
         configure_adjustments(v);
-        state.adopting_scroll = 0;
+        view(v).adopting_scroll = 0;
     }
     let (y0, y1) = tiles_range(v);
     if changed {
-        unsafe { gtk::gtk_widget_queue_draw(state.area) };
+        if let Some(area) = area(v) {
+            area.queue_draw();
+        }
+        let state = view(v);
         let scroll_y = f64::from(state.scroll_y);
         let missing = pagelayers::ns_page_layers_missing(
             layers(v).as_deref(),
@@ -590,13 +449,6 @@ pub(super) fn tiles_leave(v: *mut NsProcView) {
     pagelayers::ns_page_layers_reset(layers(v));
 }
 
-fn new_req(kind: c_int) -> *mut super::procview_state::Req {
-    let req = unsafe { g_malloc0(core::mem::size_of::<super::procview_state::Req>()) }
-        .cast::<super::procview_state::Req>();
-    unsafe { (*req).r#type = kind };
-    req
-}
-
 pub(super) fn request_tick(v: *mut NsProcView) {
     let state = view(v);
     if state.opened == 0 {
@@ -607,11 +459,8 @@ pub(super) fn request_tick(v: *mut NsProcView) {
         return;
     }
     state.tick_inflight = 1;
-    let req = new_req(REQ_TICK);
-    unsafe {
-        (*req).seq = state.load_seq;
-        g_async_queue_push_front(state.queue, req.cast());
-    }
+    let seq = state.load_seq;
+    push_req_front(v, new_req(REQ_TICK, |r| r.seq = seq));
 }
 
 pub(super) fn request_render(v: *mut NsProcView) {
@@ -635,39 +484,40 @@ pub(super) fn start_render(v: *mut NsProcView) {
     state.render_inflight = 1;
     state.render_seq += 1;
     let raster = raster_scale(v);
-    let req = new_req(REQ_RENDER);
-    let r = unsafe { &mut *req };
-    r.seq = state.render_seq;
-    r.raster = raster;
-    r.w = (f64::from(viewport_w(v)) * raster).ceil() as c_int;
-    r.h = (f64::from(viewport_h(v)) * raster).ceil() as c_int;
-    r.sx = state.scroll_x;
-    r.sy = state.scroll_y;
-    r.scale = cur_scale(v) * raster;
-    r.dpr = page_dpr(v);
-    r.caret_active = unsafe { gtk::gtk_widget_has_focus(state.area) };
-    tiles_request(v, r);
-    r.wheel.dx = state.wheel_pend_x as c_int;
-    r.wheel.dy = state.wheel_pend_y as c_int;
-    if r.wheel.dx != 0 || r.wheel.dy != 0 {
-        let s = cur_scale(v);
-        state.wheel_pend_x -= f64::from(r.wheel.dx);
-        state.wheel_pend_y -= f64::from(r.wheel.dy);
-        r.wheel.x = state.scroll_x + (state.pointer_x / s) as c_int;
-        r.wheel.y = state.scroll_y + (state.pointer_y / s) as c_int;
-        r.wheel.viewport = state.wheel_viewport != 0;
-    }
+    let req = new_req(REQ_RENDER, |r| {
+        let state = view(v);
+        r.seq = state.render_seq;
+        r.raster = raster;
+        r.w = (f64::from(viewport_w(v)) * raster).ceil() as c_int;
+        r.h = (f64::from(viewport_h(v)) * raster).ceil() as c_int;
+        r.sx = state.scroll_x;
+        r.sy = state.scroll_y;
+        r.scale = cur_scale(v) * raster;
+        r.dpr = page_dpr(v);
+        r.caret_active = flag(area(v).is_some_and(|area| area.has_focus()));
+        tiles_request(v, r);
+        let state = view(v);
+        r.wheel.dx = state.wheel_pend_x as c_int;
+        r.wheel.dy = state.wheel_pend_y as c_int;
+        if r.wheel.dx != 0 || r.wheel.dy != 0 {
+            let s = cur_scale(v);
+            state.wheel_pend_x -= f64::from(r.wheel.dx);
+            state.wheel_pend_y -= f64::from(r.wheel.dy);
+            r.wheel.x = state.scroll_x + (state.pointer_x / s) as c_int;
+            r.wheel.y = state.scroll_y + (state.pointer_y / s) as c_int;
+            r.wheel.viewport = state.wheel_viewport != 0;
+        }
+    });
     push_req(v, req);
 }
 
-unsafe extern "C" fn hover_after_scroll(data: *mut c_void) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn hover_after_scroll(v: *mut NsProcView) {
     let state = view(v);
     state.hover_after_scroll_id = 0;
     if state.closed != 0 || state.opened == 0 {
-        return SOURCE_REMOVE;
+        return;
     }
-    if unsafe { gtk::gtk_widget_contains(state.area, state.pointer_x, state.pointer_y) } != 0 {
+    if area(v).is_some_and(|area| area.contains(state.pointer_x, state.pointer_y)) {
         let s = cur_scale(v);
         request_hover(
             v,
@@ -675,7 +525,6 @@ unsafe extern "C" fn hover_after_scroll(data: *mut c_void) -> GBoolean {
             state.scroll_y + (state.pointer_y / s) as c_int,
         );
     }
-    SOURCE_REMOVE
 }
 
 fn route_wheel(v: *mut NsProcView, dx: f64, dy: f64) {
@@ -706,10 +555,13 @@ fn scroll_local(v: *mut NsProcView) {
     }
     let want_x = state.scroll_x + dx;
     let want_y = state.scroll_y + dy;
-    unsafe {
-        gtk::gtk_adjustment_set_value(adjustment(state.hadj), f64::from(want_x));
-        gtk::gtk_adjustment_set_value(adjustment(state.vadj), f64::from(want_y));
+    if let Some(hadj) = hadj(v) {
+        hadj.set_value(f64::from(want_x));
     }
+    if let Some(vadj) = vadj(v) {
+        vadj.set_value(f64::from(want_y));
+    }
+    let state = view(v);
     if state.scroll_x != want_x {
         state.wheel_left_x = 0.0;
         state.fling_vx = 0.0;
@@ -728,12 +580,15 @@ fn queue_wheel_scroll(v: *mut NsProcView, dx: f64, dy: f64) {
         return;
     }
     if state.hover_after_scroll_id != 0 {
-        unsafe { g_source_remove(state.hover_after_scroll_id) };
+        // SAFETY: the id is the view's pending hover timeout, still attached; GLib only warns on a stale one.
+        unsafe { gtk::sys::g_source_remove(state.hover_after_scroll_id) };
     } else {
         route_wheel(v, dx, dy);
     }
+    let state = view(v);
     state.hover_after_scroll_id =
-        unsafe { g_timeout_add(draw::HOVER_AFTER_SCROLL_MS, hover_after_scroll, v.cast()) };
+        glib::timeout_add_local_once(draw::HOVER_AFTER_SCROLL_MS, move || hover_after_scroll(v))
+            .raw();
     state.wheel_pend_x += dx;
     state.wheel_pend_y += dy;
     if state.tiles_mode != 0 && state.wheel_remote == 0 {
@@ -760,19 +615,13 @@ fn wheel_scrolling(v: *mut NsProcView) -> bool {
         || state.wheel_pend_y != 0.0
 }
 
-unsafe extern "C" fn wheel_tick(
-    _widget: *mut GtkWidget,
-    clock: *mut GdkFrameClock,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn wheel_tick(v: *mut NsProcView, now: i64) -> bool {
     let state = view(v);
     if state.closed != 0 || state.opened == 0 || glide(state).idle() {
         state.wheel_tick_id = 0;
         state.wheel_last_us = 0;
-        return SOURCE_REMOVE;
+        return false;
     }
-    let now = unsafe { gtk::gdk_frame_clock_get_frame_time(clock) };
     let dt_ms = draw::frame_interval_ms(now, state.wheel_last_us);
     state.wheel_last_us = now;
     let mut motion = glide(state);
@@ -782,41 +631,38 @@ unsafe extern "C" fn wheel_tick(
     state.fling_vx = motion.fling_x;
     state.fling_vy = motion.fling_y;
     queue_wheel_scroll(v, mx, my);
-    SOURCE_CONTINUE
+    true
 }
 
 fn arm_wheel_animation(v: *mut NsProcView) {
     let state = view(v);
-    if state.wheel_tick_id != 0 || state.area.is_null() || glide(state).idle() {
+    if state.wheel_tick_id != 0 || glide(state).idle() {
         return;
     }
+    let Some(area) = area(v) else {
+        return;
+    };
     state.wheel_last_us = 0;
-    state.wheel_tick_id =
-        unsafe { gtk::gtk_widget_add_tick_callback(state.area, Some(wheel_tick), v.cast(), None) };
+    state.wheel_tick_id = area.add_tick_callback(move |_, now| wheel_tick(v, now));
 }
 
 pub(super) fn scroll_target_x(v: *const NsProcView) -> f64 {
-    let state = unsafe { &*v };
+    let state = view(v.cast_mut());
     f64::from(state.scroll_x) + state.wheel_pend_x + state.wheel_left_x
 }
 
 pub(super) fn scroll_target_y(v: *const NsProcView) -> f64 {
-    let state = unsafe { &*v };
+    let state = view(v.cast_mut());
     f64::from(state.scroll_y) + state.wheel_pend_y + state.wheel_left_y
 }
 
 pub(super) fn scroll_view_to(v: *mut NsProcView, x: f64, y: f64) {
-    let state = view(v);
-    let (max_x, max_y) = unsafe {
-        (
-            gtk::gtk_adjustment_get_upper(adjustment(state.hadj))
-                - gtk::gtk_adjustment_get_page_size(adjustment(state.hadj)),
-            gtk::gtk_adjustment_get_upper(adjustment(state.vadj))
-                - gtk::gtk_adjustment_get_page_size(adjustment(state.vadj)),
-        )
-    };
+    let max = |adj: Option<gtk::Adjustment>| adj.map_or(0.0, |adj| adj.upper() - adj.page_size());
+    let max_x = max(hadj(v));
+    let max_y = max(vadj(v));
     let x = x.clamp(0.0, max_x.max(0.0));
     let y = y.clamp(0.0, max_y.max(0.0));
+    let state = view(v);
     state.fling_vx = 0.0;
     state.fling_vy = 0.0;
     state.wheel_viewport = 1;
@@ -825,12 +671,7 @@ pub(super) fn scroll_view_to(v: *mut NsProcView, x: f64, y: f64) {
     arm_wheel_animation(v);
 }
 
-unsafe extern "C" fn on_device_scale_changed(
-    _object: *mut c_void,
-    _pspec: *mut c_void,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_device_scale_changed(v: *mut NsProcView) {
     let state = view(v);
     if state.closed != 0 || state.opened == 0 {
         return;
@@ -840,94 +681,78 @@ unsafe extern "C" fn on_device_scale_changed(
     }
 }
 
-unsafe extern "C" fn on_area_realize(area: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    set_im_client(v, area);
-    let native = unsafe { gtk::gtk_widget_get_native(area) };
-    let surface = if native.is_null() {
-        ptr::null_mut()
-    } else {
-        unsafe { gtk::gtk_native_get_surface(native) }
-    };
+fn disconnect_scale_surface(v: *mut NsProcView) {
     let state = view(v);
-    if surface.is_null() || surface.cast() == state.scale_surface {
+    if state.surface_scale_handler == 0 {
         return;
     }
-    if !state.scale_surface.is_null() && state.surface_scale_handler != 0 {
-        unsafe {
-            gtk::g_signal_handler_disconnect(state.scale_surface, state.surface_scale_handler)
-        };
-    }
-    state.scale_surface = surface.cast();
-    state.surface_scale_handler = connect(
-        surface.cast(),
-        c"notify::scale",
-        on_device_scale_changed as *const (),
-        v.cast(),
-    );
-}
-
-fn set_im_client(v: *mut NsProcView, area: *mut GtkWidget) {
-    let im = view(v).im;
-    if !im.is_null() {
-        // SAFETY: `im` is the view's live GtkIMContext, owned until the view is freed.
-        unsafe { gtk::gtk_im_context_set_client_widget(im.cast(), area) };
+    // SAFETY: scale_surface is null or the surface the area was realized on, alive until the area unrealizes.
+    if let Some(surface) = unsafe { gtk::from_borrowed::<gtk::Surface>(state.scale_surface) } {
+        gtk::SignalHandlerId::from_raw(state.surface_scale_handler).disconnect(surface.object());
     }
 }
 
-unsafe extern "C" fn on_area_unrealize(_area: *mut GtkWidget, data: *mut c_void) {
-    let v = data.cast::<NsProcView>();
-    set_im_client(v, ptr::null_mut());
+fn on_area_realize(v: *mut NsProcView, area: &Widget) {
+    set_im_client(v, Some(area));
+    let Some(surface) = area.surface() else {
+        return;
+    };
     let state = view(v);
-    if !state.scale_surface.is_null() && state.surface_scale_handler != 0 {
-        unsafe {
-            gtk::g_signal_handler_disconnect(state.scale_surface, state.surface_scale_handler)
-        };
+    if surface.as_ptr() == state.scale_surface {
+        return;
     }
+    disconnect_scale_surface(v);
+    let state = view(v);
+    state.scale_surface = surface.as_ptr();
+    state.surface_scale_handler = surface
+        .object()
+        .connect_notify(c"scale", move || on_device_scale_changed(v))
+        .raw();
+}
+
+fn set_im_client(v: *mut NsProcView, area: Option<&Widget>) {
+    // SAFETY: im is null or the view's live GtkIMContext, owned until the view is freed.
+    if let Some(im) = unsafe { gtk::from_borrowed::<gtk::IMContext>(view(v).im) } {
+        im.set_client_widget(area);
+    }
+}
+
+fn on_area_unrealize(v: *mut NsProcView) {
+    set_im_client(v, None);
+    disconnect_scale_surface(v);
+    let state = view(v);
     state.scale_surface = ptr::null_mut();
     state.surface_scale_handler = 0;
 }
 
-unsafe extern "C" fn on_area_focus_notify(
-    _object: *mut c_void,
-    _pspec: *mut c_void,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_area_focus_notify(v: *mut NsProcView) {
     view(v).last_anim_frame_us = 0;
     request_render(v);
 }
 
-unsafe extern "C" fn anim_tick(
-    _widget: *mut GtkWidget,
-    clock: *mut GdkFrameClock,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn anim_tick(v: *mut NsProcView, frame_time: i64) -> bool {
     let state = view(v);
     if state.closed != 0 || state.opened == 0 {
         state.anim_tick_id = 0;
         state.last_anim_frame_us = 0;
-        return SOURCE_REMOVE;
+        return false;
     }
     if ns_pv_media_video_playing(v) {
-        return SOURCE_CONTINUE;
+        return true;
     }
-    let mut now = if clock.is_null() {
-        0
+    let now = if frame_time > 0 {
+        frame_time
     } else {
-        unsafe { gtk::gdk_frame_clock_get_frame_time(clock) }
+        glib::monotonic_us()
     };
-    if now <= 0 {
-        now = unsafe { g_get_monotonic_time() };
-    }
+    let state = view(v);
     let interval = if state.page_animating != 0 {
         draw::ANIM_FRAME_US
     } else {
         draw::CARET_BLINK_US
     };
     if state.last_anim_frame_us > 0 && now - state.last_anim_frame_us < interval {
-        return SOURCE_CONTINUE;
+        return true;
     }
     state.last_anim_frame_us = now;
     if state.page_animating != 0 && !wheel_scrolling(v) {
@@ -935,35 +760,33 @@ unsafe extern "C" fn anim_tick(
     } else {
         request_render(v);
     }
-    SOURCE_CONTINUE
+    true
 }
 
 pub(super) fn arm_anim(v: *mut NsProcView) {
     let state = view(v);
-    if state.anim_tick_id != 0 || state.closed != 0 || state.area.is_null() {
+    if state.anim_tick_id != 0 || state.closed != 0 {
         return;
     }
+    let Some(area) = area(v) else {
+        return;
+    };
     state.last_anim_frame_us = 0;
-    state.anim_tick_id =
-        unsafe { gtk::gtk_widget_add_tick_callback(state.area, Some(anim_tick), v.cast(), None) };
+    state.anim_tick_id = area.add_tick_callback(move |_, now| anim_tick(v, now));
 }
 
 pub(super) fn disarm_anim(v: *mut NsProcView) {
     let state = view(v);
-    if state.anim_tick_id != 0 && !state.area.is_null() {
-        unsafe { gtk::gtk_widget_remove_tick_callback(state.area, state.anim_tick_id) };
+    if state.anim_tick_id != 0
+        && let Some(area) = area(v)
+    {
+        area.remove_tick_callback(state.anim_tick_id);
     }
     state.anim_tick_id = 0;
     state.last_anim_frame_us = 0;
 }
 
-unsafe extern "C" fn on_resize(
-    _area: *mut GtkWidget,
-    width: c_int,
-    height: c_int,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_resize(v: *mut NsProcView, width: c_int, height: c_int) {
     let state = view(v);
     if !state.deferred_url.is_null() && width > 1 && height > 1 {
         let url = state.deferred_url;
@@ -972,6 +795,7 @@ unsafe extern "C" fn on_resize(
         let activated = state.deferred_user_activated;
         state.deferred_url = ptr::null_mut();
         do_load(v, url, record != 0, history != 0, activated != 0);
+        // SAFETY: url was the view's g_strdup'd deferred URL, detached above and freed once here.
         unsafe { glib::g_free(url.cast()) };
         return;
     }
@@ -984,57 +808,41 @@ unsafe extern "C" fn on_resize(
     }
 }
 
-unsafe extern "C" fn on_scroll(
-    ctrl: *mut GtkEventController,
-    dx: f64,
-    dy: f64,
-    data: *mut c_void,
-) -> GBoolean {
-    let v = data.cast::<NsProcView>();
+fn on_scroll(v: *mut NsProcView, ctrl: &EventControllerScroll, dx: f64, dy: f64) -> bool {
     let state = view(v);
     if state.opened == 0 {
-        return 0;
+        return false;
     }
-    let mut mods = unsafe { gtk::gtk_event_controller_get_current_event_state(ctrl) };
-    let event = unsafe { gtk::gtk_event_controller_get_current_event(ctrl) };
-    if !event.is_null() {
-        mods |= unsafe { gtk::gdk_event_get_modifier_state(event) };
+    let mut mods = ctrl.current_event_state();
+    if let Some(event_mods) = ctrl.current_event_modifier_state() {
+        mods |= event_mods;
     }
-    if mods & gtk::CONTROL_MASK != 0 {
+    if mods & gtk::sys::CONTROL_MASK != 0 {
         let delta = if dy != 0.0 { dy } else { dx };
         if delta < 0.0 {
             ns_proc_view_zoom_in(v);
         } else if delta > 0.0 {
             ns_proc_view_zoom_out(v);
         }
-        return 1;
+        return true;
     }
     let s = cur_scale(v);
     state.fling_vx = 0.0;
     state.fling_vy = 0.0;
     state.wheel_viewport = 0;
-    if unsafe { gtk::gtk_event_controller_scroll_get_unit(ctrl) } == gtk::SCROLL_UNIT_SURFACE {
+    if ctrl.unit() == gtk::sys::SCROLL_UNIT_SURFACE {
         queue_wheel_scroll(v, dx / s, dy / s);
-        return 1;
+        return true;
     }
     state.wheel_left_x += dx * draw::WHEEL_STEP_PX / s;
     state.wheel_left_y += dy * draw::WHEEL_STEP_PX / s;
     arm_wheel_animation(v);
-    1
+    true
 }
 
-unsafe extern "C" fn on_scroll_decelerate(
-    ctrl: *mut GtkEventController,
-    vel_x: f64,
-    vel_y: f64,
-    data: *mut c_void,
-) {
-    let v = data.cast::<NsProcView>();
+fn on_scroll_decelerate(v: *mut NsProcView, ctrl: &EventControllerScroll, vel_x: f64, vel_y: f64) {
     let state = view(v);
-    if state.opened == 0
-        || unsafe { gtk::gtk_event_controller_get_current_event_state(ctrl) } & gtk::CONTROL_MASK
-            != 0
-    {
+    if state.opened == 0 || ctrl.current_event_state() & gtk::sys::CONTROL_MASK != 0 {
         return;
     }
     let s = cur_scale(v);
@@ -1044,67 +852,56 @@ unsafe extern "C" fn on_scroll_decelerate(
     arm_wheel_animation(v);
 }
 
-pub(super) fn ns_pv_area_new(v: *mut NsProcView) -> *mut GtkWidget {
-    let widget = unsafe { gtk::g_object_new(area_type().type_id, ptr::null()) }.cast::<GtkWidget>();
-    unsafe { *area_view_slot(widget) = v };
+pub(super) fn ns_pv_area_new(v: *mut NsProcView) -> Widget {
+    let widget = Widget::new_snapshot_area();
+    widget.set_snapshot_func(move |widget, snapshot| area_snapshot(v, widget, snapshot));
     widget
 }
 
-/// # Safety
-/// `widget` is a drawing area `ns_pv_area_new` created.
-pub(super) unsafe fn ns_pv_area_set_view(widget: *mut GtkWidget, v: *mut NsProcView) {
-    unsafe { *area_view_slot(widget) = v };
+pub(super) fn ns_pv_area_detach(v: *mut NsProcView) {
+    if let Some(area) = area(v) {
+        area.clear_snapshot_func();
+    }
 }
 
 pub(super) fn ns_pv_install_view_signals(v: *mut NsProcView) {
-    let state = view(v);
-    connect(
-        state.hadj,
-        c"value-changed",
-        on_adj_changed as *const (),
-        v.cast(),
-    );
-    connect(
-        state.vadj,
-        c"value-changed",
-        on_adj_changed as *const (),
-        v.cast(),
-    );
+    if let Some(hadj) = hadj(v) {
+        hadj.connect_value_changed(move || on_adj_changed(v));
+    }
+    if let Some(vadj) = vadj(v) {
+        vadj.connect_value_changed(move || on_adj_changed(v));
+    }
 }
 
 pub(super) fn ns_pv_install_area_signals(v: *mut NsProcView) {
-    let area = view(v).area.cast::<c_void>();
-    connect(area, c"resize", on_resize as *const (), v.cast());
-    connect(
-        area,
-        c"notify::has-focus",
-        on_area_focus_notify as *const (),
-        v.cast(),
-    );
-    connect(
-        area,
-        c"notify::scale-factor",
-        on_device_scale_changed as *const (),
-        v.cast(),
-    );
-    connect(area, c"realize", on_area_realize as *const (), v.cast());
-    connect(area, c"unrealize", on_area_unrealize as *const (), v.cast());
+    let Some(area) = area(v) else {
+        return;
+    };
+    area.connect_resize(move |_, width, height| on_resize(v, width, height));
+    area.object()
+        .connect_notify(c"has-focus", move || on_area_focus_notify(v));
+    area.object()
+        .connect_notify(c"scale-factor", move || on_device_scale_changed(v));
+    let weak = area.downgrade();
+    area.connect_realize(move || {
+        if let Some(area) = weak.upgrade() {
+            on_area_realize(v, &area);
+        }
+    });
+    area.connect_unrealize(move || on_area_unrealize(v));
 }
 
 pub(super) fn ns_pv_install_scroll(v: *mut NsProcView) {
-    let scroll = unsafe {
-        gtk::gtk_event_controller_scroll_new(
-            gtk::EVENT_CONTROLLER_SCROLL_BOTH_AXES | gtk::EVENT_CONTROLLER_SCROLL_KINETIC,
-        )
+    let Some(area) = area(v) else {
+        return;
     };
-    connect(scroll.cast(), c"scroll", on_scroll as *const (), v.cast());
-    connect(
-        scroll.cast(),
-        c"decelerate",
-        on_scroll_decelerate as *const (),
-        v.cast(),
+    let scroll = EventControllerScroll::new(
+        gtk::sys::EVENT_CONTROLLER_SCROLL_BOTH_AXES | gtk::sys::EVENT_CONTROLLER_SCROLL_KINETIC,
     );
-    unsafe { gtk::gtk_widget_add_controller(view(v).area, scroll.cast()) };
+    scroll.connect_scroll(move |ctrl, dx, dy| on_scroll(v, ctrl, dx, dy));
+    scroll
+        .connect_decelerate(move |ctrl, vel_x, vel_y| on_scroll_decelerate(v, ctrl, vel_x, vel_y));
+    area.add_controller(scroll);
 }
 
 pub(super) fn ns_pv_stop_wheel_animation(v: *mut NsProcView) {

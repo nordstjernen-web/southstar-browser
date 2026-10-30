@@ -308,6 +308,11 @@ pub fn proc_info(pid: c_int) -> ProcInfo {
     }
 }
 
+#[cfg(target_os = "linux")]
+pub fn clock_ticks() -> c_long {
+    sys::clock_ticks()
+}
+
 pub fn proc_cpu(pid: c_int) -> f64 {
     if pid <= 0 {
         return -1.0;
