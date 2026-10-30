@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the JavaScript engine layer and the page pipeline carry less
+  unsafe code. `southstar-js-engine` keeps its runtimes and realms in
+  thread-local registries of `Rc`s, with `Weak` back-links from the realms and
+  Boa's host hooks, so a stale or freed runtime or context handle resolves to
+  nothing instead of a dangling pointer and freeing one is a safe call; a
+  `Scope` borrows its `Context` instead of holding a raw pointer; the unused
+  raw-pointer host class instances are gone, and the one remaining way into a
+  runtime's `Context` is a single documented unsafe block. `southstar-engine`
+  draws its PNG, PDF and print captures through the safe `southstar-cairo`
+  wrappers and tracks frame viewports with weak node handles, so it no longer
+  contains any unsafe code.
 * Internals: WebGPU's unsafe code is documented and smaller. Every wgpu-native
   call sits in one owned-handle method with its safety argument, the adapter,
   device and map waits share one callback path whose state is heap-allocated

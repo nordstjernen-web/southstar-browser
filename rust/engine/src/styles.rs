@@ -6,11 +6,10 @@ use core::cell::RefCell;
 use core::ffi::CStr;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 
 use southstar_css::OwnedSheet;
-use southstar_dom::{Kind, Node, ancestors, children};
+use southstar_dom::{Kind, Node, WeakNode, ancestors, children};
 
 use crate::fetch::{self, CssFetch};
 use crate::ffi::{self, CssCache, SheetList};
@@ -23,9 +22,8 @@ const MEDIA_MEMO_MAX: usize = 256;
 
 static RELAYOUT_COUNT: AtomicU64 = AtomicU64::new(0);
 static RELAYOUT_US: AtomicI64 = AtomicI64::new(0);
-static FRAME_VIEWPORTS: Mutex<Option<HashMap<usize, (f64, f64)>>> = Mutex::new(None);
-
 thread_local! {
+    static FRAME_VIEWPORTS: RefCell<HashMap<usize, (WeakNode, f64, f64)>> = RefCell::new(HashMap::new());
     static MEDIA_MEMO: RefCell<HashMap<usize, (ffi::Bytes, bool)>> = RefCell::new(HashMap::new());
 }
 
@@ -164,32 +162,25 @@ pub fn frame_viewport_measured(frame: Node) -> (f64, f64) {
 }
 
 fn frame_viewport_record(frame: Node, w: f64, h: f64) {
-    if let Ok(mut guard) = FRAME_VIEWPORTS.lock()
-        && let Some(map) = guard.as_mut()
-    {
-        map.insert(frame.as_ptr() as usize, (w, h));
-    }
+    FRAME_VIEWPORTS.with(|map| {
+        map.borrow_mut()
+            .insert(frame.as_ptr() as usize, (frame.downgrade(), w, h))
+    });
 }
 
 fn frame_viewports_reset() {
-    if let Ok(mut guard) = FRAME_VIEWPORTS.lock() {
-        guard.get_or_insert_with(HashMap::new).clear();
-    }
+    FRAME_VIEWPORTS.with(|map| map.borrow_mut().clear());
 }
 
 pub fn frame_viewports_disagree_with_layout() -> bool {
-    let recorded: Vec<(usize, (f64, f64))> = match FRAME_VIEWPORTS.lock() {
-        Ok(guard) => guard
-            .as_ref()
-            .map_or(Vec::new(), |m| m.iter().map(|(k, v)| (*k, *v)).collect()),
-        Err(_) => return false,
-    };
-    recorded.into_iter().any(
-        |(frame, (w, h))| match ffi::layout_frame_viewport_raw(frame) {
+    let recorded: Vec<(WeakNode, f64, f64)> =
+        FRAME_VIEWPORTS.with(|map| map.borrow().values().copied().collect());
+    recorded.into_iter().any(|(frame, w, h)| {
+        match frame.get().and_then(ffi::layout_frame_viewport) {
             Some((lw, lh)) => (w - lw).abs() > 0.01 || (h - lh).abs() > 0.01,
             None => false,
-        },
-    )
+        }
+    })
 }
 
 fn sheet_type_is_css(kind: Option<&CStr>) -> bool {

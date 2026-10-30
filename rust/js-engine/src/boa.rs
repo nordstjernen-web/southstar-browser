@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::any::Any;
-use std::marker::PhantomData;
 use std::path::Path;
 
 use boa_engine::builtins::object::OrdinaryObject;
@@ -71,13 +70,7 @@ type HostTrace = fn(&dyn Any, &mut dyn FnMut(&Value));
 struct HostData {
     data: Box<dyn Any>,
     trace: Option<HostTrace>,
-    class: *const HostClass,
-}
-
-impl HostData {
-    fn class(&self) -> Option<&'static HostClass> {
-        unsafe { self.class.as_ref() }
-    }
+    class: Option<&'static HostClass>,
 }
 
 impl JsData for HostData {
@@ -86,22 +79,19 @@ impl JsData for HostData {
         Self: Sized,
     {
         let exotic = self
-            .class()
+            .class
             .is_some_and(|class| class::has_hooks(&class.hooks));
         boa_engine::object::host_internal_methods(exotic)
     }
 }
 
-impl Finalize for HostData {
-    fn finalize(&self) {
-        if let Some(finalize) = self.class().and_then(|class| class.raw_finalize)
-            && let Some(raw) = class::take_raw(&*self.data)
-        {
-            finalize(raw);
-        }
-    }
-}
+impl Finalize for HostData {}
 
+// SAFETY: the only GC pointers HostData reaches are the Values inside `data`. Those its tracer
+// reports are marked here; any it does not report (all of them when there is no tracer) are
+// counted by boa_gc as roots rather than as edges, because a Gc's reference count then exceeds
+// the references the trace found, so leaving them unmarked can leak an object but never frees
+// one that is still reachable.
 unsafe impl BoaTrace for HostData {
     custom_trace!(this, mark, {
         if let Some(trace) = this.trace {
@@ -226,15 +216,17 @@ impl Engine {
     pub fn set_max_stack_size(&mut self, _bytes: usize) {}
 
     pub fn enter<R>(&mut self, f: impl FnOnce(&mut Scope<'_>) -> R) -> R {
-        let ctx = runtime::default_context(self.rt);
-        let _host = unsafe { ctx.as_ref() }.map(access::enter);
-        f(&mut Scope::of(ctx))
+        runtime::enter_default(self.rt, |ctx| {
+            let _host = access::enter(ctx);
+            f(&mut Scope::of(ctx))
+        })
+        .expect("the engine's runtime lives as long as the engine")
     }
 }
 
 impl Drop for Engine {
     fn drop(&mut self) {
-        unsafe { self.rt.free() };
+        self.rt.free();
     }
 }
 
@@ -242,20 +234,18 @@ impl Drop for Engine {
 pub struct SharedMemory(boa_engine::builtins::array_buffer::SharedArrayBuffer);
 
 pub struct Scope<'a> {
-    ctx: *mut Context,
-    engine: PhantomData<&'a mut Context>,
+    ctx: &'a mut Context,
+}
+
+impl<'a> Scope<'a> {
+    fn of(ctx: &'a mut Context) -> Scope<'a> {
+        Scope { ctx }
+    }
 }
 
 impl Scope<'_> {
-    fn of(ctx: *mut Context) -> Scope<'static> {
-        Scope {
-            ctx,
-            engine: PhantomData,
-        }
-    }
-
     fn cx(&mut self) -> &mut Context {
-        unsafe { &mut *self.ctx }
+        self.ctx
     }
 
     fn error(&mut self, error: JsError) -> Value {
@@ -737,7 +727,7 @@ impl Scope<'_> {
     }
 
     pub fn new_host_object<T: Any>(&mut self, prototype: Option<&Value>, data: T) -> Value {
-        self.host_object(prototype, data, None, core::ptr::null())
+        self.host_object(prototype, data, None, None)
     }
 
     pub fn new_traced_host_object<T: Any + Trace>(
@@ -745,7 +735,7 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
     ) -> Value {
-        self.host_object(prototype, data, Some(trace_as::<T>), core::ptr::null())
+        self.host_object(prototype, data, Some(trace_as::<T>), None)
     }
 
     fn host_object<T: Any>(
@@ -753,7 +743,7 @@ impl Scope<'_> {
         prototype: Option<&Value>,
         data: T,
         trace: Option<HostTrace>,
-        class: *const HostClass,
+        class: Option<&'static HostClass>,
     ) -> Value {
         let prototype = prototype.and_then(|p| p.0.as_object());
         let host = HostData {
@@ -861,12 +851,17 @@ impl Scope<'_> {
         }
     }
 
+    /// # Safety
+    ///
+    /// `data` is valid for reads and writes of `len` bytes, touched by nothing but the buffer,
+    /// until the buffer is detached, or for as long as `owner` lives when one is given.
     pub unsafe fn external_array_buffer(
         &mut self,
         data: *mut u8,
         len: usize,
         owner: Option<std::rc::Rc<dyn std::any::Any>>,
     ) -> Result<Value, Value> {
+        // SAFETY: the caller upholds from_external_bytes's contract for data, len and owner.
         unsafe { JsArrayBuffer::from_external_bytes(data, len, owner, self.cx()) }
             .map(|buffer| Value(buffer.into()))
             .map_err(|e| self.error(e))
@@ -1314,7 +1309,7 @@ impl Scope<'_> {
         let realm = self.cx().create_realm().map_err(|e| self.error(e))?;
         let previous = self.cx().enter_realm(realm);
         let result = {
-            let mut scope = Scope::of(self.ctx);
+            let mut scope = Scope::of(self.cx());
             init(&mut scope).map(|()| scope.global())
         };
         self.cx().enter_realm(previous);

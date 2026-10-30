@@ -880,14 +880,12 @@ object (QuickJS's `JS_IsHostAccess`, which the Event class uses to show the
 engine its hidden state). On Boa `PropertyDefinition` carries no throw
 flag.
 
-A class built with `HostClass::new_raw` keeps a bare pointer as its
-instance data instead of boxed Rust data (`new_raw_instance`,
-`raw_instance`, `set_raw_instance`) and runs a `RawFinalize` when the
-object is collected; the Element class uses it so a node wrapper points
-straight at its `ns_node` and the node's `js_wrapper` points back at the
-object's identity (`object_identity`, `object_from_identity`). On Boa the
-finalizer runs from the collector's finalize phase, and the identity is the
-object's allocation (`JsObject::identity` in the fork).
+Raw-pointer instance data (`HostClass::new_raw`, `new_raw_instance`,
+`raw_instance`, `set_raw_instance` and its `RawFinalize`) was removed once
+nothing created such instances any more. An object's identity
+(`object_identity`, `object_from_identity`) remains for the C ABI's opaque
+handles; on Boa it is the object's allocation (`JsObject::identity` in the
+fork).
 
 ##### Converting a crate off raw QuickJS
 

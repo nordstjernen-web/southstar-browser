@@ -17,7 +17,8 @@ pub unsafe fn identity_value(identity: *mut c_void) -> Value {
     if identity.is_null() {
         return Value::undefined();
     }
-    // SAFETY: guaranteed by the caller.
+    // SAFETY: the caller passes the identity of a live object, whose allocation from_identity
+    // takes a new reference to.
     Value(unsafe { JsObject::from_identity(identity) }.into())
 }
 
@@ -43,6 +44,11 @@ impl Scope<'_> {
         if identity.is_null() {
             return Value::undefined();
         }
+        // SAFETY: every caller passes the identity of an object it keeps alive: canvas holds a
+        // reference taken by retain_identity until it calls release_identity, and a performance
+        // observer reads its wrapper's identity only from a method called on that wrapper or
+        // while the observer's pinned Value roots it, so the allocation is live and
+        // from_identity only takes a new reference to it.
         Value(unsafe { JsObject::from_identity(identity) }.into())
     }
 
@@ -53,8 +59,13 @@ impl Scope<'_> {
             .map_or(core::ptr::null_mut(), |object| object.retain_identity())
     }
 
+    /// # Safety
+    ///
+    /// `identity` is null or came from [`Scope::retain_identity`] and was not released yet.
     pub unsafe fn release_identity(&mut self, identity: *mut c_void) {
         if !identity.is_null() {
+            // SAFETY: the caller passes an unreleased identity from retain_identity, whose
+            // reference this drops once.
             unsafe { JsObject::release_identity(identity) };
         }
     }
