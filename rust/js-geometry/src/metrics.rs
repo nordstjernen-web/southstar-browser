@@ -5,7 +5,7 @@
 use southstar_dom::FLAG_SVG_NS;
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::{BoxRef, children};
-use southstar_style::{Display, PropId, StyleRef, display_of};
+use southstar_style::{Display, PropId, StyleRef, StyleTable, display_of};
 
 use crate::boxes::{
     border_box, box_for_this, inline_rect_for_this, point_to_client, window_scroll,
@@ -177,7 +177,8 @@ fn offset_parent_candidate(js: ffi::Js, n: Element) -> bool {
     if element_named(n, "body") || element_named(n, "html") {
         return true;
     }
-    let style = ffi::style_table(js).get(n);
+    let table = ffi::style_table(js);
+    let style = StyleTable::new(table.as_deref()).get(n);
     if POSITIONED.iter().any(|kw| position_is(style, kw)) {
         return true;
     }
@@ -189,14 +190,16 @@ fn offset_parent_is_static_root(js: ffi::Js, p: Element) -> bool {
     if !element_named(p, "body") && !element_named(p, "html") {
         return false;
     }
-    let pos = ffi::style_table(js)
+    let table = ffi::style_table(js);
+    let pos = StyleTable::new(table.as_deref())
         .get(p)
         .and_then(|s| s.get(PropId::Position));
     pos.is_none_or(|v| v.is_keyword(c"static"))
 }
 
 fn is_fixed(js: ffi::Js, n: Element) -> bool {
-    position_is(ffi::style_table(js).get(n), c"fixed")
+    let table = ffi::style_table(js);
+    position_is(StyleTable::new(table.as_deref()).get(n), c"fixed")
 }
 
 fn ancestors(n: Element) -> impl Iterator<Item = Element> {

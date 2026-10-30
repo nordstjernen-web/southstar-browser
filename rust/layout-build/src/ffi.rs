@@ -207,7 +207,7 @@ pub fn abs_pending_len() -> usize {
 
 type PendingEntry<'a> = (Option<Node<'a>>, Option<StyleRef<'a>>, bool);
 
-pub fn abs_pending_entry(i: usize, table: StyleTable) -> Option<PendingEntry<'static>> {
+pub fn abs_pending_entry<'a>(i: usize, table: StyleTable<'a>) -> Option<PendingEntry<'a>> {
     let (dom, pseudo, fixed) = state::with(|st| {
         st.abs_pending
             .as_ref()

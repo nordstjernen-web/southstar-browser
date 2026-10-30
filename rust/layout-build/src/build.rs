@@ -50,7 +50,7 @@ fn build_once(
 
 pub struct BuildInput<'a> {
     pub doc: Option<Node<'a>>,
-    pub styles: StyleTable,
+    pub styles: StyleTable<'a>,
     pub viewport_width: f64,
     pub focused_input: Option<Node<'a>>,
     pub caret_byte: usize,

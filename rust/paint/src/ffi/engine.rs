@@ -209,8 +209,7 @@ pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
     let Some(svg) = b.dom() else {
         return;
     };
-    // SAFETY: a box's SVG style table is null or a live table its layout owns.
-    let styles = unsafe { southstar_style::StyleTable::from_ptr(b.svg_styles()) };
+    let styles = southstar_style::svg_styles(b);
     southstar_svg::render_node(cr.into(), svg, w, h, styles, southstar_style::box_style(b));
 }
 

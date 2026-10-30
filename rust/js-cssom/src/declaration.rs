@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use southstar_dom::Node;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+use southstar_style::StyleTable;
 
 use crate::computed::{self, COMPUTED_PROPS};
 use crate::ffi::{self, Js};
@@ -112,12 +113,16 @@ fn pseudo_supported(name: &str, colons: usize) -> bool {
 
 fn custom_names(js: Js, node: Node<'_>) -> Vec<Vec<u8>> {
     ffi::flush_layout(js);
-    ffi::style_of(js, node).map_or_else(Vec::new, |s| s.var_names())
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
+    styles.get(node).map_or_else(Vec::new, |s| s.var_names())
 }
 
 fn custom_count(js: Js, node: Node<'_>) -> usize {
     ffi::flush_layout(js);
-    ffi::style_of(js, node).map_or(0, |s| s.var_count())
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
+    styles.get(node).map_or(0, |s| s.var_count())
 }
 
 pub(crate) struct ComputedMethods {

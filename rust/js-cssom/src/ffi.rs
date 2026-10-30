@@ -4,9 +4,10 @@
 
 use core::ffi::CStr;
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
-use southstar_css::{self as css_engine, Prop};
+use southstar_css::{self as css_engine, Prop, StyleMap};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_dom::{Node, NsNode};
 use southstar_js_engine::{Scope, Value};
@@ -14,7 +15,7 @@ use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
-use southstar_style::{NsCssValue, StyleRef, StyleTable, Transform, ValueRef};
+use southstar_style::{NsCssValue, StyleRef, Transform, ValueRef};
 
 use crate::links::nsr_event_new;
 use crate::links::nsr_js_element_is_rendered;
@@ -96,21 +97,11 @@ pub(crate) fn host_caller(scope: &mut Scope<'_>) -> bool {
     scope.is_host_caller()
 }
 
-pub(crate) fn style_table(js: Js) -> StyleTable {
+pub(crate) fn style_table(js: Js) -> Option<Rc<StyleMap>> {
     if js.is_null() {
-        return StyleTable::none();
+        return None;
     }
-    unsafe { StyleTable::from_ptr(api::style_table(js.page())) }
-}
-
-pub(crate) fn has_style_table(js: Js) -> bool {
-    !style_table(js).as_ptr().is_null()
-}
-
-pub(crate) fn style_of(js: Js, node: Node<'_>) -> Option<StyleRef<'static>> {
-    let table = style_table(js);
-    let style = table.get(node)?;
-    unsafe { StyleRef::from_ptr(style.as_ptr()) }
+    api::style_table(js.page())
 }
 
 pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
@@ -247,38 +238,24 @@ pub(crate) fn serialize_value(v: &NsCssValue) -> String {
     text_until_nul(&css_engine::value_serialize(v))
 }
 
-pub(crate) fn serialize_raw(v: *const NsCssValue) -> Option<String> {
-    // SAFETY: callers pass null or a value the style or animation engine keeps alive across this call.
-    let v = unsafe { ValueRef::from_ptr(v) };
-    Some(v.map_or_else(String::new, |v| {
-        text_until_nul(&css_engine::value_serialize(v.data()))
-    }))
-}
-
 pub(crate) fn dimension_px(v: ValueRef<'_>, font_px: f64, basis: f64) -> f64 {
     css_engine::dimension_px(v.data(), font_px, basis)
 }
 
-pub(crate) struct Decl {
-    pub value: *const NsCssValue,
-}
-
-pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[Decl]) -> R) -> R {
+pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[ValueRef<'_>]) -> R) -> R {
     let block = css_engine::Declarations::parse(until_nul(text));
-    let decls: Vec<Decl> = block
+    let values: Vec<ValueRef<'_>> = block
         .iter()
-        .map(|d| Decl {
-            value: core::ptr::from_ref(d.value()),
-        })
+        .map(|d| ValueRef::from_data(d.value()))
         .collect();
-    f(&decls)
+    f(&values)
 }
 
 pub(crate) fn sheet_declared_value(text: &str, prop: usize) -> Option<String> {
     let text = c_string(text.as_bytes());
     let sheet = css_engine::OwnedSheet::parse(text.to_bytes());
     let (_, value) = sheet.declared_values().find(|&(id, _)| id == prop)?;
-    serialize_raw(value)
+    Some(serialize_value(value))
 }
 
 pub(crate) fn columns_shorthand(values: &[Option<String>]) -> Option<String> {

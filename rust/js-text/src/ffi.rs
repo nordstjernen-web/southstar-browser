@@ -4,11 +4,12 @@
 
 use core::ffi::CStr;
 use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
-use southstar_style::StyleTable;
 
 use crate::Element;
 
@@ -39,11 +40,11 @@ pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, messag
     nsr_dom_exception(scope, name.as_bytes(), code, message.as_bytes())
 }
 
-pub(crate) fn style_table(js: Js) -> StyleTable {
+pub(crate) fn style_table(js: Js) -> Option<Rc<StyleMap>> {
     if js.is_null() {
-        return StyleTable::none();
+        return None;
     }
-    unsafe { StyleTable::from_ptr(api::style_table(js.0)) }
+    api::style_table(js.0)
 }
 
 pub(crate) fn flush_layout(js: Js) {

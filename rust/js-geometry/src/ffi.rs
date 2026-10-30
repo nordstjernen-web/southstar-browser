@@ -4,7 +4,9 @@
 
 use core::ffi::{CStr, c_void};
 use std::ffi::CString;
+use std::rc::Rc;
 
+use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -77,19 +79,19 @@ pub(crate) fn layout_root(js: Js) -> Option<BoxRef<'static>> {
     api::layout_root(js.0)
 }
 
-pub(crate) fn style_table(js: Js) -> StyleTable {
+pub(crate) fn style_table(js: Js) -> Option<Rc<StyleMap>> {
     if js.is_null() {
-        return StyleTable::none();
+        return None;
     }
-    unsafe { StyleTable::from_ptr(api::style_table(js.0)) }
+    api::style_table(js.0)
 }
 
 pub(crate) fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'static>> {
     southstar_style::box_style(b.into_static())
 }
 
-pub(crate) fn svg_styles(b: BoxRef<'_>) -> StyleTable {
-    unsafe { StyleTable::from_ptr(b.svg_styles()) }
+pub(crate) fn svg_styles(b: BoxRef<'_>) -> StyleTable<'_> {
+    southstar_style::svg_styles(b)
 }
 
 pub(crate) fn box_dom(b: BoxRef<'_>) -> Option<Element> {

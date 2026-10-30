@@ -53,7 +53,7 @@ js-clone	0	0	0	0	0	0	0
 js-collections	1	0	0	0	1	0	0
 js-compression	4	7	0	0	3	3	0
 js-crypto	0	0	0	0	0	0	0
-js-cssom	4	0	0	0	3	0	0
+js-cssom	0	0	0	0	0	0	0
 js-custom-elements	0	0	0	0	0	0	0
 js-dispatch	0	0	0	0	0	0	0
 js-document	1	0	0	0	1	0	0
@@ -65,7 +65,7 @@ js-focus	0	0	0	0	0	0	0
 js-fonts	0	0	0	0	0	0	0
 js-forms	0	0	0	0	0	0	0
 js-frames	2	1	0	0	1	0	0
-js-geometry	2	0	0	0	2	0	0
+js-geometry	0	0	0	0	0	0	0
 js-html	0	0	0	0	0	0	0
 js-images	4	0	0	0	2	1	0
 js-input	0	0	0	0	0	0	0
@@ -87,7 +87,7 @@ js-services	6	3	0	0	0	0	0
 js-shadow	0	0	0	0	0	0	0
 js-storage	0	0	0	0	0	0	0
 js-temporal	0	0	0	0	0	0	0
-js-text	1	0	0	0	1	0	0
+js-text	0	0	0	0	0	0	0
 js-top-layer	0	0	0	0	0	0	0
 js-traversal	0	0	0	0	0	0	0
 js-url	8	1	0	0	5	1	0
@@ -122,12 +122,12 @@ net	28	18	0	0	10	1	0
 netstore	0	0	0	0	0	0	0
 netutil	2	1	0	0	0	0	0
 numfmt	0	0	0	0	0	0	0
-paint	2	0	0	0	0	0	0
+paint	1	0	0	0	0	0	0
 pdf	19	19	0	0	0	0	0
 plmpeg	0	0	0	0	0	0	0
 print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
-render	4	0	0	0	1	0	0
+render	2	0	0	0	1	0	0
 renderer-client	103	54	0	0	42	4	0
 renderer-host	64	42	1	0	21	4	0
 safebrowsing	9	4	0	0	0	0	0
@@ -139,7 +139,7 @@ southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	23	0	0	27	6	0
 static	0	0	0	0	0	0	0
-style	8	0	0	0	1	0	0
+style	4	0	0	0	0	0	0
 svg	0	0	0	0	0	0	0
 text	432	302	0	0	0	0	0
 texture	0	0	0	0	0	0	0
