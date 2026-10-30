@@ -259,10 +259,7 @@ pub fn bind_video_events(cache: Option<VideoCache>, js: Option<Js>) {
     if let Some(cache) = cache {
         cache.set_js_sink(js.map(|js| -> southstar_video::JsSink {
             Rc::new(move |node, kind, value| {
-                // SAFETY: the video cache reports events with the pointer of the live media element that owns the video.
-                if let Some(node) = unsafe { Node::from_ptr(node.cast()) } {
-                    southstar_js_media::video_event(js.page(), node, kind, value);
-                }
+                southstar_js_media::video_event(js.page(), node, kind, value);
             })
         }));
     }

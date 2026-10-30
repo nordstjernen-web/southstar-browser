@@ -6,7 +6,7 @@ audio-helper	115	31	1	0	26	4	0
 av	10	40	0	0	3	2	3
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
-browser	142	20	79	0	26	3	0
+browser	141	20	79	0	26	3	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	13	5	0	0	11	0	0
@@ -32,7 +32,7 @@ glctx	71	55	0	0	0	0	0
 glib	110	90	0	0	0	1	0
 gtk	203	21	0	0	0	0	0
 gtk-ffi	29	371	0	0	0	0	0
-headless	16	8	0	0	0	0	0
+headless	15	8	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
 history	4	0	1	0	2	0	0
 html-parser	0	0	0	0	0	0	0
