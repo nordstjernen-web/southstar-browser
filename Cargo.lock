@@ -2344,7 +2344,6 @@ name = "southstar-image-decoders"
 version = "1.0.4-dev"
 dependencies = [
  "southstar-av",
- "southstar-glib",
  "southstar-raster",
  "southstar-texture",
 ]

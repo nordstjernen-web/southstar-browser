@@ -6,7 +6,7 @@ audio-helper	98	20	1	0	0	0	0
 av	10	40	0	0	3	2	3
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
-browser	141	20	79	0	26	3	0
+browser	117	1	79	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	13	5	0	0	11	0	0
@@ -44,7 +44,7 @@ http-wire	0	0	0	0	0	0	0
 i18n	0	0	0	0	0	0	0
 idb	0	0	0	0	0	0	0
 image	16	6	0	0	0	0	0
-image-decoders	29	19	0	0	15	0	0
+image-decoders	27	18	0	0	0	0	0
 intl-core	0	0	0	0	0	0	0
 ipc	11	8	0	0	7	0	0
 js-attrs	0	0	0	0	0	0	0
@@ -130,7 +130,7 @@ print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
 render	2	0	0	0	1	0	0
 renderer-client	61	46	0	0	0	0	0
-renderer-host	48	35	1	0	12	3	0
+renderer-host	46	25	1	0	0	0	0
 safebrowsing	9	4	0	0	0	0	0
 sandbox	68	43	0	0	10	2	0
 selection	0	0	0	0	0	0	0

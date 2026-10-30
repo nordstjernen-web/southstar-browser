@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the embedding API, the renderer process and the image decoders
+  have every unsafe block documented with one operation each. Page painting
+  draws through the safe cairo wrappers over length-checked pixel buffers,
+  print sheets are written to PNG the same way, decoded image buffers are
+  plain Rust allocations, and the libwebp and libavif bindings keep their
+  frame and pixel lengths inside the decoder owners.
 * Internals: the JavaScript engine layer and the page pipeline carry less
   unsafe code. `southstar-js-engine` keeps its runtimes and realms in
   thread-local registries of `Rc`s, with `Weak` back-links from the realms and

@@ -3,22 +3,20 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr::{self, NonNull};
+use core::ffi::{CStr, c_int};
+use core::marker::PhantomData;
+use core::ptr;
 
 use southstar_css::RetainedStyle;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::BoxRef;
 
-use southstar_cairo::ContextRef;
+use southstar_cairo::{Antialias, Context, ContextRef, Format};
 use southstar_engine::Sheet;
 use southstar_selection::NsSelection;
 
 use super::{NsBrowser, PrintSetup};
 
-const FORMAT_ARGB32: c_int = 0;
-const STATUS_SUCCESS: c_int = 0;
-const ANTIALIAS_FAST: c_int = 4;
 pub const VP_STICKY: c_int = 2;
 
 pub use southstar_layout_position::StickyY;
@@ -36,82 +34,73 @@ pub struct VpLayerInfo {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<VpLayerInfo>() == 72);
 
-unsafe extern "C" {
-    fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut c_void;
-    fn cairo_image_surface_create_for_data(
-        data: *mut u8,
-        format: c_int,
+pub struct Surface<'a> {
+    surface: southstar_cairo::Surface,
+    _pixels: PhantomData<&'a [Cell<u8>]>,
+}
+
+impl Surface<'static> {
+    pub fn image(width: c_int, height: c_int) -> Option<Surface<'static>> {
+        let surface = southstar_cairo::Surface::image(Format::Argb32, width, height)?;
+        Some(Surface {
+            surface,
+            _pixels: PhantomData,
+        })
+    }
+}
+
+impl<'a> Surface<'a> {
+    fn for_cells(
+        pixels: &'a [Cell<u8>],
         width: c_int,
         height: c_int,
         stride: c_int,
-    ) -> *mut c_void;
-    fn cairo_image_surface_get_data(surface: *mut c_void) -> *mut u8;
-    fn cairo_image_surface_get_stride(surface: *mut c_void) -> c_int;
-    fn cairo_surface_status(surface: *mut c_void) -> c_int;
-    fn cairo_surface_destroy(surface: *mut c_void);
-    fn cairo_surface_flush(surface: *mut c_void);
-    fn cairo_surface_reference(surface: *mut c_void) -> *mut c_void;
-    fn cairo_surface_write_to_png(surface: *mut c_void, filename: *const c_char) -> c_int;
-    fn cairo_create(target: *mut c_void) -> *mut c_void;
-    fn cairo_destroy(cr: *mut c_void);
-    fn cairo_get_target(cr: *mut c_void) -> *mut c_void;
-    fn cairo_set_tolerance(cr: *mut c_void, tolerance: f64);
-    fn cairo_set_antialias(cr: *mut c_void, antialias: c_int);
-    fn cairo_rectangle(cr: *mut c_void, x: f64, y: f64, w: f64, h: f64);
-    fn cairo_clip(cr: *mut c_void);
-    fn cairo_scale(cr: *mut c_void, sx: f64, sy: f64);
-    fn cairo_translate(cr: *mut c_void, tx: f64, ty: f64);
-}
-
-pub struct Surface(NonNull<c_void>);
-
-impl Surface {
-    pub fn image(width: c_int, height: c_int) -> Option<Surface> {
-        let surf =
-            NonNull::new(unsafe { cairo_image_surface_create(FORMAT_ARGB32, width, height) })?;
-        if unsafe { cairo_surface_status(surf.as_ptr()) } != STATUS_SUCCESS {
-            unsafe { cairo_surface_destroy(surf.as_ptr()) };
+    ) -> Option<Surface<'a>> {
+        let row_bytes = usize::try_from(stride).ok()?;
+        let width_bytes = usize::try_from(width).ok()?.checked_mul(4)?;
+        let needed = usize::try_from(height).ok()?.checked_mul(row_bytes)?;
+        if width_bytes > row_bytes || needed > pixels.len() {
             return None;
         }
-        Some(Surface(surf))
+        let data = pixels.as_ptr().cast_mut().cast::<u8>();
+        // SAFETY: `data` addresses `pixels`, which holds at least `stride * height` bytes, is borrowed for 'a by the returned Surface and every Cairo drawing on it, and is only written through cairo while they live; Cell makes those writes legal behind the shared borrow.
+        let surface = unsafe {
+            southstar_cairo::Surface::for_data(data, Format::Argb32, width, height, stride)
+        };
+        surface.as_ref().status().is_ok().then_some(Surface {
+            surface,
+            _pixels: PhantomData,
+        })
     }
 
     pub fn flush(&self) {
-        unsafe { cairo_surface_flush(self.0.as_ptr()) };
+        self.surface.as_ref().flush();
     }
 
     pub fn write_png(&self, path: &CStr) {
-        unsafe { cairo_surface_write_to_png(self.0.as_ptr(), path.as_ptr()) };
+        let _ = self.surface.as_ref().write_to_png(path);
     }
 
     pub fn copy_to_rgba(&self, out: &PixelBuf) {
-        let src = unsafe { cairo_image_surface_get_data(self.0.as_ptr()) };
-        let src_stride = unsafe { cairo_image_surface_get_stride(self.0.as_ptr()) } as usize;
-        let rows = out.height as usize;
-        // SAFETY: the surface is an ARGB32 image of the output's height, so its data holds `rows` rows of `src_stride` bytes, and nothing writes to it while it is read here.
-        let src = unsafe { core::slice::from_raw_parts(src, src_stride * rows) };
-        for y in 0..rows {
-            for x in 0..out.width as usize {
-                let at = y * src_stride + x * 4;
-                let px = u32::from_ne_bytes([src[at], src[at + 1], src[at + 2], src[at + 3]]);
-                let rgba = [
-                    (px >> 16) as u8,
-                    (px >> 8) as u8,
-                    px as u8,
-                    (px >> 24) as u8,
-                ];
-                let row = y * out.stride as usize + x * 4;
-                for (cell, byte) in out.pixels[row..row + 4].iter().zip(rgba) {
-                    cell.set(byte);
+        self.surface.as_ref().with_data(|src, src_stride| {
+            let rows = (out.height as usize).min(src.len() / src_stride.max(1));
+            for y in 0..rows {
+                for x in 0..out.width as usize {
+                    let at = y * src_stride + x * 4;
+                    let px = u32::from_ne_bytes([src[at], src[at + 1], src[at + 2], src[at + 3]]);
+                    let rgba = [
+                        (px >> 16) as u8,
+                        (px >> 8) as u8,
+                        px as u8,
+                        (px >> 24) as u8,
+                    ];
+                    let row = y * out.stride as usize + x * 4;
+                    for (cell, byte) in out.pixels[row..row + 4].iter().zip(rgba) {
+                        cell.set(byte);
+                    }
                 }
             }
-        }
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        unsafe { cairo_surface_destroy(self.0.as_ptr()) };
+        });
     }
 }
 
@@ -119,79 +108,66 @@ fn tolerance(scale: f64) -> f64 {
     if scale > 0.0 { 0.5 / scale } else { 0.5 }
 }
 
-pub struct Cairo(NonNull<c_void>);
+pub struct Cairo<'a> {
+    context: Context,
+    _pixels: PhantomData<&'a [Cell<u8>]>,
+}
 
-impl Cairo {
-    pub fn on_surface(surface: &Surface, width: c_int, height: c_int, scale: f64) -> Cairo {
-        let cr =
-            Cairo(NonNull::new(unsafe { cairo_create(surface.0.as_ptr()) }).expect("cairo_create"));
+impl<'a> Cairo<'a> {
+    pub fn on_surface(surface: &Surface<'a>, width: c_int, height: c_int, scale: f64) -> Cairo<'a> {
+        let cr = Cairo {
+            context: Context::new(surface.surface.as_ref()),
+            _pixels: PhantomData,
+        };
         cr.setup(width, height, scale);
         cr
     }
 
     fn for_data(
-        pixels: &[Cell<u8>],
+        pixels: &'a [Cell<u8>],
         width: c_int,
         height: c_int,
         stride: c_int,
         scale: f64,
-    ) -> Option<Cairo> {
-        let data = pixels.as_ptr().cast_mut().cast::<u8>();
-        let surf = unsafe {
-            cairo_image_surface_create_for_data(data, FORMAT_ARGB32, width, height, stride)
-        };
-        if unsafe { cairo_surface_status(surf) } != STATUS_SUCCESS {
-            unsafe { cairo_surface_destroy(surf) };
-            return None;
-        }
-        let cr = unsafe { cairo_create(surf) };
-        unsafe { cairo_surface_destroy(surf) };
-        let cr = Cairo(NonNull::new(cr)?);
-        cr.setup(width, height, scale);
-        Some(cr)
+    ) -> Option<Cairo<'a>> {
+        let surface = Surface::for_cells(pixels, width, height, stride)?;
+        Some(Cairo::on_surface(&surface, width, height, scale))
     }
 
-    pub fn on_buffer(buf: &PixelBuf, scale: f64) -> Option<Cairo> {
+    pub fn on_buffer(buf: &PixelBuf<'a>, scale: f64) -> Option<Cairo<'a>> {
         Cairo::for_data(buf.pixels, buf.width, buf.height, buf.stride, scale)
     }
 
     fn setup(&self, width: c_int, height: c_int, scale: f64) {
-        unsafe {
-            cairo_set_tolerance(self.raw(), tolerance(scale));
-            cairo_set_antialias(self.raw(), ANTIALIAS_FAST);
-            cairo_rectangle(self.raw(), 0.0, 0.0, f64::from(width), f64::from(height));
-            cairo_clip(self.raw());
-        }
-    }
-
-    fn raw(&self) -> *mut c_void {
-        self.0.as_ptr()
+        let cr = self.context.as_ref();
+        cr.set_tolerance(tolerance(scale));
+        cr.set_antialias(Antialias::Fast);
+        cr.rectangle(0.0, 0.0, f64::from(width), f64::from(height));
+        cr.clip();
     }
 
     pub fn scale(&self, s: f64) {
-        unsafe { cairo_scale(self.raw(), s, s) };
+        self.context.as_ref().scale(s, s);
     }
 
     pub fn translate(&self, x: f64, y: f64) {
-        unsafe { cairo_translate(self.raw(), x, y) };
+        self.context.as_ref().translate(x, y);
     }
 
-    pub fn destroy(self) {
-        unsafe { cairo_destroy(self.raw()) };
-    }
+    pub fn destroy(self) {}
 
-    pub fn finish(self) -> Surface {
-        let surf = unsafe { cairo_surface_reference(cairo_get_target(self.raw())) };
-        unsafe {
-            cairo_destroy(self.raw());
-            cairo_surface_flush(surf);
+    pub fn finish(self) -> Surface<'a> {
+        let surface = self.context.as_ref().target().reference();
+        drop(self.context);
+        surface.as_ref().flush();
+        Surface {
+            surface,
+            _pixels: PhantomData,
         }
-        Surface(NonNull::new(surf).expect("cairo target"))
     }
 
     fn cr(&self) -> ContextRef<'_> {
-        // SAFETY: the context is live until destroy or finish consumes this value, which the borrow of self outlasts.
-        unsafe { ContextRef::from_raw(self.raw()) }.expect("live cairo context")
+        self.context.as_ref()
     }
 
     pub fn paint(&self, b: &NsBrowser, layout: BoxRef<'_>) {
@@ -272,8 +248,10 @@ impl PrintPages {
         self.sheets().is_empty()
     }
 
-    pub fn sheet(&self, index: usize) -> Option<NonNull<c_void>> {
-        self.sheets().get(index).map(Sheet::as_ptr)
+    pub fn sheet(&self, index: usize) -> Option<southstar_cairo::SurfaceRef<'_>> {
+        let sheet = self.sheets().get(index)?;
+        // SAFETY: the sheet holds a reference to its live recording surface for as long as `self` lives, and print pages stay on the thread that recorded them.
+        unsafe { southstar_cairo::SurfaceRef::from_raw(sheet.as_ptr().as_ptr()) }
     }
 
     pub fn into_surfaces(self) -> Vec<southstar_cairo::Surface> {
@@ -298,19 +276,19 @@ struct DocTile<'t, 'a> {
     target: &'t TileTarget<'a>,
 }
 
-impl DocTile<'_, '_> {
+impl<'a> DocTile<'_, 'a> {
     fn transform(&self, cr: &Cairo) {
         cr.translate(0.0, -f64::from(self.target.tile_y));
         cr.scale(self.target.scale);
         cr.translate(-f64::from(self.target.scroll_x), 0.0);
     }
 
-    fn for_buffer(&self, pixels: &[Cell<u8>]) -> Option<Cairo> {
+    fn for_buffer<'p>(&self, pixels: &'p [Cell<u8>]) -> Option<Cairo<'p>> {
         let t = self.target;
         Cairo::for_data(pixels, t.width, t.height, t.stride, t.scale)
     }
 
-    fn upper(&self, index: usize) -> Option<Cairo> {
+    fn upper(&self, index: usize) -> Option<Cairo<'a>> {
         let cr = self.for_buffer(self.target.bufs[index + 1])?;
         self.transform(&cr);
         Some(cr)

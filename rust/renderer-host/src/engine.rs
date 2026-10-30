@@ -2,40 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+
+use southstar_cairo::{Context, Format, Surface};
 
 pub use southstar_browser::api::{
     LayerPlan, LayerTarget, Page, Post, PrintPages, PrintSetup, TileTarget, VpLayerInfo, init,
     print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_initiator,
     set_next_referrer, set_next_user_activated, shutdown,
 };
-
-#[repr(C)]
-struct CairoSurface {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct Cairo {
-    _private: [u8; 0],
-}
-
-const CAIRO_FORMAT_RGB24: c_int = 1;
-const CAIRO_STATUS_SUCCESS: c_int = 0;
-
-unsafe extern "C" {
-
-    fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut CairoSurface;
-    fn cairo_create(target: *mut CairoSurface) -> *mut Cairo;
-    fn cairo_set_source_rgb(cr: *mut Cairo, r: f64, g: f64, b: f64);
-    fn cairo_paint(cr: *mut Cairo);
-    fn cairo_scale(cr: *mut Cairo, sx: f64, sy: f64);
-    fn cairo_set_source_surface(cr: *mut Cairo, surface: *mut CairoSurface, x: f64, y: f64);
-    fn cairo_destroy(cr: *mut Cairo);
-    fn cairo_surface_write_to_png(surface: *mut CairoSurface, filename: *const c_char) -> c_int;
-    fn cairo_surface_destroy(surface: *mut CairoSurface);
-}
 
 pub fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -100,17 +76,14 @@ pub fn write_png(
     let Some(sheet) = pages.sheet(index) else {
         return false;
     };
-    unsafe {
-        let img = cairo_image_surface_create(CAIRO_FORMAT_RGB24, width, height);
-        let cr = cairo_create(img);
-        cairo_set_source_rgb(cr, 1.0, 1.0, 1.0);
-        cairo_paint(cr);
-        cairo_scale(cr, scale, scale);
-        cairo_set_source_surface(cr, sheet.as_ptr().cast(), 0.0, 0.0);
-        cairo_paint(cr);
-        cairo_destroy(cr);
-        let ok = cairo_surface_write_to_png(img, path.as_ptr()) == CAIRO_STATUS_SUCCESS;
-        cairo_surface_destroy(img);
-        ok
-    }
+    let img = Surface::image_unchecked(Format::Rgb24, width, height);
+    let context = Context::new(img.as_ref());
+    let cr = context.as_ref();
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.paint();
+    cr.scale(scale, scale);
+    cr.set_source_surface(sheet, 0.0, 0.0);
+    cr.paint();
+    drop(context);
+    img.as_ref().write_to_png(path).is_ok()
 }

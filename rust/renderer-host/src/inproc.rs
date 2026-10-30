@@ -81,10 +81,12 @@ thread_local! {
 
 fn close_fd(fd: c_int) {
     #[cfg(unix)]
+    // SAFETY: the connection owned this descriptor and was just removed, so nothing reads or writes it any more.
     unsafe {
         close(fd)
     };
     #[cfg(windows)]
+    // SAFETY: the connection owned this CRT descriptor and was just removed, so nothing reads or writes it any more.
     unsafe {
         _close(fd)
     };

@@ -997,7 +997,9 @@ pub unsafe extern "C" fn ns_browser_render_rgba(
     out: *mut u8,
     stride: c_int,
 ) -> c_int {
-    match (b, unsafe { pixel_buf(out, width, height, stride) }) {
+    // SAFETY: the embedder passes null or `stride * height` writable bytes at `out` that it does not touch during the call.
+    let buf = unsafe { pixel_buf(out, width, height, stride) };
+    match (b, buf) {
         (Some(b), Some(buf)) => render::render_rgba(b, scroll_x, scroll_y, scale, &buf),
         _ => -1,
     }
@@ -1014,7 +1016,9 @@ pub unsafe extern "C" fn ns_browser_render_argb32(
     out: *mut u8,
     stride: c_int,
 ) -> c_int {
-    match (b, unsafe { pixel_buf(out, width, height, stride) }) {
+    // SAFETY: the embedder passes null or `stride * height` writable bytes at `out` that it does not touch during the call.
+    let buf = unsafe { pixel_buf(out, width, height, stride) };
+    match (b, buf) {
         (Some(b), Some(buf)) => render::render_argb32(b, scroll_x, scroll_y, scale, &buf),
         _ => -1,
     }
