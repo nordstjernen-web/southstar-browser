@@ -6,7 +6,8 @@ use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicI32, Ordering};
 
-use southstar_glib::{self as glib, GBoolean, GError, GPtrArray};
+use southstar_cairo::Surface;
+use southstar_glib::{self as glib, GBoolean, GError};
 use southstar_gtk_ffi::{self as gtk, GtkWidget};
 
 use super::gtk::{connect, cstring, handler, set_accessible_label, tr};
@@ -80,20 +81,14 @@ fn page_title(v: *mut NsProcView) -> &'static [u8] {
 }
 
 struct PrintJob {
-    pages: *mut GPtrArray,
+    pages: Vec<Surface>,
     setup: PrintSetup,
     raster_scale: f64,
 }
 
 unsafe extern "C" fn print_job_free(data: *mut c_void) {
-    let job = unsafe { Box::from_raw(data.cast::<PrintJob>()) };
-    unsafe {
-        let pages = &*job.pages;
-        for i in 0..pages.len as usize {
-            gtk::cairo_surface_destroy((*pages.pdata.add(i)).cast());
-        }
-        glib::g_ptr_array_free(job.pages, 1);
-    }
+    // SAFETY: data is the PrintJob print_run boxed for the print operation, which frees it once, here.
+    drop(unsafe { Box::from_raw(data.cast::<PrintJob>()) });
 }
 
 unsafe extern "C" fn on_print_begin(
@@ -102,7 +97,7 @@ unsafe extern "C" fn on_print_begin(
     data: *mut c_void,
 ) {
     let job = unsafe { &*data.cast::<PrintJob>() };
-    unsafe { gtk::gtk_print_operation_set_n_pages(op, (*job.pages).len as c_int) };
+    unsafe { gtk::gtk_print_operation_set_n_pages(op, job.pages.len() as c_int) };
 }
 
 unsafe extern "C" fn on_print_draw(
@@ -112,10 +107,9 @@ unsafe extern "C" fn on_print_draw(
     data: *mut c_void,
 ) {
     let job = unsafe { &*data.cast::<PrintJob>() };
-    let pages = unsafe { &*job.pages };
-    if page_nr < 0 || page_nr as c_uint >= pages.len {
+    let Some(page) = usize::try_from(page_nr).ok().and_then(|i| job.pages.get(i)) else {
         return;
-    }
+    };
     unsafe {
         let cr = gtk::gtk_print_context_get_cairo_context(ctx);
         let surface_w = gtk::gtk_print_context_get_width(ctx);
@@ -131,7 +125,7 @@ unsafe extern "C" fn on_print_draw(
         };
         gtk::cairo_save(cr);
         gtk::cairo_scale(cr, scale, scale);
-        gtk::cairo_set_source_surface(cr, (*pages.pdata.add(page_nr as usize)).cast(), 0.0, 0.0);
+        gtk::cairo_set_source_surface(cr, page.as_raw().cast(), 0.0, 0.0);
         gtk::cairo_paint(cr);
         gtk::cairo_restore(cr);
     }
@@ -139,7 +133,7 @@ unsafe extern "C" fn on_print_draw(
 
 pub(super) fn print_run(
     v: *mut NsProcView,
-    pages: *mut GPtrArray,
+    pages: Vec<Surface>,
     setup: &PrintSetup,
     raster_scale: f64,
 ) {

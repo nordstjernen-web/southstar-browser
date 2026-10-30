@@ -2,22 +2,46 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_long, c_void};
+use core::ffi::{c_int, c_long};
 use core::ptr;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use southstar_ipc::{Conn, Head};
 
 use crate::client::Renderer;
 
-pub type AttachFn = unsafe extern "C" fn(
+pub type AttachFn = fn(
     ctrl_r: c_int,
     ctrl_w: c_int,
-    fb: *mut u8,
+    fb: Arc<SharedFrame>,
     max_w: c_int,
     max_h: c_int,
-) -> *mut c_void;
+) -> Option<InprocId>;
+
+pub type InprocId = u64;
+
+pub struct SharedFrame(Box<[AtomicU8]>);
+
+impl SharedFrame {
+    fn zeroed(len: usize) -> SharedFrame {
+        let bytes = Box::into_raw(vec![0u8; len].into_boxed_slice()) as *mut [AtomicU8];
+        // SAFETY: the pointer comes from Box::into_raw of a byte slice, and AtomicU8 has the size, alignment and bit validity of u8.
+        SharedFrame(unsafe { Box::from_raw(bytes) })
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn as_ptr(&self) -> *mut u8 {
+        self.0.as_ptr().cast::<u8>().cast_mut()
+    }
+}
 
 static ATTACH: Mutex<Option<AttachFn>> = Mutex::new(None);
 
@@ -29,11 +53,6 @@ fn attach_hook() -> Option<AttachFn> {
     *ATTACH.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-unsafe extern "C" {
-    fn g_atomic_rc_box_alloc0(block_size: usize) -> *mut c_void;
-    fn g_atomic_rc_box_release(mem_block: *mut c_void);
-}
-
 pub enum Child {
     Process(sys::Process),
     InProcess,
@@ -42,7 +61,7 @@ pub enum Child {
 pub enum Framebuffer {
     None,
     Mapped(sys::Mapping),
-    Shared(*mut u8),
+    Shared(Arc<SharedFrame>),
 }
 
 impl Framebuffer {
@@ -50,7 +69,7 @@ impl Framebuffer {
         match self {
             Framebuffer::None => ptr::null(),
             Framebuffer::Mapped(map) => map.pixels(),
-            Framebuffer::Shared(fb) => *fb,
+            Framebuffer::Shared(fb) => fb.as_ptr(),
         }
     }
 }
@@ -85,7 +104,7 @@ fn renderer(
         max_w,
         max_h,
         dpr_milli: 0,
-        inproc_conn: ptr::null_mut(),
+        inproc_conn: None,
         linear: (0, 0, 0),
         head: Head::boxed(),
     }
@@ -111,17 +130,12 @@ fn spawn_inproc(max_w: c_int, max_h: c_int) -> Option<Renderer> {
         return None;
     }
     let size = max_w as usize * max_h as usize * 4;
-    let fb = unsafe { g_atomic_rc_box_alloc0(size) }.cast::<u8>();
-    let Some((server_r, server_w, client_r, client_w)) = sys::inproc_channel() else {
-        unsafe { g_atomic_rc_box_release(fb.cast()) };
+    let fb = Arc::new(SharedFrame::zeroed(size));
+    let (server_r, server_w, client_r, client_w) = sys::inproc_channel()?;
+    let Some(conn) = attach(server_r, server_w, Arc::clone(&fb), max_w, max_h) else {
+        sys::close_channel(server_r, server_w, client_r, client_w);
         return None;
     };
-    let conn = unsafe { attach(server_r, server_w, fb, max_w, max_h) };
-    if conn.is_null() {
-        sys::close_channel(server_r, server_w, client_r, client_w);
-        unsafe { g_atomic_rc_box_release(fb.cast()) };
-        return None;
-    }
     let mut r = renderer(
         Child::InProcess,
         client_r,
@@ -131,7 +145,7 @@ fn spawn_inproc(max_w: c_int, max_h: c_int) -> Option<Renderer> {
         max_w,
         max_h,
     );
-    r.inproc_conn = conn;
+    r.inproc_conn = Some(conn);
     Some(r)
 }
 
@@ -146,9 +160,7 @@ fn close(r: &mut Renderer) {
     match core::mem::replace(&mut r.child, Child::InProcess) {
         Child::InProcess => {
             sys::close_inproc(r.sock, r.wfd);
-            if let Framebuffer::Shared(fb) = r.fb {
-                unsafe { g_atomic_rc_box_release(fb.cast()) };
-            }
+            r.fb = Framebuffer::None;
         }
         Child::Process(process) => {
             let map = match core::mem::replace(&mut r.fb, Framebuffer::None) {

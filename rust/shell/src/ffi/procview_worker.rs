@@ -481,10 +481,9 @@ fn do_print(v: *mut NsProcView, r: &Req) {
     let res = new_res(v, RES_PRINT, r.seq);
     let out = reply(res);
     if let Some(pages) = with_renderer(v, |p| p.print(&mut out.print_setup)).flatten() {
-        out.print_pages = pages.sheets.as_ptr().cast();
-        out.print_scale = pages.scale;
+        out.print_pages = Some(Box::new(pages));
     }
-    out.ok = glib::boolean(!out.print_pages.is_null());
+    out.ok = glib::boolean(out.print_pages.is_some());
     post(res);
 }
 

@@ -6,7 +6,7 @@ use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 
 use southstar_glib::GBoolean;
 use southstar_gtk_ffi::{GBytes, GtkWidget};
-use southstar_renderer_client::{Remote, Renderer};
+use southstar_renderer_client::{PrintedPages, Remote, Renderer};
 
 pub use southstar_renderer_client::{PrintSetup, Wheel};
 
@@ -131,9 +131,8 @@ pub struct Res {
     pub favicon_stride: c_int,
     pub dump_tab: c_int,
     pub inspect: GBoolean,
-    pub print_pages: *mut c_void,
+    pub print_pages: Option<Box<PrintedPages>>,
     pub print_setup: PrintSetup,
-    pub print_scale: f64,
 }
 
 #[repr(C)]
