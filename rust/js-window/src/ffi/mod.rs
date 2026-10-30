@@ -570,6 +570,7 @@ fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {
 }
 
 fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
+    // SAFETY: the only caller, resource_origin_clean, passes its own arguments, which its contract makes null or NUL-terminated strings live for the call.
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
 }
 

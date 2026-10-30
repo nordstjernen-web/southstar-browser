@@ -238,7 +238,11 @@ fn styles_tables_equal(a: &StyleMap, b: &StyleMap) -> bool {
 
 fn container_entry_sig(b: BoxRef<'_>, kind: &CStr, names: Option<&CStr>) -> u64 {
     let queries_block = kind.to_bytes().eq_ignore_ascii_case(b"size");
-    let str_hash = |s: &CStr| u64::from(unsafe { glib::g_str_hash(s.as_ptr().cast()) });
+    let str_hash = |s: &CStr| {
+        u64::from(s.to_bytes().iter().fold(5381u32, |h, &c| {
+            h.wrapping_mul(33).wrapping_add(c as i8 as u32)
+        }))
+    };
     let parts = [
         b.dom_ptr() as u64,
         str_hash(kind),

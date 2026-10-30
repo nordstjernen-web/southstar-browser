@@ -18,6 +18,7 @@ unsafe extern "C" {
 
 pub(crate) fn brotli_decompress(input: &[u8], output: &mut [u8]) -> Option<usize> {
     let mut decoded = output.len();
+    // SAFETY: input and output are live slices whose lengths are passed with them, and decoded is a live local the decoder updates.
     let result = unsafe {
         BrotliDecoderDecompress(
             input.len(),

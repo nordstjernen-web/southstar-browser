@@ -15,12 +15,8 @@ use super::{Js, c_string};
 
 pub(crate) use southstar_net::Response;
 
-unsafe extern "C" {
-    fn g_get_monotonic_time() -> i64;
-}
-
 pub(crate) fn monotonic_time() -> i64 {
-    unsafe { g_get_monotonic_time() }
+    southstar_glib::monotonic_us()
 }
 
 pub(crate) fn node_in_page(js: Js, node: Node<'_>) -> bool {

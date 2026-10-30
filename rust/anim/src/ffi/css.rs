@@ -380,8 +380,6 @@ pub fn monotonic_us() -> i64 {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodePtr(*const NsNode);
 
-unsafe impl Send for NodePtr {}
-
 impl NodePtr {
     pub fn new(node: *const NsNode) -> Option<NodePtr> {
         (!node.is_null()).then_some(NodePtr(node))
