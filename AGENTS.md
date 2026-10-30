@@ -189,13 +189,15 @@ library API or language feature stabilized after 1.91.
   `src/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
   the other system libraries. A new crate is added to `rust/southstar-ffi`
   (dependency plus `pub use`).
-- Every crate is published to crates.io, and `cargo install southstar`
-  (`rust/southstar`) builds the browser without meson. So every internal
-  dependency names its exact version beside its path (`southstar-dom = { path
-  = "../dom", version = "=1.0.5-dev" }`), a crate embeds only files inside
-  its own directory, and a new crate inherits `publish`, `repository` and
-  `homepage` from the workspace. `scripts/set-version.py` sets the version
-  everywhere it is written; `scripts/publish-crates.py` publishes a release.
+- Southstar is published to crates.io, and `cargo install southstar`
+  (`rust/southstar`) builds the browser without meson. The workspace's crates
+  are not published one by one: `scripts/crates-io.py` merges them into the
+  ~two dozen crates `scripts/crates-io-groups.toml` lists, each member a module
+  with its `crate::`/`southstar_x::` paths rewritten, and CI checks that the
+  merged crates build. A new crate goes into a group there ("engine" takes the
+  rest) and embeds only files inside its own directory.
+  `scripts/set-version.py` sets the version everywhere it is written;
+  `scripts/crates-io.py publish` publishes a release.
 - `unsafe` follows `docs/unsafe-policy.md`: only for system FFI, the
   embedding API, the JS/GC binding layer, OS primitives and SIMD; never in
   parsers or engine logic; one operation per block with a `// SAFETY:`

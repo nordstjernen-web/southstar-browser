@@ -8,7 +8,7 @@ version = "1.0.5"
 edition = "2024"
 rust-version = "1.91"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
-publish = true
+publish = false
 repository = "https://github.com/nordstjernen-web/southstar-browser"
 homepage = "https://github.com/nordstjernen-web/southstar-browser"
 

@@ -1,0 +1,84 @@
+# Southstar — how the workspace's crates are merged into the crates published on crates.io.
+# Each group becomes one published crate whose members are modules; every publishable crate
+# belongs to exactly one group, and "engine" takes whatever no other group names.
+
+unpublished = ["static", "launcher", "jsshell"]
+
+[southstar]
+description = "Southstar, a web browser written from scratch in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"
+members = ["southstar"]
+
+[southstar-build]
+description = "Build-script helpers for Southstar: system libraries through pkg-config, and C struct layouts probed from installed headers"
+members = ["build"]
+
+[southstar-url]
+description = "Southstar's WHATWG URL parser: parsing against a base, the host parser with UTS #46 IDNA, serialization and the URL API setters"
+members = ["url"]
+
+[southstar-html5]
+description = "Southstar's HTML5 parser: a WHATWG tokenizer and tree builder that builds through a TreeSink"
+members = ["html5"]
+
+[southstar-unicode]
+description = "Southstar's Unicode support: character properties for text layout and the Unicode Bidirectional Algorithm (UAX #9)"
+members = ["unicode", "bidi"]
+
+[southstar-http]
+description = "Southstar's HTTP client: HTTP/1.1 and HTTP/2 with HPACK over rustls, proxies, FTP and the sans-I/O wire formats"
+members = ["http-wire", "http"]
+
+[southstar-codecs]
+description = "Southstar's media decoders: MPEG-1 video and MP2 (a port of pl_mpeg), MP3 (a port of minimp3) and FFmpeg's libav declarations"
+members = ["plmpeg", "minimp3", "av"]
+
+[southstar-text]
+description = "Southstar's text layout, a Rust port of the Pango fork web-text-lib: itemization, line breaking, shaping and paragraph layout"
+members = ["text"]
+
+[southstar-woff2]
+description = "Southstar's WOFF2 web-font decoder over libbrotlidec"
+members = ["woff2"]
+
+[southstar-platform]
+description = "Southstar's platform layer: GLib, cairo, SQLite, configuration, sandboxing, IPC, shared memory and other system bindings"
+members = [
+    "glib", "cairo", "sqlite", "config", "debuglog", "digest", "keyfile", "mat4", "numfmt",
+    "datetime", "texture", "i18n", "spellcheck", "netutil", "sandbox", "glctx", "mic",
+    "threaddump", "ipc", "media-shm", "helper-ffi", "about-style", "mime", "raster", "webvtt", "bookmarks",
+]
+
+[southstar-dom]
+description = "Southstar's DOM, its HTML and XML tree builders and HTML utilities"
+members = ["dom", "html-util", "html-parser", "xml"]
+
+[southstar-css]
+description = "Southstar's CSS: tokenizer, grammar, colors, media queries, selectors and the cascade"
+members = ["css", "css-color", "css-grammar", "css-media", "css-prop-syntax", "css-syntax", "selector-text"]
+
+[southstar-support]
+description = "Southstar's storage and support code: the HTTP cache, cookies, history, CSP, Intl data, image decoders and WebCrypto"
+members = [
+    "http-cache", "netstore", "history", "csp", "intl-core", "webcrypto", "image-decoders",
+    "bytecode-cache", "safebrowsing", "pdf",
+]
+
+[southstar-engine]
+description = "Southstar's browser engine: the JavaScript bindings, style, layout, painting, networking and media"
+members = []
+
+[southstar-runtime]
+description = "Southstar's browser runtime: the browser core, the renderer process and its client, headless mode and the watchdog"
+members = ["browser", "headless", "renderer-host", "renderer-client", "watchdog", "ffi"]
+
+[southstar-shell]
+description = "Southstar's GTK 4 shell: windows, tabs, chrome and the GTK bindings it uses"
+members = ["shell", "gtk", "gtk-ffi"]
+
+[southstar-audio-helper]
+description = "Southstar's audio helper process: decodes media audio and plays it through SDL2"
+members = ["audio-helper"]
+
+[southstar-video-helper]
+description = "Southstar's video helper process: decodes video with libav into a shared-memory frame ring"
+members = ["video-helper"]
