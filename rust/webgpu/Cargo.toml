@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 southstar-cairo = { path = "../cairo" }
 southstar-dom = { path = "../dom" }
+southstar-glib = { path = "../glib" }
 southstar-canvas = { path = "../canvas", default-features = false, features = ["webgpu"] }
 southstar-js-engine = { path = "../js-engine", default-features = false }
 southstar-js-runtime = { path = "../js-runtime", features = ["webgpu"] }
