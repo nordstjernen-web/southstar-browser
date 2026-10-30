@@ -98,7 +98,7 @@ cp "$ROOT/README.md" "$STAGE/Contents/Resources/share/southstar/"
 
 ICONSET=$(mktemp -d)
 trap 'rm -rf "$ICONSET"' EXIT
-ICON_GIF="$ROOT/data/icons/hicolor/scalable/apps/southstar.gif"
+ICON_GIF="$ROOT/rust/net/data/southstar.gif"
 if command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
     mkdir -p "$ICONSET/southstar.iconset"
     for sz in 16 32 64 128 256 512; do

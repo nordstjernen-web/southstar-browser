@@ -54,104 +54,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
-name = "boa_ast"
-version = "0.22.0"
-dependencies = [
- "bitflags",
- "boa_interner",
- "boa_macros",
- "boa_string",
- "indexmap",
- "num-bigint",
- "rustc-hash",
- "strum",
-]
-
-[[package]]
-name = "boa_engine"
-version = "0.22.0"
-dependencies = [
- "aligned-vec",
- "arrayvec",
- "async-channel",
- "bitflags",
- "boa_ast",
- "boa_gc",
- "boa_icu_provider",
- "boa_interner",
- "boa_macros",
- "boa_parser",
- "boa_string",
- "bytemuck",
- "cfg-if",
- "cow-utils",
- "dashmap",
- "dynify",
- "fast-float2",
- "fixed_decimal",
- "float16",
- "futures-concurrency",
- "futures-lite",
- "hashbrown 0.17.1",
- "icu_calendar",
- "icu_casemap",
- "icu_collator",
- "icu_datetime",
- "icu_decimal",
- "icu_list",
- "icu_locale",
- "icu_normalizer",
- "icu_plurals",
- "icu_provider",
- "icu_segmenter",
- "icu_time",
- "indexmap",
- "intrusive-collections",
- "itertools",
- "libm",
- "num-bigint",
- "num-integer",
- "num-traits",
- "num_enum",
- "oneshot",
- "pastey",
- "portable-atomic",
- "rand",
- "regress",
- "rustc-hash",
- "ryu-js",
- "serde",
- "serde_json",
- "small_btree",
- "static_assertions",
- "sys-locale",
- "tag_ptr",
- "tap",
- "temporal_rs",
- "thin-vec",
- "thiserror",
- "time",
- "timezone_provider",
- "tinystr",
- "writeable",
- "xsum",
- "yoke",
- "zerofrom",
-]
-
-[[package]]
-name = "boa_gc"
-version = "0.22.0"
-dependencies = [
- "arrayvec",
- "boa_macros",
- "boa_string",
- "hashbrown 0.17.1",
- "icu_locale_core",
- "thin-vec",
-]
-
-[[package]]
 name = "boa_icu_provider"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -177,22 +79,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boa_interner"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "317c631e791f5cb7d0017e43c0a758b0eaffd40c34c4c360e2a6be7752b78cd1"
-dependencies = [
- "boa_gc",
- "boa_macros",
- "hashbrown 0.17.1",
- "indexmap",
- "once_cell",
- "phf",
- "rustc-hash",
- "static_assertions",
-]
-
-[[package]]
 name = "boa_macros"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,34 +90,6 @@ dependencies = [
  "quote",
  "syn 3.0.9",
  "synstructure",
-]
-
-[[package]]
-name = "boa_parser"
-version = "0.22.0"
-dependencies = [
- "bitflags",
- "boa_ast",
- "boa_interner",
- "boa_macros",
- "fast-float2",
- "icu_properties",
- "num-bigint",
- "num-traits",
- "regress",
- "rustc-hash",
-]
-
-[[package]]
-name = "boa_string"
-version = "0.22.0"
-dependencies = [
- "fast-float2",
- "itoa",
- "pastey",
- "rustc-hash",
- "ryu-js",
- "static_assertions",
 ]
 
 [[package]]
@@ -1747,6 +1605,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar"
+version = "1.0.5-dev"
+dependencies = [
+ "cc",
+ "southstar-audio-helper",
+ "southstar-build",
+ "southstar-ffi",
+ "southstar-renderer-host",
+ "southstar-shell",
+ "southstar-video-helper",
+]
+
+[[package]]
 name = "southstar-about-style"
 version = "1.0.5-dev"
 
@@ -1767,6 +1638,7 @@ name = "southstar-audio-helper"
 version = "1.0.5-dev"
 dependencies = [
  "southstar-av",
+ "southstar-build",
  "southstar-glib",
  "southstar-helper-ffi",
  "southstar-http",
@@ -1778,10 +1650,153 @@ dependencies = [
 [[package]]
 name = "southstar-av"
 version = "1.0.5-dev"
+dependencies = [
+ "southstar-build",
+]
 
 [[package]]
 name = "southstar-bidi"
 version = "1.0.5-dev"
+
+[[package]]
+name = "southstar-boa-ast"
+version = "1.0.5-dev"
+dependencies = [
+ "bitflags",
+ "boa_macros",
+ "indexmap",
+ "num-bigint",
+ "rustc-hash",
+ "southstar-boa-interner",
+ "southstar-boa-string",
+ "strum",
+]
+
+[[package]]
+name = "southstar-boa-engine"
+version = "1.0.5-dev"
+dependencies = [
+ "aligned-vec",
+ "arrayvec",
+ "async-channel",
+ "bitflags",
+ "boa_icu_provider",
+ "boa_macros",
+ "bytemuck",
+ "cfg-if",
+ "cow-utils",
+ "dashmap",
+ "dynify",
+ "fast-float2",
+ "fixed_decimal",
+ "float16",
+ "futures-concurrency",
+ "futures-lite",
+ "hashbrown 0.17.1",
+ "icu_calendar",
+ "icu_casemap",
+ "icu_collator",
+ "icu_datetime",
+ "icu_decimal",
+ "icu_list",
+ "icu_locale",
+ "icu_normalizer",
+ "icu_plurals",
+ "icu_provider",
+ "icu_segmenter",
+ "icu_time",
+ "indexmap",
+ "intrusive-collections",
+ "itertools",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "num_enum",
+ "oneshot",
+ "pastey",
+ "portable-atomic",
+ "rand",
+ "regress",
+ "rustc-hash",
+ "ryu-js",
+ "serde",
+ "serde_json",
+ "small_btree",
+ "southstar-boa-ast",
+ "southstar-boa-gc",
+ "southstar-boa-interner",
+ "southstar-boa-parser",
+ "southstar-boa-string",
+ "static_assertions",
+ "sys-locale",
+ "tag_ptr",
+ "tap",
+ "temporal_rs",
+ "thin-vec",
+ "thiserror",
+ "time",
+ "timezone_provider",
+ "tinystr",
+ "writeable",
+ "xsum",
+ "yoke",
+ "zerofrom",
+]
+
+[[package]]
+name = "southstar-boa-gc"
+version = "1.0.5-dev"
+dependencies = [
+ "arrayvec",
+ "boa_macros",
+ "hashbrown 0.17.1",
+ "icu_locale_core",
+ "southstar-boa-string",
+ "thin-vec",
+]
+
+[[package]]
+name = "southstar-boa-interner"
+version = "1.0.5-dev"
+dependencies = [
+ "boa_macros",
+ "hashbrown 0.17.1",
+ "indexmap",
+ "once_cell",
+ "phf",
+ "rustc-hash",
+ "southstar-boa-gc",
+ "static_assertions",
+]
+
+[[package]]
+name = "southstar-boa-parser"
+version = "1.0.5-dev"
+dependencies = [
+ "bitflags",
+ "boa_macros",
+ "fast-float2",
+ "icu_properties",
+ "num-bigint",
+ "num-traits",
+ "regress",
+ "rustc-hash",
+ "southstar-boa-ast",
+ "southstar-boa-interner",
+]
+
+[[package]]
+name = "southstar-boa-string"
+version = "1.0.5-dev"
+dependencies = [
+ "fast-float2",
+ "itoa",
+ "pastey",
+ "rustc-hash",
+ "ryu-js",
+ "static_assertions",
+]
 
 [[package]]
 name = "southstar-bookmarks"
@@ -1842,6 +1857,13 @@ dependencies = [
  "southstar-url",
  "southstar-video",
  "southstar-webgl",
+]
+
+[[package]]
+name = "southstar-build"
+version = "1.0.5-dev"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -2344,6 +2366,7 @@ name = "southstar-image-decoders"
 version = "1.0.5-dev"
 dependencies = [
  "southstar-av",
+ "southstar-build",
  "southstar-raster",
  "southstar-texture",
 ]
@@ -2552,9 +2575,9 @@ dependencies = [
 name = "southstar-js-engine"
 version = "1.0.5-dev"
 dependencies = [
- "boa_engine",
- "boa_gc",
  "serde_json",
+ "southstar-boa-engine",
+ "southstar-boa-gc",
 ]
 
 [[package]]

@@ -6,26 +6,28 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-mime = { path = "../mime" }
-southstar-css = { path = "../css" }
-southstar-datetime = { path = "../datetime" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-html-util = { path = "../html-util" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-collections = { path = "../js-collections" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-frames = { path = "../js-frames" }
-southstar-js-mutation = { path = "../js-mutation" }
-southstar-js-net = { path = "../js-net" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-url = { path = "../js-url" }
-southstar-net = { path = "../net" }
-southstar-numfmt = { path = "../numfmt" }
-southstar-unicode = { path = "../unicode" }
-southstar-url = { path = "../url" }
+southstar-mime = { path = "../mime", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-datetime = { path = "../datetime", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.5-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-url = { path = "../js-url", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

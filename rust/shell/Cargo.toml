@@ -6,46 +6,49 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-unicode = { path = "../unicode" }
-southstar-bookmarks = { path = "../bookmarks" }
-southstar-browser = { path = "../browser" }
-southstar-bytecode-cache = { path = "../bytecode-cache" }
-southstar-cairo = { path = "../cairo" }
-southstar-config = { path = "../config" }
-southstar-debuglog = { path = "../debuglog" }
-southstar-dom = { path = "../dom" }
-southstar-engine = { path = "../engine" }
-southstar-ffi = { path = "../southstar-ffi" }
-southstar-font = { path = "../font" }
-southstar-glib = { path = "../glib" }
-southstar-gtk = { path = "../gtk" }
-southstar-gtk-ffi = { path = "../gtk-ffi" }
-southstar-headless = { path = "../headless" }
-southstar-history = { path = "../history" }
-southstar-html-parser = { path = "../html-parser" }
-southstar-http-cache = { path = "../http-cache" }
-southstar-i18n = { path = "../i18n" }
-southstar-media-shm = { path = "../media-shm" }
-southstar-net = { path = "../net" }
-southstar-netutil = { path = "../netutil" }
-southstar-paint = { path = "../paint" }
-southstar-renderer-client = { path = "../renderer-client" }
-southstar-renderer-host = { path = "../renderer-host" }
-southstar-sandbox = { path = "../sandbox" }
-southstar-spellcheck = { path = "../spellcheck" }
-southstar-svg = { path = "../svg" }
-southstar-text = { path = "../text" }
-southstar-threaddump = { path = "../threaddump" }
-southstar-url = { path = "../url" }
-southstar-watchdog = { path = "../watchdog" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
+southstar-bookmarks = { path = "../bookmarks", version = "=1.0.5-dev" }
+southstar-browser = { path = "../browser", version = "=1.0.5-dev" }
+southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.5-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-engine = { path = "../engine", version = "=1.0.5-dev" }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.5-dev" }
+southstar-font = { path = "../font", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-gtk = { path = "../gtk", version = "=1.0.5-dev" }
+southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.5-dev" }
+southstar-headless = { path = "../headless", version = "=1.0.5-dev" }
+southstar-history = { path = "../history", version = "=1.0.5-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.5-dev" }
+southstar-http-cache = { path = "../http-cache", version = "=1.0.5-dev" }
+southstar-i18n = { path = "../i18n", version = "=1.0.5-dev" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-netutil = { path = "../netutil", version = "=1.0.5-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.5-dev" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.5-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.5-dev" }
+southstar-spellcheck = { path = "../spellcheck", version = "=1.0.5-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.5-dev" }
+southstar-text = { path = "../text", version = "=1.0.5-dev" }
+southstar-threaddump = { path = "../threaddump", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-watchdog = { path = "../watchdog", version = "=1.0.5-dev" }
 
 [features]
+rust-main = []
 avif = ["southstar-ffi/avif"]
 sdl = ["southstar-ffi/sdl"]
 fontconfig = ["southstar-ffi/fontconfig"]

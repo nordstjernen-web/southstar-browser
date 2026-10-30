@@ -1,0 +1,5 @@
+#include <stddef.h>
+#include <vorbis/vorbisfile.h>
+vorbis_info.channels=offsetof(vorbis_info, channels)
+vorbis_info.rate=offsetof(vorbis_info, rate)
+sizeof.OggVorbis_File=sizeof(OggVorbis_File)

@@ -11,3 +11,5 @@ macro_rules! emit {
 mod ffi;
 mod player;
 mod protocol;
+
+pub use protocol::run;

@@ -162,7 +162,7 @@ done
 # cache so the bundled icons show up without a filesystem scan.
 mkdir -p "$APP/share/icons/hicolor/scalable/apps"
 cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
-   "$ROOT/data/icons/hicolor/scalable/apps/southstar.gif" \
+   "$ROOT/rust/net/data/southstar.gif" \
    "$APP/share/icons/hicolor/scalable/apps/"
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache --force --ignore-theme-index \

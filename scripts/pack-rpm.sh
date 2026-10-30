@@ -39,7 +39,7 @@ cp "$STAGE/southstar-renderer" "$RPMTOP/SOURCES/"
 # (southstar-back, southstar-reload, …) — not just the app icon.
 ( cd "$ROOT/data/icons/hicolor/scalable/apps" && \
   tar -czf "$RPMTOP/SOURCES/southstar-icons.tar.gz" \
-      southstar*.svg southstar.gif )
+      southstar*.svg -C "$ROOT/rust/net/data" southstar.gif )
 cp "$ROOT/data/southstar.desktop" "$RPMTOP/SOURCES/"
 cp "$ROOT/README.md" "$RPMTOP/SOURCES/"
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$RPMTOP/SOURCES/"

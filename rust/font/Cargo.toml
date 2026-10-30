@@ -6,14 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-digest = { path = "../digest" }
-southstar-glib = { path = "../glib" }
-southstar-net = { path = "../net" }
-southstar-text = { path = "../text" }
-southstar-url = { path = "../url" }
-southstar-woff2 = { path = "../woff2", optional = true }
+southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-text = { path = "../text", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-woff2 = { path = "../woff2", version = "=1.0.5-dev", optional = true }
 
 [features]
 fontconfig = []

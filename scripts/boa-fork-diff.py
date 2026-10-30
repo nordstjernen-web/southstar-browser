@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CRATES = ("boa_engine", "boa_parser", "boa_ast", "boa_gc", "boa_string")
+CRATES = ("boa_engine", "boa_parser", "boa_ast", "boa_gc", "boa_interner", "boa_string")
 INDEX = "https://index.crates.io/bo/a_/{0}"
 DOWNLOAD = "https://static.crates.io/crates/{0}/{0}-{1}.crate"
 COMPARED = ("src", "Cargo.toml")
@@ -27,7 +27,7 @@ def fork_dir(crate):
 
 def fork_version(crate):
     with (fork_dir(crate) / "Cargo.toml").open("rb") as manifest:
-        return tomllib.load(manifest)["package"]["version"]
+        return tomllib.load(manifest)["package"]["metadata"]["southstar"]["upstream-version"]
 
 
 def fetch(url):

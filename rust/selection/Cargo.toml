@@ -6,10 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-layout = { path = "../layout" }
-southstar-style = { path = "../style" }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

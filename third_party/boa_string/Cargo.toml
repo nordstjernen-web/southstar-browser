@@ -12,8 +12,8 @@
 [package]
 edition = "2024"
 rust-version = "1.91.0"
-name = "boa_string"
-version = "0.22.0"
+name = "southstar-boa-string"
+version = "1.0.5-dev"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -21,7 +21,7 @@ autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Boa is a Javascript lexer, parser and compiler written in Rust. Currently, it has support for some of the language."
+description = "Southstar's fork of boa_string: Boa is a Javascript lexer, parser and compiler written in Rust. Currently, it has support for some of the language."
 readme = "README.md"
 keywords = [
     "javascript",
@@ -33,7 +33,7 @@ categories = [
     "compilers",
 ]
 license = "Unlicense OR MIT"
-repository = "https://github.com/boa-dev/boa"
+repository = "https://github.com/nordstjernen-web/southstar-browser"
 resolver = "2"
 
 [package.metadata.docs.rs]
@@ -153,3 +153,6 @@ invalid_rust_codeblocks = "warn"
 missing_crate_level_docs = "warn"
 private_doc_tests = "warn"
 private_intra_doc_links = "warn"
+
+[package.metadata.southstar]
+upstream-version = "0.22.0"

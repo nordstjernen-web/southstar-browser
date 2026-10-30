@@ -6,14 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-glib = { path = "../glib" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-net = { path = "../net" }
-southstar-url = { path = "../url" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

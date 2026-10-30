@@ -189,6 +189,13 @@ library API or language feature stabilized after 1.91.
   `src/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
   the other system libraries. A new crate is added to `rust/southstar-ffi`
   (dependency plus `pub use`).
+- Every crate is published to crates.io, and `cargo install southstar`
+  (`rust/southstar`) builds the browser without meson. So every internal
+  dependency names its exact version beside its path (`southstar-dom = { path
+  = "../dom", version = "=1.0.5-dev" }`), a crate embeds only files inside
+  its own directory, and a new crate inherits `publish`, `repository` and
+  `homepage` from the workspace. `scripts/set-version.py` sets the version
+  everywhere it is written; `scripts/publish-crates.py` publishes a release.
 - `unsafe` follows `docs/unsafe-policy.md`: only for system FFI, the
   embedding API, the JS/GC binding layer, OS primitives and SIMD; never in
   parsers or engine logic; one operation per block with a `// SAFETY:`
@@ -220,7 +227,8 @@ library API or language feature stabilized after 1.91.
   free of FFI. Test parsers, URL handling, cookies and HSTS, CSP and the
   cascade first; check a behavior change in the browser itself as well.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
-  (patched in through `[patch.crates-io]`). QuickJS-ng was removed in October
+  (its crates are renamed `southstar-boa-*`, so the fork is published to
+  crates.io with the rest of the tree). QuickJS-ng was removed in October
   2026. Bindings use the `rust/js-engine` API (`Scope`, `Value`, `HostClass`);
   engine hooks the bindings need go into the Boa fork, and are listed in
   `docs/boa-fork.md` (`scripts/boa-fork-diff.py` shows the fork's patch).

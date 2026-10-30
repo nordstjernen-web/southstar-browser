@@ -67,13 +67,13 @@ const TAGLINES: [&str; 5] = [
     "S\u{fc}dstern the unique web browser",
 ];
 
-const LOGO_GIF: &[u8] = include_bytes!("../../../data/icons/hicolor/scalable/apps/southstar.gif");
+const LOGO_GIF: &[u8] = include_bytes!("../data/southstar.gif");
 
 const LOGO_PATHS: [&str; 4] = [
     "share/icons/hicolor/scalable/apps/southstar.gif",
     "../share/icons/hicolor/scalable/apps/southstar.gif",
-    "../../data/icons/hicolor/scalable/apps/southstar.gif",
-    "data/icons/hicolor/scalable/apps/southstar.gif",
+    "../../rust/net/data/southstar.gif",
+    "rust/net/data/southstar.gif",
 ];
 
 struct Document {

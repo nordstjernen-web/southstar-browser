@@ -6,6 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[build-dependencies]
+southstar-build = { path = "../build", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

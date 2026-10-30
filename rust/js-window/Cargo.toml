@@ -6,24 +6,26 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-canvas = { path = "../canvas" }
-southstar-css = { path = "../css" }
-southstar-css-media = { path = "../css-media" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-clone = { path = "../js-clone" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-frames = { path = "../js-frames" }
-southstar-js-geometry = { path = "../js-geometry" }
-southstar-js-net = { path = "../js-net" }
-southstar-js-perf = { path = "../js-perf" }
-southstar-js-runtime = { path = "../js-runtime" }
-southstar-js-services = { path = "../js-services" }
-southstar-layout-hit = { path = "../layout-hit" }
-southstar-unicode = { path = "../unicode" }
-southstar-url = { path = "../url" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-clone = { path = "../js-clone", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.5-dev" }
+southstar-js-geometry = { path = "../js-geometry", version = "=1.0.5-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.5-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev" }
+southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.5-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

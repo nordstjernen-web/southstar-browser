@@ -98,7 +98,7 @@ hung).
 ## How it works
 
 `--wpt` makes the headless driver inject a hook script
-(`data/js/wpt-hook.js`, embedded into the binary at build time) into
+(`rust/headless/js/wpt-hook.js`, embedded into the binary at build time) into
 the fresh JS context before any document script runs. The hook places
 an accessor trap on `globalThis.add_completion_callback`; when
 testharness.js defines that function the trap registers a completion

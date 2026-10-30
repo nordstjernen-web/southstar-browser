@@ -6,10 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-boa_engine = { version = "0.22", features = ["annex-b", "experimental"] }
-boa_gc = "0.22"
+boa_engine = { package = "southstar-boa-engine", path = "../../third_party/boa_engine", version = "=1.0.5-dev", features = ["annex-b", "experimental"] }
+boa_gc = { package = "southstar-boa-gc", path = "../../third_party/boa_gc", version = "=1.0.5-dev" }
 serde_json = "1"
 
 [features]

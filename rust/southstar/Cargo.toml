@@ -1,0 +1,72 @@
+[package]
+name = "southstar"
+description = "Southstar, a web browser written from scratch in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords = ["browser", "web", "gtk", "html", "javascript"]
+categories = ["gui", "web-programming"]
+include = ["/Cargo.toml", "/build.rs", "/src/**", "/bundle/**"]
+
+[[bin]]
+name = "southstar"
+path = "src/main.rs"
+
+[[bin]]
+name = "southstar-renderer"
+path = "src/renderer.rs"
+
+[[bin]]
+name = "southstar-audio"
+path = "src/audio.rs"
+required-features = ["sdl"]
+
+[[bin]]
+name = "southstar-video"
+path = "src/video.rs"
+required-features = ["libav"]
+
+[dependencies]
+southstar-shell = { path = "../shell", version = "=1.0.5-dev", features = ["rust-main"] }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.5-dev" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.5-dev" }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.5-dev", features = ["rust-main"], optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.5-dev", features = ["rust-main"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+southstar-shell = { path = "../shell", version = "=1.0.5-dev", features = ["rust-main", "seccomp", "egl"] }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.5-dev", features = ["rust-main", "seccomp"], optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.5-dev", features = ["rust-main", "seccomp"], optional = true }
+
+[target.'cfg(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+southstar-shell = { path = "../shell", version = "=1.0.5-dev", features = ["rust-main", "egl"] }
+
+[target.'cfg(windows)'.dependencies]
+southstar-shell = { path = "../shell", version = "=1.0.5-dev", features = ["rust-main", "fontconfig"] }
+
+[build-dependencies]
+southstar-build = { path = "../build", version = "=1.0.5-dev" }
+cc = "1.2"
+
+[features]
+default = ["libav", "sdl", "wasm", "rust-shaper", "http-brotli", "http-zstd", "woff2"]
+libav = ["southstar-shell/libav", "dep:southstar-video-helper", "southstar-audio-helper?/libav"]
+sdl = ["southstar-shell/sdl", "dep:southstar-audio-helper"]
+wasm = ["southstar-shell/wasm"]
+rust-shaper = ["southstar-shell/rust-shaper"]
+http-brotli = ["southstar-shell/http-brotli"]
+http-zstd = ["southstar-shell/http-zstd"]
+woff2 = ["southstar-shell/woff2"]
+thai = ["southstar-shell/thai"]
+avif = ["southstar-shell/avif"]
+poppler = ["southstar-shell/poppler"]
+enchant = ["southstar-shell/enchant"]
+vorbisfile = ["sdl", "southstar-audio-helper/vorbisfile", "southstar-shell/audio-native-vorbis"]
+opusfile = ["sdl", "southstar-audio-helper/opusfile", "southstar-shell/audio-native-opus"]
+
+[lints]
+workspace = true

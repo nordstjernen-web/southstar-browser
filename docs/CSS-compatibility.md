@@ -265,7 +265,7 @@ carry forward from the 1.0.21 pass.
 
 ## CSSOM (object model — CSSOM 1)
 
-Scripted access to stylesheets and rules (`data/js/polyfills.js`, which
+Scripted access to stylesheets and rules (`rust/js-runtime/js/polyfills.js`, which
 holds the whole rule model; the C side has no CSSOM of its own).
 `getComputedStyle` resolved values are covered in the rows above.
 

@@ -22,108 +22,33 @@ if get_option('overflow_checks')
   southstar_rust_env += {'CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS': 'true'}
 endif
 rust_cc = meson.get_compiler('c')
+fs = import('fs')
+layout_probes = []
 if have_libav
-  av_layout_prefix = '''#include <stddef.h>
-#include <errno.h>
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libavutil/log.h>
-#include <libswscale/swscale.h>
-#include <libswresample/swresample.h>'''
-  av_layout_deps = [libavformat, libavcodec, libavutil, libswscale, libswresample]
-  av_layout = []
-  foreach member : [
-    'AVFormatContext.nb_streams', 'AVFormatContext.streams',
-    'AVFormatContext.duration', 'AVFormatContext.pb',
-    'AVStream.codecpar', 'AVStream.time_base', 'AVStream.duration',
-    'AVStream.avg_frame_rate', 'AVStream.r_frame_rate',
-    'AVCodecParameters.codec_id', 'AVCodecParameters.width',
-    'AVCodecParameters.height',
-    'AVCodecContext.ch_layout', 'AVCodecContext.sample_rate',
-    'AVCodecContext.sample_fmt',
-    'AVIOContext.buffer', 'AVIOContext.eof_reached', 'AVIOContext.error',
-    'AVPacket.stream_index', 'AVPacket.pts', 'AVPacket.duration',
-    'AVFrame.data', 'AVFrame.linesize', 'AVFrame.width', 'AVFrame.height',
-    'AVFrame.format', 'AVFrame.pts', 'AVFrame.nb_samples', 'AVFrame.extended_data',
-    'AVFrame.ch_layout', 'AVFrame.best_effort_timestamp',
-    'AVChannelLayout.nb_channels',
-  ]
-    parts = member.split('.')
-    av_layout += member + '=' + rust_cc.compute_int(
-      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
-      prefix: av_layout_prefix, dependencies: av_layout_deps).to_string()
-  endforeach
-  foreach constant : [
-    ['sizeof.AVChannelLayout', 'sizeof(AVChannelLayout)'],
-    ['AVERROR_EAGAIN', 'AVERROR(EAGAIN)'], ['AVERROR_EOF', 'AVERROR_EOF'],
-    ['AVMEDIA_TYPE_VIDEO', 'AVMEDIA_TYPE_VIDEO'],
-    ['AVMEDIA_TYPE_AUDIO', 'AVMEDIA_TYPE_AUDIO'],
-    ['AV_PIX_FMT_BGRA', 'AV_PIX_FMT_BGRA'],
-    ['AV_SAMPLE_FMT_FLT', 'AV_SAMPLE_FMT_FLT'],
-    ['AV_SAMPLE_FMT_NONE', 'AV_SAMPLE_FMT_NONE'],
-    ['AV_LOG_QUIET', 'AV_LOG_QUIET'], ['SWS_BILINEAR', 'SWS_BILINEAR'],
-    ['AVSEEK_FLAG_BACKWARD', 'AVSEEK_FLAG_BACKWARD'],
-    ['AVSEEK_SIZE', 'AVSEEK_SIZE'], ['AVSEEK_FORCE', 'AVSEEK_FORCE'],
-    ['AV_CODEC_ID_NONE', 'AV_CODEC_ID_NONE'],
-    ['AV_CODEC_ID_VP8', 'AV_CODEC_ID_VP8'], ['AV_CODEC_ID_VP9', 'AV_CODEC_ID_VP9'],
-    ['AV_CODEC_ID_AV1', 'AV_CODEC_ID_AV1'], ['AV_CODEC_ID_H264', 'AV_CODEC_ID_H264'],
-    ['AV_CODEC_ID_HEVC', 'AV_CODEC_ID_HEVC'],
-    ['AV_CODEC_ID_MPEG4', 'AV_CODEC_ID_MPEG4'],
-    ['AV_CODEC_ID_THEORA', 'AV_CODEC_ID_THEORA'],
-    ['AV_CODEC_ID_OPUS', 'AV_CODEC_ID_OPUS'],
-    ['AV_CODEC_ID_VORBIS', 'AV_CODEC_ID_VORBIS'],
-    ['AV_CODEC_ID_AAC', 'AV_CODEC_ID_AAC'], ['AV_CODEC_ID_MP3', 'AV_CODEC_ID_MP3'],
-    ['AV_CODEC_ID_FLAC', 'AV_CODEC_ID_FLAC'], ['AV_CODEC_ID_ALAC', 'AV_CODEC_ID_ALAC'],
-    ['AV_CODEC_ID_AC3', 'AV_CODEC_ID_AC3'], ['AV_CODEC_ID_EAC3', 'AV_CODEC_ID_EAC3'],
-  ]
-    av_layout += constant[0] + '=' + rust_cc.compute_int(
-      constant[1], prefix: av_layout_prefix, dependencies: av_layout_deps,
-      low: -2147483648, high: 2147483647).to_string()
-  endforeach
-  southstar_rust_env += {'NS_AV_LAYOUT': ','.join(av_layout)}
+  layout_probes += [['NS_AV_LAYOUT', 'av/layout.txt',
+                     [libavformat, libavcodec, libavutil, libswscale, libswresample]]]
 endif
 if libvorbisfile.found()
-  vorbis_layout_prefix = '#include <stddef.h>\n#include <vorbis/vorbisfile.h>'
-  vorbis_layout = []
-  foreach member : ['vorbis_info.channels', 'vorbis_info.rate']
-    parts = member.split('.')
-    vorbis_layout += member + '=' + rust_cc.compute_int(
-      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
-      prefix: vorbis_layout_prefix, dependencies: [libvorbisfile]).to_string()
-  endforeach
-  vorbis_layout += 'sizeof.OggVorbis_File=' + rust_cc.compute_int(
-    'sizeof(OggVorbis_File)', prefix: vorbis_layout_prefix,
-    dependencies: [libvorbisfile]).to_string()
-  southstar_rust_env += {'NS_VORBIS_LAYOUT': ','.join(vorbis_layout)}
+  layout_probes += [['NS_VORBIS_LAYOUT', 'audio-helper/vorbis-layout.txt', [libvorbisfile]]]
 endif
 if have_avif
-  avif_layout_prefix = '#include <stddef.h>\n#include <avif/avif.h>'
-  avif_layout = []
-  foreach member : [
-    'avifDecoder.maxThreads', 'avifDecoder.imageSizeLimit',
-    'avifDecoder.imageDimensionLimit', 'avifDecoder.strictFlags',
-    'avifDecoder.image', 'avifImage.width', 'avifImage.height',
-    'avifRGBImage.format', 'avifRGBImage.depth',
-    'avifRGBImage.alphaPremultiplied', 'avifRGBImage.pixels',
-    'avifRGBImage.rowBytes',
-  ]
-    parts = member.split('.')
-    avif_layout += member + '=' + rust_cc.compute_int(
-      'offsetof(@0@, @1@)'.format(parts[0], parts[1]),
-      prefix: avif_layout_prefix, dependencies: [libavif]).to_string()
-  endforeach
-  foreach constant : [
-    ['sizeof.avifRGBImage', 'sizeof(avifRGBImage)'],
-    ['AVIF_RGB_FORMAT_BGRA', 'AVIF_RGB_FORMAT_BGRA'],
-    ['AVIF_STRICT_DISABLED', 'AVIF_STRICT_DISABLED'],
-    ['AVIF_RESULT_OK', 'AVIF_RESULT_OK'],
-  ]
-    avif_layout += constant[0] + '=' + rust_cc.compute_int(
-      constant[1], prefix: avif_layout_prefix, dependencies: [libavif],
-      low: -2147483648, high: 2147483647).to_string()
-  endforeach
-  southstar_rust_env += {'NS_AVIF_LAYOUT': ','.join(avif_layout)}
+  layout_probes += [['NS_AVIF_LAYOUT', 'image-decoders/avif-layout.txt', [libavif]]]
 endif
+foreach probe : layout_probes
+  layout_prefix = []
+  layout_values = []
+  foreach line : fs.read(probe[1]).strip().split('\n')
+    if line.startswith('#')
+      layout_prefix += line
+    elif line != ''
+      entry = line.split('=')
+      layout_values += entry[0] + '=' + rust_cc.compute_int(entry[1],
+        prefix: '\n'.join(layout_prefix), dependencies: probe[2],
+        low: -2147483648, high: 2147483647).to_string()
+    endif
+  endforeach
+  southstar_rust_env += {probe[0]: ','.join(layout_values)}
+endforeach
 if libthai.found()
   southstar_rust_features += ['thai']
   southstar_rust_link_deps += [libthai]

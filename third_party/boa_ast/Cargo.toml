@@ -12,8 +12,8 @@
 [package]
 edition = "2024"
 rust-version = "1.91.0"
-name = "boa_ast"
-version = "0.22.0"
+name = "southstar-boa-ast"
+version = "1.0.5-dev"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -21,7 +21,7 @@ autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Abstract Syntax Tree definition for the Boa JavaScript engine."
+description = "Southstar's fork of boa_ast: Abstract Syntax Tree definition for the Boa JavaScript engine."
 readme = false
 keywords = [
     "javascript",
@@ -34,7 +34,7 @@ categories = [
     "compilers",
 ]
 license = "Unlicense OR MIT"
-repository = "https://github.com/boa-dev/boa"
+repository = "https://github.com/nordstjernen-web/southstar-browser"
 resolver = "2"
 
 [package.metadata.docs.rs]
@@ -67,13 +67,17 @@ optional = true
 version = "2.13.1"
 
 [dependencies.boa_interner]
-version = "~0.22.0"
+package = "southstar-boa-interner"
+version = "=1.0.5-dev"
+path = "../boa_interner"
 
 [dependencies.boa_macros]
 version = "~0.22.0"
 
 [dependencies.boa_string]
-version = "~0.22.0"
+package = "southstar-boa-string"
+version = "=1.0.5-dev"
+path = "../boa_string"
 
 [dependencies.indexmap]
 version = "2.14.0"
@@ -186,3 +190,6 @@ invalid_rust_codeblocks = "warn"
 missing_crate_level_docs = "warn"
 private_doc_tests = "warn"
 private_intra_doc_links = "warn"
+
+[package.metadata.southstar]
+upstream-version = "0.22.0"

@@ -6,10 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-css-syntax = { path = "../css-syntax" }
-southstar-numfmt = { path = "../numfmt" }
+southstar-css-syntax = { path = "../css-syntax", version = "=1.0.5-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

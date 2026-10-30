@@ -12,8 +12,8 @@
 [package]
 edition = "2024"
 rust-version = "1.91.0"
-name = "boa_engine"
-version = "0.22.0"
+name = "southstar-boa-engine"
+version = "1.0.5-dev"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -21,7 +21,7 @@ autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Boa is a Javascript lexer, parser and compiler written in Rust. Currently, it has support for some of the language."
+description = "Southstar's fork of boa_engine: Boa is a Javascript lexer, parser and compiler written in Rust. Currently, it has support for some of the language."
 readme = "README.md"
 keywords = [
     "javascript",
@@ -35,7 +35,7 @@ categories = [
     "compilers",
 ]
 license = "Unlicense OR MIT"
-repository = "https://github.com/boa-dev/boa"
+repository = "https://github.com/nordstjernen-web/southstar-browser"
 resolver = "2"
 
 [package.metadata.docs.rs]
@@ -133,10 +133,14 @@ version = "2.5.0"
 version = "2.13.1"
 
 [dependencies.boa_ast]
-version = "~0.22.0"
+package = "southstar-boa-ast"
+version = "=1.0.5-dev"
+path = "../boa_ast"
 
 [dependencies.boa_gc]
-version = "~0.22.0"
+package = "southstar-boa-gc"
+version = "=1.0.5-dev"
+path = "../boa_gc"
 features = [
     "thin-vec",
     "boa_string",
@@ -149,16 +153,22 @@ features = ["std"]
 optional = true
 
 [dependencies.boa_interner]
-version = "~0.22.0"
+package = "southstar-boa-interner"
+version = "=1.0.5-dev"
+path = "../boa_interner"
 
 [dependencies.boa_macros]
 version = "~0.22.0"
 
 [dependencies.boa_parser]
-version = "~0.22.0"
+package = "southstar-boa-parser"
+version = "=1.0.5-dev"
+path = "../boa_parser"
 
 [dependencies.boa_string]
-version = "~0.22.0"
+package = "southstar-boa-string"
+version = "=1.0.5-dev"
+path = "../boa_string"
 
 [dependencies.bytemuck]
 version = "1.25.2"
@@ -432,3 +442,6 @@ default-features = false
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies.web-time]
 version = "1.1.0"
 optional = true
+
+[package.metadata.southstar]
+upstream-version = "0.22.0"

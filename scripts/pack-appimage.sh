@@ -94,7 +94,7 @@ install -m644 "$ROOT/data/southstar.desktop" \
 
 install -dm755 "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 ICON_SVG="$ROOT/data/icons/hicolor/scalable/apps/southstar.svg"
-ICON_GIF="$ROOT/data/icons/hicolor/scalable/apps/southstar.gif"
+ICON_GIF="$ROOT/rust/net/data/southstar.gif"
 PNG_ICON="$APPDIR/usr/share/icons/hicolor/256x256/apps/southstar.png"
 if command -v rsvg-convert >/dev/null 2>&1; then
     rsvg-convert -w 256 -h 256 -o "$PNG_ICON" "$ICON_SVG"

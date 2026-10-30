@@ -6,13 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-datetime = { path = "../datetime" }
-southstar-glib = { path = "../glib" }
-southstar-html-util = { path = "../html-util" }
-southstar-numfmt = { path = "../numfmt" }
-southstar-url = { path = "../url" }
+southstar-datetime = { path = "../datetime", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.5-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

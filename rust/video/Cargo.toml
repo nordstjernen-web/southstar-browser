@@ -6,21 +6,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-av = { path = "../av", optional = true }
-southstar-camera = { path = "../camera" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-image = { path = "../image" }
-southstar-layout = { path = "../layout" }
-southstar-layout-query = { path = "../layout-query" }
-southstar-net = { path = "../net" }
-southstar-plmpeg = { path = "../plmpeg" }
-southstar-style = { path = "../style" }
-southstar-texture = { path = "../texture" }
-southstar-url = { path = "../url" }
-southstar-webvtt = { path = "../webvtt" }
+southstar-av = { path = "../av", version = "=1.0.5-dev", optional = true }
+southstar-camera = { path = "../camera", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-image = { path = "../image", version = "=1.0.5-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-plmpeg = { path = "../plmpeg", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-webvtt = { path = "../webvtt", version = "=1.0.5-dev" }
 
 [features]
 libav = ["dep:southstar-av"]

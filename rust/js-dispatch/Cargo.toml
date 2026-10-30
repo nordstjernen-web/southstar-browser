@@ -6,22 +6,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-debuglog = { path = "../debuglog" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-focus = { path = "../js-focus" }
-southstar-js-forms = { path = "../js-forms" }
-southstar-js-frames = { path = "../js-frames" }
-southstar-js-net = { path = "../js-net" }
-southstar-js-runtime = { path = "../js-runtime" }
-southstar-js-services = { path = "../js-services" }
-southstar-js-shadow = { path = "../js-shadow" }
-southstar-js-url = { path = "../js-url" }
-southstar-js-window = { path = "../js-window" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-focus = { path = "../js-focus", version = "=1.0.5-dev" }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.5-dev" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.5-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev" }
+southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
+southstar-js-shadow = { path = "../js-shadow", version = "=1.0.5-dev" }
+southstar-js-url = { path = "../js-url", version = "=1.0.5-dev" }
+southstar-js-window = { path = "../js-window", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

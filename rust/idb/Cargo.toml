@@ -6,14 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-config = { path = "../config" }
-southstar-digest = { path = "../digest" }
-southstar-glib = { path = "../glib" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime" }
-southstar-sqlite = { path = "../sqlite" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev" }
+southstar-sqlite = { path = "../sqlite", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

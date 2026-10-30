@@ -13,4 +13,5 @@ mod taskmgr;
 mod titlerow;
 mod window;
 
+pub use ffi::appmain::run;
 pub use southstar_ffi;

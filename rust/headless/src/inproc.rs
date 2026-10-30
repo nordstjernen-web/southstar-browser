@@ -25,7 +25,7 @@ static DOC_CHARSET: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 const WPT_POLL_JS: &CStr = c"(function () {    var g = globalThis;    if (g.__ns_wpt_done) return \"1\";    if (g.__ns_wpt_installed && !g.__ns_wpt_seen_harness &&        typeof g.add_completion_callback === \"function\") {        try {            g.add_completion_callback(g.__ns_wpt_oncomplete);            g.__ns_wpt_seen_harness = true;        } catch (e) {}    }    return \"0\";})()";
 
-const WPT_HOOK: &str = concat!(include_str!("../../../data/js/wpt-hook.js"), "\0");
+const WPT_HOOK: &str = concat!(include_str!("../js/wpt-hook.js"), "\0");
 
 fn cstring(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());

@@ -331,7 +331,7 @@ message('JS engine: Boa')
 
 install_data(
   'data/icons/hicolor/scalable/apps/southstar.svg',
-  'data/icons/hicolor/scalable/apps/southstar.gif',
+  'rust/net/data/southstar.gif',
   'data/icons/hicolor/scalable/apps/southstar-back-symbolic.svg',
   'data/icons/hicolor/scalable/apps/southstar-bookmarks-symbolic.svg',
   'data/icons/hicolor/scalable/apps/southstar-close-symbolic.svg',

@@ -6,22 +6,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-bytecode-cache = { path = "../bytecode-cache" }
-southstar-csp = { path = "../csp" }
-southstar-dom = { path = "../dom" }
-southstar-engine = { path = "../engine" }
-southstar-extensions = { path = "../extensions", default-features = false }
-southstar-glib = { path = "../glib" }
-southstar-js-custom-elements = { path = "../js-custom-elements" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-images = { path = "../js-images" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-url = { path = "../js-url" }
-southstar-net = { path = "../net" }
-southstar-sandbox = { path = "../sandbox" }
-southstar-url = { path = "../url" }
+southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.5-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-engine = { path = "../engine", version = "=1.0.5-dev" }
+southstar-extensions = { path = "../extensions", version = "=1.0.5-dev", default-features = false }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-url = { path = "../js-url", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

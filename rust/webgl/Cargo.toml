@@ -6,17 +6,19 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo" }
-southstar-config = { path = "../config" }
-southstar-dom = { path = "../dom" }
-southstar-glctx = { path = "../glctx" }
-southstar-glib = { path = "../glib" }
-southstar-canvas = { path = "../canvas", default-features = false }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime" }
-southstar-url = { path = "../url" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glctx = { path = "../glctx", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

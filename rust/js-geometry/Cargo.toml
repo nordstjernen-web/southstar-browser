@@ -6,21 +6,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-canvas = { path = "../canvas" }
-southstar-css = { path = "../css" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-cssom = { path = "../js-cssom" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-layout = { path = "../layout" }
-southstar-layout-hit = { path = "../layout-hit" }
-southstar-layout-query = { path = "../layout-query" }
-southstar-mat4 = { path = "../mat4" }
-southstar-style = { path = "../style" }
-southstar-svg = { path = "../svg" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-cssom = { path = "../js-cssom", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.5-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
+southstar-mat4 = { path = "../mat4", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

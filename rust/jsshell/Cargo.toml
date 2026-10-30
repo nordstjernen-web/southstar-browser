@@ -5,16 +5,18 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-publish.workspace = true
+publish = false
+repository.workspace = true
+homepage.workspace = true
 
 [[bin]]
 name = "southstar-jsshell"
 path = "src/main.rs"
 
 [dependencies]
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-intl = { path = "../js-intl" }
-southstar-js-temporal = { path = "../js-temporal", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-intl = { path = "../js-intl", version = "=1.0.5-dev" }
+southstar-js-temporal = { path = "../js-temporal", version = "=1.0.5-dev", default-features = false }
 
 [features]
 boa-intl = ["southstar-js-engine/boa-intl"]

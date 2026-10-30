@@ -265,7 +265,7 @@ freeze landed then.
 
 NOTE on layering: `NodeIterator`/`TreeWalker`/`Range`/`NodeFilter`, the
 CSSOM rule model and much of the DOM are implemented in
-**`data/js/polyfills.js`**, which overrides the Rust bindings. Fix the
+**`rust/js-runtime/js/polyfills.js`**, which overrides the Rust bindings. Fix the
 polyfill, not a dead binding — grep `polyfills.js` first.
 
 | # | Improvement | Evidence | Est. gain |

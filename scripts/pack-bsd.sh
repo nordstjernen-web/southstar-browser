@@ -32,7 +32,7 @@ cp "$BUILDDIR/src/gtk/southstar" "$STAGE/"
     cp "$BUILDDIR/src/southstar-renderer" "$STAGE/"
 cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
    "$STAGE/data/icons/hicolor/scalable/apps/" 2>/dev/null || true
-cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar.gif \
+cp "$ROOT"/rust/net/data/southstar.gif \
    "$STAGE/data/icons/hicolor/scalable/apps/" 2>/dev/null || true
 cp "$ROOT/data/southstar.desktop" "$STAGE/data/" 2>/dev/null || true
 cp "$ROOT/README.md" "$STAGE/" 2>/dev/null || true
