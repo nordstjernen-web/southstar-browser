@@ -22,6 +22,12 @@ Southstar Browser 1.0.5-dev:
   scripts. The shell and the media helpers expose a Rust `run` entry point
   beside the C `main` that meson links. The polyfill, streaming and WPT-hook
   scripts and the about-page logo moved into the crates that embed them.
+* Windows and macOS packages: the bundled LGPL FFmpeg is 8.1.3, up from
+  8.1.1, for CVE-2026-8461 and CVE-2026-30999 (fixed in 8.1.2).
+  `scripts/build-ffmpeg-lgpl.sh` now checks the downloaded tarball against
+  a pinned SHA-256 and fetches only from ffmpeg.org.
+* FreeBSD, NetBSD and DragonFly: the sandbox crate builds again. Its
+  `getentropy` declaration used `c_int` without importing it.
 
 Southstar Browser 1.0.4:
 ======

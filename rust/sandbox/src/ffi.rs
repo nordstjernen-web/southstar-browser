@@ -1294,7 +1294,7 @@ fn os_fill(buf: &mut [u8]) -> bool {
     target_os = "dragonfly"
 ))]
 fn os_fill(buf: &mut [u8]) -> bool {
-    use core::ffi::c_void;
+    use core::ffi::{c_int, c_void};
     unsafe extern "C" {
         fn getentropy(buf: *mut c_void, len: usize) -> c_int;
     }

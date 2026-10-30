@@ -13,31 +13,42 @@
 # Prints the prefix on success; point pkg-config at "<prefix>/lib/pkgconfig".
 #
 # Env:
-#   FFMPEG_VERSION   release tag without the leading n (default 8.1.1)
+#   FFMPEG_VERSION   release tag without the leading n (default 8.1.3)
 #   NS_FFMPEG_NOASM  set to 1 to configure --disable-x86asm (no nasm needed)
 #   NS_FFMPEG_HOST   cross prefix passed as --cross-prefix (e.g. for mingw)
 #   FFMPEG_EXTRA_CONFIGURE  extra configure flags (target-os/arch on cross)
 set -euo pipefail
 
 PREFIX=${1:?usage: build-ffmpeg-lgpl.sh <install-prefix>}
-VER=${FFMPEG_VERSION:-8.1.1}
+VER=${FFMPEG_VERSION:-8.1.3}
 JOBS=${NS_BUILD_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 log() { printf '[ffmpeg-lgpl] %s\n' "$*" >&2; }
 
-TARBALL="$WORK/ffmpeg-${VER}.tar.gz"
-fetched=0
-for url in \
-    "https://ffmpeg.org/releases/ffmpeg-${VER}.tar.gz" \
-    "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n${VER}"; do
-    log "fetching $url"
-    if curl -fsSL --retry 3 --max-time 300 -o "$TARBALL" "$url"; then
-        fetched=1; break
+case "$VER" in
+    8.1.3) SHA256=bd458826a039b48a9606e794554c75eb4c4984b84173f7afa3128eae89336f2b ;;
+    *)     SHA256=${FFMPEG_SHA256:-} ;;
+esac
+[ -n "$SHA256" ] || { log "ERROR: no pinned checksum for FFmpeg ${VER}; set FFMPEG_SHA256"; exit 1; }
+
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+    else
+        shasum -a 256 "$1" | cut -d' ' -f1
     fi
-done
-[ "$fetched" = 1 ] || { log "ERROR: could not download FFmpeg ${VER}"; exit 1; }
+}
+
+TARBALL="$WORK/ffmpeg-${VER}.tar.gz"
+url="https://ffmpeg.org/releases/ffmpeg-${VER}.tar.gz"
+log "fetching $url"
+curl -fsSL --retry 3 --max-time 300 -o "$TARBALL" "$url" ||
+    { log "ERROR: could not download FFmpeg ${VER}"; exit 1; }
+got=$(sha256_of "$TARBALL")
+[ "$got" = "$SHA256" ] ||
+    { log "ERROR: checksum mismatch for $url (got $got)"; exit 1; }
 
 SRC="$WORK/ffmpeg-src"
 mkdir -p "$SRC"
