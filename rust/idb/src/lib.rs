@@ -184,7 +184,7 @@ fn open_db(scope: &Scope<'_>, name: &[u8]) -> Option<Arc<Handle>> {
 }
 
 fn set_meta(db: &Db, key: &CStr, value: &[u8]) -> bool {
-    let Some(st) = db.prepare(c"INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+    let Some(mut st) = db.prepare(c"INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
     else {
         return false;
     };
@@ -194,7 +194,7 @@ fn set_meta(db: &Db, key: &CStr, value: &[u8]) -> bool {
 }
 
 fn get_meta(db: &Db, key: &CStr) -> Option<Vec<u8>> {
-    let st = db.prepare(c"SELECT value FROM meta WHERE key=?")?;
+    let mut st = db.prepare(c"SELECT value FROM meta WHERE key=?")?;
     st.bind_text(1, Some(key));
     if st.step() { st.column_text(0) } else { None }
 }
@@ -225,7 +225,7 @@ fn string(scope: &mut Scope<'_>, bytes: Option<&[u8]>, default: &[u8]) -> Value 
 
 fn store_array(scope: &mut Scope<'_>, db: &Db) -> Value {
     let arr = scope.new_array();
-    let Some(st) =
+    let Some(mut st) =
         db.prepare(c"SELECT name,key_path,auto_increment,key_gen FROM stores ORDER BY name")
     else {
         return arr;
@@ -252,7 +252,7 @@ fn store_array(scope: &mut Scope<'_>, db: &Db) -> Value {
             Value::int64(st.column_int64(3)),
         );
         let indexes = scope.new_array();
-        if let Some(ist) = db.prepare(c"SELECT name,key_path,unique_index,multi_entry FROM indexes WHERE store=? ORDER BY name") {
+        if let Some(mut ist) = db.prepare(c"SELECT name,key_path,unique_index,multi_entry FROM indexes WHERE store=? ORDER BY name") {
             ist.bind_text(1, Some(&c(name.as_deref().unwrap_or_default())));
             let mut j = 0;
             while ist.step() {
@@ -387,7 +387,7 @@ fn insert_unique(
     ints: &[bool],
     exists: &str,
 ) -> Result<Value, Value> {
-    let Some(st) = db.prepare(sql) else {
+    let Some(mut st) = db.prepare(sql) else {
         return result(scope, false, db);
     };
     for (i, t) in texts.iter().enumerate() {
@@ -430,7 +430,7 @@ fn backend_create_store(
 }
 
 fn run(db: &Db, sql: &CStr, texts: &[&[u8]]) -> bool {
-    let Some(st) = db.prepare(sql) else {
+    let Some(mut st) = db.prepare(sql) else {
         return false;
     };
     for (i, t) in texts.iter().enumerate() {
@@ -501,14 +501,14 @@ fn backend_delete_index(
 }
 
 fn next_key_in(db: &Db, store: &[u8]) -> Option<i64> {
-    let st = db.prepare(c"SELECT key_gen FROM stores WHERE name=?")?;
+    let mut st = db.prepare(c"SELECT key_gen FROM stores WHERE name=?")?;
     st.bind_text(1, Some(&c(store)));
     if !st.step() {
         return None;
     }
     let key = st.column_int64(0);
     drop(st);
-    let st = db.prepare(c"UPDATE stores SET key_gen=? WHERE name=?")?;
+    let mut st = db.prepare(c"UPDATE stores SET key_gen=? WHERE name=?")?;
     st.bind_int64(1, key.wrapping_add(1));
     st.bind_text(2, Some(&c(store)));
     (st.step_result() == Step::Done).then_some(key)
@@ -567,7 +567,7 @@ fn insert_index_entries(
         .get(entries, "length")
         .unwrap_or_else(|_| Value::undefined());
     let len = scope.to_int32(&length).unwrap_or(0) as u32;
-    let Some(st) = db.prepare(
+    let Some(mut st) = db.prepare(
         c"INSERT OR IGNORE INTO index_records(store,name,index_key,primary_key) VALUES(?,?,?,?)",
     ) else {
         return Err(Failure::Sql);
@@ -599,10 +599,10 @@ fn insert_index_entries(
 }
 
 fn db_pages(db: &Db) -> i64 {
-    match db.prepare(c"PRAGMA page_count") {
-        Some(st) if st.step() => st.column_int64(0),
-        _ => 0,
-    }
+    let Some(mut st) = db.prepare(c"PRAGMA page_count") else {
+        return 0;
+    };
+    if st.step() { st.column_int64(0) } else { 0 }
 }
 
 fn max_origin_pages() -> i64 {
@@ -672,7 +672,7 @@ fn put_in(
     numeric: Option<f64>,
 ) -> Result<(), Failure> {
     let db = &handle.db;
-    let st = db
+    let mut st = db
         .prepare(c"INSERT INTO records(store,key,value) VALUES(?,?,?) ON CONFLICT(store,key) DO UPDATE SET value=excluded.value")
         .ok_or(Failure::Sql)?;
     st.bind_text(1, Some(&c(store)));
@@ -693,7 +693,7 @@ fn put_in(
     }
     insert_index_entries(scope, db, store, key, &args[5])?;
     if let Some(numeric) = numeric.filter(|n| *n >= 1.0)
-        && let Some(st) = db.prepare(c"UPDATE stores SET key_gen=max(key_gen, ?) WHERE name=?")
+        && let Some(mut st) = db.prepare(c"UPDATE stores SET key_gen=max(key_gen, ?) WHERE name=?")
     {
         let next = numeric + 1.0;
         st.bind_int64(
@@ -720,7 +720,7 @@ fn put_in(
 }
 
 fn key_exists(db: &Db, store: &[u8], key: &[u8]) -> Option<bool> {
-    let st = db.prepare(c"SELECT 1 FROM records WHERE store=? AND key=?")?;
+    let mut st = db.prepare(c"SELECT 1 FROM records WHERE store=? AND key=?")?;
     st.bind_text(1, Some(&c(store)));
     st.bind_text(2, Some(&c(key)));
     Some(st.step())
@@ -773,7 +773,7 @@ fn backend_get(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<V
     let Some(handle) = open_db(scope, &db_name) else {
         return Err(cannot_open(scope));
     };
-    let Some(st) = handle
+    let Some(mut st) = handle
         .db
         .prepare(c"SELECT value FROM records WHERE store=? AND key=?")
     else {
@@ -796,7 +796,7 @@ fn backend_records(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
         return Err(cannot_open(scope));
     };
     let arr = scope.new_array();
-    if let Some(st) = handle
+    if let Some(mut st) = handle
         .db
         .prepare(c"SELECT key,value FROM records WHERE store=?")
     {
@@ -828,7 +828,7 @@ fn backend_index_records(
         return Err(cannot_open(scope));
     };
     let arr = scope.new_array();
-    if let Some(st) = handle.db.prepare(
+    if let Some(mut st) = handle.db.prepare(
         c"SELECT ir.index_key,ir.primary_key,r.value FROM index_records ir JOIN records r ON r.store=ir.store AND r.key=ir.primary_key WHERE ir.store=? AND ir.name=?",
     ) {
         st.bind_text(1, Some(&c(&store)));

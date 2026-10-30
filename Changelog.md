@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: `southstar-sqlite` and `southstar-renderer-client` document
+  every unsafe block with one operation each. A prepared statement now
+  borrows its connection and stepping or resetting it needs `&mut`, so a
+  borrowed blob column can't outlive its row. The renderer framebuffer
+  mappings unmap themselves on drop, the shared-memory descriptor is an
+  `OwnedFd`, and repeated OS calls go through small helpers.
 * Internals: WebGL's GL calls go through checked wrappers. Each call into
   libepoxy is one documented `unsafe` operation, and the wrappers check
   every pointer-and-length pair themselves: texture uploads and

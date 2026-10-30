@@ -132,7 +132,7 @@ pub fn is_recordable(url: &[u8]) -> bool {
 }
 
 fn prune(db: &Db) {
-    if let Some(st) = db.prepare(PRUNE) {
+    if let Some(mut st) = db.prepare(PRUNE) {
         st.bind_int(1, MAX_ROWS);
         st.step();
     }
@@ -183,7 +183,7 @@ pub fn record(url: Option<&CStr>, title: Option<&CStr>) {
         return;
     };
     let history = lock();
-    let Some(st) = history.db.as_ref().and_then(|db| db.prepare(RECORD)) else {
+    let Some(mut st) = history.db.as_ref().and_then(|db| db.prepare(RECORD)) else {
         return;
     };
     let now = SystemTime::now()
@@ -277,7 +277,7 @@ fn append_visits(page: &mut Vec<u8>) -> bool {
     let now = LocalDateTime::now();
     {
         let history = lock();
-        if let Some(st) = history.db.as_ref().and_then(|db| db.prepare(RECENT)) {
+        if let Some(mut st) = history.db.as_ref().and_then(|db| db.prepare(RECENT)) {
             st.bind_int(1, PAGE_ROWS);
             while st.step() {
                 let Some(url) = st.column_text(0) else {
