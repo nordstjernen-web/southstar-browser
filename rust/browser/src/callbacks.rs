@@ -2,9 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 
 use std::ffi::CString;
+
+use southstar_dom::Node;
 
 use crate::ffi::{self, NsBrowser};
 use crate::open::UNSAFE_CONTINUE_SCHEME;
@@ -152,7 +154,7 @@ pub fn js_audio(b: &NsBrowser, command: &CStr) {
     b.pending_audio.append(b"\n");
 }
 
-pub fn media_seek(b: Option<&NsBrowser>, node: *const c_void, seconds: f64) -> bool {
+pub fn media_seek(b: Option<&NsBrowser>, node: Node<'_>, seconds: f64) -> bool {
     if ffi::env_set("NS_DBG_AUDIO") {
         ffi::printerr_double(c"[media-seek] to=%.3f\n", seconds);
     }
@@ -162,7 +164,7 @@ pub fn media_seek(b: Option<&NsBrowser>, node: *const c_void, seconds: f64) -> b
     videos.seek_node(node, seconds, ffi::monotonic_us())
 }
 
-pub fn media_play(b: &NsBrowser, node: *const c_void, play: bool) {
+pub fn media_play(b: &NsBrowser, node: Node<'_>, play: bool) {
     let Some(videos) = b.videos() else {
         return;
     };
@@ -172,7 +174,7 @@ pub fn media_play(b: &NsBrowser, node: *const c_void, play: bool) {
     }
 }
 
-pub fn media_muted(b: &NsBrowser, node: *const c_void, muted: bool) {
+pub fn media_muted(b: &NsBrowser, node: Node<'_>, muted: bool) {
     let Some(videos) = b.videos() else {
         return;
     };
@@ -182,7 +184,7 @@ pub fn media_muted(b: &NsBrowser, node: *const c_void, muted: bool) {
     }
 }
 
-pub fn media_volume(b: &NsBrowser, node: *const c_void, volume: f64) {
+pub fn media_volume(b: &NsBrowser, node: Node<'_>, volume: f64) {
     let Some(videos) = b.videos() else {
         return;
     };

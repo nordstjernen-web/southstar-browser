@@ -8,10 +8,10 @@ mod media;
 mod mse;
 mod store;
 
-use core::ffi::{CStr, c_void};
+use core::ffi::CStr;
 use std::collections::{HashMap, HashSet};
 
-use southstar_dom::Node;
+use southstar_dom::{Node, WeakNode};
 use southstar_layout::BoxRef;
 
 use ffi::Response;
@@ -41,7 +41,7 @@ pub enum FetchKind {
 }
 
 struct JsEvent {
-    node: *const c_void,
+    node: WeakNode,
     kind: &'static CStr,
     value: f64,
 }
@@ -66,9 +66,12 @@ impl Sink {
     }
 
     fn event(&mut self, v: &NsVideo, kind: &'static CStr, value: f64) {
-        let node = v.dom_addr();
-        if self.js.is_some() && !node.is_null() {
-            self.queue.push(JsEvent { node, kind, value });
+        if let (Some(_), Some(node)) = (&self.js, v.dom()) {
+            self.queue.push(JsEvent {
+                node: node.downgrade(),
+                kind,
+                value,
+            });
         }
     }
 
@@ -92,7 +95,7 @@ pub struct Cache {
     videos: Vec<(Vec<u8>, Video)>,
     requested: HashSet<Vec<u8>>,
     streams: HashMap<u32, MseStream>,
-    node_state: HashMap<usize, NodeMediaState>,
+    node_state: HashMap<WeakNode, NodeMediaState>,
     pending: usize,
     outbox: Vec<store::Fetch>,
     base_url: Option<Vec<u8>>,
@@ -251,10 +254,6 @@ fn attr<'a>(n: Option<Node<'a>>, name: &CStr) -> Option<&'a [u8]> {
 
 fn non_empty_attr<'a>(n: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
     attr(Some(n), name).filter(|s| !s.is_empty())
-}
-
-fn node_ptr(n: Node<'_>) -> *const c_void {
-    n.as_ptr().cast()
 }
 
 fn pick_track(dom: Node<'_>) -> Option<Node<'_>> {
@@ -440,12 +439,12 @@ impl Cache {
         }
     }
 
-    fn node_state(&mut self, dom_node: *const c_void) -> &mut NodeMediaState {
-        self.node_state.entry(dom_node as usize).or_default()
+    fn node_state(&mut self, dom_node: Node<'_>) -> &mut NodeMediaState {
+        self.node_state.entry(dom_node.downgrade()).or_default()
     }
 
-    fn apply_node_state(&mut self, v: &mut NsVideo, dom_node: *const c_void) {
-        let Some(st) = self.node_state.remove(&(dom_node as usize)) else {
+    fn apply_node_state(&mut self, v: &mut NsVideo, dom_node: Node<'_>) {
+        let Some(st) = self.node_state.remove(&dom_node.downgrade()) else {
             return;
         };
         if let Some(muted) = st.muted {
@@ -493,8 +492,8 @@ impl Cache {
         best.cloned()
     }
 
-    fn find_by_node(&self, dom_node: *const c_void) -> Option<Video> {
-        self.newest(|v| v.dom_addr() == dom_node && !v.is_camera.get())
+    fn find_by_node(&self, dom_node: Node<'_>) -> Option<Video> {
+        self.newest(|v| v.dom() == Some(dom_node) && !v.is_camera.get())
     }
 
     fn find_mse_rollover(&self) -> Option<Video> {
@@ -540,7 +539,7 @@ impl Cache {
         true
     }
 
-    fn seek_node(&mut self, dom_node: *const c_void, seconds: f64, now_us: i64) -> bool {
+    fn seek_node(&mut self, dom_node: Node<'_>, seconds: f64, now_us: i64) -> bool {
         let found = self.find_by_node(dom_node);
         if found.as_ref().is_some_and(|p| p.read().is_camera.get()) {
             return false;
@@ -581,7 +580,7 @@ impl Cache {
         true
     }
 
-    fn set_node_playing(&mut self, dom_node: *const c_void, play: bool, now_us: i64) -> bool {
+    fn set_node_playing(&mut self, dom_node: Node<'_>, play: bool, now_us: i64) -> bool {
         let found = self.find_by_node(dom_node);
         if found.as_ref().is_some_and(|p| p.read().is_camera.get()) {
             return false;
@@ -633,7 +632,7 @@ impl Cache {
         true
     }
 
-    fn set_node_volume(&mut self, dom_node: *const c_void, volume: f64) -> bool {
+    fn set_node_volume(&mut self, dom_node: Node<'_>, volume: f64) -> bool {
         let Some(p) = self.find_by_node(dom_node) else {
             self.node_state(dom_node).volume = Some(volume);
             return true;
@@ -650,7 +649,7 @@ impl Cache {
         true
     }
 
-    fn set_node_muted(&mut self, dom_node: *const c_void, muted: bool) -> bool {
+    fn set_node_muted(&mut self, dom_node: Node<'_>, muted: bool) -> bool {
         let found = self.find_by_node(dom_node);
         if dbg_audio() {
             debug(&format!(
@@ -744,7 +743,7 @@ impl Cache {
         {
             let mut v = p.get();
             v.dom = Some(dom.downgrade());
-            self.apply_node_state(&mut v, node_ptr(dom));
+            self.apply_node_state(&mut v, dom);
         }
         self.discover_track(p, dom);
         self.note_stream_version(p, Some(dom), abs);
@@ -758,8 +757,7 @@ impl Cache {
         poster: Option<&[u8]>,
     ) {
         let mse_id = mse_url_id(abs);
-        let dom_ptr = dom.map_or(core::ptr::null(), node_ptr);
-        let mut previous = dom.and_then(|_| self.find_by_node(dom_ptr));
+        let mut previous = dom.and_then(|dom| self.find_by_node(dom));
         if mse_id != 0 && previous.is_none() {
             previous = self.find_mse_rollover();
         }
@@ -791,7 +789,7 @@ impl Cache {
             if mse_id != 0 && prev.read().mse_id != mse_id {
                 inherit_node_playback(&mut p.get(), &prev.read());
             }
-            if dom.is_some() && prev.read().dom_addr() == dom_ptr {
+            if dom.is_some() && prev.read().dom() == dom {
                 release_node(&self.sink, &mut prev.get());
             }
         }
@@ -800,7 +798,7 @@ impl Cache {
             media.set_video(p.media_handle());
         }
         if let Some(dom) = dom {
-            self.apply_node_state(&mut p.get(), dom_ptr);
+            self.apply_node_state(&mut p.get(), dom);
             self.discover_track(&p, dom);
         }
 

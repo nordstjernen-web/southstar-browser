@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, Ref, RefCell, RefMut};
-use core::ffi::{CStr, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_int, c_uint};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
@@ -140,10 +140,6 @@ impl NsVideo {
     pub fn dom(&self) -> Option<Node<'static>> {
         self.dom.and_then(WeakNode::get)
     }
-
-    pub fn dom_addr(&self) -> *const c_void {
-        Node::ptr_or_null(self.dom()).cast()
-    }
 }
 
 struct VideoSlot {
@@ -247,7 +243,7 @@ impl Video {
 }
 
 pub type AudioSink = Rc<dyn Fn(&CStr)>;
-pub type JsSink = Rc<dyn Fn(*const c_void, &CStr, f64)>;
+pub type JsSink = Rc<dyn Fn(Node<'static>, &CStr, f64)>;
 
 #[derive(Clone)]
 pub struct AudioOut(AudioSink);
@@ -264,7 +260,7 @@ impl AudioOut {
 pub struct JsOut(JsSink);
 
 impl JsOut {
-    fn deliver(&self, node: *const c_void, kind: &CStr, value: f64) {
+    fn deliver(&self, node: Node<'static>, kind: &CStr, value: f64) {
         (self.0)(node, kind, value);
     }
 }
@@ -359,7 +355,9 @@ impl VideoCache {
         };
         if let Some(out) = out {
             for e in events {
-                out.deliver(e.node, e.kind, e.value);
+                if let Some(node) = e.node.get() {
+                    out.deliver(node, e.kind, e.value);
+                }
             }
         }
     }
@@ -460,10 +458,7 @@ impl VideoCache {
         handled
     }
 
-    pub fn seek_node(self, dom_node: *const c_void, seconds: f64, now_us: i64) -> bool {
-        if dom_node.is_null() {
-            return false;
-        }
+    pub fn seek_node(self, dom_node: Node<'_>, seconds: f64, now_us: i64) -> bool {
         let handled = self
             .with(|c| c.seek_node(dom_node, seconds, now_us))
             .unwrap_or(false);
@@ -471,25 +466,19 @@ impl VideoCache {
         handled
     }
 
-    pub fn set_node_playing(self, dom_node: *const c_void, play: bool, now_us: i64) -> bool {
-        !dom_node.is_null()
-            && self
-                .with(|c| c.set_node_playing(dom_node, play, now_us))
-                .unwrap_or(false)
+    pub fn set_node_playing(self, dom_node: Node<'_>, play: bool, now_us: i64) -> bool {
+        self.with(|c| c.set_node_playing(dom_node, play, now_us))
+            .unwrap_or(false)
     }
 
-    pub fn set_node_muted(self, dom_node: *const c_void, muted: bool) -> bool {
-        !dom_node.is_null()
-            && self
-                .with(|c| c.set_node_muted(dom_node, muted))
-                .unwrap_or(false)
+    pub fn set_node_muted(self, dom_node: Node<'_>, muted: bool) -> bool {
+        self.with(|c| c.set_node_muted(dom_node, muted))
+            .unwrap_or(false)
     }
 
-    pub fn set_node_volume(self, dom_node: *const c_void, volume: f64) -> bool {
-        !dom_node.is_null()
-            && self
-                .with(|c| c.set_node_volume(dom_node, volume))
-                .unwrap_or(false)
+    pub fn set_node_volume(self, dom_node: Node<'_>, volume: f64) -> bool {
+        self.with(|c| c.set_node_volume(dom_node, volume))
+            .unwrap_or(false)
     }
 }
 

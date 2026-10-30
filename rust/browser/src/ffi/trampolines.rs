@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ops::ControlFlow;
 use std::rc::Rc;
 
@@ -36,18 +36,12 @@ impl PageRef {
     }
 }
 
-fn media_node(node: Node<'_>) -> *const c_void {
-    node.as_ptr().cast()
-}
-
 fn audio_command(page: PageRef, command: &CStr) {
     page.with(|b| callbacks::js_audio(b, command));
 }
 
-fn video_event(page: PageRef, node: *const c_void, kind: &CStr, value: f64) {
-    // SAFETY: the video cache reports events with the pointer of the live media element that owns the video.
-    let node = unsafe { Node::from_ptr(node.cast()) };
-    if let (Some(js), Some(node)) = (page.get().and_then(NsBrowser::js), node) {
+fn video_event(page: PageRef, node: Node<'_>, kind: &CStr, value: f64) {
+    if let Some(js) = page.get().and_then(NsBrowser::js) {
         southstar_js_media::video_event(js.page(), node, kind, value);
     }
 }
@@ -140,19 +134,19 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
     southstar_js_media::set_seek_hook(
         js_page,
         Some(Rc::new(move |node, seconds| {
-            callbacks::media_seek(page.get(), media_node(node), seconds)
+            callbacks::media_seek(page.get(), node, seconds)
         })),
     );
     southstar_js_media::set_play_hook(
         js_page,
         Some(Rc::new(move |node, play| {
-            page.with(|b| callbacks::media_play(b, media_node(node), play));
+            page.with(|b| callbacks::media_play(b, node, play));
         })),
     );
     southstar_js_media::set_muted_hook(
         js_page,
         Some(Rc::new(move |node, muted| {
-            page.with(|b| callbacks::media_muted(b, media_node(node), muted));
+            page.with(|b| callbacks::media_muted(b, node, muted));
         })),
     );
     southstar_js_media::set_mse_hook(
@@ -194,7 +188,7 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
     southstar_js_media::set_volume_hook(
         js_page,
         Some(Rc::new(move |node, volume| {
-            page.with(|b| callbacks::media_volume(b, media_node(node), volume));
+            page.with(|b| callbacks::media_volume(b, node, volume));
         })),
     );
     api::set_window_action_hook(

@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: inline `<video>` identifies its element by `Node` and
+  `WeakNode` instead of raw pointers, so media events reach only the live
+  element and the browser and headless shells lose their `Node::from_ptr`.
 * Internals: more of the shell runs on the safe `southstar-gtk` layer.
   The SVG toolbar icons are a Rust-implemented `GdkPaintable` /
   `GtkSymbolicPaintable`, the title-bar row is a custom layout driven by
