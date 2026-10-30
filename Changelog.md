@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the media helpers' unsafe code is documented and smaller. The
+  `southstar-video` and `southstar-audio` helpers drive libav through small
+  owners (format, codec, packet, frame, scaler, resampler, in-memory I/O) whose
+  every call is one unsafe operation with a `SAFETY` comment, and create and
+  write their frame ring and audio clock through `southstar-media-shm`, which
+  gained the writer side; the audio helper's reload timer uses `std` instead
+  of `SDL_GetTicks`. Unsafe in the two helpers drops from 182 to 136 with no
+  undocumented or multi-operation blocks left.
 * Internals: `southstar-sqlite` and `southstar-renderer-client` document
   every unsafe block with one operation each. A prepared statement now
   borrows its connection and stepping or resetting it needs `&mut`, so a

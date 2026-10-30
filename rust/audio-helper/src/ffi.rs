@@ -5,6 +5,8 @@
 #[cfg(feature = "libav")]
 pub mod av;
 pub mod clock;
+#[cfg(feature = "libav")]
+pub mod libav;
 #[cfg(feature = "opusfile")]
 pub mod opus;
 #[cfg(target_os = "linux")]

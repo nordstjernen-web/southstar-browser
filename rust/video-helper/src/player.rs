@@ -35,7 +35,7 @@ impl State {
     }
 
     pub fn store_clock(&self, position: f64) {
-        if let Some(ring) = self.ring {
+        if let Some(ring) = &self.ring {
             ring.store_clock(position, self.playing);
         }
     }
@@ -116,7 +116,7 @@ fn local_path_for(url: &[u8]) -> &[u8] {
     }
 }
 
-fn wait_for_space(shared: &Shared, ring: Option<RingView>) -> bool {
+fn wait_for_space(shared: &Shared, ring: Option<&RingView>) -> bool {
     let Some(ring) = ring else {
         return false;
     };
@@ -163,7 +163,7 @@ fn decode(shared: &Shared) -> Option<Ring> {
             state.want_seek = false;
             state.reset_queue = false;
             if reset_queue {
-                if let Some(view) = state.ring {
+                if let Some(view) = &state.ring {
                     view.reset();
                 }
                 decoded_until = 0.0;
@@ -200,7 +200,7 @@ fn decode(shared: &Shared) -> Option<Ring> {
                 let view = created.view();
                 let duration = {
                     let mut state = shared.lock();
-                    state.ring = Some(view);
+                    state.ring = Some(view.clone());
                     state.store_clock(keep);
                     state.duration
                 };
@@ -244,7 +244,7 @@ fn decode(shared: &Shared) -> Option<Ring> {
         }
 
         let view = ring.as_ref().map(Ring::view);
-        if !wait_for_space(shared, view) {
+        if !wait_for_space(shared, view.as_ref()) {
             continue;
         }
         let Some(view) = view else {

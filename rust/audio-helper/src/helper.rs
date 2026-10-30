@@ -4,7 +4,9 @@
 
 use std::fs::OpenOptions;
 use std::io::{BufRead, Write};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Instant;
 
 #[cfg(feature = "libav")]
 use crate::decode::Sink;
@@ -62,6 +64,11 @@ impl Sink for FreshSink {
     fn append(&mut self, stereo: &[f32]) -> bool {
         decode::append_stereo(&mut self.0, stereo)
     }
+}
+
+fn ticks() -> u32 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u32
 }
 
 fn emit(parts: &[&[u8]]) {
@@ -291,7 +298,7 @@ impl Helper {
             }
         }
         let size_now = decode::file_size(&path);
-        let now = sdl::ticks();
+        let now = ticks();
         let behind = {
             let m = mixer::lock();
             let p = &m.players[i];
@@ -566,6 +573,7 @@ pub fn run() {
     #[cfg(feature = "libav")]
     av::quiet();
     southstar_http::init();
+    ticks();
     let output = start_output();
     if let Some(clock) = Clock::create() {
         let name = clock.name().to_vec();

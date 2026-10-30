@@ -27,16 +27,19 @@ struct File(*mut OggOpusFile);
 
 impl Drop for File {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the file op_open_memory returned, freed exactly once.
         unsafe { op_free(self.0) };
     }
 }
 
 pub fn decode(bytes: &[u8]) -> Option<Decoded> {
+    // SAFETY: bytes is readable for its length and outlives the returned file, which is dropped before decode returns; no error code is asked for.
     let of = unsafe { op_open_memory(bytes.as_ptr(), bytes.len(), ptr::null_mut()) };
     if of.is_null() {
         return None;
     }
     let of = File(of);
+    // SAFETY: of.0 is an open Opus file; -1 asks for the current link.
     let channels = unsafe { op_channel_count(of.0, -1) };
     if !(1..=8).contains(&channels) {
         return None;
@@ -45,6 +48,7 @@ pub fn decode(bytes: &[u8]) -> Option<Decoded> {
     let mut frame = vec![0f32; frame_cap as usize];
     let mut pcm = Collector::new(RATE, channels);
     loop {
+        // SAFETY: of.0 is an open Opus file and frame holds frame_cap floats.
         let got = unsafe { op_read_float(of.0, frame.as_mut_ptr(), frame_cap, ptr::null_mut()) };
         if got == 0 {
             break;
