@@ -2,18 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_glib as glib;
 use southstar_text::LogAttr;
 use southstar_text::breaks::get_log_attrs;
 use southstar_text::language::Language;
-
-#[repr(C)]
-struct GTimeZone {
-    _private: [u8; 0],
-}
 
 #[repr(C)]
 #[derive(Default)]
@@ -37,12 +32,6 @@ pub(crate) struct BrokenDown {
     pub(crate) hour: i32,
     pub(crate) minute: i32,
     pub(crate) second: i32,
-}
-
-unsafe extern "C" {
-    fn g_time_zone_new_local() -> *mut GTimeZone;
-    fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
-    fn g_time_zone_unref(tz: *mut GTimeZone);
 }
 
 #[cfg(not(windows))]
@@ -102,16 +91,7 @@ pub(crate) fn break_down(seconds: i64, utc: bool) -> Option<BrokenDown> {
 }
 
 pub(crate) fn local_zone_identifier() -> Option<Vec<u8>> {
-    // SAFETY: g_time_zone_new_local takes no arguments and returns a new reference or null.
-    let zone = unsafe { g_time_zone_new_local() };
-    if zone.is_null() {
-        return None;
-    }
-    // SAFETY: `zone` is the live reference created above, and the identifier it returns is a NUL-terminated string it owns.
-    let id = unsafe { glib::bytes(g_time_zone_get_identifier(zone)) }.map(<[u8]>::to_vec);
-    // SAFETY: releases the reference created above; `id` was copied out first.
-    unsafe { g_time_zone_unref(zone) };
-    id
+    glib::local_time_zone_identifier()
 }
 
 pub(crate) fn getenv(name: &CStr) -> Option<Vec<u8>> {

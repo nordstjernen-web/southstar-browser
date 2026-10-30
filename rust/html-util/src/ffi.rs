@@ -3,30 +3,15 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_int, c_void};
-use core::ptr::{self, NonNull};
-use std::ffi::CString;
 
 use southstar_glib as glib;
 
 unsafe extern "C" {
-    fn g_convert(
-        str_: *const c_char,
-        len: isize,
-        to_codeset: *const c_char,
-        from_codeset: *const c_char,
-        bytes_read: *mut usize,
-        bytes_written: *mut usize,
-        error: *mut *mut c_void,
-    ) -> *mut c_char;
     fn uchardet_new() -> *mut c_void;
     fn uchardet_delete(ud: *mut c_void);
     fn uchardet_handle_data(ud: *mut c_void, data: *const c_char, len: usize) -> c_int;
     fn uchardet_data_end(ud: *mut c_void);
     fn uchardet_get_charset(ud: *const c_void) -> *const c_char;
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(crate::until_nul(bytes)).unwrap_or_default()
 }
 
 #[cfg(windows)]
@@ -72,23 +57,7 @@ pub(crate) fn utf8_validate(text: &[u8]) -> bool {
 }
 
 pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<Vec<u8>> {
-    let from = cstring(from);
-    let mut written = 0usize;
-    let out = unsafe {
-        g_convert(
-            text.as_ptr().cast(),
-            text.len() as isize,
-            c"UTF-8".as_ptr(),
-            from.as_ptr(),
-            ptr::null_mut(),
-            &mut written,
-            ptr::null_mut(),
-        )
-    };
-    let out = NonNull::new(out)?;
-    let bytes = unsafe { glib::slice(out.as_ptr().cast::<u8>(), written) }.to_vec();
-    unsafe { glib::g_free(out.as_ptr().cast()) };
-    Some(bytes)
+    glib::convert(text, b"UTF-8", from)
 }
 
 pub(crate) fn detect_charset(sample: &[u8]) -> Option<Vec<u8>> {

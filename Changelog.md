@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the local clock (history day headings, `document.lastModified`,
+  file listing times), the local time-zone name `Intl` reports, charset
+  conversion (form submission, legacy page charsets) and directory-listing
+  collation each called GLib through their own unsafe FFI in five crates.
+  They now go through one set of safe wrappers in `rust/glib`
+  (`LocalDateTime`, `local_time_zone_identifier`, `convert`,
+  `utf8_collate`), with unit tests; 13 fewer `unsafe` blocks overall and
+  the glib helpers' unsafe functions documented.
 * Networking: a request made from inside an iframe — `fetch`, XHR,
   `sendBeacon`, `EventSource` and `WebSocket` — is made by the frame's
   document, not the embedding page. The frame's URL is now the request's

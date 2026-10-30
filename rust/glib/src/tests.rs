@@ -76,3 +76,33 @@ fn stops_at_nul_and_offsets() {
     assert_eq!(ascii_strtod_at(c"x 12y", 1), (12.0, 4));
     assert_eq!(ascii_strtod_at(c"ab", 9), (0.0, 2));
 }
+
+#[test]
+fn converts_between_charsets() {
+    assert_eq!(
+        crate::convert(b"caf\xe9", b"UTF-8", b"ISO-8859-1").as_deref(),
+        Some("café".as_bytes())
+    );
+    assert_eq!(
+        crate::convert("café".as_bytes(), b"ISO-8859-1", b"UTF-8").as_deref(),
+        Some(b"caf\xe9".as_slice())
+    );
+    assert_eq!(crate::convert(b"x", b"UTF-8", b"no-such-charset"), None);
+}
+
+#[test]
+fn collates_and_formats_local_times() {
+    assert_eq!(
+        crate::utf8_collate(b"apple", b"banana"),
+        core::cmp::Ordering::Less
+    );
+    assert_eq!(
+        crate::utf8_collate(b"same", b"same"),
+        core::cmp::Ordering::Equal
+    );
+    let when = crate::LocalDateTime::from_unix(86_400 * 200).unwrap();
+    assert_eq!(when.year(), 1970);
+    assert!((199..=201).contains(&when.day_of_year()));
+    assert_eq!(when.format(c"%Y").as_deref(), Some(b"1970".as_slice()));
+    assert!(crate::LocalDateTime::now().is_some_and(|now| now.year() >= 2024));
+}
