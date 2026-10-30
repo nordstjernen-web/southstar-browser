@@ -442,13 +442,24 @@ pub(crate) fn device_create_pipeline_layout(
         let n = (array_len(scope, &list) as usize).min(MAX_ENTRIES);
         for i in 0..n {
             let e = index(scope, &list, i as u32);
+            if e.is_null() || e.is_undefined() {
+                held.push(None);
+                continue;
+            }
             let Some(layout) = host::<BindGroupLayout>(&e) else {
                 return Err(scope.type_error("createPipelineLayout: bindGroupLayouts"));
             };
-            held.push(layout);
+            held.push(Some(layout));
         }
     }
-    let layouts: Vec<_> = held.iter().map(|layout| layout.raw()).collect();
+    let layouts: Vec<_> = held
+        .iter()
+        .map(|layout| {
+            layout
+                .as_ref()
+                .map_or(core::ptr::null_mut(), |layout| layout.raw())
+        })
+        .collect();
     let mut descriptor = PipelineLayoutDescriptor::zeroed();
     descriptor.bind_group_layout_count = layouts.len();
     descriptor.bind_group_layouts = layouts.as_ptr();

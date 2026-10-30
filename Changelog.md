@@ -9,8 +9,8 @@ Southstar Browser 1.0.4-dev:
   and leaked on timeout (a late callback no longer writes into a dead stack
   frame), uncaptured errors log through `southstar-glib`, `getMappedRange`
   and `mapAsync` reject ranges past the buffer's end, and
-  `createPipelineLayout` throws on a non-layout entry instead of passing a null
-  handle.
+  `createPipelineLayout` throws on an entry that is neither a bind-group layout
+  nor null instead of passing a null handle for it.
 * Internals: the media helpers' unsafe code is documented and smaller. The
   `southstar-video` and `southstar-audio` helpers drive libav through small
   owners (format, codec, packet, frame, scaler, resampler, in-memory I/O) whose
