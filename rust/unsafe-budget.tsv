@@ -1,7 +1,7 @@
 # Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
-anim	8	0	0	0	1	0	0
+anim	7	0	0	0	0	0	0
 audio-helper	96	20	1	0	0	0	0
 av	8	40	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
@@ -29,7 +29,7 @@ extensions	3	2	0	0	0	0	0
 font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
-glib	110	90	0	0	0	1	0
+glib	110	90	0	0	0	0	0
 gtk	495	27	0	0	0	0	0
 gtk-ffi	29	371	0	0	0	0	0
 headless	15	8	0	0	0	0	0
@@ -51,13 +51,13 @@ js-attrs	0	0	0	0	0	0	0
 js-bind	0	0	0	0	0	0	0
 js-brand	0	0	0	0	0	0	0
 js-clone	0	0	0	0	0	0	0
-js-collections	1	0	0	0	1	0	0
+js-collections	1	0	0	0	0	0	0
 js-compression	4	4	0	0	0	0	0
 js-crypto	0	0	0	0	0	0	0
 js-cssom	0	0	0	0	0	0	0
 js-custom-elements	0	0	0	0	0	0	0
 js-dispatch	0	0	0	0	0	0	0
-js-document	1	0	0	0	1	0	0
+js-document	0	0	0	0	0	0	0
 js-dom-factory	0	0	0	0	0	0	0
 js-elements	0	0	0	0	0	0	0
 js-engine	9	0	0	0	0	0	0
@@ -65,16 +65,16 @@ js-events	0	0	0	0	0	0	0
 js-focus	0	0	0	0	0	0	0
 js-fonts	0	0	0	0	0	0	0
 js-forms	0	0	0	0	0	0	0
-js-frames	2	1	0	0	1	0	0
+js-frames	0	0	0	0	0	0	0
 js-geometry	0	0	0	0	0	0	0
 js-html	0	0	0	0	0	0	0
 js-images	4	0	0	0	0	0	0
 js-input	0	0	0	0	0	0	0
 js-interfaces	0	0	0	0	0	0	0
-js-intl	8	6	0	0	0	1	0
+js-intl	8	6	0	0	0	0	0
 js-lifecycle	0	0	0	0	0	0	0
 js-loader	0	0	0	0	0	0	0
-js-media	1	0	0	0	1	0	0
+js-media	1	0	0	0	0	0	0
 js-mutation	0	0	0	0	0	0	0
 js-net	2	0	0	0	0	0	0
 js-node	0	0	0	0	0	0	0
@@ -93,7 +93,7 @@ js-top-layer	0	0	0	0	0	0	0
 js-traversal	0	0	0	0	0	0	0
 js-url	2	1	0	0	0	0	0
 js-wasm	2	0	0	0	0	0	0
-js-window	2	0	0	0	1	0	0
+js-window	2	0	0	0	0	0	0
 js-workers	0	0	0	0	0	0	0
 jsshell	0	0	0	0	0	0	0
 keyfile	0	0	0	0	0	0	0
@@ -128,7 +128,7 @@ pdf	19	19	0	0	0	0	0
 plmpeg	0	0	0	0	0	0	0
 print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
-render	2	0	0	0	1	0	0
+render	1	0	0	0	0	0	0
 renderer-client	61	46	0	0	0	0	0
 renderer-host	46	25	1	0	0	0	0
 safebrowsing	9	4	0	0	0	0	0
@@ -156,5 +156,5 @@ webgl	62	6	0	0	0	0	0
 webgpu	68	72	0	0	0	0	0
 websocket	0	0	0	0	0	0	0
 webvtt	0	0	0	0	0	0	0
-woff2	2	1	0	0	1	0	0
+woff2	2	1	0	0	0	0	0
 xml	0	0	0	0	0	0	0

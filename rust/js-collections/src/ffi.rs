@@ -87,10 +87,11 @@ pub(crate) fn live_new_object(scope: &mut Scope<'_>, back: Live) -> Value {
     crate::class::new_live(scope, back).unwrap_or_else(|_| Value::null())
 }
 
-pub(crate) fn live_of<'a>(value: &Value) -> Option<&'a Live> {
+pub(crate) fn live_of(value: &Value) -> Option<&Live> {
     let back = value.with_instance(&crate::class::LIVE_CLASS, |back: &Live| {
         core::ptr::from_ref(back)
     })?;
+    // SAFETY: the Live record is the instance data of the object `value` roots, which keeps it alive and unmoved for as long as the borrow of `value` lasts.
     unsafe { back.as_ref() }
 }
 

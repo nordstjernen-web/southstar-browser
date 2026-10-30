@@ -64,21 +64,16 @@ pub(crate) fn real_time_ms() -> f64 {
 pub(crate) fn break_down(seconds: i64, utc: bool) -> Option<BrokenDown> {
     let mut tm = Tm::default();
     #[cfg(not(windows))]
-    // SAFETY: both pointers come from live locals for the duration of the call.
-    let ok = unsafe {
-        if utc {
-            !gmtime_r(&seconds, &mut tm).is_null()
-        } else {
-            !localtime_r(&seconds, &mut tm).is_null()
-        }
+    let ok = {
+        let convert = if utc { gmtime_r } else { localtime_r };
+        // SAFETY: both pointers come from live locals for the duration of the call.
+        !unsafe { convert(&seconds, &mut tm) }.is_null()
     };
     #[cfg(windows)]
-    let ok = unsafe {
-        if utc {
-            _gmtime64_s(&mut tm, &seconds) == 0
-        } else {
-            _localtime64_s(&mut tm, &seconds) == 0
-        }
+    let ok = {
+        let convert = if utc { _gmtime64_s } else { _localtime64_s };
+        // SAFETY: both pointers come from live locals for the duration of the call.
+        unsafe { convert(&mut tm, &seconds) == 0 }
     };
     ok.then_some(BrokenDown {
         year: tm.year.wrapping_add(1900),
@@ -176,12 +171,15 @@ pub(crate) mod windows {
     }
 
     pub(crate) fn zone() -> Option<(Vec<u8>, Option<Vec<u8>>)> {
+        // SAFETY: DynamicTimeZoneInformation is plain integers and u16 arrays, for which all-zero bytes are a valid value.
         let mut info: DynamicTimeZoneInformation = unsafe { core::mem::zeroed() };
+        // SAFETY: info is a live, correctly laid out DYNAMIC_TIME_ZONE_INFORMATION the call fills in.
         if unsafe { GetDynamicTimeZoneInformation(&mut info) } == TIME_ZONE_ID_INVALID {
             return None;
         }
         let key = utf8(&info.time_zone_key_name)?;
         let mut locale = [0u16; LOCALE_NAME_MAX_LENGTH];
+        // SAFETY: locale is a live buffer of exactly the length passed, which the call NUL-terminates.
         unsafe { GetUserDefaultLocaleName(locale.as_mut_ptr(), LOCALE_NAME_MAX_LENGTH as i32) };
         Some((key, utf8(&locale)))
     }

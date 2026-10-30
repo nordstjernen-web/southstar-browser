@@ -211,12 +211,7 @@ pub(crate) fn new_text(text: &[u8]) -> Element {
 }
 
 pub(crate) fn attr_bytes(node: Element, name: &CStr) -> Option<&'static [u8]> {
-    let attr = southstar_dom::attrs::find(node, name)?;
-    let value = attr.value_ptr();
-    if value.is_null() {
-        return None;
-    }
-    Some(unsafe { core::slice::from_raw_parts(value.cast(), attr.value_len() as usize) })
+    southstar_dom::attrs::find(node, name)?.value_bytes()
 }
 
 pub(crate) fn cookies_for_js(url: &[u8]) -> Option<Vec<u8>> {

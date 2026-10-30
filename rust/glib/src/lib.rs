@@ -153,7 +153,7 @@ pub fn strdup(bytes: &[u8]) -> *mut c_char {
     // SAFETY: out has room for bytes.len() bytes and cannot overlap the borrowed slice.
     unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
     // SAFETY: bytes.len() is the last of the bytes.len() + 1 allocated bytes.
-    unsafe { out.add(bytes.len()).write(0) };
+    unsafe { out.wrapping_add(bytes.len()).write(0) };
     out.cast()
 }
 

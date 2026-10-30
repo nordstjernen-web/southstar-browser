@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the last undocumented and multi-operation `unsafe` blocks are
+  gone from every crate's Linux build, so `rust/unsafe-budget.tsv` now
+  carries zero in all three unsafe-documentation columns. `js-document` and
+  `js-frames` contain no unsafe code (`forbid(unsafe_code)`): attribute
+  bytes come from the DOM's safe accessor and the frame clock from
+  `southstar_glib::monotonic_us`. The container-query signature hashes
+  names in Rust instead of through `g_str_hash`, and the animation node key
+  no longer claims to be `Send`.
 * Internals: the networking, URL, compression, WebSocket, history, extensions
   and JS runtime crates and the GTK shell document every remaining unsafe
   block, one operation each, and carry less of it. WebSocket hashes and
