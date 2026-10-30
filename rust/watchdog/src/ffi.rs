@@ -50,8 +50,9 @@ mod os {
     use core::ffi::{CStr, c_char, c_int, c_void};
     use core::ptr;
     use std::ffi::CString;
+    use std::os::unix::ffi::OsStringExt;
 
-    use southstar_glib::{self as glib, GBoolean, GError, TRUE};
+    use southstar_glib::{self as glib, GBoolean, GError};
 
     use super::GPid;
 
@@ -62,14 +63,6 @@ mod os {
     pub(super) const STOP_SIGNALS: [c_int; 2] = [SIGINT, SIGTERM];
 
     unsafe extern "C" {
-        fn g_get_environ() -> *mut *mut c_char;
-        fn g_environ_setenv(
-            envp: *mut *mut c_char,
-            variable: *const c_char,
-            value: *const c_char,
-            overwrite: GBoolean,
-        ) -> *mut *mut c_char;
-        fn g_environ_unsetenv(envp: *mut *mut c_char, variable: *const c_char) -> *mut *mut c_char;
         fn g_spawn_async(
             working_directory: *const c_char,
             argv: *mut *mut c_char,
@@ -81,57 +74,77 @@ mod os {
             error: *mut *mut GError,
         ) -> GBoolean;
         fn kill(pid: GPid, signal: c_int) -> c_int;
-        fn getppid() -> c_int;
         #[cfg(target_os = "linux")]
         fn prctl(option: c_int, ...) -> c_int;
     }
 
+    fn child_environment(recover: bool) -> Vec<CString> {
+        let mut environment: Vec<CString> = std::env::vars_os()
+            .filter(|(name, _)| name != "NS_WATCHDOG_RECOVER")
+            .filter_map(|(name, value)| {
+                let mut entry = name.into_vec();
+                entry.push(b'=');
+                entry.extend(value.into_vec());
+                CString::new(entry).ok()
+            })
+            .collect();
+        if recover {
+            environment.push(c"NS_WATCHDOG_RECOVER=1".to_owned());
+        }
+        environment
+    }
+
+    fn null_terminated(strings: &[CString]) -> Vec<*mut c_char> {
+        strings
+            .iter()
+            .map(|string| string.as_ptr().cast_mut())
+            .chain([ptr::null_mut()])
+            .collect()
+    }
+
     pub(super) fn spawn(argv: &[CString], recover: bool) -> Result<GPid, String> {
-        let mut pointers: Vec<*mut c_char> =
-            argv.iter().map(|arg| arg.as_ptr().cast_mut()).collect();
-        pointers.push(ptr::null_mut());
+        let mut pointers = null_terminated(argv);
+        let environment = child_environment(recover);
+        let mut envp = null_terminated(&environment);
         let mut pid: GPid = 0;
         let mut error: *mut GError = ptr::null_mut();
+        // SAFETY: argv and envp are NULL-terminated arrays of NUL-terminated strings that outlive the call, which copies them; pid and error are writable locals.
         let ok = unsafe {
-            let mut envp = g_get_environ();
-            envp = if recover {
-                g_environ_setenv(envp, c"NS_WATCHDOG_RECOVER".as_ptr(), c"1".as_ptr(), TRUE)
-            } else {
-                g_environ_unsetenv(envp, c"NS_WATCHDOG_RECOVER".as_ptr())
-            };
-            let ok = g_spawn_async(
+            g_spawn_async(
                 ptr::null(),
                 pointers.as_mut_ptr(),
-                envp,
+                envp.as_mut_ptr(),
                 G_SPAWN_DO_NOT_REAP_CHILD,
                 None,
                 ptr::null_mut(),
                 &mut pid,
                 &mut error,
-            );
-            glib::g_strfreev(envp);
-            ok
+            )
         };
         if ok != 0 {
             return Ok(pid);
         }
+        // SAFETY: error is null or the GError g_spawn_async set on failure, which stays alive until it is freed below.
         let text = unsafe { error.as_ref() }
             .filter(|e| !e.message.is_null())
             .map_or_else(
                 || "unknown error".to_owned(),
                 |e| {
+                    // SAFETY: a GError's non-null message is a NUL-terminated string the error owns.
                     unsafe { CStr::from_ptr(e.message) }
                         .to_string_lossy()
                         .into_owned()
                 },
             );
         if !error.is_null() {
+            // SAFETY: error is the GError g_spawn_async set, freed exactly once after text was copied out of it.
             unsafe { glib::g_error_free(error) };
         }
         Err(text)
     }
 
     pub(super) fn kill_child(pid: GPid, force: bool) {
+        // SAFETY: kill takes a pid and a signal number and touches no memory; pid is a child this supervisor has not yet closed.
         unsafe { kill(pid, if force { SIGKILL } else { SIGTERM }) };
     }
 
@@ -141,16 +154,18 @@ mod os {
         #[cfg(target_os = "linux")]
         {
             const PR_SET_PDEATHSIG: c_int = 1;
+            // SAFETY: PR_SET_PDEATHSIG takes an integer signal number and touches no memory.
             unsafe { prctl(PR_SET_PDEATHSIG, SIGTERM as core::ffi::c_ulong) };
-            if unsafe { getppid() } == 1 {
+            if std::os::unix::process::parent_id() == 1 {
+                // SAFETY: _exit ends the process at once; the orphaned child runs no further code.
                 unsafe { super::_exit(0) };
             }
         }
     }
 
     pub(super) fn parent_pid() -> c_int {
-        let parent = unsafe { getppid() };
-        if parent > 1 { parent } else { 0 }
+        let parent = std::os::unix::process::parent_id();
+        if parent > 1 { parent as c_int } else { 0 }
     }
 }
 
@@ -228,11 +243,9 @@ mod os {
             startup_info: *mut StartupInfo,
             process_information: *mut ProcessInformation,
         ) -> i32;
-        fn GetLastError() -> u32;
         fn CloseHandle(handle: Handle) -> i32;
         fn SetEnvironmentVariableW(name: *const u16, value: *const u16) -> i32;
         fn TerminateProcess(process: Handle, exit_code: u32) -> i32;
-        fn GetCurrentProcessId() -> u32;
         fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> Handle;
         fn Process32FirstW(snapshot: Handle, entry: *mut ProcessEntry) -> i32;
         fn Process32NextW(snapshot: Handle, entry: *mut ProcessEntry) -> i32;
@@ -256,15 +269,40 @@ mod os {
             .and_then(|old| String::from_utf8(old).ok())
             .map(|old| wide(&old));
         let one = wide("1");
+        // SAFETY: name is a NUL-terminated UTF-16 string and the value is one too or null, which removes the variable.
         unsafe {
             SetEnvironmentVariableW(
                 name.as_ptr(),
                 if recover { one.as_ptr() } else { ptr::null() },
             )
         };
-        let mut startup: StartupInfo = unsafe { mem::zeroed() };
-        startup.cb = mem::size_of::<StartupInfo>() as u32;
-        let mut info: ProcessInformation = unsafe { mem::zeroed() };
+        let mut startup = StartupInfo {
+            cb: mem::size_of::<StartupInfo>() as u32,
+            reserved: ptr::null_mut(),
+            desktop: ptr::null_mut(),
+            title: ptr::null_mut(),
+            x: 0,
+            y: 0,
+            x_size: 0,
+            y_size: 0,
+            x_count_chars: 0,
+            y_count_chars: 0,
+            fill_attribute: 0,
+            flags: 0,
+            show_window: 0,
+            reserved2_len: 0,
+            reserved2: ptr::null_mut(),
+            std_input: ptr::null_mut(),
+            std_output: ptr::null_mut(),
+            std_error: ptr::null_mut(),
+        };
+        let mut info = ProcessInformation {
+            process: ptr::null_mut(),
+            thread: ptr::null_mut(),
+            process_id: 0,
+            thread_id: 0,
+        };
+        // SAFETY: app is a NUL-terminated UTF-16 path, command a writable NUL-terminated command line, and startup and info are initialized writable locals; the call keeps no pointer to them.
         let ok = unsafe {
             CreateProcessW(
                 app.as_ptr(),
@@ -279,30 +317,29 @@ mod os {
                 &mut info,
             )
         };
-        let error = if ok != 0 {
-            0
-        } else {
-            unsafe { GetLastError() }
-        };
+        let error = (ok == 0).then(std::io::Error::last_os_error);
         let restore = old.filter(|old| old.len() > 1);
+        // SAFETY: name is a NUL-terminated UTF-16 string and the value is the saved NUL-terminated value or null, which removes the variable.
         unsafe {
             SetEnvironmentVariableW(
                 name.as_ptr(),
                 restore.as_ref().map_or(ptr::null(), |old| old.as_ptr()),
             )
         };
-        if ok == 0 {
-            let text = std::io::Error::from_raw_os_error(error as i32).to_string();
+        if let Some(error) = error {
+            let text = error.to_string();
             let text = text
                 .rsplit_once(" (os error ")
                 .map_or(text.as_str(), |(detail, _)| detail);
             return Err(format!("CreateProcessW failed: {text}"));
         }
+        // SAFETY: info.thread is the primary-thread handle CreateProcessW just returned, which nothing else uses; it is closed once.
         unsafe { CloseHandle(info.thread) };
         Ok(info.process)
     }
 
     pub(super) fn kill_child(pid: GPid, _force: bool) {
+        // SAFETY: pid is the process handle CreateProcessW returned, still open because the supervisor closes it only after this.
         unsafe { TerminateProcess(pid, 1) };
     }
 
@@ -318,6 +355,7 @@ mod os {
         );
         let body = wide(&body);
         let caption = wide("Southstar");
+        // SAFETY: body and caption are NUL-terminated UTF-16 strings that outlive the call, and a null owner window is allowed.
         unsafe {
             MessageBoxW(
                 ptr::null_mut(),
@@ -331,22 +369,36 @@ mod os {
     pub(super) fn guard_parent_death() {}
 
     pub(super) fn parent_pid() -> c_int {
-        let me = unsafe { GetCurrentProcessId() };
+        let me = std::process::id();
+        // SAFETY: CreateToolhelp32Snapshot takes plain flags and a process id and touches no caller memory.
         let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
         if snapshot as isize == -1 {
             return 0;
         }
-        let mut entry: ProcessEntry = unsafe { mem::zeroed() };
-        entry.size = mem::size_of::<ProcessEntry>() as u32;
+        let mut entry = ProcessEntry {
+            size: mem::size_of::<ProcessEntry>() as u32,
+            usage: 0,
+            process_id: 0,
+            default_heap_id: 0,
+            module_id: 0,
+            threads: 0,
+            parent_process_id: 0,
+            priority_base: 0,
+            flags: 0,
+            exe_file: [0; 260],
+        };
         let mut parent = 0;
+        // SAFETY: snapshot is a live process snapshot and entry is a writable PROCESSENTRY32W whose size field is set.
         let mut more = unsafe { Process32FirstW(snapshot, &mut entry) } != 0;
         while more {
             if entry.process_id == me {
                 parent = entry.parent_process_id;
                 break;
             }
+            // SAFETY: snapshot is a live process snapshot and entry is a writable PROCESSENTRY32W whose size field is set.
             more = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
         }
+        // SAFETY: snapshot is the handle opened above, closed exactly once.
         unsafe { CloseHandle(snapshot) };
         parent as c_int
     }
@@ -368,6 +420,7 @@ fn watch_for_hangs() {
                 "ns_watchdog: main loop unresponsive for {secs}s — exiting for restart"
             );
             let _ = stderr.flush();
+            // SAFETY: _exit ends the hung process at once without running atexit handlers that could block on the stuck main thread.
             unsafe { _exit(crate::HANG_EXIT) };
         }
     }

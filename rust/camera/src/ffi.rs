@@ -9,10 +9,13 @@ use southstar_texture::TextureRef;
 
 #[cfg(target_os = "linux")]
 mod v4l2 {
-    use core::ffi::{c_char, c_int, c_long, c_ulong, c_void};
+    use core::ffi::{c_int, c_long, c_ulong, c_void};
     use core::mem::size_of;
     use core::ptr;
     use std::ffi::CString;
+    use std::fs::File;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::fs::OpenOptionsExt;
 
     use southstar_glib as glib;
 
@@ -21,9 +24,7 @@ mod v4l2 {
     const FIELD_ANY: u32 = 0;
     const MEMORY_MMAP: u32 = 1;
     const BUFFERS: u32 = 4;
-    const O_RDWR: c_int = 0o2;
     const O_NONBLOCK: c_int = 0o4000;
-    const O_CLOEXEC: c_int = 0o2000000;
     const PROT_READ_WRITE: c_int = 3;
     const MAP_SHARED: c_int = 1;
     const EINTR: i32 = 4;
@@ -31,6 +32,7 @@ mod v4l2 {
     pub(super) const PIX_FMT_YUYV: u32 = u32::from_le_bytes(*b"YUYV");
 
     #[repr(C)]
+    #[derive(Default)]
     struct Capability {
         driver: [u8; 16],
         card: [u8; 32],
@@ -42,7 +44,7 @@ mod v4l2 {
     }
 
     #[repr(C)]
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Default)]
     struct PixFormat {
         width: u32,
         height: u32,
@@ -72,6 +74,7 @@ mod v4l2 {
     }
 
     #[repr(C)]
+    #[derive(Default)]
     struct RequestBuffers {
         count: u32,
         kind: u32,
@@ -123,8 +126,6 @@ mod v4l2 {
     const STREAMOFF: c_ulong = ioc(WRITE, 19, size_of::<c_int>());
 
     unsafe extern "C" {
-        fn open(path: *const c_char, flags: c_int, ...) -> c_int;
-        fn close(fd: c_int) -> c_int;
         fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
         fn mmap(
             addr: *mut c_void,
@@ -137,21 +138,29 @@ mod v4l2 {
         fn munmap(addr: *mut c_void, len: usize) -> c_int;
     }
 
-    fn zeroed<T>() -> T {
-        unsafe { core::mem::zeroed() }
-    }
-
-    struct Device(c_int);
+    struct Device(File);
 
     impl Device {
         fn open(path: &CString) -> Option<Device> {
-            let fd = unsafe { open(path.as_ptr(), O_RDWR | O_NONBLOCK | O_CLOEXEC) };
-            (fd >= 0).then(|| Device(fd))
+            let path = glib::path_from_bytes(path.to_bytes())?;
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(O_NONBLOCK)
+                .open(path)
+                .ok()
+                .map(Device)
+        }
+
+        fn fd(&self) -> c_int {
+            self.0.as_raw_fd()
         }
 
         fn ioctl<T>(&self, request: c_ulong, arg: &mut T) -> bool {
+            let arg = (arg as *mut T).cast::<c_void>();
             loop {
-                let status = unsafe { ioctl(self.0, request, (arg as *mut T).cast::<c_void>()) };
+                // SAFETY: each request this module issues is paired with the repr(C) struct its V4L2 ioctl number encodes, and arg is that struct, exclusively borrowed for the call.
+                let status = unsafe { ioctl(self.fd(), request, arg) };
                 if status >= 0 {
                     return true;
                 }
@@ -162,23 +171,28 @@ mod v4l2 {
         }
 
         fn capability(&self) -> Option<Capability> {
-            let mut cap: Capability = zeroed();
+            let mut cap = Capability::default();
             (self.ioctl(QUERYCAP, &mut cap) && cap.capabilities & CAP_VIDEO_CAPTURE != 0)
                 .then_some(cap)
         }
 
         fn set_format(&self, pixelformat: u32) -> Option<PixFormat> {
-            let mut format: Format = zeroed();
-            format.kind = VIDEO_CAPTURE;
+            let mut format = Format {
+                kind: VIDEO_CAPTURE,
+                fmt: FormatUnion { raw: [0; 200] },
+            };
             format.fmt.pix = PixFormat {
                 width: 640,
                 height: 480,
                 pixelformat,
                 field: FIELD_ANY,
-                ..unsafe { format.fmt.pix }
+                ..PixFormat::default()
             };
-            let accepted = self.ioctl(S_FMT, &mut format);
-            accepted.then_some(unsafe { format.fmt.pix })
+            if !self.ioctl(S_FMT, &mut format) {
+                return None;
+            }
+            // SAFETY: pix was written above, and VIDIOC_S_FMT on a capture format fills that member, which is plain integers.
+            Some(unsafe { format.fmt.pix })
         }
 
         fn stream(&self, on: bool) -> bool {
@@ -187,17 +201,21 @@ mod v4l2 {
         }
 
         fn buffer(index: u32) -> Buffer {
-            let mut buffer: Buffer = zeroed();
-            buffer.kind = VIDEO_CAPTURE;
-            buffer.memory = MEMORY_MMAP;
-            buffer.index = index;
-            buffer
-        }
-    }
-
-    impl Drop for Device {
-        fn drop(&mut self) {
-            unsafe { close(self.0) };
+            Buffer {
+                index,
+                kind: VIDEO_CAPTURE,
+                bytesused: 0,
+                flags: 0,
+                field: 0,
+                timestamp: [0; 2],
+                timecode: [0; 4],
+                sequence: 0,
+                memory: MEMORY_MMAP,
+                location: BufferLocation { userptr: 0 },
+                length: 0,
+                reserved2: 0,
+                request_fd: 0,
+            }
         }
     }
 
@@ -208,6 +226,7 @@ mod v4l2 {
 
     impl Drop for Mapping {
         fn drop(&mut self) {
+            // SAFETY: start and length are the mapping mmap returned for this Mapping, unmapped only here, and every Frame slice of it borrows the Camera that owns it.
             unsafe { munmap(self.start, self.length) };
         }
     }
@@ -252,7 +271,7 @@ mod v4l2 {
                 count: BUFFERS,
                 kind: VIDEO_CAPTURE,
                 memory: MEMORY_MMAP,
-                ..zeroed()
+                ..RequestBuffers::default()
             };
             if !device.ioctl(REQBUFS, &mut request) || request.count < 2 {
                 return None;
@@ -272,14 +291,17 @@ mod v4l2 {
                     break;
                 }
                 let length = buffer.length as usize;
+                // SAFETY: VIDIOC_QUERYBUF on an MMAP buffer sets the offset member of the location union, which is a plain integer.
                 let offset = i64::from(unsafe { buffer.location.offset });
+                let fd = camera.device.fd();
+                // SAFETY: a new shared mapping of the device at the offset and length the driver reported for this buffer; it replaces no existing memory.
                 let start = unsafe {
                     mmap(
                         ptr::null_mut(),
                         length,
                         PROT_READ_WRITE,
                         MAP_SHARED,
-                        camera.device.0,
+                        fd,
                         offset,
                     )
                 };
@@ -313,8 +335,9 @@ mod v4l2 {
                 return None;
             }
             let mapping = self.mappings.get(buffer.index as usize)?;
-            let data =
-                unsafe { core::slice::from_raw_parts(mapping.start.cast::<u8>(), mapping.length) };
+            let start = mapping.start.cast::<u8>().cast_const();
+            // SAFETY: the mapping is length bytes of live shared memory owned by self, and the Frame borrows self, so the slice cannot outlive the mapping.
+            let data = unsafe { core::slice::from_raw_parts(start, mapping.length) };
             Some(Frame {
                 data,
                 used: buffer.bytesused as usize,
@@ -335,12 +358,14 @@ mod v4l2 {
         if cap.card[0] == 0 {
             return None;
         }
-        let tail = unsafe {
-            core::slice::from_raw_parts(
-                cap.card.as_ptr(),
-                size_of::<Capability>() - core::mem::offset_of!(Capability, card),
-            )
-        };
+        let mut tail = [&cap.card[..], &cap.bus_info[..]].concat();
+        for word in [cap.version, cap.capabilities, cap.device_caps]
+            .into_iter()
+            .chain(cap.reserved)
+        {
+            tail.extend_from_slice(&word.to_ne_bytes());
+        }
+
         let end = tail.iter().position(|&c| c == 0).unwrap_or(tail.len());
         Some(tail[..end].to_vec())
     }

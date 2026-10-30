@@ -128,17 +128,20 @@ mod sys {
     }
 
     pub(super) fn read_fd(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
+        // SAFETY: buf is an exclusively borrowed buffer of buf.len() writable bytes; read writes at most that many and keeps no pointer to it.
         let n = unsafe { read(fd, buf.as_mut_ptr().cast(), buf.len()) };
         last_error(n, |n| n)
     }
 
     pub(super) fn write_fd(fd: c_int, buf: &[u8]) -> io::Result<usize> {
+        // SAFETY: buf is buf.len() readable bytes; write reads at most that many and keeps no pointer to it.
         let n = unsafe { write(fd, buf.as_ptr().cast(), buf.len()) };
         last_error(n, |n| n)
     }
 
     fn set_int_option(fd: c_int, name: c_int, value: c_int) -> bool {
         let value_ptr = (&raw const value).cast();
+        // SAFETY: value_ptr points at a live c_int and the length passed is exactly its size; the kernel copies it during the call.
         unsafe { setsockopt(fd, SOCKET_LEVEL, name, value_ptr, size_of::<c_int>() as u32) == 0 }
     }
 
@@ -155,6 +158,7 @@ mod sys {
         if fd < 0 || (seconds < 0 && cfg!(not(target_os = "linux"))) {
             return;
         }
+        // SAFETY: fd is a non-negative descriptor the caller keeps open for this call; ManuallyDrop leaves its ownership with the caller, so it is never closed here.
         let socket = ManuallyDrop::new(unsafe { UnixStream::from_raw_fd(fd) });
         let timeout = (seconds > 0).then(|| Duration::from_secs(seconds as u64));
         let _ = socket.set_read_timeout(timeout);
@@ -188,6 +192,7 @@ mod sys {
         control.0[CMSG_DATA..CMSG_LEN].copy_from_slice(&fd.to_ne_bytes());
         let msg = message(&mut iov, &mut control);
         loop {
+            // SAFETY: msg points at iov, dummy and control, all live for this call, with lengths matching their buffers.
             if unsafe { sendmsg(sock, &msg, 0) } >= 0 {
                 return true;
             }
@@ -206,6 +211,7 @@ mod sys {
         let mut control = Control([0; CMSG_SPACE]);
         let mut msg = message(&mut iov, &mut control);
         let received = loop {
+            // SAFETY: msg points at iov, dummy and control, all live and writable for this call, with lengths matching their buffers.
             let r = unsafe { recvmsg(sock, &mut msg, RECEIVE_CLOEXEC) };
             if r >= 0 || io::Error::last_os_error().kind() != io::ErrorKind::Interrupted {
                 break r;
@@ -227,6 +233,7 @@ mod sys {
             return -1;
         }
         let fd = int_at(CMSG_DATA);
+        // SAFETY: F_SETFD with an integer flag argument only changes the descriptor's close-on-exec flag; it touches no memory.
         unsafe { fcntl(fd, SET_FD_FLAGS, CLOSE_ON_EXEC) };
         fd
     }
@@ -251,11 +258,15 @@ mod sys {
     }
 
     pub(super) fn read_fd(fd: c_int, buf: &mut [u8]) -> io::Result<usize> {
-        result(unsafe { _read(fd, buf.as_mut_ptr().cast(), chunk(buf.len())) })
+        let len = chunk(buf.len());
+        // SAFETY: buf is an exclusively borrowed buffer of at least len writable bytes; _read writes at most len and keeps no pointer to it.
+        result(unsafe { _read(fd, buf.as_mut_ptr().cast(), len) })
     }
 
     pub(super) fn write_fd(fd: c_int, buf: &[u8]) -> io::Result<usize> {
-        result(unsafe { _write(fd, buf.as_ptr().cast(), chunk(buf.len())) })
+        let len = chunk(buf.len());
+        // SAFETY: buf is at least len readable bytes; _write reads at most len and keeps no pointer to it.
+        result(unsafe { _write(fd, buf.as_ptr().cast(), len) })
     }
 
     pub(super) fn set_bufsize(_fd: c_int, _bytes: c_int) {}

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the sandbox, watchdog, thread-dump, IPC, camera and libav layout
+  crates document every unsafe block and use less of it: the Landlock ruleset,
+  seccomp filter, Windows tokens and V4L2 device are RAII owners, and std
+  replaces the hand-written pipe, zone-identifier write, parent-pid and
+  environment calls. Sandbox rules and mitigations are unchanged.
 * Internals: the embedding API, the renderer process and the image decoders
   have every unsafe block documented with one operation each. Page painting
   draws through the safe cairo wrappers over length-checked pixel buffers,

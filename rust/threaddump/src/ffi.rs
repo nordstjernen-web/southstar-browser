@@ -15,6 +15,7 @@ pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
         let _ = writeln!(out, "  (no /proc/{pid}/task)");
         return;
     };
+    // SAFETY: sysconf takes an integer name and touches no caller memory.
     let tick = match unsafe { sysconf(SC_CLK_TCK) } {
         tick if tick > 0 => tick as f64,
         _ => 100.0,
@@ -96,11 +97,22 @@ pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
         fn CloseHandle(handle: Handle) -> c_int;
     }
 
+    struct Owned(Handle);
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            // SAFETY: Owned only wraps a valid handle this function opened, closed exactly once here.
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    // SAFETY: CreateToolhelp32Snapshot takes plain flags and a process id and touches no caller memory.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
     if snapshot == INVALID_HANDLE_VALUE {
         out.extend_from_slice(b"  (thread snapshot failed)\n");
         return;
     }
+    let snapshot = Owned(snapshot);
     let mut entry = ThreadEntry32 {
         size: core::mem::size_of::<ThreadEntry32>() as u32,
         usage: 0,
@@ -111,21 +123,24 @@ pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
         flags: 0,
     };
     let mut count = 0;
-    let mut more = unsafe { Thread32First(snapshot, &mut entry) } != 0;
+    // SAFETY: snapshot is a live thread snapshot and entry is a writable THREADENTRY32 whose size field is set.
+    let mut more = unsafe { Thread32First(snapshot.0, &mut entry) } != 0;
     while more {
         if entry.owner_process_id == pid as u32 {
             let mut cpu = -1.0;
+            // SAFETY: OpenThread takes plain access flags and a thread id and touches no caller memory.
             let thread =
                 unsafe { OpenThread(THREAD_QUERY_LIMITED_INFORMATION, 0, entry.thread_id) };
             if !thread.is_null() {
+                let thread = Owned(thread);
                 let [mut creation, mut exit, mut kernel, mut user] = <[FileTime; 4]>::default();
+                // SAFETY: thread is a live handle opened with query access and the four FILETIMEs are writable locals.
                 if unsafe {
-                    GetThreadTimes(thread, &mut creation, &mut exit, &mut kernel, &mut user)
+                    GetThreadTimes(thread.0, &mut creation, &mut exit, &mut kernel, &mut user)
                 } != 0
                 {
                     cpu = (kernel.ticks() + user.ticks()) as f64 / 1e7;
                 }
-                unsafe { CloseHandle(thread) };
             }
             let _ = writeln!(
                 out,
@@ -134,9 +149,10 @@ pub(crate) fn list_threads(pid: i32, out: &mut Vec<u8>) {
             );
             count += 1;
         }
-        more = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
+        // SAFETY: snapshot is a live thread snapshot and entry is a writable THREADENTRY32 whose size field is set.
+        more = unsafe { Thread32Next(snapshot.0, &mut entry) } != 0;
     }
-    unsafe { CloseHandle(snapshot) };
+    drop(snapshot);
     let _ = writeln!(out, "  ({count} threads)");
 }
 
@@ -148,14 +164,11 @@ pub(crate) fn list_threads(_pid: i32, out: &mut Vec<u8>) {
 #[cfg(unix)]
 mod signal {
     use core::ffi::{c_int, c_void};
-    use std::fs::File;
-    use std::io::{ErrorKind, Read, Write};
-    use std::os::fd::FromRawFd;
+    use std::io::{ErrorKind, PipeReader, Read, Write};
+    use std::os::fd::{AsRawFd, IntoRawFd};
     use std::sync::atomic::{AtomicI32, Ordering};
 
-    const F_SETFD: c_int = 2;
     const F_SETFL: c_int = 4;
-    const FD_CLOEXEC: c_int = 1;
     #[cfg(target_os = "linux")]
     const O_NONBLOCK: c_int = 0o4000;
     #[cfg(not(target_os = "linux"))]
@@ -166,7 +179,6 @@ mod signal {
     type Handler = extern "C" fn(c_int);
 
     unsafe extern "C" {
-        fn pipe(fds: *mut c_int) -> c_int;
         fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;
         fn write(fd: c_int, buf: *const c_void, count: usize) -> isize;
         fn signal(signum: c_int, handler: Handler) -> usize;
@@ -194,12 +206,22 @@ mod signal {
     static WRITE_END: AtomicI32 = AtomicI32::new(-1);
 
     extern "C" fn on_sigquit(_signum: c_int) {
+        // SAFETY: errno_location has no preconditions and returns this thread's errno slot.
         let errno = unsafe { errno_location() };
-        let saved = unsafe { *errno };
+        // SAFETY: errno is this thread's live, aligned errno slot.
+        let saved = unsafe { errno.read() };
         let byte = 1u8;
         let fd = WRITE_END.load(Ordering::Relaxed);
-        while unsafe { write(fd, (&raw const byte).cast(), 1) } < 0 && unsafe { *errno } == EINTR {}
-        unsafe { *errno = saved };
+        loop {
+            // SAFETY: write reads the one byte at &byte, a live local; it is async-signal-safe.
+            let wrote = unsafe { write(fd, (&raw const byte).cast(), 1) };
+            // SAFETY: errno is this thread's live, aligned errno slot.
+            if wrote >= 0 || unsafe { errno.read() } != EINTR {
+                break;
+            }
+        }
+        // SAFETY: errno is this thread's live, aligned errno slot; restoring it keeps the interrupted code's errno intact.
+        unsafe { errno.write(saved) };
     }
 
     fn to_stderr(pid: i32, label: Option<&[u8]>) {
@@ -208,7 +230,7 @@ mod signal {
         let _ = stderr.flush();
     }
 
-    fn dispatch(mut pipe: File, label: Option<Vec<u8>>) {
+    fn dispatch(mut pipe: PipeReader, label: Option<Vec<u8>>) {
         let mut byte = [0u8; 1];
         loop {
             match pipe.read(&mut byte) {
@@ -224,22 +246,19 @@ mod signal {
         if READ_END.load(Ordering::Relaxed) >= 0 {
             return;
         }
-        let mut fds = [-1; 2];
-        if unsafe { pipe(fds.as_mut_ptr()) } != 0 {
+        let Ok((reader, writer)) = std::io::pipe() else {
             return;
-        }
-        unsafe {
-            fcntl(fds[0], F_SETFD, FD_CLOEXEC);
-            fcntl(fds[1], F_SETFD, FD_CLOEXEC);
-            fcntl(fds[1], F_SETFL, O_NONBLOCK);
-        }
-        READ_END.store(fds[0], Ordering::Relaxed);
-        WRITE_END.store(fds[1], Ordering::Relaxed);
-        let reader = unsafe { File::from_raw_fd(fds[0]) };
+        };
+        let write_end = writer.into_raw_fd();
+        // SAFETY: F_SETFL with an integer flag argument only changes the write end's status flags; it touches no memory.
+        unsafe { fcntl(write_end, F_SETFL, O_NONBLOCK) };
+        READ_END.store(reader.as_raw_fd(), Ordering::Relaxed);
+        WRITE_END.store(write_end, Ordering::Relaxed);
         let label = label.map(<[u8]>::to_vec);
         let _ = std::thread::Builder::new()
             .name("thread-dump".into())
             .spawn(move || dispatch(reader, label));
+        // SAFETY: on_sigquit only loads an atomic, calls write and saves and restores errno, all async-signal-safe.
         unsafe { signal(SIGQUIT, on_sigquit) };
     }
 }

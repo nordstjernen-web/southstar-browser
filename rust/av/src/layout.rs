@@ -63,25 +63,25 @@ impl<S, T: Copy> Field<S, T> {
         self.offset
     }
 
+    pub fn ptr(&self, base: *mut S) -> *mut T {
+        base.cast::<u8>().wrapping_add(self.offset).cast::<T>()
+    }
+
+    /// # Safety
+    ///
+    /// `base` must point to a live `S` laid out as the installed headers describe, so that a `T` lies at this field's offset.
     pub unsafe fn get(&self, base: *const S) -> T {
-        unsafe {
-            base.cast::<u8>()
-                .add(self.offset)
-                .cast::<T>()
-                .read_unaligned()
-        }
+        let field = self.ptr(base.cast_mut()).cast_const();
+        // SAFETY: the caller guarantees a live S at base, so field addresses its T; it may be unaligned, hence read_unaligned.
+        unsafe { field.read_unaligned() }
     }
 
+    /// # Safety
+    ///
+    /// `base` must point to a live `S` laid out as the installed headers describe and writable for a `T` at this field's offset.
     pub unsafe fn set(&self, base: *mut S, value: T) {
-        unsafe {
-            base.cast::<u8>()
-                .add(self.offset)
-                .cast::<T>()
-                .write_unaligned(value)
-        }
-    }
-
-    pub unsafe fn ptr(&self, base: *mut S) -> *mut T {
-        unsafe { base.cast::<u8>().add(self.offset).cast::<T>() }
+        let field = self.ptr(base);
+        // SAFETY: the caller guarantees a live, writable S at base, so field addresses its T; it may be unaligned, hence write_unaligned.
+        unsafe { field.write_unaligned(value) }
     }
 }
