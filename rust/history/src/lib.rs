@@ -8,7 +8,7 @@ use std::ffi::CStr;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use ffi::LocalTime;
+use southstar_glib::LocalDateTime;
 use southstar_sqlite::Db;
 
 const MAX_ROWS: i32 = 10000;
@@ -201,9 +201,9 @@ pub fn clear() {
     }
 }
 
-fn day_label(when: &LocalTime, now: &LocalTime) -> Vec<u8> {
-    let days = now.day_of_year() - when.day_of_year();
-    let same_year = now.year() == when.year();
+fn day_label(when: &LocalDateTime, now: Option<&LocalDateTime>) -> Vec<u8> {
+    let same_year = now.is_some_and(|now| now.year() == when.year());
+    let days = now.map_or(-1, |now| now.day_of_year() - when.day_of_year());
     match (same_year, days) {
         (true, 0) => b"Today".to_vec(),
         (true, 1) => b"Yesterday".to_vec(),
@@ -245,7 +245,7 @@ fn append_row(
     page: &mut Vec<u8>,
     raw_url: &[u8],
     raw_title: Option<&[u8]>,
-    when: Option<&LocalTime>,
+    when: Option<&LocalDateTime>,
 ) {
     let url = ffi::utf8_make_valid(raw_url);
     let title = raw_title
@@ -274,7 +274,7 @@ fn append_row(
 fn append_visits(page: &mut Vec<u8>) -> bool {
     let mut have = false;
     let mut open_day = None;
-    let now = LocalTime::now();
+    let now = LocalDateTime::now();
     {
         let history = lock();
         if let Some(st) = history.db.as_ref().and_then(|db| db.prepare(RECENT)) {
@@ -285,9 +285,9 @@ fn append_visits(page: &mut Vec<u8>) -> bool {
                 };
                 let title = st.column_text(1);
                 have = true;
-                let when = LocalTime::from_unix(st.column_int64(2));
+                let when = LocalDateTime::from_unix(st.column_int64(2));
                 let day = match &when {
-                    Some(when) => day_label(when, &now),
+                    Some(when) => day_label(when, now.as_ref()),
                     None => b"Earlier".to_vec(),
                 };
                 switch_day(page, &mut open_day, &day);

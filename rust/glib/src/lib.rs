@@ -13,6 +13,7 @@ mod source;
 mod strtod;
 #[cfg(test)]
 mod tests;
+mod text;
 
 pub use dirs::{
     download_dir, home_dir, language_names, system_data_dirs, tmp_dir, user_cache_dir,
@@ -28,6 +29,7 @@ pub use source::{
     idle_add_once, scope, timeout_add_local, timeout_add_local_once, timeout_add_once,
     timeout_add_seconds_local,
 };
+pub use text::{LocalDateTime, convert, local_time_zone_identifier, utf8_collate};
 
 pub type GBoolean = c_int;
 pub const TRUE: GBoolean = 1;
@@ -118,6 +120,8 @@ unsafe extern "C" {
 pub struct GStr(core::ptr::NonNull<c_char>);
 
 impl GStr {
+    /// # Safety
+    /// `s` is null or a NUL-terminated GLib allocation the caller owns and hands over.
     pub unsafe fn take(s: *mut c_char) -> Option<Self> {
         core::ptr::NonNull::new(s).map(GStr)
     }
@@ -127,12 +131,14 @@ impl core::ops::Deref for GStr {
     type Target = CStr;
 
     fn deref(&self) -> &CStr {
+        // SAFETY: the string is a live NUL-terminated allocation this value owns.
         unsafe { CStr::from_ptr(self.0.as_ptr()) }
     }
 }
 
 impl Drop for GStr {
     fn drop(&mut self) {
+        // SAFETY: frees the allocation this value owns, exactly once.
         unsafe { g_free(self.0.as_ptr().cast()) };
     }
 }
@@ -142,12 +148,13 @@ pub fn boolean(value: bool) -> GBoolean {
 }
 
 pub fn strdup(bytes: &[u8]) -> *mut c_char {
-    unsafe {
-        let out = g_malloc(bytes.len() + 1).cast::<u8>();
-        ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len());
-        *out.add(bytes.len()) = 0;
-        out.cast()
-    }
+    // SAFETY: g_malloc aborts rather than return null, so the result is bytes.len() + 1 writable bytes.
+    let out = unsafe { g_malloc(bytes.len() + 1) }.cast::<u8>();
+    // SAFETY: out has room for bytes.len() bytes and cannot overlap the borrowed slice.
+    unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
+    // SAFETY: bytes.len() is the last of the bytes.len() + 1 allocated bytes.
+    unsafe { out.add(bytes.len()).write(0) };
+    out.cast()
 }
 
 pub fn ascii_strtod(text: &[u8]) -> f64 {
@@ -206,14 +213,20 @@ pub fn file_get_contents(path: &[u8]) -> Option<Vec<u8>> {
     std::fs::read(path_from_bytes(path)?).ok()
 }
 
+/// # Safety
+/// `p` is null or a NUL-terminated string that stays valid and unchanged for `'a`.
 pub unsafe fn bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
+    // SAFETY: the caller guarantees a non-null p is a NUL-terminated string living for 'a.
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
 }
 
+/// # Safety
+/// `p` is null or points to `len` initialized bytes that stay valid and unchanged for `'a`.
 pub unsafe fn slice<'a>(p: *const u8, len: usize) -> &'a [u8] {
     if p.is_null() || len == 0 {
         &[]
     } else {
+        // SAFETY: the caller guarantees p points to len bytes living for 'a.
         unsafe { core::slice::from_raw_parts(p, len) }
     }
 }

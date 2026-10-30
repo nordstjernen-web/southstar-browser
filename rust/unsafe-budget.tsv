@@ -29,13 +29,13 @@ extensions	3	2	0	0	2	1	0
 font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
-glib	90	78	0	0	5	1	3
+glib	108	89	0	0	0	1	0
 gtk-ffi	29	371	0	0	0	0	0
 headless	16	8	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
-history	14	6	1	0	10	1	0
+history	4	0	1	0	2	0	0
 html-parser	0	0	0	0	0	0	0
-html-util	9	6	0	0	8	1	0
+html-util	6	5	0	0	5	1	0
 html5	0	0	0	0	0	0	0
 http	36	23	0	0	8	1	0
 http-cache	10	7	0	0	0	0	0
@@ -56,7 +56,7 @@ js-crypto	0	0	0	0	0	0	0
 js-cssom	4	0	0	0	3	0	0
 js-custom-elements	0	0	0	0	0	0	0
 js-dispatch	0	0	0	0	0	0	0
-js-document	7	3	0	0	6	0	0
+js-document	1	0	0	0	1	0	0
 js-dom-factory	0	0	0	0	0	0	0
 js-elements	0	0	0	0	0	0	0
 js-engine	38	0	0	0	30	0	6
@@ -70,7 +70,7 @@ js-html	0	0	0	0	0	0	0
 js-images	4	0	0	0	2	1	0
 js-input	0	0	0	0	0	0	0
 js-interfaces	0	0	0	0	0	0	0
-js-intl	12	9	0	0	0	2	0
+js-intl	8	6	0	0	0	1	0
 js-lifecycle	0	0	0	0	0	0	0
 js-loader	0	0	0	0	0	0	0
 js-media	1	0	0	0	1	0	0
@@ -118,7 +118,7 @@ media-shm	0	0	0	0	0	0	0
 mic	9	5	0	0	0	0	0
 mime	0	0	0	0	0	0	0
 minimp3	0	0	0	0	0	0	0
-net	36	23	0	0	15	1	0
+net	28	18	0	0	10	1	0
 netstore	0	0	0	0	0	0	0
 netutil	2	1	0	0	0	0	0
 numfmt	0	0	0	0	0	0	0

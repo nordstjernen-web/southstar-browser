@@ -2,35 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_char};
 use std::ffi::CString;
 
 use southstar_config::util;
 use southstar_glib as glib;
 
-#[repr(C)]
-struct GDateTime {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    fn g_date_time_new_now_local() -> *mut GDateTime;
-    fn g_date_time_new_from_unix_local(t: i64) -> *mut GDateTime;
-    fn g_date_time_get_day_of_year(datetime: *mut GDateTime) -> c_int;
-    fn g_date_time_get_year(datetime: *mut GDateTime) -> c_int;
-    fn g_date_time_format(datetime: *mut GDateTime, format: *const c_char) -> *mut c_char;
-    fn g_date_time_unref(datetime: *mut GDateTime);
-}
-
 fn c_string(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-unsafe fn take(p: *mut c_char) -> Option<Vec<u8>> {
-    let bytes = unsafe { glib::bytes(p) }?.to_vec();
-    unsafe { glib::g_free(p.cast()) };
-    Some(bytes)
 }
 
 pub(crate) fn warn(message: &[u8]) {
@@ -83,39 +63,6 @@ pub(crate) fn unichar_to_utf8(c: char) -> Vec<u8> {
 
 pub(crate) fn uri_host(url: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::host_from(url)
-}
-
-pub(crate) struct LocalTime(*mut GDateTime);
-
-impl LocalTime {
-    pub(crate) fn now() -> LocalTime {
-        LocalTime(unsafe { g_date_time_new_now_local() })
-    }
-
-    pub(crate) fn from_unix(t: i64) -> Option<LocalTime> {
-        let dt = unsafe { g_date_time_new_from_unix_local(t) };
-        (!dt.is_null()).then(|| LocalTime(dt))
-    }
-
-    pub(crate) fn day_of_year(&self) -> i32 {
-        unsafe { g_date_time_get_day_of_year(self.0) }
-    }
-
-    pub(crate) fn year(&self) -> i32 {
-        unsafe { g_date_time_get_year(self.0) }
-    }
-
-    pub(crate) fn format(&self, format: &CStr) -> Option<Vec<u8>> {
-        unsafe { take(g_date_time_format(self.0, format.as_ptr())) }
-    }
-}
-
-impl Drop for LocalTime {
-    fn drop(&mut self) {
-        if !self.0.is_null() {
-            unsafe { g_date_time_unref(self.0) };
-        }
-    }
 }
 
 #[unsafe(no_mangle)]

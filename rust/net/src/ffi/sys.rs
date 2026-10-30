@@ -10,22 +10,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use southstar_config::util;
-use southstar_glib::GStr;
 use southstar_netutil::file_uri;
-
-#[repr(C)]
-struct GDateTime {
-    _private: [u8; 0],
-}
 
 const TMP_NAME_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 unsafe extern "C" {
-    fn g_utf8_collate(str1: *const c_char, str2: *const c_char) -> c_int;
-    fn g_date_time_new_from_unix_local(t: i64) -> *mut GDateTime;
-    fn g_date_time_format(datetime: *mut GDateTime, format: *const c_char) -> *mut c_char;
-    fn g_date_time_unref(datetime: *mut GDateTime);
-
     fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
 }
@@ -33,10 +22,6 @@ unsafe extern "C" {
 fn c(bytes: &[u8]) -> CString {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     CString::new(&bytes[..end]).unwrap_or_default()
-}
-
-fn take(p: *mut c_char) -> Option<Vec<u8>> {
-    unsafe { GStr::take(p) }.map(|s| s.to_bytes().to_vec())
 }
 
 fn io_message(error: &std::io::Error) -> Vec<u8> {
@@ -49,8 +34,7 @@ fn io_message(error: &std::io::Error) -> Vec<u8> {
 }
 
 pub fn utf8_collate(a: &[u8], b: &[u8]) -> Ordering {
-    let (a, b) = (c(a), c(b));
-    unsafe { g_utf8_collate(a.as_ptr(), b.as_ptr()) }.cmp(&0)
+    southstar_glib::utf8_collate(a, b)
 }
 
 pub fn ascii_strtoull(text: &[u8]) -> u64 {
@@ -169,13 +153,7 @@ pub fn lock_exclusive(path: &[u8]) -> Option<std::fs::File> {
 }
 
 pub fn local_time_label(secs: i64) -> Option<Vec<u8>> {
-    let dt = unsafe { g_date_time_new_from_unix_local(secs) };
-    if dt.is_null() {
-        return None;
-    }
-    let out = take(unsafe { g_date_time_format(dt, c"%Y-%m-%d %H:%M".as_ptr()) });
-    unsafe { g_date_time_unref(dt) };
-    out
+    southstar_glib::LocalDateTime::from_unix(secs)?.format(c"%Y-%m-%d %H:%M")
 }
 
 pub fn mime_type_guess(filename: &[u8], data: Option<&[u8]>) -> Vec<u8> {

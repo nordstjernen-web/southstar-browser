@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 use core::ptr;
 use std::ffi::CString;
 
@@ -29,24 +29,8 @@ impl Js {
     }
 }
 
-unsafe extern "C" {
-    fn g_date_time_new_now_local() -> *mut c_void;
-    fn g_date_time_format(datetime: *mut c_void, format: *const c_char) -> *mut c_char;
-    fn g_date_time_unref(datetime: *mut c_void);
-}
-
 fn raw(node: Option<Element>) -> *mut NsNode {
     node.map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
-fn borrowed_text(text: *const c_char) -> Option<Vec<u8>> {
-    (!text.is_null()).then(|| unsafe { CStr::from_ptr(text) }.to_bytes().to_vec())
-}
-
-fn take_glib_string(text: *mut c_char) -> Option<Vec<u8>> {
-    let bytes = borrowed_text(text)?;
-    unsafe { glib::g_free(text.cast()) };
-    Some(bytes)
 }
 
 fn c_bytes(bytes: &[u8]) -> CString {
@@ -252,13 +236,8 @@ pub(crate) fn http_date(date: &[u8]) -> i64 {
 }
 
 pub(crate) fn local_now_formatted(format: &CStr) -> Option<Vec<u8>> {
-    let now = unsafe { g_date_time_new_now_local() };
-    if now.is_null() {
-        return None;
-    }
-    let text = take_glib_string(unsafe { g_date_time_format(now, format.as_ptr()) });
-    unsafe { g_date_time_unref(now) };
-    Some(text.unwrap_or_default())
+    let now = glib::LocalDateTime::now()?;
+    Some(now.format(format).unwrap_or_default())
 }
 
 macro_rules! rust_methods {
