@@ -129,7 +129,7 @@ plmpeg	0	0	0	0	0	0	0
 print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
 render	2	0	0	0	1	0	0
-renderer-client	90	47	0	0	37	4	0
+renderer-client	61	46	0	0	0	0	0
 renderer-host	48	35	1	0	12	3	0
 safebrowsing	9	4	0	0	0	0	0
 sandbox	68	43	0	0	10	2	0
@@ -138,7 +138,7 @@ selector-text	0	0	0	0	0	0	0
 shell	238	35	1	0	20	4	0
 southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
-sqlite	29	23	0	0	27	6	0
+sqlite	29	21	0	0	0	0	0
 static	0	0	0	0	0	0	0
 style	4	0	0	0	0	0	0
 svg	0	0	0	0	0	0	0

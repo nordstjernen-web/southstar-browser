@@ -169,7 +169,7 @@ impl Cache {
     }
 
     fn drop_if_legacy(&self) {
-        let Some(st) = self
+        let Some(mut st) = self
             .db
             .as_ref()
             .and_then(|db| db.prepare(c"SELECT name FROM pragma_table_info('entries')"))
@@ -190,7 +190,7 @@ impl Cache {
     }
 
     fn user_version(&self) -> i32 {
-        let Some(st) = self
+        let Some(mut st) = self
             .db
             .as_ref()
             .and_then(|db| db.prepare(c"PRAGMA user_version"))
@@ -235,7 +235,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
     }
 
     fn find_row_key(&self, base_key: &[u8], headers: &[&[u8]]) -> Option<Vec<u8>> {
-        let st = self
+        let mut st = self
             .db
             .as_ref()?
             .prepare(c"SELECT key,vary FROM entries WHERE base_key=?")?;
@@ -258,7 +258,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
         if let Some(dir) = &self.dir {
             ffi::unlink(&body_path_for_key(dir, key, false));
         }
-        let Some(st) = self
+        let Some(mut st) = self
             .db
             .as_ref()
             .and_then(|db| db.prepare(c"DELETE FROM entries WHERE key=?"))
@@ -270,7 +270,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
     }
 
     fn touch_key(&self, key: &[u8]) {
-        let Some(st) = self
+        let Some(mut st) = self
             .db
             .as_ref()
             .and_then(|db| db.prepare(c"UPDATE entries SET last_used=? WHERE key=?"))
@@ -286,7 +286,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
         let Some(db) = &self.db else {
             return;
         };
-        let Some(st) = db.prepare(sql) else {
+        let Some(mut st) = db.prepare(sql) else {
             return;
         };
         st.bind_int64(1, bind_value);
@@ -386,7 +386,7 @@ pub fn get(url: &[u8], partition: Option<&[u8]>, headers: &[&[u8]]) -> Option<En
     }
     let base = base_key_for_url(url, partition);
     let key = cache.find_row_key(&base, headers)?;
-    let st = cache.db.as_ref()?.prepare(
+    let mut st = cache.db.as_ref()?.prepare(
         c"SELECT final_url,status,content_type,cors_allow_origin,etag,last_modified,expires_at,fetched_at,body_size,headers FROM entries WHERE key=?",
     )?;
     st.bind_text(1, Some(&cstring(&key)));
@@ -498,7 +498,7 @@ pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, header
     };
     let base = base_key_for_url(url, partition);
     let key = row_key_for(&base, &selector);
-    let Some(st) = cache.db.as_ref().and_then(|db| {
+    let Some(mut st) = cache.db.as_ref().and_then(|db| {
         db.prepare(
             c"INSERT INTO entries(key,base_key,url,final_url,status,content_type,cors_allow_origin,etag,last_modified,vary,expires_at,fetched_at,last_used,body_size,headers) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET url=excluded.url,final_url=excluded.final_url,status=excluded.status,content_type=excluded.content_type,cors_allow_origin=excluded.cors_allow_origin,headers=excluded.headers,etag=excluded.etag,last_modified=excluded.last_modified,vary=excluded.vary,expires_at=excluded.expires_at,fetched_at=excluded.fetched_at,last_used=excluded.last_used,body_size=excluded.body_size",
         )
@@ -563,7 +563,7 @@ pub fn promote_304(
     let Some(db) = &cache.db else {
         return;
     };
-    let Some(st) = db.prepare(c"SELECT expires_at FROM entries WHERE key=?") else {
+    let Some(mut st) = db.prepare(c"SELECT expires_at FROM entries WHERE key=?") else {
         return;
     };
     st.bind_text(1, Some(&cstring(&key)));
@@ -576,7 +576,7 @@ pub fn promote_304(
     if expires_at <= old_expires {
         return;
     }
-    let Some(st) =
+    let Some(mut st) =
         db.prepare(c"UPDATE entries SET expires_at=?,fetched_at=?,last_used=? WHERE key=?")
     else {
         return;
