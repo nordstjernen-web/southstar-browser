@@ -220,3 +220,8 @@ pub unsafe fn views(notebook: *mut GtkWidget) -> Vec<View> {
             .collect()
     }
 }
+
+pub fn notebook_views(notebook: &southstar_gtk::Widget) -> Vec<View> {
+    // SAFETY: the handle keeps the notebook alive for the call.
+    unsafe { views(notebook.as_ptr()) }
+}

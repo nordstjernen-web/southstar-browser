@@ -190,6 +190,16 @@ unsafe fn toolbar_button(
 }
 
 impl ProcWindow {
+    fn window_handle(&self) -> Option<southstar_gtk::Widget> {
+        // SAFETY: the window pointer is null or the live toplevel this record belongs to.
+        unsafe { southstar_gtk::Widget::from_ptr(self.window.get()) }
+    }
+
+    fn notebook_handle(&self) -> Option<southstar_gtk::Widget> {
+        // SAFETY: the notebook pointer is null or the live notebook inside this window.
+        unsafe { southstar_gtk::Widget::from_ptr(self.notebook()) }
+    }
+
     fn notebook(&self) -> *mut GtkWidget {
         self.notebook.get()
     }
@@ -922,12 +932,9 @@ unsafe extern "C" fn on_view_notify(
                         let target = cstring(target);
                         let name = name.filter(|n| !n.is_empty()).map(cstring);
                         let page = v.url();
-                        downloads::start(
-                            pw.window.get(),
-                            &target,
-                            name.as_deref(),
-                            page.as_deref(),
-                        );
+                        if let Some(window) = pw.window_handle() {
+                            downloads::start(&window, &target, name.as_deref(), page.as_deref());
+                        }
                     }
                 }
             }
@@ -1117,7 +1124,9 @@ unsafe extern "C" fn on_address_icon_press(_entry: *mut GtkWidget, pos: c_int, d
 }
 
 unsafe extern "C" fn on_downloads_clicked(_b: *mut GtkWidget, data: *mut c_void) {
-    unsafe { downloads::show(pw(data).window.get()) };
+    if let Some(window) = unsafe { pw(data) }.window_handle() {
+        downloads::show(&window);
+    }
 }
 
 unsafe extern "C" fn on_newtab_clicked(_b: *mut GtkWidget, data: *mut c_void) {
@@ -1259,12 +1268,16 @@ unsafe extern "C" fn act_quit(_a: *mut c_void, _p: *mut c_void, data: *mut c_voi
 }
 
 unsafe extern "C" fn act_downloads(_a: *mut c_void, _p: *mut c_void, data: *mut c_void) {
-    unsafe { downloads::show(pw(data).window.get()) };
+    if let Some(window) = unsafe { pw(data) }.window_handle() {
+        downloads::show(&window);
+    }
 }
 
 unsafe extern "C" fn act_task_manager(_a: *mut c_void, _p: *mut c_void, data: *mut c_void) {
     let pw = unsafe { pw(data) };
-    unsafe { taskmgr::show(pw.window.get(), pw.notebook()) };
+    if let (Some(window), Some(notebook)) = (pw.window_handle(), pw.notebook_handle()) {
+        taskmgr::show(&window, &notebook);
+    }
 }
 
 unsafe extern "C" fn act_print(_a: *mut c_void, _p: *mut c_void, data: *mut c_void) {

@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: new `rust/gtk` (`southstar-gtk`) crate of safe,
+  reference-counted GTK widget handles — `Widget`, typed `Box`, `Label`,
+  `Button`, `ListBox`, `Window`, `ProgressBar` and friends, Rust-closure
+  signal handlers, weak references and typed per-object data. The task
+  manager and downloads windows are rewritten on it and contain no
+  `unsafe` code; downloads run on a `std::thread` and report back through
+  a main-loop idle callback instead of a leaked record shared across
+  threads. The shell's unsafe count drops from 870 to 808.
 * Internals: printing and single-process mode no longer go through GLib
   containers: printed pages are a Rust `Vec` of cairo surfaces from
   renderer to print dialog, the in-process framebuffer is an `Arc`-owned
