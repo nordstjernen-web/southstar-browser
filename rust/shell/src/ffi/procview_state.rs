@@ -3,8 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
+use core::sync::atomic::AtomicI32;
+use std::ffi::CString;
 
-use southstar_glib::GBoolean;
+use southstar_glib::{GBoolean, SourceId};
+use southstar_gtk::{Entry, Label, Revealer, SearchEntry, TextView, Widget, Window};
 use southstar_gtk_ffi::{GBytes, GtkWidget};
 use southstar_renderer_client::{PrintedPages, Remote, Renderer};
 
@@ -135,9 +138,47 @@ pub struct Res {
     pub print_setup: PrintSetup,
 }
 
+pub struct FindBar {
+    pub revealer: Revealer,
+    pub entry: SearchEntry,
+    pub label: Label,
+}
+
+pub struct PermBar {
+    pub revealer: Revealer,
+    pub label: Label,
+}
+
+pub struct Console {
+    pub window: Window,
+    pub notebook: Widget,
+    pub entry: Entry,
+    pub log: TextView,
+    pub network: TextView,
+    pub performance: TextView,
+    pub layout: TextView,
+    pub elements: TextView,
+}
+
+#[derive(Default)]
+pub struct ViewUi {
+    pub current_url: Option<CString>,
+    pub current_title: Option<CString>,
+    pub remote_ip: Option<CString>,
+    pub deferred_url: Option<CString>,
+    pub perm_origin: Option<CString>,
+    pub ctx_link: Option<CString>,
+    pub history: Vec<CString>,
+    pub find: Option<FindBar>,
+    pub perm: Option<PermBar>,
+    pub console: Option<Console>,
+    pub console_poll: Option<SourceId>,
+}
+
 #[repr(C)]
 pub struct NsProcView {
-    pub rc: c_int,
+    pub rc: AtomicI32,
+    pub ui: Option<Box<ViewUi>>,
     pub root: *mut GtkWidget,
     pub area: *mut GtkWidget,
     pub hscroll: *mut GtkWidget,
@@ -155,10 +196,7 @@ pub struct NsProcView {
     pub media: *mut c_void,
     pub notify: NotifyFn,
     pub notify_ud: *mut c_void,
-    pub current_url: *mut c_char,
-    pub current_title: *mut c_char,
     pub security: c_int,
-    pub remote_ip: *mut c_char,
     pub page_w: c_int,
     pub page_h: c_int,
     pub scroll_x: c_int,
@@ -194,42 +232,17 @@ pub struct NsProcView {
     pub multi_click: GBoolean,
     pub ctx_x: f64,
     pub ctx_y: f64,
-    pub ctx_link: *mut c_char,
     pub ctx_popover: *mut GtkWidget,
     pub ctx_actions: *mut c_void,
-    pub search_revealer: *mut GtkWidget,
-    pub search_entry: *mut GtkWidget,
-    pub search_label: *mut GtkWidget,
     pub find_seq: c_int,
     pub find_case: GBoolean,
-    pub overlay: *mut GtkWidget,
-    pub perm_revealer: *mut GtkWidget,
-    pub perm_label: *mut GtkWidget,
     pub perm_kind: c_int,
     pub perm_pending: GBoolean,
-    pub perm_origin: *mut c_char,
-    pub console_window: *mut GtkWidget,
-    pub console_notebook: *mut GtkWidget,
-    pub console_entry: *mut GtkWidget,
-    pub console_view: *mut GtkWidget,
-    pub console_buffer: *mut c_void,
-    pub net_view: *mut GtkWidget,
-    pub net_buffer: *mut c_void,
-    pub perf_view: *mut GtkWidget,
-    pub perf_buffer: *mut c_void,
-    pub layout_view: *mut GtkWidget,
-    pub layout_buffer: *mut c_void,
-    pub elements_view: *mut GtkWidget,
-    pub elements_buffer: *mut c_void,
-    pub inspect_entry: *mut GtkWidget,
     pub console_open: GBoolean,
-    pub console_poll_id: c_uint,
-    pub history: *mut c_void,
     pub hist_index: c_int,
     pub pending_record: GBoolean,
     pub pending_local: GBoolean,
     pub local_page: GBoolean,
-    pub deferred_url: *mut c_char,
     pub deferred_record: GBoolean,
     pub deferred_history: GBoolean,
     pub deferred_user_activated: GBoolean,
@@ -274,4 +287,10 @@ pub struct NsProcView {
     pub last_anim_frame_us: i64,
     pub page_animating: GBoolean,
     pub caret_blinking: GBoolean,
+}
+
+impl NsProcView {
+    pub fn ui(&mut self) -> &mut ViewUi {
+        self.ui.get_or_insert_with(Box::default)
+    }
 }

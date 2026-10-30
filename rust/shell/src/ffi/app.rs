@@ -93,8 +93,7 @@ fn on_activate(ctx: &Context, app: &Application) {
     #[cfg(target_os = "macos")]
     super::macos_dock::set_dock_icon();
     install_chrome_css();
-    // SAFETY: app is the live application emitting activate; the window it builds registers with it.
-    let pw = unsafe { window::proc_window_new(app.as_ptr(), initial_size()) };
+    let pw = window::proc_window_new(app, initial_size());
     *pw.session_path.borrow_mut() = ctx.session_path.clone();
     pw.present();
     pw.apply_scheme();
@@ -117,11 +116,7 @@ fn on_activate(ctx: &Context, app: &Application) {
         let url = ctx.url.as_deref().unwrap_or(c"about:start");
         pw.add_tab_full(url, true, ctx.private_mode);
     }
-    if pw.session_path.borrow().is_some() {
-        // SAFETY: write_session reads its data as the ProcWindow, which lives until the window is destroyed and removes this timer first.
-        let timer = unsafe { gtk::g_timeout_add_seconds(4, window::write_session, pw.as_data()) };
-        pw.session_timer.set(timer);
-    }
+    pw.start_session_timer();
 }
 
 fn mtime_seconds(path: &Path) -> Option<i64> {

@@ -70,6 +70,31 @@ pub(crate) unsafe fn connect_boxed<F: 'static>(
     callback: sys::GCallback,
     f: F,
 ) -> SignalHandlerId {
+    // SAFETY: the caller's guarantee is passed on unchanged.
+    unsafe { connect_boxed_flags(object, signal, callback, f, 0) }
+}
+
+/// # Safety
+/// As for [`connect_boxed`]; the handler runs after the signal's default handler.
+pub(crate) unsafe fn connect_boxed_after<F: 'static>(
+    object: &Object,
+    signal: &CStr,
+    callback: sys::GCallback,
+    f: F,
+) -> SignalHandlerId {
+    // SAFETY: the caller's guarantee is passed on unchanged.
+    unsafe { connect_boxed_flags(object, signal, callback, f, sys::CONNECT_AFTER) }
+}
+
+/// # Safety
+/// As for [`connect_boxed`].
+unsafe fn connect_boxed_flags<F: 'static>(
+    object: &Object,
+    signal: &CStr,
+    callback: sys::GCallback,
+    f: F,
+    flags: c_uint,
+) -> SignalHandlerId {
     let data = Box::into_raw(Box::new(f)).cast::<c_void>();
     // SAFETY: object is live, signal is NUL-terminated, the caller vouches for callback, and drop_closure frees data with the handler.
     let id = unsafe {
@@ -79,7 +104,7 @@ pub(crate) unsafe fn connect_boxed<F: 'static>(
             callback,
             data,
             Some(signal::drop_closure::<F>),
-            0,
+            flags,
         )
     };
     SignalHandlerId::from_raw(id)
@@ -129,7 +154,7 @@ unsafe extern "C" fn on_key<R: Reply, F: Fn(c_uint, c_uint, GdkModifierType) -> 
     f(keyval, keycode, state).into_c()
 }
 
-fn take_path(file: *mut c_void) -> Option<Vec<u8>> {
+pub(crate) fn take_path(file: *mut c_void) -> Option<Vec<u8>> {
     // SAFETY: file is a live GFile of the dropped list; the path is a new string or null.
     let path = unsafe { sys::g_file_get_path(file) };
     if path.is_null() {
@@ -252,6 +277,11 @@ impl EventController {
         self.0.as_ptr().cast()
     }
 
+    pub fn set_propagation_phase(&self, phase: c_int) {
+        // SAFETY: self is a live event controller; GTK checks the phase value.
+        unsafe { sys::gtk_event_controller_set_propagation_phase(self.as_ptr().cast(), phase) };
+    }
+
     pub fn current_event_state(&self) -> GdkModifierType {
         // SAFETY: self is a live event controller.
         unsafe { sys::gtk_event_controller_get_current_event_state(self.as_ptr()) }
@@ -271,8 +301,28 @@ controller_class!(
     EventControllerMotion,
     EventControllerKey,
     EventControllerScroll,
+    EventControllerFocus,
     DropTarget,
 );
+
+impl EventControllerFocus {
+    pub fn new() -> EventControllerFocus {
+        // SAFETY: gtk_event_controller_focus_new has no preconditions.
+        EventControllerFocus(EventController::adopt(unsafe {
+            sys::gtk_event_controller_focus_new()
+        }))
+    }
+
+    pub fn connect_enter(&self, f: impl Fn() + 'static) -> SignalHandlerId {
+        signal::connect_plain(&self.0.0, c"enter", f)
+    }
+}
+
+impl Default for EventControllerFocus {
+    fn default() -> EventControllerFocus {
+        EventControllerFocus::new()
+    }
+}
 
 fn set_button(gesture: &EventController, button: c_uint) {
     // SAFETY: gesture is a live GtkGestureSingle.

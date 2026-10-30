@@ -30,7 +30,7 @@ font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
 glib	110	90	0	0	0	1	0
-gtk	330	22	0	0	0	0	0
+gtk	495	27	0	0	0	0	0
 gtk-ffi	29	371	0	0	0	0	0
 headless	15	8	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
@@ -135,7 +135,7 @@ safebrowsing	9	4	0	0	0	0	0
 sandbox	68	43	0	0	10	2	0
 selection	0	0	0	0	0	0	0
 selector-text	0	0	0	0	0	0	0
-shell	494	44	1	0	250	97	0
+shell	238	35	1	0	20	4	0
 southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	23	0	0	27	6	0

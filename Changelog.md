@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the browser window and the tab view's chrome run on
+  `southstar-gtk`. The window record is an `Rc` whose closures hold only a
+  weak reference; tabs, toolbar, address bar, status pill, actions, menu,
+  bookmarks popover, fullscreen and session saving use typed handles
+  (`SimpleAction`, `Menu`, `Notebook`, `Popover`, `Entry`, ...). The find
+  bar, permission bar, developer tools, print operation and save dialogs
+  use new `PrintOperation`, `FileDialog`, `Revealer` and `SearchEntry`
+  wrappers, and page URL, title and history are owned Rust strings and a
+  `Vec`. The session file is written to a temporary file and renamed. The
+  shell's unsafe count drops from 494 to 238 and its undocumented unsafe
+  blocks from 250 to 20.
 * Fix: the headless runner (`--headless --dump=...`) and single-process
   mode no longer abort at exit with "cannot access a Thread Local Storage
   value during or after destruction". The in-process renderer connection

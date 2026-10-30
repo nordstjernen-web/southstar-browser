@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
+use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_gtk_ffi::{self as gtk, GCallback, GtkWidget};
+use southstar_gtk_ffi::{self as gtk, GCallback};
 
 macro_rules! handler {
     ($f:expr) => {{
@@ -69,36 +69,6 @@ pub fn basename(path: &CStr) -> CString {
 
 pub fn file_test(path: &CStr, test: core::ffi::c_uint) -> bool {
     unsafe { gtk::g_file_test(path.as_ptr(), test) != 0 }
-}
-
-pub unsafe fn set_accessible_label(w: *mut GtkWidget, label: &CStr) {
-    unsafe {
-        gtk::gtk_accessible_update_property(
-            w,
-            gtk::ACCESSIBLE_PROPERTY_LABEL,
-            label.as_ptr(),
-            -1 as c_int,
-        )
-    };
-}
-
-pub unsafe fn toggle_css_class(w: *mut GtkWidget, class: &CStr, on: bool) {
-    unsafe {
-        if on {
-            gtk::gtk_widget_add_css_class(w, class.as_ptr());
-        } else {
-            gtk::gtk_widget_remove_css_class(w, class.as_ptr());
-        }
-    }
-}
-
-pub unsafe fn set_margins(w: *mut GtkWidget, start: c_int, end: c_int, top: c_int, bottom: c_int) {
-    unsafe {
-        gtk::gtk_widget_set_margin_start(w, start);
-        gtk::gtk_widget_set_margin_end(w, end);
-        gtk::gtk_widget_set_margin_top(w, top);
-        gtk::gtk_widget_set_margin_bottom(w, bottom);
-    }
 }
 
 pub fn open_path(path: &CStr) {

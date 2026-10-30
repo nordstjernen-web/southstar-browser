@@ -62,6 +62,56 @@ pub fn display_is_safe(decoded: &str) -> bool {
     })
 }
 
+fn hex_digit(c: u8) -> Option<u8> {
+    char::from(c)
+        .to_digit(16)
+        .and_then(|d| u8::try_from(d).ok())
+}
+
+pub fn uri_unescape(text: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(text.len());
+    let mut rest = text;
+    while let Some((&c, tail)) = rest.split_first() {
+        if c != b'%' {
+            out.push(c);
+            rest = tail;
+            continue;
+        }
+        let (hi, lo) = match tail {
+            [hi, lo, ..] => (hex_digit(*hi)?, hex_digit(*lo)?),
+            _ => return None,
+        };
+        let byte = hi << 4 | lo;
+        if byte == 0 {
+            return None;
+        }
+        out.push(byte);
+        rest = &tail[2..];
+    }
+    Some(out)
+}
+
+pub fn markup_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '\'' => out.push_str("&apos;"),
+            '"' => out.push_str("&quot;"),
+            '\u{1}'..='\u{8}'
+            | '\u{b}'
+            | '\u{c}'
+            | '\u{e}'..='\u{1f}'
+            | '\u{7f}'..='\u{84}'
+            | '\u{86}'..='\u{9f}' => out.push_str(&format!("&#x{:x};", u32::from(c))),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 pub fn completed_host(text: &[u8], ctrl: bool, shift: bool) -> Option<Vec<u8>> {
     let text = strip(text);
     if text.is_empty() || contains(text, b"://") || text.contains(&b' ') || is_explicit_url(text) {

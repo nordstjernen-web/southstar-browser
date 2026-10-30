@@ -6,12 +6,14 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_glib::{self as glib, GBoolean, GPtrArray};
+use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk_ffi as gtk;
 
+use super::gtk::{cstring, tr};
 use super::pagelayers::{ns_layer_update_free, ns_page_layers_reset};
 use super::procview_chrome::{
-    ns_pv_console_append, ns_pv_console_set_open, ns_pv_show_context_menu, print_run,
+    ns_pv_console_append, ns_pv_console_set_open, ns_pv_console_text, ns_pv_show_context_menu,
+    print_run,
 };
 use super::procview_draw::{
     arm_anim, clear_busy_cursor, configure_adjustments, disarm_anim, layers,
@@ -19,14 +21,15 @@ use super::procview_draw::{
     set_named_cursor, start_render, tiles_apply, tiles_leave,
 };
 use super::procview_input::{
-    cur_scale, maybe_update_viewport, ns_pv_css_viewport_h, ns_pv_css_viewport_w, page_dpr,
-    push_req, start_hover, start_link, start_select,
+    area, cur_scale, hadj, maybe_update_viewport, new_req, ns_pv_css_viewport_h,
+    ns_pv_css_viewport_w, page_dpr, push_req, push_req_front, start_hover, start_link,
+    start_select, vadj, view,
 };
 use super::procview_media::{
     ns_pv_media_audio_pid, ns_pv_media_audio_shutdown, ns_pv_media_pump, ns_pv_media_stats,
     ns_pv_media_video_pid, ns_pv_media_video_playing, ns_pv_media_video_shutdown,
 };
-use super::procview_state::{NsProcView, Req, Res};
+use super::procview_state::{NsProcView, Res};
 use super::procview_view::ns_proc_view_unref;
 use super::procview_worker::{
     RES_CLICK, RES_CONSOLE, RES_COPY, RES_DROPFILES, RES_DUMP, RES_EVAL, RES_EXPORT, RES_FAVICON,
@@ -65,96 +68,67 @@ const DEV_TAB_PERFORMANCE: c_int = 2;
 const DEV_TAB_LAYOUT: c_int = 3;
 const DEV_TAB_ELEMENTS: c_int = 4;
 
-unsafe extern "C" {
-    fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    fn g_async_queue_push_front(queue: *mut c_void, data: *mut c_void);
-    fn g_strcmp0(a: *const c_char, b: *const c_char) -> c_int;
+fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: every string a reply carries is null or NUL-terminated and owned by the reply, which outlives its dispatch.
+    (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
 
-fn view<'a>(v: *mut NsProcView) -> &'a mut NsProcView {
-    unsafe { &mut *v }
+fn filled<'a>(s: *const c_char) -> Option<&'a CStr> {
+    text(s).filter(|s| !s.is_empty())
 }
 
-fn tr(text: &CStr) -> *const c_char {
-    southstar_i18n::translate(text).unwrap_or(text).as_ptr()
+fn is_local(url: &CStr) -> bool {
+    nav::is_local_url(url.to_bytes())
 }
 
-fn nonempty(s: *const c_char) -> bool {
-    !s.is_null() && unsafe { *s } != 0
-}
-
-fn same(a: *const c_char, b: *const c_char) -> bool {
-    unsafe { g_strcmp0(a, b) == 0 }
-}
-
-fn dup(s: *const c_char) -> *mut c_char {
-    unsafe { glib::g_strdup(s) }
-}
-
-fn url_bytes<'a>(url: *const c_char) -> Option<&'a [u8]> {
-    // SAFETY: every URL the view holds or receives is null or a NUL-terminated string it owns.
-    unsafe { glib::bytes(url) }
-}
-
-fn is_local(url: *const c_char) -> bool {
-    url_bytes(url).is_some_and(nav::is_local_url)
-}
-
-fn page_may_open(v: *mut NsProcView, url: *const c_char) -> bool {
+fn page_may_open(v: *mut NsProcView, url: &CStr) -> bool {
     if !is_local(url) || view(v).local_page != 0 {
         return true;
     }
     post_emit(
         v,
         EVT_STATUS,
-        tr(c"Blocked a web page from opening a local file"),
+        Some(tr(c"Blocked a web page from opening a local file")),
     );
     false
 }
 
-pub(super) fn ns_pv_page_may_open(v: *mut NsProcView, url: *const c_char) -> bool {
+pub(super) fn ns_pv_page_may_open(v: *mut NsProcView, url: &CStr) -> bool {
     page_may_open(v, url)
 }
 
-fn page_load(v: *mut NsProcView, url: *const c_char) {
+fn page_load(v: *mut NsProcView, url: &CStr) {
     if page_may_open(v, url) {
         load(v, url);
     }
 }
 
-fn replace(slot: &mut *mut c_char, value: *mut c_char) {
-    unsafe { glib::g_free((*slot).cast()) };
-    *slot = value;
-}
-
 fn clear_object(slot: &mut *mut c_void) {
     if !slot.is_null() {
+        // SAFETY: slot holds the one reference the view owns to this object, dropped once here.
         unsafe { gtk::g_object_unref(*slot) };
         *slot = ptr::null_mut();
     }
 }
 
-fn history(v: *mut NsProcView) -> *mut GPtrArray {
-    view(v).history.cast()
-}
-
 fn history_len(v: *mut NsProcView) -> c_int {
-    unsafe { (*history(v)).len as c_int }
+    c_int::try_from(view(v).ui().history.len()).unwrap_or(c_int::MAX)
 }
 
-fn history_at(v: *mut NsProcView, index: c_int) -> *mut c_char {
-    unsafe { *(*history(v)).pdata.add(index as usize) }.cast()
+fn history_at(v: *mut NsProcView, index: c_int) -> Option<CString> {
+    let index = usize::try_from(index).ok()?;
+    view(v).ui().history.get(index).cloned()
 }
 
-fn new_req(kind: c_int) -> *mut Req {
-    let req = unsafe { g_malloc0(core::mem::size_of::<Req>()) }.cast::<Req>();
-    unsafe { (*req).r#type = kind };
-    req
+fn current_url(v: *mut NsProcView) -> Option<CString> {
+    view(v).ui().current_url.clone()
 }
 
-pub(super) fn post_emit(v: *mut NsProcView, evt: c_int, text: *const c_char) {
+pub(super) fn post_emit(v: *mut NsProcView, evt: c_int, text: Option<&CStr>) {
     let state = view(v);
     if let Some(notify) = state.notify {
+        let text = text.map_or(ptr::null(), CStr::as_ptr);
+        // SAFETY: the window registered notify for this view with notify_ud as its data; text is null or NUL-terminated for the call.
         unsafe { notify(v, evt, text, state.notify_ud) };
     }
 }
@@ -163,72 +137,74 @@ fn finish_loading(v: *mut NsProcView) {
     let state = view(v);
     if state.loading != 0 {
         state.loading = 0;
-        post_emit(v, EVT_LOADING, c"0".as_ptr());
+        post_emit(v, EVT_LOADING, Some(c"0"));
     }
 }
 
 fn request_favicon(v: *mut NsProcView) {
-    let req = new_req(REQ_FAVICON);
-    unsafe { (*req).seq = view(v).load_seq };
-    push_req(v, req);
+    let seq = view(v).load_seq;
+    push_req(v, new_req(REQ_FAVICON, |r| r.seq = seq));
 }
 
-fn push_history(v: *mut NsProcView, url: *const c_char) {
-    if !nonempty(url) {
+fn push_history(v: *mut NsProcView, url: &CStr) {
+    if url.is_empty() {
         return;
     }
     let index = view(v).hist_index;
-    if index >= 0 && same(history_at(v, index), url) {
+    let ui = view(v).ui();
+    if index >= 0 && ui.history.get(index as usize).map(CString::as_c_str) == Some(url) {
         return;
     }
-    while history_len(v) > index + 1 {
-        unsafe { glib::g_ptr_array_remove_index(history(v), (history_len(v) - 1) as u32) };
-    }
-    unsafe { glib::g_ptr_array_add(history(v), dup(url).cast()) };
+    ui.history.truncate(usize::try_from(index + 1).unwrap_or(0));
+    ui.history.push(url.to_owned());
     view(v).hist_index = history_len(v) - 1;
-    post_emit(v, EVT_HISTORY, ptr::null());
+    post_emit(v, EVT_HISTORY, None);
 }
 
 fn follow_same_document_state(
     v: *mut NsProcView,
-    url: *const c_char,
+    url: Option<&CStr>,
     pushed: bool,
-    title: *const c_char,
+    title: Option<&CStr>,
 ) {
-    let state = view(v);
-    let accepted = url_bytes(url).is_some_and(|next| {
-        nav::same_document_url_ok(url_bytes(state.current_url), next, state.local_page != 0)
+    let local_page = view(v).local_page != 0;
+    let current = current_url(v);
+    let accepted = url.is_some_and(|next| {
+        nav::same_document_url_ok(
+            current.as_deref().map(CStr::to_bytes),
+            next.to_bytes(),
+            local_page,
+        )
     });
-    if nonempty(url) && accepted && !same(url, view(v).current_url) {
+    if let Some(url) = url.filter(|url| !url.is_empty())
+        && accepted
+        && current.as_deref() != Some(url)
+    {
         let index = view(v).hist_index;
         if pushed || index < 0 {
             push_history(v, url);
-        } else {
-            unsafe {
-                let slot = (*history(v)).pdata.add(index as usize);
-                glib::g_free(*slot);
-                *slot = dup(url).cast();
-            }
+        } else if let Some(slot) = view(v).ui().history.get_mut(index as usize) {
+            *slot = url.to_owned();
         }
-        let state = view(v);
-        replace(&mut state.current_url, dup(url));
-        post_emit(v, EVT_URL, state.current_url);
+        view(v).ui().current_url = Some(url.to_owned());
+        post_emit(v, EVT_URL, Some(url));
     }
-    if !title.is_null() && !same(title, view(v).current_title) {
-        let state = view(v);
-        replace(&mut state.current_title, dup(title));
-        post_emit(v, EVT_TITLE, state.current_title);
+    if let Some(title) = title
+        && view(v).ui().current_title.as_deref() != Some(title)
+    {
+        view(v).ui().current_title = Some(title.to_owned());
+        post_emit(v, EVT_TITLE, Some(title));
     }
 }
 
 pub(super) fn do_load(
     v: *mut NsProcView,
-    url: *const c_char,
+    url: &CStr,
     record: bool,
     history: bool,
     user_activated: bool,
 ) {
-    if !nonempty(url) {
+    if url.is_empty() {
         return;
     }
     perm_resolve(v, false);
@@ -257,35 +233,38 @@ pub(super) fn do_load(
     state.hover_pending = 0;
     state.has_selection = 0;
     state.find_seq += 1;
-    unsafe {
-        if !state.search_revealer.is_null() {
-            gtk::gtk_revealer_set_reveal_child(state.search_revealer, 0);
-        }
-        if !state.search_label.is_null() {
-            gtk::gtk_label_set_text(state.search_label, c"".as_ptr());
-        }
+    if let Some(find) = state.ui().find.as_ref() {
+        let (revealer, label) = (find.revealer.clone(), find.label.clone());
+        revealer.set_reveal_child(false);
+        label.set_text(c"");
     }
+    let state = view(v);
     state.opened = 0;
     state.page_animating = 0;
     state.caret_blinking = 0;
     ns_pv_stop_wheel_animation(v);
     disarm_anim(v);
+    let state = view(v);
     clear_object(&mut state.frame);
     ns_page_layers_reset(layers(v));
-    state.tiles_mode = 0;
-    unsafe { gtk::gtk_widget_queue_draw(state.area) };
+    view(v).tiles_mode = 0;
+    let area = area(v);
+    if let Some(area) = &area {
+        area.queue_draw();
+    }
+    let state = view(v);
     if state.loading == 0 {
         state.loading = 1;
-        post_emit(v, EVT_LOADING, c"1".as_ptr());
+        post_emit(v, EVT_LOADING, Some(c"1"));
     }
     set_busy_cursor(v);
-    post_emit(v, EVT_STATUS, tr(c"Loading…"));
+    post_emit(v, EVT_STATUS, Some(tr(c"Loading…")));
 
+    let vw = area.as_ref().map_or(0, |area| area.width());
+    let vh = area.as_ref().map_or(0, |area| area.height());
     let state = view(v);
-    let vw = unsafe { gtk::gtk_widget_get_width(state.area) };
-    let vh = unsafe { gtk::gtk_widget_get_height(state.area) };
     if vw <= 1 || vh <= 1 {
-        replace(&mut state.deferred_url, dup(url));
+        state.ui().deferred_url = Some(url.to_owned());
         state.deferred_record = glib::boolean(record);
         state.deferred_history = glib::boolean(history);
         state.deferred_user_activated = glib::boolean(user_activated);
@@ -295,21 +274,22 @@ pub(super) fn do_load(
     state.last_vp_h = ns_pv_css_viewport_h(v);
     state.last_vp_dpr = page_dpr(v);
 
-    let req = new_req(REQ_LOAD);
-    unsafe {
-        let r = &mut *req;
-        r.seq = seq;
-        r.url = dup(url);
-        r.vw = state.last_vp_w;
-        r.vh = state.last_vp_h;
-        r.dpr = state.last_vp_dpr;
-        r.history = glib::boolean(history);
-        r.user_activated = glib::boolean(user_activated);
-    }
-    push_req(v, req);
+    let (vw, vh, dpr) = (state.last_vp_w, state.last_vp_h, state.last_vp_dpr);
+    push_req(
+        v,
+        new_req(REQ_LOAD, |r| {
+            r.seq = seq;
+            r.url = glib::strdup(url.to_bytes());
+            r.vw = vw;
+            r.vh = vh;
+            r.dpr = dpr;
+            r.history = glib::boolean(history);
+            r.user_activated = glib::boolean(user_activated);
+        }),
+    );
 }
 
-fn load(v: *mut NsProcView, url: *const c_char) {
+fn load(v: *mut NsProcView, url: &CStr) {
     view(v).render_restarts = 0;
     do_load(v, url, true, false, true);
 }
@@ -327,8 +307,10 @@ fn step_history(v: *mut NsProcView, delta: c_int) {
     let state = view(v);
     state.hist_index += delta;
     state.render_restarts = 0;
-    post_emit(v, EVT_HISTORY, ptr::null());
-    do_load(v, history_at(v, view(v).hist_index), false, true, true);
+    post_emit(v, EVT_HISTORY, None);
+    if let Some(url) = history_at(v, view(v).hist_index) {
+        do_load(v, &url, false, true, true);
+    }
 }
 
 fn set_zoom(v: *mut NsProcView, scale: f64) {
@@ -338,8 +320,8 @@ fn set_zoom(v: *mut NsProcView, scale: f64) {
         return;
     }
     view(v).scale = clamped;
-    let percent = CString::new((permille / 10).to_string()).unwrap_or_default();
-    post_emit(v, EVT_ZOOM, percent.as_ptr());
+    let percent = cstring((permille / 10).to_string());
+    post_emit(v, EVT_ZOOM, Some(&percent));
     if view(v).opened != 0 && !maybe_update_viewport(v) {
         configure_adjustments(v);
         request_render(v);
@@ -353,28 +335,36 @@ pub(super) fn perm_resolve(v: *mut NsProcView, allow: bool) {
     }
     state.perm_pending = 0;
     let kind = state.perm_kind;
-    let origin = state.perm_origin;
-    state.perm_origin = ptr::null_mut();
-    if !state.perm_revealer.is_null() {
-        unsafe { gtk::gtk_revealer_set_reveal_child(state.perm_revealer, 0) };
+    let origin = state.ui().perm_origin.take();
+    if let Some(perm) = state.ui().perm.as_ref() {
+        let revealer = perm.revealer.clone();
+        revealer.set_reveal_child(false);
     }
-    if state.closed == 0 {
-        let req = new_req(kind);
-        unsafe {
-            (*req).url = dup(origin);
-            (*req).mods = c_int::from(allow);
-        }
-        push_req(v, req);
-        if kind == REQ_WEBGL && allow && !view(v).current_url.is_null() {
-            do_load(v, view(v).current_url, false, false, true);
+    if view(v).closed == 0 {
+        push_req(
+            v,
+            new_req(kind, |r| {
+                r.url = origin
+                    .as_deref()
+                    .map_or(ptr::null_mut(), |o| glib::strdup(o.to_bytes()));
+                r.mods = c_int::from(allow);
+            }),
+        );
+        if kind == REQ_WEBGL
+            && allow
+            && let Some(url) = current_url(v)
+        {
+            do_load(v, &url, false, false, true);
         }
     }
-    unsafe { glib::g_free(origin.cast()) };
 }
 
-fn perm_bar_show(v: *mut NsProcView, kind: c_int, origin: *const c_char) {
+fn perm_bar_show(v: *mut NsProcView, kind: c_int, origin: &CStr) {
     let state = view(v);
-    if state.perm_pending != 0 && state.perm_kind == kind && same(state.perm_origin, origin) {
+    if state.perm_pending != 0
+        && state.perm_kind == kind
+        && state.ui().perm_origin.as_deref() == Some(origin)
+    {
         return;
     }
     if state.perm_pending != 0 {
@@ -383,28 +373,26 @@ fn perm_bar_show(v: *mut NsProcView, kind: c_int, origin: *const c_char) {
     let state = view(v);
     state.perm_pending = 1;
     state.perm_kind = kind;
-    state.perm_origin = dup(origin);
+    state.ui().perm_origin = Some(origin.to_owned());
     let what = if kind == REQ_WEBGL {
         tr(c"This site wants to use WebGL (3D graphics)")
     } else {
         tr(c"This site wants to use your camera and microphone")
     };
-    let mut text = unsafe { CStr::from_ptr(what) }.to_bytes().to_vec();
-    text.extend_from_slice(" — ".as_bytes());
-    text.extend_from_slice(unsafe { glib::bytes(origin) }.unwrap_or(b"(null)"));
-    let text = CString::new(text).unwrap_or_default();
-    unsafe {
-        gtk::gtk_label_set_text(state.perm_label, text.as_ptr());
-        gtk::gtk_revealer_set_reveal_child(state.perm_revealer, 1);
+    let mut message = what.to_bytes().to_vec();
+    message.extend_from_slice(" — ".as_bytes());
+    message.extend_from_slice(origin.to_bytes());
+    let message = cstring(message);
+    if let Some(perm) = view(v).ui().perm.as_ref() {
+        let (revealer, label) = (perm.revealer.clone(), perm.label.clone());
+        label.set_text(&message);
+        revealer.set_reveal_child(true);
     }
 }
 
-fn apply_window_action(v: *mut NsProcView, action: *const c_char) {
-    if v.is_null() || action.is_null() {
-        return;
-    }
-    if unsafe { glib::bytes(action) }.is_some_and(nav::is_fullscreen_action) {
-        post_emit(v, EVT_FULLSCREEN, action);
+fn apply_window_action(v: *mut NsProcView, action: &CStr) {
+    if nav::is_fullscreen_action(action.to_bytes()) {
+        post_emit(v, EVT_FULLSCREEN, Some(action));
     }
 }
 
@@ -429,34 +417,37 @@ fn set_anim(v: *mut NsProcView) {
     }
 }
 
-fn copy_to_clipboard(v: *mut NsProcView, text: *const c_char, status: &CStr) {
-    unsafe { gtk::gdk_clipboard_set_text(gtk::gtk_widget_get_clipboard(view(v).area), text) };
-    post_emit(v, EVT_STATUS, tr(status));
+fn copy_to_clipboard(v: *mut NsProcView, text: &CStr, status: &CStr) {
+    if let Some(area) = area(v) {
+        area.set_clipboard_text(text);
+    }
+    post_emit(v, EVT_STATUS, Some(tr(status)));
 }
 
 fn side_channels(v: *mut NsProcView, res: &Res) {
-    if nonempty(res.webgl) {
-        post_emit(v, EVT_WEBGL, c"1".as_ptr());
+    if filled(res.webgl).is_some() {
+        post_emit(v, EVT_WEBGL, Some(c"1"));
     }
-    if nonempty(res.camera) {
-        perm_bar_show(v, REQ_CAMERA, res.camera);
+    if let Some(camera) = filled(res.camera) {
+        perm_bar_show(v, REQ_CAMERA, camera);
     }
-    if nonempty(res.download) {
-        post_emit(v, EVT_DOWNLOAD, res.download);
+    if let Some(download) = filled(res.download) {
+        post_emit(v, EVT_DOWNLOAD, Some(download));
     }
-    if nonempty(res.audio) {
+    if filled(res.audio).is_some() {
         ns_pv_media_pump(v, res.audio);
     }
-    if nonempty(res.window_action) {
-        apply_window_action(v, res.window_action);
+    if let Some(action) = filled(res.window_action) {
+        apply_window_action(v, action);
     }
 }
 
-fn redirect(v: *mut NsProcView, nav_url: *const c_char) -> bool {
-    let state = view(v);
-    if nonempty(nav_url) && state.js_redirects < nav::MAX_JS_REDIRECTS && page_may_open(v, nav_url)
+fn redirect(v: *mut NsProcView, nav_url: Option<&CStr>) -> bool {
+    if let Some(nav_url) = nav_url.filter(|url| !url.is_empty())
+        && view(v).js_redirects < nav::MAX_JS_REDIRECTS
+        && page_may_open(v, nav_url)
     {
-        state.js_redirects += 1;
+        view(v).js_redirects += 1;
         do_load(v, nav_url, false, false, false);
         return true;
     }
@@ -468,59 +459,58 @@ fn on_page(v: *mut NsProcView, res: &Res) {
         return;
     }
     if res.ok == 0 {
-        post_emit(v, EVT_STATUS, tr(c"Failed to load page"));
+        post_emit(v, EVT_STATUS, Some(tr(c"Failed to load page")));
         finish_loading(v);
         clear_busy_cursor(v);
         return;
     }
-    if nonempty(res.nav) && page_may_open(v, res.nav) {
+    if let Some(nav_url) = filled(res.nav)
+        && page_may_open(v, nav_url)
+    {
         let state = view(v);
         if state.js_redirects < nav::MAX_JS_REDIRECTS {
             state.js_redirects += 1;
             let record = state.pending_record != 0;
-            do_load(v, res.nav, record, false, false);
+            do_load(v, nav_url, record, false, false);
             return;
         }
-        post_emit(v, EVT_STATUS, tr(c"Stopped after too many redirects"));
+        post_emit(v, EVT_STATUS, Some(tr(c"Stopped after too many redirects")));
     }
+    let local = text(res.url).is_some_and(is_local);
     let state = view(v);
-    if is_local(res.url) && state.pending_local == 0 {
+    if local && state.pending_local == 0 {
         post_emit(
             v,
             EVT_STATUS,
-            tr(c"Blocked a web page from opening a local file"),
+            Some(tr(c"Blocked a web page from opening a local file")),
         );
         finish_loading(v);
         clear_busy_cursor(v);
         return;
     }
-    state.local_page = glib::boolean(is_local(res.url));
+    state.local_page = glib::boolean(local);
     state.js_redirects = 0;
-    replace(&mut state.current_url, dup(res.url));
-    replace(&mut state.current_title, dup(res.title));
+    let ui = state.ui();
+    ui.current_url = text(res.url).map(CStr::to_owned);
+    ui.current_title = text(res.title).map(CStr::to_owned);
+    ui.remote_ip = text(res.remote_ip).map(CStr::to_owned);
     state.security = res.security;
-    replace(
-        &mut state.remote_ip,
-        if res.remote_ip.is_null() {
-            ptr::null_mut()
-        } else {
-            dup(res.remote_ip)
-        },
-    );
     state.page_w = res.pw;
     state.page_h = res.ph;
     state.scroll_x = 0;
     state.scroll_y = 0;
     state.opened = 1;
     configure_adjustments(v);
-    let state = view(v);
-    if state.pending_record != 0 {
-        push_history(v, state.current_url);
+    let url = current_url(v);
+    if view(v).pending_record != 0
+        && let Some(url) = &url
+    {
+        push_history(v, url);
     }
-    let state = view(v);
-    post_emit(v, EVT_URL, state.current_url);
-    post_emit(v, EVT_TITLE, state.current_title);
-    post_emit(v, EVT_STATUS, c"".as_ptr());
+    let title = view(v).ui().current_title.clone();
+    post_emit(v, EVT_URL, url.as_deref());
+    post_emit(v, EVT_TITLE, title.as_deref());
+    post_emit(v, EVT_STATUS, Some(c""));
     finish_loading(v);
     request_render(v);
     request_favicon(v);
@@ -530,10 +520,10 @@ fn on_tick(v: *mut NsProcView, res: &Res) {
     let current = res.seq == view(v).load_seq && res.ok != 0;
     let mut navigated = false;
     if current {
-        navigated = redirect(v, res.nav);
+        navigated = redirect(v, filled(res.nav));
         side_channels(v, res);
         if !navigated {
-            follow_same_document_state(v, res.url, res.url_pushed != 0, res.title);
+            follow_same_document_state(v, text(res.url), res.url_pushed != 0, text(res.title));
         }
         view(v).page_animating = res.animating;
         set_anim(v);
@@ -552,6 +542,26 @@ fn on_tick(v: *mut NsProcView, res: &Res) {
     }
 }
 
+fn adopt_requested_scroll(v: *mut NsProcView, res: &Res) {
+    view(v).adopting_scroll = 1;
+    configure_adjustments(v);
+    let (hadj, vadj) = (hadj(v), vadj(v));
+    if res.requested_scroll_y >= 0
+        && let Some(vadj) = &vadj
+    {
+        vadj.set_value(f64::from(res.requested_scroll_y));
+    }
+    if res.requested_scroll_x >= 0
+        && let Some(hadj) = &hadj
+    {
+        hadj.set_value(f64::from(res.requested_scroll_x));
+    }
+    let state = view(v);
+    state.adopting_scroll = 0;
+    state.scroll_x = hadj.map_or(0.0, |adj| adj.value()) as c_int;
+    state.scroll_y = vadj.map_or(0.0, |adj| adj.value()) as c_int;
+}
+
 fn on_frame(v: *mut NsProcView, res: &mut Res) {
     let current = res.seq == view(v).render_seq;
     if res.ok != 0 && res.wheel_snapped != 0 {
@@ -562,33 +572,13 @@ fn on_frame(v: *mut NsProcView, res: &mut Res) {
         state.page_animating = res.animating;
         state.caret_blinking = res.caret_blinking;
         set_anim(v);
-        if adopt_page_size(v, res) {
-            unsafe { gtk::gtk_widget_queue_draw(view(v).area) };
+        if adopt_page_size(v, res)
+            && let Some(area) = area(v)
+        {
+            area.queue_draw();
         }
         if res.requested_scroll_y >= 0 || res.requested_scroll_x >= 0 {
-            view(v).adopting_scroll = 1;
-            configure_adjustments(v);
-            let state = view(v);
-            unsafe {
-                if res.requested_scroll_y >= 0 {
-                    gtk::gtk_adjustment_set_value(
-                        state.vadj.cast(),
-                        f64::from(res.requested_scroll_y),
-                    );
-                }
-                if res.requested_scroll_x >= 0 {
-                    gtk::gtk_adjustment_set_value(
-                        state.hadj.cast(),
-                        f64::from(res.requested_scroll_x),
-                    );
-                }
-            }
-            let state = view(v);
-            state.adopting_scroll = 0;
-            unsafe {
-                state.scroll_x = gtk::gtk_adjustment_get_value(state.hadj.cast()) as c_int;
-                state.scroll_y = gtk::gtk_adjustment_get_value(state.vadj.cast()) as c_int;
-            }
+            adopt_requested_scroll(v, res);
         }
     }
     if current && res.ok != 0 && !res.layers.is_null() {
@@ -600,18 +590,22 @@ fn on_frame(v: *mut NsProcView, res: &mut Res) {
         state.frame = core::mem::replace(&mut res.texture, ptr::null_mut());
         state.frame_scale = res.texture_scale;
         state.render_restarts = 0;
-        unsafe { gtk::gtk_widget_queue_draw(state.area) };
+        if let Some(area) = area(v) {
+            area.queue_draw();
+        }
         clear_busy_cursor(v);
     } else if current && res.ok != 0 && res.frame_unchanged != 0 {
         view(v).render_restarts = 0;
     }
     if current && res.ok != 0 {
-        redirect(v, res.nav);
+        redirect(v, filled(res.nav));
     }
     if res.ok != 0 {
         side_channels(v, res);
-        if !res.clipboard.is_null() && !view(v).area.is_null() {
-            copy_to_clipboard(v, res.clipboard, c"Copied to clipboard");
+        if let Some(clipboard) = text(res.clipboard)
+            && area(v).is_some()
+        {
+            copy_to_clipboard(v, clipboard, c"Copied to clipboard");
         }
     }
     let state = view(v);
@@ -619,16 +613,20 @@ fn on_frame(v: *mut NsProcView, res: &mut Res) {
     if state.render_pending != 0 {
         state.render_pending = 0;
         start_render(v);
-    } else if current && res.ok == 0 && !state.current_url.is_null() {
+    } else if current
+        && res.ok == 0
+        && let Some(url) = current_url(v)
+    {
+        let state = view(v);
         if state.render_restarts < nav::MAX_RESTARTS {
             state.render_restarts += 1;
-            post_emit(v, EVT_STATUS, tr(c"Renderer restarted"));
-            do_load(v, view(v).current_url, false, false, false);
+            post_emit(v, EVT_STATUS, Some(tr(c"Renderer restarted")));
+            do_load(v, &url, false, false, false);
         } else {
             post_emit(
                 v,
                 EVT_STATUS,
-                tr(c"This tab's renderer keeps failing — reload to retry"),
+                Some(tr(c"This tab's renderer keeps failing — reload to retry")),
             );
             finish_loading(v);
             clear_busy_cursor(v);
@@ -646,15 +644,15 @@ fn pending_link(v: *mut NsProcView) {
     }
 }
 
-fn show_link_status(v: *mut NsProcView, href: *const c_char, cursor: *const c_char) {
-    let cursor = unsafe { glib::bytes(cursor) };
-    if nonempty(href) {
-        post_emit(v, EVT_STATUS, href);
+fn show_link_status(v: *mut NsProcView, href: Option<&CStr>, cursor: Option<&CStr>) {
+    let cursor = cursor.map(CStr::to_bytes);
+    if let Some(href) = href {
+        post_emit(v, EVT_STATUS, Some(href));
         if view(v).busy_cursor == 0 {
             set_named_cursor(v, cursor.unwrap_or(b"pointer"));
         }
     } else {
-        post_emit(v, EVT_STATUS, c"".as_ptr());
+        post_emit(v, EVT_STATUS, Some(c""));
         if view(v).busy_cursor == 0 {
             set_named_cursor(v, cursor.unwrap_or_default());
         }
@@ -671,19 +669,20 @@ fn on_link(v: *mut NsProcView, res: &Res) {
             request_render(v);
         }
         if res.prevented == 0 {
-            ns_pv_show_context_menu(v, res.href, res.edit);
+            ns_pv_show_context_menu(v, text(res.href), res.edit);
         }
         pending_link(v);
         return;
     }
     let mut navigated = false;
-    show_link_status(v, res.href, res.cursor);
-    if nonempty(res.href) {
+    let href = filled(res.href);
+    show_link_status(v, href, text(res.cursor));
+    if let Some(href) = href {
         if res.action == ACT_NAVIGATE {
             navigated = true;
-            page_load(v, res.href);
-        } else if res.action == ACT_NEWTAB && page_may_open(v, res.href) {
-            post_emit(v, EVT_NEWTAB, res.href);
+            page_load(v, href);
+        } else if res.action == ACT_NEWTAB && page_may_open(v, href) {
+            post_emit(v, EVT_NEWTAB, Some(href));
         }
     }
     if !navigated {
@@ -696,7 +695,7 @@ fn on_hover(v: *mut NsProcView, res: &Res) {
         return;
     }
     view(v).hover_inflight = 0;
-    show_link_status(v, res.href, res.cursor);
+    show_link_status(v, filled(res.href), text(res.cursor));
     if res.ok != 0 {
         request_render(v);
     }
@@ -719,13 +718,16 @@ fn on_scrollbar(v: *mut NsProcView, res: &Res) {
                 state.sb_dragging = 1;
                 if state.sb_have_last != 0 {
                     let s = cur_scale(v);
-                    let req = new_req(REQ_SCROLLBAR);
-                    unsafe {
-                        (*req).kind = 1;
-                        (*req).x = state.scroll_x + (state.sb_last_x / s) as c_int;
-                        (*req).y = state.scroll_y + (state.sb_last_y / s) as c_int;
-                    }
-                    push_req(v, req);
+                    let x = state.scroll_x + (state.sb_last_x / s) as c_int;
+                    let y = state.scroll_y + (state.sb_last_y / s) as c_int;
+                    push_req(
+                        v,
+                        new_req(REQ_SCROLLBAR, |r| {
+                            r.kind = 1;
+                            r.x = x;
+                            r.y = y;
+                        }),
+                    );
                 }
             }
         } else if still && state.sb_have_last != 0 {
@@ -754,84 +756,59 @@ fn on_scrollbar(v: *mut NsProcView, res: &Res) {
 }
 
 fn on_find(v: *mut NsProcView, res: &Res) {
-    let state = view(v);
-    if res.seq != state.find_seq {
+    if res.seq != view(v).find_seq {
         return;
     }
-    if !state.search_label.is_null() {
-        let query = if state.search_entry.is_null() {
-            ptr::null()
-        } else {
-            unsafe { gtk::gtk_editable_get_text(state.search_entry) }
-        };
+    if let Some(find) = view(v).ui().find.as_ref() {
+        let (entry, label) = (find.entry.clone(), find.label.clone());
         if res.find_total > 0 {
-            let label =
-                CString::new(nav::find_count(res.find_current, res.find_total)).unwrap_or_default();
-            unsafe { gtk::gtk_label_set_text(state.search_label, label.as_ptr()) };
+            label.set_text(&cstring(nav::find_count(res.find_current, res.find_total)));
+        } else if entry.text().is_empty() {
+            label.set_text(c"");
         } else {
-            let text = if nonempty(query) {
-                tr(c"No results")
-            } else {
-                c"".as_ptr()
-            };
-            unsafe { gtk::gtk_label_set_text(state.search_label, text) };
+            label.set_text(tr(c"No results"));
         }
     }
-    if res.find_total > 0 {
-        unsafe {
-            gtk::gtk_adjustment_set_value(
-                state.vadj.cast(),
-                nav::find_scroll_target(res.find_scroll_y),
-            )
-        };
+    if res.find_total > 0
+        && let Some(vadj) = vadj(v)
+    {
+        vadj.set_value(nav::find_scroll_target(res.find_scroll_y));
     }
     request_render(v);
 }
 
 fn on_eval(v: *mut NsProcView, res: &Res) {
-    let state = view(v);
+    let href = filled(res.href);
     if res.inspect != 0 {
-        if !state.elements_buffer.is_null() {
-            let text = if nonempty(res.href) {
-                res.href.cast_const()
-            } else {
-                tr(c"No matching element")
-            };
-            unsafe { gtk::gtk_text_buffer_set_text(state.elements_buffer, text, -1) };
+        if let Some(elements) = ns_pv_console_text(v, DEV_TAB_ELEMENTS) {
+            let shown = href.unwrap_or(tr(c"No matching element"));
+            elements.set_text(&shown.to_string_lossy());
         }
-    } else if nonempty(res.href) {
-        ns_pv_console_append(v, res.href);
-        ns_pv_console_append(v, c"\n".as_ptr());
+    } else if let Some(href) = href {
+        ns_pv_console_append(v, href.to_bytes());
+        ns_pv_console_append(v, b"\n");
     } else {
-        ns_pv_console_append(v, c"undefined\n".as_ptr());
+        ns_pv_console_append(v, b"undefined\n");
     }
     request_render(v);
 }
 
 fn on_dump(v: *mut NsProcView, res: &Res) {
-    let state = view(v);
-    let buf = match res.dump_tab {
-        DEV_TAB_NETWORK => state.net_buffer,
-        DEV_TAB_PERFORMANCE => state.perf_buffer,
-        DEV_TAB_LAYOUT => state.layout_buffer,
-        DEV_TAB_ELEMENTS => state.elements_buffer,
-        _ => ptr::null_mut(),
-    };
-    let text = if nonempty(res.href) {
-        res.href.cast_const()
-    } else {
-        tr(c"(empty)")
-    };
-    if buf == state.perf_buffer {
-        // SAFETY: text is the reply's NUL-terminated text or a static translation.
-        let mut out = unsafe { glib::bytes(text) }.unwrap_or_default().to_vec();
-        out.extend_from_slice(&ns_pv_media_stats(v));
-        let out = CString::new(out).unwrap_or_default();
-        // SAFETY: buf is the live performance buffer and out is NUL-terminated.
-        unsafe { gtk::gtk_text_buffer_set_text(buf, out.as_ptr(), -1) };
-    } else if !buf.is_null() {
-        unsafe { gtk::gtk_text_buffer_set_text(buf, text, -1) };
+    if !matches!(
+        res.dump_tab,
+        DEV_TAB_NETWORK | DEV_TAB_PERFORMANCE | DEV_TAB_LAYOUT | DEV_TAB_ELEMENTS
+    ) {
+        return;
     }
+    let Some(view_text) = ns_pv_console_text(v, res.dump_tab) else {
+        return;
+    };
+    let shown = filled(res.href).unwrap_or(tr(c"(empty)"));
+    let mut out = shown.to_bytes().to_vec();
+    if res.dump_tab == DEV_TAB_PERFORMANCE {
+        out.extend_from_slice(&ns_pv_media_stats(v));
+    }
+    view_text.set_text(&String::from_utf8_lossy(&out));
 }
 
 fn on_favicon(v: *mut NsProcView, res: &Res) {
@@ -853,7 +830,7 @@ fn on_favicon(v: *mut NsProcView, res: &Res) {
         };
         state.favicon = tex.cast();
     }
-    post_emit(v, EVT_FAVICON, ptr::null());
+    post_emit(v, EVT_FAVICON, None);
 }
 
 fn dispatch(v: *mut NsProcView, res: &mut Res) {
@@ -876,8 +853,10 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             }
         }
         RES_COPY => {
-            if nonempty(res.href) && !view(v).area.is_null() {
-                copy_to_clipboard(v, res.href, c"Copied selection");
+            if let Some(href) = filled(res.href)
+                && area(v).is_some()
+            {
+                copy_to_clipboard(v, href, c"Copied selection");
             }
             if res.kind == 7 {
                 request_render(v);
@@ -887,9 +866,11 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             if res.seq != view(v).key_seq {
                 return;
             }
-            if res.kind == 0 && nonempty(res.href) {
-                post_emit(v, EVT_STATUS, res.href);
-                page_load(v, res.href);
+            if res.kind == 0
+                && let Some(href) = filled(res.href)
+            {
+                post_emit(v, EVT_STATUS, Some(href));
+                page_load(v, href);
             } else {
                 if res.fallback_scroll != 0 && res.prevented == 0 {
                     scroll_view_to(v, res.fallback_x, res.fallback_y);
@@ -901,9 +882,9 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             if res.seq != view(v).click_seq {
                 return;
             }
-            if nonempty(res.href) {
-                post_emit(v, EVT_STATUS, res.href);
-                page_load(v, res.href);
+            if let Some(href) = filled(res.href) {
+                post_emit(v, EVT_STATUS, Some(href));
+                page_load(v, href);
             } else {
                 request_render(v);
             }
@@ -917,19 +898,21 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
         }
         RES_SCROLLBAR => on_scrollbar(v, res),
         RES_RELEASE => {
-            if nonempty(res.href) {
-                post_emit(v, EVT_STATUS, res.href);
-                page_load(v, res.href);
+            if let Some(href) = filled(res.href) {
+                post_emit(v, EVT_STATUS, Some(href));
+                page_load(v, href);
             } else if res.ok != 0 {
                 request_render(v);
             }
         }
         RES_FIND => on_find(v, res),
         RES_EXPORT => {
-            if res.ok != 0 && !res.url.is_null() {
-                post_emit(v, EVT_STATUS, res.url);
+            if res.ok != 0
+                && let Some(url) = text(res.url)
+            {
+                post_emit(v, EVT_STATUS, Some(url));
             } else {
-                post_emit(v, EVT_STATUS, tr(c"Could not save page"));
+                post_emit(v, EVT_STATUS, Some(tr(c"Could not save page")));
             }
         }
         RES_PRINT => {
@@ -937,13 +920,13 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
             if let Some(pages) = pages {
                 print_run(v, pages.sheets, &res.print_setup, pages.scale);
             } else {
-                post_emit(v, EVT_STATUS, tr(c"Nothing to print"));
+                post_emit(v, EVT_STATUS, Some(tr(c"Nothing to print")));
             }
             request_render(v);
         }
         RES_CONSOLE => {
-            if nonempty(res.href) {
-                ns_pv_console_append(v, res.href);
+            if let Some(href) = filled(res.href) {
+                ns_pv_console_append(v, href.to_bytes());
             }
         }
         RES_EVAL => on_eval(v, res),
@@ -954,43 +937,47 @@ fn dispatch(v: *mut NsProcView, res: &mut Res) {
 }
 
 fn free_res(res: *mut Res) {
-    unsafe {
-        let r = &mut *res;
-        clear_object(&mut r.texture);
-        ns_layer_update_free(r.layers.cast());
-        for s in [
-            r.title,
-            r.url,
-            r.nav,
-            r.remote_ip,
-            r.webgl,
-            r.camera,
-            r.download,
-            r.audio,
-        ] {
-            glib::g_free(s.cast());
-        }
-        glib::g_free(r.clipboard.cast());
-        glib::g_free(r.window_action.cast());
-        glib::g_free(r.href.cast());
-        glib::g_free(r.cursor.cast());
-        glib::g_free(r.media_url.cast());
-        if !r.favicon_bytes.is_null() {
-            gtk::g_bytes_unref(r.favicon_bytes);
-        }
-        drop(r.print_pages.take());
-        ns_proc_view_unref(r.view);
-        glib::g_free(res.cast());
+    // SAFETY: res is the whole reply on_result took over; nothing else refers to it.
+    let r = unsafe { &mut *res };
+    clear_object(&mut r.texture);
+    // SAFETY: layers is null or the reply's own LayerUpdate, freed once here.
+    unsafe { ns_layer_update_free(r.layers.cast()) };
+    for s in [
+        r.title,
+        r.url,
+        r.nav,
+        r.remote_ip,
+        r.webgl,
+        r.camera,
+        r.download,
+        r.audio,
+        r.clipboard,
+        r.window_action,
+        r.href,
+        r.cursor,
+        r.media_url,
+    ] {
+        // SAFETY: each string is null or a GLib allocation the reply owns.
+        unsafe { glib::g_free(s.cast()) };
     }
+    if !r.favicon_bytes.is_null() {
+        // SAFETY: drops the reply's reference to its favicon bytes.
+        unsafe { gtk::g_bytes_unref(r.favicon_bytes) };
+    }
+    drop(r.print_pages.take());
+    ns_proc_view_unref(r.view);
+    // SAFETY: the reply was allocated with g_malloc0 and is freed exactly once.
+    unsafe { glib::g_free(res.cast()) };
 }
 
 pub(super) unsafe extern "C" fn on_result(data: *mut c_void) -> GBoolean {
-    let res = data.cast::<Res>();
-    let v = unsafe { (*res).view };
+    // SAFETY: data is the reply the worker queued for this idle source, which hands it over once.
+    let res = unsafe { &mut *data.cast::<Res>() };
+    let v = res.view;
     if view(v).closed == 0 {
-        dispatch(v, unsafe { &mut *res });
+        dispatch(v, res);
     }
-    free_res(res);
+    free_res(data.cast());
     gtk::SOURCE_REMOVE
 }
 
@@ -1007,16 +994,18 @@ pub(super) fn ns_proc_view_stop(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_proc_view_push_video_event(v: *mut NsProcView, token: &CStr, kind: &CStr) {
-    let req = new_req(REQ_VIDEO_EVENT);
-    unsafe {
-        (*req).seq = view(v).load_seq;
-        (*req).key = dup(token.as_ptr());
-        (*req).query = dup(kind.as_ptr());
-        g_async_queue_push_front(view(v).queue, req.cast());
-    }
+    let seq = view(v).load_seq;
+    push_req_front(
+        v,
+        new_req(REQ_VIDEO_EVENT, |r| {
+            r.seq = seq;
+            r.key = glib::strdup(token.to_bytes());
+            r.query = glib::strdup(kind.to_bytes());
+        }),
+    );
 }
 
-pub(super) fn ns_proc_view_load(v: *mut NsProcView, url: *const c_char) {
+pub(super) fn ns_proc_view_load(v: *mut NsProcView, url: &CStr) {
     load(v, url);
 }
 
@@ -1041,12 +1030,10 @@ pub(super) fn ns_proc_view_forward(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_proc_view_reload(v: *mut NsProcView) {
-    let state = view(v);
-    state.render_restarts = 0;
-    if state.hist_index >= 0 && state.hist_index < history_len(v) {
-        do_load(v, history_at(v, state.hist_index), false, false, true);
-    } else if !state.current_url.is_null() {
-        do_load(v, state.current_url, false, false, true);
+    view(v).render_restarts = 0;
+    let url = history_at(v, view(v).hist_index).or_else(|| current_url(v));
+    if let Some(url) = url {
+        do_load(v, &url, false, false, true);
     }
 }
 
@@ -1061,32 +1048,35 @@ pub(super) fn ns_proc_view_exit_fullscreen(v: *mut NsProcView) {
     if v.is_null() || view(v).closed != 0 || view(v).opened == 0 {
         return;
     }
-    let req = new_req(REQ_EVAL);
-    unsafe { (*req).query = dup(c"document.exitFullscreen()".as_ptr()) };
-    push_req(v, req);
+    push_req(
+        v,
+        new_req(REQ_EVAL, |r| {
+            r.query = glib::strdup(b"document.exitFullscreen()");
+        }),
+    );
 }
 
-pub(super) fn ns_proc_view_url(v: *mut NsProcView) -> *const c_char {
-    view(v).current_url
+pub(super) fn ns_proc_view_url(v: *mut NsProcView) -> Option<CString> {
+    current_url(v)
 }
 
 pub(super) fn ns_proc_view_local_page(v: *mut NsProcView) -> bool {
     !v.is_null() && view(v).local_page != 0
 }
 
-pub(super) fn ns_proc_view_title(v: *mut NsProcView) -> *const c_char {
-    view(v).current_title
+pub(super) fn ns_proc_view_title(v: *mut NsProcView) -> Option<CString> {
+    view(v).ui().current_title.clone()
 }
 
 pub(super) fn ns_proc_view_security(v: *mut NsProcView) -> c_int {
     if v.is_null() { 0 } else { view(v).security }
 }
 
-pub(super) fn ns_proc_view_remote_ip(v: *mut NsProcView) -> *const c_char {
+pub(super) fn ns_proc_view_remote_ip(v: *mut NsProcView) -> Option<CString> {
     if v.is_null() {
-        ptr::null()
+        None
     } else {
-        view(v).remote_ip
+        view(v).ui().remote_ip.clone()
     }
 }
 
@@ -1153,9 +1143,8 @@ pub(super) fn ns_proc_view_stop_audio(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_proc_view_focus(v: *mut NsProcView) {
-    let area = view(v).area;
-    if !area.is_null() {
-        unsafe { gtk::gtk_widget_grab_focus(area) };
+    if let Some(area) = area(v) {
+        area.grab_focus();
     }
 }
 
