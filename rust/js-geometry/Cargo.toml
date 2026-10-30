@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-canvas = { path = "../canvas", version = "=1.0.5-dev" }
-southstar-css = { path = "../css", version = "=1.0.5-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-js-cssom = { path = "../js-cssom", version = "=1.0.5-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
-southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
-southstar-layout-hit = { path = "../layout-hit", version = "=1.0.5-dev" }
-southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
-southstar-mat4 = { path = "../mat4", version = "=1.0.5-dev" }
-southstar-style = { path = "../style", version = "=1.0.5-dev" }
-southstar-svg = { path = "../svg", version = "=1.0.5-dev" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5" }
+southstar-css = { path = "../css", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-js-cssom = { path = "../js-cssom", version = "=1.0.5" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
+southstar-layout = { path = "../layout", version = "=1.0.5" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.5" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5" }
+southstar-mat4 = { path = "../mat4", version = "=1.0.5" }
+southstar-style = { path = "../style", version = "=1.0.5" }
+southstar-svg = { path = "../svg", version = "=1.0.5" }
 
 [lints]
 workspace = true

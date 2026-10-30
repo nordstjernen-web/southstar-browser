@@ -10,15 +10,15 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-browser = { path = "../browser", version = "=1.0.5-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-image = { path = "../image", version = "=1.0.5-dev" }
-southstar-ipc = { path = "../ipc", version = "=1.0.5-dev" }
-southstar-net = { path = "../net", version = "=1.0.5-dev" }
-southstar-renderer-client = { path = "../renderer-client", version = "=1.0.5-dev" }
-southstar-threaddump = { path = "../threaddump", version = "=1.0.5-dev" }
-southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-browser = { path = "../browser", version = "=1.0.5" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-image = { path = "../image", version = "=1.0.5" }
+southstar-ipc = { path = "../ipc", version = "=1.0.5" }
+southstar-net = { path = "../net", version = "=1.0.5" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.5" }
+southstar-threaddump = { path = "../threaddump", version = "=1.0.5" }
+southstar-url = { path = "../url", version = "=1.0.5" }
 
 [features]
 sdl = []

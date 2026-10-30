@@ -10,28 +10,28 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
-southstar-engine = { path = "../engine", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-image = { path = "../image", version = "=1.0.5-dev" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5-dev" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
-southstar-js-events = { path = "../js-events", version = "=1.0.5-dev" }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.5-dev" }
-southstar-js-images = { path = "../js-images", version = "=1.0.5-dev" }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.5-dev" }
-southstar-js-net = { path = "../js-net", version = "=1.0.5-dev" }
-southstar-js-observers = { path = "../js-observers", version = "=1.0.5-dev" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.5-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
-southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
-southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.5-dev" }
-southstar-js-url = { path = "../js-url", version = "=1.0.5-dev" }
-southstar-js-window = { path = "../js-window", version = "=1.0.5-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
-southstar-video = { path = "../video", version = "=1.0.5-dev" }
+southstar-anim = { path = "../anim", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
+southstar-engine = { path = "../engine", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-image = { path = "../image", version = "=1.0.5" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.5" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.5" }
+southstar-js-images = { path = "../js-images", version = "=1.0.5" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.5" }
+southstar-js-net = { path = "../js-net", version = "=1.0.5" }
+southstar-js-observers = { path = "../js-observers", version = "=1.0.5" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.5" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.5" }
+southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.5" }
+southstar-js-url = { path = "../js-url", version = "=1.0.5" }
+southstar-js-window = { path = "../js-window", version = "=1.0.5" }
+southstar-layout = { path = "../layout", version = "=1.0.5" }
+southstar-video = { path = "../video", version = "=1.0.5" }
 
 [lints]
 workspace = true

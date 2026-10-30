@@ -1,6 +1,6 @@
 {
   "name": "southstar-browser",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Southstar Browser: a minimal, secure web browser written from scratch in Rust with GTK 4, built from source on install",
   "keywords": [
     "browser",

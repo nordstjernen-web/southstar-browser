@@ -14,11 +14,11 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.5-dev" }
-southstar-media-shm = { path = "../media-shm", version = "=1.0.5-dev" }
+southstar-av = { path = "../av", version = "=1.0.5" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.5" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5-dev" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5" }
 
 [features]
 rust-main = []

@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.5-dev" }
+southstar-build = { path = "../build", version = "=1.0.5" }
 
 [lints]
 workspace = true

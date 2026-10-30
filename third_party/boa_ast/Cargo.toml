@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.91.0"
 name = "southstar-boa-ast"
-version = "1.0.5-dev"
+version = "1.0.5"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -68,7 +68,7 @@ version = "2.13.1"
 
 [dependencies.boa_interner]
 package = "southstar-boa-interner"
-version = "=1.0.5-dev"
+version = "=1.0.5"
 path = "../boa_interner"
 
 [dependencies.boa_macros]
@@ -76,7 +76,7 @@ version = "~0.22.0"
 
 [dependencies.boa_string]
 package = "southstar-boa-string"
-version = "=1.0.5-dev"
+version = "=1.0.5"
 path = "../boa_string"
 
 [dependencies.indexmap]

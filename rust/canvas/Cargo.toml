@@ -10,20 +10,20 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
-southstar-css = { path = "../css", version = "=1.0.5-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-image = { path = "../image", version = "=1.0.5-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.5-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
-southstar-text = { path = "../text", version = "=1.0.5-dev" }
-southstar-texture = { path = "../texture", version = "=1.0.5-dev" }
-southstar-video = { path = "../video", version = "=1.0.5-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5" }
+southstar-css = { path = "../css", version = "=1.0.5" }
+southstar-digest = { path = "../digest", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-image = { path = "../image", version = "=1.0.5" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.5" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5" }
+southstar-layout = { path = "../layout", version = "=1.0.5" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5" }
+southstar-text = { path = "../text", version = "=1.0.5" }
+southstar-texture = { path = "../texture", version = "=1.0.5" }
+southstar-video = { path = "../video", version = "=1.0.5" }
 
 [features]
 webgpu = []

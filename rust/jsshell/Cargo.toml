@@ -14,9 +14,9 @@ name = "southstar-jsshell"
 path = "src/main.rs"
 
 [dependencies]
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
-southstar-js-intl = { path = "../js-intl", version = "=1.0.5-dev" }
-southstar-js-temporal = { path = "../js-temporal", version = "=1.0.5-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
+southstar-js-intl = { path = "../js-intl", version = "=1.0.5" }
+southstar-js-temporal = { path = "../js-temporal", version = "=1.0.5", default-features = false }
 
 [features]
 boa-intl = ["southstar-js-engine/boa-intl"]

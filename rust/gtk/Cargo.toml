@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
-southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.5-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5" }
+southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.5" }
 
 [lints]
 workspace = true

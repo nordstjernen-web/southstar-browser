@@ -4,7 +4,7 @@ members = ["rust/*"]
 exclude = ["third_party"]
 
 [workspace.package]
-version = "1.0.5-dev"
+version = "1.0.5"
 edition = "2024"
 rust-version = "1.91"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"

@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
-southstar-css = { path = "../css", version = "=1.0.5-dev" }
-southstar-css-media = { path = "../css-media", version = "=1.0.5-dev" }
-southstar-css-syntax = { path = "../css-syntax", version = "=1.0.5-dev" }
-southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-image = { path = "../image", version = "=1.0.5-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
-southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
-southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
-southstar-net = { path = "../net", version = "=1.0.5-dev" }
-southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
-southstar-print = { path = "../print", version = "=1.0.5-dev" }
-southstar-render = { path = "../render", version = "=1.0.5-dev" }
-southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-anim = { path = "../anim", version = "=1.0.5" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5" }
+southstar-css = { path = "../css", version = "=1.0.5" }
+southstar-css-media = { path = "../css-media", version = "=1.0.5" }
+southstar-css-syntax = { path = "../css-syntax", version = "=1.0.5" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-image = { path = "../image", version = "=1.0.5" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
+southstar-layout = { path = "../layout", version = "=1.0.5" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5" }
+southstar-net = { path = "../net", version = "=1.0.5" }
+southstar-paint = { path = "../paint", version = "=1.0.5" }
+southstar-print = { path = "../print", version = "=1.0.5" }
+southstar-render = { path = "../render", version = "=1.0.5" }
+southstar-url = { path = "../url", version = "=1.0.5" }
 
 [lints]
 workspace = true

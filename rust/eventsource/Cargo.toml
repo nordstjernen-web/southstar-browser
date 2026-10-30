@@ -10,9 +10,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-http = { path = "../http", version = "=1.0.5-dev" }
-southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-http = { path = "../http", version = "=1.0.5" }
+southstar-net = { path = "../net", version = "=1.0.5" }
 
 [lints]
 workspace = true
