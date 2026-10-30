@@ -11,14 +11,14 @@ the Nordstjernen C codebase, its full history included, renamed to Southstar
 Browser and trimmed to the desktop. It was then ported to Rust module by
 module while it kept running, and in October 2026 the last of the project's
 C went, the QuickJS-ng engine included. All of Southstar's own code is now
-Rust; C remains only in the system libraries it links (GTK, Cairo, Pango,
+Rust; C remains only in the system libraries it links (GTK, Cairo, HarfBuzz,
 OpenSSL, FFmpeg, SDL2, …).
 
 ![Southstar Browser showing a Wikipedia article](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
-(an interpreter, no JIT), forked into the tree at `third_party/boa_engine` and
+(an interpreter, no JIT), forked into the tree at `third_party/boa_*` and
 extended there with the hooks the browser needs and the newest language
 features. The bindings are Rust, over the engine layer in `rust/js-engine`.
 It passes **all of test262** (52,133 of 52,133 tests outside `test/staging`,
@@ -31,10 +31,10 @@ Supported platforms:
 * macOS
 * FreeBSD and NetBSD
 
-CI builds Linux, FreeBSD and NetBSD on every push; the Windows, macOS and
-musl workflows run only when started by hand.
+CI builds Linux on every push and pull request and FreeBSD and NetBSD
+nightly; the Windows, macOS and musl workflows run only when started by hand.
 
-**Version:** 1.0.4.
+**Version:** 1.0.4 (`main` is 1.0.5-dev).
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 
@@ -44,14 +44,14 @@ WHATWG HTML standard (§1–§16) in
 [docs/HTML-compatibility.md](docs/HTML-compatibility.md) records **140 spec
 rows fully implemented, 31 partial, 0 absent** (July 2026), besides a handful
 that are non-goals by design: `embed`/`object` plugins, `frame`/`frameset`,
-`applet`/`marquee`, telemetry, and AI-style web APIs. The tracked
+`applet`/`marquee`, the application cache and `navigator` device APIs. The tracked
 web-platform-tests slice passes 95% of its subtests
 ([docs/wpt-scores.md](docs/wpt-scores.md)).
 
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The browser is about 330,000 lines of Rust in some 145
+**Minimalism.** The browser is about 380,000 lines of Rust in some 158
 crates under `rust/`, excluding the vendored Boa fork and generated tables —
 small enough for one person to read and audit end-to-end.
 
@@ -137,7 +137,7 @@ See [npm/README.md](npm/README.md).
   WebAssembly JS API over the pure-Rust [wasmi](https://github.com/wasmi-labs/wasmi)
   interpreter (`rust/js-wasm`).
 - **MathML** — a minimalist presentation-MathML renderer (`rust/mathml`)
-  laid out over Pango/Cairo and embedded inline on the text baseline.
+  laid out over `rust/text` and Cairo and embedded inline on the text baseline.
 - **Spell checking** — optional, via Enchant: misspelled words in editable
   text get a red wavy underline, honouring the `spellcheck` attribute.
 - **Safe browsing** — a top-level navigation's host is checked against a local
@@ -199,17 +199,21 @@ MSIX package declares it as an app execution alias.
 
 Southstar is an independent engine — no upstream browser code.
 
-**Vendored in-tree**, built from the main tree with no submodules:
-[Boa](https://github.com/boa-dev/boa)
-(fork, no JIT), the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
-(memory-safe image decoding), [rustls](https://github.com/rustls/rustls) with
-[ring](https://github.com/briansmith/ring) and RustCrypto's
-[ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
+**In-tree**, with no git submodules or meson subprojects:
+[Boa](https://github.com/boa-dev/boa) (fork, no JIT, in `third_party/`),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
 (MP3, ported to Rust). Text layout is `rust/text`, a Rust port of Pango, so
-setup needs no network and no Pango;
-web fonts are shaped by [HarfRust](https://github.com/harfbuzz/harfrust) and
+the build needs no Pango.
+
+**Rust crates** from crates.io, pinned in `Cargo.lock` and fetched by Cargo
+at build time (see `debian/README.source` for an offline, vendored build):
+the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
+(memory-safe image decoding), [rustls](https://github.com/rustls/rustls) with
+[ring](https://github.com/briansmith/ring) and RustCrypto's
+[ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
+and [wasmi](https://github.com/wasmi-labs/wasmi) (WebAssembly); web fonts are
+shaped by [HarfRust](https://github.com/harfbuzz/harfrust) and
 drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
 (`-Drust-shaper=false` leaves them on HarfBuzz and FreeType).
 
@@ -229,14 +233,14 @@ drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
 | libpsl | — | public-suffix list for cookie scoping |
 | SQLite | — | IndexedDB persistent storage |
 | libwebp | — | WebP decoding (lossy, lossless and animated) |
-| SDL2 | — | audio output for the `southstar-audio` helper |
 | libseccomp | — (Linux only) | syscall sandbox; no-op on macOS/Windows |
 
 **Optional**, auto-detected or build-time-selected:
 [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
 PDF), libavif (AVIF images), Enchant (spell checking), libthai (Thai word
-breaking), libbrotlidec and libzstd (`br` and `zstd` content
+breaking), SDL2 (audio output for the `southstar-audio` helper; `-Daudio`),
+vorbisfile and opusfile (Ogg audio without FFmpeg), libbrotlidec and libzstd (`br` and `zstd` content
 decoding), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
 WebGPU).
 
@@ -262,9 +266,8 @@ agreement. Bundled third-party components keep their own licenses
 
 - [Nordstjernen Sol](https://github.com/nordstjernen-web/nordstjernen-sol-browser)
   — the C browser Southstar starts from.
-- [Nordstjernen Web Browser](https://github.com/nordstjernen-web/northstar-web-browser)
-  (formerly Northstar) — the GPL-licensed minimalist sibling, one process
-  and no tabs.
+- [Northstar Web Browser](https://github.com/nordstjernen-web/northstar-web-browser)
+  — the GPL-licensed minimalist C sibling, one process and no tabs.
 
 # Development team
 Southstar is developed by a team located in Norway, Poland and Spain.
