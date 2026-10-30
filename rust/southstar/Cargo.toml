@@ -10,7 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 keywords = ["browser", "web", "gtk", "html", "javascript"]
 categories = ["gui", "web-programming"]
-include = ["/Cargo.toml", "/build.rs", "/src/**", "/bundle/**"]
+readme = "README.md"
+include = ["/Cargo.toml", "/README.md", "/build.rs", "/src/**", "/bundle/**"]
 
 [[bin]]
 name = "southstar"

@@ -22,7 +22,7 @@ autoexamples = false
 autotests = false
 autobenches = false
 description = "Southstar's fork of boa_string: Boa is a Javascript lexer, parser and compiler written in Rust. Currently, it has support for some of the language."
-readme = "README.md"
+readme = false
 keywords = [
     "javascript",
     "js",

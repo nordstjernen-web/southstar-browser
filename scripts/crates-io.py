@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GROUPS = Path(__file__).resolve().parent / "crates-io-groups.toml"
+READMES = Path(__file__).resolve().parent / "crates-io-readmes"
 STAGING = ROOT / "target" / "crates-io"
 BUNDLED = ["License.md", "COPYING", "THIRD-PARTY-LICENSES.md", "data/safebrowsing.list", "data/i18n", "data/icons"]
 RETRY_AFTER = re.compile(r"try again after (\w{3}, \d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} GMT)")
@@ -25,6 +26,7 @@ CRATE_IDENT = re.compile(r"(::)?\bsouthstar_[a-z0-9_]+\b")
 SELF_PATH = re.compile(r"(\$?)\bcrate::")
 IDENT_CHAR = re.compile(r"[A-Za-z0-9_>]")
 CARGO = os.environ.get("CARGO") or shutil.which("cargo") or "cargo"
+REPOSITORY = "https://github.com/nordstjernen-web/southstar-browser"
 USER_AGENT = "southstar-crates-io (github.com/nordstjernen-web/southstar-browser)"
 
 
@@ -293,7 +295,7 @@ def manifest(plan, group, build_script, lib_path, bins, extra):
         "description": plan.groups[group]["description"],
         "repository": first["repository"],
         "homepage": first["homepage"],
-        "readme": False,
+        "readme": "README.md",
     }
     package.update(extra)
     if build_script:
@@ -312,6 +314,29 @@ def manifest(plan, group, build_script, lib_path, bins, extra):
     for tool, lints in plan.lints.items():
         text += "\n" + toml_table(f"lints.{tool}", lints)
     return text
+
+
+def write_readme(plan, group, into):
+    if (into / "README.md").exists():
+        return
+    handwritten = READMES / f"{group}.md"
+    if handwritten.exists():
+        shutil.copy2(handwritten, into / "README.md")
+        return
+    members = plan.groups[group]["members"]
+    lines = [f"# {group}", "", plan.groups[group]["description"] + ".", "",
+             f"This crate is part of [Southstar]({REPOSITORY}), a web browser written from scratch in Rust "
+             "with a GTK 4 interface. It is published so that `cargo install southstar` can build the "
+             "browser; its API follows the browser's needs and is not stable.", ""]
+    if not plan.standalone(group):
+        lines += ["## Modules", "", "Each module is a crate of the Southstar workspace, merged into this one for publishing:", ""]
+        lines += [f"- `{ident(m)}`: {plan.members[m]['description']}" for m in members]
+        lines.append("")
+    lines += ["## Install the browser", "", "```sh", "cargo install southstar", "```", "",
+              f"The [southstar](https://crates.io/crates/southstar) crate lists the system libraries it needs.", "",
+              "## License", "", f"`{licence(plan, group)}`. The license texts are in the "
+              f"[repository]({REPOSITORY}).", ""]
+    (into / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def write_wrapped(plan, group, into):
@@ -348,6 +373,7 @@ def write_wrapped(plan, group, into):
         (into / "build.rs").write_text("\n".join(script) + "\n", encoding="utf-8")
     text = manifest(plan, group, "build.rs" if build_members else None, "src/lib.rs", [], {})
     (into / "Cargo.toml").write_text(text, encoding="utf-8")
+    write_readme(plan, group, into)
 
 
 def write_standalone(plan, group, into):
@@ -371,6 +397,7 @@ def write_standalone(plan, group, into):
             lib_path = path
     text = manifest(plan, group, build_script, lib_path, bins, extra)
     (into / "Cargo.toml").write_text(text, encoding="utf-8")
+    write_readme(plan, group, into)
     if group == "southstar":
         for item in BUNDLED:
             source_item, target_item = ROOT / item, into / "bundle" / item
@@ -434,8 +461,25 @@ def publish_one(name, manifest_path):
         sys.exit(f"crates-io: publishing {name} failed")
 
 
+def fork_order(plan):
+    order, done = [], set()
+
+    def visit(name):
+        if name in done:
+            return
+        done.add(name)
+        for dep in plan.forks[name]["dependencies"]:
+            if dep["kind"] != "dev" and dep["name"] in plan.forks:
+                visit(dep["name"])
+        order.append((name, plan.forks[name]))
+
+    for name in sorted(plan.forks):
+        visit(name)
+    return order
+
+
 def publish(plan, staging):
-    queue = [(name, Path(p["manifest_path"]), p["version"]) for name, p in sorted(plan.forks.items())]
+    queue = [(name, Path(p["manifest_path"]), p["version"]) for name, p in fork_order(plan)]
     queue += [(group, staging / group / "Cargo.toml", plan.version) for group in plan.order]
     for index, (name, manifest_path, version) in enumerate(queue, 1):
         if published(name, version):
