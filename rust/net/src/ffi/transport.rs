@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int};
+use core::ffi::c_int;
 use core::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::thread::JoinHandle;
@@ -69,6 +69,7 @@ fn warm_rng() {
         .name("nd-rng-warmup".into())
         .spawn(|| {
             let mut buf = [0u8; 32];
+            // SAFETY: `buf` is a writable buffer of exactly `buf.len()` bytes.
             unsafe { RAND_bytes(buf.as_mut_ptr(), buf.len() as c_int) };
         });
     *lock(&RNG_WARMUP) = thread.ok();
@@ -102,6 +103,6 @@ pub fn ca_bundle_path() -> Option<Vec<u8>> {
     CA_BUNDLE.get()
 }
 
-pub fn ns_net_ec_curves() -> *const c_char {
-    c"X25519MLKEM768:X25519:P-256:P-384".as_ptr()
+pub fn ec_curves() -> &'static [u8] {
+    b"X25519MLKEM768:X25519:P-256:P-384"
 }

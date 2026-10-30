@@ -45,7 +45,7 @@ impl Js {
 pub(crate) struct Source(glib::SourceId);
 
 unsafe extern "C" {
-    fn g_uuid_string_random() -> *mut c_char;
+    safe fn g_uuid_string_random() -> *mut c_char;
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
@@ -55,23 +55,6 @@ pub(crate) fn cstring(bytes: &[u8]) -> CString {
 fn until_nul(bytes: &[u8]) -> &[u8] {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     &bytes[..end]
-}
-
-unsafe fn borrowed(p: *const c_char) -> Vec<u8> {
-    if p.is_null() {
-        Vec::new()
-    } else {
-        unsafe { CStr::from_ptr(p) }.to_bytes().to_vec()
-    }
-}
-
-unsafe fn take_gstr(p: *mut c_char) -> Option<Vec<u8>> {
-    if p.is_null() {
-        return None;
-    }
-    let bytes = unsafe { borrowed(p) };
-    unsafe { glib::g_free(p.cast()) };
-    Some(bytes)
 }
 
 pub(crate) fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
@@ -94,7 +77,9 @@ pub(crate) fn document_origin(scope: &Scope<'_>, js: Js) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {
-    unsafe { take_gstr(g_uuid_string_random()) }.unwrap_or_default()
+    // SAFETY: g_uuid_string_random hands over a new GLib string, taken exactly once.
+    unsafe { glib::GStr::take(g_uuid_string_random()) }
+        .map_or_else(Vec::new, |uuid| uuid.to_bytes().to_vec())
 }
 
 pub(crate) fn mark_mutated(js: Js) {
@@ -167,14 +152,7 @@ pub(crate) fn host_is(value: &Value, kind: HostKind) -> bool {
 }
 
 pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    let view = api::bytes_view(scope, value)?;
-    let bytes = if view.data.is_null() || view.len == 0 {
-        Vec::new()
-    } else {
-        unsafe { core::slice::from_raw_parts(view.data, view.len) }.to_vec()
-    };
-    drop(view);
-    Some(bytes)
+    api::bytes_view_copy(scope, value)
 }
 
 macro_rules! natives {

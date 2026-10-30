@@ -53,6 +53,8 @@ pub(crate) fn with_active_caller<R, F: FnOnce(StoreContextMut<'_, HostState>) ->
     f: F,
 ) -> Result<R, F> {
     let caller = entry.caller.get().cast::<Caller<'_, HostState>>();
+    // SAFETY: `caller` is null or the `Caller` `in_import` stored for exactly the duration of
+    // the import call it is running, which is still on the stack while `f` runs on it.
     match unsafe { caller.as_mut() } {
         Some(caller) => Ok(f(caller.as_context_mut())),
         None => Err(f),
@@ -65,5 +67,7 @@ pub(crate) fn memory_buffer(
     len: usize,
     store: Rc<dyn Any>,
 ) -> Result<Value, Value> {
+    // SAFETY: `data..data + len` is the wasm memory owned by the store `store` keeps alive, and
+    // `Realm::sync_views` detaches the buffer before a grow can move or shrink that memory.
     unsafe { scope.external_array_buffer(data, len, Some(store)) }
 }

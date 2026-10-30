@@ -198,7 +198,7 @@ impl LayerUpdate {
             return None;
         }
         self.budget -= len;
-        Texture::from_bgra(&map[off..off + len], width, rows, row).map(|tex| (tex, len))
+        Texture::from_bytes(width, rows, &map[off..off + len], row).map(|tex| (tex, len))
     }
 
     pub fn parse(desc: &[u8], map: &[u8]) -> Option<LayerUpdate> {

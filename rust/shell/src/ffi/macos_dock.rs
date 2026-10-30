@@ -4,132 +4,142 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::mem::transmute;
-use core::ptr;
+use std::ffi::CString;
 
-use southstar_gtk_ffi::{self as gtk, CAIRO_FORMAT_ARGB32, CairoSurface};
+use southstar_cairo::{Context, Format, Surface};
 
-use super::gtk::{borrowed, build_filename};
+use super::gtk::{build_filename, cstring};
 
 const DOCK_ICON_DIM: c_int = 512;
-const CAIRO_STATUS_SUCCESS: c_int = 0;
 const ICON_RESOURCE: &CStr = c"/org/southstar/WebBrowser/icons/scalable/apps/southstar.svg";
 
 type Id = *mut c_void;
 type Sel = *const c_void;
-
-unsafe extern "C" {
-    fn g_get_tmp_dir() -> *const c_char;
-    fn cairo_surface_write_to_png(surface: *mut CairoSurface, filename: *const c_char) -> c_int;
-}
 
 #[link(name = "objc")]
 unsafe extern "C" {
     fn objc_getClass(name: *const c_char) -> Id;
     fn sel_registerName(name: *const c_char) -> Sel;
     fn objc_msgSend();
-    fn objc_autoreleasePoolPush() -> *mut c_void;
+    safe fn objc_autoreleasePoolPush() -> *mut c_void;
     fn objc_autoreleasePoolPop(pool: *mut c_void);
 }
 
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {}
 
-unsafe fn send(receiver: Id, selector: &CStr) -> Id {
-    unsafe {
-        let imp: unsafe extern "C" fn(Id, Sel) -> Id =
-            transmute(objc_msgSend as unsafe extern "C" fn());
-        imp(receiver, sel_registerName(selector.as_ptr()))
-    }
+fn selector(name: &CStr) -> Sel {
+    // SAFETY: `name` is a NUL-terminated string that outlives the call; the runtime copies it.
+    unsafe { sel_registerName(name.as_ptr()) }
 }
 
-unsafe fn send_unit(receiver: Id, selector: &CStr) {
-    unsafe {
-        let imp: unsafe extern "C" fn(Id, Sel) = transmute(objc_msgSend as unsafe extern "C" fn());
-        imp(receiver, sel_registerName(selector.as_ptr()))
-    }
-}
-
-unsafe fn send_ptr(receiver: Id, selector: &CStr, arg: *const c_void) -> Id {
-    unsafe {
-        let imp: unsafe extern "C" fn(Id, Sel, *const c_void) -> Id =
-            transmute(objc_msgSend as unsafe extern "C" fn());
-        imp(receiver, sel_registerName(selector.as_ptr()), arg)
-    }
-}
-
-unsafe fn send_void(receiver: Id, selector: &CStr, arg: Id) {
-    unsafe {
-        let imp: unsafe extern "C" fn(Id, Sel, Id) =
-            transmute(objc_msgSend as unsafe extern "C" fn());
-        imp(receiver, sel_registerName(selector.as_ptr()), arg)
-    }
-}
-
-unsafe fn class(name: &CStr) -> Id {
+fn class(name: &CStr) -> Id {
+    // SAFETY: `name` is a NUL-terminated string that outlives the call; an unknown class is nil.
     unsafe { objc_getClass(name.as_ptr()) }
 }
 
-fn render_icon_png() -> Option<std::ffi::CString> {
-    unsafe {
-        let bytes = gtk::g_resources_lookup_data(ICON_RESOURCE.as_ptr(), 0, ptr::null_mut());
-        if bytes.is_null() {
-            return None;
-        }
-        let surf =
-            gtk::cairo_image_surface_create(CAIRO_FORMAT_ARGB32, DOCK_ICON_DIM, DOCK_ICON_DIM);
-        if gtk::cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS {
-            gtk::cairo_surface_destroy(surf);
-            gtk::g_bytes_unref(bytes);
-            return None;
-        }
-        let mut len = 0usize;
-        let data = gtk::g_bytes_get_data(bytes, &mut len);
-        let cr = gtk::cairo_create(surf);
-        let canvas =
-            southstar_cairo::ContextRef::from_raw(cr.cast()).map(southstar_svg::Canvas::from);
-        let rendered = !data.is_null()
-            && canvas.is_some_and(|canvas| {
-                southstar_svg::render_bytes(
-                    canvas,
-                    core::slice::from_raw_parts(data.cast::<u8>(), len),
-                    f64::from(DOCK_ICON_DIM),
-                    f64::from(DOCK_ICON_DIM),
-                )
-            });
-        gtk::cairo_destroy(cr);
-        gtk::g_bytes_unref(bytes);
-        if !rendered {
-            gtk::cairo_surface_destroy(surf);
-            return None;
-        }
-        gtk::cairo_surface_flush(surf);
+/// # Safety
+///
+/// `receiver` must be nil or a live object whose `selector` method takes no arguments and
+/// returns an object.
+unsafe fn send(receiver: Id, selector_name: &CStr) -> Id {
+    // SAFETY: objc_msgSend is called through a pointer cast to the method's exact signature,
+    // which the caller guarantees.
+    let imp: unsafe extern "C" fn(Id, Sel) -> Id =
+        unsafe { transmute(objc_msgSend as unsafe extern "C" fn()) };
+    // SAFETY: the caller guarantees `receiver` answers `selector_name` with this signature.
+    unsafe { imp(receiver, selector(selector_name)) }
+}
 
-        let tmp = borrowed(g_get_tmp_dir())?.to_owned();
-        let png = build_filename(&[&tmp, c"southstar-dock.png"]);
-        let status = cairo_surface_write_to_png(surf, png.as_ptr());
-        gtk::cairo_surface_destroy(surf);
-        (status == CAIRO_STATUS_SUCCESS).then_some(png)
+/// # Safety
+///
+/// `receiver` must be nil or a live object whose `selector` method takes no arguments and
+/// returns nothing.
+unsafe fn send_unit(receiver: Id, selector_name: &CStr) {
+    // SAFETY: objc_msgSend is called through a pointer cast to the method's exact signature,
+    // which the caller guarantees.
+    let imp: unsafe extern "C" fn(Id, Sel) =
+        unsafe { transmute(objc_msgSend as unsafe extern "C" fn()) };
+    // SAFETY: the caller guarantees `receiver` answers `selector_name` with this signature.
+    unsafe { imp(receiver, selector(selector_name)) }
+}
+
+/// # Safety
+///
+/// `receiver` must be nil or a live object whose `selector` method takes one pointer argument
+/// and returns an object, and `arg` must be what that method expects.
+unsafe fn send_ptr(receiver: Id, selector_name: &CStr, arg: *const c_void) -> Id {
+    // SAFETY: objc_msgSend is called through a pointer cast to the method's exact signature,
+    // which the caller guarantees.
+    let imp: unsafe extern "C" fn(Id, Sel, *const c_void) -> Id =
+        unsafe { transmute(objc_msgSend as unsafe extern "C" fn()) };
+    // SAFETY: the caller guarantees `receiver` answers `selector_name` with this signature and
+    // that `arg` is valid for it.
+    unsafe { imp(receiver, selector(selector_name), arg) }
+}
+
+/// # Safety
+///
+/// `receiver` must be nil or a live object whose `selector` method takes one object argument
+/// and returns nothing, and `arg` must be nil or a live object of the expected class.
+unsafe fn send_void(receiver: Id, selector_name: &CStr, arg: Id) {
+    // SAFETY: objc_msgSend is called through a pointer cast to the method's exact signature,
+    // which the caller guarantees.
+    let imp: unsafe extern "C" fn(Id, Sel, Id) =
+        unsafe { transmute(objc_msgSend as unsafe extern "C" fn()) };
+    // SAFETY: the caller guarantees `receiver` answers `selector_name` with this signature and
+    // that `arg` is valid for it.
+    unsafe { imp(receiver, selector(selector_name), arg) }
+}
+
+fn render_icon_png() -> Option<CString> {
+    let svg = southstar_gtk::resource_bytes(ICON_RESOURCE)?;
+    let surface = Surface::image(Format::Argb32, DOCK_ICON_DIM, DOCK_ICON_DIM)?;
+    let rendered = {
+        let cr = Context::new(surface.as_ref());
+        southstar_svg::render_bytes(
+            southstar_svg::Canvas::from(cr.as_ref()),
+            &svg,
+            f64::from(DOCK_ICON_DIM),
+            f64::from(DOCK_ICON_DIM),
+        )
+    };
+    if !rendered {
+        return None;
     }
+    surface.as_ref().flush();
+    let tmp = Some(southstar_glib::tmp_dir()).filter(|dir| !dir.is_empty())?;
+    let png = build_filename(&[&cstring(tmp), c"southstar-dock.png"]);
+    surface.as_ref().write_to_png(&png).ok()?;
+    Some(png)
 }
 
 pub fn set_dock_icon() {
     let Some(png) = render_icon_png() else {
         return;
     };
-    unsafe {
-        let pool = objc_autoreleasePoolPush();
-        let path = send_ptr(
+    let pool = objc_autoreleasePoolPush();
+    // SAFETY: +[NSString stringWithUTF8String:] takes a C string and returns an object, and `png`
+    // is NUL-terminated and outlives the call.
+    let path = unsafe {
+        send_ptr(
             class(c"NSString"),
             c"stringWithUTF8String:",
             png.as_ptr().cast(),
-        );
-        let image = send(class(c"NSImage"), c"alloc");
-        let image = send_ptr(image, c"initWithContentsOfFile:", path.cast_const());
-        if !image.is_null() {
-            let app = send(class(c"NSApplication"), c"sharedApplication");
-            send_void(app, c"setApplicationIconImage:", image);
-            send_unit(image, c"release");
-        }
-        objc_autoreleasePoolPop(pool);
+        )
+    };
+    // SAFETY: +[NSImage alloc] takes no arguments and returns an object.
+    let image = unsafe { send(class(c"NSImage"), c"alloc") };
+    // SAFETY: -[NSImage initWithContentsOfFile:] takes an NSString, and `path` is one or nil.
+    let image = unsafe { send_ptr(image, c"initWithContentsOfFile:", path.cast_const()) };
+    if !image.is_null() {
+        // SAFETY: +[NSApplication sharedApplication] takes no arguments and returns an object.
+        let app = unsafe { send(class(c"NSApplication"), c"sharedApplication") };
+        // SAFETY: -[NSApplication setApplicationIconImage:] takes an NSImage, which `image` is.
+        unsafe { send_void(app, c"setApplicationIconImage:", image) };
+        // SAFETY: `image` is the object alloc/init returned, released exactly once here.
+        unsafe { send_unit(image, c"release") };
     }
+    // SAFETY: `pool` is the pool pushed above, popped exactly once.
+    unsafe { objc_autoreleasePoolPop(pool) };
 }

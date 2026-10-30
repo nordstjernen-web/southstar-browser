@@ -7,6 +7,8 @@ mod rules;
 #[cfg(test)]
 mod tests;
 
+pub use ffi::registrable_domain;
+
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::path::Path;

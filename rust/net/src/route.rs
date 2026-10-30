@@ -2,23 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
-
-use southstar_glib as glib;
 use southstar_http::{Route, TlsSettings};
 
 use crate::ffi::proxy::{configured_no_proxy, pick_configured_proxy};
-use crate::ffi::transport::{ca_bundle_path, ns_net_ec_curves};
+use crate::ffi::transport::{ca_bundle_path, ec_curves};
 use crate::url;
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
-}
 
 pub fn tls_settings() -> TlsSettings {
     TlsSettings {
         ca_bundle: ca_bundle_path(),
-        curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),
+        curves: ec_curves().to_vec(),
     }
 }
 

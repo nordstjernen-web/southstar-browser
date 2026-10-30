@@ -105,7 +105,7 @@ unsafe extern "system" {
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    fn pthread_self() -> usize;
+    safe fn pthread_self() -> usize;
     fn pthread_get_stacksize_np(thread: usize) -> usize;
 }
 
@@ -613,6 +613,7 @@ pub(crate) fn warn(message: &str) {
 
 #[cfg(target_os = "macos")]
 pub(crate) fn thread_stack_size() -> usize {
+    // SAFETY: pthread_self is the calling thread, which is alive for the call.
     unsafe { pthread_get_stacksize_np(pthread_self()) }
 }
 

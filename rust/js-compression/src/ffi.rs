@@ -4,6 +4,7 @@
 
 use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
 
+use southstar_http::{Inflate, Inflated};
 use southstar_js_engine::{Scope, Value};
 
 #[repr(C)]
@@ -25,9 +26,7 @@ struct ZStream {
 }
 
 unsafe extern "C" {
-    fn zlibVersion() -> *const c_char;
-    fn inflateInit2_(strm: *mut ZStream, bits: c_int, version: *const c_char, size: c_int)
-    -> c_int;
+    safe fn zlibVersion() -> *const c_char;
     fn deflateInit2_(
         strm: *mut ZStream,
         level: c_int,
@@ -38,9 +37,7 @@ unsafe extern "C" {
         version: *const c_char,
         size: c_int,
     ) -> c_int;
-    fn inflate(strm: *mut ZStream, flush: c_int) -> c_int;
     fn deflate(strm: *mut ZStream, flush: c_int) -> c_int;
-    fn inflateEnd(strm: *mut ZStream) -> c_int;
     fn deflateEnd(strm: *mut ZStream) -> c_int;
 }
 
@@ -64,13 +61,12 @@ pub(crate) enum Step {
     Failed,
 }
 
-pub(crate) struct Zlib {
+pub(crate) struct Deflate {
     stream: Box<ZStream>,
-    decompress: bool,
 }
 
-impl Zlib {
-    pub fn new(decompress: bool, window_bits: i32) -> Option<Zlib> {
+impl Deflate {
+    fn new(window_bits: i32) -> Option<Deflate> {
         let mut stream = Box::new(ZStream {
             next_in: core::ptr::null(),
             avail_in: 0,
@@ -87,44 +83,33 @@ impl Zlib {
             adler: 0,
             reserved: 0,
         });
-        let size = core::mem::size_of::<ZStream>() as c_int;
+        // SAFETY: `stream` is a boxed, zeroed z_stream whose size is passed alongside it, and the
+        // version is zlib's own.
         let rc = unsafe {
-            if decompress {
-                inflateInit2_(&mut *stream, window_bits, zlibVersion(), size)
-            } else {
-                deflateInit2_(
-                    &mut *stream,
-                    Z_DEFAULT_COMPRESSION,
-                    Z_DEFLATED,
-                    window_bits,
-                    8,
-                    Z_DEFAULT_STRATEGY,
-                    zlibVersion(),
-                    size,
-                )
-            }
+            deflateInit2_(
+                &mut *stream,
+                Z_DEFAULT_COMPRESSION,
+                Z_DEFLATED,
+                window_bits,
+                8,
+                Z_DEFAULT_STRATEGY,
+                zlibVersion(),
+                core::mem::size_of::<ZStream>() as c_int,
+            )
         };
-        (rc == Z_OK).then(|| Zlib { stream, decompress })
+        (rc == Z_OK).then_some(Deflate { stream })
     }
 
-    pub fn decompress(&self) -> bool {
-        self.decompress
-    }
-
-    pub fn step(&mut self, input: &mut &[u8], out: &mut [u8], finish: bool) -> (Step, usize) {
+    fn step(&mut self, input: &mut &[u8], out: &mut [u8], finish: bool) -> (Step, usize) {
         let take = input.len().min(c_uint::MAX as usize);
         self.stream.next_in = input.as_ptr();
         self.stream.avail_in = take as c_uint;
         self.stream.next_out = out.as_mut_ptr();
         self.stream.avail_out = out.len() as c_uint;
         let flush = if finish { Z_FINISH } else { Z_NO_FLUSH };
-        let rc = unsafe {
-            if self.decompress {
-                inflate(&mut *self.stream, flush)
-            } else {
-                deflate(&mut *self.stream, flush)
-            }
-        };
+        // SAFETY: the stream was initialized by deflateInit2_, next_in/avail_in describe `input`
+        // and next_out/avail_out describe `out`, both live for the call.
+        let rc = unsafe { deflate(&mut *self.stream, flush) };
         *input = &input[take - self.stream.avail_in as usize..];
         let produced = out.len() - self.stream.avail_out as usize;
         let step = match rc {
@@ -137,13 +122,45 @@ impl Zlib {
     }
 }
 
-impl Drop for Zlib {
+impl Drop for Deflate {
     fn drop(&mut self) {
-        unsafe {
-            if self.decompress {
-                inflateEnd(&mut *self.stream);
-            } else {
-                deflateEnd(&mut *self.stream);
+        // SAFETY: the stream was initialized by deflateInit2_ (`new` returns None otherwise) and
+        // is ended exactly once, here.
+        unsafe { deflateEnd(&mut *self.stream) };
+    }
+}
+
+pub(crate) enum Zlib {
+    Inflate(Inflate),
+    Deflate(Deflate),
+}
+
+impl Zlib {
+    pub fn new(decompress: bool, window_bits: i32) -> Option<Zlib> {
+        if decompress {
+            Inflate::new(window_bits).map(Zlib::Inflate)
+        } else {
+            Deflate::new(window_bits).map(Zlib::Deflate)
+        }
+    }
+
+    pub fn decompress(&self) -> bool {
+        matches!(self, Zlib::Inflate(_))
+    }
+
+    pub fn step(&mut self, input: &mut &[u8], out: &mut [u8], finish: bool) -> (Step, usize) {
+        match self {
+            Zlib::Deflate(deflate) => deflate.step(input, out, finish),
+            Zlib::Inflate(inflate) => {
+                let (status, consumed, produced) = inflate.step(input, out, finish);
+                *input = &input[consumed..];
+                let step = match status {
+                    Inflated::Progress => Step::Progress,
+                    Inflated::StreamEnd => Step::StreamEnd,
+                    Inflated::BufError => Step::BufError,
+                    Inflated::Failed => Step::Failed,
+                };
+                (step, produced)
             }
         }
     }

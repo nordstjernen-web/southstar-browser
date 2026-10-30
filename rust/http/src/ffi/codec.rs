@@ -32,7 +32,7 @@ struct ZStream {
 }
 
 unsafe extern "C" {
-    fn zlibVersion() -> *const c_char;
+    safe fn zlibVersion() -> *const c_char;
     fn inflateInit2_(strm: *mut ZStream, bits: c_int, version: *const c_char, size: c_int)
     -> c_int;
     fn inflate(strm: *mut ZStream, flush: c_int) -> c_int;
@@ -43,12 +43,23 @@ const Z_OK: c_int = 0;
 const Z_STREAM_END: c_int = 1;
 const Z_BUF_ERROR: c_int = -5;
 const Z_NO_FLUSH: c_int = 0;
+const Z_FINISH: c_int = 4;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Inflated {
+    Progress,
+    StreamEnd,
+    BufError,
+    Failed,
+}
 
 pub struct Inflate {
     stream: Box<ZStream>,
     finished: bool,
 }
 
+// SAFETY: the z_stream is reached only through `&mut Inflate`, zlib keeps no thread affinity, and
+// its input and output pointers are reset before every inflate call.
 unsafe impl Send for Inflate {}
 
 impl Inflate {
@@ -69,6 +80,8 @@ impl Inflate {
             adler: 0,
             reserved: 0,
         });
+        // SAFETY: `stream` is a boxed, zeroed z_stream whose size is passed alongside it, and the
+        // version is zlib's own.
         let rc = unsafe {
             inflateInit2_(
                 &mut *stream,
@@ -83,6 +96,28 @@ impl Inflate {
         })
     }
 
+    pub fn step(&mut self, input: &[u8], out: &mut [u8], finish: bool) -> (Inflated, usize, usize) {
+        let take = input.len().min(c_uint::MAX as usize);
+        let room = out.len().min(c_uint::MAX as usize);
+        self.stream.next_in = input.as_ptr();
+        self.stream.avail_in = take as c_uint;
+        self.stream.next_out = out.as_mut_ptr();
+        self.stream.avail_out = room as c_uint;
+        let flush = if finish { Z_FINISH } else { Z_NO_FLUSH };
+        // SAFETY: the stream was initialized by inflateInit2_, next_in/avail_in describe
+        // `input` and next_out/avail_out describe `out`, both live for the call.
+        let rc = unsafe { inflate(&mut *self.stream, flush) };
+        let consumed = take - self.stream.avail_in as usize;
+        let produced = room - self.stream.avail_out as usize;
+        let status = match rc {
+            Z_OK => Inflated::Progress,
+            Z_STREAM_END => Inflated::StreamEnd,
+            Z_BUF_ERROR => Inflated::BufError,
+            _ => Inflated::Failed,
+        };
+        (status, consumed, produced)
+    }
+
     pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<usize, Failure> {
         if self.finished {
             return Ok(input.len());
@@ -90,24 +125,17 @@ impl Inflate {
         let mut out = [0u8; OUT_CHUNK];
         let mut rest = input;
         loop {
-            let take = rest.len().min(c_uint::MAX as usize);
-            self.stream.next_in = rest.as_ptr();
-            self.stream.avail_in = take as c_uint;
-            self.stream.next_out = out.as_mut_ptr();
-            self.stream.avail_out = OUT_CHUNK as c_uint;
-            let rc = unsafe { inflate(&mut *self.stream, Z_NO_FLUSH) };
-            let consumed = take - self.stream.avail_in as usize;
+            let (status, consumed, produced) = self.step(rest, &mut out, false);
             rest = &rest[consumed..];
-            let produced = OUT_CHUNK - self.stream.avail_out as usize;
             if produced > 0 && !emit(&out[..produced]) {
                 return Err(Failure::Stopped);
             }
-            match rc {
-                Z_STREAM_END => {
+            match status {
+                Inflated::StreamEnd => {
                     self.finished = true;
                     return Ok(rest.len());
                 }
-                Z_OK | Z_BUF_ERROR => {
+                Inflated::Progress | Inflated::BufError => {
                     if rest.is_empty() && produced < OUT_CHUNK {
                         return Ok(0);
                     }
@@ -115,7 +143,7 @@ impl Inflate {
                         return Err(Failure::Corrupt);
                     }
                 }
-                _ => return Err(Failure::Corrupt),
+                Inflated::Failed => return Err(Failure::Corrupt),
             }
         }
     }
@@ -123,6 +151,8 @@ impl Inflate {
 
 impl Drop for Inflate {
     fn drop(&mut self) {
+        // SAFETY: the stream was initialized by inflateInit2_ (`new` returns None otherwise) and
+        // is ended exactly once, here.
         unsafe { inflateEnd(&mut *self.stream) };
     }
 }
@@ -158,10 +188,13 @@ mod brotli {
         finished: bool,
     }
 
+    // SAFETY: the decoder state is owned by this value, reached only through `&mut Brotli`, and
+    // libbrotlidec keeps no thread affinity.
     unsafe impl Send for Brotli {}
 
     impl Brotli {
         pub fn new() -> Option<Brotli> {
+            // SAFETY: null allocator functions and opaque select brotli's default allocator.
             let state = unsafe {
                 BrotliDecoderCreateInstance(
                     core::ptr::null(),
@@ -182,6 +215,8 @@ mod brotli {
             while !self.finished {
                 let mut next_out = out.as_mut_ptr();
                 let mut avail_out = OUT_CHUNK;
+                // SAFETY: `state` is the live decoder, next_in/avail_in describe the rest of
+                // `input` and next_out/avail_out the rest of `out`, and total_out may be null.
                 let rc = unsafe {
                     BrotliDecoderDecompressStream(
                         self.state,
@@ -209,6 +244,7 @@ mod brotli {
 
     impl Drop for Brotli {
         fn drop(&mut self) {
+            // SAFETY: `state` is the non-null decoder `new` created, destroyed exactly once, here.
             unsafe { BrotliDecoderDestroyInstance(self.state) };
         }
     }
@@ -234,14 +270,14 @@ mod zstd {
     }
 
     unsafe extern "C" {
-        fn ZSTD_createDStream() -> *mut c_void;
+        safe fn ZSTD_createDStream() -> *mut c_void;
         fn ZSTD_initDStream(ds: *mut c_void) -> usize;
         fn ZSTD_decompressStream(
             ds: *mut c_void,
             out: *mut OutBuffer,
             input: *mut InBuffer,
         ) -> usize;
-        fn ZSTD_isError(code: usize) -> c_uint;
+        safe fn ZSTD_isError(code: usize) -> c_uint;
         fn ZSTD_freeDStream(ds: *mut c_void) -> usize;
     }
 
@@ -249,14 +285,17 @@ mod zstd {
         stream: *mut c_void,
     }
 
+    // SAFETY: the stream is owned by this value, reached only through `&mut Zstd`, and libzstd
+    // keeps no thread affinity.
     unsafe impl Send for Zstd {}
 
     impl Zstd {
         pub fn new() -> Option<Zstd> {
-            let stream = unsafe { ZSTD_createDStream() };
+            let stream = ZSTD_createDStream();
             if stream.is_null() {
                 return None;
             }
+            // SAFETY: `stream` is the non-null stream just created.
             unsafe { ZSTD_initDStream(stream) };
             Some(Zstd { stream })
         }
@@ -274,11 +313,13 @@ mod zstd {
                     size: OUT_CHUNK,
                     pos: 0,
                 };
+                // SAFETY: `stream` is live, `inb` describes `input` and `outb` describes `out`,
+                // both of which outlive the call.
                 let rc = unsafe { ZSTD_decompressStream(self.stream, &mut outb, &mut inb) };
                 if outb.pos > 0 && !emit(&out[..outb.pos]) {
                     return Err(Failure::Stopped);
                 }
-                if unsafe { ZSTD_isError(rc) } != 0 {
+                if ZSTD_isError(rc) != 0 {
                     return Err(Failure::Corrupt);
                 }
                 if inb.pos >= inb.size && outb.pos < OUT_CHUNK {
@@ -290,6 +331,7 @@ mod zstd {
 
     impl Drop for Zstd {
         fn drop(&mut self) {
+            // SAFETY: `stream` is the non-null stream `new` created, freed exactly once, here.
             unsafe { ZSTD_freeDStream(self.stream) };
         }
     }

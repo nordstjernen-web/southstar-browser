@@ -2,11 +2,12 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_int;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use ring::rand::{SecureRandom, SystemRandom};
+use southstar_digest::Algorithm;
 use southstar_http::{Received, Request, Upgraded};
 
 use crate::{
@@ -37,11 +38,6 @@ pub struct WebSocket {
 }
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
-
-unsafe extern "C" {
-    fn SHA1(data: *const u8, len: usize, digest: *mut u8) -> *mut u8;
-    fn RAND_bytes(buf: *mut u8, num: c_int) -> c_int;
-}
 
 struct Dispatch {
     socket: Arc<Socket>,
@@ -119,7 +115,7 @@ impl Connection {
 }
 
 fn random(buf: &mut [u8]) {
-    unsafe { RAND_bytes(buf.as_mut_ptr(), buf.len() as c_int) };
+    let _ = SystemRandom::new().fill(buf);
 }
 
 fn mask_key() -> [u8; 4] {
@@ -130,9 +126,7 @@ fn mask_key() -> [u8; 4] {
 
 fn accept_for(key: &[u8]) -> Vec<u8> {
     let input = [key, ACCEPT_GUID].concat();
-    let mut digest = [0u8; 20];
-    unsafe { SHA1(input.as_ptr(), input.len(), digest.as_mut_ptr()) };
-    base64(&digest)
+    base64(&southstar_digest::digest(Algorithm::Sha1, &input))
 }
 
 fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {

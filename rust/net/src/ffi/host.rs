@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::sync::Mutex;
 
 use southstar_config::NsConfig;
@@ -15,17 +14,15 @@ const OPENSSL_VERSION: c_int = 0;
 
 unsafe extern "C" {
     fn g_get_os_info(key: *const c_char) -> *mut c_char;
-    fn psl_builtin() -> *const c_void;
-    fn psl_registrable_domain(psl: *const c_void, domain: *const c_char) -> *const c_char;
-    fn cairo_version_string() -> *const c_char;
-    fn sqlite3_libversion() -> *const c_char;
-    fn WebPGetDecoderVersion() -> c_int;
-    fn OpenSSL_version(kind: c_int) -> *const c_char;
+    safe fn cairo_version_string() -> *const c_char;
+    safe fn sqlite3_libversion() -> *const c_char;
+    safe fn WebPGetDecoderVersion() -> c_int;
+    safe fn OpenSSL_version(kind: c_int) -> *const c_char;
 }
 
 #[cfg(feature = "libav")]
 unsafe extern "C" {
-    fn av_version_info() -> *const c_char;
+    safe fn av_version_info() -> *const c_char;
 }
 
 #[cfg_attr(windows, link(name = "glib-2.0", kind = "dylib"))]
@@ -40,15 +37,19 @@ fn until_nul(bytes: &[u8]) -> &[u8] {
     &bytes[..end]
 }
 
-fn c(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
-}
-
-fn owned(p: *mut c_char) -> Option<Vec<u8>> {
+/// # Safety
+///
+/// `p` must be null or a newly allocated GLib string the caller hands over.
+unsafe fn owned(p: *mut c_char) -> Option<Vec<u8>> {
+    // SAFETY: the caller hands over ownership of `p`, a GLib string or null.
     unsafe { GStr::take(p) }.map(|s| s.to_bytes().to_vec())
 }
 
-fn borrowed(p: *const c_char) -> Option<Vec<u8>> {
+/// # Safety
+///
+/// `p` must be null or a NUL-terminated string valid for the call.
+unsafe fn borrowed(p: *const c_char) -> Option<Vec<u8>> {
+    // SAFETY: the caller guarantees `p` is null or a NUL-terminated string valid for the call.
     unsafe { glib::bytes(p) }.map(<[u8]>::to_vec)
 }
 
@@ -88,7 +89,10 @@ pub fn random_below(n: i32) -> usize {
 }
 
 pub fn os_info(key: &CStr) -> Option<Vec<u8>> {
-    owned(unsafe { g_get_os_info(key.as_ptr()) })
+    // SAFETY: `key` is a NUL-terminated string that outlives the call.
+    let info = unsafe { g_get_os_info(key.as_ptr()) };
+    // SAFETY: g_get_os_info returns null or a newly allocated string the caller owns.
+    unsafe { owned(info) }
 }
 
 pub fn processors() -> u32 {
@@ -100,14 +104,7 @@ pub fn url_host(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
-    let lower = c(&host.to_ascii_lowercase());
-    // SAFETY: takes no arguments and returns libpsl's built-in list or null.
-    let psl = unsafe { psl_builtin() };
-    if psl.is_null() {
-        return None;
-    }
-    // SAFETY: `psl` is the built-in list and `lower` a NUL-terminated string that outlives the call.
-    borrowed(unsafe { psl_registrable_domain(psl, lower.as_ptr()) })
+    southstar_extensions::registrable_domain(&host.to_ascii_lowercase())
 }
 
 fn form_decode(text: &[u8]) -> Option<Vec<u8>> {
@@ -196,7 +193,8 @@ pub struct Versions {
 
 #[cfg(feature = "libav")]
 fn libav_version() -> Option<Vec<u8>> {
-    borrowed(unsafe { av_version_info() })
+    // SAFETY: libav's version string is static and NUL-terminated.
+    unsafe { borrowed(av_version_info()) }
 }
 
 #[cfg(not(feature = "libav"))]
@@ -204,18 +202,41 @@ fn libav_version() -> Option<Vec<u8>> {
     None
 }
 
+fn glib_version() -> [u32; 3] {
+    // SAFETY: GLib initializes its version constants at load time and never writes them.
+    let major = unsafe { glib_major_version };
+    // SAFETY: as above, a read-only constant exported by GLib.
+    let minor = unsafe { glib_minor_version };
+    // SAFETY: as above, a read-only constant exported by GLib.
+    let micro = unsafe { glib_micro_version };
+    [major, minor, micro]
+}
+
+fn cairo_version() -> Option<Vec<u8>> {
+    // SAFETY: cairo's version string is static and NUL-terminated.
+    unsafe { borrowed(cairo_version_string()) }
+}
+
+fn sqlite_version() -> Option<Vec<u8>> {
+    // SAFETY: SQLite's version string is static and NUL-terminated.
+    unsafe { borrowed(sqlite3_libversion()) }
+}
+
+fn openssl_version() -> Option<Vec<u8>> {
+    // SAFETY: OpenSSL's version text for a valid selector is static and NUL-terminated.
+    unsafe { borrowed(OpenSSL_version(OPENSSL_VERSION)) }
+}
+
 pub fn versions() -> Versions {
-    unsafe {
-        Versions {
-            js_engine: Some(southstar_js_engine::engine_version().into_bytes()),
-            glib: [glib_major_version, glib_minor_version, glib_micro_version],
-            cairo: borrowed(cairo_version_string()),
-            sqlite: borrowed(sqlite3_libversion()),
-            webp: WebPGetDecoderVersion(),
-            libav: libav_version(),
-            openssl: borrowed(OpenSSL_version(OPENSSL_VERSION)),
-            networking: southstar_http::description().to_vec(),
-        }
+    Versions {
+        js_engine: Some(southstar_js_engine::engine_version().into_bytes()),
+        glib: glib_version(),
+        cairo: cairo_version(),
+        sqlite: sqlite_version(),
+        webp: WebPGetDecoderVersion(),
+        libav: libav_version(),
+        openssl: openssl_version(),
+        networking: southstar_http::description().to_vec(),
     }
 }
 

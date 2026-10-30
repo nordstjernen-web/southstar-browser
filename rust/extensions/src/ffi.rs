@@ -25,7 +25,7 @@ struct PslContext {
 }
 
 unsafe extern "C" {
-    fn psl_builtin() -> *const PslContext;
+    safe fn psl_builtin() -> *const PslContext;
     fn psl_registrable_domain(psl: *const PslContext, domain: *const c_char) -> *const c_char;
 }
 
@@ -246,11 +246,15 @@ pub(crate) fn write_private_file(path: &[u8], data: &[u8]) -> bool {
     true
 }
 
-pub(crate) fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
-    let psl = unsafe { psl_builtin() };
+pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
+    let psl = psl_builtin();
     if psl.is_null() {
         return None;
     }
     let host = cstring(host);
-    unsafe { glib::bytes(psl_registrable_domain(psl, host.as_ptr())) }.map(<[u8]>::to_vec)
+    // SAFETY: `psl` is the non-null built-in list and `host` a NUL-terminated string that
+    // outlives the call.
+    let domain = unsafe { psl_registrable_domain(psl, host.as_ptr()) };
+    // SAFETY: the result is null or points into `host`, which is still alive here.
+    unsafe { glib::bytes(domain) }.map(<[u8]>::to_vec)
 }

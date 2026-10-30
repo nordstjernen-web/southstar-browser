@@ -184,8 +184,12 @@ fn log_failure(js: Js, img: ImageRef<'_>) {
     if !img.failed() || !ffi::log_enabled(js) || img.http_status() == 204 {
         return;
     }
-    let url = ffi::c_str(img.url()).map_or(&b"(no url)"[..], CStr::to_bytes);
-    let error = ffi::c_str(img.error()).map_or(&b"(no error msg)"[..], CStr::to_bytes);
+    let url = img.url_text();
+    let error = img.error_text();
+    let url = url.as_deref().map_or(&b"(no url)"[..], CStr::to_bytes);
+    let error = error
+        .as_deref()
+        .map_or(&b"(no error msg)"[..], CStr::to_bytes);
     let mut line = b"[image] error: ".to_vec();
     line.extend_from_slice(url);
     line.extend_from_slice(" — ".as_bytes());

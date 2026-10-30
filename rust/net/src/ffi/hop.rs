@@ -2,17 +2,16 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_long};
+use core::ffi::c_long;
 use std::ffi::CString;
 use std::time::Duration;
 
-use southstar_glib as glib;
 use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
 use southstar_netstore::cookies::Context;
 
 use super::queue::Cancellable;
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
-use super::transport::{ca_bundle_path, ns_net_aborting, ns_net_ec_curves};
+use super::transport::{ca_bundle_path, ec_curves, ns_net_aborting};
 use crate::response::cstr;
 use crate::{cookies, hsts, url};
 
@@ -100,10 +99,6 @@ impl Handler for Sinks<'_> {
 
 fn seconds(value: c_long, fallback: u64) -> Duration {
     Duration::from_secs(if value > 0 { value as u64 } else { fallback })
-}
-
-fn text<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    unsafe { glib::bytes(p) }
 }
 
 pub fn transport(
@@ -207,7 +202,7 @@ pub fn transport(
         allow_insecure: insecure_opt_in && !pinned && hop.navigation,
         tls: TlsSettings {
             ca_bundle: ca_bundle_path(),
-            curves: text(ns_net_ec_curves()).unwrap_or_default().to_vec(),
+            curves: ec_curves().to_vec(),
         },
         proxy,
     };

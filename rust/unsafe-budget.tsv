@@ -11,7 +11,7 @@ bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	8	3	0	0	0	0	0
 canvas	4	0	0	0	0	0	0
-config	3	0	0	0	3	0	0
+config	3	0	0	0	0	0	0
 csp	0	0	0	0	0	0	0
 css	10	0	0	0	0	0	0
 css-color	0	0	0	0	0	0	0
@@ -25,7 +25,7 @@ digest	0	0	0	0	0	0	0
 dom	14	0	0	0	0	0	0
 engine	0	0	0	0	0	0	0
 eventsource	0	0	0	0	0	0	0
-extensions	3	2	0	0	2	1	0
+extensions	3	2	0	0	0	0	0
 font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
@@ -34,11 +34,11 @@ gtk	495	27	0	0	0	0	0
 gtk-ffi	29	371	0	0	0	0	0
 headless	15	8	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
-history	4	0	1	0	2	0	0
+history	4	0	1	0	0	0	0
 html-parser	0	0	0	0	0	0	0
-html-util	6	5	0	0	5	1	0
+html-util	6	5	0	0	0	0	0
 html5	0	0	0	0	0	0	0
-http	36	23	0	0	8	1	0
+http	34	23	0	0	0	0	0
 http-cache	10	7	0	0	0	0	0
 http-wire	0	0	0	0	0	0	0
 i18n	0	0	0	0	0	0	0
@@ -52,7 +52,7 @@ js-bind	0	0	0	0	0	0	0
 js-brand	0	0	0	0	0	0	0
 js-clone	0	0	0	0	0	0	0
 js-collections	1	0	0	0	1	0	0
-js-compression	4	7	0	0	3	3	0
+js-compression	4	4	0	0	0	0	0
 js-crypto	0	0	0	0	0	0	0
 js-cssom	0	0	0	0	0	0	0
 js-custom-elements	0	0	0	0	0	0	0
@@ -68,7 +68,7 @@ js-forms	0	0	0	0	0	0	0
 js-frames	2	1	0	0	1	0	0
 js-geometry	0	0	0	0	0	0	0
 js-html	0	0	0	0	0	0	0
-js-images	4	0	0	0	2	1	0
+js-images	4	0	0	0	0	0	0
 js-input	0	0	0	0	0	0	0
 js-interfaces	0	0	0	0	0	0	0
 js-intl	8	6	0	0	0	1	0
@@ -83,7 +83,7 @@ js-page	0	0	0	0	0	0	0
 js-perf	0	0	0	0	0	0	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	0	0	0	0	0	0	0
-js-runtime	17	3	0	0	5	0	0
+js-runtime	15	3	0	0	0	0	0
 js-services	6	3	0	0	0	0	0
 js-shadow	0	0	0	0	0	0	0
 js-storage	0	0	0	0	0	0	0
@@ -91,8 +91,8 @@ js-temporal	0	0	0	0	0	0	0
 js-text	0	0	0	0	0	0	0
 js-top-layer	0	0	0	0	0	0	0
 js-traversal	0	0	0	0	0	0	0
-js-url	8	1	0	0	5	1	0
-js-wasm	2	0	0	0	2	0	0
+js-url	2	1	0	0	0	0	0
+js-wasm	2	0	0	0	0	0	0
 js-window	2	0	0	0	1	0	0
 js-workers	0	0	0	0	0	0	0
 jsshell	0	0	0	0	0	0	0
@@ -119,7 +119,7 @@ media-shm	19	11	0	0	0	0	0
 mic	9	5	0	0	0	0	0
 mime	0	0	0	0	0	0	0
 minimp3	0	0	0	0	0	0	0
-net	28	18	0	0	10	1	0
+net	27	15	0	0	0	0	0
 netstore	0	0	0	0	0	0	0
 netutil	2	1	0	0	0	0	0
 numfmt	0	0	0	0	0	0	0
@@ -135,7 +135,7 @@ safebrowsing	9	4	0	0	0	0	0
 sandbox	55	38	0	0	0	0	0
 selection	0	0	0	0	0	0	0
 selector-text	0	0	0	0	0	0	0
-shell	238	35	1	0	20	4	0
+shell	229	33	1	0	0	0	0
 southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	21	0	0	0	0	0
@@ -154,7 +154,7 @@ webaudio	0	0	0	0	0	0	0
 webcrypto	104	118	0	0	0	0	0
 webgl	62	6	0	0	0	0	0
 webgpu	68	72	0	0	0	0	0
-websocket	3	2	0	0	2	0	0
+websocket	0	0	0	0	0	0	0
 webvtt	0	0	0	0	0	0	0
 woff2	2	1	0	0	1	0	0
 xml	0	0	0	0	0	0	0

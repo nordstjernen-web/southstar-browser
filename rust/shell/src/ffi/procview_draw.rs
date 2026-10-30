@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use southstar_cairo::{Antialias, Context, Format, LineCap, LineJoin, Pattern, Surface};
 use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk::{self as gtk, Cursor, EventControllerScroll, SnapshotRef, Texture, Widget};
-use southstar_gtk_ffi::{GdkRgba, GdkTexture, GrapheneRect, GtkSnapshot};
+use southstar_gtk_ffi::{GdkRgba, GdkTexture, GrapheneRect};
 
 use super::pagelayers;
 use super::procview_input::{
@@ -47,20 +47,15 @@ fn frame_covers(frame: Option<&Texture>, fs: f64, width: f32, height: f32) -> bo
     })
 }
 
-unsafe extern "C" fn snapshot_page_video(
-    snapshot: *mut GtkSnapshot,
+fn snapshot_page_video(
+    v: *mut NsProcView,
+    snapshot: SnapshotRef<'_>,
     offset_x: f64,
     offset_y: f64,
-    data: *mut c_void,
 ) {
-    let v = data.cast::<NsProcView>();
     if !ns_pv_media_on_page(v) {
         return;
     }
-    // SAFETY: the page layers pass the snapshot they are recording into, live for this call.
-    let Some(snapshot) = (unsafe { SnapshotRef::from_raw(snapshot) }) else {
-        return;
-    };
     let fs = raster_scale(v);
     snapshot.save();
     snapshot.translate((-offset_x / fs) as f32, (-offset_y / fs) as f32);
@@ -75,14 +70,13 @@ fn area_snapshot(v: *mut NsProcView, widget: &Widget, snapshot: SnapshotRef<'_>)
     if state.tiles_mode != 0 {
         pagelayers::ns_page_layers_snapshot(
             layers(v).as_deref(),
-            snapshot.as_ptr(),
+            snapshot,
             f64::from(width),
             f64::from(height),
             raster_scale(v),
             f64::from(state.scroll_x),
             f64::from(state.scroll_y),
-            Some(snapshot_page_video),
-            v.cast(),
+            &mut |snapshot, x, y| snapshot_page_video(v, snapshot, x, y),
         );
         return;
     }

@@ -362,6 +362,8 @@ fn invalidate_wrapper(target: Node<'static>) {
         if let Some(page) = Js::of(js) {
             let ctx = page.ctx();
             if !ctx.is_null() && super::record::unpin_wrapper(page.some(), n) {
+                // SAFETY: `wrapper` is the identity retained for this node, cleared from the
+                // node above so it is released exactly once.
                 ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
             }
         }

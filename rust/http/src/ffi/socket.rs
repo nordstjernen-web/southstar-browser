@@ -158,6 +158,7 @@ pub fn init() -> bool {
     static READY: OnceLock<bool> = OnceLock::new();
     *READY.get_or_init(|| {
         let mut data = [0u8; 512];
+        // SAFETY: `data` is a writable buffer larger than the WSADATA WSAStartup fills in.
         unsafe { WSAStartup(0x0202, data.as_mut_ptr()) == 0 }
     })
 }
@@ -234,7 +235,9 @@ pub fn encode_addr(addr: &SocketAddr) -> (Vec<u8>, c_int) {
 
 #[cfg(unix)]
 fn new_socket(family: c_int) -> Option<TcpStream> {
+    // SAFETY: socket takes plain integers and returns a new descriptor or -1.
     let fd = unsafe { socket(family, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP) };
+    // SAFETY: a non-negative `fd` is the open socket just created, owned by nothing else.
     let stream = (fd >= 0).then(|| unsafe { TcpStream::from_raw_fd(fd) })?;
     no_sigpipe(&stream);
     Some(stream)
@@ -243,6 +246,7 @@ fn new_socket(family: c_int) -> Option<TcpStream> {
 #[cfg(windows)]
 fn new_socket(family: c_int) -> Option<TcpStream> {
     let _ = SOCK_CLOEXEC;
+    // SAFETY: the protocol info pointer may be null, and the rest are plain integers.
     let s = unsafe {
         WSASocketW(
             family,
@@ -253,16 +257,21 @@ fn new_socket(family: c_int) -> Option<TcpStream> {
             0x81,
         )
     };
+    // SAFETY: anything but INVALID_SOCKET is the open socket just created, owned by nothing else.
     (s != usize::MAX).then(|| unsafe { TcpStream::from_raw_socket(s as RawSocket) })
 }
 
 #[cfg(unix)]
 fn raw_connect(stream: &TcpStream, addr: &[u8]) -> c_int {
+    // SAFETY: the descriptor is the socket `stream` owns, and `addr` is a sockaddr of
+    // `addr.len()` bytes that outlives the call.
     unsafe { connect(stream.as_raw_fd(), addr.as_ptr(), addr.len() as u32) }
 }
 
 #[cfg(windows)]
 fn raw_connect(stream: &TcpStream, addr: &[u8]) -> c_int {
+    // SAFETY: the socket is the one `stream` owns, and `addr` is a sockaddr of `addr.len()`
+    // bytes that outlives the call.
     unsafe {
         connect(
             stream.as_raw_socket() as usize,
@@ -293,6 +302,7 @@ pub fn poll_fds(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, i32> {
             revents: 0,
         })
         .collect();
+    // SAFETY: `c` is a writable array of exactly `c.len()` pollfd structures.
     let r = unsafe { poll(c.as_mut_ptr(), c.len() as Nfds, timeout_ms) };
     if r < 0 {
         return Err(last_error());
@@ -305,6 +315,7 @@ pub fn poll_fds(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, i32> {
 
 #[cfg(windows)]
 pub fn poll_fds(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, i32> {
+    // SAFETY: `fds` is a writable array of exactly `fds.len()` WSAPOLLFD-layout structures.
     let r = unsafe {
         WSAPoll(
             fds.as_mut_ptr(),

@@ -6,6 +6,8 @@ use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::ptr;
 use std::ffi::CString;
 
+use southstar_config::util;
+use southstar_glib::GStr;
 use southstar_gtk_ffi::{self as gtk, GCallback};
 
 macro_rules! handler {
@@ -21,12 +23,18 @@ macro_rules! handler {
 
 pub(crate) use handler;
 
+/// # Safety
+///
+/// `instance` must be a live GObject that has `signal`, `handler` must be a callback with that
+/// signal's signature, and `data` must stay valid for as long as the handler can run.
 pub unsafe fn connect<T>(
     instance: *mut T,
     signal: &CStr,
     handler: GCallback,
     data: *mut c_void,
 ) -> c_ulong {
+    // SAFETY: the caller guarantees the instance, signal signature and data lifetime, and
+    // `signal` is a NUL-terminated string that outlives the call.
     unsafe { gtk::g_signal_connect_data(instance.cast(), signal.as_ptr(), handler, data, None, 0) }
 }
 
@@ -44,41 +52,43 @@ pub fn cstring(text: impl Into<Vec<u8>>) -> CString {
     CString::new(bytes).unwrap_or_default()
 }
 
+/// # Safety
+///
+/// `p` must be null or a NUL-terminated string that stays valid and unchanged for `'a`.
 pub unsafe fn borrowed<'a>(p: *const c_char) -> Option<&'a CStr> {
+    // SAFETY: the caller guarantees a non-null `p` is a NUL-terminated string living for `'a`.
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
 }
 
-pub unsafe fn take_gstring(p: *mut c_char) -> Option<CString> {
-    if p.is_null() {
-        return None;
-    }
-    let out = unsafe { CStr::from_ptr(p) }.to_owned();
-    unsafe { gtk::g_free(p.cast()) };
-    Some(out)
-}
-
 pub fn build_filename(parts: &[&CStr]) -> CString {
-    let mut argv: Vec<*mut c_char> = parts.iter().map(|p| p.as_ptr().cast_mut()).collect();
-    argv.push(ptr::null_mut());
-    unsafe { take_gstring(gtk::g_build_filenamev(argv.as_mut_ptr())) }.unwrap_or_default()
+    let parts: Vec<&[u8]> = parts.iter().map(|part| part.to_bytes()).collect();
+    cstring(util::build_filename(&parts))
 }
 
 pub fn basename(path: &CStr) -> CString {
-    unsafe { take_gstring(gtk::g_path_get_basename(path.as_ptr())) }.unwrap_or_default()
+    // SAFETY: `path` is a NUL-terminated string that outlives the call.
+    let base = unsafe { gtk::g_path_get_basename(path.as_ptr()) };
+    // SAFETY: g_path_get_basename hands over a newly allocated string, taken exactly once.
+    unsafe { GStr::take(base) }.map_or_else(CString::default, |base| CStr::to_owned(&base))
 }
 
 pub fn file_test(path: &CStr, test: core::ffi::c_uint) -> bool {
-    unsafe { gtk::g_file_test(path.as_ptr(), test) != 0 }
+    let Some(path) = util::os_path(path.to_bytes()) else {
+        return false;
+    };
+    (test & gtk::FILE_TEST_EXISTS != 0 && path.exists())
+        || (test & gtk::FILE_TEST_IS_DIR != 0 && path.is_dir())
+        || (test & gtk::FILE_TEST_IS_REGULAR != 0 && path.is_file())
 }
 
 pub fn open_path(path: &CStr) {
+    let Some(uri) = southstar_netutil::file_uri::filename_to_uri(path.to_bytes()) else {
+        return;
+    };
+    let uri = cstring(uri);
+    // SAFETY: `uri` is a NUL-terminated string that outlives the call; the launch context and
+    // error out-pointer may be null.
     unsafe {
-        if let Some(uri) = take_gstring(gtk::g_filename_to_uri(
-            path.as_ptr(),
-            ptr::null(),
-            ptr::null_mut(),
-        )) {
-            gtk::g_app_info_launch_default_for_uri(uri.as_ptr(), ptr::null_mut(), ptr::null_mut());
-        }
-    }
+        gtk::g_app_info_launch_default_for_uri(uri.as_ptr(), ptr::null_mut(), ptr::null_mut())
+    };
 }

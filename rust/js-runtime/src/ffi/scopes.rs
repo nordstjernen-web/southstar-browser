@@ -258,6 +258,8 @@ pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mu
         let base = js.st().realm_scope_base.get();
         save(js, scope);
         js.set_ctx(realm);
+        // SAFETY: `base` is null or the base RealmScope `frame_scope_enter` recorded, which stays
+        // on its caller's stack until `realm_scope_leave` clears the pointer.
         let base = unsafe { base.as_ref() };
         js.set_frame(base.map_or(ptr::null_mut(), |base| base.frame));
         js.set_current_doc(base.map_or_else(|| top_document(js.current_doc()), |base| base.doc));

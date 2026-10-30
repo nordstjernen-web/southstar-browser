@@ -2415,6 +2415,7 @@ dependencies = [
 name = "southstar-js-compression"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-http",
  "southstar-js-engine",
 ]
 
@@ -3846,6 +3847,8 @@ dependencies = [
 name = "southstar-websocket"
 version = "1.0.4-dev"
 dependencies = [
+ "ring",
+ "southstar-digest",
  "southstar-glib",
  "southstar-http",
  "southstar-net",

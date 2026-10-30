@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -151,14 +151,8 @@ pub(crate) fn finish_eval_depth(js: Js) {
     (api::loader_hooks().schedule_pending_script_drain)(js.page());
 }
 
-pub(crate) fn dispatch_window_only_event(
-    js: Js,
-    doc: *const NsNode,
-    kind: *const c_char,
-    event: Value,
-) {
-    let kind = text(kind).map_or_else(String::new, |kind| kind.to_string_lossy().into_owned());
-    crate::events::dispatch_window_only_event(js.some(), super::record::node(doc), &kind, event);
+pub(crate) fn dispatch_window_only_event(js: Js, doc: *const NsNode, kind: &str, event: Value) {
+    crate::events::dispatch_window_only_event(js.some(), super::record::node(doc), kind, event);
 }
 
 pub(crate) fn active_js() -> Option<Js> {
@@ -343,7 +337,7 @@ pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesVi
         return None;
     }
     Some(BytesView {
-        data: unsafe { base.add(offset as usize) },
+        data: base.wrapping_add(offset as usize),
         len: length as usize,
         holder: buffer,
     })
@@ -353,6 +347,9 @@ pub(crate) fn bytes_of(view: &BytesView) -> &[u8] {
     if view.data.is_null() || view.len == 0 {
         &[]
     } else {
+        // SAFETY: `data..data + len` lies inside the ArrayBuffer `holder` keeps alive, checked
+        // against its length in `bytes_view`, and no script runs to detach it while `view` is
+        // borrowed.
         unsafe { core::slice::from_raw_parts(view.data, view.len) }
     }
 }
@@ -368,8 +365,4 @@ pub(crate) fn names_table(names: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
         .map(|name| c_line(name).into_bytes())
         .filter(|name| seen.insert(name.clone()))
         .collect()
-}
-
-pub(crate) fn text<'a>(raw: *const c_char) -> Option<&'a CStr> {
-    (!raw.is_null()).then(|| unsafe { CStr::from_ptr(raw) })
 }

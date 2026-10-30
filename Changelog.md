@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the networking, URL, compression, WebSocket, history, extensions
+  and JS runtime crates and the GTK shell document every remaining unsafe
+  block, one operation each, and carry less of it. WebSocket hashes and
+  randomizes through ring instead of libcrypto and is now unsafe-free; the
+  compression streams decompress through `southstar-http`'s zlib owner; the
+  public-suffix lookup lives in one place; uchardet sits behind an owner; the
+  shell's page layers draw through `southstar-gtk`'s texture and snapshot
+  types, and the macOS Dock icon renders through `southstar-cairo`.
 * Internals: the sandbox, watchdog, thread-dump, IPC, camera and libav layout
   crates document every unsafe block and use less of it: the Landlock ruleset,
   seccomp filter, Windows tokens and V4L2 device are RAII owners, and std
