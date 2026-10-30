@@ -702,7 +702,7 @@ fn ensure_tick(v: *mut NsProcView, m: &mut Media) {
         && let Some(area) = area(v)
     {
         m.tick_armed = true;
-        area.add_tick_callback(move |widget| video_tick(v, widget));
+        area.add_tick_callback(move |widget, _| video_tick(v, widget).is_continue());
     }
 }
 

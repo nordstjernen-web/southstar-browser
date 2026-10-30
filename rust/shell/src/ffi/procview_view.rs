@@ -12,7 +12,7 @@ use super::gtk::{connect, handler};
 use super::pagelayers::{ns_page_layers_free, ns_page_layers_new};
 use super::procview_chrome::{build_perm_bar, build_search_bar, ctx_install_actions};
 use super::procview_draw::{
-    disarm_anim, ns_pv_area_new, ns_pv_area_set_view, ns_pv_install_area_signals,
+    disarm_anim, ns_pv_area_detach, ns_pv_area_new, ns_pv_install_area_signals,
     ns_pv_install_scroll, ns_pv_install_view_signals,
 };
 use super::procview_input::{
@@ -92,9 +92,9 @@ fn free_view(v: *mut NsProcView) {
     }
 }
 
-unsafe extern "C" fn on_area_destroy(widget: *mut GtkWidget, data: *mut c_void) {
+unsafe extern "C" fn on_area_destroy(_widget: *mut GtkWidget, data: *mut c_void) {
     let v = data.cast::<NsProcView>();
-    unsafe { ns_pv_area_set_view(widget, ptr::null_mut()) };
+    ns_pv_area_detach(v);
     let state = view(v);
     state.closed = 1;
     unref_object(state.im);
@@ -194,7 +194,8 @@ pub(super) fn ns_proc_view_new() -> *mut NsProcView {
         ns_pv_install_view_signals(v);
 
         state.layers = ns_page_layers_new().cast();
-        state.area = ns_pv_area_new(v);
+        let area = ns_pv_area_new(v);
+        state.area = area.as_ptr();
         gtk::gtk_widget_set_hexpand(state.area, 1);
         gtk::gtk_widget_set_vexpand(state.area, 1);
         gtk::gtk_widget_set_focusable(state.area, 1);

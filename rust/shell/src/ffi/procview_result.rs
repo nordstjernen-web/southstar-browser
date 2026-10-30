@@ -651,12 +651,12 @@ fn show_link_status(v: *mut NsProcView, href: *const c_char, cursor: *const c_ch
     if nonempty(href) {
         post_emit(v, EVT_STATUS, href);
         if view(v).busy_cursor == 0 {
-            set_named_cursor(view(v).area, cursor.unwrap_or(b"pointer"));
+            set_named_cursor(v, cursor.unwrap_or(b"pointer"));
         }
     } else {
         post_emit(v, EVT_STATUS, c"".as_ptr());
         if view(v).busy_cursor == 0 {
-            set_named_cursor(view(v).area, cursor.unwrap_or_default());
+            set_named_cursor(v, cursor.unwrap_or_default());
         }
     }
 }
