@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.4-dev:
+Southstar Browser 1.0.4:
 ======
 * Internals: the last undocumented and multi-operation `unsafe` blocks are
   gone from every crate's Linux build, so `rust/unsafe-budget.tsv` now
