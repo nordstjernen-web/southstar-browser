@@ -8,7 +8,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::{OwnedSheet, StyleMap};
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_runtime::api;
 use southstar_layout::{BoxPool, BoxRef};
 
@@ -70,11 +70,6 @@ pub fn media_viewport_push(w: f64, h: f64) {
 
 pub fn media_viewport_pop() {
     southstar_css_media::viewport_pop();
-}
-
-pub fn layout_frame_viewport_raw(frame: usize) -> Option<(f64, f64)> {
-    // SAFETY: frame is the address of a node of this thread's store, and from_ptr returns None once that node is freed.
-    unsafe { Node::from_ptr(frame as *const NsNode) }.and_then(layout_frame_viewport)
 }
 
 pub fn layout_frame_viewport(frame: Node) -> Option<(f64, f64)> {

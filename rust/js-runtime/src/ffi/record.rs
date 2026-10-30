@@ -438,13 +438,10 @@ pub(crate) unsafe fn free_engine(js: Page) {
     free_realm_values(record);
     free_window_values(record);
     for ctx in record.frame_ctxs.take().unwrap_or_default() {
-        // SAFETY: the page owns its frame realms, and the runtime that created them is still live.
-        unsafe { ctx.free() };
+        ctx.free();
     }
-    // SAFETY: the page owns its main context, freed once here before its runtime.
-    unsafe { record.ctx.get().free() };
-    // SAFETY: the page owns its runtime, whose contexts were all freed above.
-    unsafe { record.rt.get().free() };
+    record.ctx.get().free();
+    record.rt.get().free();
     // SAFETY: the record came from Box::leak in alloc, and the caller guarantees it is not used again.
     drop(unsafe { Box::from_raw(js.as_ptr().cast_mut().cast::<Record>()) });
 }
@@ -1104,8 +1101,7 @@ pub(crate) fn free_frame_contexts(js: Option<Page>) {
     };
     let frames = record.frame_ctxs.borrow_mut().as_mut().map(core::mem::take);
     for ctx in frames.unwrap_or_default() {
-        // SAFETY: the page owns its frame realms, and taking them out of the list above frees each once.
-        unsafe { ctx.free() };
+        ctx.free();
     }
 }
 

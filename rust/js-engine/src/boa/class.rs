@@ -1,4 +1,4 @@
-//! Southstar — host classes on Boa: instances carrying Rust data, per-realm class prototypes, raw-instance finalizers, and the class hooks run as the Boa fork's host exotic methods.
+//! Southstar — host classes on Boa: instances carrying Rust data, per-realm class prototypes, and the class hooks run as the Boa fork's host exotic methods.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -11,7 +11,6 @@ use boa_engine::object::{
 use boa_engine::prelude::{Finalize, JsData, Trace as BoaTrace};
 use boa_engine::property::{PropertyDescriptor as BoaPropertyDescriptor, PropertyKey as BoaKey};
 use boa_engine::{Context, JsError, JsObject, JsResult, JsString, JsValue};
-use boa_gc::custom_trace;
 
 use super::{HostData, Scope, Value};
 use crate::{ClassHooks, HostClass, OwnProperty, Trace};
@@ -29,18 +28,8 @@ impl<T: Trace> Trace for ClassInstance<T> {
 
 struct NoData;
 
-pub(super) struct RawData(core::cell::Cell<*mut core::ffi::c_void>);
-
-#[derive(Default, Finalize, JsData)]
+#[derive(Default, Finalize, JsData, BoaTrace)]
 struct ClassPrototypes(Vec<(usize, JsValue)>);
-
-unsafe impl BoaTrace for ClassPrototypes {
-    custom_trace!(this, mark, {
-        for (_, prototype) in &this.0 {
-            mark(prototype);
-        }
-    });
-}
 
 fn class_key(class: &HostClass) -> usize {
     core::ptr::from_ref(class) as usize
@@ -53,12 +42,6 @@ pub(super) fn has_hooks(hooks: &ClassHooks) -> bool {
         || hooks.define_own_property.is_some()
         || hooks.delete.is_some()
         || hooks.set.is_some()
-}
-
-pub(super) fn take_raw(data: &dyn Any) -> Option<*mut core::ffi::c_void> {
-    let instance = data.downcast_ref::<ClassInstance<RawData>>()?;
-    let raw = instance.data.0.replace(core::ptr::null_mut());
-    (!raw.is_null()).then_some(raw)
 }
 
 #[derive(Clone)]
@@ -193,7 +176,7 @@ fn descriptor_of(property: OwnProperty) -> BoaPropertyDescriptor {
 }
 
 fn class_of(object: &JsObject) -> Option<&'static HostClass> {
-    object.downcast_ref::<HostData>()?.class()
+    object.downcast_ref::<HostData>()?.class
 }
 
 fn thrown(error: Value) -> JsError {
@@ -342,7 +325,7 @@ impl Scope<'_> {
 
     fn class_instance<T: Any>(
         &mut self,
-        class: &HostClass,
+        class: &'static HostClass,
         prototype: Option<&Value>,
         data: T,
         trace: Option<super::HostTrace>,
@@ -352,27 +335,12 @@ impl Scope<'_> {
             class: class_key(class),
             data,
         };
-        self.host_object(
-            prototype.as_ref(),
-            instance,
-            trace,
-            core::ptr::from_ref(class),
-        )
-    }
-
-    pub unsafe fn new_raw_instance(
-        &mut self,
-        class: &HostClass,
-        prototype: Option<&Value>,
-        data: *mut core::ffi::c_void,
-    ) -> Result<Value, Value> {
-        let raw = RawData(core::cell::Cell::new(data));
-        Ok(self.class_instance(class, prototype, raw, None))
+        self.host_object(prototype.as_ref(), instance, trace, Some(class))
     }
 
     pub fn new_instance(
         &mut self,
-        class: &HostClass,
+        class: &'static HostClass,
         prototype: Option<&Value>,
     ) -> Result<Value, Value> {
         Ok(self.class_instance(class, prototype, NoData, None))
@@ -380,7 +348,7 @@ impl Scope<'_> {
 
     pub fn new_instance_with<T: Any>(
         &mut self,
-        class: &HostClass,
+        class: &'static HostClass,
         prototype: Option<&Value>,
         data: T,
     ) -> Result<Value, Value> {
@@ -389,7 +357,7 @@ impl Scope<'_> {
 
     pub fn new_traced_instance<T: Any + Trace>(
         &mut self,
-        class: &HostClass,
+        class: &'static HostClass,
         prototype: Option<&Value>,
         data: T,
     ) -> Result<Value, Value> {
@@ -541,15 +509,6 @@ impl Value {
         .flatten()
     }
 
-    pub fn raw_instance(&self, class: &HostClass) -> *mut core::ffi::c_void {
-        self.with_instance(class, |raw: &RawData| raw.0.get())
-            .unwrap_or(core::ptr::null_mut())
-    }
-
-    pub unsafe fn set_raw_instance(&self, data: *mut core::ffi::c_void) {
-        self.with_host::<ClassInstance<RawData>, _>(|instance| instance.data.0.set(data));
-    }
-
     pub fn object_identity(&self) -> *mut core::ffi::c_void {
         self.0
             .as_object()
@@ -560,7 +519,7 @@ impl Value {
         self.0.as_object().is_some_and(|object| {
             object
                 .downcast_ref::<HostData>()
-                .is_some_and(|host| core::ptr::addr_eq(host.class, core::ptr::from_ref(class)))
+                .is_some_and(|host| host.class.is_some_and(|known| core::ptr::eq(known, class)))
         })
     }
 }

@@ -7,7 +7,7 @@ mod images;
 mod net;
 
 use core::cell::Cell;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr::NonNull;
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -15,16 +15,17 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 
 use southstar_anim::AnimHandle;
+use southstar_cairo::{Content, Context, Format, PdfMetadata, Rectangle, Surface};
 use southstar_css::StyleMap;
 use southstar_dom::Node;
 use southstar_glib as glib;
 use southstar_layout::BoxRef;
 
 pub use css::{
-    CssScope, SheetList, is_self_contained, layout_frame_viewport, layout_frame_viewport_raw,
-    media_query_matches, media_viewport_pop, media_viewport_push, merged_styles_cached,
-    parse_import_cached, parse_url_cached, shadow_adopted_css, style_element_cache_end,
-    style_element_text, stylesheet_from_style_element_cached, url_resolve_opt,
+    CssScope, SheetList, is_self_contained, layout_frame_viewport, media_query_matches,
+    media_viewport_pop, media_viewport_push, merged_styles_cached, parse_import_cached,
+    parse_url_cached, shadow_adopted_css, style_element_cache_end, style_element_text,
+    stylesheet_from_style_element_cached, url_resolve_opt,
 };
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
@@ -36,51 +37,6 @@ pub use net::{
 use crate::fetch;
 
 pub use southstar_print::PrintSetup;
-
-#[repr(C)]
-struct CairoSurface {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct Cairo {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-struct CairoRectangle {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-}
-
-const CAIRO_STATUS_SUCCESS: c_int = 0;
-const CAIRO_FORMAT_ARGB32: c_int = 0;
-const CAIRO_CONTENT_COLOR_ALPHA: c_int = 0x3000;
-const CAIRO_PDF_METADATA_CREATOR: c_int = 4;
-const CAIRO_PDF_METADATA_CREATE_DATE: c_int = 5;
-
-unsafe extern "C" {
-    fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> *mut CairoSurface;
-    fn cairo_pdf_surface_create(path: *const c_char, width: f64, height: f64) -> *mut CairoSurface;
-    fn cairo_pdf_surface_set_metadata(
-        surface: *mut CairoSurface,
-        metadata: c_int,
-        utf8: *const c_char,
-    );
-    fn cairo_recording_surface_create(
-        content: c_int,
-        extents: *const CairoRectangle,
-    ) -> *mut CairoSurface;
-    fn cairo_surface_status(surface: *mut CairoSurface) -> c_int;
-    fn cairo_surface_destroy(surface: *mut CairoSurface);
-    fn cairo_surface_write_to_png(surface: *mut CairoSurface, path: *const c_char) -> c_int;
-    fn cairo_status_to_string(status: c_int) -> *const c_char;
-    fn cairo_create(surface: *mut CairoSurface) -> *mut Cairo;
-    fn cairo_destroy(cr: *mut Cairo);
-    fn cairo_show_page(cr: *mut Cairo);
-}
 
 pub fn err(bytes: &[u8]) {
     glib::stderr_write(bytes);
@@ -95,114 +51,74 @@ pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
 }
 
 pub struct Capture {
-    surface: NonNull<CairoSurface>,
-    cr: *mut Cairo,
+    cr: Context,
+    surface: Surface,
 }
 
 impl Capture {
-    fn with_surface(
-        surface: *mut CairoSurface,
-        before_draw: impl FnOnce(*mut CairoSurface),
-    ) -> Option<Capture> {
-        let surface = NonNull::new(surface)?;
-        if unsafe { cairo_surface_status(surface.as_ptr()) } != CAIRO_STATUS_SUCCESS {
-            unsafe { cairo_surface_destroy(surface.as_ptr()) };
-            return None;
-        }
-        before_draw(surface.as_ptr());
-        let cr = unsafe { cairo_create(surface.as_ptr()) };
-        Some(Capture { surface, cr })
+    fn with_surface(surface: Surface) -> Option<Capture> {
+        surface.as_ref().status().ok()?;
+        let cr = Context::new(surface.as_ref());
+        Some(Capture { cr, surface })
     }
 
     pub fn image(width: i32, height: i32) -> Option<Capture> {
-        Capture::with_surface(
-            unsafe { cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height) },
-            |_| {},
-        )
+        Capture::with_surface(Surface::image(Format::Argb32, width, height)?)
     }
 
     pub fn pdf(path: &CStr, width: f64, height: f64) -> Option<Capture> {
-        Capture::with_surface(
-            unsafe { cairo_pdf_surface_create(path.as_ptr(), width, height) },
-            set_pdf_metadata,
-        )
+        let surface = Surface::pdf(path, width, height);
+        surface.as_ref().status().ok()?;
+        set_pdf_metadata(&surface);
+        Capture::with_surface(surface)
     }
 
     pub fn recording(width: f64, height: f64) -> Capture {
-        let extent = CairoRectangle {
+        let extent = Rectangle {
             x: 0.0,
             y: 0.0,
             width,
             height,
         };
-        let surface = unsafe { cairo_recording_surface_create(CAIRO_CONTENT_COLOR_ALPHA, &extent) };
-        let surface = NonNull::new(surface).expect("cairo_recording_surface_create");
-        let cr = unsafe { cairo_create(surface.as_ptr()) };
-        Capture { surface, cr }
+        let surface = Surface::recording(Content::ColorAlpha, Some(&extent));
+        let cr = Context::new(surface.as_ref());
+        Capture { cr, surface }
     }
 
     pub fn paint(&self, root: BoxRef) {
-        // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
-        if let Some(cr) = unsafe { southstar_cairo::ContextRef::from_raw(self.cr.cast()) } {
-            southstar_paint::paint(cr, root, None, None);
-        }
+        southstar_paint::paint(self.cr.as_ref(), root, None, None);
     }
 
     pub fn show_page(&self) {
-        unsafe { cairo_show_page(self.cr) };
+        self.cr.as_ref().show_page();
     }
 
     pub fn draw_sheet(&self, root: BoxRef, setup: &PrintSetup, scale: f64, top: f64, bottom: f64) {
-        // SAFETY: the capture owns its live cairo context until into_surface or drop destroys it.
-        if let Some(cr) = unsafe { southstar_cairo::ContextRef::from_raw(self.cr.cast()) } {
-            southstar_print::draw_page(cr, root, setup, scale, top, bottom);
-        }
+        southstar_print::draw_page(self.cr.as_ref(), root, setup, scale, top, bottom);
     }
 
     pub fn write_png(self, path: &CStr) -> Result<(), Vec<u8>> {
-        let surface = self.into_surface();
-        let status = unsafe { cairo_surface_write_to_png(surface, path.as_ptr()) };
-        unsafe { cairo_surface_destroy(surface) };
-        if status == CAIRO_STATUS_SUCCESS {
-            return Ok(());
-        }
-        let reason = unsafe { CStr::from_ptr(cairo_status_to_string(status)) };
-        Err(reason.to_bytes().to_vec())
+        self.into_surface()
+            .as_ref()
+            .write_to_png(path)
+            .map_err(|error| error.description().to_bytes().to_vec())
     }
 
-    fn into_surface(self) -> *mut CairoSurface {
-        self.into_surface_ref().as_ptr()
-    }
-
-    fn into_surface_ref(self) -> NonNull<CairoSurface> {
-        let surface = self.surface;
-        // SAFETY: the capture owns its context and destroys it once, here, keeping the surface's reference.
-        unsafe { cairo_destroy(self.cr) };
-        core::mem::forget(self);
+    fn into_surface(self) -> Surface {
+        let Capture { cr, surface } = self;
+        drop(cr);
         surface
     }
 }
 
-impl Drop for Capture {
-    fn drop(&mut self) {
-        unsafe {
-            cairo_destroy(self.cr);
-            cairo_surface_destroy(self.surface.as_ptr());
-        }
-    }
-}
-
-fn set_pdf_metadata(surface: *mut CairoSurface) {
-    unsafe {
-        cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_CREATOR, c"Southstar".as_ptr())
-    };
+fn set_pdf_metadata(surface: &Surface) {
+    let surface = surface.as_ref();
+    surface.set_pdf_metadata(PdfMetadata::Creator, c"Southstar");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64);
     if let Ok(date) = CString::new(crate::iso8601_utc(now)) {
-        unsafe {
-            cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_CREATE_DATE, date.as_ptr())
-        };
+        surface.set_pdf_metadata(PdfMetadata::CreateDate, &date);
     }
 }
 
@@ -361,31 +277,22 @@ pub fn dump_layout(root: BoxRef<'_>) -> Vec<u8> {
     Out::collect(|out| crate::write_layout(root, 0, out))
 }
 
-pub struct Sheet(NonNull<CairoSurface>);
+pub struct Sheet(Surface);
 
 impl Sheet {
     pub fn as_ptr(&self) -> NonNull<c_void> {
-        self.0.cast()
+        NonNull::new(self.0.as_raw()).expect("a sheet holds a live surface")
     }
 
     pub fn into_raw(self) -> NonNull<c_void> {
-        let surface = self.0.cast();
-        core::mem::forget(self);
-        surface
-    }
-}
-
-impl Drop for Sheet {
-    fn drop(&mut self) {
-        // SAFETY: the sheet owns one reference to its recording surface and releases it once.
-        unsafe { cairo_surface_destroy(self.0.as_ptr()) };
+        NonNull::new(self.0.into_raw()).expect("a sheet holds a live surface")
     }
 }
 
 pub fn print_sheets(root: BoxRef<'_>, setup: &PrintSetup) -> Vec<Sheet> {
     crate::print_recordings(root, setup)
         .into_iter()
-        .map(|capture| Sheet(capture.into_surface_ref()))
+        .map(|capture| Sheet(capture.into_surface()))
         .collect()
 }
 

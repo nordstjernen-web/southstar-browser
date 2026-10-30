@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::{Cell, RefCell};
+use core::cell::{Cell, RefCell, UnsafeCell};
 use core::ffi::c_void;
+use core::mem::ManuallyDrop;
 use core::ptr;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::Path;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::time::{Duration, Instant};
 
 use boa_engine::builtins::promise::OperationType;
@@ -28,16 +29,16 @@ const CALL_DEPTH_LIMIT: usize = 10_000;
 const VALUE_STACK_LIMIT: usize = 1 << 20;
 
 pub(super) struct BoaRuntime {
-    ctx: *mut Context,
+    ctx: UnsafeCell<Context>,
     options: RuntimeOptions,
     opaque: Cell<*mut c_void>,
     executor: Rc<Executor>,
     loader: Rc<Loader>,
-    records: RefCell<Vec<*mut RealmRecord>>,
+    records: RefCell<Vec<usize>>,
 }
 
 pub(super) struct RealmRecord {
-    runtime: *mut BoaRuntime,
+    runtime: Weak<BoaRuntime>,
     realm: Realm,
     opaque: Cell<*mut c_void>,
 }
@@ -45,13 +46,26 @@ pub(super) struct RealmRecord {
 #[derive(Trace, Finalize, JsData)]
 struct RealmTag(usize);
 
+type Registry<T> = ManuallyDrop<RefCell<HashMap<usize, Rc<T>>>>;
+
 thread_local! {
-    static LIVE: RefCell<HashSet<usize>> = RefCell::new(HashSet::new());
+    static RUNTIMES: Registry<BoaRuntime> = ManuallyDrop::new(RefCell::new(HashMap::new()));
+    static RECORDS: Registry<RealmRecord> = ManuallyDrop::new(RefCell::new(HashMap::new()));
     static CONTEXTS: RefCell<Vec<(usize, usize)>> = const { RefCell::new(Vec::new()) };
 }
 
-fn live(record: *const RealmRecord) -> bool {
-    LIVE.with(|live| live.borrow().contains(&(record as usize)))
+fn registered<T>(
+    registry: &'static std::thread::LocalKey<Registry<T>>,
+    key: usize,
+) -> Option<Rc<T>> {
+    registry.with(|map| map.borrow().get(&key).cloned())
+}
+
+fn unregister<T>(
+    registry: &'static std::thread::LocalKey<Registry<T>>,
+    key: usize,
+) -> Option<Rc<T>> {
+    registry.with(|map| map.borrow_mut().remove(&key))
 }
 
 #[derive(Default)]
@@ -264,12 +278,12 @@ impl JobExecutor for Executor {
 }
 
 struct Hooks {
-    runtime: Cell<*const BoaRuntime>,
+    runtime: RefCell<Weak<BoaRuntime>>,
 }
 
 impl Hooks {
-    fn runtime(&self) -> Option<&BoaRuntime> {
-        unsafe { self.runtime.get().as_ref() }
+    fn runtime(&self) -> Option<Rc<BoaRuntime>> {
+        self.runtime.borrow().upgrade()
     }
 }
 
@@ -336,7 +350,7 @@ impl HostHooks for Hooks {
 
 struct Loader {
     simple: Option<Rc<SimpleModuleLoader>>,
-    runtime: Cell<*const BoaRuntime>,
+    runtime: RefCell<Weak<BoaRuntime>>,
     modules: RefCell<HashMap<String, Vec<(Realm, Module)>>>,
 }
 
@@ -347,7 +361,7 @@ impl Loader {
         request: &ModuleRequest,
         context: &mut Context,
     ) -> JsResult<Module> {
-        let runtime = unsafe { self.runtime.get().as_ref() };
+        let runtime = self.runtime.borrow().upgrade();
         let options = runtime.map(|runtime| runtime.options).unwrap_or_default();
         let Some(load) = options.module_load else {
             return Err(JsNativeError::typ()
@@ -462,11 +476,11 @@ impl BoaRuntime {
             ..Executor::default()
         });
         let hooks = Rc::new(Hooks {
-            runtime: Cell::new(ptr::null()),
+            runtime: RefCell::new(Weak::new()),
         });
         let loader = Rc::new(Loader {
             simple: simple.map(Rc::new),
-            runtime: Cell::new(ptr::null()),
+            runtime: RefCell::new(Weak::new()),
             modules: RefCell::new(HashMap::new()),
         });
         let Ok(mut context) = Context::builder()
@@ -489,31 +503,44 @@ impl BoaRuntime {
             limits.set_recursion_limit(CALL_DEPTH_LIMIT);
             limits.set_stack_size_limit(VALUE_STACK_LIMIT);
         }
-        let runtime = Box::into_raw(Box::new(BoaRuntime {
-            ctx: Box::into_raw(Box::new(context)),
+        let runtime = Rc::new(BoaRuntime {
+            ctx: UnsafeCell::new(context),
             options: *options,
             opaque: Cell::new(ptr::null_mut()),
             executor,
             loader: loader.clone(),
             records: RefCell::new(Vec::new()),
-        }));
-        hooks.runtime.set(runtime);
-        loader.runtime.set(runtime);
-        let ctx = unsafe { (*runtime).ctx } as usize;
-        CONTEXTS.with(|contexts| contexts.borrow_mut().push((ctx, runtime as usize)));
-        RuntimeHandle(runtime.cast())
+        });
+        *hooks.runtime.borrow_mut() = Rc::downgrade(&runtime);
+        *loader.runtime.borrow_mut() = Rc::downgrade(&runtime);
+        let handle = RuntimeHandle(Rc::as_ptr(&runtime).cast_mut().cast());
+        let ctx = runtime.ctx.get() as usize;
+        CONTEXTS.with(|contexts| contexts.borrow_mut().push((ctx, handle.0 as usize)));
+        RUNTIMES.with(|runtimes| runtimes.borrow_mut().insert(handle.0 as usize, runtime));
+        handle
     }
 
-    fn record(&self, realm: Realm, opaque: *mut c_void) -> ContextHandle {
-        let record = Box::into_raw(Box::new(RealmRecord {
-            runtime: ptr::from_ref(self).cast_mut(),
+    fn with_context<R>(&self, f: impl FnOnce(&mut Context) -> R) -> R {
+        // SAFETY: the Context lives in this runtime, which the caller holds through an Rc for
+        // the whole call, so it outlives the reference. A runtime never leaves its thread (it
+        // holds Rc and Cell), and the host enters it only here and from the natives and hooks
+        // Boa calls with its own &mut Context, which Boa does not touch until they return, so
+        // the reference handed to f is the only one in use while f runs.
+        f(unsafe { &mut *self.ctx.get() })
+    }
+
+    fn record(self: &Rc<Self>, realm: Realm, opaque: *mut c_void) -> ContextHandle {
+        let record = Rc::new(RealmRecord {
+            runtime: Rc::downgrade(self),
             realm: realm.clone(),
             opaque: Cell::new(opaque),
-        }));
-        realm.host_defined_mut().insert(RealmTag(record as usize));
-        self.records.borrow_mut().push(record);
-        LIVE.with(|live| live.borrow_mut().insert(record as usize));
-        ContextHandle(record.cast())
+        });
+        let handle = ContextHandle(Rc::as_ptr(&record).cast_mut().cast());
+        let key = handle.0 as usize;
+        realm.host_defined_mut().insert(RealmTag(key));
+        self.records.borrow_mut().push(key);
+        RECORDS.with(|records| records.borrow_mut().insert(key, record));
+        handle
     }
 }
 
@@ -521,11 +548,11 @@ pub(super) fn engine_runtime(module_root: &Path, options: &RuntimeOptions) -> Ru
     BoaRuntime::build(options, SimpleModuleLoader::new(module_root).ok())
 }
 
-pub(super) fn default_context(rt: RuntimeHandle) -> *mut Context {
-    rt.runtime().map_or(ptr::null_mut(), |runtime| runtime.ctx)
+pub(super) fn enter_default<R>(rt: RuntimeHandle, f: impl FnOnce(&mut Context) -> R) -> Option<R> {
+    rt.runtime().map(|runtime| runtime.with_context(f))
 }
 
-fn handle_of_realm(ctx: &mut Context, realm: &Realm) -> ContextHandle {
+fn handle_of_realm(ctx: &Context, realm: &Realm) -> ContextHandle {
     if let Some(tag) = realm.host_defined().get::<RealmTag>() {
         return ContextHandle(tag.0 as *mut c_void);
     }
@@ -535,7 +562,7 @@ fn handle_of_realm(ctx: &mut Context, realm: &Realm) -> ContextHandle {
     runtime.record(realm.clone(), ptr::null_mut())
 }
 
-fn runtime_of<'a>(ctx: &Context) -> Option<&'a BoaRuntime> {
+fn runtime_of(ctx: &Context) -> Option<Rc<BoaRuntime>> {
     let key = ptr::from_ref(ctx) as usize;
     let runtime = CONTEXTS.with(|contexts| {
         contexts
@@ -544,31 +571,28 @@ fn runtime_of<'a>(ctx: &Context) -> Option<&'a BoaRuntime> {
             .find(|(c, _)| *c == key)
             .map(|(_, r)| *r)
     })?;
-    unsafe { (runtime as *const BoaRuntime).as_ref() }
+    registered(&RUNTIMES, runtime)
 }
 
 impl RuntimeHandle {
-    fn runtime<'a>(self) -> Option<&'a BoaRuntime> {
-        unsafe { self.0.cast::<BoaRuntime>().as_ref() }
+    fn runtime(self) -> Option<Rc<BoaRuntime>> {
+        registered(&RUNTIMES, self.0 as usize)
     }
 
     pub fn new(options: &RuntimeOptions) -> RuntimeHandle {
         BoaRuntime::build(options, None)
     }
 
-    pub unsafe fn free(self) {
-        let raw = self.0.cast::<BoaRuntime>();
-        if raw.is_null() {
+    pub fn free(self) {
+        let Some(runtime) = unregister(&RUNTIMES, self.0 as usize) else {
             return;
-        }
-        let runtime = unsafe { Box::from_raw(raw) };
-        let ctx = runtime.ctx as usize;
+        };
+        let ctx = runtime.ctx.get() as usize;
         CONTEXTS.with(|contexts| contexts.borrow_mut().retain(|(c, _)| *c != ctx));
         for record in runtime.records.take() {
-            LIVE.with(|live| live.borrow_mut().remove(&(record as usize)));
-            drop(unsafe { Box::from_raw(record) });
+            drop(unregister(&RECORDS, record));
         }
-        drop(unsafe { Box::from_raw(runtime.ctx) });
+        drop(runtime);
     }
 
     pub fn opaque(self) -> *mut c_void {
@@ -588,8 +612,7 @@ impl RuntimeHandle {
         let Some(runtime) = self.runtime() else {
             return ContextHandle::NULL;
         };
-        let ctx = unsafe { &mut *runtime.ctx };
-        match ctx.create_realm() {
+        match runtime.with_context(|ctx| ctx.create_realm()) {
             Ok(realm) => runtime.record(realm, opaque),
             Err(_) => ContextHandle::NULL,
         }
@@ -604,23 +627,21 @@ impl RuntimeHandle {
         let Some(runtime) = self.runtime() else {
             return ContextHandle::NULL;
         };
-        let ctx = unsafe { &mut *runtime.ctx };
-        match runtime.executor.front_realm() {
+        runtime.with_context(|ctx| match runtime.executor.front_realm() {
             Some(realm) => handle_of_realm(ctx, &realm),
             None if runtime.executor.is_empty() => ContextHandle::NULL,
             None => {
                 let realm = ctx.realm().clone();
                 handle_of_realm(ctx, &realm)
             }
-        }
+        })
     }
 
     pub fn run_pending_job(self) -> JobOutcome {
         let Some(runtime) = self.runtime() else {
             return JobOutcome::Idle;
         };
-        let ctx = unsafe { &mut *runtime.ctx };
-        match runtime.executor.run_one(ctx) {
+        runtime.with_context(|ctx| match runtime.executor.run_one(ctx) {
             Ran::Nothing => JobOutcome::Idle,
             Ran::Job(realm, result) => {
                 let realm = realm.unwrap_or_else(|| ctx.realm().clone());
@@ -633,7 +654,7 @@ impl RuntimeHandle {
                     }
                 }
             }
-        }
+        })
     }
 
     pub fn gc(self) {
@@ -648,25 +669,24 @@ impl RuntimeHandle {
 }
 
 impl ContextHandle {
-    fn record<'a>(self) -> Option<&'a RealmRecord> {
-        let record = self.0.cast::<RealmRecord>();
-        if record.is_null() || !live(record) {
-            return None;
-        }
-        unsafe { record.as_ref() }
+    fn record(self) -> Option<Rc<RealmRecord>> {
+        registered(&RECORDS, self.0 as usize)
     }
 
     pub fn with<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
         let record = self.record()?;
-        let ctx = unsafe { (*record.runtime).ctx };
-        let current = unsafe { (*ctx).realm().clone() };
-        let _host = super::access::enter(unsafe { &*ctx });
-        if current == record.realm {
-            return Some(f(&mut Scope::of(ctx)));
-        }
-        let previous = unsafe { (*ctx).enter_realm(record.realm.clone()) };
-        let result = f(&mut Scope::of(ctx));
-        unsafe { (*ctx).enter_realm(previous) };
+        let runtime = record.runtime.upgrade()?;
+        let result = runtime.with_context(|ctx| {
+            let current = ctx.realm().clone();
+            let _host = super::access::enter(ctx);
+            if current == record.realm {
+                return f(&mut Scope::of(ctx));
+            }
+            let previous = ctx.enter_realm(record.realm.clone());
+            let result = f(&mut Scope::of(ctx));
+            ctx.enter_realm(previous);
+            result
+        });
         Some(result)
     }
 
@@ -683,42 +703,41 @@ impl ContextHandle {
 
     pub fn runtime(self) -> RuntimeHandle {
         self.record().map_or(RuntimeHandle::NULL, |record| {
-            RuntimeHandle(record.runtime.cast())
+            RuntimeHandle(record.runtime.as_ptr().cast_mut().cast())
         })
     }
 
-    pub unsafe fn free(self) {
+    pub fn free(self) {
         let Some(record) = self.record() else {
             return;
         };
-        let raw = ptr::from_ref(record).cast_mut();
+        let key = self.0 as usize;
         record.realm.host_defined_mut().remove::<RealmTag>();
-        if let Some(runtime) = unsafe { record.runtime.as_ref() } {
-            runtime.records.borrow_mut().retain(|&r| r != raw);
+        if let Some(runtime) = record.runtime.upgrade() {
+            runtime.records.borrow_mut().retain(|&r| r != key);
             runtime.loader.forget_realm(&record.realm);
         }
-        LIVE.with(|live| live.borrow_mut().remove(&(raw as usize)));
-        drop(unsafe { Box::from_raw(raw) });
+        drop(unregister(&RECORDS, key));
     }
 }
 
 impl Scope<'_> {
     pub fn handle(&self) -> ContextHandle {
-        let ctx = unsafe { &mut *self.ctx };
-        let realm = ctx.realm().clone();
-        handle_of_realm(ctx, &realm)
+        let realm = self.ctx.realm().clone();
+        handle_of_realm(self.ctx, &realm)
     }
 
     pub fn runtime(&self) -> RuntimeHandle {
-        let ctx = unsafe { &*self.ctx };
-        runtime_of(ctx).map_or(RuntimeHandle::NULL, |runtime| {
-            RuntimeHandle(ptr::from_ref(runtime).cast_mut().cast())
+        runtime_of(self.ctx).map_or(RuntimeHandle::NULL, |runtime| {
+            RuntimeHandle(Rc::as_ptr(&runtime).cast_mut().cast())
         })
     }
 
     pub(super) fn register_module(&mut self, path: &Path, module: &Module) {
-        let simple = runtime_of(self.cx()).and_then(|runtime| runtime.loader.simple.as_ref());
-        if let Some(simple) = simple {
+        let Some(runtime) = runtime_of(self.cx()) else {
+            return;
+        };
+        if let Some(simple) = &runtime.loader.simple {
             simple.insert(path.to_path_buf(), module.clone());
         }
     }
