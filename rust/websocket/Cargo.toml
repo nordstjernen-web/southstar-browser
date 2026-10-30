@@ -8,6 +8,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+ring = { version = "0.17.14", default-features = false }
+southstar-digest = { path = "../digest" }
 southstar-glib = { path = "../glib" }
 southstar-http = { path = "../http" }
 southstar-net = { path = "../net" }

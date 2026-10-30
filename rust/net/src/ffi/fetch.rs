@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long};
-use core::ptr;
+use core::ffi::{CStr, c_int, c_long};
 
 use southstar_glib as glib;
 use southstar_http_cache as http_cache;
@@ -60,15 +59,6 @@ impl FetchDest {
             .map(|line| line.to_bytes().to_vec())
             .collect()
     }
-
-    fn raw_accept_lines(self) -> &'static AcceptLines {
-        match self {
-            FetchDest::Script => &SCRIPT_ACCEPT,
-            FetchDest::Style => &STYLE_ACCEPT,
-            FetchDest::Image => &IMAGE_ACCEPT,
-            FetchDest::Font => &FONT_ACCEPT,
-        }
-    }
 }
 
 const SCRIPT_LINES: [&CStr; 2] = [
@@ -86,21 +76,6 @@ const FONT_LINES: [&CStr; 2] = [
     c"Accept: font/woff2,font/woff,application/font-woff,application/octet-stream;q=0.8,*/*;q=0.5",
     c"X-ND-Fetch-Dest: font",
 ];
-
-struct AcceptLines([*const c_char; 3]);
-
-unsafe impl Sync for AcceptLines {}
-
-impl AcceptLines {
-    const fn of(lines: &[&CStr; 2]) -> AcceptLines {
-        AcceptLines([lines[0].as_ptr(), lines[1].as_ptr(), ptr::null()])
-    }
-}
-
-static SCRIPT_ACCEPT: AcceptLines = AcceptLines::of(&SCRIPT_LINES);
-static STYLE_ACCEPT: AcceptLines = AcceptLines::of(&STYLE_LINES);
-static IMAGE_ACCEPT: AcceptLines = AcceptLines::of(&IMAGE_LINES);
-static FONT_ACCEPT: AcceptLines = AcceptLines::of(&FONT_LINES);
 
 #[derive(Clone)]
 pub enum Failure {
@@ -678,10 +653,6 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             return Err(Failure::Cancelled);
         }
     }
-}
-
-pub fn ns_net_accept_headers_for(dest: c_int) -> *const *const c_char {
-    FetchDest::from_raw(dest).map_or(ptr::null(), |dest| dest.raw_accept_lines().0.as_ptr())
 }
 
 pub fn request_key(

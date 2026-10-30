@@ -148,6 +148,14 @@ impl<'a> ImageRef<'a> {
         self.state().map_or(ptr::null(), |s| text_ptr(&s.error))
     }
 
+    pub fn url_text(self) -> Option<CString> {
+        self.read(|s| s.url.clone())
+    }
+
+    pub fn error_text(self) -> Option<CString> {
+        self.read(|s| s.error.clone())
+    }
+
     pub fn http_status(self) -> c_long {
         self.read(|s| s.http_status)
     }
@@ -207,6 +215,14 @@ impl<'a> ImageRef<'a> {
     pub fn timing_allow_origin(self) -> *const c_char {
         self.state()
             .map_or(ptr::null(), |s| text_ptr(&s.timing_allow_origin))
+    }
+
+    pub fn next_hop_protocol_text(self) -> Option<CString> {
+        self.read(|s| s.next_hop_protocol.clone())
+    }
+
+    pub fn timing_allow_origin_text(self) -> Option<CString> {
+        self.read(|s| s.timing_allow_origin.clone())
     }
 
     pub fn body_size(self) -> i64 {

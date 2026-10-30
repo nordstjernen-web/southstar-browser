@@ -15,7 +15,7 @@ use southstar_netutil::file_uri;
 const TMP_NAME_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 unsafe extern "C" {
-    fn psl_builtin() -> *const c_void;
+    safe fn psl_builtin() -> *const c_void;
     fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
 }
 
@@ -305,11 +305,13 @@ pub fn write_file(path: &[u8], contents: &[u8]) -> bool {
 }
 
 pub fn is_public_suffix(domain: &[u8]) -> bool {
-    let psl = unsafe { psl_builtin() };
+    let psl = psl_builtin();
     if psl.is_null() {
         return false;
     }
     let domain = c(domain);
+    // SAFETY: `psl` is the non-null built-in list and `domain` a NUL-terminated string that
+    // outlives the call.
     unsafe { psl_is_public_suffix(psl, domain.as_ptr()) != 0 }
 }
 
@@ -336,19 +338,10 @@ pub fn exists(path: &[u8]) -> bool {
 
 #[cfg(target_vendor = "apple")]
 fn platform_exe() -> Option<Vec<u8>> {
-    unsafe extern "C" {
-        fn _NSGetExecutablePath(buf: *mut c_char, size: *mut u32) -> c_int;
-    }
-    let mut size = 0u32;
-    unsafe { _NSGetExecutablePath(core::ptr::null_mut(), &mut size) };
-    if size == 0 || size > 32768 {
-        return None;
-    }
-    let mut raw = vec![0u8; size as usize];
-    if unsafe { _NSGetExecutablePath(raw.as_mut_ptr().cast(), &mut size) } != 0 {
-        return None;
-    }
-    Some(raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())].to_vec())
+    use std::os::unix::ffi::OsStrExt;
+    std::env::current_exe()
+        .ok()
+        .map(|p| p.as_os_str().as_bytes().to_vec())
 }
 
 #[cfg(windows)]
@@ -432,6 +425,7 @@ pub fn available_memory_bytes() -> u64 {
         avail_virtual: 0,
         avail_extended_virtual: 0,
     };
+    // SAFETY: `status` is a writable MEMORYSTATUSEX whose length field holds its size.
     if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 {
         status.avail_phys
     } else {
@@ -452,6 +446,8 @@ pub fn available_memory_bytes() -> u64 {
     }
     let mut mem = 0u64;
     let mut len = core::mem::size_of::<u64>();
+    // SAFETY: the name is NUL-terminated, `mem` is writable for the `len` bytes passed, and no
+    // new value is set.
     let ok = unsafe {
         sysctlbyname(
             c"hw.memsize".as_ptr(),
@@ -471,7 +467,9 @@ pub fn available_memory_bytes() -> u64 {
     }
     const AVPHYS_PAGES: c_int = 501;
     const PAGESIZE: c_int = if cfg!(target_os = "openbsd") { 28 } else { 11 };
+    // SAFETY: sysconf takes a plain selector and only returns a value.
     let pages = unsafe { sysconf(AVPHYS_PAGES) };
+    // SAFETY: sysconf takes a plain selector and only returns a value.
     let size = unsafe { sysconf(PAGESIZE) };
     if pages > 0 && size > 0 {
         pages as u64 * size as u64

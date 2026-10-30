@@ -39,6 +39,10 @@ pub fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesView> {
     glue::bytes_view(scope, value)
 }
 
+pub fn bytes_view_copy(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
+    glue::bytes_view(scope, value).map(|view| glue::bytes_of(&view).to_vec())
+}
+
 pub fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
     if value.is_undefined() || value.is_null() {
         return None;
@@ -198,7 +202,7 @@ pub fn dispatch_document_window_event(js: Option<Page>, kind: &str, event: Value
         return;
     };
     let kind = glue::c_line(kind.as_bytes());
-    glue::dispatch_window_only_event(js, js.current_doc(), kind.as_ptr(), event);
+    glue::dispatch_window_only_event(js, js.current_doc(), &kind.to_string_lossy(), event);
 }
 
 pub fn iframe_document(js: Option<Page>) -> Option<Value> {

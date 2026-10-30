@@ -2,10 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_double, c_int, c_void};
+use core::ffi::{c_char, c_double, c_int};
 
 use southstar_glib::strdup;
-use southstar_gtk_ffi::GtkSnapshot;
+use southstar_gtk::SnapshotRef;
 
 use super::gdk::{Snapshot, Under};
 use crate::pagelayers::{LayerUpdate, PageLayers};
@@ -18,6 +18,7 @@ pub(super) fn layer_update_parse(desc: &[u8], map: &[u8]) -> *mut LayerUpdate {
 /// `u` is null or a layer update `layer_update_parse` returned that has not been freed.
 pub(super) unsafe fn ns_layer_update_free(u: *mut LayerUpdate) {
     if !u.is_null() {
+        // SAFETY: the caller passes a box `layer_update_parse` leaked and nothing has freed yet.
         drop(unsafe { Box::from_raw(u) });
     }
 }
@@ -30,6 +31,7 @@ pub(super) fn ns_page_layers_new() -> *mut PageLayers {
 /// `pl` is null or page layers `ns_page_layers_new` returned that have not been freed.
 pub(super) unsafe fn ns_page_layers_free(pl: *mut PageLayers) {
     if !pl.is_null() {
+        // SAFETY: the caller passes a box `ns_page_layers_new` leaked and nothing has freed yet.
         drop(unsafe { Box::from_raw(pl) });
     }
 }
@@ -103,22 +105,17 @@ pub(super) fn ns_page_layers_scroller_at(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ns_page_layers_snapshot(
     pl: Option<&PageLayers>,
-    snapshot: *mut GtkSnapshot,
+    snapshot: SnapshotRef<'_>,
     width: c_double,
     height: c_double,
     raster: c_double,
     scroll_x: c_double,
     scroll_y: c_double,
-    under: Under,
-    under_data: *mut c_void,
+    under: Under<'_>,
 ) {
     let Some(pl) = pl else {
         return;
     };
-    let mut canvas = Snapshot {
-        snapshot,
-        under,
-        under_data,
-    };
+    let mut canvas = Snapshot { snapshot, under };
     pl.snapshot(&mut canvas, width, height, raster, scroll_x, scroll_y);
 }

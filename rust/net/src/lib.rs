@@ -34,9 +34,7 @@ pub use cookies::{
 };
 pub use error_page::build as build_error_page;
 pub use ffi::fetch::Failure;
-pub use ffi::fetch::{
-    FetchDest, accept_header_lines, ns_net_accept_headers_for as accept_headers_for, request_key,
-};
+pub use ffi::fetch::{FetchDest, accept_header_lines, request_key};
 pub use ffi::forms::{multipart_boundary, urlencoded_append_pair};
 pub use ffi::host::set_self_exe;
 pub use ffi::netlog::set_log_fetches;

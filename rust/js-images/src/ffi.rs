@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int, c_void};
 use core::ptr;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
@@ -27,10 +27,6 @@ impl Js {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Realm(ContextHandle);
-
-pub(crate) fn c_str<'a>(p: *const c_char) -> Option<&'a CStr> {
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) })
-}
 
 pub(crate) fn halted(js: Js) -> bool {
     api::halted(js.0)
@@ -142,18 +138,18 @@ pub(crate) fn request_repaint(js: Js) {
 }
 
 pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
-    let Some(url) = c_str(img.url()) else {
+    let Some(url) = img.url_text() else {
         return;
     };
     if js.is_null() {
         return;
     }
     let mut info = (api::loader_hooks().element_perf_info)(js.0, Some(node));
-    if southstar_js_perf::has_resource_timing(js.0, info.timeline, url, Some(c"img")) {
+    if southstar_js_perf::has_resource_timing(js.0, info.timeline, &url, Some(c"img")) {
         return;
     }
-    info.next_hop_protocol = c_str(img.next_hop_protocol()).map(CStr::to_owned);
-    info.timing_allow_origin = c_str(img.timing_allow_origin()).map(CStr::to_owned);
+    info.next_hop_protocol = img.next_hop_protocol_text();
+    info.timing_allow_origin = img.timing_allow_origin_text();
     info.status = img.http_status();
     info.body_size = img.body_size();
     let now = southstar_glib::monotonic_us();
@@ -169,7 +165,14 @@ pub(crate) fn record_image_timing(js: Js, node: Element, img: ImageRef<'_>) {
     } else {
         now
     };
-    southstar_js_perf::add_resource_timed(js.0, Some(&info), url, Some(c"img"), (start, end), None);
+    southstar_js_perf::add_resource_timed(
+        js.0,
+        Some(&info),
+        &url,
+        Some(c"img"),
+        (start, end),
+        None,
+    );
 }
 
 pub(crate) fn dispatch_resource_event(js: Js, node: Element, kind: &CStr) {
@@ -182,15 +185,18 @@ pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
     ImageRef::from_media(b.media()?.image()?)
 }
 
+/// # Safety
+///
+/// `data` must be null or the address of a `Load` owned by a live `Rc`.
 unsafe fn retain(data: *mut c_void) -> Option<Rc<Load>> {
     let load = data.cast_const().cast::<Load>();
     if load.is_null() {
         return None;
     }
-    unsafe {
-        Rc::increment_strong_count(load);
-        Some(Rc::from_raw(load))
-    }
+    // SAFETY: the caller guarantees `load` came from a live `Rc<Load>`.
+    unsafe { Rc::increment_strong_count(load) };
+    // SAFETY: the strong count taken above is the one this new `Rc` owns.
+    Some(unsafe { Rc::from_raw(load) })
 }
 
 fn on_image_ready(img: ImageRef<'static>, load: usize) {

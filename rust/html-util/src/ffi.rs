@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_int, c_void};
 use southstar_glib as glib;
 
 unsafe extern "C" {
-    fn uchardet_new() -> *mut c_void;
+    safe fn uchardet_new() -> *mut c_void;
     fn uchardet_delete(ud: *mut c_void);
     fn uchardet_handle_data(ud: *mut c_void, data: *const c_char, len: usize) -> c_int;
     fn uchardet_data_end(ud: *mut c_void);
@@ -60,22 +60,45 @@ pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<Vec<u8>> {
     glib::convert(text, b"UTF-8", from)
 }
 
+struct Detector(*mut c_void);
+
+impl Detector {
+    fn new() -> Option<Detector> {
+        let detector = uchardet_new();
+        (!detector.is_null()).then_some(Detector(detector))
+    }
+
+    fn feed(&mut self, data: &[u8]) -> bool {
+        // SAFETY: the detector is live and `data` is `data.len()` readable bytes.
+        unsafe { uchardet_handle_data(self.0, data.as_ptr().cast(), data.len()) == 0 }
+    }
+
+    fn finish(&mut self) -> Vec<u8> {
+        // SAFETY: the detector is live.
+        unsafe { uchardet_data_end(self.0) };
+        // SAFETY: the detector is live; it returns a charset name it owns.
+        let name = unsafe { uchardet_get_charset(self.0) };
+        // SAFETY: the name is null or NUL-terminated and lives as long as the detector, which
+        // outlives this copy.
+        unsafe { glib::bytes(name) }.map_or_else(Vec::new, <[u8]>::to_vec)
+    }
+}
+
+impl Drop for Detector {
+    fn drop(&mut self) {
+        // SAFETY: the detector is the non-null one `new` created, deleted exactly once, here.
+        unsafe { uchardet_delete(self.0) };
+    }
+}
+
 pub(crate) fn detect_charset(sample: &[u8]) -> Option<Vec<u8>> {
-    let detector = unsafe { uchardet_new() };
-    if detector.is_null() {
+    let mut detector = Detector::new()?;
+    if !detector.feed(sample) {
         return None;
     }
-    let mut charset = None;
-    if unsafe { uchardet_handle_data(detector, sample.as_ptr().cast(), sample.len()) } == 0 {
-        unsafe { uchardet_data_end(detector) };
-        let name = unsafe { glib::bytes(uchardet_get_charset(detector)) }.unwrap_or_default();
-        if !name.is_empty()
-            && !name.eq_ignore_ascii_case(b"ASCII")
-            && !name.eq_ignore_ascii_case(b"UTF-8")
-        {
-            charset = Some(name.to_vec());
-        }
-    }
-    unsafe { uchardet_delete(detector) };
-    charset
+    let name = detector.finish();
+    (!name.is_empty()
+        && !name.eq_ignore_ascii_case(b"ASCII")
+        && !name.eq_ignore_ascii_case(b"UTF-8"))
+    .then_some(name)
 }

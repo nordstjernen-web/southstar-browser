@@ -65,9 +65,14 @@ pub(crate) fn uri_host(url: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::host_from(url)
 }
 
+/// # Safety
+///
+/// `url` and `title` must each be null or a NUL-terminated string valid for the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ns_history_record(url: *const c_char, title: *const c_char) {
+    // SAFETY: the caller passes null or a NUL-terminated string valid for the call.
     let url = (!url.is_null()).then(|| unsafe { CStr::from_ptr(url) });
+    // SAFETY: the caller passes null or a NUL-terminated string valid for the call.
     let title = (!title.is_null()).then(|| unsafe { CStr::from_ptr(title) });
     crate::record(url, title);
 }

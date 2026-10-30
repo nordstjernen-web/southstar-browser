@@ -15,6 +15,8 @@ struct Global {
     config: UnsafeCell<NsConfig>,
 }
 
+// SAFETY: the configuration is written only from the browser's main thread (init, reload,
+// shutdown, settings edits under `lock()`), and other threads only read it between writes.
 unsafe impl Sync for Global {}
 
 static GLOBAL: Global = Global {
@@ -25,6 +27,8 @@ static PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 static LOCK: Mutex<()> = Mutex::new(());
 
 fn global_config() -> &'static mut NsConfig {
+    // SAFETY: the cell is valid for the whole program, and writers are serialized on the main
+    // thread as stated on `Global`'s `Sync` impl.
     unsafe { &mut *GLOBAL.config.get() }
 }
 
@@ -33,6 +37,8 @@ fn global_path() -> MutexGuard<'static, Option<PathBuf>> {
 }
 
 pub(crate) fn config() -> Option<&'static NsConfig> {
+    // SAFETY: the cell is valid for the whole program, and readers never overlap a write as
+    // stated on `Global`'s `Sync` impl.
     Some(unsafe { &*GLOBAL.config.get() })
 }
 

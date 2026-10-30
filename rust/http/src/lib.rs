@@ -43,6 +43,7 @@ pub fn init() {
 }
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
+pub use ffi::codec::{Inflate, Inflated};
 pub use proxy::{
     EnvLookup, Proxy, bypassed as proxy_bypassed, env_valid as env_proxies_valid,
     from_env as env_proxy, parse as parse_proxy,
