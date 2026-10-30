@@ -7,10 +7,12 @@ pub mod libav;
 pub mod os;
 pub mod ring;
 
-use core::ffi::{c_char, c_int};
-
+#[cfg(not(feature = "rust-main"))]
 #[unsafe(no_mangle)]
-pub extern "C" fn main(_argc: c_int, _argv: *const *const c_char) -> c_int {
+pub extern "C" fn main(
+    _argc: core::ffi::c_int,
+    _argv: *const *const core::ffi::c_char,
+) -> core::ffi::c_int {
     crate::protocol::run();
     0
 }

@@ -3,6 +3,25 @@ Changelog:
 
 Southstar Browser 1.0.5-dev:
 ======
+* Southstar is published on crates.io: `cargo install southstar` builds the
+  browser, the renderer and the audio and video helpers without meson, from
+  the new `rust/southstar` package. Its build script links the system
+  libraries through pkg-config and compiles the icon bundle. On first start
+  the browser writes its translations and license texts to `share/southstar`
+  beside its install prefix. Every crate in the tree is published with it, at
+  the same version, with each internal dependency pinned to it;
+  `scripts/set-version.py` bumps all of them and `scripts/publish-crates.py`
+  uploads a release.
+* Internals: the Boa fork is published as `southstar-boa-*` crates instead of
+  being patched over the crates.io releases. `boa_interner` joins it
+  unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each
+  fork records the release it copies, and `scripts/boa-fork-diff.py` reads it.
+* Internals: the FFmpeg, libvorbisfile and libavif struct layouts are listed
+  once, in `layout.txt` files inside their crates. Meson computes them from
+  those lists, and a plain cargo build probes them in the crates' build
+  scripts. The shell and the media helpers expose a Rust `run` entry point
+  beside the C `main` that meson links. The polyfill, streaming and WPT-hook
+  scripts and the about-page logo moved into the crates that embed them.
 
 Southstar Browser 1.0.4:
 ======

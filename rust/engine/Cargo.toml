@@ -6,25 +6,27 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim" }
-southstar-cairo = { path = "../cairo" }
-southstar-css = { path = "../css" }
-southstar-css-media = { path = "../css-media" }
-southstar-css-syntax = { path = "../css-syntax" }
-southstar-debuglog = { path = "../debuglog" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-image = { path = "../image" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-layout = { path = "../layout" }
-southstar-layout-query = { path = "../layout-query" }
-southstar-net = { path = "../net" }
-southstar-paint = { path = "../paint" }
-southstar-print = { path = "../print" }
-southstar-render = { path = "../render" }
-southstar-url = { path = "../url" }
+southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.5-dev" }
+southstar-css-syntax = { path = "../css-syntax", version = "=1.0.5-dev" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-image = { path = "../image", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
+southstar-print = { path = "../print", version = "=1.0.5-dev" }
+southstar-render = { path = "../render", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

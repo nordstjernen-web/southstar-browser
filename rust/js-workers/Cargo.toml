@@ -6,26 +6,28 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-glib = { path = "../glib" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-clone = { path = "../js-clone", default-features = false }
-southstar-js-cssom = { path = "../js-cssom" }
-southstar-js-dispatch = { path = "../js-dispatch" }
-southstar-js-document = { path = "../js-document" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-events = { path = "../js-events" }
-southstar-js-interfaces = { path = "../js-interfaces" }
-southstar-js-loader = { path = "../js-loader" }
-southstar-js-net = { path = "../js-net" }
-southstar-js-perf = { path = "../js-perf" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-services = { path = "../js-services" }
-southstar-js-url = { path = "../js-url" }
-southstar-js-window = { path = "../js-window" }
-southstar-net = { path = "../net" }
-southstar-url = { path = "../url" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-clone = { path = "../js-clone", version = "=1.0.5-dev", default-features = false }
+southstar-js-cssom = { path = "../js-cssom", version = "=1.0.5-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5-dev" }
+southstar-js-document = { path = "../js-document", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.5-dev" }
+southstar-js-interfaces = { path = "../js-interfaces", version = "=1.0.5-dev" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.5-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.5-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
+southstar-js-url = { path = "../js-url", version = "=1.0.5-dev" }
+southstar-js-window = { path = "../js-window", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

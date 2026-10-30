@@ -6,19 +6,22 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av" }
-southstar-media-shm = { path = "../media-shm" }
+southstar-av = { path = "../av", version = "=1.0.5-dev" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.5-dev" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-southstar-helper-ffi = { path = "../helper-ffi" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5-dev" }
 
 [features]
+rust-main = []
 seccomp = ["southstar-helper-ffi/seccomp"]
 
 [lints]

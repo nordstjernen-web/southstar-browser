@@ -6,25 +6,27 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim" }
-southstar-config = { path = "../config" }
-southstar-csp = { path = "../csp" }
-southstar-css = { path = "../css" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-brand = { path = "../js-brand" }
-southstar-js-crypto = { path = "../js-crypto" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-intl = { path = "../js-intl", default-features = false }
-southstar-js-realm = { path = "../js-realm", default-features = false }
-southstar-js-temporal = { path = "../js-temporal", default-features = false }
-southstar-js-wasm = { path = "../js-wasm", optional = true }
-southstar-layout = { path = "../layout" }
-southstar-net = { path = "../net" }
-southstar-url = { path = "../url" }
+southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-brand = { path = "../js-brand", version = "=1.0.5-dev" }
+southstar-js-crypto = { path = "../js-crypto", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-intl = { path = "../js-intl", version = "=1.0.5-dev", default-features = false }
+southstar-js-realm = { path = "../js-realm", version = "=1.0.5-dev", default-features = false }
+southstar-js-temporal = { path = "../js-temporal", version = "=1.0.5-dev", default-features = false }
+southstar-js-wasm = { path = "../js-wasm", version = "=1.0.5-dev", optional = true }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [features]
 wasm = ["dep:southstar-js-wasm"]

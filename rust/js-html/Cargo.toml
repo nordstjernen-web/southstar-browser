@@ -6,21 +6,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-html-parser = { path = "../html-parser" }
-southstar-js-attrs = { path = "../js-attrs" }
-southstar-js-collections = { path = "../js-collections" }
-southstar-js-custom-elements = { path = "../js-custom-elements" }
-southstar-js-elements = { path = "../js-elements" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-loader = { path = "../js-loader" }
-southstar-js-mutation = { path = "../js-mutation" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-shadow = { path = "../js-shadow" }
-southstar-url = { path = "../url" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.5-dev" }
+southstar-js-attrs = { path = "../js-attrs", version = "=1.0.5-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.5-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5-dev" }
+southstar-js-elements = { path = "../js-elements", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.5-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-shadow = { path = "../js-shadow", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

@@ -6,15 +6,17 @@ edition.workspace = true
 rust-version.workspace = true
 license = "LGPL-2.0-or-later"
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [features]
 rust-shaper = ["dep:harfrust", "dep:png", "dep:read-fonts", "dep:skrifa"]
 thai = []
 
 [dependencies]
-southstar-bidi = { path = "../bidi" }
-southstar-cairo = { path = "../cairo" }
-southstar-unicode = { path = "../unicode" }
+southstar-bidi = { path = "../bidi", version = "=1.0.5-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
 harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }
 png = { version = "0.18", optional = true, default-features = false }
 read-fonts = { version = "0.46", optional = true, default-features = false, features = ["std"] }

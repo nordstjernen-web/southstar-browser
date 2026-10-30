@@ -6,14 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
 crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-http = { path = "../http" }
-southstar-sandbox = { path = "../sandbox" }
+southstar-http = { path = "../http", version = "=1.0.5-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.5-dev" }
 
 [features]
 seccomp = ["southstar-sandbox/seccomp"]

@@ -6,21 +6,23 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-css = { path = "../css" }
-southstar-dom = { path = "../dom" }
-southstar-layout = { path = "../layout" }
-southstar-layout-flex = { path = "../layout-flex" }
-southstar-layout-float = { path = "../layout-float" }
-southstar-layout-geom = { path = "../layout-geom" }
-southstar-layout-grid = { path = "../layout-grid" }
-southstar-layout-inline = { path = "../layout-inline" }
-southstar-layout-sizing = { path = "../layout-sizing" }
-southstar-layout-table = { path = "../layout-table" }
-southstar-layout-tree = { path = "../layout-tree" }
-southstar-mathml = { path = "../mathml" }
-southstar-style = { path = "../style" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-flex = { path = "../layout-flex", version = "=1.0.5-dev" }
+southstar-layout-float = { path = "../layout-float", version = "=1.0.5-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.5-dev" }
+southstar-layout-grid = { path = "../layout-grid", version = "=1.0.5-dev" }
+southstar-layout-inline = { path = "../layout-inline", version = "=1.0.5-dev" }
+southstar-layout-sizing = { path = "../layout-sizing", version = "=1.0.5-dev" }
+southstar-layout-table = { path = "../layout-table", version = "=1.0.5-dev" }
+southstar-layout-tree = { path = "../layout-tree", version = "=1.0.5-dev" }
+southstar-mathml = { path = "../mathml", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

@@ -110,7 +110,7 @@ if [ -f "$AUDIO_BIN" ]; then
     cp "$AUDIO_BIN" "$STAGE/"
 fi
 cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
-   "$ROOT"/data/icons/hicolor/scalable/apps/southstar.gif \
+   "$ROOT"/rust/net/data/southstar.gif \
    "$STAGE/data/icons/hicolor/scalable/apps/"
 cp "$ROOT/data/southstar.desktop" "$STAGE/data/"
 

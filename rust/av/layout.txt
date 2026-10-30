@@ -1,0 +1,68 @@
+#include <stddef.h>
+#include <errno.h>
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/log.h>
+#include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
+AVFormatContext.nb_streams=offsetof(AVFormatContext, nb_streams)
+AVFormatContext.streams=offsetof(AVFormatContext, streams)
+AVFormatContext.duration=offsetof(AVFormatContext, duration)
+AVFormatContext.pb=offsetof(AVFormatContext, pb)
+AVStream.codecpar=offsetof(AVStream, codecpar)
+AVStream.time_base=offsetof(AVStream, time_base)
+AVStream.duration=offsetof(AVStream, duration)
+AVStream.avg_frame_rate=offsetof(AVStream, avg_frame_rate)
+AVStream.r_frame_rate=offsetof(AVStream, r_frame_rate)
+AVCodecParameters.codec_id=offsetof(AVCodecParameters, codec_id)
+AVCodecParameters.width=offsetof(AVCodecParameters, width)
+AVCodecParameters.height=offsetof(AVCodecParameters, height)
+AVCodecContext.ch_layout=offsetof(AVCodecContext, ch_layout)
+AVCodecContext.sample_rate=offsetof(AVCodecContext, sample_rate)
+AVCodecContext.sample_fmt=offsetof(AVCodecContext, sample_fmt)
+AVIOContext.buffer=offsetof(AVIOContext, buffer)
+AVIOContext.eof_reached=offsetof(AVIOContext, eof_reached)
+AVIOContext.error=offsetof(AVIOContext, error)
+AVPacket.stream_index=offsetof(AVPacket, stream_index)
+AVPacket.pts=offsetof(AVPacket, pts)
+AVPacket.duration=offsetof(AVPacket, duration)
+AVFrame.data=offsetof(AVFrame, data)
+AVFrame.linesize=offsetof(AVFrame, linesize)
+AVFrame.width=offsetof(AVFrame, width)
+AVFrame.height=offsetof(AVFrame, height)
+AVFrame.format=offsetof(AVFrame, format)
+AVFrame.pts=offsetof(AVFrame, pts)
+AVFrame.nb_samples=offsetof(AVFrame, nb_samples)
+AVFrame.extended_data=offsetof(AVFrame, extended_data)
+AVFrame.ch_layout=offsetof(AVFrame, ch_layout)
+AVFrame.best_effort_timestamp=offsetof(AVFrame, best_effort_timestamp)
+AVChannelLayout.nb_channels=offsetof(AVChannelLayout, nb_channels)
+sizeof.AVChannelLayout=sizeof(AVChannelLayout)
+AVERROR_EAGAIN=AVERROR(EAGAIN)
+AVERROR_EOF=AVERROR_EOF
+AVMEDIA_TYPE_VIDEO=AVMEDIA_TYPE_VIDEO
+AVMEDIA_TYPE_AUDIO=AVMEDIA_TYPE_AUDIO
+AV_PIX_FMT_BGRA=AV_PIX_FMT_BGRA
+AV_SAMPLE_FMT_FLT=AV_SAMPLE_FMT_FLT
+AV_SAMPLE_FMT_NONE=AV_SAMPLE_FMT_NONE
+AV_LOG_QUIET=AV_LOG_QUIET
+SWS_BILINEAR=SWS_BILINEAR
+AVSEEK_FLAG_BACKWARD=AVSEEK_FLAG_BACKWARD
+AVSEEK_SIZE=AVSEEK_SIZE
+AVSEEK_FORCE=AVSEEK_FORCE
+AV_CODEC_ID_NONE=AV_CODEC_ID_NONE
+AV_CODEC_ID_VP8=AV_CODEC_ID_VP8
+AV_CODEC_ID_VP9=AV_CODEC_ID_VP9
+AV_CODEC_ID_AV1=AV_CODEC_ID_AV1
+AV_CODEC_ID_H264=AV_CODEC_ID_H264
+AV_CODEC_ID_HEVC=AV_CODEC_ID_HEVC
+AV_CODEC_ID_MPEG4=AV_CODEC_ID_MPEG4
+AV_CODEC_ID_THEORA=AV_CODEC_ID_THEORA
+AV_CODEC_ID_OPUS=AV_CODEC_ID_OPUS
+AV_CODEC_ID_VORBIS=AV_CODEC_ID_VORBIS
+AV_CODEC_ID_AAC=AV_CODEC_ID_AAC
+AV_CODEC_ID_MP3=AV_CODEC_ID_MP3
+AV_CODEC_ID_FLAC=AV_CODEC_ID_FLAC
+AV_CODEC_ID_ALAC=AV_CODEC_ID_ALAC
+AV_CODEC_ID_AC3=AV_CODEC_ID_AC3
+AV_CODEC_ID_EAC3=AV_CODEC_ID_EAC3

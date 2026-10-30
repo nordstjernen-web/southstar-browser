@@ -6,14 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode" }
-southstar-about-style = { path = "../about-style" }
-southstar-config = { path = "../config" }
-southstar-glib = { path = "../glib" }
-southstar-sqlite = { path = "../sqlite" }
-southstar-url = { path = "../url" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
+southstar-about-style = { path = "../about-style", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-sqlite = { path = "../sqlite", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

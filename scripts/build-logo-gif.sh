@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-out="data/icons/hicolor/scalable/apps/southstar.gif"
+out="rust/net/data/southstar.gif"
 size=128
 frames=24
 trail=6

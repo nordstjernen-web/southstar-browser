@@ -30,8 +30,8 @@ const FLAG_CDATA: u32 = 1 << 10;
 const FLAG_PI: u32 = 1 << 11;
 const MATHML_NS: &CStr = c"http://www.w3.org/1998/Math/MathML";
 
-static POLYFILLS: &str = concat!(include_str!("../../../../data/js/polyfills.js"), "\0");
-static STREAMING: &str = concat!(include_str!("../../../../data/js/streaming.js"), "\0");
+static POLYFILLS: &str = concat!(include_str!("../../js/polyfills.js"), "\0");
+static STREAMING: &str = concat!(include_str!("../../js/streaming.js"), "\0");
 
 const FRAME_WINDOW_CHAIN: &[u8] = b"(function(G){\
   var gp = Object.getPrototypeOf, sp = Object.setPrototypeOf;\

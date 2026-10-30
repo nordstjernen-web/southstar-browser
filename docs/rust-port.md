@@ -171,7 +171,7 @@ vendored code excluded):
 
 Vendored C: an HTML/URL library (~289k lines), QuickJS-ng fork (~101k), Wuffs (~97k), WAMR
 (~73k), pl_mpeg (~4.5k), minimp3 (~1.9k); ns-pango is a meson subproject.
-`data/js/polyfills.js` (11k lines) and `streaming.js` are JavaScript and stay
+`rust/js-runtime/js/polyfills.js` (11k lines) and `streaming.js` are JavaScript and stay
 as they are.
 
 ### 4.2 Structure that shapes the plan
@@ -675,7 +675,7 @@ Scope (77.7k lines): `js.c` and its siblings (`js_canvas*.c`, `js_intl.c`,
 - **Event loop.** Timers, rAF and worker loops are GLib sources today. They
   stay on GLib (through the `glib` crate) during the port; replacing GLib's
   loop with a Rust one is a later step.
-- The JavaScript polyfills (`data/js/*.js`) are unchanged.
+- The JavaScript polyfills (`rust/js-runtime/js/*.js`) are unchanged.
 
 Exit: no C bindings remain; with the default QuickJS-ng backend, test262 and
 WPT slice scores are not lower and the Speedometer runs
@@ -773,7 +773,7 @@ results go into a table in `docs/` next to the WPT scoreboard:
 | Conformance | test262 through `southstar-jsshell` (overall, language, built-ins, intl402, annexB) |
 | Web platform | the tracked WPT slice (`scripts/wpt-score.sh`) once phase 7's bindings run |
 | Speed | JetStream's shell runner and SunSpider/Kraken-style suites in `southstar-jsshell`; Speedometer in the browser |
-| Start-up and memory | time and resident memory to create a realm with the polyfills (`data/js/*.js`) loaded; memory after loading a set of real sites |
+| Start-up and memory | time and resident memory to create a realm with the polyfills (`rust/js-runtime/js/*.js`) loaded; memory after loading a set of real sites |
 | Cost | binary size and build time added by the backend, crates pulled in, minimum Rust version |
 | Platforms | builds and smoke-runs on Linux, Windows (MSYS2 MinGW), macOS, FreeBSD, NetBSD and musl |
 

@@ -6,26 +6,28 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim" }
-southstar-canvas = { path = "../canvas" }
-southstar-css = { path = "../css" }
-southstar-css-media = { path = "../css-media" }
-southstar-css-prop-syntax = { path = "../css-prop-syntax" }
-southstar-dom = { path = "../dom" }
-southstar-engine = { path = "../engine" }
-southstar-glib = { path = "../glib" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-layout = { path = "../layout" }
-southstar-layout-grid = { path = "../layout-grid" }
-southstar-mat4 = { path = "../mat4" }
-southstar-numfmt = { path = "../numfmt" }
-southstar-paint = { path = "../paint" }
-southstar-selector-text = { path = "../selector-text" }
-southstar-style = { path = "../style" }
-southstar-url = { path = "../url" }
+southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.5-dev" }
+southstar-css-prop-syntax = { path = "../css-prop-syntax", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-engine = { path = "../engine", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-grid = { path = "../layout-grid", version = "=1.0.5-dev" }
+southstar-mat4 = { path = "../mat4", version = "=1.0.5-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
+southstar-selector-text = { path = "../selector-text", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

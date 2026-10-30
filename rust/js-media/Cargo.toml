@@ -6,20 +6,22 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-dispatch = { path = "../js-dispatch" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-events = { path = "../js-events" }
-southstar-js-perf = { path = "../js-perf" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-services = { path = "../js-services" }
-southstar-mic = { path = "../mic" }
-southstar-url = { path = "../url" }
-southstar-video = { path = "../video" }
-southstar-webaudio = { path = "../webaudio" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.5-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
+southstar-mic = { path = "../mic", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-video = { path = "../video", version = "=1.0.5-dev" }
+southstar-webaudio = { path = "../webaudio", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

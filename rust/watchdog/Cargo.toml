@@ -6,10 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-debuglog = { path = "../debuglog" }
-southstar-glib = { path = "../glib" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

@@ -182,6 +182,23 @@ instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).
 
+### Install with cargo
+
+Southstar is also on [crates.io](https://crates.io/crates/southstar). With the
+same development packages installed (pkg-config finds them), this builds the
+browser and its renderer and media helpers into `~/.cargo/bin`:
+
+```sh
+cargo install southstar
+southstar
+```
+
+On first start it writes its translations and license texts to
+`~/.cargo/share/southstar`. AVIF, Thai word breaking, PDF, spell-checking and
+native Ogg audio are optional cargo features (`avif`, `thai`, `poppler`,
+`enchant`, `vorbisfile`, `opusfile`). On Windows, run it from an MSYS2 MINGW64
+shell with the libraries from [docs/Windows.md](docs/Windows.md) installed.
+
 ### The `internet-browser-southstar` command
 
 `meson install` puts `internet-browser-southstar` beside `southstar` in the binary

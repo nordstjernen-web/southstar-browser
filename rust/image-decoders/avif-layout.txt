@@ -1,0 +1,18 @@
+#include <stddef.h>
+#include <avif/avif.h>
+avifDecoder.maxThreads=offsetof(avifDecoder, maxThreads)
+avifDecoder.imageSizeLimit=offsetof(avifDecoder, imageSizeLimit)
+avifDecoder.imageDimensionLimit=offsetof(avifDecoder, imageDimensionLimit)
+avifDecoder.strictFlags=offsetof(avifDecoder, strictFlags)
+avifDecoder.image=offsetof(avifDecoder, image)
+avifImage.width=offsetof(avifImage, width)
+avifImage.height=offsetof(avifImage, height)
+avifRGBImage.format=offsetof(avifRGBImage, format)
+avifRGBImage.depth=offsetof(avifRGBImage, depth)
+avifRGBImage.alphaPremultiplied=offsetof(avifRGBImage, alphaPremultiplied)
+avifRGBImage.pixels=offsetof(avifRGBImage, pixels)
+avifRGBImage.rowBytes=offsetof(avifRGBImage, rowBytes)
+sizeof.avifRGBImage=sizeof(avifRGBImage)
+AVIF_RGB_FORMAT_BGRA=AVIF_RGB_FORMAT_BGRA
+AVIF_STRICT_DISABLED=AVIF_STRICT_DISABLED
+AVIF_RESULT_OK=AVIF_RESULT_OK

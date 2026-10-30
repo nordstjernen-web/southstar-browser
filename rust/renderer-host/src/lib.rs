@@ -11,3 +11,4 @@ mod serve;
 mod tiles;
 
 pub use inproc::{single_process_enable, single_process_enabled, single_process_shutdown};
+pub use process::run;

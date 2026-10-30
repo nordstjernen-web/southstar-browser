@@ -6,13 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
 ring = { version = "0.17.14", default-features = false }
-southstar-digest = { path = "../digest" }
-southstar-glib = { path = "../glib" }
-southstar-http = { path = "../http" }
-southstar-net = { path = "../net" }
+southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-http = { path = "../http", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

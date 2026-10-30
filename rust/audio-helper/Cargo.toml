@@ -6,25 +6,31 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av" }
-southstar-glib = { path = "../glib" }
-southstar-helper-ffi = { path = "../helper-ffi" }
-southstar-http = { path = "../http" }
-southstar-media-shm = { path = "../media-shm" }
-southstar-minimp3 = { path = "../minimp3" }
-southstar-plmpeg = { path = "../plmpeg" }
+southstar-av = { path = "../av", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5-dev" }
+southstar-http = { path = "../http", version = "=1.0.5-dev" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.5-dev" }
+southstar-minimp3 = { path = "../minimp3", version = "=1.0.5-dev" }
+southstar-plmpeg = { path = "../plmpeg", version = "=1.0.5-dev" }
 
 [features]
+rust-main = []
 libav = []
 vorbisfile = []
 opusfile = []
 seccomp = ["southstar-helper-ffi/seccomp"]
+
+[build-dependencies]
+southstar-build = { path = "../build", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

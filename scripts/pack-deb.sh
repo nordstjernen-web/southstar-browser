@@ -58,7 +58,7 @@ if [ -x "$STAGE/southstar-audio" ]; then
 fi
 # All app + toolbar icons the UI and about: pages look up by name.
 for icon in "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
-            "$ROOT"/data/icons/hicolor/scalable/apps/southstar.gif; do
+            "$ROOT"/rust/net/data/southstar.gif; do
     [ -e "$icon" ] && install -m644 "$icon" \
         "$PKGROOT/usr/share/icons/hicolor/scalable/apps/"
 done

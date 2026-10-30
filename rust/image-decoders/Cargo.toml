@@ -6,14 +6,19 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-av = { path = "../av", optional = true }
-southstar-raster = { path = "../raster" }
-southstar-texture = { path = "../texture" }
+southstar-av = { path = "../av", version = "=1.0.5-dev", optional = true }
+southstar-raster = { path = "../raster", version = "=1.0.5-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.5-dev" }
 
 [features]
 avif = ["dep:southstar-av"]
+
+[build-dependencies]
+southstar-build = { path = "../build", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

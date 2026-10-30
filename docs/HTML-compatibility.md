@@ -429,7 +429,7 @@ by the C engine are not yet routed through the worker (only page `fetch()`
 is intercepted).
 
 The **Cache API** (`caches` / `CacheStorage` / `Cache`) is a working
-in-memory store (`NSCache` in `data/js/polyfills.js`). `caches.open(name)`
+in-memory store (`NSCache` in `rust/js-runtime/js/polyfills.js`). `caches.open(name)`
 returns a real `Cache`; `put(request, response)` reads the response body to
 an `ArrayBuffer` and stores it with status/headers/url (rejecting a used
 body, a `206` response, or a non-`GET` request per spec), and `match` /

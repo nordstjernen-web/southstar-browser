@@ -6,24 +6,26 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-mime = { path = "../mime" }
-southstar-about-style = { path = "../about-style" }
-southstar-config = { path = "../config" }
-southstar-debuglog = { path = "../debuglog" }
-southstar-digest = { path = "../digest" }
-southstar-extensions = { path = "../extensions" }
-southstar-glib = { path = "../glib" }
-southstar-history = { path = "../history" }
-southstar-html-util = { path = "../html-util" }
-southstar-http = { path = "../http" }
-southstar-http-cache = { path = "../http-cache" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-netstore = { path = "../netstore" }
-southstar-netutil = { path = "../netutil" }
-southstar-sandbox = { path = "../sandbox" }
-southstar-url = { path = "../url" }
+southstar-mime = { path = "../mime", version = "=1.0.5-dev" }
+southstar-about-style = { path = "../about-style", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
+southstar-extensions = { path = "../extensions", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-history = { path = "../history", version = "=1.0.5-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.5-dev" }
+southstar-http = { path = "../http", version = "=1.0.5-dev" }
+southstar-http-cache = { path = "../http-cache", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-netstore = { path = "../netstore", version = "=1.0.5-dev" }
+southstar-netutil = { path = "../netutil", version = "=1.0.5-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
 
 [features]
 avif = []

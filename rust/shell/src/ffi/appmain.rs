@@ -614,6 +614,7 @@ fn sandbox_proc_mode(single_process: bool) {
     southstar_sandbox::sandbox_init(self_exe_str());
 }
 
+#[cfg(not(feature = "rust-main"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let args: Vec<&CStr> = (0..usize::try_from(argc).unwrap_or(0))
@@ -624,8 +625,12 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
         // SAFETY: each argument is a NUL-terminated string that lives until the process exits.
         .map(|a| unsafe { CStr::from_ptr(a) })
         .collect();
+    run(&args)
+}
+
+pub fn run(args: &[&CStr]) -> c_int {
     #[cfg(windows)]
-    if appmain::need_console(&args) {
+    if appmain::need_console(args) {
         win32::attach_parent_console();
     }
     if !southstar_sandbox::refuse_root() {
@@ -635,12 +640,12 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     let exe = self_exe_str();
     southstar_i18n::init(exe);
     let watchdog_args: Vec<&[u8]> = args.iter().skip(1).map(|a| a.to_bytes()).collect();
-    if appmain::flag_given(&args, b"--private") {
+    if appmain::flag_given(args, b"--private") {
         setenv(c"NS_PRIVATE", c"1");
     }
     southstar_config::init();
 
-    let proc_mode = appmain::proc_mode_wanted(&args);
+    let proc_mode = appmain::proc_mode_wanted(args);
 
     for _ in args
         .iter()
@@ -668,10 +673,10 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     }
 
     southstar_sandbox::win32_mitigations_init(proc_mode);
-    add_screenshot_writable_dirs(&args);
+    add_screenshot_writable_dirs(args);
 
     let single_process = proc_mode
-        && (appmain::flag_given(&args, b"--single-process")
+        && (appmain::flag_given(args, b"--single-process")
             || appmain::env_enabled(getenv(c"NS_SINGLE_PROCESS").as_deref()));
     if single_process {
         southstar_renderer_host::single_process_enable();
@@ -695,7 +700,7 @@ pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
     #[cfg(target_os = "macos")]
     macos_anchor_gtk_data();
 
-    let options = appmain::parse(&args);
+    let options = appmain::parse(args);
     for action in &options.actions {
         match action {
             Action::Proxy(proxy) => {

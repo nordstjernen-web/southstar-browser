@@ -6,32 +6,34 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-canvas = { path = "../canvas" }
-southstar-config = { path = "../config" }
-southstar-csp = { path = "../csp" }
-southstar-css = { path = "../css" }
-southstar-dom = { path = "../dom" }
-southstar-forms = { path = "../forms" }
-southstar-glib = { path = "../glib" }
-southstar-html-parser = { path = "../html-parser" }
-southstar-html-util = { path = "../html-util" }
-southstar-js-bind = { path = "../js-bind", default-features = false }
-southstar-js-custom-elements = { path = "../js-custom-elements" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-geometry = { path = "../js-geometry" }
-southstar-js-loader = { path = "../js-loader" }
-southstar-js-mutation = { path = "../js-mutation" }
-southstar-js-perf = { path = "../js-perf" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-services = { path = "../js-services" }
-southstar-js-storage = { path = "../js-storage" }
-southstar-layout = { path = "../layout" }
-southstar-net = { path = "../net" }
-southstar-sandbox = { path = "../sandbox" }
-southstar-url = { path = "../url" }
-southstar-xml = { path = "../xml" }
+southstar-canvas = { path = "../canvas", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-forms = { path = "../forms", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.5-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.5-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.5-dev", default-features = false }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-geometry = { path = "../js-geometry", version = "=1.0.5-dev" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.5-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.5-dev" }
+southstar-js-storage = { path = "../js-storage", version = "=1.0.5-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-xml = { path = "../xml", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

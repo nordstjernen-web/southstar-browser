@@ -6,18 +6,20 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-css = { path = "../css" }
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-collections = { path = "../js-collections" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-events = { path = "../js-events" }
-southstar-js-mutation = { path = "../js-mutation" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-style = { path = "../style" }
-southstar-unicode = { path = "../unicode" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.5-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

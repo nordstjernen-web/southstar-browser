@@ -6,19 +6,21 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom" }
-southstar-glib = { path = "../glib" }
-southstar-js-collections = { path = "../js-collections" }
-southstar-js-document = { path = "../js-document" }
-southstar-js-dom-factory = { path = "../js-dom-factory" }
-southstar-js-engine = { path = "../js-engine", default-features = false }
-southstar-js-events = { path = "../js-events" }
-southstar-js-forms = { path = "../js-forms" }
-southstar-js-mutation = { path = "../js-mutation" }
-southstar-js-reflect = { path = "../js-reflect" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.5-dev" }
+southstar-js-document = { path = "../js-document", version = "=1.0.5-dev" }
+southstar-js-dom-factory = { path = "../js-dom-factory", version = "=1.0.5-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.5-dev" }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.5-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5-dev" }
+southstar-js-reflect = { path = "../js-reflect", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
 
 [lints]
 workspace = true

@@ -6,10 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo" }
-southstar-gtk-ffi = { path = "../gtk-ffi" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
+southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true

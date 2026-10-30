@@ -1,9 +1,12 @@
 # The Boa fork
 
 Southstar's JavaScript engine is [Boa](https://github.com/boa-dev/boa).
-Five of its crates are forked into `third_party/`, each a copy of the
-**0.22.0** release from crates.io patched into the build through
-`[patch.crates-io]` in `Cargo.toml`:
+Six of its crates are forked into `third_party/`, each a copy of the
+**0.22.0** release from crates.io. The forks are published to crates.io as
+`southstar-boa-*` packages at Southstar's version, and keep their library
+names, so `rust/js-engine` depends on `boa_engine = { package =
+"southstar-boa-engine", … }` and the code is unchanged. Each fork records the
+release it copies in `[package.metadata.southstar] upstream-version`:
 
 | Crate | crates.io sha256 |
 | --- | --- |
@@ -11,13 +14,15 @@ Five of its crates are forked into `third_party/`, each a copy of the
 | `boa_parser` | `641e81b3c8cbb7a2140547fb3ea534e9edf210b4e8c920b5fa864a919e11fbcf` |
 | `boa_ast` | `9221b0a090572b4a118b46c5874c0781fe4bc9546b85f0a615b8bfb609ca4ed7` |
 | `boa_gc` | `af82119558ab1002d1978c8459b53a3ebb506177d29a3aca37c07c1777b1d966` |
+| `boa_interner` | `317c631e791f5cb7d0017e43c0a758b0eaffd40c34c4c360e2a6be7752b78cd1` |
 | `boa_string` | `30bf86c2bcff5bf2547acbfc516c5d3108ca527cb131511d749bf6fbef762c0e` |
 
 `boa_engine` carries a small set of embedder hooks; the parser and the AST
 were forked for syntax that 0.22 does not parse, `boa_gc` for the cost of
-its thread-locals on Windows, and `boa_string` for rope strings. `boa_interner` and the other Boa
-crates come unchanged from crates.io at the
-same version, and `rust/js-engine` is the only crate that depends on Boa.
+its thread-locals on Windows, and `boa_string` for rope strings. `boa_interner` is unchanged; it is
+forked only because it depends on `boa_gc` and `boa_string`, and the
+published crates can't patch it. `boa_macros` and the other Boa crates come
+from crates.io at the same version, and `rust/js-engine` is the only crate that depends on Boa.
 
 The aim is a fork whose difference from upstream stays small and readable,
 so a Boa release, and above all a security fix, can be taken by re-applying
@@ -162,12 +167,13 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
 ## Taking an upstream release
 
 1. `python3 scripts/boa-fork-diff.py > boa.patch` on the current fork.
-2. Unpack each new release (`boa_engine`, `boa_parser`, `boa_ast`) over its
+2. Unpack each new release (every forked `boa_*` crate) over its
    directory in `third_party/` (`src/`, `Cargo.toml`, `ABOUT.md`) and apply
    `boa.patch` with `patch -p1 -d third_party`, fixing hunks that no longer
    apply. Drop the rows of the tables that upstream has since taken.
-3. Bump the other `boa_*` crates in `Cargo.lock` to the same version
-   (`cargo update -p boa_gc -p boa_interner …`), update the versions and
+3. Restore each fork's `[package]` name, version and description, set
+   `upstream-version`, bump `boa_macros` in `Cargo.lock` to the same
+   version (`cargo update -p boa_macros`), update the versions and
    checksums at the top of this page, and run `cargo vet` for the new
    crate versions.
 4. Run `scripts/rust-tests.sh`, test262 through `southstar-jsshell`

@@ -6,46 +6,48 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [features]
 libav = []
 
 [dependencies]
-southstar-anim = { path = "../anim" }
-southstar-config = { path = "../config" }
-southstar-css = { path = "../css" }
-southstar-css-media = { path = "../css-media" }
-southstar-debuglog = { path = "../debuglog" }
-southstar-digest = { path = "../digest" }
-southstar-dom = { path = "../dom" }
-southstar-forms = { path = "../forms" }
-southstar-engine = { path = "../engine" }
-southstar-glib = { path = "../glib" }
-southstar-html-parser = { path = "../html-parser" }
-southstar-html-util = { path = "../html-util" }
-southstar-image = { path = "../image" }
-southstar-js-dispatch = { path = "../js-dispatch" }
-southstar-js-focus = { path = "../js-focus" }
-southstar-js-forms = { path = "../js-forms" }
-southstar-js-input = { path = "../js-input" }
-southstar-js-lifecycle = { path = "../js-lifecycle" }
-southstar-js-loader = { path = "../js-loader" }
-southstar-js-media = { path = "../js-media" }
-southstar-js-page = { path = "../js-page" }
-southstar-js-runtime = { path = "../js-runtime", default-features = false }
-southstar-js-top-layer = { path = "../js-top-layer" }
-southstar-js-window = { path = "../js-window" }
-southstar-layout = { path = "../layout" }
-southstar-layout-hit = { path = "../layout-hit" }
-southstar-layout-query = { path = "../layout-query" }
-southstar-net = { path = "../net" }
-southstar-numfmt = { path = "../numfmt" }
-southstar-paint = { path = "../paint" }
-southstar-renderer-client = { path = "../renderer-client" }
-southstar-renderer-host = { path = "../renderer-host" }
-southstar-style = { path = "../style" }
-southstar-url = { path = "../url" }
-southstar-video = { path = "../video" }
+southstar-anim = { path = "../anim", version = "=1.0.5-dev" }
+southstar-config = { path = "../config", version = "=1.0.5-dev" }
+southstar-css = { path = "../css", version = "=1.0.5-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.5-dev" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.5-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.5-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
+southstar-forms = { path = "../forms", version = "=1.0.5-dev" }
+southstar-engine = { path = "../engine", version = "=1.0.5-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.5-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.5-dev" }
+southstar-image = { path = "../image", version = "=1.0.5-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5-dev" }
+southstar-js-focus = { path = "../js-focus", version = "=1.0.5-dev" }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.5-dev" }
+southstar-js-input = { path = "../js-input", version = "=1.0.5-dev" }
+southstar-js-lifecycle = { path = "../js-lifecycle", version = "=1.0.5-dev" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.5-dev" }
+southstar-js-media = { path = "../js-media", version = "=1.0.5-dev" }
+southstar-js-page = { path = "../js-page", version = "=1.0.5-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5-dev", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.5-dev" }
+southstar-js-window = { path = "../js-window", version = "=1.0.5-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.5-dev" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.5-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.5-dev" }
+southstar-net = { path = "../net", version = "=1.0.5-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.5-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.5-dev" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.5-dev" }
+southstar-style = { path = "../style", version = "=1.0.5-dev" }
+southstar-url = { path = "../url", version = "=1.0.5-dev" }
+southstar-video = { path = "../video", version = "=1.0.5-dev" }
 
 [lints]
 workspace = true
