@@ -7,21 +7,14 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
 use core::time::Duration;
 use std::ffi::{CString, OsString};
+use std::io::Write;
 
 use southstar_glib as glib;
 
 const DLOG_JS: c_int = 5;
 
 unsafe extern "C" {
-    fn g_printerr(format: *const c_char, ...);
     fn malloc(size: usize) -> *mut c_void;
-}
-
-fn c_input(bytes: &[u8]) -> Vec<u8> {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    let mut v = bytes[..end].to_vec();
-    v.push(0);
-    v
 }
 
 #[derive(Default)]
@@ -110,12 +103,8 @@ pub fn log_message(text: &CStr) {
 }
 
 pub fn printerr(text: &[u8]) {
-    let text = c_input(text);
-    unsafe { g_printerr(c"%s".as_ptr(), text.as_ptr()) };
-}
-
-pub fn printerr_double(format: &CStr, value: f64) {
-    unsafe { g_printerr(format.as_ptr(), value) };
+    let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
+    let _ = std::io::stderr().write_all(&text[..end]);
 }
 
 fn os_bytes(value: OsString) -> Vec<u8> {
@@ -135,14 +124,7 @@ pub fn env_value(name: &str) -> Option<Vec<u8>> {
 }
 
 pub fn printerr_paint_profile(ms: f64, width: c_int, height: c_int) {
-    unsafe {
-        g_printerr(
-            c"[profile] paint %6.1fms %dx%d\n".as_ptr(),
-            ms,
-            width,
-            height,
-        )
-    };
+    printerr(format!("[profile] paint {ms:6.1}ms {width}x{height}\n").as_bytes());
 }
 
 pub fn env_set(name: &str) -> bool {
@@ -189,6 +171,7 @@ pub fn debug_log_console(line: &CStr) {
 }
 
 pub fn malloc_dup(bytes: &[u8]) -> *mut c_char {
+    // SAFETY: malloc takes a plain size; the C caller owns the result and releases it with free().
     let out = unsafe { malloc(bytes.len() + 1) }.cast::<u8>();
     if out.is_null() {
         return ptr::null_mut();

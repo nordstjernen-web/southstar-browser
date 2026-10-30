@@ -9,7 +9,6 @@ publish.workspace = true
 
 [dependencies]
 southstar-av = { path = "../av", optional = true }
-southstar-glib = { path = "../glib" }
 southstar-raster = { path = "../raster" }
 southstar-texture = { path = "../texture" }
 

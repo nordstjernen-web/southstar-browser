@@ -68,6 +68,40 @@ struct DecoderConfig {
     options: DecoderOptions,
 }
 
+impl DecoderConfig {
+    fn zeroed() -> DecoderConfig {
+        DecoderConfig {
+            input: BitstreamFeatures {
+                width: 0,
+                height: 0,
+                has_alpha: 0,
+                has_animation: 0,
+                format: 0,
+                pad: [0; 5],
+            },
+            output: DecBuffer {
+                colorspace: 0,
+                width: 0,
+                height: 0,
+                is_external_memory: 0,
+                u: BufferUnion {
+                    yuva: YuvaBuffer {
+                        planes: [ptr::null_mut(); 4],
+                        strides: [0; 4],
+                        sizes: [0; 4],
+                    },
+                },
+                pad: [0; 4],
+                private_memory: ptr::null_mut(),
+            },
+            options: DecoderOptions {
+                fields: [0; 14],
+                pad: [0; 5],
+            },
+        }
+    }
+}
+
 #[repr(C)]
 struct AnimDecoderOptions {
     color_mode: c_int,
@@ -122,6 +156,7 @@ unsafe extern "C" {
 
 pub fn info(data: &[u8]) -> Option<(i32, i32)> {
     let (mut width, mut height) = (0, 0);
+    // SAFETY: the pointer and length describe the live `data` slice, which libwebp only reads, and both out-pointers are local integers.
     (unsafe { WebPGetInfo(data.as_ptr(), data.len(), &mut width, &mut height) } != 0)
         .then_some((width, height))
 }
@@ -138,11 +173,11 @@ fn decode_bgra(data: &[u8], out: &mut [u8], stride: usize, mode: c_int) -> bool 
     let Ok(stride) = c_int::try_from(stride) else {
         return false;
     };
-    let mut config = core::mem::MaybeUninit::<DecoderConfig>::zeroed();
-    if unsafe { WebPInitDecoderConfigInternal(config.as_mut_ptr(), DECODER_ABI_VERSION) } == 0 {
+    let mut config = DecoderConfig::zeroed();
+    // SAFETY: `config` is a fully initialised `DecoderConfig` laid out as the header of this ABI version describes it.
+    if unsafe { WebPInitDecoderConfigInternal(&mut config, DECODER_ABI_VERSION) } == 0 {
         return false;
     }
-    let mut config = unsafe { config.assume_init() };
     config.output.colorspace = mode;
     config.output.is_external_memory = 1;
     config.output.u.rgba = RgbaBuffer {
@@ -150,6 +185,7 @@ fn decode_bgra(data: &[u8], out: &mut [u8], stride: usize, mode: c_int) -> bool 
         stride,
         size: out.len(),
     };
+    // SAFETY: `data` is read within its length, and the external output buffer is the live `out` slice whose length libwebp checks against `stride` times the image height before writing.
     unsafe { WebPDecode(data.as_ptr(), data.len(), &mut config) == VP8_STATUS_OK }
 }
 
@@ -160,6 +196,7 @@ pub struct AnimDecoder<'a> {
 
 impl Drop for AnimDecoder<'_> {
     fn drop(&mut self) {
+        // SAFETY: the decoder came from `WebPAnimDecoderNewInternal`, is owned by this value and is deleted only here.
         unsafe { WebPAnimDecoderDelete(self.decoder.as_ptr()) };
     }
 }
@@ -171,6 +208,7 @@ impl<'a> AnimDecoder<'a> {
             use_threads: 0,
             padding: [0; 7],
         };
+        // SAFETY: `options` is an initialised local laid out as the demux header of this ABI version describes it.
         if unsafe { WebPAnimDecoderOptionsInitInternal(&mut options, DEMUX_ABI_VERSION) } == 0 {
             return None;
         }
@@ -179,6 +217,7 @@ impl<'a> AnimDecoder<'a> {
             bytes: data.as_ptr(),
             size: data.len(),
         };
+        // SAFETY: `webp` points at `data`, which the returned decoder borrows for `'a` through `_data`, and `options` is initialised.
         let decoder = unsafe { WebPAnimDecoderNewInternal(&webp, &options, DEMUX_ABI_VERSION) };
         NonNull::new(decoder).map(|decoder| AnimDecoder {
             decoder,
@@ -188,22 +227,29 @@ impl<'a> AnimDecoder<'a> {
 
     pub fn info(&self) -> Option<AnimInfo> {
         let mut info = AnimInfo::default();
+        // SAFETY: the decoder is live while `self` is, and `info` is a local `WebPAnimInfo`.
         (unsafe { WebPAnimDecoderGetInfo(self.decoder.as_ptr(), &mut info) } != 0).then_some(info)
     }
 
     pub fn has_more_frames(&self) -> bool {
+        // SAFETY: the decoder is live while `self` is.
         unsafe { WebPAnimDecoderHasMoreFrames(self.decoder.as_ptr()) != 0 }
     }
 
-    pub fn next_frame(&mut self, canvas_width: u32, canvas_height: u32) -> Option<(&[u8], i32)> {
+    pub fn next_frame(&mut self) -> Option<(&[u8], i32)> {
+        let info = self.info()?;
+        let len = (info.canvas_width as usize)
+            .checked_mul(4)?
+            .checked_mul(info.canvas_height as usize)?;
         let mut buf = ptr::null_mut();
         let mut timestamp = 0;
+        // SAFETY: the decoder is live and exclusively borrowed, and both out-pointers are locals.
         if unsafe { WebPAnimDecoderGetNext(self.decoder.as_ptr(), &mut buf, &mut timestamp) } == 0
             || buf.is_null()
         {
             return None;
         }
-        let len = canvas_width as usize * 4 * canvas_height as usize;
+        // SAFETY: libwebp returns its own BGRA canvas of the `len` bytes the decoder's canvas size gives, which stays valid and unchanged until the next `WebPAnimDecoderGetNext` on this decoder; the `&mut self` borrow keeps the slice from outliving that.
         Some((unsafe { core::slice::from_raw_parts(buf, len) }, timestamp))
     }
 }

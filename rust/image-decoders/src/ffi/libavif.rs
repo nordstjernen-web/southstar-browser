@@ -84,57 +84,76 @@ impl<'a> Decoder<'a> {
         if LAYOUT.is_empty() {
             return None;
         }
+        // SAFETY: `avifDecoderCreate` takes no arguments; the decoder it returns is owned by `Decoder` and destroyed in its `Drop`.
         let raw = NonNull::new(unsafe { avifDecoderCreate() })?;
         let decoder = Decoder {
             raw,
             _data: core::marker::PhantomData,
         };
+        decoder.set(MAX_THREADS, 1);
+        decoder.set(IMAGE_SIZE_LIMIT, limits.max_pixels);
+        decoder.set(IMAGE_DIMENSION_LIMIT, limits.max_dimension);
+        decoder.set(STRICT_FLAGS, STRICT_DISABLED);
         let p = raw.as_ptr();
-        unsafe {
-            MAX_THREADS.set(p, 1);
-            IMAGE_SIZE_LIMIT.set(p, limits.max_pixels);
-            IMAGE_DIMENSION_LIMIT.set(p, limits.max_dimension);
-            STRICT_FLAGS.set(p, STRICT_DISABLED);
-            if avifDecoderSetIOMemory(p, data.as_ptr(), data.len()) != RESULT_OK
-                || avifDecoderParse(p) != RESULT_OK
-                || avifDecoderNextImage(p) != RESULT_OK
-            {
-                return None;
-            }
+        // SAFETY: the decoder reads `data` only while it lives, and `Decoder<'a>` borrows `data` for that long.
+        if unsafe { avifDecoderSetIOMemory(p, data.as_ptr(), data.len()) } != RESULT_OK {
+            return None;
+        }
+        // SAFETY: `p` is a live decoder with its input set.
+        if unsafe { avifDecoderParse(p) } != RESULT_OK {
+            return None;
+        }
+        // SAFETY: `p` is a live decoder that parsed successfully.
+        if unsafe { avifDecoderNextImage(p) } != RESULT_OK {
+            return None;
         }
         Some(decoder)
     }
 
+    fn set<T: Copy>(&self, field: Field<AvifDecoder, T>, value: T) {
+        // SAFETY: the decoder is live while `self` is, and the field's offset and type come from the installed avif.h.
+        unsafe { field.set(self.raw.as_ptr(), value) };
+    }
+
+    fn image(&self) -> Option<NonNull<AvifImage>> {
+        // SAFETY: the decoder is live while `self` is, and the field's offset and type come from the installed avif.h.
+        NonNull::new(unsafe { IMAGE.get(self.raw.as_ptr()) })
+    }
+
+    fn image_field(&self, field: Field<AvifImage, u32>) -> u32 {
+        self.image().map_or(0, |image| {
+            // SAFETY: `image` is the decoder's current image, owned by the live decoder, and the field's offset and type come from the installed avif.h.
+            unsafe { field.get(image.as_ptr()) }
+        })
+    }
+
     pub fn size(&self) -> (u32, u32) {
-        let image = unsafe { IMAGE.get(self.raw.as_ptr()) };
-        if image.is_null() {
-            return (0, 0);
-        }
-        unsafe { (IMAGE_WIDTH.get(image), IMAGE_HEIGHT.get(image)) }
+        (
+            self.image_field(IMAGE_WIDTH),
+            self.image_field(IMAGE_HEIGHT),
+        )
     }
 
     pub fn to_bgra_premultiplied(&self) -> Option<RgbImage> {
-        let image = unsafe { IMAGE.get(self.raw.as_ptr()) };
-        if image.is_null() {
-            return None;
-        }
+        let image = self.image()?.as_ptr();
         let mut rgb = RgbImage {
             storage: vec![0u64; RGB_IMAGE_SIZE.div_ceil(8)],
             allocated: false,
+            height: self.image_field(IMAGE_HEIGHT) as usize,
         };
-        let p = rgb.raw();
-        unsafe {
-            avifRGBImageSetDefaults(p, image);
-            RGB_FORMAT.set(p, RGB_FORMAT_BGRA);
-            RGB_DEPTH.set(p, 8);
-            RGB_ALPHA_PREMULTIPLIED.set(p, 1);
-            if avifRGBImageAllocatePixels(p) != RESULT_OK {
-                return None;
-            }
-            rgb.allocated = true;
-            if avifImageYUVToRGB(image, p) != RESULT_OK {
-                return None;
-            }
+        // SAFETY: the storage is `sizeof(avifRGBImage)` 8-byte-aligned writable bytes and `image` is the decoder's live current image.
+        unsafe { avifRGBImageSetDefaults(rgb.raw(), image) };
+        rgb.set(RGB_FORMAT, RGB_FORMAT_BGRA);
+        rgb.set(RGB_DEPTH, 8);
+        rgb.set(RGB_ALPHA_PREMULTIPLIED, 1);
+        // SAFETY: the storage holds an initialised `avifRGBImage` without pixels; `RgbImage`'s `Drop` frees what this allocates.
+        if unsafe { avifRGBImageAllocatePixels(rgb.raw()) } != RESULT_OK {
+            return None;
+        }
+        rgb.allocated = true;
+        // SAFETY: `image` is the decoder's live current image and the RGB image has pixels allocated for its size.
+        if unsafe { avifImageYUVToRGB(image, rgb.raw()) } != RESULT_OK {
+            return None;
         }
         Some(rgb)
     }
@@ -142,6 +161,7 @@ impl<'a> Decoder<'a> {
 
 impl Drop for Decoder<'_> {
     fn drop(&mut self) {
+        // SAFETY: the decoder came from `avifDecoderCreate`, is owned by this value and is destroyed only here.
         unsafe { avifDecoderDestroy(self.raw.as_ptr()) };
     }
 }
@@ -149,6 +169,7 @@ impl Drop for Decoder<'_> {
 pub struct RgbImage {
     storage: Vec<u64>,
     allocated: bool,
+    height: usize,
 }
 
 impl RgbImage {
@@ -156,20 +177,28 @@ impl RgbImage {
         self.storage.as_mut_ptr().cast()
     }
 
-    fn raw_const(&self) -> *const AvifRgbImage {
-        self.storage.as_ptr().cast()
+    fn set<T: Copy>(&mut self, field: Field<AvifRgbImage, T>, value: T) {
+        let p = self.raw();
+        // SAFETY: the storage spans `sizeof(avifRGBImage)` bytes, and the field's offset and type come from the installed avif.h.
+        unsafe { field.set(p, value) };
+    }
+
+    fn get<T: Copy>(&self, field: Field<AvifRgbImage, T>) -> T {
+        // SAFETY: the storage spans `sizeof(avifRGBImage)` initialised bytes, and the field's offset and type come from the installed avif.h.
+        unsafe { field.get(self.storage.as_ptr().cast()) }
     }
 
     pub fn row_bytes(&self) -> usize {
-        unsafe { RGB_ROW_BYTES.get(self.raw_const()) as usize }
+        self.get(RGB_ROW_BYTES) as usize
     }
 
-    pub fn pixels(&self, height: usize) -> Option<&[u8]> {
-        let pixels = unsafe { RGB_PIXELS.get(self.raw_const()) };
-        let len = self.row_bytes().checked_mul(height)?;
-        if pixels.is_null() {
+    pub fn pixels(&self) -> Option<&[u8]> {
+        let pixels = self.get(RGB_PIXELS);
+        let len = self.row_bytes().checked_mul(self.height)?;
+        if !self.allocated || pixels.is_null() {
             return None;
         }
+        // SAFETY: `avifRGBImageAllocatePixels` allocated `rowBytes * height` bytes at `pixels`, `height` being the image height `avifRGBImageSetDefaults` copied, and they live until `Drop` frees them.
         Some(unsafe { core::slice::from_raw_parts(pixels, len) })
     }
 }
@@ -178,6 +207,7 @@ impl Drop for RgbImage {
     fn drop(&mut self) {
         if self.allocated {
             let p = self.raw();
+            // SAFETY: the pixels were allocated by `avifRGBImageAllocatePixels` and are freed only here.
             unsafe { avifRGBImageFreePixels(p) };
         }
     }

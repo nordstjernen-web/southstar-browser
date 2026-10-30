@@ -269,7 +269,7 @@ fn webp_animation_first_frame(data: &[u8]) -> Option<Pixels> {
     if !webp_canvas_ok(info.canvas_width, info.canvas_height) || !decoder.has_more_frames() {
         return None;
     }
-    let (frame, _) = decoder.next_frame(info.canvas_width, info.canvas_height)?;
+    let (frame, _) = decoder.next_frame()?;
     let stride = info.canvas_width as usize * 4;
     let mut buffer = Buffer::try_new(stride * info.canvas_height as usize)?;
     buffer.copy_from_slice(frame);
@@ -318,7 +318,7 @@ pub fn decode_avif(data: &[u8]) -> Option<Pixels> {
     if stride < w as usize * 4 {
         return None;
     }
-    let pixels = rgb.pixels(h as usize)?;
+    let pixels = rgb.pixels()?;
     let mut buffer = Buffer::try_new(pixels.len())?;
     buffer.copy_from_slice(pixels);
     Some(Pixels {
@@ -356,7 +356,7 @@ pub fn decode_webp_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
     let mut prev_ts = 0;
     let mut total = 0usize;
     while decoder.has_more_frames() {
-        let (frame, ts) = decoder.next_frame(info.canvas_width, info.canvas_height)?;
+        let (frame, ts) = decoder.next_frame()?;
         if total + size > WEBP_MAX_TOTAL_BYTES {
             break;
         }

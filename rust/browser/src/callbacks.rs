@@ -156,7 +156,7 @@ pub fn js_audio(b: &NsBrowser, command: &CStr) {
 
 pub fn media_seek(b: Option<&NsBrowser>, node: Node<'_>, seconds: f64) -> bool {
     if ffi::env_set("NS_DBG_AUDIO") {
-        ffi::printerr_double(c"[media-seek] to=%.3f\n", seconds);
+        ffi::printerr(format!("[media-seek] to={seconds:.3}\n").as_bytes());
     }
     let Some(videos) = b.and_then(NsBrowser::videos) else {
         return false;
