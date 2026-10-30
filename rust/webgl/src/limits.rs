@@ -47,7 +47,7 @@ struct Store {
     skip_images: usize,
 }
 
-fn store(version: i32, pack: bool) -> Store {
+fn store(extended: bool, pack: bool, volume: bool) -> Store {
     let read = |pname: u32| gl::get_integer(pname).max(0) as usize;
     let mut s = Store {
         align: gl::get_integer(if pack {
@@ -62,7 +62,7 @@ fn store(version: i32, pack: bool) -> Store {
         image_height: 0,
         skip_images: 0,
     };
-    if version >= 2 {
+    if extended {
         s.row_length = read(if pack {
             PACK_ROW_LENGTH
         } else {
@@ -78,7 +78,7 @@ fn store(version: i32, pack: bool) -> Store {
         } else {
             UNPACK_SKIP_PIXELS
         });
-        if !pack {
+        if !pack && volume {
             s.image_height = read(UNPACK_IMAGE_HEIGHT);
             s.skip_images = read(UNPACK_SKIP_IMAGES);
         }
@@ -98,7 +98,23 @@ pub(crate) fn transfer_bytes(
         return 0;
     }
     let pix = pixel_bytes(format, kind);
-    let s = store(version, pack);
+    let s = store(version >= 2, pack, true);
+    transfer_span(&s, (w as usize, h as usize, depth as usize), pix).unwrap_or(usize::MAX)
+}
+
+pub(crate) fn gl_transfer_bytes(
+    size: (i32, i32, i32),
+    pixel: (u32, u32),
+    pack: bool,
+    volume: bool,
+) -> usize {
+    let (w, h, depth) = size;
+    if w <= 0 || h <= 0 || depth <= 0 {
+        return 0;
+    }
+    let pix = pixel_bytes(pixel.0, pixel.1);
+    let extended = gl::is_desktop_gl() || gl::gl_version() >= 30;
+    let s = store(extended, pack, volume);
     transfer_span(&s, (w as usize, h as usize, depth as usize), pix).unwrap_or(usize::MAX)
 }
 
