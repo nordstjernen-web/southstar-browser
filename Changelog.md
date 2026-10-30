@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: the tab view runs on safe `southstar-gtk` wrappers. Drawing,
+  cursors, scrolling and pointer, keyboard, IME and file-drop input go
+  through typed event controllers, a Rust-closure snapshot area, memory
+  textures and adjustments; the `southstar-audio`/`southstar-video`
+  helpers are `std::process` children whose output a reader thread hands
+  to the main loop, their shared-memory frame ring and audio clock are
+  read through a safe `southstar-media-shm` API, and the tab worker is a
+  std thread. The shell's unsafe count drops from 727 to 494.
 * Internals: `rust/webcrypto`'s OpenSSL layer owns every PKCS#8, ECDSA
   signature, MAC/KDF, BIGNUM and OSSL_PARAM builder handle through an RAII
   wrapper, builds OSSL_PARAM arrays in Rust, declares OpenSSL's argument-free
