@@ -1,53 +1,24 @@
-//! Southstar — the monotonic clock the shell also reads, named shared memory, file sizes and the Linux sandbox.
+//! Southstar — the monotonic clock the shell also reads, file sizes and the Linux sandbox.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_void};
-use core::ptr;
+#[cfg(target_os = "linux")]
 use std::ffi::CString;
 
 #[cfg(windows)]
 mod sys {
-    use super::*;
-
-    pub const INVALID_HANDLE_VALUE: *mut c_void = -1isize as *mut c_void;
-    pub const PAGE_READWRITE: u32 = 0x04;
-    pub const FILE_MAP_ALL_ACCESS: u32 = 0x000f_001f;
+    use core::ffi::c_int;
 
     unsafe extern "system" {
         pub fn QueryPerformanceCounter(count: *mut i64) -> c_int;
         pub fn QueryPerformanceFrequency(frequency: *mut i64) -> c_int;
-        pub fn CreateFileMappingA(
-            file: *mut c_void,
-            attributes: *mut c_void,
-            protect: u32,
-            size_high: u32,
-            size_low: u32,
-            name: *const c_char,
-        ) -> *mut c_void;
-        pub fn MapViewOfFile(
-            mapping: *mut c_void,
-            access: u32,
-            offset_high: u32,
-            offset_low: u32,
-            bytes: usize,
-        ) -> *mut c_void;
-        pub fn UnmapViewOfFile(base: *const c_void) -> c_int;
-        pub fn CloseHandle(handle: *mut c_void) -> c_int;
     }
 }
 
 #[cfg(unix)]
 mod sys {
-    use super::*;
+    use core::ffi::c_int;
 
-    pub const O_RDWR: c_int = 2;
-    #[cfg(target_os = "linux")]
-    pub const CREATE_EXCLUSIVE: c_int = 0x40 | 0x80;
-    #[cfg(not(target_os = "linux"))]
-    pub const CREATE_EXCLUSIVE: c_int = 0x200 | 0x800;
-    pub const PROT_READ_WRITE: c_int = 3;
-    pub const MAP_SHARED: c_int = 1;
     #[cfg(target_os = "linux")]
     pub const CLOCK_MONOTONIC: c_int = 1;
     #[cfg(target_vendor = "apple")]
@@ -65,28 +36,6 @@ mod sys {
 
     unsafe extern "C" {
         pub fn clock_gettime(clock: c_int, ts: *mut Timespec) -> c_int;
-        pub fn shm_open(name: *const c_char, oflag: c_int, ...) -> c_int;
-        pub fn shm_unlink(name: *const c_char) -> c_int;
-        #[cfg(not(all(target_os = "linux", target_env = "gnu", target_pointer_width = "32")))]
-        pub fn mmap(
-            addr: *mut c_void,
-            len: usize,
-            prot: c_int,
-            flags: c_int,
-            fd: c_int,
-            offset: i64,
-        ) -> *mut c_void;
-        #[cfg(all(target_os = "linux", target_env = "gnu", target_pointer_width = "32"))]
-        #[link_name = "mmap64"]
-        pub fn mmap(
-            addr: *mut c_void,
-            len: usize,
-            prot: c_int,
-            flags: c_int,
-            fd: c_int,
-            offset: i64,
-        ) -> *mut c_void;
-        pub fn munmap(addr: *mut c_void, len: usize) -> c_int;
     }
 }
 
@@ -94,10 +43,10 @@ mod sys {
 pub fn now_us() -> i64 {
     let mut count = 0i64;
     let mut frequency = 0i64;
-    unsafe {
-        sys::QueryPerformanceCounter(&mut count);
-        sys::QueryPerformanceFrequency(&mut frequency);
-    }
+    // SAFETY: count is a writable i64 the call only fills.
+    unsafe { sys::QueryPerformanceCounter(&mut count) };
+    // SAFETY: frequency is a writable i64 the call only fills.
+    unsafe { sys::QueryPerformanceFrequency(&mut frequency) };
     if frequency <= 0 {
         return 0;
     }
@@ -110,6 +59,7 @@ pub fn now_us() -> i64 {
         tv_sec: 0,
         tv_nsec: 0,
     };
+    // SAFETY: ts is a writable timespec the call only fills.
     unsafe { sys::clock_gettime(sys::CLOCK_MONOTONIC, &mut ts) };
     ts.tv_sec * 1_000_000 + ts.tv_nsec / 1000
 }
@@ -120,117 +70,6 @@ pub fn file_size(path: &[u8]) -> i64 {
     #[cfg(not(unix))]
     let path = String::from_utf8_lossy(path).into_owned();
     std::fs::metadata(path).map_or(-1, |meta| meta.len() as i64)
-}
-
-pub struct SharedMemory {
-    base: *mut u8,
-    name: CString,
-    #[cfg(windows)]
-    handle: *mut c_void,
-    #[cfg(unix)]
-    bytes: usize,
-    #[cfg(unix)]
-    _file: std::fs::File,
-}
-
-unsafe impl Send for SharedMemory {}
-
-impl SharedMemory {
-    #[cfg(windows)]
-    pub fn create(name: &str, bytes: usize) -> Option<SharedMemory> {
-        let name = CString::new(name).ok()?;
-        let handle = unsafe {
-            sys::CreateFileMappingA(
-                sys::INVALID_HANDLE_VALUE,
-                ptr::null_mut(),
-                sys::PAGE_READWRITE,
-                (bytes as u64 >> 32) as u32,
-                (bytes as u64 & 0xffff_ffff) as u32,
-                name.as_ptr(),
-            )
-        };
-        if handle.is_null() {
-            return None;
-        }
-        let base = unsafe { sys::MapViewOfFile(handle, sys::FILE_MAP_ALL_ACCESS, 0, 0, bytes) };
-        if base.is_null() {
-            unsafe { sys::CloseHandle(handle) };
-            return None;
-        }
-        Some(SharedMemory {
-            base: base.cast(),
-            name,
-            handle,
-        })
-    }
-
-    #[cfg(unix)]
-    pub fn create(name: &str, bytes: usize) -> Option<SharedMemory> {
-        use std::os::fd::{AsRawFd, FromRawFd};
-        let name = CString::new(name).ok()?;
-        let fd = unsafe {
-            sys::shm_open(
-                name.as_ptr(),
-                sys::CREATE_EXCLUSIVE | sys::O_RDWR,
-                0o600 as core::ffi::c_uint,
-            )
-        };
-        if fd < 0 {
-            return None;
-        }
-        let file = unsafe { std::fs::File::from_raw_fd(fd) };
-        let unlink = || unsafe { sys::shm_unlink(name.as_ptr()) };
-        if file.set_len(bytes as u64).is_err() {
-            unlink();
-            return None;
-        }
-        let base = unsafe {
-            sys::mmap(
-                ptr::null_mut(),
-                bytes,
-                sys::PROT_READ_WRITE,
-                sys::MAP_SHARED,
-                file.as_raw_fd(),
-                0,
-            )
-        };
-        if base as isize == -1 {
-            unlink();
-            return None;
-        }
-        Some(SharedMemory {
-            base: base.cast(),
-            name,
-            bytes,
-            _file: file,
-        })
-    }
-
-    pub fn base(&self) -> *mut u8 {
-        self.base
-    }
-
-    pub fn name(&self) -> &str {
-        self.name.to_str().unwrap_or_default()
-    }
-}
-
-impl Drop for SharedMemory {
-    #[cfg(windows)]
-    fn drop(&mut self) {
-        unsafe {
-            sys::UnmapViewOfFile(self.base.cast());
-            sys::CloseHandle(self.handle);
-        }
-    }
-
-    #[cfg(unix)]
-    fn drop(&mut self) {
-        unsafe {
-            sys::munmap(self.base.cast(), self.bytes);
-            sys::shm_unlink(self.name.as_ptr());
-        }
-    }
 }
 
 #[cfg(target_os = "linux")]

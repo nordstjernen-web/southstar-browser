@@ -2,30 +2,28 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr;
 use core::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 use southstar_media_shm::{
-    MEDIA_CLOCK_PLAYING, MEDIA_CLOCK_USED, VIDEO_RING_MAGIC, VIDEO_RING_SLOTS, VIDEO_RING_VERSION,
-    VideoRingHdr, VideoRingSlot,
+    ClockSample, Geometry, MEDIA_CLOCK_PLAYING, MEDIA_CLOCK_USED, SharedMemory, VIDEO_RING_SLOTS,
+    VideoRing, VideoRingHdr,
 };
 
 use super::decoder::Decoder;
-use super::os::{self, SharedMemory};
+use super::os;
 
 const HEADER_BYTES: usize = core::mem::size_of::<VideoRingHdr>();
 
 static NEXT_NAME: AtomicU32 = AtomicU32::new(0);
 
 pub struct Ring {
-    memory: SharedMemory,
+    view: RingView,
+    name: String,
 }
 
-#[derive(Clone, Copy)]
-pub struct RingView(*mut VideoRingHdr);
-
-unsafe impl Send for RingView {}
-unsafe impl Sync for RingView {}
+#[derive(Clone)]
+pub struct RingView(Arc<SharedMemory>);
 
 impl Ring {
     pub fn create(width: u32, height: u32) -> Option<Ring> {
@@ -37,104 +35,73 @@ impl Ring {
             std::process::id(),
             NEXT_NAME.fetch_add(1, Ordering::Relaxed) + 1
         );
-        let memory = SharedMemory::create(&name, total)?;
-        let hdr = memory.base().cast::<VideoRingHdr>();
-        unsafe {
-            ptr::write_bytes(hdr.cast::<u8>(), 0, HEADER_BYTES);
-            (&raw mut (*hdr).magic).write(VIDEO_RING_MAGIC);
-            (&raw mut (*hdr).version).write(VIDEO_RING_VERSION);
-            (&raw mut (*hdr).width).write(width);
-            (&raw mut (*hdr).height).write(height);
-            (&raw mut (*hdr).stride).write(stride);
-            (&raw mut (*hdr).nslots).write(VIDEO_RING_SLOTS);
-            (&raw mut (*hdr).frame_bytes).write(frame_bytes);
-            (*hdr).generation.store(1, Ordering::Release);
-        }
-        Some(Ring { memory })
+        let memory = SharedMemory::create(name.as_bytes(), total)?;
+        memory.video_ring()?.initialize(Geometry {
+            width,
+            height,
+            stride,
+            frame_bytes,
+        });
+        Some(Ring {
+            view: RingView(Arc::new(memory)),
+            name,
+        })
     }
 
     pub fn view(&self) -> RingView {
-        RingView(self.memory.base().cast())
+        self.view.clone()
     }
 
     pub fn name(&self) -> &str {
-        self.memory.name()
+        &self.name
     }
 }
 
 impl RingView {
-    fn published_counter(&self) -> &AtomicU32 {
-        unsafe { &(*self.0).published }
-    }
-
-    fn released_counter(&self) -> &AtomicU32 {
-        unsafe { &(*self.0).released }
-    }
-
-    fn generation(&self) -> &AtomicU32 {
-        unsafe { &(*self.0).generation }
-    }
-
-    fn clock_sequence(&self) -> &AtomicU32 {
-        unsafe { &(*self.0).clock_sequence }
-    }
-
-    fn slot(&self, index: usize) -> *mut VideoRingSlot {
-        unsafe {
-            (&raw mut (*self.0).slots)
-                .cast::<VideoRingSlot>()
-                .add(index)
-        }
+    fn ring(&self) -> VideoRing<'_> {
+        self.0
+            .video_ring()
+            .expect("a created ring holds its header")
     }
 
     pub fn width(&self) -> u32 {
-        unsafe { (&raw const (*self.0).width).read_volatile() }
+        self.ring().geometry().width
     }
 
     pub fn height(&self) -> u32 {
-        unsafe { (&raw const (*self.0).height).read_volatile() }
+        self.ring().geometry().height
     }
 
     pub fn stride(&self) -> u32 {
-        unsafe { (&raw const (*self.0).stride).read_volatile() }
-    }
-
-    fn nslots(&self) -> u32 {
-        unsafe { (&raw const (*self.0).nslots).read_volatile() }
-    }
-
-    fn frame_bytes(&self) -> u32 {
-        unsafe { (&raw const (*self.0).frame_bytes).read_volatile() }
+        self.ring().geometry().stride
     }
 
     pub fn published(&self) -> u32 {
-        self.published_counter().load(Ordering::Acquire)
+        self.ring().published().load(Ordering::Acquire)
     }
 
     pub fn released(&self) -> u32 {
-        self.released_counter().load(Ordering::Acquire)
+        self.ring().released().load(Ordering::Acquire)
     }
 
     pub fn store_clock(&self, position: f64, playing: bool) {
-        let clock_sequence = self.clock_sequence();
-        let mut sequence = clock_sequence.load(Ordering::Relaxed);
-        if sequence & 1 != 0 {
-            sequence = sequence.wrapping_add(1);
-        }
-        clock_sequence.store(sequence.wrapping_add(1), Ordering::Release);
         let flags = MEDIA_CLOCK_USED | if playing { MEDIA_CLOCK_PLAYING } else { 0 };
-        unsafe {
-            (&raw mut (*self.0).clock_flags).write_volatile(flags);
-            (&raw mut (*self.0).clock_monotonic_us).write_volatile(os::now_us());
-            (&raw mut (*self.0).clock_position).write_volatile(position);
-        }
-        clock_sequence.store(sequence.wrapping_add(2), Ordering::Release);
+        self.ring().store_clock(ClockSample {
+            flags,
+            monotonic_us: os::now_us(),
+            position,
+        });
     }
 
     pub fn reset(&self) {
+        let ring = self.ring();
         let published = self.published();
-        self.released_counter().store(published, Ordering::Release);
-        self.generation().fetch_add(1, Ordering::AcqRel);
+        ring.released().store(published, Ordering::Release);
+        ring.generation().fetch_add(1, Ordering::AcqRel);
+    }
+
+    fn nslots(&self) -> u32 {
+        self.ring().nslots().clamp(1, VIDEO_RING_SLOTS)
     }
 
     pub fn has_space(&self) -> bool {
@@ -145,30 +112,27 @@ impl RingView {
         if !self.has_space() {
             return false;
         }
-        let sequence = self
-            .published_counter()
-            .load(Ordering::Relaxed)
-            .wrapping_add(1);
-        let index = (sequence.wrapping_sub(1) % self.nslots()) as usize;
-        if !decoder.prepare_scaler(self.width(), self.height()) {
+        let ring = self.ring();
+        let sequence = ring.published().load(Ordering::Relaxed).wrapping_add(1);
+        let index = sequence.wrapping_sub(1) % self.nslots();
+        let geometry = ring.geometry();
+        if !decoder.prepare_scaler(geometry.width, geometry.height) {
             return false;
         }
-        let meta = self.slot(index);
-        let meta_sequence = unsafe { &(*meta).sequence };
-        let pixels = unsafe {
-            self.0
-                .cast::<u8>()
-                .add(HEADER_BYTES + index * self.frame_bytes() as usize)
+        let Some(pixels) = ring.frame(index, geometry) else {
+            return false;
         };
-        meta_sequence.store(0, Ordering::Release);
-        unsafe {
-            decoder.scale_into(pixels, self.stride());
-            (&raw mut (*meta).generation).write_volatile(self.generation().load(Ordering::Acquire));
-            (&raw mut (*meta).pts).write_volatile(pts);
-            (&raw mut (*meta).duration).write_volatile(duration);
-        }
-        meta_sequence.store(sequence, Ordering::Release);
-        self.published_counter().store(sequence, Ordering::Release);
+        let slot_sequence = ring.slot_sequence(index);
+        slot_sequence.store(0, Ordering::Release);
+        decoder.scale_into(&pixels);
+        ring.write_slot(
+            index,
+            ring.generation().load(Ordering::Acquire),
+            pts,
+            duration,
+        );
+        slot_sequence.store(sequence, Ordering::Release);
+        ring.published().store(sequence, Ordering::Release);
         true
     }
 }

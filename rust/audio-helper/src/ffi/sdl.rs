@@ -1,4 +1,4 @@
-//! Southstar — the SDL2 audio device, audio streams and tick counter the helper uses, declared by hand.
+//! Southstar — the SDL2 audio device and audio streams the helper uses, declared by hand.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -36,7 +36,6 @@ unsafe extern "C" {
     fn SDL_SetMainReady();
     fn SDL_Init(flags: u32) -> c_int;
     fn SDL_Quit();
-    fn SDL_GetTicks() -> u32;
     fn SDL_OpenAudioDevice(
         device: *const c_char,
         iscapture: c_int,
@@ -62,22 +61,22 @@ unsafe extern "C" {
 }
 
 pub fn init_audio() -> bool {
+    // SAFETY: tells SDL that main() is the program's own entry point; no arguments.
     unsafe { SDL_SetMainReady() };
+    // SAFETY: initializes SDL's audio subsystem once, from the main thread, before any other SDL call.
     unsafe { SDL_Init(SDL_INIT_AUDIO) == 0 }
 }
 
 pub fn quit() {
+    // SAFETY: shuts SDL down after the device and streams were dropped.
     unsafe { SDL_Quit() };
 }
 
-pub fn ticks() -> u32 {
-    unsafe { SDL_GetTicks() }
-}
-
 unsafe extern "C" fn mix(_user: *mut c_void, stream: *mut u8, len: c_int) {
-    let len = len.max(0) as usize;
-    unsafe { ptr::write_bytes(stream, 0, len) };
-    let out = unsafe { core::slice::from_raw_parts_mut(stream.cast::<f32>(), len / 4) };
+    let samples = len.max(0) as usize / size_of::<f32>();
+    // SAFETY: SDL hands the callback its aligned float output buffer of len bytes, exclusively for the call.
+    let out = unsafe { core::slice::from_raw_parts_mut(stream.cast::<f32>(), samples) };
+    out.fill(0.0);
     crate::mixer::lock().mix(out);
 }
 
@@ -97,10 +96,12 @@ impl Device {
             userdata: ptr::null_mut(),
         };
         let mut have = AudioSpec { ..want };
+        // SAFETY: want and have are live AudioSpecs; the callback is a static function that only touches the mixer behind its lock.
         let id = unsafe { SDL_OpenAudioDevice(ptr::null(), 0, &want, &mut have, 0) };
         if id == 0 {
             return None;
         }
+        // SAFETY: id is the device SDL_OpenAudioDevice just opened.
         unsafe { SDL_PauseAudioDevice(id, 0) };
         Some(Device(id))
     }
@@ -108,6 +109,7 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
+        // SAFETY: self.0 is an open device, closed exactly once.
         unsafe { SDL_CloseAudioDevice(self.0) };
     }
 }
@@ -116,6 +118,7 @@ pub struct AudioStream(*mut SdlAudioStream);
 
 impl AudioStream {
     pub fn to_stereo(channels: c_int, rate: c_int, device_rate: c_int) -> Option<AudioStream> {
+        // SAFETY: plain values in; the result is null or a new stream this value owns.
         let stream = unsafe {
             SDL_NewAudioStream(
                 AUDIO_F32SYS,
@@ -133,14 +136,17 @@ impl AudioStream {
         let Ok(bytes) = c_int::try_from(core::mem::size_of_val(samples)) else {
             return false;
         };
+        // SAFETY: self.0 is a live stream and samples holds bytes readable bytes, which SDL copies.
         unsafe { SDL_AudioStreamPut(self.0, samples.as_ptr().cast(), bytes) >= 0 }
     }
 
     pub fn flush(&mut self) {
+        // SAFETY: self.0 is a live stream.
         unsafe { SDL_AudioStreamFlush(self.0) };
     }
 
     pub fn available(&self) -> c_int {
+        // SAFETY: self.0 is a live stream.
         unsafe { SDL_AudioStreamAvailable(self.0) }
     }
 
@@ -152,6 +158,7 @@ impl AudioStream {
         if want < FRAME_BYTES {
             return 0;
         }
+        // SAFETY: self.0 is a live stream and out has room for want bytes, want being at most its size.
         let got = unsafe { SDL_AudioStreamGet(self.0, out.as_mut_ptr().cast(), want) };
         (got.max(0) / FRAME_BYTES) as usize
     }
@@ -162,6 +169,7 @@ impl AudioStream {
             return None;
         }
         let mut buf = vec![0f32; (avail as usize).div_ceil(4)];
+        // SAFETY: self.0 is a live stream and buf has room for avail bytes.
         let got = unsafe { SDL_AudioStreamGet(self.0, buf.as_mut_ptr().cast(), avail) };
         if got <= 0 {
             return None;
@@ -173,6 +181,7 @@ impl AudioStream {
 
 impl Drop for AudioStream {
     fn drop(&mut self) {
+        // SAFETY: self.0 is the stream SDL_NewAudioStream returned, freed exactly once.
         unsafe { SDL_FreeAudioStream(self.0) };
     }
 }
