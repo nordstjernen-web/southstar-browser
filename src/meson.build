@@ -56,7 +56,7 @@ southstar_c_deps += [libpsl]
 
 southstar_c_deps += http_backend_deps
 
-# macOS WebGL: src/glctx.c creates the offscreen GL context through CGL, whose
+# macOS WebGL: rust/glctx creates the offscreen GL context through CGL, whose
 # symbols live in the OpenGL framework. Unused targets drop it via
 # -dead_strip_dylibs.
 if host_machine.system() == 'darwin'
@@ -64,11 +64,9 @@ if host_machine.system() == 'darwin'
 endif
 
 sdl2_dep = dependency('sdl2', required: get_option('audio'))
-ns_lib_c_args = []
 ns_sdl_deps = []
 if sdl2_dep.found()
   ns_sdl_deps += [sdl2_dep]
-  ns_lib_c_args += ['-DNS_HAVE_SDL']
 endif
 
 southstar_deps = [southstar_rust_dep] + southstar_c_deps
@@ -148,7 +146,6 @@ libsouthstar_lib = library(
   'southstar',
   southstar_embed_sources,
   dependencies: southstar_deps + ns_sdl_deps,
-  c_args: ns_lib_c_args,
   link_whole: southstar_rust_lib,
   link_args: southstar_link_args + libsouthstar_api_link_args,
   link_depends: libsouthstar_map,

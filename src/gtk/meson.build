@@ -25,7 +25,6 @@ executable(
     southstar_icon_resources +
     southstar_win_resources,
   dependencies: southstar_gtk_deps,
-  c_args: ['-DNS_HAVE_GTK=1'],
   win_subsystem: southstar_win_subsystem,
   link_args: southstar_exe_link_args + southstar_gtk_platform_link_args,
   install: true,
