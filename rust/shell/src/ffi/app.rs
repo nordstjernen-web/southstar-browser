@@ -2,14 +2,17 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_void};
-use core::ptr;
+use core::ffi::{CStr, c_int};
 use core::sync::atomic::{AtomicI32, Ordering};
 use std::ffi::CString;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use southstar_gtk::{Application, CssProvider, Display};
 use southstar_gtk_ffi as gtk;
 
-use super::gtk::{borrowed, build_filename, connect, file_test, handler, take_gstring, tr};
+use super::appmain::{dirname, self_exe_str, setenv};
+use super::gtk::{build_filename, cstring, tr};
 use super::procview_media::ns_proc_video_helper_available;
 use super::window;
 use crate::window as rules;
@@ -42,110 +45,133 @@ struct Context {
     private_mode: bool,
 }
 
-unsafe extern "C" fn on_activate(app: *mut c_void, data: *mut c_void) {
-    unsafe {
-        let ctx = &*data.cast::<Context>();
-        gtk::setlocale(LC_NUMERIC, c"C".as_ptr());
-        window::install_icon_search_paths();
-        super::icons::install_window_icon(c"southstar");
-        #[cfg(target_os = "macos")]
-        super::macos_dock::set_dock_icon();
-        window::install_chrome_css();
-        let pw = window::proc_window_new(app, initial_size());
-        *pw.session_path.borrow_mut() = ctx.session_path.clone();
-        pw.present();
-        pw.apply_scheme();
-
-        let mut opened = false;
-        if ctx.recover
-            && let Some(path) = &ctx.session_path
-        {
-            let mut contents: *mut c_char = ptr::null_mut();
-            if gtk::g_file_get_contents(
-                path.as_ptr(),
-                &mut contents,
-                ptr::null_mut(),
-                ptr::null_mut(),
-            ) != 0
-                && let Some(contents) = take_gstring(contents)
-            {
-                for line in contents.to_bytes().split(|&c| c == b'\n') {
-                    if rules::session_url_recoverable(line) {
-                        let url = super::gtk::cstring(line);
-                        pw.add_tab(&url, !opened);
-                        opened = true;
-                    }
-                }
-            }
-            if opened {
-                pw.status(tr(
-                    c"Recovered the previous session after an unexpected exit",
-                ));
-            }
-        }
-        if !opened {
-            let url = ctx.url.as_deref().unwrap_or(c"about:start");
-            pw.add_tab_full(url, true, ctx.private_mode);
-        }
-        if pw.session_path.borrow().is_some() {
-            pw.session_timer.set(gtk::g_timeout_add_seconds(
-                4,
-                window::write_session,
-                pw.as_data(),
-            ));
-        }
+fn install_icon_search_paths() {
+    let Some(theme) = Display::default_display().and_then(|d| d.icon_theme()) else {
+        return;
+    };
+    theme.add_resource_path(c"/org/southstar/WebBrowser/icons");
+    let Some(dir) = self_exe_str().and_then(dirname) else {
+        return;
+    };
+    for rel in rules::ICON_SEARCH_PATHS {
+        theme.add_search_path(&build_filename(&[&dir, rel]));
     }
 }
 
-fn mtime_seconds(path: &CStr) -> Option<i64> {
-    #[cfg(unix)]
-    let path = {
-        use std::os::unix::ffi::OsStrExt;
-        std::path::Path::new(std::ffi::OsStr::from_bytes(path.to_bytes()))
+fn install_chrome_css() {
+    let Some(display) = Display::default_display() else {
+        return;
     };
-    #[cfg(not(unix))]
-    let path = std::path::Path::new(path.to_str().ok()?);
+    let provider = CssProvider::new();
+    provider.load_from_string(&cstring(crate::chrome::CHROME_CSS));
+    display.add_style_provider(
+        &provider,
+        southstar_gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+}
+
+fn use_c_numeric_locale() {
+    // SAFETY: the category is LC_NUMERIC and the locale a NUL-terminated literal; this runs on the main thread before any window exists.
+    unsafe { gtk::setlocale(LC_NUMERIC, c"C".as_ptr()) };
+}
+
+fn recovered_session(path: &CStr) -> Vec<CString> {
+    let Some(contents) = southstar_glib::file_get_contents(path.to_bytes()) else {
+        return Vec::new();
+    };
+    let text = contents.split(|&c| c == 0).next().unwrap_or_default();
+    text.split(|&c| c == b'\n')
+        .filter(|line| rules::session_url_recoverable(line))
+        .map(cstring)
+        .collect()
+}
+
+fn on_activate(ctx: &Context, app: &Application) {
+    use_c_numeric_locale();
+    install_icon_search_paths();
+    super::icons::install_window_icon(c"southstar");
+    #[cfg(target_os = "macos")]
+    super::macos_dock::set_dock_icon();
+    install_chrome_css();
+    // SAFETY: app is the live application emitting activate; the window it builds registers with it.
+    let pw = unsafe { window::proc_window_new(app.as_ptr(), initial_size()) };
+    *pw.session_path.borrow_mut() = ctx.session_path.clone();
+    pw.present();
+    pw.apply_scheme();
+
+    let mut opened = false;
+    if ctx.recover
+        && let Some(path) = &ctx.session_path
+    {
+        for url in recovered_session(path) {
+            pw.add_tab(&url, !opened);
+            opened = true;
+        }
+        if opened {
+            pw.status(tr(
+                c"Recovered the previous session after an unexpected exit",
+            ));
+        }
+    }
+    if !opened {
+        let url = ctx.url.as_deref().unwrap_or(c"about:start");
+        pw.add_tab_full(url, true, ctx.private_mode);
+    }
+    if pw.session_path.borrow().is_some() {
+        // SAFETY: write_session reads its data as the ProcWindow, which lives until the window is destroyed and removes this timer first.
+        let timer = unsafe { gtk::g_timeout_add_seconds(4, window::write_session, pw.as_data()) };
+        pw.session_timer.set(timer);
+    }
+}
+
+fn mtime_seconds(path: &Path) -> Option<i64> {
     let modified = std::fs::symlink_metadata(path).ok()?.modified().ok()?;
-    Some(match modified.duration_since(std::time::UNIX_EPOCH) {
+    Some(match modified.duration_since(UNIX_EPOCH) {
         Ok(d) => d.as_secs() as i64,
         Err(e) => -(e.duration().as_secs_f64().ceil() as i64),
     })
 }
 
+fn now_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
+}
+
 fn clear_cache_dir(name: &CStr, min_age_s: i64) {
-    let cache = CString::new(southstar_glib::user_cache_dir()).unwrap_or_default();
-    let dir = build_filename(&[&cache, c"southstar", name]);
-    let cutoff = unsafe { gtk::g_get_real_time() } / 1_000_000 - min_age_s;
-    let mut stack: Vec<CString> = vec![dir];
-    let mut dirs: Vec<CString> = Vec::new();
+    let Some(cache) = southstar_glib::path_from_bytes(&southstar_glib::user_cache_dir()) else {
+        return;
+    };
+    let Some(name) = southstar_glib::path_from_bytes(name.to_bytes()) else {
+        return;
+    };
+    let dir = cache.join("southstar").join(name);
+    let cutoff = now_seconds() - min_age_s;
+    let mut stack: Vec<PathBuf> = vec![dir];
+    let mut dirs: Vec<PathBuf> = Vec::new();
     let mut guard = 0;
     while !stack.is_empty() && guard < rules::CACHE_WALK_LIMIT {
         guard += 1;
         let Some(d) = stack.pop() else {
             break;
         };
-        unsafe {
-            let gd = gtk::g_dir_open(d.as_ptr(), 0, ptr::null_mut());
-            if !gd.is_null() {
-                while let Some(entry) = borrowed(gtk::g_dir_read_name(gd)) {
-                    let child = build_filename(&[&d, entry]);
-                    if file_test(&child, gtk::FILE_TEST_IS_SYMLINK)
-                        || !file_test(&child, gtk::FILE_TEST_IS_DIR)
-                    {
-                        if min_age_s <= 0 || mtime_seconds(&child).is_some_and(|m| m < cutoff) {
-                            gtk::g_unlink(child.as_ptr());
-                        }
-                    } else {
-                        stack.push(child);
+        if let Ok(entries) = std::fs::read_dir(&d) {
+            for entry in entries.flatten() {
+                let child = entry.path();
+                let is_link = std::fs::symlink_metadata(&child).is_ok_and(|m| m.is_symlink());
+                if is_link || !child.is_dir() {
+                    if min_age_s <= 0 || mtime_seconds(&child).is_some_and(|m| m < cutoff) {
+                        let _ = std::fs::remove_file(&child);
                     }
+                } else {
+                    stack.push(child);
                 }
-                gtk::g_dir_close(gd);
             }
         }
         dirs.push(d);
     }
     for d in dirs.iter().skip(1).rev() {
-        unsafe { gtk::g_rmdir(d.as_ptr()) };
+        let _ = std::fs::remove_dir(d);
     }
 }
 
@@ -171,33 +197,26 @@ pub(super) fn ns_procapp_run(
     recover: bool,
     private_mode: bool,
 ) -> c_int {
-    unsafe {
-        if ns_proc_video_helper_available() {
-            gtk::g_setenv(c"NS_VIDEO_HELPER".as_ptr(), c"1".as_ptr(), 1);
-        }
-        clear_http_caches(false);
-        southstar_net::init();
-        if !private_mode {
-            southstar_history::init();
-        }
-        let ctx = Context {
-            url: Some(startup_url.to_owned()),
-            session_path: session_path.map(CStr::to_owned),
-            recover,
-            private_mode,
-        };
-        let app = gtk::gtk_application_new(rules::APP_ID.as_ptr(), gtk::APPLICATION_NON_UNIQUE);
-        connect(
-            app,
-            c"activate",
-            handler!(on_activate),
-            (&ctx as *const Context).cast_mut().cast(),
-        );
-        let status = gtk::g_application_run(app, 0, ptr::null_mut());
-        gtk::g_object_unref(app);
-        southstar_history::shutdown();
-        southstar_net::shutdown();
-        clear_http_caches(true);
-        status
+    if ns_proc_video_helper_available() {
+        setenv(c"NS_VIDEO_HELPER", c"1");
     }
+    clear_http_caches(false);
+    southstar_net::init();
+    if !private_mode {
+        southstar_history::init();
+    }
+    let ctx = Context {
+        url: Some(startup_url.to_owned()),
+        session_path: session_path.map(CStr::to_owned),
+        recover,
+        private_mode,
+    };
+    let app = Application::new(rules::APP_ID, southstar_gtk::APPLICATION_NON_UNIQUE);
+    app.connect_activate(move |app| on_activate(&ctx, app));
+    let status = app.run();
+    drop(app);
+    southstar_history::shutdown();
+    southstar_net::shutdown();
+    clear_http_caches(true);
+    status
 }

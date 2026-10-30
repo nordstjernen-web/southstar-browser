@@ -7,19 +7,23 @@ use core::ffi::{CStr, c_int};
 pub use southstar_gtk_ffi as sys;
 use southstar_gtk_ffi::GtkWidget;
 
+mod application;
 mod ffi;
 mod layout;
 mod object;
 mod paintable;
 mod signal;
+mod style;
 mod widgets;
 
+pub use application::{APPLICATION_NON_UNIQUE, Application};
 pub use layout::{CustomLayout, HeaderBar, WindowControls, set_custom_layout};
 pub use object::{Object, WeakObject};
 pub use paintable::{
     Entry, MenuButton, Paintable, PaintableImpl, pixbuf_loads_format, resource_bytes,
 };
 pub use signal::SignalHandlerId;
+pub use style::{CssProvider, Display, IconTheme, STYLE_PROVIDER_PRIORITY_APPLICATION};
 pub use widgets::*;
 
 pub use sys::{GtkOrientation, ORIENTATION_HORIZONTAL, ORIENTATION_VERTICAL};

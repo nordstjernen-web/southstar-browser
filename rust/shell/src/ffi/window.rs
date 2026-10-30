@@ -12,7 +12,6 @@ use southstar_bookmarks::Bookmarks;
 use southstar_config::NsConfig;
 use southstar_gtk_ffi::{self as gtk, GBoolean, GdkRgba, GtkWidget};
 
-use super::appmain::self_exe;
 use super::gtk::{
     borrowed, connect, cstring, handler, set_accessible_label, set_margins, take_gstring,
     toggle_css_class, tr, tr_string,
@@ -123,48 +122,6 @@ unsafe extern "C" fn procwindow_free(data: *mut c_void) {
                 }
             }
         }
-    }
-}
-
-pub unsafe fn install_icon_search_paths() {
-    unsafe {
-        let display = gtk::gdk_display_get_default();
-        if display.is_null() {
-            return;
-        }
-        let theme = gtk::gtk_icon_theme_get_for_display(display);
-        if theme.is_null() {
-            return;
-        }
-        gtk::gtk_icon_theme_add_resource_path(theme, c"/org/southstar/WebBrowser/icons".as_ptr());
-        let Some(exe) = borrowed(self_exe()) else {
-            return;
-        };
-        let Some(dir) = take_gstring(gtk::g_path_get_dirname(exe.as_ptr())) else {
-            return;
-        };
-        for rel in rules::ICON_SEARCH_PATHS {
-            let p = super::gtk::build_filename(&[&dir, rel]);
-            gtk::gtk_icon_theme_add_search_path(theme, p.as_ptr());
-        }
-    }
-}
-
-pub unsafe fn install_chrome_css() {
-    unsafe {
-        let display = gtk::gdk_display_get_default();
-        if display.is_null() {
-            return;
-        }
-        let p = gtk::gtk_css_provider_new();
-        let css = cstring(crate::chrome::CHROME_CSS);
-        gtk::gtk_css_provider_load_from_string(p, css.as_ptr());
-        gtk::gtk_style_context_add_provider_for_display(
-            display,
-            p,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-        gtk::g_object_unref(p);
     }
 }
 
