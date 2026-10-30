@@ -110,10 +110,9 @@ message('southstar build profile: ' +
         (ns_is_release ? 'release (LTO + stripped + hardened)'
                        : 'development (debug symbols + frame pointer + hardened)'))
 
-# The engine uses no GTK widgets: it links the GLib/cairo graphics stack
-# directly, and GdkTexture is replaced by the ns_texture abstraction
-# (src/texture.c). The engine paints with Cairo and southstar-text and wraps decoded images in the
-# ns_texture abstraction (no GdkTexture), so the graphics stack is declared
+# The engine uses no GTK widgets: it paints with Cairo and southstar-text and
+# wraps decoded images in the texture abstraction of rust/texture (no
+# GdkTexture), so the graphics stack is declared
 # directly rather than pulled in transitively through gtk4. The toolkit
 # (gtk4/epoxy) stays out of the shared engine deps and is added only to the
 # GTK shell, keeping the out-of-process renderer and the embeddable library
@@ -213,19 +212,6 @@ libpsl = dependency('libpsl')
 
 sqlite3 = dependency('sqlite3')
 
-add_project_arguments('-DNS_ENABLE_WEBGL=1', language: 'c')
-# The offscreen GL context (src/glctx.c) has three backends: WGL on Windows,
-# CGL on macOS (which has no EGL — its epoxy dispatches to the OpenGL
-# framework, and its GL 4.1 core profile compiles GLSL-ES shaders), and EGL
-# everywhere else. Pick CGL on darwin, otherwise EGL when its header is
-# present; without any, ns_gl_context_create() stubs out and WebGL is simply
-# unavailable rather than failing the build.
-if host_machine.system() == 'darwin'
-  add_project_arguments('-DNS_HAVE_CGL=1', language: 'c')
-elif have_egl
-  add_project_arguments('-DNS_HAVE_EGL=1', language: 'c')
-endif
-
 # WebGPU (navigator.gpu) layers rust/webgpu over the external wgpu-native
 # library; the webgpu.h/wgpu.h headers are vendored in-tree (pinned API) while
 # the library is located via pkg-config (wgpu_native) or an extracted release
@@ -253,7 +239,6 @@ if not webgpu_feature.disabled()
         dependency('threads'),
       ],
     )
-    add_project_arguments('-DND_HAVE_WEBGPU=1', language: 'c')
     have_webgpu = true
     message('WebGPU: built (wgpu-native found) — experimental, runtime-gated by --enable-webgpu')
   elif webgpu_feature.enabled()
@@ -267,37 +252,22 @@ endif
 
 libpoppler = dependency('poppler-glib', required: false)
 have_poppler = libpoppler.found()
-if have_poppler
-  add_project_arguments('-DNS_HAVE_POPPLER=1', language: 'c')
-endif
 
 libfontconfig = dependency('fontconfig', version: '>=2.15')
 have_fontconfig = libfontconfig.found()
-if have_fontconfig
-  add_project_arguments('-DNS_HAVE_FONTCONFIG=1', language: 'c')
-endif
 libfreetype = dependency('freetype2')
 have_freetype = libfreetype.found()
-if have_freetype
-  add_project_arguments('-DNS_HAVE_FREETYPE=1', language: 'c')
-endif
 
 # WOFF2 web fonts. FreeType reads them only when it was built with Brotli
 # (Homebrew's is not), so rust/woff2 decodes them over libbrotlidec.
 libbrotlidec_fonts = dependency('libbrotlidec', required: false)
 have_woff2 = libbrotlidec_fonts.found()
-if have_woff2
-  add_project_arguments('-DNS_HAVE_WOFF2=1', language: 'c')
-endif
 
 libwebp = dependency('libwebp')
 libwebpdemux = dependency('libwebpdemux')
 
 libavif = dependency('libavif', required: get_option('avif'))
 have_avif = libavif.found()
-if have_avif
-  add_project_arguments('-DNS_HAVE_AVIF=1', language: 'c')
-endif
 
 # Inline WebM (VP9/VP8 + Opus/Vorbis) over FFmpeg's libav* (github.com/FFmpeg/
 # FFmpeg, not the defunct Libav fork). Required on Linux and Windows, where WebM
@@ -319,22 +289,13 @@ libswscale = dependency('libswscale', version: '>=7', required: libav_required)
 libswresample = dependency('libswresample', version: '>=4', required: libav_required)
 have_libav = libavformat.found() and libavcodec.found() and libavutil.found() \
   and libswscale.found() and libswresample.found()
-if have_libav
-  add_project_arguments('-DNS_HAVE_LIBAV=1', language: 'c')
-endif
 
 # vorbisfile is the ov_* high-level decode API over libvorbis, used by the audio
-# helper (src/audio/main.c) to decode Ogg/Vorbis natively where FFmpeg is absent.
+# helper (rust/audio-helper) to decode Ogg/Vorbis natively where FFmpeg is absent.
 libvorbisfile = dependency('vorbisfile', required: false)
-if libvorbisfile.found()
-  add_project_arguments('-DNS_HAVE_VORBISFILE=1', language: 'c')
-endif
 # opusfile is the high-level op_* decode API over libopus + libogg, used by the
 # audio helper to decode Ogg/Opus natively where FFmpeg is absent.
 libopusfile = dependency('opusfile', required: false)
-if libopusfile.found()
-  add_project_arguments('-DNS_HAVE_OPUSFILE=1', language: 'c')
-endif
 # canPlayType/mediaCapabilities may honestly advertise native Ogg audio only
 # where the decoder that plays it is built: the desktop (SDL2) southstar-audio
 # helper.
@@ -347,18 +308,12 @@ if get_option('audio').allowed()
 endif
 libenchant = dependency('enchant-2', required: false)
 have_enchant = libenchant.found()
-if have_enchant
-  add_project_arguments('-DNS_HAVE_ENCHANT=1', language: 'c')
-endif
 
 libseccomp = dependency(
   'libseccomp',
   required: host_machine.system() == 'linux',
 )
 have_seccomp = libseccomp.found()
-if have_seccomp
-  add_project_arguments('-DNS_HAVE_SECCOMP=1', language: 'c')
-endif
 
 zlib = dependency('zlib')
 
@@ -369,13 +324,8 @@ if build_date == ''
     build_date = date_cmd.stdout().strip()
   endif
 endif
-add_project_arguments('-DNS_BUILD_DATE="' + build_date + '"', language: 'c')
-add_project_arguments('-DNS_VERSION="' + meson.project_version() + '"', language: 'c')
 
 have_wasm = get_option('wasm').allowed()
-if have_wasm
-  add_project_arguments('-DNS_HAVE_WASM=1', language: 'c')
-endif
 
 message('JS engine: Boa')
 

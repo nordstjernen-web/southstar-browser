@@ -1,11 +1,12 @@
-# Nordstjernen licensing
+# Southstar licensing
 
 Copyright 2026 Andreas Røsdal
 
-Nordstjernen is dual-licensed. You may use, copy, modify and distribute it
+Southstar is dual-licensed. You may use, copy, modify and distribute it
 under the terms of **either** of these two licenses, at your option:
 
-1. the **Nordstjernen Source License v1.0** (NSL-1.0), reproduced in full
+1. the **Nordstjernen Source License v1.0** (NSL-1.0), the license of the
+   Nordstjernen browser that Southstar is ported from, reproduced in full
    below; or
 2. the **GNU General Public License, version 3 or (at your option) any
    later version** (GPL-3.0-or-later). Version 3 is reproduced in full in
@@ -21,23 +22,23 @@ NSL-1.0 option is bound by the NSL-1.0 terms alone.
 
 Under the GPL option:
 
-> Nordstjernen is free software: you can redistribute it and/or modify it
+> Southstar is free software: you can redistribute it and/or modify it
 > under the terms of the GNU General Public License as published by the Free
 > Software Foundation, either version 3 of the License, or (at your option)
 > any later version.
 >
-> Nordstjernen is distributed in the hope that it will be useful, but WITHOUT
+> Southstar is distributed in the hope that it will be useful, but WITHOUT
 > ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 > FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
 > more details.
 >
 > You should have received a copy of the GNU General Public License along
-> with Nordstjernen. If not, see <https://www.gnu.org/licenses/>.
+> with Southstar. If not, see <https://www.gnu.org/licenses/>.
 
 Commercial licenses remain available by written agreement for anyone who
 needs terms that neither license provides; see "Commercial License" below.
 
-Third-party components included with or linked into Nordstjernen keep their
+Third-party components included with or linked into Southstar keep their
 own licenses; their notices are reproduced in
 [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
