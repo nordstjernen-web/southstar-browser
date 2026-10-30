@@ -34,6 +34,7 @@ unsafe extern "C" {
     pub fn gtk_scrolled_window_get_type() -> GType;
     pub fn gtk_text_view_get_type() -> GType;
     pub fn gtk_progress_bar_get_type() -> GType;
+    pub fn gtk_notebook_get_type() -> GType;
     pub fn gtk_window_set_hide_on_close(
         window: *mut southstar_gtk_ffi::GtkWidget,
         setting: southstar_gtk_ffi::GBoolean,

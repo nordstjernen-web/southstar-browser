@@ -9,8 +9,8 @@ use southstar_gtk_ffi as sys;
 use crate::signal::{self, SignalHandlerId};
 use crate::{Widget, ffi};
 
-macro_rules! widget_class {
-    ($($name:ident => $get_type:path),* $(,)?) => {
+macro_rules! widget_type {
+    ($($name:ident),* $(,)?) => {
         $(
             #[derive(Clone, PartialEq, Eq)]
             pub struct $name(Widget);
@@ -34,6 +34,14 @@ macro_rules! widget_class {
                     &self.0
                 }
             }
+        )*
+    };
+}
+
+macro_rules! widget_class {
+    ($($name:ident => $get_type:path),* $(,)?) => {
+        $(
+            crate::widgets::widget_type!($name);
 
             impl $name {
                 pub fn cast(widget: &Widget) -> Option<$name> {
@@ -46,7 +54,7 @@ macro_rules! widget_class {
     };
 }
 
-pub(crate) use widget_class;
+pub(crate) use {widget_class, widget_type};
 
 widget_class!(
     Box => ffi::gtk_box_get_type,

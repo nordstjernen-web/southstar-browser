@@ -7,29 +7,38 @@ use core::ffi::{CStr, c_int};
 pub use southstar_gtk_ffi as sys;
 use southstar_gtk_ffi::GtkWidget;
 
+mod action;
 mod application;
+mod entry;
 mod event;
 mod ffi;
 mod layout;
+mod menu;
+mod notebook;
 mod object;
 mod paintable;
+mod popover;
 mod signal;
 mod snapshot;
 mod style;
 mod viewport;
 mod widgets;
 
+pub use action::{ApplicationWindow, SimpleAction, default_settings};
 pub use application::{APPLICATION_NON_UNIQUE, Application};
 pub use event::{
-    DropTarget, EventController, EventControllerKey, EventControllerMotion, EventControllerScroll,
-    GestureClick, GestureDrag, IMContext, ObjectType, from_borrowed, keyval_name, keyval_to_lower,
-    keyval_to_unicode,
+    DropTarget, EventController, EventControllerFocus, EventControllerKey, EventControllerMotion,
+    EventControllerScroll, GestureClick, GestureDrag, IMContext, ObjectType, from_borrowed,
+    keyval_name, keyval_to_lower, keyval_to_unicode,
 };
 pub use layout::{CustomLayout, HeaderBar, WindowControls, set_custom_layout};
+pub use menu::{Menu, MenuItem};
+pub use notebook::{Notebook, Overlay, Separator, Spinner};
 pub use object::{Object, WeakObject};
 pub use paintable::{
     Entry, MenuButton, Paintable, PaintableImpl, pixbuf_loads_format, resource_bytes,
 };
+pub use popover::Popover;
 pub use signal::SignalHandlerId;
 pub use snapshot::{Cursor, SnapshotRef, Texture};
 pub use style::{CssProvider, Display, IconTheme, STYLE_PROVIDER_PRIORITY_APPLICATION};

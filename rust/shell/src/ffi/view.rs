@@ -6,8 +6,6 @@ use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr::NonNull;
 use std::ffi::CString;
 
-use southstar_gtk_ffi::{self as gtk, GdkPaintable, GtkWidget};
-
 use super::procview_chrome::{
     ns_proc_view_find_close, ns_proc_view_find_open, ns_proc_view_print, ns_proc_view_save_image,
     ns_proc_view_save_pdf, ns_proc_view_set_color_scheme,
@@ -56,8 +54,15 @@ impl View {
         self.0.as_ptr()
     }
 
-    pub fn widget(self) -> *mut GtkWidget {
-        ns_proc_view_widget(self.p())
+    pub fn page(self) -> Option<southstar_gtk::Widget> {
+        // SAFETY: the view's root widget lives as long as the view, which outlives this call.
+        unsafe { southstar_gtk::Widget::from_ptr_keep_floating(ns_proc_view_widget(self.p())) }
+    }
+
+    pub fn attach_to_page(self) -> Option<southstar_gtk::Widget> {
+        let page = self.page()?;
+        page.object().set_data(PAGE_VIEW_KEY, Some(self));
+        Some(page)
     }
 
     pub unsafe fn set_notify(self, cb: Notify, data: *mut c_void) {
@@ -132,8 +137,9 @@ impl View {
         owned(ns_proc_view_remote_ip(self.p()))
     }
 
-    pub fn favicon(self) -> *mut GdkPaintable {
-        ns_proc_view_favicon(self.p()).cast()
+    pub fn favicon(self) -> Option<southstar_gtk::Texture> {
+        // SAFETY: the favicon is null or the live GdkTexture the view keeps until it sets another.
+        unsafe { southstar_gtk::from_borrowed(ns_proc_view_favicon(self.p())) }
     }
 
     pub fn renderer_pid(self) -> c_int {
@@ -205,23 +211,15 @@ pub fn save_image(v: Option<View>) {
     ns_proc_view_save_image(v.map_or(core::ptr::null_mut(), View::raw));
 }
 
-pub unsafe fn for_page(page: *mut GtkWidget) -> Option<View> {
-    if page.is_null() {
-        return None;
-    }
-    unsafe { View::from_raw(gtk::g_object_get_data(page.cast(), PAGE_VIEW_KEY.as_ptr())) }
-}
-
-pub unsafe fn views(notebook: *mut GtkWidget) -> Vec<View> {
-    unsafe {
-        let n = gtk::gtk_notebook_get_n_pages(notebook);
-        (0..n)
-            .filter_map(|i| for_page(gtk::gtk_notebook_get_nth_page(notebook, i)))
-            .collect()
-    }
+pub fn for_page(page: &southstar_gtk::Widget) -> Option<View> {
+    page.object().data::<View>(PAGE_VIEW_KEY)
 }
 
 pub fn notebook_views(notebook: &southstar_gtk::Widget) -> Vec<View> {
-    // SAFETY: the handle keeps the notebook alive for the call.
-    unsafe { views(notebook.as_ptr()) }
+    southstar_gtk::Notebook::cast(notebook).map_or_else(Vec::new, |notebook| {
+        notebook
+            .pages()
+            .filter_map(|page| for_page(&page))
+            .collect()
+    })
 }

@@ -82,25 +82,6 @@ pub unsafe fn set_accessible_label(w: *mut GtkWidget, label: &CStr) {
     };
 }
 
-pub unsafe fn toggle_css_class(w: *mut GtkWidget, class: &CStr, on: bool) {
-    unsafe {
-        if on {
-            gtk::gtk_widget_add_css_class(w, class.as_ptr());
-        } else {
-            gtk::gtk_widget_remove_css_class(w, class.as_ptr());
-        }
-    }
-}
-
-pub unsafe fn set_margins(w: *mut GtkWidget, start: c_int, end: c_int, top: c_int, bottom: c_int) {
-    unsafe {
-        gtk::gtk_widget_set_margin_start(w, start);
-        gtk::gtk_widget_set_margin_end(w, end);
-        gtk::gtk_widget_set_margin_top(w, top);
-        gtk::gtk_widget_set_margin_bottom(w, bottom);
-    }
-}
-
 pub fn open_path(path: &CStr) {
     unsafe {
         if let Some(uri) = take_gstring(gtk::g_filename_to_uri(
