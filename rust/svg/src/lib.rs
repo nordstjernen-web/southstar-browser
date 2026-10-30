@@ -57,7 +57,7 @@ static R: Prop = Prop::new(c"r");
 pub struct Ctx<'a> {
     cr: Canvas,
     root: Node<'a>,
-    styles: StyleTable,
+    styles: StyleTable<'a>,
     ids: Option<HashMap<&'a [u8], Node<'a>>>,
     depth: i32,
     use_depth: i32,
@@ -347,7 +347,7 @@ fn collapsed_text(n: Node<'_>) -> Option<Vec<u8>> {
 }
 
 impl<'a> Ctx<'a> {
-    fn new(cr: Canvas, root: Node<'a>, styles: StyleTable, vw: f64, vh: f64) -> Ctx<'a> {
+    fn new(cr: Canvas, root: Node<'a>, styles: StyleTable<'a>, vw: f64, vh: f64) -> Ctx<'a> {
         Ctx {
             cr,
             root,

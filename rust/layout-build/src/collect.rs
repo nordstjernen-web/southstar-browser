@@ -67,7 +67,7 @@ impl Span {
 }
 
 pub struct Collector<'a> {
-    pub styles: StyleTable,
+    pub styles: StyleTable<'a>,
     pub state: CollectState,
     active_link: Option<(&'a CStr, Option<&'a CStr>, Node<'a>)>,
     pub out: Vec<u8>,
@@ -142,7 +142,7 @@ fn sorted(a: usize, b: usize) -> (usize, usize) {
 }
 
 impl<'a> Collector<'a> {
-    pub fn new(styles: StyleTable, abs_placeholders: bool) -> Collector<'a> {
+    pub fn new(styles: StyleTable<'a>, abs_placeholders: bool) -> Collector<'a> {
         Collector {
             styles,
             state: state::collect_state(),

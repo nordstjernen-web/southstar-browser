@@ -314,7 +314,7 @@ fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
 
 struct Ctx<'a, 'o> {
     root: BoxRef<'a>,
-    styles: StyleTable,
+    styles: StyleTable<'o>,
     viewport_width: f64,
     map: BoxMap<'a>,
     order: &'o NodeOrder,

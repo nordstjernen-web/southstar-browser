@@ -399,12 +399,12 @@ struct Inherited {
     block: bool,
 }
 
-struct Walker {
-    styles: StyleTable,
+struct Walker<'t> {
+    styles: StyleTable<'t>,
 }
 
-impl Walker {
-    fn style<'a>(&self, node: Node<'a>) -> Option<StyleRef<'a>> {
+impl<'t> Walker<'t> {
+    fn style(&self, node: Node<'_>) -> Option<StyleRef<'t>> {
         self.styles.get(node)
     }
 

@@ -306,14 +306,8 @@ pub fn layout_root(js: Option<Page>) -> Option<BoxRef<'static>> {
     record::layout_root(js)
 }
 
-pub fn style_table(js: Option<Page>) -> *const StyleMap {
-    state(js, ptr::null(), |state| {
-        state
-            .style_table
-            .borrow()
-            .as_ref()
-            .map_or(ptr::null(), Rc::as_ptr)
-    })
+pub fn style_table(js: Option<Page>) -> Option<Rc<StyleMap>> {
+    state(js, None, |state| state.style_table.borrow().clone())
 }
 
 pub fn image_cache(js: Option<Page>) -> *mut c_void {

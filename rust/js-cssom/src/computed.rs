@@ -4,7 +4,7 @@
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
-use southstar_style::{Kind, PropId, StyleRef, ValueRef, display_of};
+use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 use crate::ffi::{self, AnimList, Js};
 
@@ -669,8 +669,10 @@ fn logical_start(style: Option<StyleRef<'_>>, vertical: bool) -> &'static str {
 }
 
 fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Option<BoxRef<'static>> {
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
     if pos == "sticky" {
-        if ffi::has_style_table(js) && ffi::layout_root(js).is_some() {
+        if styles.is_some() && ffi::layout_root(js).is_some() {
             for p in southstar_dom::ancestors(n) {
                 if !p.is_element() {
                     continue;
@@ -685,7 +687,7 @@ fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Optio
                 if stop {
                     break;
                 }
-                if ffi::style_of(js, p).is_some_and(style_scroll_container) {
+                if styles.get(p).is_some_and(style_scroll_container) {
                     return ffi::find_box(js, p);
                 }
             }
@@ -696,14 +698,14 @@ fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Optio
         return b.parent();
     }
     let fixed = pos == "fixed";
-    if !ffi::has_style_table(js) || ffi::layout_root(js).is_none() {
+    if !styles.is_some() || ffi::layout_root(js).is_none() {
         return None;
     }
     for p in southstar_dom::ancestors(n) {
         if !p.is_element() {
             continue;
         }
-        let Some(ps) = ffi::style_of(js, p) else {
+        let Some(ps) = styles.get(p) else {
             continue;
         };
         let mut is_cb = style_has_transform(ps);
@@ -929,9 +931,7 @@ fn range_list(js: Js, n: Node<'_>, text: &str) -> String {
                 && rest.as_bytes()[0].is_ascii_alphabetic())
         {
             converted = ffi::with_declarations(&format!("left: {lp}"), |decls| {
-                let lv = decls
-                    .first()
-                    .and_then(|d| unsafe { ValueRef::from_ptr(d.value) })?;
+                let lv = *decls.first()?;
                 let plain_len = lv.length().is_some_and(|(_, u)| u != UNIT_PERCENT);
                 let calc_len = lv.calc_terms().is_some_and(|c| c[0] == 0.0);
                 (plain_len || calc_len).then(|| px(ffi::dimension_px(lv, font, 0.0)))
@@ -1025,9 +1025,11 @@ fn anim_keyword_value(
 }
 
 fn anim_lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
     let is_anim = name.starts_with('a');
     if name == "animation" || name == "transition" {
-        let s = ffi::style_of(js, n);
+        let s = styles.get(n);
         let (list, mismatch) = ffi::anim_lists(s, is_anim);
         return Some(if mismatch {
             String::new()
@@ -1047,8 +1049,8 @@ fn anim_lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return None;
     }
     let (key, lhp) = anim_key(&name[dash + 1..], is_anim)?;
-    if ffi::has_style_table(js) {
-        let s = ffi::style_of(js, n);
+    if styles.is_some() {
+        let s = styles.get(n);
         let lv = s.and_then(|s| s.get(lhp));
         if let (Some(s), Some(keyword)) = (s, keyword_of(lv)) {
             return anim_keyword_value(js, n, s, key, keyword, is_anim);
@@ -1161,7 +1163,9 @@ fn gap_shorthand(js: Js, n: Node<'_>, name: &str) -> Option<String> {
 }
 
 fn gap_longhand(js: Js, n: Node<'_>, id: usize, name: &str) -> Option<String> {
-    let value = ffi::style_of(js, n).and_then(|s| s.value_at(id))?;
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
+    let value = styles.get(n).and_then(|s| s.value_at(id))?;
     if value.kind() == Kind::Keyword
         && let Some(text) = keyword_of(Some(value))
     {
@@ -1327,7 +1331,9 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
                 "grid-auto-columns",
             ];
             ffi::flush_style(js);
-            let Some(grid_style) = ffi::style_of(js, n) else {
+            let table = ffi::style_table(js);
+            let styles = StyleTable::new(table.as_deref());
+            let Some(grid_style) = styles.get(n) else {
                 return Some(Some(String::new()));
             };
             let full = name == "grid";
@@ -1427,10 +1433,12 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     }
 
     ffi::flush_layout(js);
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
     let style_attr = str_of(n.attr(c"style"));
     let has_style_attr = style_attr.is_some_and(|s| !s.is_empty());
     let lbox = ffi::find_box(js, n);
-    let computed = ffi::style_of(js, n).or_else(|| lbox.and_then(box_style));
+    let computed = styles.get(n).or_else(|| lbox.and_then(box_style));
 
     if let Some(b) = lbox
         && (name == "grid-template-columns" || name == "grid-template-rows")
@@ -1454,7 +1462,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         while let Some(p) = root.parent().filter(|p| p.is_element()) {
             root = p;
         }
-        let root_style = ffi::style_of(js, root);
+        let root_style = styles.get(root);
         if let Some(tracks) = ffi::tracks_computed_serialize(c, root_style, id) {
             return Some(tracks);
         }
@@ -1533,8 +1541,8 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     }
 
     if name.len() > 2 && name.starts_with("--") {
-        if ffi::has_style_table(js)
-            && let Some(s) = ffi::style_of(js, n)
+        if styles.is_some()
+            && let Some(s) = styles.get(n)
             && s.has_vars()
         {
             let key = ffi::c_string(name.as_bytes());
@@ -1561,8 +1569,11 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         }
     }
     if name == "overflow-clip-margin"
-        && let Some(kw) =
-            keyword_of(ffi::style_of(js, n).and_then(|s| s.get(PropId::OverflowClipMargin)))
+        && let Some(kw) = keyword_of(
+            styles
+                .get(n)
+                .and_then(|s| s.get(PropId::OverflowClipMargin)),
+        )
     {
         return Some(range_list(js, n, kw));
     }
@@ -1599,9 +1610,9 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             Some(m) => m.kind() == Kind::Keyword && keyword_of(Some(m)) == Some("auto"),
         };
         if is_auto {
-            if ffi::has_style_table(js) {
+            if styles.is_some() {
                 for ancestor in southstar_dom::ancestors_and_self(n) {
-                    if display_of(ffi::style_of(js, ancestor)).is_none() {
+                    if display_of(styles.get(ancestor)).is_none() {
                         return Some("0px".into());
                     }
                 }
@@ -1619,10 +1630,10 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
                     !(ratio.kind() == Kind::Keyword && keyword_of(Some(ratio)) == Some("auto"));
             }
             if !preserve
-                && ffi::has_style_table(js)
+                && styles.is_some()
                 && let Some(parent) = n.parent()
             {
-                let pd = display_of(ffi::style_of(js, parent));
+                let pd = display_of(styles.get(parent));
                 preserve = pd.box_ == DISPLAY_BOX_NORMAL
                     && pd.internal == 0
                     && (pd.inner == DISPLAY_INNER_FLEX || pd.inner == DISPLAY_INNER_GRID);
@@ -1635,8 +1646,9 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             || is(PropId::FillOpacity)
             || is(PropId::StrokeOpacity)
             || is(PropId::StopOpacity)
-    }) && ffi::has_style_table(js)
-        && let Some((o, UNIT_NUMBER)) = ffi::style_of(js, n)
+    }) && styles.is_some()
+        && let Some((o, UNIT_NUMBER)) = styles
+            .get(n)
             .and_then(|s| s.value_at(id))
             .and_then(ValueRef::length)
     {
@@ -1650,7 +1662,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     if let Some(id) =
         pid.filter(|_| is(PropId::Scale) || is(PropId::Rotate) || is(PropId::Translate))
     {
-        if let Some(v) = ffi::style_of(js, n).and_then(|s| s.value_at(id))
+        if let Some(v) = styles.get(n).and_then(|s| s.value_at(id))
             && let Some(r) = ffi::individual_transform_serialize(v, id)
         {
             return Some(r);
@@ -1658,14 +1670,14 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return Some("none".into());
     }
     if let Some(id) = pid.filter(|_| GAP_LISTS.iter().any(|&p| is(p)))
-        && ffi::has_style_table(js)
+        && styles.is_some()
         && let Some(text) = gap_longhand(js, n, id, name)
     {
         return Some(text);
     }
-    if CURRENTCOLOR_INITIAL.contains(&name) && ffi::has_style_table(js) {
+    if CURRENTCOLOR_INITIAL.contains(&name) && styles.is_some() {
         let own = pid
-            .and_then(|id| ffi::style_of(js, n).and_then(|s| s.value_at(id)))
+            .and_then(|id| styles.get(n).and_then(|s| s.value_at(id)))
             .and_then(ffi::serialize)
             .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("currentcolor"));
         return own.or_else(|| lookup(js, n, "color"));
@@ -1675,9 +1687,9 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         None => name,
     };
     if let Some(id) = pid
-        && ffi::has_style_table(js)
+        && styles.is_some()
     {
-        let s = ffi::style_of(js, n);
+        let s = styles.get(n);
         if let Some(v) = s.and_then(|s| s.value_at(id)) {
             return ffi::serialize(v);
         }
@@ -1717,7 +1729,9 @@ fn pseudo_substyle<'a>(s: StyleRef<'a>, pseudo: &str) -> Option<StyleRef<'a>> {
 
 pub(crate) fn lookup_pseudo(js: Js, n: Node<'_>, pseudo: &str, name: &str) -> Option<String> {
     ffi::flush_layout(js);
-    let base = ffi::style_of(js, n);
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
+    let base = styles.get(n);
     let ps = base.and_then(|b| pseudo_substyle(b, pseudo));
     let Some(ps) = ps else {
         if pseudo == "before" || pseudo == "after" {

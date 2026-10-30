@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.4-dev:
 ======
+* Internals: `StyleTable` borrows its `StyleMap` with a lifetime instead
+  of wrapping a raw pointer; the page's table is handed out as a shared
+  `Rc`, SVG boxes' tables are read through `southstar_style::svg_styles`,
+  and the CSSOM, geometry and innerText bindings (js-cssom, js-geometry,
+  js-text) no longer contain any `unsafe` code. Two computed-style paths
+  (the `grid` shorthand and nested value lookups) could read a style table
+  freed by an intervening layout flush; holding the `Rc` keeps it alive.
 * Internals: the local clock (history day headings, `document.lastModified`,
   file listing times), the local time-zone name `Intl` reports, charset
   conversion (form submission, legacy page charsets) and directory-listing

@@ -8,7 +8,7 @@ pub use ffi::{
     CalcSize, Display, Kind, NsCssValue, PROP_COUNT, Prop, RectValue, SizeValue, StyleRef,
     StyleTable, Value, ValueRef, attr_style, border_image_params, border_image_source, box_style,
     col_hint_style, display_of, effective_transform, font_family_for_pango, font_stretch_rank,
-    layer, layer_count, styles_equal, values_equal,
+    layer, layer_count, styles_equal, svg_styles, values_equal,
 };
 pub use southstar_css::{
     BorderImageParams, CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_FIT_CONTENT, CALC_SIZE_MAX_CONTENT,

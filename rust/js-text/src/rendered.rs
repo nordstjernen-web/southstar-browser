@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_style::StyleTable;
 
 use crate::ffi::{self, Js};
 use crate::{
@@ -26,8 +27,9 @@ pub fn get_inner_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> J
     }
     let js = ffi::js_of(scope);
     ffi::flush_layout(js);
-    let styles = ffi::style_table(js);
-    let text = if styles.as_ptr().is_null() || inner_text::display_none(styles, node) {
+    let table = ffi::style_table(js);
+    let styles = StyleTable::new(table.as_deref());
+    let text = if !styles.is_some() || inner_text::display_none(styles, node) {
         inner_text::text_content(node)
     } else {
         inner_text::rendered_text(styles, node)

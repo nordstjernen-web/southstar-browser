@@ -72,7 +72,7 @@ pub use southstar_layout_build::{
     abs_pending_clear as pending_clear, abs_pending_len as pending_len,
 };
 
-pub fn pending_entry(i: usize, styles: StyleTable) -> Option<Option<Entry<'static>>> {
+pub fn pending_entry<'a>(i: usize, styles: StyleTable<'a>) -> Option<Option<Entry<'a>>> {
     let (dom, pseudo, fixed) = southstar_layout_build::abs_pending_entry(i, styles)?;
     Some(dom.map(|dom| Entry { dom, pseudo, fixed }))
 }

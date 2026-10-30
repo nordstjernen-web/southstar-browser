@@ -125,6 +125,10 @@ impl CalcSize {
 pub struct ValueRef<'a>(&'a NsCssValue);
 
 impl<'a> ValueRef<'a> {
+    pub fn from_data(data: &'a NsCssValue) -> ValueRef<'a> {
+        ValueRef(data)
+    }
+
     pub fn get(self) -> Value<'a> {
         match self.kind() {
             Kind::Keyword => Value::Keyword(self.keyword_text()),
@@ -193,14 +197,6 @@ impl<'a> ValueRef<'a> {
 
     pub fn next_layer(self) -> Option<ValueRef<'a>> {
         self.0.next_layer().map(ValueRef)
-    }
-
-    /// # Safety
-    ///
-    /// `p` is null or a value made by rust/css that outlives `'a`.
-    pub unsafe fn from_ptr(p: *const NsCssValue) -> Option<ValueRef<'a>> {
-        // SAFETY: the caller passes null or a live value.
-        unsafe { p.as_ref() }.map(ValueRef)
     }
 
     pub fn kind(self) -> Kind {
@@ -366,7 +362,7 @@ impl<'a> StyleRef<'a> {
     /// # Safety
     ///
     /// `p` is null or a computed style made by rust/css that outlives `'a`.
-    pub unsafe fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
+    unsafe fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
         NonNull::new(p.cast::<StyleData>().cast_mut()).map(|p| StyleRef(p, PhantomData))
     }
 
@@ -510,29 +506,33 @@ impl<'a> StyleRef<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleTable(*const StyleMap);
+pub struct StyleTable<'a>(Option<&'a StyleMap>);
 
-impl StyleTable {
-    /// # Safety
-    ///
-    /// `table` is null or a style table that stays alive while this StyleTable or a copy of it is used.
-    pub unsafe fn from_ptr(table: *const StyleMap) -> StyleTable {
+impl<'a> StyleTable<'a> {
+    pub fn new(table: Option<&'a StyleMap>) -> StyleTable<'a> {
         StyleTable(table)
     }
 
-    pub fn none() -> StyleTable {
-        StyleTable(core::ptr::null())
+    pub fn none() -> StyleTable<'a> {
+        StyleTable(None)
+    }
+
+    pub fn is_some(self) -> bool {
+        self.0.is_some()
     }
 
     pub fn as_ptr(self) -> *const StyleMap {
-        self.0
+        self.0.map_or(ptr::null(), ptr::from_ref)
     }
 
-    pub fn get(self, node: Node<'_>) -> Option<StyleRef<'_>> {
-        // SAFETY: from_ptr's caller keeps the table alive while it is used.
-        let table = unsafe { self.0.as_ref() }?;
-        unsafe { StyleRef::from_ptr(table.lookup(node.as_ptr()).cast()) }
+    pub fn get(self, node: Node<'_>) -> Option<StyleRef<'a>> {
+        self.0?.get(node.as_ptr()).map(StyleRef::from_data)
     }
+}
+
+pub fn svg_styles(b: BoxRef<'_>) -> StyleTable<'_> {
+    // SAFETY: an SVG box stores null or the style table its subtree was built from, which outlives the box tree.
+    StyleTable(unsafe { b.svg_styles().as_ref() })
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {

@@ -220,8 +220,7 @@ fn apply_zoom(c: &RenderCtx, styles: &StyleMap) {
 
 fn style_pass(c: &RenderCtx, styles: &StyleMap) {
     feed_animations(c, styles);
-    // SAFETY: the table is borrowed for the whole call.
-    request_fonts(c, unsafe { StyleTable::from_ptr(styles) });
+    request_fonts(c, StyleTable::new(Some(styles)));
     apply_zoom(c, styles);
 }
 
@@ -359,8 +358,7 @@ fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> Option
     southstar_paint::list_ordinals_begin();
     let layout = southstar_layout_position::layout_build(BuildInput {
         doc: c.doc(),
-        // SAFETY: styles is the style table this relayout computed for the context's document.
-        styles: unsafe { StyleTable::from_ptr(styles) },
+        styles: StyleTable::new(Some(styles)),
         viewport_width,
         focused_input: c.focused_input,
         caret_byte: c.caret_byte,
