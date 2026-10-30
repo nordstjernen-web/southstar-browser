@@ -2,11 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_ulong, c_void};
+use core::ffi::{CStr, c_char, c_ulong, c_void};
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_gtk_ffi::{self as gtk, GCallback, GtkWidget};
+use southstar_gtk_ffi::{self as gtk, GCallback};
 
 macro_rules! handler {
     ($f:expr) => {{
