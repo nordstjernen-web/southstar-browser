@@ -2,7 +2,10 @@
 """Southstar — publish every crate to crates.io in dependency order, skipping versions already there and waiting out the rate limit on new crates."""
 
 import argparse
+import datetime
+import email.utils
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BUNDLE = ROOT / "rust" / "southstar" / "bundle"
+RETRY_AFTER = re.compile(r"try again after (\w{3}, \d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} GMT)")
 BUNDLED = ["License.md", "COPYING", "THIRD-PARTY-LICENSES.md", "data/safebrowsing.list", "data/i18n", "data/icons"]
 
 
@@ -65,6 +69,18 @@ def stage_bundle():
             shutil.copy2(source, target)
 
 
+def retry_delay(message):
+    match = RETRY_AFTER.search(message)
+    if not match:
+        return 60
+    try:
+        when = email.utils.parsedate_to_datetime(match.group(1))
+    except (TypeError, ValueError):
+        return 60
+    remaining = (when - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+    return max(10, int(remaining) + 5)
+
+
 def publish(package):
     command = ["cargo", "publish", "--locked", "--no-verify", "--manifest-path", package["manifest_path"]]
     if package["name"] == "southstar":
@@ -76,8 +92,9 @@ def publish(package):
         if result.returncode == 0:
             return
         if "429" in result.stderr or "too many" in result.stderr.lower():
-            print(f"publish-crates: rate limited on {package['name']}; waiting 60 s", flush=True)
-            time.sleep(60)
+            wait = retry_delay(result.stderr)
+            print(f"publish-crates: rate limited on {package['name']}; waiting {wait} s", flush=True)
+            time.sleep(wait)
             continue
         sys.exit(f"publish-crates: {package['name']} failed")
 
