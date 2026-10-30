@@ -46,6 +46,8 @@ macro_rules! widget_class {
     };
 }
 
+pub(crate) use widget_class;
+
 widget_class!(
     Box => ffi::gtk_box_get_type,
     Label => ffi::gtk_label_get_type,

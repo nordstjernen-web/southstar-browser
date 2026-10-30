@@ -47,7 +47,7 @@ unsafe extern "C" fn on_activate(app: *mut c_void, data: *mut c_void) {
         let ctx = &*data.cast::<Context>();
         gtk::setlocale(LC_NUMERIC, c"C".as_ptr());
         window::install_icon_search_paths();
-        super::icons::ns_icon_install_window_icon(c"southstar");
+        super::icons::install_window_icon(c"southstar");
         #[cfg(target_os = "macos")]
         super::macos_dock::set_dock_icon();
         window::install_chrome_css();

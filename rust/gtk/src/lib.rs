@@ -8,11 +8,17 @@ pub use southstar_gtk_ffi as sys;
 use southstar_gtk_ffi::GtkWidget;
 
 mod ffi;
+mod layout;
 mod object;
+mod paintable;
 mod signal;
 mod widgets;
 
+pub use layout::{CustomLayout, HeaderBar, WindowControls, set_custom_layout};
 pub use object::{Object, WeakObject};
+pub use paintable::{
+    Entry, MenuButton, Paintable, PaintableImpl, pixbuf_loads_format, resource_bytes,
+};
 pub use signal::SignalHandlerId;
 pub use widgets::*;
 

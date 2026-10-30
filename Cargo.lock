@@ -2191,6 +2191,7 @@ version = "1.0.4-dev"
 name = "southstar-gtk"
 version = "1.0.4-dev"
 dependencies = [
+ "southstar-cairo",
  "southstar-gtk-ffi",
 ]
 
