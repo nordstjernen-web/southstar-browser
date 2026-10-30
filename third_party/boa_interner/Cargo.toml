@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.91.0"
 name = "southstar-boa-interner"
-version = "1.0.5-dev"
+version = "1.0.5"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -55,7 +55,7 @@ optional = true
 
 [dependencies.boa_gc]
 package = "southstar-boa-gc"
-version = "=1.0.5-dev"
+version = "=1.0.5"
 path = "../boa_gc"
 
 [dependencies.boa_macros]

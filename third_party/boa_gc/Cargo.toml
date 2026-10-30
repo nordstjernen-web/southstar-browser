@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.91.0"
 name = "southstar-boa-gc"
-version = "1.0.5-dev"
+version = "1.0.5"
 authors = ["boa-dev"]
 build = false
 autolib = false
@@ -57,7 +57,7 @@ version = "~0.22.0"
 
 [dependencies.boa_string]
 package = "southstar-boa-string"
-version = "=1.0.5-dev"
+version = "=1.0.5"
 path = "../boa_string"
 optional = true
 

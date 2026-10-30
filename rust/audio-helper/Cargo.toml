@@ -14,13 +14,13 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5-dev" }
-southstar-http = { path = "../http", version = "=1.0.5-dev" }
-southstar-media-shm = { path = "../media-shm", version = "=1.0.5-dev" }
-southstar-minimp3 = { path = "../minimp3", version = "=1.0.5-dev" }
-southstar-plmpeg = { path = "../plmpeg", version = "=1.0.5-dev" }
+southstar-av = { path = "../av", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5" }
+southstar-http = { path = "../http", version = "=1.0.5" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.5" }
+southstar-minimp3 = { path = "../minimp3", version = "=1.0.5" }
+southstar-plmpeg = { path = "../plmpeg", version = "=1.0.5" }
 
 [features]
 rust-main = []
@@ -30,7 +30,7 @@ opusfile = []
 seccomp = ["southstar-helper-ffi/seccomp"]
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.5-dev" }
+southstar-build = { path = "../build", version = "=1.0.5" }
 
 [lints]
 workspace = true

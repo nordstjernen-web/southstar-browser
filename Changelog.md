@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.5-dev:
+Southstar Browser 1.0.5:
 ======
 * Southstar is published on crates.io: `cargo install southstar` builds the
   browser, the renderer and the audio and video helpers without meson, from

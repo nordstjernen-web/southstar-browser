@@ -10,10 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.5-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.5-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.5-dev" }
-southstar-paint = { path = "../paint", version = "=1.0.5-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.5" }
+southstar-cairo = { path = "../cairo", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.5" }
+southstar-paint = { path = "../paint", version = "=1.0.5" }
 
 [lints]
 workspace = true

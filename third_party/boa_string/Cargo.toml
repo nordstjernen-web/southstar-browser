@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.91.0"
 name = "southstar-boa-string"
-version = "1.0.5-dev"
+version = "1.0.5"
 authors = ["boa-dev"]
 build = false
 autolib = false

@@ -10,9 +10,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-datetime = { path = "../datetime", version = "=1.0.5-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.5-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5-dev", default-features = false }
+southstar-datetime = { path = "../datetime", version = "=1.0.5" }
+southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
 
 [lints]
 workspace = true
