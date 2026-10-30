@@ -2188,6 +2188,13 @@ name = "southstar-glib"
 version = "1.0.4-dev"
 
 [[package]]
+name = "southstar-gtk"
+version = "1.0.4-dev"
+dependencies = [
+ "southstar-gtk-ffi",
+]
+
+[[package]]
 name = "southstar-gtk-ffi"
 version = "1.0.4-dev"
 
@@ -3663,6 +3670,7 @@ dependencies = [
  "southstar-ffi",
  "southstar-font",
  "southstar-glib",
+ "southstar-gtk",
  "southstar-gtk-ffi",
  "southstar-headless",
  "southstar-history",

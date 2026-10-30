@@ -101,18 +101,6 @@ pub unsafe fn set_margins(w: *mut GtkWidget, start: c_int, end: c_int, top: c_in
     }
 }
 
-pub unsafe fn label(text: &CStr) -> *mut GtkWidget {
-    unsafe { gtk::gtk_label_new(text.as_ptr()) }
-}
-
-pub unsafe fn hexpand_spacer() -> *mut GtkWidget {
-    unsafe {
-        let spacer = gtk::gtk_label_new(c"".as_ptr());
-        gtk::gtk_widget_set_hexpand(spacer, 1);
-        spacer
-    }
-}
-
 pub fn open_path(path: &CStr) {
     unsafe {
         if let Some(uri) = take_gstring(gtk::g_filename_to_uri(

@@ -29,6 +29,7 @@ unsafe extern "C" {
     fn g_time_zone_new_local() -> *mut GTimeZone;
     fn g_time_zone_get_identifier(tz: *mut GTimeZone) -> *const c_char;
     fn g_time_zone_unref(tz: *mut GTimeZone);
+    fn g_format_size(size: u64) -> *mut c_char;
     fn g_utf8_collate(str1: *const c_char, str2: *const c_char) -> c_int;
     fn g_convert(
         text: *const c_char,
@@ -124,4 +125,11 @@ pub fn convert(text: &[u8], to: &[u8], from: &[u8]) -> Option<Vec<u8>> {
     // SAFETY: the buffer is a new GLib allocation the caller owns and is not used again.
     unsafe { crate::g_free(out.as_ptr().cast()) };
     Some(bytes)
+}
+
+pub fn format_size(size: u64) -> Vec<u8> {
+    // SAFETY: g_format_size takes any size and returns a new string the caller owns.
+    let text = unsafe { g_format_size(size) };
+    // SAFETY: the string is null or a GLib allocation handed over to GStr.
+    unsafe { crate::GStr::take(text) }.map_or_else(Vec::new, |s| s.to_bytes().to_vec())
 }

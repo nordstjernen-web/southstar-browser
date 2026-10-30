@@ -29,7 +29,7 @@ pub use source::{
     idle_add_once, scope, timeout_add_local, timeout_add_local_once, timeout_add_once,
     timeout_add_seconds_local,
 };
-pub use text::{LocalDateTime, convert, local_time_zone_identifier, utf8_collate};
+pub use text::{LocalDateTime, convert, format_size, local_time_zone_identifier, utf8_collate};
 
 pub type GBoolean = c_int;
 pub const TRUE: GBoolean = 1;

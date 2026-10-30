@@ -24,6 +24,7 @@ southstar-engine = { path = "../engine" }
 southstar-ffi = { path = "../southstar-ffi" }
 southstar-font = { path = "../font" }
 southstar-glib = { path = "../glib" }
+southstar-gtk = { path = "../gtk" }
 southstar-gtk-ffi = { path = "../gtk-ffi" }
 southstar-headless = { path = "../headless" }
 southstar-history = { path = "../history" }
