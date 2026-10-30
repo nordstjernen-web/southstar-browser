@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GROUPS = Path(__file__).resolve().parent / "crates-io-groups.toml"
+READMES = Path(__file__).resolve().parent / "crates-io-readmes"
 STAGING = ROOT / "target" / "crates-io"
 BUNDLED = ["License.md", "COPYING", "THIRD-PARTY-LICENSES.md", "data/safebrowsing.list", "data/i18n", "data/icons"]
 RETRY_AFTER = re.compile(r"try again after (\w{3}, \d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} GMT)")
@@ -317,6 +318,10 @@ def manifest(plan, group, build_script, lib_path, bins, extra):
 
 def write_readme(plan, group, into):
     if (into / "README.md").exists():
+        return
+    handwritten = READMES / f"{group}.md"
+    if handwritten.exists():
+        shutil.copy2(handwritten, into / "README.md")
         return
     members = plan.groups[group]["members"]
     lines = [f"# {group}", "", plan.groups[group]["description"] + ".", "",
