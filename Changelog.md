@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.5-dev:
+======
+
 Southstar Browser 1.0.4:
 ======
 * Internals: the last undocumented and multi-operation `unsafe` blocks are
