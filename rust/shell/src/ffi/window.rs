@@ -8,7 +8,7 @@ use core::ops::ControlFlow;
 use core::ptr;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use southstar_bookmarks::Bookmarks;
 use southstar_config::NsConfig;
@@ -93,7 +93,7 @@ fn brand_versioned() -> &'static CStr {
     })
 }
 
-fn config() -> Option<&'static NsConfig> {
+fn config() -> Option<Arc<NsConfig>> {
     southstar_config::get()
 }
 
@@ -888,8 +888,8 @@ fn load_home_page(v: View) {
     let home = {
         let config = southstar_config::lock();
         config.reload();
-        let home = config
-            .get()
+        let snapshot = config.get();
+        let home = snapshot
             .home_url
             .c_str()
             .filter(|h| !h.is_empty())

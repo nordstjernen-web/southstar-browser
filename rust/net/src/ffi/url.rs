@@ -7,7 +7,7 @@ use southstar_glib::GBoolean;
 use crate::url;
 
 fn config_flag(flag: impl Fn(&southstar_config::NsConfig) -> GBoolean) -> bool {
-    southstar_config::get().is_some_and(|c| flag(c) != 0)
+    southstar_config::get().is_some_and(|c| flag(&c) != 0)
 }
 
 pub fn http_date(date: &[u8]) -> i64 {

@@ -33,7 +33,8 @@ fn text_field(c: Option<&NsConfig>, field: impl Fn(&NsConfig) -> &Text) -> Vec<u
 pub fn json() -> Vec<u8> {
     let config = southstar_config::lock();
     config.reload();
-    let c = Some(config.get());
+    let snapshot = config.get();
+    let c = Some(&*snapshot);
     let on = |field: fn(&NsConfig) -> GBoolean| flag(c.is_some_and(|c| field(c) != 0));
     let mut out = b"{\"home_url\":\"".to_vec();
     out.extend_from_slice(&text_field(c, |c| &c.home_url));
@@ -88,21 +89,22 @@ pub fn save(form: &[u8]) {
     };
     let mut config = southstar_config::lock();
     config.reload();
-    let c = config.get_mut();
     let value = |key: &str| fields.get(key.as_bytes());
-    if let Some(v) = value("home_url") {
-        c.home_url.set(v);
-    }
-    if let Some(v) = value("search_engine") {
-        c.search_engine.set(v);
-    }
-    if let Some(v) = value("cookie_policy") {
-        c.cookie_policy = sys::atoi_of(v);
-    }
-    for (key, field) in SWITCHES {
-        if let Some(v) = value(key) {
-            *field(c) = GBoolean::from(sys::atoi_of(v) != 0);
+    config.update(|c| {
+        if let Some(v) = value("home_url") {
+            c.home_url.set(v);
         }
-    }
+        if let Some(v) = value("search_engine") {
+            c.search_engine.set(v);
+        }
+        if let Some(v) = value("cookie_policy") {
+            c.cookie_policy = sys::atoi_of(v);
+        }
+        for (key, field) in SWITCHES {
+            if let Some(v) = value(key) {
+                *field(c) = GBoolean::from(sys::atoi_of(v) != 0);
+            }
+        }
+    });
     config.save();
 }

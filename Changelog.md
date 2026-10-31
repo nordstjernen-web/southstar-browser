@@ -24,6 +24,12 @@ Southstar Browser 1.0.5:
   a safe `BufferView` in `rust/js-engine`, live collections share their record
   through an `Rc`, and the main realm's base frame is copied instead of
   pointing at a stack scope.
+* Internals: the animation engine handle is an `Rc<RefCell<…>>` instead of a
+  leaked box freed by hand, the global configuration sits behind an
+  `RwLock` holding an `Arc` snapshot instead of an `UnsafeCell`, and image
+  readiness and WebSocket/EventSource callbacks find their owner through a
+  weak registry instead of rebuilding an `Rc` from an address. `config`,
+  `js-images` and `js-net` now forbid unsafe code.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each

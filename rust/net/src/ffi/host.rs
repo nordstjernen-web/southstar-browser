@@ -4,7 +4,7 @@
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use southstar_config::NsConfig;
 use southstar_config::util;
@@ -157,7 +157,7 @@ pub fn atoi_of(text: &[u8]) -> i32 {
     util::ascii_strtoll(text).unwrap_or(0) as i32
 }
 
-pub fn unlocked_config() -> Option<&'static NsConfig> {
+pub fn unlocked_config() -> Option<Arc<NsConfig>> {
     southstar_config::get()
 }
 

@@ -4,7 +4,7 @@
 
 #[cfg(feature = "enchant")]
 mod enchant {
-    use core::ffi::{CStr, c_char, c_int};
+    use core::ffi::{c_char, c_int};
     use core::ptr;
     use std::ffi::CString;
     use std::sync::{Mutex, MutexGuard};

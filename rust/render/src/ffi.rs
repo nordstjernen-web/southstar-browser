@@ -196,7 +196,7 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
 }
 
 fn feed_animations(c: &RenderCtx, styles: &StyleMap) {
-    let Some(anim) = c.anim else {
+    let Some(anim) = &c.anim else {
         return;
     };
     for sheet in c.style_sheets() {

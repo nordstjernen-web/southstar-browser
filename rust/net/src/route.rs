@@ -16,7 +16,8 @@ pub fn tls_settings() -> TlsSettings {
 }
 
 pub fn apply_dns_over_https() {
-    let url = southstar_config::get().and_then(|c| c.doh_url.bytes());
+    let config = southstar_config::get();
+    let url = config.as_deref().and_then(|c| c.doh_url.bytes());
     southstar_http::set_dns_over_https(url, tls_settings());
 }
 

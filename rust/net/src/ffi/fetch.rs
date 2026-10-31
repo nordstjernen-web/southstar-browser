@@ -152,7 +152,7 @@ fn user_agent(cfg: Option<&southstar_config::NsConfig>) -> Vec<u8> {
 }
 
 fn cache_partition(url: &[u8], top_url: Option<&[u8]>) -> Vec<u8> {
-    let ua = user_agent(southstar_config::get());
+    let ua = user_agent(southstar_config::get().as_deref());
     let effective_top = top_url.unwrap_or(url);
     let top_origin = url::origin_from(effective_top);
     let top_site = url::site_from(effective_top);
@@ -321,6 +321,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     }
 
     let cfg = southstar_config::get();
+    let cfg = cfg.as_deref();
     let ua = user_agent(cfg);
     let language = accept_language();
     let effective_top = f.top_url.unwrap_or(&url);

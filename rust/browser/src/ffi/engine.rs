@@ -33,7 +33,7 @@ impl NsBrowser {
             viewport_width: self.vw.get(),
             viewport_height: self.vh.get(),
             images: self.images.get(),
-            anim: self.anim.get(),
+            anim: self.anim(),
             js: self.js.get().map(Js::handle),
             focused,
             hover: self.hover_node.get(),
@@ -50,7 +50,7 @@ impl NsBrowser {
         self.styles.replace(Some(styles));
     }
 
-    pub fn load_keyframes(&self, anim: Anim) {
+    pub fn load_keyframes(&self, anim: &Anim) {
         let base = self.base_url.get();
         southstar_engine::load_keyframes(anim, &self.engine_page(base.as_deref()));
         let styles = self.styles();

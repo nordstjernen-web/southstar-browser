@@ -137,7 +137,7 @@ pub struct NsBrowser {
     layout: Cell<Option<BoxRef<'static>>>,
     styles: RefCell<Option<Rc<StyleMap>>>,
     js: Cell<Option<Js>>,
-    anim: Cell<Option<Anim>>,
+    anim: RefCell<Option<Anim>>,
     images: Cell<Option<Images>>,
     videos: Cell<Option<Videos>>,
     css_cache: Cell<Option<CssCache>>,
@@ -233,7 +233,7 @@ impl NsBrowser {
     }
 
     pub fn anim(&self) -> Option<Anim> {
-        self.anim.get()
+        self.anim.borrow().clone()
     }
 
     pub fn images(&self) -> Option<Images> {
@@ -330,10 +330,7 @@ impl NsBrowser {
             js.set_layout_root(None);
             js.set_style_table(None);
         }
-        if let Some(anim) = self.anim.take() {
-            // SAFETY: the handle is out of the page's slot, paint was detached from it above, and nothing samples animations or runs script before the script engine's copy is released below.
-            unsafe { anim.free() };
-        }
+        drop(self.anim.take());
         self.free_layout();
         self.drop_styles();
         if let Some(cache) = self.css_cache.take() {
@@ -479,7 +476,7 @@ pub fn attach_caches(b: &NsBrowser) {
 }
 
 pub fn set_anim(b: &NsBrowser, anim: Anim) {
-    b.anim.set(Some(anim));
+    drop(b.anim.replace(Some(anim)));
 }
 
 pub fn wire_js_callbacks(b: &NsBrowser, js: Js) {

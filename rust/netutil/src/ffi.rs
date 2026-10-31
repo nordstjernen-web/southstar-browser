@@ -88,9 +88,8 @@ fn default_accept_language_c() -> &'static CStr {
 
 pub fn effective_accept_language() -> Vec<u8> {
     southstar_config::get()
-        .and_then(|c| c.accept_language.non_empty())
-        .unwrap_or_else(default_accept_language)
-        .to_vec()
+        .and_then(|c| c.accept_language.non_empty().map(<[u8]>::to_vec))
+        .unwrap_or_else(|| default_accept_language().to_vec())
 }
 
 pub fn effective_navigator_languages() -> Vec<Vec<u8>> {

@@ -111,7 +111,7 @@ impl Drop for CssScope {
     }
 }
 
-pub fn load_into_anim(anim: southstar_anim::AnimHandle, sheets: &SheetList) {
+pub fn load_into_anim(anim: &southstar_anim::AnimHandle, sheets: &SheetList) {
     for sheet in &sheets.sheets {
         anim.load_keyframes(sheet);
     }
@@ -135,7 +135,7 @@ pub fn render_ctx<'a>(r: &Relayout<'a>, sheets: &'a SheetList<'a>) -> RenderCtx<
         zoom: 1.0,
         images: r.images,
         base_url: r.base.map(CStr::to_bytes),
-        anim: r.anim,
+        anim: r.anim.clone(),
         focused_input: r.focused,
         hover_node: r.hover,
         caret_byte: r.caret_byte,

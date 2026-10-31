@@ -65,6 +65,7 @@ fn feature(out: &mut Vec<u8>, key: &str, on: bool) {
 
 fn user_agent() -> Option<Vec<u8>> {
     let config = sys::unlocked_config();
+    let config = config.as_deref();
     config
         .and_then(|c| c.user_agent.non_empty())
         .map(<[u8]>::to_vec)

@@ -30,7 +30,7 @@ fn settle_quiet(b: &NsBrowser) -> bool {
     if b.dirty.get() {
         return false;
     }
-    if b.anim().is_some_and(ffi::Anim::has_active) {
+    if b.anim().is_some_and(|anim| anim.has_active()) {
         return false;
     }
     if b.js().is_some_and(ffi::Js::has_pending_work) {
@@ -241,7 +241,7 @@ pub fn animating(b: &NsBrowser) -> bool {
         || images::images_outstanding(b) > 0
         || b.js().is_some_and(ffi::Js::has_pending_animation_frame)
         || b.js().is_some_and(ffi::Js::needs_tick)
-        || b.anim().is_some_and(ffi::Anim::has_active)
+        || b.anim().is_some_and(|anim| anim.has_active())
         || b.images().is_some_and(ffi::Images::animating)
         || b.videos().is_some_and(ffi::Videos::animating)
 }
