@@ -14,7 +14,7 @@ crate-type = ["staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-ffi = { path = "../southstar-ffi", version = "=1.0.5" }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.6-dev" }
 
 [features]
 avif = ["southstar-ffi/avif"]

@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.5" }
-southstar-about-style = { path = "../about-style", version = "=1.0.5" }
-southstar-config = { path = "../config", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-sqlite = { path = "../sqlite", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-unicode = { path = "../unicode", version = "=1.0.6-dev" }
+southstar-about-style = { path = "../about-style", version = "=1.0.6-dev" }
+southstar-config = { path = "../config", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-sqlite = { path = "../sqlite", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

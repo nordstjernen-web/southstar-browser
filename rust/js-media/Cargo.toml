@@ -10,18 +10,18 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-events = { path = "../js-events", version = "=1.0.5" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
-southstar-js-services = { path = "../js-services", version = "=1.0.5" }
-southstar-mic = { path = "../mic", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
-southstar-video = { path = "../video", version = "=1.0.5" }
-southstar-webaudio = { path = "../webaudio", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.6-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.6-dev" }
+southstar-mic = { path = "../mic", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
+southstar-video = { path = "../video", version = "=1.0.6-dev" }
+southstar-webaudio = { path = "../webaudio", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

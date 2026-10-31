@@ -10,28 +10,28 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.5" }
-southstar-anim = { path = "../anim", version = "=1.0.5" }
-southstar-cairo = { path = "../cairo", version = "=1.0.5" }
-southstar-canvas = { path = "../canvas", version = "=1.0.5" }
-southstar-css = { path = "../css", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-font = { path = "../font", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-image = { path = "../image", version = "=1.0.5" }
-southstar-js-images = { path = "../js-images", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5" }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
-southstar-layout-geom = { path = "../layout-geom", version = "=1.0.5" }
-southstar-mat4 = { path = "../mat4", version = "=1.0.5" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.5" }
-southstar-selection = { path = "../selection", version = "=1.0.5" }
-southstar-spellcheck = { path = "../spellcheck", version = "=1.0.5" }
-southstar-style = { path = "../style", version = "=1.0.5" }
-southstar-svg = { path = "../svg", version = "=1.0.5" }
-southstar-text = { path = "../text", version = "=1.0.5" }
-southstar-texture = { path = "../texture", version = "=1.0.5" }
-southstar-video = { path = "../video", version = "=1.0.5" }
+southstar-unicode = { path = "../unicode", version = "=1.0.6-dev" }
+southstar-anim = { path = "../anim", version = "=1.0.6-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.6-dev" }
+southstar-canvas = { path = "../canvas", version = "=1.0.6-dev" }
+southstar-css = { path = "../css", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-font = { path = "../font", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-image = { path = "../image", version = "=1.0.6-dev" }
+southstar-js-images = { path = "../js-images", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.6-dev" }
+southstar-mat4 = { path = "../mat4", version = "=1.0.6-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.6-dev" }
+southstar-selection = { path = "../selection", version = "=1.0.6-dev" }
+southstar-spellcheck = { path = "../spellcheck", version = "=1.0.6-dev" }
+southstar-style = { path = "../style", version = "=1.0.6-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.6-dev" }
+southstar-text = { path = "../text", version = "=1.0.6-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.6-dev" }
+southstar-video = { path = "../video", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

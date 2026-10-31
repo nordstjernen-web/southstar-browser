@@ -1,20 +1,8 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.5:
+Southstar Browser 1.0.6-dev:
 ======
-* Southstar is published on crates.io: `cargo install southstar` builds the
-  browser, the renderer and the audio and video helpers without meson, from
-  the new `rust/southstar` package. Its build script links the system
-  libraries through pkg-config and compiles the icon bundle. On first start
-  the browser writes its translations and license texts to `share/southstar`
-  beside its install prefix. The workspace's ~160 crates are published as 18
-  merged crates (`southstar-engine`, `-css`, `-dom`, `-platform`, …) plus the
-  six Boa forks: `scripts/crates-io.py` builds each merged crate from the
-  workspace crates `scripts/crates-io-groups.toml` assigns to it, as modules
-  with their paths rewritten, and publishes them in dependency order. CI checks
-  that the merged crates build. `scripts/set-version.py` sets the version
-  everywhere it is written.
 * Internals: the box-tree builder, list markers, SVG geometry and the
   animation engine hold nodes as `Node` or `WeakNode` instead of raw
   `NsNode` pointers, so an animation's state no longer resolves to a node
@@ -46,6 +34,21 @@ Southstar Browser 1.0.5:
   or an in-memory buffer, codec, packet, frame, scaler and resampler), shared
   by the inline WebM decoder and the audio and video helpers, which drop their
   own copies. `rust/video` now forbids unsafe code.
+
+Southstar Browser 1.0.5:
+======
+* Southstar is published on crates.io: `cargo install southstar` builds the
+  browser, the renderer and the audio and video helpers without meson, from
+  the new `rust/southstar` package. Its build script links the system
+  libraries through pkg-config and compiles the icon bundle. On first start
+  the browser writes its translations and license texts to `share/southstar`
+  beside its install prefix. The workspace's ~160 crates are published as 18
+  merged crates (`southstar-engine`, `-css`, `-dom`, `-platform`, …) plus the
+  six Boa forks: `scripts/crates-io.py` builds each merged crate from the
+  workspace crates `scripts/crates-io-groups.toml` assigns to it, as modules
+  with their paths rewritten, and publishes them in dependency order. CI checks
+  that the merged crates build. `scripts/set-version.py` sets the version
+  everywhere it is written.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each

@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-boa_engine = { package = "southstar-boa-engine", path = "../../third_party/boa_engine", version = "=1.0.5", features = ["annex-b", "experimental"] }
-boa_gc = { package = "southstar-boa-gc", path = "../../third_party/boa_gc", version = "=1.0.5" }
+boa_engine = { package = "southstar-boa-engine", path = "../../third_party/boa_engine", version = "=1.0.6-dev", features = ["annex-b", "experimental"] }
+boa_gc = { package = "southstar-boa-gc", path = "../../third_party/boa_gc", version = "=1.0.6-dev" }
 serde_json = "1"
 
 [features]

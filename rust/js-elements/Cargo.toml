@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-image = { path = "../image", version = "=1.0.5" }
-southstar-js-collections = { path = "../js-collections", version = "=1.0.5" }
-southstar-js-cssom = { path = "../js-cssom", version = "=1.0.5" }
-southstar-js-document = { path = "../js-document", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-forms = { path = "../js-forms", version = "=1.0.5" }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.5" }
-southstar-js-geometry = { path = "../js-geometry", version = "=1.0.5" }
-southstar-js-images = { path = "../js-images", version = "=1.0.5" }
-southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5" }
-southstar-js-reflect = { path = "../js-reflect", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
-southstar-js-shadow = { path = "../js-shadow", version = "=1.0.5" }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-image = { path = "../image", version = "=1.0.6-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.6-dev" }
+southstar-js-cssom = { path = "../js-cssom", version = "=1.0.6-dev" }
+southstar-js-document = { path = "../js-document", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.6-dev" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.6-dev" }
+southstar-js-geometry = { path = "../js-geometry", version = "=1.0.6-dev" }
+southstar-js-images = { path = "../js-images", version = "=1.0.6-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.6-dev" }
+southstar-js-reflect = { path = "../js-reflect", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
+southstar-js-shadow = { path = "../js-shadow", version = "=1.0.6-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

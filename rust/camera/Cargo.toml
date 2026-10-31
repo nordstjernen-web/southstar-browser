@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-config = { path = "../config", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-image = { path = "../image", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5" }
-southstar-texture = { path = "../texture", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-config = { path = "../config", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-image = { path = "../image", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true
