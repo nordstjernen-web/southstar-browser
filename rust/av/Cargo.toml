@@ -12,5 +12,9 @@ homepage.workspace = true
 [build-dependencies]
 southstar-build = { path = "../build", version = "=1.0.5" }
 
+[features]
+resample = []
+scale = []
+
 [lints]
 workspace = true

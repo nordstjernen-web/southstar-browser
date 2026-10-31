@@ -2,17 +2,23 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#[cfg(feature = "scale")]
 pub mod convert;
 pub mod decode;
 pub mod demux;
 pub mod ffi;
 pub mod layout;
+#[cfg(feature = "resample")]
+pub mod resample;
 
-pub use convert::{Resampler, Scaler};
+#[cfg(feature = "scale")]
+pub use convert::Scaler;
 pub use decode::{Codec, CodecDescription, Frame, Packet};
 pub use demux::{Format, Parameters, Stream, quiet_logging};
 pub use ffi::*;
 pub use layout::Field;
+#[cfg(feature = "resample")]
+pub use resample::Resampler;
 
 const LAYOUT: Option<&str> = match option_env!("NS_AV_LAYOUT") {
     Some(text) if !text.is_empty() => Some(text),

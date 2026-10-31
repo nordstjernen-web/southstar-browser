@@ -7,8 +7,8 @@ use core::ptr::{self, NonNull};
 
 use crate::demux::Parameters;
 use crate::{
-    self as av, AVChannelLayout, AVCodec, AVCodecContext, AVFrame, AVPacket, Field, channel_layout,
-    codec_context, frame,
+    self as av, AVCodec, AVCodecContext, AVFrame, AVPacket, Field, channel_layout, codec_context,
+    frame,
 };
 
 const CODEC_CHANNELS: Field<AVCodecContext, c_int> =
@@ -58,10 +58,11 @@ impl Codec {
         self.get(&CODEC_CHANNELS)
     }
 
-    pub(crate) fn channel_layout(&self) -> *const AVChannelLayout {
+    #[cfg(feature = "resample")]
+    pub(crate) fn channel_layout(&self) -> *const crate::AVChannelLayout {
         codec_context::CH_LAYOUT
             .ptr(self.0.as_ptr())
-            .cast::<AVChannelLayout>()
+            .cast::<crate::AVChannelLayout>()
             .cast_const()
     }
 

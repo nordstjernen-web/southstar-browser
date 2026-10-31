@@ -2,8 +2,8 @@
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
 anim	2	0	0	0	0	0	0
-audio-helper	96	20	1	0	0	0	0
-av	8	40	0	0	0	0	0
+audio-helper	43	20	1	0	0	0	0
+av	72	40	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
 browser	116	1	79	0	0	0	0
@@ -149,8 +149,8 @@ texture	0	0	0	0	0	0	0
 threaddump	17	11	0	0	0	0	0
 unicode	0	0	0	0	0	0	0
 url	0	0	0	0	0	0	0
-video	55	0	0	0	0	0	0
-video-helper	38	3	1	0	0	0	0
+video	0	0	0	0	0	0	0
+video-helper	7	3	1	0	0	0	0
 watchdog	25	15	0	0	0	0	0
 webaudio	0	0	0	0	0	0	0
 webcrypto	104	118	0	0	0	0	0

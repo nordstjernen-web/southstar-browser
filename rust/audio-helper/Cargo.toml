@@ -14,7 +14,7 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.5" }
+southstar-av = { path = "../av", version = "=1.0.5", features = ["resample"] }
 southstar-glib = { path = "../glib", version = "=1.0.5" }
 southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.5" }
 southstar-http = { path = "../http", version = "=1.0.5" }

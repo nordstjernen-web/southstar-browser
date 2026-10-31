@@ -49,6 +49,7 @@ fn windows_locale() -> Option<Vec<u8>> {
         fn GetUserDefaultLocaleName(name: *mut u16, length: core::ffi::c_int) -> core::ffi::c_int;
     }
     let mut name = [0u16; LOCALE_NAME_MAX_LENGTH];
+    // SAFETY: name is a writable buffer of exactly the length passed.
     if unsafe {
         GetUserDefaultLocaleName(
             name.as_mut_ptr(),
