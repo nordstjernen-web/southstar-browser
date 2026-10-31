@@ -1,18 +1,18 @@
 # Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
-anim	7	0	0	0	0	0	0
+anim	3	0	0	0	0	0	0
 audio-helper	96	20	1	0	0	0	0
 av	8	40	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
-browser	117	1	79	0	0	0	0
+browser	116	1	79	0	0	0	0
 build	0	0	0	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	8	3	0	0	0	0	0
 canvas	0	0	0	0	0	0	0
-config	3	0	0	0	0	0	0
+config	0	0	0	0	0	0	0
 csp	0	0	0	0	0	0	0
 css	10	0	0	0	0	0	0
 css-color	0	0	0	0	0	0	0
@@ -33,7 +33,7 @@ glctx	71	55	0	0	0	0	0
 glib	110	90	0	0	0	0	0
 gtk	495	27	0	0	0	0	0
 gtk-ffi	29	371	0	0	0	0	0
-headless	15	8	0	0	0	0	0
+headless	13	8	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
 history	4	0	1	0	0	0	0
 html-parser	0	0	0	0	0	0	0
@@ -69,7 +69,7 @@ js-forms	0	0	0	0	0	0	0
 js-frames	0	0	0	0	0	0	0
 js-geometry	0	0	0	0	0	0	0
 js-html	0	0	0	0	0	0	0
-js-images	4	0	0	0	0	0	0
+js-images	0	0	0	0	0	0	0
 js-input	0	0	0	0	0	0	0
 js-interfaces	0	0	0	0	0	0	0
 js-intl	8	6	0	0	0	0	0
@@ -77,7 +77,7 @@ js-lifecycle	0	0	0	0	0	0	0
 js-loader	0	0	0	0	0	0	0
 js-media	0	0	0	0	0	0	0
 js-mutation	0	0	0	0	0	0	0
-js-net	2	0	0	0	0	0	0
+js-net	0	0	0	0	0	0	0
 js-node	0	0	0	0	0	0	0
 js-observers	0	0	0	0	0	0	0
 js-page	0	0	0	0	0	0	0
