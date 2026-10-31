@@ -5,11 +5,10 @@
 use core::ffi::c_int;
 use std::ffi::CString;
 
-use southstar_av::{self as av, AVRational, codec_parameters, frame, stream};
-
-pub use super::libav::quiet_logging;
-use super::libav::{Codec, Format, Frame, Packet, Scaler};
 use super::os;
+pub use southstar_av::quiet_logging;
+use southstar_av::{self as av, AVRational, codec_parameters, frame, stream};
+use southstar_av::{Codec, CodecDescription, Format, Frame, Packet, Scaler};
 
 const MAX_DIMENSION: c_int = 4096;
 
@@ -22,7 +21,7 @@ pub enum Next {
 pub struct Decoder {
     scaler: Scaler,
     codec: Codec,
-    format: Format,
+    format: Format<'static>,
     packet: Packet,
     frame: Frame,
     stream: c_int,
@@ -44,7 +43,8 @@ impl Decoder {
         let index = format.best_stream(av::AVMEDIA_TYPE_VIDEO)?;
         let video = format.stream(index)?;
         let params = video.parameters()?;
-        let codec = Codec::open(&params, params.get(&codec_parameters::CODEC_ID))?;
+        let decoder = CodecDescription::find(params.get(&codec_parameters::CODEC_ID))?;
+        let codec = Codec::open(&params, decoder)?;
         let width = params.get(&codec_parameters::WIDTH);
         let height = params.get(&codec_parameters::HEIGHT);
         if width <= 0 || height <= 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
@@ -162,6 +162,15 @@ impl Decoder {
     }
 
     pub fn scale_into(&mut self, target: &southstar_media_shm::Frame) {
-        self.scaler.scale(&self.frame, target);
+        // SAFETY: the ring's frame() checked that target holds height rows of stride bytes, each with width * 4 pixel bytes, inside the mapping; the slot is unpublished while it is written.
+        unsafe {
+            self.scaler.scale_to(
+                &self.frame,
+                target.as_ptr(),
+                target.stride as usize,
+                target.width,
+                target.height,
+            )
+        };
     }
 }

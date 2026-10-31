@@ -35,6 +35,10 @@ Southstar Browser 1.0.5:
   resolved when a sheet is parsed into its cache, so a cached sheet is never
   changed afterwards, and the container map a style pass reads is moved into
   the pass rather than lent to it as a pointer.
+* Internals: `rust/av` owns the safe libav layer (format context over a file
+  or an in-memory buffer, codec, packet, frame, scaler and resampler), shared
+  by the inline WebM decoder and the audio and video helpers, which drop their
+  own copies. `rust/video` now forbids unsafe code.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each
