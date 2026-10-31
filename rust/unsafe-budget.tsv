@@ -11,7 +11,7 @@ build	0	0	0	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	8	3	0	0	0	0	0
-canvas	2	0	0	0	0	0	0
+canvas	0	0	0	0	0	0	0
 config	3	0	0	0	0	0	0
 csp	0	0	0	0	0	0	0
 css	10	0	0	0	0	0	0
@@ -52,7 +52,7 @@ js-attrs	0	0	0	0	0	0	0
 js-bind	0	0	0	0	0	0	0
 js-brand	0	0	0	0	0	0	0
 js-clone	0	0	0	0	0	0	0
-js-collections	1	0	0	0	0	0	0
+js-collections	0	0	0	0	0	0	0
 js-compression	4	4	0	0	0	0	0
 js-crypto	0	0	0	0	0	0	0
 js-cssom	0	0	0	0	0	0	0
@@ -75,7 +75,7 @@ js-interfaces	0	0	0	0	0	0	0
 js-intl	8	6	0	0	0	0	0
 js-lifecycle	0	0	0	0	0	0	0
 js-loader	0	0	0	0	0	0	0
-js-media	1	0	0	0	0	0	0
+js-media	0	0	0	0	0	0	0
 js-mutation	0	0	0	0	0	0	0
 js-net	2	0	0	0	0	0	0
 js-node	0	0	0	0	0	0	0
@@ -84,7 +84,7 @@ js-page	0	0	0	0	0	0	0
 js-perf	0	0	0	0	0	0	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	0	0	0	0	0	0	0
-js-runtime	11	3	0	0	0	0	0
+js-runtime	9	3	0	0	0	0	0
 js-services	6	3	0	0	0	0	0
 js-shadow	0	0	0	0	0	0	0
 js-storage	0	0	0	0	0	0	0
@@ -94,7 +94,7 @@ js-top-layer	0	0	0	0	0	0	0
 js-traversal	0	0	0	0	0	0	0
 js-url	2	1	0	0	0	0	0
 js-wasm	2	0	0	0	0	0	0
-js-window	2	0	0	0	0	0	0
+js-window	0	0	0	0	0	0	0
 js-workers	0	0	0	0	0	0	0
 jsshell	0	0	0	0	0	0	0
 keyfile	0	0	0	0	0	0	0

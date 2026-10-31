@@ -248,15 +248,7 @@ pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
 }
 
 pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
-    if super::record::unpin_wrapper(js.some(), node) {
-        if let (Some(record), Some(node)) =
-            (super::record::record(js.some()), super::record::node(node))
-        {
-            super::record::release_wrapper(record, node);
-        }
-        return true;
-    }
-    false
+    super::record::unpin_wrapper(js.some(), node)
 }
 
 pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'_>) -> Fetch {
