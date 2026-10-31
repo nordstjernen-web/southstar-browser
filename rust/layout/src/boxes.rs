@@ -502,14 +502,6 @@ impl<'a> BoxRef<'a> {
         b.map(BoxRef::of)
     }
 
-    /// # Safety
-    ///
-    /// `b` is null or a pointer `BoxRef::as_ptr` returned on this thread.
-    pub unsafe fn from_ptr(b: *const NsBox) -> Option<BoxRef<'a>> {
-        // SAFETY: box slots are never deallocated, and the caller passes null or one of this thread's slots.
-        unsafe { b.as_ref() }.map(BoxRef::of)
-    }
-
     pub fn as_ptr(self) -> *const NsBox {
         ptr::from_ref(self.0)
     }

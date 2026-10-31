@@ -3,9 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use core::ptr;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::{FontKeyword, font_kerning, font_keyword};
 use southstar_layout_geom::style_is_contents;
@@ -231,7 +230,7 @@ fn first_letter_attrs(fl: StyleRef<'_>, text: &[u8], out: &mut Vec<InlineAttr>) 
 
 pub fn build_inline_run(
     first: Option<Node<'_>>,
-    last_excl: *const NsNode,
+    last_excl: Option<Node<'_>>,
     styles: StyleTable,
     abs_placeholders: bool,
 ) -> Option<BoxRef<'static>> {
@@ -245,10 +244,9 @@ pub fn build_inline_run(
     {
         c.text_transform = Some(kw);
     }
-    let first_child_of_parent = first.zip(parent).is_some_and(|(f, p)| {
-        p.first_child()
-            .is_some_and(|fc| ptr::eq(fc.as_ptr(), f.as_ptr()))
-    });
+    let first_child_of_parent = first
+        .zip(parent)
+        .is_some_and(|(f, p)| p.first_child().is_some_and(|fc| fc == f));
     if let Some(p) = parent.filter(|p| p.is_element() && first_child_of_parent)
         && let Some(marker) = ffi::li_marker(p, parent_style)
     {
@@ -257,7 +255,7 @@ pub fn build_inline_run(
     let depth = c.state.inline_collect_depth;
     let body_start = c.out.len();
     let mut n = first;
-    while let Some(node) = n.filter(|node| !ptr::eq(node.as_ptr(), last_excl)) {
+    while let Some(node) = n.filter(|node| Some(*node) != last_excl) {
         n = node.next_sibling();
         c.walk(node, depth);
     }

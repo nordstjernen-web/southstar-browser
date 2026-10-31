@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -85,13 +84,14 @@ impl Js {
         );
     }
 
-    pub fn bind_layout_flush(self, ctx: &Ctx) {
-        let ctx = ptr::from_ref(ctx);
+    pub fn bind_layout_flush(self, ctx: &Rc<Ctx>) {
+        let ctx = Rc::downgrade(ctx);
         api::set_layout_flush_hook(
             self.page(),
             Some(Rc::new(move || {
-                // SAFETY: the run unbinds the layout flush before its context goes away.
-                crate::inproc::flush_layout(unsafe { &*ctx });
+                if let Some(ctx) = ctx.upgrade() {
+                    crate::inproc::flush_layout(&ctx);
+                }
             })),
         );
     }

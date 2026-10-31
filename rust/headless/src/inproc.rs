@@ -672,7 +672,7 @@ pub fn run_one(
     let image_cache = Some(ImageCache::create());
     let video_cache = Some(VideoCache::create());
     let flush_base = page_url.clone();
-    let ctx = Ctx {
+    let ctx = Rc::new(Ctx {
         doc: doc.node().downgrade(),
         js,
         base: flush_base.clone(),
@@ -688,7 +688,7 @@ pub fn run_one(
         caret: Cell::new(0),
         anchor: Cell::new(0),
         relaying: Cell::new(false),
-    };
+    });
     if let Some(js) = js {
         js.set_style_table(ctx.styles.borrow().clone());
         js.set_image_cache(image_cache);

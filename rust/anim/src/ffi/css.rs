@@ -10,7 +10,7 @@ use southstar_css::{
     AnimationEntry, Declaration, Declarations, NsCssValue, OwnedValue, Prop as CssProp, Sheet,
     StyleData, StyleMap, ValueKind,
 };
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 use southstar_layout::Style;
 use southstar_style::{StyleRef, UNIT_PERCENT, UNIT_PX};
 
@@ -367,36 +367,38 @@ pub fn monotonic_us() -> i64 {
     southstar_glib::monotonic_us()
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NodePtr(*const NsNode);
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct NodePtr {
+    node: WeakNode,
+    key: usize,
+}
 
 impl NodePtr {
-    pub fn new(node: *const NsNode) -> Option<NodePtr> {
-        (!node.is_null()).then_some(NodePtr(node))
+    pub fn of(node: Node<'_>) -> NodePtr {
+        NodePtr {
+            node: node.downgrade(),
+            key: node.as_ptr() as usize,
+        }
     }
 
     pub fn key(self) -> usize {
-        self.0 as usize
+        self.key
     }
 
     pub fn node(self) -> Option<Node<'static>> {
-        // SAFETY: a NodePtr is made from a node of this thread's store, and `from_ptr` returns None once that node is freed.
-        unsafe { Node::from_ptr(self.0) }
+        self.node.get()
     }
 
     pub fn parent(self) -> Option<NodePtr> {
-        self.node()?.parent().and_then(|p| NodePtr::new(p.as_ptr()))
+        self.node()?.parent().map(NodePtr::of)
     }
 
     pub fn first_child(self) -> Option<NodePtr> {
-        self.node()?
-            .first_child()
-            .and_then(|c| NodePtr::new(c.as_ptr()))
+        self.node()?.first_child().map(NodePtr::of)
     }
 
     pub fn next_in_subtree(self, root: NodePtr, descend: bool) -> Option<NodePtr> {
-        southstar_dom::index::next_in_subtree(self.node()?, root.node(), descend)
-            .and_then(|n| NodePtr::new(n.as_ptr()))
+        southstar_dom::index::next_in_subtree(self.node()?, root.node(), descend).map(NodePtr::of)
     }
 
     pub fn ancestors(self) -> impl Iterator<Item = NodePtr> {
@@ -404,15 +406,15 @@ impl NodePtr {
     }
 
     pub fn style_in<'a>(self, styles: StylesTable<'a>) -> Option<StyleRef<'a>> {
-        styles.0.get(self.0).map(StyleRef::from_data)
+        styles.0.get(self.node()?.as_ptr()).map(StyleRef::from_data)
     }
 
     pub fn retained_style_in(self, styles: StylesTable<'_>) -> Option<RetainedStyle> {
-        styles.0.retained(self.0).map(RetainedStyle)
+        styles.0.retained(self.node()?.as_ptr()).map(RetainedStyle)
     }
 
     pub fn style_mut_in(self, styles: StylesTable<'_>) -> Option<StyleMut> {
-        NonNull::new(styles.0.lookup(self.0)).map(StyleMut)
+        NonNull::new(styles.0.lookup(self.node()?.as_ptr())).map(StyleMut)
     }
 
     pub fn style_before_change(self) -> Option<RetainedStyle> {
@@ -420,7 +422,7 @@ impl NodePtr {
     }
 
     pub fn exclude_from_incremental(self, exclude: bool) {
-        southstar_css::incremental_exclude(self.0, exclude);
+        southstar_css::incremental_exclude(self.key, exclude);
     }
 }
 
@@ -433,13 +435,13 @@ impl<'a> StylesTable<'a> {
     }
 
     pub fn contains(self, node: NodePtr) -> bool {
-        self.0.contains(node.0)
+        node.node().is_some_and(|n| self.0.contains(n.as_ptr()))
     }
 
     pub fn entries(self) -> Vec<(NodePtr, StyleRef<'a>)> {
         self.0
-            .iter()
-            .filter_map(|(k, v)| Some((NodePtr::new(k as *const NsNode)?, StyleRef::from_data(v))))
+            .nodes()
+            .map(|(node, style)| (NodePtr::of(node), StyleRef::from_data(style)))
             .collect()
     }
 }

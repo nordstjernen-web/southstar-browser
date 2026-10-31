@@ -50,7 +50,7 @@ fn build_inline_run(
     last_excl: Option<Node<'_>>,
     st: StyleTable,
 ) -> Option<BoxRef<'static>> {
-    run::build_inline_run(Some(first), Node::ptr_or_null(last_excl), st, true)
+    run::build_inline_run(Some(first), last_excl, st, true)
 }
 
 fn build_pseudo_block_for(ps: StyleRef<'_>, host: Node<'_>) -> Option<BoxRef<'static>> {
