@@ -2,8 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_int, c_void};
+use core::cell::RefCell;
+use core::ffi::{CStr, c_int};
 use core::ptr;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
 
@@ -70,12 +72,12 @@ pub(crate) fn has_image_cache(js: Js) -> bool {
     image_cache(js).is_some()
 }
 
-fn load_ptr(load: &Load) -> *mut c_void {
-    ptr::from_ref(load).cast_mut().cast()
+thread_local! {
+    static AWAITING: RefCell<HashMap<usize, Weak<Load>>> = RefCell::new(HashMap::new());
 }
 
 fn load_addr(load: &Load) -> usize {
-    load_ptr(load) as usize
+    ptr::from_ref(load).addr()
 }
 
 pub(crate) fn cache_get(
@@ -84,7 +86,10 @@ pub(crate) fn cache_get(
     top_url: &CStr,
     load: &Rc<Load>,
 ) -> Option<ImageRef<'static>> {
-    image_cache(js)?.get(url, Some(top_url), Some(on_image_ready), load_addr(load))
+    let cache = image_cache(js)?;
+    let addr = load_addr(load);
+    AWAITING.with(|awaiting| awaiting.borrow_mut().insert(addr, Rc::downgrade(load)));
+    cache.get(url, Some(top_url), Some(on_image_ready), addr)
 }
 
 pub(crate) fn cache_peek(js: Js, url: &CStr) -> Option<ImageRef<'static>> {
@@ -92,8 +97,10 @@ pub(crate) fn cache_peek(js: Js, url: &CStr) -> Option<ImageRef<'static>> {
 }
 
 pub(crate) fn cancel_image_cb(js: Js, load: &Load) {
+    let addr = load_addr(load);
+    drop(AWAITING.try_with(|awaiting| awaiting.borrow_mut().remove(&addr)));
     if let Some(cache) = image_cache(js) {
-        cache.cancel_ready(load_addr(load));
+        cache.cancel_ready(addr);
     }
 }
 
@@ -185,23 +192,9 @@ pub(crate) fn layout_image(js: Js, el: Element) -> Option<ImageRef<'static>> {
     ImageRef::from_media(b.media()?.image()?)
 }
 
-/// # Safety
-///
-/// `data` must be null or the address of a `Load` owned by a live `Rc`.
-unsafe fn retain(data: *mut c_void) -> Option<Rc<Load>> {
-    let load = data.cast_const().cast::<Load>();
-    if load.is_null() {
-        return None;
-    }
-    // SAFETY: the caller guarantees `load` came from a live `Rc<Load>`.
-    unsafe { Rc::increment_strong_count(load) };
-    // SAFETY: the strong count taken above is the one this new `Rc` owns.
-    Some(unsafe { Rc::from_raw(load) })
-}
-
-fn on_image_ready(img: ImageRef<'static>, load: usize) {
-    // SAFETY: load is the address of a Load whose Rc keeps it alive until its callback is cancelled.
-    if let Some(load) = unsafe { retain(load as *mut c_void) } {
+fn on_image_ready(img: ImageRef<'static>, addr: usize) {
+    let load = AWAITING.with(|awaiting| awaiting.borrow().get(&addr).and_then(Weak::upgrade));
+    if let Some(load) = load {
         crate::on_image_ready(load, Some(img));
     }
 }

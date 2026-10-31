@@ -191,13 +191,13 @@ pub fn compute_cascade(page: &Page<'_>) -> Rc<StyleMap> {
     Rc::new(styles)
 }
 
-pub fn load_keyframes(anim: AnimHandle, page: &Page<'_>) {
+pub fn load_keyframes(anim: &AnimHandle, page: &Page<'_>) {
     let sheets = crate::styles::collect_stylesheets(page.doc, page.base, page.css_cache);
     css::load_into_anim(anim, &sheets);
     drop(sheets);
 }
 
-pub fn anim_observe(anim: AnimHandle, styles: Option<&StyleMap>, now_us: i64) {
+pub fn anim_observe(anim: &AnimHandle, styles: Option<&StyleMap>, now_us: i64) {
     if let Some(styles) = styles {
         anim.observe_all(styles, now_us);
     }
@@ -228,7 +228,7 @@ pub fn relayout(
         viewport_width,
         viewport_height: req.viewport_height,
         images: req.images,
-        anim: req.anim,
+        anim: req.anim.clone(),
         focused: req.focused,
         hover: req.hover,
         caret_byte: req.caret_byte,

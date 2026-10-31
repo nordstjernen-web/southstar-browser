@@ -172,11 +172,11 @@ pub fn compute_cascade(doc: &Document, base: Option<&CStr>, css_cache: CssCache)
 
 pub use southstar_anim::AnimHandle as Anim;
 
-pub fn load_keyframes(anim: Anim, doc: &Document, base: Option<&CStr>, css_cache: CssCache) {
+pub fn load_keyframes(anim: &Anim, doc: &Document, base: Option<&CStr>, css_cache: CssCache) {
     southstar_engine::load_keyframes(anim, &page(doc, base, css_cache));
 }
 
-pub fn anim_observe(anim: Anim, styles: Option<&StyleMap>, now_us: i64) {
+pub fn anim_observe(anim: &Anim, styles: Option<&StyleMap>, now_us: i64) {
     southstar_engine::anim_observe(anim, styles, now_us);
 }
 
@@ -218,7 +218,7 @@ pub fn relayout(r: &Relayout, layout: &Cell<Option<BoxRef<'static>>>) -> Option<
         viewport_width: r.vw,
         viewport_height: r.vh,
         images: r.images,
-        anim: r.anim,
+        anim: r.anim.clone(),
         js: r.js.map(super::Js::handle),
         focused: r.focused,
         hover: None,

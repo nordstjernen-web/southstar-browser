@@ -2,60 +2,61 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::UnsafeCell;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, RwLock};
 
-use southstar_glib::{FALSE, TRUE};
+use southstar_glib::{FALSE, GBoolean, TRUE};
 
 use crate::NsConfig;
 use crate::util as fs;
 
-struct Global {
-    config: UnsafeCell<NsConfig>,
-}
-
-// SAFETY: the configuration is written only from the browser's main thread (init, reload,
-// shutdown, settings edits under `lock()`), and other threads only read it between writes.
-unsafe impl Sync for Global {}
-
-static GLOBAL: Global = Global {
-    config: UnsafeCell::new(NsConfig::ZERO),
-};
+static GLOBAL: LazyLock<RwLock<Arc<NsConfig>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(NsConfig::ZERO)));
 
 static PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 static LOCK: Mutex<()> = Mutex::new(());
 
-fn global_config() -> &'static mut NsConfig {
-    // SAFETY: the cell is valid for the whole program, and writers are serialized on the main
-    // thread as stated on `Global`'s `Sync` impl.
-    unsafe { &mut *GLOBAL.config.get() }
+fn update<R>(f: impl FnOnce(&mut NsConfig) -> R) -> R {
+    let mut config = GLOBAL.write().unwrap_or_else(|e| e.into_inner());
+    f(Arc::make_mut(&mut config))
+}
+
+fn replace(config: NsConfig) {
+    *GLOBAL.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(config);
+}
+
+fn snapshot() -> NsConfig {
+    NsConfig::clone(&config())
 }
 
 fn global_path() -> MutexGuard<'static, Option<PathBuf>> {
     PATH.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub(crate) fn config() -> Option<&'static NsConfig> {
-    // SAFETY: the cell is valid for the whole program, and readers never overlap a write as
-    // stated on `Global`'s `Sync` impl.
-    Some(unsafe { &*GLOBAL.config.get() })
+pub(crate) fn config() -> Arc<NsConfig> {
+    Arc::clone(&GLOBAL.read().unwrap_or_else(|e| e.into_inner()))
+}
+
+fn switch_on(field: impl FnOnce(&mut NsConfig) -> &mut GBoolean) {
+    let switched = update(|config| {
+        let flag = field(config);
+        let off = *flag == FALSE;
+        if off {
+            *flag = TRUE;
+        }
+        off
+    });
+    if switched {
+        save();
+    }
 }
 
 pub(crate) fn enable_camera() {
-    let config = global_config();
-    if config.camera_enabled == FALSE {
-        config.camera_enabled = TRUE;
-        save();
-    }
+    switch_on(|config| &mut config.camera_enabled);
 }
 
 pub(crate) fn enable_webgl() {
-    let config = global_config();
-    if config.webgl_enabled == FALSE {
-        config.webgl_enabled = TRUE;
-        save();
-    }
+    switch_on(|config| &mut config.webgl_enabled);
 }
 
 pub(crate) fn ascii_strtoll(value: &[u8]) -> Option<i64> {
@@ -104,7 +105,9 @@ pub fn init() {
         return;
     };
     let path = dir.join("southstar").join("southstar.conf");
-    load(global_config(), &path);
+    let mut config = snapshot();
+    load(&mut config, &path);
+    replace(config);
     *slot = Some(path);
 }
 
@@ -114,11 +117,11 @@ pub fn reload() {
     };
     let mut fresh = NsConfig::ZERO;
     load(&mut fresh, &path);
-    crate::adopt(global_config(), &mut fresh);
+    update(|config| crate::adopt(config, &mut fresh));
 }
 
 pub fn shutdown() {
-    *global_config() = NsConfig::ZERO;
+    replace(NsConfig::ZERO);
     *global_path() = None;
 }
 
@@ -137,12 +140,12 @@ impl ConfigLock {
         reload();
     }
 
-    pub fn get(&self) -> &NsConfig {
-        global_config()
+    pub fn get(&self) -> Arc<NsConfig> {
+        config()
     }
 
-    pub fn get_mut(&mut self) -> &mut NsConfig {
-        global_config()
+    pub fn update<R>(&mut self, f: impl FnOnce(&mut NsConfig) -> R) -> R {
+        update(f)
     }
 
     pub fn save(&self) -> bool {
@@ -158,7 +161,7 @@ pub fn save() -> bool {
     if fs::make_dirs(dir, 0o700).is_err() {
         return false;
     }
-    let contents = crate::serialize(global_config());
+    let contents = crate::serialize(&mut snapshot());
     let written = fs::write_atomic(&path, &contents, 0o666).is_ok();
     if written {
         let _ = fs::set_mode(&path, 0o600);
@@ -168,5 +171,5 @@ pub fn save() -> bool {
 
 pub fn dump(default_language: &[u8]) -> Vec<u8> {
     let path = global_path().as_deref().map(fs::path_bytes);
-    crate::render_dump(global_config(), path.as_deref(), default_language)
+    crate::render_dump(&mut snapshot(), path.as_deref(), default_language)
 }

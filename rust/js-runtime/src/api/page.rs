@@ -625,12 +625,12 @@ pub fn set_image_cache(js: Option<Page>, cache: *mut c_void) {
 }
 
 pub fn anim(js: Option<Page>) -> Option<AnimHandle> {
-    state(js, None, |state| state.anim.get())
+    state(js, None, |state| state.anim.borrow().clone())
 }
 
 pub fn set_anim(js: Option<Page>, anim: Option<AnimHandle>) {
     if let Some(js) = Js::of(js) {
-        js.st().anim.set(anim);
+        drop(js.st().anim.replace(anim));
         glue::raf_set_host_driven(js);
     }
 }

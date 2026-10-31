@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use core::ptr;
 use std::time::{Duration, Instant};
 
@@ -11,7 +11,7 @@ use southstar_js_runtime::api::Page;
 use southstar_layout::NsBox;
 
 struct PaintState {
-    anim: Cell<Option<AnimHandle>>,
+    anim: RefCell<Option<AnimHandle>>,
     js: Cell<Option<Page>>,
     search_case_sensitive: Cell<bool>,
     search_active: Cell<*const NsBox>,
@@ -23,7 +23,7 @@ struct PaintState {
 impl PaintState {
     fn new() -> PaintState {
         PaintState {
-            anim: Cell::new(None),
+            anim: RefCell::new(None),
             js: Cell::new(None),
             search_case_sensitive: Cell::new(false),
             search_active: Cell::new(ptr::null()),
@@ -39,11 +39,11 @@ thread_local! {
 }
 
 pub fn anim() -> Option<AnimHandle> {
-    STATE.with(|s| s.anim.get())
+    STATE.with(|s| s.anim.borrow().clone())
 }
 
 pub fn set_anim(anim: Option<AnimHandle>) {
-    STATE.with(|s| s.anim.set(anim));
+    STATE.with(|s| drop(s.anim.replace(anim)));
 }
 
 pub fn js() -> Option<Page> {

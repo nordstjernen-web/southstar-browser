@@ -5,6 +5,8 @@
 use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 use core::sync::atomic::{AtomicPtr, Ordering};
+use std::ffi::CString;
+use std::sync::Arc;
 
 use southstar_config::{NsConfig, Text};
 use southstar_glib::{GBoolean, GError, GStr, g_free, g_path_get_dirname};
@@ -438,12 +440,12 @@ fn apply_gsk_renderer(pref: Option<&CStr>) {
     }
 }
 
-fn config() -> Option<&'static NsConfig> {
+fn config() -> Option<Arc<NsConfig>> {
     southstar_config::get()
 }
 
-fn config_text(field: impl FnOnce(&'static NsConfig) -> &'static Text) -> Option<&'static CStr> {
-    config().and_then(|c| field(c).c_str())
+fn config_text(field: impl FnOnce(&NsConfig) -> &Text) -> Option<CString> {
+    config().and_then(|c| field(&c).c_str().map(CStr::to_owned))
 }
 
 fn create_private_dir(dir: &CStr) {
@@ -550,10 +552,13 @@ fn run_proc_gui(
     recover: bool,
     private_mode: bool,
 ) -> c_int {
-    apply_gsk_renderer(gsk_renderer_override.or_else(|| config_text(|c| &c.gsk_renderer)));
+    let configured_renderer = config_text(|c| &c.gsk_renderer);
+    apply_gsk_renderer(gsk_renderer_override.or(configured_renderer.as_deref()));
+    let home = config_text(|c| &c.home_url);
     let start = match url {
         Some(url) if !url.is_empty() => url,
-        _ => config_text(|c| &c.home_url)
+        _ => home
+            .as_deref()
             .filter(|h| !h.is_empty())
             .unwrap_or(c"about:start"),
     };
@@ -748,10 +753,11 @@ pub fn run(args: &[&CStr]) -> c_int {
         );
     }
 
+    let configured_renderer = config_text(|c| &c.gsk_renderer);
     apply_gsk_renderer(
         options
             .gsk_renderer_override
-            .or_else(|| config_text(|c| &c.gsk_renderer)),
+            .or(configured_renderer.as_deref()),
     );
     let opts = headless_opts(&options);
     let headless_rc = run_headless(&opts);

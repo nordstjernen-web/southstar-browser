@@ -2,9 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int, c_long};
+use std::collections::HashMap;
 use std::ffi::CString;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 use southstar_glib as glib;
 use southstar_js_bind::host::{self, HostKind};
@@ -196,48 +198,70 @@ pub(crate) enum Transport {
     EventSource(southstar_eventsource::EventSource),
 }
 
-fn socket_ref(data: usize) -> Rc<crate::socket::Socket> {
-    let ptr = data as *const crate::socket::Socket;
-    // SAFETY: data is the address of a socket whose Rc the transport's owner keeps alive until the transport is freed.
-    unsafe { Rc::increment_strong_count(ptr) };
-    // SAFETY: the count was raised above, so this Rc owns one reference.
-    unsafe { Rc::from_raw(ptr) }
+thread_local! {
+    static SOCKETS: RefCell<HashMap<usize, Weak<crate::socket::Socket>>> =
+        RefCell::new(HashMap::new());
+    static NEXT_SOCKET_KEY: Cell<usize> = const { Cell::new(1) };
+}
+
+fn socket_key(socket: &Rc<crate::socket::Socket>) -> usize {
+    let key = NEXT_SOCKET_KEY.with(|next| next.replace(next.get().wrapping_add(1)));
+    SOCKETS.with(|sockets| {
+        let mut sockets = sockets.borrow_mut();
+        sockets.retain(|_, socket| socket.strong_count() > 0);
+        sockets.insert(key, Rc::downgrade(socket));
+    });
+    key
+}
+
+fn socket_ref(key: usize) -> Option<Rc<crate::socket::Socket>> {
+    SOCKETS.with(|sockets| sockets.borrow().get(&key).and_then(Weak::upgrade))
 }
 
 fn socket_busy(data: usize) -> bool {
-    socket_ref(data).js.in_pump()
+    socket_ref(data).is_some_and(|socket| socket.js.in_pump())
 }
 
 fn socket_on_open(data: usize) {
-    crate::socket::on_open(&socket_ref(data));
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_open(&socket);
+    }
 }
 
 fn ws_on_text(text: &[u8], data: usize) {
-    crate::socket::on_text(&socket_ref(data), text);
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_text(&socket, text);
+    }
 }
 
 fn ws_on_binary(bytes: &[u8], data: usize) {
-    crate::socket::on_binary(&socket_ref(data), bytes);
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_binary(&socket, bytes);
+    }
 }
 
 fn ws_on_close(code: i32, reason: &[u8], clean: bool, data: usize) {
-    crate::socket::on_close(&socket_ref(data), code, reason, clean);
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_close(&socket, code, reason, clean);
+    }
 }
 
 fn ws_on_error(message: &[u8], data: usize) {
-    crate::socket::on_error(&socket_ref(data), message);
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_error(&socket, message);
+    }
 }
 
 fn es_on_message(event: &[u8], text: &[u8], last_id: &[u8], data: usize) {
-    crate::socket::on_event_message(&socket_ref(data), event, text, last_id);
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_event_message(&socket, event, text, last_id);
+    }
 }
 
 fn es_on_error(fatal: bool, data: usize) {
-    crate::socket::on_event_error(&socket_ref(data), fatal);
-}
-
-fn socket_addr(socket: &Rc<crate::socket::Socket>) -> usize {
-    Rc::as_ptr(socket) as usize
+    if let Some(socket) = socket_ref(data) {
+        crate::socket::on_event_error(&socket, fatal);
+    }
 }
 
 impl Transport {
@@ -271,7 +295,7 @@ impl Transport {
             top_url,
             protocols,
             events,
-            socket_addr(socket),
+            socket_key(socket),
         ))
     }
 
@@ -293,7 +317,7 @@ impl Transport {
             b"",
             events,
             allow_url,
-            socket_addr(socket),
+            socket_key(socket),
         ))
     }
 

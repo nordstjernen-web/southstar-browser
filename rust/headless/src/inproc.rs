@@ -170,7 +170,7 @@ pub fn relayout(c: &Ctx) {
         vw: c.vw,
         vh: c.vh,
         images: c.image_cache,
-        anim: c.anim,
+        anim: c.anim.clone(),
         js: c.js,
         css_cache: c.css_cache,
         focused: c.focus_for_layout(),
@@ -225,13 +225,13 @@ impl<'a> Settle<'a> {
             }
             cache.tick(now);
         }
-        if let Some(anim) = fc.anim.filter(|a| a.tick(now)) {
+        if let Some(anim) = fc.anim.as_ref().filter(|a| a.tick(now)) {
             STYLES_STALE.store(true, Ordering::Relaxed);
             if anim.needs_layout() {
                 LAYOUT_DIRTY.store(true, Ordering::Relaxed);
             }
         }
-        if let (Some(anim), Some(js)) = (fc.anim, fc.js) {
+        if let (Some(anim), Some(js)) = (fc.anim.clone(), fc.js) {
             js.dispatch_anim_events(anim);
         }
         if let Some(js) = fc.js {
@@ -640,8 +640,8 @@ pub fn run_one(
     let styles = ffi::compute_cascade(&doc, page_url.as_deref(), css_cache);
 
     let anim = Anim::create();
-    ffi::load_keyframes(anim, &doc, page_url.as_deref(), css_cache);
-    ffi::anim_observe(anim, Some(&styles), ffi::monotonic_us());
+    ffi::load_keyframes(&anim, &doc, page_url.as_deref(), css_cache);
+    ffi::anim_observe(&anim, Some(&styles), ffi::monotonic_us());
     let anim = Some(anim);
 
     let nav = Rc::new(NavCapture::default());
@@ -680,7 +680,7 @@ pub fn run_one(
         vh,
         image_cache,
         video_cache,
-        anim,
+        anim: anim.clone(),
         css_cache,
         styles: RefCell::new(Some(styles)),
         layout: Cell::new(None),
@@ -692,7 +692,7 @@ pub fn run_one(
     if let Some(js) = js {
         js.set_style_table(ctx.styles.borrow().clone());
         js.set_image_cache(image_cache);
-        js.set_anim(anim);
+        js.set_anim(anim.clone());
         js.bind_layout_flush(&ctx);
         js.bind_media(video_cache);
         ffi::bind_video_events(video_cache, Some(js));
@@ -727,10 +727,7 @@ pub fn run_one(
             js.clear_layout_root();
             js.set_style_table(None);
         }
-        if let Some(anim) = anim {
-            // SAFETY: this page's run is over: script and the layout flush were detached above and the next page creates its own engine.
-            unsafe { anim.free() };
-        }
+        drop(anim);
         ffi::free_layout(ctx.layout.take());
         drop(ctx.styles.take());
         css_cache.free();
@@ -801,11 +798,11 @@ pub fn run_one(
             fetch_videos_into_layout(&ctx, base);
 
             let time_ms = if o.time_ms >= 0 { o.time_ms } else { 1000 };
-            if let Some(anim) = anim {
+            if let Some(anim) = &anim {
                 anim.rebase(0);
                 anim.tick(0);
             }
-            ffi::paint_set_anim(anim);
+            ffi::paint_set_anim(anim.clone());
             let initial = ffi::suffix_before_ext(o.out_path, c"-initial");
             rc = write_capture(ctx.layout(), initial.as_deref(), o.dump, &print_setup);
             let shown = initial.as_ref().map_or(&b"(null)"[..], |p| p.to_bytes());
@@ -818,7 +815,7 @@ pub fn run_one(
             settle(time_ms, &ctx);
             relayout(&ctx);
             fetch_videos_into_layout(&ctx, base);
-            if let Some(anim) = anim {
+            if let Some(anim) = &anim {
                 anim.rebase(0);
                 let end = time_ms as i64 * 1000;
                 let mut t = 0;
@@ -828,7 +825,7 @@ pub fn run_one(
                 }
                 anim.tick(end);
             }
-            ffi::paint_set_anim(anim);
+            ffi::paint_set_anim(anim.clone());
             let rc2 = write_capture(ctx.layout(), o.out_path, o.dump, &print_setup);
             let path = o.out_path.map_or(&b"(null)"[..], CStr::to_bytes);
             err(&[
@@ -859,10 +856,7 @@ pub fn run_one(
     drop(nav.pending_url.borrow_mut().take());
     nav.clear_post();
     ffi::paint_set_anim(None);
-    if let Some(anim) = anim {
-        // SAFETY: the run is over and paint was detached from the engine above; script is not run again before it is freed below.
-        unsafe { anim.free() };
-    }
+    drop(anim);
     if let Some(js) = js {
         js.clear_layout_root();
         js.set_style_table(None);

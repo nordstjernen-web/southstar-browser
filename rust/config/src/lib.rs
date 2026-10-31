@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 mod ffi;
 pub mod util;
 
@@ -9,6 +11,7 @@ pub use ffi::{ConfigLock, dump, init, lock, reload, save, shutdown};
 
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::sync::Arc;
 
 use southstar_glib::{FALSE, GBoolean};
 
@@ -44,6 +47,7 @@ impl Text {
     }
 }
 
+#[derive(Clone)]
 pub struct NsConfig {
     pub home_url: Text,
     pub user_agent: Text,
@@ -340,8 +344,8 @@ impl NsConfig {
     }
 }
 
-pub fn get() -> Option<&'static NsConfig> {
-    ffi::config()
+pub fn get() -> Option<Arc<NsConfig>> {
+    Some(ffi::config())
 }
 
 pub fn cache_enabled() -> bool {

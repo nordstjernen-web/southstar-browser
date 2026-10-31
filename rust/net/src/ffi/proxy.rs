@@ -2,13 +2,15 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::sync::Arc;
+
 use southstar_config::NsConfig;
 
 use crate::storage::Slot;
 
 static OVERRIDE: Slot = Slot::new();
 
-fn config() -> Option<&'static NsConfig> {
+fn config() -> Option<Arc<NsConfig>> {
     southstar_config::get()
 }
 

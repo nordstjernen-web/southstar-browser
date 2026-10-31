@@ -121,8 +121,8 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
     }
     b.compute_cascade();
     let anim = ffi::Anim::create();
+    b.load_keyframes(&anim);
     ffi::set_anim(b, anim);
-    b.load_keyframes(anim);
     if let Some(js) = ffi::attach_js(b, setup.navigation_timing) {
         b.load_delay_deadline_us
             .set(ffi::monotonic_us() + LOAD_DELAY_US);
