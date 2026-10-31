@@ -10,9 +10,8 @@ use southstar_js_runtime::api;
 use super::imports;
 use super::state::{CanvasState, Node, js_of};
 
-pub(crate) fn ctx2d_of(scope: &mut Scope<'_>, st: &CanvasState) -> Option<Value> {
-    let identity = st.ctx2d();
-    (!identity.is_null()).then(|| scope.object_from_identity(identity))
+pub(crate) fn ctx2d_of(st: &CanvasState) -> Option<Value> {
+    st.ctx2d()
 }
 
 pub(crate) fn dom_exception(

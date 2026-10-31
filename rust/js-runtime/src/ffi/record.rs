@@ -5,7 +5,7 @@
 use core::cell::{Cell, OnceCell, RefCell};
 use core::ffi::CStr;
 use core::ptr::{self, NonNull};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ffi::CString;
 
 use southstar_csp::Csp;
@@ -154,7 +154,7 @@ pub(crate) struct Record {
     pub raf_frame_ctx: Cell<*mut NsNode>,
     pristine_promise: RefCell<Value>,
     layout_root: Cell<Option<BoxRef<'static>>>,
-    pinned_wrappers_set: RefCell<Option<HashSet<usize>>>,
+    pinned_wrappers_set: RefCell<Option<HashMap<usize, Value>>>,
     cookie_value: RefCell<Option<CString>>,
     cookie_version: Cell<u64>,
     cookie_buckets: RefCell<Option<HashMap<CString, CString>>>,
@@ -290,7 +290,7 @@ pub(crate) fn create_context(page: Page, js: &Record) -> bool {
 }
 
 pub(crate) fn init_tables(js: &Record, page: bool) {
-    js.pinned_wrappers_set.replace(Some(HashSet::new()));
+    js.pinned_wrappers_set.replace(Some(HashMap::new()));
     if page {
         js.frame_ctxs.replace(Some(Vec::new()));
         js.cookie_buckets.replace(Some(HashMap::new()));
@@ -306,26 +306,31 @@ pub(crate) fn has_pinned_set(js: Option<Page>) -> bool {
     record(js).is_some_and(|js| js.pinned_wrappers_set.borrow().is_some())
 }
 
-pub(crate) fn pin_wrapper(js: Option<Page>, n: *const NsNode) -> bool {
-    record(js).is_some_and(|js| {
-        js.pinned_wrappers_set
-            .borrow_mut()
-            .as_mut()
-            .map(|set| set.insert(n as usize))
-            .is_some()
-    })
+pub(crate) fn pin_wrapper(js: Option<Page>, n: *const NsNode, wrapper: &Value) -> bool {
+    let Some(js) = record(js) else {
+        return false;
+    };
+    let previous = js
+        .pinned_wrappers_set
+        .borrow_mut()
+        .as_mut()
+        .map(|set| set.insert(n as usize, wrapper.clone()));
+    previous.is_some()
 }
 
 pub(crate) fn unpin_wrapper(js: Option<Page>, n: *const NsNode) -> bool {
-    record(js).is_some_and(|js| {
-        js.pinned_wrappers_set
-            .borrow_mut()
-            .as_mut()
-            .is_some_and(|set| set.remove(&(n as usize)))
-    })
+    let Some(js) = record(js) else {
+        return false;
+    };
+    let pinned = js
+        .pinned_wrappers_set
+        .borrow_mut()
+        .as_mut()
+        .and_then(|set| set.remove(&(n as usize)));
+    pinned.is_some()
 }
 
-pub(crate) fn take_pinned_wrappers(js: Option<Page>) -> Vec<usize> {
+pub(crate) fn take_pinned_wrappers(js: Option<Page>) -> Vec<(usize, Value)> {
     record(js).map_or_else(Vec::new, |js| {
         js.pinned_wrappers_set
             .borrow_mut()
@@ -334,12 +339,16 @@ pub(crate) fn take_pinned_wrappers(js: Option<Page>) -> Vec<usize> {
     })
 }
 
-fn pinned_wrapper_nodes(js: Option<Page>) -> Vec<usize> {
+fn pinned_wrappers(js: Option<Page>) -> Vec<(usize, Value)> {
     record(js).map_or_else(Vec::new, |js| {
         js.pinned_wrappers_set
             .borrow()
             .as_ref()
-            .map_or_else(Vec::new, |set| set.iter().copied().collect())
+            .map_or_else(Vec::new, |set| {
+                set.iter()
+                    .map(|(key, wrapper)| (*key, wrapper.clone()))
+                    .collect()
+            })
     })
 }
 
@@ -355,36 +364,26 @@ pub(crate) fn set_pristine_promise(js: &Record, promise: Value) {
     drop(js.pristine_promise.replace(promise));
 }
 
-pub(crate) fn release_wrapper(js: &Record, n: Node<'_>) {
-    let wrapper = n.js_wrapper();
-    if wrapper.is_null() {
-        return;
-    }
-    // SAFETY: the node's wrapper identity names its live wrapper, whose pin is released once, here.
-    js.ctx
-        .get()
-        .with(|scope| unsafe { scope.release_identity(wrapper) });
-}
+pub(crate) fn release_wrapper(_js: &Record, _n: Node<'_>) {}
 
-pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, release: bool) {
+pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, pinned: Option<Value>) {
     let wrapper = n.js_wrapper();
     if wrapper.is_null() {
         return;
     }
-    // SAFETY: a node's wrapper identity is cleared when the wrapper is collected, so it names a live object.
-    let object = unsafe { southstar_js_engine::identity_value(wrapper) };
-    object.with_instance(
-        &super::wrapper::ELEMENT_CLASS,
-        super::wrapper::ElementData::unbind,
-    );
-    n.set_js_wrapper(ptr::null_mut());
-    n.set_js_invalidate(None);
-    if release {
-        // SAFETY: the identity was the node's wrapper until just above and is released once, here.
+    let object = pinned.or_else(|| {
         js.ctx
             .get()
-            .with(|scope| unsafe { scope.release_identity(wrapper) });
+            .with(|scope| scope.object_from_identity(wrapper))
+    });
+    if let Some(object) = object {
+        object.with_instance(
+            &super::wrapper::ELEMENT_CLASS,
+            super::wrapper::ElementData::unbind,
+        );
     }
+    n.set_js_wrapper(ptr::null_mut());
+    n.set_js_invalidate(None);
 }
 
 fn eval_bundled(js: Option<Page>, source: &str, origin: &CStr) {
@@ -936,7 +935,7 @@ pub(crate) fn node_unpinned(js: Option<Page>, n: Node<'_>) -> bool {
         js.pinned_wrappers_set
             .borrow()
             .as_ref()
-            .is_some_and(|set| !set.contains(&(n.as_ptr() as usize)))
+            .is_some_and(|set| !set.contains_key(&(n.as_ptr() as usize)))
     })
 }
 
@@ -947,7 +946,7 @@ pub(crate) fn wrapper_pinned(js: Option<Page>, n: Node<'_>) -> bool {
                 .pinned_wrappers_set
                 .borrow()
                 .as_ref()
-                .is_some_and(|set| set.contains(&(n.as_ptr() as usize)))
+                .is_some_and(|set| set.contains_key(&(n.as_ptr() as usize)))
     })
 }
 
@@ -1050,18 +1049,13 @@ pub(crate) fn adopt_dom_protos(scope: &mut Scope<'_>, protos: AdoptedProtos) {
     let previous = record.protos.replace(Some(adopted));
     let previous_document = record.proto_document.replace(document);
     drop((previous, previous_document));
-    for key in pinned_wrapper_nodes(js) {
-        let Some(n) = node(key as *const NsNode) else {
+    for (key, object) in pinned_wrappers(js) {
+        let Some(n) = node(key as *const NsNode).filter(|n| n.has_js_wrapper()) else {
             continue;
         };
-        let wrapper = n.js_wrapper();
-        if wrapper.is_null() {
-            continue;
-        }
         let Some(proto) = kind_proto(record, n).filter(Value::is_object) else {
             continue;
         };
-        let object = scope.object_from_identity(wrapper);
         drop(scope.set_prototype(&object, &proto));
     }
 }

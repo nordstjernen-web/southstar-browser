@@ -335,10 +335,8 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     {
         imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
-    if let Some(js) = js
-        && super::record::pin_wrapper(js.some(), n.as_ptr())
-    {
-        scope.retain_identity(&obj);
+    if let Some(js) = js {
+        super::record::pin_wrapper(js.some(), n.as_ptr(), &obj);
     }
     Ok(obj)
 }
@@ -356,16 +354,12 @@ fn invalidate_wrapper(target: Node<'static>) {
     (crate::api::observers_hooks().scrub_node)(js, target);
     (crate::api::attrs_hooks().detach_owner)(js, target);
     (crate::api::mutation_hooks().attribute_map_release_owner)(js, target);
-    let wrapper = target.js_wrapper();
-    if !wrapper.is_null() {
+    if target.has_js_wrapper() {
         target.set_js_wrapper(ptr::null_mut());
-        if let Some(page) = Js::of(js) {
-            let ctx = page.ctx();
-            if !ctx.is_null() && super::record::unpin_wrapper(page.some(), n) {
-                // SAFETY: `wrapper` is the identity retained for this node, cleared from the
-                // node above so it is released exactly once.
-                ctx.with(|scope| unsafe { scope.release_identity(wrapper) });
-            }
+        if let Some(page) = Js::of(js)
+            && !page.ctx().is_null()
+        {
+            super::record::unpin_wrapper(page.some(), n);
         }
     }
     if let Some(js) = js {

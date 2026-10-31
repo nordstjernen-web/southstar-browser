@@ -84,7 +84,7 @@ fn get_2d(
     offscreen: bool,
     options: &Value,
 ) -> Value {
-    if let Some(existing) = host::ctx2d_of(scope, st) {
+    if let Some(existing) = host::ctx2d_of(st) {
         return existing;
     }
     if st.context_kind() != 0 {

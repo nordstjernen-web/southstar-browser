@@ -1,4 +1,4 @@
-//! Southstar — the remaining neutral scope helpers on Boa: object identities and pins; import.meta; engine-private names, brands and bytecode are not available, so they report nothing.
+//! Southstar — the remaining neutral scope helpers on Boa: object identities; import.meta; engine-private names, brands and bytecode are not available, so they report nothing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,18 +9,6 @@ use boa_engine::{JsError, JsObject, JsString};
 
 use super::{Compiled, Scope, Value};
 use crate::{BrandMode, MemoryUsage, TaskFn};
-
-/// # Safety
-///
-/// `identity` is null or the identity of an object that is still alive.
-pub unsafe fn identity_value(identity: *mut c_void) -> Value {
-    if identity.is_null() {
-        return Value::undefined();
-    }
-    // SAFETY: the caller passes the identity of a live object, whose allocation from_identity
-    // takes a new reference to.
-    Value(unsafe { JsObject::from_identity(identity) }.into())
-}
 
 impl Scope<'_> {
     pub fn enqueue_native(&mut self, f: TaskFn, args: &[Value]) -> Result<(), Value> {
@@ -44,30 +32,12 @@ impl Scope<'_> {
         if identity.is_null() {
             return Value::undefined();
         }
-        // SAFETY: every caller passes the identity of an object it keeps alive: canvas holds a
-        // reference taken by retain_identity until it calls release_identity, and a performance
+        // SAFETY: every caller passes the identity of an object it keeps alive: a DOM node keeps
+        // its wrapper's identity only until the wrapper's finalizer clears it, and a performance
         // observer reads its wrapper's identity only from a method called on that wrapper or
         // while the observer's pinned Value roots it, so the allocation is live and
         // from_identity only takes a new reference to it.
         Value(unsafe { JsObject::from_identity(identity) }.into())
-    }
-
-    pub fn retain_identity(&mut self, object: &Value) -> *mut c_void {
-        object
-            .0
-            .as_object()
-            .map_or(core::ptr::null_mut(), |object| object.retain_identity())
-    }
-
-    /// # Safety
-    ///
-    /// `identity` is null or came from [`Scope::retain_identity`] and was not released yet.
-    pub unsafe fn release_identity(&mut self, identity: *mut c_void) {
-        if !identity.is_null() {
-            // SAFETY: the caller passes an unreleased identity from retain_identity, whose
-            // reference this drops once.
-            unsafe { JsObject::release_identity(identity) };
-        }
     }
 
     pub fn add_engine_private_name(&mut self, _name: &str) {}

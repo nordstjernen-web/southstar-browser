@@ -3,12 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, Ref, RefCell};
-use core::ffi::c_void;
-use core::ptr;
 use std::ffi::CString;
 
 use southstar_dom::WeakNode;
-use southstar_js_engine::ContextHandle;
+use southstar_js_engine::{ContextHandle, Value};
 use southstar_js_runtime::api::Page;
 
 use super::cairo::{Context, Pattern, Surface};
@@ -31,7 +29,7 @@ pub struct CanvasState {
     pub shadow_ox: Cell<f64>,
     pub shadow_oy: Cell<f64>,
     pub origin_clean: Cell<bool>,
-    ctx2d: Cell<*mut c_void>,
+    ctx2d: RefCell<Option<Value>>,
     jsctx: Cell<ContextHandle>,
     owned_node: Cell<Option<southstar_dom::Node<'static>>>,
     context_kind: Cell<i32>,
@@ -110,7 +108,7 @@ impl CanvasState {
             shadow_ox: Cell::new(0.0),
             shadow_oy: Cell::new(0.0),
             origin_clean: Cell::new(true),
-            ctx2d: Cell::new(ptr::null_mut()),
+            ctx2d: RefCell::new(None),
             jsctx: Cell::new(ContextHandle::NULL),
             owned_node: Cell::new(None),
             context_kind: Cell::new(0),
@@ -168,8 +166,8 @@ impl CanvasState {
             .is_some()
     }
 
-    pub(crate) fn ctx2d(&self) -> *mut c_void {
-        self.ctx2d.get()
+    pub(crate) fn ctx2d(&self) -> Option<Value> {
+        self.ctx2d.borrow().clone()
     }
 
     pub(crate) fn context_kind(&self) -> i32 {
@@ -190,12 +188,10 @@ impl CanvasState {
         obj: &southstar_js_engine::Value,
         kind: i32,
     ) {
-        let old = self.ctx2d.replace(ptr::null_mut());
-        if !old.is_null() {
-            // SAFETY: old is the identity this state retained for its previous 2D context and releases once, here.
-            unsafe { scope.release_identity(old) };
-        }
-        self.ctx2d.set(scope.retain_identity(obj));
+        let previous = self
+            .ctx2d
+            .replace(Some(obj.clone()).filter(southstar_js_engine::Value::is_object));
+        drop(previous);
         self.jsctx
             .set(southstar_js_runtime::api::main_context(js_of(scope).page()));
         self.context_kind.set(kind);
@@ -217,10 +213,8 @@ impl CanvasState {
         self.shadow_ox.set(0.0);
         self.shadow_oy.set(0.0);
         self.origin_clean.set(true);
-        let ctx2d = self.ctx2d.get();
-        if !ctx2d.is_null() {
+        if let Some(obj) = self.ctx2d() {
             self.jsctx.get().with(|scope| {
-                let obj = scope.object_from_identity(ctx2d);
                 crate::api::ctx2d_init_state(scope, &obj);
             });
         }
@@ -229,13 +223,7 @@ impl CanvasState {
 
 impl Drop for CanvasState {
     fn drop(&mut self) {
-        let ctx2d = self.ctx2d.replace(ptr::null_mut());
-        if !ctx2d.is_null() {
-            self.jsctx.get().with(|scope| {
-                // SAFETY: ctx2d is the identity this state retained for its 2D context and releases once, here.
-                unsafe { scope.release_identity(ctx2d) }
-            });
-        }
+        drop(self.ctx2d.take());
         if let Some(node) = self.owned_node.take() {
             node.free_tree();
         }

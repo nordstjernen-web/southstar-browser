@@ -11,7 +11,7 @@ build	0	0	0	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
 cairo	169	120	0	0	0	0	0
 camera	8	3	0	0	0	0	0
-canvas	4	0	0	0	0	0	0
+canvas	2	0	0	0	0	0	0
 config	3	0	0	0	0	0	0
 csp	0	0	0	0	0	0	0
 css	10	0	0	0	0	0	0
@@ -61,7 +61,7 @@ js-dispatch	0	0	0	0	0	0	0
 js-document	0	0	0	0	0	0	0
 js-dom-factory	0	0	0	0	0	0	0
 js-elements	0	0	0	0	0	0	0
-js-engine	9	0	0	0	0	0	0
+js-engine	5	0	0	0	0	0	0
 js-events	0	0	0	0	0	0	0
 js-focus	0	0	0	0	0	0	0
 js-fonts	0	0	0	0	0	0	0
@@ -84,7 +84,7 @@ js-page	0	0	0	0	0	0	0
 js-perf	0	0	0	0	0	0	0
 js-realm	0	0	0	0	0	0	0
 js-reflect	0	0	0	0	0	0	0
-js-runtime	15	3	0	0	0	0	0
+js-runtime	11	3	0	0	0	0	0
 js-services	6	3	0	0	0	0	0
 js-shadow	0	0	0	0	0	0	0
 js-storage	0	0	0	0	0	0	0

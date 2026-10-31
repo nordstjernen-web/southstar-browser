@@ -30,8 +30,8 @@ pub(crate) fn free(js: Js) {
 }
 
 pub(crate) fn release_pinned_wrappers(js: Js) {
-    for node in js.take_pinned_wrappers() {
-        js.detach_wrapper(node, true);
+    for (node, wrapper) in js.take_pinned_wrappers() {
+        js.detach_wrapper(node, Some(wrapper));
     }
 }
 
@@ -53,7 +53,7 @@ fn free_orphans(js: Js) {
     };
     let mut roots = Vec::new();
     for node in orphans {
-        js.detach_wrapper(node, false);
+        js.detach_wrapper(node, None);
         if !owned_by_document(js, node) {
             roots.push(node);
         }
