@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-html-parser = { path = "../html-parser", version = "=1.0.5" }
-southstar-js-attrs = { path = "../js-attrs", version = "=1.0.5" }
-southstar-js-collections = { path = "../js-collections", version = "=1.0.5" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5" }
-southstar-js-elements = { path = "../js-elements", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.5" }
-southstar-js-mutation = { path = "../js-mutation", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
-southstar-js-shadow = { path = "../js-shadow", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.6-dev" }
+southstar-js-attrs = { path = "../js-attrs", version = "=1.0.6-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.6-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.6-dev" }
+southstar-js-elements = { path = "../js-elements", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.6-dev" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
+southstar-js-shadow = { path = "../js-shadow", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

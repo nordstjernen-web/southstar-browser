@@ -10,9 +10,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-config = { path = "../config", version = "=1.0.5" }
-southstar-digest = { path = "../digest", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
+southstar-config = { path = "../config", version = "=1.0.6-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

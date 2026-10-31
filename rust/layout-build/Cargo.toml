@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.5" }
-southstar-css = { path = "../css", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-image = { path = "../image", version = "=1.0.5" }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
-southstar-layout-content = { path = "../layout-content", version = "=1.0.5" }
-southstar-layout-float = { path = "../layout-float", version = "=1.0.5" }
-southstar-layout-geom = { path = "../layout-geom", version = "=1.0.5" }
-southstar-layout-query = { path = "../layout-query", version = "=1.0.5" }
-southstar-layout-tree = { path = "../layout-tree", version = "=1.0.5" }
-southstar-net = { path = "../net", version = "=1.0.5" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.5" }
-southstar-paint = { path = "../paint", version = "=1.0.5" }
-southstar-style = { path = "../style", version = "=1.0.5" }
-southstar-svg = { path = "../svg", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-unicode = { path = "../unicode", version = "=1.0.6-dev" }
+southstar-css = { path = "../css", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-image = { path = "../image", version = "=1.0.6-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
+southstar-layout-content = { path = "../layout-content", version = "=1.0.6-dev" }
+southstar-layout-float = { path = "../layout-float", version = "=1.0.6-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.6-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.6-dev" }
+southstar-layout-tree = { path = "../layout-tree", version = "=1.0.6-dev" }
+southstar-net = { path = "../net", version = "=1.0.6-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.6-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.6-dev" }
+southstar-style = { path = "../style", version = "=1.0.6-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

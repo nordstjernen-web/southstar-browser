@@ -10,16 +10,16 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-css = { path = "../css", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-js-collections = { path = "../js-collections", version = "=1.0.5" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.5" }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.5" }
-southstar-js-observers = { path = "../js-observers", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
+southstar-css = { path = "../css", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.6-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.6-dev" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.6-dev" }
+southstar-js-observers = { path = "../js-observers", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
 
 [lints]
 workspace = true

@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-mime = { path = "../mime", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-events = { path = "../js-events", version = "=1.0.5" }
-southstar-js-focus = { path = "../js-focus", version = "=1.0.5" }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.5" }
-southstar-js-geometry = { path = "../js-geometry", version = "=1.0.5" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
-southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.5" }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
+southstar-mime = { path = "../mime", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.6-dev" }
+southstar-js-focus = { path = "../js-focus", version = "=1.0.6-dev" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.6-dev" }
+southstar-js-geometry = { path = "../js-geometry", version = "=1.0.6-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.6-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true

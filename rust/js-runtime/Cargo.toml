@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-anim = { path = "../anim", version = "=1.0.5" }
-southstar-config = { path = "../config", version = "=1.0.5" }
-southstar-csp = { path = "../csp", version = "=1.0.5" }
-southstar-css = { path = "../css", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-js-bind = { path = "../js-bind", version = "=1.0.5", default-features = false }
-southstar-js-brand = { path = "../js-brand", version = "=1.0.5" }
-southstar-js-crypto = { path = "../js-crypto", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-intl = { path = "../js-intl", version = "=1.0.5", default-features = false }
-southstar-js-realm = { path = "../js-realm", version = "=1.0.5", default-features = false }
-southstar-js-temporal = { path = "../js-temporal", version = "=1.0.5", default-features = false }
-southstar-js-wasm = { path = "../js-wasm", version = "=1.0.5", optional = true }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
-southstar-net = { path = "../net", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-anim = { path = "../anim", version = "=1.0.6-dev" }
+southstar-config = { path = "../config", version = "=1.0.6-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.6-dev" }
+southstar-css = { path = "../css", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.6-dev", default-features = false }
+southstar-js-brand = { path = "../js-brand", version = "=1.0.6-dev" }
+southstar-js-crypto = { path = "../js-crypto", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-intl = { path = "../js-intl", version = "=1.0.6-dev", default-features = false }
+southstar-js-realm = { path = "../js-realm", version = "=1.0.6-dev", default-features = false }
+southstar-js-temporal = { path = "../js-temporal", version = "=1.0.6-dev", default-features = false }
+southstar-js-wasm = { path = "../js-wasm", version = "=1.0.6-dev", optional = true }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
+southstar-net = { path = "../net", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [features]
 wasm = ["dep:southstar-js-wasm"]

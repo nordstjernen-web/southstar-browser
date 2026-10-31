@@ -32,25 +32,25 @@ path = "src/video.rs"
 required-features = ["libav"]
 
 [dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.5", features = ["rust-main"] }
-southstar-ffi = { path = "../southstar-ffi", version = "=1.0.5" }
-southstar-renderer-host = { path = "../renderer-host", version = "=1.0.5" }
-southstar-audio-helper = { path = "../audio-helper", version = "=1.0.5", features = ["rust-main"], optional = true }
-southstar-video-helper = { path = "../video-helper", version = "=1.0.5", features = ["rust-main"], optional = true }
+southstar-shell = { path = "../shell", version = "=1.0.6-dev", features = ["rust-main"] }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.6-dev" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.6-dev" }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.6-dev", features = ["rust-main"], optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.6-dev", features = ["rust-main"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.5", features = ["rust-main", "seccomp", "egl"] }
-southstar-audio-helper = { path = "../audio-helper", version = "=1.0.5", features = ["rust-main", "seccomp"], optional = true }
-southstar-video-helper = { path = "../video-helper", version = "=1.0.5", features = ["rust-main", "seccomp"], optional = true }
+southstar-shell = { path = "../shell", version = "=1.0.6-dev", features = ["rust-main", "seccomp", "egl"] }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.6-dev", features = ["rust-main", "seccomp"], optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.6-dev", features = ["rust-main", "seccomp"], optional = true }
 
 [target.'cfg(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.5", features = ["rust-main", "egl"] }
+southstar-shell = { path = "../shell", version = "=1.0.6-dev", features = ["rust-main", "egl"] }
 
 [target.'cfg(windows)'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.5", features = ["rust-main", "fontconfig"] }
+southstar-shell = { path = "../shell", version = "=1.0.6-dev", features = ["rust-main", "fontconfig"] }
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.5" }
+southstar-build = { path = "../build", version = "=1.0.6-dev" }
 cc = "1.2"
 
 [features]

@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-digest = { path = "../digest", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-net = { path = "../net", version = "=1.0.5" }
-southstar-text = { path = "../text", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
-southstar-woff2 = { path = "../woff2", version = "=1.0.5", optional = true }
+southstar-digest = { path = "../digest", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-net = { path = "../net", version = "=1.0.6-dev" }
+southstar-text = { path = "../text", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
+southstar-woff2 = { path = "../woff2", version = "=1.0.6-dev", optional = true }
 
 [features]
 fontconfig = []

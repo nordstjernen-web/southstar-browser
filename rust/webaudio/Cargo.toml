@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
 
 [lints]
 workspace = true

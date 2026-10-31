@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.5", optional = true, features = ["scale"] }
-southstar-camera = { path = "../camera", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-image = { path = "../image", version = "=1.0.5" }
-southstar-layout = { path = "../layout", version = "=1.0.5" }
-southstar-layout-query = { path = "../layout-query", version = "=1.0.5" }
-southstar-net = { path = "../net", version = "=1.0.5" }
-southstar-plmpeg = { path = "../plmpeg", version = "=1.0.5" }
-southstar-style = { path = "../style", version = "=1.0.5" }
-southstar-texture = { path = "../texture", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
-southstar-webvtt = { path = "../webvtt", version = "=1.0.5" }
+southstar-av = { path = "../av", version = "=1.0.6-dev", optional = true, features = ["scale"] }
+southstar-camera = { path = "../camera", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-image = { path = "../image", version = "=1.0.6-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.6-dev" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.6-dev" }
+southstar-net = { path = "../net", version = "=1.0.6-dev" }
+southstar-plmpeg = { path = "../plmpeg", version = "=1.0.6-dev" }
+southstar-style = { path = "../style", version = "=1.0.6-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
+southstar-webvtt = { path = "../webvtt", version = "=1.0.6-dev" }
 
 [features]
 libav = ["dep:southstar-av"]

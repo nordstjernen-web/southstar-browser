@@ -10,20 +10,20 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.5" }
-southstar-csp = { path = "../csp", version = "=1.0.5" }
-southstar-dom = { path = "../dom", version = "=1.0.5" }
-southstar-engine = { path = "../engine", version = "=1.0.5" }
-southstar-extensions = { path = "../extensions", version = "=1.0.5", default-features = false }
-southstar-glib = { path = "../glib", version = "=1.0.5" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.5" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.5", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.5" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.5", default-features = false }
-southstar-js-url = { path = "../js-url", version = "=1.0.5" }
-southstar-net = { path = "../net", version = "=1.0.5" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.5" }
-southstar-url = { path = "../url", version = "=1.0.5" }
+southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.6-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.6-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.6-dev" }
+southstar-engine = { path = "../engine", version = "=1.0.6-dev" }
+southstar-extensions = { path = "../extensions", version = "=1.0.6-dev", default-features = false }
+southstar-glib = { path = "../glib", version = "=1.0.6-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.6-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.6-dev", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.6-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.6-dev", default-features = false }
+southstar-js-url = { path = "../js-url", version = "=1.0.6-dev" }
+southstar-net = { path = "../net", version = "=1.0.6-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.6-dev" }
+southstar-url = { path = "../url", version = "=1.0.6-dev" }
 
 [lints]
 workspace = true
