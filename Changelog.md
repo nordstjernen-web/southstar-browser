@@ -15,6 +15,13 @@ Southstar Browser 1.0.5:
   with their paths rewritten, and publishes them in dependency order. CI checks
   that the merged crates build. `scripts/set-version.py` sets the version
   everywhere it is written.
+* Internals: the box-tree builder, list markers, SVG geometry and the
+  animation engine hold nodes as `Node` or `WeakNode` instead of raw
+  `NsNode` pointers, so an animation's state no longer resolves to a node
+  that reused a freed slot; the computed-style map keeps a weak handle beside
+  each style. `BoxRef::from_ptr` is gone and `rust/layout` forbids unsafe
+  code, and the headless layout-flush hook holds a `Weak` to its context
+  instead of a raw reference.
 * Internals: pinned DOM wrappers and a canvas's 2D context are held as plain
   JavaScript values instead of raw retained object pointers, so
   `retain_identity`/`release_identity` and `identity_value` are gone from the

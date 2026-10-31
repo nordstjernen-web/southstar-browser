@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
 
-use southstar_dom::{Kind, Node, NsNode, children};
+use southstar_dom::{Kind, Node, children};
 use southstar_glib as glib;
 
 use super::cascade::{Parents, cascade_apply};
@@ -270,7 +270,7 @@ impl<'a> Walk<'a> {
                     self.compute_element(node, author, parent, layout_parent)
                 }
             };
-            self.out.insert(ptr as usize, own_style.clone());
+            self.out.insert(node, own_style.clone());
             let computed = own_style.get();
             child_parent = Some(computed);
             if computed.display.box_ != BOX_CONTENTS {
@@ -614,9 +614,9 @@ fn compute(
     out
 }
 
-pub fn incremental_exclude(node: *const NsNode, exclude: bool) {
-    if !node.is_null() {
-        set_excluded(node as usize, exclude);
+pub fn incremental_exclude(node_key: usize, exclude: bool) {
+    if node_key != 0 {
+        set_excluded(node_key, exclude);
     }
 }
 

@@ -96,7 +96,7 @@ impl AnimInfo {
 }
 
 fn node_ptr(node: Node<'_>) -> NodePtr {
-    NodePtr::new(node.as_ptr()).expect("a node has an address")
+    NodePtr::of(node)
 }
 
 impl AnimHandle {

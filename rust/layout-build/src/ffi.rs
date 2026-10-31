@@ -193,7 +193,7 @@ pub fn new_inline_run(parts: RunParts<'_>) -> BoxRef<'static> {
 }
 
 pub fn set_open_select(select: Option<Node<'_>>) {
-    state::set_open_select(Node::ptr_or_null(select));
+    state::set_open_select(select);
 }
 
 pub use state::set_datalist_open;
@@ -287,8 +287,7 @@ pub fn abs_static_target(b: BoxRef<'_>) -> Option<usize> {
         st.abs_placeholders
             .as_ref()
             .and_then(|m| m.get(&key).copied())
-            .filter(|target| !target.is_null())
-            .map(|target| target as usize)
+            .filter(|&target| target != 0)
     })
 }
 

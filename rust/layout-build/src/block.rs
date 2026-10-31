@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, NsNode, children};
+use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, WeakNode, children};
 use southstar_layout::{BoxPool, BoxRef};
 use southstar_layout_content::tags;
 use southstar_layout_geom::{
@@ -35,8 +35,8 @@ use crate::state;
 
 type Pending = Option<BoxRef<'static>>;
 
-fn same(a: *const NsNode, n: Node<'_>) -> bool {
-    ptr::eq(a, n.as_ptr())
+fn same(a: Option<WeakNode>, n: Node<'_>) -> bool {
+    a == Some(n.downgrade())
 }
 
 fn style_ptr(s: Option<StyleRef<'_>>) -> *const southstar_layout::Style {
@@ -52,7 +52,7 @@ fn inline_run(
     last: Option<Node<'_>>,
     styles: StyleTable,
 ) -> Option<BoxRef<'static>> {
-    run::build_inline_run(Some(first), Node::ptr_or_null(last), styles, true)
+    run::build_inline_run(Some(first), last, styles, true)
 }
 
 fn append_or_free(parent: BoxRef<'_>, run: Option<BoxRef<'static>>) {
@@ -362,13 +362,12 @@ fn build_blockified_inline_item(
             st.pseudo_block_before,
             st.pseudo_block_after,
         );
-        st.pseudo_blocks_host = n.as_ptr();
+        st.pseudo_blocks_host = Some(n.downgrade());
         st.pseudo_block_before = before_block.is_some();
         st.pseudo_block_after = after_block.is_some();
         saved
     });
-    let mut run =
-        run::build_inline_run(Some(n), Node::ptr_or_null(n.next_sibling()), styles, false);
+    let mut run = run::build_inline_run(Some(n), n.next_sibling(), styles, false);
     state::with(|st| {
         (
             st.pseudo_blocks_host,
@@ -406,7 +405,7 @@ fn fieldset_rendered_legend<'a>(n: Node<'a>, styles: StyleTable) -> Option<Node<
 }
 
 fn build_rendered_legend(n: Node<'_>, styles: StyleTable) -> BoxRef<'static> {
-    let saved = state::with(|st| core::mem::replace(&mut st.blockified_legend, n.as_ptr()));
+    let saved = state::with(|st| st.blockified_legend.replace(n.downgrade()));
     let legend = build_block(Some(n), styles);
     state::with(|st| st.blockified_legend = saved);
     let legend = legend.unwrap_or_else(|| {
@@ -428,7 +427,7 @@ pub fn build_form_control_block(
     block.set_dom(Some(n));
     block.set_style(style_ptr(s));
     collect_box_bg_image(block, s);
-    let prev = state::with(|st| core::mem::replace(&mut st.form_control_inline, n.as_ptr()));
+    let prev = state::with(|st| st.form_control_inline.replace(n.downgrade()));
     let run = inline_run(n, n.next_sibling(), styles);
     state::with(|st| st.form_control_inline = prev);
     append_or_free(block, run);
@@ -650,9 +649,9 @@ fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> 
     if let Some(legend_node) = rendered_legend {
         let legend = build_rendered_legend(legend_node, styles);
         append_child(block, legend);
-        state::with(|st| st.inline_skip = legend_node.as_ptr());
+        state::with(|st| st.inline_skip = Some(legend_node.downgrade()));
     }
-    let is_legend = |c: Node<'_>| rendered_legend.is_some_and(|l| ptr::eq(l.as_ptr(), c.as_ptr()));
+    let is_legend = |c: Node<'_>| rendered_legend == Some(c);
 
     let sr = shadow_root(Some(n));
     let mut c = match sr {

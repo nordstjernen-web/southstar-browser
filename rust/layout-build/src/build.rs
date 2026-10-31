@@ -2,10 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr;
 use std::collections::{HashMap, HashSet};
 
-use southstar_dom::{Node, NsNode, controls};
+use southstar_dom::{Node, controls};
 use southstar_layout::{BoxPool, BoxRef};
 use southstar_layout_content::text_input;
 use southstar_layout_content::{counters_build, counters_clear};
@@ -70,7 +69,7 @@ fn contenteditable_focus(n: Option<Node<'_>>) -> bool {
 pub fn layout_build(input: BuildInput<'_>) -> Option<BoxRef<'static>> {
     passes::install_builders();
     state::with(|st| {
-        st.focused_input = Node::ptr_or_null(input.focused_input);
+        st.focused_input = input.focused_input.map(Node::downgrade);
         st.focused_is_contenteditable = contenteditable_focus(input.focused_input);
         st.caret_byte = input.caret_byte;
         st.anchor_byte = input.anchor_byte;
@@ -90,7 +89,7 @@ pub fn layout_build(input: BuildInput<'_>) -> Option<BoxRef<'static>> {
     }
     ffi::image_cache_collect(input.image_cache);
     state::with(|st| {
-        st.focused_input = ptr::null::<NsNode>();
+        st.focused_input = None;
         st.focused_is_contenteditable = false;
         st.caret_byte = 0;
         st.anchor_byte = 0;

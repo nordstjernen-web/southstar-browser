@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use southstar_cairo::ContextRef;
-use southstar_dom::{Kind as NodeKind, Node, NsNode};
+use southstar_dom::{Kind as NodeKind, Node, WeakNode};
 use southstar_image::ImageRef;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId as P, StyleRef, display_of};
@@ -18,7 +18,7 @@ use crate::util::{
     Rgba, get, is_space, keyword_is, length_or, rgba_of, skip_spaces, style_of, truncate,
 };
 
-type OrdinalTable = HashMap<*const NsNode, i32>;
+type OrdinalTable = HashMap<WeakNode, i32>;
 
 struct Ordinals {
     scope: u32,
@@ -91,11 +91,11 @@ fn item_ordinal(item: Node<'_>, current: i32) -> i32 {
     })
 }
 
-fn number_children(parent: Node<'_>, ordinals: &mut HashMap<*const NsNode, i32>) -> i32 {
+fn number_children(parent: Node<'_>, ordinals: &mut OrdinalTable) -> i32 {
     let (mut current, reversed) = list_start(parent);
     for p in children(parent).filter(|&c| is_li(c)) {
         let ordinal = item_ordinal(p, current);
-        ordinals.insert(p.as_ptr(), ordinal);
+        ordinals.insert(p.downgrade(), ordinal);
         current = ordinal + if reversed { -1 } else { 1 };
     }
     current
@@ -111,15 +111,15 @@ fn list_item_ordinal(li: Option<Node<'_>>) -> i32 {
     let cached = ORDINALS.with(|o| {
         let mut o = o.borrow_mut();
         let (ordinals, next) = o.tables.as_mut()?;
-        let next_value = match next.get(&parent.as_ptr()) {
+        let next_value = match next.get(&parent.downgrade()) {
             Some(&n) => n,
             None => {
                 let n = number_children(parent, ordinals);
-                next.insert(parent.as_ptr(), n);
+                next.insert(parent.downgrade(), n);
                 n
             }
         };
-        Some(ordinals.get(&li.as_ptr()).copied().unwrap_or(next_value))
+        Some(ordinals.get(&li.downgrade()).copied().unwrap_or(next_value))
     });
     if let Some(ordinal) = cached {
         return ordinal;

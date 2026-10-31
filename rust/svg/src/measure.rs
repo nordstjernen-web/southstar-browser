@@ -72,7 +72,7 @@ impl Frame {
 
 struct Measure<'a> {
     target: Node<'a>,
-    path: HashSet<*const southstar_dom::NsNode>,
+    path: HashSet<Node<'a>>,
     inside: bool,
     boxless: bool,
     out: SvgGeometry,
@@ -127,7 +127,7 @@ impl<'a> Measure<'a> {
             if !is_element(c) {
                 continue;
             }
-            if !self.inside && !self.path.contains(&c.as_ptr()) {
+            if !self.inside && !self.path.contains(&c) {
                 continue;
             }
             self.node(ctx, c, st, frame, own);
@@ -245,7 +245,7 @@ impl<'a> Measure<'a> {
     ) {
         if name_is(n, b"switch") {
             let choice = switch_choice(n);
-            if choice.is_none_or(|c| !self.path.contains(&c.as_ptr())) {
+            if choice.is_none_or(|c| !self.path.contains(&c)) {
                 self.out.rendered = boolean(false);
                 self.boxless = true;
             }
@@ -357,11 +357,11 @@ fn local_matrix(ctx: &mut Ctx<'_>, n: Node<'_>, st: &State) -> (Matrix, Matrix) 
     (local, viewport)
 }
 
-fn path_to<'a>(svg: Node<'a>, target: Node<'a>) -> Option<HashSet<*const southstar_dom::NsNode>> {
+fn path_to<'a>(svg: Node<'a>, target: Node<'a>) -> Option<HashSet<Node<'a>>> {
     let mut path = HashSet::new();
     let mut n = Some(target);
     while let Some(cur) = n.filter(|&c| !same(c, svg)) {
-        path.insert(cur.as_ptr());
+        path.insert(cur);
         n = cur.parent();
     }
     n.map(|_| path)

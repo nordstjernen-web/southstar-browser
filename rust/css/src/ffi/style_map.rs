@@ -4,15 +4,18 @@
 
 use std::collections::HashMap;
 
+use southstar_dom::{Node, WeakNode};
+
 use super::computed_units::RawStyle;
 use super::style_alloc::RetainedStyle;
 
 #[derive(Default)]
-pub struct StyleMap(HashMap<usize, RetainedStyle>);
+pub struct StyleMap(HashMap<usize, (WeakNode, RetainedStyle)>);
 
 impl StyleMap {
-    pub(super) fn insert(&mut self, node: usize, style: RetainedStyle) {
-        self.0.insert(node, style);
+    pub(super) fn insert(&mut self, node: Node<'_>, style: RetainedStyle) {
+        self.0
+            .insert(node.as_ptr() as usize, (node.downgrade(), style));
     }
 
     pub fn len(&self) -> usize {
@@ -28,30 +31,38 @@ impl StyleMap {
     }
 
     pub fn get<T>(&self, node: *const T) -> Option<&RawStyle> {
-        self.0.get(&(node as usize)).map(RetainedStyle::get)
+        self.0.get(&(node as usize)).map(|(_, style)| style.get())
     }
 
     pub fn retained<T>(&self, node: *const T) -> Option<RetainedStyle> {
-        self.0.get(&(node as usize)).cloned()
+        self.0.get(&(node as usize)).map(|(_, style)| style.clone())
     }
 
     pub fn lookup<T>(&self, node: *const T) -> *mut RawStyle {
         self.0
             .get(&(node as usize))
-            .map_or(core::ptr::null_mut(), |style| style.as_ptr().cast_mut())
+            .map_or(core::ptr::null_mut(), |(_, style)| {
+                style.as_ptr().cast_mut()
+            })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, &RawStyle)> + '_ {
-        self.0.iter().map(|(&node, style)| (node, style.get()))
+        self.0.iter().map(|(&node, (_, style))| (node, style.get()))
+    }
+
+    pub fn nodes(&self) -> impl Iterator<Item = (Node<'static>, &RawStyle)> + '_ {
+        self.0
+            .values()
+            .filter_map(|(node, style)| Some((node.get()?, style.get())))
     }
 
     pub(super) fn styles(&self) -> impl Iterator<Item = (usize, &RetainedStyle)> + '_ {
-        self.0.iter().map(|(&node, style)| (node, style))
+        self.0.iter().map(|(&node, (_, style))| (node, style))
     }
 
     pub fn entries(&self) -> impl Iterator<Item = (usize, *mut RawStyle)> + '_ {
         self.0
             .iter()
-            .map(|(&node, style)| (node, style.as_ptr().cast_mut()))
+            .map(|(&node, (_, style))| (node, style.as_ptr().cast_mut()))
     }
 }

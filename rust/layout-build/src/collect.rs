@@ -5,7 +5,7 @@
 use core::ffi::CStr;
 use core::ptr;
 
-use southstar_dom::{MAX_DEPTH, Node, NsNode, children, controls};
+use southstar_dom::{MAX_DEPTH, Node, WeakNode, children, controls};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_content::controls::{
     FontKeyword, append_inline_spacer, emit_attr, emit_attr_styled, emit_color, emit_font_family,
@@ -85,7 +85,7 @@ pub struct Collector<'a> {
     pub atomics: Vec<(usize, BoxRef<'static>)>,
     abs_placeholders: bool,
     pub ws_ranges: Vec<WsRange>,
-    ws_parent: *const NsNode,
+    ws_parent: Option<WeakNode>,
     ws_parent_mode: i32,
 }
 
@@ -133,8 +133,8 @@ pub fn white_space_mode(node: Node<'_>, styles: StyleTable) -> i32 {
     WS_COLLAPSE
 }
 
-pub(crate) fn same(a: *const NsNode, n: Node<'_>) -> bool {
-    ptr::eq(a, n.as_ptr())
+pub(crate) fn same(a: Option<Node<'_>>, n: Node<'_>) -> bool {
+    a == Some(n)
 }
 
 fn sorted(a: usize, b: usize) -> (usize, usize) {
@@ -162,7 +162,7 @@ impl<'a> Collector<'a> {
             atomics: Vec::new(),
             abs_placeholders,
             ws_ranges: Vec::new(),
-            ws_parent: ptr::null(),
+            ws_parent: None,
             ws_parent_mode: 0,
         }
     }
@@ -184,8 +184,9 @@ impl<'a> Collector<'a> {
         if self.out.len() <= start {
             return;
         }
-        if !same(self.ws_parent, parent) {
-            self.ws_parent = parent.as_ptr();
+        let parent_ref = Some(parent.downgrade());
+        if self.ws_parent != parent_ref {
+            self.ws_parent = parent_ref;
             self.ws_parent_mode = white_space_mode(parent, self.styles);
         }
         self.ws_ranges.push(WsRange {
@@ -351,7 +352,7 @@ impl<'a> Collector<'a> {
                 let fixed = keyword_is(ps.get(PropId::Position), c"fixed");
                 if !fixed
                     && self.abs_placeholders
-                    && let Some(ph) = state::abs_placeholder(ps.as_ptr().cast())
+                    && let Some(ph) = state::abs_placeholder(ps.as_ptr() as usize)
                 {
                     self.push_atomic(ph);
                 }
