@@ -15,6 +15,10 @@ Southstar Browser 1.0.5:
   with their paths rewritten, and publishes them in dependency order. CI checks
   that the merged crates build. `scripts/set-version.py` sets the version
   everywhere it is written.
+* Internals: pinned DOM wrappers and a canvas's 2D context are held as plain
+  JavaScript values instead of raw retained object pointers, so
+  `retain_identity`/`release_identity` and `identity_value` are gone from the
+  engine layer and the Boa fork.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each

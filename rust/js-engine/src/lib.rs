@@ -6,7 +6,7 @@ mod boa;
 
 pub use backend::{
     ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Scope, SetFlags, SharedMemory,
-    Value, engine_version, identity_value,
+    Value, engine_version,
 };
 use boa as backend;
 

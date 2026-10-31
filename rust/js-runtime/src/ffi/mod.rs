@@ -339,15 +339,15 @@ impl Js {
         record::set_active(None);
     }
 
-    pub fn take_pinned_wrappers(self) -> Vec<Element> {
+    pub fn take_pinned_wrappers(self) -> Vec<(Element, Value)> {
         record::take_pinned_wrappers(self.some())
             .into_iter()
-            .filter_map(|key| record::node(key as *const NsNode))
+            .filter_map(|(key, wrapper)| Some((record::node(key as *const NsNode)?, wrapper)))
             .collect()
     }
 
-    pub fn detach_wrapper(self, node: Element, release: bool) {
-        record::detach_wrapper(self.rec(), node, release);
+    pub fn detach_wrapper(self, node: Element, pinned: Option<Value>) {
+        record::detach_wrapper(self.rec(), node, pinned);
     }
 
     pub fn current_document(self) -> Option<*const NsNode> {

@@ -141,23 +141,6 @@ impl JsObject {
         object
     }
 
-    /// Keeps the object alive until [`Self::release_identity`] and returns its identity.
-    #[cfg(not(feature = "jsvalue-enum"))]
-    #[must_use]
-    pub fn retain_identity(&self) -> *mut std::ffi::c_void {
-        self.clone().into_raw().as_ptr().cast()
-    }
-
-    /// Drops the reference taken by [`Self::retain_identity`].
-    ///
-    /// # Safety
-    /// `identity` must come from [`Self::retain_identity`] and be released once.
-    #[cfg(not(feature = "jsvalue-enum"))]
-    pub unsafe fn release_identity(identity: *mut std::ffi::c_void) {
-        // SAFETY: the caller guarantees a reference taken by `retain_identity`.
-        drop(unsafe { Self::from_raw(NonNull::new_unchecked(identity.cast())) });
-    }
-
     /// Creates a new ordinary object with its prototype set to the `Object` prototype.
     ///
     /// This is an alias for [`Self::with_object_proto`].
