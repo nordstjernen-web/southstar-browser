@@ -11,7 +11,7 @@ use std::rc::Rc;
 use southstar_dom::{Node, NsNode};
 
 use southstar_glib::{MainContext, SourceId};
-use southstar_js_engine::{ContextHandle, JobOutcome, ObjectKind, Scope, Value};
+use southstar_js_engine::{BufferView, ContextHandle, JobOutcome, ObjectKind, Scope, Value};
 
 use super::Js;
 use super::imports;
@@ -299,20 +299,9 @@ pub(crate) fn add_resource_timing(
     add(js.page(), Some(info), url, Some(initiator), span, response);
 }
 
-pub struct BytesView {
-    pub data: *const u8,
-    pub len: usize,
-    pub holder: Value,
-}
-
-pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesView> {
+pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BufferView> {
     if scope.object_kind(value) == Some(ObjectKind::ArrayBuffer) {
-        let (data, len) = scope.array_buffer_ptr(value)?;
-        return Some(BytesView {
-            data,
-            len,
-            holder: value.clone(),
-        });
+        return scope.array_buffer_view(value);
     }
     if !value.is_object() {
         return None;
@@ -331,27 +320,7 @@ pub(crate) fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesVi
     }
     let offset = scope.to_index(&offset).ok()?;
     let length = scope.to_index(&length).ok()?;
-    let (base, total) = scope.array_buffer_ptr(&buffer)?;
-    let total = total as u64;
-    if offset > total || length > total - offset {
-        return None;
-    }
-    Some(BytesView {
-        data: base.wrapping_add(offset as usize),
-        len: length as usize,
-        holder: buffer,
-    })
-}
-
-pub(crate) fn bytes_of(view: &BytesView) -> &[u8] {
-    if view.data.is_null() || view.len == 0 {
-        &[]
-    } else {
-        // SAFETY: `data..data + len` lies inside the ArrayBuffer `holder` keeps alive, checked
-        // against its length in `bytes_view`, and no script runs to detach it while `view` is
-        // borrowed.
-        unsafe { core::slice::from_raw_parts(view.data, view.len) }
-    }
+    scope.buffer_view(&buffer, offset, length)
 }
 
 pub(crate) fn blob_bytes(scope: &mut Scope<'_>, value: &Value) -> Vec<u8> {

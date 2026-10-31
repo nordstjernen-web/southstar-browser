@@ -6,6 +6,7 @@ mod imports;
 
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
@@ -87,12 +88,8 @@ pub(crate) fn live_new_object(scope: &mut Scope<'_>, back: Live) -> Value {
     crate::class::new_live(scope, back).unwrap_or_else(|_| Value::null())
 }
 
-pub(crate) fn live_of(value: &Value) -> Option<&Live> {
-    let back = value.with_instance(&crate::class::LIVE_CLASS, |back: &Live| {
-        core::ptr::from_ref(back)
-    })?;
-    // SAFETY: the Live record is the instance data of the object `value` roots, which keeps it alive and unmoved for as long as the borrow of `value` lasts.
-    unsafe { back.as_ref() }
+pub(crate) fn live_of(value: &Value) -> Option<Rc<Live>> {
+    value.with_instance(&crate::class::LIVE_CLASS, Rc::clone)
 }
 
 pub(crate) fn build_attributes(scope: &mut Scope<'_>, owner: &Value) -> Value {
@@ -135,7 +132,7 @@ pub(crate) fn live_length(
     _args: &[Value],
 ) -> Result<Value, Value> {
     match live_of(this) {
-        Some(back) => Ok(Value::int64(live::length(scope, back) as i64)),
+        Some(back) => Ok(Value::int64(live::length(scope, &back) as i64)),
         None => Err(scope.type_error("Illegal invocation")),
     }
 }
@@ -182,7 +179,7 @@ pub fn nsr_make_live(
 
 pub fn nsr_live_snapshot(scope: &mut Scope<'_>, obj: &Value) -> Value {
     match live_of(obj) {
-        Some(back) => live::snapshot(scope, back),
+        Some(back) => live::snapshot(scope, &back),
         None => obj.clone(),
     }
 }

@@ -31,6 +31,12 @@ impl FrameUrl {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct BaseFrame {
+    doc: *mut NsNode,
+    frame: *mut NsNode,
+}
+
 pub(crate) struct RealmScope {
     ctx: ContextHandle,
     doc: *mut NsNode,
@@ -213,8 +219,11 @@ pub(crate) fn frame_scope_enter(
 ) {
     save(js, scope);
     let state = js.st();
-    if state.realm_scope_base.get().is_null() && js.ctx() == js.main_realm() {
-        state.realm_scope_base.set(scope);
+    if state.realm_scope_base.get().is_none() && js.ctx() == js.main_realm() {
+        state.realm_scope_base.set(Some(BaseFrame {
+            doc: scope.doc,
+            frame: scope.frame,
+        }));
         scope.is_base = true;
     }
     if state.top_url_slot.borrow().is_none() {
@@ -258,9 +267,6 @@ pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mu
         let base = js.st().realm_scope_base.get();
         save(js, scope);
         js.set_ctx(realm);
-        // SAFETY: `base` is null or the base RealmScope `frame_scope_enter` recorded, which stays
-        // on its caller's stack until `realm_scope_leave` clears the pointer.
-        let base = unsafe { base.as_ref() };
         js.set_frame(base.map_or(ptr::null_mut(), |base| base.frame));
         js.set_current_doc(base.map_or_else(|| top_document(js.current_doc()), |base| base.doc));
         let top = top_url(js);
@@ -291,7 +297,7 @@ pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
         *prev_slot.borrow_mut() = Some(non_null_text(current.as_deref()));
     }
     if scope.is_base {
-        js.st().realm_scope_base.set(ptr::null_mut());
+        js.st().realm_scope_base.set(None);
     }
     js.st().top_url_slot.replace(scope.prev_slot.take());
     restore_current_url(js, scope.url.as_ref());

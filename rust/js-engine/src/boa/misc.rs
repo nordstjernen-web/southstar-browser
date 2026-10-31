@@ -46,13 +46,6 @@ impl Scope<'_> {
         self.is_native_function(value)
     }
 
-    pub fn array_buffer_ptr(&mut self, value: &Value) -> Option<(*mut u8, usize)> {
-        let object = value.0.as_object()?.clone();
-        let buffer = boa_engine::object::builtins::JsArrayBuffer::from_object(object).ok()?;
-        let mut data = buffer.data_mut()?;
-        Some((data.as_mut_ptr(), data.len()))
-    }
-
     pub fn to_index(&mut self, value: &Value) -> Result<u64, Value> {
         value.0.to_index(self.cx()).map_err(|e| self.error(e))
     }

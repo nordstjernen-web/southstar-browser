@@ -44,7 +44,7 @@ pub(crate) const FOREIGN: u32 = FLAG_SVG_NS | FLAG_FOREIGN_NS;
 pub(crate) const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 
 pub fn collection_kind(value: &Value) -> c_int {
-    ffi::live_of(value).map_or(-1, live::Live::collection_kind)
+    ffi::live_of(value).map_or(-1, |back| back.collection_kind())
 }
 
 pub fn make_live(scope: &mut Scope<'_>, owner: &Value, kind: c_int, param: Option<&[u8]>) -> Value {

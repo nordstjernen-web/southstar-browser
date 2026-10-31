@@ -5,7 +5,7 @@
 use core::ptr;
 
 use southstar_dom::{Node, NsNode};
-use southstar_js_engine::{ContextHandle, HostClass, Scope, TaskFn, Value};
+use southstar_js_engine::{BufferView, ContextHandle, HostClass, Scope, TaskFn, Value};
 
 use crate::budget;
 use crate::ffi::state::TaskRun;
@@ -21,7 +21,6 @@ mod nodes;
 mod page;
 mod tasks;
 
-pub use crate::ffi::glue::BytesView;
 pub use crate::ffi::record::AdoptedProtos;
 pub use crate::ffi::{Callbacks as PageCallbacks, NavigationTiming, NsJs};
 pub use enter::*;
@@ -35,12 +34,12 @@ pub use tasks::*;
 
 const BODY_BYTES_MAX: usize = 32 * 1024 * 1024;
 
-pub fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BytesView> {
+pub fn bytes_view(scope: &mut Scope<'_>, value: &Value) -> Option<BufferView> {
     glue::bytes_view(scope, value)
 }
 
 pub fn bytes_view_copy(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    glue::bytes_view(scope, value).map(|view| glue::bytes_of(&view).to_vec())
+    glue::bytes_view(scope, value).map(|view| view.bytes().to_vec())
 }
 
 pub fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
@@ -54,7 +53,7 @@ pub fn body_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
             .filter(|b| b.len() <= BODY_BYTES_MAX);
     }
     if let Some(view) = glue::bytes_view(scope, value) {
-        let bytes = glue::bytes_of(&view);
+        let bytes = view.bytes();
         return (bytes.len() <= BODY_BYTES_MAX).then(|| bytes.to_vec());
     }
     if !value.is_object() {

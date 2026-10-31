@@ -632,7 +632,7 @@ pub(crate) fn item(scope: &mut Scope<'_>, this: &Value, index: Option<&Value>) -
     let Ok(index) = scope.to_int32(index) else {
         return Ok(Value::null());
     };
-    let (snap, length) = snapshot_with_length(scope, back);
+    let (snap, length) = snapshot_with_length(scope, &back);
     if index < 0 || index as u32 >= length {
         return Ok(Value::null());
     }
@@ -647,8 +647,8 @@ fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
         return Ok(Value::null());
     };
     let name = CString::new(truncated(&name).into_vec()).unwrap_or_default();
-    let (snap, length) = snapshot_with_length(scope, back);
-    Ok(named(scope, back, &snap, length, &name).unwrap_or_else(Value::null))
+    let (snap, length) = snapshot_with_length(scope, &back);
+    Ok(named(scope, &back, &snap, length, &name).unwrap_or_else(Value::null))
 }
 
 const OPERATION: Attributes = Attributes {

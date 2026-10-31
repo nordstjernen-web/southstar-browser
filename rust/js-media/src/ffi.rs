@@ -154,15 +154,7 @@ pub(crate) fn with_bytes<R>(
     f: impl FnOnce(&[u8]) -> R,
 ) -> Option<R> {
     let view = api::bytes_view(scope, value)?;
-    let bytes = if view.data.is_null() || view.len == 0 {
-        &[][..]
-    } else {
-        // SAFETY: bytes_view points at view.len bytes of a buffer that view.holder keeps alive until it is dropped after f returns.
-        unsafe { core::slice::from_raw_parts(view.data, view.len) }
-    };
-    let result = f(bytes);
-    drop(view.holder);
-    Some(result)
+    Some(f(&view.bytes()))
 }
 
 macro_rules! methods {

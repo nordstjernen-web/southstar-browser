@@ -13,7 +13,7 @@ use southstar_css::StyleMap;
 use southstar_dom::{Node, NsNode, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
-use super::scopes::RealmScope;
+use super::scopes::BaseFrame;
 
 pub type LogFn = dyn Fn(&CStr);
 pub type DataFn = dyn Fn();
@@ -72,7 +72,7 @@ pub(crate) struct PageState {
     pub in_layout_flush: Cell<bool>,
     pub current_url: RefCell<Option<CString>>,
     pub document_origin: RefCell<Option<CString>>,
-    pub realm_scope_base: Cell<*mut RealmScope>,
+    pub realm_scope_base: Cell<Option<BaseFrame>>,
     pub top_url_slot: RefCell<Option<UrlCell>>,
     pub current_script: Cell<*mut NsNode>,
     pub early_inject_src: RefCell<Option<CString>>,
@@ -129,7 +129,7 @@ impl PageState {
             in_layout_flush: Cell::new(false),
             current_url: RefCell::new(None),
             document_origin: RefCell::new(None),
-            realm_scope_base: Cell::new(ptr::null_mut()),
+            realm_scope_base: Cell::new(None),
             top_url_slot: RefCell::new(None),
             current_script: Cell::new(ptr::null_mut()),
             early_inject_src: RefCell::new(None),
