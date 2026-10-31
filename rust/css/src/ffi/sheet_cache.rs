@@ -15,25 +15,6 @@ const MERGED_TRIM_ABOVE: usize = 64;
 const MERGED_TRIM_TO: usize = 48;
 const URL_SHEETS_MAX: usize = 256;
 
-struct Sheet(OwnedSheet);
-
-impl Sheet {
-    fn adopt(sheet: OwnedSheet) -> Self {
-        sheet.set_cached(true);
-        Sheet(sheet)
-    }
-
-    fn handle(&self) -> OwnedSheet {
-        self.0.share()
-    }
-}
-
-impl Drop for Sheet {
-    fn drop(&mut self) {
-        self.0.set_cached(false);
-    }
-}
-
 fn viewport() -> (f64, f64) {
     (
         southstar_css_media::viewport_w(),
@@ -49,7 +30,7 @@ fn viewport_rounded() -> (u64, u64) {
 struct StyleElementSheet {
     css: Vec<u8>,
     viewport: (f64, f64),
-    sheet: Sheet,
+    sheet: OwnedSheet,
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -60,7 +41,7 @@ struct MergedKey {
 }
 
 struct MergedSheet {
-    sheet: Sheet,
+    sheet: OwnedSheet,
     stamp: u64,
 }
 
@@ -73,7 +54,7 @@ struct UrlKey {
 
 struct ImportSheet {
     css: Vec<u8>,
-    sheet: Sheet,
+    sheet: OwnedSheet,
 }
 
 #[derive(Default)]
@@ -82,7 +63,7 @@ struct Caches {
     merged: HashMap<MergedKey, MergedSheet>,
     clock: u64,
     pass_start: u64,
-    links: HashMap<UrlKey, Sheet>,
+    links: HashMap<UrlKey, OwnedSheet>,
     imports: HashMap<UrlKey, ImportSheet>,
     relayout_depth: u32,
     media_generation: u64,
@@ -91,7 +72,7 @@ struct Caches {
 type Dropped = (
     HashMap<usize, StyleElementSheet>,
     HashMap<MergedKey, MergedSheet>,
-    HashMap<UrlKey, Sheet>,
+    HashMap<UrlKey, OwnedSheet>,
     HashMap<UrlKey, ImportSheet>,
 );
 
@@ -150,14 +131,6 @@ fn with<R>(f: impl FnOnce(&mut Caches) -> R) -> R {
     CACHES.with_borrow_mut(f)
 }
 
-fn parse_in_layer(css: &[u8], layer: Option<&[u8]>) -> OwnedSheet {
-    let mut sheet = OwnedSheet::parse(css);
-    if let Some(layer) = layer {
-        sheet.force_layer(layer);
-    }
-    sheet
-}
-
 fn url_key(url: &[u8], layer: Option<&[u8]>) -> Option<UrlKey> {
     (!url.is_empty()).then(|| UrlKey {
         viewport: viewport_rounded(),
@@ -166,7 +139,10 @@ fn url_key(url: &[u8], layer: Option<&[u8]>) -> Option<UrlKey> {
     })
 }
 
-pub fn stylesheet_from_style_element_cached(style: Node<'_>) -> Option<OwnedSheet> {
+pub fn stylesheet_from_style_element_cached(
+    style: Node<'_>,
+    base: Option<&[u8]>,
+) -> Option<OwnedSheet> {
     let css = style_text::style_element_text(style)?;
     let key = style.as_ptr() as usize;
     let viewport = viewport();
@@ -175,13 +151,13 @@ pub fn stylesheet_from_style_element_cached(style: Node<'_>) -> Option<OwnedShee
             .style_elements
             .get(&key)
             .filter(|entry| entry.css == css && entry.viewport == viewport)
-            .map(|entry| entry.sheet.handle())
+            .map(|entry| entry.sheet.clone())
     });
     if hit.is_some() {
         return hit;
     }
-    let sheet = Sheet::adopt(OwnedSheet::parse(&css));
-    let out = sheet.handle();
+    let sheet = OwnedSheet::parse_resolved(&css, base, None);
+    let out = sheet.clone();
     let entry = StyleElementSheet {
         css,
         viewport,
@@ -205,14 +181,14 @@ pub fn merged_styles_cached(css: &[u8], base: Option<&[u8]>) -> Option<OwnedShee
         merged.get_mut(&key).map(|entry| {
             *clock += 1;
             entry.stamp = *clock;
-            entry.sheet.handle()
+            entry.sheet.clone()
         })
     });
     if hit.is_some() {
         return hit;
     }
-    let sheet = Sheet::adopt(OwnedSheet::parse(&key.css));
-    let out = sheet.handle();
+    let sheet = OwnedSheet::parse_resolved(&key.css, base, None);
+    let out = sheet.clone();
     drop(with(|caches| {
         let stamp = caches.tick();
         caches.merged.insert(key, MergedSheet { sheet, stamp })
@@ -222,33 +198,33 @@ pub fn merged_styles_cached(css: &[u8], base: Option<&[u8]>) -> Option<OwnedShee
 
 pub fn parse_url_cached(url: &[u8], css: &[u8]) -> OwnedSheet {
     let Some(key) = url_key(url, None) else {
-        return OwnedSheet::parse(css);
+        return OwnedSheet::parse_resolved(css, Some(url), None);
     };
-    if let Some(sheet) = with(|caches| caches.links.get(&key).map(Sheet::handle)) {
+    if let Some(sheet) = with(|caches| caches.links.get(&key).cloned()) {
         return sheet;
     }
-    let sheet = Sheet::adopt(OwnedSheet::parse(css));
-    let out = sheet.handle();
+    let sheet = OwnedSheet::parse_resolved(css, Some(url), None);
+    let out = sheet.clone();
     drop(with(|caches| caches.links.insert(key, sheet)));
     out
 }
 
 pub fn parse_import_cached(url: &[u8], layer: Option<&[u8]>, css: &[u8]) -> OwnedSheet {
     let Some(key) = url_key(url, layer) else {
-        return parse_in_layer(css, layer);
+        return OwnedSheet::parse_resolved(css, Some(url), layer);
     };
     let hit = with(|caches| {
         caches
             .imports
             .get(&key)
             .filter(|entry| entry.css == css)
-            .map(|entry| entry.sheet.handle())
+            .map(|entry| entry.sheet.clone())
     });
     if let Some(sheet) = hit {
         return sheet;
     }
-    let sheet = Sheet::adopt(parse_in_layer(css, layer));
-    let out = sheet.handle();
+    let sheet = OwnedSheet::parse_resolved(css, Some(url), layer);
+    let out = sheet.clone();
     let entry = ImportSheet {
         css: css.to_vec(),
         sheet,

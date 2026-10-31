@@ -43,8 +43,11 @@ pub fn merged_styles_cached(run: &[u8], base: Option<&CStr>) -> Option<OwnedShee
     southstar_css::merged_styles_cached(run, base.map(CStr::to_bytes))
 }
 
-pub fn stylesheet_from_style_element_cached(style: Node) -> Option<OwnedSheet> {
-    southstar_css::stylesheet_from_style_element_cached(style)
+pub fn stylesheet_from_style_element_cached(
+    style: Node,
+    base: Option<&CStr>,
+) -> Option<OwnedSheet> {
+    southstar_css::stylesheet_from_style_element_cached(style, base.map(CStr::to_bytes))
 }
 
 pub fn style_element_text(style: Node) -> Option<Vec<u8>> {

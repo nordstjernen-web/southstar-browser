@@ -294,12 +294,6 @@ impl AnimList {
 pub struct RetainedStyle(southstar_css::RetainedStyle);
 
 impl RetainedStyle {
-    pub fn retain(style: StyleRef<'_>) -> RetainedStyle {
-        // SAFETY: a StyleRef is a live computed style made by rust/css.
-        let retained = unsafe { southstar_css::RetainedStyle::retain(style.as_ptr()) };
-        RetainedStyle(retained.expect("a live style"))
-    }
-
     pub fn get(&self) -> StyleRef<'_> {
         StyleRef::retained(&self.0)
     }
@@ -335,10 +329,6 @@ pub fn may_animate(style: StyleRef<'_>) -> bool {
 pub struct StyleMut(NonNull<StyleData>);
 
 impl StyleMut {
-    pub fn of(style: StyleRef<'_>) -> StyleMut {
-        StyleMut(NonNull::new(style.as_ptr().cast::<StyleData>().cast_mut()).expect("a live style"))
-    }
-
     fn with<R>(&self, f: impl FnOnce(&mut StyleData) -> R) -> R {
         // SAFETY: a StyleMut is made from a live computed style, which the engine alone writes during a pass, and no reference into it outlives this call.
         f(unsafe { &mut *self.0.as_ptr() })
@@ -415,6 +405,14 @@ impl NodePtr {
 
     pub fn style_in<'a>(self, styles: StylesTable<'a>) -> Option<StyleRef<'a>> {
         styles.0.get(self.0).map(StyleRef::from_data)
+    }
+
+    pub fn retained_style_in(self, styles: StylesTable<'_>) -> Option<RetainedStyle> {
+        styles.0.retained(self.0).map(RetainedStyle)
+    }
+
+    pub fn style_mut_in(self, styles: StylesTable<'_>) -> Option<StyleMut> {
+        NonNull::new(styles.0.lookup(self.0)).map(StyleMut)
     }
 
     pub fn style_before_change(self) -> Option<RetainedStyle> {

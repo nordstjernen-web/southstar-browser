@@ -35,7 +35,7 @@ use super::registry::{
 };
 use super::selector::attr_ancestor_hashes;
 use super::selector_view::SheetRef;
-use super::sheet::{Sheet, SheetData};
+use super::sheet::Sheet;
 use super::style_alloc::{RetainedStyle, style_alloc};
 use super::style_map::StyleMap;
 use super::style_share::{
@@ -180,11 +180,11 @@ fn frame_viewport(frame: Node<'_>, parent: Option<&RawStyle>) -> Option<(f64, f6
     (w > 0.0 && h > 0.0 && differs).then(|| viewport::replace(w, h))
 }
 
-fn pseudo_mask(sheet: Option<&SheetData>) -> c_uint {
+fn pseudo_mask(sheet: Option<&Sheet>) -> c_uint {
     sheet.map_or(0, |sheet| sheet.pseudo_mask.get())
 }
 
-type Sheets<'a> = [Option<&'a SheetData>];
+type Sheets<'a> = [Option<&'a Sheet>];
 
 #[derive(Clone, Copy)]
 struct Pass<'a> {
@@ -194,12 +194,12 @@ struct Pass<'a> {
 }
 
 struct Walk<'a> {
-    ua: Option<&'a SheetData>,
+    ua: Option<&'a Sheet>,
     layer_ranks: &'a LayerRanks,
     out: StyleMap,
     registered: &'a RegisteredProps,
     adjust_cache: &'a AdjustCache,
-    doc_sheets: Option<HashMap<usize, Vec<Option<&'a SheetData>>>>,
+    doc_sheets: Option<HashMap<usize, Vec<Option<&'a Sheet>>>>,
     reuse: Option<&'a Styles>,
     scratch: &'a mut Scratch,
     root_px: f64,
@@ -229,7 +229,7 @@ impl<'a> Walk<'a> {
         } else {
             None
         };
-        let own_sheets: Vec<Option<&'a SheetData>>;
+        let own_sheets: Vec<Option<&'a Sheet>>;
         let author = match &self.doc_sheets {
             Some(by_doc) if is_document => {
                 own_sheets = by_doc.get(&(ptr as usize)).cloned().unwrap_or_default();
@@ -486,15 +486,15 @@ pub fn compute_styles(
     doc: Option<Node<'_>>,
     sheets: &[impl Deref<Target = Sheet>],
     sheet_docs: &[Node<'_>],
-    containers: Option<&ContainerMap>,
+    containers: Option<&mut ContainerMap>,
 ) -> StyleMap {
-    let authors: Vec<Option<&SheetData>> = sheets.iter().map(|sheet| Some(sheet.raw())).collect();
+    let authors: Vec<Option<&Sheet>> = sheets.iter().map(|sheet| Some(&**sheet)).collect();
     with_container_map(containers, || compute(doc, &authors, sheet_docs))
 }
 
 fn compute(
     doc_node: Option<Node<'_>>,
-    authors: &[Option<&SheetData>],
+    authors: &[Option<&Sheet>],
     sheet_docs: &[Node<'_>],
 ) -> StyleMap {
     element_state::reset_language_cache();
@@ -521,7 +521,7 @@ fn compute(
     matcher::has_memo_begin();
     matcher::batch_begin();
 
-    let serial = |sheet: Option<&SheetData>| sheet.map_or(0, SheetData::serial);
+    let serial = |sheet: Option<&Sheet>| sheet.map_or(0, Sheet::serial);
     let author_serials: Vec<u64> = authors.iter().map(|&sheet| serial(sheet)).collect();
     let sig =
         incremental::sheet_signature(serial(ua), &author_serials, registered_property_serial());
@@ -536,7 +536,7 @@ fn compute(
 
     ancestor_filter_begin(attr_ancestor_hashes());
     let doc_sheets = (!sheet_docs.is_empty()).then(|| {
-        let mut by_doc: HashMap<usize, Vec<Option<&SheetData>>> = HashMap::new();
+        let mut by_doc: HashMap<usize, Vec<Option<&Sheet>>> = HashMap::new();
         for (owner, &sheet) in sheet_docs.iter().zip(authors) {
             by_doc
                 .entry(owner.as_ptr() as usize)

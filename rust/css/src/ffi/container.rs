@@ -2,9 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::RefCell;
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -95,31 +94,37 @@ impl ContainerMap {
 }
 
 thread_local! {
-    static MAP: Cell<*const ContainerMap> = const { Cell::new(ptr::null()) };
+    static MAP: RefCell<Option<ContainerMap>> = const { RefCell::new(None) };
 }
 
-pub(super) fn with_container_map<R>(map: Option<&ContainerMap>, f: impl FnOnce() -> R) -> R {
-    struct Restore(*const ContainerMap);
+pub(super) fn with_container_map<R>(map: Option<&mut ContainerMap>, f: impl FnOnce() -> R) -> R {
+    struct Restore<'a> {
+        map: Option<&'a mut ContainerMap>,
+        outer: Option<ContainerMap>,
+    }
 
-    impl Drop for Restore {
+    impl Drop for Restore<'_> {
         fn drop(&mut self) {
-            MAP.with(|current| current.set(self.0));
+            let installed =
+                MAP.with_borrow_mut(|current| core::mem::replace(current, self.outer.take()));
+            if let (Some(map), Some(installed)) = (self.map.as_deref_mut(), installed) {
+                *map = installed;
+            }
         }
     }
 
-    let installed = map.map_or(ptr::null(), ptr::from_ref);
-    let _restore = Restore(MAP.with(|current| current.replace(installed)));
+    let mut restore = Restore { map, outer: None };
+    let installed = restore.map.as_deref_mut().map(core::mem::take);
+    restore.outer = MAP.with_borrow_mut(|current| core::mem::replace(current, installed));
     f()
 }
 
 fn with_current_map<R>(f: impl FnOnce(Option<&ContainerMap>) -> R) -> R {
-    let map = MAP.with(Cell::get);
-    // SAFETY: MAP is null or a map with_container_map borrows until its closure, which this call runs within, returns.
-    f(unsafe { map.as_ref() })
+    MAP.with_borrow(|map| f(map.as_ref()))
 }
 
 pub(crate) fn container_map_installed() -> bool {
-    !MAP.with(Cell::get).is_null()
+    MAP.with_borrow(Option::is_some)
 }
 
 fn str_hash(text: &CStr) -> u32 {

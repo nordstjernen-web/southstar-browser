@@ -3,8 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_uint, c_void};
-use core::marker::PhantomData;
-use core::ptr::{self, NonNull};
+use core::ptr;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
@@ -344,7 +343,7 @@ pub fn layer(head: Option<ValueRef<'_>>, index: i32) -> Option<ValueRef<'_>> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleRef<'a>(NonNull<StyleData>, PhantomData<&'a StyleData>);
+pub struct StyleRef<'a>(&'a StyleData);
 
 const BEFORE: usize = 0;
 const AFTER: usize = 1;
@@ -359,15 +358,8 @@ const HIDDEN_BEFORE: usize = 9;
 const HIDDEN_AFTER: usize = 10;
 
 impl<'a> StyleRef<'a> {
-    /// # Safety
-    ///
-    /// `p` is null or a computed style made by rust/css that outlives `'a`.
-    unsafe fn from_ptr(p: *const Style) -> Option<StyleRef<'a>> {
-        NonNull::new(p.cast::<StyleData>().cast_mut()).map(|p| StyleRef(p, PhantomData))
-    }
-
     pub fn as_ptr(self) -> *const Style {
-        self.0.as_ptr().cast_const().cast()
+        ptr::from_ref(self.0).cast()
     }
 
     pub fn ptr_or_null(style: Option<StyleRef<'_>>) -> *const Style {
@@ -375,17 +367,15 @@ impl<'a> StyleRef<'a> {
     }
 
     pub fn from_data(data: &'a StyleData) -> StyleRef<'a> {
-        StyleRef(NonNull::from(data), PhantomData)
+        StyleRef(data)
     }
 
     pub fn retained(style: &'a southstar_css::RetainedStyle) -> StyleRef<'a> {
-        let p = style.as_ptr().cast_mut();
-        StyleRef(NonNull::new(p).expect("a retained style"), PhantomData)
+        StyleRef(style.get())
     }
 
     pub fn data(self) -> &'a StyleData {
-        // SAFETY: a StyleRef points at a live computed style for 'a.
-        unsafe { self.0.as_ref() }
+        self.0
     }
 
     pub fn value(self, prop: &Prop) -> Option<ValueRef<'a>> {
@@ -432,8 +422,7 @@ impl<'a> StyleRef<'a> {
     }
 
     fn pseudo(self, slot: usize) -> Option<StyleRef<'a>> {
-        let pseudo = self.data().pseudo_ptr(slot);
-        NonNull::new(pseudo.cast_mut()).map(|p| StyleRef(p, PhantomData))
+        self.0.pseudo(slot).map(StyleRef)
     }
 
     pub fn first_line(self) -> Option<StyleRef<'a>> {
@@ -549,7 +538,7 @@ pub fn col_hint_style(h: &TableColHint) -> Option<StyleRef<'_>> {
 
 fn layout_style<'a>(style: *const Style) -> Option<StyleRef<'a>> {
     // SAFETY: the box tree stores only null or the computed style a box, inline attribute or column hint was built from, which outlives the box tree.
-    unsafe { StyleRef::from_ptr(style) }
+    unsafe { style.cast::<StyleData>().as_ref() }.map(StyleRef)
 }
 
 pub fn display_of(style: Option<StyleRef<'_>>) -> Display {
@@ -592,7 +581,7 @@ pub fn styles_equal(a: Option<StyleRef<'_>>, b: Option<StyleRef<'_>>) -> bool {
         (Some(a), Some(b)) => (a, b),
         _ => return false,
     };
-    if a.0 == b.0 {
+    if ptr::eq(a.0, b.0) {
         return true;
     }
     if a.display() != b.display() {

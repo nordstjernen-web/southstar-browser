@@ -21,7 +21,7 @@ use super::pending::RawPendingMatch;
 use super::rule_index::{Buckets, Candidate, RuleIndex, rule_index_build};
 use super::selector::SelectorData;
 use super::selector_view::{RuleRef, SelectorRef};
-use super::sheet::{OwnedSheet, SheetData};
+use super::sheet::{OwnedSheet, Sheet};
 use crate::gather::{Accum, AncestorFilter, DESTS, class_tokens};
 use crate::hints;
 use crate::matcher::{self, AddrHasher};
@@ -192,7 +192,7 @@ fn cached_match(
     result
 }
 
-pub(super) fn rule_index_ensure(sheet: &SheetData) {
+pub(super) fn rule_index_ensure(sheet: &Sheet) {
     sheet.index.get_or_init(|| rule_index_build(sheet));
 }
 
@@ -432,7 +432,7 @@ pub(super) struct Origin {
 }
 
 pub(super) fn gather_matches(
-    sheet: &SheetData,
+    sheet: &Sheet,
     origin: Origin,
     el: Node<'_>,
     pes: &[c_uint],

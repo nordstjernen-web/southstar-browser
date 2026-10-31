@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::declarations::lookup_key;
 use super::selector_view::SelectorRef;
-use super::sheet::SheetData;
+use super::sheet::Sheet;
 use crate::rule_index::{self, Key, Table};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,7 +33,7 @@ fn push(bucket: &mut Vec<Candidate>, cand: Candidate) {
     }
 }
 
-pub(super) fn rule_index_build(sheet: &SheetData) -> RuleIndex {
+pub(super) fn rule_index_build(sheet: &Sheet) -> RuleIndex {
     let mut rules = Vec::new();
     for rule in &sheet.rules {
         let mut selectors = Vec::new();

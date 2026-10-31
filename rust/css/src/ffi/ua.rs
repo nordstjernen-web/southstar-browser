@@ -2,21 +2,21 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use super::sheet::SheetData;
+use super::sheet::Sheet;
 
 const UA: &str = include_str!("../ua.css");
 const UA_QUIRKS: &str = include_str!("../ua-quirks.css");
 
-fn parse(text: &str) -> &'static SheetData {
-    Box::leak(SheetData::parse(text.as_bytes()))
+fn parse(text: &str) -> &'static Sheet {
+    Box::leak(Sheet::parse(text.as_bytes()))
 }
 
 thread_local! {
-    static STANDARD: &'static SheetData = parse(UA);
-    static QUIRKS: &'static SheetData = parse(&[UA, UA_QUIRKS].concat());
+    static STANDARD: &'static Sheet = parse(UA);
+    static QUIRKS: &'static Sheet = parse(&[UA, UA_QUIRKS].concat());
 }
 
-pub(super) fn ua_sheet(quirks: bool) -> &'static SheetData {
+pub(super) fn ua_sheet(quirks: bool) -> &'static Sheet {
     if quirks {
         QUIRKS.with(|sheet| *sheet)
     } else {
