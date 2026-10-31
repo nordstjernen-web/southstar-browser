@@ -1001,8 +1001,8 @@ fn apply_propagate(styles: StylesTable, node: NodePtr, prop: i32, base: Borrowed
     while let Some(child) = c {
         let style = child.style_in(styles);
         let inherits = style.is_some_and(|st| css::style_value(st, prop) == base);
-        if let Some(st) = style.filter(|_| inherits) {
-            StyleMut::of(st).set_retained(prop, current);
+        if inherits && let Some(st) = child.style_mut_in(styles) {
+            st.set_retained(prop, current);
         }
         c = child.next_in_subtree(node, inherits);
     }
@@ -1540,7 +1540,9 @@ impl Anim {
         drop(tv);
         drop(av);
         if s.prev_style_ptr() != style.as_ptr() {
-            s.prev_style = Some(RetainedStyle::retain(style));
+            s.prev_style = styles
+                .and_then(|styles| node.retained_style_in(styles))
+                .filter(|retained| retained.ptr() == style.as_ptr());
         }
         self.states.insert(node.key(), s);
     }
@@ -1583,10 +1585,9 @@ impl Anim {
 
     pub fn apply(&mut self, styles: StylesTable) {
         for s in self.states.values_mut() {
-            let Some(style) = s.node.style_in(styles) else {
+            let Some(st) = s.node.style_mut_in(styles) else {
                 continue;
             };
-            let st = StyleMut::of(style);
             let node = s.node;
             let mut mutated = false;
             s.base_values.clear();

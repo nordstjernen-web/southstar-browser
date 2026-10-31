@@ -6,7 +6,7 @@ use core::cell::{Cell, OnceCell};
 use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ops::Deref;
-use core::ptr::{self, NonNull};
+use core::ptr;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -26,7 +26,7 @@ use crate::nesting;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
 
-pub(super) struct SheetData {
+pub struct Sheet {
     pub(super) rules: Vec<Rule>,
     imports: Vec<Import>,
     pub(super) layer_names: Vec<Vec<u8>>,
@@ -39,16 +39,14 @@ pub(super) struct SheetData {
     has_container_units: bool,
     has_hover_rules: bool,
     has_active_rules: bool,
-    cached: Cell<bool>,
     pub(super) pseudo_mask: Cell<c_uint>,
     serial: u64,
-    resolved_base: Option<Vec<u8>>,
     pub(super) index: OnceCell<RuleIndex>,
 }
 
-impl SheetData {
-    fn new(serial: u64, has_container_units: bool) -> SheetData {
-        SheetData {
+impl Sheet {
+    fn new(serial: u64, has_container_units: bool) -> Sheet {
+        Sheet {
             rules: Vec::new(),
             imports: Vec::new(),
             layer_names: Vec::new(),
@@ -61,10 +59,8 @@ impl SheetData {
             has_container_units,
             has_hover_rules: false,
             has_active_rules: false,
-            cached: Cell::new(false),
             pseudo_mask: Cell::new(0),
             serial,
-            resolved_base: None,
             index: OnceCell::new(),
         }
     }
@@ -235,7 +231,7 @@ impl SyntaxDef {
 }
 
 pub(crate) struct SheetBuilder {
-    sheet: Box<SheetData>,
+    sheet: Box<Sheet>,
 }
 
 pub(crate) struct RuleBuilder {
@@ -397,14 +393,15 @@ impl SheetBuilder {
     }
 }
 
-pub struct OwnedSheet(NonNull<SheetData>);
+#[derive(Clone)]
+pub struct OwnedSheet(Rc<Sheet>);
 
-impl SheetData {
-    pub(super) fn parse(css: &[u8]) -> Box<SheetData> {
+impl Sheet {
+    pub(super) fn parse(css: &[u8]) -> Box<Sheet> {
         let serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
         let has_container_units = nesting::has_container_units(css);
         let mut builder = SheetBuilder {
-            sheet: Box::new(SheetData::new(serial, has_container_units)),
+            sheet: Box::new(Sheet::new(serial, has_container_units)),
         };
         let mut flattened = nesting::flatten(css);
         if let Some(nul) = flattened.iter().position(|&c| c == 0) {
@@ -417,28 +414,34 @@ impl SheetData {
 
 impl OwnedSheet {
     pub fn parse(css: &[u8]) -> OwnedSheet {
-        OwnedSheet(NonNull::from(Box::leak(SheetData::parse(css))))
+        OwnedSheet::from(Sheet::parse(css))
     }
 
-    fn raw_mut(&mut self) -> &mut SheetData {
-        // SAFETY: the handle points to a live sheet, and borrowing the handle mutably keeps its other uses out.
-        unsafe { self.0.as_mut() }
-    }
-
-    pub(super) fn set_cached(&self, cached: bool) {
-        self.raw().cached.set(cached);
-    }
-
-    pub(super) fn share(&self) -> OwnedSheet {
-        OwnedSheet(self.0)
-    }
-
-    pub fn resolve_urls(&mut self, base: &CStr) {
-        let sheet = self.raw_mut();
-        if sheet.resolved_base.as_deref() == Some(base.to_bytes()) {
-            return;
+    pub(super) fn parse_resolved(
+        css: &[u8],
+        base: Option<&[u8]>,
+        layer: Option<&[u8]>,
+    ) -> OwnedSheet {
+        let mut sheet = Sheet::parse(css);
+        if let Some(layer) = layer {
+            sheet.force_layer(layer);
         }
-        sheet.resolved_base = Some(base.to_bytes().to_vec());
+        if let Some(base) = base {
+            sheet.resolve_urls(&c_text(base));
+        }
+        OwnedSheet::from(sheet)
+    }
+}
+
+impl From<Box<Sheet>> for OwnedSheet {
+    fn from(sheet: Box<Sheet>) -> OwnedSheet {
+        OwnedSheet(Rc::from(sheet))
+    }
+}
+
+impl Sheet {
+    fn resolve_urls(&mut self, base: &CStr) {
+        let sheet = self;
         for rule in &mut sheet.rules {
             rule_resolve_urls(rule, base);
         }
@@ -453,11 +456,11 @@ impl OwnedSheet {
         }
     }
 
-    pub(super) fn force_layer(&mut self, layer: &[u8]) {
+    fn force_layer(&mut self, layer: &[u8]) {
         if layer.is_empty() {
             return;
         }
-        let sheet = self.raw_mut();
+        let sheet = self;
         sheet.serial = SERIAL_NEXT.fetch_add(1, Ordering::Relaxed);
         let old_names = core::mem::take(&mut sheet.layer_names);
         sheet.layers.clear();
@@ -504,18 +507,7 @@ impl Deref for OwnedSheet {
     type Target = Sheet;
 
     fn deref(&self) -> &Sheet {
-        // SAFETY: the handle points to a live sheet, and Sheet is a transparent SheetData.
-        unsafe { self.0.cast::<Sheet>().as_ref() }
-    }
-}
-
-impl Drop for OwnedSheet {
-    fn drop(&mut self) {
-        if self.raw().cached.get() {
-            return;
-        }
-        // SAFETY: the handle came from Box::leak, and a sheet no cache holds has no other handle.
-        drop(unsafe { Box::from_raw(self.0.as_ptr()) });
+        &self.0
     }
 }
 
@@ -612,9 +604,6 @@ fn has_url(value: &NsCssValue) -> bool {
     value.url().is_some() || value.next_layer().is_some_and(has_url)
 }
 
-#[repr(transparent)]
-pub struct Sheet(SheetData);
-
 pub struct FontFaceRule<'a> {
     pub family: Option<&'a CStr>,
     pub src_url: Option<&'a CStr>,
@@ -630,20 +619,8 @@ pub struct ImportRule<'a> {
 }
 
 impl Sheet {
-    /// # Safety
-    ///
-    /// `sheet` is null or points to a style sheet made by this crate that outlives `'a`.
-    pub unsafe fn from_ptr<'a>(sheet: *const c_void) -> Option<&'a Sheet> {
-        // SAFETY: the caller passes null or a live sheet, and Sheet is a transparent SheetData.
-        unsafe { sheet.cast::<Sheet>().as_ref() }
-    }
-
-    pub(super) fn raw(&self) -> &SheetData {
-        &self.0
-    }
-
     pub(super) fn rules(&self) -> &[Rule] {
-        &self.0.rules
+        &self.rules
     }
 
     pub fn as_ptr(&self) -> *const c_void {
@@ -651,27 +628,27 @@ impl Sheet {
     }
 
     pub fn has_container_rules(&self) -> bool {
-        self.0.has_container_rules
+        self.has_container_rules
     }
 
     pub fn has_container_units(&self) -> bool {
-        self.0.has_container_units
+        self.has_container_units
     }
 
     pub fn has_hover_rules(&self) -> bool {
-        self.0.has_hover_rules
+        self.has_hover_rules
     }
 
     pub fn has_active_rules(&self) -> bool {
-        self.0.has_active_rules
+        self.has_active_rules
     }
 
     pub fn page_rule(&self) -> Option<&PageRule> {
-        self.0.page_rule.as_ref()
+        self.page_rule.as_ref()
     }
 
     pub fn font_faces(&self) -> impl Iterator<Item = FontFaceRule<'_>> {
-        self.0.font_faces.iter().map(|face| FontFaceRule {
+        self.font_faces.iter().map(|face| FontFaceRule {
             family: Some(&face.family),
             src_url: Some(&face.src_url),
             unicode_range: face.unicode_range.as_deref(),
@@ -689,7 +666,7 @@ impl Sheet {
     }
 
     pub fn imports(&self) -> impl Iterator<Item = ImportRule<'_>> {
-        self.0.imports.iter().map(|import| ImportRule {
+        self.imports.iter().map(|import| ImportRule {
             url: Some(&import.url),
             layer_name: import.layer_name.as_deref(),
             media: import.media.as_deref(),
@@ -697,6 +674,6 @@ impl Sheet {
     }
 
     pub fn keyframes(&self) -> impl Iterator<Item = Keyframes> + '_ {
-        self.0.keyframes.iter().cloned()
+        self.keyframes.iter().cloned()
     }
 }

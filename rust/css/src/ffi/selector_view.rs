@@ -7,7 +7,7 @@ use core::ffi::CStr;
 use super::declarations::Rule;
 pub(crate) use super::selector::{AttrData as AttrRef, PseudoData as PseudoRef};
 use super::selector::{CompoundData, SelectorData};
-use super::sheet::{Scope, SheetData};
+use super::sheet::{Scope, Sheet};
 
 #[derive(Clone, Copy)]
 pub(crate) struct SelectorRef<'a>(&'a SelectorData);
@@ -25,7 +25,7 @@ pub(crate) struct RuleRef<'a>(&'a Rule);
 pub(crate) struct ScopeRef<'a>(&'a Scope);
 
 #[derive(Clone, Copy)]
-pub(crate) struct SheetRef<'a>(&'a SheetData);
+pub(crate) struct SheetRef<'a>(&'a Sheet);
 
 impl<'a> SelectorRef<'a> {
     pub(super) fn new(sel: &'a SelectorData) -> Self {
@@ -215,11 +215,11 @@ impl<'a> ScopeRef<'a> {
 }
 
 impl<'a> SheetRef<'a> {
-    pub(super) fn new(sheet: &'a SheetData) -> Self {
+    pub(super) fn new(sheet: &'a Sheet) -> Self {
         SheetRef(sheet)
     }
 
-    pub(super) fn raw(self) -> &'a SheetData {
+    pub(super) fn raw(self) -> &'a Sheet {
         self.0
     }
 

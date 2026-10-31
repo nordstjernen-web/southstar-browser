@@ -227,7 +227,7 @@ pub struct Expand<'a> {
 
 fn append_expanded(
     out: &mut Vec<OwnedSheet>,
-    mut sh: OwnedSheet,
+    sh: OwnedSheet,
     base: Option<&CStr>,
     x: &Expand,
     seen: &mut HashSet<Vec<u8>>,
@@ -263,9 +263,6 @@ fn append_expanded(
                 append_expanded(out, child, Some(&abs), x, seen, depth + 1);
             }
         }
-    }
-    if let Some(base) = base {
-        sh.resolve_urls(base);
     }
     out.push(sh);
 }
@@ -450,7 +447,7 @@ impl<'a> Collect<'a, '_> {
         }
         if find(&css, b"@import", 0).is_some() || !ffi::is_self_contained(&css) {
             self.flush();
-            if let Some(sh) = ffi::stylesheet_from_style_element_cached(n) {
+            if let Some(sh) = ffi::stylesheet_from_style_element_cached(n, base) {
                 let x = Expand {
                     top_url: self.top_url,
                     cache: self.cache,

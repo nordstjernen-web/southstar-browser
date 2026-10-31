@@ -406,12 +406,12 @@ pub fn relayout(
     let t0 = clock();
     southstar_css::set_render_zoom(c.zoom());
     let (want_cq, uses_cq_units) = containers_wanted(c);
-    let predicted = predicted_map(c.doc_key(), viewport_width, want_cq);
+    let mut predicted = predicted_map(c.doc_key(), viewport_width, want_cq);
     let cache_selectors = selector_cache_wanted(c, predicted.as_ref());
     if cache_selectors {
         southstar_css::selector_cache_begin();
     }
-    let compute = |containers: Option<&ContainerMap>| {
+    let compute = |containers: Option<&mut ContainerMap>| {
         Rc::new(southstar_css::compute_styles(
             c.doc(),
             c.sheets,
@@ -419,7 +419,7 @@ pub fn relayout(
             containers,
         ))
     };
-    let mut styles = compute(predicted.as_ref());
+    let mut styles = compute(predicted.as_mut());
     let t1 = clock();
 
     style_pass(c, &styles);
@@ -458,7 +458,7 @@ pub fn relayout(
         }
         southstar_css::container_features_begin();
         let t4 = clock();
-        let styles2 = compute(Some(&containers));
+        let styles2 = compute(Some(&mut containers));
         let t5 = clock();
         let features_used = southstar_css::container_features_used();
         if (!features_used && !stale) || styles_tables_equal(&styles, &styles2) {

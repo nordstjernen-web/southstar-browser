@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 use std::rc::Rc;
 
 use super::style_alloc::RetainedStyle;
@@ -26,7 +25,6 @@ pub struct RawStyle {
     pub(super) specified_inline: u8,
     pub(super) pseudo_styles: [Option<RetainedStyle>; 11],
     pub(super) share_id: u64,
-    pub(super) ref_count: Cell<c_int>,
     pub(super) currentcolor_bits: u32,
     pub(super) vars: Option<Rc<VarMap>>,
 }
@@ -39,22 +37,9 @@ impl RawStyle {
             specified_inline: 0,
             pseudo_styles: [const { None }; 11],
             share_id: 0,
-            ref_count: Cell::new(0),
             currentcolor_bits: 0,
             vars: None,
         }
-    }
-
-    pub fn retain(&self) {
-        self.ref_count.set(self.ref_count.get() + 1);
-    }
-
-    pub(super) fn release(&self) -> bool {
-        let count = self.ref_count.get();
-        if count > 0 {
-            self.ref_count.set(count - 1);
-        }
-        count == 0
     }
 
     pub fn value_at(&self, prop: usize) -> Option<&NsCssValue> {
@@ -77,13 +62,6 @@ impl RawStyle {
 
     pub fn specified_inline(&self) -> bool {
         self.specified_inline != 0
-    }
-
-    pub fn pseudo_ptr(&self, slot: usize) -> *const RawStyle {
-        self.pseudo_styles
-            .get(slot)
-            .and_then(Option::as_ref)
-            .map_or(core::ptr::null(), RetainedStyle::as_ptr)
     }
 
     pub fn pseudo(&self, slot: usize) -> Option<&RawStyle> {

@@ -30,6 +30,11 @@ Southstar Browser 1.0.5:
   readiness and WebSocket/EventSource callbacks find their owner through a
   weak registry instead of rebuilding an `Rc` from an address. `config`,
   `js-images` and `js-net` now forbid unsafe code.
+* Internals: computed styles and parsed style sheets are reference-counted
+  with `Rc` instead of hand-kept counts over raw pointers. Sheet URLs are
+  resolved when a sheet is parsed into its cache, so a cached sheet is never
+  changed afterwards, and the container map a style pass reads is moved into
+  the pass rather than lent to it as a pointer.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each

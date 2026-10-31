@@ -13,7 +13,7 @@ use super::container::Container;
 use super::custom_props::RawVarMatch;
 use super::gather::Matches;
 use super::pending::RawPendingMatch;
-use super::style_alloc::{RetainedStyle, style_clone_shared};
+use super::style_alloc::{NewStyle, RetainedStyle, style_clone_shared};
 use super::value::NsCssValue;
 use crate::container;
 use crate::nesting;
@@ -193,7 +193,7 @@ pub(super) fn style_share_end() {
 pub(super) enum Shared {
     Unkeyed,
     Miss,
-    Hit(Box<RawStyle>),
+    Hit(NewStyle),
 }
 
 pub(super) fn style_share_find(
