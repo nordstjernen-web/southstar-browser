@@ -220,7 +220,8 @@ impl<'m> Cascade<'_, 'm> {
                 own.insert(name.to_vec(), b"initial".to_vec());
             }
             _ => {
-                own.insert(name.to_vec(), value.text.to_vec());
+                let computed = value.expanded.as_deref().unwrap_or(value.text);
+                own.insert(name.to_vec(), computed.to_vec());
             }
         }
     }
@@ -276,7 +277,7 @@ impl<'m> Cascade<'_, 'm> {
                     let inherits = registered.as_ref().is_some_and(|r| r.inherits);
                     self.restore_default(own, name, registered.as_ref(), inherits);
                 } else {
-                    own.insert(name.to_vec(), value.text.to_vec());
+                    own.insert(name.to_vec(), checked.to_vec());
                 }
             }
         }
