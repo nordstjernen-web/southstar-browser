@@ -164,19 +164,12 @@ impl<'a> ImageRef<'a> {
         self.read(|s| (s.natural_width, s.natural_height))
     }
 
-    pub fn source_url(self) -> *const c_char {
-        self.state().map_or(ptr::null(), |s| {
-            text_ptr(if s.final_url.is_some() {
-                &s.final_url
-            } else {
-                &s.url
-            })
-        })
+    pub fn source_url(self) -> Option<CString> {
+        self.read(|s| s.final_url.as_ref().or(s.url.as_ref()).cloned())
     }
 
-    pub fn cors_allow_origin(self) -> *const c_char {
-        self.state()
-            .map_or(ptr::null(), |s| text_ptr(&s.cors_allow_origin))
+    pub fn cors_allow_origin(self) -> Option<CString> {
+        self.read(|s| s.cors_allow_origin.clone())
     }
 
     pub fn is_animated(self) -> bool {

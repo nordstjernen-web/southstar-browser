@@ -5,8 +5,8 @@
 mod boa;
 
 pub use backend::{
-    ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey, Scope, SetFlags, SharedMemory,
-    Value, engine_version,
+    BufferBytes, BufferView, ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey,
+    Scope, SetFlags, SharedMemory, Value, engine_version,
 };
 use boa as backend;
 
@@ -134,6 +134,12 @@ pub type TaskFn = for<'a> fn(&mut Scope<'a>, &[Value]) -> Result<Value, Value>;
 
 pub trait Trace {
     fn trace(&self, visit: &mut dyn FnMut(&Value));
+}
+
+impl<T: Trace> Trace for std::rc::Rc<T> {
+    fn trace(&self, visit: &mut dyn FnMut(&Value)) {
+        T::trace(self, visit);
+    }
 }
 
 pub struct TypedArrayBytes<'a> {

@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
+use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -569,11 +569,6 @@ fn caller_document_url(js: Js, ctx: ContextHandle) -> Option<Vec<u8>> {
         .map(CString::into_bytes)
 }
 
-fn opt_bytes<'a>(p: *const c_char) -> Option<&'a [u8]> {
-    // SAFETY: the only caller, resource_origin_clean, passes its own arguments, which its contract makes null or NUL-terminated strings live for the call.
-    (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_bytes())
-}
-
 pub fn note_viewport_scroll(js: Page, x: f64, y: f64) {
     page::note_viewport_scroll(Js::of_page(js), x, y);
 }
@@ -590,17 +585,7 @@ pub fn fire_page_transition(js: Page, kind: &CStr, persisted: bool) {
     page::fire_page_transition(Js::of_page(js), kind, persisted);
 }
 
-/// # Safety
-///
-/// `url` and `cors_allow_origin` are null or NUL-terminated strings that live for the call.
-unsafe fn resource_origin_clean(
-    scope: &Scope<'_>,
-    url: *const c_char,
-    cors_allow_origin: *const c_char,
-) -> bool {
-    let Some(url) = opt_bytes(url) else {
-        return false;
-    };
+fn resource_origin_clean(scope: &Scope<'_>, url: &[u8], cors_allow_origin: Option<&[u8]>) -> bool {
     let js = js_of(scope);
     if js.is_null() {
         return false;
@@ -610,7 +595,7 @@ unsafe fn resource_origin_clean(
     } else {
         caller_document_url(js, scope.handle())
     };
-    page::resource_origin_clean(caller, url, opt_bytes(cors_allow_origin))
+    page::resource_origin_clean(caller, url, cors_allow_origin)
 }
 
 pub fn nsr_js_new_window_named(scope: &mut Scope<'_>) -> Result<Value, Value> {

@@ -2,8 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use core::ptr;
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
 use southstar_dom::Node;
@@ -18,8 +17,8 @@ use crate::bitmap::{ImageBitmap, Source};
 
 struct Found<'a> {
     texture: Option<TextureRef>,
-    url: *const c_char,
-    cors_allow_origin: *const c_char,
+    url: Option<CString>,
+    cors_allow_origin: Option<CString>,
     cacheable: Option<ImageRef<'a>>,
 }
 
@@ -41,8 +40,8 @@ fn from_box(scope: &Scope<'_>, node: Node<'_>, name: &[u8]) -> Option<Found<'sta
         b"video" => BoxVideo::of(b)?.with_poster(|texture, url| {
             Some(Found {
                 texture: texture.cloned(),
-                url: url.map_or(ptr::null(), CStr::as_ptr),
-                cors_allow_origin: ptr::null(),
+                url: url.map(CStr::to_owned),
+                cors_allow_origin: None,
                 cacheable: None,
             })
         }),
@@ -100,14 +99,15 @@ pub(crate) fn drawimage_source(scope: &mut Scope<'_>, src: &Value) -> Option<Sou
             }
             from_image(southstar_js_images::image_for_node(js, element)?, true)
         })?;
-    let allow = if cors_requested {
-        found.cors_allow_origin
-    } else {
-        ptr::null()
-    };
-    let origin_clean = crate::links::resource_origin_clean();
-    // SAFETY: the found URL and allowed origin are null or strings their image or video keeps alive here.
-    let origin_clean = unsafe { origin_clean(scope, found.url, allow) };
+    let allow = found
+        .cors_allow_origin
+        .as_deref()
+        .filter(|_| cors_requested)
+        .map(CStr::to_bytes);
+    let origin_clean = found
+        .url
+        .as_deref()
+        .is_some_and(|url| crate::links::resource_origin_clean()(scope, url.to_bytes(), allow));
     if let Some(image) = found.cacheable
         && let Some(cached) = image
             .render_cache()

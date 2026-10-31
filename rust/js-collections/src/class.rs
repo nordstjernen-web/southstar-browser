@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::CString;
+use std::rc::Rc;
 
 use southstar_js_engine::{
     ClassHooks, HostClass, OwnProperty, PropertyDefinition, PropertyKey, Scope, Value,
@@ -30,7 +31,7 @@ pub fn register(scope: &mut Scope<'_>) {
 }
 
 pub(crate) fn new_live(scope: &mut Scope<'_>, back: Live) -> Result<Value, Value> {
-    scope.new_traced_instance(&LIVE_CLASS, None, back)
+    scope.new_traced_instance(&LIVE_CLASS, None, Rc::new(back))
 }
 
 fn name_of(scope: &mut Scope<'_>, key: &PropertyKey) -> Option<CString> {
@@ -70,8 +71,8 @@ fn get_own(
         }
     };
     let found = match (index, &name) {
-        (Some(index), _) => live::get_own(scope, back, Key::Index(index)),
-        (None, Some(name)) => live::get_own(scope, back, Key::Name(name)),
+        (Some(index), _) => live::get_own(scope, &back, Key::Index(index)),
+        (None, Some(name)) => live::get_own(scope, &back, Key::Name(name)),
         (None, None) => None,
     };
     Ok(found.map(|value| OwnProperty::data(value, false, index.is_some(), true)))
@@ -82,7 +83,7 @@ fn own_keys(scope: &mut Scope<'_>, obj: &Value) -> Result<Vec<PropertyKey>, Valu
         return Ok(Vec::new());
     };
     let mut named: Vec<Vec<u8>> = Vec::new();
-    let length = live::own_names(scope, back, obj, |name| {
+    let length = live::own_names(scope, &back, obj, |name| {
         let end = name.iter().position(|&b| b == 0).unwrap_or(name.len());
         named.push(name[..end].to_vec());
     });
@@ -96,12 +97,12 @@ fn delete(scope: &mut Scope<'_>, obj: &Value, key: &PropertyKey) -> Result<bool,
         return Ok(true);
     };
     if let Some(index) = key.array_index(scope) {
-        return Ok(live::deletable(scope, back, Key::Index(index)));
+        return Ok(live::deletable(scope, &back, Key::Index(index)));
     }
     let Some(name) = name_of(scope, key) else {
         return Ok(true);
     };
-    Ok(live::deletable(scope, back, Key::Name(&name)))
+    Ok(live::deletable(scope, &back, Key::Name(&name)))
 }
 
 fn define_own(
@@ -115,7 +116,7 @@ fn define_own(
             return Ok(false);
         }
         if let Some(name) = name_of(scope, key)
-            && live::named_exists(scope, back, Key::Name(&name))
+            && live::named_exists(scope, &back, Key::Name(&name))
         {
             if definition.throws() {
                 return Err(scope.type_error("Cannot define property on this object"));

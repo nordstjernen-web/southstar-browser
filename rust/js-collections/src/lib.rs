@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+#![forbid(unsafe_code)]
+
 pub mod class;
 pub(crate) mod ffi;
 pub mod links;
@@ -44,7 +46,7 @@ pub(crate) const FOREIGN: u32 = FLAG_SVG_NS | FLAG_FOREIGN_NS;
 pub(crate) const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
 
 pub fn collection_kind(value: &Value) -> c_int {
-    ffi::live_of(value).map_or(-1, live::Live::collection_kind)
+    ffi::live_of(value).map_or(-1, |back| back.collection_kind())
 }
 
 pub fn make_live(scope: &mut Scope<'_>, owner: &Value, kind: c_int, param: Option<&[u8]>) -> Value {

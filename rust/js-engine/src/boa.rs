@@ -197,6 +197,32 @@ impl Value {
     }
 }
 
+pub struct BufferView {
+    buffer: JsArrayBuffer,
+    range: core::ops::Range<usize>,
+}
+
+impl BufferView {
+    pub fn bytes(&self) -> BufferBytes<'_> {
+        let range = self.range.clone();
+        BufferBytes(
+            self.buffer
+                .data()
+                .and_then(|data| boa_gc::GcRef::try_map(data, |bytes| bytes.get(range))),
+        )
+    }
+}
+
+pub struct BufferBytes<'a>(Option<boa_gc::GcRef<'a, [u8]>>);
+
+impl core::ops::Deref for BufferBytes<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.0.as_deref().unwrap_or(&[])
+    }
+}
+
 pub struct Engine {
     rt: RuntimeHandle,
 }
@@ -910,6 +936,29 @@ impl Scope<'_> {
             TypedArrayKind::Float32 => ElementType::Float32,
             TypedArrayKind::Float64 => ElementType::Float64,
             TypedArrayKind::Float16 => ElementType::Float16,
+        })
+    }
+
+    pub fn buffer_view(&mut self, value: &Value, offset: u64, len: u64) -> Option<BufferView> {
+        let buffer = JsArrayBuffer::from_object(value.0.as_object()?.clone()).ok()?;
+        let total = buffer.data()?.len() as u64;
+        if offset > total || len > total - offset {
+            return None;
+        }
+        let start = usize::try_from(offset).ok()?;
+        let end = start.checked_add(usize::try_from(len).ok()?)?;
+        Some(BufferView {
+            buffer,
+            range: start..end,
+        })
+    }
+
+    pub fn array_buffer_view(&mut self, value: &Value) -> Option<BufferView> {
+        let buffer = JsArrayBuffer::from_object(value.0.as_object()?.clone()).ok()?;
+        let len = buffer.data()?.len();
+        Some(BufferView {
+            buffer,
+            range: 0..len,
         })
     }
 

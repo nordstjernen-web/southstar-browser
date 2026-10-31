@@ -364,8 +364,6 @@ pub(crate) fn set_pristine_promise(js: &Record, promise: Value) {
     drop(js.pristine_promise.replace(promise));
 }
 
-pub(crate) fn release_wrapper(_js: &Record, _n: Node<'_>) {}
-
 pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, pinned: Option<Value>) {
     let wrapper = n.js_wrapper();
     if wrapper.is_null() {

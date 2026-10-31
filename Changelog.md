@@ -19,6 +19,11 @@ Southstar Browser 1.0.5:
   JavaScript values instead of raw retained object pointers, so
   `retain_identity`/`release_identity` and `identity_value` are gone from the
   engine layer and the Boa fork.
+* Internals: the JS bindings drop more C-port raw pointers. The canvas taint
+  check passes owned URLs and byte slices, ArrayBuffer views are read through
+  a safe `BufferView` in `rust/js-engine`, live collections share their record
+  through an `Rc`, and the main realm's base frame is copied instead of
+  pointing at a stack scope.
 * Internals: the Boa fork is published as `southstar-boa-*` crates instead of
   being patched over the crates.io releases. `boa_interner` joins it
   unchanged, because it depends on the forked `boa_gc` and `boa_string`. Each

@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::c_char;
 use std::sync::OnceLock;
 
 use southstar_dom::{Node, WeakNode};
@@ -13,7 +12,7 @@ use southstar_layout::BoxRef;
 pub type WebglGetContextFn =
     fn(&mut Scope<'_>, Option<Page>, &Value, Option<WeakNode>, i32, &Value) -> Result<Value, Value>;
 
-pub type ResourceOriginCleanFn = unsafe fn(&Scope<'_>, *const c_char, *const c_char) -> bool;
+pub type ResourceOriginCleanFn = fn(&Scope<'_>, &[u8], Option<&[u8]>) -> bool;
 
 pub struct JsEventsLinks {
     pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
