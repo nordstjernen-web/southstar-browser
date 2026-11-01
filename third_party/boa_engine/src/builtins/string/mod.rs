@@ -230,7 +230,7 @@ impl String {
     ///
     /// The resulting string can also not be larger than the maximum string size,
     /// which can differ in JavaScript engines. In Boa it is `2^32 - 1`
-    pub(crate) const MAX_STRING_LENGTH: usize = u32::MAX as usize;
+    pub(crate) const MAX_STRING_LENGTH: usize = boa_string::MAX_STRING_LENGTH;
 
     /// Abstract function `StringCreate( value, prototype )`.
     ///
