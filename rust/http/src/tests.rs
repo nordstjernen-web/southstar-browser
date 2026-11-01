@@ -1,4 +1,4 @@
-//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list) and its proxy choice from the environment.
+//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list), its proxy choice from the environment and FTP URL parsing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,8 +8,8 @@ use ring::rand::SystemRandom;
 use rustls::NamedGroup;
 use rustls::crypto::SupportedKxGroup;
 
-use crate::proxy;
 use crate::x25519_mlkem768::{CIPHERTEXT_LEN, SEED_LEN, X25519_LEN, X25519MlKem768};
+use crate::{ftp, proxy};
 
 const ENCAPSULATION_KEY_LEN: usize = 1184;
 
@@ -237,4 +237,34 @@ fn an_upgrade_request_carries_its_cookies() {
     let text = String::from_utf8_lossy(&head);
     assert!(text.contains("\r\nCookie: session=abc; theme=dark\r\n"));
     assert!(text.ends_with("Connection: Upgrade\r\n\r\n"));
+}
+
+#[test]
+fn ftp_url_parts_are_decoded() {
+    let location = ftp::parse(b"ftp://me:p%40ss@Example.org:2121/pub/a%20b/file.txt").unwrap();
+    assert_eq!(location.host, "example.org");
+    assert_eq!(location.port, 2121);
+    assert_eq!(location.user, b"me");
+    assert_eq!(location.password, b"p@ss");
+    assert_eq!(location.dirs, vec![b"pub".to_vec(), b"a b".to_vec()]);
+    assert_eq!(location.file.as_deref(), Some(&b"file.txt"[..]));
+}
+
+#[test]
+fn ftp_url_refuses_line_breaks_in_commands() {
+    let urls: [&[u8]; 6] = [
+        b"ftp://example.org/x%0D%0ADELE%20y",
+        b"ftp://example.org/dir%0A/file",
+        b"ftp://us%0Der@example.org/file",
+        b"ftp://user:pa%0Ass@example.org/file",
+        b"ftp://example.org/fi%00le",
+        b"ftp://exa\r\nmple.org/file",
+    ];
+    for url in urls {
+        assert!(
+            ftp::parse(url).is_none(),
+            "{}",
+            String::from_utf8_lossy(url)
+        );
+    }
 }
