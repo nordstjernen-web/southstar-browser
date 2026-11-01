@@ -8,7 +8,7 @@ use std::ffi::CString;
 use super::os;
 pub use southstar_av::quiet_logging;
 use southstar_av::{self as av, AVRational, codec_parameters, frame, stream};
-use southstar_av::{Codec, CodecDescription, Format, Frame, Packet, Scaler};
+use southstar_av::{Decoder as AvDecoder, Format, Frame, Packet, Scaler};
 
 const MAX_DIMENSION: c_int = 4096;
 
@@ -20,7 +20,7 @@ pub enum Next {
 
 pub struct Decoder {
     scaler: Scaler,
-    codec: Codec,
+    codec: AvDecoder,
     format: Format<'static>,
     packet: Packet,
     frame: Frame,
@@ -43,14 +43,13 @@ impl Decoder {
         let index = format.best_stream(av::AVMEDIA_TYPE_VIDEO)?;
         let video = format.stream(index)?;
         let params = video.parameters()?;
-        let decoder = CodecDescription::find(params.get(&codec_parameters::CODEC_ID))?;
-        let codec = Codec::open(&params, decoder)?;
+        let time_base = video.get(&stream::TIME_BASE);
+        let codec = AvDecoder::open(&params, time_base)?;
         let width = params.get(&codec_parameters::WIDTH);
         let height = params.get(&codec_parameters::HEIGHT);
         if width <= 0 || height <= 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
             return None;
         }
-        let time_base = video.get(&stream::TIME_BASE);
         let average = video.get(&stream::AVG_FRAME_RATE);
         let rate = if average.num > 0 && average.den > 0 {
             average

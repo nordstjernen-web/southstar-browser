@@ -9,8 +9,8 @@ use crate::decode::{Decoded, Sink, file_size, max_floats};
 use crate::ffi::sdl::AudioStream;
 use crate::mixer::DEVICE_RATE;
 pub use southstar_av::quiet_logging as quiet;
-use southstar_av::{self as av, codec_context, frame};
-use southstar_av::{Codec, Format, Frame, Packet, Resampler};
+use southstar_av::{self as av, frame};
+use southstar_av::{Decoder as AvDecoder, Format, Frame, Packet, Resampler};
 
 const DRAIN_SAMPLES: usize = 4096;
 
@@ -18,7 +18,7 @@ struct Decoder {
     resampler: Resampler,
     frame: Frame,
     packet: Packet,
-    codec: Codec,
+    codec: AvDecoder,
     sidx: c_int,
     rate: c_int,
     channels: c_int,
@@ -27,11 +27,12 @@ struct Decoder {
 
 impl Decoder {
     fn open(format: &mut Format) -> Option<Decoder> {
-        let (sidx, description) = format.best_stream_and_decoder(av::AVMEDIA_TYPE_AUDIO)?;
-        let codec = Codec::open(&format.stream(sidx)?.parameters()?, description)?;
-        let rate = codec.get(&codec_context::SAMPLE_RATE);
+        let sidx = format.best_stream(av::AVMEDIA_TYPE_AUDIO)?;
+        let stream = format.stream(sidx)?;
+        let codec = AvDecoder::open(&stream.parameters()?, stream.time_base())?;
+        let rate = codec.sample_rate();
         let channels = codec.channels();
-        let sample_fmt = codec.get(&codec_context::SAMPLE_FMT);
+        let sample_fmt = codec.sample_format();
         if rate <= 0 || rate > 192000 || !(1..=8).contains(&channels) {
             return None;
         }

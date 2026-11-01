@@ -97,6 +97,10 @@ unsafe extern "C" {
     pub fn av_frame_alloc() -> *mut AVFrame;
     pub fn av_frame_free(frame: *mut *mut AVFrame);
     pub fn av_frame_unref(frame: *mut AVFrame);
+    pub fn av_frame_get_buffer(frame: *mut AVFrame, align: c_int) -> c_int;
+    pub fn av_frame_move_ref(dst: *mut AVFrame, src: *mut AVFrame);
+    pub fn av_channel_layout_default(layout: *mut AVChannelLayout, nb_channels: c_int);
+    pub fn av_channel_layout_uninit(layout: *mut AVChannelLayout);
     pub fn av_malloc(size: usize) -> *mut c_void;
     pub fn av_free(ptr: *mut c_void);
     pub fn av_freep(ptr: *mut c_void);

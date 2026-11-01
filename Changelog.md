@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.6:
 ======
+* Media: on Windows, H.264 video and AAC audio are decoded by the system's
+  Media Foundation transforms (`rust/media-foundation`), in the renderer, the
+  `southstar-video` MSE helper and the `southstar-audio` helper. libav still
+  demuxes; Media Foundation is loaded at runtime, so Windows N editions without
+  it fall back to libavcodec. The bundled LGPL FFmpeg gains the MP4 demuxer and
+  the H.264/AAC parsers (no decoders), so MP4 and H.264 MSE play there.
+  `NS_MEDIA_NO_OS_DECODER=1` forces libav; `NS_MEDIA_OS_CODECS_ONLY=1` makes
+  YouTube serve H.264.
 * Security: a cookie written from script with the `HttpOnly` attribute
   (`document.cookie`, a frame document's cookie) is ignored, as RFC 6265
   section 5.3 requires. It used to be stored without the flag, readable from

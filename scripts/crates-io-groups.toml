@@ -30,7 +30,7 @@ members = ["http-wire", "http"]
 
 [southstar-codecs]
 description = "Southstar's media decoders: MPEG-1 video and MP2 (a port of pl_mpeg), MP3 (a port of minimp3) and FFmpeg's libav declarations"
-members = ["plmpeg", "minimp3", "av"]
+members = ["plmpeg", "minimp3", "av", "media-foundation"]
 
 [southstar-text]
 description = "Southstar's text layout, a Rust port of the Pango fork web-text-lib: itemization, line breaking, shaping and paragraph layout"

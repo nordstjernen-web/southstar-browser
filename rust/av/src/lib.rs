@@ -8,12 +8,13 @@ pub mod decode;
 pub mod demux;
 pub mod ffi;
 pub mod layout;
+mod os;
 #[cfg(feature = "resample")]
 pub mod resample;
 
 #[cfg(feature = "scale")]
 pub use convert::Scaler;
-pub use decode::{Codec, CodecDescription, Frame, Packet};
+pub use decode::{Codec, CodecDescription, Decoder, Frame, Packet};
 pub use demux::{Format, Parameters, Stream, quiet_logging};
 pub use ffi::*;
 pub use layout::Field;
@@ -71,6 +72,7 @@ pub const AVERROR_EOF: core::ffi::c_int = constant("AVERROR_EOF");
 pub const AVMEDIA_TYPE_VIDEO: core::ffi::c_int = constant("AVMEDIA_TYPE_VIDEO");
 pub const AVMEDIA_TYPE_AUDIO: core::ffi::c_int = constant("AVMEDIA_TYPE_AUDIO");
 pub const AV_PIX_FMT_BGRA: core::ffi::c_int = constant("AV_PIX_FMT_BGRA");
+pub const AV_PIX_FMT_NV12: core::ffi::c_int = constant("AV_PIX_FMT_NV12");
 pub const AV_SAMPLE_FMT_FLT: core::ffi::c_int = constant("AV_SAMPLE_FMT_FLT");
 pub const AV_SAMPLE_FMT_NONE: core::ffi::c_int = constant("AV_SAMPLE_FMT_NONE");
 pub const AV_LOG_QUIET: core::ffi::c_int = constant("AV_LOG_QUIET");
@@ -126,6 +128,12 @@ pub mod codec_parameters {
     pub const WIDTH: Field<AVCodecParameters, core::ffi::c_int> = field("AVCodecParameters.width");
     pub const HEIGHT: Field<AVCodecParameters, core::ffi::c_int> =
         field("AVCodecParameters.height");
+    pub const EXTRADATA: Field<AVCodecParameters, *mut u8> = field("AVCodecParameters.extradata");
+    pub const EXTRADATA_SIZE: Field<AVCodecParameters, core::ffi::c_int> =
+        field("AVCodecParameters.extradata_size");
+    pub const SAMPLE_RATE: Field<AVCodecParameters, core::ffi::c_int> =
+        field("AVCodecParameters.sample_rate");
+    pub const CH_LAYOUT: Field<AVCodecParameters, u8> = field("AVCodecParameters.ch_layout");
 }
 
 pub mod codec_context {
@@ -149,6 +157,8 @@ pub mod packet {
     pub const STREAM_INDEX: Field<AVPacket, core::ffi::c_int> = field("AVPacket.stream_index");
     pub const PTS: Field<AVPacket, i64> = field("AVPacket.pts");
     pub const DURATION: Field<AVPacket, i64> = field("AVPacket.duration");
+    pub const DATA: Field<AVPacket, *mut u8> = field("AVPacket.data");
+    pub const SIZE: Field<AVPacket, core::ffi::c_int> = field("AVPacket.size");
 }
 
 pub mod frame {
@@ -162,6 +172,7 @@ pub mod frame {
     pub const EXTENDED_DATA: Field<AVFrame, *mut *mut u8> = field("AVFrame.extended_data");
     pub const PTS: Field<AVFrame, i64> = field("AVFrame.pts");
     pub const NB_SAMPLES: Field<AVFrame, core::ffi::c_int> = field("AVFrame.nb_samples");
+    pub const SAMPLE_RATE: Field<AVFrame, core::ffi::c_int> = field("AVFrame.sample_rate");
     pub const CH_LAYOUT: Field<AVFrame, u8> = field("AVFrame.ch_layout");
     pub const BEST_EFFORT_TIMESTAMP: Field<AVFrame, i64> = field("AVFrame.best_effort_timestamp");
 }

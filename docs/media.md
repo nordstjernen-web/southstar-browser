@@ -54,6 +54,34 @@ How libav is obtained differs by platform, to keep it redistributable:
   the native VP8/VP9/Opus/Vorbis decoders — no GPL parts, no external codec
   libraries.
 
+### H.264 and AAC — Windows Media Foundation
+
+On Windows, **H.264 video and AAC audio** are decoded by the operating
+system's own Media Foundation transforms rather than by libavcodec. libav still
+demuxes the container; `rust/media-foundation` (`southstar-media-foundation`)
+hands each packet to the H.264 or AAC decoder MFT and returns NV12 pictures or
+float/16-bit PCM, which `southstar-av`'s `Decoder` puts into ordinary `AVFrame`s,
+so the swscale conversion, the frame ring and the audio resampler work
+unchanged. Every libav decoding site — the renderer's in-process decoder, the
+`southstar-video` helper that plays MSE streams, and the `southstar-audio`
+helper — opens streams through that `Decoder`, which prefers Media Foundation
+for H.264 and AAC and otherwise uses libavcodec.
+
+`mfplat.dll` and `ole32.dll` are loaded at runtime, so a Windows N edition
+without the Media Feature Pack still starts and simply falls back to libav. The
+COM interfaces are declared by hand (no `windows` crate), with every vtable slot
+and GUID checked against the Windows SDK headers. HE-AAC configurations are
+rewritten to their AAC-LC core, as the Microsoft AAC decoder requires; avcC
+parameter sets are converted to Annex B and sent with the first sample after a
+start or a seek. `canPlayType` and `MediaSource.isTypeSupported` report
+`avc1`/`mp4a.40` when the system decoders are present, so the LGPL FFmpeg the
+Windows package bundles (which demuxes MP4 and parses H.264/AAC but carries no
+decoder for either) plays MP4, HLS and H.264 MSE.
+
+Two environment variables help compare the paths: `NS_MEDIA_NO_OS_DECODER=1`
+forces libavcodec, and `NS_MEDIA_OS_CODECS_ONLY=1` advertises only the codecs
+Media Foundation decodes — YouTube then serves H.264 instead of VP9.
+
 ## Audio
 
 The MPEG-1 stream's **MP2 audio track** plays too (unless the element is
