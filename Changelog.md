@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: joining strings with `+` or a template literal throws a
+  `RangeError` ("Invalid string length") once the result would exceed
+  2^32 - 1 code units. The lazy rope strings added the two lengths without a
+  limit, so a page that doubled a string about 55 times wrapped the length
+  around in a release build and reading the string then overflowed a heap
+  buffer in the renderer.
 
 Southstar Browser 1.0.6:
 ======

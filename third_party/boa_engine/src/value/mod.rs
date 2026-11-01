@@ -44,7 +44,7 @@ mod equality;
 mod hash;
 mod inner;
 mod integer;
-mod operations;
+pub(crate) mod operations;
 mod r#type;
 mod variant;
 

@@ -51,6 +51,9 @@ use vtable::JsStringVTable;
 /// The length from which [`JsString::concat_lazy`] builds a rope instead of copying.
 const ROPE_MIN_LENGTH: usize = 512;
 
+/// The longest string [`JsString::concat_lazy`] builds, in code units.
+pub const MAX_STRING_LENGTH: usize = u32::MAX as usize;
+
 fn alloc_overflow() -> ! {
     panic!("detected overflow during string allocation")
 }
@@ -637,22 +640,27 @@ impl JsString {
 
     /// Creates the concatenation of `x` and `y`, as a rope that defers copying their
     /// characters until they are read when the result is long, so that building a string
-    /// by repeated appends takes linear time.
+    /// by repeated appends takes linear time. Returns `None` when the result would be
+    /// longer than [`MAX_STRING_LENGTH`].
     #[must_use]
-    pub fn concat_lazy(x: &JsString, y: &JsString) -> Self {
+    pub fn concat_lazy(x: &JsString, y: &JsString) -> Option<Self> {
         if x.is_empty() {
-            return y.clone();
+            return Some(y.clone());
         }
         if y.is_empty() {
-            return x.clone();
+            return Some(x.clone());
         }
-        if x.len().saturating_add(y.len()) < ROPE_MIN_LENGTH {
-            return Self::concat(x.as_str(), y.as_str());
+        let len = x.len().checked_add(y.len())?;
+        if len > MAX_STRING_LENGTH {
+            return None;
+        }
+        if len < ROPE_MIN_LENGTH {
+            return Some(Self::concat(x.as_str(), y.as_str()));
         }
         let rope = Box::new(RopeString::new(x.clone(), y.clone()));
-        Self {
+        Some(Self {
             ptr: NonNull::from(Box::leak(rope)).cast(),
-        }
+        })
     }
 
     /// Creates a new [`JsString`] from the concatenation of every element of

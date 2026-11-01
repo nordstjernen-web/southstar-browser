@@ -569,7 +569,7 @@ fn starts_with_and_ends_with_basic() {
 #[test]
 fn rope_concatenation() {
     let piece = JsString::from("x".repeat(600).as_str());
-    let rope = JsString::concat_lazy(&piece, &JsString::from("yz"));
+    let rope = JsString::concat_lazy(&piece, &JsString::from("yz")).unwrap();
     assert_eq!(rope.kind(), JsStringKind::Rope);
     assert_eq!(rope.len(), 602);
     let clone = rope.clone();
@@ -592,7 +592,8 @@ fn rope_concatenation() {
 fn rope_mixed_encodings() {
     let latin1 = JsString::from("a".repeat(300).as_str());
     let utf16 = JsString::from("\u{1F600}".repeat(150).as_str());
-    let rope = JsString::concat_lazy(&JsString::concat_lazy(&latin1, &utf16), &latin1);
+    let rope =
+        JsString::concat_lazy(&JsString::concat_lazy(&latin1, &utf16).unwrap(), &latin1).unwrap();
     let expected = format!(
         "{}{}{}",
         "a".repeat(300),
@@ -608,12 +609,25 @@ fn rope_deep_chains() {
     let mut left = JsString::from("s".repeat(512).as_str());
     let mut right = left.clone();
     for _ in 0..200_000 {
-        left = JsString::concat_lazy(&left, &piece);
-        right = JsString::concat_lazy(&piece, &right);
+        left = JsString::concat_lazy(&left, &piece).unwrap();
+        right = JsString::concat_lazy(&piece, &right).unwrap();
     }
     assert_eq!(left.len(), 512 + 600_000);
     assert_eq!(right.as_str().len(), 512 + 600_000);
     assert!(right.as_str().starts_with(JsStr::latin1(b"abcabc")));
     drop(left);
     drop(right);
+}
+
+#[test]
+fn rope_length_is_capped() {
+    let mut string = JsString::from("s".repeat(1024).as_str());
+    let mut doublings = 0;
+    while let Some(doubled) = JsString::concat_lazy(&string, &string) {
+        string = doubled;
+        doublings += 1;
+        assert!(doublings < 64);
+    }
+    assert!(string.len() <= crate::MAX_STRING_LENGTH);
+    assert!(string.len() * 2 > crate::MAX_STRING_LENGTH);
 }

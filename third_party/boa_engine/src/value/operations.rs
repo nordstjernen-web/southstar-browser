@@ -8,6 +8,15 @@ use crate::{
     value::{JsSymbol, Numeric, PreferredType},
 };
 
+/// Concatenates `x` and `y`, throwing a `RangeError` when the result would be too long.
+pub(crate) fn concat_or_range_error(x: &JsString, y: &JsString) -> JsResult<JsString> {
+    JsString::concat_lazy(x, y).ok_or_else(|| {
+        JsNativeError::range()
+            .with_message("Invalid string length")
+            .into()
+    })
+}
+
 impl JsValue {
     /// Perform the binary `+` operator on the value and return the result.
     pub fn add(&self, other: &Self, context: &mut Context) -> JsResult<Self> {
@@ -24,7 +33,7 @@ impl JsValue {
 
             // String concat
             (JsVariant::String(x), JsVariant::String(y)) => {
-                Self::from(JsString::concat_lazy(&x, &y))
+                Self::from(concat_or_range_error(&x, &y)?)
             }
 
             // Slow path:
@@ -33,10 +42,10 @@ impl JsValue {
                 let y = other.to_primitive(context, PreferredType::Default)?;
                 match (x.variant(), y.variant()) {
                     (JsVariant::String(x), _) => {
-                        Self::from(JsString::concat_lazy(&x, &y.to_string(context)?))
+                        Self::from(concat_or_range_error(&x, &y.to_string(context)?)?)
                     }
                     (_, JsVariant::String(y)) => {
-                        Self::from(JsString::concat_lazy(&x.to_string(context)?, &y))
+                        Self::from(concat_or_range_error(&x.to_string(context)?, &y)?)
                     }
                     (_, _) => {
                         match (x.to_numeric(context)?, y.to_numeric(context)?) {
