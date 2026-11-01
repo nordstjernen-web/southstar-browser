@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.7-dev:
+======
+
 Southstar Browser 1.0.6:
 ======
 * Media: on Windows, H.264 video and AAC audio are decoded by the system's

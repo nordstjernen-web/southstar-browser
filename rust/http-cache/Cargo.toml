@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-config = { path = "../config", version = "=1.0.6" }
-southstar-digest = { path = "../digest", version = "=1.0.6" }
-southstar-glib = { path = "../glib", version = "=1.0.6" }
-southstar-netstore = { path = "../netstore", version = "=1.0.6" }
-southstar-sqlite = { path = "../sqlite", version = "=1.0.6" }
-southstar-url = { path = "../url", version = "=1.0.6" }
+southstar-config = { path = "../config", version = "=1.0.7-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.7-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
+southstar-netstore = { path = "../netstore", version = "=1.0.7-dev" }
+southstar-sqlite = { path = "../sqlite", version = "=1.0.7-dev" }
+southstar-url = { path = "../url", version = "=1.0.7-dev" }
 
 [lints]
 workspace = true
