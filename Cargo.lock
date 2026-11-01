@@ -1652,6 +1652,7 @@ name = "southstar-av"
 version = "1.0.6"
 dependencies = [
  "southstar-build",
+ "southstar-media-foundation",
 ]
 
 [[package]]
@@ -3483,6 +3484,10 @@ dependencies = [
  "southstar-paint",
  "southstar-unicode",
 ]
+
+[[package]]
+name = "southstar-media-foundation"
+version = "1.0.6"
 
 [[package]]
 name = "southstar-media-shm"

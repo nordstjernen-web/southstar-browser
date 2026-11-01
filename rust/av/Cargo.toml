@@ -9,6 +9,9 @@ publish.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+[dependencies]
+southstar-media-foundation = { path = "../media-foundation", version = "=1.0.6" }
+
 [build-dependencies]
 southstar-build = { path = "../build", version = "=1.0.6" }
 

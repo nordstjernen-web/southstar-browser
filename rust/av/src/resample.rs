@@ -5,16 +5,19 @@
 use core::ffi::{CStr, c_int};
 use core::ptr::NonNull;
 
-use crate::decode::{Codec, Frame};
+use crate::decode::{Decoder, Frame};
 use crate::{self as av, AVChannelLayout, SwrContext, frame};
 
 pub struct Resampler(NonNull<SwrContext>);
 
 impl Resampler {
-    pub fn to_float(codec: &Codec, rate: c_int, sample_fmt: c_int) -> Option<Resampler> {
+    pub fn to_float(decoder: &Decoder, rate: c_int, sample_fmt: c_int) -> Option<Resampler> {
+        let layout = decoder.channel_layout();
+        if layout.is_null() {
+            return None;
+        }
         // SAFETY: allocates an unconfigured resampler or returns null.
         let resampler = Resampler(NonNull::new(unsafe { av::swr_alloc() })?);
-        let layout = codec.channel_layout();
         resampler.set_layout(c"in_chlayout", layout);
         resampler.set_layout(c"out_chlayout", layout);
         resampler.set_int(c"in_sample_rate", i64::from(rate));

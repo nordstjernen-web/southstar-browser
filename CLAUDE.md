@@ -77,7 +77,11 @@ Update Changelog.md
   and **auto-detected on macOS** (a stock build there without libav carries no
   libav symbol or dependency and behaves exactly as before). The version floor
   is FFmpeg 6.0's library sonames (libavcodec ≥ 60, libavutil ≥ 58, …) — the
-  oldest release carrying the `AVChannelLayout` API this code uses. Other
+  oldest release carrying the `AVChannelLayout` API this code uses. On Windows,
+  **H.264 and AAC** are decoded by the system's **Media Foundation**
+  transforms (`rust/media-foundation`, loaded at runtime from `mfplat.dll`)
+  behind `southstar-av`'s `Decoder`, so the bundled LGPL FFmpeg only demuxes
+  and parses them (`docs/media.md`). Other
   `<audio>` and other `<video>`
   codecs render a
   poster and play overlay; clicking resolves the media URL in the renderer

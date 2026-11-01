@@ -4,7 +4,7 @@
 
 use core::ffi::c_int;
 
-use southstar_av::{self as av, AVRational, CodecDescription, Format, Frame, Packet, Scaler};
+use southstar_av::{self as av, AVRational, Decoder, Format, Frame, Packet, Scaler};
 use southstar_av::{codec_parameters, frame, stream};
 
 use super::{Next, copy_bytes, pixel_buffer};
@@ -50,7 +50,7 @@ impl Codec {
 }
 
 pub fn decoder_exists(codec: Codec) -> bool {
-    av::available() && CodecDescription::find(codec.id()).is_some()
+    av::available() && Decoder::exists(codec.id())
 }
 
 const VIDEO_CODECS: [c_int; 7] = [
@@ -67,7 +67,7 @@ pub struct Demuxer {
     sws: Scaler,
     frame: Frame,
     pkt: Packet,
-    vdec: av::Codec,
+    vdec: Decoder,
     input: Format<'static>,
     vstream: c_int,
     time_base: AVRational,
@@ -93,13 +93,13 @@ impl Demuxer {
         if !input.find_stream_info() {
             return None;
         }
-        let (vstream, dec) = input.best_stream_and_decoder(av::AVMEDIA_TYPE_VIDEO)?;
+        let vstream = input.best_stream(av::AVMEDIA_TYPE_VIDEO)?;
         let vs = input.stream(vstream)?;
         let par = vs.parameters()?;
         if !VIDEO_CODECS.contains(&par.get(&codec_parameters::CODEC_ID)) {
             return None;
         }
-        let vdec = av::Codec::open(&par, dec)?;
+        let vdec = Decoder::open(&par, vs.time_base())?;
         let width = par.get(&codec_parameters::WIDTH);
         let height = par.get(&codec_parameters::HEIGHT);
         if !super::dimensions_valid(width, height) {

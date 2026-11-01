@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use crate::decode::{CodecDescription, Packet};
 use crate::{
     self as av, AVCodec, AVCodecParameters, AVDictionary, AVFormatContext, AVIOContext, AVStream,
-    Field, format_context, io_context, stream,
+    Field, codec_parameters, format_context, io_context, stream,
 };
 
 const IO_BUFFER: c_int = 32768;
@@ -334,4 +334,22 @@ impl Parameters<'_> {
     pub(crate) fn as_ptr(&self) -> *const AVCodecParameters {
         self.0.as_ptr()
     }
+
+    pub fn extradata(&self) -> &[u8] {
+        let data = self.get(&codec_parameters::EXTRADATA);
+        let size = usize::try_from(self.get(&codec_parameters::EXTRADATA_SIZE)).unwrap_or(0);
+        if data.is_null() || size == 0 {
+            return &[];
+        }
+        // SAFETY: libav's codec parameters own extradata_size bytes at extradata for as long as the stream lives.
+        unsafe { core::slice::from_raw_parts(data, size) }
+    }
+
+    pub fn channels(&self) -> c_int {
+        self.get(&PARAMETER_CHANNELS)
+    }
 }
+
+const PARAMETER_CHANNELS: Field<AVCodecParameters, c_int> = Field::at(
+    (codec_parameters::CH_LAYOUT.offset() + crate::channel_layout::NB_CHANNELS.offset()) as i64,
+);

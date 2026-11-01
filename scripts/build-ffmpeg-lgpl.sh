@@ -3,6 +3,8 @@
 # media Southstar decodes — VP9/VP8 video and Opus/Vorbis audio in Matroska
 # /WebM and Ogg containers — so it can be bundled into the redistributable
 # macOS and Windows packages without the GPL obligations of a stock FFmpeg.
+# It also demuxes MP4 and parses H.264 and AAC, with no decoder for either:
+# on Windows those streams are decoded by Media Foundation.
 #
 # `--disable-gpl --disable-nonfree --disable-version3` keeps the result LGPL
 # v2.1+, and `--disable-autodetect` guarantees no external codec library
@@ -73,9 +75,9 @@ cd "$SRC"
     --disable-everything \
     --enable-avformat --enable-avcodec --enable-avutil \
     --enable-swscale --enable-swresample \
-    --enable-demuxer=matroska,ogg \
+    --enable-demuxer=matroska,ogg,mov \
     --enable-decoder=vp8,vp9,opus,vorbis \
-    --enable-parser=vp8,vp9,opus,vorbis \
+    --enable-parser=vp8,vp9,opus,vorbis,h264,aac \
     --enable-protocol=file \
     $ASM_FLAG \
     "${CROSS[@]}" \

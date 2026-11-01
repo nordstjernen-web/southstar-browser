@@ -6,9 +6,10 @@ use core::ffi::c_int;
 use core::ptr::{self, NonNull};
 
 use crate::demux::Parameters;
+use crate::os::{OsDecoder, Plane};
 use crate::{
-    self as av, AVCodec, AVCodecContext, AVFrame, AVPacket, Field, channel_layout, codec_context,
-    frame,
+    self as av, AVChannelLayout, AVCodec, AVCodecContext, AVFrame, AVPacket, AVRational, Field,
+    channel_layout, codec_context, codec_parameters, frame,
 };
 
 const CODEC_CHANNELS: Field<AVCodecContext, c_int> =
@@ -116,6 +117,16 @@ impl Packet {
         self.get(&av::packet::DURATION)
     }
 
+    pub fn data(&self) -> &[u8] {
+        let data = self.get(&av::packet::DATA);
+        let size = usize::try_from(self.get(&av::packet::SIZE)).unwrap_or(0);
+        if data.is_null() || size == 0 {
+            return &[];
+        }
+        // SAFETY: a read packet's data points at size payload bytes that live as long as the packet's reference.
+        unsafe { core::slice::from_raw_parts(data, size) }
+    }
+
     pub fn unref(&mut self) {
         // SAFETY: self.0 is an allocated packet; its payload reference is dropped.
         unsafe { av::av_packet_unref(self.0.as_ptr()) };
@@ -154,6 +165,120 @@ impl Frame {
     pub fn unref(&mut self) {
         // SAFETY: self.0 is an allocated frame; its buffer references are dropped.
         unsafe { av::av_frame_unref(self.0.as_ptr()) };
+    }
+
+    pub(crate) fn set<T: Copy>(&mut self, field: &Field<AVFrame, T>, value: T) {
+        // SAFETY: self.0 is an allocated frame this value owns and the field's offset and type come from the installed headers.
+        unsafe { field.set(self.0.as_ptr(), value) };
+    }
+
+    pub(crate) fn set_default_layout(&mut self, channels: c_int) {
+        let layout = frame::CH_LAYOUT
+            .ptr(self.0.as_ptr())
+            .cast::<AVChannelLayout>();
+        // SAFETY: the frame was just unreferenced, so its channel layout is reset and may be initialized in place.
+        unsafe { av::av_channel_layout_default(layout, channels) };
+    }
+
+    pub(crate) fn allocate(&mut self, align: c_int) -> bool {
+        // SAFETY: self.0 is an unreferenced frame whose format and size, or sample count and layout, were just set.
+        unsafe { av::av_frame_get_buffer(self.0.as_ptr(), align) >= 0 }
+    }
+
+    pub(crate) fn plane(&mut self, index: usize, rows: usize) -> Option<Plane<'_>> {
+        let base = NonNull::new(*self.get(&frame::DATA).get(index)?)?;
+        let stride = usize::try_from(*self.get(&frame::LINESIZE).get(index)?).ok()?;
+        Some(Plane::new(base, stride, rows))
+    }
+
+    pub(crate) fn float_samples(&mut self, count: usize) -> Option<&mut [f32]> {
+        let base = NonNull::new(self.get(&frame::DATA)[0].cast::<f32>())?;
+        // SAFETY: av_frame_get_buffer allocated plane 0 for nb_samples interleaved float frames of every channel, count floats in all, borrowed exclusively with self.
+        Some(unsafe { core::slice::from_raw_parts_mut(base.as_ptr(), count) })
+    }
+
+    pub(crate) fn take_from(&mut self, source: &mut Frame) {
+        self.unref();
+        // SAFETY: both frames are allocated and self was just unreferenced, as av_frame_move_ref requires.
+        unsafe { av::av_frame_move_ref(self.0.as_ptr(), source.0.as_ptr()) };
+    }
+}
+
+pub enum Decoder {
+    Libav(Codec),
+    System(OsDecoder),
+}
+
+impl Decoder {
+    pub fn open(parameters: &Parameters, time_base: AVRational) -> Option<Decoder> {
+        if let Some(system) = OsDecoder::open(parameters, time_base) {
+            return Some(Decoder::System(system));
+        }
+        let description = CodecDescription::find(parameters.get(&codec_parameters::CODEC_ID))?;
+        Codec::open(parameters, description).map(Decoder::Libav)
+    }
+
+    pub fn exists(codec_id: c_int) -> bool {
+        if std::env::var_os("NS_MEDIA_OS_CODECS_ONLY").is_some() {
+            return crate::os::supports(codec_id);
+        }
+        crate::os::supports(codec_id) || CodecDescription::find(codec_id).is_some()
+    }
+
+    pub fn is_system(&self) -> bool {
+        matches!(self, Decoder::System(_))
+    }
+
+    pub fn send(&mut self, packet: Option<&Packet>) -> c_int {
+        match self {
+            Decoder::Libav(codec) => codec.send(packet),
+            Decoder::System(system) => system.send(packet),
+        }
+    }
+
+    pub fn receive(&mut self, frame: &mut Frame) -> c_int {
+        match self {
+            Decoder::Libav(codec) => codec.receive(frame),
+            Decoder::System(system) => system.receive(frame),
+        }
+    }
+
+    pub fn flush(&mut self) {
+        match self {
+            Decoder::Libav(codec) => codec.flush(),
+            Decoder::System(system) => system.flush(),
+        }
+    }
+
+    pub fn sample_rate(&self) -> c_int {
+        match self {
+            Decoder::Libav(codec) => codec.get(&codec_context::SAMPLE_RATE),
+            Decoder::System(system) => system.audio_format().map_or(0, |format| format.0),
+        }
+    }
+
+    pub fn channels(&self) -> c_int {
+        match self {
+            Decoder::Libav(codec) => codec.channels(),
+            Decoder::System(system) => system.audio_format().map_or(0, |format| format.1),
+        }
+    }
+
+    pub fn sample_format(&self) -> c_int {
+        match self {
+            Decoder::Libav(codec) => codec.get(&codec_context::SAMPLE_FMT),
+            Decoder::System(_) => av::AV_SAMPLE_FMT_FLT,
+        }
+    }
+
+    #[cfg(feature = "resample")]
+    pub(crate) fn channel_layout(&self) -> *const AVChannelLayout {
+        match self {
+            Decoder::Libav(codec) => codec.channel_layout(),
+            Decoder::System(system) => system
+                .audio_format()
+                .map_or(core::ptr::null(), |format| format.2),
+        }
     }
 }
 
