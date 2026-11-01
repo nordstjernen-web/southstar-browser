@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.6-dev:
 ======
+* Security: an event fired at an `<iframe>` element (its `load`, `error`, …)
+  now runs the parent page's listeners in the parent's realm. They used to run
+  in the framed document's realm, so a `fetch()` or XMLHttpRequest from the
+  parent's iframe `onload` resolved relative URLs, applied CSP and decided
+  credentials against the child frame's origin. browseraudit.com reported
+  this as 18 critical same-origin-policy failures.
 * Internals: the box-tree builder, list markers, SVG geometry and the
   animation engine hold nodes as `Node` or `WeakNode` instead of raw
   `NsNode` pointers, so an animation's state no longer resolves to a node
