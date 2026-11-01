@@ -15,6 +15,7 @@ const MAX_COOKIE_LEN: usize = 4096;
 struct Attrs {
     expired: bool,
     secure: bool,
+    httponly: bool,
     has_domain: bool,
     samesite_none: bool,
     path_is_root: bool,
@@ -81,6 +82,8 @@ fn parse_attrs(attrs: &[u8]) -> Attrs {
         let has_value = eq.is_some();
         if key.eq_ignore_ascii_case(b"secure") {
             out.secure = true;
+        } else if key.eq_ignore_ascii_case(b"httponly") {
+            out.httponly = true;
         } else if key.eq_ignore_ascii_case(b"max-age") && has_value {
             if let Some(expired) = max_age_expired(value) {
                 out.has_max_age = true;
@@ -201,6 +204,9 @@ pub fn set_cookie(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
     let name = &cookie[..eq];
     let pair = &cookie[..semi.unwrap_or(cookie.len())];
     let attrs = semi.map_or_else(Attrs::default, |s| parse_attrs(&cookie[s..]));
+    if attrs.httponly {
+        return Ok(Value::undefined());
+    }
     let is_https = ffi::partition_key(js).is_some_and(|key| key.starts_with(b"https://"));
     if attrs.secure && !is_https {
         return Ok(Value::undefined());
