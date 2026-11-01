@@ -79,7 +79,7 @@ pub fn parse(url: &[u8]) -> Option<Location> {
             None => (hostport, 21),
         }
     };
-    if host.is_empty() {
+    if host.is_empty() || !host.iter().all(u8::is_ascii_graphic) {
         return None;
     }
     let path = path.strip_prefix(b"/").unwrap_or(path);
@@ -89,7 +89,15 @@ pub fn parse(url: &[u8]) -> Option<Location> {
     };
     let mut segments: Vec<Vec<u8>> = path.split(|&c| c == b'/').map(percent_decode).collect();
     let file = segments.pop().filter(|f| !f.is_empty());
-    let dirs = segments.into_iter().filter(|d| !d.is_empty()).collect();
+    let dirs: Vec<Vec<u8>> = segments.into_iter().filter(|d| !d.is_empty()).collect();
+    if ![&user, &password]
+        .into_iter()
+        .chain(&dirs)
+        .chain(&file)
+        .all(|argument| is_command_argument(argument))
+    {
+        return None;
+    }
     Some(Location {
         host: String::from_utf8_lossy(host).to_ascii_lowercase(),
         port,
@@ -98,6 +106,10 @@ pub fn parse(url: &[u8]) -> Option<Location> {
         dirs,
         file,
     })
+}
+
+fn is_command_argument(argument: &[u8]) -> bool {
+    !argument.iter().any(|&c| matches!(c, b'\r' | b'\n' | 0))
 }
 
 struct Control<'a> {
@@ -137,6 +149,9 @@ impl Control<'_> {
     }
 
     fn command(&mut self, line: &[u8]) -> Option<(u32, Vec<u8>)> {
+        if !is_command_argument(line) {
+            return None;
+        }
         let mut out = line.to_vec();
         out.extend_from_slice(b"\r\n");
         if !self.stream.write_all(&out, self.abort) {

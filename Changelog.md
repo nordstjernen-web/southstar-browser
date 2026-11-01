@@ -9,6 +9,11 @@ Southstar Browser 1.0.7-dev:
   limit, so a page that doubled a string about 55 times wrapped the length
   around in a release build and reading the string then overflowed a heap
   buffer in the renderer.
+* Security: an `ftp://` URL whose user name, password or path decodes to a
+  carriage return, line feed or NUL is refused, and the FTP client never
+  sends a command line containing one. A page could navigate to
+  `ftp://host/x%0D%0A...` and have the browser send any FTP command from the
+  user's network position, such as `DELE` or a `PORT` bounce.
 
 Southstar Browser 1.0.6:
 ======
