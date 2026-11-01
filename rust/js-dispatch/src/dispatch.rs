@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use southstar_dom::ancestors_and_self;
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::handlers;
@@ -79,7 +79,10 @@ pub(crate) fn dispatch_built(js: Js, target: Element, kind: &str, event: Value) 
         return (false, false);
     }
     let saved_ctx = js.ctx();
-    let target_ctx = js.realm_for_node(target);
+    let target_doc = nearest_document(Some(target));
+    let target_ctx = target_doc
+        .or_else(|| target.parent())
+        .map_or(ContextHandle::NULL, |owner| js.realm_for_node(owner));
     let mut root = target;
     while let Some(parent) = root.parent() {
         root = parent;
@@ -93,7 +96,6 @@ pub(crate) fn dispatch_built(js: Js, target: Element, kind: &str, event: Value) 
     } else {
         main_realm
     };
-    let target_doc = nearest_document(Some(target));
     let frame = target_doc.and_then(|doc| doc.parent().map(|frame| (doc, frame)));
     js.in_dispatch_scope(ctx, frame, || {
         let budget = js.budget_enter();
