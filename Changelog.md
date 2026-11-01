@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.6-dev:
+Southstar Browser 1.0.6:
 ======
 * Security: a cookie written from script with the `HttpOnly` attribute
   (`document.cookie`, a frame document's cookie) is ignored, as RFC 6265
