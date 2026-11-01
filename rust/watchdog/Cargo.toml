@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-debuglog = { path = "../debuglog", version = "=1.0.6" }
-southstar-glib = { path = "../glib", version = "=1.0.6" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.7-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
 
 [lints]
 workspace = true
