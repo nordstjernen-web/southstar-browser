@@ -181,6 +181,15 @@ fn script_cookies_cannot_overwrite_httponly_ones() {
 }
 
 #[test]
+fn script_cannot_set_httponly_cookies() {
+    let target = "https://example.com/";
+    let jar = store_all(target, &["kept=1"]);
+    let from_script = set(target, "discard=1; HttpOnly; Path=/").expect("valid cookie");
+    let jar = cookies::store(Some(&jar), &from_script, false);
+    assert_eq!(header(&jar, target, true).as_deref(), Some("kept=1"));
+}
+
+#[test]
 fn defaults_the_cookie_path_to_the_request_directory() {
     assert_eq!(
         set("https://example.com/a/b/c", "x=1").expect("valid").path,

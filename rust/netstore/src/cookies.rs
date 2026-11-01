@@ -353,6 +353,9 @@ pub fn store(jar: Option<&[u8]>, cookie: &Cookie, from_http: bool) -> Vec<u8> {
         path,
         now,
     } = cookie;
+    if a.httponly && !from_http {
+        return jar.unwrap_or_default().to_vec();
+    }
     let (name, value, file_domain, path, now) =
         (&name[..], &value[..], &file_domain[..], &path[..], *now);
     let mut out = Vec::new();

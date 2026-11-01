@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.6-dev:
 ======
+* Security: a cookie written from script with the `HttpOnly` attribute
+  (`document.cookie`, a frame document's cookie) is ignored, as RFC 6265
+  section 5.3 requires. It used to be stored without the flag, readable from
+  script and sent to the server; browseraudit.com reported both as critical.
 * Security: an event fired at an `<iframe>` element (its `load`, `error`, …)
   now runs the parent page's listeners in the parent's realm. They used to run
   in the framed document's realm, so a `fetch()` or XMLHttpRequest from the
