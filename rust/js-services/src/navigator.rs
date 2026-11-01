@@ -413,6 +413,12 @@ fn watch_position(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result
 fn clipboard_write_text(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Value> {
     let (promise, resolve, _reject) = scope.new_promise()?;
     let js = ffi::js_of(scope);
+    if !ffi::has_transient_activation(js) {
+        return reject_message(
+            scope,
+            "NotAllowedError: clipboard write requires a user gesture",
+        );
+    }
     let text = match args.first() {
         Some(value) => scope.to_string(value).unwrap_or_default(),
         None => String::new(),

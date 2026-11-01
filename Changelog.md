@@ -14,6 +14,11 @@ Southstar Browser 1.0.7-dev:
   sends a command line containing one. A page could navigate to
   `ftp://host/x%0D%0A...` and have the browser send any FTP command from the
   user's network position, such as `DELE` or a `PORT` bounce.
+* Security: `navigator.clipboard.writeText`, `navigator.clipboard.write` and
+  `document.execCommand('copy'/'cut')` need transient user activation (a
+  click or key press in the last few seconds). Any page or frame used to be
+  able to overwrite the system clipboard from a timer, for example swapping a
+  copied wallet address or shell command.
 
 Southstar Browser 1.0.6:
 ======

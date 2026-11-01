@@ -273,6 +273,10 @@ pub(crate) fn user_activation(js: Js) -> (bool, bool) {
     api::user_activation_state(js.0)
 }
 
+pub(crate) fn has_transient_activation(js: Js) -> bool {
+    api::has_transient_activation(js.0)
+}
+
 pub(crate) fn clipboard_write(js: Js, text: &str) -> Option<bool> {
     let text = CString::new(text.replace('\0', "")).unwrap_or_default();
     api::clipboard_write(js.0, &text)

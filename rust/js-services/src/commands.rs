@@ -30,7 +30,9 @@ fn command_arg(scope: &mut Scope<'_>, args: &[Value]) -> Option<Command> {
 
 fn run(js: Js, command: Command) -> bool {
     match command {
-        Command::Copy | Command::Cut => ffi::copy_selection(js),
+        Command::Copy | Command::Cut => {
+            ffi::has_transient_activation(js) && ffi::copy_selection(js)
+        }
         Command::SelectAll => ffi::selection_command(js, c"selectAll"),
         Command::Unselect => ffi::selection_command(js, c"unselect"),
     }
