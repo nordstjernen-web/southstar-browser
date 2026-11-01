@@ -34,15 +34,15 @@ Supported platforms:
 CI builds Linux on every push and pull request and FreeBSD and NetBSD
 nightly; the Windows, macOS and musl workflows run only when started by hand.
 
-**Version:** 1.0.5.
+**Version:** 1.0.6 (`main` is 1.0.7-dev).
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 
 **Standards.** Behaviour is measured against the spec text, section by
 section, not against another browser. The walk-through of the in-scope
 WHATWG HTML standard (§1–§16) in
-[docs/HTML-compatibility.md](docs/HTML-compatibility.md) records **140 spec
-rows fully implemented, 31 partial, 0 absent** (July 2026), besides a handful
+[docs/HTML-compatibility.md](docs/HTML-compatibility.md) records **144 spec
+rows fully implemented, 31 partial, 0 absent** (October 2026), besides a handful
 that are non-goals by design: `embed`/`object` plugins, `frame`/`frameset`,
 `applet`/`marquee`, the application cache and `navigator` device APIs. The tracked
 web-platform-tests slice passes 95% of its subtests
@@ -51,7 +51,7 @@ web-platform-tests slice passes 95% of its subtests
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The browser is about 380,000 lines of Rust in some 158
+**Minimalism.** The browser is about 385,000 lines of Rust in some 161
 crates under `rust/`, excluding the vendored Boa fork and generated tables —
 small enough for one person to read and audit end-to-end.
 
@@ -72,8 +72,11 @@ the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
 
 ## Download
 
-There are no Southstar binaries yet — build from source (below). The
-per-platform build and packaging notes are in [docs/](docs/README.md).
+Each [GitHub release](https://github.com/nordstjernen-web/southstar-browser/releases)
+carries x86-64 Linux `.deb` packages for Ubuntu 24.04 and 26.04, Debian 13,
+forky and sid, and a portable Linux zip, built by the `release` workflow.
+On other platforms, build from source (below). The per-platform build and
+packaging notes are in [docs/](docs/README.md).
 
 npm builds it from source for you:
 
@@ -126,7 +129,9 @@ See [npm/README.md](npm/README.md).
   in-engine, with optional AVIF and inline PDF support.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
-  present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). MSE/`blob:`
+  present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). On Windows,
+  H.264 and AAC are decoded by the system's Media Foundation
+  (`rust/media-foundation`), so MP4 and H.264 streams play too. MSE/`blob:`
   streaming and HLS/DASH manifests play through the `southstar-video`
   helper, and a `<track default>` WebVTT file is drawn over the video. Other
   codecs render a poster and play overlay. See [docs/media.md](docs/media.md).
@@ -220,8 +225,9 @@ Southstar is an independent engine — no upstream browser code.
 [Boa](https://github.com/boa-dev/boa) (fork, no JIT, in `third_party/`),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
-(MP3, ported to Rust). Text layout is `rust/text`, a Rust port of Pango, so
-the build needs no Pango.
+(MP3, ported to Rust), plus the wgpu-native C headers
+(`third_party/wgpu-native`) for the optional WebGPU build. Text layout is
+`rust/text`, a Rust port of Pango, so the build needs no Pango.
 
 **Rust crates** from crates.io, pinned in `Cargo.lock` and fetched by Cargo
 at build time (see `debian/README.source` for an offline, vendored build):
