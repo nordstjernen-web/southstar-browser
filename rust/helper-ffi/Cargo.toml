@@ -14,8 +14,8 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-http = { path = "../http", version = "=1.0.6-dev" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.6-dev" }
+southstar-http = { path = "../http", version = "=1.0.6" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.6" }
 
 [features]
 seccomp = ["southstar-sandbox/seccomp"]
