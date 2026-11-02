@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: a download name longer than 200 bytes is shortened in its stem
+  and keeps its extension, and trailing dots and spaces are trimmed again
+  afterwards. Cutting the name used to be able to leave `name.exe.`,
+  which skipped the prompt for files that can run programs while Windows
+  saved it as `name.exe`. The shell also adds a renderer's layer origin and
+  offset in floating point, so out-of-range values cannot overflow.
 * Security: mouse, pointer, drag and focus events only expose a
   `relatedTarget` from the listener's own document. Moving the pointer or
   dragging across a frame edge used to hand a cross-origin frame the

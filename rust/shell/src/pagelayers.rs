@@ -566,7 +566,7 @@ impl PageLayers {
                 canvas,
                 tex,
                 f64::from(l.x),
-                f64::from(l.origin + l.y),
+                f64::from(l.origin) + f64::from(l.y),
                 raster,
             );
             return;
@@ -577,7 +577,7 @@ impl PageLayers {
             canvas,
             tex,
             f64::from(l.x) + dx - ox,
-            f64::from(l.origin + l.y) + dy - oy,
+            f64::from(l.origin) + f64::from(l.y) + dy - oy,
             raster,
         );
     }
