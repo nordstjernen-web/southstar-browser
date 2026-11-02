@@ -197,8 +197,8 @@ library API or language feature stabilized after 1.91.
   (`rust/southstar`) builds the browser without meson. The workspace's crates
   are not published one by one: `scripts/crates-io.py` merges them into the
   ~two dozen crates `scripts/crates-io-groups.toml` lists, each member a module
-  with its `crate::`/`southstar_x::` paths rewritten, and CI checks that the
-  merged crates build. A new crate goes into a group there ("engine" takes the
+  with its `crate::`/`southstar_x::` paths rewritten, and CI checks on
+  pushes to `main` that the merged crates build. A new crate goes into a group there ("engine" takes the
   rest) and embeds only files inside its own directory.
   `scripts/set-version.py` sets the version everywhere it is written;
   `scripts/crates-io.py publish` publishes a release.
@@ -227,7 +227,8 @@ library API or language feature stabilized after 1.91.
   message; `cargo vet --locked` must pass (CI runs it too).
 - Unit tests live next to the code: `#[cfg(test)] mod tests;` in the crate
   root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
-  crate that has them (CI runs it too). A test binary links only the crate and
+  crate that has them; CI does not run them, so run it locally before pushing
+  a change to a crate with tests. A test binary links only the crate and
   its Cargo dependencies, so tests work for crates whose code needs no
   meson-supplied library — one more reason to keep parsers and engine logic
   free of FFI. Test parsers, URL handling, cookies and HSTS, CSP and the
