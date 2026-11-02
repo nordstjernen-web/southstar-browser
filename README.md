@@ -6,9 +6,7 @@ Southstar Browser
 [![Best viewed in Southstar Browser](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
-and JavaScript standards. It is the next step for
-[Nordstjernen Sol](https://github.com/nordstjernen-web/nordstjernen-sol-browser),
-**rewritten in Rust**.
+and JavaScript standards, written in Rust.
 
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).
