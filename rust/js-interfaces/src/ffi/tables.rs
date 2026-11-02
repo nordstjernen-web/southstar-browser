@@ -65,7 +65,7 @@ pub(crate) static TLIST_PROTO: [Prop; 10] = [
 pub(crate) static VALIDITY_PROTO_FUNCS: [Prop; 1] =
     [accessor("valid", Some(adapt::validity_get_valid), None)];
 
-pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 510] = [
+pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 509] = [
     method("getNumberOfChars", 0, natives::element_get_number_of_chars),
     method("getSVGDocument", 0, frames::owner::svg_document),
     accessor(
@@ -584,11 +584,6 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 510] = [
     method("decode", 0, bind::natives::resolved_undefined),
     method("toBlob", 1, canvas::context::element_to_blob),
     method("attachInternals", 0, forms::internals::attach_internals),
-    accessor(
-        "_internals",
-        Some(adapt::element_get_internals),
-        Some(elements::element::ignore),
-    ),
     accessor(
         "index",
         Some(elements::element::option_index),

@@ -35,8 +35,12 @@ pub(crate) fn wrap(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
     api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
-pub(crate) fn shadow_root(scope: &mut Scope<'_>, element: &Value) -> Value {
-    nsr_element_get_shadowRoot(scope, element).unwrap_or_else(|_| Value::undefined())
+pub(crate) fn internals_shadow_root(scope: &mut Scope<'_>, element: &Value) -> Value {
+    nsr_internals_shadow_root(scope, element).unwrap_or_else(|_| Value::null())
+}
+
+pub(crate) fn node_wrapper(scope: &mut Scope<'_>, node: Element) -> Value {
+    api::node_wrapper(scope, node).unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn not_found(scope: &mut Scope<'_>, message: &str) -> Value {
@@ -311,7 +315,6 @@ macro_rules! setters {
 
 methods! {
     nsr_window_form_data_ctor => crate::form_data::construct,
-    nsr_custom_state_set_ctor => crate::internals::custom_state_set,
     nsr_submit_event_ctor => crate::submit::submit_event_ctor,
     nsr_radio_node_list_get_value => crate::collection::radio_list_value,
     nsr_radio_node_list_set_value => crate::collection::set_radio_list_value,

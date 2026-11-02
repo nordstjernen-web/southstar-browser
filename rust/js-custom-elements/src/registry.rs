@@ -59,6 +59,34 @@ fn record_extends(scope: &mut Scope<'_>, class: &Value, options: &Value) -> JsRe
     Ok(())
 }
 
+fn capture_form_options(scope: &mut Scope<'_>, class: &Value) -> JsResult<()> {
+    let features = scope.get(class, "disabledFeatures")?;
+    let mut disable_internals = false;
+    if features.is_object() {
+        let length = scope.get(&features, "length")?;
+        let length = scope.to_int32(&length).unwrap_or(0);
+        for i in 0..length.max(0) as u32 {
+            let item = scope.get_index(&features, i)?;
+            disable_internals |= scope.to_string(&item)? == "internals";
+        }
+    }
+    let form_associated = scope.get(class, "formAssociated")?;
+    let form_associated = Value::boolean(scope.to_bool(&form_associated));
+    let _ = scope.define(
+        class,
+        "__nd_ce_disable_internals",
+        Value::boolean(disable_internals),
+        Attributes::CONFIGURABLE,
+    );
+    let _ = scope.define(
+        class,
+        crate::form_associated::FORM_ASSOCIATED,
+        form_associated,
+        Attributes::CONFIGURABLE,
+    );
+    Ok(())
+}
+
 pub fn define(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     if args.len() < 2 {
         return Err(scope.type_error("customElements.define: name and class required"));
@@ -81,6 +109,7 @@ pub fn define(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult 
         record_extends(scope, class, &options)?;
     }
     capture_observed_attributes(scope, class)?;
+    capture_form_options(scope, class)?;
 
     let page = crate::page(js);
     let document = ffi::realm_document(scope);
@@ -167,6 +196,9 @@ pub(crate) fn html_element_construct(scope: &mut Scope<'_>, new_target: &Value) 
     let element = ffi::new_orphan_element(scope, &name);
     if !element.is_object() {
         return None;
+    }
+    if let Some(node) = ffi::unwrap_node(&element) {
+        crate::form_associated::mark(scope, node, new_target);
     }
     let proto = crate::get(scope, new_target, "prototype");
     if proto.is_object() {

@@ -9,7 +9,6 @@ pub(crate) use crate::links::nsr_cache_open;
 pub(crate) use crate::links::nsr_canvas_install;
 pub(crate) use crate::links::nsr_cssom_install_css;
 pub(crate) use crate::links::nsr_cssom_install_window;
-pub(crate) use crate::links::nsr_custom_state_set_ctor;
 pub(crate) use crate::links::nsr_document_ctor;
 pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_dom_parser_parseFromString;

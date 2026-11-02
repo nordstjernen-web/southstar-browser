@@ -4,7 +4,7 @@
 
 use core::ffi::CStr;
 
-use southstar_dom::{ancestors, children, controls, select};
+use southstar_dom::{ancestors, children, controls, internals, select};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Page, cstring};
@@ -18,7 +18,7 @@ const CUSTOM_VALIDITY_ATTR: &CStr = c"data-nd-custom-validity";
 const PATTERN_MAX_LEN: usize = 2048;
 const PATTERN_VALUE_MAX_LEN: usize = 10000;
 const HIDDEN_FLAG: Attributes = Attributes {
-    writable: false,
+    writable: true,
     enumerable: false,
     configurable: false,
 };
@@ -294,7 +294,9 @@ fn element_valid(node: Element) -> bool {
 }
 
 fn invalid_here(form: Element, scan: Element) -> bool {
-    scan.element_name().is_some() && form_owner(scan) == Some(form) && !element_valid(scan)
+    scan.element_name().is_some()
+        && form_owner(scan) == Some(form)
+        && (!element_valid(scan) || internals::fails_validation(scan))
 }
 
 pub(crate) fn first_invalid(form: Element, scan: Element, depth: i32) -> Option<Element> {
@@ -331,6 +333,26 @@ pub fn validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResul
     let custom = has_custom_error(node);
     let flags = compute(node);
     let is_valid = !(flags.any() || custom);
+    let fields = [
+        ("valueMissing", flags.value_missing),
+        ("typeMismatch", flags.type_mismatch),
+        ("patternMismatch", flags.pattern_mismatch),
+        ("tooLong", flags.too_long),
+        ("tooShort", flags.too_short),
+        ("rangeUnderflow", flags.range_underflow),
+        ("rangeOverflow", flags.range_overflow),
+        ("stepMismatch", flags.step_mismatch),
+        ("badInput", false),
+        ("customError", custom),
+    ];
+    Ok(validity_state(scope, &fields, is_valid))
+}
+
+pub(crate) fn validity_state(
+    scope: &mut Scope<'_>,
+    fields: &[(&str, bool)],
+    is_valid: bool,
+) -> Value {
     let global = scope.global();
     let ctor = scope
         .get(&global, "ValidityState")
@@ -347,23 +369,21 @@ pub fn validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResul
     } else {
         scope.new_object()
     };
-    let fields = [
-        ("valueMissing", flags.value_missing),
-        ("typeMismatch", flags.type_mismatch),
-        ("patternMismatch", flags.pattern_mismatch),
-        ("tooLong", flags.too_long),
-        ("tooShort", flags.too_short),
-        ("rangeUnderflow", flags.range_underflow),
-        ("rangeOverflow", flags.range_overflow),
-        ("stepMismatch", flags.step_mismatch),
-        ("badInput", false),
-        ("customError", custom),
-    ];
-    for (name, flag) in fields {
-        let _ = scope.set(&state, name, Value::boolean(flag));
-    }
     let _ = scope.define(&state, "__ndValid", Value::boolean(is_valid), HIDDEN_FLAG);
-    Ok(state)
+    update_validity_state(scope, &state, fields, is_valid);
+    state
+}
+
+pub(crate) fn update_validity_state(
+    scope: &mut Scope<'_>,
+    state: &Value,
+    fields: &[(&str, bool)],
+    is_valid: bool,
+) {
+    for &(name, flag) in fields {
+        let _ = scope.set(state, name, Value::boolean(flag));
+    }
+    let _ = scope.set(state, "__ndValid", Value::boolean(is_valid));
 }
 
 pub fn check_validity(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {

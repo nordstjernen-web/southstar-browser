@@ -305,3 +305,50 @@ fn taking_template_contents_hands_over_ownership() {
     assert!(weak.get().is_none());
     template.free_tree();
 }
+
+#[test]
+fn element_internals_track_states_submission_and_form_association() {
+    use crate::internals::{self, Entry};
+    let form = node::new_element(b"form");
+    let fieldset = node::new_element(b"fieldset");
+    let custom = node::new_element(b"my-control");
+    form.append(fieldset);
+    fieldset.append(custom);
+    assert!(!internals::is_form_associated(custom));
+    assert!(!crate::controls::supports_disabled(custom));
+    internals::mark_form_associated(custom);
+    assert!(internals::is_form_associated(custom));
+    assert!(internals::will_validate(custom));
+    attrs::set_attribute(fieldset, c"disabled", Some(b""));
+    assert!(crate::controls::effectively_disabled(custom));
+    assert!(!crate::controls::disabled_within(custom, custom));
+    assert!(crate::controls::disabled_within(custom, fieldset));
+    assert!(!internals::will_validate(custom));
+    internals::set_invalid(custom, true);
+    assert!(!internals::fails_validation(custom));
+    attrs::remove_attribute(fieldset, c"disabled");
+    assert!(internals::fails_validation(custom));
+    assert!(internals::add_state(custom, "checked"));
+    assert!(!internals::add_state(custom, "checked"));
+    assert!(internals::add_state(custom, "--busy"));
+    assert!(internals::has_state(custom, b"checked"));
+    assert_eq!(internals::states(custom), ["checked", "--busy"]);
+    assert!(internals::delete_state(custom, "checked"));
+    assert!(!internals::has_state(custom, b"checked"));
+    assert!(internals::clear_states(custom));
+    assert!(internals::states(custom).is_empty());
+    let entry = Entry {
+        name: None,
+        value: b"42".to_vec(),
+    };
+    internals::set_submission(custom, Some(vec![entry.clone()]));
+    assert_eq!(internals::submission(custom), Some(vec![entry]));
+    assert!(internals::swap_owner(custom, Some(form)).is_none());
+    assert_eq!(
+        internals::swap_owner(custom, None).and_then(crate::WeakNode::get),
+        Some(form)
+    );
+    let weak = custom.downgrade();
+    form.free_tree();
+    assert!(weak.get().is_none());
+}

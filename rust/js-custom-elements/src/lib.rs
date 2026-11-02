@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod ffi;
+mod form_associated;
 mod reactions;
 mod registry;
 

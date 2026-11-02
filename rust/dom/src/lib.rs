@@ -1,4 +1,4 @@
-//! Southstar — the DOM: nodes and attributes, document indexes, serialization and form controls.
+//! Southstar — the DOM: nodes and attributes, document indexes, serialization, form controls and element internals.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,6 +9,7 @@ mod data;
 mod handle;
 pub mod image_map;
 pub mod index;
+pub mod internals;
 pub mod node;
 mod owned;
 pub mod select;

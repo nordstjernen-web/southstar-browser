@@ -14,6 +14,7 @@ const DECLARATIVE: &CStr = c"data-nd-shadow-declarative";
 const DELEGATES: &CStr = c"data-nd-shadow-delegates";
 const SERIALIZABLE: &CStr = c"data-nd-shadow-serializable";
 const CLONABLE: &CStr = c"data-nd-shadow-clonable";
+const HIDDEN_FROM_INTERNALS: &CStr = c"data-nd-shadow-hidden-from-internals";
 
 const ALLOWED_HOSTS: [&[u8]; 18] = [
     b"article",
@@ -149,6 +150,10 @@ pub fn attach_shadow(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     let root = southstar_dom::node::new_element(b"div");
     southstar_dom::attrs::set_len(root, SHADOW_ATTR, Some(mode.to_bytes()));
     write_flags(root, flags);
+    let custom = scope.get(this, "__nd_ce_class")?;
+    if !custom.is_object() {
+        southstar_dom::attrs::set_len(root, HIDDEN_FROM_INTERNALS, Some(b"1"));
+    }
     ffi::append_child(host, root);
     ffi::arm_js_invalidate(root);
     wrap_shadow_root(scope, root)
@@ -251,6 +256,13 @@ fn define_props(scope: &mut Scope<'_>, wrapper: &Value) -> JsResult<()> {
 pub fn get_shadow_root(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     match ffi::unwrap_node(this).and_then(crate::shadow_child) {
         Some(root) if !crate::is_closed(root) => wrap_shadow_root(scope, root),
+        _ => Ok(Value::null()),
+    }
+}
+
+pub fn internals_shadow_root(scope: &mut Scope<'_>, this: &Value) -> JsResult {
+    match ffi::unwrap_node(this).and_then(crate::shadow_child) {
+        Some(root) if root.attr(HIDDEN_FROM_INTERNALS).is_none() => wrap_shadow_root(scope, root),
         _ => Ok(Value::null()),
     }
 }

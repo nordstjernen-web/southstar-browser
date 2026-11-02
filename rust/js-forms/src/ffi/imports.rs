@@ -3,8 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) use crate::links::nsr_dom_exception;
-pub(crate) use crate::links::nsr_element_get_shadowRoot;
 pub(crate) use crate::links::nsr_event_ctor;
+pub(crate) use crate::links::nsr_internals_shadow_root;
 pub(crate) use crate::links::nsr_namedmap_item;
 pub(crate) use southstar_js_collections::nsr_live_owner;
 pub(crate) use southstar_js_collections::nsr_live_snapshot;

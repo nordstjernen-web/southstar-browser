@@ -293,6 +293,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
         None,
     );
     ffi::install_on(scope, Installer::LiveConstructors, global);
+    southstar_js_forms::internals::install(scope, global);
     let validity_proto = install_table_on(scope, global, "ValidityState", ProtoTable::Validity);
     if validity_proto.is_object() {
         let _ = scope.define_to_string_tag(&validity_proto, "ValidityState");

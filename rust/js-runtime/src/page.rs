@@ -615,13 +615,6 @@ fn install_constructors(scope: &mut Scope<'_>, global: &Value) {
     );
     bind_constructor(scope, global, "VTTCue", 3, imports::nsr_vtt_cue_ctor);
     ffi::imports::nsr_services_install_clipboard_item(scope, global);
-    bind_constructor(
-        scope,
-        global,
-        "CustomStateSet",
-        0,
-        imports::nsr_custom_state_set_ctor,
-    );
     ffi::install_webgl(scope, global);
     bind_constructor(scope, global, "Audio", 1, imports::nsr_window_audio_ctor);
     imports::nsr_media_install_audio(scope, global);

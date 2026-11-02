@@ -48,6 +48,6 @@ pub(crate) fn is_slot(node: Option<Element>) -> bool {
 
 pub fn install_runtime_hooks() {
     southstar_js_forms::links::set_js_shadow_links(southstar_js_forms::links::JsShadowLinks {
-        element_get_shadow_root: crate::ffi::nsr_element_get_shadowRoot,
+        internals_shadow_root: crate::root::internals_shadow_root,
     });
 }

@@ -139,6 +139,7 @@ pub use pattern::pattern_matches;
 pub use prop::Prop;
 pub use restyle::{
     attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_restyle_dirty,
+    mark_states_dirty,
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};

@@ -24,7 +24,7 @@ fn js_events_links() -> &'static JsEventsLinks {
 }
 
 pub struct JsShadowLinks {
-    pub element_get_shadow_root: fn(&mut Scope<'_>, &Value) -> Result<Value, Value>,
+    pub internals_shadow_root: fn(&mut Scope<'_>, &Value) -> Result<Value, Value>,
 }
 
 static JS_SHADOW_LINKS: OnceLock<JsShadowLinks> = OnceLock::new();
@@ -48,12 +48,11 @@ pub(crate) fn nsr_dom_exception(
     (js_events_links().dom_exception)(scope, name, code, message)
 }
 
-#[allow(non_snake_case)]
-pub(crate) fn nsr_element_get_shadowRoot(
+pub(crate) fn nsr_internals_shadow_root(
     scope: &mut Scope<'_>,
     this: &Value,
 ) -> Result<Value, Value> {
-    (js_shadow_links().element_get_shadow_root)(scope, this)
+    (js_shadow_links().internals_shadow_root)(scope, this)
 }
 
 pub struct JsAttrsLinks {

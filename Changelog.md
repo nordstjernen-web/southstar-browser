@@ -3,6 +3,24 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Custom elements: `attachInternals()` returns a real `ElementInternals`
+  (a non-constructible interface) instead of an object of no-op functions,
+  and throws `NotSupportedError` for built-in, customized built-in and
+  not-yet-upgraded elements, when `disabledFeatures` lists "internals", and
+  on a second call. Elements whose class sets `static formAssociated = true`
+  are form-associated: `internals.form`, `labels`, `willValidate`,
+  `setFormValue()` (strings, `File`s and `FormData` entries, which reach
+  `new FormData(form)` and the submitted form body), `setValidity()`,
+  `validity`, `validationMessage`, `checkValidity()` and `reportValidity()`
+  work; the element is listed in `form.elements` and `fieldset.elements`,
+  is labelable, is disabled by `disabled` or a disabled fieldset, blocks
+  form submission and `form.checkValidity()` while invalid and matches
+  `:valid`/`:invalid`/`:disabled`. `formAssociatedCallback`,
+  `formDisabledCallback` and `formResetCallback` run when the form owner,
+  disabled state or owning form's reset change them. `internals.states` is a
+  set-like `CustomStateSet` that the new `:state(name)` pseudo-class matches,
+  `internals.shadowRoot` reaches closed shadow roots, and the ARIA
+  properties (`role`, `ariaLabel`, …) are stored on the internals.
 * Security: exporting a page opens the renderer's output file once without
   following links, checks it is the same single-link regular file, and
   copies from that handle. The shell used to check the path and then copy
