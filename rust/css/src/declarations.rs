@@ -14,6 +14,7 @@ use crate::scan::{
 };
 use crate::shorthand;
 use crate::supports;
+use crate::tree_count;
 use crate::{animation, calc};
 
 pub(crate) trait Sink {
@@ -362,8 +363,15 @@ pub(crate) fn parse_block(s: &[u8], mut p: usize, sink: &mut impl Sink) -> usize
             p = skip_semicolon(p);
             continue;
         }
+        if !tree_counting_valid(&name, raw) {
+            p = skip_semicolon(p);
+            continue;
+        }
         if sink.capturing()
-            && (has_substitution(raw) || contains(raw, b"attr(") || has_container_unit(raw))
+            && (has_substitution(raw)
+                || contains(raw, b"attr(")
+                || has_container_unit(raw)
+                || tree_count::uses_tree_counting(raw))
         {
             let (raw, important) = strip_important(raw);
             sink.pending(&name, raw, important);
@@ -409,6 +417,14 @@ pub fn named_property_supported(name: &[u8]) -> bool {
         .any(|(name, text, _)| expands(name, text))
 }
 
+fn tree_counting_valid(name: &[u8], raw: &[u8]) -> bool {
+    if !tree_count::uses_tree_counting(raw) || has_substitution(raw) || contains(raw, b"attr(") {
+        return true;
+    }
+    let (value, _) = strip_important(strip(raw));
+    named_declaration_valid(name, &tree_count::substitute(value, None))
+}
+
 pub(crate) fn declaration_valid(prop: Option<Prop>, text: &[u8]) -> bool {
     if text.is_empty() {
         return true;
@@ -418,6 +434,9 @@ pub(crate) fn declaration_valid(prop: Option<Prop>, text: &[u8]) -> bool {
     }
     if has_substitution(text) || contains(text, b"attr(") {
         return true;
+    }
+    if tree_count::uses_tree_counting(text) {
+        return property::parse_for(prop, &tree_count::substitute(text, None)).is_some();
     }
     property::parse_for(prop, text).is_some()
 }
