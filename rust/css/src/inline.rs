@@ -370,7 +370,28 @@ fn positions_canonical(value: &[u8], background: bool) -> Option<Vec<u8>> {
     Some(out)
 }
 
+fn anchor_shorthand_canonical(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+    let ctx = match prop {
+        b"inset" | b"inset-block" | b"inset-inline" => crate::anchor::Context::Inset,
+        b"margin" | b"margin-block" | b"margin-inline" => crate::anchor::Context::Margin,
+        _ => return None,
+    };
+    if !crate::anchor::mentions_anchor_fn(value) {
+        return None;
+    }
+    let parts: Vec<Vec<u8>> = split_ws_paren(value, 8)
+        .into_iter()
+        .map(|tok| {
+            crate::anchor::canonical(tok, ctx).map_or_else(|| tok.to_vec(), String::into_bytes)
+        })
+        .collect();
+    Some(parts.join(&b' '))
+}
+
 fn value_canonical(prop: &[u8], mut value: Vec<u8>) -> Vec<u8> {
+    if let Some(text) = anchor_shorthand_canonical(prop, &value) {
+        return text;
+    }
     if prop == b"-webkit-perspective"
         && !value.contains(&b'(')
         && let Some((n, crate::units::NUMBER)) = property::length(&value)

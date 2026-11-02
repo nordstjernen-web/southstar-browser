@@ -1120,6 +1120,41 @@ impl Parser<'_> {
         p
     }
 
+    fn position_try(&mut self, p: usize) -> usize {
+        let s = self.s;
+        let end = s.len();
+        let (name_end, term) = scan_segment(s, p);
+        let name = trim_range(s, p, name_end);
+        if term != b'{' {
+            return if term == b';' && name_end < end {
+                name_end + 1
+            } else {
+                name_end
+            };
+        }
+        let block_end = skip_to_block_end(s, name_end, end);
+        if !crate::anchor::is_position_try_name(name) {
+            return block_end;
+        }
+        let body_start = name_end + 1;
+        let body = &s[body_start..block_body_end(s, body_start, block_end).max(body_start)];
+        let mut decls = Vec::new();
+        for (dprop, dval) in descriptors(body) {
+            let dprop = dprop.to_ascii_lowercase();
+            if !crate::anchor::position_try_allows(&dprop) || dval.contains(&b'!') {
+                continue;
+            }
+            let expanded = crate::shorthand::expand(&dprop, dval);
+            for (i, decl) in expanded.iter().enumerate() {
+                let value = crate::shorthand::slot_value(&expanded, i);
+                let text = crate::values::serialize(value, false);
+                decls.push((decl.prop, text));
+            }
+        }
+        self.sheet.push_position_try(name, decls);
+        block_end
+    }
+
     fn at_rule(&mut self, at_start: usize, layer: Option<&[u8]>) -> usize {
         let s = self.s;
         let end = s.len();
@@ -1204,6 +1239,9 @@ impl Parser<'_> {
         }
         if eq(&name, b"property") {
             return self.property(p);
+        }
+        if eq(&name, b"position-try") {
+            return self.position_try(p);
         }
         if eq(&name, b"page") {
             let (prelude_end, term) = scan_segment(s, p);

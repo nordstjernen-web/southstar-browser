@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS Anchor Positioning, values: `anchor-name`, `anchor-scope`,
+  `position-anchor`, `position-area`, `position-try-fallbacks`,
+  `position-try-order`, the `position-try` shorthand and
+  `position-visibility` parse, serialize and compute; `anchor()` is
+  accepted in the inset properties and `anchor-size()` in the inset, size
+  and margin properties, alone or inside `calc()`, `min()`, `max()` and
+  `clamp()`, with calc simplification; `anchor-center` is a
+  `justify-self`/`align-self` value; `@position-try` rules are parsed
+  (keeping only the declarations the spec allows) and exposed in the CSSOM
+  as `CSSPositionTryRule` with a `CSSPositionTryDescriptors` style
+  (WPT `css-anchor-position/parsing`: 41 → 220 of 220; `anchor-parse-*`,
+  `anchor-size-parse-*`, `position-area-parsing`/`-computed` and the
+  `at-position-try-*` files: 1,586 → 9,801 of 9,802; `anchor-name-basics`
+  4 → 54 of 54).
 * Frames: a frame or iframe whose script sets `location.href`,
   `location`, or calls `location.assign()` or `location.replace()` now
   navigates that frame, whether the script runs while the frame loads,

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use crate::anchor;
 use crate::animation::{self, Longhand};
 use crate::border_image;
 use crate::color::{self, parse_color};
@@ -416,7 +417,8 @@ pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
         | b"text-wrap"
         | b"text-emphasis"
         | b"-webkit-text-stroke"
-        | b"font-synthesis" => keyword_shorthand(&mut out, name, text),
+        | b"font-synthesis"
+        | b"position-try" => keyword_shorthand(&mut out, name, text),
         b"margin" => box_quad(
             &mut out,
             text,
@@ -1866,7 +1868,11 @@ fn box_quad(out: &mut Out, text: &[u8], props: [Prop; 4]) {
     }
 }
 
-const KEYWORD_SHORTHANDS: [(&[u8], &[Prop]); 5] = [
+const KEYWORD_SHORTHANDS: [(&[u8], &[Prop]); 6] = [
+    (
+        b"position-try",
+        &[Prop::PositionTryOrder, Prop::PositionTryFallbacks],
+    ),
     (
         b"text-emphasis",
         &[Prop::TextEmphasisStyle, Prop::TextEmphasisColor],
@@ -1945,6 +1951,10 @@ fn keyword_shorthand_values(name: &[u8], text: &[u8]) -> Option<Vec<Vec<u8>>> {
     }
     if eq(name, b"font-synthesis") {
         return font_synthesis_values(text);
+    }
+    if eq(name, b"position-try") {
+        let (order, fallbacks) = anchor::position_try_split(text)?;
+        return Some(vec![order.into_bytes(), fallbacks.into_bytes()]);
     }
     let tokens = split_ws_paren(text, KEYWORD_SHORTHAND_TOKENS_MAX);
     if tokens.is_empty() || tokens.len() >= KEYWORD_SHORTHAND_TOKENS_MAX {
@@ -2044,6 +2054,7 @@ pub fn keyword_shorthand_compose(name: &[u8], values: &[&[u8]]) -> Option<Vec<u8
     Some(match name.to_ascii_lowercase().as_slice() {
         b"white-space" => white_space_compose(values[0], values[1]),
         b"font-synthesis" => font_synthesis_compose(values),
+        b"position-try" if values[0] == b"normal" => values[1].to_vec(),
         b"text-wrap" if values[1] == b"auto" => values[0].to_vec(),
         b"text-wrap" if values[0] == b"wrap" => values[1].to_vec(),
         _ => [values[0], b" ", values[1]].concat(),

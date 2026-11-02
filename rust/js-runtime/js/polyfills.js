@@ -9415,6 +9415,10 @@
         var CSSLayerBlockRule = ctorFor('CSSLayerBlockRule', CSSGroupingRule.prototype);
         var CSSContainerRule = ctorFor('CSSContainerRule', CSSConditionRule.prototype);
         var CSSScopeRule = ctorFor('CSSScopeRule', CSSGroupingRule.prototype);
+        var CSSPositionTryRule = ctorFor('CSSPositionTryRule', CSSRule.prototype);
+        var CSSPositionTryDescriptors = ctorFor('CSSPositionTryDescriptors',
+            global.CSSStyleDeclaration ? global.CSSStyleDeclaration.prototype
+                                       : Object.prototype);
 
         var CONSTANTS = {
             STYLE_RULE: 1, CHARSET_RULE: 2, IMPORT_RULE: 3, MEDIA_RULE: 4,
@@ -9471,6 +9475,127 @@
             return typeof d['initial-value'] === 'string'
                 ? d['initial-value'] : null;
         });
+        getter(CSSPositionTryRule.prototype, 'name', function () {
+            return this.__name || '';
+        });
+        accessor(CSSPositionTryRule.prototype, 'style',
+            function () { return this.__descriptorsProxy; },
+            function (v) { this.__descriptorsProxy.cssText = v; });
+
+        var POSITION_TRY_ALLOWED = new RegExp(
+            '^(?:(?:margin|inset)(?:-(?:top|right|bottom|left|block|inline|' +
+            'block-start|block-end|inline-start|inline-end))?|top|right|bottom|left|' +
+            '(?:min-|max-)?(?:width|height|block-size|inline-size)|' +
+            'place-self|align-self|justify-self|position-anchor|position-area)$');
+        function positionTryAllowed(name) {
+            return POSITION_TRY_ALLOWED.test(name) && name !== 'inset-top' &&
+                   name !== 'inset-right' && name !== 'inset-bottom' &&
+                   name !== 'inset-left';
+        }
+        function positionTryDeclText(text) {
+            var s = String(text), parts = [], buf = '', depth = 0, quote = 0;
+            for (var i = 0; i <= s.length; i++) {
+                var c = i < s.length ? s.charAt(i) : ';';
+                if (quote) {
+                    buf += c;
+                    if (c === '\\') { buf += s.charAt(++i); continue; }
+                    if (c === quote) quote = 0;
+                    continue;
+                }
+                if (c === '"' || c === "'") { quote = c; buf += c; continue; }
+                if (c === '(' || c === '[' || c === '{') depth++;
+                else if (c === ')' || c === ']' || c === '}') {
+                    depth--;
+                    if (c === '}' && depth <= 0) {
+                        buf = '';
+                        depth = 0;
+                        continue;
+                    }
+                }
+                if (c === ';' && depth <= 0) { parts.push(buf); buf = ''; continue; }
+                buf += c;
+            }
+            var kept = [];
+            for (var k = 0; k < parts.length; k++) {
+                var decl = parts[k], colon = decl.indexOf(':');
+                if (colon < 0 || decl.indexOf('{') >= 0) continue;
+                var name = decl.slice(0, colon).replace(/^\s+|\s+$/g, '').toLowerCase();
+                var value = decl.slice(colon + 1);
+                if (!positionTryAllowed(name) || /!\s*important\s*$/i.test(value)) continue;
+                kept.push(name + ':' + value);
+            }
+            return kept.join(';');
+        }
+        function positionTryDescriptors(rule, decl) {
+            var target = Object.create(CSSPositionTryDescriptors.prototype);
+            function dashed(p) {
+                return p.indexOf('-') >= 0 ? p.toLowerCase()
+                    : p.replace(/[A-Z]/g, function (c) { return '-' + c.toLowerCase(); });
+            }
+            function isCssProperty(name) {
+                try { return !!(global.CSS && global.CSS.supports(name, 'inherit')); }
+                catch (e) { return false; }
+            }
+            var api = {
+                getPropertyValue: function (n) {
+                    n = String(n).toLowerCase();
+                    return positionTryAllowed(n) ? decl.getPropertyValue(n) : '';
+                },
+                setProperty: function (n, v, priority) {
+                    n = String(n).toLowerCase();
+                    if (!positionTryAllowed(n) ||
+                        String(priority || '').toLowerCase() === 'important')
+                        return;
+                    decl.setProperty(n, v);
+                    notify(rule);
+                },
+                removeProperty: function (n) {
+                    n = String(n).toLowerCase();
+                    if (!positionTryAllowed(n)) return '';
+                    var old = decl.removeProperty(n);
+                    notify(rule);
+                    return old;
+                },
+                getPropertyPriority: function () { return ''; },
+                item: function (i) { return decl.item(i); }
+            };
+            return new Proxy(target, {
+                get: function (t, p) {
+                    if (typeof p !== 'string') return Reflect.get(t, p);
+                    if (Object.prototype.hasOwnProperty.call(api, p)) return api[p];
+                    if (p === 'length') return decl.length;
+                    if (p === 'cssText') return decl.cssText;
+                    if (p === 'parentRule') return rule;
+                    if (/^\d+$/.test(p)) {
+                        var item = decl.item(+p);
+                        return item ? item : undefined;
+                    }
+                    var d = dashed(p);
+                    if (positionTryAllowed(d)) return decl.getPropertyValue(d);
+                    if (Object.prototype.hasOwnProperty.call(t, p)) return t[p];
+                    if (/^[a-zA-Z-]+$/.test(p) && isCssProperty(d)) return undefined;
+                    return Reflect.get(t, p);
+                },
+                set: function (t, p, v) {
+                    if (p === 'cssText') {
+                        decl.cssText = positionTryDeclText(v);
+                        notify(rule);
+                        return true;
+                    }
+                    if (typeof p === 'string') {
+                        var d = dashed(p);
+                        if (positionTryAllowed(d)) {
+                            decl.setProperty(d, v);
+                            notify(rule);
+                            return true;
+                        }
+                        if (/^[a-zA-Z-]+$/.test(p) && isCssProperty(d)) return true;
+                    }
+                    t[p] = v;
+                    return true;
+                }
+            });
+        }
 
         var dirtySheets = [];
         var sheetFlushQueued = false;
@@ -10184,6 +10309,7 @@
                         else if (c === quote) quote = 0;
                         i++; continue;
                     }
+                    if (c === '\\') { i += 2; continue; }
                     if (c === '"' || c === "'") { quote = c; i++; continue; }
                     if (c === '/' && text.charAt(i + 1) === '*') {
                         i += 2;
@@ -10347,6 +10473,30 @@
                 var nraw = nhead + (nbody ? ' { ' + nbody + ' }' : ' { }');
                 nr.__cssText = function () { return nraw; };
                 return nr;
+            }
+            if (kw === 'position-try') {
+                var ptName = prelude.replace(/^@[\w-]+\s*/, '')
+                                    .replace(/^\s+|\s+$/g, '');
+                if (!/^--(?:[-\w]|\\[\s\S]|[^\x00-\x7f])+$/.test(ptName)) return null;
+                var pt = Object.create(CSSPositionTryRule.prototype);
+                pt.__parentStyleSheet = sheet || null;
+                pt.__parentRule = parentRule || null;
+                pt.__at = kw;
+                pt.__type = 0;
+                pt.__name = ptName;
+                var ptHolder = document.createElement('span');
+                try { ptHolder.style.cssText = positionTryDeclText(block); } catch (e) {}
+                pt.__holder = ptHolder;
+                pt.__descriptorsProxy = positionTryDescriptors(pt, ptHolder.style);
+                pt.__cssText = function () {
+                    var d = '';
+                    try {
+                        d = String(ptHolder.style.cssText || '')
+                            .replace(/^\s+|\s+$/g, '');
+                    } catch (e) {}
+                    return '@position-try ' + ptName + (d ? ' { ' + d + ' }' : ' { }');
+                };
+                return pt;
             }
             if (kw === 'keyframes' || kw === '-webkit-keyframes') {
                 var kfName = prelude.replace(/^@[\w-]+\s*/, '').replace(/^\s+|\s+$/g, '');
