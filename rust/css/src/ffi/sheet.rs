@@ -7,6 +7,8 @@ use core::ffi::{CStr, c_int, c_uint, c_void};
 use core::mem::size_of;
 use core::ops::Deref;
 use core::ptr;
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -16,7 +18,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use southstar_css_prop_syntax as prop_syntax;
 use southstar_glib::GBoolean;
 
-use super::declarations::{Rule, RuleSink, lookup_key, until_nul};
+use super::declarations::{Rule, RuleSink, lookup_key};
 use super::keyframes::{KeyframeStop, Keyframes};
 use super::rule_index::RuleIndex;
 use super::selector::SelectorGroup;
@@ -117,8 +119,10 @@ impl PropertyRule {
         has_initial: bool,
     ) -> Self {
         PropertyRule {
-            name: c_text(name),
-            initial_value: initial_value.filter(|_| has_initial).map(c_text),
+            name: c_string_until_nul(name),
+            initial_value: initial_value
+                .filter(|_| has_initial)
+                .map(c_string_until_nul),
             syntax,
             inherits,
             has_initial,
@@ -172,10 +176,6 @@ pub(super) struct Scope {
 const _: () = assert!(size_of::<PageRule>() == 72);
 
 static SERIAL_NEXT: AtomicU64 = AtomicU64::new(1);
-
-fn c_text(text: &[u8]) -> CString {
-    CString::new(until_nul(text)).unwrap_or_default()
-}
 
 fn sort_stops(stops: &mut Vec<KeyframeStop>) {
     let pcts: Vec<f64> = stops.iter().map(KeyframeStop::pct).collect();
@@ -305,17 +305,17 @@ impl SheetBuilder {
             self.layer_register(layer);
         }
         self.sheet.imports.push(Import {
-            url: c_text(url),
-            layer_name: layer.map(c_text),
-            media: media.map(c_text),
+            url: c_string_until_nul(url),
+            layer_name: layer.map(c_string_until_nul),
+            media: media.map(c_string_until_nul),
         });
     }
 
     pub(crate) fn push_font_face(&mut self, face: FontFace) {
         self.sheet.font_faces.push(FontFaceData {
-            family: c_text(&face.family),
-            src_url: c_text(&face.src_url),
-            unicode_range: face.unicode_range.as_deref().map(c_text),
+            family: c_string_until_nul(&face.family),
+            src_url: c_string_until_nul(&face.src_url),
+            unicode_range: face.unicode_range.as_deref().map(c_string_until_nul),
             weight: face.weight,
             slant: face.slant,
         });
@@ -347,8 +347,8 @@ impl SheetBuilder {
         has_initial: bool,
     ) {
         self.sheet.property_rules.push(Arc::new(PropertyRule {
-            name: c_text(name),
-            initial_value: initial.map(c_text),
+            name: c_string_until_nul(name),
+            initial_value: initial.map(c_string_until_nul),
             syntax: syntax.0,
             inherits,
             has_initial,
@@ -434,7 +434,7 @@ impl OwnedSheet {
             sheet.force_layer(layer);
         }
         if let Some(base) = base {
-            sheet.resolve_urls(&c_text(base));
+            sheet.resolve_urls(&c_string_until_nul(base));
         }
         OwnedSheet::from(sheet)
     }
@@ -458,7 +458,7 @@ impl Sheet {
                 .filter(|url| url_should_resolve(url))
                 .and_then(|url| url_resolve(base, url))
             {
-                face.src_url = c_text(&resolved);
+                face.src_url = c_string_until_nul(&resolved);
             }
         }
     }
@@ -489,7 +489,7 @@ impl Sheet {
                 Some(existing) => layer_join(Some(layer), existing.to_bytes()),
                 None => layer.to_vec(),
             };
-            import.layer_name = Some(c_text(&full));
+            import.layer_name = Some(c_string_until_nul(&full));
             sheet.layer_register(&full);
         }
         sheet.imports = imports;

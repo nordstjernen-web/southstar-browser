@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::until_nul;
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
@@ -36,11 +37,6 @@ fn user_cache_dir() -> Vec<u8> {
 pub fn env_set(name: &CStr) -> bool {
     name.to_str()
         .is_ok_and(|name| std::env::var_os(name).is_some())
-}
-
-pub fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
 }
 
 fn is_dir_separator(b: u8) -> bool {

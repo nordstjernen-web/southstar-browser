@@ -84,10 +84,6 @@ pub fn split_header(line: &[u8]) -> Option<(&[u8], &[u8])> {
     Some((&line[..colon], value))
 }
 
-pub fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
-}
-
 pub fn chunk_size(line: &[u8]) -> Option<u64> {
     let line = line.strip_suffix(b"\r").unwrap_or(line);
     let digits = line

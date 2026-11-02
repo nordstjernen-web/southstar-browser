@@ -3,10 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_int, c_long};
+use southstar_unicode::until_nul;
+use southstar_unicode::until_nul_owned;
 
 use southstar_ipc::{
     Conn, Head, MAX_REPLY, atol, json_double, json_escape, json_string, json_value, request_head,
-    until_nul, write_message,
+    write_message,
 };
 
 use crate::ffi::{self, PrintSetup, PrintedPages};
@@ -141,13 +143,7 @@ fn double(body: &[u8], key: &str) -> Option<f64> {
 fn text(body: &[u8], key: &str) -> Option<Vec<u8>> {
     json_value(until_nul(body), key.as_bytes())
         .and_then(json_string)
-        .map(c_text)
-}
-
-fn c_text(mut value: Vec<u8>) -> Vec<u8> {
-    let len = until_nul(&value).len();
-    value.truncate(len);
-    value
+        .map(until_nul_owned)
 }
 
 fn non_empty(value: Option<Vec<u8>>) -> Option<Vec<u8>> {
@@ -474,7 +470,7 @@ impl Renderer {
             }
             self.linear.0 = 0;
             let mut out = frame_from_head(&self.head);
-            out.tiles = Some(c_text(desc));
+            out.tiles = Some(until_nul_owned(desc));
             out.width = self.head.x_w as c_int;
             out.height = self.head.x_h as c_int;
             out.stride = self.head.x_stride as c_int;
@@ -551,7 +547,7 @@ impl Renderer {
     }
 
     pub fn clipboard(&mut self) -> Text {
-        self.request("/clipboard", "{}").map(c_text)
+        self.request("/clipboard", "{}").map(until_nul_owned)
     }
 
     pub fn link_cursor_at(&mut self, x: c_int, y: c_int) -> Option<(Text, Text)> {

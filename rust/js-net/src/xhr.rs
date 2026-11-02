@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul_owned;
 use std::ffi::CString;
 
 use southstar_js_engine::{Attributes, Scope, Value};
@@ -195,7 +196,7 @@ fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     }
     let method = scope.to_bytes(&args[0])?;
     let url = scope.to_bytes(&args[1])?;
-    let url = crate::until_nul(url);
+    let url = until_nul_owned(url);
     let asynchronous = args.len() < 3 || scope.to_bool(&args[2]);
     if let Some(user) = args.get(3).filter(|u| !is_nullish(u)) {
         scope.to_bytes(user)?;
@@ -230,7 +231,7 @@ fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             "XMLHttpRequest.open: invalid URL",
         ));
     }
-    let method = crate::until_nul(method);
+    let method = until_nul_owned(method);
     let normalized = headers::standard_method(&method).map_or(method, <[u8]>::to_vec);
     set_str(scope, this, "_method", &normalized);
     set_str(scope, this, "_url", &url);

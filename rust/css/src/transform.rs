@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::PI;
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_mat4::Mat4;
 
@@ -71,13 +71,8 @@ const _: () = assert!(
         && core::mem::size_of::<Transform>() == 2120
 );
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn strtod_all(text: &[u8]) -> f64 {
-    ffi::strtod(&c_text(text), 0).0
+    ffi::strtod(&c_string_until_nul(text), 0).0
 }
 
 fn flag(value: bool) -> i32 {
@@ -93,7 +88,7 @@ fn parse_transform_len(s: &[u8]) -> Option<(f64, bool)> {
             (resolved.px, false)
         });
     }
-    let text = c_text(s);
+    let text = c_string_until_nul(s);
     let bytes = text.to_bytes();
     let (v, end) = ffi::strtod(&text, 0);
     if end == 0 {
@@ -166,11 +161,11 @@ pub(crate) fn parse_angle_any(s: &[u8]) -> Option<f64> {
         return ok.then(|| resolved.px * 180.0 / PI);
     }
     if ANGLE_MATH.iter().any(|name| starts_with_ci(s, name)) {
-        let rewritten = units::angle_expr_rewrite(&c_text(s), false);
+        let rewritten = units::angle_expr_rewrite(&c_string_until_nul(s), false);
         let (ok, resolved) = calc::resolve_to_px_pct(&rewritten, false);
         return ok.then_some(resolved.px);
     }
-    let (_, end) = ffi::strtod(&c_text(s), 0);
+    let (_, end) = ffi::strtod(&c_string_until_nul(s), 0);
     if end == 0 {
         return None;
     }
@@ -182,7 +177,7 @@ fn parse_scale_number(s: &[u8]) -> Option<f64> {
     if s.is_empty() {
         return None;
     }
-    let text = c_text(s);
+    let text = c_string_until_nul(s);
     let bytes = text.to_bytes();
     let (v, end) = ffi::strtod(&text, 0);
     if end != 0 {
@@ -202,7 +197,7 @@ fn parse_scale_number(s: &[u8]) -> Option<f64> {
         let mut wrapped = b"calc(".to_vec();
         wrapped.extend_from_slice(bytes);
         wrapped.push(b')');
-        calc::parse_calc(&c_text(&wrapped))
+        calc::parse_calc(&c_string_until_nul(&wrapped))
     });
     match parsed {
         Some(Parsed::Length(v, unit)) => {
@@ -1083,7 +1078,7 @@ fn serialize_calc_number(n: f64) -> Vec<u8> {
 }
 
 fn eval_calc_number(arg: &[u8]) -> Option<f64> {
-    match calc::parse_calc(&c_text(arg))? {
+    match calc::parse_calc(&c_string_until_nul(arg))? {
         Parsed::Length(v, NUMBER) => Some(v),
         _ => None,
     }
@@ -1267,7 +1262,7 @@ fn leading_zeros_text(arg: &[u8]) -> Vec<u8> {
 }
 
 fn math_canonical_or_zeros(arg: &[u8]) -> Vec<u8> {
-    math::math_canonical(&c_text(arg)).unwrap_or_else(|| leading_zeros_text(arg))
+    math::math_canonical(&c_string_until_nul(arg)).unwrap_or_else(|| leading_zeros_text(arg))
 }
 
 fn arg_canonical(arg: &[u8], want: u32, scale_percent: bool) -> Option<Vec<u8>> {
@@ -1286,7 +1281,7 @@ fn arg_canonical(arg: &[u8], want: u32, scale_percent: bool) -> Option<Vec<u8>> 
                 return Some(canon);
             }
             if want & TX_PERCENT == 0 || want & TX_ANGLE != 0 {
-                let probe = calc::parse_calc(&c_text(arg)).is_some();
+                let probe = calc::parse_calc(&c_string_until_nul(arg)).is_some();
                 let angle_ok = want & TX_ANGLE != 0 && parse_angle_any(arg).is_some();
                 if !probe && !angle_ok {
                     return None;
@@ -1307,7 +1302,7 @@ fn arg_canonical(arg: &[u8], want: u32, scale_percent: bool) -> Option<Vec<u8>> 
             }
             return None;
         }
-        if let Some(parsed) = calc::parse_calc(&c_text(arg)) {
+        if let Some(parsed) = calc::parse_calc(&c_string_until_nul(arg)) {
             let pct = matches!(parsed, Parsed::Calc(c) if c.pct != 0.0);
             let number = matches!(parsed, Parsed::Length(_, NUMBER));
             if want & TX_LENGTH != 0 || want & TX_PERCENT != 0 || (want & TX_NUMBER != 0 && number)
@@ -1328,7 +1323,7 @@ fn arg_canonical(arg: &[u8], want: u32, scale_percent: bool) -> Option<Vec<u8>> 
         }
         return None;
     }
-    let text = c_text(arg);
+    let text = c_string_until_nul(arg);
     let bytes = text.to_bytes();
     if want & TX_ANGLE != 0 {
         let (num, end) = ffi::strtod(&text, 0);
@@ -1680,7 +1675,7 @@ fn rotate_canonical(tokens: &[&[u8]]) -> Option<Vec<u8>> {
             continue;
         }
         if n == 4 && n_vec < 3 && (i == 0 || n_vec > 0 || angle.is_some()) {
-            let text = c_text(tok);
+            let text = c_string_until_nul(tok);
             let (num, end) = ffi::strtod(&text, 0);
             if end != 0 && end == text.to_bytes().len() {
                 vec[n_vec] = num;

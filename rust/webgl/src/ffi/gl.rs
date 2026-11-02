@@ -4,6 +4,7 @@
 
 use core::ffi::{c_char, c_int, c_void};
 use core::ptr;
+use southstar_unicode::until_nul_owned;
 use std::ffi::CString;
 
 use crate::consts::{
@@ -368,12 +369,6 @@ fn c_names(names: &[Vec<u8>]) -> (Vec<CString>, Vec<*const c_char>) {
     (owned, pointers)
 }
 
-fn until_nul(mut bytes: Vec<u8>) -> Vec<u8> {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    bytes.truncate(end);
-    bytes
-}
-
 fn len_i32<T>(v: &[T]) -> i32 {
     i32::try_from(v.len()).unwrap_or(i32::MAX)
 }
@@ -637,7 +632,7 @@ pub(crate) fn object_log(kind: LogKind, name: u32, len: i32) -> Vec<u8> {
     };
     // SAFETY: GL writes at most len bytes, including the terminator, and buf holds len + 1.
     unsafe { entry(name, len, ptr::null_mut(), buf.as_mut_ptr().cast()) };
-    until_nul(buf)
+    until_nul_owned(buf)
 }
 
 #[derive(Clone, Copy)]
@@ -677,7 +672,7 @@ pub(crate) fn active_variable(which: ActiveKind, program: u32, index: u32, max: 
     Active {
         size,
         kind,
-        name: until_nul(name),
+        name: until_nul_owned(name),
     }
 }
 
@@ -1084,7 +1079,7 @@ pub(crate) fn get_active_uniform_block_name(program: u32, index: u32) -> Vec<u8>
             name.as_mut_ptr().cast(),
         )
     };
-    until_nul(name)
+    until_nul_owned(name)
 }
 
 pub(crate) fn get_attached_shaders(program: u32) -> Vec<u32> {

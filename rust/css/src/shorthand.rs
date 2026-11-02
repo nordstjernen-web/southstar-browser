@@ -20,7 +20,7 @@ use crate::position;
 use crate::prop::Prop;
 use crate::property::{
     self, Body, Value, bg_clip_canonical, bg_repeat_canonical, bg_repeat_token, bg_token_is_box,
-    c_text, calc_value, eq, length, lower, mask_box_keyword, wide_keyword, word_is_one_of,
+    calc_value, eq, length, lower, mask_box_keyword, wide_keyword, word_is_one_of,
 };
 use crate::scan::{
     has_substitution, scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range,
@@ -29,6 +29,7 @@ use crate::text::{add_leading_zeros, split_top_level_commas};
 use crate::units::{EM, NUMBER, PERCENT, PX};
 use crate::values;
 use southstar_css_grammar::has_keyword;
+use southstar_unicode::c_string_until_nul;
 
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Slot {
@@ -259,7 +260,7 @@ fn join(parts: &[&[u8]], sep: &[u8]) -> Vec<u8> {
 }
 
 fn is_color(tok: &[u8]) -> bool {
-    parse_color(&c_text(tok)).is_some() || color::needs_current_color(tok)
+    parse_color(&c_string_until_nul(tok)).is_some() || color::needs_current_color(tok)
 }
 
 fn is_color_keyword(tok: &[u8]) -> bool {
@@ -1777,7 +1778,9 @@ fn border_radius_half_canonical(text: &[u8]) -> Option<Vec<u8>> {
             vals.push(add_leading_zeros(tok));
         } else {
             calc_value(tok)?;
-            vals.push(math_canonical(&c_text(tok)).unwrap_or_else(|| add_leading_zeros(tok)));
+            vals.push(
+                math_canonical(&c_string_until_nul(tok)).unwrap_or_else(|| add_leading_zeros(tok)),
+            );
         }
     }
     let n = vals.len();

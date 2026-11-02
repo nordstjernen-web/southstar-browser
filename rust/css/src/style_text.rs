@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul_owned;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use southstar_dom::{Kind, Node, ancestors_and_self, attrs, children};
@@ -64,13 +65,6 @@ fn frame_scope_id(style: Node) -> Option<Vec<u8>> {
         .map(scope_id)
 }
 
-fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
-    if let Some(end) = text.iter().position(|&c| c == 0) {
-        text.truncate(end);
-    }
-    text
-}
-
 pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
     if style.element_name() != Some(b"style") {
         return None;
@@ -87,10 +81,10 @@ pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
         return None;
     }
     if let Some(host_id) = shadow_scope_id(style) {
-        return Some(until_nul(scoped_css(&text, &host_id, false)));
+        return Some(until_nul_owned(scoped_css(&text, &host_id, false)));
     }
     if let Some(frame_id) = frame_scope_id(style) {
-        return Some(until_nul(scoped_css(&text, &frame_id, true)));
+        return Some(until_nul_owned(scoped_css(&text, &frame_id, true)));
     }
     Some(text)
 }
@@ -98,5 +92,5 @@ pub fn style_element_text(style: Node) -> Option<Vec<u8>> {
 pub fn shadow_adopted_text(root: Node) -> Option<Vec<u8>> {
     let css = root.attr(ADOPTED_CSS_ATTR).filter(|css| !css.is_empty())?;
     let host_id = shadow_host_scope_id(root)?;
-    Some(until_nul(scoped_css(css.to_bytes(), &host_id, false)))
+    Some(until_nul_owned(scoped_css(css.to_bytes(), &host_id, false)))
 }

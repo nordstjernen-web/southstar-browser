@@ -2,10 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
-use crate::ffi::{Js, cstring};
+use crate::ffi::Js;
 
 pub type Blob = (Arc<[u8]>, Option<Vec<u8>>);
 
@@ -34,7 +35,7 @@ fn registry() -> MutexGuard<'static, Registry> {
 }
 
 fn key(url: &[u8]) -> Vec<u8> {
-    cstring(url).into_bytes()
+    c_string_until_nul(url).into_bytes()
 }
 
 pub(crate) fn add_page(js: Js) -> bool {
@@ -61,7 +62,7 @@ pub(crate) fn put(js: Js, url: &[u8], bytes: &[u8], kind: Option<&[u8]>) {
     let entry = Entry {
         bytes: bytes.into(),
         kind: kind
-            .map(|k| cstring(k).into_bytes())
+            .map(|k| c_string_until_nul(k).into_bytes())
             .filter(|k| !k.is_empty()),
     };
     registry()

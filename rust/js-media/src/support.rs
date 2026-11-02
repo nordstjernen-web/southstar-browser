@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::until_nul_str;
 
 use crate::{JsResult, ffi, get, set};
 
@@ -48,10 +49,6 @@ fn is_c_space(c: char) -> bool {
 
 fn strip(text: &str) -> &str {
     text.trim_matches(is_c_space)
-}
-
-fn until_nul(text: &str) -> &str {
-    text.split('\0').next().unwrap_or_default()
 }
 
 fn codec_supported(codec: &str) -> bool {
@@ -102,7 +99,7 @@ fn container_supported(container: &str) -> bool {
 }
 
 pub(crate) fn type_support(media_type: &str) -> &'static str {
-    let media_type = until_nul(media_type);
+    let media_type = until_nul_str(media_type);
     if media_type.is_empty() {
         return "";
     }
@@ -141,7 +138,7 @@ pub(crate) fn is_type_supported(scope: &mut Scope<'_>, _: &Value, args: &[Value]
     let Ok(text) = scope.to_string(arg) else {
         return Ok(Value::boolean(false));
     };
-    let lowered = until_nul(&text).to_ascii_lowercase();
+    let lowered = until_nul_str(&text).to_ascii_lowercase();
     let (container, _) = split_type(&lowered);
     let supported = SEGMENTED.contains(&container) && !type_support(&text).is_empty();
     Ok(Value::boolean(supported))
@@ -176,7 +173,7 @@ pub(crate) fn decoding_info(scope: &mut Scope<'_>, _: &Value, args: &[Value]) ->
         let audio = get(scope, config, "audio");
         let kind_ok = kind
             .as_deref()
-            .is_none_or(|kind| matches!(until_nul(kind), "file" | "media-source"));
+            .is_none_or(|kind| matches!(until_nul_str(kind), "file" | "media-source"));
         if kind_ok && (video.is_object() || audio.is_object()) {
             supported = config_supported(scope, &video) && config_supported(scope, &audio);
         }

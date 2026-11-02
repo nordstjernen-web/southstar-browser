@@ -13,6 +13,7 @@ homepage.workspace = true
 libav = []
 
 [dependencies]
+southstar-unicode = { path = "../unicode", version = "=1.0.7-dev" }
 southstar-anim = { path = "../anim", version = "=1.0.7-dev" }
 southstar-config = { path = "../config", version = "=1.0.7-dev" }
 southstar-css = { path = "../css", version = "=1.0.7-dev" }

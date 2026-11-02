@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi::cairo::Surface;
 use crate::ffi::context as host;
@@ -22,15 +23,8 @@ enum ContextType {
     Bitmap,
 }
 
-fn c_text(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = bytes.iter().position(|&c| c == 0) {
-        bytes.truncate(nul);
-    }
-    bytes
-}
-
 fn context_type(scope: &mut Scope<'_>, v: &Value) -> Result<ContextType, Value> {
-    let t = c_text(scope.to_bytes(v)?);
+    let t = until_nul_owned(scope.to_bytes(v)?);
     Ok(match t.as_slice() {
         b"2d" => ContextType::TwoD,
         b"webgl" | b"experimental-webgl" => ContextType::WebGl,

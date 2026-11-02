@@ -4,10 +4,12 @@
 
 use core::ffi::{CStr, c_char, c_int, c_void};
 use core::ptr;
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::io::Write;
 use std::time::Duration;
 
-use southstar_ipc::{Conn, Head, set_bufsize, until_nul};
+use southstar_ipc::{Conn, Head, set_bufsize};
 
 use crate::engine::{self, Page};
 use crate::ffi::new_session;
@@ -32,7 +34,7 @@ fn env(name: &CStr) -> Option<Vec<u8>> {
 
 fn selftest(url: &[u8]) -> c_int {
     engine::init();
-    let Some(page) = Page::open(&engine::cstring(url), 1280, 720.0, 25000, None) else {
+    let Some(page) = Page::open(&c_string_until_nul(url), 1280, 720.0, 25000, None) else {
         return 1;
     };
     let mut fb = vec![0u8; 1280 * 4 * 720];
@@ -100,7 +102,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
     if let Some(scheme) = env(c"NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {
         engine::set_color_scheme(scheme == b"dark");
     }
-    let self_exe = engine::cstring(args[0]);
+    let self_exe = c_string_until_nul(args[0]);
     engine::sandbox(Some(&self_exe));
     southstar_threaddump::install_signal(Some(b"southstar-renderer"));
     let bufsz = (size + 65536).min(0x7fff_ffff) as c_int;

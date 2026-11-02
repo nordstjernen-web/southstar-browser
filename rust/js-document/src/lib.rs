@@ -45,10 +45,3 @@ pub(crate) fn document_for(scope: &Scope<'_>, this: &Value) -> Option<Element> {
 pub(crate) fn element_named(node: Node<'_>, tag: &str) -> bool {
     node.element_name() == Some(tag.as_bytes())
 }
-
-pub(crate) fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |nul| &bytes[..nul])
-}

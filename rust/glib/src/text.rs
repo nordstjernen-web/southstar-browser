@@ -5,7 +5,7 @@
 use core::cmp::Ordering;
 use core::ffi::{CStr, c_char, c_int};
 use core::ptr::{self, NonNull};
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use crate::GError;
 
@@ -92,19 +92,14 @@ pub fn local_time_zone_identifier() -> Option<Vec<u8>> {
     id
 }
 
-fn until_nul(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 pub fn utf8_collate(a: &[u8], b: &[u8]) -> Ordering {
-    let (a, b) = (until_nul(a), until_nul(b));
+    let (a, b) = (c_string_until_nul(a), c_string_until_nul(b));
     // SAFETY: both arguments are NUL-terminated strings that outlive the call.
     unsafe { g_utf8_collate(a.as_ptr(), b.as_ptr()) }.cmp(&0)
 }
 
 pub fn convert(text: &[u8], to: &[u8], from: &[u8]) -> Option<Vec<u8>> {
-    let (to, from) = (until_nul(to), until_nul(from));
+    let (to, from) = (c_string_until_nul(to), c_string_until_nul(from));
     let len = isize::try_from(text.len()).ok()?;
     let mut written = 0usize;
     // SAFETY: text is len readable bytes, both codeset names are NUL-terminated and the null out-parameters are optional.

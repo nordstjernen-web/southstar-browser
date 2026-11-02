@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CStr;
 
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS};
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::{Element, JsResult, c_string, ffi};
+use crate::{Element, JsResult, ffi};
 
 const HIDDEN: Attributes = Attributes {
     writable: false,
@@ -85,7 +86,7 @@ fn put_forwards(scope: &mut Scope<'_>, this: &Value, args: &[Value], attr: &CStr
         return Ok(Value::undefined());
     };
     let value = args.first().cloned().unwrap_or_else(Value::undefined);
-    let text = c_string(&scope.to_bytes(&value)?);
+    let text = c_string_until_nul(&scope.to_bytes(&value)?);
     ffi::set_attr(ffi::js_of(scope), node, attr, &text);
     Ok(Value::undefined())
 }

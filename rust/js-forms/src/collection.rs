@@ -4,6 +4,7 @@
 
 use southstar_dom::controls;
 use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi::{self, Page};
 use crate::{Element, JsResult, named, text_is};
@@ -88,7 +89,7 @@ pub(crate) fn array_named_item(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     let Some(arg) = args.first().filter(|a| a.is_string()) else {
         return Ok(Value::null());
     };
-    let name = crate::until_nul(scope.to_bytes(arg)?);
+    let name = until_nul_owned(scope.to_bytes(arg)?);
     if name.is_empty() {
         return Ok(Value::null());
     }
@@ -119,7 +120,7 @@ pub(crate) fn set_radio_list_value(
     let Some(arg) = args.first() else {
         return Ok(Value::undefined());
     };
-    let wanted = crate::until_nul(scope.to_bytes(arg)?);
+    let wanted = until_nul_owned(scope.to_bytes(arg)?);
     let snapshot = ffi::live_snapshot(scope, this);
     let radios: Vec<Element> = items(scope, &snapshot)
         .iter()

@@ -2,15 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
+use southstar_unicode::c_string_until_nul;
 
 pub(crate) fn html_escape(text: &[u8]) -> Vec<u8> {
-    southstar_html_util::escape_text(cstring(text).as_bytes())
+    southstar_html_util::escape_text(c_string_until_nul(text).as_bytes())
 }
 
 #[cfg_attr(not(feature = "poppler"), allow(dead_code))]

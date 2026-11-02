@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::until_nul_owned;
 pub mod checkable;
 pub mod collection;
 pub(crate) mod ffi;
@@ -69,13 +70,6 @@ pub(crate) fn type_of(node: Element) -> Option<&'static CStr> {
 
 pub(crate) fn non_empty(text: Option<&CStr>) -> Option<&CStr> {
     text.filter(|t| !t.is_empty())
-}
-
-pub(crate) fn until_nul(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(end) = bytes.iter().position(|&b| b == 0) {
-        bytes.truncate(end);
-    }
-    bytes
 }
 
 pub(crate) fn hidden_child(node: Element) -> bool {
@@ -144,7 +138,7 @@ pub(crate) fn index(scope: &mut Scope<'_>, object: &Value, i: u32) -> Value {
 }
 
 pub(crate) fn c_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    scope.to_bytes(value).ok().map(until_nul)
+    scope.to_bytes(value).ok().map(until_nul_owned)
 }
 
 pub(crate) fn to_uint32(scope: &mut Scope<'_>, value: &Value) -> JsResult<u32> {

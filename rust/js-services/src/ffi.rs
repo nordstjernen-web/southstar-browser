@@ -5,6 +5,7 @@
 #[cfg(windows)]
 use core::ffi::{c_int, c_uint};
 use core::ops::ControlFlow;
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -190,11 +191,6 @@ pub(crate) fn dispatch_with_event(
     event: &Value,
 ) {
     nsr_target_dispatch_with_event(scope, target, kind, event);
-}
-
-fn until_nul(text: &str) -> &[u8] {
-    let text = text.as_bytes();
-    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
 }
 
 pub(crate) fn media_query_matches(query: Option<&str>) -> bool {

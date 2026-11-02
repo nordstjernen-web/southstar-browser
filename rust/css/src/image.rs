@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use crate::calc::{self, MAX_DEPTH};
@@ -12,11 +13,6 @@ use crate::scan::{
     is_ws, match_paren_quoted, scan_until, skip_ws, starts_with_ci, strip, trim_range,
 };
 use crate::units;
-
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
 
 pub(crate) fn text_starts_image_set(text: &[u8]) -> bool {
     let rest = &text[skip_ws(text, 0, text.len())..];
@@ -263,7 +259,7 @@ fn number_with(v: f64, suffix: &[u8]) -> Vec<u8> {
 }
 
 fn resolution_canonical(tok: &[u8], computed: bool) -> Option<Vec<u8>> {
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     let s = text.to_bytes();
     if token_is_math_fn(s) {
         let mut p = 0;
@@ -536,7 +532,7 @@ pub(crate) fn pick_image_set_url(t: &[u8]) -> Option<Vec<u8>> {
         let mut res = 1.0;
         p = skip_ws(t, p, t.len());
         if at(p) != 0 && at(p) != b',' && at(p) != b')' {
-            res = ffi::strtod(&c_text(&t[p..]), 0).0;
+            res = ffi::strtod(&c_string_until_nul(&t[p..]), 0).0;
             while at(p) != 0 && at(p) != b',' && at(p) != b')' {
                 p += 1;
             }

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_dom::serialize::collect_text;
@@ -26,10 +27,6 @@ const LIVE_LINKS: c_int = 10;
 
 fn utf8_char_count(bytes: &[u8]) -> usize {
     bytes.iter().filter(|&&b| b & 0xc0 != 0x80).count()
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes.split(|&b| b == 0).next().unwrap_or_default()
 }
 
 fn c_string(bytes: Vec<u8>) -> CString {

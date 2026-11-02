@@ -2,9 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::ffi::CString;
 
 use southstar_css_syntax::Kind as SyntaxKind;
 
@@ -28,11 +28,6 @@ struct PangoMemo {
     map: HashMap<Vec<u8>, Vec<u8>>,
     generation: u64,
     oracle: u32,
-}
-
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
 }
 
 fn token_clean(raw: &[u8]) -> Vec<u8> {
@@ -399,9 +394,10 @@ fn size_token_valid(tok: &[u8]) -> bool {
         return true;
     }
     if is_math_prefix(tok) {
-        return calc::parse_calc(&c_text(tok)).is_some();
+        return calc::parse_calc(&c_string_until_nul(tok)).is_some();
     }
-    units::parse_length(&c_text(tok)).is_some_and(|(v, unit)| unit != NUMBER && v >= 0.0)
+    units::parse_length(&c_string_until_nul(tok))
+        .is_some_and(|(v, unit)| unit != NUMBER && v >= 0.0)
 }
 
 fn line_height_token_valid(tok: &[u8]) -> bool {
@@ -409,9 +405,9 @@ fn line_height_token_valid(tok: &[u8]) -> bool {
         return true;
     }
     if is_math_prefix(tok) {
-        return calc::parse_calc(&c_text(tok)).is_some();
+        return calc::parse_calc(&c_string_until_nul(tok)).is_some();
     }
-    units::parse_length(&c_text(tok)).is_some_and(|(v, _)| v >= 0.0)
+    units::parse_length(&c_string_until_nul(tok)).is_some_and(|(v, _)| v >= 0.0)
 }
 
 pub(crate) fn shorthand_slash(tok: &[u8]) -> Option<usize> {
@@ -458,7 +454,7 @@ fn weight_token(t: &[u8]) -> bool {
     if !t.first().is_some_and(u8::is_ascii_digit) {
         return false;
     }
-    let text = c_text(t);
+    let text = c_string_until_nul(t);
     let (w, end) = ffi::strtod(&text, 0);
     end == text.to_bytes().len() && (1.0..=1000.0).contains(&w)
 }
@@ -612,7 +608,7 @@ fn random_item_valid(item: &[u8]) -> bool {
     }
     for (i, t) in tok.iter().enumerate() {
         let ok = if i == 1 && tok[0].eq_ignore_ascii_case(b"fixed") {
-            let text = c_text(t);
+            let text = c_string_until_nul(t);
             ffi::strtod(&text, 0).1 == text.to_bytes().len()
         } else {
             ident_valid(t) || (t.starts_with(b"--") && t.len() > 2)
@@ -817,7 +813,7 @@ fn variation_read_value(s: &[u8], pos: &mut usize) -> bool {
     if p >= s.len() || s[p] == b',' {
         return false;
     }
-    let text = c_text(s);
+    let text = c_string_until_nul(s);
     let (v, end) = ffi::strtod(&text, p);
     if end == p || !v.is_finite() {
         return false;

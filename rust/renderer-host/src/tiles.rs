@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_int, c_long};
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -34,13 +35,6 @@ struct Request {
     vp_held: c_long,
     have: Vec<c_long>,
     hold: Vec<c_long>,
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 fn long_field(body: &[u8], key: &str, default: c_long) -> c_long {

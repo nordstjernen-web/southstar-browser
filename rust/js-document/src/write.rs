@@ -4,13 +4,12 @@
 
 use core::ffi::CStr;
 use std::cell::RefCell;
-use std::ffi::CString;
 
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{Element, JsResult, until_nul};
+use crate::{Element, JsResult};
 
 const INVALID_STATE_ERR: i32 = 11;
 
@@ -453,8 +452,4 @@ fn markup_is_complete(s: &[u8]) -> bool {
         }
     }
     open.is_empty()
-}
-
-pub(crate) fn c_string(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
 }

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
@@ -534,7 +535,7 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
             t.h1_status_line(&line);
             status_parsed = true;
         } else if !t.informational {
-            if let Some((name, value)) = h1::split_header(h1::until_nul(&line)) {
+            if let Some((name, value)) = h1::split_header(until_nul(&line)) {
                 if name.eq_ignore_ascii_case(b"transfer-encoding") {
                     if value.len() >= 7 && value[..7].eq_ignore_ascii_case(b"chunked") {
                         chunked = true;
@@ -1364,7 +1365,7 @@ pub fn upgrade(req: &Request, abort: &dyn Fn() -> bool) -> Result<Upgraded, Stri
         let Some((start, end)) = read_line(&mut stream, &mut buf, &mut pos, &give_up) else {
             return Err(String::from("connection closed during the upgrade"));
         };
-        let line = h1::until_nul(&buf[start..end]).to_vec();
+        let line = until_nul(&buf[start..end]).to_vec();
         if line.is_empty() {
             if status / 100 == 1 && status != 101 {
                 status = 0;

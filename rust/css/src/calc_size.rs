@@ -4,10 +4,11 @@
 
 use crate::calc::{Calc, Parsed};
 use crate::math::math_canonical;
-use crate::property::{Body, Value, c_text, calc_value, eq, length, lower};
+use crate::property::{Body, Value, calc_value, eq, length, lower};
 use crate::scan::{match_close_paren, starts_with_ci, strip};
 use crate::text::split_top_level_commas;
 use crate::units::{EM, PERCENT, PX, REM, Unit, VH, VMAX, VMIN, VW};
+use southstar_unicode::c_string_until_nul;
 
 pub const FN_CALC_SIZE: u8 = 32;
 
@@ -225,7 +226,7 @@ fn basis(t: &[u8]) -> Option<Basis> {
     }
     let linear = length_percentage(t)?;
     let text = if t.contains(&b'(') {
-        math_canonical(&c_text(t)).unwrap_or_else(|| lower(t))
+        math_canonical(&c_string_until_nul(t)).unwrap_or_else(|| lower(t))
     } else {
         lower(t)
     };
@@ -252,7 +253,9 @@ fn is_zero(c: &Calc) -> bool {
 
 fn expression_text(expr: &[u8], size: f64, constant: &Calc) -> Vec<u8> {
     let zero = substitute(expr, b"0px");
-    let canonical = math_canonical(&c_text(&[b"calc(".as_slice(), &zero, b")"].concat()));
+    let canonical = math_canonical(&c_string_until_nul(
+        &[b"calc(".as_slice(), &zero, b")"].concat(),
+    ));
     let constant_text = match canonical {
         Some(text) if !is_zero(constant) => {
             let inner = text

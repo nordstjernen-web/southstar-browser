@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
+use southstar_unicode::until_nul_owned;
 use std::rc::Rc;
 
 use southstar_js_engine::{Attributes, Scope, Value};
@@ -82,10 +83,10 @@ fn log_exception(scope: &mut Scope<'_>, error: &Value, kind: &str) {
         scope.to_bytes(&stack).ok()
     };
     let mut line = format!("JS error in WebSocket {kind}: ").into_bytes();
-    line.extend_from_slice(&crate::until_nul(message));
+    line.extend_from_slice(&until_nul_owned(message));
     if let Some(stack) = stack {
         line.push(b'\n');
-        line.extend_from_slice(&crate::until_nul(stack));
+        line.extend_from_slice(&until_nul_owned(stack));
     }
     Js::of(scope).log_line(&line);
 }
@@ -377,7 +378,7 @@ fn page_origin(js: Js, realm: Realm) -> Option<Vec<u8>> {
 }
 
 fn resolve_target(scope: &mut Scope<'_>, js: Js, url: &Value) -> JsResult<Vec<u8>> {
-    let raw = crate::until_nul(scope.to_bytes(url)?);
+    let raw = until_nul_owned(scope.to_bytes(url)?);
     let page = js.page_url();
     Ok(page
         .as_deref()

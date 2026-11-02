@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul_owned;
 mod entry;
 mod ffi;
 mod navigation;
@@ -51,15 +52,8 @@ impl Trace for PerformanceHandle {
 #[derive(Clone)]
 struct ObserverHandle(Rc<Observer>);
 
-fn c_text(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = bytes.iter().position(|&c| c == 0) {
-        bytes.truncate(nul);
-    }
-    bytes
-}
-
 fn text_of(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    scope.to_bytes(value).ok().map(c_text)
+    scope.to_bytes(value).ok().map(until_nul_owned)
 }
 
 fn realm_key(js: Js, timeline: usize) -> usize {

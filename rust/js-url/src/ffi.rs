@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use std::ffi::CString;
+use southstar_unicode::until_nul;
 
 use southstar_glib as glib;
 use southstar_js_bind::host::{self, HostKind};
@@ -43,15 +43,6 @@ impl Js {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Source(glib::SourceId);
-
-pub(crate) fn cstring(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
-}
 
 pub(crate) fn url_resolve(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(base.map(until_nul), href)

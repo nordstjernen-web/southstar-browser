@@ -7,6 +7,7 @@ use core::cell::{Cell, Ref, RefCell, RefMut};
 use core::ffi::{CStr, c_char, c_int, c_long, c_void};
 use core::marker::PhantomData;
 use core::ptr;
+use southstar_unicode::c_string_until_nul;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -70,11 +71,6 @@ fn next_stamp() -> u64 {
 
 fn text_ptr(text: &Option<CString>) -> *const c_char {
     text.as_ref().map_or(ptr::null(), |t| t.as_ptr())
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 #[derive(Clone, Copy)]
@@ -756,7 +752,7 @@ fn decode_body(bytes: &[u8]) -> Decoded {
 fn set_error(img: &mut State, message: &[u8]) {
     img.failed = true;
     img.failed_at_us = monotonic_us();
-    img.error = Some(cstring(message));
+    img.error = Some(c_string_until_nul(message));
 }
 
 fn apply_decoded_state(img: &mut State, d: Decoded, content_type: Option<&[u8]>, body_len: usize) {
@@ -891,7 +887,7 @@ fn record_response(img: &mut State, resp: &Response) {
     img.timing_allow_origin = resp
         .raw_headers()
         .and_then(|raw| southstar_net::raw_header_values(raw.to_bytes(), b"timing-allow-origin"))
-        .map(|values| cstring(&values));
+        .map(|values| c_string_until_nul(&values));
     img.body_size = resp.body().map_or(0, |b| b.len() as i64);
 }
 

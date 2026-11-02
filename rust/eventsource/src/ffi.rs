@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
+use southstar_unicode::until_nul;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -181,10 +182,6 @@ fn connect_once(source: &Arc<Source>) -> bool {
     };
     southstar_http::fetch(&request, &mut transfer);
     !transfer.parser.fatal && !blocked.get()
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 
 fn worker(source: Arc<Source>) {

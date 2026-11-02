@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul;
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard};
@@ -173,10 +174,6 @@ fn attr<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
 
 fn lower(text: &[u8]) -> Vec<u8> {
     text.to_ascii_lowercase()
-}
-
-fn until_nul(text: &[u8]) -> &[u8] {
-    &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())]
 }
 
 fn tokens(value: &[u8]) -> impl Iterator<Item = &[u8]> {

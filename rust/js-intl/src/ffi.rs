@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -44,11 +45,6 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn _gmtime64_s(out: *mut Tm, time: *const i64) -> c_int;
     fn _localtime64_s(out: *mut Tm, time: *const i64) -> c_int;
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 pub(crate) fn real_time_ms() -> f64 {
@@ -114,7 +110,7 @@ impl LogAttrs {
 }
 
 pub(crate) fn text_language(locale: &[u8]) -> Option<CString> {
-    (!locale.is_empty()).then(|| cstring(locale))
+    (!locale.is_empty()).then(|| c_string_until_nul(locale))
 }
 
 pub(crate) fn log_attrs(text: &CStr, chars: usize, language: Option<&CString>) -> LogAttrs {
@@ -127,7 +123,7 @@ pub(crate) fn log_attrs(text: &CStr, chars: usize, language: Option<&CString>) -
 }
 
 pub(crate) fn c_text(bytes: &[u8]) -> CString {
-    cstring(bytes)
+    c_string_until_nul(bytes)
 }
 
 #[cfg(windows)]

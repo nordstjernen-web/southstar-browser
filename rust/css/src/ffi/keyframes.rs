@@ -5,6 +5,7 @@
 use super::computed_units::RawStyle;
 use crate::keyframes;
 use crate::transform::Transform;
+use southstar_unicode::until_nul_owned;
 
 #[derive(Clone)]
 pub struct KeyframeStop {
@@ -17,13 +18,6 @@ pub struct KeyframeStop {
 pub struct Keyframes {
     name: Vec<u8>,
     stops: Vec<KeyframeStop>,
-}
-
-fn until_nul(mut text: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = text.iter().position(|&c| c == 0) {
-        text.truncate(nul);
-    }
-    text
 }
 
 impl KeyframeStop {
@@ -56,7 +50,7 @@ impl KeyframeStop {
             .raw_props
             .as_deref()
             .and_then(|raw| style.resolve_vars(raw))
-            .map(until_nul);
+            .map(until_nul_owned);
         let merged = resolved.as_deref().and_then(|text| {
             keyframes::resolved_transform(text, self.transform.unwrap_or_default())
         });

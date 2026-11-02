@@ -5,6 +5,8 @@
 use core::ffi::CStr;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use core::ffi::{c_char, c_int};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -147,11 +149,6 @@ fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
     }
     result.extend_from_slice(trailing);
     result
-}
-
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

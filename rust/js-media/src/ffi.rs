@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_uint};
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -50,11 +51,6 @@ use southstar_js_events::nsr_event_adopt_interface;
 use southstar_js_events::nsr_event_new;
 
 use southstar_js_dispatch::nsr_target_dispatchEvent;
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
-}
 
 pub(crate) fn c_text(text: &str) -> CString {
     CString::new(until_nul(text.as_bytes())).unwrap_or_default()

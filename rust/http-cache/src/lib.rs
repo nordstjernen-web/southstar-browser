@@ -2,9 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 mod ffi;
 
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::sync::Mutex;
 
 use southstar_sqlite::{Db, Step};
@@ -53,11 +54,6 @@ pub struct Response<'a> {
     pub expires_header: Option<&'a [u8]>,
     pub vary: Option<&'a [u8]>,
     pub body: &'a [u8],
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
@@ -239,7 +235,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
             .db
             .as_ref()?
             .prepare(c"SELECT key,vary FROM entries WHERE base_key=?")?;
-        st.bind_text(1, Some(&cstring(base_key)));
+        st.bind_text(1, Some(&c_string_until_nul(base_key)));
         while st.step() {
             let stored = st.column_text(0);
             let vary = st.column_text(1);
@@ -265,7 +261,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
         else {
             return;
         };
-        st.bind_text(1, Some(&cstring(key)));
+        st.bind_text(1, Some(&c_string_until_nul(key)));
         st.step();
     }
 
@@ -278,7 +274,7 @@ body_size INTEGER NOT NULL DEFAULT 0)",
             return;
         };
         st.bind_int64(1, ffi::now_seconds());
-        st.bind_text(2, Some(&cstring(key)));
+        st.bind_text(2, Some(&c_string_until_nul(key)));
         st.step();
     }
 
@@ -330,7 +326,7 @@ pub fn init() {
     ffi::restrict_to_owner(&dir, true);
     cache.dir = Some(dir.clone());
     let db_path = ffi::build_filename(&[&dir, b"http-cache.sqlite"]);
-    let db = match Db::open(&cstring(&db_path)) {
+    let db = match Db::open(&c_string_until_nul(&db_path)) {
         Ok(db) => db,
         Err(message) => {
             ffi::warn(
@@ -389,7 +385,7 @@ pub fn get(url: &[u8], partition: Option<&[u8]>, headers: &[&[u8]]) -> Option<En
     let mut st = cache.db.as_ref()?.prepare(
         c"SELECT final_url,status,content_type,cors_allow_origin,etag,last_modified,expires_at,fetched_at,body_size,headers FROM entries WHERE key=?",
     )?;
-    st.bind_text(1, Some(&cstring(&key)));
+    st.bind_text(1, Some(&c_string_until_nul(&key)));
     if !st.step() {
         return None;
     }
@@ -506,11 +502,14 @@ pub fn put(url: &[u8], partition: Option<&[u8]>, response: &Response<'_>, header
         return;
     };
     let now = ffi::now_seconds();
-    let text = |value: Option<&[u8]>| value.map(cstring);
-    st.bind_text(1, Some(&cstring(&key)));
-    st.bind_text(2, Some(&cstring(&base)));
-    st.bind_text(3, Some(&cstring(url)));
-    st.bind_text(4, Some(&cstring(response.final_url.unwrap_or(url))));
+    let text = |value: Option<&[u8]>| value.map(c_string_until_nul);
+    st.bind_text(1, Some(&c_string_until_nul(&key)));
+    st.bind_text(2, Some(&c_string_until_nul(&base)));
+    st.bind_text(3, Some(&c_string_until_nul(url)));
+    st.bind_text(
+        4,
+        Some(&c_string_until_nul(response.final_url.unwrap_or(url))),
+    );
     st.bind_int64(5, response.status);
     st.bind_text(6, text(response.content_type).as_deref());
     st.bind_text(7, text(response.cors_allow_origin).as_deref());
@@ -566,7 +565,7 @@ pub fn promote_304(
     let Some(mut st) = db.prepare(c"SELECT expires_at FROM entries WHERE key=?") else {
         return;
     };
-    st.bind_text(1, Some(&cstring(&key)));
+    st.bind_text(1, Some(&c_string_until_nul(&key)));
     if !st.step() {
         return;
     }
@@ -585,6 +584,6 @@ pub fn promote_304(
     st.bind_int64(1, expires_at);
     st.bind_int64(2, now);
     st.bind_int64(3, now);
-    st.bind_text(4, Some(&cstring(&key)));
+    st.bind_text(4, Some(&c_string_until_nul(&key)));
     st.step();
 }

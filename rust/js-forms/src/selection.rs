@@ -4,6 +4,7 @@
 
 use southstar_dom::controls::{self, Step};
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi::{self, Page};
 use crate::{Element, JsResult, length, named, to_uint32, type_of, uint32, value};
@@ -97,7 +98,7 @@ fn position(scope: &mut Scope<'_>, this: &Value, property: &str) -> u32 {
 }
 
 fn direction_arg(scope: &mut Scope<'_>, value: &Value) -> JsResult<&'static str> {
-    let text = crate::until_nul(scope.to_bytes(value)?);
+    let text = until_nul_owned(scope.to_bytes(value)?);
     Ok(match text.as_slice() {
         b"forward" => "forward",
         b"backward" => "backward",
@@ -150,7 +151,7 @@ pub fn selection_direction(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> 
         .get(this, "_selDir")
         .unwrap_or_else(|_| Value::undefined());
     let text = if stored.is_string() {
-        scope.to_bytes(&stored).map(crate::until_nul).ok()
+        scope.to_bytes(&stored).map(until_nul_owned).ok()
     } else {
         None
     };
@@ -287,7 +288,7 @@ pub fn set_range_text(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
     let mode = match args.get(3).filter(|m| !m.is_undefined()) {
         None => b"preserve".to_vec(),
         Some(m) => {
-            let requested = crate::until_nul(scope.to_bytes(m)?);
+            let requested = until_nul_owned(scope.to_bytes(m)?);
             if !matches!(
                 requested.as_slice(),
                 b"select" | b"start" | b"end" | b"preserve"

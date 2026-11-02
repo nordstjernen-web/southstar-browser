@@ -2,10 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::time::Instant;
 
 use crate::decode::{DecodeError, Decoder, Encoding, codings};
-use crate::h1::{status_code, until_nul};
+use crate::h1::status_code;
 
 pub const MAX_HEADER_BYTES: usize = 1024 * 1024;
 

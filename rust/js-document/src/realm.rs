@@ -4,10 +4,12 @@
 
 use southstar_dom::Kind;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 
 use crate::ffi::{self, Js};
-use crate::write::{append_args, c_string, dynamic_markup_active, throw_during_construction};
-use crate::{Element, JsResult, element_named, until_nul};
+use crate::write::{append_args, dynamic_markup_active, throw_during_construction};
+use crate::{Element, JsResult, element_named};
 
 const REALM_MARK: &str = "\u{fffd}realmdoc";
 const WRITE_BUFFER: &str = "\u{fffd}wbuf";
@@ -397,7 +399,7 @@ fn get_element_by_id(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     let Ok(id) = scope.to_bytes(id) else {
         return Ok(Value::null());
     };
-    let id = c_string(&id);
+    let id = c_string_until_nul(&id);
     match southstar_dom::index::find_by_id(root, &id) {
         Some(found) => Ok(ffi::wrap_node(scope, Some(found))),
         None => Ok(Value::null()),

@@ -3,11 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_dom::attrs;
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Element, INVALID_CHARACTER_ERR, JsResult, SYNTAX_ERR, c_string, ffi, string_arg};
+use crate::{Element, INVALID_CHARACTER_ERR, JsResult, SYNTAX_ERR, ffi, string_arg};
 
 const LINK_REL_TOKENS: &[&str] = &[
     "alternate",
@@ -79,7 +80,7 @@ fn update(scope: &Scope<'_>, node: Element, attr: &CStr, set: &TokenSet) {
         return;
     }
     let joined = set.join(&b' ');
-    ffi::set_attr(ffi::js_of(scope), node, attr, &c_string(&joined));
+    ffi::set_attr(ffi::js_of(scope), node, attr, &c_string_until_nul(&joined));
 }
 
 fn validate(scope: &mut Scope<'_>, token: &[u8]) -> JsResult<()> {
@@ -281,7 +282,7 @@ pub(crate) fn toggle(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsR
     let js = ffi::js_of(scope);
     let value = current(node, attr).filter(|v| !v.is_empty());
     if value.is_none() && force != Some(false) {
-        ffi::set_attr(js, node, attr, &c_string(&token));
+        ffi::set_attr(js, node, attr, &c_string_until_nul(&token));
         return Ok(Value::boolean(true));
     }
     let mut set = parse(value);

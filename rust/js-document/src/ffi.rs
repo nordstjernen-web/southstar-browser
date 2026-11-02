@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_dom::{Node, Tree};
@@ -29,7 +30,7 @@ impl Js {
 }
 
 fn c_bytes(bytes: &[u8]) -> CString {
-    CString::new(crate::until_nul(bytes)).unwrap_or_default()
+    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
@@ -222,7 +223,7 @@ pub(crate) fn cookie_store_from_js(url: &[u8], cookie: &[u8]) {
 }
 
 pub(crate) fn http_date(date: &[u8]) -> i64 {
-    southstar_net::http_date(crate::until_nul(date))
+    southstar_net::http_date(until_nul(date))
 }
 
 pub(crate) fn local_now_formatted(format: &CStr) -> Option<Vec<u8>> {
@@ -383,7 +384,7 @@ pub(crate) fn parse_fragment(context: Option<&CStr>, markup: &[u8], scripting: b
 }
 
 pub(crate) fn url_host(url: &[u8]) -> Option<Vec<u8>> {
-    southstar_url::bytes::host_from(crate::until_nul(url))
+    southstar_url::bytes::host_from(until_nul(url))
 }
 
 const LIVE_DOC_TAG: c_int = 3;

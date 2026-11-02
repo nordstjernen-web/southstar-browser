@@ -3,9 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{c_int, c_uint};
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
-use super::declarations::until_nul;
 use super::selector_view::{GroupRef, SelectorRef};
 use crate::selector::{self, AttrPred, Compound, FLAGS, PseudoPred, Selector};
 
@@ -53,10 +54,6 @@ pub(crate) struct PseudoData {
     pub(super) of_group: Option<Vec<SelectorData>>,
 }
 
-fn c_text(text: &[u8]) -> CString {
-    CString::new(until_nul(text)).unwrap_or_default()
-}
-
 fn text(text: Option<&[u8]>) -> Option<Vec<u8>> {
     text.map(|text| until_nul(text).to_vec())
 }
@@ -71,7 +68,7 @@ fn groups(groups: Option<&Vec<Vec<Selector>>>) -> Option<Vec<Vec<SelectorData>>>
 
 fn attr_data(pred: &AttrPred) -> AttrData {
     AttrData {
-        name: c_text(&pred.name),
+        name: c_string_until_nul(&pred.name),
         op: pred.op,
         value: text(pred.value.as_deref()),
         case_insensitive: pred.case_insensitive,
@@ -93,10 +90,10 @@ fn pseudo_data(pred: &PseudoPred) -> PseudoData {
 
 fn compound_data(c: &Compound) -> CompoundData {
     CompoundData {
-        type_: c.type_.as_deref().map(c_text),
-        id: c.id.as_deref().map(c_text),
+        type_: c.type_.as_deref().map(c_string_until_nul),
+        id: c.id.as_deref().map(c_string_until_nul),
         classes: c.classes.clone(),
-        first_class: c.classes.first().map(|class| c_text(class)),
+        first_class: c.classes.first().map(c_string_until_nul),
         attrs: c.attrs.iter().map(attr_data).collect(),
         pseudos: c.pseudos.iter().map(pseudo_data).collect(),
         matches_any: groups(c.matches_any.as_ref()),

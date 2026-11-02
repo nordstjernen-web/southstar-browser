@@ -4,6 +4,7 @@
 
 use core::ffi::c_int;
 use core::ops::ControlFlow;
+use southstar_unicode::until_nul;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
@@ -12,7 +13,7 @@ use std::sync::{Arc, Condvar, Mutex};
 
 use southstar_cairo::Surface;
 use southstar_glib::MainContext;
-use southstar_ipc::{Conn, Head, until_nul};
+use southstar_ipc::{Conn, Head};
 use southstar_renderer_client::{InprocId, SharedFrame};
 
 use crate::engine::{self, PrintPages, PrintSetup};

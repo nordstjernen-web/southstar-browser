@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_css_color::Color;
 
@@ -99,11 +99,6 @@ impl Value {
     }
 }
 
-pub(crate) fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 pub(crate) fn lower(t: &[u8]) -> Vec<u8> {
     t.to_ascii_lowercase()
 }
@@ -136,11 +131,11 @@ pub(crate) fn contains(hay: &[u8], needle: &[u8]) -> bool {
 }
 
 pub(crate) fn length(t: &[u8]) -> Option<(f64, Unit)> {
-    units::parse_length(&c_text(t))
+    units::parse_length(&c_string_until_nul(t))
 }
 
 pub(crate) fn calc_value(t: &[u8]) -> Option<Parsed> {
-    calc::parse_calc(&c_text(t))
+    calc::parse_calc(&c_string_until_nul(t))
 }
 
 fn split_ws(t: &[u8]) -> Vec<&[u8]> {
@@ -594,7 +589,7 @@ fn layer_list(prop: Prop, t: &[u8]) -> Option<Value> {
 }
 
 fn image_reference(t: &[u8]) -> Option<Value> {
-    if let Some(gr) = gradient::parse_value(&c_text(t)) {
+    if let Some(gr) = gradient::parse_value(&c_string_until_nul(t)) {
         return Some(Value::of(Body::Gradient(Box::new(gr))));
     }
     let start = t.iter().position(|&c| !is_ws(c)).unwrap_or(t.len());
@@ -825,7 +820,7 @@ fn dasharray(t: &[u8]) -> Option<Value> {
             if part.is_empty() {
                 continue;
             }
-            let text = c_text(part);
+            let text = c_string_until_nul(part);
             let (d, mut end) = ffi::strtod(&text, 0);
             while end < part.len() && b"%epxtcmnihra".contains(&part[end]) {
                 end += 1;
@@ -958,7 +953,8 @@ fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
     } else if let Some(parsed) = calc_value(t) {
         let mut value = Value::from_parsed(parsed);
         if folds_relative_units(t) {
-            value.specified = crate::math::math_canonical(&c_text(t)).or_else(|| Some(lower(t)));
+            value.specified =
+                crate::math::math_canonical(&c_string_until_nul(t)).or_else(|| Some(lower(t)));
         }
         Some(value)
     } else {
@@ -1148,7 +1144,7 @@ fn perspective(t: &[u8]) -> Option<Value> {
 }
 
 fn aspect_ratio(t: &[u8]) -> Option<Value> {
-    let text = c_text(t);
+    let text = c_string_until_nul(t);
     let s = text.to_bytes();
     let end = s.len();
     let mut rp = 0;
@@ -1753,7 +1749,7 @@ fn font_weight(t: &[u8]) -> Option<Value> {
         Some(Parsed::Length(v, NUMBER)) => Some(v),
         Some(_) => None,
         None => {
-            let text = c_text(t);
+            let text = c_string_until_nul(t);
             let (d, mut end) = ffi::strtod(&text, 0);
             let s = text.to_bytes();
             while end < s.len() && is_ws(s[end]) {

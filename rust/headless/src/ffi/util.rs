@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::c_int;
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -63,10 +64,6 @@ pub fn ascii_strtoll(s: &[u8]) -> i64 {
         });
     let value = if negative { -magnitude } else { magnitude };
     i64::try_from(value).unwrap_or(if negative { i64::MIN } else { i64::MAX })
-}
-
-fn until_nul(s: &[u8]) -> &[u8] {
-    &s[..s.iter().position(|&b| b == 0).unwrap_or(s.len())]
 }
 
 pub fn strcompress(s: &[u8]) -> CString {

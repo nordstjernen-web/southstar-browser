@@ -3,26 +3,22 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char};
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_config::util;
 use southstar_glib as glib;
-
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 pub(crate) fn warn(message: &[u8]) {
     glib::warning(message);
 }
 
 pub(crate) fn build_filename(dir: &CStr, name: &CStr) -> CString {
-    c_string(&util::build_filename(&[dir.to_bytes(), name.to_bytes()]))
+    c_string_until_nul(&util::build_filename(&[dir.to_bytes(), name.to_bytes()]))
 }
 
 pub(crate) fn user_data_dir() -> CString {
-    c_string(&glib::user_data_dir())
+    c_string_until_nul(&glib::user_data_dir())
 }
 
 pub(crate) fn mkdir_with_parents(path: &CStr, mode: u32) {

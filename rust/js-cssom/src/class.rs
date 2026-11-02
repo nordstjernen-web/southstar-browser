@@ -6,6 +6,7 @@ use southstar_dom::Node;
 use southstar_js_engine::{
     ClassHooks, HostClass, OwnProperty, PropertyKey, Scope, SetFlags, Trace, Value,
 };
+use southstar_unicode::until_nul;
 
 use crate::{declaration, ffi};
 
@@ -56,11 +57,6 @@ pub(crate) fn new_style_decl(scope: &mut Scope<'_>, element: &Value) -> Result<V
         element: element.clone(),
     };
     scope.new_traced_instance(&STYLE_CLASS, None, decl)
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
 }
 
 fn get_own(

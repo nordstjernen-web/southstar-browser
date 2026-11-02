@@ -4,6 +4,7 @@
 
 use core::ffi::{c_char, c_long};
 use core::fmt;
+use southstar_unicode::until_nul;
 
 use crate::ffi::harfbuzz_strings::{normalize_feature, normalize_variation};
 use crate::types::{FontColor, Gravity, SCALE, Stretch, Style, Variant, Weight, font_mask};
@@ -372,11 +373,6 @@ impl core::hash::Hash for FontDescription {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         state.write_u32(FontDescription::hash(self));
     }
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
 }
 
 fn signed_char(b: u8) -> u32 {

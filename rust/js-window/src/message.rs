@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi::{self, Js, Realm};
 use crate::{array_length, existing_page, get, is_nullish, page, set};
@@ -96,7 +97,7 @@ fn origin_of(scope: &mut Scope<'_>, window: &Value) -> Option<Vec<u8>> {
     if !origin.is_string() {
         return None;
     }
-    scope.to_bytes(&origin).ok().map(crate::c_text)
+    scope.to_bytes(&origin).ok().map(until_nul_owned)
 }
 
 fn adopt_data(scope: &mut Scope<'_>, realm: Realm, event: &Value) {
@@ -254,7 +255,7 @@ fn target_origin(scope: &mut Scope<'_>, args: &[Value]) -> Result<(Vec<u8>, Valu
             .get(1)
             .is_none_or(|options| options.is_object() || is_nullish(options));
     if !options_form {
-        let origin = crate::c_text(scope.to_bytes(&args[1])?);
+        let origin = until_nul_owned(scope.to_bytes(&args[1])?);
         let transfer = args.get(2).cloned().unwrap_or_else(Value::undefined);
         return Ok((origin, transfer));
     }
@@ -266,7 +267,7 @@ fn target_origin(scope: &mut Scope<'_>, args: &[Value]) -> Result<(Vec<u8>, Valu
     if origin.is_undefined() {
         return Ok((b"/".to_vec(), transfer));
     }
-    Ok((crate::c_text(scope.to_bytes(&origin)?), transfer))
+    Ok((until_nul_owned(scope.to_bytes(&origin)?), transfer))
 }
 
 fn window_or_global(scope: &mut Scope<'_>, window: &Value, realm: Realm) -> Value {

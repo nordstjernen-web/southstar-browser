@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use crate::calc::{self, Parsed};
 use crate::color::{color_text, parse_color};
@@ -42,11 +42,6 @@ pub struct ShadowList {
 const _: () =
     assert!(core::mem::size_of::<Shadow>() == 112 && core::mem::size_of::<ShadowList>() == 904);
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn gclamp(value: f64, low: f64, high: f64) -> f64 {
     if value > high {
         high
@@ -65,7 +60,7 @@ fn text_is_ident(t: &[u8]) -> bool {
 }
 
 fn length_token(tok: &[u8], allow_negative: bool, out: &mut Vec<u8>) -> bool {
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     if let Some((num, unit)) = units::parse_length(&text) {
         if unit == PERCENT || (unit == NUMBER && num != 0.0) || (!allow_negative && num < 0.0) {
             return false;
@@ -119,7 +114,7 @@ fn specified_one(text: &[u8], is_text: bool, out: &mut Vec<u8>) -> bool {
             }
             continue;
         }
-        let parsed = parse_color(&c_text(tok));
+        let parsed = parse_color(&c_string_until_nul(tok));
         if parsed.is_some() || tok.eq_ignore_ascii_case(b"currentcolor") {
             if color.is_some() {
                 return false;
@@ -192,7 +187,7 @@ fn parse_one(text: &[u8]) -> Option<Shadow> {
     let (mut lens, mut ems, mut rems) = ([0.0f64; 4], [0.0f64; 4], [0.0f64; 4]);
     let mut n_lens = 0;
     for tok in split_ws_limit(text, 8) {
-        let text = c_text(tok);
+        let text = c_string_until_nul(tok);
         if let Some(rgba) = parse_color(&text) {
             color = Some(rgba);
             continue;

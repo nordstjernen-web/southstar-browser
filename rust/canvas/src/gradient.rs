@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi::cairo::{Extend, Pattern};
 use crate::raster::ConicStop;
@@ -27,13 +28,6 @@ fn field(scope: &mut Scope<'_>, obj: &Value, name: &str) -> f64 {
         .ok()
         .and_then(|v| scope.to_number(&v).ok())
         .unwrap_or(f64::NAN)
-}
-
-fn c_text(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = bytes.iter().position(|&c| c == 0) {
-        bytes.truncate(nul);
-    }
-    bytes
 }
 
 fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
@@ -92,7 +86,7 @@ fn image_pattern(scope: &mut Scope<'_>, obj: &Value, origin_clean: &mut bool) ->
     drop(source);
     let rep = crate::hidden::get(scope, obj, "_rep").unwrap_or_else(|_| Value::undefined());
     let extend = if rep.is_string() {
-        match scope.to_bytes(&rep).map(c_text).as_deref() {
+        match scope.to_bytes(&rep).map(until_nul_owned).as_deref() {
             Ok(b"no-repeat") => Extend::None,
             _ => Extend::Repeat,
         }
@@ -124,7 +118,7 @@ pub(crate) fn build_pattern(scope: &mut Scope<'_>, obj: &Value) -> (Option<Patte
     if !kind.is_string() {
         return (None, origin_clean);
     }
-    let Ok(kind) = scope.to_bytes(&kind).map(c_text) else {
+    let Ok(kind) = scope.to_bytes(&kind).map(until_nul_owned) else {
         return (None, origin_clean);
     };
     let pattern = match kind.as_slice() {
@@ -175,7 +169,7 @@ pub(crate) fn add_color_stop(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     let color = scope
         .to_bytes(&args[1])
         .ok()
-        .map(c_text)
+        .map(until_nul_owned)
         .and_then(|c| crate::color::parse(&c));
     let Some([r, g, b, a]) = color else {
         return Err(crate::api::throw_dom(
@@ -209,7 +203,7 @@ pub(crate) fn create_pattern(scope: &mut Scope<'_>, this: &Value, args: &[Value]
         .get(1)
         .filter(|v| v.is_string())
         .and_then(|v| scope.to_bytes(v).ok())
-        .map(c_text)
+        .map(until_nul_owned)
         .filter(|r| !r.is_empty())
         .unwrap_or_else(|| b"repeat".to_vec());
     Ok(crate::ffi::new_pattern(scope, this, source, &repetition))

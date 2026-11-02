@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 mod ffi;
 
 pub use ffi::{CorsCheck, EventSource, Events, UrlCheck};
@@ -79,13 +80,6 @@ impl Shared {
         self.pending.fetch_add(1, Ordering::SeqCst);
         true
     }
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 fn strtoll_saturating(digits: &[u8]) -> i64 {

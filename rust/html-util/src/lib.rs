@@ -2,15 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 mod ffi;
 mod tables;
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
-}
 
 fn html_space(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')

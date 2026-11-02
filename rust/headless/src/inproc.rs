@@ -4,6 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int};
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::Mutex;
@@ -28,13 +29,8 @@ const WPT_POLL_JS: &CStr = c"(function () {    var g = globalThis;    if (g.__ns
 
 const WPT_HOOK: &str = concat!(include_str!("../js/wpt-hook.js"), "\0");
 
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 fn opt_cstring(bytes: &Option<Vec<u8>>) -> Option<CString> {
-    bytes.as_deref().map(cstring)
+    bytes.as_deref().map(c_string_until_nul)
 }
 
 fn mark_stale(flag: &AtomicBool) {
@@ -90,7 +86,7 @@ pub fn form_submit(nav: &NavCapture, form: Node, submitter: Option<Node>) {
     let accept = form.attr(c"accept-charset").filter(|c| !c.is_empty());
     let doc_charset = DOC_CHARSET
         .lock()
-        .map(|c| c.as_deref().map(cstring))
+        .map(|c| c.as_deref().map(c_string_until_nul))
         .unwrap_or_default();
     ffi::set_submission_charset(accept.or(doc_charset.as_deref()));
     let submitter = submitter.filter(|s| s.as_ptr() != form.as_ptr());
@@ -456,7 +452,7 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
 
         let mut made = None;
         if let Some(src) = want_src.as_deref().filter(|s| is_inline_video(s)) {
-            let src = cstring(src);
+            let src = c_string_until_nul(src);
             if let Some(resp) = ffi::fetch(&src, Some(base))
                 && let (None, Some(body)) =
                     (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
@@ -467,7 +463,7 @@ fn fetch_videos_into_layout(fc: &Ctx, base: Option<&CStr>) {
         if made.is_none()
             && let Some(poster) = want_poster.as_deref()
         {
-            let poster = cstring(poster);
+            let poster = c_string_until_nul(poster);
             if let Some(resp) = ffi::fetch(&poster, Some(base))
                 && let (None, Some(body)) =
                     (&resp.error, resp.body.as_deref().filter(|b| !b.is_empty()))
@@ -530,7 +526,7 @@ fn load_page(
             if !is_capture(o.dump) {
                 return None;
             }
-            let body = ffi::error_page(o.url, 0, Some(&cstring(&emsg)));
+            let body = ffi::error_page(o.url, 0, Some(&c_string_until_nul(&emsg)));
             return Some(Page {
                 final_url: Some(opts_url.unwrap_or(b"").to_vec()),
                 content_type: Some(HTML_UTF8.to_vec()),
@@ -559,7 +555,7 @@ fn load_page(
         body = Some(ffi::error_page(
             page_or_opts(&final_url).as_deref(),
             status,
-            Some(&cstring(&error)),
+            Some(&c_string_until_nul(&error)),
         ));
         content_type = Some(HTML_UTF8.to_vec());
     } else if status >= 400 {
@@ -600,7 +596,7 @@ fn load_page(
             && !has(b"svg")
             && (ct.starts_with(b"text/xml") || ct.starts_with(b"application/xml") || has(b"+xml"));
         if is_json || is_xml {
-            let ct_c = cstring(&ct);
+            let ct_c = c_string_until_nul(&ct);
             let (decoded, _) = ffi::decode_body(b, Some(&ct_c));
             let url = doc_url(&final_url);
             let html = if is_json {
@@ -674,7 +670,7 @@ pub fn run_one(
                 .map(|i| &u.to_bytes()[i + 1..])
         })
         .filter(|f| !f.is_empty())
-        .map(cstring);
+        .map(c_string_until_nul);
     ffi::css_set_target_fragment(target_frag.as_deref());
     ffi::css_set_doc_language(opt_cstring(&page.content_language).as_deref());
     if let Some(frag) = &target_frag {
@@ -763,7 +759,8 @@ pub fn run_one(
     let pending = nav.pending_url.borrow_mut().take();
     if let (Some(pending), true) = (pending, hop < 4 && !o.wpt) {
         let base = final_url.clone().unwrap_or_else(|| fetch_url.to_owned());
-        let next = ffi::url_resolve(&base, &cstring(&pending)).unwrap_or_else(|| pending.clone());
+        let next = ffi::url_resolve(&base, &c_string_until_nul(&pending))
+            .unwrap_or_else(|| pending.clone());
         let next_post = nav.post_body.borrow_mut().take();
         let next_ct = nav.post_ct.borrow_mut().take();
         let marker: &[u8] = if next_post.is_some() { b" POST" } else { b"" };
@@ -792,13 +789,19 @@ pub fn run_one(
             actions: None,
             ..*o
         };
-        let ct = next_ct.as_deref().map(cstring);
+        let ct = next_ct.as_deref().map(c_string_until_nul);
         let post = match (&next_post, &ct) {
             (Some(body), Some(ct)) => Some((body.as_slice(), ct.as_c_str())),
             (Some(body), None) => Some((body.as_slice(), c"")),
             _ => None,
         };
-        return run_one(&next_opts, &cstring(&next), hop + 1, Some(&base), post);
+        return run_one(
+            &next_opts,
+            &c_string_until_nul(&next),
+            hop + 1,
+            Some(&base),
+            post,
+        );
     }
 
     relayout(&ctx);

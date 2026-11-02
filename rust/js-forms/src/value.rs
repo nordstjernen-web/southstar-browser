@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_long};
+use southstar_unicode::until_nul_owned;
 
 use southstar_datetime as dt;
 use southstar_dom::{controls, select as dom_select};
@@ -567,7 +568,7 @@ pub fn set_value(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResul
     let text = if null_to_empty {
         Vec::new()
     } else {
-        crate::until_nul(scope.to_bytes(&value)?)
+        until_nul_owned(scope.to_bytes(&value)?)
     };
     let page = Page::of(scope);
     match el.element_name() {

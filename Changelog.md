@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Source: the 45 copies of `until_nul` (the bytes before the first NUL)
+  and the 45 `c_text`/`c_string`/`cstring` helpers that turned such bytes
+  into a `CString` are now four shared functions in `southstar-unicode`:
+  `until_nul`, `until_nul_owned`, `until_nul_str` and
+  `c_string_until_nul`. The 26 helpers with other behaviour (an empty
+  string on a NUL, NULs removed) are kept.
 * README: link to Southstar Browser in the Microsoft Store.
 * Source: removed about 65 public functions nothing called, and the
   private helpers only they used: Pango API surface kept by the

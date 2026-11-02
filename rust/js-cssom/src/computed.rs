@@ -5,6 +5,7 @@
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
+use southstar_unicode::c_string_until_nul;
 
 use crate::ffi::{self, AnimList, Js};
 
@@ -1615,7 +1616,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
             && let Some(s) = styles.get(n)
             && s.has_vars()
         {
-            let key = ffi::c_string(name.as_bytes());
+            let key = c_string_until_nul(name.as_bytes());
             if let Some(v) = s.var(&key) {
                 return (!v.to_bytes().eq_ignore_ascii_case(b"initial"))
                     .then(|| v.to_string_lossy().into_owned());
@@ -1827,7 +1828,7 @@ pub(crate) fn lookup_pseudo(js: Js, n: Node<'_>, pseudo: &str, name: &str) -> Op
         name
     };
     if name.len() > 2 && name.starts_with("--") {
-        let key = ffi::c_string(name.as_bytes());
+        let key = c_string_until_nul(name.as_bytes());
         return ps
             .var(&key)
             .filter(|v| !v.to_bytes().eq_ignore_ascii_case(b"initial"))

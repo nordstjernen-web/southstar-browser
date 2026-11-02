@@ -6,6 +6,7 @@
 
 use core::f64::consts::PI;
 use southstar_css_syntax::{self as css, Component, Kind};
+use southstar_unicode::until_nul;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SynKind {
@@ -285,13 +286,6 @@ impl<'a> Input<'a> {
     fn text_of(&self, c: &Component) -> &'a [u8] {
         until_nul(&self.text[c.start..c.end])
     }
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&byte| byte == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 fn is_ws(c: &Component) -> bool {

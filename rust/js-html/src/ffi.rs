@@ -5,7 +5,6 @@
 use core::ffi::CStr;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::ffi::CString;
 
 use southstar_dom::Tree;
 use southstar_js_engine::{Scope, Value};
@@ -23,11 +22,6 @@ use southstar_js_elements::nsr_element_set_node_value;
 
 fn raw_js(js: Option<Js>) -> Option<Page> {
     js.map(|js| js.0)
-}
-
-pub(crate) fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -62,8 +63,8 @@ fn dispatch_run(dispatch: Box<Dispatch>) {
                 code,
                 reason,
                 clean,
-            } => (events.on_close)(*code, crate::until_nul(reason), *clean, data_arg),
-            Post::Error(message) => (events.on_error)(crate::until_nul(message), data_arg),
+            } => (events.on_close)(*code, until_nul(reason), *clean, data_arg),
+            Post::Error(message) => (events.on_error)(until_nul(message), data_arg),
         }
     }
     dispatch
@@ -131,7 +132,7 @@ fn accept_for(key: &[u8]) -> Vec<u8> {
 
 fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
     let shared = &socket.shared;
-    let url = crate::until_nul(&shared.url);
+    let url = until_nul(&shared.url);
     let http_url = ws_to_http(url).ok_or_else(|| b"unsupported URL scheme".to_vec())?;
     let target = southstar_http::parse_target(&http_url).ok_or_else(|| b"invalid URL".to_vec())?;
     let mut nonce = [0u8; 16];
@@ -143,7 +144,7 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
         [&b"Sec-WebSocket-Key: "[..], &key].concat(),
     ];
     if let Some(origin) = shared.origin.as_deref().filter(|o| !o.is_empty()) {
-        lines.push([b"Origin: ".as_slice(), crate::until_nul(origin)].concat());
+        lines.push([b"Origin: ".as_slice(), until_nul(origin)].concat());
     }
     if !shared.protocols.is_empty() {
         lines.push(
@@ -244,7 +245,7 @@ fn worker(socket: Arc<Socket>) {
                 }
                 Out::Close { code, reason } => {
                     close_code = code;
-                    close_reason = reason.map(|r| crate::until_nul(&r).to_vec());
+                    close_reason = reason.map(|r| until_nul(&r).to_vec());
                     shared.set_state(STATE_CLOSING);
                     connection.send_close(shared, close_code, close_reason.as_deref());
                     clean_close = true;
