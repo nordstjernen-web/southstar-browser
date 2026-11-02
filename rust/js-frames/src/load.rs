@@ -502,6 +502,7 @@ fn make_realm_document(
     let realm_scope = if realm_doc.is_object() {
         crate::realm::make_scope(
             ctx,
+            Some(iframe),
             &realm_doc,
             Some(iorigin.to_bytes()),
             doc_url.as_deref().map(CStr::to_bytes),

@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Frames: a frame or iframe whose script sets `location.href`,
+  `location`, or calls `location.assign()` or `location.replace()` now
+  navigates that frame, whether the script runs while the frame loads,
+  from a timer, or is called by the parent; so does a parent setting
+  `frame.contentWindow.location`. The assignment used to change only the
+  URL the frame reported. Fragment-only changes still stay in the same
+  document and fire `hashchange`.
 * HTML: `<frameset>` and `<frame>`. Frame documents load like iframe
   documents, under the same CSP `frame-src`, sandbox, cross-origin,
   `X-Frame-Options`/`frame-ancestors` and nesting limits, and the

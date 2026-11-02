@@ -37,12 +37,14 @@ fn initial_url_value(ctx: Ctx, url: Option<&[u8]>) -> Value {
 
 pub(crate) fn make_scope(
     ctx: Ctx,
+    frame: Option<Node<'_>>,
     document: &Value,
     initial_url: Option<&[u8]>,
     doc_url: Option<&[u8]>,
     sandbox: u32,
 ) -> Value {
     let global = ctx.global();
+    let navigate = ffi::navigate_frame_function(Js::of_ctx(ctx), ctx, frame);
     let Some(maker) = ctx.eval_hidden(bootstrap::SCOPE, c"<iframe-scope>") else {
         return Value::null();
     };
@@ -55,6 +57,7 @@ pub(crate) fn make_scope(
         initial_url_value(ctx, initial_url),
         Value::int(sandbox as i32),
         text_or_undefined(ctx, doc_url),
+        navigate,
     ];
     ctx.call(&maker, &Value::undefined(), &args)
         .unwrap_or_else(Value::null)
@@ -132,6 +135,7 @@ fn run_global_bootstrap(
     let doc = text_or_undefined(fctx, doc_url);
     let realm_clone = ffi::realm_clone_function(fctx);
     let window_events = owner::frame_window_events(fctx);
+    let navigate = ffi::navigate_frame_function(js, fctx, iframe);
     let args = [
         window.clone(),
         parent_global.clone(),
@@ -146,6 +150,7 @@ fn run_global_bootstrap(
         doc,
         realm_clone,
         window_events,
+        navigate,
     ];
     let result = fctx.call(&maker, &Value::undefined(), &args)?;
     if !result.is_object() {
@@ -316,7 +321,7 @@ pub(crate) fn run_modules(
     let scope = if iframe_scope.is_object() {
         iframe_scope.clone()
     } else {
-        make_scope(ctx, document, origin, None, sandbox)
+        make_scope(ctx, None, document, origin, None, sandbox)
     };
     if !scope.is_object() {
         for module in modules {
