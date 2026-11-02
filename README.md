@@ -11,14 +11,6 @@ and JavaScript standards, written in Rust.
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).
 
-The rewrite started from a working browser rather than an empty repository:
-the Nordstjernen C codebase, its full history included, renamed to Southstar
-Browser and trimmed to the desktop. It was then ported to Rust module by
-module while it kept running, and in October 2026 the last of the project's
-C went, the QuickJS-ng engine included. All of Southstar's own code is now
-Rust; C remains only in the system libraries it links (GTK, Cairo, HarfBuzz,
-OpenSSL, FFmpeg, SDL2, …).
-
 ![Southstar Browser playing a YouTube video](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
