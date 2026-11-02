@@ -448,7 +448,7 @@ pub(crate) fn child_frame_window(
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Node<'_>) -> Value {
-    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn window_action(js: Js, action: &str) {

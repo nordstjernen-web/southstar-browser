@@ -39,7 +39,7 @@ fn owned_by_document(js: Js, node: Element) -> bool {
     let document = js.current_document();
     let mut ancestor = node.parent();
     while let Some(current) = ancestor {
-        if Some(current.as_ptr()) == document || js.orphan_tracked(current) {
+        if Some(current) == document || js.orphan_tracked(current) {
             return true;
         }
         ancestor = current.parent();

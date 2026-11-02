@@ -5,7 +5,6 @@
 use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
-use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
@@ -13,7 +12,7 @@ use super::{Js, imports, raw_js};
 use crate::{Element, JsResult};
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn attr_owner(value: &Value) -> Option<Element> {

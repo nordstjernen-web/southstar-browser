@@ -3,10 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr;
 use std::ffi::CString;
 
-use southstar_dom::{Node, NsNode, Tree};
+use southstar_dom::{Node, Tree};
 use southstar_glib as glib;
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_js_runtime::api;
@@ -29,10 +28,6 @@ impl Js {
     }
 }
 
-fn raw(node: Option<Element>) -> *mut NsNode {
-    node.map_or(ptr::null_mut(), Node::as_mut_ptr)
-}
-
 fn c_bytes(bytes: &[u8]) -> CString {
     CString::new(crate::until_nul(bytes)).unwrap_or_default()
 }
@@ -46,7 +41,7 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    api::make_element(scope, raw(node)).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {

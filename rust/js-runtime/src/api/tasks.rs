@@ -86,7 +86,7 @@ pub fn timer_gate(js: Option<Page>, frame: Option<Node<'_>>, idle_expired: bool)
     let Some(js) = Js::of(js) else {
         return TimerGate::Drop;
     };
-    match scheduling::timer_gate(js, Node::ptr_or_null(frame).cast_mut(), idle_expired) {
+    match scheduling::timer_gate(js, frame, idle_expired) {
         scheduling::TIMER_RUN => TimerGate::Run,
         scheduling::TIMER_WAIT => TimerGate::Wait,
         _ => TimerGate::Drop,
@@ -131,14 +131,14 @@ pub fn sweep_orphans(js: Option<Page>) {
 }
 
 pub fn unpin_subtree(js: Option<Page>, root: Node<'_>) {
-    let root = record::node(root.as_ptr());
+    let root = root.downgrade().get();
     if let (Some(js), Some(root)) = (Js::of(js), root) {
         orphans::unpin_subtree(js, root);
     }
 }
 
 pub fn purge_subtree_rafs(js: Option<Page>, root: Node<'_>) {
-    record::purge_subtree_rafs(js, root.as_mut_ptr());
+    record::purge_subtree_rafs(js, root);
 }
 
 pub fn source_remove(js: Option<Page>, id: SourceId) {
@@ -203,7 +203,7 @@ pub fn frame_eval<R>(
     };
     let state = js.st();
     let script = match script {
-        Some(script) => script.as_mut_ptr(),
+        Some(script) => Some(script.downgrade()),
         None => state.current_script.get(),
     };
     let previous = state.current_script.replace(script);

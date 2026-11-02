@@ -24,7 +24,7 @@ pub struct Selection {
 }
 
 fn state<R>(js: Option<Page>, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
-    Js::of(js).map_or(fallback, |js| f(js.st()))
+    Js::of(js).map_or(fallback, |js| f(&js.st()))
 }
 
 macro_rules! hook_setter {

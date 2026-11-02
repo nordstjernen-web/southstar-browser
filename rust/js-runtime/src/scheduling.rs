@@ -119,7 +119,11 @@ pub(crate) fn due_timers_allowed(js: Js) -> bool {
     !glue::engine_in_blocking_fetch()
 }
 
-pub(crate) fn timer_gate(js: Js, frame: *mut southstar_dom::NsNode, idle_expired: bool) -> c_int {
+pub(crate) fn timer_gate(
+    js: Js,
+    frame: Option<southstar_dom::Node<'_>>,
+    idle_expired: bool,
+) -> c_int {
     if js.halted() {
         return TIMER_DROP;
     }
@@ -129,7 +133,7 @@ pub(crate) fn timer_gate(js: Js, frame: *mut southstar_dom::NsNode, idle_expired
     if glue::engine_in_blocking_fetch() && !idle_expired {
         return TIMER_WAIT;
     }
-    if !frame.is_null() && node_root(frame) != node_root(js.current_doc()) {
+    if frame.is_some() && node_root(frame) != node_root(js.current_doc()) {
         return TIMER_DROP;
     }
     TIMER_RUN

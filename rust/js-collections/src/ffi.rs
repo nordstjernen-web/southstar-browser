@@ -69,7 +69,7 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Element> {

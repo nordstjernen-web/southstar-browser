@@ -165,7 +165,7 @@ pub(crate) fn unwrap(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
-    api::make_element(scope, el.as_ptr()).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, Some(el)).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value {

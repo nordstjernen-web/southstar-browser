@@ -10,7 +10,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css::StyleMap;
-use southstar_dom::{Node, NsNode, WeakNode};
+use southstar_dom::{Node, WeakNode};
 use southstar_js_engine::{ContextHandle, Scope, Value};
 
 use super::scopes::BaseFrame;
@@ -74,14 +74,14 @@ pub(crate) struct PageState {
     pub document_origin: RefCell<Option<CString>>,
     pub realm_scope_base: Cell<Option<BaseFrame>>,
     pub top_url_slot: RefCell<Option<UrlCell>>,
-    pub current_script: Cell<*mut NsNode>,
+    pub current_script: Cell<Option<WeakNode>>,
     pub early_inject_src: RefCell<Option<CString>>,
     pub mutated: Cell<bool>,
     pub main_context: RefCell<Option<southstar_glib::MainContext>>,
     pub worker_host: RefCell<Option<crate::api::WorkerHost>>,
     pub style_table: RefCell<Option<Rc<StyleMap>>>,
     pub autofocus_processed: Cell<bool>,
-    pub active_modal: Cell<*const NsNode>,
+    pub active_modal: Cell<Option<WeakNode>>,
     pub user_activation_us: Cell<i64>,
     pub user_ever_activated: Cell<bool>,
     pub image_cache: Cell<*mut c_void>,
@@ -131,14 +131,14 @@ impl PageState {
             document_origin: RefCell::new(None),
             realm_scope_base: Cell::new(None),
             top_url_slot: RefCell::new(None),
-            current_script: Cell::new(ptr::null_mut()),
+            current_script: Cell::new(None),
             early_inject_src: RefCell::new(None),
             mutated: Cell::new(false),
             main_context: RefCell::new(None),
             worker_host: RefCell::new(None),
             style_table: RefCell::new(None),
             autofocus_processed: Cell::new(false),
-            active_modal: Cell::new(ptr::null()),
+            active_modal: Cell::new(None),
             user_activation_us: Cell::new(0),
             user_ever_activated: Cell::new(false),
             image_cache: Cell::new(ptr::null_mut()),

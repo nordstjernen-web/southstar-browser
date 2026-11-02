@@ -88,7 +88,7 @@ pub(crate) fn call_observer(
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: Option<WeakNode>) -> Value {
     let node = node.and_then(WeakNode::get);
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {

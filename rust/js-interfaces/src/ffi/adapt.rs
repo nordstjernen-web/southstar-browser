@@ -2,7 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::Node;
 use southstar_js_attrs as attrs;
 use southstar_js_document as document;
 use southstar_js_engine::{Scope, Value};
@@ -52,7 +51,7 @@ macro_rules! node_getters {
     ($($name:ident => $f:path,)*) => {
         $(
             pub(crate) fn $name(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-                api::make_element(scope, Node::ptr_or_null($f(api::unwrap_element(this))))
+                api::make_element(scope, $f(api::unwrap_element(this)))
             }
         )*
     };

@@ -87,7 +87,7 @@ pub(crate) fn element(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, element: Element) -> Value {
-    api::make_element(scope, element.as_ptr()).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, Some(element)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dispatch(js: Js, element: Element, kind: &str) {

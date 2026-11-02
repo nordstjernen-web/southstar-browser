@@ -22,7 +22,7 @@ use crate::{scheduling, worker};
 const TRANSIENT_ACTIVATION_US: i64 = 5_000_000;
 
 fn state<R>(js: Option<Page>, fallback: R, f: impl FnOnce(&PageState) -> R) -> R {
-    Js::of(js).map_or(fallback, |js| f(js.st()))
+    Js::of(js).map_or(fallback, |js| f(&js.st()))
 }
 
 fn add(js: Option<Page>, depth: impl FnOnce(&PageState) -> &Cell<c_int>, delta: i32) -> i32 {
@@ -92,31 +92,31 @@ pub fn swap_module_context(js: Option<Page>, ctx: ContextHandle) -> ContextHandl
 pub fn set_realm(js: Option<Page>, ctx: ContextHandle, doc: Option<Node<'_>>) {
     if let Some(js) = Js::of(js) {
         js.set_ctx(ctx);
-        js.set_current_doc(Node::ptr_or_null(doc).cast_mut());
+        js.set_current_doc(doc);
     }
 }
 
 pub fn current_document(js: Option<Page>) -> Option<Node<'static>> {
-    record::node(Js::of(js)?.current_doc())
+    Js::of(js)?.current_doc()
 }
 
 pub fn swap_current_document(js: Option<Page>, doc: Option<Node<'_>>) -> Option<Node<'static>> {
     let js = Js::of(js)?;
     let previous = js.current_doc();
-    js.set_current_doc(Node::ptr_or_null(doc).cast_mut());
-    record::node(previous)
+    js.set_current_doc(doc);
+    previous
 }
 
 pub fn current_script(js: Option<Page>) -> Option<Node<'static>> {
-    record::node(Js::of(js)?.st().current_script.get())
+    record::live(Js::of(js)?.st().current_script.get())
 }
 
 pub fn swap_current_script(js: Option<Page>, script: Option<Node<'_>>) -> Option<Node<'static>> {
     let previous = Js::of(js)?
         .st()
         .current_script
-        .replace(Node::ptr_or_null(script).cast_mut());
-    record::node(previous)
+        .replace(record::weak(script));
+    record::live(previous)
 }
 
 pub fn ce_main_doc(js: Option<Page>) -> Option<Node<'static>> {
@@ -164,12 +164,11 @@ pub fn set_document(js: Option<Page>, doc: Option<Node<'_>>, origin: Option<&CSt
     let Some(js) = Js::of(js) else {
         return;
     };
-    let doc = Node::ptr_or_null(doc).cast_mut();
     js.set_current_doc(doc);
     js.set_ce_main_doc(doc);
     let state = js.st();
     state.autofocus_processed.set(false);
-    state.active_modal.set(ptr::null());
+    state.active_modal.set(None);
     state.document_origin.replace(origin.map(CStr::to_owned));
 }
 
@@ -201,7 +200,7 @@ pub fn node_in_page(js: Option<Page>, node: Option<Node<'_>>) -> bool {
         return false;
     };
     let top = scopes::top_document(js.current_doc());
-    !top.is_null() && scopes::top_document(node.as_mut_ptr()) == top
+    top.is_some() && scopes::top_document(Some(node)) == top
 }
 
 pub fn url_parses(js: Option<Page>, url: &CStr) -> bool {
@@ -403,13 +402,12 @@ pub fn set_autofocus_processed(js: Option<Page>) {
 }
 
 pub fn active_modal(js: Option<Page>) -> Option<Node<'static>> {
-    record::node(state(js, ptr::null(), |state| state.active_modal.get()))
+    record::live(state(js, None, |state| state.active_modal.get()))
 }
 
 pub fn set_active_modal(js: Option<Page>, modal: Option<Node<'_>>) {
-    let modal = Node::ptr_or_null(modal);
     state(js, (), |state| {
-        state.active_modal.set(modal);
+        state.active_modal.set(record::weak(modal));
         glue::set_active_modal(modal);
     });
 }
@@ -442,7 +440,7 @@ pub fn events_suspended(js: Option<Page>) -> bool {
 }
 
 pub fn window_events_blocked(js: Option<Page>) -> bool {
-    Js::of(js).is_none_or(|js| js.current_doc().is_null() || js.halted() || js.st().in_pump.get())
+    Js::of(js).is_none_or(|js| js.current_doc().is_none() || js.halted() || js.st().in_pump.get())
 }
 
 pub fn wpt_hooks_enabled(js: Option<Page>) -> bool {
@@ -480,15 +478,14 @@ pub fn context_frame(js: Option<Page>, ctx: ContextHandle) -> Option<Node<'stati
     if ctx.is_null() || ctx == js.main_realm() {
         return None;
     }
-    let frame = scopes::frame_of_realm(js, ctx);
-    record::node(if frame.is_null() { js.frame() } else { frame })
+    scopes::frame_of_realm(js, ctx).or_else(|| js.frame())
 }
 
 pub fn forget_frame_context(js: Option<Page>, frame: Node<'_>) {
     if let Some(js) = Js::of(js)
-        && js.frame().cast_const() == frame.as_ptr()
+        && js.frame() == Some(frame)
     {
-        js.set_frame(ptr::null_mut());
+        js.set_frame(None);
     }
 }
 

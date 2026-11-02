@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use core::ptr;
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -47,7 +46,7 @@ pub fn in_frame_scope<R>(
         return f();
     };
     let mut scope = scopes::RealmScope::inactive();
-    scopes::frame_scope_enter(js, realm, frame.as_mut_ptr(), &mut scope);
+    scopes::frame_scope_enter(js, realm, Some(frame), &mut scope);
     let result = f();
     scopes::realm_scope_leave(Some(js), &mut scope);
     result
@@ -62,9 +61,7 @@ pub fn in_dispatch_scope<R>(
     let Some(js) = Js::of(js) else {
         return f();
     };
-    let (doc, frame) = frame.map_or((ptr::null_mut(), ptr::null_mut()), |(doc, frame)| {
-        (doc.as_mut_ptr(), frame.as_mut_ptr())
-    });
+    let (doc, frame) = frame.map_or((None, None), |(doc, frame)| (Some(doc), Some(frame)));
     scopes::in_dispatch(js, ctx, doc, frame, f)
 }
 
@@ -80,13 +77,7 @@ pub fn during_frame_load<R>(
         return f();
     };
     let realm_doc = realm_doc.is_object().then(|| realm_doc.clone());
-    let mut scope = scopes::frame_load_begin(
-        js,
-        frame.as_mut_ptr(),
-        doc.as_mut_ptr(),
-        Some(url),
-        realm_doc,
-    );
+    let mut scope = scopes::frame_load_begin(js, frame, doc, Some(url), realm_doc);
     let result = f();
     scopes::frame_load_end(js, &mut scope);
     result
@@ -115,7 +106,6 @@ pub fn enter_timer_scope(
     ctx: ContextHandle,
     frame: Option<Node<'_>>,
 ) -> Option<TimerScope> {
-    let frame = Node::ptr_or_null(frame).cast_mut();
     Some(TimerScope(scopes::timer_scope_begin(
         Js::of(js)?,
         ctx,
@@ -163,7 +153,6 @@ pub fn enter_raf_scope(
     ctx: ContextHandle,
     frame: Option<Node<'_>>,
 ) -> Option<RafScope> {
-    let frame = Node::ptr_or_null(frame).cast_mut();
     scopes::raf_scope_begin(Js::of(js)?, ctx, frame).map(RafScope)
 }
 

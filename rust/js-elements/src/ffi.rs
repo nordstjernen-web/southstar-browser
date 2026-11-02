@@ -36,7 +36,7 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn make_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::null())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::null())
 }
 
 pub(crate) fn make_labels(scope: &mut Scope<'_>, owner: &Value) -> JsResult {

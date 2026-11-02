@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::{Node, WeakNode};
 
 use crate::ffi::glue;
 use crate::ffi::{self, Js};
@@ -46,7 +46,7 @@ pub(crate) fn unpin_subtree(js: Js, root: Node<'static>) {
             child = current.next_sibling();
         }
         if node.has_js_wrapper() {
-            glue::unpin(js, node.as_mut_ptr());
+            glue::unpin(js, node);
         }
     }
 }
@@ -59,10 +59,10 @@ pub(crate) fn process_pending_iframes(js: Js) {
     if state.iframe_load_depth.get() > 0 || state.eval_depth.get() > 0 {
         return;
     }
-    let mut loaded: HashSet<*const NsNode> = HashSet::new();
+    let mut loaded: HashSet<Option<WeakNode>> = HashSet::new();
     while !js.halted() && glue::pending_iframe_count(js) > 0 {
         let iframe = glue::pending_iframe_first(js);
-        if !loaded.insert(Node::ptr_or_null(iframe)) {
+        if !loaded.insert(iframe.map(Node::downgrade)) {
             break;
         }
         glue::load_first_pending_iframe(js, iframe);

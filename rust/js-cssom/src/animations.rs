@@ -95,7 +95,7 @@ pub(crate) fn list(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
     }
     for (i, info) in anim.visit(node).iter().enumerate() {
         let o = info_to_js(scope, info)?;
-        let el = ffi::make_element(scope, info.node.as_ptr());
+        let el = ffi::make_element(scope, info.node);
         scope.set(&o, "el", el)?;
         scope.set_index(&arr, i as u32, o)?;
     }

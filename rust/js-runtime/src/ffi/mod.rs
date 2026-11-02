@@ -14,7 +14,7 @@ use core::ffi::{CStr, c_int, c_void};
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::NsNode;
+use southstar_dom::Node;
 use southstar_glib::MainContext;
 use southstar_js_engine::{ContextHandle, RuntimeHandle, RuntimeOptions, Scope, Value};
 
@@ -117,7 +117,7 @@ impl Js {
         Js(record::alloc())
     }
 
-    pub(crate) fn rec(self) -> &'static record::Record {
+    pub(crate) fn rec(self) -> Rc<record::Record> {
         record::record(Some(self.0)).expect("a Js handle names a live page")
     }
 
@@ -145,7 +145,7 @@ impl Js {
         self.0.as_ptr().cast_mut().cast()
     }
 
-    pub(crate) fn st(self) -> &'static PageState {
+    pub(crate) fn st(self) -> Rc<PageState> {
         self.rec().state()
     }
 
@@ -177,28 +177,28 @@ impl Js {
         self.st().current_url.replace(url)
     }
 
-    pub fn current_doc(self) -> *mut NsNode {
-        self.rec().current_doc.get()
+    pub fn current_doc(self) -> Option<Node<'static>> {
+        self.rec().current_doc()
     }
 
-    pub fn set_current_doc(self, doc: *mut NsNode) {
-        self.rec().current_doc.set(doc);
+    pub fn set_current_doc(self, doc: Option<Node<'_>>) {
+        self.rec().set_current_doc(doc);
     }
 
-    pub fn frame(self) -> *mut NsNode {
-        self.rec().raf_frame_ctx.get()
+    pub fn frame(self) -> Option<Node<'static>> {
+        self.rec().frame()
     }
 
-    pub fn set_frame(self, frame: *mut NsNode) {
-        self.rec().raf_frame_ctx.set(frame);
+    pub fn set_frame(self, frame: Option<Node<'_>>) {
+        self.rec().set_frame(frame);
     }
 
-    pub fn ce_main_doc(self) -> *const NsNode {
-        self.rec().ce_main_doc.get()
+    pub fn ce_main_doc(self) -> Option<Node<'static>> {
+        self.rec().ce_main_doc()
     }
 
-    pub fn set_ce_main_doc(self, doc: *const NsNode) {
-        self.rec().ce_main_doc.set(doc);
+    pub fn set_ce_main_doc(self, doc: Option<Node<'_>>) {
+        self.rec().set_ce_main_doc(doc);
     }
 
     pub fn scope<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
@@ -211,7 +211,7 @@ impl Js {
     }
 
     pub fn set_time_origin(self, origin_us: i64, origin_real_ms: f64) {
-        record::set_time_origin(self.rec(), origin_us, origin_real_ms);
+        record::set_time_origin(&self.rec(), origin_us, origin_real_ms);
     }
 
     pub fn perf_init(self) {
@@ -243,11 +243,11 @@ impl Js {
             module_load: Some(imports::nsr_js_module_load),
             ..RuntimeOptions::default()
         };
-        record::create_runtime(self.rec(), &options)
+        record::create_runtime(&self.rec(), &options)
     }
 
     pub fn create_context(self) -> bool {
-        record::create_context(self.0, self.rec())
+        record::create_context(self.0, &self.rec())
     }
 
     pub fn set_callbacks(self, callbacks: Callbacks) {
@@ -259,7 +259,7 @@ impl Js {
 
     pub fn init_tables(self, main_context: MainContext, page: bool) {
         *self.st().main_context.borrow_mut() = Some(main_context);
-        record::init_tables(self.rec(), page);
+        record::init_tables(&self.rec(), page);
     }
 
     pub fn init_page_states(self) {
@@ -271,7 +271,7 @@ impl Js {
     pub fn adopt_worker_host(self, setup: &WorkerSetup<'_>) {
         let partition = setup.origin.filter(|origin| !origin.is_empty());
         *self.st().worker_host.borrow_mut() = Some(setup.host.clone());
-        record::set_partition_key(self.rec(), partition);
+        record::set_partition_key(&self.rec(), partition);
         let host = setup.host.clone();
         self.set_callbacks(Callbacks {
             log: Some(Rc::new(move |line: &CStr| {
@@ -299,15 +299,15 @@ impl Js {
     }
 
     pub fn set_proto_document(self, proto: Value) {
-        record::set_proto_document(self.rec(), proto);
+        record::set_proto_document(&self.rec(), proto);
     }
 
     pub fn set_navigator_brand(self, brand: Value) {
-        record::set_navigator_brand(self.rec(), brand);
+        record::set_navigator_brand(&self.rec(), brand);
     }
 
     pub fn set_pristine_promise(self, promise: Value) {
-        record::set_pristine_promise(self.rec(), promise);
+        record::set_pristine_promise(&self.rec(), promise);
     }
 
     pub fn make_performance_object(self, scope: &mut Scope<'_>, include_memory: bool) -> Value {
@@ -342,17 +342,16 @@ impl Js {
     pub fn take_pinned_wrappers(self) -> Vec<(Element, Value)> {
         record::take_pinned_wrappers(self.some())
             .into_iter()
-            .filter_map(|(key, wrapper)| Some((record::node(key as *const NsNode)?, wrapper)))
+            .filter_map(|(key, wrapper)| Some((key.get()?, wrapper)))
             .collect()
     }
 
     pub fn detach_wrapper(self, node: Element, pinned: Option<Value>) {
-        record::detach_wrapper(self.rec(), node, pinned);
+        record::detach_wrapper(&self.rec(), node, pinned);
     }
 
-    pub fn current_document(self) -> Option<*const NsNode> {
-        let doc = self.current_doc();
-        (!doc.is_null()).then_some(doc.cast_const())
+    pub fn current_document(self) -> Option<Element> {
+        self.current_doc()
     }
 
     pub fn orphans_snapshot(self) -> Option<Vec<Element>> {
@@ -385,7 +384,7 @@ impl Js {
     }
 
     pub fn free_page_strings(self) {
-        record::free_page_strings(self.rec());
+        record::free_page_strings(&self.rec());
         self.replace_current_url(None);
     }
 
@@ -418,7 +417,7 @@ impl Js {
     }
 
     pub fn free_pinned_set(self) {
-        record::free_pinned_set(self.rec());
+        record::free_pinned_set(&self.rec());
     }
 
     pub fn teardown_input_states(self) {
@@ -428,19 +427,19 @@ impl Js {
     }
 
     pub fn free_realm_values(self) {
-        record::free_realm_values(self.rec());
+        record::free_realm_values(&self.rec());
     }
 
     pub fn teardown_registries(self) {
         (api::observers_hooks().teardown)(self.0);
         (api::custom_elements_hooks().teardown)(self.0);
-        record::free_platform_globals(self.rec());
+        record::free_platform_globals(&self.rec());
         (api::storage_hooks().teardown)(self.0);
         (api::media_hooks().teardown)(self.0);
     }
 
     pub fn free_partition(self) {
-        record::free_partition(self.rec());
+        record::free_partition(&self.rec());
     }
 
     pub fn teardown_style_states(self) {
@@ -458,7 +457,7 @@ impl Js {
     }
 
     pub fn free_window_values(self) {
-        record::free_window_values(self.rec());
+        record::free_window_values(&self.rec());
     }
 
     pub fn teardown_dispatch(self) {
@@ -467,8 +466,7 @@ impl Js {
     }
 
     pub fn free_engine(self) {
-        // SAFETY: teardown frees the engine last, and the page is not used afterwards.
-        unsafe { record::free_engine(self.0) };
+        record::free_engine(self.0);
     }
 }
 

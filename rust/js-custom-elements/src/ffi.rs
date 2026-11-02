@@ -49,11 +49,11 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn node_wrapper(scope: &mut Scope<'_>, node: Element) -> Value {
-    api::node_wrapper(scope, node.as_ptr()).unwrap_or_else(Value::undefined)
+    api::node_wrapper(scope, node).unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn wrapper_pinned(js: Js, node: Element) -> bool {
