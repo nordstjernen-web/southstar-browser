@@ -24,7 +24,9 @@ use crate::gradient::{self, Gradient};
 use crate::grid::{self, Areas, Tracks};
 use crate::image;
 use crate::prop::Prop;
-use crate::scan::{is_gspace, is_ws, split_ws_limit, starts_with_ci, strip, strtol10, trim_range};
+use crate::scan::{
+    has_substitution, is_gspace, is_ws, split_ws_limit, starts_with_ci, strip, strtol10, trim_range,
+};
 use crate::shadow::{self, ShadowList};
 use crate::time;
 use crate::transform::{self, Individual, Transform};
@@ -1055,7 +1057,7 @@ fn image_prop(t: &[u8]) -> Option<Value> {
 }
 
 fn transform_prop(t: &[u8]) -> Option<Value> {
-    if !eq(t, b"none") && !contains(t, b"var(") {
+    if !eq(t, b"none") && !has_substitution(t) {
         transform::list_canonical(t)?;
     }
     if let Some(tf) = transform::parse_transform(t) {
@@ -1075,7 +1077,7 @@ fn individual_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         _ => Individual::Scale,
     };
     let canon = transform::individual_canonical(t, kind);
-    if canon.is_none() && !contains(t, b"var(") {
+    if canon.is_none() && !has_substitution(t) {
         return None;
     }
     let v = match kind {
@@ -1709,7 +1711,7 @@ const CURSORS: [&[u8]; 36] = [
 fn font_weight(t: &[u8]) -> Option<Value> {
     let kw = lower(t);
     if matches!(kw.as_slice(), b"normal" | b"bold" | b"bolder" | b"lighter")
-        || contains(&kw, b"var(")
+        || has_substitution(&kw)
         || contains(&kw, b"attr(")
         || contains(&kw, b"env(")
         || kw.contains(&b'"')
@@ -1994,7 +1996,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
                 return keyword_choice(t, "none");
             }
             let is_text = prop == P::TextShadow;
-            if shadow::specified_canonical(t, is_text).is_none() && !contains(t, b"var(") {
+            if shadow::specified_canonical(t, is_text).is_none() && !has_substitution(t) {
                 return None;
             }
             shadow::parse_list(t).map(|mut list| {
@@ -2033,7 +2035,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             "border-box padding-box content-box fill-box stroke-box view-box",
         ),
         P::MaskType => keyword_choice(t, "luminance alpha"),
-        P::Content => keyword_text(if contains(t, b"var(") {
+        P::Content => keyword_text(if has_substitution(t) {
             Some(t.to_vec())
         } else {
             content_canonical(t)
@@ -2067,7 +2069,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::TransformBox => keyword_choice(t, "content-box border-box fill-box stroke-box view-box"),
         P::TransformOrigin | P::PerspectiveOrigin => {
             if transform::origin_canonical(t, prop == P::PerspectiveOrigin).is_none()
-                && !contains(t, b"var(")
+                && !has_substitution(t)
             {
                 return None;
             }
@@ -2160,7 +2162,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             keyword_text(grid::line_canonical(t).map(|(text, _)| text))
         }
         P::ClipPath => {
-            let raw = contains(t, b"var(") || starts_with_ci(strip(t), b"url(");
+            let raw = has_substitution(t) || starts_with_ci(strip(t), b"url(");
             if raw {
                 clip_path::valid(t).then(|| Value::keyword(lower_outside_strings(t)))
             } else {

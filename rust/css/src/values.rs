@@ -24,7 +24,7 @@ use crate::math::math_canonical;
 use crate::prop::Prop;
 use crate::property::{self, text_is_ident};
 use crate::property::{Body, Rect, Size, Value};
-use crate::scan::{split_ws_limit, starts_with_ci, strip};
+use crate::scan::{has_substitution, split_ws_limit, starts_with_ci, strip};
 use crate::shadow::{self, Shadow, ShadowList};
 use crate::shorthand::{self, border_radius_canonical};
 use crate::text::split_top_level_commas;
@@ -857,7 +857,7 @@ pub(crate) fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
         let known = parse_color(&text).is_some() || value.eq_ignore_ascii_case(b"currentcolor");
         return known.then(|| value.to_ascii_lowercase());
     }
-    if has(value, b"var(") || has(value, b"env(") || has(value, b"attr(") {
+    if has_substitution(value) || has(value, b"env(") || has(value, b"attr(") {
         return None;
     }
     color::specified_text(value)

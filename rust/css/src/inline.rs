@@ -19,10 +19,11 @@ use crate::grid;
 use crate::image::{self, text_starts_image_set};
 use crate::position;
 use crate::prop::Prop;
-use crate::property::{self, Body, Value, bg_token_is_box, contains, eq, lower};
+use crate::property::{self, Body, Value, bg_token_is_box, eq, lower};
 use crate::scan::{
-    is_ident, is_ws, match_close_paren, scan_until, skip_to_block_end, skip_ws_comments,
-    split_ws_limit, split_ws_paren, starts_with_ci, strip, strip_important, trim_range,
+    has_substitution, is_ident, is_ws, match_close_paren, scan_until, skip_to_block_end,
+    skip_ws_comments, split_ws_limit, split_ws_paren, starts_with_ci, strip, strip_important,
+    trim_range,
 };
 use crate::shorthand::{self, ANIMATION_LONGHANDS, TRANSITION_LONGHANDS};
 use crate::text::{add_leading_zeros, normalize_negative_zero, split_top_level_commas};
@@ -934,7 +935,7 @@ pub fn get(style: &[u8], prop: &[u8]) -> Option<Vec<u8>> {
         }
     }
     if (eq(prop, b"grid") || eq(prop, b"grid-template"))
-        && !contains(style, b"var(")
+        && !has_substitution(style)
         && let Some(text) = grid_value(style, prop.len() == 4)
     {
         return keep(Some(text));

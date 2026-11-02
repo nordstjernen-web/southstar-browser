@@ -14,6 +14,20 @@ pub(crate) fn is_ident(c: u8) -> bool {
     is_ident_start(c) || c.is_ascii_digit()
 }
 
+pub(crate) fn has_substitution(text: &[u8]) -> bool {
+    let mut from = 0;
+    while let Some(i) = text[from..].iter().position(|&c| c == b'(') {
+        let head = &text[..from + i];
+        if head.ends_with(b"var")
+            || (head.ends_with(b"if") && (head.len() == 2 || !is_ident(head[head.len() - 3])))
+        {
+            return true;
+        }
+        from += i + 1;
+    }
+    false
+}
+
 pub(crate) fn is_gspace(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
 }

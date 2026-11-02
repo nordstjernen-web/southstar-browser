@@ -18,7 +18,7 @@ use super::computed_units::{PROP_COUNT, RawStyle};
 use super::container::{
     ContainerMap, container_map_signature, container_stack_push, with_container_map,
 };
-use super::custom_props::{AdjustCache, build_vars, compute_registered_vars};
+use super::custom_props::{AdjustCache, QueryContext, build_vars, compute_registered_vars};
 use super::fixups::{
     display_contents_to_none, frame_viewport_from_style, strip_native_widget_decorations,
 };
@@ -43,6 +43,7 @@ use super::style_share::{
 };
 use super::ua::ua_sheet;
 use super::values::values_equal;
+use super::vars::Scope;
 use super::viewport;
 use crate::display::{BOX_CONTENTS, BOX_NONE};
 use crate::incremental::{self, PassKey};
@@ -388,8 +389,27 @@ impl<'a> Walk<'a> {
             vars,
             pending,
         } = &mut element[0];
-        style.vars = build_vars(parent_vars, vars, pass.registered, Some(pass.adjust_cache));
-        resolve_pending(pending, style.vars.as_deref(), pass.registered, decls, node);
+        let query = QueryContext::new(parent_style, pass.root_px);
+        style.vars = build_vars(
+            parent_vars,
+            vars,
+            pass.registered,
+            Some(pass.adjust_cache),
+            node,
+            &query,
+        );
+        let scope = Scope {
+            parent: parent_vars.map(|v| &**v),
+            node,
+            query: &query,
+        };
+        resolve_pending(
+            pending,
+            style.vars.as_deref(),
+            pass.registered,
+            decls,
+            &scope,
+        );
         let parents = Parents {
             style: parent_style,
             layout: layout_parent,
@@ -423,18 +443,26 @@ fn pseudo_style(pass: &Pass, node: Node<'_>, style: &mut RawStyle, pe: c_uint, d
         vars,
         pending,
     } = dest;
+    let query = QueryContext::new(Some(style), pass.root_px);
     pseudo.vars = build_vars(
         style.vars.as_ref(),
         vars,
         pass.registered,
         Some(pass.adjust_cache),
+        node,
+        &query,
     );
+    let scope = Scope {
+        parent: style.vars.as_deref(),
+        node,
+        query: &query,
+    };
     resolve_pending(
         pending,
         pseudo.vars.as_deref(),
         pass.registered,
         decls,
-        node,
+        &scope,
     );
     let parent: &RawStyle = style;
     let parents = Parents {

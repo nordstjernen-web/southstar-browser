@@ -5,13 +5,12 @@
 use core::ffi::{c_int, c_void};
 use std::rc::Rc;
 
-use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 
 use super::cascade::RawMatch;
 use super::declarations::{Declarations, PendingDecl};
 use super::registry::RegisteredProps;
-use super::vars::{VarMap, substitute_in};
+use super::vars::{Scope, VarMap, substitute_scoped};
 use crate::pending::{self, Pending};
 
 pub(super) struct RawPendingMatch {
@@ -70,7 +69,7 @@ pub(super) fn resolve_pending(
     vars: Option<&VarMap>,
     registered: &RegisteredProps,
     matches: &mut Vec<RawMatch>,
-    node: Node<'_>,
+    scope: &Scope<'_>,
 ) {
     if raw.is_empty() {
         return;
@@ -88,7 +87,7 @@ pub(super) fn resolve_pending(
             inline_style: m.inline_style != 0,
         })
         .collect();
-    let node = Some(node);
+    let node = Some(scope.node);
     for i in pending::order(&list) {
         let pm = &raw[i];
         let pd = &*pm.pd;
@@ -99,7 +98,7 @@ pub(super) fn resolve_pending(
         let substituted = pending::substituted_value(
             text,
             custom,
-            |t| substitute_in(t, vars, Some(registered)),
+            |t| substitute_scoped(t, vars, registered, scope),
             node,
         );
         let applied = substituted.is_some_and(|value| append_decls(pm, pd, name, &value, matches));

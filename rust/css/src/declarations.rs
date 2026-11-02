@@ -9,8 +9,8 @@ use crate::lex;
 use crate::prop::Prop;
 use crate::property::{self, contains, eq, wide_keyword};
 use crate::scan::{
-    byte, is_ident, is_ws, match_close_paren, scan_until, skip_comment, skip_to_block_end,
-    skip_ws_comments, split_ws_paren, strip, strip_important, trim_range,
+    byte, has_substitution, is_ident, is_ws, match_close_paren, scan_until, skip_comment,
+    skip_to_block_end, skip_ws_comments, split_ws_paren, strip, strip_important, trim_range,
 };
 use crate::shorthand;
 use crate::supports;
@@ -81,8 +81,16 @@ const CSSOM_PROPERTIES: [&[u8]; 25] = [
     b"animation-range",
 ];
 
-pub(crate) fn find_function(s: &[u8], mut p: usize, end: usize, name: &[u8]) -> Option<usize> {
-    let n = name.len();
+pub(crate) fn find_function(s: &[u8], p: usize, end: usize, name: &[u8]) -> Option<usize> {
+    find_functions(s, p, end, &[name]).map(|(at, _)| at)
+}
+
+pub(crate) fn find_functions(
+    s: &[u8],
+    mut p: usize,
+    end: usize,
+    names: &[&[u8]],
+) -> Option<(usize, usize)> {
     let start = p;
     let mut quote = 0u8;
     while p < end {
@@ -111,12 +119,14 @@ pub(crate) fn find_function(s: &[u8], mut p: usize, end: usize, name: &[u8]) -> 
             p += 1;
             continue;
         }
-        if end - p > n
-            && s[p + n] == b'('
-            && s[p..p + n].eq_ignore_ascii_case(name)
-            && (p == start || !is_ident(s[p - 1]))
-        {
-            return Some(p);
+        if p == start || !is_ident(s[p - 1]) {
+            let found = names.iter().position(|name| {
+                let n = name.len();
+                end - p > n && s[p + n] == b'(' && s[p..p + n].eq_ignore_ascii_case(name)
+            });
+            if let Some(which) = found {
+                return Some((p, which));
+            }
         }
         p += 1;
     }
@@ -353,7 +363,7 @@ pub(crate) fn parse_block(s: &[u8], mut p: usize, sink: &mut impl Sink) -> usize
             continue;
         }
         if sink.capturing()
-            && (contains(raw, b"var(") || contains(raw, b"attr(") || has_container_unit(raw))
+            && (has_substitution(raw) || contains(raw, b"attr(") || has_container_unit(raw))
         {
             let (raw, important) = strip_important(raw);
             sink.pending(&name, raw, important);
@@ -406,7 +416,7 @@ pub(crate) fn declaration_valid(prop: Option<Prop>, text: &[u8]) -> bool {
     if contains(text, b"attr(") && !attr_functions_valid(text) {
         return false;
     }
-    if contains(text, b"var(") || contains(text, b"attr(") {
+    if has_substitution(text) || contains(text, b"attr(") {
         return true;
     }
     property::parse_for(prop, text).is_some()
@@ -423,12 +433,12 @@ pub fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
         return value_syntax_valid(text);
     }
     if eq(name, b"border-image") || eq(name, b"-webkit-border-image") {
-        return contains(text, b"var(") || expands(b"border-image", text);
+        return has_substitution(text) || expands(b"border-image", text);
     }
     if eq(name, b"unicode-range") {
         return unicode_range_canonical(text).is_some();
     }
-    if eq(name, b"animation-range") && !contains(text, b"var(") {
+    if eq(name, b"animation-range") && !has_substitution(text) {
         return wide_keyword(text).is_some() || animation::range_shorthand_expand(text).is_some();
     }
     if !eq(name, b"all") {
@@ -439,7 +449,7 @@ pub fn named_declaration_valid(name: &[u8], text: &[u8]) -> bool {
         }
         return supports::declaration(name, text);
     }
-    contains(text, b"var(") || wide_keyword(text).is_some()
+    has_substitution(text) || wide_keyword(text).is_some()
 }
 
 fn sizes_is_length_fn(p: &[u8]) -> bool {
