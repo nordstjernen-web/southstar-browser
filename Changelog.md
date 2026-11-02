@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* DOM: events dispatched inside a shadow tree are retargeted: listeners
+  outside the tree see the host as `event.target`, an event that is not
+  `composed` stops at the shadow root, `composedPath()` leaves out nodes in
+  closed shadow trees the listener cannot see, and `event.target` is null
+  once such a dispatch ends. Listeners on the page used to receive the
+  shadow tree's internal nodes.
 * SVG: `getComputedTextLength()` and `getSubStringLength(charnum, nchars)`
   measure `<text>` and `<tspan>` elements with the same text layout that
   draws them; a `charnum` past the end throws `IndexSizeError`. Charting

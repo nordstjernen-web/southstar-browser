@@ -385,8 +385,13 @@ pub(crate) fn composed_path(scope: &mut Scope<'_>, this: &Value, _: &[Value]) ->
         return Ok(path);
     }
     if let Some((nodes, window)) = ffi::dispatch_path(scope) {
+        let current = get(scope, this, "currentTarget");
+        let current = ffi::unwrap_node(&current);
         let mut index = 0u32;
         for node in nodes {
+            if southstar_js_shadow::hidden_in_closed_tree(node, current) {
+                continue;
+            }
             let wrapper = ffi::wrap_node(scope, node);
             let _ = scope.set_index(&path, index, wrapper);
             index += 1;

@@ -2599,6 +2599,7 @@ dependencies = [
  "southstar-js-perf",
  "southstar-js-runtime",
  "southstar-js-services",
+ "southstar-js-shadow",
 ]
 
 [[package]]

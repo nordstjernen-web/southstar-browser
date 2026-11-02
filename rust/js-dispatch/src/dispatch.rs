@@ -140,18 +140,36 @@ fn in_shadow_tree(node: Element) -> bool {
     false
 }
 
+fn is_composed(scope: &mut Scope<'_>, event: &Value) -> bool {
+    let composed = get(scope, event, "composed");
+    if composed.is_undefined() {
+        truthy(scope, event, "_is_trusted")
+    } else {
+        scope.to_bool(&composed)
+    }
+}
+
+fn set_target(js: Js, event: &Value, node: Element) {
+    js.scope(|scope| {
+        let wrapper = ffi::wrap(scope, node);
+        set(scope, event, "target", wrapper);
+    });
+}
+
 fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) {
     let mut fired = false;
     let (mut nodes, mut flags) = take_path(js);
+    let composed = js.scope(|scope| is_composed(scope, event)).unwrap_or(true);
     let mut cur = Some(target);
     while let Some(n) = cur {
         nodes.push(n);
-        if is_document(n) {
+        if is_document(n) || (!composed && ffi::is_shadow_root(n)) {
             break;
         }
         cur = n.parent();
     }
     flags.extend(nodes.iter().map(|&n| in_shadow_tree(n)));
+    let retargets = flags.first().copied().unwrap_or(false);
     let path_len = nodes.len();
     let mut window_in_path = nodes.last().is_some_and(|&tail| is_real_document(tail));
     let nodes = Rc::new(nodes);
@@ -178,6 +196,12 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
     let window_is_target =
         !bubbles && window_in_path && at_document && matches!(kind, "load" | "unload");
     let mut stopped = event_stopped(js, event);
+    let document_target = nodes
+        .last()
+        .map_or(target, |&outer| ffi::retarget(target, outer));
+    if retargets && window_in_path {
+        set_target(js, event, document_target);
+    }
     if window_is_target {
         if !stopped {
             stopped = window_listeners(js, Some(target), kind, event, true, true, &mut fired);
@@ -202,7 +226,7 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
                 target,
                 kind,
                 event,
-                Phase::capture(i == 0, flags[i]),
+                Phase::capture(i == 0, flags[i], retargets),
                 &mut fired,
             );
         }
@@ -224,16 +248,22 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
                 target,
                 kind,
                 event,
-                Phase::bubble(i == 0, in_shadow),
+                Phase::bubble(i == 0, in_shadow, retargets),
                 &mut fired,
             );
         }
     }
     if window_in_path && !stopped && (bubbles || window_is_target) && bubble_len == path_len {
+        if retargets {
+            set_target(js, event, document_target);
+        }
         window_listeners(js, Some(target), kind, event, false, false, &mut fired);
     }
     crate::with(js, |page| page.paths.pop());
     return_path(js, nodes, flags);
+    if retargets {
+        js.scope(|scope| set(scope, event, "target", Value::null()));
+    }
     let prevented = js
         .scope(|scope| finish_event(scope, event))
         .unwrap_or(false);
@@ -245,22 +275,25 @@ struct Phase {
     capture: bool,
     at_target: bool,
     in_shadow: bool,
+    retarget: bool,
 }
 
 impl Phase {
-    fn capture(at_target: bool, in_shadow: bool) -> Phase {
+    fn capture(at_target: bool, in_shadow: bool, retarget: bool) -> Phase {
         Phase {
             capture: true,
             at_target,
             in_shadow,
+            retarget,
         }
     }
 
-    fn bubble(at_target: bool, in_shadow: bool) -> Phase {
+    fn bubble(at_target: bool, in_shadow: bool, retarget: bool) -> Phase {
         Phase {
             capture: false,
             at_target,
             in_shadow,
+            retarget,
         }
     }
 }
@@ -318,6 +351,13 @@ fn invoke_at(
     if kind.starts_with("webkit") && alias_shadowed(js, cur, event) {
         return false;
     }
+    let visible = if phase.retarget {
+        let visible = ffi::retarget(target, cur);
+        set_target(js, event, visible);
+        visible
+    } else {
+        target
+    };
     let has_listeners = is_document(cur) || cur.flags() & FLAG_HAS_LISTENERS != 0;
     let snapshot = if has_listeners {
         snapshot_own(js, cur, kind, phase.capture, false)
@@ -340,7 +380,7 @@ fn invoke_at(
         let current = js.scope(|scope| {
             let current = ffi::wrap(scope, cur);
             set(scope, event, "currentTarget", current.clone());
-            let number = if cur == target {
+            let number = if cur == visible {
                 2
             } else if phase.capture {
                 1
