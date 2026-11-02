@@ -98,6 +98,8 @@ const CONSENT_EXTENSIONS: [&[u8]; 82] = [
     b"rb",
 ];
 
+const MAX_EXTENSION_LEN: usize = 16;
+
 pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
     let mut out: Vec<u8> = name
         .iter()
@@ -111,17 +113,10 @@ pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
                 )
         })
         .collect();
-    while out.last().is_some_and(|&c| c == b' ' || c == b'.') {
-        out.pop();
-    }
-    while out.first().is_some_and(|&c| c == b' ' || c == b'.') {
-        out.remove(0);
-    }
+    trim_edges(&mut out);
     if out.len() > MAX_NAME_LEN {
-        out.truncate(MAX_NAME_LEN);
-        while !out.is_empty() && core::str::from_utf8(&out).is_err() {
-            out.pop();
-        }
+        out = shortened(&out);
+        trim_edges(&mut out);
     }
     let stem = out
         .iter()
@@ -132,6 +127,30 @@ pub fn safe_name(name: &[u8]) -> Option<Vec<u8>> {
         || ((lowered.starts_with(b"com") || lowered.starts_with(b"lpt"))
             && is_port_number(&lowered[3..]));
     (!out.is_empty() && !reserved).then_some(out)
+}
+
+fn trim_edges(name: &mut Vec<u8>) {
+    while name.last().is_some_and(|&c| c == b' ' || c == b'.') {
+        name.pop();
+    }
+    let lead = name.iter().take_while(|&&c| c == b' ' || c == b'.').count();
+    name.drain(..lead);
+}
+
+fn shortened(name: &[u8]) -> Vec<u8> {
+    let ext: &[u8] = match name.iter().rposition(|&c| c == b'.') {
+        Some(dot) if name.len() - dot <= MAX_EXTENSION_LEN => &name[dot..],
+        _ => &[],
+    };
+    let mut stem = name[..name.len() - ext.len()].to_vec();
+    stem.truncate(MAX_NAME_LEN - ext.len());
+    while !stem.is_empty() && core::str::from_utf8(&stem).is_err() {
+        stem.pop();
+    }
+    while stem.last().is_some_and(|&c| c == b' ' || c == b'.') {
+        stem.pop();
+    }
+    [&stem[..], ext].concat()
 }
 
 fn is_port_number(rest: &[u8]) -> bool {
