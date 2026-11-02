@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS: `sibling-index()` and `sibling-count()` read the sibling positions
+  the selector matcher caches per style pass instead of walking every
+  sibling for every element. A rule using them on 30,000 siblings took
+  11.1 s to style and now takes about 3 s.
 * Source: the 45 copies of `until_nul` (the bytes before the first NUL)
   and the 45 `c_text`/`c_string`/`cstring` helpers that turned such bytes
   into a `CString` are now four shared functions in `southstar-unicode`:

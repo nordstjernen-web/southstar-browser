@@ -4,6 +4,7 @@
 
 use southstar_dom::{Node, children};
 
+use crate::matcher;
 use crate::scan::is_ident;
 
 const INDEX: &[u8] = b"sibling-index(";
@@ -40,6 +41,9 @@ fn position(node: Option<Node<'_>>) -> (usize, usize) {
     let Some(parent) = node.parent() else {
         return (1, 1);
     };
+    if let Some(cached) = matcher::sibling_position(node) {
+        return cached;
+    }
     let mut index = 0;
     let mut count = 0;
     for sibling in children(parent).filter(|c| c.is_element()) {

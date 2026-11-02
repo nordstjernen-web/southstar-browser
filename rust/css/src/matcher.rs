@@ -307,6 +307,13 @@ fn position_of(el: Node<'_>) -> Option<Position> {
     })
 }
 
+pub(crate) fn sibling_position(el: Node<'_>) -> Option<(usize, usize)> {
+    let pos = position_of(el)?;
+    let index = usize::try_from(pos.child).ok()?;
+    let after = usize::try_from(pos.last_child).ok()?;
+    Some((index, index + after - 1))
+}
+
 fn group_matches(group: GroupRef<'_>, el: Node<'_>) -> bool {
     group
         .selectors()
