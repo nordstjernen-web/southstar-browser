@@ -13,6 +13,7 @@ pub mod node;
 mod owned;
 pub mod select;
 pub mod serialize;
+pub mod shadow;
 pub mod store;
 #[cfg(test)]
 mod tests;

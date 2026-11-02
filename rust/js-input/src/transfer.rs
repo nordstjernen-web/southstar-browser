@@ -191,7 +191,7 @@ pub(crate) fn drag_event(
         set(scope, &event, "ctrlKey", Value::boolean(m.ctrl));
         set(scope, &event, "altKey", Value::boolean(m.alt));
         set(scope, &event, "metaKey", Value::boolean(m.meta));
-        let related = match related {
+        let related = match related.and_then(|r| southstar_dom::shadow::related_target(target, r)) {
             Some(related) => ffi::wrap(scope, related),
             None => Value::null(),
         };

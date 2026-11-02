@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: mouse, pointer, drag and focus events only expose a
+  `relatedTarget` from the listener's own document. Moving the pointer or
+  dragging across a frame edge used to hand a cross-origin frame the
+  embedding page's node (and through `ownerDocument.defaultView` its
+  window, storage and same-origin requests), and the reverse. A node in a
+  child frame now shows up as the `<iframe>` element, one in another
+  document as null, and `relatedTarget` is retargeted out of shadow trees
+  like `target`.
 * Workers: `SharedWorker`. `new SharedWorker(url, nameOrOptions)` returns
   an object with a `port` and `onerror`; constructors in the renderer that
   name the same script URL and name from the same origin reach one worker
