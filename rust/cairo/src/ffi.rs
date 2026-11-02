@@ -186,7 +186,6 @@ unsafe extern "C" {
         height: c_int,
         stride: c_int,
     ) -> *mut RawSurface;
-    fn cairo_image_surface_create_from_png(filename: *const c_char) -> *mut RawSurface;
     fn cairo_image_surface_get_data(surface: *mut RawSurface) -> *mut u8;
     fn cairo_image_surface_get_width(surface: *mut RawSurface) -> c_int;
     fn cairo_image_surface_get_height(surface: *mut RawSurface) -> c_int;

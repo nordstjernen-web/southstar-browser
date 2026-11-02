@@ -229,13 +229,6 @@ unsafe extern "C" {
     -> *mut c_void;
     pub fn g_object_ref(object: *mut c_void) -> *mut c_void;
     pub fn g_object_unref(object: *mut c_void);
-    pub fn g_object_set_data_full(
-        object: *mut c_void,
-        key: *const c_char,
-        data: *mut c_void,
-        destroy: GDestroyNotify,
-    );
-    pub fn g_object_get_data(object: *mut c_void, key: *const c_char) -> *mut c_void;
     pub fn g_object_bind_property(
         source: *mut c_void,
         source_property: *const c_char,
@@ -550,7 +543,6 @@ pub const EVENT_CONTROLLER_SCROLL_KINETIC: c_uint = 1 << 3;
 
 unsafe extern "C" {
     pub fn g_type_query(type_: GType, query: *mut GTypeQuery);
-    pub fn g_bytes_new_take(data: *mut c_void, size: usize) -> *mut GBytes;
 
     pub fn gdk_cursor_new_from_name(
         name: *const c_char,

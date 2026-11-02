@@ -8,7 +8,6 @@ use crate::{GBoolean, GType, GdkRgba, GtkWidget};
 
 pub type GCallback = unsafe extern "C" fn();
 pub type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
-pub type GThreadFunc = unsafe extern "C" fn(data: *mut c_void) -> *mut c_void;
 pub type GClosureNotify = Option<unsafe extern "C" fn(data: *mut c_void, closure: *mut c_void)>;
 
 pub const SOURCE_REMOVE: GBoolean = 0;
@@ -58,57 +57,19 @@ unsafe extern "C" {
         destroy_data: GClosureNotify,
         connect_flags: c_uint,
     ) -> c_ulong;
-    pub fn g_object_set_data(object: *mut c_void, key: *const c_char, data: *mut c_void);
     pub fn g_signal_handler_disconnect(instance: *mut c_void, handler_id: c_ulong);
-    pub fn g_timeout_add(interval: c_uint, function: GSourceFunc, data: *mut c_void) -> c_uint;
-    pub fn g_timeout_add_seconds(
-        interval: c_uint,
-        function: GSourceFunc,
-        data: *mut c_void,
-    ) -> c_uint;
     pub fn g_idle_add(function: GSourceFunc, data: *mut c_void) -> c_uint;
     pub fn g_source_remove(tag: c_uint) -> GBoolean;
-    pub fn g_thread_new(name: *const c_char, func: GThreadFunc, data: *mut c_void) -> *mut c_void;
-    pub fn g_thread_unref(thread: *mut c_void);
 
     pub fn g_get_monotonic_time() -> i64;
-    pub fn g_get_real_time() -> i64;
-    pub fn g_get_num_processors() -> c_uint;
     pub fn g_filename_to_uri(
         filename: *const c_char,
         hostname: *const c_char,
         error: *mut *mut c_void,
     ) -> *mut c_char;
     pub fn g_format_size(size: u64) -> *mut c_char;
-    pub fn g_file_set_contents(
-        filename: *const c_char,
-        contents: *const c_char,
-        length: isize,
-        error: *mut *mut c_void,
-    ) -> GBoolean;
-    pub fn g_file_get_contents(
-        filename: *const c_char,
-        contents: *mut *mut c_char,
-        length: *mut usize,
-        error: *mut *mut c_void,
-    ) -> GBoolean;
-    pub fn g_file_test(filename: *const c_char, test: c_uint) -> GBoolean;
-    pub fn g_dir_open(path: *const c_char, flags: c_uint, error: *mut *mut c_void) -> *mut c_void;
-    pub fn g_dir_read_name(dir: *mut c_void) -> *const c_char;
-    pub fn g_dir_close(dir: *mut c_void);
     pub fn g_path_get_basename(file_name: *const c_char) -> *mut c_char;
     pub fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
-    pub fn g_build_filenamev(args: *mut *mut c_char) -> *mut c_char;
-    pub fn g_unlink(filename: *const c_char) -> c_int;
-    pub fn g_rmdir(filename: *const c_char) -> c_int;
-    pub fn g_uri_unescape_string(
-        escaped_string: *const c_char,
-        illegal_characters: *const c_char,
-    ) -> *mut c_char;
-    pub fn g_markup_escape_text(text: *const c_char, length: isize) -> *mut c_char;
-    pub fn g_utf8_make_valid(str: *const c_char, len: isize) -> *mut c_char;
-    pub fn g_strdup(str: *const c_char) -> *mut c_char;
-    pub fn g_getenv(variable: *const c_char) -> *const c_char;
     pub fn g_setenv(variable: *const c_char, value: *const c_char, overwrite: GBoolean)
     -> GBoolean;
     pub fn g_app_info_launch_default_for_uri(
@@ -276,7 +237,6 @@ unsafe extern "C" {
         start_pos: *mut c_int,
         end_pos: *mut c_int,
     ) -> GBoolean;
-    pub fn gtk_editable_get_type() -> GType;
     pub fn gtk_notebook_new() -> *mut GtkWidget;
     pub fn gtk_notebook_set_show_tabs(notebook: *mut GtkWidget, show_tabs: GBoolean);
     pub fn gtk_notebook_set_show_border(notebook: *mut GtkWidget, show_border: GBoolean);

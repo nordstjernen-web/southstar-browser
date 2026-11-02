@@ -68,13 +68,6 @@ impl Surface {
         unsafe { Surface::own(raw) }
     }
 
-    pub fn from_png(path: &CStr) -> Surface {
-        // SAFETY: the path is NUL-terminated; cairo returns a new reference, an error surface on failure.
-        let raw = unsafe { super::cairo_image_surface_create_from_png(path.as_ptr()) };
-        // SAFETY: that new reference is handed to the Surface.
-        unsafe { Surface::own(raw) }
-    }
-
     pub fn recording(content: Content, extents: Option<&Rectangle>) -> Surface {
         let extents: *const Rectangle = extents.map_or(ptr::null(), ptr::from_ref);
         // SAFETY: extents is null or a rectangle cairo copies before returning a new reference.
