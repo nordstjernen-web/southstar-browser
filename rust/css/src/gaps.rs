@@ -4,11 +4,12 @@
 
 use crate::calc::Parsed;
 use crate::prop::Prop;
-use crate::property::{self, Body, c_text, calc_value, eq, length, lower, wide_keyword};
+use crate::property::{self, Body, calc_value, eq, length, lower, wide_keyword};
 use crate::scan::{match_close_paren, split_ws_paren, starts_with_ci, strip};
 use crate::text::split_top_level_commas;
 use crate::units::{self, EM, NUMBER, PERCENT, PX, REM, Unit, VH, VMAX, VMIN, VW};
 use crate::{math, values};
+use southstar_unicode::c_string_until_nul;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Part {
@@ -236,9 +237,9 @@ fn width_item(t: &[u8]) -> Option<Vec<u8>> {
     if t.contains(&b'(') {
         return match calc_value(t)? {
             Parsed::Length(v, unit) if unit != PERCENT && (unit != NUMBER || v == 0.0) => {
-                math::math_canonical(&c_text(t))
+                math::math_canonical(&c_string_until_nul(t))
             }
-            Parsed::Calc(c) if c.pct == 0.0 => math::math_canonical(&c_text(t)),
+            Parsed::Calc(c) if c.pct == 0.0 => math::math_canonical(&c_string_until_nul(t)),
             _ => None,
         };
     }
@@ -287,7 +288,7 @@ fn inset_value(t: &[u8]) -> Option<Vec<u8>> {
         return Some(values::g_unit(v, if unit == NUMBER { PX } else { unit }));
     }
     if t.contains(&b'(') {
-        return math::math_canonical(&c_text(t)).or_else(|| Some(lower(t)));
+        return math::math_canonical(&c_string_until_nul(t)).or_else(|| Some(lower(t)));
     }
     Some(lower(t))
 }

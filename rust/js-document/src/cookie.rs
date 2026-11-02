@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use southstar_js_engine::{Scope, Value};
 
+use crate::JsResult;
 use crate::ffi::{self, Js};
-use crate::{JsResult, until_nul};
 
 const MAX_COOKIE_LEN: usize = 4096;
 

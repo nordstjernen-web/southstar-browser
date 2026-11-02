@@ -10,6 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+southstar-unicode = { path = "../unicode", version = "=1.0.7-dev" }
 southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.7-dev" }
 southstar-csp = { path = "../csp", version = "=1.0.7-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.7-dev" }

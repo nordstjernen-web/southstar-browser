@@ -3,14 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_long};
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_dom::{self as dom, Node};
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 pub fn fragment_target<'a>(root: Node<'a>, frag: &CStr) -> Option<Node<'a>> {
     dom::index::find_fragment_target(root, frag)
@@ -59,7 +54,7 @@ pub fn length_limits_apply(n: Node) -> bool {
 }
 
 pub fn set_editable_value(n: Node, value: &[u8]) {
-    dom::controls::set_editable_value(n, &cstring(value));
+    dom::controls::set_editable_value(n, &c_string_until_nul(value));
 }
 
 pub fn effectively_disabled(el: Node) -> bool {
@@ -109,7 +104,7 @@ pub fn is_contenteditable_host(n: Node) -> bool {
 }
 
 pub fn utf8_strlen(s: &[u8]) -> c_long {
-    let c = cstring(s);
+    let c = c_string_until_nul(s);
     let chars = c.as_bytes().iter().filter(|&&b| b & 0xc0 != 0x80).count();
     c_long::try_from(chars).unwrap_or(c_long::MAX)
 }

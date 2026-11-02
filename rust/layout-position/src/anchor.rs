@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul_owned;
 use std::collections::HashMap;
 
 use southstar_css::anchor::{
@@ -150,17 +151,10 @@ pub struct Env<'e, 'a> {
     pub font_px: f64,
 }
 
-fn until_nul(mut v: Vec<u8>) -> Vec<u8> {
-    if let Some(p) = v.iter().position(|&c| c == 0) {
-        v.truncate(p);
-    }
-    v
-}
-
 fn text(style: StyleRef<'_>, prop: PropId, initial: &[u8]) -> Vec<u8> {
     style
         .get(prop)
-        .map(|v| until_nul(southstar_css::value_serialize(v.data())))
+        .map(|v| until_nul_owned(southstar_css::value_serialize(v.data())))
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| initial.to_vec())
 }

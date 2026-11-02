@@ -3,7 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char};
-use std::ffi::{CString, OsStr};
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
+use std::ffi::OsStr;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -45,15 +47,6 @@ impl Regex {
     }
 }
 
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    &bytes[..end]
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
-}
-
 #[cfg(unix)]
 fn path_of(bytes: &[u8]) -> PathBuf {
     use std::os::unix::ffi::OsStrExt;
@@ -87,7 +80,7 @@ pub(crate) fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
     let mut have_leading = false;
     let mut single_element: Option<&[u8]> = None;
     let mut last_trailing: &[u8] = &[];
-    for element in parts.iter().map(|part| until_nul(part)) {
+    for element in parts.iter().map(until_nul) {
         if element.is_empty() {
             continue;
         }
@@ -251,7 +244,7 @@ pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
     if psl.is_null() {
         return None;
     }
-    let host = cstring(host);
+    let host = c_string_until_nul(host);
     // SAFETY: `psl` is the non-null built-in list and `host` a NUL-terminated string that
     // outlives the call.
     let domain = unsafe { psl_registrable_domain(psl, host.as_ptr()) };

@@ -3,13 +3,14 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_js_engine::{
     ClassHooks, HostClass, OwnProperty, PropertyKey, Scope, SetFlags, Trace, Value,
 };
 
 use crate::ffi::Shared;
-use crate::{Element, c_string, dataset, ffi, token_list};
+use crate::{Element, dataset, ffi, token_list};
 
 pub(crate) static TOKEN_LIST_CLASS: HostClass = HostClass::new(
     c"DOMTokenList",
@@ -151,7 +152,7 @@ fn dataset_own_keys(scope: &mut Scope<'_>, obj: &Value) -> Result<Vec<PropertyKe
     let names = dataset_node(obj).map(dataset::names).unwrap_or_default();
     Ok(names
         .iter()
-        .map(|name| scope.property_key(c_string(name).as_bytes()))
+        .map(|name| scope.property_key(c_string_until_nul(name).as_bytes()))
         .collect())
 }
 

@@ -4,8 +4,8 @@
 
 use core::cell::{OnceCell, RefCell};
 use core::ffi::{CStr, c_int, c_void};
+use southstar_unicode::c_string_until_nul;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::rc::Rc;
 
 use southstar_css_prop_syntax::{self as prop_syntax, Context, SyntaxDef};
@@ -13,7 +13,6 @@ use southstar_dom::Node;
 use southstar_glib::GBoolean;
 
 use super::computed_units::{RawStyle, StyleView};
-use super::declarations::until_nul;
 use super::font::relative_unit_px;
 use super::registry::RegisteredProps;
 use super::sheet::PropertyRule;
@@ -151,13 +150,9 @@ fn views(raw: &[RawVarMatch]) -> Vec<VarMatch<'_>> {
         .collect()
 }
 
-fn c_text(text: &[u8]) -> CString {
-    CString::new(until_nul(text)).unwrap_or_default()
-}
-
 fn own_table(own: Own) -> VarTable {
     own.into_iter()
-        .map(|(name, value)| (c_text(&name), c_text(&value)))
+        .map(|(name, value)| (c_string_until_nul(&name), c_string_until_nul(&value)))
         .collect()
 }
 
@@ -282,7 +277,7 @@ pub(super) fn compute_registered_vars(
             syntax_ctx(&StyleView(style), root_px, color)
         });
         if let Some(computed) = prop_syntax::compute(syntax, value.to_bytes(), Some(ctx)) {
-            replaced.push((name.clone(), c_text(&computed)));
+            replaced.push((name.clone(), c_string_until_nul(&computed)));
         }
     }
     if !replaced.is_empty() {

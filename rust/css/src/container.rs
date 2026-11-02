@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::{Cell, RefCell};
-use std::ffi::{CStr, CString};
+use southstar_unicode::c_string_until_nul;
+use std::ffi::CStr;
 
 use crate::calc;
 use crate::ffi::{self, Container};
@@ -236,14 +237,9 @@ fn feature_name_known(name: &[u8]) -> bool {
     FEATURE_NAMES.contains(&name)
 }
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn ratio_value(v: &[u8]) -> Option<f64> {
     let whole_number = |part: &[u8]| -> Option<f64> {
-        let text = c_text(strip(part));
+        let text = c_string_until_nul(strip(part));
         let (value, end) = ffi::strtod(&text, 0);
         (end == text.to_bytes().len()).then_some(value)
     };
@@ -315,9 +311,9 @@ fn value_is_length(v: &[u8]) -> bool {
         } else {
             v.to_vec()
         };
-        return calc::parse_calc(&c_text(&text)).is_some();
+        return calc::parse_calc(&c_string_until_nul(&text)).is_some();
     }
-    match units::parse_length(&c_text(v)) {
+    match units::parse_length(&c_string_until_nul(v)) {
         Some((n, unit)) => unit != NUMBER || n == 0.0,
         None => false,
     }

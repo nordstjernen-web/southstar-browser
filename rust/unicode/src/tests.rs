@@ -73,3 +73,12 @@ fn classes_of_characters() {
     assert!(is_print(u32::from(' ')));
     assert!(!is_print(0x0378));
 }
+
+#[test]
+fn until_nul_stops_at_the_first_nul() {
+    assert_eq!(crate::until_nul(b"ab\0cd"), b"ab");
+    assert_eq!(crate::until_nul("abc"), b"abc");
+    assert_eq!(crate::until_nul(b""), b"");
+    assert_eq!(crate::until_nul_owned(b"x\0y".to_vec()), b"x");
+    assert_eq!(crate::until_nul_str("k\0v"), "k");
+}

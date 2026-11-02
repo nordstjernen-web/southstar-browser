@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 mod diagnostics;
 mod settings;
 mod templates;
@@ -119,10 +120,6 @@ pub fn is_privileged_page(url: &[u8]) -> bool {
 
 pub fn request_from_chrome(top_url: Option<&[u8]>) -> bool {
     top_url.filter(|t| !t.is_empty()).is_none_or(is_chrome_page)
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 
 fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {

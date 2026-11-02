@@ -5,6 +5,7 @@
 use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
 use core::ptr::{self, NonNull};
+use southstar_unicode::c_string_until_nul;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -214,11 +215,6 @@ fn page_of(scope: &Scope<'_>) -> Option<Page> {
     Page::current(scope)
 }
 
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 pub(crate) fn alloc() -> Page {
     let record = Rc::new(Record {
         rt: Cell::new(RuntimeHandle::NULL),
@@ -327,7 +323,7 @@ pub(crate) fn init_tables(js: &Record, page: bool) {
 
 pub(crate) fn set_partition_key(js: &Record, partition_key: Option<&CStr>) {
     js.partition_key
-        .replace(partition_key.map(|key| cstring(key.to_bytes())));
+        .replace(partition_key.map(|key| c_string_until_nul(key.to_bytes())));
 }
 
 pub(crate) fn has_pinned_set(js: Option<Page>) -> bool {
@@ -501,11 +497,11 @@ fn partition_apply(page: Option<Page>, js: &Record, new_url: Option<&CStr>) {
     let origin = new_url
         .and_then(|url| southstar_url::bytes::origin_from(url.to_bytes()))
         .filter(|origin| !origin.is_empty())
-        .map(|origin| cstring(&origin));
+        .map(|origin| c_string_until_nul(&origin));
     let new_key = origin.unwrap_or_else(|| {
         let counter = js.opaque_counter.get() + 1;
         js.opaque_counter.set(counter);
-        cstring(format!("opaque://{counter}").as_bytes())
+        c_string_until_nul(format!("opaque://{counter}").as_bytes())
     });
     if js.partition_key.borrow().as_ref() == Some(&new_key) {
         return;
@@ -974,7 +970,7 @@ pub(crate) fn wrapper_pinned(js: Option<Page>, n: Node<'_>) -> bool {
 
 pub(crate) fn new_orphan_element(scope: &mut Scope<'_>, name: &[u8]) -> Result<Value, Value> {
     let js = page_of(scope);
-    let name = cstring(name);
+    let name = c_string_until_nul(name);
     let element_node = southstar_dom::node::new_element(name.to_bytes());
     super::wrapper::arm_js_invalidate(element_node);
     (crate::api::mutation_hooks().track_orphan)(js, element_node);
@@ -1224,7 +1220,7 @@ pub(crate) fn set_cookie_value(js: Option<Page>, value: Option<&CStr>) {
     let Some(record) = record(js) else {
         return;
     };
-    let value = value.map(|value| cstring(value.to_bytes()));
+    let value = value.map(|value| c_string_until_nul(value.to_bytes()));
     record.cookie_value.replace(value);
 }
 

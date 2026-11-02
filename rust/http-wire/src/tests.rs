@@ -4,6 +4,7 @@
 
 use crate::h2::{Connection, Event};
 use crate::{frame, h1, hpack};
+use southstar_unicode::until_nul;
 
 fn hex(text: &str) -> Vec<u8> {
     let digits: Vec<u8> = text.bytes().filter(u8::is_ascii_hexdigit).collect();
@@ -141,7 +142,7 @@ fn http1_lines() {
     assert_eq!(h1::strtoll(b" 0x1F", 16), 31);
     assert_eq!(h1::strtoll(b"-12abc", 10), -12);
     assert_eq!(h1::strtoll(b"99999999999999999999999", 10), i64::MAX);
-    assert_eq!(h1::until_nul(b"ab\0cd"), b"ab");
+    assert_eq!(until_nul(b"ab\0cd"), b"ab");
 }
 
 fn server_frame(kind: u8, flags: u8, stream: u32, payload: &[u8]) -> Vec<u8> {

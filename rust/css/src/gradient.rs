@@ -3,8 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::{PI, SQRT_2};
+use southstar_unicode::c_string_until_nul;
 use std::borrow::Cow;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 
 use southstar_css_color::{Color, Space};
 
@@ -184,11 +185,6 @@ pub(crate) struct GradientParse {
     stop_texts: Option<Vec<Vec<u8>>>,
 }
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn flag(value: bool) -> i32 {
     i32::from(value)
 }
@@ -205,9 +201,9 @@ pub(crate) fn token_is_math_fn(t: &[u8]) -> bool {
 
 pub(crate) fn token_is_length_pct(t: &[u8]) -> bool {
     if token_is_math_fn(t) {
-        return calc::parse_calc(&c_text(t)).is_some();
+        return calc::parse_calc(&c_string_until_nul(t)).is_some();
     }
-    match units::parse_length(&c_text(t)) {
+    match units::parse_length(&c_string_until_nul(t)) {
         Some((v, unit)) => unit != NUMBER || v == 0.0,
         None => false,
     }
@@ -229,7 +225,7 @@ fn token_is_angle(t: &[u8]) -> bool {
     if t == b"0" {
         return true;
     }
-    let text = c_text(t);
+    let text = c_string_until_nul(t);
     let (_, end) = ffi::strtod(&text, 0);
     if end == 0 {
         return false;
@@ -241,7 +237,7 @@ fn token_is_angle(t: &[u8]) -> bool {
 }
 
 pub(crate) fn parse_angle_deg(s: &[u8]) -> f64 {
-    let text = c_text(s);
+    let text = c_string_until_nul(s);
     let bytes = text.to_bytes();
     let (v, end) = ffi::strtod(&text, 0);
     if end == 0 {
@@ -264,7 +260,7 @@ fn stop_color_specified(tok: &[u8]) -> Vec<u8> {
         || [&b"rgb("[..], b"rgba(", b"hsl(", b"hsla("]
             .iter()
             .any(|name| starts_with_ci(tok, name));
-    if legacy && let Some(rgba) = color::parse_color(&c_text(tok)) {
+    if legacy && let Some(rgba) = color::parse_color(&c_string_until_nul(tok)) {
         return color_text(rgba);
     }
     if tok.contains(&b'(') {
@@ -665,7 +661,7 @@ fn stop_pos_parse(t: &[u8], conic: bool, st: &mut Stop) -> bool {
             st.has_pos = 1;
             return true;
         }
-        if let Some((v, PERCENT)) = units::parse_length(&c_text(t)) {
+        if let Some((v, PERCENT)) = units::parse_length(&c_string_until_nul(t)) {
             st.pos = v / 100.0;
             st.has_pos = 1;
             return true;
@@ -689,7 +685,7 @@ fn stop_parse(gp: &mut GradientParse, seg: &[u8]) -> Option<bool> {
     if n < 1 {
         return None;
     }
-    if let Some(rgba) = color::parse_color(&c_text(tok[0])) {
+    if let Some(rgba) = color::parse_color(&c_string_until_nul(tok[0])) {
         if n > 3 {
             return None;
         }

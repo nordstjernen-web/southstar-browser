@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 use std::sync::OnceLock;
 
@@ -10,11 +11,6 @@ use southstar_config::util;
 use southstar_glib as glib;
 
 use crate::file_uri;
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 pub(crate) fn configured_search_engine() -> Option<Vec<u8>> {
     let config = southstar_config::get()?;
@@ -83,7 +79,7 @@ fn default_accept_language_c() -> &'static CStr {
             None => crate::accept_language_from_language_names(&language_names())
                 .unwrap_or_else(|| b"en-US,en;q=0.9".to_vec()),
         };
-        cstring(&value)
+        c_string_until_nul(&value)
     })
 }
 

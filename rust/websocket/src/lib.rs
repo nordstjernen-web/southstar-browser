@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::until_nul;
 mod ffi;
 
 pub use ffi::{Events, WebSocket};
@@ -169,13 +170,6 @@ pub fn close_frame(code: i32, reason: Option<&[u8]>) -> Vec<u8> {
         }
     }
     frame
-}
-
-pub fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 pub struct FrameMeta {

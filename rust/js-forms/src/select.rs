@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul_owned;
 use std::collections::VecDeque;
 
 use southstar_dom::{children, controls, select};
@@ -239,7 +240,7 @@ pub fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
     let Some(arg) = args.first().filter(|a| a.is_string()) else {
         return Ok(Value::null());
     };
-    let Ok(name) = scope.to_bytes(arg).map(crate::until_nul) else {
+    let Ok(name) = scope.to_bytes(arg).map(until_nul_owned) else {
         return Ok(Value::null());
     };
     let Some(el) = ffi::element(this) else {

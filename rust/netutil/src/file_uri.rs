@@ -3,13 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_config::util;
+use southstar_unicode::until_nul;
 
 const HEX: &[u8; 16] = b"0123456789ABCDEF";
 const SEPARATOR: u8 = if cfg!(windows) { b'\\' } else { b'/' };
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
-}
 
 fn is_separator(byte: u8) -> bool {
     byte == b'/' || (cfg!(windows) && byte == b'\\')

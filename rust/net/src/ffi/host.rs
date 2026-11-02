@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_char, c_int, c_uint};
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -30,11 +31,6 @@ unsafe extern "C" {
     static glib_major_version: c_uint;
     static glib_minor_version: c_uint;
     static glib_micro_version: c_uint;
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
 }
 
 /// # Safety

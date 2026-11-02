@@ -4,12 +4,13 @@
 
 use southstar_dom::{ancestors, children, controls, select};
 use southstar_js_engine::{NativeFn, Scope, Value};
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi;
 use crate::submit::is_submit_trigger;
 use crate::{
     Element, JsResult, c_bytes, form_owner, index, length, name_is, named, non_empty, text_is,
-    text_is_any, type_of, until_nul,
+    text_is_any, type_of,
 };
 
 const ITERATORS: &str = "(function(P,check){ function* walk(fd,kind){  for(var i=0;i<fd._entries.length;i++){   var e=fd._entries[i];   yield kind===0?[e[0],e[1]]:kind===1?e[0]:e[1];  } } function make(name,kind){  var f=({[name]:function(){check(this);return walk(this,kind);}})[name];  Object.defineProperty(f,'length',{value:0,configurable:true});  Object.defineProperty(P,name,{value:f,writable:true,enumerable:true,configurable:true});  return f; } var entries=make('entries',0); make('keys',1);make('values',2); Object.defineProperty(P,Symbol.iterator,{value:entries,writable:true,configurable:true});})";
@@ -144,7 +145,7 @@ fn pair_named(scope: &mut Scope<'_>, pair: &Value, name: &[u8]) -> bool {
 }
 
 fn key_arg(scope: &mut Scope<'_>, key: &Value) -> JsResult<Vec<u8>> {
-    scope.to_bytes(key).map(until_nul)
+    scope.to_bytes(key).map(until_nul_owned)
 }
 
 fn set(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
@@ -336,7 +337,7 @@ fn option_selected(option: Element) -> bool {
 }
 
 fn append_option(scope: &mut Scope<'_>, fd: &Value, name: &[u8], option: Element) {
-    let value = until_nul(select::option_value(option));
+    let value = until_nul_owned(select::option_value(option));
     append_pair(scope, fd, name, &value);
 }
 
@@ -414,7 +415,7 @@ fn populate(scope: &mut Scope<'_>, fd: &Value, form: Element, submitter: Option<
             continue;
         }
         let value = if name_is(el, "textarea") {
-            until_nul(controls::textarea_value(Some(el)))
+            until_nul_owned(controls::textarea_value(Some(el)))
         } else {
             match controls::used_value(el) {
                 Some(value) => value.to_bytes().to_vec(),

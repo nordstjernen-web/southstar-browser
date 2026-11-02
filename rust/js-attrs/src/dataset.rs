@@ -3,12 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, attrs};
 use southstar_js_engine::{Scope, Value};
 
-use crate::{Element, INVALID_CHARACTER_ERR, JsResult, SYNTAX_ERR, c_string, ffi, string_arg};
+use crate::{Element, INVALID_CHARACTER_ERR, JsResult, SYNTAX_ERR, ffi, string_arg};
 
 const MATHML_NS: &[u8] = b"http://www.w3.org/1998/Math/MathML";
 
@@ -58,7 +59,7 @@ fn prop_to_attr(prop: &[u8]) -> Result<CString, Invalid> {
             out.push(c);
         }
     }
-    let attr = c_string(&out);
+    let attr = c_string_until_nul(&out);
     if southstar_js_dom_factory::valid_element_local_name(attr.to_bytes()) {
         Ok(attr)
     } else {

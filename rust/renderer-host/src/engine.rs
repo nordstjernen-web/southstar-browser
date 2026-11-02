@@ -3,7 +3,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use std::ffi::CString;
 
 use southstar_cairo::{Context, Format, Surface};
 
@@ -12,11 +11,6 @@ pub use southstar_browser::api::{
     print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_initiator,
     set_next_referrer, set_next_user_activated, shutdown,
 };
-
-pub fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 pub fn net_idle() -> bool {
     southstar_net::idle()

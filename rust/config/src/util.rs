@@ -2,14 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
-}
 
 #[cfg(unix)]
 pub fn os_path(path: &[u8]) -> Option<PathBuf> {
@@ -55,7 +52,7 @@ pub fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
     let separator = separator_for(parts);
     let parts: Vec<&[u8]> = parts
         .iter()
-        .map(|part| until_nul(part))
+        .map(until_nul)
         .filter(|part| !part.is_empty())
         .collect();
     let mut out: Vec<u8> = Vec::new();

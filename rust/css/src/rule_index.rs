@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 
 use crate::ffi::{CompoundRef, SelectorRef};
@@ -25,10 +26,6 @@ struct Counts {
     by_class: HashMap<Vec<u8>, u32>,
     by_tag: HashMap<Vec<u8>, u32>,
     by_attr: HashMap<Vec<u8>, u32>,
-}
-
-fn until_nul(text: &[u8]) -> &[u8] {
-    &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())]
 }
 
 fn subject_type(subject: CompoundRef<'_>) -> Option<&[u8]> {

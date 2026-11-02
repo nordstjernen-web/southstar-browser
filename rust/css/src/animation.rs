@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use crate::content::{append_unescaped, ident_valid, wide_keyword_or_default};
 use crate::ffi;
@@ -201,11 +201,6 @@ fn starts_digit_like(tok: &[u8]) -> bool {
     first.is_ascii_digit() || (first == b'-' && second.is_ascii_digit())
 }
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn item_valid(prop: Longhand, item: &[u8]) -> bool {
     match prop {
         Longhand::AnimationName => {
@@ -226,7 +221,7 @@ fn item_valid(prop: Longhand, item: &[u8]) -> bool {
             if eq(item, b"infinite") {
                 return true;
             }
-            let text = c_text(item);
+            let text = c_string_until_nul(item);
             let (num, end) = ffi::strtod(&text, 0);
             end != 0 && end == text.to_bytes().len() && num >= 0.0
         }
@@ -277,7 +272,7 @@ fn range_lp_canonical(tok: &[u8]) -> Option<Vec<u8>> {
     if tok.is_empty() {
         return None;
     }
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     if time::starts_math_fn(tok) {
         let Some(m) = math_canonical(&text) else {
             let len = tok.len();
@@ -460,7 +455,7 @@ fn apply_longhand(out: &mut [Entry], value: Option<&[u8]>, prop: Longhand) {
                     e.iter_count = -1;
                     e.iterations = f64::INFINITY;
                 } else {
-                    let (num, _) = ffi::strtod(&c_text(item), 0);
+                    let (num, _) = ffi::strtod(&c_string_until_nul(item), 0);
                     e.iterations = if num < 0.0 { 0.0 } else { num };
                     e.iter_count = if num <= 0.0 { 0 } else { num as i32 };
                 }
@@ -743,7 +738,7 @@ fn shorthand_token(e: &mut Entry, got: &mut Seen, tok: &[u8], is_animation: bool
         }
         return true;
     }
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     let (num, end) = ffi::strtod(&text, 0);
     if end != 0 && end == text.to_bytes().len() {
         if !is_animation || got.iter || num < 0.0 {

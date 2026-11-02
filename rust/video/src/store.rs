@@ -4,6 +4,7 @@
 
 use core::cell::{Cell, Ref, RefCell, RefMut};
 use core::ffi::{CStr, c_int, c_uint};
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
@@ -13,7 +14,7 @@ use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::{BoxRef, MediaHandle};
 use southstar_webvtt::Cue;
 
-use crate::ffi::{self, Player, Response, Texture, decode_image, until_nul};
+use crate::ffi::{self, Player, Response, Texture, decode_image};
 use crate::{Cache, FetchKind, Sink};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

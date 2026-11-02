@@ -2,23 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 
 use southstar_dom::attrs::{self, NsName};
 use southstar_dom::{Kind, Node, Tree, node};
 
 use crate::Dom;
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&c| c == 0)
-        .map_or(bytes, |nul| &bytes[..nul])
-}
-
-fn c_string(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
-}
 
 struct DomBuilder;
 
@@ -54,7 +44,7 @@ impl Dom for DomBuilder {
     }
 
     fn set_attr(&mut self, element: Node<'static>, name: &[u8], value: &[u8]) {
-        attrs::set_attribute(element, &c_string(name), Some(until_nul(value)));
+        attrs::set_attribute(element, &c_string_until_nul(name), Some(until_nul(value)));
     }
 
     fn set_attr_ns(
@@ -69,8 +59,15 @@ impl Dom for DomBuilder {
         if attrs::is_internal(until_nul(local)) || attrs::is_internal(until_nul(qualified)) {
             return;
         }
-        let (namespace, prefix) = (namespace.map(c_string), prefix.map(c_string));
-        let (local, qualified, value) = (c_string(local), c_string(qualified), c_string(value));
+        let (namespace, prefix) = (
+            namespace.map(c_string_until_nul),
+            prefix.map(c_string_until_nul),
+        );
+        let (local, qualified, value) = (
+            c_string_until_nul(local),
+            c_string_until_nul(qualified),
+            c_string_until_nul(value),
+        );
         let qname = NsName {
             namespace_uri: namespace.as_deref(),
             prefix: prefix.as_deref(),

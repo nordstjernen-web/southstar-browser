@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use crate::calc::{self, Parsed};
 use crate::container;
@@ -112,11 +112,6 @@ pub(crate) struct Areas {
     pub rects: Vec<AreaRect>,
 }
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn track_token(tok: &[u8]) -> Option<Track> {
     if tok.is_empty() {
         return None;
@@ -132,7 +127,7 @@ fn track_token(tok: &[u8]) -> Option<Track> {
             return Some(out);
         }
     }
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     let (v, end) = crate::ffi::strtod(&text, 0);
     if end == 0 {
         return None;
@@ -169,7 +164,7 @@ fn track_token(tok: &[u8]) -> Option<Track> {
 
 fn math_track(text: &[u8]) -> Option<Track> {
     let mut out = Track::default();
-    match calc::parse_calc(&c_text(text))? {
+    match calc::parse_calc(&c_string_until_nul(text))? {
         Parsed::Length(v, PX | NUMBER) => {
             out.kind = TRACK_PX;
             out.v = v;
@@ -664,12 +659,12 @@ fn integer_canonical(tok: &[u8]) -> Option<(Vec<u8>, bool, i64)> {
         return None;
     }
     if !matches!(
-        calc::parse_calc(&c_text(tok)),
+        calc::parse_calc(&c_string_until_nul(tok)),
         Some(Parsed::Length(_, NUMBER))
     ) {
         return None;
     }
-    let canon = math::math_canonical(&c_text(tok)).unwrap_or_else(|| tok.to_vec());
+    let canon = math::math_canonical(&c_string_until_nul(tok)).unwrap_or_else(|| tok.to_vec());
     Some((canon, false, 0))
 }
 
@@ -979,7 +974,7 @@ fn names_append(acc: &mut Vec<u8>, tok: &[u8]) -> bool {
 }
 
 fn track_token_canonical(tok: &[u8]) -> Vec<u8> {
-    if let Some((v, NUMBER)) = units::parse_length(&c_text(tok))
+    if let Some((v, NUMBER)) = units::parse_length(&c_string_until_nul(tok))
         && v == 0.0
     {
         return b"0px".to_vec();

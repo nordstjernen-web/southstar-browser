@@ -11,6 +11,7 @@ use core::ffi::c_int;
 use core::ffi::c_void;
 #[cfg(target_vendor = "apple")]
 use core::ptr;
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_config::util;
@@ -23,26 +24,21 @@ unsafe extern "C" {
     fn free(p: *mut c_void);
 }
 
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 pub(crate) fn getenv(name: &CStr) -> Option<CString> {
-    util::env_bytes(name.to_str().ok()?).map(|value| c_string(&value))
+    util::env_bytes(name.to_str().ok()?).map(|value| c_string_until_nul(&value))
 }
 
 pub(crate) fn user_config_dir() -> CString {
-    c_string(&glib::user_config_dir())
+    c_string_until_nul(&glib::user_config_dir())
 }
 
 pub(crate) fn build_filename(parts: &[&CStr]) -> CString {
     let parts: Vec<&[u8]> = parts.iter().map(|part| part.to_bytes()).collect();
-    c_string(&util::build_filename(&parts))
+    c_string_until_nul(&util::build_filename(&parts))
 }
 
 fn path_get_dirname(path: &[u8]) -> CString {
-    c_string(&util::path_dirname(path))
+    c_string_until_nul(&util::path_dirname(path))
 }
 
 pub(crate) fn exists(path: &CStr) -> bool {
@@ -51,7 +47,7 @@ pub(crate) fn exists(path: &CStr) -> bool {
 
 pub(crate) fn file_text(path: &CStr) -> Option<Vec<u8>> {
     let contents = std::fs::read(util::os_path(path.to_bytes())?).ok()?;
-    Some(c_string(&contents).into_bytes())
+    Some(c_string_until_nul(&contents).into_bytes())
 }
 
 pub(crate) fn markup_escape(text: &CStr) -> Vec<u8> {

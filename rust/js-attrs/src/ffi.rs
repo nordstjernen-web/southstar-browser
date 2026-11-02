@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::c_string_until_nul;
 mod imports;
 
 use core::ffi::CStr;
@@ -13,8 +14,8 @@ use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
 
+use crate::Element;
 use crate::attr::{self, AttrState};
-use crate::{Element, c_string};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Js(Option<Page>);
@@ -40,7 +41,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    let message = c_string(message.as_bytes());
+    let message = c_string_until_nul(message.as_bytes());
     imports::nsr_dom_exception(scope, name.as_bytes(), code, message.to_bytes())
 }
 

@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::until_nul_owned;
 mod ffi;
 mod intersection;
 mod mutation;
@@ -91,15 +92,8 @@ pub(crate) fn teardown(js: Js) {
     drop(resize);
 }
 
-pub(crate) fn c_text(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = bytes.iter().position(|&c| c == 0) {
-        bytes.truncate(nul);
-    }
-    bytes
-}
-
 pub(crate) fn text_of(scope: &mut Scope<'_>, value: &Value) -> Result<Vec<u8>, Value> {
-    scope.to_bytes(value).map(c_text)
+    scope.to_bytes(value).map(until_nul_owned)
 }
 
 pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {

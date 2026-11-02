@@ -5,6 +5,7 @@
 use southstar_js_engine::{
     Attributes, BoundFn, ContextHandle, ElementType, NativeFn, Scope, Value,
 };
+use southstar_unicode::until_nul_owned;
 
 use crate::ffi;
 use crate::ffi::state::Node;
@@ -396,15 +397,8 @@ fn enum_has(values: &str, s: &[u8]) -> bool {
     values.split(' ').any(|v| v.as_bytes() == s)
 }
 
-fn c_text(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(nul) = bytes.iter().position(|&c| c == 0) {
-        bytes.truncate(nul);
-    }
-    bytes
-}
-
 fn to_text(scope: &mut Scope<'_>, value: &Value) -> Result<Vec<u8>, Value> {
-    scope.to_bytes(value).map(c_text)
+    scope.to_bytes(value).map(until_nul_owned)
 }
 
 fn set_string(scope: &mut Scope<'_>, owner: &Value, name: &str, text: &[u8]) {

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul_owned;
 
 use southstar_dom::{ancestors, children, controls, internals, select};
 use southstar_js_engine::{Attributes, Scope, Value};
@@ -11,7 +12,7 @@ use crate::ffi::{self, Page, cstring};
 use crate::submit::is_submit_trigger;
 use crate::{
     Element, JsResult, MAX_DEPTH, c_bytes, form_owner, hidden_child, named, text_is, text_is_any,
-    type_of, until_nul,
+    type_of,
 };
 
 const CUSTOM_VALIDITY_ATTR: &CStr = c"data-nd-custom-validity";
@@ -122,14 +123,14 @@ fn radio_group_required(radio: Element) -> bool {
 
 fn control_value(node: Element, tag: &[u8]) -> Vec<u8> {
     match tag {
-        b"textarea" => until_nul(controls::textarea_value(Some(node))),
+        b"textarea" => until_nul_owned(controls::textarea_value(Some(node))),
         b"select" => {
             let option = if node.attr(c"multiple").is_some() {
                 select::first_selected_option(node)
             } else {
                 select::chosen_option(node)
             };
-            option.map_or_else(Vec::new, |o| until_nul(select::option_value(o)))
+            option.map_or_else(Vec::new, |o| until_nul_owned(select::option_value(o)))
         }
         _ => controls::used_value(node).map_or_else(Vec::new, |v| v.to_bytes().to_vec()),
     }

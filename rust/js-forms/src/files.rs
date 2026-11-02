@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul_owned;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
@@ -68,7 +69,7 @@ pub fn get_files(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResu
     };
     let same = match (&path, &cached_path) {
         (None, None) => true,
-        (Some(path), Some(cached)) => path.to_bytes() == crate::until_nul(cached.clone()),
+        (Some(path), Some(cached)) => path.to_bytes() == until_nul_owned(cached.clone()),
         _ => false,
     };
     if same {

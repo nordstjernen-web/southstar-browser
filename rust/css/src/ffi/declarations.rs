@@ -5,8 +5,9 @@
 use core::cell::{Cell, OnceCell};
 use core::ffi::{CStr, c_int, c_uint};
 use core::ops::Deref;
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::collections::{HashMap, HashSet};
-use std::ffi::CString;
 use std::rc::Rc;
 
 use super::selector::SelectorGroup;
@@ -68,18 +69,8 @@ pub(super) struct VarTable {
     important: Option<HashSet<Vec<u8>>>,
 }
 
-pub(super) fn until_nul(text: &[u8]) -> &[u8] {
-    text.iter()
-        .position(|&c| c == 0)
-        .map_or(text, |nul| &text[..nul])
-}
-
 pub(super) fn lookup_key(text: &[u8]) -> &[u8] {
     if text.contains(&0) { &[] } else { text }
-}
-
-fn c_text(text: &[u8]) -> CString {
-    CString::new(until_nul(text)).unwrap_or_default()
 }
 
 impl VarTable {
@@ -93,7 +84,10 @@ impl VarTable {
 
     fn set(&mut self, name: &[u8], value: &[u8], important: bool) {
         let key = until_nul(name);
-        let entry = (Rc::from(c_text(key)), Rc::from(c_text(value)));
+        let entry = (
+            Rc::from(c_string_until_nul(key)),
+            Rc::from(c_string_until_nul(value)),
+        );
         match self.index.get(key) {
             Some(&at) => self.entries[at] = entry,
             None => {
@@ -127,7 +121,7 @@ impl VarTable {
     pub(super) fn replace_texts(&mut self, mut replace: impl FnMut(&[u8]) -> Option<Vec<u8>>) {
         for (_, text) in &mut self.entries {
             if let Some(replaced) = replace(text.to_bytes()) {
-                *text = Rc::from(c_text(&replaced));
+                *text = Rc::from(c_string_until_nul(&replaced));
             }
         }
     }

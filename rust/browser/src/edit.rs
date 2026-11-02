@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_dom::{Node, ancestors_and_self};
@@ -13,11 +14,6 @@ use crate::{build, hit, page, query};
 const EDIT_FIELD: c_int = 1;
 const EDIT_WRITABLE: c_int = 2;
 const EDIT_SELECTION: c_int = 4;
-
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 fn value_bytes(n: Node<'_>) -> &[u8] {
     ffi::editable_value(n).map_or(&[][..], CStr::to_bytes)
@@ -122,7 +118,7 @@ pub fn input_replace(
     next.extend_from_slice(&cur[..del_start]);
     next.extend_from_slice(ins);
     next.extend_from_slice(&cur[del_end..]);
-    let next = c_string(&next);
+    let next = c_string_until_nul(&next);
     let data = if input_type.to_bytes() == b"insertLineBreak" {
         None
     } else {
@@ -299,7 +295,7 @@ fn paste_text_for(field: Node<'_>, text: &CStr, lo: usize, hi: usize) -> CString
         out.push(if c == b'\n' && !multiline { b' ' } else { c });
         i += 1;
     }
-    let mut out = c_string(&out);
+    let mut out = c_string_until_nul(&out);
     let maxlength = if ffi::is_contenteditable_host(field) {
         None
     } else {
@@ -311,7 +307,7 @@ fn paste_text_for(field: Node<'_>, text: &CStr, lo: usize, hi: usize) -> CString
         let room = if max > kept { max - kept } else { 0 };
         if ffi::utf8_strlen(&out) > room {
             let cut = ffi::utf8_offset(&out, room);
-            out = c_string(&out.as_bytes()[..cut]);
+            out = c_string_until_nul(&out.as_bytes()[..cut]);
         }
     }
     out

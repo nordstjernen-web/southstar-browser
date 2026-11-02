@@ -4,12 +4,9 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::until_nul_str;
 #[cfg(test)]
 mod tests;
-
-fn until_nul(text: &str) -> &str {
-    text.split('\0').next().unwrap_or_default()
-}
 
 fn is_key_name(key: &str) -> bool {
     !key.is_empty()
@@ -96,13 +93,13 @@ pub fn write_groups<'a>(
         out.push_str(name);
         out.push_str("]\n");
         for (key, value) in entries {
-            let key = until_nul(key);
+            let key = until_nul_str(key);
             if !is_key_name(key) {
                 continue;
             }
             out.push_str(key);
             out.push('=');
-            escape_value(until_nul(value), &mut out);
+            escape_value(until_nul_str(value), &mut out);
             out.push('\n');
         }
     }

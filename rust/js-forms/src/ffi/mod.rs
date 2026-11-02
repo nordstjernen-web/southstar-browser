@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul_owned;
 mod imports;
 
 use core::ffi::{CStr, c_int};
@@ -20,7 +21,7 @@ use crate::{Element, JsResult};
 pub(crate) struct Page(api::Page);
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
-    CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
+    CString::new(until_nul_owned(bytes.to_vec())).unwrap_or_default()
 }
 
 fn live(n: Node<'_>) -> Option<Element> {
@@ -53,7 +54,7 @@ pub(crate) fn dom_exception(
     code: c_int,
     message: &str,
 ) -> Value {
-    let message = crate::until_nul(message.as_bytes().to_vec());
+    let message = until_nul_owned(message.as_bytes().to_vec());
     nsr_dom_exception(scope, name.to_bytes(), code, &message)
 }
 
@@ -100,7 +101,7 @@ pub(crate) fn make_live(
     kind: c_int,
     param: Option<&[u8]>,
 ) -> JsResult {
-    let param = param.map(|p| crate::until_nul(p.to_vec()));
+    let param = param.map(|p| until_nul_owned(p.to_vec()));
     Ok(nsr_make_live(scope, owner, kind, param.as_deref(), None))
 }
 
@@ -152,7 +153,7 @@ pub(crate) fn with_pattern_scope<R>(f: impl FnOnce(&mut Scope<'_>) -> Option<R>)
 }
 
 pub(crate) fn url_is_valid_absolute(url: &[u8]) -> bool {
-    southstar_url::bytes::is_valid_absolute(&crate::until_nul(url.to_vec()))
+    southstar_url::bytes::is_valid_absolute(&until_nul_owned(url.to_vec()))
 }
 
 pub(crate) fn sandbox_blocks_forms(node: Element) -> bool {

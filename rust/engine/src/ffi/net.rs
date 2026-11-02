@@ -4,6 +4,8 @@
 
 use core::cell::RefCell;
 use core::ffi::{CStr, c_int};
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::CString;
 use std::rc::Rc;
@@ -210,15 +212,6 @@ pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(Some(base.to_bytes()), href.to_bytes())
 }
 
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
-}
-
-fn cstring(bytes: &[u8]) -> CString {
-    CString::new(until_nul(bytes)).unwrap_or_default()
-}
-
 pub fn url_is_http_or_https(url: &[u8]) -> bool {
     southstar_url::bytes::is_http_or_https(until_nul(url))
 }
@@ -232,11 +225,11 @@ pub fn preload_clear() {
 }
 
 pub fn preconnect(origin: &[u8]) {
-    southstar_net::preconnect_async(&cstring(origin));
+    southstar_net::preconnect_async(&c_string_until_nul(origin));
 }
 
 pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
-    let url = cstring(url);
+    let url = c_string_until_nul(url);
     let headers = accept_headers(dest);
     if dest != Dest::Default
         && let Some(key) = southstar_net::request_key(

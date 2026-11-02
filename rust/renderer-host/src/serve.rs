@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int, c_long};
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_ipc::{
@@ -80,7 +81,7 @@ fn double_or(body: &[u8], key: &str, default: f64) -> f64 {
 fn text(body: &[u8], key: &str) -> Option<CString> {
     json_value(body, key.as_bytes())
         .and_then(json_string)
-        .map(|value| engine::cstring(&value))
+        .map(|value| c_string_until_nul(&value))
 }
 
 fn escaped(value: Option<&[u8]>) -> String {
@@ -242,7 +243,7 @@ impl<F: Framebuffer> Session<F> {
         let Some(post) = cur.take_post() else {
             return;
         };
-        let url = href.filter(|h| !h.is_empty()).map(engine::cstring);
+        let url = href.filter(|h| !h.is_empty()).map(c_string_until_nul);
         self.post = Some(StashedPost { url, post });
     }
 
@@ -564,7 +565,7 @@ impl<F: Framebuffer> Session<F> {
             self.bfcache_park_or_close(cur);
         }
         if let (Some(referrer), None, Some(url)) = (&referrer, &restored, &url) {
-            let referrer = engine::cstring(referrer);
+            let referrer = c_string_until_nul(referrer);
             if engine::same_origin(&referrer, url) {
                 engine::set_next_referrer(Some(&referrer));
             }
@@ -674,7 +675,7 @@ impl<F: Framebuffer> Session<F> {
             .as_ref()
             .and_then(Page::favicon_url)
             .filter(|url| !url.is_empty())
-            .and_then(|url| engine::fetch_favicon(&engine::cstring(&url)));
+            .and_then(|url| engine::fetch_favicon(&c_string_until_nul(&url)));
         match icon {
             Some(icon) => {
                 let headers = format!(
@@ -722,7 +723,7 @@ impl<F: Framebuffer> Session<F> {
                 if written == i && w > 0 && h > 0 {
                     let mut path = prefix.as_bytes().to_vec();
                     path.extend_from_slice(format!("-{i}.png").as_bytes());
-                    if engine::write_png(&pages, i, w, h, scale, &engine::cstring(&path)) {
+                    if engine::write_png(&pages, i, w, h, scale, &c_string_until_nul(&path)) {
                         written = i + 1;
                     }
                 }
@@ -881,7 +882,7 @@ impl<F: Framebuffer> Session<F> {
                     let list: Vec<CString> = paths
                         .as_bytes()
                         .split(|&b| b == b'\n')
-                        .map(engine::cstring)
+                        .map(c_string_until_nul)
                         .collect();
                     let list: Vec<&CStr> = list.iter().map(CString::as_c_str).collect();
                     changed = cur.drop_files(x, y, &list);

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 use std::collections::{HashSet, VecDeque};
 
 use southstar_dom::{Kind, MAX_DEPTH};
@@ -138,7 +139,7 @@ pub fn item_id_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsResult
     let Some(n) = ffi::unwrap_node(this) else {
         return Ok(());
     };
-    let value = ffi::c_string(&scope.to_bytes(val)?);
+    let value = c_string_until_nul(&scope.to_bytes(val)?);
     ffi::set_attr_recorded(ffi::js_of(scope), n, c"itemid", &value);
     Ok(())
 }
@@ -177,7 +178,7 @@ pub fn item_value_set(scope: &mut Scope<'_>, this: &Value, val: &Value) -> JsRes
         .or_else(|| (name == b"time" && n.attr(c"datetime").is_some()).then_some(c"datetime"));
     match attr {
         Some(attr) => {
-            let value = ffi::c_string(&scope.to_bytes(val)?);
+            let value = c_string_until_nul(&scope.to_bytes(val)?);
             ffi::set_attr_recorded(ffi::js_of(scope), n, attr, &value);
             Ok(())
         }
@@ -197,7 +198,7 @@ fn property_set(root: Element, doc: Option<Element>) -> HashSet<usize> {
             ids.insert(id);
         }
         for id in ids.names() {
-            let id = ffi::c_string(&id);
+            let id = c_string_until_nul(&id);
             if let Some(referenced) = southstar_dom::index::find_by_id(doc, &id)
                 && referenced.kind() == Kind::Element
             {

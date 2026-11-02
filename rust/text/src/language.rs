@@ -2,6 +2,7 @@
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Mutex, OnceLock};
@@ -145,12 +146,6 @@ fn lc_ctype() -> String {
 #[cfg(not(windows))]
 fn lc_ctype() -> String {
     crate::ffi::glib_lang::lc_ctype()
-}
-
-fn until_nul(s: &str) -> &[u8] {
-    let bytes = s.as_bytes();
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
 }
 
 pub fn language_matches(language: Option<Language>, range_list: &str) -> bool {

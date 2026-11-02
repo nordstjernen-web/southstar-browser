@@ -28,7 +28,7 @@ pub(crate) fn ascii_strtod(text: &[u8]) -> f64 {
 }
 
 pub(crate) fn path_basename(path: &[u8]) -> Vec<u8> {
-    let path = crate::until_nul(path);
+    let path = southstar_unicode::until_nul(path);
     if path.is_empty() {
         return b".".to_vec();
     }

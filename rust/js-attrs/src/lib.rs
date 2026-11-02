@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::c_string_until_nul;
 pub mod attr;
 pub mod class;
 mod dataset;
@@ -47,13 +48,10 @@ pub(crate) fn same_node(a: Element, b: Element) -> bool {
     a.as_ptr() == b.as_ptr()
 }
 
-pub(crate) fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
-
 pub(crate) fn string_arg(scope: &mut Scope<'_>, value: &Value) -> JsResult<CString> {
-    scope.to_bytes(value).map(|bytes| c_string(&bytes))
+    scope
+        .to_bytes(value)
+        .map(|bytes| c_string_until_nul(&bytes))
 }
 
 pub(crate) fn optional_string_arg(

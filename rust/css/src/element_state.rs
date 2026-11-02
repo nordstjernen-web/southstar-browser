@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ffi::CString;
@@ -109,10 +110,6 @@ pub fn set_doc_language(lang: Option<&[u8]>) {
 
 pub(crate) fn reset_language_cache() {
     PRAGMA.with_borrow_mut(|pragma| pragma.valid = false);
-}
-
-fn until_nul(text: &[u8]) -> &[u8] {
-    &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())]
 }
 
 fn eq(a: &[u8], b: &[u8]) -> bool {

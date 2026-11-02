@@ -3,8 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use southstar_unicode::c_string_until_nul;
 use std::collections::VecDeque;
-use std::ffi::CString;
 
 use southstar_dom::{Node, ancestors_and_self, children};
 use southstar_glib::GBoolean;
@@ -12,11 +12,6 @@ use southstar_glib::GBoolean;
 use crate::ffi::{self, Js, err, out};
 use crate::inproc::{Ctx, NavCapture, relayout, settle};
 use crate::text::strip;
-
-fn cstring(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 fn utf8_skip(b: u8) -> usize {
     match b {
@@ -358,7 +353,7 @@ fn seed_drag_data(fc: &Ctx, session: &ffi::DragSession, source: Node) {
         Some(base) => ffi::url_resolve(base, raw),
         None => Some(raw.to_bytes().to_vec()),
     };
-    let Some(abs) = abs.map(|a| cstring(&a)) else {
+    let Some(abs) = abs.map(|a| c_string_until_nul(&a)) else {
         return;
     };
     session.set_data(c"text/plain", &abs);
@@ -697,7 +692,7 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
             err(&[b"[headless] key ", rest, b"\n"].concat());
             key(fc, nav, strip(rest));
         } else if let Some(src) = a.strip_prefix(b"eval ") {
-            eval_action(fc, &cstring(src), c"headless-act-eval");
+            eval_action(fc, &c_string_until_nul(src), c"headless-act-eval");
         } else if let Some(rest) = a.strip_prefix(b"evalfile ") {
             let path = strip(rest);
             match ffi::file_contents(path) {

@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+use southstar_unicode::until_nul_owned;
 mod abort;
 mod beacon;
 mod body;
@@ -137,15 +138,8 @@ pub(crate) fn next_id() -> u32 {
     }
 }
 
-pub(crate) fn until_nul(mut bytes: Vec<u8>) -> Vec<u8> {
-    if let Some(end) = bytes.iter().position(|&b| b == 0) {
-        bytes.truncate(end);
-    }
-    bytes
-}
-
 pub(crate) fn c_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
-    scope.to_bytes(value).ok().map(until_nul)
+    scope.to_bytes(value).ok().map(until_nul_owned)
 }
 
 pub(crate) fn prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {

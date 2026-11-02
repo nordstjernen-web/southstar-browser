@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -20,11 +21,6 @@ use southstar_js_events::nsr_event_adopt_interface;
 use southstar_js_events::nsr_event_define_source;
 
 use southstar_js_services::nsr_services_set_timeout;
-
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 impl Js {
     fn of(js: Option<Page>) -> Js {
@@ -173,7 +169,7 @@ pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value 
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &CStr, code: i32, message: &str) -> Value {
-    let message = c_string(message.as_bytes());
+    let message = c_string_until_nul(message.as_bytes());
     nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
 }
 

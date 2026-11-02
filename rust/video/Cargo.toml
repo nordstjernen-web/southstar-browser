@@ -10,6 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+southstar-unicode = { path = "../unicode", version = "=1.0.7-dev" }
 southstar-av = { path = "../av", version = "=1.0.7-dev", optional = true, features = ["scale"] }
 southstar-camera = { path = "../camera", version = "=1.0.7-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.7-dev" }

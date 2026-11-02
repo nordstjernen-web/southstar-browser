@@ -3,12 +3,13 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul;
 
 use southstar_dom::index::find_first_element;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi;
-use crate::{Element, FLAG_QUIRKS, JsResult, document_for, until_nul};
+use crate::{Element, FLAG_QUIRKS, JsResult, document_for};
 
 const READY_STATES: [&str; 3] = ["loading", "interactive", "complete"];
 

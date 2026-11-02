@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul;
 use std::ffi::{CString, OsStr};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -10,11 +11,6 @@ use std::time::Instant;
 
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
-}
 
 #[cfg(unix)]
 fn path_of(bytes: &[u8]) -> PathBuf {

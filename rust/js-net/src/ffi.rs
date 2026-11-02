@@ -4,6 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int, c_long};
+use southstar_unicode::until_nul_owned;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::{Rc, Weak};
@@ -71,7 +72,7 @@ fn long(value: c_long) -> i64 {
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
-    CString::new(crate::until_nul(bytes.to_vec())).unwrap_or_default()
+    CString::new(until_nul_owned(bytes.to_vec())).unwrap_or_default()
 }
 
 pub(crate) fn monotonic_us() -> i64 {
@@ -287,11 +288,11 @@ impl Transport {
         let protocols = protocols
             .unwrap_or_default()
             .iter()
-            .map(|p| crate::until_nul(p.clone()))
+            .map(|p| until_nul_owned(p.clone()))
             .collect();
         Transport::WebSocket(southstar_websocket::WebSocket::open(
-            crate::until_nul(url.to_vec()).as_slice(),
-            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            until_nul_owned(url.to_vec()).as_slice(),
+            Some(until_nul_owned(origin.to_vec()).as_slice()),
             top_url,
             protocols,
             events,
@@ -313,8 +314,8 @@ impl Transport {
             busy: socket_busy,
         };
         Transport::EventSource(southstar_eventsource::EventSource::open(
-            crate::until_nul(url.to_vec()).as_slice(),
-            Some(crate::until_nul(origin.to_vec()).as_slice()),
+            until_nul_owned(url.to_vec()).as_slice(),
+            Some(until_nul_owned(origin.to_vec()).as_slice()),
             b"",
             events,
             allow_url,
@@ -336,7 +337,7 @@ impl Transport {
 
     pub fn protocol(&self) -> Vec<u8> {
         match self {
-            Transport::WebSocket(ws) => crate::until_nul(ws.protocol()),
+            Transport::WebSocket(ws) => until_nul_owned(ws.protocol()),
             _ => Vec::new(),
         }
     }
@@ -356,7 +357,7 @@ impl Transport {
     pub fn close(&self, code: i32, reason: Option<&[u8]>) {
         match self {
             Transport::WebSocket(ws) => {
-                let reason = reason.map(|r| crate::until_nul(r.to_vec()));
+                let reason = reason.map(|r| until_nul_owned(r.to_vec()));
                 ws.close(code, reason.as_deref());
             }
             Transport::EventSource(es) => es.close(),
@@ -421,7 +422,7 @@ pub(crate) fn serialize_form_body(scope: &mut Scope<'_>, value: &Value) -> Optio
         let (body, content_type) = nsr_js_form_data_serialize(scope, value);
         return Some(Serialized {
             body,
-            content_type: Some(crate::until_nul(content_type)),
+            content_type: Some(until_nul_owned(content_type)),
         });
     }
     if api::is_url_search_params(scope, value) {

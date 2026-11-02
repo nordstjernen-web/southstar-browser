@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 mod ffi;
 mod rules;
 #[cfg(test)]
@@ -93,13 +94,6 @@ static REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 fn registry() -> &'static Registry {
     REGISTRY.get_or_init(Registry::load)
-}
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&c| c == 0)
-        .map_or(bytes, |nul| &bytes[..nul])
 }
 
 fn c_string(scope: &mut Scope<'_>, value: &Value) -> Result<Vec<u8>, Value> {

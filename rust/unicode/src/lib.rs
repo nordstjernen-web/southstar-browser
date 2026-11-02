@@ -4,12 +4,14 @@
 
 #![forbid(unsafe_code)]
 
+mod c_bytes;
 mod case;
 mod tables;
 
 #[cfg(test)]
 mod tests;
 
+pub use c_bytes::{c_string_until_nul, until_nul, until_nul_owned, until_nul_str};
 pub use case::{fold_string, lower_string, to_lower, to_title, to_upper, upper_string};
 
 #[repr(u8)]

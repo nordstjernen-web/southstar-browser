@@ -2,7 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::{CStr, CString};
+use southstar_unicode::c_string_until_nul;
+use std::ffi::CStr;
 
 use crate::calc::{self, Parsed};
 use crate::ffi;
@@ -275,11 +276,6 @@ impl Expr<'_> {
     }
 }
 
-fn c_text(bytes: &[u8]) -> CString {
-    let len = bytes.iter().position(|&c| c == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..len]).unwrap_or_default()
-}
-
 fn is_time_in(text: &CStr, s: usize, e: usize) -> bool {
     let expr = Expr {
         text,
@@ -289,7 +285,7 @@ fn is_time_in(text: &CStr, s: usize, e: usize) -> bool {
 }
 
 pub(crate) fn is_time(item: &[u8]) -> bool {
-    let text = c_text(item);
+    let text = c_string_until_nul(item);
     let len = text.to_bytes().len();
     is_time_in(&text, 0, len)
 }
@@ -313,7 +309,7 @@ fn top_level_segments(s: &[u8]) -> Vec<(usize, usize)> {
 }
 
 pub(crate) fn property_valid(t: &[u8]) -> bool {
-    let text = c_text(t);
+    let text = c_string_until_nul(t);
     top_level_segments(text.to_bytes())
         .iter()
         .all(|&(a, b)| is_time_in(&text, a, b))
@@ -373,11 +369,11 @@ fn seconds_in(text: &CStr, s: usize, e: usize) -> Option<f64> {
         return None;
     }
     let stripped = strip_units(text, s, e);
-    let parsed = calc::parse_calc(&c_text(&stripped)).or_else(|| {
+    let parsed = calc::parse_calc(&c_string_until_nul(&stripped)).or_else(|| {
         let mut wrapped = b"calc(".to_vec();
         wrapped.extend_from_slice(&stripped);
         wrapped.push(b')');
-        calc::parse_calc(&c_text(&wrapped))
+        calc::parse_calc(&c_string_until_nul(&wrapped))
     })?;
     match parsed {
         Parsed::Length(v, _) => Some(v),
@@ -386,7 +382,7 @@ fn seconds_in(text: &CStr, s: usize, e: usize) -> Option<f64> {
 }
 
 pub(crate) fn seconds(item: &[u8]) -> Option<f64> {
-    let text = c_text(item);
+    let text = c_string_until_nul(item);
     let len = text.to_bytes().len();
     seconds_in(&text, 0, len)
 }
@@ -411,7 +407,7 @@ pub(crate) fn starts_math_fn(s: &[u8]) -> bool {
 }
 
 pub fn list_serialize(value: &[u8], computed: bool) -> Option<Vec<u8>> {
-    let text = c_text(value);
+    let text = c_string_until_nul(value);
     let b = text.to_bytes();
     let mut out = Vec::new();
     let mut changed = false;
@@ -468,7 +464,7 @@ pub(crate) fn time_text(ms: f64) -> Vec<u8> {
 }
 
 pub(crate) fn parse_ms(tok: &[u8]) -> Option<f64> {
-    let text = c_text(tok);
+    let text = c_string_until_nul(tok);
     let (v, end) = ffi::strtod(&text, 0);
     if end == 0 {
         return None;

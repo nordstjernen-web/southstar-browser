@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -10,10 +11,6 @@ use crate::{host_scope, nesting};
 const CACHE_MAX: usize = 4096;
 
 static CACHE: Mutex<Option<HashMap<Vec<u8>, Vec<u8>>>> = Mutex::new(None);
-
-fn until_nul(text: &[u8]) -> &[u8] {
-    &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())]
-}
 
 pub(crate) fn scoped(css: &[u8], host_id: &[u8], frame_scope: bool) -> Vec<u8> {
     let mut key = Vec::with_capacity(css.len() + host_id.len() + 2);

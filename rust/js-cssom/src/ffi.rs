@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
+use southstar_unicode::until_nul;
 use std::rc::Rc;
 
 use southstar_anim::AnimHandle;
@@ -47,7 +48,7 @@ impl AnimList {
 
     pub fn shorthand_serialize(&self, is_animation: bool) -> String {
         let text = css_engine::animation_shorthand_serialize(&self.0, is_animation);
-        lossy(c_string(&text).to_bytes())
+        lossy(c_string_until_nul(&text).to_bytes())
     }
 }
 
@@ -55,18 +56,8 @@ pub(crate) fn anim_entry_timing(entry: &AnimEntry) -> String {
     lossy(&css_engine::timing_serialize(Some(&entry.timing)))
 }
 
-fn until_nul(text: &str) -> &[u8] {
-    let text = text.as_bytes();
-    &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())]
-}
-
 fn lossy(text: &[u8]) -> String {
     String::from_utf8_lossy(text).into_owned()
-}
-
-pub(crate) fn c_string(text: &[u8]) -> CString {
-    let end = text.iter().position(|&b| b == 0).unwrap_or(text.len());
-    CString::new(&text[..end]).unwrap_or_default()
 }
 
 pub(crate) fn ascii_strtod(text: &str) -> (f64, usize) {
@@ -142,7 +133,7 @@ pub(crate) fn anim(js: Js) -> Option<AnimHandle> {
 }
 
 pub(crate) fn set_attr_recorded(js: Js, node: Node<'_>, name: &CStr, value: &[u8]) {
-    let value = c_string(value);
+    let value = c_string_until_nul(value);
     (api::mutation_hooks().set_attr_recorded)(js.page(), node, name, value.to_bytes());
 }
 
@@ -256,7 +247,7 @@ pub(crate) fn with_declarations<R>(text: &str, f: impl FnOnce(&[ValueRef<'_>]) -
 }
 
 pub(crate) fn sheet_declared_value(text: &str, prop: usize) -> Option<String> {
-    let text = c_string(text.as_bytes());
+    let text = c_string_until_nul(text.as_bytes());
     let sheet = css_engine::OwnedSheet::parse(text.to_bytes());
     let (_, value) = sheet.declared_values().find(|&(id, _)| id == prop)?;
     Some(serialize_value(value))

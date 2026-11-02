@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use std::ffi::CString;
+use southstar_unicode::c_string_until_nul;
 
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, ScriptOptions, Value};
@@ -152,7 +152,8 @@ impl Js {
     }
 
     pub fn eval_source(self, code: &[u8], origin: &CStr) {
-        let _ = southstar_js_loader::eval_source(self.ptr(), &c_string(code), Some(origin));
+        let _ =
+            southstar_js_loader::eval_source(self.ptr(), &c_string_until_nul(code), Some(origin));
     }
 
     pub fn inline_scripts_allowed(self, el: Element) -> bool {
@@ -180,7 +181,7 @@ impl Js {
     }
 
     pub fn request_download(self, url: &[u8], filename: &CStr) -> bool {
-        api::request_download(self.ptr(), &c_string(url), Some(filename))
+        api::request_download(self.ptr(), &c_string_until_nul(url), Some(filename))
     }
 
     pub fn anchor_fragment_navigate(self, url: &[u8]) -> bool {
@@ -188,11 +189,11 @@ impl Js {
     }
 
     pub fn navigate(self, url: &[u8]) {
-        api::navigate(self.ptr(), &c_string(url), false);
+        api::navigate(self.ptr(), &c_string_until_nul(url), false);
     }
 
     pub fn follow_link_target(self, anchor: Element, url: &[u8]) -> LinkTarget {
-        southstar_js_frames::follow_link_target(self.ptr(), anchor, &c_string(url))
+        southstar_js_frames::follow_link_target(self.ptr(), anchor, &c_string_until_nul(url))
     }
 
     pub fn checkable_post_click(self, el: Element, kind: i32, state: &ClickState, prevented: bool) {
@@ -237,11 +238,6 @@ pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) ->
 
 pub(crate) fn event_flags(kind: &CStr) -> (bool, bool) {
     events::init_flags(&kind.to_string_lossy(), false)
-}
-
-fn c_string(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
 }
 
 pub(crate) fn activation_behavior(scope: &mut Scope<'_>, act: Element, target: Element) {

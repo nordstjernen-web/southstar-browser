@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::until_nul;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
@@ -13,10 +14,6 @@ use crate::{storage, url};
 
 static JAR_WRITE: Mutex<()> = Mutex::new(());
 static JAR_WRITES: AtomicU64 = AtomicU64::new(0);
-
-fn until_nul(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
-}
 
 fn read_jar(path: &[u8]) -> Option<Vec<u8>> {
     sys::read_file(path)
