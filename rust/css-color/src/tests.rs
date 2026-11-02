@@ -438,3 +438,76 @@ fn light_dark_and_contrast() {
         Some("rgb(255, 255, 255)")
     );
 }
+
+#[test]
+fn palette_mix() {
+    let mix = |text: &str| crate::palette_mix_text(text.as_bytes());
+    let cases = [
+        (
+            "palette-mix(          light 30%, dark)",
+            "palette-mix(light 30%, dark 70%)",
+        ),
+        (
+            "palette-mix(in oklab, 30% --foo, normal)",
+            "palette-mix(--foo 30%, normal 70%)",
+        ),
+        (
+            "palette-mix(in xyz, light 10%, dark)",
+            "palette-mix(in xyz-d65, light 10%, dark 90%)",
+        ),
+        (
+            "palette-mix(in lch shorter hue, light 10%, dark)",
+            "palette-mix(in lch, light 10%, dark 90%)",
+        ),
+        (
+            "palette-mix(in lch longer hue, light 10%, dark)",
+            "palette-mix(in lch longer hue, light 10%, dark 90%)",
+        ),
+        (
+            "palette-mix(palette-mix(in srgb, light 30%, normal) 20%, dark)",
+            "palette-mix(palette-mix(in srgb, light 30%, normal 70%) 20%, dark 80%)",
+        ),
+        (
+            "palette-mix(in srgb, dark 50%, light 50%)",
+            "palette-mix(in srgb, dark, light)",
+        ),
+        (
+            "palette-mix(in srgb, dark 30%, light 40%)",
+            "palette-mix(in srgb, dark 30%, light 40%)",
+        ),
+        (
+            "palette-mix(in srgb, dark calc(10%), light)",
+            "palette-mix(in srgb, dark 10%, light 90%)",
+        ),
+        (
+            "palette-mix(in srgb, dark 50%)",
+            "palette-mix(in srgb, dark 50%)",
+        ),
+        (
+            "palette-mix(in srgb, dark, light, --foo)",
+            "palette-mix(in srgb, dark, light, --foo)",
+        ),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(mix(input).as_deref(), Some(expected), "{input}");
+    }
+    assert_eq!(
+        crate::palette_mix_specified(b"palette-mix(in srgb, light calc(50%), dark)").as_deref(),
+        Some("palette-mix(in srgb, light calc(50%), dark)")
+    );
+    for invalid in [
+        "palette-mix(in oklab, dark -10%, light 40%)",
+        "palette-mix(in oklab, dark 150%, light 40%)",
+        "palette-mix(in oklab dark 60%, light 40%)",
+        "palette-mix(in oklab, dark 60% light 40%)",
+        "palette-mix(oklab, dark 60%, light 40%)",
+        "palette-mix(dark 60%, light 40%, in oklab)",
+        "palette-mix(in oklch hue, dark 60%, light 40%)",
+        "palette-mix(in oklch shorter, dark 60%, light 40%)",
+        "palette-mix(in oklab, dark 60%, , light 40%)",
+        "palette-mix(in oklab, red 60%, light 40%)",
+        "palette-mix(in oklab, dark -10%, light, --foo)",
+    ] {
+        assert_eq!(mix(invalid), None, "{invalid}");
+    }
+}

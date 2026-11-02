@@ -556,7 +556,7 @@ fn relative(kind: FnKind, mut args: Tokens<'_>, depth: u32) -> Option<ColorFunct
     })
 }
 
-fn mix_percent(t: &mut Tokens<'_>) -> Option<Option<MixPercent>> {
+pub(crate) fn mix_percent(t: &mut Tokens<'_>) -> Option<Option<MixPercent>> {
     let save = t.pos;
     let Some(c) = t.peek() else {
         return Some(None);
@@ -588,7 +588,7 @@ fn mix_percent(t: &mut Tokens<'_>) -> Option<Option<MixPercent>> {
     Some(Some(value))
 }
 
-fn interpolation(t: &mut Tokens<'_>) -> Option<Interpolation> {
+pub(crate) fn interpolation(t: &mut Tokens<'_>) -> Option<Interpolation> {
     let c = t.next()?;
     if c.kind != Kind::Ident {
         return None;
@@ -757,7 +757,7 @@ impl ColorFunction {
     }
 }
 
-fn mix_percent_value(p: &MixPercent) -> Option<f64> {
+pub(crate) fn mix_percent_value(p: &MixPercent) -> Option<f64> {
     match p {
         MixPercent::Value(v) => Some(*v),
         MixPercent::Calc(node) => calc::eval(node, &|_| None).map(|v| v.0),
