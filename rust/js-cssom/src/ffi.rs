@@ -202,6 +202,10 @@ pub(crate) fn same_origin_as_document(scope: &Scope<'_>, url: &str) -> bool {
         })
 }
 
+pub(crate) fn linked_css_redirected_away(url: &str) -> bool {
+    southstar_engine::linked_css_redirected_away(until_nul(url))
+}
+
 pub(crate) fn linked_css_text(url: &str) -> Option<String> {
     southstar_engine::linked_css_text(until_nul(url)).map(|css| lossy(&css))
 }

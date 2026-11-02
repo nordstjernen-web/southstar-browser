@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: a `<link rel=stylesheet>` whose same-origin URL redirects to
+  another origin is treated as cross-origin by the CSSOM: reading its
+  `cssRules` throws `SecurityError`. The text of the other origin's
+  stylesheet used to be readable.
 * Security: a `Content-Encoding: zstd` response may use a decompression
   window of at most 8 MiB, the limit RFC 8878 and RFC 9659 set for HTTP;
   a frame that asks for more fails to decode. libzstd's default had let a
