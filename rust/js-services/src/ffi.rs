@@ -223,7 +223,7 @@ pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
     const SM_CYSCREEN: c_int = 1;
     const SPI_GETWORKAREA: c_uint = 0x0030;
     unsafe extern "system" {
-        fn GetSystemMetrics(index: c_int) -> c_int;
+        safe fn GetSystemMetrics(index: c_int) -> c_int;
         fn SystemParametersInfoW(
             action: c_uint,
             param: c_uint,
@@ -237,11 +237,12 @@ pub(crate) fn display_metrics() -> Option<DisplayMetrics> {
         right: 0,
         bottom: 0,
     };
+    // SAFETY: SPI_GETWORKAREA writes one RECT through `pv_param`, which points at `area`.
     let has_area =
         unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, (&raw mut area).cast(), 0) } != 0;
     Some(DisplayMetrics {
-        width: unsafe { GetSystemMetrics(SM_CXSCREEN) },
-        height: unsafe { GetSystemMetrics(SM_CYSCREEN) },
+        width: GetSystemMetrics(SM_CXSCREEN),
+        height: GetSystemMetrics(SM_CYSCREEN),
         work_area: has_area.then_some((area.left, area.top, area.right, area.bottom)),
     })
 }
@@ -386,6 +387,8 @@ pub(crate) fn physical_memory_bytes() -> Option<u64> {
         avail_virtual: 0,
         avail_extended_virtual: 0,
     };
+    // SAFETY: `status` is a MEMORYSTATUSEX with its length field set to its own size, which is
+    // what GlobalMemoryStatusEx fills in.
     (unsafe { GlobalMemoryStatusEx(&mut status) } != 0).then_some(status.total_phys)
 }
 

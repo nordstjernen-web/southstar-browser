@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Windows: the Windows-only `unsafe` code now passes clippy's unsafe
+  documentation lints. Every block is one operation with a `SAFETY:`
+  comment. The executable path comes from `std::env::current_exe` and
+  process and token handles are closed by `OwnedHandle`. The WGL
+  context's window, DC and context free themselves on drop. Calls with no
+  preconditions are declared `safe fn`.
 * Performance: reading a computed value that does not depend on layout
   (`getComputedStyle(el).color`, custom properties, pseudo-element styles,
   `getAnimations()`) after a style change recomputes the cascade only and

@@ -7,19 +7,14 @@ use core::ffi::CStr;
 use core::ffi::c_char;
 #[cfg(target_vendor = "apple")]
 use core::ffi::c_int;
-#[cfg(any(windows, target_vendor = "apple"))]
+#[cfg(target_vendor = "apple")]
 use core::ffi::c_void;
-#[cfg(any(windows, target_vendor = "apple"))]
+#[cfg(target_vendor = "apple")]
 use core::ptr;
 use std::ffi::CString;
 
 use southstar_config::util;
 use southstar_glib as glib;
-
-#[cfg(windows)]
-unsafe extern "system" {
-    fn GetModuleFileNameW(module: *mut c_void, filename: *mut u16, size: u32) -> u32;
-}
 
 #[cfg(target_vendor = "apple")]
 unsafe extern "C" {
@@ -65,20 +60,8 @@ pub(crate) fn markup_escape(text: &CStr) -> Vec<u8> {
 
 #[cfg(windows)]
 pub(crate) fn self_exe_dir() -> Option<CString> {
-    let mut cap: u32 = 260;
-    let mut buf: Vec<u16> = vec![0; cap as usize];
-    let mut n = unsafe { GetModuleFileNameW(ptr::null_mut(), buf.as_mut_ptr(), cap) };
-    while n >= cap && cap < 32768 {
-        cap *= 2;
-        buf.resize(cap as usize, 0);
-        n = unsafe { GetModuleFileNameW(ptr::null_mut(), buf.as_mut_ptr(), cap) };
-    }
-    if n == 0 || n >= cap {
-        return None;
-    }
-    let end = buf.iter().position(|&unit| unit == 0).unwrap_or(buf.len());
-    let exe = String::from_utf16(&buf[..end]).ok()?;
-    Some(path_get_dirname(exe.as_bytes()))
+    let exe = std::env::current_exe().ok()?;
+    Some(path_get_dirname(exe.to_str()?.as_bytes()))
 }
 
 #[cfg(target_vendor = "apple")]

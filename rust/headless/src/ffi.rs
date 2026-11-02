@@ -13,7 +13,7 @@ mod util;
 use core::cell::Cell;
 use core::ffi::c_int;
 #[cfg(windows)]
-use core::ffi::{c_uint, c_void};
+use core::ffi::c_uint;
 use core::ops::ControlFlow;
 
 use southstar_glib as glib;
@@ -52,25 +52,23 @@ use crate::inproc::{Settle, WptWait};
 
 #[cfg(windows)]
 unsafe extern "system" {
-    fn SetConsoleOutputCP(code_page: c_uint) -> c_int;
+    safe fn SetConsoleOutputCP(code_page: c_uint) -> c_int;
 }
 
 #[cfg(windows)]
 unsafe extern "C" {
-    fn __acrt_iob_func(index: c_uint) -> *mut c_void;
-    fn _fileno(stream: *mut c_void) -> c_int;
-    fn _setmode(fd: c_int, mode: c_int) -> c_int;
+    safe fn _setmode(fd: c_int, mode: c_int) -> c_int;
 }
 
 #[cfg(windows)]
 pub fn console_setup() {
     const CP_UTF8: c_uint = 65001;
     const O_BINARY: c_int = 0x8000;
-    unsafe {
-        SetConsoleOutputCP(CP_UTF8);
-        _setmode(_fileno(__acrt_iob_func(1)), O_BINARY);
-        _setmode(_fileno(__acrt_iob_func(2)), O_BINARY);
-    }
+    const STDOUT_FD: c_int = 1;
+    const STDERR_FD: c_int = 2;
+    SetConsoleOutputCP(CP_UTF8);
+    _setmode(STDOUT_FD, O_BINARY);
+    _setmode(STDERR_FD, O_BINARY);
 }
 
 #[cfg(not(windows))]
