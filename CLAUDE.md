@@ -494,6 +494,12 @@ the dev profile — no LTO, integer overflow checks on — which compiles much
 faster and runs slower. `-Doverflow_checks=true` turns the overflow checks on
 in a release build too (CI does).
 
+For a release build you rebuild often, use `-Dlto=off` (no LTO, 256 codegen
+units, incremental): `meson setup builddir-fast -Dlto=off`. On the Windows
+box a rebuild after touching one `rust/css` file took 31–47 s, against 870 s
+with the default `-Dlto=fat`; a clean build took 469 s; pages load about 60%
+slower. `-Dlto=thin` sits in between. Releases and packages keep `fat`.
+
 Optionally use the `lld` linker for faster final links
 (`CC_LD=lld meson setup builddir`). Not required.
 

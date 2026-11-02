@@ -21,6 +21,18 @@ southstar_rust_env = {
 if get_option('overflow_checks')
   southstar_rust_env += {'CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS': 'true'}
 endif
+if get_option('lto') == 'thin'
+  southstar_rust_env += {
+    'CARGO_PROFILE_RELEASE_LTO': 'thin',
+    'CARGO_PROFILE_RELEASE_CODEGEN_UNITS': '16',
+  }
+elif get_option('lto') == 'off'
+  southstar_rust_env += {
+    'CARGO_PROFILE_RELEASE_LTO': 'off',
+    'CARGO_PROFILE_RELEASE_CODEGEN_UNITS': '256',
+    'CARGO_PROFILE_RELEASE_INCREMENTAL': 'true',
+  }
+endif
 rust_cc = meson.get_compiler('c')
 fs = import('fs')
 layout_probes = []
