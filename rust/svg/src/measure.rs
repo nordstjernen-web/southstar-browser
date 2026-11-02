@@ -76,6 +76,8 @@ struct Measure<'a> {
     inside: bool,
     boxless: bool,
     out: SvgGeometry,
+    chars: Option<(usize, usize)>,
+    text_length: Option<Option<f64>>,
 }
 
 fn empty_geometry() -> SvgGeometry {
@@ -169,9 +171,19 @@ impl<'a> Measure<'a> {
     }
 
     fn text(&mut self, ctx: &mut Ctx<'a>, n: Node<'a>, st: &State, own: &mut Extent) {
+        let target = same(n, self.target);
         let Some((layout, x, top, w, h)) = ctx.text_layout(n, st) else {
+            if target {
+                self.text_length = Some(
+                    self.chars
+                        .map_or(Some(0.0), |(start, _)| (start == 0).then_some(0.0)),
+                );
+            }
             return;
         };
+        if target {
+            self.text_length = Some(layout.advance(self.chars));
+        }
         drop(layout);
         own.add_point(x, top);
         own.add_point(x + w, top + h);
@@ -375,15 +387,34 @@ pub fn node_geometry(
     styles: StyleTable,
     inherited: Option<StyleRef<'_>>,
 ) -> SvgGeometry {
+    walk(svg, target, width, height, styles, inherited, None).map_or_else(empty_geometry, |m| m.out)
+}
+
+pub fn node_text_length(
+    svg: Option<Node<'_>>,
+    target: Option<Node<'_>>,
+    size: (f64, f64),
+    styles: StyleTable,
+    inherited: Option<StyleRef<'_>>,
+    chars: Option<(usize, usize)>,
+) -> Option<Option<f64>> {
+    walk(svg, target, size.0, size.1, styles, inherited, chars)?.text_length
+}
+
+fn walk<'a>(
+    svg: Option<Node<'a>>,
+    target: Option<Node<'a>>,
+    width: f64,
+    height: f64,
+    styles: StyleTable<'a>,
+    inherited: Option<StyleRef<'_>>,
+    chars: Option<(usize, usize)>,
+) -> Option<Measure<'a>> {
     let (Some(svg), Some(target)) = (svg, target) else {
-        return empty_geometry();
+        return None;
     };
-    let Some(path) = path_to(svg, target) else {
-        return empty_geometry();
-    };
-    let Some(surface) = Surface::image(FORMAT_A8, 1, 1) else {
-        return empty_geometry();
-    };
+    let path = path_to(svg, target)?;
+    let surface = Surface::image(FORMAT_A8, 1, 1)?;
     let cr = Canvas::on(&surface);
     let mut m = Measure {
         target,
@@ -391,6 +422,8 @@ pub fn node_geometry(
         inside: same(target, svg),
         boxless: false,
         out: empty_geometry(),
+        chars,
+        text_length: None,
     };
     let mut ctx = Ctx::new(cr, svg, styles, 0.0, 0.0);
     m.out.rendered = boolean(true);
@@ -407,5 +440,5 @@ pub fn node_geometry(
     if same(target, svg) {
         m.report(&frame, &own);
     }
-    m.out
+    Some(m)
 }

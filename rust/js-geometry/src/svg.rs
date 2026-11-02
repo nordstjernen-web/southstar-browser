@@ -495,6 +495,54 @@ fn path_of(this: &Value) -> Vec<Pt> {
     flatten_path(ffi::unwrap_node(this).and_then(|n| n.attr(c"d")))
 }
 
+fn text_length(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    chars: Option<(usize, usize)>,
+) -> Option<Option<f64>> {
+    let node = ffi::unwrap_node(this).filter(|n| n.flags() & FLAG_SVG_NS != 0)?;
+    let js = ffi::js_of(scope);
+    let svg = owner_root(node).filter(|_| !js.is_null())?;
+    ffi::flush_layout(js);
+    let svg_box = ffi::layout_root(js).and_then(|root| ffi::find_by_dom(root, svg))?;
+    southstar_svg::node_text_length(
+        Some(svg),
+        Some(node),
+        (svg_box.content_width(), svg_box.content_height()),
+        ffi::svg_styles(svg_box),
+        ffi::box_style(svg_box),
+        chars,
+    )
+}
+
+pub fn get_computed_text_length(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
+    let length = text_length(scope, this, None).flatten().unwrap_or(0.0);
+    Ok(Value::number(length))
+}
+
+fn char_index(scope: &mut Scope<'_>, value: Option<&Value>) -> JsResult<usize> {
+    let n = match value {
+        Some(v) => scope.to_number(v)?,
+        None => return Err(scope.type_error("getSubStringLength: 2 arguments required")),
+    };
+    let n = if n.is_finite() { n.trunc() } else { 0.0 };
+    let wrapped = n.rem_euclid(4_294_967_296.0);
+    Ok(wrapped as usize)
+}
+
+pub fn get_sub_string_length(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
+    let start = char_index(scope, args.first())?;
+    let count = char_index(scope, args.get(1))?;
+    match text_length(scope, this, Some((start, count))) {
+        Some(Some(length)) => Ok(Value::number(length)),
+        Some(None) => Err(scope.dom_exception(
+            "IndexSizeError",
+            "getSubStringLength: charnum is beyond the number of characters",
+        )),
+        None => Ok(Value::number(0.0)),
+    }
+}
+
 pub fn get_total_length(_scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     Ok(Value::number(path_length(&path_of(this), None).0))
 }
