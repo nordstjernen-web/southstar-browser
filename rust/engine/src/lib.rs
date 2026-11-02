@@ -9,7 +9,7 @@ mod ffi;
 mod styles;
 mod timings;
 
-pub use fetch::{linked_css_known, linked_css_text};
+pub use fetch::{linked_css_known, linked_css_redirected_away, linked_css_text};
 pub use styles::layout_perf;
 pub use timings::{ResourceTiming, take_resource_timings};
 

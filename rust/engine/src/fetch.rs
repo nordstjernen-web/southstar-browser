@@ -17,6 +17,29 @@ const LAZY_IMAGE_MARGIN_PX: f64 = 4000.0;
 const MAX_DEPTH: u32 = 512;
 
 static LINKED_CSS: Mutex<Option<HashMap<Vec<u8>, Vec<u8>>>> = Mutex::new(None);
+static REDIRECTED_AWAY: Mutex<Option<HashSet<Vec<u8>>>> = Mutex::new(None);
+
+fn record_redirect(url: &[u8], away: bool) {
+    let Ok(mut guard) = REDIRECTED_AWAY.lock() else {
+        return;
+    };
+    let set = guard.get_or_insert_with(HashSet::new);
+    if away {
+        if set.len() >= LINKED_CSS_MAX {
+            set.clear();
+        }
+        set.insert(url.to_vec());
+    } else {
+        set.remove(url);
+    }
+}
+
+pub fn linked_css_redirected_away(url: &[u8]) -> bool {
+    REDIRECTED_AWAY
+        .lock()
+        .ok()
+        .is_some_and(|guard| guard.as_ref().is_some_and(|set| set.contains(url)))
+}
 
 pub fn content_type_is_css(ct: Option<&[u8]>) -> bool {
     let Some(ct) = ct.filter(|c| !c.is_empty()) else {
@@ -105,6 +128,13 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
     }
     let start_us = ffi::monotonic_us();
     let resp = ffi::fetch_blocking_with_headers(f.url, f.top_url, Dest::Style);
+    if let Some(r) = &resp {
+        let fetched = r.final_url().unwrap_or(f.url).to_bytes();
+        record_redirect(
+            f.url.to_bytes(),
+            !southstar_url::bytes::same_origin(f.url.to_bytes(), fetched),
+        );
+    }
     let cross_origin = resp.as_ref().is_some_and(|r| {
         let fetched = r.final_url().unwrap_or(f.url).to_bytes();
         f.top_url
