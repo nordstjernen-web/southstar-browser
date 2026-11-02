@@ -51,6 +51,31 @@ impl Flag {
         self.0.replace(false)
     }
 }
+pub type RestyleKey = (u64, u64, usize, c_int, u64);
+
+#[derive(Default)]
+pub struct Dirty {
+    value: Cell<bool>,
+    epoch: Cell<u64>,
+}
+
+impl Dirty {
+    pub fn get(&self) -> bool {
+        self.value.get()
+    }
+
+    pub fn set(&self, value: bool) {
+        if value {
+            self.epoch.set(self.epoch.get().wrapping_add(1));
+        }
+        self.value.set(value);
+    }
+
+    pub fn epoch(&self) -> u64 {
+        self.epoch.get()
+    }
+}
+
 #[derive(Default)]
 pub struct Text(RefCell<Option<Rc<CStr>>>);
 
@@ -166,9 +191,10 @@ pub struct NsBrowser {
     pub images_arrived_since_layout: Flag,
     pub load_delay_deadline_us: Cell<i64>,
     img_requested: RefCell<HashSet<CString>>,
-    pub dirty: Flag,
+    pub dirty: Dirty,
     pub dppx: Cell<f64>,
-    pub cascade_dirty: Flag,
+    pub cascade_dirty: Dirty,
+    pub restyled: RefCell<Option<(RestyleKey, Rc<StyleMap>)>>,
     pub relaying: Flag,
     pub pending_nav: Text,
     pub soft_nav_pushed: Flag,
@@ -333,6 +359,7 @@ impl NsBrowser {
         drop(self.anim.take());
         self.free_layout();
         self.drop_styles();
+        drop(self.restyled.take());
         if let Some(cache) = self.css_cache.take() {
             cache.free();
         }

@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Performance: reading a computed value that does not depend on layout
+  (`getComputedStyle(el).color`, custom properties, pseudo-element styles,
+  `getAnimations()`) after a style change recomputes the cascade only and
+  leaves the layout stale until something needs boxes. It used to rebuild
+  the whole layout tree on every such read: 20 `el.style.color = …;
+  getComputedStyle(el).color` rounds on a 3,000-node page went from 630 ms
+  to about 20 ms after the first layout, and 20 class toggles with a read
+  from 670 ms to 33 ms. Sizes, margins, paddings, border widths, insets,
+  transforms and their origins, grid tracks, and pages with container
+  queries or frames still take the full relayout.
 * Security: a `<link rel=stylesheet>` whose same-origin URL redirects to
   another origin is treated as cross-origin by the CSSOM: reading its
   `cssRules` throws `SecurityError`. The text of the other origin's

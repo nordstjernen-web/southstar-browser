@@ -4,6 +4,7 @@
 
 use core::ffi::{CStr, c_int};
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::OnceLock;
 
 use southstar_dom::Node;
@@ -135,6 +136,7 @@ pub fn relayout(b: &NsBrowser) {
     }
     b.relaying.set(true);
     b.cascade_dirty.set(false);
+    drop(b.restyled.take());
     if let Some(js) = b.js() {
         js.consume_mutated();
     }
@@ -236,6 +238,50 @@ pub fn flush(b: &NsBrowser) {
     if b.layout().is_none() || b.dirty.get() || b.cascade_dirty.get() {
         relayout(b);
         b.dirty.set(false);
+    }
+}
+
+fn restyle_key(b: &NsBrowser) -> ffi::RestyleKey {
+    (
+        b.dirty.epoch(),
+        b.cascade_dirty.epoch(),
+        Node::ptr_or_null(b.hover_node.get()) as usize,
+        b.vw.get(),
+        b.vh.get().to_bits(),
+    )
+}
+
+pub fn flush_style(b: &NsBrowser) {
+    let Some(js) = b.js() else {
+        return;
+    };
+    if js.consume_mutated() {
+        b.dirty.set(true);
+    }
+    if b.relaying.get() {
+        return;
+    }
+    if b.layout().is_none() || !b.dirty.get() {
+        flush(b);
+        return;
+    }
+    let key = restyle_key(b);
+    if let Some((cached, styles)) = b.restyled.borrow().as_ref()
+        && *cached == key
+    {
+        if !js.style_table_is(styles) {
+            js.set_style_table(Some(Rc::clone(styles)));
+        }
+        return;
+    }
+    ffi::css_set_viewport(f64::from(b.vw.get()), b.vh.get());
+    ffi::css_set_doc_language(b.doc_language.get().as_deref());
+    match b.engine_restyle(js.focused_node()) {
+        Some(styles) => {
+            js.set_style_table(Some(Rc::clone(&styles)));
+            b.restyled.replace(Some((key, styles)));
+        }
+        None => flush(b),
     }
 }
 

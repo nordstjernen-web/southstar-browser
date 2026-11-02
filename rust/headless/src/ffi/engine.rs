@@ -209,7 +209,15 @@ pub struct Relayout<'a> {
 }
 
 pub fn relayout(r: &Relayout, layout: &Cell<Option<BoxRef<'static>>>) -> Option<Rc<StyleMap>> {
-    let req = southstar_engine::Relayout {
+    southstar_engine::relayout(&engine_request(r), layout)
+}
+
+pub fn restyle(r: &Relayout) -> Option<Rc<StyleMap>> {
+    southstar_engine::restyle(&engine_request(r))
+}
+
+fn engine_request<'a>(r: &Relayout<'a>) -> southstar_engine::Relayout<'a> {
+    southstar_engine::Relayout {
         page: Page {
             doc: r.doc,
             base: r.base,
@@ -224,8 +232,7 @@ pub fn relayout(r: &Relayout, layout: &Cell<Option<BoxRef<'static>>>) -> Option<
         hover: None,
         caret_byte: r.caret,
         sel_anchor_byte: r.anchor,
-    };
-    southstar_engine::relayout(&req, layout)
+    }
 }
 
 pub fn free_layout(layout: Option<BoxRef<'static>>) {

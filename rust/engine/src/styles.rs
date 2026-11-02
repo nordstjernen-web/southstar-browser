@@ -172,6 +172,10 @@ fn frame_viewports_reset() {
     FRAME_VIEWPORTS.with(|map| map.borrow_mut().clear());
 }
 
+pub fn frame_viewports_recorded() -> bool {
+    FRAME_VIEWPORTS.with(|map| !map.borrow().is_empty())
+}
+
 pub fn frame_viewports_disagree_with_layout() -> bool {
     let recorded: Vec<(WeakNode, f64, f64)> =
         FRAME_VIEWPORTS.with(|map| map.borrow().values().copied().collect());

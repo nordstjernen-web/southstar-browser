@@ -96,8 +96,21 @@ impl Js {
         );
     }
 
+    pub fn bind_style_flush(self, ctx: &Rc<Ctx>) {
+        let ctx = Rc::downgrade(ctx);
+        api::set_style_flush_hook(
+            self.page(),
+            Some(Rc::new(move || {
+                if let Some(ctx) = ctx.upgrade() {
+                    crate::inproc::flush_style(&ctx);
+                }
+            })),
+        );
+    }
+
     pub fn unbind_layout_flush(self) {
         api::set_layout_flush_hook(self.page(), None);
+        api::set_style_flush_hook(self.page(), None);
     }
 
     pub fn bind_media(self, video_cache: Option<VideoCache>) {
@@ -139,6 +152,10 @@ impl Js {
 
     pub fn set_style_table(self, styles: Option<Rc<StyleMap>>) {
         api::set_style_table(self.page(), styles);
+    }
+
+    pub fn style_table_is(self, styles: &Rc<StyleMap>) -> bool {
+        api::style_table(self.page()).is_some_and(|table| Rc::ptr_eq(&table, styles))
     }
 
     pub fn set_image_cache(self, cache: Option<ImageCache>) {
