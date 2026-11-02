@@ -1,4 +1,4 @@
-//! Southstar — units resolved in a computed style: the element's font size in px, then em, rem, ex, ch, viewport and container units, percentages in line-height, and infinite or NaN calc() results clamped, across lengths, calc() values, shadows, grid tracks, transforms and sizes.
+//! Southstar — units resolved in a computed style: the element's font size in px, then em, rem, ex, ch, lh, rlh, viewport and container units, percentages in line-height, and infinite or NaN calc() results clamped, across lengths, calc() values, shadows, grid tracks, transforms and sizes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -253,6 +253,8 @@ fn fold_percent(c: &mut RawCalc, basis: f64) {
 struct Basis<'a> {
     font_px: f64,
     root_px: f64,
+    line_px: f64,
+    parent_line_px: f64,
     font: Font<'a>,
 }
 
@@ -263,6 +265,7 @@ enum Change {
     Calc { refresh: f64, line_pct: bool },
     Size,
     Length,
+    LineLength { of_parent: bool },
 }
 
 fn change_for(prop: usize, slot: Slot<'_>) -> Option<Change> {
@@ -287,6 +290,9 @@ fn change_for(prop: usize, slot: Slot<'_>) -> Option<Change> {
             (font_relative(s.w_unit) || font_relative(s.h_unit)).then_some(Change::Size)
         }
         Slot::Length(l) => match l.unit {
+            LH | RLH => Some(Change::LineLength {
+                of_parent: prop == LINE_HEIGHT,
+            }),
             PERCENT if prop == LINE_HEIGHT => Some(Change::Length),
             EM | REM | VW | VH | VMIN | VMAX | EX | CH | CAP | IC => Some(Change::Length),
             _ => None,
@@ -373,6 +379,14 @@ fn apply(change: Change, slot: SlotMut<'_>, b: &Basis<'_>) {
             }
             l.unit = PX;
         }
+        (Change::LineLength { of_parent }, SlotMut::Length(l)) => {
+            l.v *= match (l.unit, of_parent) {
+                (RLH, _) => b.root_px * NORMAL_LINE_HEIGHT,
+                (_, true) => b.parent_line_px,
+                (_, false) => b.line_px,
+            };
+            l.unit = PX;
+        }
         _ => {}
     }
 }
@@ -406,11 +420,21 @@ pub(crate) fn resolve(out: &mut ComputedStyle<'_>, parent: Option<&StyleView<'_>
     let font_px = own_font_px(out, parent, root_px);
     let root_px = if root_px <= 0.0 { font_px } else { root_px };
     out.set_length_px(FONT_SIZE, font_px);
+    let parent_line_px = parent.map_or(16.0 * NORMAL_LINE_HEIGHT, |p| {
+        line_height_px(p, style_font_px(p))
+    });
+    let line_px = match out.slot(LINE_HEIGHT) {
+        Some(Slot::Length(l)) if l.unit == LH => l.v * parent_line_px,
+        Some(Slot::Length(l)) if l.unit == RLH => l.v * root_px * NORMAL_LINE_HEIGHT,
+        slot => line_height_of(slot, font_px),
+    };
     let font = out.font();
     let family = font.family.map(CStr::to_owned);
     let basis = Basis {
         font_px,
         root_px,
+        line_px,
+        parent_line_px,
         font: Font {
             family: family.as_deref(),
             weight: font.weight,
@@ -463,15 +487,21 @@ pub(crate) fn style_font_px(style: &StyleView<'_>) -> f64 {
     style.font_px().unwrap_or(16.0)
 }
 
+const NORMAL_LINE_HEIGHT: f64 = 1.4375;
+
 fn line_height_px(style: &StyleView<'_>, font_px: f64) -> f64 {
-    match style.slot(LINE_HEIGHT) {
+    line_height_of(style.slot(LINE_HEIGHT), font_px)
+}
+
+fn line_height_of(slot: Option<Slot<'_>>, font_px: f64) -> f64 {
+    match slot {
         Some(Slot::Length(l)) => match l.unit {
             PX => l.v,
             NUMBER | EM => l.v * font_px,
             PERCENT => l.v * font_px / 100.0,
-            _ => font_px * 1.4375,
+            _ => font_px * NORMAL_LINE_HEIGHT,
         },
-        _ => font_px * 1.4375,
+        _ => font_px * NORMAL_LINE_HEIGHT,
     }
 }
 

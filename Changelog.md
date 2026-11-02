@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS: the `lh` and `rlh` units resolve when the style is computed: `lh`
+  against the element's own line height (the parent's inside
+  `line-height` itself) and `rlh` against the root's. They used to reach
+  layout unresolved, so `height: 2lh` computed to `0px`.
 * Rust port: blob: URLs, `crypto.randomUUID` and the watchdog's session
   file name take their UUIDs from one safe `southstar_sandbox::uuid_v4` over
   the platform CSPRNG instead of GLib's `g_uuid_string_random`; `rust/js-url`
