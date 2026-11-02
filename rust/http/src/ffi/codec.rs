@@ -253,7 +253,7 @@ mod brotli {
 #[cfg(feature = "zstd")]
 mod zstd {
     use super::{Emit, Failure, OUT_CHUNK};
-    use core::ffi::{c_uint, c_void};
+    use core::ffi::{c_int, c_uint, c_void};
 
     #[repr(C)]
     struct InBuffer {
@@ -271,7 +271,7 @@ mod zstd {
 
     unsafe extern "C" {
         safe fn ZSTD_createDStream() -> *mut c_void;
-        fn ZSTD_initDStream(ds: *mut c_void) -> usize;
+        fn ZSTD_DCtx_setParameter(ds: *mut c_void, param: c_int, value: c_int) -> usize;
         fn ZSTD_decompressStream(
             ds: *mut c_void,
             out: *mut OutBuffer,
@@ -280,6 +280,9 @@ mod zstd {
         safe fn ZSTD_isError(code: usize) -> c_uint;
         fn ZSTD_freeDStream(ds: *mut c_void) -> usize;
     }
+
+    const ZSTD_D_WINDOW_LOG_MAX: c_int = 100;
+    const MAX_WINDOW_LOG: c_int = 23;
 
     pub struct Zstd {
         stream: *mut c_void,
@@ -295,9 +298,12 @@ mod zstd {
             if stream.is_null() {
                 return None;
             }
-            // SAFETY: `stream` is the non-null stream just created.
-            unsafe { ZSTD_initDStream(stream) };
-            Some(Zstd { stream })
+            let zstd = Zstd { stream };
+            // SAFETY: `stream` is the non-null stream just created, owned by `zstd`.
+            let rc = unsafe {
+                ZSTD_DCtx_setParameter(zstd.stream, ZSTD_D_WINDOW_LOG_MAX, MAX_WINDOW_LOG)
+            };
+            (ZSTD_isError(rc) == 0).then_some(zstd)
         }
 
         pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<(), Failure> {

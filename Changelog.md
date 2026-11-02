@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: a `Content-Encoding: zstd` response may use a decompression
+  window of at most 8 MiB, the limit RFC 8878 and RFC 9659 set for HTTP;
+  a frame that asks for more fails to decode. libzstd's default had let a
+  server make the browser allocate 128 MiB per response.
 * Security: `EventSource` checks CORS. A stream from another origin
   (judged by its URL after redirects) opens only when
   `Access-Control-Allow-Origin` names the page's origin or is `*`; with

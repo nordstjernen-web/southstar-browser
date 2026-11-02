@@ -1,4 +1,4 @@
-//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list), its proxy choice from the environment and FTP URL parsing.
+//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list), its proxy choice from the environment, FTP URL parsing and the zstd window cap.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -267,4 +267,43 @@ fn ftp_url_refuses_line_breaks_in_commands() {
             String::from_utf8_lossy(url)
         );
     }
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_frame(window_descriptor: u8) -> Vec<u8> {
+    vec![
+        0x28,
+        0xb5,
+        0x2f,
+        0xfd,
+        0x00,
+        window_descriptor,
+        0x09,
+        0x00,
+        0x00,
+        b'a',
+    ]
+}
+
+#[cfg(feature = "zstd")]
+fn zstd_decode(frame: &[u8]) -> Option<Vec<u8>> {
+    let mut zstd = crate::ffi::codec::Zstd::new()?;
+    let mut out = Vec::new();
+    let mut emit = |chunk: &[u8]| {
+        out.extend_from_slice(chunk);
+        true
+    };
+    zstd.feed(frame, &mut emit).ok()?;
+    Some(out)
+}
+
+#[cfg(feature = "zstd")]
+#[test]
+fn zstd_window_is_capped_at_8_mib() {
+    assert_eq!(
+        zstd_decode(&zstd_frame(13 << 3)).as_deref(),
+        Some(&b"a"[..])
+    );
+    assert_eq!(zstd_decode(&zstd_frame((13 << 3) | 1)), None);
+    assert_eq!(zstd_decode(&zstd_frame(17 << 3)), None);
 }
