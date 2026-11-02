@@ -7,6 +7,10 @@ Southstar Browser 1.0.7-dev:
   the selector matcher caches per style pass instead of walking every
   sibling for every element. A rule using them on 30,000 siblings took
   11.1 s to style and now takes about 3 s.
+* DNS over HTTPS: the answer cache holds at most 1024 hosts. It grew by
+  one entry per distinct host name and never shrank, so a page requesting
+  many generated subdomains could grow it without limit. When full,
+  expired answers are dropped first, then the one expiring soonest.
 * Source: the 45 copies of `until_nul` (the bytes before the first NUL)
   and the 45 `c_text`/`c_string`/`cstring` helpers that turned such bytes
   into a `CString` are now four shared functions in `southstar-unicode`:

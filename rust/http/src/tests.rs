@@ -307,3 +307,31 @@ fn zstd_window_is_capped_at_8_mib() {
     assert_eq!(zstd_decode(&zstd_frame((13 << 3) | 1)), None);
     assert_eq!(zstd_decode(&zstd_frame(17 << 3)), None);
 }
+
+#[test]
+fn doh_cache_stays_bounded() {
+    use std::collections::HashMap;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::time::{Duration, Instant};
+
+    let now = Instant::now();
+    let addr = vec![IpAddr::V4(Ipv4Addr::LOCALHOST)];
+    let mut cache = HashMap::new();
+    for i in 0..5000u64 {
+        let expires = now + Duration::from_secs(60 + i);
+        crate::doh::remember(&mut cache, format!("h{i}.test"), addr.clone(), expires, now);
+    }
+    assert_eq!(cache.len(), 1024);
+    assert!(cache.contains_key("h4999.test"));
+    assert!(!cache.contains_key("h0.test"));
+
+    let later = now + Duration::from_secs(100_000);
+    crate::doh::remember(
+        &mut cache,
+        "fresh.test".to_owned(),
+        addr,
+        later + Duration::from_secs(60),
+        later,
+    );
+    assert_eq!(cache.len(), 1);
+}
