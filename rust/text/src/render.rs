@@ -146,15 +146,6 @@ impl<'a> CairoRenderer<'a> {
         }
     }
 
-    pub fn set_offset(&mut self, x_offset: f64, y_offset: f64) {
-        self.x_offset = x_offset;
-        self.y_offset = y_offset;
-    }
-
-    pub fn set_has_show_text_glyphs(&mut self, has_show_text_glyphs: bool) {
-        self.has_show_text_glyphs = has_show_text_glyphs;
-    }
-
     pub fn activate(&mut self) {
         self.active_count += 1;
     }
@@ -550,25 +541,6 @@ impl<'a> CairoRenderer<'a> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw_trapezoid(
-        &mut self,
-        part: RenderPart,
-        y1: f64,
-        x11: f64,
-        x21: f64,
-        y2: f64,
-        x12: f64,
-        x22: f64,
-    ) {
-        if self.active_count <= 0 {
-            return;
-        }
-        if self.should_draw_part(part) {
-            self.fill_trapezoid(part, y1, x11, x21, y2, x12, x22);
-        }
-    }
-
     pub fn draw_line(
         &mut self,
         runs: &[GlyphItem],
@@ -722,79 +694,6 @@ fn do_glyph_string(cr: &CairoContext, font: Option<&Font>, glyphs: &GlyphString,
     renderer.restore_current_point();
 }
 
-fn do_glyph_item(cr: &CairoContext, text: &str, glyph_item: &GlyphItem, do_path: bool) {
-    let mut renderer = CairoRenderer::at_current_point(cr, do_path);
-    if !do_path {
-        renderer.activate();
-        renderer.unset_part_colors();
-    }
-    renderer.draw_glyph_item(Some(text), glyph_item, 0, 0);
-    if !do_path {
-        renderer.deactivate();
-    }
-    renderer.restore_current_point();
-}
-
-fn do_line_runs(
-    cr: &CairoContext,
-    runs: &[GlyphItem],
-    text: Option<&str>,
-    line_logical_extents: impl FnMut() -> Rectangle,
-    do_path: bool,
-) {
-    let mut renderer = CairoRenderer::at_current_point(cr, do_path);
-    renderer.draw_line(runs, text, 0, 0, line_logical_extents);
-    renderer.restore_current_point();
-}
-
-fn do_error_underline(cr: &CairoContext, x: f64, y: f64, width: f64, height: f64, do_path: bool) {
-    if !do_path {
-        cr.new_path();
-    }
-    draw_error_underline_path(cr, x, y, width, height);
-    if !do_path {
-        cr.fill();
-    }
-}
-
-pub fn show_glyph_string(cr: &CairoContext, font: Option<&Font>, glyphs: &GlyphString) {
-    do_glyph_string(cr, font, glyphs, false);
-}
-
 pub fn glyph_string_path(cr: &CairoContext, font: Option<&Font>, glyphs: &GlyphString) {
     do_glyph_string(cr, font, glyphs, true);
-}
-
-pub fn show_glyph_item(cr: &CairoContext, text: &str, glyph_item: &GlyphItem) {
-    do_glyph_item(cr, text, glyph_item, false);
-}
-
-pub fn glyph_item_path(cr: &CairoContext, text: &str, glyph_item: &GlyphItem) {
-    do_glyph_item(cr, text, glyph_item, true);
-}
-
-pub fn show_line_runs(
-    cr: &CairoContext,
-    runs: &[GlyphItem],
-    text: Option<&str>,
-    line_logical_extents: impl FnMut() -> Rectangle,
-) {
-    do_line_runs(cr, runs, text, line_logical_extents, false);
-}
-
-pub fn line_runs_path(
-    cr: &CairoContext,
-    runs: &[GlyphItem],
-    text: Option<&str>,
-    line_logical_extents: impl FnMut() -> Rectangle,
-) {
-    do_line_runs(cr, runs, text, line_logical_extents, true);
-}
-
-pub fn show_error_underline(cr: &CairoContext, x: f64, y: f64, width: f64, height: f64) {
-    do_error_underline(cr, x, y, width, height, false);
-}
-
-pub fn error_underline_path(cr: &CairoContext, x: f64, y: f64, width: f64, height: f64) {
-    do_error_underline(cr, x, y, width, height, true);
 }

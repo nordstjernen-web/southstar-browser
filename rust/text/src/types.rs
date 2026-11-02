@@ -51,10 +51,6 @@ pub fn units_from_double(d: f64) -> i32 {
     (d * SCALE_F + 0.5).floor() as i32
 }
 
-pub fn units_to_double(i: i32) -> f64 {
-    f64::from(i) / SCALE_F
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 pub struct Rectangle {
@@ -80,14 +76,6 @@ impl Rectangle {
 
     pub const fn descent(&self) -> i32 {
         self.y + self.height
-    }
-
-    pub const fn lbearing(&self) -> i32 {
-        self.x
-    }
-
-    pub const fn rbearing(&self) -> i32 {
-        self.x + self.width
     }
 }
 

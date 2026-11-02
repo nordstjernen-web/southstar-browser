@@ -675,10 +675,6 @@ impl Font {
         hb_font.finish()
     }
 
-    pub fn get_glyph(&self, wc: u32) -> Glyph {
-        self.nominal_glyph(wc).unwrap_or(0)
-    }
-
     pub fn scaled_font(&self) -> Option<&ScaledFont> {
         self.0
             .scaled_font

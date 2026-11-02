@@ -627,41 +627,6 @@ impl CairoRenderer<'_> {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn fill_trapezoid(
-        &self,
-        part: RenderPart,
-        y1: f64,
-        x11: f64,
-        x21: f64,
-        y2: f64,
-        x12: f64,
-        x22: f64,
-    ) {
-        let cr = self.cr;
-        cr.save();
-
-        if !self.do_path {
-            self.apply_part_color(part);
-        }
-
-        let (x, y) = cr.user_to_device_distance(self.x_offset, self.y_offset);
-        cr.identity_matrix();
-        cr.translate(x, y);
-
-        cr.move_to(x11, y1);
-        cr.line_to(x21, y1);
-        cr.line_to(x22, y2);
-        cr.line_to(x12, y2);
-        cr.close_path();
-
-        if !self.do_path {
-            cr.fill();
-        }
-
-        cr.restore();
-    }
-
     pub(super) fn fill_error_underline(&self, x: i32, y: i32, width: i32, height: i32) {
         let cr = self.cr;
         if !self.do_path {

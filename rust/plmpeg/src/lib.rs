@@ -179,14 +179,6 @@ impl Plm {
         };
     }
 
-    pub fn set_audio_stream(&mut self, stream_index: i32) {
-        if !(0..=3).contains(&stream_index) {
-            return;
-        }
-        self.audio_stream_index = stream_index;
-        self.set_audio_enabled(self.audio_enabled);
-    }
-
     pub fn set_video_enabled(&mut self, enabled: bool) {
         self.video_enabled = enabled;
         if !enabled {
@@ -325,49 +317,5 @@ impl Plm {
         let samples = self.audio.as_deref()?.samples();
         self.time = samples.time;
         Some(samples)
-    }
-
-    pub fn seek_frame(&mut self, time: f64, seek_exact: bool) -> Option<Frame<'_>> {
-        if !self.init_decoders() || self.feed.video_type == 0 {
-            return None;
-        }
-        let kind = self.feed.video_type;
-        let start_time = self.feed.demux.start_time(kind);
-        let duration = self.feed.demux.duration(kind);
-        let time = if time < 0.0 {
-            0.0
-        } else if time > duration {
-            duration
-        } else {
-            time
-        };
-        let packet = self.feed.demux.seek(time, kind, true)?;
-        let previous_audio_type = self.feed.audio_type;
-        self.feed.audio_type = 0;
-        let video = self.video.as_mut()?;
-        video.rewind();
-        self.feed.video_buf.rewind();
-        video.set_time(packet.pts - start_time);
-        let Feed {
-            demux, video_buf, ..
-        } = &mut self.feed;
-        video_buf.write(demux.data(&packet));
-        let mut frame = video.decode(&mut Self::video_track(&mut self.feed));
-        if seek_exact {
-            while let Some((_, frame_time)) = frame
-                && frame_time < time
-            {
-                frame = video.decode(&mut Self::video_track(&mut self.feed));
-            }
-        }
-        self.feed.audio_type = previous_audio_type;
-        if let Some((_, frame_time)) = frame {
-            self.time = frame_time;
-        }
-        self.has_ended = false;
-        let (base, frame_time) = frame?;
-        self.video
-            .as_deref()
-            .map(|video| video.frame(base, frame_time))
     }
 }

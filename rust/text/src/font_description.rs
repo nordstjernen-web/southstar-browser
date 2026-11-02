@@ -142,10 +142,6 @@ impl FontDescription {
         Variant::from_i32(self.variant).unwrap_or(Variant::Normal)
     }
 
-    pub fn variant_value(&self) -> i32 {
-        self.variant
-    }
-
     pub fn set_weight(&mut self, weight: Weight) {
         self.weight = weight.0;
         self.mask |= font_mask::WEIGHT as u16;
@@ -206,10 +202,6 @@ impl FontDescription {
 
     pub fn gravity(&self) -> Gravity {
         Gravity::from_i32(self.gravity).unwrap_or(Gravity::South)
-    }
-
-    pub fn gravity_value(&self) -> i32 {
-        self.gravity
     }
 
     pub fn set_variations(&mut self, variations: Option<&str>) {

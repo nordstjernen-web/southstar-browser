@@ -116,17 +116,6 @@ impl Space {
         }
     }
 
-    pub fn is_predefined(self) -> bool {
-        !matches!(
-            self,
-            Space::Lab | Space::Lch | Space::Oklab | Space::Oklch | Space::Hsl | Space::Hwb
-        )
-    }
-
-    pub fn is_xyz(self) -> bool {
-        matches!(self, Space::XyzD50 | Space::XyzD65)
-    }
-
     pub fn hue_index(self) -> Option<usize> {
         match self {
             Space::Hsl | Space::Hwb => Some(0),

@@ -531,12 +531,3 @@ pub fn shape_cache_stats() -> (u64, u64, u64, u64) {
         entries as u64,
     )
 }
-
-pub fn shape_cache_skip_reasons() -> (u64, u64, u64, u64) {
-    (
-        u64::from(SKIP_FONT.load(Ordering::Relaxed)),
-        u64::from(SKIP_LEN.load(Ordering::Relaxed)),
-        u64::from(SKIP_FEAT.load(Ordering::Relaxed)),
-        u64::from(SKIP_CTX.load(Ordering::Relaxed)),
-    )
-}

@@ -59,10 +59,6 @@ impl Frame<'_> {
         self.convert::<4, 0, 1, 2>(dest, stride);
     }
 
-    pub fn to_rgb(&self, dest: &mut [u8], stride: usize) {
-        self.convert::<3, 0, 1, 2>(dest, stride);
-    }
-
     fn convert<const BPP: usize, const RI: usize, const GI: usize, const BI: usize>(
         &self,
         dest: &mut [u8],
@@ -197,11 +193,6 @@ impl Video {
 
     pub fn pixel_aspect_ratio(&self) -> f64 {
         self.pixel_aspect_ratio
-    }
-
-    pub fn set_time(&mut self, time: f64) {
-        self.frames_decoded = (self.framerate * time) as i32;
-        self.time = time;
     }
 
     pub fn rewind(&mut self) {

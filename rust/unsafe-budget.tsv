@@ -3,7 +3,7 @@ crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_uns
 about-style	0	0	0	0	0	0	0
 anim	0	0	0	0	0	0	0
 audio-helper	43	20	1	0	0	0	0
-av	82	44	0	0	0	0	0
+av	81	44	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
 browser	116	1	79	0	0	0	0
@@ -31,7 +31,7 @@ font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
 glib	109	65	0	0	0	0	0
-gtk	495	27	0	0	0	0	0
+gtk	492	27	0	0	0	0	0
 gtk-ffi	28	346	0	0	0	0	0
 headless	11	6	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0

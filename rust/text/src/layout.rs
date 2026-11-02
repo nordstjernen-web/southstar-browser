@@ -295,34 +295,12 @@ impl Layout {
         self.indent
     }
 
-    pub fn set_strut_line_height(&mut self, line_height: i32) {
-        let line_height = line_height.max(0);
-        if line_height != self.strut_line_height {
-            self.strut_line_height = line_height;
-            self.layout_changed();
-        }
-    }
-
     pub fn strut_line_height(&self) -> i32 {
         self.strut_line_height
     }
 
-    pub fn set_spacing(&mut self, spacing: i32) {
-        if spacing != self.spacing {
-            self.spacing = spacing;
-            self.layout_changed();
-        }
-    }
-
     pub fn spacing(&self) -> i32 {
         self.spacing
-    }
-
-    pub fn set_line_spacing(&mut self, factor: f32) {
-        if factor != self.line_spacing {
-            self.line_spacing = factor;
-            self.layout_changed();
-        }
     }
 
     pub fn line_spacing(&self) -> f32 {
@@ -378,15 +356,6 @@ impl Layout {
         self.justify
     }
 
-    pub fn set_justify_last_line(&mut self, justify: bool) {
-        if justify != self.justify_last_line {
-            self.justify_last_line = justify;
-            if self.justify {
-                self.layout_changed();
-            }
-        }
-    }
-
     pub fn justify_last_line(&self) -> bool {
         self.justify_last_line
     }
@@ -429,13 +398,6 @@ impl Layout {
         self.tabs.clone()
     }
 
-    pub fn set_single_paragraph_mode(&mut self, setting: bool) {
-        if self.single_paragraph != setting {
-            self.single_paragraph = setting;
-            self.layout_changed();
-        }
-    }
-
     pub fn single_paragraph_mode(&self) -> bool {
         self.single_paragraph
     }
@@ -464,10 +426,6 @@ impl Layout {
 
     pub fn text(&self) -> &str {
         &self.text
-    }
-
-    pub fn character_count(&self) -> i32 {
-        self.n_chars
     }
 
     pub fn context_changed(&mut self) {
@@ -553,15 +511,6 @@ impl Layout {
         let ctx = lock_context(&context);
         let (ink, logical, _) = self.extents_internal(&ctx, true, true, false);
         (ink.unwrap_or_default(), logical.unwrap_or_default())
-    }
-
-    pub fn ink_extents(&mut self) -> Rectangle {
-        self.ensure_lines();
-        let context = Arc::clone(&self.context);
-        let ctx = lock_context(&context);
-        self.extents_internal(&ctx, true, false, false)
-            .0
-            .unwrap_or_default()
     }
 
     pub fn logical_extents(&mut self) -> Rectangle {

@@ -8,7 +8,6 @@ use core::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
-use southstar_cairo::Context;
 use southstar_gtk_ffi::{self as sys, GBytes, GdkRgba, GrapheneRect, GtkSnapshot, GtkWidget};
 
 use crate::event::borrow_object;
@@ -79,13 +78,6 @@ impl<'a> SnapshotRef<'a> {
     pub fn append_texture(&self, texture: &Texture, bounds: &GrapheneRect) {
         // SAFETY: self is a live snapshot and texture a live texture the snapshot references.
         unsafe { sys::gtk_snapshot_append_texture(self.as_ptr(), texture.as_ptr(), bounds) };
-    }
-
-    pub fn append_cairo(&self, bounds: &GrapheneRect) -> Option<Context> {
-        // SAFETY: self is a live snapshot and bounds outlives the call.
-        let cr = unsafe { sys::gtk_snapshot_append_cairo(self.as_ptr(), bounds) };
-        // SAFETY: GTK returns a new cairo_t reference that the Context takes over on this thread.
-        unsafe { Context::from_raw_full(cr.cast()) }
     }
 }
 

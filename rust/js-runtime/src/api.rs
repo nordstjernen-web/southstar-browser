@@ -100,38 +100,6 @@ pub fn usp_serialize(scope: &mut Scope<'_>, usp: &Value) -> Vec<u8> {
     bytes[..end].to_vec()
 }
 
-pub fn reject_with_message(scope: &mut Scope<'_>, reject: &Value, message: &[u8]) {
-    let name_len = message
-        .iter()
-        .position(|&b| b == b':')
-        .unwrap_or(message.len());
-    let colon = name_len < message.len();
-    let is_dom_name = name_len > 5
-        && name_len < 64
-        && message[name_len - 5..name_len] == *b"Error"
-        && message[..name_len].iter().all(u8::is_ascii_alphanumeric);
-    let error = scope.new_error();
-    let lossy = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
-    if is_dom_name {
-        let name = scope.string(&lossy(&message[..name_len]));
-        let _ = scope.set(&error, "name", name);
-        let mut rest = if colon {
-            &message[name_len + 1..]
-        } else {
-            message
-        };
-        while let Some((b' ', tail)) = rest.split_first() {
-            rest = tail;
-        }
-        let text = scope.string(&lossy(rest));
-        let _ = scope.set(&error, "message", text);
-    } else {
-        let text = scope.string(&lossy(message));
-        let _ = scope.set(&error, "message", text);
-    }
-    let _ = scope.call(reject, &Value::undefined(), &[error]);
-}
-
 pub(crate) fn queue_task(js: Js, ctx: ContextHandle, run: TaskRun) {
     let task = glue::message_task(ctx, run);
     if scheduling::queue_message_task(js, task) {

@@ -101,16 +101,8 @@ impl Analysis {
         self.size_font.as_ref()
     }
 
-    pub fn set_size_font(&mut self, font: Option<Font>) {
-        self.size_font = font;
-    }
-
     pub fn strut_font(&self) -> Option<&Font> {
         self.strut_font.as_ref()
-    }
-
-    pub fn set_strut_font(&mut self, font: Option<Font>) {
-        self.strut_font = font;
     }
 }
 
