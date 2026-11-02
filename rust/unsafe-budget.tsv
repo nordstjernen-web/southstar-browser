@@ -9,7 +9,7 @@ bookmarks	0	0	0	0	0	0	0
 browser	116	1	79	0	0	0	0
 build	0	0	0	0	0	0	0
 bytecode-cache	0	0	0	0	0	0	0
-cairo	169	120	0	0	0	0	0
+cairo	167	119	0	0	0	0	0
 camera	8	3	0	0	0	0	0
 canvas	0	0	0	0	0	0	0
 config	0	0	0	0	0	0	0
@@ -30,9 +30,9 @@ extensions	3	2	0	0	0	0	0
 font	19	20	0	0	0	0	0
 forms	0	0	0	0	0	0	0
 glctx	71	55	0	0	0	0	0
-glib	110	90	0	0	0	0	0
+glib	109	65	0	0	0	0	0
 gtk	495	27	0	0	0	0	0
-gtk-ffi	29	371	0	0	0	0	0
+gtk-ffi	28	346	0	0	0	0	0
 headless	11	6	0	0	0	0	0
 helper-ffi	0	0	0	0	0	0	0
 history	4	0	1	0	0	0	0

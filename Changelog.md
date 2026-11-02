@@ -12,6 +12,10 @@ Southstar Browser 1.0.7-dev:
   stops 256 properties deep and the reference that goes past the limit
   is invalid at computed-value time; chains declared in dependency order
   are unaffected.
+* Source: removed 50 GLib, GTK and cairo FFI declarations that nothing
+  called (the GArray/GPtrArray, string, file and directory helpers left
+  over from the C port, and cairo's PNG file loader), lowering the
+  unsafe budget of `glib`, `gtk-ffi` and `cairo`.
 * Settings: a search engine set to DuckDuckGo Lite
   (`https://lite.duckduckgo.com/lite/?q=%s`) is kept. It was replaced
   by `https://duckduckgo.com/?q=%s` every time the configuration

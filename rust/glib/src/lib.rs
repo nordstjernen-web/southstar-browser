@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int, c_long, c_uint, c_void};
+use core::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use core::ptr;
 
 mod dirs;
@@ -43,18 +43,6 @@ pub const FILE_TEST_IS_DIR: GFileTest = 1 << 2;
 pub const FILE_TEST_EXISTS: GFileTest = 1 << 4;
 
 #[repr(C)]
-pub struct GPtrArray {
-    pub pdata: *mut *mut c_void,
-    pub len: c_uint,
-}
-
-#[repr(C)]
-pub struct GArray {
-    pub data: *mut c_char,
-    pub len: c_uint,
-}
-
-#[repr(C)]
 pub struct GError {
     pub domain: u32,
     pub code: c_int,
@@ -65,56 +53,13 @@ pub struct GError {
 unsafe extern "C" {
     pub fn g_malloc(n_bytes: usize) -> *mut c_void;
     pub fn g_malloc0(n_bytes: usize) -> *mut c_void;
-    pub fn g_realloc(mem: *mut c_void, n_bytes: usize) -> *mut c_void;
     pub fn g_free(mem: *mut c_void);
-    pub fn g_strdup(s: *const c_char) -> *mut c_char;
-    pub fn g_strndup(s: *const c_char, n: usize) -> *mut c_char;
-    pub fn g_strfreev(v: *mut *mut c_char);
-    pub fn g_markup_escape_text(text: *const c_char, length: isize) -> *mut c_char;
-    pub fn g_getenv(variable: *const c_char) -> *const c_char;
     pub fn g_get_user_config_dir() -> *const c_char;
     pub fn g_get_user_data_dir() -> *const c_char;
     pub fn g_get_user_cache_dir() -> *const c_char;
     pub fn g_get_language_names() -> *const *const c_char;
-    pub fn g_file_get_contents(
-        filename: *const c_char,
-        contents: *mut *mut c_char,
-        length: *mut usize,
-        error: *mut *mut GError,
-    ) -> GBoolean;
     pub fn g_error_free(error: *mut GError);
-    pub fn g_file_test(filename: *const c_char, test: GFileTest) -> GBoolean;
-    pub fn g_file_read_link(filename: *const c_char, error: *mut *mut GError) -> *mut c_char;
-    pub fn g_build_filenamev(args: *mut *mut c_char) -> *mut c_char;
     pub fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
-    pub fn g_utf16_to_utf8(
-        str: *const u16,
-        len: c_long,
-        items_read: *mut c_long,
-        items_written: *mut c_long,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
-    pub fn g_array_new(
-        zero_terminated: GBoolean,
-        clear: GBoolean,
-        element_size: c_uint,
-    ) -> *mut GArray;
-    pub fn g_array_append_vals(array: *mut GArray, data: *const c_void, len: c_uint)
-    -> *mut GArray;
-    pub fn g_ptr_array_new_with_free_func(free_func: GDestroyNotify) -> *mut GPtrArray;
-    pub fn g_ptr_array_add(array: *mut GPtrArray, data: *mut c_void);
-    pub fn g_ptr_array_unref(array: *mut GPtrArray);
-    pub fn g_ptr_array_free(array: *mut GPtrArray, free_segment: GBoolean) -> *mut *mut c_void;
-    pub fn g_ptr_array_new() -> *mut GPtrArray;
-    pub fn g_ptr_array_insert(array: *mut GPtrArray, index: c_int, data: *mut c_void);
-    pub fn g_ptr_array_set_size(array: *mut GPtrArray, length: c_int);
-    pub fn g_ptr_array_remove_index(array: *mut GPtrArray, index: c_uint) -> *mut c_void;
-    pub fn g_ptr_array_sort(
-        array: *mut GPtrArray,
-        compare_func: Option<unsafe extern "C" fn(a: *const c_void, b: *const c_void) -> c_int>,
-    );
-    pub fn g_str_hash(v: *const c_void) -> c_uint;
-    pub fn g_str_equal(a: *const c_void, b: *const c_void) -> GBoolean;
 }
 
 pub struct GStr(core::ptr::NonNull<c_char>);
