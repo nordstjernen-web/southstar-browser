@@ -150,10 +150,23 @@ fn is_composed(scope: &mut Scope<'_>, event: &Value) -> bool {
 }
 
 fn set_target(js: Js, event: &Value, node: Element) {
+    set_node(js, event, "target", node);
+}
+
+fn set_node(js: Js, event: &Value, key: &str, node: Element) {
     js.scope(|scope| {
         let wrapper = ffi::wrap(scope, node);
-        set(scope, event, "target", wrapper);
+        set(scope, event, key, wrapper);
     });
+}
+
+fn shadow_related(js: Js, event: &Value) -> Option<Element> {
+    js.scope(|scope| {
+        let related = get(scope, event, "relatedTarget");
+        ffi::unwrap(&related)
+    })
+    .flatten()
+    .filter(|&related| in_shadow_tree(related))
 }
 
 fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) {
@@ -170,6 +183,7 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
     }
     flags.extend(nodes.iter().map(|&n| in_shadow_tree(n)));
     let retargets = flags.first().copied().unwrap_or(false);
+    let related = shadow_related(js, event);
     let path_len = nodes.len();
     let mut window_in_path = nodes.last().is_some_and(|&tail| is_real_document(tail));
     let nodes = Rc::new(nodes);
@@ -199,8 +213,17 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
     let document_target = nodes
         .last()
         .map_or(target, |&outer| ffi::retarget(target, outer));
-    if retargets && window_in_path {
-        set_target(js, event, document_target);
+    let set_window_targets = || {
+        if retargets {
+            set_target(js, event, document_target);
+        }
+        if let Some(related) = related {
+            let outer = nodes.last().copied().unwrap_or(target);
+            set_node(js, event, "relatedTarget", ffi::retarget(related, outer));
+        }
+    };
+    if window_in_path {
+        set_window_targets();
     }
     if window_is_target {
         if !stopped {
@@ -226,7 +249,7 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
                 target,
                 kind,
                 event,
-                Phase::capture(i == 0, flags[i], retargets),
+                Phase::capture(i == 0, flags[i], retargets).with_related(related),
                 &mut fired,
             );
         }
@@ -248,21 +271,22 @@ fn run_path(js: Js, target: Element, kind: &str, event: &Value) -> (bool, bool) 
                 target,
                 kind,
                 event,
-                Phase::bubble(i == 0, in_shadow, retargets),
+                Phase::bubble(i == 0, in_shadow, retargets).with_related(related),
                 &mut fired,
             );
         }
     }
     if window_in_path && !stopped && (bubbles || window_is_target) && bubble_len == path_len {
-        if retargets {
-            set_target(js, event, document_target);
-        }
+        set_window_targets();
         window_listeners(js, Some(target), kind, event, false, false, &mut fired);
     }
     crate::with(js, |page| page.paths.pop());
     return_path(js, nodes, flags);
     if retargets {
         js.scope(|scope| set(scope, event, "target", Value::null()));
+    }
+    if related.is_some() {
+        js.scope(|scope| set(scope, event, "relatedTarget", Value::null()));
     }
     let prevented = js
         .scope(|scope| finish_event(scope, event))
@@ -276,6 +300,7 @@ struct Phase {
     at_target: bool,
     in_shadow: bool,
     retarget: bool,
+    related: Option<Element>,
 }
 
 impl Phase {
@@ -285,7 +310,12 @@ impl Phase {
             at_target,
             in_shadow,
             retarget,
+            related: None,
         }
+    }
+
+    fn with_related(self, related: Option<Element>) -> Phase {
+        Phase { related, ..self }
     }
 
     fn bubble(at_target: bool, in_shadow: bool, retarget: bool) -> Phase {
@@ -294,6 +324,7 @@ impl Phase {
             at_target,
             in_shadow,
             retarget,
+            related: None,
         }
     }
 }
@@ -350,6 +381,9 @@ fn invoke_at(
 ) -> bool {
     if kind.starts_with("webkit") && alias_shadowed(js, cur, event) {
         return false;
+    }
+    if let Some(related) = phase.related {
+        set_node(js, event, "relatedTarget", ffi::retarget(related, cur));
     }
     let visible = if phase.retarget {
         let visible = ffi::retarget(target, cur);

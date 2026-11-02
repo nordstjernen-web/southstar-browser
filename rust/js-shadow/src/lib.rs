@@ -31,39 +31,14 @@ pub fn is_closed(root: Node<'_>) -> bool {
         .is_some_and(|mode| mode.to_bytes() == b"closed")
 }
 
-fn shadow_root_of(node: Node<'_>) -> Option<Node<'_>> {
-    southstar_dom::ancestors_and_self(node).find(|&n| is_shadow_root(n))
-}
-
-fn inclusive_ancestor(ancestor: Node<'_>, node: Node<'_>) -> bool {
-    southstar_dom::ancestors_and_self(node).any(|n| n == ancestor)
-}
-
-pub fn retarget<'a>(target: Node<'a>, against: Node<'_>) -> Node<'a> {
-    let mut visible = target;
-    for _ in 0..southstar_dom::MAX_DEPTH {
-        let Some(root) = shadow_root_of(visible) else {
-            return visible;
-        };
-        if inclusive_ancestor(root, against) {
-            return visible;
-        }
-        let Some(host) = root.parent() else {
-            return visible;
-        };
-        visible = host;
-    }
-    visible
-}
-
-pub fn in_shadow_tree(node: Node<'_>) -> bool {
-    shadow_root_of(node).is_some()
-}
+pub use southstar_dom::shadow::{in_shadow_tree, related_target, retarget};
 
 pub fn hidden_in_closed_tree(node: Node<'_>, from: Option<Node<'_>>) -> bool {
     southstar_dom::ancestors_and_self(node)
         .filter(|&n| is_shadow_root(n) && is_closed(n))
-        .any(|root| !from.is_some_and(|from| inclusive_ancestor(root, from)))
+        .any(|root| {
+            !from.is_some_and(|from| southstar_dom::ancestors_and_self(from).any(|n| n == root))
+        })
 }
 
 pub(crate) fn is_slot(node: Option<Element>) -> bool {

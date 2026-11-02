@@ -135,6 +135,7 @@ fn dispatch_focus_event(js: Js, target: Element, kind: &CStr, related: Option<El
     js.scope(|scope| {
         let event = ffi::make_event(scope, kind, target);
         let (bubbles, cancelable) = ffi::event_flags(kind);
+        let related = related.and_then(|r| southstar_dom::shadow::related_target(target, r));
         let related = ffi::wrap_or_null(scope, related);
         let _ = scope.set(&event, "bubbles", Value::boolean(bubbles));
         let _ = scope.set(&event, "cancelable", Value::boolean(cancelable));

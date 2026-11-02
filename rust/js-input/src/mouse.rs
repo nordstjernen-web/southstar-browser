@@ -147,7 +147,7 @@ pub(crate) fn mouse_event(
         put(scope, &event, "ctrlKey", Value::boolean(m.ctrl));
         put(scope, &event, "altKey", Value::boolean(m.alt));
         put(scope, &event, "metaKey", Value::boolean(m.meta));
-        let related = match related {
+        let related = match related.and_then(|r| southstar_dom::shadow::related_target(target, r)) {
             Some(related) => ffi::wrap(scope, related),
             None => Value::null(),
         };
