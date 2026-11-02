@@ -31,7 +31,6 @@ pub struct JsEventsLinks {
     pub event_define_cancel_bubble: fn(&mut Scope<'_>, &Value),
     pub event_new: fn(&mut Scope<'_>) -> Result<Value, Value>,
     pub make_abort_error: fn(&mut Scope<'_>) -> Value,
-    pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
     pub event_composed_path: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
     pub event_stop_immediate: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
     pub event_stop_propagation: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
@@ -119,15 +118,6 @@ pub(crate) fn nsr_event_new(scope: &mut Scope<'_>) -> Result<Value, Value> {
 
 pub(crate) fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value {
     (js_events_links().make_abort_error)(scope)
-}
-
-pub(crate) fn nsr_dom_exception(
-    scope: &mut Scope<'_>,
-    name: &[u8],
-    code: i32,
-    message: &[u8],
-) -> Value {
-    (js_events_links().dom_exception)(scope, name, code, message)
 }
 
 pub(crate) fn nsr_js_form_data_serialize(scope: &mut Scope<'_>, fd: &Value) -> (Vec<u8>, Vec<u8>) {

@@ -42,7 +42,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
     let message = c_string_until_nul(message.as_bytes());
-    imports::nsr_dom_exception(scope, name.as_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.as_bytes(), code, message.to_bytes())
 }
 
 pub(crate) use southstar_js_mutation::QualifiedName;

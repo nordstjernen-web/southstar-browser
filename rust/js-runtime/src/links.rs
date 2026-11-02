@@ -162,7 +162,6 @@ fn js_dom_factory_links() -> &'static JsDomFactoryLinks {
 
 pub struct JsEventsLinks {
     pub make_abort_error: fn(&mut Scope<'_>) -> Value,
-    pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
     pub install_event_attribute_getters: fn(&mut Scope<'_>, &Value),
     pub events_install_worker: fn(&mut Scope<'_>, &Value),
     pub events_install_window: fn(&mut Scope<'_>, &Value),
@@ -580,15 +579,6 @@ pub(crate) fn nsr_tag_owner_document(scope: &mut Scope<'_>, document: &Value, no
 
 pub(crate) fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value {
     (js_events_links().make_abort_error)(scope)
-}
-
-pub(crate) fn nsr_dom_exception(
-    scope: &mut Scope<'_>,
-    name: &[u8],
-    code: i32,
-    message: &[u8],
-) -> Value {
-    (js_events_links().dom_exception)(scope, name, code, message)
 }
 
 pub(crate) fn nsr_install_event_attribute_getters(scope: &mut Scope<'_>, global: &Value) {

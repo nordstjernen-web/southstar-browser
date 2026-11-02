@@ -35,7 +35,7 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    imports::nsr_dom_exception(scope, name.as_bytes(), code, c_prefix(message.as_bytes()))
+    scope.dom_exception_code(name.as_bytes(), code, c_prefix(message.as_bytes()))
 }
 
 fn c_prefix(bytes: &[u8]) -> &[u8] {

@@ -50,7 +50,7 @@ pub(crate) fn dom_exception(
     code: c_int,
     message: &CStr,
 ) -> Value {
-    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn event_new(scope: &mut Scope<'_>) -> Value {

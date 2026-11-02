@@ -7,7 +7,6 @@ use std::sync::OnceLock;
 use southstar_js_engine::{Scope, Value};
 
 pub struct JsEventsLinks {
-    pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
     pub event_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
@@ -37,15 +36,6 @@ fn js_shadow_links() -> &'static JsShadowLinks {
     JS_SHADOW_LINKS
         .get()
         .expect("southstar-js-shadow installs its links before the first page")
-}
-
-pub(crate) fn nsr_dom_exception(
-    scope: &mut Scope<'_>,
-    name: &[u8],
-    code: i32,
-    message: &[u8],
-) -> Value {
-    (js_events_links().dom_exception)(scope, name, code, message)
 }
 
 pub(crate) fn nsr_internals_shadow_root(

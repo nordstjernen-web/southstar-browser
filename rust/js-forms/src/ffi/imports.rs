@@ -1,8 +1,6 @@
 //! Southstar — the Rust-ABI entry points of the engine crates the forms bindings call, resolved at link time.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-
-pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_event_ctor;
 pub(crate) use crate::links::nsr_internals_shadow_root;
 pub(crate) use crate::links::nsr_namedmap_item;

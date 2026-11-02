@@ -47,7 +47,7 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    imports::nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn name_error(scope: &mut Scope<'_>, error: NameError) -> Value {

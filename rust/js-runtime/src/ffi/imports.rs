@@ -10,7 +10,6 @@ pub(crate) use crate::links::nsr_canvas_install;
 pub(crate) use crate::links::nsr_cssom_install_css;
 pub(crate) use crate::links::nsr_cssom_install_window;
 pub(crate) use crate::links::nsr_document_ctor;
-pub(crate) use crate::links::nsr_dom_exception;
 pub(crate) use crate::links::nsr_dom_parser_parseFromString;
 pub(crate) use crate::links::nsr_element_isSameNode;
 pub(crate) use crate::links::nsr_events_install_window;

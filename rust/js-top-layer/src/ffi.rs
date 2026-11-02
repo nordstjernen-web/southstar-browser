@@ -15,8 +15,6 @@ use crate::{Element, JsResult};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(Option<Page>);
-
-use southstar_js_events::nsr_dom_exception;
 use southstar_js_events::nsr_event_adopt_interface;
 use southstar_js_events::nsr_event_define_source;
 
@@ -170,7 +168,7 @@ pub(crate) fn wrap_or_null(scope: &mut Scope<'_>, el: Option<Element>) -> Value 
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &CStr, code: i32, message: &str) -> Value {
     let message = c_string_until_nul(message.as_bytes());
-    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Element) -> Value {

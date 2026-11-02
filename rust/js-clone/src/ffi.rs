@@ -8,8 +8,6 @@ use southstar_js_engine::{ContextHandle, Scope, Value};
 
 const DATA_CLONE_ERR: i32 = 25;
 const HIDDEN_IMAGEDATA: i32 = 4;
-
-use crate::links::nsr_dom_exception;
 use crate::links::nsr_port_transfer_commit;
 use crate::links::nsr_port_transfer_prepare;
 use southstar_canvas::nsr_canvas_clone_object;
@@ -34,8 +32,7 @@ pub(crate) fn port_transfer_commit(scope: &mut Scope<'_>, old_ports: &Value, new
 }
 
 pub(crate) fn data_clone_error(scope: &mut Scope<'_>) -> Value {
-    nsr_dom_exception(
-        scope,
+    scope.dom_exception_code(
         b"DataCloneError",
         DATA_CLONE_ERR,
         b"value could not be cloned.",

@@ -47,7 +47,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
     let message = c_bytes(message.as_bytes());
-    imports::nsr_dom_exception(scope, name.as_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.as_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_realm_document(scope: &mut Scope<'_>, doc: &Value) -> bool {

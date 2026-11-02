@@ -22,8 +22,6 @@ impl Js {
     }
 }
 
-use southstar_js_events::nsr_dom_exception;
-
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
 }
@@ -37,7 +35,7 @@ pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    nsr_dom_exception(scope, name.as_bytes(), code, message.as_bytes())
+    scope.dom_exception_code(name.as_bytes(), code, message.as_bytes())
 }
 
 pub(crate) fn style_table(js: Js) -> Option<Rc<StyleMap>> {

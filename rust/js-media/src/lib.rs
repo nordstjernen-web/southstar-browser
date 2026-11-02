@@ -72,51 +72,8 @@ pub(crate) fn make_ctor(scope: &mut Scope<'_>, name: &str, arity: u32, f: Native
     function
 }
 
-pub(crate) fn defined_error(
-    scope: &mut Scope<'_>,
-    name: &str,
-    message: &str,
-    code: Option<i32>,
-) -> Value {
-    let error = scope.new_error();
-    let name = scope.string(name);
-    let _ = scope.define(&error, "name", name, Attributes::METHOD);
-    let message = scope.string(message);
-    let _ = scope.define(&error, "message", message, Attributes::METHOD);
-    if let Some(code) = code {
-        let _ = scope.define(&error, "code", Value::int(code), Attributes::METHOD);
-    }
-    error
-}
-
-pub(crate) fn assigned_error(scope: &mut Scope<'_>, name: &str, message: &str) -> Value {
-    let error = scope.new_error();
-    set_str(scope, &error, "name", name);
-    set_str(scope, &error, "message", message);
-    set(scope, &error, "code", Value::int(9));
-    error
-}
-
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, message: &str) -> Value {
-    dom_exception_code(scope, name, message, 9)
-}
-
-pub(crate) fn dom_exception_code(
-    scope: &mut Scope<'_>,
-    name: &str,
-    message: &str,
-    code: i32,
-) -> Value {
-    let error = defined_error(scope, name, message, Some(code));
-    let global = scope.global();
-    let constructor = get(scope, &global, "DOMException");
-    if constructor.is_object() {
-        let proto = get(scope, &constructor, "prototype");
-        if proto.is_object() {
-            let _ = scope.set_prototype(&error, &proto);
-        }
-    }
-    error
+    scope.dom_exception_code(name.as_bytes(), 9, message.as_bytes())
 }
 
 pub(crate) fn resolved(scope: &mut Scope<'_>, value: Value) -> JsResult {

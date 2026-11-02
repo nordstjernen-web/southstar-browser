@@ -8,7 +8,6 @@ use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api::Page;
 
 pub struct JsEventsLinks {
-    pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
     pub event_define_source: fn(&mut Scope<'_>, &Value, Value),
     pub event_adopt_interface: fn(&mut Scope<'_>, &Value, &str),
     pub event_mark_default_prevented: fn(&mut Scope<'_>, &Value),
@@ -45,15 +44,6 @@ fn js_workers_links() -> &'static JsWorkersLinks {
     JS_WORKERS_LINKS
         .get()
         .expect("southstar-js-workers installs its links before the first page")
-}
-
-pub(crate) fn nsr_dom_exception(
-    scope: &mut Scope<'_>,
-    name: &[u8],
-    code: i32,
-    message: &[u8],
-) -> Value {
-    (js_events_links().dom_exception)(scope, name, code, message)
 }
 
 pub(crate) fn nsr_event_define_source(scope: &mut Scope<'_>, event: &Value, source: Value) {

@@ -837,11 +837,31 @@ impl Scope<'_> {
         Value(error.into_opaque(self.cx()).into())
     }
 
-    pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
+    fn dom_exception_interface(&mut self) -> Option<Value> {
         let global = self.global();
-        if let Ok(interface) = self.get(&global, "DOMException")
-            && interface.is_object()
+        self.get(&global, "DOMException")
+            .ok()
+            .filter(Value::is_object)
+    }
+
+    pub fn dom_exception_code(&mut self, name: &[u8], code: i32, message: &[u8]) -> Value {
+        let error = self.new_error();
+        let name = self.string_from_bytes(name);
+        let _ = self.define(&error, "name", name, Attributes::METHOD);
+        let message = self.string_from_bytes(message);
+        let _ = self.define(&error, "message", message, Attributes::METHOD);
+        let _ = self.define(&error, "code", Value::int(code), Attributes::METHOD);
+        if let Some(interface) = self.dom_exception_interface()
+            && let Ok(prototype) = self.get(&interface, "prototype")
+            && prototype.is_object()
         {
+            let _ = self.set_prototype(&error, &prototype);
+        }
+        error
+    }
+
+    pub fn dom_exception(&mut self, name: &str, message: &str) -> Value {
+        if let Some(interface) = self.dom_exception_interface() {
             let args = [self.string(message), self.string(name)];
             if let Ok(error) = self.construct(&interface, &args)
                 && error.is_object()

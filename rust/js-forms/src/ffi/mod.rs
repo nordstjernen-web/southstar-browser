@@ -55,7 +55,7 @@ pub(crate) fn dom_exception(
     message: &str,
 ) -> Value {
     let message = until_nul_owned(message.as_bytes().to_vec());
-    nsr_dom_exception(scope, name.to_bytes(), code, &message)
+    scope.dom_exception_code(name.to_bytes(), code, &message)
 }
 
 pub(crate) fn mark_restyle_dirty(node: Element) {

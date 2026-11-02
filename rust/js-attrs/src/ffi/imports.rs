@@ -4,7 +4,6 @@
 
 pub(crate) use southstar_js_collections::nsr_live_owner_node;
 pub(crate) use southstar_js_collections::nsr_make_live;
-pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_mutation::nsr_attribute_map_lookup;
 pub(crate) use southstar_js_mutation::nsr_attribute_map_remember;
 pub(crate) use southstar_js_reflect::nsr_element_reflect_str_get;

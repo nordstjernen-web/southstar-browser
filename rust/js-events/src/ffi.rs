@@ -116,10 +116,6 @@ pub fn nsr_events_install_worker(scope: &mut Scope<'_>, global: &Value) {
     crate::install::install_worker(scope, global);
 }
 
-pub fn nsr_dom_exception(scope: &mut Scope<'_>, name: &[u8], code: i32, message: &[u8]) -> Value {
-    crate::exceptions::dom_exception(scope, name, code, message)
-}
-
 pub fn nsr_make_abort_error(scope: &mut Scope<'_>) -> Value {
     crate::exceptions::abort_error(scope)
 }

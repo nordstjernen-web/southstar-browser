@@ -5,7 +5,7 @@
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{Element, Js};
-use crate::{JsResult, dom_exception_code, ffi, get, hooks, resolved, set, set_str, truthy};
+use crate::{JsResult, ffi, get, hooks, resolved, set, set_str, truthy};
 
 const OWN_DATA: Attributes = Attributes {
     writable: true,
@@ -246,11 +246,10 @@ fn range_edge(scope: &mut Scope<'_>, args: &[Value], data: &[Value], end: bool) 
         None => 0,
     };
     if index < 0 || index >= length {
-        return Err(dom_exception_code(
-            scope,
-            "IndexSizeError",
-            "index out of TimeRanges bounds",
+        return Err(scope.dom_exception_code(
+            b"IndexSizeError",
             1,
+            b"index out of TimeRanges bounds",
         ));
     }
     Ok(Value::number(if end { duration } else { 0.0 }))
@@ -360,11 +359,10 @@ pub fn set_volume(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResu
         None => f64::NAN,
     };
     if !volume.is_finite() || !(0.0..=1.0).contains(&volume) {
-        return Err(dom_exception_code(
-            scope,
-            "IndexSizeError",
-            "volume must be between 0 and 1",
+        return Err(scope.dom_exception_code(
+            b"IndexSizeError",
             1,
+            b"volume must be between 0 and 1",
         ));
     }
     if stored_number(scope, this, "_nd_volume", 1.0) == volume {
