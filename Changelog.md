@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* DOM: `XMLSerializer` and `NodeIterator` no longer walk into shadow
+  trees, which are not children of their host. Both used to expose the
+  contents of closed shadow roots to the page.
 * CSS: the `if()` function from CSS Values 5. A declaration such as
   `width: if(media(width > 600px): 50%; style(--compact): 8em; else: 100%)`
   is kept as written and resolved with `var()` when the style is computed:
