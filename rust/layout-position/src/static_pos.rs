@@ -40,7 +40,7 @@ impl NodeOrder {
         self.0.get(&n).copied().unwrap_or(0)
     }
 
-    fn precedes(&self, a: Node<'_>, b: Node<'_>) -> bool {
+    pub(crate) fn precedes(&self, a: Node<'_>, b: Node<'_>) -> bool {
         if a.as_ptr() == b.as_ptr() {
             return false;
         }

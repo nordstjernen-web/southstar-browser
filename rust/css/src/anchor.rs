@@ -758,6 +758,78 @@ thread_local! {
         core::cell::RefCell::new(std::collections::HashMap::new());
 }
 
+thread_local! {
+    static IMPLICIT_ANCHORS: core::cell::RefCell<Vec<(southstar_dom::WeakNode, southstar_dom::WeakNode)>> =
+        const { core::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn set_implicit_anchor(
+    element: southstar_dom::Node<'static>,
+    source: Option<southstar_dom::Node<'static>>,
+) {
+    let _ = IMPLICIT_ANCHORS.try_with(|list| {
+        let mut list = list.borrow_mut();
+        list.retain(|(el, src)| {
+            el.get()
+                .is_some_and(|e| !core::ptr::eq(e.as_ptr(), element.as_ptr()))
+                && src.get().is_some()
+        });
+        if let Some(source) = source {
+            list.push((element.downgrade(), source.downgrade()));
+        }
+    });
+}
+
+pub fn implicit_anchor(element: southstar_dom::Node<'_>) -> Option<southstar_dom::Node<'static>> {
+    IMPLICIT_ANCHORS
+        .try_with(|list| {
+            list.borrow()
+                .iter()
+                .find(|(el, _)| {
+                    el.get()
+                        .is_some_and(|e| core::ptr::eq(e.as_ptr(), element.as_ptr()))
+                })
+                .and_then(|(_, src)| src.get())
+        })
+        .ok()
+        .flatten()
+}
+
+pub const USED_FALLBACK: u8 = 1;
+pub const ZEROED_INSETS: [u8; 4] = [2, 4, 8, 16];
+
+thread_local! {
+    static PLACEMENT_FLAGS: core::cell::RefCell<Vec<(southstar_dom::WeakNode, u8)>> =
+        const { core::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn set_placement_flags(element: southstar_dom::Node<'_>, flags: u8) {
+    let _ = PLACEMENT_FLAGS.try_with(|list| {
+        let mut list = list.borrow_mut();
+        list.retain(|(w, _)| {
+            w.get()
+                .is_some_and(|e| !core::ptr::eq(e.as_ptr(), element.as_ptr()))
+        });
+        if flags != 0 {
+            list.push((element.downgrade(), flags));
+        }
+    });
+}
+
+pub fn placement_flags(element: southstar_dom::Node<'_>) -> u8 {
+    PLACEMENT_FLAGS
+        .try_with(|list| {
+            list.borrow()
+                .iter()
+                .find(|(w, _)| {
+                    w.get()
+                        .is_some_and(|e| core::ptr::eq(e.as_ptr(), element.as_ptr()))
+                })
+                .map_or(0, |(_, f)| *f)
+        })
+        .unwrap_or(0)
+}
+
 pub fn register_position_tries(doc: usize, rules: Vec<PositionTryRule>) {
     let _ = POSITION_TRIES.try_with(|map| {
         let mut map = map.borrow_mut();

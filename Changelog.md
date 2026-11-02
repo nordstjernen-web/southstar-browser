@@ -3,6 +3,24 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS Anchor Positioning, layout: an absolutely or fixed positioned box
+  resolves `anchor()` insets, `anchor-size()` sizes and margins against
+  the border box of the element named by `anchor-name` (the last
+  acceptable one in tree order, honouring `anchor-scope` and the
+  containing block), or against its default anchor from
+  `position-anchor` or, for a popover, the invoker that opened it.
+  `position-area` places the box in the 3×3 grid around the anchor with
+  the spec's default alignment, `anchor-center` centres it on the anchor
+  within its containing block, and when the box overflows,
+  `position-try-fallbacks` tries `flip-block`, `flip-inline`,
+  `flip-start`, `flip-x`/`flip-y`, `@position-try` rules and
+  `position-area` values in order (or by `position-try-order`).
+  `getComputedStyle` reports the used insets. Not yet: vertical writing
+  modes and `direction: rtl` in the anchor maths, scroll adjustment,
+  `position-visibility`, and fragmented containing blocks
+  (WPT: the 229 css-anchor-position testharness files outside the parsing
+  ones go from 950 to 2,066 of 3,443 subtests; at-position-try-cssom is
+  265 of 265).
 * CSS Anchor Positioning, values: `anchor-name`, `anchor-scope`,
   `position-anchor`, `position-area`, `position-try-fallbacks`,
   `position-try-order`, the `position-try` shorthand and
