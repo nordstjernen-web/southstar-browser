@@ -429,7 +429,7 @@ pub fn emit_form_attr_sized(
     let mut fs = 16.0;
     let mut bg_src = None;
     let mut bg_image = None;
-    if let Some(d) = dom.filter(|_| !styles.as_ptr().is_null()) {
+    if let Some(d) = dom.filter(|_| styles.is_some()) {
         s = styles.get(d);
         if let Some(st) = s {
             fs = font_size_or_16(st);

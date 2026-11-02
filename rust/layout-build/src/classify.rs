@@ -60,7 +60,7 @@ fn contains_block_media_depth(n: Node<'_>, styles: StyleTable, depth: i32) -> bo
         {
             return true;
         }
-        if !styles.as_ptr().is_null()
+        if styles.is_some()
             && let Some(cs) = styles.get(c)
         {
             if style_is_none(Some(cs)) || style_is_absolute_or_fixed(Some(cs)) {

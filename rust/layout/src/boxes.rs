@@ -479,7 +479,7 @@ box_fields! {
     grid_row_tracks: Option<Rc<[GridTrack]>> = None,
     grid_explicit_cols: c_int = 0,
     grid_explicit_rows: c_int = 0,
-    svg_styles: *const southstar_css::StyleMap = ptr::null(),
+    svg_styles: Option<Rc<southstar_css::StyleMap>> = None,
     colspan: c_int = 1,
     rowspan: c_int = 1,
     columns: c_int = 0,
@@ -707,8 +707,8 @@ impl<'a> BoxRef<'a> {
         self.raw().columns.get()
     }
 
-    pub fn svg_styles(self) -> *const southstar_css::StyleMap {
-        self.raw().svg_styles.get()
+    pub fn svg_styles(self) -> Option<Rc<southstar_css::StyleMap>> {
+        peek(&self.raw().svg_styles)
     }
 
     pub fn paint_layout(self) -> Option<Rc<dyn Any>> {
@@ -879,7 +879,7 @@ impl<'a> BoxRef<'a> {
         self.raw().is_rendered_legend.set(legend);
     }
 
-    pub fn set_svg_styles(self, styles: *const southstar_css::StyleMap) {
+    pub fn set_svg_styles(self, styles: Option<Rc<southstar_css::StyleMap>>) {
         self.raw().svg_styles.set(styles);
     }
 

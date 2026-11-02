@@ -3,12 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use core::ptr::NonNull;
 
 pub use southstar_css::Keyframes;
 use southstar_css::{
     AnimationEntry, Declaration, Declarations, NsCssValue, OwnedValue, Prop as CssProp, Sheet,
-    StyleData, StyleMap, ValueKind,
+    StyleMap, ValueKind,
 };
 use southstar_dom::{Node, WeakNode};
 use southstar_layout::Style;
@@ -326,38 +325,48 @@ pub fn may_animate(style: StyleRef<'_>) -> bool {
     southstar_css::style_may_animate(style.data())
 }
 
-pub struct StyleMut(NonNull<StyleData>);
+pub struct StylesMut<'a>(&'a mut StyleMap);
 
-impl StyleMut {
-    fn with<R>(&self, f: impl FnOnce(&mut StyleData) -> R) -> R {
-        // SAFETY: a StyleMut is made from a live computed style, which the engine alone writes during a pass, and no reference into it outlives this call.
-        f(unsafe { &mut *self.0.as_ptr() })
+impl<'a> StylesMut<'a> {
+    pub fn new(table: &'a mut StyleMap) -> StylesMut<'a> {
+        StylesMut(table)
     }
 
-    pub fn value(&self, prop: i32) -> Borrowed {
-        let Ok(index) = usize::try_from(prop) else {
-            return Borrowed::NULL;
-        };
-        Borrowed(self.with(|style| style.value_handle(index).cloned()))
+    pub fn table(&self) -> StylesTable<'_> {
+        StylesTable(self.0)
     }
 
-    pub fn replace(&self, prop: i32, value: Val) -> Option<Val> {
+    pub fn value(&self, node: NodePtr, prop: i32) -> Borrowed {
+        node.style_in(self.table())
+            .map_or(Borrowed::NULL, |style| style_value(style, prop))
+    }
+
+    fn modify<R>(
+        &mut self,
+        node: NodePtr,
+        f: impl FnOnce(&mut southstar_css::StyleData) -> R,
+    ) -> Option<R> {
+        self.0.modify(node.node()?.as_ptr(), f)
+    }
+
+    pub fn replace(&mut self, node: NodePtr, prop: i32, value: Val) -> Option<Val> {
         let index = usize::try_from(prop).ok()?;
-        self.with(|style| style.replace_value(index, Some(value.0)))
+        self.modify(node, |style| style.replace_value(index, Some(value.0)))
+            .flatten()
             .map(Val)
     }
 
-    pub fn set_retained(&self, prop: i32, value: &Val) {
+    pub fn set_retained(&mut self, node: NodePtr, prop: i32, value: &Val) {
         let Ok(index) = usize::try_from(prop) else {
             return;
         };
-        self.with(|style| {
-            if style
-                .value_handle(index)
-                .is_some_and(|current| OwnedValue::ptr_eq(current, &value.0))
-            {
-                return;
-            }
+        let current = node
+            .style_in(self.table())
+            .and_then(|style| style.data().value_handle(index).cloned());
+        if current.is_some_and(|current| OwnedValue::ptr_eq(&current, &value.0)) {
+            return;
+        }
+        self.modify(node, |style| {
             style.replace_value(index, Some(value.0.clone()));
         });
     }
@@ -413,10 +422,6 @@ impl NodePtr {
         styles.0.retained(self.node()?.as_ptr()).map(RetainedStyle)
     }
 
-    pub fn style_mut_in(self, styles: StylesTable<'_>) -> Option<StyleMut> {
-        NonNull::new(styles.0.lookup(self.node()?.as_ptr())).map(StyleMut)
-    }
-
     pub fn style_before_change(self) -> Option<RetainedStyle> {
         southstar_css::style_before_change(self.node()?).map(RetainedStyle)
     }
@@ -430,10 +435,6 @@ impl NodePtr {
 pub struct StylesTable<'a>(&'a StyleMap);
 
 impl<'a> StylesTable<'a> {
-    pub fn new(table: &'a StyleMap) -> StylesTable<'a> {
-        StylesTable(table)
-    }
-
     pub fn contains(self, node: NodePtr) -> bool {
         node.node().is_some_and(|n| self.0.contains(n.as_ptr()))
     }

@@ -13,7 +13,7 @@ use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
-use southstar_style::{StyleRef, StyleTable};
+use southstar_style::StyleRef;
 
 use crate::{Element, JsResult, Rect};
 
@@ -90,7 +90,7 @@ pub(crate) fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'static>> {
     southstar_style::box_style(b.into_static())
 }
 
-pub(crate) fn svg_styles(b: BoxRef<'_>) -> StyleTable<'_> {
+pub(crate) fn svg_styles(b: BoxRef<'_>) -> Option<Rc<StyleMap>> {
     southstar_style::svg_styles(b)
 }
 

@@ -8,6 +8,7 @@ use std::ffi::CStr;
 use southstar_dom::FLAG_SVG_NS;
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::BoxRef;
+use southstar_style::StyleTable;
 use southstar_svg::{Matrix, SvgGeometry};
 
 use crate::boxes::{accumulate_transform, border_box, box_for_this, point_to_client};
@@ -111,12 +112,13 @@ fn measure_node(
     let Some(svg_box) = ffi::layout_root(js).and_then(|root| ffi::find_by_dom(root, svg)) else {
         return (None, empty_geometry());
     };
+    let styles = ffi::svg_styles(svg_box);
     let geometry = southstar_svg::node_geometry(
         Some(svg),
         Some(node),
         svg_box.content_width(),
         svg_box.content_height(),
-        ffi::svg_styles(svg_box),
+        StyleTable::new(styles.as_ref()),
         ffi::box_style(svg_box),
     );
     (Some(svg_box), geometry)
@@ -505,11 +507,12 @@ fn text_length(
     let svg = owner_root(node).filter(|_| !js.is_null())?;
     ffi::flush_layout(js);
     let svg_box = ffi::layout_root(js).and_then(|root| ffi::find_by_dom(root, svg))?;
+    let styles = ffi::svg_styles(svg_box);
     southstar_svg::node_text_length(
         Some(svg),
         Some(node),
         (svg_box.content_width(), svg_box.content_height()),
-        ffi::svg_styles(svg_box),
+        StyleTable::new(styles.as_ref()),
         ffi::box_style(svg_box),
         chars,
     )

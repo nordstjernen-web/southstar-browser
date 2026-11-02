@@ -197,9 +197,9 @@ pub fn load_keyframes(anim: &AnimHandle, page: &Page<'_>) {
     drop(sheets);
 }
 
-pub fn anim_observe(anim: &AnimHandle, styles: Option<&StyleMap>, now_us: i64) {
+pub fn anim_observe(anim: &AnimHandle, styles: Option<&mut Rc<StyleMap>>, now_us: i64) {
     if let Some(styles) = styles {
-        anim.observe_all(styles, now_us);
+        anim.observe_all(Rc::make_mut(styles), now_us);
     }
 }
 

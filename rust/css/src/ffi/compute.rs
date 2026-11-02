@@ -620,6 +620,33 @@ pub fn incremental_exclude(node_key: usize, exclude: bool) {
     }
 }
 
+pub(super) fn with_previous_released<R>(
+    key: usize,
+    style: &mut RetainedStyle,
+    f: impl FnOnce(&mut RetainedStyle) -> R,
+) -> R {
+    let released = incremental_state(|state| {
+        let styles = &mut state.previous.as_mut()?.styles;
+        let held = styles.get(&key)?;
+        if held.as_ptr() != style.as_ptr() {
+            return None;
+        }
+        styles.remove(&key)
+    });
+    let Some(released) = released else {
+        return f(style);
+    };
+    drop(released);
+    let result = f(style);
+    let current = style.clone();
+    incremental_state(|state| {
+        if let Some(previous) = state.previous.as_mut() {
+            previous.styles.insert(key, current);
+        }
+    });
+    result
+}
+
 pub fn style_before_change(node: Node<'_>) -> Option<RetainedStyle> {
     incremental_state(|state| {
         state

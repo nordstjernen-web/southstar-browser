@@ -32,6 +32,11 @@ Southstar Browser 1.0.7-dev:
   click or key press in the last few seconds). Any page or frame used to be
   able to overwrite the system clipboard from a timer, for example swapping a
   copied wallet address or shell command.
+* Internal: page zoom and running animations change computed styles through
+  `StyleMap::modify`, which copies a style another holder still shares
+  instead of writing through a shared pointer, and an SVG box keeps its style
+  table alive by reference count. `rust/anim` and `rust/render` no longer use
+  `unsafe`.
 * Internals: `rust/js-runtime` keeps its page record in an `Rc` instead of a
   leaked box freed through a raw pointer, and remembers the current document,
   frame, script and modal as weak node handles, so a node freed while a scope

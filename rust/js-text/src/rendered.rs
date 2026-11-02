@@ -28,7 +28,7 @@ pub fn get_inner_text(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> J
     let js = ffi::js_of(scope);
     ffi::flush_layout(js);
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     let text = if !styles.is_some() || inner_text::display_none(styles, node) {
         inner_text::text_content(node)
     } else {

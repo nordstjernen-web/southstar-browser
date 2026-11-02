@@ -214,7 +214,7 @@ pub fn build_svg_box(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -
     let b = BoxPool::new_box(KIND_SVG);
     b.set_dom(Some(n));
     b.set_style(s.map_or(ptr::null(), StyleRef::as_ptr));
-    b.set_svg_styles(styles.as_ptr());
+    b.set_svg_styles(styles.retain());
     let m = b.ensure_media();
     let size = ffi::svg_intrinsic_size(n);
     let px = |p| match s.and_then(|s| s.get(p)).and_then(ValueRef::length) {

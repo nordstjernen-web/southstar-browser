@@ -114,7 +114,7 @@ fn walk(
         return;
     }
     let mut s = None;
-    if n.is_element() && !styles.as_ptr().is_null() {
+    if n.is_element() && styles.is_some() {
         s = styles.get(n);
         apply_style(current, s);
         if let Some(st) = s {
