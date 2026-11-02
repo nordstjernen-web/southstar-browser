@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS: `font-palette` accepts `palette-mix()` with an interpolation method,
+  percentages, nesting and `<dashed-ident>` palettes, and serializes it the
+  way `color-mix()` is serialized (the WPT `palette-mix-*` parsing files
+  go from about 20 to 155 of 156 subtests).
 * Dependencies: `cargo update` to the latest Rust 1.91-compatible releases
   (cc 1.10.0, ml-kem 0.3.4, ctutils 0.4.7, smallvec 1.16.4, crc32fast
   1.5.4 and others). Every direct crates.io dependency, the GitHub Actions,

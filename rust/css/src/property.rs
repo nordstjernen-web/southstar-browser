@@ -1343,6 +1343,10 @@ fn text_transform(t: &[u8]) -> Option<Value> {
 }
 
 fn font_palette(t: &[u8]) -> Option<Value> {
+    if t.len() > 12 && t[..12].eq_ignore_ascii_case(b"palette-mix(") {
+        return southstar_css_color::palette_mix_text(t)
+            .map(|text| Value::keyword(text.into_bytes()));
+    }
     if t.starts_with(b"--")
         && t[2..]
             .iter()

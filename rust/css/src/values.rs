@@ -895,6 +895,9 @@ pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>>
     if prop == b"font-feature-settings" {
         return font::feature_settings_canonical(value, false);
     }
+    if prop == b"font-palette" && starts_with_ci(strip(value), b"palette-mix(") {
+        return southstar_css_color::palette_mix_specified(strip(value)).map(String::into_bytes);
+    }
     if prop == b"font-style"
         && let [kw, angle] = split_ws_limit(value, 3)[..]
         && kw.eq_ignore_ascii_case(b"oblique")

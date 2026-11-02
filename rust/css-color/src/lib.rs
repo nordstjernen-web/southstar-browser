@@ -9,6 +9,7 @@ mod color;
 mod mix;
 mod named;
 mod number;
+mod palette;
 mod parse;
 mod space;
 mod tokens;
@@ -20,6 +21,7 @@ pub use color::{Color, legacy_text};
 pub use mix::{HueMethod, Interpolation, interpolate};
 pub use named::{NAMED, named};
 pub use number::alpha_byte_text;
+pub use palette::{palette_mix_specified, palette_mix_text};
 pub use parse::{Context, Specified, parse};
 pub use space::Space;
 
