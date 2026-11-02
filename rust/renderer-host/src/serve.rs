@@ -566,7 +566,7 @@ impl<F: Framebuffer> Session<F> {
         }
         if let (Some(referrer), None, Some(url)) = (&referrer, &restored, &url) {
             let referrer = c_string_until_nul(referrer);
-            if engine::same_origin(&referrer, url) {
+            if southstar_url::bytes::same_origin(referrer.to_bytes(), url.to_bytes()) {
                 engine::set_next_referrer(Some(&referrer));
             }
             engine::set_next_initiator(Some(&referrer));

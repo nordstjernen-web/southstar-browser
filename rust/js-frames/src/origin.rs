@@ -42,7 +42,9 @@ pub(crate) fn is_cross_origin(js: Js, iframe: Node<'_>) -> bool {
     let embedder = load::node_frame_url(iframe)
         .or_else(|| load::document_origin(js))
         .or_else(|| load::page_url(js));
-    embedder.is_none_or(|embedder| !load::same_origin(frame_url, &embedder))
+    embedder.is_none_or(|embedder| {
+        !southstar_url::bytes::same_origin(frame_url.to_bytes(), embedder.to_bytes())
+    })
 }
 
 enum RealmOrigin {
@@ -90,7 +92,9 @@ fn realm_origin(js: Js, realm: Ctx) -> RealmOrigin {
 pub(crate) fn realms_same_origin(js: Js, a: Ctx, b: Ctx) -> bool {
     match (realm_origin(js, a), realm_origin(js, b)) {
         (RealmOrigin::Unrelated, _) | (_, RealmOrigin::Unrelated) => true,
-        (RealmOrigin::Tuple(a), RealmOrigin::Tuple(b)) => load::same_origin(&a, &b),
+        (RealmOrigin::Tuple(a), RealmOrigin::Tuple(b)) => {
+            southstar_url::bytes::same_origin(a.to_bytes(), b.to_bytes())
+        }
         _ => false,
     }
 }
@@ -152,9 +156,9 @@ pub(crate) fn frame_referrer(js: Js, iframe: Node<'_>, frame_url: Option<&CStr>)
 
 pub(crate) fn mark_cross_origin(js: Js, iorigin: &CStr, flags: u32) -> u32 {
     let page_url = load::page_url(js);
-    let cross_url = page_url
-        .as_deref()
-        .is_some_and(|page_url| !load::same_origin(iorigin, page_url));
+    let cross_url = page_url.as_deref().is_some_and(|page_url| {
+        !southstar_url::bytes::same_origin(iorigin.to_bytes(), page_url.to_bytes())
+    });
     if cross_url || opaque_by_sandbox(flags) {
         flags | CROSS_ORIGIN
     } else {

@@ -24,10 +24,6 @@ pub fn net_log_dump() -> Option<Vec<u8>> {
     Some(southstar_net::log_dump())
 }
 
-pub fn same_origin(a: &CStr, b: &CStr) -> bool {
-    southstar_url::bytes::same_origin(a.to_bytes(), b.to_bytes())
-}
-
 pub struct Favicon {
     pub width: c_int,
     pub height: c_int,

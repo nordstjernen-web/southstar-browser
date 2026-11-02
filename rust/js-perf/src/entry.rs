@@ -132,10 +132,6 @@ pub fn untimed(url: &[u8]) -> bool {
     url.starts_with(b"data:") || url.starts_with(b"blob:") || url.starts_with(b"about:")
 }
 
-fn same_origin(a: Option<&[u8]>, b: &[u8]) -> bool {
-    a.is_some_and(|a| southstar_net::same_origin(a, b))
-}
-
 fn origin_of(url: Option<&[u8]>) -> Option<Vec<u8>> {
     url.and_then(southstar_net::origin_from)
 }
@@ -153,7 +149,7 @@ fn strip_ascii_space(s: &[u8]) -> &[u8] {
 }
 
 fn timing_allowed(document_url: Option<&[u8]>, url: &[u8], tao: Option<&[u8]>) -> bool {
-    if same_origin(document_url, url) {
+    if document_url.is_some_and(|document| southstar_net::same_origin(document, url)) {
         return true;
     }
     let (Some(tao), Some(_)) = (tao, document_url) else {
@@ -190,7 +186,9 @@ fn visible_status(
     initiator: Option<&[u8]>,
 ) -> i32 {
     let status = resp.map_or(info.status, |resp| resp.status) as i32;
-    if same_origin(info.document_url, url)
+    if info
+        .document_url
+        .is_some_and(|document| southstar_net::same_origin(document, url))
         || initiator == Some(b"iframe")
         || initiator == Some(b"frame")
     {

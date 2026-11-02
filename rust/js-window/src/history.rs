@@ -51,13 +51,6 @@ fn get_length(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<V
     Ok(Value::int(length))
 }
 
-fn same_origin(a: &[u8], b: &[u8]) -> bool {
-    match (ffi::url_origin(a), ffi::url_origin(b)) {
-        (Some(a), Some(b)) => !a.is_empty() && a == b,
-        _ => false,
-    }
-}
-
 fn set_state(scope: &mut Scope<'_>, args: &[Value], replace: bool) -> Result<Value, Value> {
     let js = ffi::js_of(scope);
     if js.is_null() {
@@ -87,7 +80,7 @@ fn set_state(scope: &mut Scope<'_>, args: &[Value], replace: bool) -> Result<Val
         new_url = Some(resolved);
     }
     if let Some(url) = &new_url
-        && !same_origin(url, &current)
+        && !southstar_url::bytes::same_origin(url, &current)
     {
         return Err(scope.dom_exception(
             "SecurityError",

@@ -20,6 +20,13 @@ Southstar Browser 1.0.7-dev:
   (and IndexedDB's own clock, which counted from process start) are gone;
   every crate reads the monotonic clock through
   `southstar_glib::monotonic_us` directly.
+* Navigation API: `navigate` events for a `file:` or `data:` page are
+  no longer `canIntercept` and same-document for another URL of that
+  scheme. The check compared only scheme, host and port, so any two
+  `file:` URLs (or two `data:` URLs) counted as same-origin. Source:
+  same-origin checks now all go through `southstar_url::bytes::same_origin`;
+  five local copies in js-frames, js-perf, js-window and renderer-host
+  are gone.
 * README: link to Southstar Browser in the Microsoft Store.
 * Source: removed about 65 public functions nothing called, and the
   private helpers only they used: Pango API surface kept by the
