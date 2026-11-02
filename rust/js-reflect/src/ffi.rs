@@ -14,7 +14,6 @@ use crate::{Element, JsResult, numeric, strings};
 pub(crate) struct Js(Option<Page>);
 
 use crate::links::nsr_make_token_list;
-use southstar_js_events::nsr_dom_exception;
 
 use southstar_js_services::nsr_element_async_method;
 
@@ -81,7 +80,7 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_submit_trigger(node: Element) -> bool {

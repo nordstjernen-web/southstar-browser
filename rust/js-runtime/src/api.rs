@@ -276,7 +276,7 @@ pub fn new_document_object(js: Option<Page>, scope: &mut Scope<'_>) -> Result<Va
 }
 
 pub fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    ffi::imports::nsr_dom_exception(scope, name.as_bytes(), code, message.as_bytes())
+    scope.dom_exception_code(name.as_bytes(), code, message.as_bytes())
 }
 
 pub fn abort_error(scope: &mut Scope<'_>) -> Value {

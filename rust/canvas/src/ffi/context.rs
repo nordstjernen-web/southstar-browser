@@ -20,7 +20,7 @@ pub(crate) fn dom_exception(
     code: i32,
     message: &CStr,
 ) -> Value {
-    imports::nsr_dom_exception(scope, name.to_bytes(), code, message.to_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {

@@ -6,5 +6,4 @@ pub(crate) use southstar_js_attrs::nsr_attr_owner;
 pub(crate) use southstar_js_collections::nsr_make_live;
 pub(crate) use southstar_js_dom_factory::nsr_doc_wrapper_is_xml;
 pub(crate) use southstar_js_dom_factory::nsr_validate_attr_ns;
-pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_reflect::nsr_element_reflect_str_get;

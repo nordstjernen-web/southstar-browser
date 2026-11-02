@@ -8,7 +8,6 @@ pub(crate) use southstar_js_dispatch::nsr_listeners_compact_dead;
 pub(crate) use southstar_js_dispatch::nsr_target_dispatch_with_event;
 pub(crate) use southstar_js_dispatch::nsr_target_fire_event;
 pub(crate) use southstar_js_dispatch::nsr_target_handler_realm;
-pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_events::nsr_event_define_cancel_bubble;
 pub(crate) use southstar_js_events::nsr_event_new;
 pub(crate) use southstar_js_interfaces::nsr_install_namespace_object;

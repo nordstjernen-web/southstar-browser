@@ -5,8 +5,8 @@
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::{
-    JsResult, array_length, bind, defined_error, dom_exception, ffi, get, make_ctor, rejected,
-    resolved, set, set_str, truthy,
+    JsResult, array_length, bind, dom_exception, ffi, get, make_ctor, rejected, resolved, set,
+    set_str, truthy,
 };
 
 const MAX_CHANNELS: i32 = 32;
@@ -108,11 +108,10 @@ fn rejected_not_supported(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsRe
 }
 
 fn analysis_throw(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
-    Err(defined_error(
-        scope,
-        "NotSupportedError",
-        "Southstar does not implement Web Audio analysis",
-        Some(9),
+    Err(scope.dom_exception_code(
+        b"NotSupportedError",
+        9,
+        b"Southstar does not implement Web Audio analysis",
     ))
 }
 
@@ -447,21 +446,19 @@ fn start_rendering(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     let rate = get(scope, this, "sampleRate");
     let sample_rate = scope.to_number(&rate).unwrap_or(f64::NAN);
     if !shape_ok(channels, length, sample_rate) {
-        let error = defined_error(
-            scope,
-            "NotSupportedError",
-            "OfflineAudioContext channel count, length or sample rate out of range",
-            None,
+        let error = scope.dom_exception_code(
+            b"NotSupportedError",
+            9,
+            b"OfflineAudioContext channel count, length or sample rate out of range",
         );
         return rejected(scope, error);
     }
     let mut mix = Vec::new();
     if mix.try_reserve_exact(length as usize).is_err() {
-        let error = defined_error(
-            scope,
-            "NotSupportedError",
-            "OfflineAudioContext rendering buffer could not be allocated",
-            None,
+        let error = scope.dom_exception_code(
+            b"NotSupportedError",
+            9,
+            b"OfflineAudioContext rendering buffer could not be allocated",
         );
         return rejected(scope, error);
     }

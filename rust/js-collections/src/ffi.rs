@@ -81,7 +81,7 @@ pub(crate) fn selector_syntax_error(scope: &mut Scope<'_>, selector: &[u8]) -> V
     message.push(b'\'');
     message.extend(selector.iter().copied().filter(|&c| c != 0));
     message.extend_from_slice(b"' is not a valid selector");
-    imports::nsr_dom_exception(scope, b"SyntaxError", SYNTAX_ERR, &message)
+    scope.dom_exception_code(b"SyntaxError", SYNTAX_ERR, &message)
 }
 
 pub(crate) fn live_new_object(scope: &mut Scope<'_>, back: Live) -> Value {

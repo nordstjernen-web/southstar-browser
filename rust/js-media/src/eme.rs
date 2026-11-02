@@ -4,10 +4,10 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use crate::{JsResult, assigned_error, rejected, resolved, set};
+use crate::{JsResult, rejected, resolved, set};
 
 pub(crate) fn request_access(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
-    let error = assigned_error(scope, "NotSupportedError", "No supported key system");
+    let error = scope.dom_exception_code(b"NotSupportedError", 9, b"No supported key system");
     rejected(scope, error)
 }
 
@@ -16,10 +16,10 @@ pub fn set_media_keys(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
         set(scope, this, "mediaKeys", Value::null());
         return resolved(scope, Value::undefined());
     }
-    let error = assigned_error(
-        scope,
-        "NotSupportedError",
-        "Southstar does not implement EME / DRM",
+    let error = scope.dom_exception_code(
+        b"NotSupportedError",
+        9,
+        b"Southstar does not implement EME / DRM",
     );
     rejected(scope, error)
 }

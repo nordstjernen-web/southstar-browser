@@ -9,6 +9,13 @@ Southstar Browser 1.0.7-dev:
   `until_nul`, `until_nul_owned`, `until_nul_str` and
   `c_string_until_nul`. The 26 helpers with other behaviour (an empty
   string on a NUL, NULs removed) are kept.
+* Media: the NotSupportedError the Web Audio analysis stubs,
+  OfflineAudioContext.startRendering and requestMediaKeySystemAccess /
+  setMediaKeys reject with is now a DOMException (`instanceof
+  DOMException`, code 9) instead of a plain Error. Source: DOMExceptions
+  with a legacy code are built by one `Scope::dom_exception_code` in
+  js-engine; the eight link-table forwarders that reached js-events for
+  it are gone.
 * README: link to Southstar Browser in the Microsoft Store.
 * Source: removed about 65 public functions nothing called, and the
   private helpers only they used: Pango API surface kept by the

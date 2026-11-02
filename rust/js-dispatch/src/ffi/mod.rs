@@ -255,7 +255,7 @@ pub(crate) fn define_source(scope: &mut Scope<'_>, event: &Value, source: Value)
 }
 
 pub(crate) fn invalid_state(scope: &mut Scope<'_>, message: &str) -> Value {
-    imports::nsr_dom_exception(scope, b"InvalidStateError", 11, message.as_bytes())
+    scope.dom_exception_code(b"InvalidStateError", 11, message.as_bytes())
 }
 
 pub(crate) fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Element> {

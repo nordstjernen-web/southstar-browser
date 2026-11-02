@@ -4,7 +4,6 @@
 
 pub(crate) use crate::links::nsr_attr_to_js;
 pub(crate) use southstar_js_document::nsr_make_synth_xml_document;
-pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_events::nsr_event_new;
 pub(crate) use southstar_js_reflect::nsr_element_reflect_str_get;
 

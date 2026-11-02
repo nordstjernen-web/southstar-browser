@@ -21,7 +21,6 @@ pub(crate) use southstar_js_collections::nsr_element_getElementsByTagName;
 pub(crate) use southstar_js_collections::nsr_element_querySelector;
 pub(crate) use southstar_js_collections::nsr_element_querySelectorAll;
 pub(crate) use southstar_js_collections::nsr_make_live;
-pub(crate) use southstar_js_events::nsr_dom_exception;
 pub(crate) use southstar_js_focus::nsr_document_has_focus;
 pub(crate) use southstar_js_traversal::nsr_document_create_node_iterator;
 pub(crate) use southstar_js_traversal::nsr_document_create_range;

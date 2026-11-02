@@ -14,22 +14,6 @@ pub type WebglGetContextFn =
 
 pub type ResourceOriginCleanFn = fn(&Scope<'_>, &[u8], Option<&[u8]>) -> bool;
 
-pub struct JsEventsLinks {
-    pub dom_exception: fn(&mut Scope<'_>, &[u8], i32, &[u8]) -> Value,
-}
-
-static JS_EVENTS_LINKS: OnceLock<JsEventsLinks> = OnceLock::new();
-
-pub fn set_js_events_links(links: JsEventsLinks) {
-    let _ = JS_EVENTS_LINKS.set(links);
-}
-
-fn js_events_links() -> &'static JsEventsLinks {
-    JS_EVENTS_LINKS
-        .get()
-        .expect("southstar-js-events installs its links before the first page")
-}
-
 pub struct JsCssomLinks {
     pub computed_text: fn(&Scope<'_>, Node<'_>, &str) -> Option<String>,
 }
@@ -130,15 +114,6 @@ fn webgpu_links() -> &'static WebgpuLinks {
     WEBGPU_LINKS
         .get()
         .expect("southstar-webgpu installs its links before the first page")
-}
-
-pub(crate) fn nsr_dom_exception(
-    scope: &mut Scope<'_>,
-    name: &[u8],
-    code: i32,
-    message: &[u8],
-) -> Value {
-    (js_events_links().dom_exception)(scope, name, code, message)
 }
 
 pub(crate) fn realm_for_node(scope: &Scope<'_>, node: Node<'_>) -> ContextHandle {

@@ -103,7 +103,7 @@ pub(crate) fn url_origin_from(url: Option<&[u8]>) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn throw_dom(scope: &mut Scope<'_>, name: &CStr, code: c_int, message: &str) -> Value {
-    nsr_dom_exception(scope, name.to_bytes(), code, message.as_bytes())
+    scope.dom_exception_code(name.to_bytes(), code, message.as_bytes())
 }
 
 pub(crate) fn url_host_from(url: &[u8]) -> Option<Vec<u8>> {

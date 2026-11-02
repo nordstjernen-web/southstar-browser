@@ -16,7 +16,6 @@ use southstar_dom::Node;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 pub use ffi::make_event;
-pub use ffi::nsr_dom_exception;
 pub use ffi::nsr_event_adopt_interface;
 pub use ffi::nsr_event_define_cancel_bubble;
 pub use ffi::nsr_event_define_source;
@@ -105,17 +104,6 @@ pub fn install_runtime_hooks() {
             make_event: crate::ffi::make_event,
         },
     );
-    southstar_canvas::links::set_js_events_links(southstar_canvas::links::JsEventsLinks {
-        dom_exception: crate::ffi::nsr_dom_exception,
-    });
-    southstar_js_clone::links::set_js_events_links(southstar_js_clone::links::JsEventsLinks {
-        dom_exception: crate::ffi::nsr_dom_exception,
-    });
-    southstar_js_collections::links::set_js_events_links(
-        southstar_js_collections::links::JsEventsLinks {
-            dom_exception: crate::ffi::nsr_dom_exception,
-        },
-    );
     southstar_js_cssom::links::set_js_events_links(southstar_js_cssom::links::JsEventsLinks {
         event_new: crate::ffi::nsr_event_new,
     });
@@ -124,7 +112,6 @@ pub fn install_runtime_hooks() {
             event_stop_immediate: crate::ffi::nsr_event_stop_immediate,
             event_stop_propagation: crate::ffi::nsr_event_stop_propagation,
             event_prevent_default: crate::ffi::nsr_event_prevent_default,
-            dom_exception: crate::ffi::nsr_dom_exception,
             event_define_source: crate::ffi::nsr_event_define_source,
             event_adopt_interface: crate::ffi::nsr_event_adopt_interface,
             event_mark_default_prevented: crate::ffi::nsr_event_mark_default_prevented,
@@ -134,7 +121,6 @@ pub fn install_runtime_hooks() {
     );
     southstar_js_forms::links::set_js_events_links(southstar_js_forms::links::JsEventsLinks {
         event_ctor: crate::ffi::nsr_event_ctor,
-        dom_exception: crate::ffi::nsr_dom_exception,
     });
     southstar_js_net::links::set_js_events_links(southstar_js_net::links::JsEventsLinks {
         event_composed_path: crate::ffi::nsr_event_composed_path,
@@ -145,12 +131,10 @@ pub fn install_runtime_hooks() {
         event_define_cancel_bubble: crate::ffi::nsr_event_define_cancel_bubble,
         event_new: crate::ffi::nsr_event_new,
         make_abort_error: crate::ffi::nsr_make_abort_error,
-        dom_exception: crate::ffi::nsr_dom_exception,
     });
     southstar_js_runtime::links::set_js_events_links(southstar_js_runtime::links::JsEventsLinks {
         window_event_ctor: crate::ffi::nsr_window_event_ctor,
         make_abort_error: crate::ffi::nsr_make_abort_error,
-        dom_exception: crate::ffi::nsr_dom_exception,
         install_event_attribute_getters: crate::ffi::nsr_install_event_attribute_getters,
         events_install_worker: crate::ffi::nsr_events_install_worker,
         events_install_window: crate::ffi::nsr_events_install_window,
