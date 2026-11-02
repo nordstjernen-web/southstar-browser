@@ -19,7 +19,7 @@ fn non_empty(text: Option<&CStr>) -> Option<&CStr> {
 
 pub(crate) fn src_attr(node: Node<'_>) -> Option<&'static CStr> {
     match node.element_name() {
-        Some(b"iframe") => Some(c"src"),
+        Some(b"iframe" | b"frame") => Some(c"src"),
         Some(b"object") => Some(c"data"),
         _ => None,
     }
@@ -68,10 +68,10 @@ fn source_loaded(js: Js, iframe: Node<'_>) -> bool {
     }
     let src = src_attr(iframe).and_then(|attr| iframe.attr(attr));
     let Some(src) = non_empty(src).filter(|src| !src.to_bytes().starts_with(b"about:")) else {
-        return iframe.element_name() == Some(b"iframe");
+        return matches!(iframe.element_name(), Some(b"iframe" | b"frame"));
     };
-    let current = ffi::current_url(js);
-    let origin = non_empty(current.as_deref()).unwrap_or(c"inline");
+    let base = crate::ffi::load::node_doc_base(js, iframe).or_else(|| ffi::current_url(js));
+    let origin = non_empty(base.as_deref()).unwrap_or(c"inline");
     let Some(abs_url) = ffi::resolve_url(origin, src) else {
         return false;
     };
@@ -123,7 +123,7 @@ pub(crate) fn schedule_static(js: Js, node: Node<'_>, depth: i32) {
         if node.attr(c"data-nd-frame-loaded").is_none() {
             let has_src = non_empty(node.attr(attr)).is_some();
             let has_srcdoc = non_empty(node.attr(c"srcdoc")).is_some();
-            if has_src || has_srcdoc || node.element_name() == Some(b"iframe") {
+            if has_src || has_srcdoc || matches!(node.element_name(), Some(b"iframe" | b"frame")) {
                 schedule(js, node, false);
             }
         }

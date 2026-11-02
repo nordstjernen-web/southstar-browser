@@ -93,10 +93,20 @@ fn box_inset_definite_height(b: BoxRef<'_>) -> f64 {
     b.content_height()
 }
 
+fn is_frameset(b: BoxRef<'_>) -> bool {
+    b.dom()
+        .and_then(|n| n.element_name())
+        .is_some_and(|name| name.eq_ignore_ascii_case(b"frameset"))
+}
+
 fn row_basis(b: BoxRef<'_>, s: StyleRef<'_>, cw: f64) -> f64 {
     let hv = s.get(PropId::Height);
     if is_length_or_calc(hv) {
         return clamp_height_minmax_px(Some(s), resolve_used_height(b, hv, cw, -1.0));
+    }
+    let stretched = b.read_definite_height();
+    if stretched > 0.0 && is_frameset(b) {
+        return stretched;
     }
     box_inset_definite_height(b)
 }

@@ -9,6 +9,7 @@ use southstar_dom::{FLAG_SVG_NS, Kind, Node, attrs, controls};
 
 use crate::color;
 use crate::ffi;
+use crate::frameset;
 use crate::scan::{strip, utf8_char};
 
 const QUIRKS: u32 = 1 << 5;
@@ -359,13 +360,13 @@ pub(crate) fn is_presentational_attr(name: &[u8]) -> bool {
     let names: &[&[u8]] = match first.to_ascii_lowercase() {
         b'a' => &[b"align"],
         b'b' => &[b"bgcolor", b"bordercolor", b"background", b"border"],
-        b'c' => &[b"color", b"cellspacing", b"cellpadding"],
+        b'c' => &[b"color", b"cellspacing", b"cellpadding", b"cols"],
         b'f' => &[b"face", b"frame", b"frameborder"],
         b'h' => &[b"height", b"hspace"],
         b'l' => &[b"leftmargin"],
         b'm' => &[b"marginheight", b"marginwidth"],
         b'n' => &[b"nowrap", b"noshade"],
-        b'r' => &[b"rules"],
+        b'r' => &[b"rules", b"rows"],
         b's' => &[b"size"],
         b't' => &[b"text", b"topmargin", b"type"],
         b'v' => &[b"valign", b"vspace"],
@@ -649,7 +650,16 @@ pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
     let tag = el.element_name()?;
     let any = matches!(
         tag,
-        b"td" | b"th" | b"body" | b"tr" | b"thead" | b"tbody" | b"tfoot" | b"colgroup"
+        b"td"
+            | b"th"
+            | b"body"
+            | b"tr"
+            | b"thead"
+            | b"tbody"
+            | b"tfoot"
+            | b"colgroup"
+            | b"frameset"
+            | b"frame"
     ) || (tag == b"img" && named(el.parent(), b"picture"))
         || el.attrs().any(|a| {
             a.name()
@@ -688,6 +698,12 @@ pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
     }
     if is_body {
         body_hints(&mut out, el);
+    }
+    if tag == b"frameset" {
+        frameset::frameset_hints(&mut out, el);
+    }
+    if tag == b"frame" {
+        frameset::frame_hints(&mut out, el);
     }
     if tag == b"font" {
         font_hints(&mut out, el);

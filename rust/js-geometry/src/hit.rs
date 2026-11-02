@@ -35,7 +35,8 @@ fn point_usable(x: f64, y: f64) -> bool {
 
 fn frame_of(doc: Option<Element>) -> Option<Element> {
     let doc = doc.filter(|d| d.kind() == Kind::Document)?;
-    doc.parent().filter(|p| element_named(*p, "iframe"))
+    doc.parent()
+        .filter(|p| element_named(*p, "iframe") || element_named(*p, "frame"))
 }
 
 fn frame_point(root: BoxRef<'_>, frame: Element, x: &mut f64, y: &mut f64) -> bool {

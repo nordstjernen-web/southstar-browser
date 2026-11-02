@@ -244,7 +244,9 @@ fn after_set(js: Option<Js>, node: Element, name: &CStr, value: &CStr, changed: 
     if changed && is(name, "src") && named(node, b"img") {
         ffi::start_image_load(js, node, value);
     }
-    if named(node, b"iframe") && (is(name, "src") || is(name, "srcdoc")) {
+    if (named(node, b"iframe") && (is(name, "src") || is(name, "srcdoc")))
+        || (named(node, b"frame") && is(name, "src"))
+    {
         ffi::schedule_iframe_load_full(js, node);
     } else if changed && named(node, b"object") && is(name, "data") {
         ffi::schedule_iframe_load(js, node);

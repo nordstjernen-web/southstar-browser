@@ -1,15 +1,15 @@
-//! Southstar — form submissions that navigate a frame: the frame a form's target names and the request queued for it to load.
+//! Southstar — navigations aimed at a frame: the frame a form or link target names, the sandbox rule on navigating it, and the request queued for it to load.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::ffi::{CStr, CString};
 
-use southstar_dom::{Kind, Node, ancestors_and_self, children};
+use southstar_dom::{Kind, Node, ancestors, ancestors_and_self, children};
 
 use crate::ffi::{self, Js, form, load};
 use crate::page::{self, Navigation};
 use crate::realm::frame_of;
-use crate::schedule;
+use crate::{sandbox, schedule};
 
 const MAX_DEPTH: usize = 512;
 
@@ -32,8 +32,15 @@ fn document_of(node: Node<'_>) -> Option<Node<'_>> {
     ancestors_and_self(node).find(|node| node.kind() == Kind::Document)
 }
 
+fn top_document(node: Node<'_>) -> Option<Node<'_>> {
+    ancestors_and_self(node)
+        .last()
+        .filter(|root| root.kind() == Kind::Document)
+}
+
 fn frame_holding(doc: Node<'_>) -> Option<Node<'_>> {
-    doc.parent().filter(|owner| named(*owner, b"iframe"))
+    doc.parent()
+        .filter(|owner| named(*owner, b"iframe") || named(*owner, b"frame"))
 }
 
 fn first_in_document<'a>(
@@ -63,7 +70,9 @@ fn frame_named<'a>(node: Node<'a>, name: &[u8], depth: usize) -> Option<Node<'a>
         return None;
     }
     for child in children(node) {
-        if named(child, b"iframe") && child.attr(c"name").map(CStr::to_bytes) == Some(name) {
+        if (named(child, b"iframe") || named(child, b"frame"))
+            && child.attr(c"name").map(CStr::to_bytes) == Some(name)
+        {
             return Some(child);
         }
         if let Some(hit) = frame_named(child, name, depth + 1) {
@@ -98,6 +107,77 @@ fn target_frame<'a>(page: Node<'a>, doc: Node<'a>, target: &[u8]) -> Option<Node
         return None;
     }
     frame_named(page, target, 0)
+}
+
+fn sandbox_allows(source: Node<'_>, doc: Node<'_>, frame: Option<Node<'_>>) -> bool {
+    let flags = sandbox::effective(source);
+    if flags & sandbox::ACTIVE == 0 {
+        return true;
+    }
+    match frame {
+        Some(frame) => frame_holding(doc) == Some(frame) || ancestors(frame).any(|a| a == doc),
+        None => flags & sandbox::ALLOW_TOP_NAVIGATION != 0,
+    }
+}
+
+pub enum LinkTarget {
+    Unhandled,
+    Navigated,
+    Top,
+}
+
+pub(crate) fn follow_link_target(js: Js, anchor: Node<'_>, url: &CStr) -> LinkTarget {
+    if js.is_null() || ffi::halted(js) || !load::node_in_page(js, anchor) {
+        return LinkTarget::Unhandled;
+    }
+    let (Some(doc), Some(page)) = (document_of(anchor), top_document(anchor)) else {
+        return LinkTarget::Unhandled;
+    };
+    let target = target_name(anchor, None, doc);
+    if target.is_empty()
+        || target.eq_ignore_ascii_case(b"_self")
+        || target.eq_ignore_ascii_case(b"_blank")
+    {
+        return LinkTarget::Unhandled;
+    }
+    let own = frame_holding(doc);
+    let frame = if target.eq_ignore_ascii_case(b"_top") {
+        None
+    } else if target.eq_ignore_ascii_case(b"_parent") {
+        match own {
+            Some(own) => document_of(own).and_then(frame_holding),
+            None => return LinkTarget::Unhandled,
+        }
+    } else if target.starts_with(b"_") {
+        return LinkTarget::Unhandled;
+    } else {
+        match frame_named(page, target, 0) {
+            Some(frame) => Some(frame),
+            None => return LinkTarget::Unhandled,
+        }
+    };
+    if !sandbox_allows(anchor, doc, frame) {
+        return LinkTarget::Navigated;
+    }
+    let Some(frame) = frame else {
+        return if own.is_some() {
+            LinkTarget::Top
+        } else {
+            LinkTarget::Unhandled
+        };
+    };
+    navigate_frame(js, frame, url, None);
+    LinkTarget::Navigated
+}
+
+pub(crate) fn navigate_frame(js: Js, frame: Node<'_>, url: &CStr, form_body: Option<Vec<u8>>) {
+    page::update_frame(js, frame_of(frame), |entry| {
+        entry.navigation = Some(Navigation {
+            url: url.to_owned(),
+            form_body,
+        });
+    });
+    schedule::schedule(js, frame, true);
 }
 
 fn document_url(js: Js, doc: Node<'_>) -> Option<CString> {
@@ -164,7 +244,7 @@ pub(crate) fn submit_into_frame(js: Js, form_node: Node<'_>, submitter: Option<N
         return false;
     }
     let submitter = submitter.filter(|submitter| *submitter != form_node);
-    let (Some(doc), Some(page)) = (document_of(form_node), ffi::current_document(js)) else {
+    let (Some(doc), Some(page)) = (document_of(form_node), top_document(form_node)) else {
         return false;
     };
     let button = submitter.filter(|submitter| is_submit_button(*submitter));
@@ -172,12 +252,12 @@ pub(crate) fn submit_into_frame(js: Js, form_node: Node<'_>, submitter: Option<N
     let Some(frame) = target_frame(page, doc, target) else {
         return false;
     };
+    if !sandbox_allows(form_node, doc, Some(frame)) {
+        return true;
+    }
     let Some(navigation) = navigation_for(js, form_node, submitter, doc) else {
         return false;
     };
-    page::update_frame(js, frame_of(frame), |entry| {
-        entry.navigation = Some(navigation);
-    });
-    schedule::schedule(js, frame, true);
+    navigate_frame(js, frame, &navigation.url, navigation.form_body);
     true
 }

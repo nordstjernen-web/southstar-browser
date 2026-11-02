@@ -8,6 +8,7 @@ use std::ffi::CString;
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, ScriptOptions, Value};
 use southstar_js_forms::ClickState;
+pub(crate) use southstar_js_frames::LinkTarget;
 use southstar_js_runtime::api;
 
 use crate::{Element, JsResult};
@@ -188,6 +189,10 @@ impl Js {
 
     pub fn navigate(self, url: &[u8]) {
         api::navigate(self.ptr(), &c_string(url), false);
+    }
+
+    pub fn follow_link_target(self, anchor: Element, url: &[u8]) -> LinkTarget {
+        southstar_js_frames::follow_link_target(self.ptr(), anchor, &c_string(url))
     }
 
     pub fn checkable_post_click(self, el: Element, kind: i32, state: &ClickState, prevented: bool) {

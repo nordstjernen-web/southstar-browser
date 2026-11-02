@@ -168,7 +168,7 @@ pub(crate) fn window_scroll(scope: &mut Scope<'_>, prop: &str) -> f64 {
 fn owner_iframe(node: Option<Element>) -> Option<Element> {
     let mut p = node?.parent();
     while let Some(n) = p {
-        if element_named(n, "iframe") {
+        if element_named(n, "iframe") || element_named(n, "frame") {
             return Some(n);
         }
         p = n.parent();

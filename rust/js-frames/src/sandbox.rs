@@ -8,6 +8,7 @@ pub(crate) const ACTIVE: u32 = 1 << 0;
 pub(crate) const ALLOW_SCRIPTS: u32 = 1 << 1;
 pub(crate) const ALLOW_FORMS: u32 = 1 << 2;
 pub(crate) const ALLOW_SAME_ORIGIN: u32 = 1 << 3;
+pub(crate) const ALLOW_TOP_NAVIGATION: u32 = 1 << 6;
 
 const TOKENS: &[(&[u8], u32)] = &[
     (b"allow-scripts", ALLOW_SCRIPTS),
@@ -15,7 +16,7 @@ const TOKENS: &[(&[u8], u32)] = &[
     (b"allow-same-origin", ALLOW_SAME_ORIGIN),
     (b"allow-popups", 1 << 4),
     (b"allow-modals", 1 << 5),
-    (b"allow-top-navigation", 1 << 6),
+    (b"allow-top-navigation", ALLOW_TOP_NAVIGATION),
     (b"allow-top-navigation-by-user-activation", 1 << 7),
     (b"allow-downloads", 1 << 8),
     (b"allow-popups-to-escape-sandbox", 1 << 9),
