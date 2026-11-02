@@ -10,6 +10,24 @@ pub use ffi::{
     win32_mitigations_init,
 };
 
+pub fn uuid_v4() -> Option<String> {
+    let mut bytes = [0u8; 16];
+    if !csprng_fill(&mut bytes) {
+        return None;
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let mut uuid = String::with_capacity(36);
+    for (i, byte) in bytes.iter().enumerate() {
+        if matches!(i, 4 | 6 | 8 | 10) {
+            uuid.push('-');
+        }
+        uuid.push(char::from(b"0123456789abcdef"[usize::from(byte >> 4)]));
+        uuid.push(char::from(b"0123456789abcdef"[usize::from(byte & 15)]));
+    }
+    Some(uuid)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SriDigest {
     Sha256,
@@ -493,3 +511,6 @@ pub const ROOT_MESSAGE: &str = "southstar: refusing to run as root.\n\
 \x20 Web browsers process untrusted content; running as root exposes\n\
 \x20 the whole system if the renderer is compromised.\n\
 \x20 Re-run as an unprivileged user, or set NS_ALLOW_ROOT=1 to override.\n";
+
+#[cfg(test)]
+mod tests;

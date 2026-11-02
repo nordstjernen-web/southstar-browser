@@ -74,21 +74,8 @@ pub(crate) fn get_random_values(scope: &mut Scope<'_>, _this: &Value, args: &[Va
 }
 
 pub(crate) fn random_uuid(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    let mut bytes = [0u8; 16];
-    if !crate::ffi::csprng_fill(&mut bytes) {
-        return Err(scope.type_error("CSPRNG unavailable"));
+    match southstar_sandbox::uuid_v4() {
+        Some(uuid) => Ok(scope.string(&uuid)),
+        None => Err(scope.type_error("CSPRNG unavailable")),
     }
-    let word = |i: usize| u32::from_ne_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
-    let r0 = word(0);
-    let r1 = (word(4) & 0xffff_0fff) | 0x0000_4000;
-    let r2 = (word(8) & 0x3fff_ffff) | 0x8000_0000;
-    let r3 = word(12);
-    let uuid = format!(
-        "{r0:08x}-{:04x}-{:04x}-{:04x}-{:04x}{r3:08x}",
-        r1 >> 16,
-        r1 & 0xffff,
-        r2 >> 16,
-        r2 & 0xffff,
-    );
-    Ok(scope.string(&uuid))
 }

@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Rust port: blob: URLs, `crypto.randomUUID` and the watchdog's session
+  file name take their UUIDs from one safe `southstar_sandbox::uuid_v4` over
+  the platform CSPRNG instead of GLib's `g_uuid_string_random`; `rust/js-url`
+  is now free of `unsafe` code.
 * Security: joining strings with `+` or a template literal throws a
   `RangeError` ("Invalid string length") once the result would exceed
   2^32 - 1 code units. The lazy rope strings added the two lengths without a
