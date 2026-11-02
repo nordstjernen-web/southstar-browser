@@ -163,9 +163,9 @@ pub fn relayout(b: &NsBrowser) {
     prune_cached_nodes(b);
     b.set_open_select_for_layout();
     ffi::layout_set_datalist_open(datalist_open(b, b.js().and_then(|js| js.focused_node())));
-    let t0 = ffi::monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     b.engine_relayout(b.js().and_then(|js| js.focused_node()));
-    b.relayout_cost_us.set(ffi::monotonic_us() - t0);
+    b.relayout_cost_us.set(southstar_glib::monotonic_us() - t0);
     b.relaying.set(false);
     if !scroll_save.is_empty() {
         restore_scroll(b.layout(), &scroll_save);
@@ -183,7 +183,7 @@ pub fn relayout(b: &NsBrowser) {
 }
 
 fn note_layout_signature(b: &NsBrowser) {
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let rapid = now - b.last_layout_us.get() < LAYOUT_RAPID_US;
     b.last_layout_us.set(now);
     let sig = layout_signature(b.layout());
@@ -206,12 +206,12 @@ pub fn mutation_relayout_due(b: &NsBrowser) -> bool {
         .relayout_cost_us
         .get()
         .clamp(LAYOUT_BACKGROUND_MIN_US, LAYOUT_BACKGROUND_MAX_US);
-    ffi::monotonic_us() - b.last_layout_us.get() >= min_gap
+    southstar_glib::monotonic_us() - b.last_layout_us.get() >= min_gap
 }
 
 pub fn relayout_from_mutation(b: &NsBrowser) -> bool {
     if b.layout().is_some() && b.layout_osc.get() >= LAYOUT_OSC_THRESHOLD {
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if now < b.damp_until_us.get() {
             b.dirty.set(true);
             return false;

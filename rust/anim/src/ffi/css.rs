@@ -372,10 +372,6 @@ impl<'a> StylesMut<'a> {
     }
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NodePtr {
     node: WeakNode,

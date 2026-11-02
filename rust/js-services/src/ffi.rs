@@ -42,10 +42,6 @@ pub(crate) enum Gate {
     Drop,
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn realm_of(scope: &Scope<'_>) -> Realm {
     Realm(scope.handle())
 }

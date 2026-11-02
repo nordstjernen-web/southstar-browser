@@ -172,7 +172,7 @@ fn tab_rows(tm: &mut TaskManager) {
 }
 
 fn refresh(tm: &mut TaskManager) {
-    tm.cpu.begin(glib::monotonic_us());
+    tm.cpu.begin(southstar_glib::monotonic_us());
     let selected_pid = tm.list.selected_row().map_or(0, |row| row_pid(&row));
     tm.list.remove_all();
 

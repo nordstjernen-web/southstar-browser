@@ -256,7 +256,7 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn tick(&mut self) -> c_int {
-        let now = engine::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if self.tick_deferred_at(now) {
             self.tick_deferred = true;
             return 0;
@@ -265,7 +265,7 @@ impl<F: Framebuffer> Session<F> {
             return 0;
         };
         let changed = c_int::from(cur.tick(TICK_BUDGET_MS));
-        self.last_tick_us = engine::monotonic_us();
+        self.last_tick_us = southstar_glib::monotonic_us();
         self.tick_cost_us = self.last_tick_us - now;
         self.tick_deferred = false;
         changed
@@ -277,7 +277,7 @@ impl<F: Framebuffer> Session<F> {
 
     fn note_scroll(&mut self, sx: c_long, sy: c_long, wheel: bool) {
         if wheel || (self.frame_valid && (sx != self.frame_sx || sy != self.frame_sy)) {
-            self.scroll_until_us = engine::monotonic_us() + SCROLL_ACTIVE_US;
+            self.scroll_until_us = southstar_glib::monotonic_us() + SCROLL_ACTIVE_US;
         }
     }
 

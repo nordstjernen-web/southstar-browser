@@ -324,10 +324,6 @@ pub fn warn_read_failure(what: &CStr, path: &[u8], message: &[u8]) {
     southstar_glib::warning(text);
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub fn info(message: &CStr) {
     southstar_glib::log(southstar_glib::LogLevel::Info, message.to_bytes());
 }

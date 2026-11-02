@@ -12,7 +12,7 @@ use southstar_glib::{GBoolean, SourceId};
 
 use crate::api::Page;
 use crate::ffi::glue;
-use crate::ffi::{self, Js, record};
+use crate::ffi::{Js, record};
 use crate::{budget, orphans, scheduling, teardown};
 
 #[derive(Clone)]
@@ -277,7 +277,7 @@ pub fn fetch_subresource(
     initiator: Option<&CStr>,
     info: &ResourceInfo,
 ) -> Fetched {
-    let start = ffi::monotonic_us();
+    let start = southstar_glib::monotonic_us();
     let fetched = fetch(Js::of(js), url, top_url, headers, None);
     if let Some(js) = Js::of(js)
         && js.st().worker_host.borrow().is_none()

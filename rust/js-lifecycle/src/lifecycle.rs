@@ -125,7 +125,7 @@ fn complete(js: Js, page: &Page, doc: Option<Node<'_>>) {
         let start_us = page.lifecycle.borrow().start_us;
         eprintln!(
             "[profile] js lifecycle total={:.1}ms",
-            (ffi::monotonic_us() - start_us) as f64 / 1000.0
+            (southstar_glib::monotonic_us() - start_us) as f64 / 1000.0
         );
     }
     release(js, page);

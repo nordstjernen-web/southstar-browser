@@ -27,7 +27,7 @@ fn text(value: Option<&CStr>) -> String {
 }
 
 pub(crate) fn create(js: Js, setup: &WorkerSetup<'_>) -> bool {
-    let origin_us = (ffi::monotonic_us() / 100) * 100;
+    let origin_us = (southstar_glib::monotonic_us() / 100) * 100;
     let origin_real_ms = (ffi::real_time_us() as f64 / 100.0).floor() / 10.0;
     js.set_time_origin(origin_us, origin_real_ms);
     js.adopt_worker_host(setup);

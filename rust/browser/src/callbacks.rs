@@ -161,14 +161,14 @@ pub fn media_seek(b: Option<&NsBrowser>, node: Node<'_>, seconds: f64) -> bool {
     let Some(videos) = b.and_then(NsBrowser::videos) else {
         return false;
     };
-    videos.seek_node(node, seconds, ffi::monotonic_us())
+    videos.seek_node(node, seconds, southstar_glib::monotonic_us())
 }
 
 pub fn media_play(b: &NsBrowser, node: Node<'_>, play: bool) {
     let Some(videos) = b.videos() else {
         return;
     };
-    videos.set_node_playing(node, play, ffi::monotonic_us());
+    videos.set_node_playing(node, play, southstar_glib::monotonic_us());
     if let Some(js) = b.js() {
         js.request_repaint();
     }

@@ -29,9 +29,9 @@ pub use css::{
 };
 pub use images::{ImageCache, ImageSession, Wanted, collect_images};
 pub use net::{
-    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, monotonic_us,
-    navigate_blocking, nosniff, preconnect, preload_clear, preload_request, url_is_http_or_https,
-    url_origin, url_resolve,
+    Bytes, CssCache, Dest, Post, fetch_blocking, fetch_blocking_with_headers, navigate_blocking,
+    nosniff, preconnect, preload_clear, preload_request, url_is_http_or_https, url_origin,
+    url_resolve,
 };
 
 use crate::fetch;
@@ -239,7 +239,7 @@ pub fn relayout(
     let scope = CssScope::enter(r.base);
     let mut sheets = crate::styles::collect_stylesheets(doc_node, r.base, cache);
     let ctx = css::render_ctx(&r, &sheets);
-    let t0 = monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     let (mut styles, root) = if profile_enabled() {
         css::render_relayout_profiled(&ctx, viewport_width)
     } else {
@@ -258,7 +258,7 @@ pub fn relayout(
         layout.set(root);
         css::publish_to_page(js, Some(&styles), root);
     }
-    crate::styles::add_relayout(monotonic_us() - t0);
+    crate::styles::add_relayout(southstar_glib::monotonic_us() - t0);
     css::log_relayout(Some(&styles), viewport_width);
     drop(sheets);
     Some(styles)
@@ -283,13 +283,13 @@ pub fn restyle(req: &Relayout<'_>) -> Option<Rc<StyleMap>> {
         return None;
     }
     let ctx = css::render_ctx(&r, &sheets);
-    let t0 = monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     let styles = southstar_render::restyle(&ctx)?;
     if profile_enabled() {
         eprintln!(
             "[profile] restyle nodes={} total={:.2}ms",
             css::table_size(Some(&styles)),
-            (monotonic_us() - t0) as f64 / 1000.0
+            (southstar_glib::monotonic_us() - t0) as f64 / 1000.0
         );
     }
     drop(sheets);

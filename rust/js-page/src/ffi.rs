@@ -305,10 +305,6 @@ pub(crate) fn profile_enabled() -> bool {
     southstar_js_loader::profile_enabled()
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn url_host(url: &CStr) -> Option<Vec<u8>> {
     southstar_url::bytes::host_from(url.to_bytes())
 }

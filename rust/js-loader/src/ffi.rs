@@ -497,10 +497,6 @@ pub fn install_runtime_hooks() {
     });
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn fill_element_perf_info(js: Option<Page>, el: Option<Node>, info: &mut PerfInfo) {
     let frame = el.and_then(blocking::content_frame);
     let frame_ptr = Node::ptr_or_null(frame);

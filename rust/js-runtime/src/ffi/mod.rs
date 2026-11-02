@@ -592,10 +592,6 @@ pub(crate) fn set_active(js: Js) {
     record::set_active(js.some());
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn real_time_us() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

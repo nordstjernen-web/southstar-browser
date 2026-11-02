@@ -737,7 +737,7 @@ fn anim_tick(v: *mut NsProcView, frame_time: i64) -> bool {
     let now = if frame_time > 0 {
         frame_time
     } else {
-        glib::monotonic_us()
+        southstar_glib::monotonic_us()
     };
     let state = view(v);
     let interval = if state.page_animating != 0 {

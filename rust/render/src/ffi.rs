@@ -83,10 +83,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 impl RenderCtx<'_> {
     fn style_sheets(&self) -> impl Iterator<Item = &Sheet> {
         self.sheets.iter().map(|sheet| &**sheet)
@@ -202,7 +198,7 @@ fn feed_animations(c: &RenderCtx, styles: &mut StyleMap) {
     for sheet in c.style_sheets() {
         anim.load_keyframes(sheet);
     }
-    anim.observe_all(styles, now_us());
+    anim.observe_all(styles, southstar_glib::monotonic_us());
 }
 
 fn apply_zoom(c: &RenderCtx, styles: &mut StyleMap) {
@@ -396,7 +392,13 @@ pub fn relayout(
         *p = RenderProfile::default();
     }
     let timed = profile.is_some();
-    let clock = || if timed { now_us() } else { 0 };
+    let clock = || {
+        if timed {
+            southstar_glib::monotonic_us()
+        } else {
+            0
+        }
+    };
 
     let viewport_width = c.viewport_width;
     southstar_css_media::set_base_viewport(viewport_width, c.viewport_height);

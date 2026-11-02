@@ -71,7 +71,7 @@ impl NsBrowser {
         let base = self.base_url.get();
         southstar_engine::load_keyframes(anim, &self.engine_page(base.as_deref()));
         let mut styles = self.styles.borrow_mut();
-        southstar_engine::anim_observe(anim, styles.as_mut(), super::monotonic_us());
+        southstar_engine::anim_observe(anim, styles.as_mut(), southstar_glib::monotonic_us());
     }
 
     pub fn speculative_preload(&self) {

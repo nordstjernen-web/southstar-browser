@@ -16,10 +16,6 @@ pub fn net_idle() -> bool {
     southstar_net::idle()
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub fn net_log_clear() {
     southstar_net::log_clear();
 }

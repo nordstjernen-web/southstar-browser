@@ -24,10 +24,6 @@ pub enum Dest {
     Image = 3,
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub struct NestedLoop(glib::MainLoop);
 
 impl NestedLoop {

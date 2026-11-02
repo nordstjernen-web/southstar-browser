@@ -161,9 +161,10 @@ pub(crate) fn create(js: Js, timing: Option<NavigationTiming>, callbacks: Callba
 fn navigation_timing(given: Option<NavigationTiming>) -> NavigationTiming {
     let mut timing = match given {
         Some(timing) if timing.origin_us > 0 && timing.origin_real_ms > 0.0 => timing,
-        _ => {
-            NavigationTiming::starting_at(ffi::monotonic_us(), ffi::real_time_us() as f64 / 1000.0)
-        }
+        _ => NavigationTiming::starting_at(
+            southstar_glib::monotonic_us(),
+            ffi::real_time_us() as f64 / 1000.0,
+        ),
     };
     ffi::coarsen_navigation_timing(&mut timing);
     timing

@@ -14,7 +14,7 @@ use std::rc::Rc;
 
 use southstar_image_decoders::{self as decoders, Pixels};
 use southstar_layout::MediaHandle;
-use southstar_net::{Response, monotonic_us};
+use southstar_net::Response;
 use southstar_texture::TextureRef;
 
 use crate::RetryState;
@@ -751,7 +751,7 @@ fn decode_body(bytes: &[u8]) -> Decoded {
 
 fn set_error(img: &mut State, message: &[u8]) {
     img.failed = true;
-    img.failed_at_us = monotonic_us();
+    img.failed_at_us = southstar_glib::monotonic_us();
     img.error = Some(c_string_until_nul(message));
 }
 
@@ -763,7 +763,7 @@ fn apply_decoded_state(img: &mut State, d: Decoded, content_type: Option<&[u8]>,
         img.anim_total_ms = crate::total_delay_ms(anim.iter().map(|f| i64::from(f.delay_ms)));
         img.anim_frames = Some(anim);
         img.anim_current = 0;
-        img.anim_start_us = monotonic_us();
+        img.anim_start_us = southstar_glib::monotonic_us();
         img.loaded = true;
     } else if let Some(tex) = d.tex {
         img.texture = Some(tex);
@@ -913,7 +913,9 @@ fn image_fetched(pending: Rc<Pending>, outcome: southstar_net::Outcome) {
     if pending.dead.get() {
         return;
     }
-    pending.img.write(|img| img.response_us = monotonic_us());
+    pending
+        .img
+        .write(|img| img.response_us = southstar_glib::monotonic_us());
     let response = match outcome {
         Ok(response) => response,
         Err(message) => return finish_failed(&pending, &message),
@@ -980,7 +982,7 @@ fn start_request(
     }
     img.write(|img| {
         img.attempts += 1;
-        img.request_us = monotonic_us();
+        img.request_us = southstar_glib::monotonic_us();
         img.response_us = 0;
     });
     let headers = southstar_net::FetchDest::Image.header_lines();
@@ -1039,7 +1041,7 @@ fn cache_get(
         start_request(cache, cached, url, top_url, cb, data);
         return cached;
     }
-    if cached.read(|s| crate::should_retry(&retry_state(s), monotonic_us())) {
+    if cached.read(|s| crate::should_retry(&retry_state(s), southstar_glib::monotonic_us())) {
         cached.write(|s| {
             s.failed = false;
             s.http_status = 0;
@@ -1106,7 +1108,7 @@ fn insert_encoded(cache: ImageCache, url: &CStr, bytes: &[u8]) -> Option<ImageRe
             s.natural_width = anim.w;
             s.natural_height = anim.h;
             s.anim_total_ms = anim.total_ms;
-            s.anim_start_us = monotonic_us();
+            s.anim_start_us = southstar_glib::monotonic_us();
         }));
     }
     let (texture, w, h) = decode_bytes(bytes)?;

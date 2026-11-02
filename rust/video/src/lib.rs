@@ -289,7 +289,7 @@ fn inherit_node_playback(v: &mut NsVideo, previous: &NsVideo) {
     v.prev_tick_time = previous.cur_time;
     v.last_emit_time = previous.cur_time;
     if v.playing.get() {
-        v.base_us = ffi::monotonic_us() - us(v.cur_time);
+        v.base_us = southstar_glib::monotonic_us() - us(v.cur_time);
     }
 }
 
@@ -367,7 +367,7 @@ pub fn fetched(cache: &mut Cache, v: &mut NsVideo, kind: FetchKind, resp: &Respo
                 v.player = Some(fresh);
                 v.buf_sent.set(false);
                 if v.playing.get() {
-                    v.base_us = ffi::monotonic_us() - us(v.cur_time);
+                    v.base_us = southstar_glib::monotonic_us() - us(v.cur_time);
                 }
             }
         }
@@ -378,7 +378,7 @@ pub fn fetched(cache: &mut Cache, v: &mut NsVideo, kind: FetchKind, resp: &Respo
             {
                 if v.autoplay.get() && !v.playing.get() {
                     v.playing.set(true);
-                    v.base_us = ffi::monotonic_us();
+                    v.base_us = southstar_glib::monotonic_us();
                 }
                 materialize_video(sink, v, body, 0, 0.0);
             }
@@ -460,12 +460,12 @@ impl Cache {
             v.prev_tick_time = t;
             v.last_emit_time = t;
             if v.playing.get() {
-                v.base_us = ffi::monotonic_us() - us(t);
+                v.base_us = southstar_glib::monotonic_us() - us(t);
             }
         }
         if let Some(playing) = st.playing {
             if v.player.is_some() && playing != v.playing.get() {
-                let now = ffi::monotonic_us();
+                let now = southstar_glib::monotonic_us();
                 if playing {
                     v.play(now);
                     audio_start(&mut self.sink, v);
@@ -519,7 +519,7 @@ impl Cache {
         }
         if stalled || stream_growing(&self.streams, &v) {
             v.stalled.set(true);
-            v.stall_since_us = ffi::monotonic_us();
+            v.stall_since_us = southstar_glib::monotonic_us();
             if v.playing.get() {
                 v.base_us = v.stall_since_us - us(v.cur_time);
             }
@@ -1045,7 +1045,7 @@ impl Cache {
             return true;
         };
         let mut v = p.get();
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if v.playing.get() && v.base_us > 0 {
             v.cur_time = (now - v.base_us) as f64 / 1e6;
         }

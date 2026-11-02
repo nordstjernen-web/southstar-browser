@@ -126,7 +126,7 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
             return None;
         }
     }
-    let start_us = ffi::monotonic_us();
+    let start_us = southstar_glib::monotonic_us();
     let resp = ffi::fetch_blocking_with_headers(f.url, f.top_url, Dest::Style);
     if let Some(r) = &resp {
         let fetched = r.final_url().unwrap_or(f.url).to_bytes();
@@ -157,7 +157,7 @@ pub fn fetch_css_bytes(f: &CssFetch, cache: Option<CssCache>) -> Option<ffi::Byt
         _ => {}
     }
     if let Some(resp) = resp {
-        crate::timings::record_timing(f, start_us, ffi::monotonic_us(), resp);
+        crate::timings::record_timing(f, start_us, southstar_glib::monotonic_us(), resp);
     }
     bytes
 }

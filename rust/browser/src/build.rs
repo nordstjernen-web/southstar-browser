@@ -63,7 +63,7 @@ fn arm_declarative_refresh(b: &NsBrowser, header: Option<&CStr>) {
         None => b.refresh_url.set(b.base_url.get().as_deref()),
     }
     b.refresh_due_us
-        .set(ffi::monotonic_us() + (seconds * 1e6) as i64);
+        .set(southstar_glib::monotonic_us() + (seconds * 1e6) as i64);
 }
 
 fn apply_meta_csp(js: ffi::Js, node: Node<'_>, depth: c_int) {
@@ -125,7 +125,7 @@ pub fn build(b: &NsBrowser, setup: Setup<'_>) {
     ffi::set_anim(b, anim);
     if let Some(js) = ffi::attach_js(b, setup.navigation_timing) {
         b.load_delay_deadline_us
-            .set(ffi::monotonic_us() + LOAD_DELAY_US);
+            .set(southstar_glib::monotonic_us() + LOAD_DELAY_US);
         ffi::wire_js_callbacks(b, js);
         js.add_csp_header(setup.csp_header.as_deref());
         if let Some(doc) = b.doc() {

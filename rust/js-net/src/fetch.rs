@@ -741,7 +741,7 @@ fn deliver(delivery: Delivery) {
         if state.settled {
             return;
         }
-        let end_us = ffi::monotonic_us();
+        let end_us = southstar_glib::monotonic_us();
         let start_us = if state.start_ms > 0.0 {
             js.time_origin_us() + (state.start_ms * 1000.0) as i64
         } else {

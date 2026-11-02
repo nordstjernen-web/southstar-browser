@@ -28,7 +28,7 @@ pub(crate) fn run_scripts_in_doc(js: Js, doc: Element, base_url: Option<&CStr>) 
         return;
     }
     js.clear_lifecycle();
-    let start_us = ffi::monotonic_us();
+    let start_us = southstar_glib::monotonic_us();
     install_document(js, Some(doc), base_url);
     js.snapshot_platform_globals();
     run_early_injected(js);

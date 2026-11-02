@@ -101,7 +101,7 @@ impl NsVideo {
                 self.video_opened.raw()
             ));
         }
-        self.last_paint_us = ffi::monotonic_us();
+        self.last_paint_us = southstar_glib::monotonic_us();
         self.rect_x = x;
         self.rect_y = y;
         self.rect_w = w;
@@ -530,24 +530,24 @@ pub fn build_player(sink: &mut Sink, v: &mut NsVideo, body: Option<&[u8]>) {
     }
     if v.playing.get() {
         if v.base_us == 0 {
-            v.base_us = ffi::monotonic_us() - us(v.cur_time);
+            v.base_us = southstar_glib::monotonic_us() - us(v.cur_time);
         }
         audio_start(sink, v);
         audio_seek_to_current(sink, v);
     } else if v.autoplay.get() {
-        v.play(ffi::monotonic_us());
+        v.play(southstar_glib::monotonic_us());
         audio_start(sink, v);
         sink.event(v, c"play", v.cur_time);
     }
 }
 
 pub fn extend_timed(player: &mut Player, data: &[u8]) -> bool {
-    let t0 = ffi::monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     let ok = player.extend(data);
     if ffi::env_set(c"NS_PROFILE") {
         debug(&format!(
             "[profile] mse extend {:6.1}ms  {}b ok={}\n",
-            (ffi::monotonic_us() - t0) as f64 / 1000.0,
+            (southstar_glib::monotonic_us() - t0) as f64 / 1000.0,
             data.len(),
             i32::from(ok)
         ));
@@ -568,7 +568,7 @@ fn mse_attach_player(v: &mut NsVideo, s: &MseStream) {
         v.set_frame_at(v.cur_time);
     }
     if v.playing.get() && v.base_us == 0 {
-        v.base_us = ffi::monotonic_us() - us(v.cur_time);
+        v.base_us = southstar_glib::monotonic_us() - us(v.cur_time);
     }
 }
 
@@ -601,7 +601,7 @@ pub fn mse_sync(sink: &mut Sink, s: &mut MseStream, v: &mut NsVideo) {
             v.duration = d;
         }
     }
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     if s.video.bytes.len() >= 4096 && s.video.dirty && (s.eos || now - s.video.flush_us > 250_000) {
         s.video.dirty = false;
         s.video.flush_us = now;

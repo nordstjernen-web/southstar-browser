@@ -128,7 +128,7 @@ fn schedule(scope: &mut Scope<'_>, this: &Value, args: &[Value], is_interval: bo
         is_idle: false,
         immediate,
         firing: false,
-        due_us: ffi::monotonic_us() + i64::from(ms) * 1000,
+        due_us: southstar_glib::monotonic_us() + i64::from(ms) * 1000,
         idle_deadline_us: 0,
         nesting,
         interval_ms: ms,
@@ -211,7 +211,7 @@ pub(crate) fn request_idle_callback(
             && let Ok(timeout_ms) = scope.to_int32(&timeout)
             && timeout_ms > 0
         {
-            idle_deadline_us = ffi::monotonic_us() + i64::from(timeout_ms) * 1000;
+            idle_deadline_us = southstar_glib::monotonic_us() + i64::from(timeout_ms) * 1000;
         }
     }
     let timer = Timer {
@@ -249,7 +249,7 @@ fn idle_timers_end(page: &Page, now: i64, mut end: i64) -> i64 {
 }
 
 fn idle_deadline(scope: &mut Scope<'_>, js: Js, page: &Page, did_timeout: bool) -> Value {
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let deadline_us = if did_timeout {
         now
     } else {
@@ -276,7 +276,7 @@ fn time_remaining(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Va
     let Some(deadline_us) = this.with_host(|deadline: &IdleDeadline| deadline.deadline_us) else {
         return Err(scope.type_error("Illegal invocation"));
     };
-    let left = (deadline_us - ffi::monotonic_us()).max(0);
+    let left = (deadline_us - southstar_glib::monotonic_us()).max(0);
     Ok(Value::number(((left / 100) * 100) as f64 / 1000.0))
 }
 
@@ -365,7 +365,7 @@ pub(crate) fn fire(js: Js, id: i32) -> bool {
     };
     let idle_expired = firing.is_idle
         && firing.idle_deadline_us > 0
-        && ffi::monotonic_us() >= firing.idle_deadline_us;
+        && southstar_glib::monotonic_us() >= firing.idle_deadline_us;
     match ffi::timer_gate(js, firing.frame, idle_expired) {
         Gate::Run => {}
         Gate::Wait => return true,
@@ -431,7 +431,7 @@ pub(crate) fn run_due(js: Js) {
     if !ffi::due_timers_allowed(js) {
         return;
     }
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let due: Vec<i32> = page
         .timers
         .borrow()

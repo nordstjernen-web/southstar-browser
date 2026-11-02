@@ -16,6 +16,10 @@ Southstar Browser 1.0.7-dev:
   with a legacy code are built by one `Scope::dom_exception_code` in
   js-engine; the eight link-table forwarders that reached js-events for
   it are gone.
+* Source: the 18 one-line wrappers around `southstar_glib::monotonic_us`
+  (and IndexedDB's own clock, which counted from process start) are gone;
+  every crate reads the monotonic clock through
+  `southstar_glib::monotonic_us` directly.
 * README: link to Southstar Browser in the Microsoft Store.
 * Source: removed about 65 public functions nothing called, and the
   private helpers only they used: Pango API surface kept by the

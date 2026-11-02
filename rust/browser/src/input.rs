@@ -144,7 +144,7 @@ pub fn hover(b: &NsBrowser, x: c_int, y: c_int) -> c_int {
         return 1;
     }
     if hover_restyle {
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         let min_gap = (b.relayout_cost_us.get() * 2).max(HOVER_RELAYOUT_MIN_US);
         if now - b.hover_relayout_us.get() >= min_gap {
             b.hover_relayout_us.set(now);

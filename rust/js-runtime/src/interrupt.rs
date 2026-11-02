@@ -15,7 +15,7 @@ pub(crate) fn should_interrupt(js: Js) -> bool {
         js.halt();
         return true;
     }
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let state = js.st();
     let monitor_deadline = state.monitor_deadline_us.get();
     if monitor_deadline != 0 && now > monitor_deadline {

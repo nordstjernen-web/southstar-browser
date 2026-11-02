@@ -248,14 +248,14 @@ impl<'a> Settle<'a> {
     pub fn new(ctx: &'a Ctx) -> Settle<'a> {
         Settle {
             ctx,
-            last_flush_us: Cell::new(ffi::monotonic_us()),
+            last_flush_us: Cell::new(southstar_glib::monotonic_us()),
             pending_mutation: Cell::new(false),
         }
     }
 
     pub fn tick(&self) {
         let fc = self.ctx;
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if let Some(cache) = fc.image_cache {
             cache.tick(now);
         }
@@ -289,7 +289,7 @@ impl<'a> Settle<'a> {
             STYLES_STALE.store(false, Ordering::Relaxed);
             relayout(fc);
             self.pending_mutation.set(false);
-            self.last_flush_us.set(ffi::monotonic_us());
+            self.last_flush_us.set(southstar_glib::monotonic_us());
         }
     }
 }
@@ -681,7 +681,7 @@ pub fn run_one(
 
     let anim = Anim::create();
     ffi::load_keyframes(&anim, &doc, page_url.as_deref(), css_cache);
-    ffi::anim_observe(&anim, Some(&mut styles), ffi::monotonic_us());
+    ffi::anim_observe(&anim, Some(&mut styles), southstar_glib::monotonic_us());
     let anim = Some(anim);
 
     let nav = Rc::new(NavCapture::default());

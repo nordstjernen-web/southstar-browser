@@ -302,9 +302,9 @@ fn blob_type(scope: &mut Scope<'_>, body: &Value) -> Option<Vec<u8>> {
 }
 
 fn pump_until_done(scope: &mut Scope<'_>, js: Js, this: &Value) {
-    let start = ffi::monotonic_us();
+    let start = southstar_glib::monotonic_us();
     let deadline = start + SYNC_DEADLINE_US;
-    while ffi::monotonic_us() < deadline {
+    while southstar_glib::monotonic_us() < deadline {
         if int_prop(scope, this, "readyState") >= 4 {
             break;
         }
@@ -791,7 +791,7 @@ fn deliver(delivery: Delivery) {
             if generation(scope, &state.obj) != state.generation {
                 return;
             }
-            let end_us = ffi::monotonic_us();
+            let end_us = southstar_glib::monotonic_us();
             let start_us = if state.start_ms > 0.0 {
                 js.time_origin_us() + (state.start_ms * 1000.0) as i64
             } else {

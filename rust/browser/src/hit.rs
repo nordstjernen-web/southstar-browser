@@ -183,7 +183,7 @@ pub fn media_at(b: &NsBrowser, x: c_int, y: c_int) -> Option<MediaHit> {
             return None;
         }
         if video.has_player() {
-            video.toggle(b.videos(), ffi::monotonic_us());
+            video.toggle(b.videos(), southstar_glib::monotonic_us());
             return None;
         }
     }
@@ -305,7 +305,7 @@ pub fn video_click_toggle(b: &NsBrowser, x: c_int, y: c_int) {
             {
                 return;
             }
-            video.toggle(Some(videos), ffi::monotonic_us());
+            video.toggle(Some(videos), southstar_glib::monotonic_us());
             b.dirty.set(true);
             return;
         }

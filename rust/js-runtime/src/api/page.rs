@@ -414,7 +414,7 @@ pub fn set_active_modal(js: Option<Page>, modal: Option<Node<'_>>) {
 
 pub fn note_user_activation(js: Option<Page>) {
     state(js, (), |state| {
-        state.user_activation_us.set(ffi::monotonic_us());
+        state.user_activation_us.set(southstar_glib::monotonic_us());
         state.user_ever_activated.set(true);
     });
 }
@@ -422,7 +422,7 @@ pub fn note_user_activation(js: Option<Page>) {
 pub fn has_transient_activation(js: Option<Page>) -> bool {
     state(js, false, |state| {
         let at = state.user_activation_us.get();
-        at != 0 && ffi::monotonic_us() - at <= TRANSIENT_ACTIVATION_US
+        at != 0 && southstar_glib::monotonic_us() - at <= TRANSIENT_ACTIVATION_US
     })
 }
 

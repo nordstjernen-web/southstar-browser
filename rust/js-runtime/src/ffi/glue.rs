@@ -266,7 +266,7 @@ pub(crate) fn fetch_resource(js: Option<Js>, req: &southstar_net::FetchRequest<'
     });
     let state = js.st();
     let saved = state.in_pump.replace(true);
-    let start = super::monotonic_us();
+    let start = southstar_glib::monotonic_us();
     if outcome.borrow().is_none() {
         main_loop.run();
     }
@@ -283,7 +283,7 @@ pub(crate) fn add_resource_timing(
     start_us: i64,
     response: Option<&southstar_net::Response>,
 ) {
-    let span = (start_us, super::monotonic_us());
+    let span = (start_us, southstar_glib::monotonic_us());
     let add = crate::api::perf_hooks().add_resource_timed;
     add(js.page(), Some(info), url, Some(initiator), span, response);
 }

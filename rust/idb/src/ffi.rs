@@ -6,8 +6,6 @@ use core::ffi::CStr;
 use southstar_unicode::until_nul;
 use std::ffi::{CString, OsStr};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
-use std::time::Instant;
 
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -88,11 +86,6 @@ pub fn dir_entries(dir: &[u8]) -> Option<Vec<Vec<u8>>> {
             .map(|entry| os_bytes(&entry.file_name()))
             .collect(),
     )
-}
-
-pub fn monotonic_us() -> i64 {
-    static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
-    i64::try_from(EPOCH.elapsed().as_micros()).unwrap_or(i64::MAX)
 }
 
 pub fn ascii_strtoll(text: &[u8]) -> i64 {

@@ -63,7 +63,7 @@ fn note_videos(b: &NsBrowser) {
 }
 
 pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     if now >= state.deadline_us {
         return true;
     }
@@ -134,7 +134,7 @@ fn pump_main_loop(deadline: i64) -> bool {
             break;
         }
         it += 1;
-        if ffi::monotonic_us() >= deadline {
+        if southstar_glib::monotonic_us() >= deadline {
             break;
         }
         ffi::main_context_iteration();
@@ -147,12 +147,12 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
     let budget_ms = budget_ms.max(0);
     if b.refresh_due_us.get() != 0
         && !b.pending_nav.is_set()
-        && ffi::monotonic_us() >= b.refresh_due_us.get()
+        && southstar_glib::monotonic_us() >= b.refresh_due_us.get()
     {
         b.refresh_due_us.set(0);
         b.pending_nav.put(b.refresh_url.take());
     }
-    let deadline = ffi::monotonic_us() + i64::from(budget_ms) * 1000;
+    let deadline = southstar_glib::monotonic_us() + i64::from(budget_ms) * 1000;
     let mut changed = false;
     if let Some(js) = b.js() {
         let (x, y) = (b.cur_scroll_x.get(), b.cur_scroll_y.get());
@@ -165,7 +165,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
         }
     }
     if b.hover_restyle_pending.get() {
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if now - b.hover_relayout_us.get() >= hover_relayout_gap(b) {
             b.hover_restyle_pending.set(false);
             b.hover_relayout_us.set(now);
@@ -176,7 +176,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
     }
     let mut guard = 0;
     loop {
-        let now = ffi::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if b.images().is_some_and(|images| images.tick(now)) {
             changed = true;
         }
@@ -205,7 +205,7 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
             break;
         }
         guard += 1;
-        if guard >= TICK_GUARD || ffi::monotonic_us() >= deadline {
+        if guard >= TICK_GUARD || southstar_glib::monotonic_us() >= deadline {
             break;
         }
     }
