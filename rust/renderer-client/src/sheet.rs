@@ -134,17 +134,20 @@ pub fn path_from(bytes: &[u8]) -> Option<PathBuf> {
     core::str::from_utf8(bytes).ok().map(PathBuf::from)
 }
 
-pub fn read(path: &Path) -> Option<Vec<u8>> {
+pub fn open_regular(path: &Path) -> Option<File> {
     let linked = std::fs::symlink_metadata(path).ok()?;
     if !linked.file_type().is_file() {
         return None;
     }
-    let mut file = open_no_follow(path)?;
+    let file = open_no_follow(path)?;
     let opened = file.metadata().ok()?;
-    if !opened.file_type().is_file()
-        || !same_single_file(&linked, &opened)
-        || opened.len() > MAX_FILE_BYTES
-    {
+    (opened.file_type().is_file() && same_single_file(&linked, &opened)).then_some(file)
+}
+
+pub fn read(path: &Path) -> Option<Vec<u8>> {
+    let mut file = open_regular(path)?;
+    let opened = file.metadata().ok()?;
+    if opened.len() > MAX_FILE_BYTES {
         return None;
     }
     let mut bytes = Vec::with_capacity(opened.len() as usize);

@@ -437,9 +437,11 @@ fn do_export(v: *mut NsProcView, r: &Req) {
     let dst = arg(r.export_dest).and_then(glib::path_from_bytes);
     if exported
         && let (Some(src), Some(dst)) = (&src, &dst)
-        && std::fs::symlink_metadata(src).is_ok_and(|m| m.file_type().is_file())
+        && let Some(mut file) = southstar_renderer_client::open_regular(src)
     {
-        ok = std::fs::copy(src, dst).is_ok();
+        ok = std::fs::File::create(dst)
+            .and_then(|mut out| std::io::copy(&mut file, &mut out))
+            .is_ok();
     }
     if let Some(src) = &src {
         let _ = std::fs::remove_file(src);
