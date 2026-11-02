@@ -334,7 +334,7 @@ pub(crate) fn run(js: Js) -> bool {
     let Some(page) = page(js).filter(|page| !page.frames.borrow().pending.is_empty()) else {
         return js.mutated();
     };
-    let now_us = ffi::monotonic_us();
+    let now_us = southstar_glib::monotonic_us();
     let fired = {
         let mut frames = page.frames.borrow_mut();
         frames.last_us = now_us;

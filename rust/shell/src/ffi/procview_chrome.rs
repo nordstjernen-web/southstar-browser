@@ -177,7 +177,7 @@ fn export_to(v: *mut NsProcView, dest: &[u8], pdf: bool) {
     let counter = EXPORT_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     let base = cstring(format!(
         "southstar-export-{}-{}.{}",
-        glib::monotonic_us(),
+        southstar_glib::monotonic_us(),
         counter,
         if pdf { "pdf" } else { "png" }
     ));

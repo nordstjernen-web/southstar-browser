@@ -9,10 +9,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use southstar_glib as glib;
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub fn real_time_us() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or_else(
         |before| -i64::try_from(before.duration().as_micros()).unwrap_or(i64::MAX),

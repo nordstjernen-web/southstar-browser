@@ -259,10 +259,6 @@ impl Js {
     }
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) use southstar_engine::in_blocking_fetch;
 
 pub(crate) fn profile_enabled() -> bool {

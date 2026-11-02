@@ -236,7 +236,7 @@ fn fetch_source(
     let Some(mut abs_url) = fetched.abs_url.take() else {
         return fetched;
     };
-    let start_us = load::monotonic_time();
+    let start_us = southstar_glib::monotonic_us();
     let (mut resp, error) =
         load::fetch_resource(js, &abs_url, origin, fetch_dest(iframe, kind), form_body);
     let download = resp.as_ref().is_some_and(|resp| {
@@ -258,7 +258,7 @@ fn fetch_source(
             &info,
             &abs_url,
             initiator,
-            (start_us, load::monotonic_time()),
+            (start_us, southstar_glib::monotonic_us()),
             resp.as_ref(),
         );
     }

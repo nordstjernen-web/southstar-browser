@@ -638,7 +638,7 @@ fn origin_pages(scope: &Scope<'_>, handle: &Handle) -> i64 {
     let Some(dir) = partition_dir(scope) else {
         return total;
     };
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let mut guard = cache();
     let fresh = guard
         .siblings

@@ -32,10 +32,6 @@ impl Quitter {
     }
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub fn usleep(us: u64) {
     std::thread::sleep(std::time::Duration::from_micros(us));
 }

@@ -123,10 +123,6 @@ pub fn is_cancelled(cancellable: Option<&Cancellable>) -> bool {
     cancellable.is_some_and(Cancellable::is_cancelled)
 }
 
-fn monotonic_us() -> i64 {
-    super::sys::monotonic_us()
-}
-
 fn real_time_ms() -> f64 {
     match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
         Ok(after) => after.as_micros() as f64 / 1000.0,
@@ -438,7 +434,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     };
 
     let mut out = HopOut::default();
-    let start_us = monotonic_us();
+    let start_us = southstar_glib::monotonic_us();
     let start_real_ms = real_time_ms();
 
     let produced = hop::transport(&req, &mut wctx, &mut hctx, &mut out, f.cancellable);
@@ -557,7 +553,7 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
     if let Some(raw_headers) = captured.take_raw() {
         r.raw_headers = Some(raw_headers);
     }
-    let end_us = monotonic_us();
+    let end_us = southstar_glib::monotonic_us();
     let body_len = r.body.len() as u64;
     super::netlog::ns_net_perf_record(start_us, end_us, body_len);
     let sent = (!lines.is_empty()).then(|| {

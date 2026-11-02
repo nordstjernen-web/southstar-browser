@@ -46,10 +46,6 @@ fn bytes(text: Option<&CStr>) -> Option<&[u8]> {
     text.map(CStr::to_bytes)
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn real_us() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

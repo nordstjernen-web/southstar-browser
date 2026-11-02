@@ -15,10 +15,6 @@ use super::{Js, c_string};
 
 pub(crate) use southstar_net::Response;
 
-pub(crate) fn monotonic_time() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub(crate) fn node_in_page(js: Js, node: Node<'_>) -> bool {
     api::node_in_page(js.ptr(), Some(node))
 }

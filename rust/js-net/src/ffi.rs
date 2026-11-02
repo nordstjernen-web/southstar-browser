@@ -75,10 +75,6 @@ pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(until_nul_owned(bytes.to_vec())).unwrap_or_default()
 }
 
-pub(crate) fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 fn before_nul(bytes: &[u8]) -> &[u8] {
     bytes.split(|&b| b == 0).next().unwrap_or_default()
 }

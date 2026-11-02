@@ -208,7 +208,7 @@ pub fn set_caret_blink_active(b: &NsBrowser, active: bool) -> bool {
     } else {
         0
     };
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     if !b.caret_blink_node.is(focused)
         || caret != b.caret_blink_byte.get()
         || anchor != b.caret_blink_anchor.get()

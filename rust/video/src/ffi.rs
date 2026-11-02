@@ -26,10 +26,6 @@ impl Response {
     }
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 fn user_cache_dir() -> Vec<u8> {
     southstar_glib::user_cache_dir()
 }

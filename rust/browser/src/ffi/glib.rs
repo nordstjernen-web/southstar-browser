@@ -82,10 +82,6 @@ impl StrBufOwned {
     }
 }
 
-pub fn monotonic_us() -> i64 {
-    southstar_glib::monotonic_us()
-}
-
 pub fn main_context_pending() -> bool {
     glib::default_context_pending()
 }

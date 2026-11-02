@@ -502,7 +502,7 @@ pub(crate) fn raf_scope_begin(
     }
     js.st()
         .eval_deadline_us
-        .set(super::monotonic_us() + budget::eval_budget_us());
+        .set(southstar_glib::monotonic_us() + budget::eval_budget_us());
     Some(scope)
 }
 

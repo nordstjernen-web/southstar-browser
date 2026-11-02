@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use crate::ffi::{self, Js};
+use crate::ffi::Js;
 
 pub(crate) const MONITOR_LIMIT_US: i64 = 60 * 1_000_000;
 const DEFAULT_BUDGET_MS: i32 = 60_000;
@@ -21,7 +21,7 @@ pub(crate) fn eval_budget_us() -> i64 {
 pub(crate) fn push(js: Js) -> i64 {
     let state = js.st();
     let saved = state.eval_deadline_us.get();
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     if saved == 0 {
         state.monitor_deadline_us.set(now + MONITOR_LIMIT_US);
     }
@@ -41,7 +41,7 @@ pub(crate) fn pop(js: Js, saved: i64) {
 }
 
 pub(crate) fn credit_pumped_time(js: Js, pump_start_us: i64) {
-    let pumped = ffi::monotonic_us() - pump_start_us;
+    let pumped = southstar_glib::monotonic_us() - pump_start_us;
     if pumped <= 0 {
         return;
     }

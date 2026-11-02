@@ -166,9 +166,9 @@ pub fn render_relayout_profiled(
     viewport_width: c_int,
 ) -> (Rc<StyleMap>, Option<BoxRef<'static>>) {
     let mut prof = RenderProfile::default();
-    let t0 = super::net::monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     let (styles, layout) = southstar_render::relayout(ctx, Some(&mut prof));
-    let total = super::net::monotonic_us() - t0;
+    let total = southstar_glib::monotonic_us() - t0;
     let ms = |us: i64| us as f64 / 1000.0;
     let mut line = format!(
         "[profile] relayout vw={viewport_width} nodes={} total={:.2}ms css={:.2} style={:.2} layout={:.2}",

@@ -151,7 +151,7 @@ pub fn init() {
 pub fn emit(level: c_int, category: &[u8], message: &[u8]) {
     init();
     let entry = Entry {
-        monotonic_us: ffi::monotonic_us(),
+        monotonic_us: southstar_glib::monotonic_us(),
         level,
         category: up_to_nul(category).to_vec(),
         message: up_to_nul(message).to_vec(),

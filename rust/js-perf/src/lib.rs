@@ -355,11 +355,14 @@ pub(crate) fn now_ms(js: Js) -> f64 {
     } else {
         ffi::page_time_origin_us(js)
     };
-    relative_ms(ffi::monotonic_us(), origin)
+    relative_ms(southstar_glib::monotonic_us(), origin)
 }
 
 pub(crate) fn realm_now_ms(js: Js, realm: usize) -> f64 {
-    relative_ms(ffi::monotonic_us(), timeline::time_origin_us(js, realm))
+    relative_ms(
+        southstar_glib::monotonic_us(),
+        timeline::time_origin_us(js, realm),
+    )
 }
 
 pub(crate) fn new_performance_object(scope: &mut Scope<'_>) -> Value {

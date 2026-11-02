@@ -19,7 +19,7 @@ pub fn fire_media_events(b: &NsBrowser) {
 }
 
 pub fn load_waits_for_images(b: &NsBrowser) -> bool {
-    if ffi::monotonic_us() >= b.load_delay_deadline_us.get() {
+    if southstar_glib::monotonic_us() >= b.load_delay_deadline_us.get() {
         return false;
     }
     b.media_events_source.get().is_some()
@@ -60,8 +60,8 @@ pub fn ensure_images(b: &NsBrowser) {
 
 pub fn wait_images(b: &NsBrowser) {
     ensure_images(b);
-    let deadline = ffi::monotonic_us() + WAIT_IMAGES_US;
-    while images_outstanding(b) > 0 && ffi::monotonic_us() < deadline {
+    let deadline = southstar_glib::monotonic_us() + WAIT_IMAGES_US;
+    while images_outstanding(b) > 0 && southstar_glib::monotonic_us() < deadline {
         let mut dispatched = 0;
         while ffi::main_context_pending() {
             if dispatched >= DISPATCH_BATCH {

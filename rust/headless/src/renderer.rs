@@ -230,8 +230,8 @@ fn run_actions(r: &mut Renderer, spec: &[u8], mut vw: c_int, mut vh: c_int, sett
         } else if let Some(rest) = a.strip_prefix(b"wait ") {
             let ms = ffi::ascii_strtoll(rest);
             err(format!("[headless] wait {ms}ms\n").as_bytes());
-            let end = ffi::monotonic_us().wrapping_add(ms.wrapping_mul(1000));
-            while ffi::monotonic_us() < end {
+            let end = southstar_glib::monotonic_us().wrapping_add(ms.wrapping_mul(1000));
+            while southstar_glib::monotonic_us() < end {
                 if let Some(nav) = render(r, vw, vh).and_then(|f| f.nav)
                     && !nav.is_empty()
                 {

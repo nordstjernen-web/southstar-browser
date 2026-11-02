@@ -7,10 +7,10 @@ use core::ffi::c_int;
 use southstar_js_engine::{ContextHandle, JobOutcome, Value};
 
 use crate::budget;
+use crate::ffi::Js;
 use crate::ffi::glue;
 use crate::ffi::scopes::{self, node_root};
 use crate::ffi::state::MessageTask;
-use crate::ffi::{self, Js};
 
 pub(crate) const TIMER_RUN: c_int = 0;
 pub(crate) const TIMER_WAIT: c_int = 1;
@@ -32,7 +32,7 @@ pub(crate) fn drain_microtasks(js: Js) {
     add_depth(&state.callback_depth, 1);
     loop {
         let deadline = state.eval_deadline_us.get();
-        if deadline != 0 && ffi::monotonic_us() > deadline {
+        if deadline != 0 && southstar_glib::monotonic_us() > deadline {
             break;
         }
         let realm = glue::pending_job_realm(js);

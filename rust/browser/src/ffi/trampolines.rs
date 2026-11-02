@@ -10,7 +10,7 @@ use southstar_dom::Node;
 use southstar_glib::{self as glib, SourceId};
 use southstar_js_runtime::api::{self, NavigationTiming};
 
-use super::{Js, NsBrowser, Session, Videos, browser_for, monotonic_us};
+use super::{Js, NsBrowser, Session, Videos, browser_for};
 use crate::{build, callbacks, images, page, scroll, settle};
 
 #[derive(Clone, Copy)]
@@ -232,7 +232,8 @@ pub fn start_image_session(b: &NsBrowser, viewport_h: f64) -> (Option<Session>, 
 
 pub fn run_settle_loop(b: &NsBrowser, settle_ms: c_int) {
     let main_loop = glib::MainLoop::new();
-    let mut state = settle::SettleState::new(monotonic_us() + i64::from(settle_ms) * 1000);
+    let mut state =
+        settle::SettleState::new(southstar_glib::monotonic_us() + i64::from(settle_ms) * 1000);
     glib::scope(|scope| {
         scope.timeout_add(settle_ms.max(0).unsigned_abs(), || {
             main_loop.quit();

@@ -154,7 +154,7 @@ pub fn call_observer(
     {
         js.st()
             .eval_deadline_us
-            .set(ffi::monotonic_us() + budget::eval_budget_us());
+            .set(southstar_glib::monotonic_us() + budget::eval_budget_us());
     }
     let result = glue::call_observer(js, ctx, cb, this, args, report_type);
     if let Some(js) = js

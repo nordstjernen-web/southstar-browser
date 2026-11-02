@@ -585,7 +585,7 @@ struct Shared {
 impl Shared {
     fn now(&mut self) -> i64 {
         if self.now_us == 0 {
-            self.now_us = css::monotonic_us();
+            self.now_us = southstar_glib::monotonic_us();
         }
         self.now_us
     }

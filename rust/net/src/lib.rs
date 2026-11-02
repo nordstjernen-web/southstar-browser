@@ -48,7 +48,6 @@ pub use ffi::queue::{
     set_blob_resolver, shutdown,
 };
 pub use ffi::storage::hsts_should_upgrade;
-pub use ffi::sys::monotonic_us;
 pub use ffi::transport::{ca_bundle_path, init};
 pub use ffi::url::{
     http_date, https_first_upgrade, is_mobile_mode, navigator_platform, strip_tracking_params,

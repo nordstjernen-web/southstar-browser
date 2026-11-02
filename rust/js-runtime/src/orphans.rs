@@ -22,7 +22,7 @@ pub(crate) fn sweep(js: Js) {
     {
         return;
     }
-    let now = ffi::monotonic_us();
+    let now = southstar_glib::monotonic_us();
     let last = state.last_orphan_sweep_us.get();
     if last != 0 && now - last < SWEEP_INTERVAL_US {
         return;

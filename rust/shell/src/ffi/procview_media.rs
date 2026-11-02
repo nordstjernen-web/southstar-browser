@@ -411,7 +411,7 @@ impl Media {
                 sample.flags,
                 sample.monotonic_us,
                 sample.position,
-                glib::monotonic_us(),
+                southstar_glib::monotonic_us(),
                 100_000,
             );
         }
@@ -617,7 +617,7 @@ impl Media {
             } else {
                 black += 1;
             }
-            let now = glib::monotonic_us();
+            let now = southstar_glib::monotonic_us();
             if now - last_us > 1_000_000 {
                 last_us = now;
                 let line = format!(
@@ -658,7 +658,7 @@ impl Media {
                         clock.flags,
                         clock.monotonic_us,
                         clock.position,
-                        glib::monotonic_us(),
+                        southstar_glib::monotonic_us(),
                         500_000,
                     )
                 })
@@ -753,7 +753,7 @@ fn audio_feedback(v: *mut NsProcView, line: &[u8]) {
         && token == m.token.as_slice()
     {
         let seconds = glib::ascii_strtod(value);
-        let now = glib::monotonic_us();
+        let now = southstar_glib::monotonic_us();
         if seconds >= 0.0 && now - m.resync_us > RESYNC_INTERVAL_US {
             m.resync_us = now;
             let mut cmd = b"resync ".to_vec();

@@ -71,7 +71,7 @@ pub fn note_composited_viewport(
 
 pub fn flush_video_rects(b: &NsBrowser) {
     if b.videos().is_some() {
-        b.flush_video_composites(ffi::monotonic_us());
+        b.flush_video_composites(southstar_glib::monotonic_us());
     }
 }
 
@@ -115,7 +115,7 @@ pub fn render_rgba(
     if let Some(layout) = b.layout() {
         cr.paint(b, layout);
     }
-    b.flush_video_composites(ffi::monotonic_us());
+    b.flush_video_composites(southstar_glib::monotonic_us());
     ffi::set_search(false, core::ptr::null());
     ffi::paint_set_anim(None);
     ffi::paint_set_js(None);
@@ -158,14 +158,14 @@ pub fn render_argb32(
     cr.scale(scale);
     cr.translate(-f64::from(scroll_x), -f64::from(scroll_y));
     paint_begin(b);
-    let t0 = ffi::monotonic_us();
+    let t0 = southstar_glib::monotonic_us();
     if let Some(layout) = b.layout() {
         cr.paint(b, layout);
     }
-    b.flush_video_composites(ffi::monotonic_us());
+    b.flush_video_composites(southstar_glib::monotonic_us());
     if ffi::env_set("NS_PROFILE") {
         ffi::printerr_paint_profile(
-            (ffi::monotonic_us() - t0) as f64 / 1000.0,
+            (southstar_glib::monotonic_us() - t0) as f64 / 1000.0,
             out.width,
             out.height,
         );

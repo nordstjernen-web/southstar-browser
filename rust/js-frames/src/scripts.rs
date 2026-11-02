@@ -288,10 +288,10 @@ fn publish_realm_window(
 }
 
 fn run_in_realm(js: Js, made: &FrameRealm, iframe: Option<Node<'_>>, sources: &[ClassicSource]) {
-    let deadline_us = load::monotonic_time() + load::eval_budget_us();
+    let deadline_us = southstar_glib::monotonic_us() + load::eval_budget_us();
     let run = || {
         for source in sources {
-            if load::monotonic_time() >= deadline_us {
+            if southstar_glib::monotonic_us() >= deadline_us {
                 break;
             }
             let text = String::from_utf8_lossy(&source.text);
@@ -384,7 +384,7 @@ fn run_in_page_realm(js: Js, concat: &[u8], exposed: &ExposedNames, run: &PageRe
         location,
         history,
     ];
-    let deadline_us = load::monotonic_time() + load::eval_budget_us();
+    let deadline_us = southstar_glib::monotonic_us() + load::eval_budget_us();
     load::evaluating(js, None, deadline_us, || {
         ctx.enter(|scope| {
             if let Err(exception) = scope.call(&function, &window, &args) {

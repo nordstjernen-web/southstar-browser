@@ -125,7 +125,7 @@ pub(crate) fn profile_enabled() -> bool {
 
 pub(crate) fn profile_begin() -> i64 {
     if profile_enabled() {
-        crate::ffi::monotonic_us()
+        southstar_glib::monotonic_us()
     } else {
         0
     }
@@ -134,7 +134,7 @@ pub(crate) fn profile_begin() -> i64 {
 pub(crate) fn profile_eval(started_us: i64, len: usize, cached: bool, origin: Option<&CStr>) {
     if profile_enabled() {
         let origin = origin.unwrap_or(c"<inline>");
-        let elapsed = crate::ffi::monotonic_us() - started_us;
+        let elapsed = southstar_glib::monotonic_us() - started_us;
         report_eval(elapsed, len, cached, origin.to_bytes());
     }
 }
@@ -142,7 +142,7 @@ pub(crate) fn profile_eval(started_us: i64, len: usize, cached: bool, origin: Op
 pub(crate) fn profile_module(started_us: i64, len: usize, origin: Option<&CStr>) {
     if profile_enabled() {
         let origin = origin.unwrap_or(c"module");
-        let elapsed = crate::ffi::monotonic_us() - started_us;
+        let elapsed = southstar_glib::monotonic_us() - started_us;
         report_module(elapsed, len, origin.to_bytes());
     }
 }
