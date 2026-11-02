@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: a `fetch()`, XHR or `sendBeacon` request that a redirect sends
+  to another origin is refused with a network error when its method,
+  headers or Content-Type would need a CORS preflight. A same-origin
+  `DELETE` with custom headers that the server redirected with a 307 used
+  to reach the other origin with no `OPTIONS` check. After a redirect away
+  from a cross-origin URL the request carries `Origin: null`, as the Fetch
+  Standard's tainted origin requires; same-origin redirects and simple
+  cross-origin requests follow as before.
 * CSS: the tree-counting functions `sibling-index()` and `sibling-count()`
   resolve per element to its position among its element siblings and the
   number of them, and restyle when siblings are added or removed

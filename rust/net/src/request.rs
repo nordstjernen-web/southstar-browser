@@ -34,6 +34,17 @@ const KNOWN_DESTINATIONS: [&str; 11] = [
 
 const SENSITIVE_HEADERS: [&[u8]; 3] = [b"authorization", b"cookie", b"proxy-authorization"];
 
+pub const CORS_MODE_LINE: &[u8] = b"X-ND-Fetch-Mode: cors";
+const TAINTED_ORIGIN_LINE: &[u8] = b"X-ND-Tainted-Origin: 1";
+
+const CORS_SAFELISTED_METHODS: [&[u8]; 3] = [b"GET", b"HEAD", b"POST"];
+const CORS_SAFELISTED_HEADERS: [&[u8]; 3] = [b"accept", b"accept-language", b"content-language"];
+const CORS_SIMPLE_CONTENT_TYPES: [&[u8]; 3] = [
+    b"application/x-www-form-urlencoded",
+    b"multipart/form-data",
+    b"text/plain",
+];
+
 const BODY_HEADERS: [&[u8]; 4] = [
     b"Content-Encoding:",
     b"Content-Language:",
@@ -315,6 +326,86 @@ pub fn redirect_drops_body(status: i64, method: &[u8]) -> bool {
 
 pub fn strip_body_headers(headers: &mut Vec<Vec<u8>>) {
     headers.retain(|h| !BODY_HEADERS.iter().any(|b| has_prefix_ci(h, b)));
+}
+
+pub fn is_cors_mode(headers: &[Vec<u8>]) -> bool {
+    headers
+        .iter()
+        .any(|h| h.eq_ignore_ascii_case(CORS_MODE_LINE))
+}
+
+pub fn is_origin_tainted(headers: &[Vec<u8>]) -> bool {
+    headers
+        .iter()
+        .any(|h| h.eq_ignore_ascii_case(TAINTED_ORIGIN_LINE))
+}
+
+pub fn taint_origin(headers: &mut Vec<Vec<u8>>) {
+    if !is_origin_tainted(headers) {
+        headers.push(TAINTED_ORIGIN_LINE.to_vec());
+    }
+}
+
+fn simple_content_type(value: &[u8]) -> bool {
+    let essence = value
+        .split(|&c| c == b';')
+        .next()
+        .unwrap_or_default()
+        .trim_ascii();
+    CORS_SIMPLE_CONTENT_TYPES
+        .iter()
+        .any(|simple| essence.eq_ignore_ascii_case(simple))
+}
+
+fn safelisted_header_line(line: &[u8]) -> bool {
+    if has_prefix_ci(line, b"X-ND-") {
+        return true;
+    }
+    let colon = line.iter().position(|&c| c == b':').unwrap_or(line.len());
+    let name = line[..colon].trim_ascii();
+    let value = line.get(colon + 1..).unwrap_or_default();
+    if name.eq_ignore_ascii_case(b"content-type") {
+        return simple_content_type(value);
+    }
+    CORS_SAFELISTED_HEADERS
+        .iter()
+        .any(|safe| name.eq_ignore_ascii_case(safe))
+}
+
+pub fn cors_safelisted(method: &[u8], content_type: Option<&[u8]>, headers: &[Vec<u8>]) -> bool {
+    let method_safe = CORS_SAFELISTED_METHODS
+        .iter()
+        .any(|safe| method.eq_ignore_ascii_case(safe));
+    let content_type_safe = content_type
+        .filter(|ct| !ct.is_empty())
+        .is_none_or(simple_content_type);
+    method_safe && content_type_safe && headers.iter().all(|h| safelisted_header_line(h))
+}
+
+pub fn cors_redirect_needs_preflight(
+    headers: &[Vec<u8>],
+    method: &[u8],
+    content_type: Option<&[u8]>,
+    from: &[u8],
+    to: &[u8],
+) -> bool {
+    is_cors_mode(headers)
+        && url::origin_from(from) != url::origin_from(to)
+        && !cors_safelisted(method, content_type, headers)
+}
+
+pub fn redirect_taints_origin(document: Option<&[u8]>, from: &[u8], to: &[u8]) -> bool {
+    let request_origin = document.and_then(url::origin_from);
+    let from_origin = url::origin_from(from);
+    from_origin != url::origin_from(to) && request_origin != from_origin
+}
+
+pub fn serialized_origin<'a>(request_origin: &'a [u8], headers: &[Vec<u8>]) -> &'a [u8] {
+    if is_origin_tainted(headers) && (!request_origin.is_empty() || is_cors_mode(headers)) {
+        b"null"
+    } else {
+        request_origin
+    }
 }
 
 pub fn redirect_allowed(next: &[u8], started_https: bool, is_navigation: bool) -> bool {

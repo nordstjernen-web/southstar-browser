@@ -676,6 +676,7 @@ impl Request {
         let mut headers: Vec<Vec<u8>> =
             self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
         headers.push(self.credentials.header().to_vec());
+        headers.push(southstar_net::CORS_MODE_LINE.to_vec());
         if let Some(document) = &self.document {
             headers.push([&b"X-ND-Document: "[..], document.to_bytes()].concat());
         }
