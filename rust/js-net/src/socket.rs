@@ -502,6 +502,20 @@ fn event_source_close(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> J
     Ok(Value::undefined())
 }
 
+fn event_source_cors(
+    document: Option<Vec<u8>>,
+    with_credentials: bool,
+) -> southstar_eventsource::CorsCheck {
+    Box::new(move |final_url, raw_headers| {
+        crate::headers::event_source_cors_allows(
+            document.as_deref(),
+            final_url,
+            raw_headers,
+            with_credentials,
+        )
+    })
+}
+
 pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let Some(url) = args.first() else {
         return Err(scope.type_error("EventSource requires a URL"));
@@ -557,7 +571,8 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
         .filter(|o| !o.is_empty())
         .unwrap_or_else(|| b"null".to_vec());
     let allow_url = js.connect_check(Realm::caller(scope));
-    let transport = Transport::event_source(&target, &origin, allow_url, &socket);
+    let cors_allows = event_source_cors(js.document_url(Realm::caller(scope)), with_credentials);
+    let transport = Transport::event_source(&target, &origin, allow_url, cors_allows, &socket);
     if transport.is_none() {
         socket.pin.borrow_mut().take();
         return Err(scope.type_error("EventSource: failed to start"));

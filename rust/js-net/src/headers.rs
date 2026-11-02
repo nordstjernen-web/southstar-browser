@@ -216,6 +216,25 @@ pub fn cors_allows(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>, header: Opti
         .is_some_and(|origin| !origin.is_empty() && trimmed.eq_ignore_ascii_case(&origin))
 }
 
+pub fn event_source_cors_allows(
+    doc_url: Option<&[u8]>,
+    final_url: &[u8],
+    raw_headers: &[u8],
+    with_credentials: bool,
+) -> bool {
+    let allow_origin = raw_header_lines(raw_headers)
+        .find(|(name, _)| {
+            name.trim_ascii()
+                .eq_ignore_ascii_case(b"access-control-allow-origin")
+        })
+        .map(|(_, value)| value);
+    if with_credentials {
+        cors_allows_credentials(doc_url, Some(final_url), allow_origin, Some(raw_headers))
+    } else {
+        cors_allows(doc_url, Some(final_url), allow_origin)
+    }
+}
+
 pub(crate) fn byte_string_fits(text: &[u8]) -> bool {
     core::str::from_utf8(text).is_ok_and(|s| s.chars().all(|c| (c as u32) <= 0xff))
 }

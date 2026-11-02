@@ -303,6 +303,7 @@ impl Transport {
         url: &[u8],
         origin: &[u8],
         allow_url: southstar_eventsource::UrlCheck,
+        cors_allows: southstar_eventsource::CorsCheck,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
         let events = southstar_eventsource::Events {
@@ -317,6 +318,7 @@ impl Transport {
             b"",
             events,
             allow_url,
+            cors_allows,
             socket_key(socket),
         ))
     }

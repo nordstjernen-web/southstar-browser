@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: `EventSource` checks CORS. A stream from another origin
+  (judged by its URL after redirects) opens only when
+  `Access-Control-Allow-Origin` names the page's origin or is `*`; with
+  `withCredentials` it must name the origin exactly and come with
+  `Access-Control-Allow-Credentials: true`. Otherwise the connection fails
+  for good (`readyState` CLOSED, an `error` event, no reconnect). Any page
+  could read any server's event stream before.
 * Security: a `fetch()`, XHR or `sendBeacon` request that a redirect sends
   to another origin is refused with a network error when its method,
   headers or Content-Type would need a CORS preflight. A same-origin
