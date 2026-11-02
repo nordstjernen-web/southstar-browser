@@ -3,6 +3,7 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* README: link to Southstar Browser in the Microsoft Store.
 * Security (CSS): a long chain of custom properties declared in
   reverse order (`--a2: var(--a1); --a1: var(--a0); ...`) no longer
   overflows the renderer's stack. Each property was resolved on demand
