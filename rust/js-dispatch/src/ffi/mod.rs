@@ -282,6 +282,10 @@ pub(crate) fn is_shadow_root(n: Element) -> bool {
     southstar_js_shadow::is_shadow_root(n)
 }
 
+pub(crate) fn retarget(target: Element, against: Element) -> Element {
+    southstar_js_shadow::retarget(target, against)
+}
+
 pub(crate) fn checkable_input_kind(el: Element) -> i32 {
     southstar_js_forms::checkable_input_kind(el)
 }
