@@ -72,7 +72,9 @@ fn framing_blocked(embedder: &CStr, framed: &CStr, resp: &Response) -> bool {
         if value.eq_ignore_ascii_case(b"deny") {
             return true;
         }
-        if value.eq_ignore_ascii_case(b"sameorigin") && !load::same_origin(framed, embedder) {
+        if value.eq_ignore_ascii_case(b"sameorigin")
+            && !southstar_url::bytes::same_origin(framed.to_bytes(), embedder.to_bytes())
+        {
             return true;
         }
     }

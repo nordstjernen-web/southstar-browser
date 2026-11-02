@@ -279,21 +279,6 @@ fn run_intercept(
     let _ = scope.call(&then, &all, &[on_success, on_error]);
 }
 
-fn origin_parts(url: &[u8]) -> Option<ffi::UrlOrigin> {
-    ffi::url_parts(url)
-}
-
-fn same_origin(url: &[u8], current: &[u8]) -> bool {
-    match (origin_parts(url), origin_parts(current)) {
-        (Some(a), Some(b)) => {
-            a.protocol == b.protocol
-                && a.hostname.eq_ignore_ascii_case(&b.hostname)
-                && a.port == b.port
-        }
-        _ => false,
-    }
-}
-
 fn commit_intercepted(js: Js, url: &[u8], state: Value, replace: bool) {
     let page = page(js);
     let mut session = page.session.borrow_mut();
@@ -359,7 +344,7 @@ fn navigate(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value
         let history = get(scope, options, "history");
         replace = text_of(scope, &history).is_some_and(|mode| mode == b"replace");
     }
-    let same_origin = same_origin(&url, &current);
+    let same_origin = southstar_url::bytes::same_origin(&url, &current);
 
     let event = ffi::target_make_event(scope, this, "navigate");
     set(scope, &event, "cancelable", Value::boolean(true));

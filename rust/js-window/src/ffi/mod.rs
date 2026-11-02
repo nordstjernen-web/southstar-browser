@@ -196,12 +196,6 @@ impl Js {
     }
 }
 
-pub(crate) struct UrlOrigin {
-    pub protocol: Vec<u8>,
-    pub hostname: Vec<u8>,
-    pub port: Vec<u8>,
-}
-
 fn c_string(bytes: &[u8]) -> CString {
     CString::new(bytes).unwrap_or_default()
 }
@@ -384,15 +378,6 @@ pub(crate) fn has_transient_activation(js: Js) -> bool {
 
 pub(crate) fn consume_user_activation(js: Js) {
     api::consume_user_activation(js.ptr());
-}
-
-pub(crate) fn url_parts(url: &[u8]) -> Option<UrlOrigin> {
-    let p = southstar_url::bytes::parts(c_text(url))?;
-    Some(UrlOrigin {
-        protocol: p.protocol,
-        hostname: p.hostname,
-        port: p.port,
-    })
 }
 
 pub fn nsr_window_install_history(scope: &mut Scope<'_>, global: &Value) {

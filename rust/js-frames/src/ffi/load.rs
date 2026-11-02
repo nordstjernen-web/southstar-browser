@@ -39,10 +39,6 @@ pub(crate) fn node_doc_base(js: Js, node: Node<'_>) -> Option<CString> {
     api::node_doc_base(js.ptr(), Some(node))
 }
 
-pub(crate) fn same_origin(a: &CStr, b: &CStr) -> bool {
-    southstar_url::bytes::same_origin(a.to_bytes(), b.to_bytes())
-}
-
 pub(crate) fn is_http_or_https(url: Option<&CStr>) -> bool {
     url.is_some_and(|url| southstar_url::bytes::is_http_or_https(url.to_bytes()))
 }
