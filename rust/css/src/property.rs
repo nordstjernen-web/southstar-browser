@@ -6,6 +6,7 @@ use std::ffi::CString;
 
 use southstar_css_color::Color;
 
+use crate::anchor;
 use crate::animation::{self, Entry, Longhand};
 use crate::border_image;
 use crate::calc::{self, Calc, Parsed};
@@ -852,7 +853,36 @@ fn folds_relative_units(t: &[u8]) -> bool {
         })
 }
 
+pub(crate) fn anchor_context(prop: Prop) -> Option<anchor::Context> {
+    match prop {
+        Prop::Top | Prop::Right | Prop::Bottom | Prop::Left => Some(anchor::Context::Inset),
+        Prop::Width
+        | Prop::Height
+        | Prop::MinWidth
+        | Prop::MinHeight
+        | Prop::MaxWidth
+        | Prop::MaxHeight => Some(anchor::Context::Size),
+        Prop::MarginTop | Prop::MarginRight | Prop::MarginBottom | Prop::MarginLeft => {
+            Some(anchor::Context::Margin)
+        }
+        _ => None,
+    }
+}
+
+fn position_area_value(t: &[u8]) -> Option<Value> {
+    let computed = anchor::position_area_computed(t)?;
+    let mut v = Value::keyword(computed.into_bytes());
+    v.specified = anchor::position_area_specified(t).map(String::into_bytes);
+    Some(v)
+}
+
 fn length_prop(prop: Prop, t: &[u8]) -> Option<Value> {
+    if let Some(ctx) = anchor_context(prop)
+        && anchor::mentions_anchor_fn(t)
+        && !has_substitution(t)
+    {
+        return anchor::canonical(t, ctx).map(|text| Value::keyword(text.into_bytes()));
+    }
     if starts_with_ci(t, b"calc-size(") {
         let sizing = matches!(
             prop,
@@ -1855,7 +1885,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         ),
         P::AlignSelf => alignment_keyword(
             t,
-            "auto normal stretch center start end self-start self-end flex-start flex-end baseline",
+            "auto normal stretch center start end self-start self-end flex-start flex-end baseline anchor-center",
         ),
         P::AlignContent => alignment_keyword(
             t,
@@ -1867,7 +1897,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         ),
         P::JustifySelf => alignment_keyword(
             t,
-            "auto normal stretch center start end self-start self-end flex-start flex-end left right baseline",
+            "auto normal stretch center start end self-start self-end flex-start flex-end left right baseline anchor-center",
         ),
         P::MixBlendMode => keyword_choice(
             t,
@@ -2099,6 +2129,17 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
             keyword_choice(t, "auto contain none chain")
         }
         P::Interactivity => keyword_choice(t, "auto inert"),
+        P::AnchorName => keyword_text(anchor::anchor_name(t).map(String::into_bytes)),
+        P::AnchorScope => keyword_text(anchor::anchor_scope(t).map(String::into_bytes)),
+        P::PositionAnchor => keyword_text(anchor::position_anchor(t).map(String::into_bytes)),
+        P::PositionArea => position_area_value(t),
+        P::PositionTryFallbacks => {
+            keyword_text(anchor::position_try_fallbacks(t).map(String::into_bytes))
+        }
+        P::PositionTryOrder => keyword_text(anchor::position_try_order(t).map(String::into_bytes)),
+        P::PositionVisibility => {
+            keyword_text(anchor::position_visibility(t).map(String::into_bytes))
+        }
         P::BackgroundBlendMode => blend_mode_list(t),
         P::FontVariantLigatures => {
             if eq(t.trim_ascii(), b"none") {

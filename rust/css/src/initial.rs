@@ -4,7 +4,14 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 283] = [
+const INITIALS: [(&[u8], &CStr); 290] = [
+    (b"anchor-name", c"none"),
+    (b"anchor-scope", c"none"),
+    (b"position-anchor", c"normal"),
+    (b"position-area", c"none"),
+    (b"position-try-fallbacks", c"none"),
+    (b"position-try-order", c"normal"),
+    (b"position-visibility", c"anchor-visible"),
     (b"padding-top", c"0px"),
     (b"scroll-margin-top", c"0px"),
     (b"scroll-margin-right", c"0px"),

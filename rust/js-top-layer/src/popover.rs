@@ -410,6 +410,7 @@ fn show_steps(js: Js, el: Element, source: Option<Element>) -> Validity {
     }
     set_showing(js, el, true);
     let trigger = source.map(ffi::note);
+    southstar_css::anchor::set_implicit_anchor(el, trigger);
     info(js, el, |pi| pi.trigger = trigger);
     crate::focus::popover_focusing_steps(js, el);
     if restore_focus && type_of(Some(el)) != PopoverType::None {

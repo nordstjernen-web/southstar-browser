@@ -770,8 +770,42 @@ fn inset_px(js: Js, n: Node<'_>, b: BoxRef<'static>, name: &str) -> Option<Strin
     let v = ffi::prop_id(name).and_then(|id| style.value_at(id));
     let ov = ffi::prop_id(opp_name).and_then(|id| style.value_at(id));
 
-    if !inset_value_auto(v) {
+    let flags = if abs_pos {
+        southstar_css::anchor::placement_flags(n)
+    } else {
+        0
+    };
+    let side = ["top", "right", "bottom", "left"]
+        .iter()
+        .position(|s| *s == name)
+        .unwrap_or(0);
+    if inset_value_auto(v) && flags & southstar_css::anchor::ZEROED_INSETS[side] != 0 {
+        return Some("0px".into());
+    }
+    let fallback = flags & southstar_css::anchor::USED_FALLBACK != 0;
+    let anchored = |v: Option<ValueRef<'_>>| {
+        fallback
+            || abs_pos
+                && v.and_then(ValueRef::keyword_text)
+                    .is_some_and(|k| southstar_css::anchor::mentions_anchor_fn(k.to_bytes()))
+    };
+    if !inset_value_auto(v) && !anchored(v) {
         return inset_resolve_px(v, basis, font).map(px);
+    }
+    if anchored(v) {
+        let (m, p, br) = (b.margin(), b.padding(), b.border());
+        let outer = if vertical {
+            b.content_height() + p.top + p.bottom + br.top + br.bottom + m.top + m.bottom
+        } else {
+            b.content_width() + p.left + p.right + br.left + br.right + m.left + m.right
+        };
+        let start_off = if vertical { b.y() - cb_y } else { b.x() - cb_x };
+        let used = if name == "left" || name == "top" {
+            start_off
+        } else {
+            basis - start_off - outer
+        };
+        return Some(px(used));
     }
     if sticky {
         return Some("auto".into());

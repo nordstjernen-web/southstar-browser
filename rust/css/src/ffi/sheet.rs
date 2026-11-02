@@ -23,6 +23,7 @@ use super::selector::SelectorGroup;
 use super::value::{NsCssValue, OwnedValue, Payload, c_dup};
 use crate::declarations;
 use crate::nesting;
+use crate::prop::Prop;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
 
@@ -33,6 +34,7 @@ pub struct Sheet {
     layers: HashSet<Vec<u8>>,
     font_faces: Vec<FontFaceData>,
     keyframes: Vec<Keyframes>,
+    position_tries: Vec<crate::anchor::PositionTryRule>,
     property_rules: Vec<Arc<PropertyRule>>,
     page_rule: Option<PageRule>,
     has_container_rules: bool,
@@ -53,6 +55,7 @@ impl Sheet {
             layers: HashSet::new(),
             font_faces: Vec::new(),
             keyframes: Vec::new(),
+            position_tries: Vec::new(),
             property_rules: Vec::new(),
             page_rule: None,
             has_container_rules: false,
@@ -350,6 +353,10 @@ impl SheetBuilder {
             inherits,
             has_initial,
         }));
+    }
+
+    pub(crate) fn push_position_try(&mut self, name: &[u8], decls: Vec<(Prop, Vec<u8>)>) {
+        self.sheet.position_tries.push((name.to_vec(), decls));
     }
 
     pub(crate) fn page_rule(&mut self) -> &mut PageRule {
@@ -671,6 +678,10 @@ impl Sheet {
             layer_name: import.layer_name.as_deref(),
             media: import.media.as_deref(),
         })
+    }
+
+    pub fn position_tries(&self) -> &[crate::anchor::PositionTryRule] {
+        &self.position_tries
     }
 
     pub fn keyframes(&self) -> impl Iterator<Item = Keyframes> + '_ {

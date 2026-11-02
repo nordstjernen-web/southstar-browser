@@ -541,6 +541,14 @@ fn compute(
         .map(SheetRef::new)
         .collect();
     let layer_ranks = layer_ranks_build(&sheet_refs);
+    crate::anchor::register_position_tries(
+        doc as usize,
+        authors
+            .iter()
+            .flatten()
+            .flat_map(|sheet| sheet.position_tries().iter().cloned())
+            .collect(),
+    );
     let registered = registered_props_begin(&sheet_refs);
     decl_sheet_cache_trim();
     container::stack_reset();

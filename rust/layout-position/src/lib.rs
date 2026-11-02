@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod abs;
+mod anchor;
 mod ffi;
 mod relative;
 mod static_pos;

@@ -4,6 +4,7 @@
 
 use std::ffi::CString;
 
+use crate::anchor;
 use crate::animation::{self, Entry};
 use crate::calc::Calc;
 use crate::calc_size;
@@ -863,10 +864,34 @@ pub(crate) fn color_canonical(value: &[u8]) -> Option<Vec<u8>> {
     color::specified_text(value)
 }
 
+fn anchor_specified(prop: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+    let id = Prop::from_name(prop)?;
+    let text = match id {
+        Prop::PositionArea => anchor::position_area_specified(value),
+        Prop::AnchorName => anchor::anchor_name(value),
+        Prop::AnchorScope => anchor::anchor_scope(value),
+        Prop::PositionAnchor => anchor::position_anchor(value),
+        Prop::PositionTryFallbacks => anchor::position_try_fallbacks(value),
+        Prop::PositionTryOrder => anchor::position_try_order(value),
+        Prop::PositionVisibility => anchor::position_visibility(value),
+        _ => {
+            let ctx = property::anchor_context(id)?;
+            if !anchor::mentions_anchor_fn(value) || has_substitution(value) {
+                return None;
+            }
+            anchor::canonical(value, ctx)
+        }
+    };
+    text.map(String::into_bytes)
+}
+
 pub fn specified_canonical(prop: Option<&[u8]>, value: &[u8]) -> Option<Vec<u8>> {
     let Some(prop) = prop else {
         return math_canonical(&c_text(value));
     };
+    if let Some(text) = anchor_specified(prop, value) {
+        return Some(text);
+    }
     if starts_with_ci(strip(value), b"calc-size(") {
         return Prop::from_name(prop)
             .and_then(|p| property::parse(p, value))

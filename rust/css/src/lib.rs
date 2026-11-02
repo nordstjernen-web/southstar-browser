@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod anchor;
 mod animation;
 mod attr_fn;
 mod border_image;

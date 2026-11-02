@@ -365,10 +365,17 @@ pub enum Prop {
     MathDepth,
     MathShift,
     MathStyle,
+    AnchorName,
+    AnchorScope,
+    PositionAnchor,
+    PositionArea,
+    PositionTryFallbacks,
+    PositionTryOrder,
+    PositionVisibility,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 357] = [
+    pub(crate) const ALL: [Prop; 364] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -726,6 +733,13 @@ impl Prop {
         Prop::MathDepth,
         Prop::MathShift,
         Prop::MathStyle,
+        Prop::AnchorName,
+        Prop::AnchorScope,
+        Prop::PositionAnchor,
+        Prop::PositionArea,
+        Prop::PositionTryFallbacks,
+        Prop::PositionTryOrder,
+        Prop::PositionVisibility,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1181,6 +1195,13 @@ impl Prop {
             Prop::MathDepth => c"math-depth",
             Prop::MathShift => c"math-shift",
             Prop::MathStyle => c"math-style",
+            Prop::AnchorName => c"anchor-name",
+            Prop::AnchorScope => c"anchor-scope",
+            Prop::PositionAnchor => c"position-anchor",
+            Prop::PositionArea => c"position-area",
+            Prop::PositionTryFallbacks => c"position-try-fallbacks",
+            Prop::PositionTryOrder => c"position-try-order",
+            Prop::PositionVisibility => c"position-visibility",
         }
     }
 }

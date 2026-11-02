@@ -12,6 +12,7 @@ use southstar_layout_geom::{
 };
 use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef};
 
+use crate::anchor;
 use crate::ffi::{
     self, Area, Entry, box_clips_children, build_abs_box, estimate_natural_width, flat_parent,
     flex_box_is_border_box, grid_abs_containing_block, grid_static_align_offset,
@@ -180,12 +181,22 @@ fn place_axis(
     }
 }
 
-fn position_absolute_box_in(abox: BoxRef<'_>, area: Area) {
-    let auto = |p: PropId| length_is_auto(prop(abox, p));
-    let left = inset_or_zero(prop(abox, PropId::Left), area.w);
-    let right = inset_or_zero(prop(abox, PropId::Right), area.w);
-    let top = inset_or_zero(prop(abox, PropId::Top), area.h);
-    let bottom = inset_or_zero(prop(abox, PropId::Bottom), area.h);
+struct Placing<'s> {
+    area: Area,
+    inset: [Option<f64>; 4],
+    justify: &'s CStr,
+    align: &'s CStr,
+    centre: [Option<f64>; 2],
+}
+
+fn centred_offset(centre: f64, start: f64, outer: f64, remaining: f64) -> f64 {
+    (centre - start - outer / 2.0).min(remaining).max(0.0)
+}
+
+fn position_absolute_box_in(abox: BoxRef<'_>, p: &Placing<'_>) {
+    let auto = |prop: PropId| length_is_auto(crate::ffi::prop(abox, prop));
+    let area = p.area;
+    let [top, right, bottom, left] = p.inset;
     let (outer_w, outer_h) = outer_size(abox);
     let final_x = place_axis(
         left,
@@ -196,7 +207,10 @@ fn position_absolute_box_in(abox: BoxRef<'_>, area: Area) {
         true,
         || {
             let remaining = area.w - left.unwrap_or(0.0) - right.unwrap_or(0.0) - outer_w;
-            grid_static_align_offset(self_alignment(abox, PropId::JustifySelf), remaining)
+            match p.centre[0] {
+                Some(c) => centred_offset(c, area.x + left.unwrap_or(0.0), outer_w, remaining),
+                None => grid_static_align_offset(p.justify, remaining),
+            }
         },
     )
     .map_or(abox.x(), |x| area.x + x);
@@ -209,7 +223,10 @@ fn position_absolute_box_in(abox: BoxRef<'_>, area: Area) {
         false,
         || {
             let remaining = area.h - top.unwrap_or(0.0) - bottom.unwrap_or(0.0) - outer_h;
-            grid_static_align_offset(self_alignment(abox, PropId::AlignSelf), remaining)
+            match p.centre[1] {
+                Some(c) => centred_offset(c, area.y + top.unwrap_or(0.0), outer_h, remaining),
+                None => grid_static_align_offset(p.align, remaining),
+            }
         },
     )
     .map_or(abox.y(), |y| area.y + y);
@@ -221,7 +238,7 @@ fn position_absolute_box_in(abox: BoxRef<'_>, area: Area) {
     shift_box_tree(abox, dx, dy);
 }
 
-fn position_absolute_box(abox: BoxRef<'_>, cb: BoxRef<'_>, cb_is_icb: bool) {
+fn containing_area(cb: BoxRef<'_>, cb_is_icb: bool) -> Area {
     let (m, p, e) = (cb.margin(), cb.padding(), cb.border());
     let w = if cb_is_icb {
         viewport_w()
@@ -233,13 +250,12 @@ fn position_absolute_box(abox: BoxRef<'_>, cb: BoxRef<'_>, cb_is_icb: bool) {
     } else {
         cb.content_height() + p.top + p.bottom
     };
-    let area = Area {
+    Area {
         x: cb.x() + m.left + e.left,
         y: cb.y() + m.top + e.top,
         w,
         h,
-    };
-    position_absolute_box_in(abox, area);
+    }
 }
 
 fn height_limit(
@@ -314,6 +330,8 @@ fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
 
 struct Ctx<'a, 'o> {
     root: BoxRef<'a>,
+    order_root: Node<'a>,
+    anchors: anchor::Anchors<'a>,
     styles: StyleTable<'o>,
     viewport_width: f64,
     map: BoxMap<'a>,
@@ -412,38 +430,150 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
         abox.set_x(sx.x);
         abox.set_y(static_y);
     }
+    let frame = Frame {
+        abox,
+        cb,
+        grid,
+        avail,
+        cb_h,
+        cs,
+        static_run: st.is_some(),
+        flex_parent,
+        static_rtl,
+        static_right,
+        area: grid.unwrap_or_else(|| containing_area(cb, cb_is_icb)),
+    };
+    let abox_style = style_of(abox);
+    let target = e.dom.downgrade().get();
+    let plans = match (abox_style, target) {
+        (Some(style), Some(target_node)) if anchor::uses_anchoring(Some(style)) => {
+            let doc = Node::ptr_or_null(Some(ctx.order_root)) as usize;
+            let mut env = anchor::Env {
+                root: ctx.order_root,
+                target: target_node,
+                pseudo: e.pseudo.is_some(),
+                cb_node: cb_dom.and_then(|d| d.downgrade().get()),
+                styles,
+                map: &ctx.map,
+                order: ctx.order,
+                anchors: &mut ctx.anchors,
+                cb: frame.area,
+                font_px: anchor::font_px(abox_style),
+            };
+            anchor::candidates(&mut env, style, doc)
+        }
+        _ => Vec::new(),
+    };
+    if plans.is_empty() {
+        southstar_css::anchor::set_placement_flags(e.dom, 0);
+        size_and_place(&frame, None);
+        return;
+    }
+    let (x0, y0) = (abox.x(), abox.y());
+    let restore = || shift_box_tree(abox, x0 - abox.x(), y0 - abox.y());
+    for (k, plan) in plans.iter().enumerate() {
+        if k > 0 {
+            restore();
+        }
+        size_and_place(&frame, Some(plan));
+        if plans.len() == 1 || fits(abox, plan) {
+            southstar_css::anchor::set_placement_flags(e.dom, plan.flags(k > 0));
+            return;
+        }
+    }
+    restore();
+    southstar_css::anchor::set_placement_flags(e.dom, plans[0].flags(false));
+    size_and_place(&frame, Some(&plans[0]));
+}
+
+fn fits(abox: BoxRef<'_>, plan: &anchor::Plan) -> bool {
+    const EPSILON: f64 = 0.5;
+    let imcb = plan.imcb();
+    let (w, h) = outer_size(abox);
+    abox.x() >= imcb.x - EPSILON
+        && abox.y() >= imcb.y - EPSILON
+        && abox.x() + w <= imcb.x + imcb.w + EPSILON
+        && abox.y() + h <= imcb.y + imcb.h + EPSILON
+}
+
+struct Frame<'b> {
+    abox: BoxRef<'b>,
+    cb: BoxRef<'b>,
+    grid: Option<Area>,
+    avail: f64,
+    cb_h: f64,
+    cs: Option<StyleRef<'b>>,
+    static_run: bool,
+    flex_parent: Option<BoxRef<'b>>,
+    static_rtl: bool,
+    static_right: f64,
+    area: Area,
+}
+
+fn size_and_place(f: &Frame<'_>, plan: Option<&anchor::Plan>) {
+    let Frame { abox, cb, cs, .. } = *f;
+    let grid = plan.map(|p| p.area).or(f.grid);
+    let (avail, cb_h) = match (plan, grid) {
+        (Some(p), _) => (p.area.w, p.area.h),
+        (None, Some(g)) => (g.w, g.h),
+        (None, None) => (f.avail, f.cb_h),
+    };
     let awv = prop(abox, PropId::Width);
-    let has_explicit_width = is_length_or_calc(awv);
     let alv = prop(abox, PropId::Left);
     let arv = prop(abox, PropId::Right);
     let atv = prop(abox, PropId::Top);
     let abv = prop(abox, PropId::Bottom);
-    let l_set = is_set(alv);
-    let r_set = is_set(arv);
-    let js_stretch = self_alignment(abox, PropId::JustifySelf) == c"stretch";
-    let as_stretch = self_alignment(abox, PropId::AlignSelf) == c"stretch";
+    let placed = |k: usize, v: Option<ValueRef<'_>>, basis: f64| match plan {
+        Some(p) => p.inset[k],
+        None => inset_or_zero(v, basis),
+    };
+    let sized = |k: usize, v: Option<ValueRef<'_>>| match plan {
+        Some(p) => p.inset[k].is_some(),
+        None => is_set(v),
+    };
+    let left = placed(3, alv, avail);
+    let right = placed(1, arv, avail);
+    let top = placed(0, atv, cb_h);
+    let bottom = placed(2, abv, cb_h);
+    let l_set = sized(3, alv);
+    let r_set = sized(1, arv);
+    let pick = |chosen: Option<&'static CStr>, p: PropId| -> &CStr {
+        match chosen.filter(|k| *k != c"normal") {
+            Some(k) => k,
+            None => self_alignment(abox, p),
+        }
+    };
+    let justify = pick(plan.and_then(|p| p.justify), PropId::JustifySelf);
+    let align = pick(plan.and_then(|p| p.align), PropId::AlignSelf);
+    let js_stretch = justify == c"stretch";
+    let as_stretch = align == c"stretch";
+    let planned_w = plan.and_then(|p| p.width);
+    let planned_h = plan.and_then(|p| p.height);
+    let has_explicit_width = planned_w.is_some() || is_length_or_calc(awv);
     let stretch_w =
         !has_explicit_width && ((l_set && r_set && js_stretch) || height_keyword_stretches(awv));
     let mut layout_w = avail;
     let mut inset_w = avail;
     if l_set && r_set {
-        inset_w = avail - length_resolve(alv, avail, 0.0) - length_resolve(arv, avail, 0.0);
+        inset_w = avail - left.unwrap_or(0.0) - right.unwrap_or(0.0);
         if inset_w < 0.0 {
             inset_w = 0.0;
         }
     }
+    if let Some(w) = planned_w {
+        let (m, p, b) = edges_from_style(style_of(abox), avail);
+        let extras = if flex_box_is_border_box(abox) {
+            0.0
+        } else {
+            p.left + p.right + b.left + b.right
+        };
+        layout_w = (w.max(0.0) + extras + m.left + m.right).max(0.0);
+    }
     if stretch_w {
-        let mut l = if l_set {
-            length_resolve(alv, avail, 0.0)
-        } else {
-            0.0
-        };
-        let r = if r_set {
-            length_resolve(arv, avail, 0.0)
-        } else {
-            0.0
-        };
-        if !l_set && !r_set && grid.is_none() {
+        let mut l = if l_set { left.unwrap_or(0.0) } else { 0.0 };
+        let r = if r_set { right.unwrap_or(0.0) } else { 0.0 };
+        if !l_set && !r_set && f.grid.is_none() {
+            let (cm, cbd) = (cb.margin(), cb.border());
             let origin = cb.x() + cm.left + cbd.left;
             if abox.x() > origin {
                 l = abox.x() - origin;
@@ -456,8 +586,8 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
         }
     }
     let ahv = prop(abox, PropId::Height);
-    let has_explicit_height = is_length_or_calc(ahv);
-    if has_explicit_height && value_is_percent(ahv) && cb_h > 0.0 {
+    let has_explicit_height = planned_h.is_some() || is_length_or_calc(ahv);
+    if planned_h.is_none() && has_explicit_height && value_is_percent(ahv) && cb_h > 0.0 {
         let pre_h = resolve_height_with_basis(ahv, avail, cb_h, -1.0);
         if pre_h > 0.0 {
             abox.set_content_height(pre_h);
@@ -465,6 +595,15 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
         }
     }
     layout_box(abox, layout_w, cs);
+    if let Some(w) = planned_w {
+        let content = if flex_box_is_border_box(abox) {
+            let (p, b) = (abox.padding(), abox.border());
+            w - p.left - p.right - b.left - b.right
+        } else {
+            w
+        };
+        abox.set_content_width(content.max(0.0));
+    }
     if !stretch_w && !has_explicit_width && abox.kind() == BoxKind::Block {
         let (fm, fp, fb) = edges_from_style(style_of(abox), avail);
         let box_extras = fp.left + fp.right + fb.left + fb.right;
@@ -491,32 +630,27 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
             layout_box(abox, layout_w, cs);
         }
     }
-    let t_set = is_set(atv);
-    let b_set = is_set(abv);
+    let t_set = sized(0, atv);
+    let b_set = sized(2, abv);
     let mut inset_h = -1.0;
     if cb_h > 0.0 {
         let (m, p, b) = (abox.margin(), abox.padding(), abox.border());
-        inset_h =
-            cb_h - if t_set {
-                length_resolve(atv, cb_h, 0.0)
-            } else {
-                0.0
-            } - if b_set {
-                length_resolve(abv, cb_h, 0.0)
-            } else {
-                0.0
-            } - m.top
-                - m.bottom
-                - b.top
-                - b.bottom
-                - p.top
-                - p.bottom;
+        inset_h = cb_h
+            - if t_set { top.unwrap_or(0.0) } else { 0.0 }
+            - if b_set { bottom.unwrap_or(0.0) } else { 0.0 }
+            - m.top
+            - m.bottom
+            - b.top
+            - b.bottom
+            - p.top
+            - p.bottom;
         if inset_h < 0.0 {
             inset_h = 0.0;
         }
     }
     if has_explicit_height {
-        let mut explicit_h = resolve_height_with_basis(ahv, avail, cb_h, -1.0);
+        let mut explicit_h =
+            planned_h.unwrap_or_else(|| resolve_height_with_basis(ahv, avail, cb_h, -1.0));
         if explicit_h >= 0.0 {
             if flex_box_is_border_box(abox) {
                 let (p, b) = (abox.padding(), abox.border());
@@ -539,14 +673,24 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
             abox.set_content_height(h);
         }
     }
-    let static_x = (alv.is_none() || length_is_auto(alv)) && (arv.is_none() || length_is_auto(arv));
-    let static_y = (atv.is_none() || length_is_auto(atv)) && (abv.is_none() || length_is_auto(abv));
-    if static_x && static_rtl && st.is_none() {
+    if let Some(p) = plan
+        && p.margin.iter().any(Option::is_some)
+    {
+        let mut m = abox.margin();
+        m.top = p.margin[0].unwrap_or(m.top);
+        m.right = p.margin[1].unwrap_or(m.right);
+        m.bottom = p.margin[2].unwrap_or(m.bottom);
+        m.left = p.margin[3].unwrap_or(m.left);
+        abox.set_margin(m);
+    }
+    let static_x = left.is_none() && right.is_none();
+    let static_y = top.is_none() && bottom.is_none();
+    if static_x && f.static_rtl && !f.static_run {
         let (m, p, b) = (abox.margin(), abox.padding(), abox.border());
         let outer_w = m.left + b.left + p.left + abox.content_width() + p.right + b.right + m.right;
-        shift_box_tree(abox, static_right - outer_w - abox.x(), 0.0);
+        shift_box_tree(abox, f.static_right - outer_w - abox.x(), 0.0);
     }
-    if let Some(fp) = flex_parent
+    if let Some(fp) = f.flex_parent
         && (static_x || static_y)
         && let Some((flex_x, flex_y)) = flex_static_position(abox, fp)
     {
@@ -556,17 +700,24 @@ fn place_entry<'a>(ctx: &mut Ctx<'a, '_>, i: usize, e: Entry<'_>) {
             if static_y { flex_y - abox.y() } else { 0.0 },
         );
     }
-    if let Some(g) = grid
-        && flex_parent.is_some_and(|fp| fp.same(cb))
+    if let Some(g) = f.grid
+        && f.flex_parent.is_some_and(|fp| fp.same(cb))
         && (static_x || static_y)
     {
         grid_static_position(abox, cb, g, static_x, static_y);
     }
     apply_position_offsets(abox, avail, cb_h);
-    match grid {
-        Some(g) => position_absolute_box_in(abox, g),
-        None => position_absolute_box(abox, cb, cb_is_icb),
-    }
+    let area = grid.unwrap_or(f.area);
+    position_absolute_box_in(
+        abox,
+        &Placing {
+            area,
+            inset: [top, right, bottom, left],
+            justify,
+            align,
+            centre: plan.map_or([None; 2], |p| p.centre),
+        },
+    );
 }
 
 fn precompute_round(ctx: &mut Ctx<'_, '_>, from: usize, to: usize) {
@@ -609,6 +760,8 @@ pub fn process_absolute_boxes(root: BoxRef<'_>, styles: StyleTable, viewport_wid
     map.add_tree(root);
     let mut ctx = Ctx {
         root,
+        order_root,
+        anchors: anchor::Anchors::new(),
         styles,
         viewport_width,
         map,
