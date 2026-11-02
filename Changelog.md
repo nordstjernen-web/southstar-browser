@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* `file://` URLs with a query or a fragment (`page.html#section`) load the
+  file; they used to fail with "File not found".
 * Custom elements: `attachInternals()` returns a real `ElementInternals`
   (a non-constructible interface) instead of an object of no-op functions,
   and throws `NotSupportedError` for built-in, customized built-in and

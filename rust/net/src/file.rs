@@ -133,7 +133,12 @@ pub fn respond<S: Sink>(
             content_type: None,
         });
     }
-    let Some(path) = sys::filename_from_uri(url).map(|p| sys::canonicalize_filename(&p)) else {
+    let resource = url
+        .iter()
+        .position(|&b| b == b'?' || b == b'#')
+        .map_or(url, |end| &url[..end]);
+    let Some(path) = sys::filename_from_uri(resource).map(|p| sys::canonicalize_filename(&p))
+    else {
         return Some(Response {
             final_url: url.to_vec(),
             status: 400,
