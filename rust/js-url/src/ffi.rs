@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char, c_int};
+use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 
 use southstar_glib as glib;
@@ -44,10 +44,6 @@ impl Js {
 #[derive(Clone, Copy)]
 pub(crate) struct Source(glib::SourceId);
 
-unsafe extern "C" {
-    safe fn g_uuid_string_random() -> *mut c_char;
-}
-
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
     CString::new(until_nul(bytes)).unwrap_or_default()
 }
@@ -77,9 +73,7 @@ pub(crate) fn document_origin(scope: &Scope<'_>, js: Js) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn random_uuid() -> Vec<u8> {
-    // SAFETY: g_uuid_string_random hands over a new GLib string, taken exactly once.
-    unsafe { glib::GStr::take(g_uuid_string_random()) }
-        .map_or_else(Vec::new, |uuid| uuid.to_bytes().to_vec())
+    southstar_sandbox::uuid_v4().map_or_else(Vec::new, String::into_bytes)
 }
 
 pub(crate) fn mark_mutated(js: Js) {

@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 southstar-debuglog = { path = "../debuglog", version = "=1.0.7-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.7-dev" }
 
 [lints]
 workspace = true

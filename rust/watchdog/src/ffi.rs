@@ -3,9 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::RefCell;
+use core::ffi::c_int;
 #[cfg(windows)]
 use core::ffi::c_void;
-use core::ffi::{CStr, c_char, c_int};
 use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::io::Write;
@@ -24,7 +24,6 @@ type GPid = *mut c_void;
 
 unsafe extern "C" {
     fn g_spawn_close_pid(pid: GPid);
-    fn g_uuid_string_random() -> *mut c_char;
     fn _exit(status: c_int) -> !;
 }
 
@@ -608,16 +607,8 @@ fn stop(sup: &Shared) {
 }
 
 fn session_path() -> Vec<u8> {
-    // SAFETY: g_uuid_string_random has no preconditions and returns a new string the caller owns.
-    let uuid = unsafe { g_uuid_string_random() };
-    // SAFETY: uuid is null or the NUL-terminated string just allocated by GLib, freed once when it drops.
-    let uuid = unsafe { glib::GStr::take(uuid) };
-    let name = [
-        &b"southstar-watchdog-"[..],
-        uuid.as_deref().map_or(&b""[..], CStr::to_bytes),
-        b".session",
-    ]
-    .concat();
+    let uuid = southstar_sandbox::uuid_v4().unwrap_or_default();
+    let name = [&b"southstar-watchdog-"[..], uuid.as_bytes(), b".session"].concat();
     let runtime_dir = glib::user_runtime_dir();
     let Some(dir) = glib::path_from_bytes(&runtime_dir) else {
         return name;

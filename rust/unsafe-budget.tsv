@@ -92,7 +92,7 @@ js-temporal	0	0	0	0	0	0	0
 js-text	0	0	0	0	0	0	0
 js-top-layer	0	0	0	0	0	0	0
 js-traversal	0	0	0	0	0	0	0
-js-url	2	1	0	0	0	0	0
+js-url	0	0	0	0	0	0	0
 js-wasm	2	0	0	0	0	0	0
 js-window	0	0	0	0	0	0	0
 js-workers	0	0	0	0	0	0	0
@@ -152,7 +152,7 @@ unicode	0	0	0	0	0	0	0
 url	0	0	0	0	0	0	0
 video	0	0	0	0	0	0	0
 video-helper	7	3	1	0	0	0	0
-watchdog	25	15	0	0	0	0	0
+watchdog	23	14	0	0	0	0	0
 webaudio	0	0	0	0	0	0	0
 webcrypto	104	118	0	0	0	0	0
 webgl	62	6	0	0	0	0	0
