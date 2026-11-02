@@ -7,7 +7,7 @@ use std::ffi::CString;
 use crate::calc::{self, Parsed};
 use crate::color::{color_text, parse_color};
 use crate::math;
-use crate::scan::{is_ws, scan_until, split_ws_limit, trim_range};
+use crate::scan::{has_substitution, is_ws, scan_until, split_ws_limit, trim_range};
 use crate::text::{add_leading_zeros, normalize_negative_zero};
 use crate::units::{self, CAP, CH, EM, EX, IC, NUMBER, PERCENT, REM};
 
@@ -161,7 +161,7 @@ fn specified_one(text: &[u8], is_text: bool, out: &mut Vec<u8>) -> bool {
 pub(crate) fn specified_canonical(value: &[u8], is_text: bool) -> Option<Vec<u8>> {
     let start = value.iter().position(|&c| !is_ws(c)).unwrap_or(value.len());
     let value = &value[start..];
-    if value.is_empty() || value.windows(4).any(|w| w == b"var(") {
+    if value.is_empty() || has_substitution(value) {
         return None;
     }
     if value.eq_ignore_ascii_case(b"none") {

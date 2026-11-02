@@ -66,8 +66,17 @@ impl<'a> Arrays<'a> {
         self.pending.iter().filter_map(|e| e.pd.raw_text())
     }
 
+    fn var_texts(&self) -> impl Iterator<Item = &'a [u8]> + use<'a> {
+        self.vars.iter().map(|e| e.text.to_bytes())
+    }
+
     fn uses_attr(&self) -> bool {
         self.pending_texts().any(style_share::uses_attr)
+            || (self.var_texts().any(style_share::uses_attr)
+                && self
+                    .var_texts()
+                    .chain(self.pending_texts())
+                    .any(style_share::uses_if))
     }
 
     fn needs_container(&self) -> bool {

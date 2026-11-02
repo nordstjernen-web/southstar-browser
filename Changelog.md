@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS: the `if()` function from CSS Values 5. A declaration such as
+  `width: if(media(width > 600px): 50%; style(--compact): 8em; else: 100%)`
+  is kept as written and resolved with `var()` when the style is computed:
+  the first branch whose `supports()`, `media()` or `style()` condition
+  holds (combined with `not`, `and` and `or`) supplies the value, and none
+  makes the declaration invalid at computed-value time. `style()` compares
+  custom properties by value (registered ones by computed value, so
+  `style(--size: 1em)` matches `30px` at a 30px font size), tests that one
+  is set, and compares numbers, lengths, angles, times and resolutions with
+  `<`, `<=`, `=`, `>=` and `>`. Custom properties are now resolved in
+  dependency order with cycle detection, so `--a: var(--b)` sees `--b`'s
+  final value wherever it is declared, and a cycle through `var()` or an
+  `if()` condition makes every property in it invalid. A condition that
+  reads `attr()` taints the value it picks, which may then not reach
+  `url()`, `src()` or `image-set()`. Such a declaration used to be dropped.
 * `file://` URLs with a query or a fragment (`page.html#section`) load the
   file; they used to fail with "File not found".
 * Custom elements: `attachInternals()` returns a real `ElementInternals`

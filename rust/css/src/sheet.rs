@@ -13,8 +13,8 @@ use crate::nesting::{block_body_end, skip_invalid_qualified_rule};
 use crate::prop::Prop;
 use crate::property::{self, Body};
 use crate::scan::{
-    is_ident, is_ws, scan_until, skip_comment, skip_to_block_end, skip_ws_comments, strip,
-    trim_range,
+    has_substitution, is_ident, is_ws, scan_until, skip_comment, skip_to_block_end,
+    skip_ws_comments, strip, trim_range,
 };
 use crate::selector::{self, PE_NONE};
 use crate::supports;
@@ -355,7 +355,7 @@ fn keyframe_block(body: &[u8]) -> (Stop, Option<Vec<u8>>) {
         raw.extend_from_slice(prop);
         raw.push(b':');
         raw.extend_from_slice(val);
-        if transform_prop && has(val, b"var(") {
+        if transform_prop && has_substitution(val) {
         } else if eq(prop, b"opacity") {
             let text = std::ffi::CString::new(val).unwrap_or_default();
             stop.opacity = ffi::strtod(&text, 0).0;

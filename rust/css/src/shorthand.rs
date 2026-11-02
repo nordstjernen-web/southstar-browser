@@ -19,10 +19,11 @@ use crate::position;
 use crate::prop::Prop;
 use crate::property::{
     self, Body, Value, bg_clip_canonical, bg_repeat_canonical, bg_repeat_token, bg_token_is_box,
-    c_text, calc_value, contains, eq, length, lower, mask_box_keyword, wide_keyword,
-    word_is_one_of,
+    c_text, calc_value, eq, length, lower, mask_box_keyword, wide_keyword, word_is_one_of,
 };
-use crate::scan::{scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range};
+use crate::scan::{
+    has_substitution, scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range,
+};
 use crate::text::{add_leading_zeros, split_top_level_commas};
 use crate::units::{EM, NUMBER, PERCENT, PX};
 use crate::values;
@@ -289,7 +290,7 @@ pub(crate) fn slot_value(decls: &[Decl], mut index: usize) -> &Value {
 
 pub(crate) fn expand(name: &[u8], text: &[u8]) -> Vec<Decl> {
     let mut out = Out::default();
-    if !contains(text, b"var(")
+    if !has_substitution(text)
         && let Some(pairs) = gaps::expand(name, text)
     {
         gap_longhands(&mut out, &pairs);
@@ -722,7 +723,7 @@ fn border_part(out: &mut Out, side: Option<&Side>, part: usize, text: &[u8]) {
 }
 
 fn border(out: &mut Out, text: &[u8], side: Option<&Side>) {
-    if !contains(text, b"var(") && !border_shorthand_valid(text, Prop::BorderTopStyle) {
+    if !has_substitution(text) && !border_shorthand_valid(text, Prop::BorderTopStyle) {
         return;
     }
     let tokens = split_ws(text);
@@ -1423,7 +1424,7 @@ fn columns(out: &mut Out, text: &[u8]) {
 }
 
 fn rule(out: &mut Out, text: &[u8], width: Prop, style: Prop, color: Prop) {
-    if !contains(text, b"var(") && !border_shorthand_valid(text, style) {
+    if !has_substitution(text) && !border_shorthand_valid(text, style) {
         return;
     }
     let tokens = split_ws(text);
@@ -1795,7 +1796,7 @@ fn border_radius_half_canonical(text: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn border_radius_canonical(value: &[u8]) -> Option<Vec<u8>> {
-    if contains(value, b"var(") {
+    if has_substitution(value) {
         return None;
     }
     let slash = value.iter().position(|&c| c == b'/');
@@ -1815,7 +1816,7 @@ pub(crate) fn border_radius_canonical(value: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn border_radius(out: &mut Out, text: &[u8]) {
-    if !contains(text, b"var(")
+    if !has_substitution(text)
         && wide_keyword(text).is_none()
         && border_radius_canonical(text).is_none()
     {
@@ -2051,7 +2052,7 @@ pub fn keyword_shorthand_compose(name: &[u8], values: &[&[u8]]) -> Option<Vec<u8
 
 pub(crate) fn keyword_shorthand_specified(name: &[u8], text: &[u8]) -> Option<Vec<u8>> {
     let parts = keyword_shorthand_parts(name)?;
-    if contains(text, b"var(") {
+    if has_substitution(text) {
         return None;
     }
     let text = strip(text);

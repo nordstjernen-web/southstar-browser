@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_css_prop_syntax::{self as prop_syntax, Context};
+use southstar_css_prop_syntax::{self as prop_syntax, Context, SyntaxDef};
+use southstar_dom::Node;
 use southstar_glib::GBoolean;
 
 use super::computed_units::{RawStyle, StyleView};
@@ -40,7 +41,51 @@ pub(super) struct RawVarMatch {
     pub(super) text: Rc<CStr>,
 }
 
-struct Props<'a>(&'a RegisteredProps);
+struct Props<'a> {
+    registered: &'a RegisteredProps,
+    query: &'a QueryContext<'a>,
+}
+
+pub(super) struct QueryContext<'a> {
+    parent: Option<&'a RawStyle>,
+    root_px: f64,
+    ctx: OnceCell<Context<'static>>,
+}
+
+impl<'a> QueryContext<'a> {
+    pub(super) fn new(parent: Option<&'a RawStyle>, root_px: f64) -> Self {
+        QueryContext {
+            parent,
+            root_px,
+            ctx: OnceCell::new(),
+        }
+    }
+
+    pub(super) fn compute(&self, syntax: &SyntaxDef, value: &[u8]) -> Option<Vec<u8>> {
+        let ctx = self.ctx.get_or_init(|| {
+            let mut ctx = match self.parent {
+                Some(parent) => syntax_ctx(&StyleView(parent), self.root_px, b""),
+                None => {
+                    let root = if self.root_px > 0.0 {
+                        self.root_px
+                    } else {
+                        16.0
+                    };
+                    Context {
+                        font_size: root,
+                        root_font_size: root,
+                        viewport_w: units::viewport_resolve(100.0, VW),
+                        viewport_h: units::viewport_resolve(100.0, VH),
+                        ..Context::default()
+                    }
+                }
+            };
+            ctx.current_color = None;
+            ctx
+        });
+        prop_syntax::compute(syntax, value, Some(ctx))
+    }
+}
 
 struct Parent<'a>(&'a VarMap);
 
@@ -48,6 +93,7 @@ fn registered(rule: &PropertyRule) -> Registered<'_> {
     Registered {
         inherits: rule.inherits(),
         initial: rule.initial(),
+        syntax: rule.typed_syntax(),
     }
 }
 
@@ -56,7 +102,7 @@ impl Props<'_> {
         if name.contains(&0) {
             return None;
         }
-        self.0.get(name)
+        self.registered.get(name)
     }
 }
 
@@ -66,13 +112,17 @@ impl Registry for Props<'_> {
     }
 
     fn each(&self, f: &mut dyn FnMut(&[u8], Registered<'_>)) {
-        for (name, rule) in self.0.iter() {
+        for (name, rule) in self.registered.iter() {
             f(name, registered(rule));
         }
     }
 
     fn rejects(&self, name: &[u8], value: &[u8]) -> bool {
         self.rule(name).is_some_and(|rule| rule.rejects(value))
+    }
+
+    fn compute(&self, syntax: &SyntaxDef, value: &[u8]) -> Option<Vec<u8>> {
+        self.query.compute(syntax, value)
     }
 }
 
@@ -121,6 +171,8 @@ pub(super) fn build_vars(
     raw: &[RawVarMatch],
     registered_props: &RegisteredProps,
     adjust_cache: Option<&AdjustCache>,
+    node: Node<'_>,
+    query: &QueryContext<'_>,
 ) -> Option<Rc<VarMap>> {
     let have_regs = !registered_props.is_empty();
     let have_local = !raw.is_empty();
@@ -137,7 +189,7 @@ pub(super) fn build_vars(
         if !have_local {
             return parent.cloned();
         }
-        let own = custom_props::unregistered(&matches, inherited);
+        let own = custom_props::unregistered(&matches, inherited, Some(node));
         return Some(new_map(own_table(own), parent.cloned()));
     }
     let adjust_cache = adjust_cache.filter(|_| parent.is_some() && !have_local);
@@ -147,7 +199,11 @@ pub(super) fn build_vars(
     {
         return Some(hit.clone());
     }
-    let own = custom_props::registered(&matches, inherited, &Props(registered_props));
+    let props = Props {
+        registered: registered_props,
+        query,
+    };
+    let own = custom_props::registered(&matches, inherited, &props, Some(node));
     let built = match parent {
         Some(parent) if !have_local && own.is_empty() => parent.clone(),
         _ => new_map(own_table(own), parent.cloned()),

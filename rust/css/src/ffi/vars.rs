@@ -1,16 +1,21 @@
-//! Southstar — var() substitution: an element's chain of variable maps, the registered @property rules consulted for initial values, and the variable names an element's map exposes.
+//! Southstar — var() and if() substitution: an element's chain of variable maps, the registered @property rules consulted for initial values and style() queries, and the variable names an element's map exposes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cell::OnceCell;
 use core::ffi::CStr;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::rc::Rc;
 
+use southstar_css_prop_syntax::{self as prop_syntax, SyntaxDef};
+use southstar_dom::Node;
+
+use super::custom_props::QueryContext;
 use super::declarations::lookup_key;
 use super::registry::RegisteredProps;
-use crate::vars::{self, Lookup};
+use crate::vars::{self, Lookup, Registration};
 
 pub(super) type VarTable = HashMap<CString, CString>;
 
@@ -62,6 +67,9 @@ fn c_string(text: &[u8]) -> CString {
 struct Chain<'a> {
     map: Option<&'a VarMap>,
     registered: Option<&'a RegisteredProps>,
+    parent: Option<&'a VarMap>,
+    node: Option<Node<'a>>,
+    query: Option<&'a QueryContext<'a>>,
 }
 
 pub(super) fn chain_lookup_text<'a>(mut map: Option<&'a VarMap>, name: &[u8]) -> Option<&'a CStr> {
@@ -80,13 +88,43 @@ pub(super) fn chain_lookup<'a>(map: Option<&'a VarMap>, name: &[u8]) -> Option<&
 }
 
 impl Lookup for Chain<'_> {
-    fn value(&self, name: &[u8]) -> Option<&[u8]> {
-        chain_lookup(self.map, name)
+    fn value(&self, name: &[u8]) -> Option<Cow<'_, [u8]>> {
+        chain_lookup(self.map, name).map(Cow::Borrowed)
     }
 
     fn registered_initial(&self, name: &[u8]) -> Option<Option<&[u8]>> {
         self.registered?.get(lookup_key(name))?.registered_initial()
     }
+
+    fn inherited(&self, name: &[u8]) -> Option<Cow<'_, [u8]>> {
+        chain_lookup(self.parent, name).map(Cow::Borrowed)
+    }
+
+    fn registration(&self, name: &[u8]) -> Option<Registration<'_>> {
+        let rule = self.registered?.get(lookup_key(name))?;
+        Some(Registration {
+            syntax: rule.typed_syntax(),
+            inherits: rule.inherits(),
+            initial: rule.initial(),
+        })
+    }
+
+    fn compute(&self, syntax: &SyntaxDef, value: &[u8]) -> Option<Vec<u8>> {
+        match self.query {
+            Some(query) => query.compute(syntax, value),
+            None => prop_syntax::compute(syntax, value, None),
+        }
+    }
+
+    fn node(&self) -> Option<Node<'_>> {
+        self.node
+    }
+}
+
+pub(super) struct Scope<'a> {
+    pub(super) parent: Option<&'a VarMap>,
+    pub(super) node: Node<'a>,
+    pub(super) query: &'a QueryContext<'a>,
 }
 
 pub(super) fn substitute_in(
@@ -94,9 +132,31 @@ pub(super) fn substitute_in(
     map: Option<&VarMap>,
     registered: Option<&RegisteredProps>,
 ) -> Option<Vec<u8>> {
-    let chain = Chain { map, registered };
+    let chain = Chain {
+        map,
+        registered,
+        parent: None,
+        node: None,
+        query: None,
+    };
     let lookup: Option<&dyn Lookup> = Some(&chain);
     vars::substitute(value, lookup.filter(|_| map.is_some()), 0)
+}
+
+pub(super) fn substitute_scoped(
+    value: &[u8],
+    map: Option<&VarMap>,
+    registered: &RegisteredProps,
+    scope: &Scope<'_>,
+) -> Option<Vec<u8>> {
+    let chain = Chain {
+        map,
+        registered: Some(registered),
+        parent: scope.parent,
+        node: Some(scope.node),
+        query: Some(scope.query),
+    };
+    vars::substitute(value, Some(&chain), 0)
 }
 
 pub(super) fn chain_names(map: &VarMap) -> Vec<&CStr> {

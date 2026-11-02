@@ -82,3 +82,7 @@ impl<T> ShareTable<T> {
 pub(crate) fn uses_attr(text: &[u8]) -> bool {
     text.windows(5).any(|w| w == b"attr(")
 }
+
+pub(crate) fn uses_if(text: &[u8]) -> bool {
+    text.windows(3).any(|w| w == b"if(")
+}

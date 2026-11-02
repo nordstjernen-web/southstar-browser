@@ -1,4 +1,4 @@
-//! Southstar — attr() substituted into a declaration value: the attribute read as a quoted string, as any value, against a type() syntax or with a unit, falling back through nested fallbacks, and the taint that keeps attribute text out of url() and the image functions.
+//! Southstar — attr() substituted into a declaration value: the attribute read as a quoted string, as any value, against a type() syntax or with a unit, falling back through nested fallbacks, and the taint that keeps attribute text, and values chosen by it, out of url() and the image functions.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -126,6 +126,34 @@ fn quote_close(text: &[u8], open: usize) -> Option<usize> {
     quoted_end(&text[open + 1..], text[open]).map(|i| open + 1 + i)
 }
 
+pub(crate) fn makes_url(value: &[u8]) -> bool {
+    contains(value, b"url(") || contains(value, b"src(") || contains(value, b"image-set(")
+}
+
+pub(crate) fn in_url_function(text: &[u8], at: usize) -> bool {
+    let mut stack: Vec<bool> = Vec::new();
+    let mut p = 0;
+    while p < at {
+        let c = text[p];
+        if c == b'"' || c == b'\'' {
+            match quote_close(text, p) {
+                Some(q) if q < at => {
+                    p = q + 1;
+                    continue;
+                }
+                _ => return false,
+            }
+        }
+        if c == b'(' && stack.len() < PAREN_STACK_MAX {
+            stack.push(url_function_at(text, p));
+        } else if c == b')' {
+            stack.pop();
+        }
+        p += 1;
+    }
+    stack.contains(&true)
+}
+
 pub(crate) fn substitute(
     text: &[u8],
     node: Option<Node<'_>>,
@@ -189,10 +217,7 @@ pub(crate) fn substitute(
                 return None;
             }
             let value = attr_function_value(&text[p + 5..q], node, depth)?;
-            if contains(&value, b"url(")
-                || contains(&value, b"src(")
-                || contains(&value, b"image-set(")
-            {
+            if makes_url(&value) {
                 *tainted = true;
             }
             out.extend_from_slice(&value);
