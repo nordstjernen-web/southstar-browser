@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CI: the Linux workflow no longer runs tests (the unit tests, the
+  headless smoke checks, the Unicode bidi conformance files and the WPT
+  slice), skips the merged crates.io check on pull requests, and caches
+  cargo's registry and build output (saved from `main`) instead of
+  ccache, which had almost no C left to cache.
 * CSS: `sibling-index()` and `sibling-count()` read the sibling positions
   the selector matcher caches per style pass instead of walking every
   sibling for every element. A rule using them on 30,000 siblings took
