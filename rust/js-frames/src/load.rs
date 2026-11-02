@@ -211,7 +211,10 @@ fn fetch_source(
     form_body: Option<&[u8]>,
 ) -> Fetched {
     let mut fetched = Fetched {
-        abs_url: ffi::resolve_url(origin, src),
+        abs_url: ffi::resolve_url(
+            load::node_doc_base(js, iframe).as_deref().unwrap_or(origin),
+            src,
+        ),
         decoded: None,
         resp: None,
     };
@@ -247,6 +250,7 @@ fn fetch_source(
         let info = load::element_perf_info(js, iframe);
         let initiator: &CStr = match kind {
             FrameKind::Object => c"object",
+            FrameKind::Frame if iframe.element_name() == Some(b"frame") => c"frame",
             FrameKind::Frame => c"iframe",
         };
         load::add_resource_timing(
@@ -721,7 +725,10 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     );
 
     let mut blank_frame = false;
-    if built.is_none() && decoded.is_none() && iframe.element_name() == Some(b"iframe") {
+    if built.is_none()
+        && decoded.is_none()
+        && matches!(iframe.element_name(), Some(b"iframe" | b"frame"))
+    {
         let root = owner::ensure_content_root(iframe);
         built = root.parent().map(|doc| Built {
             root,

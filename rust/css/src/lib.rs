@@ -24,6 +24,7 @@ mod element_state;
 mod ffi;
 mod fixups;
 mod font;
+mod frameset;
 mod gaps;
 mod gather;
 mod gradient;

@@ -8,7 +8,7 @@ use southstar_dom::ancestors;
 use southstar_js_engine::Scope;
 
 use crate::Element;
-use crate::ffi::{self, Js};
+use crate::ffi::{self, Js, LinkTarget};
 
 const JAVASCRIPT_SCHEME: &[u8] = b"javascript:";
 
@@ -101,7 +101,7 @@ fn activate_label(js: Js, label: Element, target: Element) {
 }
 
 fn follow_in_iframe(scope: &mut Scope<'_>, el: Element, href: &[u8]) -> bool {
-    let Some(iframe) = ancestors(el).find(|&p| named(p, "iframe")) else {
+    let Some(iframe) = ancestors(el).find(|&p| named_any(p, &["iframe", "frame"])) else {
         return false;
     };
     if !iframe.has_js_wrapper() || href.is_empty() {
@@ -123,7 +123,7 @@ fn follow_in_iframe(scope: &mut Scope<'_>, el: Element, href: &[u8]) -> bool {
 }
 
 fn run_javascript_url(js: Js, act: Element, code: &[u8]) {
-    match ancestors(act).find(|&p| named(p, "iframe")) {
+    match ancestors(act).find(|&p| named_any(p, &["iframe", "frame"])) {
         None => {
             if js.inline_scripts_allowed(act) {
                 js.eval_source(code, c"javascript-url");
@@ -148,7 +148,7 @@ fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
         return;
     }
     let href = href.unwrap_or_default();
-    if follow_in_iframe(scope, act, &href) || href.is_empty() {
+    if href.is_empty() {
         return;
     }
     let resolved = ffi::anchor_resolved_href(js, act);
@@ -157,6 +157,19 @@ fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
         if js.request_download(url, &filename) {
             return;
         }
+    }
+    if let Some(url) = resolved.as_deref() {
+        match js.follow_link_target(act, url) {
+            LinkTarget::Navigated => return,
+            LinkTarget::Top => {
+                js.navigate(url);
+                return;
+            }
+            LinkTarget::Unhandled => {}
+        }
+    }
+    if follow_in_iframe(scope, act, &href) {
+        return;
     }
     if resolved
         .as_deref()

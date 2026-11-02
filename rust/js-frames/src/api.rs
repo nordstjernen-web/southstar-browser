@@ -151,3 +151,9 @@ pub fn schedule_static_iframes(js: Option<Page>, root: Node<'_>) {
 pub fn iframe_is_cross_origin(js: Option<Page>, iframe: Node<'_>) -> bool {
     origin::is_cross_origin(Js::of(js), iframe)
 }
+
+pub use crate::submit::LinkTarget;
+
+pub fn follow_link_target(js: Option<Page>, anchor: Node<'_>, url: &CStr) -> LinkTarget {
+    crate::submit::follow_link_target(Js::of(js), anchor, url)
+}

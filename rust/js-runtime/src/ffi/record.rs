@@ -689,7 +689,7 @@ pub(crate) fn set_src_recorded(js: Option<Page>, el: Node<'_>, src: &[u8]) {
         let src = CStr::from_bytes_until_nul(&terminated).ok();
         (crate::api::images_hooks().start_image_load)(js, el, src);
     }
-    if name == Some(b"iframe") {
+    if matches!(name, Some(b"iframe" | b"frame")) {
         (crate::api::frames_hooks().schedule_load)(js, el, true);
     }
 }
@@ -749,7 +749,7 @@ pub(crate) fn purge_subtree_rafs(js: Option<Page>, root: Node<'_>) {
     }
     let mut n = Some(root);
     while let Some(current) = n {
-        if is_named(current, c"iframe") {
+        if is_named(current, c"iframe") || is_named(current, c"frame") {
             (crate::api::lifecycle_hooks().purge_frame_rafs)(js, current);
             (crate::api::services_hooks().purge_frame_timers)(js, current);
             (crate::api::frames_hooks().scrub_globals)(js, current);

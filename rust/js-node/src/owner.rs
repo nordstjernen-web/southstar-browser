@@ -25,7 +25,7 @@ fn document_ancestor(node: Element) -> Option<Element> {
 }
 
 fn is_frame_host(node: Element) -> bool {
-    matches!(node.element_name(), Some(b"iframe" | b"object"))
+    matches!(node.element_name(), Some(b"iframe" | b"frame" | b"object"))
 }
 
 pub fn owner_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {

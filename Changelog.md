@@ -3,6 +3,28 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* HTML: `<frameset>` and `<frame>`. Frame documents load like iframe
+  documents, under the same CSP `frame-src`, sandbox, cross-origin,
+  `X-Frame-Options`/`frame-ancestors` and nesting limits, and the
+  frameset lays them out as a grid of its `rows` and `cols` (pixel,
+  percentage, `*` and `n*` sizes, nested framesets), with a thin border
+  that `frameborder="0"` or `border="0"` removes. `window.frames[n]`,
+  named access (`window.left`, `frames['left']`) and a frame's
+  `contentWindow`/`contentDocument` work as for iframes, and
+  `<noframes>` is not rendered. A page with a frameset used to render
+  blank.
+* Links and forms whose `target` (or `<base target>`) names a frame or
+  iframe now navigate that frame; `_parent` and `_top` from inside a frame
+  navigate the parent frame or the whole page. A sandboxed frame may only
+  navigate itself and its descendants, and the top page only with
+  `allow-top-navigation`. A link with a named target used to navigate the
+  whole page.
+* Frames: a frame's relative `src` resolves against the document that
+  holds the frame rather than the top page, so a framed page in another
+  directory loads its own iframes.
+* CSS grid: a grid container stretched by its own grid or flex container
+  now has a definite height for its rows, so `1fr` rows inside it share
+  the stretched height instead of shrinking to their content.
 * Windows: the Windows-only `unsafe` code now passes clippy's unsafe
   documentation lints. Every block is one operation with a `SAFETY:`
   comment. The executable path comes from `std::env::current_exe` and

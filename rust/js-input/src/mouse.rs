@@ -30,7 +30,7 @@ const BUTTON_CHANGE: [&str; 8] = [
 fn owner_iframe(target: Element) -> Option<Element> {
     let mut cur = target.parent();
     while let Some(n) = cur {
-        if n.element_name() == Some(b"iframe") {
+        if matches!(n.element_name(), Some(b"iframe" | b"frame")) {
             return Some(n);
         }
         cur = n.parent();

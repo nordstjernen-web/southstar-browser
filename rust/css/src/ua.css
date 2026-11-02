@@ -88,14 +88,17 @@ input[type=hidden i] { display: none !important; }
 video { display: inline; object-fit: contain; }
 iframe { border: 2px inset; display: inline-block; overflow: hidden; width: 300px; height: 150px; }
 canvas { display: inline; }
-frame, frameset, embed { display: none; }
+embed { display: none; }
+frameset { display: grid; box-sizing: border-box; width: 100%; height: 100vh; overflow: hidden; grid-auto-rows: 0; grid-auto-columns: 0; }
+frameset > frameset { width: auto; height: auto; min-width: 0; min-height: 0; }
+frameset > frame { display: block; box-sizing: border-box; min-width: 0; min-height: 0; overflow: hidden; border: 2px inset; }
 object[data-nd-frame-loaded] { display: block; overflow: hidden; }
 object[data-nd-frame-loaded] > * { display: none; }
 audio, param { display: none; }
 audio[controls] { display: inline-block; }
 :fullscreen { position: fixed !important; top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; margin: 0 !important; z-index: 2147483647 !important; background-color: #000 !important; }
 svg { display: inline; }
-noframes, frame, frameset, applet, basefont, noembed, isindex { display: none; }
+noframes, frame, applet, basefont, noembed, isindex { display: none; }
 listing, xmp, plaintext { display: block; font-family: monospace; white-space: pre; margin-block: 1em; }
 details, summary { display: block; }
 details > summary:first-of-type { display: list-item; list-style: disclosure-closed inside; }

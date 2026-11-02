@@ -25,6 +25,10 @@ fn named(node: Node<'_>, tag: &[u8]) -> bool {
     node.element_name() == Some(tag)
 }
 
+fn is_frame_element(node: Node<'_>) -> bool {
+    named(node, b"iframe") || named(node, b"frame")
+}
+
 fn is_frame_owner(node: Node<'_>) -> bool {
     named(node, b"iframe")
         || named(node, b"object")
@@ -140,7 +144,7 @@ pub(crate) fn content_document_of(scope: &mut Scope<'_>, node: Node<'_>) -> JsRe
     if let Some(doc) = document_node(node).filter(|doc| doc.has_js_wrapper()) {
         return Ok(ffi::make_element(ffi::scope_ctx(scope), doc));
     }
-    if !named(node, b"iframe") {
+    if !is_frame_element(node) {
         return Ok(Value::null());
     }
     build_content_document(scope, node)
@@ -150,7 +154,7 @@ pub fn content_document(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_element(this).filter(|node| is_frame_owner(*node)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
-    if !named(node, b"iframe") && !named(node, b"object") {
+    if !is_frame_element(node) && !named(node, b"object") {
         return Ok(Value::null());
     }
     let js = Js::of_ctx(ffi::scope_ctx(scope));
@@ -164,7 +168,7 @@ pub fn content_window(scope: &mut Scope<'_>, this: &Value) -> JsResult {
     let Some(node) = ffi::unwrap_element(this).filter(|node| is_frame_owner(*node)) else {
         return Err(scope.type_error("Illegal invocation"));
     };
-    if !named(node, b"iframe") {
+    if !is_frame_element(node) {
         return Ok(Value::null());
     }
     let ctx = ffi::scope_ctx(scope);
@@ -218,7 +222,7 @@ pub(crate) fn child_frame_window(
     if !raw {
         return content_window(scope, &element);
     }
-    if named(frame, b"iframe") {
+    if is_frame_element(frame) {
         ensure_content_root(frame);
         return Ok(realm::realm_window(ctx, frame));
     }
