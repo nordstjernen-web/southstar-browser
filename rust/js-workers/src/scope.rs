@@ -97,13 +97,16 @@ const GLOBAL_SHAPE: &str = concat!(
     "      enumerable: true, configurable: true }); }",
     "  ['onerror','onlanguagechange','onrejectionhandled','onunhandledrejection'].forEach(function(n){",
     "    handler(WGS.prototype, n); });",
-    "  if (scopeName === 'DedicatedWorkerGlobalScope') {",
-    "    handler(G, 'onmessage'); handler(G, 'onmessageerror');",
+    "  if (scopeName !== 'ServiceWorkerGlobalScope') {",
     "    var nd = gopd(G, 'name'); var nameValue = nd && 'value' in nd ? nd.value : '';",
     "    def(G, 'name', { get: getter('name', function(){ self_of(this); return nameValue; }),",
     "      set: setter('name', function(v){ def(self_of(this), 'name',",
     "        { value: v, writable: true, enumerable: true, configurable: true }); }),",
     "      enumerable: true, configurable: true });",
+    "  }",
+    "  if (scopeName === 'SharedWorkerGlobalScope') handler(G, 'onconnect');",
+    "  if (scopeName === 'DedicatedWorkerGlobalScope') {",
+    "    handler(G, 'onmessage'); handler(G, 'onmessageerror');",
     "    var rafId = 0, rafCallbacks = new Map(), rafTimer = 0;",
     "    function rafFlush(){ rafTimer = 0; var cbs = rafCallbacks; rafCallbacks = new Map();",
     "      var ts = G.performance.now();",
@@ -252,13 +255,40 @@ pub(crate) fn report_error(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     Ok(Value::undefined())
 }
 
+fn become_shared(scope: &mut Scope<'_>) {
+    let global = scope.global();
+    for name in [
+        "DedicatedWorkerGlobalScope",
+        "postMessage",
+        "onmessage",
+        "onmessageerror",
+    ] {
+        let _ = scope.delete(&global, name);
+    }
+    ffi::bind_ctor(
+        scope,
+        &global,
+        "SharedWorkerGlobalScope",
+        0,
+        ffi::CCtor::Illegal,
+    );
+    set(scope, &global, "onconnect", Value::null());
+}
+
 pub(crate) fn shape_global(scope: &mut Scope<'_>, service_worker: bool) {
+    let shared = !service_worker
+        && ffi::worker_host_of(ffi::js_of(scope)).is_some_and(|host| host.is_shared);
+    if shared {
+        become_shared(scope);
+    }
     if let Ok(shape) = scope.eval_native_script(GLOBAL_SHAPE, "<worker-global-shape>")
         && scope.is_function(&shape)
     {
         let global = scope.global();
         let name = scope.string(if service_worker {
             "ServiceWorkerGlobalScope"
+        } else if shared {
+            "SharedWorkerGlobalScope"
         } else {
             "DedicatedWorkerGlobalScope"
         });

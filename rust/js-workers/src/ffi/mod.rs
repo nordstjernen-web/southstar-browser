@@ -192,6 +192,7 @@ natives! {
     nsr_port_add_event_listener => ports::add_event_listener,
     nsr_port_remove_event_listener => ports::remove_event_listener,
     nsr_worker_ctor => worker::construct,
+    nsr_shared_worker_ctor => crate::shared::construct,
     nsr_worker_global_post_message => worker::global_post_message,
     nsr_worker_global_close => worker::global_close,
     nsr_worker_import_scripts => worker::import_scripts,
@@ -436,6 +437,10 @@ pub(crate) fn make_worker_ctor(scope: &mut Scope<'_>) -> Value {
     make_constructor(scope, "Worker", 1, nsr_worker_ctor)
 }
 
+pub(crate) fn make_shared_worker_ctor(scope: &mut Scope<'_>) -> Value {
+    make_constructor(scope, "SharedWorker", 1, nsr_shared_worker_ctor)
+}
+
 pub(crate) fn fetch_install_interfaces(scope: &mut Scope<'_>, global: &Value) {
     nsr_fetch_install_interfaces(scope, global);
 }
@@ -605,6 +610,7 @@ pub(crate) fn net_get(url: &str, top_url: &str, header: &str) -> NetResponse {
 
 pub fn nsr_worker_install_constructor(scope: &mut Scope<'_>, global: &Value) {
     worker::install_constructor(scope, global);
+    crate::shared::install_constructor(scope, global);
 }
 
 pub fn nsr_sw_install_container(scope: &mut Scope<'_>, navigator: &Value) {

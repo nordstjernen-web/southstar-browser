@@ -34,6 +34,7 @@ pub(crate) struct Host {
     pub inline_script: Option<String>,
     pub is_module: bool,
     pub is_service_worker: bool,
+    pub is_shared: bool,
     pub scope: Option<String>,
     pub closing: AtomicBool,
     pub sw_active: AtomicBool,
@@ -51,6 +52,7 @@ pub(crate) struct HostSpec {
     pub inline_script: Option<String>,
     pub is_module: bool,
     pub is_service_worker: bool,
+    pub is_shared: bool,
     pub scope: Option<String>,
 }
 
@@ -64,6 +66,7 @@ impl Host {
             inline_script: spec.inline_script,
             is_module: spec.is_module,
             is_service_worker: spec.is_service_worker,
+            is_shared: spec.is_shared,
             scope: spec.scope,
             closing: AtomicBool::new(false),
             sw_active: AtomicBool::new(false),
@@ -119,6 +122,26 @@ pub(crate) fn owner_of(host: &Arc<Host>) -> Option<(Js, Ctx, Value)> {
     })
 }
 
+pub(crate) fn owners_of(host: &Arc<Host>) -> Vec<(Js, Ctx, Value)> {
+    OWNED.with(|list| {
+        list.borrow()
+            .iter()
+            .filter(|o| Arc::ptr_eq(&o.host, host))
+            .map(|o| (o.js, o.ctx, o.object.clone()))
+            .collect()
+    })
+}
+
+fn owner_holding_port(host: &Arc<Host>, port_id: u64) -> Option<(Js, Ctx, Value)> {
+    let owners = owners_of(host);
+    if port_id == 0 || owners.len() < 2 {
+        return owners.into_iter().next();
+    }
+    owners.into_iter().find(|(_, ctx, _)| {
+        ffi::with_ctx(*ctx, |scope| bridge_lookup(scope, port_id).is_object()).unwrap_or(false)
+    })
+}
+
 pub(crate) fn hosts_of(js: Js) -> Vec<Arc<Host>> {
     OWNED.with(|list| {
         list.borrow()
@@ -130,17 +153,28 @@ pub(crate) fn hosts_of(js: Js) -> Vec<Arc<Host>> {
 }
 
 pub(crate) fn teardown(js: Js) {
-    let hosts = hosts_of(js);
-    for host in &hosts {
-        host.owner_alive.store(false, Ordering::SeqCst);
-        stop(host, true);
-    }
     let removed: Vec<Owned> = OWNED.with(|list| {
         let mut list = list.borrow_mut();
         let (gone, kept) = list.drain(..).partition(|o| o.js == js);
         *list = kept;
         gone
     });
+    let mut stopped: Vec<&Arc<Host>> = Vec::new();
+    for owned in &removed {
+        let host = &owned.host;
+        if stopped.iter().any(|h| Arc::ptr_eq(h, host)) {
+            continue;
+        }
+        stopped.push(host);
+        if host.is_shared && !owners_of(host).is_empty() {
+            continue;
+        }
+        host.owner_alive.store(false, Ordering::SeqCst);
+        stop(host, true);
+        if host.is_shared {
+            crate::shared::forget(host);
+        }
+    }
     drop(removed);
 }
 
@@ -200,6 +234,7 @@ pub(crate) enum Body {
     Bytes(Vec<u8>),
     Error(ErrorReport),
     SwState(&'static str),
+    Connect,
 }
 
 pub(crate) struct ErrorReport {
@@ -579,7 +614,15 @@ fn decode(scope: &mut Scope<'_>, message: &Message, ports: &Value) -> (&'static 
 
 fn deliver_owner(message: Message) {
     let host = message.host.clone();
-    let Some((js, ctx, owner)) = owner_of(&host) else {
+    if host.is_shared
+        && let Body::Error(report) = &message.body
+    {
+        if report.load_error && host.owner_alive.load(Ordering::SeqCst) {
+            crate::shared::fire_error(&host);
+        }
+        return;
+    }
+    let Some((js, ctx, owner)) = owner_holding_port(&host, message.port_id) else {
         return;
     };
     let is_state = matches!(message.body, Body::SwState(_));
@@ -690,7 +733,12 @@ fn deliver_worker(message: Message) {
         } else {
             message_ports(scope, &message, &Value::undefined())
         };
-        let (kind, data) = decode(scope, &message, &ports);
+        let connect = matches!(message.body, Body::Connect);
+        let (kind, data) = if connect {
+            ("connect", scope.string(""))
+        } else {
+            decode(scope, &message, &ports)
+        };
         if message.port_id != 0 {
             bridge_deliver(scope, message.port_id, &data);
             ffi::drain_microtasks(js);
@@ -704,8 +752,18 @@ fn deliver_worker(message: Message) {
             ""
         };
         let event = worker_event(scope, kind, &data, origin, "", "");
+        if connect {
+            let port = get_index(scope, &ports, 0);
+            set(scope, &event, "source", port);
+        }
         freeze(scope, &ports);
         set(scope, &event, "ports", ports);
+        if connect {
+            let proto = crate::proto_of(scope, &global, "MessageEvent");
+            if proto.is_object() {
+                let _ = scope.set_prototype(&event, &proto);
+            }
+        }
         ffi::dispatch_engine_event(scope, &global, &event);
         ffi::drain_microtasks(js);
         drop(budget);
@@ -730,6 +788,18 @@ fn send(mut message: Message, to_owner: bool) {
     for followup in followups {
         deliver(followup);
     }
+}
+
+pub(crate) fn connect(
+    scope: &mut Scope<'_>,
+    host: &Arc<Host>,
+    worker: &Value,
+    inside: &Value,
+    outside: &Value,
+) {
+    let mut message = Message::of(host, Body::Connect);
+    transfer_port(scope, inside, outside, &mut message, worker);
+    send(message, false);
 }
 
 pub(crate) fn bridge_send(scope: &mut Scope<'_>, port: &Value, id: u64, data: &Value) -> JsResult {
@@ -1203,14 +1273,37 @@ fn init_event_slots(scope: &mut Scope<'_>, object: &Value) {
     set(scope, object, "onerror", Value::null());
 }
 
-pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value]) -> JsResult {
-    let Some(raw) = args.first() else {
-        return Err(scope.type_error("Worker requires a script URL"));
-    };
-    let js = ffi::js_of(scope);
-    if js.is_null() {
-        return Err(scope.type_error("Worker is unavailable"));
+pub(crate) struct Resolved {
+    pub url: String,
+    pub inline_script: Option<String>,
+    pub fails: bool,
+    pub opaque: bool,
+    pub is_module: bool,
+    pub name: Option<String>,
+    pub current: Option<String>,
+}
+
+impl Resolved {
+    pub(crate) fn base_url(&self) -> String {
+        self.current.clone().unwrap_or_else(|| self.url.clone())
     }
+
+    pub(crate) fn origin(&self) -> String {
+        if self.opaque {
+            "null".to_owned()
+        } else {
+            ffi::url_origin_from(&self.base_url()).unwrap_or_default()
+        }
+    }
+}
+
+pub(crate) fn resolve_script(
+    scope: &mut Scope<'_>,
+    js: Js,
+    interface: &str,
+    raw: &Value,
+    options: &Value,
+) -> Result<Resolved, Value> {
     let raw = scope.to_string(raw)?;
     let mut inline_script = None;
     let mut fails = false;
@@ -1226,20 +1319,16 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
         ffi::url_resolve(base.as_deref(), &raw)
     };
     let Some(url) = url else {
-        return Err(ffi::dom_exception(
-            scope,
-            c"SyntaxError",
-            12,
-            c"Failed to construct 'Worker': the script URL is invalid.",
-        ));
+        let message = format!("Failed to construct '{interface}': the script URL is invalid.");
+        let message = CString::new(message).unwrap_or_default();
+        return Err(ffi::dom_exception(scope, c"SyntaxError", 12, &message));
     };
     if url.starts_with("data:") {
         inline_script = ffi::decode_data_url(&url).map(|bytes| script_text(&bytes));
         fails = inline_script.is_none();
         opaque = true;
     }
-    let options = arg(args, 1);
-    let kind = option_string(scope, &options, "type");
+    let kind = option_string(scope, options, "type");
     let is_module = kind
         .as_deref()
         .is_some_and(|k| k.eq_ignore_ascii_case("module"));
@@ -1247,48 +1336,86 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
         .as_deref()
         .is_some_and(|k| !k.is_empty() && !is_module && !k.eq_ignore_ascii_case("classic"))
     {
-        return Err(scope.type_error("Worker: unsupported worker type"));
+        return Err(scope.type_error(&format!("{interface}: unsupported worker type")));
     }
-    let name = option_string(scope, &options, "name");
+    let name = option_string(scope, options, "name");
     let current = ffi::current_url(js);
     if inline_script.is_none()
         && !fails
         && let Err(error) = script_url_allowed(current.as_deref(), &url, false)
     {
         if !error.is_empty() {
-            ffi::log_line(js, &format!("Worker {url}: {error}"));
+            ffi::log_line(js, &format!("{interface} {url}: {error}"));
         }
         fails = true;
     }
     if !fails && !ffi::csp_allows_worker(js, scope, &url) {
         fails = true;
     }
+    Ok(Resolved {
+        url,
+        inline_script,
+        fails,
+        opaque,
+        is_module,
+        name,
+        current,
+    })
+}
+
+pub(crate) fn prototype_of(scope: &mut Scope<'_>, new_target: &Value) -> Option<Value> {
     let proto = if new_target.is_object() {
         get(scope, new_target, "prototype")
     } else {
         Value::null()
     };
-    let proto = proto.is_object().then_some(proto);
-    if fails {
+    proto.is_object().then_some(proto)
+}
+
+pub(crate) fn bind_event_target(scope: &mut Scope<'_>, object: &Value) {
+    ffi::bind_c_if_not_callable(
+        scope,
+        object,
+        "addEventListener",
+        2,
+        ffi::CFn::AddEventListener,
+    );
+    ffi::bind_c_if_not_callable(
+        scope,
+        object,
+        "removeEventListener",
+        2,
+        ffi::CFn::RemoveEventListener,
+    );
+    ffi::bind_c_if_not_callable(scope, object, "dispatchEvent", 1, ffi::CFn::DispatchEvent);
+}
+
+pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value]) -> JsResult {
+    let Some(raw) = args.first() else {
+        return Err(scope.type_error("Worker requires a script URL"));
+    };
+    let js = ffi::js_of(scope);
+    if js.is_null() {
+        return Err(scope.type_error("Worker is unavailable"));
+    }
+    let resolved = resolve_script(scope, js, "Worker", raw, &arg(args, 1))?;
+    let proto = prototype_of(scope, new_target);
+    if resolved.fails {
         let object = scope.new_host_object(proto.as_ref(), WorkerRef(None));
         init_event_slots(scope, &object);
         ffi::queue_fail_job(scope, &object);
         return Ok(object);
     }
-    let base_url = current.clone().unwrap_or_else(|| url.clone());
-    let origin = if opaque {
-        "null".to_owned()
-    } else {
-        ffi::url_origin_from(&base_url).unwrap_or_default()
-    };
+    let url = resolved.url.clone();
     let host = Host::new(HostSpec {
         url: url.clone(),
-        base_url,
-        name: name.unwrap_or_default(),
-        origin,
-        inline_script,
-        is_module,
+        base_url: resolved.base_url(),
+        origin: resolved.origin(),
+        name: resolved.name.unwrap_or_default(),
+        inline_script: resolved.inline_script,
+        is_module: resolved.is_module,
         is_service_worker: false,
+        is_shared: false,
         scope: None,
     });
     let object = scope.new_host_object(proto.as_ref(), WorkerRef(Some(host.clone())));
@@ -1296,21 +1423,7 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
     set_str(scope, &object, "url", &url);
     crate::bind_if_not_callable(scope, &object, "postMessage", 1, post_message);
     crate::bind_if_not_callable(scope, &object, "terminate", 0, terminate);
-    ffi::bind_c_if_not_callable(
-        scope,
-        &object,
-        "addEventListener",
-        2,
-        ffi::CFn::AddEventListener,
-    );
-    ffi::bind_c_if_not_callable(
-        scope,
-        &object,
-        "removeEventListener",
-        2,
-        ffi::CFn::RemoveEventListener,
-    );
-    ffi::bind_c_if_not_callable(scope, &object, "dispatchEvent", 1, ffi::CFn::DispatchEvent);
+    bind_event_target(scope, &object);
     adopt(Owned {
         host: host.clone(),
         js,

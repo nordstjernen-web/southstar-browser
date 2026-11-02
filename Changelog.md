@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Workers: `SharedWorker`. `new SharedWorker(url, nameOrOptions)` returns
+  an object with a `port` and `onerror`; constructors in the renderer that
+  name the same script URL and name from the same origin reach one worker
+  thread, whose `SharedWorkerGlobalScope` fires a `connect` event with the
+  new port in `ports[0]` (and `source`) for each of them. It reuses the
+  dedicated worker's thread, script fetch, same-origin, CSP and blob:/data:
+  handling, and the worker lives until its last owning page goes away or it
+  calls `close()`.
 * CSS: `font-palette` accepts `palette-mix()` with an interpolation method,
   percentages, nesting and `<dashed-ident>` palettes, and serializes it the
   way `color-mix()` is serialized (the WPT `palette-mix-*` parsing files
