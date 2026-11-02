@@ -16,7 +16,6 @@ use std::sync::Arc;
 use southstar_glib::{FALSE, GBoolean};
 
 pub const DEFAULT_SEARCH_ENGINE: &str = "https://duckduckgo.com/?q=%s";
-const OLD_SEARCH_ENGINE: &[u8] = b"https://lite.duckduckgo.com/lite/?q=%s";
 const MAX_REDIRECTS: i32 = 10;
 
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -483,9 +482,6 @@ fn load(config: &mut NsConfig, contents: Option<&[u8]>, env: impl Fn(&str) -> Op
     apply_defaults(config);
     if let Some(contents) = contents {
         apply_file(config, contents);
-    }
-    if config.text("search_engine").as_deref() == Some(OLD_SEARCH_ENGINE) {
-        config.search_engine.set(DEFAULT_SEARCH_ENGINE.as_bytes());
     }
     apply_env(config, env);
 }

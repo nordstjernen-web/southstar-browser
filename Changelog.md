@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Settings: a search engine set to DuckDuckGo Lite
+  (`https://lite.duckduckgo.com/lite/?q=%s`) is kept. It was replaced
+  by `https://duckduckgo.com/?q=%s` every time the configuration
+  loaded, a leftover of the change of default engine, so choosing Lite
+  in Settings had no effect (same bug as Nordstjernen Sol issue #743).
 * CSS Anchor Positioning, layout: an absolutely or fixed positioned box
   resolves `anchor()` insets, `anchor-size()` sizes and margins against
   the border box of the element named by `anchor-name` (the last
