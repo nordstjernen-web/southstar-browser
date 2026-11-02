@@ -17,11 +17,33 @@ const TYPE_AAAA: u16 = 28;
 const MIN_TTL: u32 = 30;
 const MAX_TTL: u32 = 3600;
 const MAX_ANSWER: usize = 64 * 1024;
+const MAX_CACHED_HOSTS: usize = 1024;
 
 struct Resolver {
     url: Vec<u8>,
     tls: Settings,
     cache: HashMap<String, (Vec<IpAddr>, Instant)>,
+}
+
+pub(crate) fn remember(
+    cache: &mut HashMap<String, (Vec<IpAddr>, Instant)>,
+    host: String,
+    addrs: Vec<IpAddr>,
+    expires: Instant,
+    now: Instant,
+) {
+    if cache.len() >= MAX_CACHED_HOSTS && !cache.contains_key(&host) {
+        cache.retain(|_, (_, at)| *at > now);
+        if cache.len() >= MAX_CACHED_HOSTS
+            && let Some(soonest) = cache
+                .iter()
+                .min_by_key(|(_, (_, at))| *at)
+                .map(|(name, _)| name.clone())
+        {
+            cache.remove(&soonest);
+        }
+    }
+    cache.insert(host, (addrs, expires));
 }
 
 static RESOLVER: Mutex<Option<Resolver>> = Mutex::new(None);
@@ -248,12 +270,13 @@ pub fn resolve(host: &str, abort: &dyn Fn() -> bool) -> Lookup {
         return Lookup::Failed;
     }
     if let Some(resolver) = lock().as_mut().filter(|r| r.url == server) {
-        resolver.cache.insert(
+        let now = Instant::now();
+        remember(
+            &mut resolver.cache,
             host.to_ascii_lowercase(),
-            (
-                addrs.clone(),
-                Instant::now() + Duration::from_secs(u64::from(ttl)),
-            ),
+            addrs.clone(),
+            now + Duration::from_secs(u64::from(ttl)),
+            now,
         );
     }
     Lookup::Found(addrs)

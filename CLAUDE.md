@@ -381,8 +381,10 @@ referer, cache, cookie partitioning — lives in `rust/net`
 (`rust/net/src/ffi/hop.rs` is the hop). Other crates reach the network
 through `southstar_http::fetch` with `southstar_net::route` supplying TLS
 settings and the proxy; the media helpers download through `rust/helper-ffi`.
-Extend `rust/http`; don't reintroduce libcurl. Not supported: HTTP/3, DNS over
-HTTPS, TLS Encrypted Client Hello.
+Extend `rust/http`; don't reintroduce libcurl. DNS over HTTPS (RFC 8484,
+`rust/http/src/doh.rs`) is off by default and used only when `doh_url` (or
+`NS_DOH_URL`) names a resolver; answers are cached for their TTL, at most 1024
+hosts. Not supported: HTTP/3, TLS Encrypted Client Hello.
 
 ### WebAssembly: wasmi
 
