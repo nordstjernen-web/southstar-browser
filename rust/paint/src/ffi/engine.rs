@@ -75,10 +75,6 @@ pub fn parse_int(text: &CStr, dflt: i32, min: i32, max: i32) -> i32 {
     southstar_dom::controls::parse_int(Some(text), dflt, min, max)
 }
 
-pub fn format_g8(value: f64) -> Vec<u8> {
-    southstar_numfmt::general(value, 8).into_bytes()
-}
-
 #[derive(Clone)]
 pub struct Texture(TextureRef);
 

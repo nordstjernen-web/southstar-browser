@@ -157,12 +157,6 @@ impl<'a> BoxRef<'a> {
         self.raw().attrs.set(attrs.map(Rc::from));
     }
 
-    pub fn push_link(self, link: LinkRange) {
-        let mut links = self.take_links().unwrap_or_default();
-        links.push(link);
-        self.put_links(Some(links));
-    }
-
     pub fn has_links(self) -> bool {
         let links = self.raw().links.take();
         let has = links.is_some();

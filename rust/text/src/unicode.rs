@@ -261,9 +261,3 @@ pub fn utf8_strlen(text: &str) -> usize {
 pub fn byte_to_char_offset(text: &str, index: usize) -> usize {
     text.char_indices().take_while(|&(i, _)| i < index).count()
 }
-
-pub fn char_offset_to_byte(text: &str, offset: usize) -> usize {
-    text.char_indices()
-        .nth(offset)
-        .map_or(text.len(), |(i, _)| i)
-}

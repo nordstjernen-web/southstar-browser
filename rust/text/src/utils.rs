@@ -16,10 +16,6 @@ pub const fn version() -> i32 {
     version_encode(VERSION_MAJOR, VERSION_MINOR, VERSION_MICRO)
 }
 
-pub const fn version_string() -> &'static str {
-    "1.58.2"
-}
-
 pub fn is_zero_width(ch: u32) -> bool {
     ((ch & !0x007F) == 0x2000
         && ((0x200B..=0x200F).contains(&ch)

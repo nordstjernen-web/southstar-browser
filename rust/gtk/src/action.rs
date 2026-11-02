@@ -61,17 +61,6 @@ impl ApplicationWindow {
         // SAFETY: self is a live GtkApplicationWindow, a GActionMap, and the map takes its own reference to the action.
         unsafe { sys::g_action_map_add_action(self.as_ptr().cast(), action.0.as_ptr()) };
     }
-
-    pub fn activate_action(&self, name: &CStr) {
-        // SAFETY: self is a live GtkApplicationWindow, a GActionGroup; GLib ignores unknown names and a null parameter fits parameterless actions.
-        unsafe {
-            sys::g_action_group_activate_action(
-                self.as_ptr().cast(),
-                name.as_ptr(),
-                core::ptr::null_mut(),
-            )
-        };
-    }
 }
 
 impl Application {

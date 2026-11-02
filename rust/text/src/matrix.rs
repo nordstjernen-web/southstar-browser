@@ -73,20 +73,10 @@ impl Matrix {
     }
 }
 
-pub fn matrix_transform_distance(matrix: Option<&Matrix>, dx: &mut f64, dy: &mut f64) {
-    if let Some(matrix) = matrix {
-        matrix.transform_distance(dx, dy);
-    }
-}
-
 pub fn matrix_get_font_scale_factor(matrix: Option<&Matrix>) -> f64 {
     matrix_get_font_scale_factors(matrix).1
 }
 
 pub fn matrix_get_font_scale_factors(matrix: Option<&Matrix>) -> (f64, f64) {
     matrix.map_or((1.0, 1.0), Matrix::font_scale_factors)
-}
-
-pub fn matrix_get_slant_ratio(matrix: Option<&Matrix>) -> f64 {
-    matrix.map_or(0.0, Matrix::slant_ratio)
 }

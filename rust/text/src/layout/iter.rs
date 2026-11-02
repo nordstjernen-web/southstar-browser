@@ -314,12 +314,6 @@ impl<'a> LayoutIter<'a> {
         self.line_extents[self.line_index].baseline
     }
 
-    pub fn layout_extents(&self) -> (Rectangle, Rectangle) {
-        let ctx = lock_context(&self.layout.context);
-        let (ink, logical, _) = self.layout.extents_internal(&ctx, true, true, false);
-        (ink.unwrap_or_default(), logical.unwrap_or_default())
-    }
-
     pub fn cluster_width(&self) -> i32 {
         self.cluster_width
     }

@@ -36,7 +36,3 @@ pub fn computed(input: &[u8], ctx: &Context) -> Option<Color> {
 pub fn computed_text(input: &[u8], ctx: &Context) -> Option<String> {
     computed(input, ctx).map(|c| c.serialize())
 }
-
-pub fn rgba8(input: &[u8], ctx: &Context) -> Option<[u8; 4]> {
-    computed(input, ctx).map(|c| c.to_rgba8())
-}

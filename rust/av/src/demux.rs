@@ -7,10 +7,10 @@ use core::marker::PhantomData;
 use core::ptr::{self, NonNull};
 use std::borrow::Cow;
 
-use crate::decode::{CodecDescription, Packet};
+use crate::decode::Packet;
 use crate::{
-    self as av, AVCodec, AVCodecParameters, AVDictionary, AVFormatContext, AVIOContext, AVStream,
-    Field, codec_parameters, format_context, io_context, stream,
+    self as av, AVCodecParameters, AVDictionary, AVFormatContext, AVIOContext, AVStream, Field,
+    codec_parameters, format_context, io_context, stream,
 };
 
 const IO_BUFFER: c_int = 32768;
@@ -254,21 +254,6 @@ impl<'a> Format<'a> {
             )
         };
         (index >= 0).then_some(index)
-    }
-
-    pub fn best_stream_and_decoder(
-        &mut self,
-        media_type: c_int,
-    ) -> Option<(c_int, CodecDescription)> {
-        let mut decoder: *const AVCodec = ptr::null();
-        // SAFETY: self.context is an open format context; decoder is a writable pointer libav sets to a static codec description.
-        let index = unsafe {
-            av::av_find_best_stream(self.context.as_ptr(), media_type, -1, -1, &mut decoder, 0)
-        };
-        if index < 0 {
-            return None;
-        }
-        Some((index, CodecDescription::from_libav(decoder)?))
     }
 
     pub fn stream(&self, index: c_int) -> Option<Stream<'_>> {

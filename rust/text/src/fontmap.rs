@@ -637,22 +637,19 @@ impl FontMap {
                 let spacing = pattern
                     .get_integer(FC_SPACING, 0)
                     .unwrap_or(FC_PROPORTIONAL);
-                builders.push(FamilyBuilder::new(&name, spacing, false));
+                builders.push(FamilyBuilder::new(&name, spacing));
                 by_name.insert(name.clone(), builders.len() - 1);
                 index = Some(builders.len() - 1);
             }
             if let Some(index) = index {
                 let family = &mut builders[index];
-                if pattern.get_bool(FC_VARIABLE, 0) == Some(true) {
-                    family.variable = true;
-                }
                 family.patterns.push(pattern);
             }
         }
-        builders.push(FamilyBuilder::new("Sans", FC_PROPORTIONAL, false));
-        builders.push(FamilyBuilder::new("Serif", FC_PROPORTIONAL, false));
-        builders.push(FamilyBuilder::new("Monospace", FC_MONO, false));
-        builders.push(FamilyBuilder::new("System-ui", FC_PROPORTIONAL, false));
+        builders.push(FamilyBuilder::new("Sans", FC_PROPORTIONAL));
+        builders.push(FamilyBuilder::new("Serif", FC_PROPORTIONAL));
+        builders.push(FamilyBuilder::new("Monospace", FC_MONO));
+        builders.push(FamilyBuilder::new("System-ui", FC_PROPORTIONAL));
         builders.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));
         let weak = self.downgrade();
         let families: Vec<FontFamily> = builders
@@ -886,16 +883,14 @@ impl FontMapState {
 struct FamilyBuilder {
     name: String,
     spacing: i32,
-    variable: bool,
     patterns: Vec<Pattern>,
 }
 
 impl FamilyBuilder {
-    fn new(name: &str, spacing: i32, variable: bool) -> FamilyBuilder {
+    fn new(name: &str, spacing: i32) -> FamilyBuilder {
         FamilyBuilder {
             name: name.to_owned(),
             spacing,
-            variable,
             patterns: Vec::new(),
         }
     }
@@ -905,7 +900,6 @@ impl FamilyBuilder {
             fontmap,
             name: self.name,
             spacing: self.spacing,
-            variable: self.variable,
             patterns: self.patterns,
             faces: OnceLock::new(),
         }))
@@ -919,7 +913,6 @@ struct FamilyInner {
     fontmap: Weak<FontMapShared>,
     name: String,
     spacing: i32,
-    variable: bool,
     patterns: Vec<Pattern>,
     faces: OnceLock<Vec<FontFace>>,
 }
@@ -982,10 +975,6 @@ impl FontFamily {
 
     pub fn is_monospace(&self) -> bool {
         matches!(self.0.spacing, FC_MONO | FC_DUAL | FC_CHARCELL)
-    }
-
-    pub fn is_variable(&self) -> bool {
-        self.0.variable
     }
 
     pub fn font_map(&self) -> Option<FontMap> {
@@ -1117,10 +1106,6 @@ impl FontFace {
         &self.0.style
     }
 
-    pub fn is_synthesized(&self) -> bool {
-        self.0.fake
-    }
-
     pub fn family(&self) -> Option<FontFamily> {
         self.0.family.upgrade().map(FontFamily)
     }
@@ -1146,36 +1131,5 @@ impl FontFace {
             Some(pattern) => font_description_from_pattern(pattern, false),
             None => FontDescription::new(),
         }
-    }
-
-    pub fn list_sizes(&self) -> Vec<i32> {
-        let Some(family) = self.0.family.upgrade() else {
-            return Vec::new();
-        };
-        let Some(fontmap) = family.fontmap.upgrade().map(FontMap::from_shared) else {
-            return Vec::new();
-        };
-        let mut pattern = PatternBuilder::new();
-        pattern.add_string(FC_FAMILY, &family.name);
-        pattern.add_string(FC_STYLE, &self.0.style);
-        let pattern = pattern.finish();
-        let fonts = fontmap.config_fonts();
-        let Some(listed) = fonts.list(&pattern, &[FC_PIXEL_SIZE]) else {
-            return Vec::new();
-        };
-        let mut sizes = Vec::new();
-        let mut dpi = -1.0;
-        for font in listed.patterns() {
-            let mut j = 0;
-            while let Some(size) = font.get_double(FC_PIXEL_SIZE, j) {
-                if dpi < 0.0 {
-                    dpi = fontmap.resolution_for(None);
-                }
-                sizes.push(c_double_to_int(f64::from(SCALE) * size * 72.0 / dpi));
-                j += 1;
-            }
-        }
-        sizes.sort_unstable();
-        sizes
     }
 }

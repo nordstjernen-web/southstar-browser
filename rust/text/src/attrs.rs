@@ -7,8 +7,8 @@ use core::fmt;
 use crate::font_description::{FontDescription, Width, c_double_to_int};
 use crate::language::Language;
 use crate::types::{
-    BaselineShift, Color, FontScale, Gravity, GravityHint, Overline, Rectangle, Stretch, Style,
-    TextTransform, Underline, Variant, Weight, font_mask,
+    Color, FontScale, Overline, Rectangle, Stretch, Style, TextTransform, Underline, Variant,
+    Weight, font_mask,
 };
 
 #[cfg(test)]
@@ -63,57 +63,6 @@ pub enum AttrType {
     FontScale = 37,
     Width = 38,
     WordSpacing = 39,
-}
-
-impl AttrType {
-    pub fn from_number(number: i32) -> Option<AttrType> {
-        const ALL: [AttrType; 40] = [
-            AttrType::Invalid,
-            AttrType::Language,
-            AttrType::Family,
-            AttrType::Style,
-            AttrType::Weight,
-            AttrType::Variant,
-            AttrType::Stretch,
-            AttrType::Size,
-            AttrType::FontDesc,
-            AttrType::Foreground,
-            AttrType::Background,
-            AttrType::Underline,
-            AttrType::Strikethrough,
-            AttrType::Rise,
-            AttrType::Shape,
-            AttrType::Scale,
-            AttrType::Fallback,
-            AttrType::LetterSpacing,
-            AttrType::UnderlineColor,
-            AttrType::StrikethroughColor,
-            AttrType::AbsoluteSize,
-            AttrType::Gravity,
-            AttrType::GravityHint,
-            AttrType::FontFeatures,
-            AttrType::ForegroundAlpha,
-            AttrType::BackgroundAlpha,
-            AttrType::AllowBreaks,
-            AttrType::Show,
-            AttrType::InsertHyphens,
-            AttrType::Overline,
-            AttrType::OverlineColor,
-            AttrType::LineHeight,
-            AttrType::AbsoluteLineHeight,
-            AttrType::TextTransform,
-            AttrType::Word,
-            AttrType::Sentence,
-            AttrType::BaselineShift,
-            AttrType::FontScale,
-            AttrType::Width,
-            AttrType::WordSpacing,
-        ];
-        usize::try_from(number)
-            .ok()
-            .and_then(|index| ALL.get(index))
-            .copied()
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -292,13 +241,6 @@ impl AttrValue {
     pub fn as_font_features(&self) -> Option<&str> {
         match self {
             AttrValue::FontFeatures(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn as_shape(&self) -> Option<&ShapeAttr> {
-        match self {
-            AttrValue::Shape(v) => Some(v),
             _ => None,
         }
     }
@@ -491,28 +433,12 @@ pub fn attr_overline_color_new(red: u16, green: u16, blue: u16) -> Attribute {
     Attribute::new(AttrValue::OverlineColor(Color { red, green, blue }))
 }
 
-pub fn attr_line_height_new(factor: f64) -> Attribute {
-    Attribute::new(AttrValue::LineHeight(factor))
-}
-
 pub fn attr_line_height_new_absolute(height: i32) -> Attribute {
     Attribute::new(AttrValue::AbsoluteLineHeight(height))
 }
 
 pub fn attr_text_transform_new(transform: TextTransform) -> Attribute {
     Attribute::new(AttrValue::TextTransform(transform as i32))
-}
-
-pub fn attr_gravity_new(gravity: Gravity) -> Attribute {
-    Attribute::new(AttrValue::Gravity(gravity as i32))
-}
-
-pub fn attr_gravity_hint_new(hint: GravityHint) -> Attribute {
-    Attribute::new(AttrValue::GravityHint(hint as i32))
-}
-
-pub fn attr_baseline_shift_new(shift: BaselineShift) -> Attribute {
-    Attribute::new(AttrValue::BaselineShift(shift as i32))
 }
 
 #[derive(Debug, Default)]

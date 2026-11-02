@@ -13,7 +13,7 @@ use southstar_cairo::ContextRef;
 use southstar_text::attrs::{self as text_attrs, AttrType};
 #[cfg(target_os = "macos")]
 use southstar_text::font::HintStyle;
-use southstar_text::font::{Antialias, CairoContext, FontOptions, HintMetrics, SubpixelOrder};
+use southstar_text::font::{Antialias, FontOptions, HintMetrics, SubpixelOrder};
 use southstar_text::fontmap::FontMap as TextFontMap;
 use southstar_text::layout::{self as text_layout, SharedContext};
 use southstar_text::{
@@ -443,14 +443,6 @@ impl Layout {
 
     pub fn show(&self, cr: ContextRef) {
         render::show_layout(cr, &mut self.get());
-    }
-
-    pub fn show_on(&self, cr: &CairoContext) {
-        southstar_text::render::show_layout(cr, &mut self.get());
-    }
-
-    pub fn path_on(&self, cr: &CairoContext) {
-        southstar_text::render::layout_path(cr, &mut self.get());
     }
 }
 

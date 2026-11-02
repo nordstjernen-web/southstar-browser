@@ -267,27 +267,12 @@ impl Context {
         self.base_dir
     }
 
-    pub fn set_base_gravity(&mut self, gravity: Gravity) {
-        if gravity != self.base_gravity {
-            self.context_changed();
-        }
-        self.base_gravity = gravity;
-        self.update_resolved_gravity();
-    }
-
     pub fn base_gravity(&self) -> Gravity {
         self.base_gravity
     }
 
     pub fn gravity(&self) -> Gravity {
         self.resolved_gravity
-    }
-
-    pub fn set_gravity_hint(&mut self, hint: GravityHint) {
-        if hint != self.gravity_hint {
-            self.context_changed();
-        }
-        self.gravity_hint = hint;
     }
 
     pub fn gravity_hint(&self) -> GravityHint {

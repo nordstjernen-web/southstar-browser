@@ -618,11 +618,6 @@ impl RuntimeHandle {
         }
     }
 
-    pub fn has_pending_jobs(self) -> bool {
-        self.runtime()
-            .is_some_and(|runtime| !runtime.executor.is_empty())
-    }
-
     pub fn pending_job_context(self) -> ContextHandle {
         let Some(runtime) = self.runtime() else {
             return ContextHandle::NULL;

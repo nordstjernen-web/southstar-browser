@@ -4,6 +4,13 @@ Changelog:
 Southstar Browser 1.0.7-dev:
 ======
 * README: link to Southstar Browser in the Microsoft Store.
+* Source: removed about 65 public functions nothing called, and the
+  private helpers only they used: Pango API surface kept by the
+  `rust/text` port (gravity and baseline-shift attributes, layout
+  spacing setters, glyph-string and error-underline renderers, matrix
+  and unit helpers), pl_mpeg's audio-stream switch and frame seek, and
+  unused helpers in js-engine, js-runtime, layout, paint, gtk, av and
+  css-color.
 * Security (CSS): a long chain of custom properties declared in
   reverse order (`--a2: var(--a1); --a1: var(--a0); ...`) no longer
   overflows the renderer's stack. Each property was resolved on demand

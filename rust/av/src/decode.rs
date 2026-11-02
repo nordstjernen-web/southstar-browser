@@ -225,10 +225,6 @@ impl Decoder {
         crate::os::supports(codec_id) || CodecDescription::find(codec_id).is_some()
     }
 
-    pub fn is_system(&self) -> bool {
-        matches!(self, Decoder::System(_))
-    }
-
     pub fn send(&mut self, packet: Option<&Packet>) -> c_int {
         match self {
             Decoder::Libav(codec) => codec.send(packet),
