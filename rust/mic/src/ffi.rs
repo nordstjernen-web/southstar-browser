@@ -35,8 +35,8 @@ mod sdl {
     const ALLOW_CHANNELS_CHANGE: c_int = 0x4;
 
     unsafe extern "C" {
-        fn SDL_WasInit(flags: u32) -> u32;
-        fn SDL_InitSubSystem(flags: u32) -> c_int;
+        safe fn SDL_WasInit(flags: u32) -> u32;
+        safe fn SDL_InitSubSystem(flags: u32) -> c_int;
         fn SDL_OpenAudioDevice(
             device: *const c_char,
             iscapture: c_int,
@@ -44,7 +44,7 @@ mod sdl {
             obtained: *mut AudioSpec,
             allowed_changes: c_int,
         ) -> u32;
-        fn SDL_PauseAudioDevice(dev: u32, pause_on: c_int);
+        safe fn SDL_PauseAudioDevice(dev: u32, pause_on: c_int);
         fn SDL_CloseAudioDevice(dev: u32);
     }
 
@@ -59,6 +59,11 @@ mod sdl {
     }
 
     unsafe extern "C" fn capture(_user: *mut c_void, stream: *mut u8, len: c_int) {
+        if stream.is_null() {
+            return;
+        }
+        // SAFETY: SDL calls the capture callback with `stream` pointing at `len` bytes of
+        // captured samples that stay valid until the callback returns.
         let stream = unsafe { core::slice::from_raw_parts(stream, len.max(0) as usize) };
         let channels = CHANNELS.load(Ordering::SeqCst);
         ring(|r| r.push_interleaved(stream, channels));
@@ -70,9 +75,7 @@ mod sdl {
             *refs += 1;
             return true;
         }
-        if unsafe { SDL_WasInit(SDL_INIT_AUDIO) } == 0
-            && unsafe { SDL_InitSubSystem(SDL_INIT_AUDIO) } != 0
-        {
+        if SDL_WasInit(SDL_INIT_AUDIO) == 0 && SDL_InitSubSystem(SDL_INIT_AUDIO) != 0 {
             return false;
         }
         let want = AudioSpec {
@@ -98,6 +101,8 @@ mod sdl {
             userdata: ptr::null_mut(),
         };
         ring(Ring::clear);
+        // SAFETY: a null name selects the default capture device, `want` is a filled-in
+        // spec whose callback matches SDL's signature and `got` is a valid out-pointer.
         let device = unsafe {
             SDL_OpenAudioDevice(
                 ptr::null(),
@@ -112,7 +117,7 @@ mod sdl {
         }
         CHANNELS.store(c_int::from(got.channels), Ordering::SeqCst);
         DEVICE.store(device, Ordering::SeqCst);
-        unsafe { SDL_PauseAudioDevice(device, 0) };
+        SDL_PauseAudioDevice(device, 0);
         *refs += 1;
         true
     }
@@ -123,6 +128,8 @@ mod sdl {
             *refs -= 1;
             let device = DEVICE.load(Ordering::SeqCst);
             if *refs == 0 && device != 0 {
+                // SAFETY: `device` is the capture device this module opened, closed once here
+                // before DEVICE is cleared, so no later call reuses the stale id.
                 unsafe { SDL_CloseAudioDevice(device) };
                 DEVICE.store(0, Ordering::SeqCst);
             }

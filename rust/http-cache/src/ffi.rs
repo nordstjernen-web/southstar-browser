@@ -39,6 +39,7 @@ pub(crate) fn restrict_to_owner(path: &[u8], is_dir: bool) {
 mod acl {
     use core::ffi::c_void;
     use core::ptr;
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
     type Handle = *mut c_void;
 
@@ -100,8 +101,7 @@ mod acl {
 
     #[link(name = "kernel32")]
     unsafe extern "system" {
-        fn GetCurrentProcess() -> Handle;
-        fn CloseHandle(handle: Handle) -> i32;
+        safe fn GetCurrentProcess() -> Handle;
         fn LocalFree(memory: *mut c_void) -> *mut c_void;
     }
 
@@ -110,25 +110,9 @@ mod acl {
             return false;
         };
         let wide: Vec<u16> = path.encode_utf16().chain([0]).collect();
-        let mut token = ptr::null_mut();
-        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        let Some(sid) = process_user_sid() else {
             return false;
-        }
-        let mut need = 0u32;
-        unsafe { GetTokenInformation(token, TOKEN_USER, ptr::null_mut(), 0, &mut need) };
-        if need == 0 {
-            unsafe { CloseHandle(token) };
-            return false;
-        }
-        let mut user = vec![0u64; (need as usize).div_ceil(8)];
-        let got = unsafe {
-            GetTokenInformation(token, TOKEN_USER, user.as_mut_ptr().cast(), need, &mut need)
         };
-        unsafe { CloseHandle(token) };
-        if got == 0 {
-            return false;
-        }
-        let sid = user[0] as usize as *mut c_void;
         let access = ExplicitAccess {
             permissions: GENERIC_ALL,
             mode: SET_ACCESS,
@@ -142,13 +126,17 @@ mod acl {
                 multiple_trustee_operation: 0,
                 form: TRUSTEE_IS_SID,
                 kind: TRUSTEE_IS_USER,
-                name: sid,
+                name: sid.as_ptr(),
             },
         };
         let mut dacl = ptr::null_mut();
+        // SAFETY: `access` is one valid EXPLICIT_ACCESS_W whose trustee SID lives in `sid`
+        // until the call returns, and `dacl` is a valid out-pointer for the new ACL.
         if unsafe { SetEntriesInAclW(1, &access, ptr::null_mut(), &mut dacl) } != 0 {
             return false;
         }
+        // SAFETY: `wide` is a NUL-terminated UTF-16 path, `dacl` is the ACL
+        // SetEntriesInAclW just allocated, and the null owner, group and SACL are permitted.
         let result = unsafe {
             SetNamedSecurityInfoW(
                 wide.as_ptr(),
@@ -160,8 +148,57 @@ mod acl {
                 ptr::null_mut(),
             )
         };
+        // SAFETY: `dacl` was allocated by SetEntriesInAclW with LocalAlloc, is freed
+        // once here and not used afterwards.
         unsafe { LocalFree(dacl) };
         result == 0
+    }
+
+    struct TokenUser(Vec<usize>);
+
+    impl TokenUser {
+        fn as_ptr(&self) -> *mut c_void {
+            self.0[0] as *mut c_void
+        }
+    }
+
+    fn process_user_sid() -> Option<TokenUser> {
+        let mut raw = ptr::null_mut();
+        // SAFETY: the pseudo-handle of the current process is always valid and `raw` is a
+        // valid out-pointer for the token handle.
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw) } == 0 {
+            return None;
+        }
+        // SAFETY: OpenProcessToken succeeded, so `raw` is a token handle this function
+        // owns exclusively; OwnedHandle closes it once on drop.
+        let token = unsafe { OwnedHandle::from_raw_handle(raw) };
+        let mut need = 0u32;
+        // SAFETY: a zero-length query with a null buffer only writes the needed size to `need`.
+        unsafe {
+            GetTokenInformation(
+                token.as_raw_handle(),
+                TOKEN_USER,
+                ptr::null_mut(),
+                0,
+                &mut need,
+            )
+        };
+        if (need as usize) < size_of::<usize>() {
+            return None;
+        }
+        let mut user = vec![0usize; (need as usize).div_ceil(size_of::<usize>())];
+        // SAFETY: `user` is pointer-aligned and at least `need` bytes long, the length
+        // passed, and `token` keeps the handle open for the call.
+        let got = unsafe {
+            GetTokenInformation(
+                token.as_raw_handle(),
+                TOKEN_USER,
+                user.as_mut_ptr().cast(),
+                need,
+                &mut need,
+            )
+        };
+        (got != 0).then_some(TokenUser(user))
     }
 }
 

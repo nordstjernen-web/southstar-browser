@@ -128,14 +128,51 @@ mod backend {
         static epoxy_wglGetCurrentDC: unsafe extern "system" fn() -> Handle;
     }
 
-    pub struct Context {
-        window: Handle,
+    struct Window(Handle);
+
+    impl Drop for Window {
+        fn drop(&mut self) {
+            // SAFETY: the window was created by `create` and is owned only by this value, so it
+            // is destroyed once and never used afterwards.
+            unsafe { DestroyWindow(self.0) };
+        }
+    }
+
+    struct WindowDc {
         dc: Handle,
-        rc: Handle,
+        window: Window,
+    }
+
+    impl Drop for WindowDc {
+        fn drop(&mut self) {
+            // SAFETY: `dc` was returned by GetDC for `window`, which is destroyed only after this
+            // runs, and is released once here.
+            unsafe { ReleaseDC(self.window.0, self.dc) };
+        }
+    }
+
+    struct RenderContext(Handle);
+
+    impl Drop for RenderContext {
+        fn drop(&mut self) {
+            // SAFETY: the context was created by wglCreateContext and is owned only by this
+            // value; `destroy` has already made it non-current.
+            unsafe { epoxy_wglDeleteContext(self.0) };
+        }
+    }
+
+    pub struct Context {
+        rc: RenderContext,
+        dc: WindowDc,
     }
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain([0]).collect()
+    }
+
+    fn current_module() -> Handle {
+        // SAFETY: a null name asks for the executable's own module handle and reads no memory.
+        unsafe { GetModuleHandleW(ptr::null()) }
     }
 
     fn class_name() -> *const u16 {
@@ -147,13 +184,15 @@ mod backend {
                 wnd_proc: Some(DefWindowProcW),
                 cls_extra: 0,
                 wnd_extra: 0,
-                instance: unsafe { GetModuleHandleW(ptr::null()) },
+                instance: current_module(),
                 icon: ptr::null_mut(),
                 cursor: ptr::null_mut(),
                 background: ptr::null_mut(),
                 menu_name: ptr::null(),
                 class_name: name.as_ptr(),
             };
+            // SAFETY: `class` is a fully initialised WNDCLASSW whose class name points into
+            // `name`, which the OnceLock keeps alive for the rest of the process.
             unsafe { RegisterClassW(&class) };
             name
         })
@@ -172,16 +211,34 @@ mod backend {
             stencil_bits: 8,
             ..PixelFormatDescriptor::default()
         };
+        // SAFETY: `dc` is a live window DC and `descriptor` a PIXELFORMATDESCRIPTOR with its
+        // size field set.
         let format = unsafe { ChoosePixelFormat(dc, &descriptor) };
+        // SAFETY: as above, and `format` is the index ChoosePixelFormat returned for this DC.
         format != 0 && unsafe { SetPixelFormat(dc, format, &descriptor) } != 0
+    }
+
+    fn wgl_make_current(dc: Handle, rc: Handle) -> bool {
+        // SAFETY: `dc` and `rc` are either both null, which releases the current context, or
+        // the live DC and context of one `Context`, created with the same pixel format.
+        unsafe { epoxy_wglMakeCurrent(dc, rc) != 0 }
+    }
+
+    fn wgl_current_context() -> Handle {
+        // SAFETY: wglGetCurrentContext takes no arguments and only reads thread state.
+        unsafe { epoxy_wglGetCurrentContext() }
     }
 
     pub fn create() -> Option<Context> {
         let title = [0u16];
+        let class = class_name();
+        let instance = current_module();
+        // SAFETY: `class` names the class registered above, `title` is an empty NUL-terminated
+        // wide string, and null parent, menu and creation parameter are allowed.
         let window = unsafe {
             CreateWindowExW(
                 0,
-                class_name(),
+                class,
                 title.as_ptr(),
                 WS_POPUP,
                 0,
@@ -190,61 +247,53 @@ mod backend {
                 1,
                 ptr::null_mut(),
                 ptr::null_mut(),
-                GetModuleHandleW(ptr::null()),
+                instance,
                 ptr::null_mut(),
             )
         };
         if window.is_null() {
             return None;
         }
-        let dc = unsafe { GetDC(window) };
-        if dc.is_null() || !set_pixel_format(dc) {
-            unsafe {
-                if !dc.is_null() {
-                    ReleaseDC(window, dc);
-                }
-                DestroyWindow(window);
-            }
+        let window = Window(window);
+        // SAFETY: `window` is the live window just created on this thread.
+        let dc = unsafe { GetDC(window.0) };
+        if dc.is_null() {
             return None;
         }
-        let rc = unsafe { epoxy_wglCreateContext(dc) };
-        if rc.is_null() || unsafe { epoxy_wglMakeCurrent(dc, rc) } == 0 {
-            unsafe {
-                if !rc.is_null() {
-                    epoxy_wglDeleteContext(rc);
-                }
-                ReleaseDC(window, dc);
-                DestroyWindow(window);
-            }
+        let dc = WindowDc { dc, window };
+        if !set_pixel_format(dc.dc) {
             return None;
         }
-        Some(Context { window, dc, rc })
+        // SAFETY: `dc` is a live window DC whose pixel format supports OpenGL.
+        let rc = unsafe { epoxy_wglCreateContext(dc.dc) };
+        if rc.is_null() {
+            return None;
+        }
+        let rc = RenderContext(rc);
+        if !wgl_make_current(dc.dc, rc.0) {
+            return None;
+        }
+        Some(Context { rc, dc })
     }
 
     pub fn make_current(c: &Context) -> bool {
-        unsafe {
-            if epoxy_wglGetCurrentContext() == c.rc && epoxy_wglGetCurrentDC() == c.dc {
+        if wgl_current_context() == c.rc.0 {
+            // SAFETY: wglGetCurrentDC takes no arguments and only reads thread state.
+            if unsafe { epoxy_wglGetCurrentDC() } == c.dc.dc {
                 return true;
             }
-            epoxy_wglMakeCurrent(c.dc, c.rc) != 0
         }
+        wgl_make_current(c.dc.dc, c.rc.0)
     }
 
     pub fn release(c: &Context) {
-        unsafe {
-            if epoxy_wglGetCurrentContext() == c.rc {
-                epoxy_wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
-            }
+        if wgl_current_context() == c.rc.0 {
+            wgl_make_current(ptr::null_mut(), ptr::null_mut());
         }
     }
 
     pub fn destroy(c: &Context) {
         release(c);
-        unsafe {
-            epoxy_wglDeleteContext(c.rc);
-            ReleaseDC(c.window, c.dc);
-            DestroyWindow(c.window);
-        }
     }
 }
 
