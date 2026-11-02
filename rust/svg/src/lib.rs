@@ -16,7 +16,7 @@ use std::ffi::CString;
 use core::ffi::CStr;
 
 pub use ffi::{Canvas, Matrix, SvgGeometry, SvgSize};
-pub use measure::node_geometry;
+pub use measure::{node_geometry, node_text_length};
 
 use ffi::{
     EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, PANGO_SCALE, Pattern,

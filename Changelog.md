@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* SVG: `getComputedTextLength()` and `getSubStringLength(charnum, nchars)`
+  measure `<text>` and `<tspan>` elements with the same text layout that
+  draws them; a `charnum` past the end throws `IndexSizeError`. Charting
+  libraries that size labels with them used to throw "not a callable
+  function".
 * CSS: the `lh` and `rlh` units resolve when the style is computed: `lh`
   against the element's own line height (the parent's inside
   `line-height` itself) and `rlh` against the root's. They used to reach

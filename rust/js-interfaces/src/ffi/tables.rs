@@ -65,7 +65,7 @@ pub(crate) static TLIST_PROTO: [Prop; 10] = [
 pub(crate) static VALIDITY_PROTO_FUNCS: [Prop; 1] =
     [accessor("valid", Some(adapt::validity_get_valid), None)];
 
-pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 508] = [
+pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 510] = [
     method("getNumberOfChars", 0, natives::element_get_number_of_chars),
     method("getSVGDocument", 0, frames::owner::svg_document),
     accessor(
@@ -763,6 +763,16 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 508] = [
     method("getCTM", 0, geometry::svg::get_ctm),
     method("getScreenCTM", 0, geometry::svg::get_screen_ctm),
     method("getTotalLength", 0, geometry::svg::get_total_length),
+    method(
+        "getComputedTextLength",
+        0,
+        geometry::svg::get_computed_text_length,
+    ),
+    method(
+        "getSubStringLength",
+        2,
+        geometry::svg::get_sub_string_length,
+    ),
     method("getPointAtLength", 1, geometry::svg::get_point_at_length),
     method("createSVGPoint", 0, geometry::svg::create_svg_point),
     method("createSVGRect", 0, geometry::svg::create_svg_rect),

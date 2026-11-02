@@ -404,6 +404,44 @@ impl TextLayout {
     pub fn baseline(&self) -> i32 {
         self.0.borrow_mut().baseline()
     }
+
+    pub fn advance(&self, chars: Option<(usize, usize)>) -> Option<f64> {
+        let mut layout = self.0.borrow_mut();
+        let Some((start, count)) = chars else {
+            return Some(f64::from(layout.logical_extents().width) / f64::from(PANGO_SCALE));
+        };
+        let (start_byte, end_byte) = utf16_byte_range(layout.text(), start, count)?;
+        let x_at = |layout: &mut Layout, byte: usize| {
+            i32::try_from(byte).map_or(0, |byte| layout.index_to_pos(byte).x)
+        };
+        let end_x = if end_byte >= layout.text().len() {
+            layout.logical_extents().width
+        } else {
+            x_at(&mut layout, end_byte)
+        };
+        let start_x = x_at(&mut layout, start_byte);
+        Some(f64::from((end_x - start_x).abs()) / f64::from(PANGO_SCALE))
+    }
+}
+
+fn utf16_byte_range(text: &str, start: usize, count: usize) -> Option<(usize, usize)> {
+    let units = text.encode_utf16().count();
+    if start > units {
+        return None;
+    }
+    let end = start.saturating_add(count).min(units);
+    let mut unit = 0;
+    let (mut start_byte, mut end_byte) = (text.len(), text.len());
+    for (byte, c) in text.char_indices() {
+        if unit <= start && start < unit + c.len_utf16() && start_byte == text.len() {
+            start_byte = byte;
+        }
+        if unit <= end && end < unit + c.len_utf16() && end_byte == text.len() {
+            end_byte = byte;
+        }
+        unit += c.len_utf16();
+    }
+    Some((start_byte, end_byte.max(start_byte)))
 }
 
 pub fn collect_text(n: Node<'_>) -> Vec<u8> {
