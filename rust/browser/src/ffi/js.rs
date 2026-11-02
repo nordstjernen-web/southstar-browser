@@ -48,6 +48,10 @@ impl Js {
         api::set_style_table(self.page(), styles);
     }
 
+    pub fn style_table_is(self, styles: &Rc<StyleMap>) -> bool {
+        api::style_table(self.page()).is_some_and(|table| Rc::ptr_eq(&table, styles))
+    }
+
     pub fn focused_node<'a>(self) -> Option<Node<'a>> {
         southstar_js_focus::focused_node(self.page())
     }

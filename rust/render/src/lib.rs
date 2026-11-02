@@ -7,4 +7,6 @@
 mod ffi;
 mod fonts;
 
-pub use ffi::{RenderCtx, RenderProfile, page_rule, page_uses_active, page_uses_hover, relayout};
+pub use ffi::{
+    RenderCtx, RenderProfile, page_rule, page_uses_active, page_uses_hover, relayout, restyle,
+};

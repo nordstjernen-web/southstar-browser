@@ -82,6 +82,7 @@ pub fn wire_js(b: &NsBrowser, js: Js) {
         )),
     );
     api::set_layout_flush_hook(js_page, Some(Rc::new(move || page.with(page::flush))));
+    api::set_style_flush_hook(js_page, Some(Rc::new(move || page.with(page::flush_style))));
     api::set_viewport_scroll_hook(
         js_page,
         Some(Rc::new(move |x, y| match page.get() {

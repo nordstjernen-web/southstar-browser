@@ -26,6 +26,23 @@ impl NsBrowser {
         }
     }
 
+    pub fn engine_restyle(&self, focused: Option<Node<'_>>) -> Option<Rc<StyleMap>> {
+        let base = self.base_url.get();
+        let request = southstar_engine::Relayout {
+            page: self.engine_page(base.as_deref()),
+            viewport_width: self.vw.get(),
+            viewport_height: self.vh.get(),
+            images: self.images.get(),
+            anim: self.anim(),
+            js: self.js.get().map(Js::handle),
+            focused,
+            hover: self.hover_node.get(),
+            caret_byte: self.caret_byte.get(),
+            sel_anchor_byte: self.sel_anchor_byte.get(),
+        };
+        southstar_engine::restyle(&request)
+    }
+
     pub fn engine_relayout(&self, focused: Option<Node<'_>>) {
         let base = self.base_url.get();
         let relayout = southstar_engine::Relayout {

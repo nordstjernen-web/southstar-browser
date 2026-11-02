@@ -45,6 +45,7 @@ hook_setter!(set_soft_nav_hook, soft_nav, NavigateFn);
 hook_setter!(set_window_action_hook, window_action, UrlFn);
 hook_setter!(set_viewport_scroll_hook, viewport_scroll, ViewportScrollFn);
 hook_setter!(set_layout_flush_hook, layout_flush, DataFn);
+hook_setter!(set_style_flush_hook, style_flush, DataFn);
 hook_setter!(set_load_delay_hook, load_delay, DelayFn);
 
 pub fn navigate(js: Option<Page>, url: &CStr, reload: bool) -> bool {
@@ -121,6 +122,20 @@ pub fn scroll_viewport(js: Option<Page>, x: f64, y: f64) {
 pub fn flush_layout(js: Option<Page>) {
     state(js, (), |state| {
         let Some(flush) = state.layout_flush.get() else {
+            return;
+        };
+        if state.in_layout_flush.get() {
+            return;
+        }
+        state.in_layout_flush.set(true);
+        flush();
+        state.in_layout_flush.set(false);
+    });
+}
+
+pub fn flush_style(js: Option<Page>) {
+    state(js, (), |state| {
+        let Some(flush) = state.style_flush.get().or_else(|| state.layout_flush.get()) else {
             return;
         };
         if state.in_layout_flush.get() {

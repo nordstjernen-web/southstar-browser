@@ -33,8 +33,8 @@ pub use engine::{
     css_set_viewport, decode_body, dump_layout, dump_text, error_page, fetch, fetch_images,
     free_layout, hit_form_dom, hit_inline_dom, hit_link, image_document, json_document,
     load_keyframes, navigate, node_dump, paint_set_anim, paint_set_js, print_setup_default,
-    relayout, suffix_before_ext, url_resolve, video_sources, write_pdf, write_pdf_paged, write_png,
-    xml_document,
+    relayout, restyle, suffix_before_ext, url_resolve, video_sources, write_pdf, write_pdf_paged,
+    write_png, xml_document,
 };
 pub use js::{
     DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_page,

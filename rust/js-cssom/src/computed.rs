@@ -1420,6 +1420,28 @@ fn physical_name(name: &str) -> Option<String> {
     None
 }
 
+fn layout_dependent(name: &str) -> bool {
+    let origin = ffi::prop_id(name).is_some_and(|id| {
+        id == PropId::TransformOrigin as usize || id == PropId::PerspectiveOrigin as usize
+    });
+    origin
+        || matches!(
+            name,
+            "width"
+                | "height"
+                | "grid-template-columns"
+                | "grid-template-rows"
+                | "transform"
+                | "top"
+                | "right"
+                | "bottom"
+                | "left"
+        )
+        || name.starts_with("margin-")
+        || name.starts_with("padding-")
+        || (name.starts_with("border-") && name.ends_with("-width"))
+}
+
 fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     let name = if name == "css-float" || name == "cssFloat" {
         "float"
@@ -1432,12 +1454,26 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
         return value;
     }
 
-    ffi::flush_layout(js);
-    let table = ffi::style_table(js);
+    let needs_layout = layout_dependent(name);
+    if needs_layout {
+        ffi::flush_layout(js);
+    } else {
+        ffi::flush_style(js);
+    }
+    let mut table = ffi::style_table(js);
+    let unstyled = StyleTable::new(table.as_ref()).get(n).is_none();
+    if unstyled && !needs_layout {
+        ffi::flush_layout(js);
+        table = ffi::style_table(js);
+    }
     let styles = StyleTable::new(table.as_ref());
     let style_attr = str_of(n.attr(c"style"));
     let has_style_attr = style_attr.is_some_and(|s| !s.is_empty());
-    let lbox = ffi::find_box(js, n);
+    let lbox = if needs_layout || styles.get(n).is_none() {
+        ffi::find_box(js, n)
+    } else {
+        None
+    };
     let computed = styles.get(n).or_else(|| lbox.and_then(box_style));
 
     if let Some(b) = lbox
@@ -1728,7 +1764,13 @@ fn pseudo_substyle<'a>(s: StyleRef<'a>, pseudo: &str) -> Option<StyleRef<'a>> {
 }
 
 pub(crate) fn lookup_pseudo(js: Js, n: Node<'_>, pseudo: &str, name: &str) -> Option<String> {
-    ffi::flush_layout(js);
+    let sized = ffi::prop_id(name)
+        .is_some_and(|id| id == PropId::Width as usize || id == PropId::Height as usize);
+    if sized {
+        ffi::flush_layout(js);
+    } else {
+        ffi::flush_style(js);
+    }
     let table = ffi::style_table(js);
     let styles = StyleTable::new(table.as_ref());
     let base = styles.get(n);

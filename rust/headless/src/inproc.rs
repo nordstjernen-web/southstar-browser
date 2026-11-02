@@ -7,7 +7,7 @@ use core::ffi::{CStr, c_int};
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use southstar_css::StyleMap;
 use southstar_dom::{Node, WeakNode, ancestors_and_self};
@@ -21,6 +21,7 @@ use crate::{Dump, Opts, nonempty};
 
 static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
 static STYLES_STALE: AtomicBool = AtomicBool::new(false);
+static STALE_EPOCH: AtomicU64 = AtomicU64::new(0);
 static DOC_CHARSET: Mutex<Option<Vec<u8>>> = Mutex::new(None);
 
 const WPT_POLL_JS: &CStr = c"(function () {    var g = globalThis;    if (g.__ns_wpt_done) return \"1\";    if (g.__ns_wpt_installed && !g.__ns_wpt_seen_harness &&        typeof g.add_completion_callback === \"function\") {        try {            g.add_completion_callback(g.__ns_wpt_oncomplete);            g.__ns_wpt_seen_harness = true;        } catch (e) {}    }    return \"0\";})()";
@@ -36,12 +37,17 @@ fn opt_cstring(bytes: &Option<Vec<u8>>) -> Option<CString> {
     bytes.as_deref().map(cstring)
 }
 
+fn mark_stale(flag: &AtomicBool) {
+    flag.store(true, Ordering::Relaxed);
+    STALE_EPOCH.fetch_add(1, Ordering::Relaxed);
+}
+
 pub fn js_log(line: &[u8]) {
     err(&[b"[js] ", line, b"\n"].concat());
 }
 
 pub fn note_mutated() {
-    LAYOUT_DIRTY.store(true, Ordering::Relaxed);
+    mark_stale(&LAYOUT_DIRTY);
 }
 
 #[derive(Default)]
@@ -122,6 +128,7 @@ pub struct Ctx {
     pub caret: Cell<usize>,
     pub anchor: Cell<usize>,
     relaying: Cell<bool>,
+    restyled: RefCell<Option<(u64, Rc<StyleMap>)>>,
 }
 
 impl Ctx {
@@ -141,6 +148,22 @@ impl Ctx {
         self.focused.set(n.map(Node::downgrade));
     }
 
+    fn request(&self) -> Relayout<'_> {
+        Relayout {
+            doc: self.doc(),
+            base: self.base.as_deref(),
+            vw: self.vw,
+            vh: self.vh,
+            images: self.image_cache,
+            anim: self.anim.clone(),
+            js: self.js,
+            css_cache: self.css_cache,
+            focused: self.focus_for_layout(),
+            caret: self.caret.get(),
+            anchor: self.anchor.get(),
+        }
+    }
+
     fn focus_for_layout(&self) -> Option<Node<'_>> {
         let from_js = self.js.and_then(|js| js.focused_node());
         from_js.or_else(|| self.focused())
@@ -149,10 +172,11 @@ impl Ctx {
 
 pub fn relayout(c: &Ctx) {
     if c.relaying.get() {
-        LAYOUT_DIRTY.store(true, Ordering::Relaxed);
+        mark_stale(&LAYOUT_DIRTY);
         return;
     }
     c.relaying.set(true);
+    drop(c.restyled.take());
     if std::env::var_os("NS_ANIM_DEBUG").is_some() {
         err(b"[anim] headless_relayout\n");
     }
@@ -164,21 +188,41 @@ pub fn relayout(c: &Ctx) {
         js.set_style_table(None);
     }
     drop(c.styles.take());
-    let args = Relayout {
-        doc: c.doc(),
-        base: c.base.as_deref(),
-        vw: c.vw,
-        vh: c.vh,
-        images: c.image_cache,
-        anim: c.anim.clone(),
-        js: c.js,
-        css_cache: c.css_cache,
-        focused: c.focus_for_layout(),
-        caret: c.caret.get(),
-        anchor: c.anchor.get(),
-    };
-    c.styles.replace(ffi::relayout(&args, &c.layout));
+    c.styles.replace(ffi::relayout(&c.request(), &c.layout));
     c.relaying.set(false);
+}
+
+pub fn flush_style(c: &Ctx) {
+    let Some(js) = c.js else {
+        return;
+    };
+    if ffi::consume_mutated(Some(js)) {
+        mark_stale(&LAYOUT_DIRTY);
+    }
+    let stale = LAYOUT_DIRTY.load(Ordering::Relaxed) || STYLES_STALE.load(Ordering::Relaxed);
+    if c.relaying.get() {
+        return;
+    }
+    if !stale || c.layout.get().is_none() {
+        flush_layout(c);
+        return;
+    }
+    let epoch = STALE_EPOCH.load(Ordering::Relaxed);
+    if let Some((cached, styles)) = c.restyled.borrow().as_ref()
+        && *cached == epoch
+    {
+        if !js.style_table_is(styles) {
+            js.set_style_table(Some(Rc::clone(styles)));
+        }
+        return;
+    }
+    match ffi::restyle(&c.request()) {
+        Some(styles) => {
+            js.set_style_table(Some(Rc::clone(&styles)));
+            c.restyled.replace(Some((epoch, styles)));
+        }
+        None => flush_layout(c),
+    }
 }
 
 pub fn flush_layout(c: &Ctx) {
@@ -226,9 +270,9 @@ impl<'a> Settle<'a> {
             cache.tick(now);
         }
         if let Some(anim) = fc.anim.as_ref().filter(|a| a.tick(now)) {
-            STYLES_STALE.store(true, Ordering::Relaxed);
+            mark_stale(&STYLES_STALE);
             if anim.needs_layout() {
-                LAYOUT_DIRTY.store(true, Ordering::Relaxed);
+                mark_stale(&LAYOUT_DIRTY);
             }
         }
         if let (Some(anim), Some(js)) = (fc.anim.clone(), fc.js) {
@@ -239,7 +283,7 @@ impl<'a> Settle<'a> {
         }
         if fc.js.is_some() && ffi::consume_mutated(fc.js) {
             self.pending_mutation.set(true);
-            STYLES_STALE.store(true, Ordering::Relaxed);
+            mark_stale(&STYLES_STALE);
         }
         if LAYOUT_DIRTY.load(Ordering::Relaxed) {
             self.pending_mutation.set(true);
@@ -688,12 +732,14 @@ pub fn run_one(
         caret: Cell::new(0),
         anchor: Cell::new(0),
         relaying: Cell::new(false),
+        restyled: RefCell::new(None),
     });
     if let Some(js) = js {
         js.set_style_table(ctx.styles.borrow().clone());
         js.set_image_cache(image_cache);
         js.set_anim(anim.clone());
         js.bind_layout_flush(&ctx);
+        js.bind_style_flush(&ctx);
         js.bind_media(video_cache);
         ffi::bind_video_events(video_cache, Some(js));
         if let Some(cache) = video_cache {

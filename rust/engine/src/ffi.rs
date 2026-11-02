@@ -264,6 +264,38 @@ pub fn relayout(
     Some(styles)
 }
 
+pub fn restyle(req: &Relayout<'_>) -> Option<Rc<StyleMap>> {
+    let r = css::Relayout {
+        doc: req.page.doc,
+        base: req.page.base,
+        viewport_width: req.viewport_width,
+        viewport_height: req.viewport_height,
+        images: req.images,
+        anim: req.anim.clone(),
+        focused: req.focused,
+        hover: req.hover,
+        caret_byte: req.caret_byte,
+        sel_anchor_byte: req.sel_anchor_byte,
+    };
+    let _scope = CssScope::enter(r.base);
+    let sheets = crate::styles::collect_stylesheets(req.page.doc, r.base, req.page.css_cache);
+    if crate::styles::frame_viewports_recorded() {
+        return None;
+    }
+    let ctx = css::render_ctx(&r, &sheets);
+    let t0 = monotonic_us();
+    let styles = southstar_render::restyle(&ctx)?;
+    if profile_enabled() {
+        eprintln!(
+            "[profile] restyle nodes={} total={:.2}ms",
+            css::table_size(Some(&styles)),
+            (monotonic_us() - t0) as f64 / 1000.0
+        );
+    }
+    drop(sheets);
+    Some(styles)
+}
+
 fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())

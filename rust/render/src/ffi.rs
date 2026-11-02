@@ -506,6 +506,22 @@ pub fn relayout(
     (styles, layout)
 }
 
+pub fn restyle(c: &RenderCtx) -> Option<Rc<StyleMap>> {
+    if containers_wanted(c).0 {
+        return None;
+    }
+    southstar_css_media::set_base_viewport(c.viewport_width, c.viewport_height);
+    southstar_css::set_focus_node(c.focused_input);
+    southstar_css::set_hover_node(c.hover_node);
+    record_page_state(c);
+    southstar_css::set_render_zoom(c.zoom());
+    let computed = southstar_css::compute_styles(c.doc(), c.sheets, c.sheet_docs, None);
+    let styles = style_pass(c, computed);
+    southstar_css::set_focus_node(None);
+    southstar_css::set_hover_node(None);
+    Some(styles)
+}
+
 pub fn page_uses_hover() -> bool {
     USES_HOVER.load(Ordering::Relaxed)
 }
