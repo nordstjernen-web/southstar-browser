@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* CSS: the tree-counting functions `sibling-index()` and `sibling-count()`
+  resolve per element to its position among its element siblings and the
+  number of them, and restyle when siblings are added or removed
+  (WPT `css-values/tree-counting`: 13 → 58 of 74 subtests in the parsing,
+  computed-value, shadow-DOM and invalidation files).
 * DOM: `XMLSerializer` and `NodeIterator` no longer walk into shadow
   trees, which are not children of their host. Both used to expose the
   contents of closed shadow roots to the page.

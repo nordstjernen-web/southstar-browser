@@ -63,6 +63,7 @@ mod time;
 mod timing;
 mod track_text;
 mod transform;
+mod tree_count;
 mod units;
 mod values;
 mod vars;

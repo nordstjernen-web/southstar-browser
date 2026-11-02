@@ -8,6 +8,7 @@ use southstar_dom::Node;
 
 use crate::attr_fn;
 use crate::scan::strip_important;
+use crate::tree_count;
 
 pub(crate) struct Pending {
     pub(crate) origin: i32,
@@ -59,6 +60,9 @@ pub(crate) fn substituted_value(
         if tainted && !custom {
             return None;
         }
+    }
+    if tree_count::uses_tree_counting(&text) {
+        text = tree_count::substitute(&text, node);
     }
     (!strip_important(&text).1).then_some(text)
 }
