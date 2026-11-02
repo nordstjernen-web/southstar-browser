@@ -3,6 +3,7 @@ Southstar Browser
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat-square)](COPYING)
 [![Latest release](https://img.shields.io/github/v/release/nordstjernen-web/southstar-browser?style=flat-square)](https://github.com/nordstjernen-web/southstar-browser/releases/latest)
+[![Best viewed in Southstar](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
 and JavaScript standards. It is the next step for
