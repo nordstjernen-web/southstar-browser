@@ -303,6 +303,7 @@ impl Transport {
         url: &[u8],
         origin: &[u8],
         allow_url: southstar_eventsource::UrlCheck,
+        cors_allows: southstar_eventsource::CorsCheck,
         socket: &Rc<crate::socket::Socket>,
     ) -> Transport {
         let events = southstar_eventsource::Events {
@@ -317,6 +318,7 @@ impl Transport {
             b"",
             events,
             allow_url,
+            cors_allows,
             socket_key(socket),
         ))
     }
@@ -676,6 +678,7 @@ impl Request {
         let mut headers: Vec<Vec<u8>> =
             self.headers.iter().map(|h| h.to_bytes().to_vec()).collect();
         headers.push(self.credentials.header().to_vec());
+        headers.push(southstar_net::CORS_MODE_LINE.to_vec());
         if let Some(document) = &self.document {
             headers.push([&b"X-ND-Document: "[..], document.to_bytes()].concat());
         }

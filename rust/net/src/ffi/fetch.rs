@@ -342,8 +342,10 @@ pub fn fetch_hop(f: &Fetch, location: &mut Option<Vec<u8>>) -> Result<Response, 
             .or_else(|| top_origin.clone())
     };
     let origin_top = if is_navigation { None } else { document };
-    let request_origin =
-        request::request_origin(&url, origin_top, initiator_origin.as_deref(), f.method);
+    let request_origin = request::serialized_origin(
+        request::request_origin(&url, origin_top, initiator_origin.as_deref(), f.method),
+        f.headers,
+    );
     let vary_origin = [b"Origin: ", request_origin].concat();
     let cache_headers: [&[u8]; 4] = [&vary_accept, &vary_language, &vary_agent, &vary_origin];
 
@@ -643,6 +645,22 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             body = None;
             content_type = None;
             request::strip_body_headers(&mut headers);
+        }
+        if request::cors_redirect_needs_preflight(&headers, &method, content_type, &base, &next) {
+            r.error = Some(cstr(
+                b"CORS request redirected to another origin would need a preflight",
+            ));
+            r.redirect_count = hops as c_int;
+            return Ok(resp);
+        }
+        if !navigation
+            && request::redirect_taints_origin(
+                request::requesting_document(&headers, top.as_deref()),
+                &base,
+                &next,
+            )
+        {
+            request::taint_origin(&mut headers);
         }
         if navigation && method.eq_ignore_ascii_case(b"GET") {
             top = None;

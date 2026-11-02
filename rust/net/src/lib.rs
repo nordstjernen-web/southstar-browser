@@ -26,6 +26,9 @@ mod transport;
 mod url;
 mod view_source;
 
+#[cfg(test)]
+mod tests;
+
 pub use about::{is_chrome_page, is_privileged_page};
 pub use blocking::{BlockingFetch, in_blocking_fetch};
 pub use cookies::{
@@ -56,6 +59,7 @@ pub use forms::set_submission_charset;
 pub use netlog::{
     Snapshot as PerfSnapshot, clear as log_clear, dump as log_dump, snapshot as perf_snapshot,
 };
+pub use request::CORS_MODE_LINE;
 pub use response::{Response, Timing as ResponseTiming};
 pub use url::{
     has_client_hints, is_nosniff as header_is_nosniff, origin_from, parse_refresh,

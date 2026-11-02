@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::cell::Cell;
+use core::cell::{Cell, RefCell};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -12,6 +12,7 @@ use southstar_http::{Fetch, Handler};
 use crate::{Parser, Post, Shared};
 
 pub type UrlCheck = Box<dyn Fn(&[u8]) -> bool + Send + Sync>;
+pub type CorsCheck = Box<dyn Fn(&[u8], &[u8]) -> bool + Send + Sync>;
 
 #[derive(Clone, Copy)]
 pub struct Events {
@@ -25,6 +26,7 @@ struct Source {
     shared: Shared,
     events: Events,
     allow_url: UrlCheck,
+    cors_allows: CorsCheck,
     data: usize,
 }
 
@@ -76,12 +78,21 @@ fn post(source: &Arc<Source>, post: Post) {
     southstar_glib::idle_add_once(move || dispatch_run(dispatch));
 }
 
-struct Transfer {
+struct Transfer<'a> {
     source: Arc<Source>,
     parser: Parser,
+    current_url: &'a RefCell<Vec<u8>>,
+    raw_headers: Vec<u8>,
 }
 
-impl Transfer {
+impl Transfer<'_> {
+    fn cors_refused(&self) -> bool {
+        self.parser.status == 200
+            && self.parser.is_event_stream
+            && !self.parser.opened
+            && !(self.source.cors_allows)(&self.current_url.borrow(), &self.raw_headers)
+    }
+
     fn post_header(&mut self, line: &[u8]) {
         let source = Arc::clone(&self.source);
         self.parser
@@ -89,20 +100,27 @@ impl Transfer {
     }
 }
 
-impl Handler for Transfer {
+impl Handler for Transfer<'_> {
     fn should_abort(&self) -> bool {
         self.source.shared.exiting()
     }
 
     fn status_line(&mut self, line: &[u8]) {
+        self.raw_headers.clear();
         self.post_header(line);
     }
 
-    fn header(&mut self, line: &[u8], _name: &[u8], _value: &[u8]) {
+    fn header(&mut self, line: &[u8], name: &[u8], value: &[u8]) {
+        self.raw_headers
+            .extend_from_slice(&[name, b": ", value, b"\n"].concat());
         self.post_header(line);
     }
 
     fn headers_done(&mut self) {
+        if self.cors_refused() {
+            self.parser.fatal = true;
+            return;
+        }
         self.post_header(
             b"
 ",
@@ -121,11 +139,14 @@ impl Handler for Transfer {
 }
 
 fn connect_once(source: &Arc<Source>) -> bool {
+    let shared = &source.shared;
+    let current_url = RefCell::new(until_nul(&shared.url).to_vec());
     let mut transfer = Transfer {
         source: Arc::clone(source),
         parser: Parser::new(),
+        current_url: &current_url,
+        raw_headers: Vec::new(),
     };
-    let shared = &source.shared;
     let blocked = Cell::new(false);
     let mut headers = vec![
         b"Accept: text/event-stream".to_vec(),
@@ -151,6 +172,9 @@ fn connect_once(source: &Arc<Source>) -> bool {
         allow_redirect: &|next| {
             let allowed = (source.allow_url)(next);
             blocked.set(!allowed);
+            if allowed {
+                *current_url.borrow_mut() = next.to_vec();
+            }
             allowed
         },
         route: &southstar_net::route::route,
@@ -194,6 +218,7 @@ impl EventSource {
         last_event_id: &[u8],
         events: Events,
         allow_url: UrlCheck,
+        cors_allows: CorsCheck,
         data: usize,
     ) -> EventSource {
         let source = Arc::new(Source {
@@ -204,6 +229,7 @@ impl EventSource {
             ),
             events,
             allow_url,
+            cors_allows,
             data,
         });
         let worker_source = Arc::clone(&source);
