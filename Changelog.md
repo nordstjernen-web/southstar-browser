@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Dependencies: `cargo update` to the latest Rust 1.91-compatible releases
+  (cc 1.10.0, ml-kem 0.3.4, ctutils 0.4.7, smallvec 1.16.4, crc32fast
+  1.5.4 and others). Every direct crates.io dependency, the GitHub Actions,
+  the bundled LGPL FFmpeg (8.1.3) and the wgpu-native headers (v29.0.1.1)
+  were already at their latest releases.
 * DOM: events dispatched inside a shadow tree are retargeted: listeners
   outside the tree see the host as `event.target`, an event that is not
   `composed` stops at the shadow root, `composedPath()` leaves out nodes in

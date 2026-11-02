@@ -1,13 +1,6 @@
 
 # cargo-vet imports lock
 
-[[publisher.utf8_iter]]
-version = "1.0.4"
-when = "2023-12-01"
-user-id = 4484
-user-login = "hsivonen"
-user-name = "Henri Sivonen"
-
 [[publisher.wasmparser]]
 version = "0.228.0"
 when = "2025-04-01"
@@ -410,15 +403,6 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.7.1"
 
-[[audits.mozilla.wildcard-audits.utf8_iter]]
-who = "Makoto Kato <m_kato@ga2.so-net.ne.jp>"
-criteria = "safe-to-deploy"
-user-id = 4484 # Henri Sivonen (hsivonen)
-start = "2022-04-19"
-end = "2024-06-16"
-notes = "Maintained by Henri Sivonen who works at Mozilla."
-aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
-
 [[audits.mozilla.audits.adler2]]
 who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
@@ -648,13 +632,6 @@ criteria = "safe-to-deploy"
 delta = "0.7.1 -> 0.9.0"
 notes = "Mostly a refactor of existing code. No use of std, no unsafe, no dependencies."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.utf16_iter]]
-who = "Henri Sivonen <hsivonen@hsivonen.fi>"
-criteria = "safe-to-deploy"
-version = "1.0.5"
-notes = "I, Henri Sivonen, wrote this crate."
-aggregated-from = "https://raw.githubusercontent.com/mozilla-firefox/firefox/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.windows-link]]
 who = "Mark Hammond <mhammond@skippinet.com.au>"
