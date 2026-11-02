@@ -178,7 +178,7 @@ fn offset_parent_candidate(js: ffi::Js, n: Element) -> bool {
         return true;
     }
     let table = ffi::style_table(js);
-    let style = StyleTable::new(table.as_deref()).get(n);
+    let style = StyleTable::new(table.as_ref()).get(n);
     if POSITIONED.iter().any(|kw| position_is(style, kw)) {
         return true;
     }
@@ -191,7 +191,7 @@ fn offset_parent_is_static_root(js: ffi::Js, p: Element) -> bool {
         return false;
     }
     let table = ffi::style_table(js);
-    let pos = StyleTable::new(table.as_deref())
+    let pos = StyleTable::new(table.as_ref())
         .get(p)
         .and_then(|s| s.get(PropId::Position));
     pos.is_none_or(|v| v.is_keyword(c"static"))
@@ -199,7 +199,7 @@ fn offset_parent_is_static_root(js: ffi::Js, p: Element) -> bool {
 
 fn is_fixed(js: ffi::Js, n: Element) -> bool {
     let table = ffi::style_table(js);
-    position_is(StyleTable::new(table.as_deref()).get(n), c"fixed")
+    position_is(StyleTable::new(table.as_ref()).get(n), c"fixed")
 }
 
 fn ancestors(n: Element) -> impl Iterator<Item = Element> {

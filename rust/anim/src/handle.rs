@@ -12,7 +12,7 @@ use southstar_dom::Node;
 use southstar_style::Transform;
 
 use crate::engine::{Anim, Info, ScriptTiming, TARGET_BG_COLOR, TARGET_COLOR};
-use crate::ffi::css::{self, NodePtr, StylesTable};
+use crate::ffi::css::{self, NodePtr, StylesMut};
 
 #[derive(Clone)]
 pub struct AnimHandle(Rc<RefCell<Anim>>);
@@ -128,8 +128,8 @@ impl AnimHandle {
         self.with(|a| a.load_keyframes(sheet));
     }
 
-    pub fn observe_all(&self, styles: &StyleMap, now_us: i64) {
-        self.with(|a| a.observe_all(StylesTable::new(styles), now_us));
+    pub fn observe_all(&self, styles: &mut StyleMap, now_us: i64) {
+        self.with(|a| a.observe_all(StylesMut::new(styles), now_us));
     }
 
     pub fn take_events(&self) -> Vec<AnimEvent> {

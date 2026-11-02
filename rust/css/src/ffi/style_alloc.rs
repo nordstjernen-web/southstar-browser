@@ -64,6 +64,17 @@ impl RetainedStyle {
     pub fn as_ptr(&self) -> *const RawStyle {
         self.0.as_ref().map_or(core::ptr::null(), Rc::as_ptr)
     }
+
+    pub(super) fn make_mut(&mut self) -> &mut RawStyle {
+        let style = self
+            .0
+            .as_mut()
+            .expect("a retained style is held until it drops");
+        if Rc::get_mut(style).is_none() {
+            *style = style_copy(style).0;
+        }
+        Rc::get_mut(style).expect("a style just copied has no other reference")
+    }
 }
 
 impl Clone for RetainedStyle {
@@ -78,6 +89,18 @@ impl Drop for RetainedStyle {
             recycle(style);
         }
     }
+}
+
+fn style_copy(source: &RawStyle) -> NewStyle {
+    let mut copy = style_alloc();
+    copy.values.clone_from(&source.values);
+    copy.display = source.display;
+    copy.specified_inline = source.specified_inline;
+    copy.pseudo_styles.clone_from(&source.pseudo_styles);
+    copy.share_id = source.share_id;
+    copy.currentcolor_bits = source.currentcolor_bits;
+    copy.vars.clone_from(&source.vars);
+    copy
 }
 
 pub(super) fn style_clone_shared(source: &RawStyle) -> NewStyle {

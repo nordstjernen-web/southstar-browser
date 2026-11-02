@@ -5,6 +5,7 @@
 use core::ffi::{CStr, c_uint, c_void};
 use core::ptr;
 use std::ffi::CString;
+use std::rc::Rc;
 use std::sync::OnceLock;
 
 use southstar_css::{
@@ -495,10 +496,10 @@ impl<'a> StyleRef<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct StyleTable<'a>(Option<&'a StyleMap>);
+pub struct StyleTable<'a>(Option<&'a Rc<StyleMap>>);
 
 impl<'a> StyleTable<'a> {
-    pub fn new(table: Option<&'a StyleMap>) -> StyleTable<'a> {
+    pub fn new(table: Option<&'a Rc<StyleMap>>) -> StyleTable<'a> {
         StyleTable(table)
     }
 
@@ -510,8 +511,8 @@ impl<'a> StyleTable<'a> {
         self.0.is_some()
     }
 
-    pub fn as_ptr(self) -> *const StyleMap {
-        self.0.map_or(ptr::null(), ptr::from_ref)
+    pub fn retain(self) -> Option<Rc<StyleMap>> {
+        self.0.cloned()
     }
 
     pub fn get(self, node: Node<'_>) -> Option<StyleRef<'a>> {
@@ -519,9 +520,8 @@ impl<'a> StyleTable<'a> {
     }
 }
 
-pub fn svg_styles(b: BoxRef<'_>) -> StyleTable<'_> {
-    // SAFETY: an SVG box stores null or the style table its subtree was built from, which outlives the box tree.
-    StyleTable(unsafe { b.svg_styles().as_ref() })
+pub fn svg_styles(b: BoxRef<'_>) -> Option<Rc<StyleMap>> {
+    b.svg_styles()
 }
 
 pub fn box_style(b: BoxRef<'_>) -> Option<StyleRef<'_>> {

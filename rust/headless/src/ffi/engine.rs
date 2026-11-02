@@ -176,7 +176,7 @@ pub fn load_keyframes(anim: &Anim, doc: &Document, base: Option<&CStr>, css_cach
     southstar_engine::load_keyframes(anim, &page(doc, base, css_cache));
 }
 
-pub fn anim_observe(anim: &Anim, styles: Option<&StyleMap>, now_us: i64) {
+pub fn anim_observe(anim: &Anim, styles: Option<&mut Rc<StyleMap>>, now_us: i64) {
     southstar_engine::anim_observe(anim, styles, now_us);
 }
 

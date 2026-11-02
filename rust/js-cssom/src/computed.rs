@@ -670,7 +670,7 @@ fn logical_start(style: Option<StyleRef<'_>>, vertical: bool) -> &'static str {
 
 fn containing_block(js: Js, n: Node<'_>, b: BoxRef<'static>, pos: &str) -> Option<BoxRef<'static>> {
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     if pos == "sticky" {
         if styles.is_some() && ffi::layout_root(js).is_some() {
             for p in southstar_dom::ancestors(n) {
@@ -1026,7 +1026,7 @@ fn anim_keyword_value(
 
 fn anim_lookup(js: Js, n: Node<'_>, name: &str) -> Option<String> {
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     let is_anim = name.starts_with('a');
     if name == "animation" || name == "transition" {
         let s = styles.get(n);
@@ -1164,7 +1164,7 @@ fn gap_shorthand(js: Js, n: Node<'_>, name: &str) -> Option<String> {
 
 fn gap_longhand(js: Js, n: Node<'_>, id: usize, name: &str) -> Option<String> {
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     let value = styles.get(n).and_then(|s| s.value_at(id))?;
     if value.kind() == Kind::Keyword
         && let Some(text) = keyword_of(Some(value))
@@ -1332,7 +1332,7 @@ fn shorthand(js: Js, n: Node<'_>, name: &str) -> Option<Option<String>> {
             ];
             ffi::flush_style(js);
             let table = ffi::style_table(js);
-            let styles = StyleTable::new(table.as_deref());
+            let styles = StyleTable::new(table.as_ref());
             let Some(grid_style) = styles.get(n) else {
                 return Some(Some(String::new()));
             };
@@ -1434,7 +1434,7 @@ fn lookup_value(js: Js, n: Node<'_>, name: &str) -> Option<String> {
 
     ffi::flush_layout(js);
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     let style_attr = str_of(n.attr(c"style"));
     let has_style_attr = style_attr.is_some_and(|s| !s.is_empty());
     let lbox = ffi::find_box(js, n);
@@ -1730,7 +1730,7 @@ fn pseudo_substyle<'a>(s: StyleRef<'a>, pseudo: &str) -> Option<StyleRef<'a>> {
 pub(crate) fn lookup_pseudo(js: Js, n: Node<'_>, pseudo: &str, name: &str) -> Option<String> {
     ffi::flush_layout(js);
     let table = ffi::style_table(js);
-    let styles = StyleTable::new(table.as_deref());
+    let styles = StyleTable::new(table.as_ref());
     let base = styles.get(n);
     let ps = base.and_then(|b| pseudo_substyle(b, pseudo));
     let Some(ps) = ps else {

@@ -637,11 +637,11 @@ pub fn run_one(
         reveal_fragment(doc.node(), frag);
     }
     let css_cache = CssCache::create();
-    let styles = ffi::compute_cascade(&doc, page_url.as_deref(), css_cache);
+    let mut styles = ffi::compute_cascade(&doc, page_url.as_deref(), css_cache);
 
     let anim = Anim::create();
     ffi::load_keyframes(&anim, &doc, page_url.as_deref(), css_cache);
-    ffi::anim_observe(&anim, Some(&styles), ffi::monotonic_us());
+    ffi::anim_observe(&anim, Some(&mut styles), ffi::monotonic_us());
     let anim = Some(anim);
 
     let nav = Rc::new(NavCapture::default());

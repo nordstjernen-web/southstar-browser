@@ -9,7 +9,7 @@ use southstar_dom::{Node, WeakNode};
 use super::computed_units::RawStyle;
 use super::style_alloc::RetainedStyle;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct StyleMap(HashMap<usize, (WeakNode, RetainedStyle)>);
 
 impl StyleMap {
@@ -38,12 +38,24 @@ impl StyleMap {
         self.0.get(&(node as usize)).map(|(_, style)| style.clone())
     }
 
-    pub fn lookup<T>(&self, node: *const T) -> *mut RawStyle {
-        self.0
-            .get(&(node as usize))
-            .map_or(core::ptr::null_mut(), |(_, style)| {
-                style.as_ptr().cast_mut()
-            })
+    pub fn modify<T, R>(
+        &mut self,
+        node: *const T,
+        f: impl FnOnce(&mut RawStyle) -> R,
+    ) -> Option<R> {
+        let key = node as usize;
+        let (_, style) = self.0.get_mut(&key)?;
+        Some(super::compute::with_previous_released(
+            key,
+            style,
+            |style| f(style.make_mut()),
+        ))
+    }
+
+    pub fn modify_all(&mut self, mut f: impl FnMut(&mut RawStyle)) {
+        for (_, style) in self.0.values_mut() {
+            f(style.make_mut());
+        }
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, &RawStyle)> + '_ {
@@ -58,11 +70,5 @@ impl StyleMap {
 
     pub(super) fn styles(&self) -> impl Iterator<Item = (usize, &RetainedStyle)> + '_ {
         self.0.iter().map(|(&node, (_, style))| (node, style))
-    }
-
-    pub fn entries(&self) -> impl Iterator<Item = (usize, *mut RawStyle)> + '_ {
-        self.0
-            .iter()
-            .map(|(&node, (_, style))| (node, style.as_ptr().cast_mut()))
     }
 }

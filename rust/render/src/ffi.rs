@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::sync::{Mutex, MutexGuard};
 
 use southstar_anim::AnimHandle;
-use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleData, StyleMap};
+use southstar_css::{ContainerMap, OwnedSheet, PageRule, Sheet, StyleMap};
 use southstar_dom::Node;
 use southstar_glib::{self as glib, GBoolean};
 use southstar_layout::{BoxPool, BoxRef};
@@ -195,7 +195,7 @@ fn request_fonts(c: &RenderCtx, styles: StyleTable) {
     }
 }
 
-fn feed_animations(c: &RenderCtx, styles: &StyleMap) {
+fn feed_animations(c: &RenderCtx, styles: &mut StyleMap) {
     let Some(anim) = &c.anim else {
         return;
     };
@@ -205,23 +205,20 @@ fn feed_animations(c: &RenderCtx, styles: &StyleMap) {
     anim.observe_all(styles, now_us());
 }
 
-fn apply_zoom(c: &RenderCtx, styles: &StyleMap) {
+fn apply_zoom(c: &RenderCtx, styles: &mut StyleMap) {
     let zoom = c.zoom();
     if (zoom - 1.0).abs() <= 0.001 {
         return;
     }
-    for (_, style) in styles.entries() {
-        // SAFETY: the table holds the live computed styles of this pass, and none is borrowed while it is scaled.
-        if let Some(style) = unsafe { style.cast::<StyleData>().as_mut() } {
-            southstar_css::style_scale_font_size(style, zoom);
-        }
-    }
+    styles.modify_all(|style| southstar_css::style_scale_font_size(style, zoom));
 }
 
-fn style_pass(c: &RenderCtx, styles: &StyleMap) {
-    feed_animations(c, styles);
-    request_fonts(c, StyleTable::new(Some(styles)));
-    apply_zoom(c, styles);
+fn style_pass(c: &RenderCtx, mut styles: StyleMap) -> Rc<StyleMap> {
+    feed_animations(c, &mut styles);
+    apply_zoom(c, &mut styles);
+    let styles = Rc::new(styles);
+    request_fonts(c, StyleTable::new(Some(&styles)));
+    styles
 }
 
 fn styles_tables_equal(a: &StyleMap, b: &StyleMap) -> bool {
@@ -358,7 +355,11 @@ fn selector_cache_wanted(c: &RenderCtx, predicted: Option<&ContainerMap>) -> boo
         .any(|sheet| sheet.has_container_rules() || sheet.has_container_units())
 }
 
-fn build_layout(c: &RenderCtx, styles: &StyleMap, viewport_width: f64) -> Option<BoxRef<'static>> {
+fn build_layout(
+    c: &RenderCtx,
+    styles: &Rc<StyleMap>,
+    viewport_width: f64,
+) -> Option<BoxRef<'static>> {
     southstar_paint::list_ordinals_begin();
     let layout = southstar_layout_position::layout_build(BuildInput {
         doc: c.doc(),
@@ -412,17 +413,12 @@ pub fn relayout(
         southstar_css::selector_cache_begin();
     }
     let compute = |containers: Option<&mut ContainerMap>| {
-        Rc::new(southstar_css::compute_styles(
-            c.doc(),
-            c.sheets,
-            c.sheet_docs,
-            containers,
-        ))
+        southstar_css::compute_styles(c.doc(), c.sheets, c.sheet_docs, containers)
     };
-    let mut styles = compute(predicted.as_mut());
+    let computed = compute(predicted.as_mut());
     let t1 = clock();
 
-    style_pass(c, &styles);
+    let mut styles = style_pass(c, computed);
     let t2 = clock();
 
     let mut layout = build_layout(c, &styles, viewport_width);
@@ -468,7 +464,7 @@ pub fn relayout(
             drop(styles2);
             break;
         }
-        style_pass(c, &styles2);
+        let styles2 = style_pass(c, styles2);
         let t6 = clock();
         let layout2 = build_layout(c, &styles2, viewport_width);
         let t7 = clock();

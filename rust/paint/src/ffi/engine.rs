@@ -210,7 +210,8 @@ pub fn svg_render_node(cr: ContextRef, b: BoxRef<'_>, w: f64, h: f64) {
         return;
     };
     let styles = southstar_style::svg_styles(b);
-    southstar_svg::render_node(cr.into(), svg, w, h, styles, southstar_style::box_style(b));
+    let table = southstar_style::StyleTable::new(styles.as_ref());
+    southstar_svg::render_node(cr.into(), svg, w, h, table, southstar_style::box_style(b));
 }
 
 pub fn math_paint(cr: ContextRef, b: BoxRef<'_>, x: f64, y: f64, font_px: f64, c: Rgba) {

@@ -1,7 +1,7 @@
 # Southstar — per-crate unsafe budget, maintained by scripts/unsafe-budget.py; a number here may only go down.
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
-anim	1	0	0	0	0	0	0
+anim	0	0	0	0	0	0	0
 audio-helper	43	20	1	0	0	0	0
 av	82	44	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
@@ -130,7 +130,7 @@ pdf	19	19	0	0	0	0	0
 plmpeg	0	0	0	0	0	0	0
 print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
-render	1	0	0	0	0	0	0
+render	0	0	0	0	0	0	0
 renderer-client	61	46	0	0	0	0	0
 renderer-host	46	25	1	0	0	0	0
 safebrowsing	9	4	0	0	0	0	0
@@ -143,7 +143,7 @@ southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	21	0	0	0	0	0
 static	0	0	0	0	0	0	0
-style	2	0	0	0	0	0	0
+style	1	0	0	0	0	0	0
 svg	0	0	0	0	0	0	0
 text	432	302	0	0	0	0	0
 texture	0	0	0	0	0	0	0

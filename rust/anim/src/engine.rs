@@ -10,7 +10,7 @@ use southstar_style::{StyleRef, display_of};
 
 use crate::ffi::css::{
     self, AnimList, Borrowed, Decls, Entry, Keyframes, NodePtr, PROP_COUNT, RetainedStyle,
-    StyleMut, StylesTable, Target, Val,
+    StylesMut, StylesTable, Target, Val,
 };
 use crate::props;
 use crate::timing::Timing;
@@ -996,30 +996,36 @@ fn ancestor_hidden(styles: Option<StylesTable>, node: NodePtr) -> bool {
     })
 }
 
-fn apply_propagate(styles: StylesTable, node: NodePtr, prop: i32, base: Borrowed, current: &Val) {
+fn apply_propagate(
+    styles: &mut StylesMut,
+    node: NodePtr,
+    prop: i32,
+    base: &Borrowed,
+    current: &Val,
+) {
     let mut c = node.first_child();
     while let Some(child) = c {
-        let style = child.style_in(styles);
-        let inherits = style.is_some_and(|st| css::style_value(st, prop) == base);
-        if inherits && let Some(st) = child.style_mut_in(styles) {
-            st.set_retained(prop, current);
+        let inherits = child
+            .style_in(styles.table())
+            .is_some_and(|st| css::style_value(st, prop) == *base);
+        if inherits {
+            styles.set_retained(child, prop, current);
         }
         c = child.next_in_subtree(node, inherits);
     }
 }
 
 fn apply_animated_value(
-    styles: StylesTable,
+    styles: &mut StylesMut,
     node: NodePtr,
     base_values: &mut BTreeMap<i32, Val>,
-    st: &StyleMut,
     prop: i32,
     current: &Val,
 ) -> bool {
     if !props::in_range(prop) {
         return false;
     }
-    let base = st.value(prop);
+    let base = styles.value(node, prop);
     if base == current.borrow() {
         return false;
     }
@@ -1031,10 +1037,10 @@ fn apply_animated_value(
         }
     });
     let font_size = props::known().font_size;
-    let font_px = st.value(font_size).px().unwrap_or(16.0);
+    let font_px = styles.value(node, font_size).px().unwrap_or(16.0);
     let root_px = node
         .ancestors()
-        .filter_map(|a| a.style_in(styles))
+        .filter_map(|a| a.style_in(styles.table()))
         .last()
         .and_then(|root| css::style_value(root, font_size).px())
         .unwrap_or(font_px);
@@ -1043,9 +1049,9 @@ fn apply_animated_value(
     } else {
         current.font_units_resolved(font_px, root_px)
     };
-    let old = st.replace(prop, resolved.unwrap_or_else(|| current.clone()));
+    let old = styles.replace(node, prop, resolved.unwrap_or_else(|| current.clone()));
     if !base.is_null() && css::prop_inherits(prop) {
-        apply_propagate(styles, node, prop, base, current);
+        apply_propagate(styles, node, prop, &base, current);
     }
     drop(old);
     true
@@ -1547,11 +1553,12 @@ impl Anim {
         self.states.insert(node.key(), s);
     }
 
-    pub fn observe_all(&mut self, styles: StylesTable, now_us: i64) {
+    pub fn observe_all(&mut self, mut styles: StylesMut, now_us: i64) {
         if self.shared.now_us == 0 || self.active.is_empty() {
             self.shared.now_us = now_us;
         }
-        let mut items: Vec<(NodePtr, StyleRef<'_>, usize)> = styles
+        let table = styles.table();
+        let mut items: Vec<(NodePtr, StyleRef<'_>, usize)> = table
             .entries()
             .into_iter()
             .filter(|(node, style)| match self.states.get(&node.key()) {
@@ -1562,10 +1569,10 @@ impl Anim {
             .collect();
         items.sort_by_key(|item| item.2);
         for (node, style, _) in items {
-            self.observe(node, style, now_us, Some(styles));
+            self.observe(node, style, now_us, Some(table));
         }
-        self.prune(styles);
-        self.apply(styles);
+        self.prune(table);
+        self.apply(&mut styles);
     }
 
     pub fn base_value(&self, node: NodePtr, prop: i32) -> Borrowed {
@@ -1583,11 +1590,12 @@ impl Anim {
         }
     }
 
-    pub fn apply(&mut self, styles: StylesTable) {
+    pub fn apply(&mut self, styles: &mut StylesMut) {
+        let released = self.release_current_styles(styles.table());
         for s in self.states.values_mut() {
-            let Some(st) = s.node.style_mut_in(styles) else {
+            if !styles.table().contains(s.node) {
                 continue;
-            };
+            }
             let node = s.node;
             let mut mutated = false;
             s.base_values.clear();
@@ -1601,8 +1609,7 @@ impl Anim {
             } = s;
             for ch in chans.iter() {
                 if let (true, Some(current)) = (ch.active, ch.current.as_ref()) {
-                    mutated |=
-                        apply_animated_value(styles, node, base_values, &st, ch.prop, current);
+                    mutated |= apply_animated_value(styles, node, base_values, ch.prop, current);
                 }
             }
             for r in runs.iter_mut().chain(scripts.iter_mut()) {
@@ -1615,7 +1622,7 @@ impl Anim {
                         base = Borrowed::NULL;
                     }
                     if base.is_null() {
-                        base = st.value(prop);
+                        base = styles.value(node, prop);
                     }
                     let init = if base.is_null() {
                         css::initial_value(prop)
@@ -1629,7 +1636,7 @@ impl Anim {
                     };
                     let parent = node
                         .parent()
-                        .and_then(|p| p.style_in(styles))
+                        .and_then(|p| p.style_in(styles.table()))
                         .map_or(Borrowed::NULL, |ps| css::style_value(ps, prop));
                     let endpoint = |v: Option<&Val>| -> (Option<Val>, Borrowed) {
                         let Some(v) = v else {
@@ -1663,11 +1670,28 @@ impl Anim {
                     }
                 }
                 for (&prop, v) in values.iter() {
-                    mutated |= apply_animated_value(styles, node, base_values, &st, prop, v);
+                    mutated |= apply_animated_value(styles, node, base_values, prop, v);
                 }
             }
             node.exclude_from_incremental(mutated);
         }
+        for key in released {
+            if let Some(s) = self.states.get_mut(&key) {
+                s.prev_style = s.node.retained_style_in(styles.table());
+            }
+        }
+    }
+
+    fn release_current_styles(&mut self, styles: StylesTable) -> Vec<usize> {
+        let mut released = Vec::new();
+        for (&key, s) in &mut self.states {
+            let current = s.node.style_in(styles).map(StyleRef::as_ptr);
+            if current.is_some_and(|current| current == s.prev_style_ptr()) {
+                s.prev_style = None;
+                released.push(key);
+            }
+        }
+        released
     }
 
     pub fn tick(&mut self, now_us: i64) -> bool {
