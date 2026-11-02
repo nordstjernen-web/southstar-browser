@@ -11,6 +11,11 @@ Southstar Browser 1.0.7-dev:
   one entry per distinct host name and never shrank, so a page requesting
   many generated subdomains could grow it without limit. When full,
   expired answers are dropped first, then the one expiring soonest.
+* Build: a `-Dlto=fat|thin|off` meson option picks the link-time
+  optimization of a release build. `fat` stays the default and is what
+  releases ship; `off` (no LTO, 256 codegen units, incremental) rebuilds
+  after a one-file change in 31-47 s instead of 870 s, for a binary that
+  loads pages about 60% slower.
 * Source: the 45 copies of `until_nul` (the bytes before the first NUL)
   and the 45 `c_text`/`c_string`/`cstring` helpers that turned such bytes
   into a `CString` are now four shared functions in `southstar-unicode`:
