@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security: exporting a page opens the renderer's output file once without
+  following links, checks it is the same single-link regular file, and
+  copies from that handle. The shell used to check the path and then copy
+  it by name, so a compromised renderer could swap in a link and have a
+  file it could not read itself copied to the user's chosen location.
 * Security: a download name longer than 200 bytes is shortened in its stem
   and keeps its extension, and trailing dots and spaces are trimmed again
   afterwards. Cutting the name used to be able to leave `name.exe.`,
