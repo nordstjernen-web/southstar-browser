@@ -6,7 +6,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use southstar_dom::serialize::is_embedded_doc;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Trace, Value};
 
 use crate::ffi::{Js, js_of, main_scope, unwrap_node, wrap_node};
@@ -83,7 +82,7 @@ fn handle(scope: &mut Scope<'_>, this: &Value) -> Option<Rc<NodeIter>> {
 }
 
 fn skip_documents(mut node: Option<Element>, backward: bool) -> Option<Element> {
-    while let Some(n) = node.filter(|&n| is_embedded_doc(n)) {
+    while let Some(n) = node.filter(|&n| crate::hidden_child(n)) {
         node = if backward {
             n.prev_sibling()
         } else {
@@ -95,7 +94,7 @@ fn skip_documents(mut node: Option<Element>, backward: bool) -> Option<Element> 
 
 fn following(node: Element, root: Element) -> Option<Element> {
     if let Some(first) = node.first_child() {
-        let child = if is_embedded_doc(first) {
+        let child = if crate::hidden_child(first) {
             skip_documents(first.next_sibling(), false)
         } else {
             Some(first)

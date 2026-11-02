@@ -428,7 +428,7 @@ impl XmlWriter {
             Kind::Element => self.element(node, ns, map, depth),
             Kind::Document => {
                 for child in children(node) {
-                    if !is_embedded_doc(child) {
+                    if !is_embedded_doc(child) && !is_shadow_root_marked(child) {
                         self.node(child, ns, map, depth + 1);
                     }
                 }
@@ -612,7 +612,7 @@ impl XmlWriter {
         }
         self.out.push(b'>');
         for child in children(content) {
-            if !is_embedded_doc(child) {
+            if !is_embedded_doc(child) && !is_shadow_root_marked(child) {
                 self.node(child, inherited.as_deref(), &map, depth + 1);
             }
         }
