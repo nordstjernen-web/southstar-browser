@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) const SCOPE: &str = concat!(
-    "(function(realWin, iframeDoc, initialURL, sandbox, docURL){",
+    "(function(realWin, iframeDoc, initialURL, sandbox, docURL, navigate){",
     "  var url = initialURL || 'about:blank';",
     "  var shown = docURL || '';",
     "  function vis(){ return shown || url; }",
@@ -35,7 +35,9 @@ pub(crate) const SCOPE: &str = concat!(
     "    get: function(){ return vis(); },",
     "    set: function(v){ var u=mk(v);",
     "      if(!u) throw new DOMException('location: invalid URL','SyntaxError');",
-    "      var o=vis(); url=u.href; shown='';",
+    "      var o=vis();",
+    "      if (!(u.hash && sameDoc(o,u.href)) && u.protocol!=='javascript:' && typeof navigate==='function' && navigate(u.href)) return;",
+    "      url=u.href; shown='';",
     "      if (o!==url && sameDoc(o,url)) fireHash(o,url); } });",
     "  Object.defineProperty(loc, 'hash', { configurable:true, enumerable:true,",
     "    get: function(){ var u=mk(vis()); return u ? u.hash : ''; },",
@@ -137,7 +139,7 @@ pub(crate) const SCOPE: &str = concat!(
 );
 
 pub(crate) const GLOBAL: &str = concat!(
-    "(function(G, realWin, iframeDoc, initialURL, sandbox, platformNames, frameEl, frameName, childFrameOf, framePostMessage, docURL, realmClone, windowEvents){",
+    "(function(G, realWin, iframeDoc, initialURL, sandbox, platformNames, frameEl, frameName, childFrameOf, framePostMessage, docURL, realmClone, windowEvents, navigate){",
     "  var url = initialURL || 'about:blank';",
     "  var shown = docURL || '';",
     "  function vis(){ return shown || url; }",
@@ -169,7 +171,9 @@ pub(crate) const GLOBAL: &str = concat!(
     "    get: function(){ return vis(); },",
     "    set: function(v){ var u=mk(v);",
     "      if(!u) throw new DOMException('location: invalid URL','SyntaxError');",
-    "      var o=vis(); url=u.href; shown='';",
+    "      var o=vis();",
+    "      if (!(u.hash && sameDoc(o,u.href)) && u.protocol!=='javascript:' && typeof navigate==='function' && navigate(u.href)) return;",
+    "      url=u.href; shown='';",
     "      if (o!==url && sameDoc(o,url)) fireHash(o,url); } });",
     "  Object.defineProperty(loc, 'hash', { configurable:true, enumerable:true,",
     "    get: function(){ var u=mk(vis()); return u ? u.hash : ''; },",

@@ -65,6 +65,8 @@ pub(crate) struct Page {
     pub deferred_loads: Vec<Frame>,
     pub iframe_globals: HashMap<Frame, Vec<CString>>,
     pub pristine: Option<Rc<Pristine>>,
+    pub navigators: HashMap<i32, Frame>,
+    pub next_navigator: i32,
 }
 
 thread_local! {

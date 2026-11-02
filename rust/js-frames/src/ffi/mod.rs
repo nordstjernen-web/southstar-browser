@@ -367,6 +367,49 @@ pub(crate) fn child_frame_of_function(ctx: Ctx) -> Value {
     ctx.enter(|scope| scope.function("childFrameOf", 2, iframe_child_frame_of))
 }
 
+fn navigate_own_frame(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+    data: &[Value],
+) -> JsResult {
+    let (Some(url), Some(id)) = (args.first(), data.first()) else {
+        return Ok(Value::boolean(false));
+    };
+    let id = scope.to_int32(id)?;
+    let js = Js::of_ctx(scope_ctx(scope));
+    if js.is_null() || halted(js) {
+        return Ok(Value::boolean(false));
+    }
+    let frame = page::peek(js, |page| page.navigators.get(&id).copied())
+        .flatten()
+        .and_then(|frame| frame_node(frame))
+        .filter(|frame| load::node_in_page(js, *frame));
+    let Some(frame) = frame else {
+        return Ok(Value::boolean(false));
+    };
+    let Ok(url) = CString::new(scope.to_bytes(url)?) else {
+        return Ok(Value::boolean(false));
+    };
+    crate::submit::navigate_frame(js, frame, &url, None);
+    Ok(Value::boolean(true))
+}
+
+pub(crate) fn navigate_frame_function(js: Js, ctx: Ctx, frame: Option<Node<'_>>) -> Value {
+    let Some(frame) = frame.filter(|_| !js.is_null()) else {
+        return Value::undefined();
+    };
+    let id = page::with(js, |page| {
+        page.navigators
+            .retain(|_, known| frame_node(*known).is_some());
+        let id = page.next_navigator;
+        page.next_navigator = page.next_navigator.wrapping_add(1);
+        page.navigators.insert(id, crate::realm::frame_of(frame));
+        id
+    });
+    ctx.enter(|scope| scope.bound_function("navigate", 1, navigate_own_frame, &[Value::int(id)]))
+}
+
 pub(crate) fn realm_clone_function(ctx: Ctx) -> Value {
     ctx.enter(|scope| scope.function("realmClone", 1, realm_clone))
 }

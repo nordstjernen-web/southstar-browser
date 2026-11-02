@@ -326,6 +326,7 @@ fn wrapper_scope(ctx: Ctx, run: &PageRealmRun<'_>) -> (Value, Value, Value) {
     } else {
         realm::make_scope(
             ctx,
+            None,
             run.iframe_doc,
             Some(run.origin.to_bytes()),
             run.doc_url.map(CStr::to_bytes),
