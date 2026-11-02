@@ -1,4 +1,4 @@
-//! Southstar — MessagePort, MessageChannel and BroadcastChannel, and the dedicated and service workers that carry messages between runtimes.
+//! Southstar — MessagePort, MessageChannel and BroadcastChannel, and the dedicated, shared and service workers that carry messages between runtimes.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,6 +9,7 @@ pub(crate) mod ffi;
 mod ports;
 mod scope;
 mod service;
+mod shared;
 mod worker;
 
 pub use ffi::install_runtime_hooks;

@@ -258,6 +258,7 @@ pub(crate) fn register(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
         inline_script: None,
         is_module: false,
         is_service_worker: true,
+        is_shared: false,
         scope: Some(scope_url.clone()),
     });
     let sw = scope.new_host_object(None, WorkerRef(Some(host.clone())));

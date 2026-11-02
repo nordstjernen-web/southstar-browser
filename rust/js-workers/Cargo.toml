@@ -1,6 +1,6 @@
 [package]
 name = "southstar-js-workers"
-description = "MessagePort, MessageChannel and BroadcastChannel, and the dedicated and service workers that carry messages between runtimes"
+description = "MessagePort, MessageChannel and BroadcastChannel, and the dedicated, shared and service workers that carry messages between runtimes"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
