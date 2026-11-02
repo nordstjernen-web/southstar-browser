@@ -173,7 +173,7 @@ pub(crate) fn adopt_frame_clock(js: Js, frame: Option<Node<'_>>, ctx: Ctx) {
 }
 
 pub(crate) fn make_element(ctx: Ctx, node: Node<'_>) -> Value {
-    ctx.try_enter(|scope| api::make_element(scope, node.as_ptr()).ok())
+    ctx.try_enter(|scope| api::make_element(scope, Some(node)).ok())
         .flatten()
         .unwrap_or_else(Value::undefined)
 }

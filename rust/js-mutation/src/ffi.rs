@@ -51,7 +51,7 @@ pub(crate) fn with_page_context(js: Js, f: impl FnOnce(&mut Scope<'_>)) {
 }
 
 pub(crate) fn element_value(scope: &mut Scope<'_>, node: Element) -> Option<Value> {
-    api::make_element(scope, node.as_ptr()).ok()
+    api::make_element(scope, Some(node)).ok()
 }
 
 pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {

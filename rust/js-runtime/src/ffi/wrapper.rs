@@ -6,7 +6,7 @@ use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
 use core::ptr;
 
-use southstar_dom::{Kind, Node, NsNode, WeakNode};
+use southstar_dom::{Kind, Node, WeakNode};
 use southstar_js_engine::{
     Attributes, ClassHooks, ContextHandle, HostClass, OwnProperty, PropertyDefinition, PropertyKey,
     Scope, SetFlags, Trace, Value,
@@ -65,10 +65,6 @@ impl Drop for ElementData {
             n.set_js_invalidate(None);
         }
     }
-}
-
-fn node<'a>(p: *const NsNode) -> Option<Node<'a>> {
-    super::record::node(p)
 }
 
 pub(crate) fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
@@ -275,7 +271,7 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
 
 fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
     let page = js.map(Js::page);
-    let proto = super::record::kind_proto_value(page, n.as_ptr());
+    let proto = super::record::kind_proto_value(page, Some(n));
     let proto = proto.unwrap_or_else(Value::undefined);
     let node_realm = match js {
         Some(js) if (crate::api::frames_hooks().cloners_made)(js.page()) => {
@@ -307,7 +303,7 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
 pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Value> {
     let js = Js::of_scope(scope);
     if let Some(js) = js
-        && ptr::eq(n.as_ptr(), js.ce_main_doc())
+        && js.ce_main_doc() == Some(n)
         && n.parent().is_none()
     {
         let document = page_document_object(js)?;
@@ -336,20 +332,19 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
         imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
     if let Some(js) = js {
-        super::record::pin_wrapper(js.some(), n.as_ptr(), &obj);
+        super::record::pin_wrapper(js.some(), n, &obj);
     }
     Ok(obj)
 }
 
-pub(crate) fn make_element(scope: &mut Scope<'_>, cnode: *const NsNode) -> Result<Value, Value> {
-    match node(cnode) {
+pub(crate) fn make_element(scope: &mut Scope<'_>, n: Option<Node<'_>>) -> Result<Value, Value> {
+    match n.and_then(|n| n.downgrade().get()) {
         Some(n) => make(scope, n),
         None => Ok(Value::null()),
     }
 }
 
 fn invalidate_wrapper(target: Node<'static>) {
-    let n = target.as_mut_ptr();
     let js = super::record::active();
     (crate::api::observers_hooks().scrub_node)(js, target);
     (crate::api::attrs_hooks().detach_owner)(js, target);
@@ -359,7 +354,7 @@ fn invalidate_wrapper(target: Node<'static>) {
         if let Some(page) = Js::of(js)
             && !page.ctx().is_null()
         {
-            super::record::unpin_wrapper(page.some(), n);
+            super::record::unpin_wrapper(page.some(), target);
         }
     }
     if let Some(js) = js {
@@ -385,5 +380,5 @@ pub(crate) fn arm_js_invalidate(target: Node<'_>) {
 
 pub(crate) fn new_document_object(page: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
     let current_doc = page.current_doc();
-    scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(node(current_doc)))
+    scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(current_doc))
 }

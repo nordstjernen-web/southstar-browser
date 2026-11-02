@@ -32,6 +32,12 @@ Southstar Browser 1.0.7-dev:
   click or key press in the last few seconds). Any page or frame used to be
   able to overwrite the system clipboard from a timer, for example swapping a
   copied wallet address or shell command.
+* Internals: `rust/js-runtime` keeps its page record in an `Rc` instead of a
+  leaked box freed through a raw pointer, and remembers the current document,
+  frame, script and modal as weak node handles, so a node freed while a scope
+  held it reads as gone rather than as whatever reused its slot. The crate's
+  bindings API (`make_element`, `node_wrapper`, `kind_proto`) takes `Node`s
+  instead of raw `NsNode` pointers.
 
 Southstar Browser 1.0.6:
 ======

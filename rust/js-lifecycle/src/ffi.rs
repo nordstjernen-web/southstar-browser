@@ -278,7 +278,7 @@ pub(crate) fn make_event(scope: &mut Scope<'_>, kind: &CStr, target: Option<Node
 }
 
 pub(crate) fn make_element(scope: &mut Scope<'_>, node: Option<Node<'_>>) -> Value {
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {

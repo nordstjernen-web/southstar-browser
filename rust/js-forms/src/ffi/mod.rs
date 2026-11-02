@@ -32,7 +32,7 @@ pub(crate) fn element(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Option<Element>) -> Value {
-    api::make_element(scope, Node::ptr_or_null(node)).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn shadow_root(scope: &mut Scope<'_>, element: &Value) -> Value {

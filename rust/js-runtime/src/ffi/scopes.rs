@@ -4,14 +4,14 @@
 
 use core::cell::RefCell;
 use core::ffi::CStr;
-use core::ptr;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Kind, Node, NsNode};
+use southstar_dom::{Kind, Node, WeakNode};
 use southstar_js_engine::{ContextHandle, Value};
 
 use super::Js;
+use super::record::{live, weak};
 use super::state::UrlCell;
 use crate::budget;
 
@@ -33,14 +33,14 @@ impl FrameUrl {
 
 #[derive(Clone, Copy)]
 pub(crate) struct BaseFrame {
-    doc: *mut NsNode,
-    frame: *mut NsNode,
+    doc: Option<WeakNode>,
+    frame: Option<WeakNode>,
 }
 
 pub(crate) struct RealmScope {
     ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
+    doc: Option<WeakNode>,
+    frame: Option<WeakNode>,
     url: Option<UrlCell>,
     entered_url: Option<CString>,
     prev_slot: Option<UrlCell>,
@@ -52,8 +52,8 @@ impl RealmScope {
     pub fn inactive() -> RealmScope {
         RealmScope {
             ctx: ContextHandle::NULL,
-            doc: ptr::null_mut(),
-            frame: ptr::null_mut(),
+            doc: None,
+            frame: None,
             url: None,
             entered_url: None,
             prev_slot: None,
@@ -65,8 +65,8 @@ impl RealmScope {
 
 struct DispatchScope {
     ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
+    doc: Option<WeakNode>,
+    frame: Option<WeakNode>,
     entered: bool,
     url: FrameUrl,
 }
@@ -75,8 +75,8 @@ impl DispatchScope {
     fn inactive() -> DispatchScope {
         DispatchScope {
             ctx: ContextHandle::NULL,
-            doc: ptr::null_mut(),
-            frame: ptr::null_mut(),
+            doc: None,
+            frame: None,
             entered: false,
             url: FrameUrl::new(),
         }
@@ -94,18 +94,18 @@ pub(crate) struct TimerScope {
 pub(crate) struct RafScope {
     js: Js,
     previous_ctx: ContextHandle,
-    previous_doc: *mut NsNode,
-    previous_frame: *mut NsNode,
-    frame: *mut NsNode,
+    previous_doc: Option<WeakNode>,
+    previous_frame: Option<WeakNode>,
+    frame: Option<WeakNode>,
     url: FrameUrl,
 }
 
 pub(crate) struct FrameLoadScope {
     url: FrameUrl,
-    doc: *mut NsNode,
-    script: *mut NsNode,
+    doc: Option<WeakNode>,
+    script: Option<WeakNode>,
     iframe_doc: Option<Value>,
-    frame: *mut NsNode,
+    frame: Option<WeakNode>,
 }
 
 fn with_top_slot<R>(js: Js, f: impl FnOnce(&mut Option<CString>) -> R) -> R {
@@ -129,8 +129,8 @@ fn non_null_text(text: Option<&CStr>) -> CString {
     text.map_or_else(CString::default, CStr::to_owned)
 }
 
-fn frame_url_attr<'a>(frame: *const NsNode) -> Option<&'a CStr> {
-    super::record::node(frame).and_then(|frame| frame.attr(FRAME_URL_ATTR))
+fn frame_url_attr<'a>(frame: Option<Node<'a>>) -> Option<&'a CStr> {
+    frame.and_then(|frame| frame.attr(FRAME_URL_ATTR))
 }
 
 fn save_current_url(js: Js) -> UrlCell {
@@ -159,8 +159,8 @@ fn frame_url_leave(js: Js, fu: &mut FrameUrl) {
     restore_current_url(js, fu.saved.as_ref());
 }
 
-pub(crate) fn top_document(doc: *mut NsNode) -> *mut NsNode {
-    let mut current = super::record::node(doc);
+pub(crate) fn top_document(doc: Option<Node<'_>>) -> Option<Node<'_>> {
+    let mut current = doc;
     while let Some(node) = current {
         let Some(mut parent) = node.parent() else {
             break;
@@ -172,38 +172,35 @@ pub(crate) fn top_document(doc: *mut NsNode) -> *mut NsNode {
             }
             match parent.parent() {
                 Some(next) => parent = next,
-                None => return ptr::null_mut(),
+                None => return None,
             }
         }
     }
-    Node::ptr_or_null(current).cast_mut()
+    current
 }
 
-pub(crate) fn node_root(node: *const NsNode) -> *const NsNode {
-    Node::ptr_or_null(super::record::node(node).map(southstar_dom::tree::root))
+pub(crate) fn node_root(node: Option<Node<'_>>) -> Option<Node<'_>> {
+    node.map(southstar_dom::tree::root)
 }
 
-pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> *mut NsNode {
+pub(crate) fn frame_of_realm(js: Js, realm: ContextHandle) -> Option<Node<'static>> {
     (crate::api::frames_hooks().frame_of_realm)(js.page(), realm)
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
 }
 
-pub(crate) fn node_realm_context(js: Js, node: *const NsNode) -> ContextHandle {
-    super::record::node(node).map_or(ContextHandle::NULL, |node| {
+pub(crate) fn node_realm_context(js: Js, node: Option<Node<'_>>) -> ContextHandle {
+    node.map_or(ContextHandle::NULL, |node| {
         (crate::api::frames_hooks().node_realm_context)(js.page(), node)
     })
 }
 
-fn iframe_document_node(frame: *const NsNode) -> *mut NsNode {
-    super::record::node(frame)
-        .and_then(crate::api::frames_hooks().document_node)
-        .map_or(ptr::null_mut(), Node::as_mut_ptr)
+fn iframe_document_node(frame: Option<Node<'_>>) -> Option<Node<'_>> {
+    frame.and_then(crate::api::frames_hooks().document_node)
 }
 
 fn save(js: Js, scope: &mut RealmScope) {
     scope.ctx = js.ctx();
-    scope.doc = js.current_doc();
-    scope.frame = js.frame();
+    scope.doc = weak(js.current_doc());
+    scope.frame = weak(js.frame());
     scope.url = Some(save_current_url(js));
     scope.entered_url = None;
     scope.prev_slot = js.st().top_url_slot.borrow().clone();
@@ -214,7 +211,7 @@ fn save(js: Js, scope: &mut RealmScope) {
 pub(crate) fn frame_scope_enter(
     js: Js,
     realm: ContextHandle,
-    frame: *mut NsNode,
+    frame: Option<Node<'_>>,
     scope: &mut RealmScope,
 ) {
     save(js, scope);
@@ -230,9 +227,8 @@ pub(crate) fn frame_scope_enter(
         state.top_url_slot.replace(scope.url.clone());
     }
     js.set_ctx(realm);
-    let frame_doc = iframe_document_node(frame);
-    if !frame_doc.is_null() {
-        js.set_current_doc(frame_doc);
+    if let Some(frame_doc) = iframe_document_node(frame) {
+        js.set_current_doc(Some(frame_doc));
     }
     js.set_frame(frame);
     js.replace_current_url(Some(non_null_text(frame_url_attr(frame))));
@@ -246,11 +242,8 @@ pub(crate) fn realm_url(js: Js, realm: ContextHandle) -> Option<CString> {
     if realm == main {
         return Some(top_url(js));
     }
-    let frame = frame_of_realm(js, realm);
-    if frame.is_null() {
-        return None;
-    }
-    frame_url_attr(frame)
+    let frame = frame_of_realm(js, realm)?;
+    frame_url_attr(Some(frame))
         .filter(|url| !url.is_empty())
         .map(CStr::to_owned)
 }
@@ -267,19 +260,20 @@ pub(crate) fn realm_scope_enter(js: Option<Js>, realm: ContextHandle, scope: &mu
         let base = js.st().realm_scope_base.get();
         save(js, scope);
         js.set_ctx(realm);
-        js.set_frame(base.map_or(ptr::null_mut(), |base| base.frame));
-        js.set_current_doc(base.map_or_else(|| top_document(js.current_doc()), |base| base.doc));
+        js.set_frame(base.and_then(|base| live(base.frame)));
+        js.set_current_doc(
+            base.map_or_else(|| top_document(js.current_doc()), |base| live(base.doc)),
+        );
         let top = top_url(js);
         scope.entered_url = Some(top.clone());
         js.replace_current_url(Some(top));
         js.st().top_url_slot.replace(None);
         return;
     }
-    let frame = frame_of_realm(js, realm);
-    if frame.is_null() {
+    let Some(frame) = frame_of_realm(js, realm) else {
         return;
-    }
-    frame_scope_enter(js, realm, frame, scope);
+    };
+    frame_scope_enter(js, realm, Some(frame), scope);
 }
 
 pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
@@ -301,8 +295,8 @@ pub(crate) fn realm_scope_leave(js: Option<Js>, scope: &mut RealmScope) {
     }
     js.st().top_url_slot.replace(scope.prev_slot.take());
     restore_current_url(js, scope.url.as_ref());
-    js.set_frame(scope.frame);
-    js.set_current_doc(scope.doc);
+    js.set_frame(live(scope.frame));
+    js.set_current_doc(live(scope.doc));
     js.set_ctx(scope.ctx);
 }
 
@@ -327,19 +321,19 @@ pub(crate) fn frame_url_end(js: Js, fu: &mut FrameUrl) {
 fn dispatch_enter(
     js: Js,
     ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
+    doc: Option<Node<'_>>,
+    frame: Option<Node<'_>>,
     scope: &mut DispatchScope,
 ) {
     *scope = DispatchScope {
         ctx: js.ctx(),
-        doc: js.current_doc(),
-        frame: js.frame(),
-        entered: !frame.is_null(),
+        doc: weak(js.current_doc()),
+        frame: weak(js.frame()),
+        entered: frame.is_some(),
         url: FrameUrl::new(),
     };
     js.set_ctx(ctx);
-    if !frame.is_null() {
+    if frame.is_some() {
         js.set_current_doc(doc);
         js.set_frame(frame);
         frame_url_enter(js, &mut scope.url, frame_url_attr(frame));
@@ -350,16 +344,16 @@ fn dispatch_leave(js: Js, scope: &mut DispatchScope) {
     if scope.entered {
         frame_url_leave(js, &mut scope.url);
     }
-    js.set_frame(scope.frame);
-    js.set_current_doc(scope.doc);
+    js.set_frame(live(scope.frame));
+    js.set_current_doc(live(scope.doc));
     js.set_ctx(scope.ctx);
 }
 
 pub(crate) fn in_dispatch<R>(
     js: Js,
     ctx: ContextHandle,
-    doc: *mut NsNode,
-    frame: *mut NsNode,
+    doc: Option<Node<'_>>,
+    frame: Option<Node<'_>>,
     f: impl FnOnce() -> R,
 ) -> R {
     let mut scope = DispatchScope::inactive();
@@ -371,24 +365,22 @@ pub(crate) fn in_dispatch<R>(
 
 pub(crate) fn frame_load_begin(
     js: Js,
-    frame: *mut NsNode,
-    doc: *mut NsNode,
+    frame: Node<'_>,
+    doc: Node<'_>,
     url: Option<&CStr>,
     realm_doc: Option<Value>,
 ) -> Box<FrameLoadScope> {
     let mut scope = Box::new(FrameLoadScope {
         url: FrameUrl::new(),
-        doc: ptr::null_mut(),
-        script: ptr::null_mut(),
+        doc: None,
+        script: None,
         iframe_doc: None,
-        frame: ptr::null_mut(),
+        frame: None,
     });
     frame_url_enter(js, &mut scope.url, url);
-    scope.doc = js.current_doc();
-    js.set_current_doc(doc);
-    if let Some(doc) = super::record::node(doc) {
-        southstar_dom::index::id_build(doc);
-    }
+    scope.doc = weak(js.current_doc());
+    js.set_current_doc(Some(doc));
+    southstar_dom::index::id_build(doc);
     let state = js.st();
     scope.script = state.current_script.get();
     scope.iframe_doc = if realm_doc.is_some() {
@@ -396,8 +388,8 @@ pub(crate) fn frame_load_begin(
     } else {
         state.iframe_doc.borrow().clone()
     };
-    scope.frame = js.frame();
-    js.set_frame(frame);
+    scope.frame = weak(js.frame());
+    js.set_frame(Some(frame));
     state
         .iframe_load_depth
         .set(state.iframe_load_depth.get() + 1);
@@ -409,11 +401,11 @@ pub(crate) fn frame_load_end(js: Js, scope: &mut FrameLoadScope) {
     state
         .iframe_load_depth
         .set(state.iframe_load_depth.get() - 1);
-    js.set_frame(scope.frame);
+    js.set_frame(live(scope.frame));
     let previous_doc = scope.iframe_doc.take();
     drop(state.iframe_doc.replace(previous_doc));
     state.current_script.set(scope.script);
-    js.set_current_doc(scope.doc);
+    js.set_current_doc(live(scope.doc));
     frame_url_leave(js, &mut scope.url);
 }
 
@@ -422,10 +414,14 @@ pub(crate) fn realm_url_begin(js: Js, realm: ContextHandle) -> Option<Box<FrameU
     Some(frame_url_begin(js, Some(&url)))
 }
 
-pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) -> Box<TimerScope> {
+pub(crate) fn timer_scope_begin(
+    js: Js,
+    ctx: ContextHandle,
+    frame: Option<Node<'_>>,
+) -> Box<TimerScope> {
     let previous_ctx = js.ctx();
     let mut ctx = if ctx.is_null() { previous_ctx } else { ctx };
-    if !frame.is_null() {
+    if frame.is_some() {
         let current_realm = node_realm_context(js, frame);
         if !current_realm.is_null() {
             ctx = current_realm;
@@ -438,7 +434,7 @@ pub(crate) fn timer_scope_begin(js: Js, ctx: ContextHandle, frame: *mut NsNode) 
         frame_scope: RealmScope::inactive(),
         budget: 0,
     });
-    if frame.is_null() {
+    if frame.is_none() {
         js.set_ctx(ctx);
     } else {
         frame_scope_enter(js, ctx, frame, &mut scope.frame_scope);
@@ -475,22 +471,18 @@ impl TimerScope {
 pub(crate) fn raf_scope_begin(
     js: Js,
     ctx: ContextHandle,
-    frame: *mut NsNode,
+    frame: Option<Node<'_>>,
 ) -> Option<Box<RafScope>> {
-    if !frame.is_null() && node_root(frame) != node_root(js.current_doc()) {
+    if frame.is_some() && node_root(frame) != node_root(js.current_doc()) {
         return None;
     }
-    let current_realm = if frame.is_null() {
-        ContextHandle::NULL
-    } else {
-        node_realm_context(js, frame)
-    };
+    let current_realm = node_realm_context(js, frame);
     let mut scope = Box::new(RafScope {
         js,
         previous_ctx: js.ctx(),
-        previous_doc: js.current_doc(),
-        previous_frame: js.frame(),
-        frame,
+        previous_doc: weak(js.current_doc()),
+        previous_frame: weak(js.frame()),
+        frame: weak(frame),
         url: FrameUrl::new(),
     });
     let next_ctx = if !current_realm.is_null() {
@@ -502,10 +494,9 @@ pub(crate) fn raf_scope_begin(
     };
     js.set_ctx(next_ctx);
     js.set_frame(frame);
-    if !frame.is_null() {
-        let frame_doc = iframe_document_node(frame);
-        if !frame_doc.is_null() {
-            js.set_current_doc(frame_doc);
+    if frame.is_some() {
+        if let Some(frame_doc) = iframe_document_node(frame) {
+            js.set_current_doc(Some(frame_doc));
         }
         frame_url_enter(js, &mut scope.url, frame_url_attr(frame));
     }
@@ -523,10 +514,10 @@ impl RafScope {
 
 pub(crate) fn raf_scope_end(scope: &mut RafScope) {
     let js = scope.js;
-    if !scope.frame.is_null() {
+    if scope.frame.is_some() {
         frame_url_leave(js, &mut scope.url);
     }
-    js.set_frame(scope.previous_frame);
-    js.set_current_doc(scope.previous_doc);
+    js.set_frame(live(scope.previous_frame));
+    js.set_current_doc(live(scope.previous_doc));
     js.set_ctx(scope.previous_ctx);
 }

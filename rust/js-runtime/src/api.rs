@@ -2,9 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ptr;
-
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{BufferView, ContextHandle, HostClass, Scope, TaskFn, Value};
 
 use crate::budget;
@@ -160,13 +158,16 @@ pub fn this_is_detached_window(js: Option<Page>, scope: &mut Scope<'_>, this: &V
     }
     let doc = match scope.get(this, "document") {
         Ok(doc) => glue::unwrap_element(&doc),
-        Err(_) => ptr::null(),
+        Err(_) => None,
     };
-    if doc.is_null() || doc == js.current_doc().cast_const() || glue::is_detached_document(doc) {
+    let Some(doc) = doc else {
+        return false;
+    };
+    if Some(doc) == js.current_doc() || glue::is_detached_document(doc) {
         return false;
     }
     let top = scopes::top_document(js.current_doc());
-    !top.is_null() && scopes::top_document(doc.cast_mut()) != top
+    top.is_some() && scopes::top_document(Some(doc)) != top
 }
 
 pub fn call_observer(
@@ -212,7 +213,7 @@ pub fn array_length(scope: &mut Scope<'_>, arr: &Value) -> u32 {
     record::array_length(scope, arr)
 }
 
-pub fn kind_proto(js: Option<Page>, node: *const NsNode) -> Option<Value> {
+pub fn kind_proto(js: Option<Page>, node: Option<Node<'_>>) -> Option<Value> {
     record::kind_proto_value(js, node)
 }
 
@@ -243,7 +244,7 @@ pub fn document_root_for(scope: &mut Scope<'_>, this: &Value) -> Option<Node<'st
     record::document_root_for(scope, this)
 }
 
-pub fn node_wrapper(scope: &mut Scope<'_>, node: *const NsNode) -> Option<Value> {
+pub fn node_wrapper(scope: &mut Scope<'_>, node: Node<'_>) -> Option<Value> {
     record::node_wrapper(scope, node)
 }
 
@@ -291,7 +292,7 @@ pub fn element_class() -> &'static HostClass {
     &wrapper::ELEMENT_CLASS
 }
 
-pub fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Result<Value, Value> {
+pub fn make_element(scope: &mut Scope<'_>, node: Option<Node<'_>>) -> Result<Value, Value> {
     wrapper::make_element(scope, node)
 }
 

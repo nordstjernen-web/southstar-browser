@@ -9,7 +9,7 @@ use std::rc::Rc;
 use southstar_anim::AnimHandle;
 use southstar_css::{self as css_engine, Prop, StyleMap};
 use southstar_css_prop_syntax as prop_syntax;
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
@@ -150,8 +150,8 @@ pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     api::unwrap_element(value)
 }
 
-pub(crate) fn make_element(scope: &mut Scope<'_>, node: *const NsNode) -> Value {
-    api::make_element(scope, node).unwrap_or_else(|_| Value::undefined())
+pub(crate) fn make_element(scope: &mut Scope<'_>, node: Node<'_>) -> Value {
+    api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn style_decl_node(value: &Value) -> Option<Node<'static>> {

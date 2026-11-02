@@ -48,7 +48,7 @@ pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
-    api::make_element(scope, node.as_ptr()).unwrap_or_else(|_| Value::undefined())
+    api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn dom_rect(scope: &mut Scope<'_>, rect: [f64; 4]) -> Value {

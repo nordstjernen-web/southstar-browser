@@ -8,7 +8,7 @@ use core::ops::ControlFlow;
 use std::ffi::CString;
 use std::rc::Rc;
 
-use southstar_dom::{Node, NsNode};
+use southstar_dom::Node;
 
 use southstar_glib::{MainContext, SourceId};
 use southstar_js_engine::{BufferView, ContextHandle, JobOutcome, ObjectKind, Scope, Value};
@@ -142,8 +142,8 @@ pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {
     (api::window_hooks().note_viewport_scroll)(js.page(), x, y);
 }
 
-pub(crate) fn set_active_modal(modal: *const NsNode) {
-    southstar_dom::tree::set_active_modal(super::record::node(modal));
+pub(crate) fn set_active_modal(modal: Option<Node<'_>>) {
+    southstar_dom::tree::set_active_modal(modal);
 }
 
 pub(crate) fn finish_eval_depth(js: Js) {
@@ -151,22 +151,19 @@ pub(crate) fn finish_eval_depth(js: Js) {
     (api::loader_hooks().schedule_pending_script_drain)(js.page());
 }
 
-pub(crate) fn dispatch_window_only_event(js: Js, doc: *const NsNode, kind: &str, event: Value) {
-    crate::events::dispatch_window_only_event(js.some(), super::record::node(doc), kind, event);
+pub(crate) fn dispatch_window_only_event(js: Js, doc: Option<Node<'_>>, kind: &str, event: Value) {
+    crate::events::dispatch_window_only_event(js.some(), doc, kind, event);
 }
 
 pub(crate) fn active_js() -> Option<Js> {
     Js::of(super::record::active())
 }
 
-pub(crate) fn unwrap_element(value: &Value) -> *const NsNode {
-    southstar_dom::Node::ptr_or_null(super::wrapper::unwrap(value))
+pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
+    super::wrapper::unwrap(value)
 }
 
-pub(crate) fn is_detached_document(doc: *const NsNode) -> bool {
-    let Some(node) = super::record::node(doc) else {
-        return false;
-    };
+pub(crate) fn is_detached_document(node: Node<'_>) -> bool {
     node.kind() != southstar_dom::Kind::Document || node.flags() & NODE_FRAGMENT != 0
 }
 
@@ -224,7 +221,7 @@ pub(crate) fn collect_orphans(js: Js) -> Vec<Node<'static>> {
 }
 
 pub(crate) fn free_orphan_subtree(js: Js, root: Node<'static>) {
-    super::record::purge_subtree_rafs(js.some(), root.as_mut_ptr());
+    super::record::purge_subtree_rafs(js.some(), root);
     (api::frames_hooks().purge_subtree_pending)(js.page(), root);
     (api::loader_hooks().purge_subtree_script_refs)(js.page(), root);
     (api::mutation_hooks().purge_subtree_node_refs)(js.page(), root);
@@ -247,7 +244,7 @@ pub(crate) fn load_first_pending_iframe(js: Js, iframe: Option<Node<'static>>) {
     }
 }
 
-pub(crate) fn unpin(js: Js, node: *mut NsNode) -> bool {
+pub(crate) fn unpin(js: Js, node: Node<'_>) -> bool {
     super::record::unpin_wrapper(js.some(), node)
 }
 
