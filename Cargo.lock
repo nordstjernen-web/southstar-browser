@@ -3175,6 +3175,7 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-net",
+ "southstar-sandbox",
  "southstar-url",
 ]
 
@@ -3831,6 +3832,7 @@ version = "1.0.7-dev"
 dependencies = [
  "southstar-debuglog",
  "southstar-glib",
+ "southstar-sandbox",
 ]
 
 [[package]]
