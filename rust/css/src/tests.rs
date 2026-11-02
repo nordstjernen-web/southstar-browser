@@ -5,6 +5,7 @@
 mod anchor;
 mod frameset;
 mod if_fn;
+mod var_chain;
 
 use crate::prop::Prop;
 use crate::property;

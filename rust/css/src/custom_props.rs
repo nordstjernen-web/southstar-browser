@@ -17,6 +17,7 @@ const ORIGIN_PRESENTATIONAL: i32 = 1;
 const ORIGIN_AUTHOR: i32 = 2;
 const LAYER_NONE: i32 = i32::MAX;
 const GUARANTEED_INVALID: &[u8] = b"initial";
+const RESOLVE_DEPTH_MAX: usize = 256;
 
 pub(crate) type Own = HashMap<Vec<u8>, Vec<u8>>;
 
@@ -173,6 +174,9 @@ impl Lookup for Cascade<'_, '_> {
             let stack = self.stack.borrow();
             if let Some(at) = stack.iter().position(|n| *n == name) {
                 self.cyclic.borrow_mut().extend(&stack[at..]);
+                return None;
+            }
+            if stack.len() >= RESOLVE_DEPTH_MAX && self.todo.borrow().contains_key(name) {
                 return None;
             }
         }

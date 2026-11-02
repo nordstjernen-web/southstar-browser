@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Security (CSS): a long chain of custom properties declared in
+  reverse order (`--a2: var(--a1); --a1: var(--a0); ...`) no longer
+  overflows the renderer's stack. Each property was resolved on demand
+  by recursing into the one it references, with no depth limit across
+  properties, so about 10,000 links crashed the renderer. Resolution now
+  stops 256 properties deep and the reference that goes past the limit
+  is invalid at computed-value time; chains declared in dependency order
+  are unaffected.
 * Settings: a search engine set to DuckDuckGo Lite
   (`https://lite.duckduckgo.com/lite/?q=%s`) is kept. It was replaced
   by `https://duckduckgo.com/?q=%s` every time the configuration
