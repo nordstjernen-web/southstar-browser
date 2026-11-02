@@ -66,8 +66,3 @@ pub(crate) fn element_from_point_fns(scope: &mut Scope<'_>) -> [(&'static str, V
         ),
     ]
 }
-
-#[allow(non_snake_case)]
-pub fn nsr_element_get_shadowRoot(scope: &mut Scope<'_>, this: &Value) -> Result<Value, Value> {
-    crate::root::get_shadow_root(scope, this, &[])
-}

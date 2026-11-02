@@ -136,6 +136,7 @@ pub(crate) fn reset_form(scope: &mut Scope<'_>, form: Option<Element>) {
         .unwrap_or_else(|| form.root());
     controls::reset_owned_controls(form, Some(doc));
     reset_owned_outputs(page, form, doc, 0);
+    crate::internals::reset_owned(scope, form, doc);
     Page::mark_mutated(page);
 }
 

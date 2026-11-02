@@ -272,7 +272,7 @@ fn fieldset_listed(scan: Element, depth: i32, visit: &mut dyn FnMut(Element)) {
         if hidden_child(child) {
             continue;
         }
-        if name_in(child, LISTED) {
+        if name_in(child, LISTED) || southstar_dom::internals::is_form_associated(child) {
             visit(child);
         }
         fieldset_listed(child, depth + 1, visit);
@@ -293,7 +293,9 @@ fn radio_nodes(
         if hidden_child(child) {
             continue;
         }
-        if name_in(child, RADIO_CONTROLS) && form_owner(child) == Some(form) {
+        if (name_in(child, RADIO_CONTROLS) || southstar_dom::internals::is_form_associated(child))
+            && form_owner(child) == Some(form)
+        {
             let id = child.attr(c"id").map(CStr::to_bytes);
             let nm = child.attr(c"name").map(CStr::to_bytes);
             if id == Some(name) || nm == Some(name) {

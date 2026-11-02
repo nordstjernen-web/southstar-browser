@@ -10,7 +10,7 @@ use core::ffi::{CStr, c_long};
 use std::ffi::CString;
 
 use ffi::Query;
-use southstar_dom::{Node, ancestors, children, controls, select};
+use southstar_dom::{Node, ancestors, children, controls, internals, select};
 
 const MAX_DEPTH: i32 = 512;
 const PATTERN_MAX_LEN: usize = 2048;
@@ -173,9 +173,30 @@ fn submission_name<'a>(form: Node, node: Node<'a>) -> Option<&'a CStr> {
     (!controls::effectively_disabled(node)).then_some(name)
 }
 
+fn collect_custom(form: Node, node: Node, query: &mut Query) {
+    if !belongs_to(form, node) || controls::effectively_disabled(node) {
+        return;
+    }
+    let element_name = node.attr(c"name").filter(|name| !name.is_empty());
+    for entry in internals::submission(node).unwrap_or_default() {
+        let name = match entry.name {
+            Some(name) => CString::new(name).unwrap_or_default(),
+            None => match element_name {
+                Some(name) => name.to_owned(),
+                None => continue,
+            },
+        };
+        let value = CString::new(entry.value).unwrap_or_default();
+        query.append(&name, Some(&value));
+    }
+}
+
 fn collect_into(form: Node, node: Node, query: &mut Query, submitter: Option<Node>, depth: i32) {
     if depth >= MAX_DEPTH {
         return;
+    }
+    if internals::is_form_associated(node) {
+        collect_custom(form, node, query);
     }
     if let Some(tag) = node.element_name().filter(|tag| SUBMITTABLE.contains(tag))
         && let Some(name) = submission_name(form, node)
@@ -298,6 +319,9 @@ fn first_invalid_in<'a>(
         && !controls::readonly_bars_validation(node)
         && control_invalid(node, tag, Some(doc))
     {
+        return Some(node);
+    }
+    if internals::fails_validation(node) && belongs_to(form, node) {
         return Some(node);
     }
     children(node).find_map(|child| first_invalid_in(form, child, doc, depth + 1))

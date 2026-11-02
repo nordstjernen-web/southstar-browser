@@ -47,6 +47,7 @@ const PC_ACTIVE: u32 = 27;
 const PC_LANG: u32 = 39;
 const PC_DIR: u32 = 40;
 const PC_HEADING: u32 = 45;
+const PC_STATE: u32 = 55;
 
 const MAX_SELECTOR_NESTING: i32 = 48;
 const ANCESTOR_HASHES_MAX: usize = 4;
@@ -103,7 +104,7 @@ const PSEUDO_CLASSES: [(&[u8], u32); 49] = [
     (b"stalled", 54),
 ];
 
-const STANDARD_PSEUDO_CLASSES: [&[u8]; 29] = [
+const STANDARD_PSEUDO_CLASSES: [&[u8]; 28] = [
     b"default",
     b"indeterminate",
     b"in-range",
@@ -132,7 +133,6 @@ const STANDARD_PSEUDO_CLASSES: [&[u8]; 29] = [
     b"host-context",
     b"nth-col",
     b"nth-last-col",
-    b"state",
 ];
 
 const STANDARD_PSEUDO_ELEMENTS: [&[u8]; 15] = [
@@ -452,6 +452,16 @@ fn parse_anb(arg: &[u8]) -> Option<(i32, i32)> {
     Some((clamp(a), clamp(b)))
 }
 
+fn state_argument(arg: &[u8]) -> Option<Vec<u8>> {
+    let end = arg.len();
+    let mut p = skip_ws_comments(arg, 0, end);
+    if p >= end || !(is_ident_start(arg[p]) || arg[p] == b'\\') {
+        return None;
+    }
+    let state = read_ident(arg, &mut p, end);
+    (!state.is_empty() && skip_ws_comments(arg, p, end) == end).then_some(state)
+}
+
 fn pseudo_keyword(name: &[u8], arg: Option<&[u8]>, depth: i32) -> Option<PseudoPred> {
     if let Some(&(_, kind)) = PSEUDO_CLASSES.iter().find(|(k, _)| eq_ci(name, k)) {
         return Some(PseudoPred {
@@ -521,6 +531,11 @@ fn pseudo_keyword(name: &[u8], arg: Option<&[u8]>, depth: i32) -> Option<PseudoP
                 ..PseudoPred::default()
             })
         }
+        (Some(arg), 5) if eq_ci(name, b"state") => state_argument(arg).map(|state| PseudoPred {
+            kind: PC_STATE,
+            arg: Some(state),
+            ..PseudoPred::default()
+        }),
         (Some(arg), 3) if eq_ci(name, b"dir") => {
             let dir = trim_range(arg, 0, arg.len()).to_ascii_lowercase();
             (dir == b"ltr" || dir == b"rtl").then(|| PseudoPred {

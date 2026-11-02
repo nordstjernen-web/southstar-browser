@@ -935,10 +935,24 @@ pub fn supports_disabled(el: Node) -> bool {
         Some(
             b"button" | b"fieldset" | b"input" | b"optgroup" | b"option" | b"select" | b"textarea"
         )
-    )
+    ) || crate::internals::is_form_associated(el)
 }
 
 pub fn effectively_disabled(el: Node) -> bool {
+    disabled_among(el, ancestors(el))
+}
+
+pub fn disabled_within<'a>(el: Node<'a>, top: Node<'a>) -> bool {
+    let mut passed_top = el == top;
+    let chain = ancestors(el).take_while(move |p| {
+        let inside = !passed_top;
+        passed_top = *p == top;
+        inside
+    });
+    disabled_among(el, chain)
+}
+
+fn disabled_among<'a>(el: Node<'a>, chain: impl Iterator<Item = Node<'a>>) -> bool {
     if !supports_disabled(el) {
         return false;
     }
@@ -946,7 +960,7 @@ pub fn effectively_disabled(el: Node) -> bool {
         return true;
     }
     let is_option = named(el, b"option");
-    for p in ancestors(el) {
+    for p in chain {
         if is_option && named(p, b"optgroup") && p.attr(c"disabled").is_some() {
             return true;
         }

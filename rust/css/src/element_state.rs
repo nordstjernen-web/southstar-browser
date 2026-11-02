@@ -9,7 +9,8 @@ use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard};
 
 use southstar_dom::{
-    FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, attrs, controls, select, serialize,
+    FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, attrs, controls, internals, select,
+    serialize,
 };
 
 use crate::ffi;
@@ -52,6 +53,7 @@ const PC_MUTED: u32 = 51;
 const PC_SEEKING: u32 = 52;
 const PC_BUFFERING: u32 = 53;
 const PC_STALLED: u32 = 54;
+const PC_STATE: u32 = 55;
 
 const DIR_DEPTH_MAX: i32 = 256;
 const PRAGMA_LANG_MAX: usize = 127;
@@ -735,6 +737,10 @@ pub(crate) fn matches(el: Node<'_>, kind: u32, arg: Option<&[u8]>) -> bool {
         PC_ENABLED => controls::supports_disabled(el) && !controls::effectively_disabled(el),
         PC_REQUIRED => controls::supports_required(el) && has(el, c"required"),
         PC_OPTIONAL => controls::supports_required(el) && !has(el, c"required"),
+        PC_VALID if internals::is_form_associated(el) => {
+            internals::will_validate(el) && !internals::is_invalid(el)
+        }
+        PC_INVALID if internals::is_form_associated(el) => internals::fails_validation(el),
         PC_VALID => will_validate(el) && control_is_valid(el),
         PC_INVALID => will_validate(el) && !control_is_valid(el),
         PC_IN_RANGE => range_state(el) == Some((false, false)),
@@ -765,6 +771,7 @@ pub(crate) fn matches(el: Node<'_>, kind: u32, arg: Option<&[u8]>) -> bool {
         PC_SEEKING => is_media(el) && has(el, c"data-nd-seeking"),
         PC_BUFFERING => is_media(el) && has(el, c"data-nd-buffering"),
         PC_STALLED => is_media(el) && has(el, c"data-nd-stalled"),
+        PC_STATE => arg.is_some_and(|state| internals::has_state(el, state)),
         _ => false,
     }
 }

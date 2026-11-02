@@ -309,6 +309,13 @@ fn append_pair(scope: &mut Scope<'_>, fd: &Value, name: &[u8], value: &[u8]) {
     push(scope, fd, pair);
 }
 
+pub(crate) fn push_entry(scope: &mut Scope<'_>, fd: &Value, name: Value, value: Value) {
+    let pair = scope.new_array();
+    let _ = scope.set_index(&pair, 0, name);
+    let _ = scope.set_index(&pair, 1, value);
+    push(scope, fd, pair);
+}
+
 fn option_disabled(option: Element) -> bool {
     if controls::effectively_disabled(option) {
         return true;
@@ -378,6 +385,10 @@ fn append_submitter(scope: &mut Scope<'_>, fd: &Value, el: Element, name: Option
 fn populate(scope: &mut Scope<'_>, fd: &Value, form: Element, submitter: Option<Element>) {
     for el in crate::listed_controls(form, true) {
         if name_is(el, "object") || controls::effectively_disabled(el) {
+            continue;
+        }
+        if southstar_dom::internals::is_form_associated(el) {
+            crate::internals::append_submission(scope, fd, el);
             continue;
         }
         let name = non_empty(el.attr(c"name")).map(|n| n.to_bytes());

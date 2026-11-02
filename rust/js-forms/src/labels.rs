@@ -11,7 +11,7 @@ pub(crate) fn is_labelable(node: Element) -> bool {
     match node.element_name() {
         Some(b"input") => type_of(node).is_none() || !type_is(node, "hidden"),
         Some(b"button" | b"meter" | b"output" | b"progress" | b"select" | b"textarea") => true,
-        _ => false,
+        _ => southstar_dom::internals::is_form_associated(node),
     }
 }
 

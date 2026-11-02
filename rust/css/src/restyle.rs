@@ -917,6 +917,17 @@ pub fn mark_attr_dirty(target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>
     with_state(|s| s.mark_attr(target, name, old));
 }
 
+pub fn mark_states_dirty(target: Node<'_>) {
+    with_state(|s| {
+        s.mark(target);
+        if let Some(next) = target.next_sibling()
+            && !s.mark_following_siblings(next)
+        {
+            s.mark(target.parent().unwrap_or(target));
+        }
+    });
+}
+
 pub fn attr_may_affect_style(target: Node<'_>, name: Option<&[u8]>) -> bool {
     with_state(|s| s.attr_may_affect_style(target, name))
 }

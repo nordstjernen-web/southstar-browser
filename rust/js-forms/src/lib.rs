@@ -105,7 +105,8 @@ fn collect_listed(
         if hidden_child(child) {
             continue;
         }
-        if LISTED.iter().any(|tag| name_is(child, tag))
+        if (LISTED.iter().any(|tag| name_is(child, tag))
+            || southstar_dom::internals::is_form_associated(child))
             && form_owner(child) == Some(form)
             && (include_image || !is_image_input(child))
         {
@@ -187,7 +188,6 @@ pub fn install_runtime_hooks() {
     southstar_js_runtime::links::set_js_forms_links(southstar_js_runtime::links::JsFormsLinks {
         radio_node_list_set_value: crate::ffi::nsr_radio_node_list_set_value,
         radio_node_list_get_value: crate::ffi::nsr_radio_node_list_get_value,
-        custom_state_set_ctor: crate::ffi::nsr_custom_state_set_ctor,
         window_form_data_ctor: crate::ffi::nsr_window_form_data_ctor,
         form_named_control: crate::ffi::nsr_form_named_control,
         form_indexed_control: crate::ffi::nsr_form_indexed_control,

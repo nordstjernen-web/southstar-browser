@@ -8,6 +8,7 @@ use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, Js};
+use crate::form_associated;
 use crate::{Element, Key, MAX_DEPTH, Page, WRITABLE_CONFIGURABLE, get, truthy};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
@@ -72,7 +73,7 @@ pub(crate) fn log_error(scope: &mut Scope<'_>, js: Js, exception: &Value, callba
     ffi::log_line(js, &line);
 }
 
-fn call_callback(
+pub(crate) fn call_callback(
     scope: &mut Scope<'_>,
     js: Js,
     element: &Value,
@@ -196,6 +197,7 @@ fn upgrade_with(
     let marker = get(scope, &element, "__nd_ce_class");
     if marker.same_object(class) {
         fire_connected_if_needed(scope, js, node, &element, class);
+        form_associated::refresh(scope, js, node);
         return;
     }
     let proto = get(scope, class, "prototype");
@@ -208,6 +210,7 @@ fn upgrade_with(
         class.clone(),
         WRITABLE_CONFIGURABLE,
     );
+    form_associated::mark(scope, node, class);
     page.under_construction.borrow_mut().insert(id);
 
     let previous = page.upgrading.replace(Some(element.clone()));
@@ -244,6 +247,7 @@ fn upgrade_with(
     page.under_construction.borrow_mut().remove(&id);
 
     fire_connected_if_needed(scope, js, node, &element, class);
+    form_associated::upgraded(scope, js, node);
 
     for child in southstar_dom::children(node) {
         if ffi::node_in_page(js, child) {
@@ -360,11 +364,12 @@ pub(crate) fn upgrade_element(js: Js, node: Element) {
     });
 }
 
-fn disconnect_rec(scope: &mut Scope<'_>, js: Js, root: Element, depth: i32) {
+fn disconnect_rec(scope: &mut Scope<'_>, js: Js, root: Element, top: Element, depth: i32) {
     if depth >= MAX_DEPTH {
         return;
     }
     if root.is_element() {
+        form_associated::removing(scope, js, root, top);
         ffi::popover_removing(js, root);
         let element = ffi::node_wrapper(scope, root);
         if element.is_object() && truthy(scope, &element, "__nd_ce_connected") {
@@ -381,12 +386,12 @@ fn disconnect_rec(scope: &mut Scope<'_>, js: Js, root: Element, depth: i32) {
         }
     }
     for child in southstar_dom::children(root) {
-        disconnect_rec(scope, js, child, depth + 1);
+        disconnect_rec(scope, js, child, top, depth + 1);
     }
 }
 
 pub(crate) fn disconnect_subtree(js: Js, root: Element) {
-    ffi::main_scope(js, |scope| disconnect_rec(scope, js, root, 0));
+    ffi::main_scope(js, |scope| disconnect_rec(scope, js, root, root, 0));
 }
 
 pub(crate) fn attribute_changed(
@@ -399,6 +404,7 @@ pub(crate) fn attribute_changed(
     let Some(page) = crate::existing_page(js) else {
         return;
     };
+    form_associated::attribute_changed(js, node, attr_name);
     if page.in_attr_callback.get() != 0 || !ffi::wrapper_pinned(js, node) {
         return;
     }

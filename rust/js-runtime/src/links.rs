@@ -187,7 +187,6 @@ pub struct JsFormsLinks {
     pub form_indexed_control: fn(&mut Scope<'_>, &Value, u32) -> Result<Value, Value>,
     pub radio_node_list_set_value: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
     pub radio_node_list_get_value: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
-    pub custom_state_set_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
     pub window_form_data_ctor: fn(&mut Scope<'_>, &Value, &[Value]) -> Result<Value, Value>,
 }
 
@@ -1171,14 +1170,6 @@ pub(crate) fn nsr_radio_node_list_get_value(
     args: &[Value],
 ) -> Result<Value, Value> {
     (js_forms_links().radio_node_list_get_value)(scope, this, args)
-}
-
-pub(crate) fn nsr_custom_state_set_ctor(
-    scope: &mut Scope<'_>,
-    this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    (js_forms_links().custom_state_set_ctor)(scope, this, args)
 }
 
 pub(crate) fn nsr_window_form_data_ctor(

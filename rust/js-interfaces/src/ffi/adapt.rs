@@ -105,7 +105,6 @@ native_getters! {
     element_get_progress_position => forms::value::progress_position,
     element_get_offset_parent => geometry::metrics::get_offset_parent,
     media_get_src_object => media::element::src_object,
-    element_get_internals => forms::internals::internals,
     dialog_get_return_value => top_layer::dialog::get_return_value,
     element_get_owner_svg_element => geometry::svg::get_owner_svg_element,
     element_get_whole_text => text::rendered::get_whole_text,

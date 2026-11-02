@@ -51,9 +51,9 @@ const PC_FOCUS_WITHIN: u32 = 30;
 const PC_DEFINED: u32 = 33;
 const PC_SCOPE: u32 = 34;
 const PC_FULLSCREEN: u32 = 44;
-const STATE_KINDS: [u32; 36] = [
+const STATE_KINDS: [u32; 37] = [
     6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 23, 24, 25, 31, 32, 35, 36, 37, 38, 39, 40, 41,
-    42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
+    42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
 ];
 
 const MATCH_BUDGET: u64 = 8_000_000;
