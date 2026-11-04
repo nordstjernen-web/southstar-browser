@@ -97,7 +97,7 @@ bundle and `.dmg`.
 Install [Homebrew](https://brew.sh) if you do not already have it, then:
 
 ```sh
-brew install meson ninja pkg-config cmake gtk4 libepoxy openssl@3 \
+brew install meson ninja pkg-config gtk4 libepoxy openssl@3 \
     brotli zstd uchardet libpsl sqlite webp sdl2 rust
 brew install ccache    # optional, speeds up rebuilds
 ```

@@ -54,7 +54,7 @@ Debian 13 and other stable releases install it with
 
 Alpine builds against musl rather than glibc, so the resulting binary
 is not interchangeable with the glibc portable zip — run a musl build
-on a musl system. Add `clang cmake git zip` if you are packaging with
+on a musl system. Add `clang git zip` if you are packaging with
 the nightly scripts.
 
 **Required** on Linux, for inline **WebM** playback (VP9/VP8 video +
