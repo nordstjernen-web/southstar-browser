@@ -65,7 +65,7 @@ install_zypper() {
         sleep $((i * 15))
     done
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
-        gcc gcc-c++ clang pkgconf-pkg-config meson ninja git zip unzip curl \
+        gcc clang pkgconf-pkg-config meson ninja git zip unzip curl \
         rpm-build patchelf ca-certificates \
         gtk4-devel libepoxy-devel libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel \
         sqlite3-devel libseccomp-devel libwebp-devel libavif-devel rust cargo

@@ -67,7 +67,6 @@ jobs:
             rustc --version
             cargo --version
             export CC="ccache cc"
-            export CXX="ccache c++"
             meson setup builddir --buildtype=release -Db_ndebug=true
             meson compile -C builddir
             if ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
