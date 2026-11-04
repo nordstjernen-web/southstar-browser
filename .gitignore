@@ -47,13 +47,6 @@ compile_commands.json
 # Meson auto-downloaded subprojects (wrap files only are committed).
 /subprojects/packagecache/
 
-# CMake (in case)
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-CTestTestfile.cmake
-Testing/
-
 # Editor / OS
 *~
 *.swp

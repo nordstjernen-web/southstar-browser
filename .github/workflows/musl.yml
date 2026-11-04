@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies (musl)
         run: |
           apk add --no-cache \
-            build-base clang ccache pkgconf meson ninja git cmake \
+            build-base clang ccache pkgconf meson ninja git \
             gtk4.0-dev libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev libwebp-dev libavif-dev sdl2-dev \
             libseccomp-dev ffmpeg-dev curl llvm-libunwind-dev \
             fontconfig font-dejavu ca-certificates file nodejs
