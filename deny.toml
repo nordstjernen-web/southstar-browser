@@ -23,7 +23,6 @@ allow = [
 ]
 exceptions = [
     { crate = "southstar-text", allow = ["LGPL-2.0-or-later"] },
-    { crate = "southstar-psl", allow = ["MPL-2.0"] },
 ]
 
 [licenses.private]

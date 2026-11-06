@@ -47,6 +47,7 @@ BuildRequires:  pkgconfig(harfbuzz)
 BuildRequires:  pkgconfig(freetype2)
 BuildRequires:  pkgconfig(cairo-ft)
 Requires:       hicolor-icon-theme
+Requires:       (publicsuffix-list or publicsuffix)
 Recommends:     mpv
 Recommends:     myspell-en_US
 Requires(post): update-alternatives

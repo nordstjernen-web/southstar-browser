@@ -3670,6 +3670,9 @@ dependencies = [
 [[package]]
 name = "southstar-psl"
 version = "1.0.8-dev"
+dependencies = [
+ "southstar-url",
+]
 
 [[package]]
 name = "southstar-raster"

@@ -208,6 +208,7 @@ FW="$STAGE/Contents/Frameworks"
 mkdir -p "$RES/share/southstar/i18n"
 cp "$ROOT"/data/i18n/*.lang "$RES/share/southstar/i18n/" 2>/dev/null || true
 cp "$ROOT/data/safebrowsing.list" "$RES/share/southstar/" 2>/dev/null || true
+"$ROOT/scripts/fetch-psl.sh" "$RES/share/southstar"
 
 # Homebrew's "sdl2" is the sdl2-compat shim: the audio helper links
 # libSDL2-2.0.0.dylib, but that shim dlopen's the real SDL3 at runtime

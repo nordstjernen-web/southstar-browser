@@ -8,6 +8,7 @@ arch=(x86_64 aarch64)
 url='https://github.com/nordstjernen-web/southstar-browser'
 license=('LicenseRef-NSL-1.0 OR GPL-3.0-or-later')
 depends=(
+  publicsuffix-list
   brotli
   cairo
   enchant

@@ -40,6 +40,7 @@ Package: southstar
 Architecture: any
 Depends:
  ca-certificates,
+ publicsuffix,
  ${shlibs:Depends},
  ${misc:Depends},
 Recommends:

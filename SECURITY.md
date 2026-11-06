@@ -313,7 +313,10 @@ request that fails verification is never retried without it.
 
 - Cookies and the HTTP cache are partitioned per top-level **site**
   (scheme + registrable domain + port), where the registrable domain
-  comes from the Public Suffix List, compiled into `rust/psl`. All subdomains within
+  comes from the Public Suffix List, which `rust/psl` reads at first use
+  from the system (`/usr/share/publicsuffix/`) or the copy the Windows,
+  macOS, AppImage and tarball bundles ship (`share/southstar/`). Without
+  the list every host is its own site and `Domain=` cookies stay host-only. All subdomains within
   the same registrable domain share one cookie jar and one cache
   partition; everything else is isolated. Third-party cookies are
   blocked by default.

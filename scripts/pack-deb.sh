@@ -171,7 +171,7 @@ fi
 
 INSTALLED_KB=$(du -sk "$PKGROOT/usr" | cut -f1)
 
-FALLBACK_DEPS="libgtk-4-1, libepoxy0, libssl3 | libssl3t64, zlib1g, libbrotli1, libzstd1, libuchardet0, libsqlite3-0, libpoppler-glib8, libfontconfig1"
+FALLBACK_DEPS="publicsuffix, libgtk-4-1, libepoxy0, libssl3 | libssl3t64, zlib1g, libbrotli1, libzstd1, libuchardet0, libsqlite3-0, libpoppler-glib8, libfontconfig1"
 
 RUNTIME_DEPS=""
 if command -v dpkg-shlibdeps >/dev/null 2>&1; then
