@@ -10,10 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-glib = { path = "../glib", version = "=1.0.8" }
-southstar-http = { path = "../http", version = "=1.0.8" }
-southstar-net = { path = "../net", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
+southstar-http = { path = "../http", version = "=1.0.8-dev" }
+southstar-net = { path = "../net", version = "=1.0.8-dev" }
 
 [lints]
 workspace = true
