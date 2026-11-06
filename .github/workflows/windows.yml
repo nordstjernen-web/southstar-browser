@@ -40,8 +40,6 @@ jobs:
             git
             mingw-w64-ucrt-x86_64-clang
             mingw-w64-ucrt-x86_64-pkgconf
-            mingw-w64-ucrt-x86_64-meson
-            mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-ccache
             mingw-w64-ucrt-x86_64-gtk4
             mingw-w64-ucrt-x86_64-libepoxy
@@ -83,8 +81,6 @@ jobs:
           rustc --version
           cargo --version
           ccache --version | head -1
-          meson --version
-          ninja --version
           pkg-config --modversion gtk4
           pkg-config --modversion libcrypto
 
@@ -99,7 +95,7 @@ jobs:
         run: |
           # MSYS2's FFmpeg is GPL; use a minimal LGPL one (VP9/VP8 +
           # Opus/Vorbis only). Build it once into a cached prefix (keyed on the
-          # build script), then install it into the MSYS2 prefix so meson finds
+          # build script), then install it into the MSYS2 prefix so pkg-config finds
           # it via the default pkg-config path and pack-windows.sh's DLL chase
           # bundles it. WebM is required on Windows, so this must succeed.
           PREFIX="$(cygpath -u "$RUNNER_TEMP")/ffmpeg-lgpl"
@@ -116,12 +112,12 @@ jobs:
 
       - name: Build
         id: build
-        if: hashFiles('meson.build') != ''
+        if: hashFiles('Cargo.toml') != ''
+        env:
         run: |
           set -o pipefail
           export CC="ccache clang"
-          meson setup builddir --werror
-          meson compile -C builddir 2>&1 | tee build.log
+          cargo xtask build 2>&1 | tee build.log
 
       - name: ccache stats
         if: always()
@@ -136,20 +132,20 @@ jobs:
           key: ccache-windows-ucrt64-${{ matrix.windows }}-${{ github.sha }}
 
       - name: Smoke test (binary present)
-        if: hashFiles('builddir/src/gtk/southstar.exe') != ''
+        if: hashFiles('target/release/southstar.exe') != ''
         run: |
-          test -f builddir/src/gtk/southstar.exe
-          file builddir/src/gtk/southstar.exe
+          test -f target/release/southstar.exe
+          file target/release/southstar.exe
 
       - name: Headless smoke (--print-config + about:start)
-        if: hashFiles('builddir/src/gtk/southstar.exe') != ''
+        if: hashFiles('target/release/southstar.exe') != ''
         env:
           NS_ALLOW_ROOT: '1'
         run: |
           set -o pipefail
-          ./builddir/src/gtk/southstar.exe --print-config > config.txt
+          ./target/release/southstar.exe --print-config > config.txt
           head -5 config.txt
-          ./builddir/src/gtk/southstar.exe --headless --dump=text about:start > about.txt
+          ./target/release/southstar.exe --headless --dump=text about:start > about.txt
           head -3 about.txt
           grep -q Southstar about.txt
 
@@ -164,25 +160,24 @@ jobs:
           retention-days: 14
 
       - name: Upload southstar binary
-        if: hashFiles('builddir/src/gtk/southstar.exe') != ''
+        if: hashFiles('target/release/southstar.exe') != ''
         uses: actions/upload-artifact@v7
         with:
           name: southstar-windows-${{ matrix.windows }}
-          path: builddir/src/gtk/southstar.exe
+          path: target/release/southstar.exe
           if-no-files-found: error
           retention-days: 14
 
       - name: Build redistributable bundle (pack-windows.sh)
         id: pack
-        if: github.event_name != 'pull_request' && hashFiles('builddir/src/gtk/southstar.exe') != ''
+        if: github.event_name != 'pull_request' && hashFiles('target/release/southstar.exe') != ''
         env:
-          BUILDDIR: ${{ github.workspace }}/builddir
+          BUILT_DIR: ${{ github.workspace }}/target/release
           NS_ALLOW_ROOT: '1'
         run: |
           set -o pipefail
           ./scripts/pack-windows.sh 2>&1 | tee pack-windows.log
-          VERSION=$(grep -E "^[[:space:]]*version" meson.build | head -1 \
-                    | sed -E "s/.*version: '([^']+)'.*/\1/")
+          VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           ZIP="dist/southstar-${VERSION}-windows-x86_64.zip"
           ./dist/southstar-win64/southstar.exe --print-config > bundle-config.txt
           ./dist/southstar-win64/southstar.exe --headless --dump=text about:start > bundle-about.txt
@@ -220,7 +215,7 @@ jobs:
       - name: Build MSIX package (pack-msix.sh)
         if: steps.pack.outcome == 'success'
         env:
-          BUILDDIR: ${{ github.workspace }}/builddir
+          BUILT_DIR: ${{ github.workspace }}/target/release
         run: |
           set -o pipefail
           ./scripts/pack-msix.sh 2>&1 | tee pack-msix.log

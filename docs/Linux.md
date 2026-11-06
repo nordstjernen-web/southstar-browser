@@ -3,36 +3,36 @@
 This document records the working setup for building and packaging
 Southstar on Linux. The primary supported targets are Debian /
 Ubuntu, Fedora / RHEL, and openSUSE on `x86_64`. Local Linux is the
-correctness gate: every commit must pass `meson compile -C builddir`
+correctness gate: every commit must pass `cargo xtask build`
 locally before pushing.
 
 ## Build dependencies
 
 System packages required on Debian / Ubuntu:
 
-    sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
+    sudo apt install build-essential pkg-config cargo rustc \
         libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
         libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
 
 On Fedora / RHEL:
 
-    sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel \
+    sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
         openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel libseccomp-devel \
         libwebp-devel SDL2-devel
 
 On openSUSE:
 
-    sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel \
+    sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
         libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
         libwebp-devel libSDL2-devel
 
 On Arch Linux (see [Arch.md](Arch.md) for the package):
 
-    sudo pacman -S --needed base-devel meson rust python gtk4 libepoxy openssl         zlib brotli zstd uchardet libpsl sqlite libseccomp libwebp sdl2 ffmpeg
+    sudo pacman -S --needed base-devel rust gtk4 libepoxy openssl zlib brotli zstd uchardet libpsl sqlite libseccomp libwebp sdl2 ffmpeg
 
 On Alpine (musl libc):
 
-    sudo apk add build-base linux-headers pkgconf meson ninja cargo rust gtk4.0-dev \
+    sudo apk add build-base linux-headers pkgconf cargo rust gtk4.0-dev \
         libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev \
         libseccomp-dev libwebp-dev sdl2-dev
 
@@ -59,7 +59,7 @@ the nightly scripts.
 
 **Required** on Linux, for inline **WebM** playback (VP9/VP8 video +
 Opus/Vorbis audio): the FFmpeg `libav*` development packages, version 6.0 or
-newer. `meson setup` fails without them — YouTube and most modern sites serve
+newer. `cargo xtask build` fails without them — YouTube and most modern sites serve
 VP9/WebM, so the external-player fallback is not acceptable here.
 
     sudo apt install libavformat-dev libavcodec-dev libavutil-dev \
@@ -68,19 +68,23 @@ VP9/WebM, so the external-player fallback is not acceptable here.
     sudo zypper install ffmpeg-devel                            # openSUSE (Packman)
     sudo apk add ffmpeg-dev                                     # Alpine
 
-`ccache` is the biggest build-time win — `meson` picks it up
-automatically. With ccache warm, a clean `meson setup builddir &&
-meson compile -C builddir` drops from ~35 s to ~1 s. Install once
-with the distro package manager.
+pkg-config and a C compiler are needed besides Rust: the build scripts
+compile the GTK icon resource and probe C struct layouts from the installed
+headers.
 
 ## Develop
 
-    meson setup builddir
-    meson compile -C builddir
-    ./builddir/src/gtk/southstar
+    cargo xtask build
+    ./target/release/southstar
 
-`./scripts/dev.sh build` runs `meson setup` (only if needed) and
-`meson compile -C builddir` in one shot.
+`cargo xtask build` checks the libraries above, enables the optional
+features the installed ones allow (`cargo xtask features` lists them) and
+builds a fat-LTO release into `target/release/`. For a quick edit-and-run
+loop, `cargo xtask build --lto off --target-dir target-fast` builds an
+incremental release into `target-fast/release/`, and `cargo xtask build
+--debug` the dev profile into `target/debug/`. `cargo xtask run` builds and
+starts the browser; `./scripts/dev.sh build` and `./scripts/dev.sh run` wrap
+the same commands.
 
 ## Package — portable zip
 

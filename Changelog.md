@@ -3,6 +3,20 @@ Changelog:
 
 Southstar Browser 1.0.7:
 ======
+* Build: Cargo replaces meson. `cargo xtask build` checks the system
+  libraries, detects the optional ones and builds every executable and
+  `libsouthstar`; `cargo xtask run` starts the browser and `cargo xtask
+  install --prefix --destdir [--libdir]` installs what `meson install`
+  did. Options `--debug`, `--lto fat|thin|off`, `--overflow-checks`,
+  `--audio`/`--avif`/`--webgpu auto|enabled|disabled`,
+  `--wgpu-native-root`, `--no-wasm` and `--no-rust-shaper` replace the
+  meson options. Outputs are in `target/release/`. meson, ninja,
+  `src/`, `scripts/cargo-build.py` and the C entry points the
+  executables exported for meson are gone; the embedding header is
+  `rust/capi/include/libsouthstar.h`. CI, the packaging scripts and
+  recipes and the documentation use the new commands.
+* Fonts: the fontconfig registration of downloaded fonts documents each
+  unsafe call, now that clippy checks it.
 * Flexbox: a row flex container with `height: 0` has a definite cross
   size of zero, so `align-items: center` centres a taller item on it and
   the item overflows equally above and below, as in other browsers. A

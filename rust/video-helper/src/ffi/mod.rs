@@ -5,13 +5,3 @@
 pub mod decoder;
 pub mod os;
 pub mod ring;
-
-#[cfg(not(feature = "rust-main"))]
-#[unsafe(no_mangle)]
-pub extern "C" fn main(
-    _argc: core::ffi::c_int,
-    _argv: *const *const core::ffi::c_char,
-) -> core::ffi::c_int {
-    crate::protocol::run();
-    0
-}

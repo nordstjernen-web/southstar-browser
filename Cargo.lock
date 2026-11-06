@@ -1612,6 +1612,7 @@ dependencies = [
  "southstar-audio-helper",
  "southstar-build",
  "southstar-ffi",
+ "southstar-launcher",
  "southstar-renderer-host",
  "southstar-shell",
  "southstar-video-helper",
@@ -1911,6 +1912,14 @@ dependencies = [
  "southstar-texture",
  "southstar-unicode",
  "southstar-video",
+]
+
+[[package]]
+name = "southstar-capi"
+version = "1.0.8-dev"
+dependencies = [
+ "southstar-build",
+ "southstar-ffi",
 ]
 
 [[package]]
@@ -3788,13 +3797,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "southstar-static"
-version = "1.0.8-dev"
-dependencies = [
- "southstar-ffi",
-]
-
-[[package]]
 name = "southstar-style"
 version = "1.0.8-dev"
 dependencies = [
@@ -3956,6 +3958,10 @@ dependencies = [
  "southstar-dom",
  "southstar-unicode",
 ]
+
+[[package]]
+name = "southstar-xtask"
+version = "1.0.8-dev"
 
 [[package]]
 name = "spin"

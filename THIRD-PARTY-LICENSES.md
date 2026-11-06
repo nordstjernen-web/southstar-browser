@@ -395,8 +395,8 @@ later. See the LGPL section above for terms and obligations.
 
 ### Optional dynamic dependencies
 
-These are linked only when present on the build host (meson
-`required: false`). When a build bundles them, their notices apply:
+These are linked only when present on the build host (`cargo xtask
+build` detects them). When a build bundles them, their notices apply:
 
 - **Brotli** (`libbrotlidec`) — MIT, © the Brotli authors. `br`
   HTTP content decoding.

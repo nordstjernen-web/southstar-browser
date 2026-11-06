@@ -9,14 +9,13 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+mod link;
+
+pub use link::{EngineLink, engine_link, feature_enabled, hardening_link_args};
+
 pub struct Library {
     pub cflags: Vec<String>,
     pub libs: Vec<String>,
-}
-
-pub fn meson_build() -> bool {
-    println!("cargo:rerun-if-env-changed=NS_VERSION");
-    env::var_os("NS_VERSION").is_some()
 }
 
 pub fn pkg_config(modules: &[&str]) -> Option<Library> {

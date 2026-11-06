@@ -2,23 +2,22 @@
 # Build a redistributable Southstar Windows bundle: a root launcher plus the
 # MSYS2 DLLs and GTK runtime data under app/ so it runs outside MSYS2.
 #
-# Builds (or reuses) a separate --buildtype=release tree in $BUILDDIR so the
-# shipped binary has NDEBUG defined — third-party assertions in vendored deps
-# are compiled out, and the optimiser runs at -O3.
+# Builds the release profile with `cargo xtask build` (extra options in
+# $NS_XTASK_ARGS) and packs the binaries from $BUILT_DIR.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BUILDDIR=${BUILDDIR:-$ROOT/builddir-release}
+BUILT_DIR=${BUILT_DIR:-$ROOT/target/release}
 OUT=${OUT:-$ROOT/dist/southstar-win64}
 APP=$OUT/app
-BIN_SRC=$BUILDDIR/src/gtk/southstar.exe
-RENDERER_SRC=$BUILDDIR/src/southstar-renderer.exe
-LAUNCHER_SRC=$BUILDDIR/src/southstar-launcher.exe
-AUDIO_SRC=$BUILDDIR/src/southstar-audio.exe
+BIN_SRC=$BUILT_DIR/southstar.exe
+RENDERER_SRC=$BUILT_DIR/southstar-renderer.exe
+LAUNCHER_SRC=$BUILT_DIR/southstar-launcher.exe
+AUDIO_SRC=$BUILT_DIR/southstar-audio.exe
 BROWSER_EXE=southstar-ui.exe
-EXTRA_MESON_SETUP_ARGS=()
-if [ -n "${NS_MESON_SETUP_ARGS:-}" ]; then
-    EXTRA_MESON_SETUP_ARGS=($NS_MESON_SETUP_ARGS)
+XTASK_ARGS=()
+if [ -n "${NS_XTASK_ARGS:-}" ]; then
+    XTASK_ARGS=($NS_XTASK_ARGS)
 fi
 
 resolve_mingw_prefix() {
@@ -37,12 +36,9 @@ MINGW_PREFIX=$(resolve_mingw_prefix) || {
     exit 1
 }
 
-if [ ! -d "$BUILDDIR" ]; then
-    meson setup "$BUILDDIR" --buildtype=release "${EXTRA_MESON_SETUP_ARGS[@]}"
-elif [ ${#EXTRA_MESON_SETUP_ARGS[@]} -gt 0 ]; then
-    meson configure "$BUILDDIR" "${EXTRA_MESON_SETUP_ARGS[@]}"
+if [ -z "${NS_SKIP_BUILD:-}" ]; then
+    (cd "$ROOT" && cargo xtask build "${XTASK_ARGS[@]}")
 fi
-meson compile -C "$BUILDDIR"
 
 if [ ! -x "$BIN_SRC" ]; then
     echo "pack-windows: build did not produce $BIN_SRC" >&2

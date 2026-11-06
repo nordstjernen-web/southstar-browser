@@ -5,11 +5,9 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
-          | sed -E "s/.*version: '([^']+)'.*/\1/")
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
 ARCH=$(uname -m)
 NAME=southstar
-BUILDDIR="$ROOT/build-appimage"
 APPDIR="$ROOT/dist/AppDir"
 TOOLS="$ROOT/dist/appimage-tools"
 
@@ -72,18 +70,9 @@ fetch_tool "$RUNTIME" \
     "https://github.com/AppImage/type2-runtime/releases/download/$RUNTIME_RELEASE/runtime-${ARCH}" \
     "$RUNTIME_SHA256"
 
-if [ ! -d "$BUILDDIR" ]; then
-    meson setup "$BUILDDIR" \
-        --prefix=/usr \
-        --buildtype=release \
-        -Db_lto=true \
-        -Db_ndebug=true \
-        --strip
-fi
-meson compile -C "$BUILDDIR"
-
 rm -rf "$APPDIR"
-DESTDIR="$APPDIR" meson install -C "$BUILDDIR"
+(cd "$ROOT" && cargo xtask install --prefix /usr --destdir "$APPDIR" ${NS_XTASK_ARGS:-})
+strip "$APPDIR"/usr/bin/southstar* 2>/dev/null || true
 
 rm -rf "$APPDIR/usr/include" "$APPDIR/usr/lib" "$APPDIR/usr/lib64" \
        "$APPDIR/usr/lib32"

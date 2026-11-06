@@ -10,7 +10,6 @@ repository.workspace = true
 homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
@@ -23,7 +22,6 @@ southstar-minimp3 = { path = "../minimp3", version = "=1.0.8-dev" }
 southstar-plmpeg = { path = "../plmpeg", version = "=1.0.8-dev" }
 
 [features]
-rust-main = []
 libav = []
 vorbisfile = []
 opusfile = []

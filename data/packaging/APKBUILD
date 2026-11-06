@@ -11,8 +11,6 @@ arch="x86_64 aarch64"
 license="LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 makedepends="
 	cargo
-	meson
-	ninja
 	rust
 	gtk4.0-dev
 	libepoxy-dev
@@ -41,12 +39,11 @@ builddir="$srcdir/southstar-browser-$pkgver"
 options="!check"
 
 build() {
-	abuild-meson -Dwebgpu=disabled . output
-	meson compile -C output
+	cargo xtask build --webgpu disabled
 }
 
 package() {
-	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+	cargo xtask install --webgpu disabled --prefix /usr --destdir "$pkgdir"
 	install -Dm644 License.md \
 		"$pkgdir"/usr/share/licenses/$pkgname/License.md
 	install -Dm644 COPYING \

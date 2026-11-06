@@ -13,8 +13,7 @@ trap 'rc=$?; printf "[pack-apk] FAILED (exit %s) at line %s: %s\n" \
 [ -n "${NS_DEBUG:-}" ] && set -x
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=${VERSION:-$(awk -F"'" \
-    '/^[[:space:]]*version[[:space:]]*:/ { print $2; exit }' "$ROOT/meson.build")}
+VERSION=${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)}
 ARCH=$(uname -m)
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}

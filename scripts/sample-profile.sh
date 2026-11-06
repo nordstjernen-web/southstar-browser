@@ -7,8 +7,8 @@
 # workload) without a perf/instrumented build — a debugoptimized build with
 # frame pointers is enough:
 #
-#   meson setup builddir-prof --buildtype=debugoptimized -Db_lto=false
-#   meson compile -C builddir-prof
+#   RUSTFLAGS="-C force-frame-pointers=yes" CARGO_PROFILE_RELEASE_DEBUG=true \
+#       cargo xtask build --lto off --target-dir target-prof
 #
 # Usage: scripts/sample-profile.sh <pid> [num-samples]
 #   num-samples defaults to 120.

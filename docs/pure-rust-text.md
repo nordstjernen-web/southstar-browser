@@ -1,7 +1,7 @@
 # Pure-Rust shaping and fonts
 
-Status: web fonts take the Rust path by default. The `rust-shaper` meson
-option (on by default; cargo feature `rust-shaper` on `southstar-text`)
+Status: web fonts take the Rust path by default. The `rust-shaper` cargo
+feature (on by default; `cargo xtask build --no-rust-shaper` leaves it out)
 builds it, and `NS_RUST_FONTS=web|all|off` picks the fonts at runtime: `web`
 (the default) = fonts loaded through `@font-face`, `all` adds system fonts,
 `off` (or `NS_TEXT_SHAPER=harfbuzz`) is the C path only. A Rust-backed font is

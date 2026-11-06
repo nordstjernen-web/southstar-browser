@@ -8,7 +8,7 @@ build reconstructs the source tarball in the build VM.
 The build recipe therefore lives at the **repo root**, where the bridge
 can find it:
 
-- `/southstar.spec` — RPM build recipe (meson build). It carries no
+- `/southstar.spec` — RPM build recipe (`cargo xtask` build). It carries no
   `Source0`: its `%prep` locates the tree the bridge laid down under
   `%{_sourcedir}` and copies it into the build directory.
 
@@ -56,9 +56,9 @@ project is the distribution channel.
 
 ## Build options
 
-The spec disables one meson feature unavailable in OBS:
+The spec disables one build feature unavailable in OBS:
 
-- `-Dwebgpu=disabled` — needs external wgpu-native.
+- `--webgpu disabled` — needs external wgpu-native.
 
 Everything else (GTK shell, sandboxed renderer, SDL2 audio helper, WebGL,
 enchant spell-check) builds from the declared `BuildRequires`.

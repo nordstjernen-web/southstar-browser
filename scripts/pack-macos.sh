@@ -5,11 +5,10 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
-          | sed -E "s/.*version: '([^']+)'.*/\1/")
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
 ARCH=$(uname -m)
 NAME=Southstar
-BUILDDIR=${BUILDDIR:-$ROOT/build-macos}
+BUILT_DIR=${BUILT_DIR:-$ROOT/target/release}
 STAGE="$ROOT/dist/${NAME}.app"
 DMG="$ROOT/dist/southstar-${VERSION}-macos-${ARCH}.dmg"
 
@@ -45,15 +44,10 @@ run_dylibbundler() {
 OPENSSL_PC="$(brew --prefix openssl@3 2>/dev/null)/lib/pkgconfig"
 [ -d "$OPENSSL_PC" ] && export PKG_CONFIG_PATH="$OPENSSL_PC:${PKG_CONFIG_PATH:-}"
 
-if [ ! -d "$BUILDDIR" ]; then
-    meson setup "$BUILDDIR" \
-        --prefix=/usr/local \
-        --buildtype=release \
-        -Db_lto=true \
-        -Db_ndebug=true \
-        --strip
+if [ -z "${NS_SKIP_BUILD:-}" ]; then
+    (cd "$ROOT" && cargo xtask build ${NS_XTASK_ARGS:-})
 fi
-meson compile -C "$BUILDDIR"
+strip "$BUILT_DIR"/southstar "$BUILT_DIR"/southstar-renderer 2>/dev/null || true
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Contents/MacOS"
@@ -64,15 +58,15 @@ mkdir -p "$STAGE/Contents/Frameworks"
 # rewrites every dependency to @executable_path/../Frameworks, so no
 # DYLD_LIBRARY_PATH shim is needed, and a Mach-O entry point is what lets the
 # whole .app be code-signed (a shell script cannot carry a signature).
-install -m755 "$BUILDDIR/src/gtk/southstar" \
+install -m755 "$BUILT_DIR/southstar" \
     "$STAGE/Contents/MacOS/Southstar"
 # The GUI spawns one sandboxed renderer process per tab; ship it alongside.
-install -m755 "$BUILDDIR/src/southstar-renderer" \
+install -m755 "$BUILT_DIR/southstar-renderer" \
     "$STAGE/Contents/MacOS/southstar-renderer"
 # The audio playback helper (MP2/MP3 + optional Opus/Vorbis decode, SDL2
 # output). Built only when SDL2 was present at configure time; ship it beside
 # the main binary so the shell can spawn it for <video>/<audio> sound.
-AUDIO_BIN="$BUILDDIR/src/southstar-audio"
+AUDIO_BIN="$BUILT_DIR/southstar-audio"
 if [ -f "$AUDIO_BIN" ]; then
     install -m755 "$AUDIO_BIN" "$STAGE/Contents/MacOS/southstar-audio"
 else
@@ -84,7 +78,7 @@ fi
 # shell spawns it instead of decoding MSE video in-process. Without it here,
 # ns_proc_video_helper_available() returns false and NS_VIDEO_HELPER is never
 # set, so a released .app silently loses the out-of-process video path.
-VIDEO_BIN="$BUILDDIR/src/southstar-video"
+VIDEO_BIN="$BUILT_DIR/southstar-video"
 if [ -f "$VIDEO_BIN" ]; then
     install -m755 "$VIDEO_BIN" "$STAGE/Contents/MacOS/southstar-video"
 else

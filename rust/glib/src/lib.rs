@@ -1,4 +1,4 @@
-//! Southstar — the GLib functions and types ported modules share with the C side, linked by meson.
+//! Southstar — the GLib functions and types the ported modules share.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

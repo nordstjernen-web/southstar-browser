@@ -8,28 +8,27 @@ log() { printf '[pack-bsd] %s\n' "$*" >&2; }
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OS=${1:-${NS_PACK_OS:-bsd}}
-BUILDDIR=${BUILDDIR:-$ROOT/builddir}
-VERSION=${VERSION:-$(awk -F"'" \
-    '/^[[:space:]]*version[[:space:]]*:/ { print $2; exit }' "$ROOT/meson.build")}
+BUILT_DIR=${BUILT_DIR:-$ROOT/target/release}
+VERSION=${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)}
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
 SLUG="southstar-${FSVERSION}-${OS}-x86_64"
 STAGE="$ROOT/dist/$SLUG"
 ZIP="$ROOT/dist/${SLUG}.zip"
 
-if [ ! -x "$BUILDDIR/src/gtk/southstar" ]; then
-    log "ERROR: $BUILDDIR/src/gtk/southstar not found — build first"
+if [ ! -x "$BUILT_DIR/southstar" ]; then
+    log "ERROR: $BUILT_DIR/southstar not found — build first"
     exit 1
 fi
 
-strip "$BUILDDIR/src/gtk/southstar" 2>/dev/null || true
-strip "$BUILDDIR/src/southstar-renderer" 2>/dev/null || true
+strip "$BUILT_DIR/southstar" 2>/dev/null || true
+strip "$BUILT_DIR/southstar-renderer" 2>/dev/null || true
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/data/icons/hicolor/scalable/apps"
-cp "$BUILDDIR/src/gtk/southstar" "$STAGE/"
-[ -f "$BUILDDIR/src/southstar-renderer" ] && \
-    cp "$BUILDDIR/src/southstar-renderer" "$STAGE/"
+cp "$BUILT_DIR/southstar" "$STAGE/"
+[ -f "$BUILT_DIR/southstar-renderer" ] && \
+    cp "$BUILT_DIR/southstar-renderer" "$STAGE/"
 cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
    "$STAGE/data/icons/hicolor/scalable/apps/" 2>/dev/null || true
 cp "$ROOT"/rust/net/data/southstar.gif \

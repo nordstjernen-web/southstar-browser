@@ -66,7 +66,7 @@ the browser; their APIs follow the browser's needs and are not stable.
 
 ## Links
 
-- Source, issues and other build options (meson, packages):
+- Source, issues and other build options (`cargo xtask`, packages):
   <https://github.com/nordstjernen-web/southstar-browser>
 - License: NSL-1.0 or GPL-3.0-or-later, at your option (`License.md` and
   `COPYING` in the repository).

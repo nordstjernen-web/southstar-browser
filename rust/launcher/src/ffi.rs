@@ -285,8 +285,7 @@ fn run(console: bool, args: &[Vec<u16>]) -> c_int {
     exit_code as c_int
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn main(_argc: c_int, _argv: *mut *mut c_char) -> c_int {
+pub fn start() -> c_int {
     let args = arguments();
     let console = launch::args_need_console(&args);
     if console {

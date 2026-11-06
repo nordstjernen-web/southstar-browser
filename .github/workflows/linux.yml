@@ -152,7 +152,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            gcc make pkg-config meson ninja-build \
+            gcc pkg-config \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
             libharfbuzz-dev libfontconfig-dev libfreetype-dev libthai-dev \
@@ -180,7 +180,7 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            builddir/rust/cargo-target
+            target
           key: cargo-build-${{ env.FULL }}-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
             cargo-build-${{ env.FULL }}-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
@@ -189,8 +189,6 @@ jobs:
       - name: Show toolchain versions
         run: |
           gcc --version | head -1
-          meson --version
-          ninja --version
           pkg-config --modversion gtk4
           pkg-config --modversion libavcodec
 
@@ -199,11 +197,10 @@ jobs:
         run: |
           set -o pipefail
           if [ "$FULL" = true ]; then
-            meson setup builddir --werror -Doverflow_checks=true
+            cargo xtask build --overflow-checks 2>&1 | tee build.log
           else
-            meson setup builddir --werror -Dbuildtype=debug
+            cargo xtask build --debug 2>&1 | tee build.log
           fi
-          meson compile -C builddir 2>&1 | tee build.log
 
       - name: Save the cargo build cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -213,5 +210,5 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            builddir/rust/cargo-target
+            target
           key: cargo-build-${{ env.FULL }}-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}

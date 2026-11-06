@@ -88,8 +88,8 @@ rm -rf ~/.config/southstar ~/.cache/southstar ~/.local/share/southstar
 The macOS build uses **Homebrew** for the toolchain and dependencies —
 the same packages the CI workflow
 ([`.github/workflows/macos.yml`](../.github/workflows/macos.yml))
-installs, which is the authoritative spec. The meson build produces a
-single Mach-O executable; `scripts/pack-macos.sh` wraps it into a `.app`
+installs, which is the authoritative spec. `cargo xtask build` produces a
+single Mach-O executable (plus the renderer and media helpers); `scripts/pack-macos.sh` wraps it into a `.app`
 bundle and `.dmg`.
 
 ### One-time setup
@@ -97,9 +97,8 @@ bundle and `.dmg`.
 Install [Homebrew](https://brew.sh) if you do not already have it, then:
 
 ```sh
-brew install meson ninja pkg-config gtk4 libepoxy openssl@3 \
+brew install pkg-config gtk4 libepoxy openssl@3 \
     brotli zstd uchardet libpsl sqlite webp sdl2 rust
-brew install ccache    # optional, speeds up rebuilds
 ```
 
 Homebrew installs to `/opt/homebrew` on Apple Silicon and `/usr/local` on
@@ -121,25 +120,18 @@ Optional extras, all auto-detected — the build works without them:
 ```sh
 git clone https://github.com/nordstjernen-web/southstar-browser
 cd southstar-browser
-meson setup builddir
-meson compile -C builddir
+cargo xtask build
 ```
 
 Boa (`third_party/boa_engine`) is in-tree,
-so `meson setup` requires no submodules or setup-time downloads.
-
-To match CI exactly:
-
-```sh
-export CC="ccache clang"
-meson setup builddir --werror
-meson compile -C builddir
-```
+so the build needs no submodules; the first build fetches only the crates
+`Cargo.lock` pins. `cargo xtask build --lto off --target-dir target-fast`
+builds a quicker incremental release into `target-fast/release/`.
 
 ### Run
 
 ```sh
-./builddir/src/gtk/southstar https://example.com
+./target/release/southstar https://example.com
 ```
 
 The first launch creates per-user state under `~/.config/southstar/`,
@@ -151,8 +143,8 @@ paths — every GTK app on macOS follows the same Unix convention. Set
 Headless rendering works the same as on Linux:
 
 ```sh
-./builddir/src/gtk/southstar --headless --dump=text https://example.com
-./builddir/src/gtk/southstar --headless --dump=png:/tmp/page.png https://example.com
+./target/release/southstar --headless --dump=text https://example.com
+./target/release/southstar --headless --dump=png:/tmp/page.png https://example.com
 ```
 
 ### Package the `.app` and `.dmg`
@@ -324,8 +316,8 @@ Updates ship only through the store — no self-update.
   There is no X11 or Wayland requirement, and no XQuartz dependency.
   If the GPU (`ngl`) renderer misbehaves, `GSK_RENDERER=cairo` forces the
   software path.
-- **Packaging.** The meson output is a plain Mach-O binary in
-  `builddir/src/gtk/southstar` that launches from Terminal or Finder
+- **Packaging.** The build output is a plain Mach-O binary in
+  `target/release/southstar` that launches from Terminal or Finder
   and shows up in the Dock while it runs. For distribution,
   `scripts/pack-macos.sh` stages a `.app` bundle (with a generated
   `Info.plist`) and produces a `.dmg`. The bundle executable is the real
@@ -383,12 +375,12 @@ TLS is rustls, compiled into the binary, so it behaves the same on every Mac.
 SDK ships no OpenSSL headers or `.pc` files, so `pkg-config` has to find
 Homebrew's `openssl@3`. `scripts/pack-macos.sh` and
 `.github/workflows/macos.yml` put its `pkgconfig` directory first on
-`PKG_CONFIG_PATH`; do the same if `meson setup` cannot find `libcrypto`:
+`PKG_CONFIG_PATH`; do the same if `cargo xtask build` cannot find `libcrypto`:
 
 ```sh
 PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$PKG_CONFIG_PATH" \
-    meson setup builddir
-otool -L builddir/src/gtk/southstar | grep crypto   # expect .../opt/openssl@3/...
+    cargo xtask build
+otool -L target/release/southstar | grep crypto   # expect .../opt/openssl@3/...
 ```
 
 A post-quantum group (`X25519MLKEM768`) hard-pinned in the OpenSSL TLS setup
@@ -400,7 +392,7 @@ unknown names are skipped rather than fatal.
 ### Test the *bundled* binary, not just the build-tree one
 
 CI's macOS smoke test runs `--headless --dump=text about:start` on the
-**builddir** binary. That page is local, so it proves neither **networking**
+**build-tree** binary. That page is local, so it proves neither **networking**
 (no HTTPS is fetched) nor anything **bundle-specific**. Two whole classes of bug
 sail past it:
 
@@ -413,15 +405,15 @@ So after any change to networking, the bundle layout, dylib dependencies, or
 rpaths, **build the `.dmg` and launch the bundled binary against a real URL**:
 
 ```sh
-BUILDDIR="$PWD/builddir" NS_PACK_AI=disabled ./scripts/pack-macos.sh
+NS_PACK_AI=disabled ./scripts/pack-macos.sh
 dist/Southstar.app/Contents/MacOS/Southstar \
     --headless --dump=text https://example.com    # must print page text
 ```
 
-(Reusing an existing `BUILDDIR` skips the from-scratch compile; `dylibbundler`
-still takes a few minutes.) Worth adding to CI as a real gate.
+(cargo reuses an up-to-date `target/release` build, so only `dylibbundler`'s
+few minutes remain.) Worth adding to CI as a real gate.
 
-### `dylibbundler` + meson build-rpaths → duplicate `LC_RPATH` (fatal)
+### `dylibbundler` + build rpaths → duplicate `LC_RPATH` (fatal)
 
 The build binary carries one `LC_RPATH` per Homebrew dependency directory, and
 `dylibbundler` adds a `@executable_path/../Frameworks/` rpath for each of them —
@@ -449,10 +441,10 @@ entry after bundling; if you rework the packaging, keep that step (and re-sign
   `src/gtk/appmain.c`), and `target_vendor = "apple"` across the Rust one
   (see `rust/extensions`) — match them for new macOS-specific code rather
   than introducing a new macro.
-- **Objective-C** is added as a meson language only on darwin
-  (`add_languages('objc')` in `src/gtk/meson.build`), guarded so Linux/Windows
-  builds never see it; macOS-only Cocoa code (`*.m`) goes there with the
-  relevant `-framework` link arg.
+- **Cocoa calls** are Rust over the Objective-C runtime (see
+  `rust/shell/src/ffi/macos_dock.rs`); the `-framework` link arguments the
+  executables need are in `rust/build/src/link.rs`. There is no Objective-C
+  source to compile.
 
 ### Quick triage when "it builds on Linux but macOS CI / the `.dmg` is broken"
 
@@ -468,8 +460,7 @@ entry after bundling; if you rework the packaging, keep that step (and re-sign
 
 Same as everywhere else (`CLAUDE.md`):
 
-1. `meson compile -C builddir` finishes without new warnings under
-   the configured Clang flags.
+1. `cargo xtask build` finishes without new warnings.
 2. The browser launches and the affected UI path works manually.
 3. The change is committed and pushed to `origin/main`.
 

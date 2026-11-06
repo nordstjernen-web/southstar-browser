@@ -5,7 +5,7 @@
 set -euo pipefail
 export LC_NUMERIC=C
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BIN=${NS_BIN:-$ROOT/builddir/src/gtk/southstar}
+BIN=${NS_BIN:-$ROOT/target/release/southstar}
 export NS_ALLOW_ROOT=${NS_ALLOW_ROOT:-1}
 WORK=${NS_SPEEDOMETER_DIR:-${TMPDIR:-/tmp}/nd-spdm-main}
 PORT=${NS_PORT:-8133}

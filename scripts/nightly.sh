@@ -123,9 +123,8 @@ fi
 [ -n "$DATE" ] || DATE=$(date -u +%Y-%m-%d)
 DATESTAMP=${DATE//-/}
 COMMIT=$(git rev-parse --short "$NIGHTLY_REF" 2>/dev/null || git rev-parse --short HEAD)
-MESON_VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
-                | sed -E "s/.*version: '([^']+)'.*/\1/")
-NVERSION="${MESON_VERSION}+nightly.${DATESTAMP}.g${COMMIT}"
+BASE_VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
+NVERSION="${BASE_VERSION}+nightly.${DATESTAMP}.g${COMMIT}"
 
 OUTDIR="$NIGHTLY_ROOT"
 WORK=$(mktemp -d)

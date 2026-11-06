@@ -16,7 +16,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BIN=${NS_BIN:-$ROOT/builddir/src/gtk/southstar}
+BIN=${NS_BIN:-$ROOT/target/release/southstar}
 export NS_ALLOW_ROOT=${NS_ALLOW_ROOT:-1}
 WPT_ROOT=${NS_WPT_ROOT:-}
 SAMPLE=250

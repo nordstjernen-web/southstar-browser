@@ -4,10 +4,7 @@ Priority: optional
 Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
 Build-Depends:
  debhelper-compat (= 13),
- meson (>= 1.0),
- ninja-build,
  pkg-config,
- python3,
  cargo (>= 1.91) | cargo-1.91,
  rustc (>= 1.91) | rustc-1.91,
  libglib2.0-dev,

@@ -1,4 +1,4 @@
-//! Southstar — decoding Ogg/Vorbis to PCM with libvorbisfile, its struct layout computed by meson.
+//! Southstar — decoding Ogg/Vorbis to PCM with libvorbisfile, its struct layout probed from the installed headers by the build script.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

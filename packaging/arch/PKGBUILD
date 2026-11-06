@@ -38,7 +38,7 @@ depends=(
   zlib
   zstd
 )
-makedepends=(cargo meson python)
+makedepends=(cargo)
 optdepends=(
   'hunspell: spell checking'
   'hunspell-en_us: English dictionary for spell checking'
@@ -47,6 +47,12 @@ source=("$pkgname-$pkgver.tar.gz::https://github.com/nordstjernen-web/southstar-
 sha256sums=('452d43e0cdc10ead87194389d23023f407032ee6b16f237de96ac295893980fc')
 
 _srcdir=southstar-browser-$pkgver
+_xtask_args=(
+  --webgpu disabled
+  --avif enabled
+  --audio enabled
+  --build-date "$(date -u -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%F)"
+)
 
 prepare() {
   cd "$_srcdir"
@@ -57,28 +63,28 @@ prepare() {
 build() {
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_NET_OFFLINE=true
-  # The engine is one fat-LTO Rust staticlib; with full debug info its link
-  # needs more than 8 GB of memory, so the debug package keeps line tables.
+  # The engine is linked with fat LTO; with full debug info the link needs
+  # more than 8 GB of memory, so the debug package keeps line tables.
   RUSTFLAGS=${RUSTFLAGS//-C debuginfo=2/-C debuginfo=line-tables-only}
   export RUSTFLAGS
-  # The archive rustc writes for that staticlib has no symbol index for GCC
-  # LTO bytecode, so the C objects built by cargo (ring's) also carry
-  # machine code.
+  # rustc links the C objects cargo builds (ring's) without GCC's LTO
+  # plugin, so they also carry machine code.
   export CFLAGS+=" -ffat-lto-objects"
-  # wgpu-native is not in the Arch repositories and meson would otherwise
-  # download a prebuilt release, so WebGPU is left out. AVIF and the audio
-  # helper are required explicitly so a missing dependency fails the build
-  # instead of dropping a feature.
-  arch-meson "$_srcdir" build \
-    -Dwebgpu=disabled \
-    -Davif=enabled \
-    -Daudio=enabled \
-    -Dbuild_date="$(date -u -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%F)"
-  meson compile -C build
+  # wgpu-native is not in the Arch repositories, so WebGPU is left out. AVIF
+  # and the audio helper are required explicitly so a missing dependency fails
+  # the build instead of dropping a feature.
+  cd "$_srcdir"
+  cargo xtask build "${_xtask_args[@]}"
 }
 
 package() {
-  meson install -C build --destdir "$pkgdir"
+  cd "$_srcdir"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_NET_OFFLINE=true
+  RUSTFLAGS=${RUSTFLAGS//-C debuginfo=2/-C debuginfo=line-tables-only}
+  export RUSTFLAGS
+  export CFLAGS+=" -ffat-lto-objects"
+  cargo xtask install "${_xtask_args[@]}" --prefix /usr --destdir "$pkgdir"
 
   # libsouthstar.so and its header are the embedding API; the browser links
   # the engine statically, and the library has no SONAME version.

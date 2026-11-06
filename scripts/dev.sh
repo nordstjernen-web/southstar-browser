@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-BIN=${NS_BIN:-$ROOT/builddir/src/gtk/southstar}
+BIN=${NS_BIN:-$ROOT/target/release/southstar}
 export NS_ALLOW_ROOT=${NS_ALLOW_ROOT:-1}
 BASE=${NS_BASE:-$ROOT/data/baseline}
 
@@ -15,9 +15,9 @@ usage() {
 Usage: ./scripts/dev.sh <command> [args]
 
 Commands:
-  build              Run 'meson setup builddir' (only if needed) and
-                     'meson compile -C builddir'. Picks up ccache
-                     automatically when installed.
+  build [options]    Run 'cargo xtask build' (options as for cargo xtask,
+                     e.g. --lto off --target-dir target-fast).
+  run [-- args]      Run 'cargo xtask run': build, then start the browser.
   smoke              For each built-in fixture target, render headless and
                      diff against its baseline. Reports drift.
   baseline <target>  Render one target and (re)write its baseline.
@@ -134,14 +134,17 @@ cmd_baselines() {
 
 cmd_build() {
     cd "$ROOT"
-    if [ ! -f builddir/build.ninja ]; then
-        meson setup builddir
-    fi
-    meson compile -C builddir
+    cargo xtask build "$@"
+}
+
+cmd_run() {
+    cd "$ROOT"
+    cargo xtask run "$@"
 }
 
 case "${1:-}" in
-    build)     cmd_build ;;
+    build)     shift; cmd_build "$@" ;;
+    run)       shift; cmd_run "$@" ;;
     smoke)     cmd_smoke ;;
     baseline)  shift; cmd_baseline "${1:?url required}" ;;
     baselines) cmd_baselines ;;

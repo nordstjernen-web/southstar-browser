@@ -3,7 +3,8 @@
 The Arch package recipe is `packaging/arch/PKGBUILD`, with its generated
 `packaging/arch/.SRCINFO`. The package is named `southstar-browser`; the
 command it installs is `southstar`. It builds a tagged release tarball with
-`arch-meson`, the same way the Debian and openSUSE packages build it. For
+`cargo xtask build` and stages it with `cargo xtask install`, the same way
+the Debian and openSUSE packages build it. For
 plain build-from-source instructions see [Linux.md](Linux.md).
 
 ## Build the package
@@ -24,8 +25,8 @@ The package:
 - builds the Rust engine with line-table debug info instead of makepkg's
   `-C debuginfo=2`. The engine is a single fat-LTO staticlib, and its link
   with full debug info is killed for lack of memory on an 8 GB machine.
-- passes `-Dwebgpu=disabled`. wgpu-native is not in the Arch repositories
-  (only in the AUR), and meson would otherwise look for a prebuilt release.
+- passes `--webgpu disabled`. wgpu-native is not in the Arch repositories
+  (only in the AUR), and the build would otherwise look for a prebuilt release.
 - builds the C objects that cargo compiles (ring's) with
   `-ffat-lto-objects`. makepkg enables GCC LTO, and the archive rustc writes
   for the staticlib has no symbol index for LTO bytecode, so without machine

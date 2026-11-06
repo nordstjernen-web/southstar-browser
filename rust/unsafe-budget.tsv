@@ -2,7 +2,7 @@
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
 anim	0	0	0	0	0	0	0
-audio-helper	43	20	1	0	0	0	0
+audio-helper	42	20	0	0	0	0	0
 av	81	44	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
@@ -12,6 +12,7 @@ bytecode-cache	0	0	0	0	0	0	0
 cairo	167	119	0	0	0	0	0
 camera	8	3	0	0	0	0	0
 canvas	0	0	0	0	0	0	0
+capi	0	0	0	0	0	0	0
 config	0	0	0	0	0	0	0
 csp	0	0	0	0	0	0	0
 css	0	0	0	0	0	0	0
@@ -98,7 +99,7 @@ js-window	0	0	0	0	0	0	0
 js-workers	0	0	0	0	0	0	0
 jsshell	0	0	0	0	0	0	0
 keyfile	0	0	0	0	0	0	0
-launcher	18	17	1	0	0	0	0
+launcher	17	17	0	0	0	0	0
 layout	0	0	0	0	0	0	0
 layout-block	0	0	0	0	0	0	0
 layout-build	0	0	0	0	0	0	0
@@ -132,17 +133,16 @@ print	0	0	0	0	0	0	0
 raster	0	0	0	0	0	0	0
 render	0	0	0	0	0	0	0
 renderer-client	61	46	0	0	0	0	0
-renderer-host	46	25	1	0	0	0	0
+renderer-host	42	25	0	0	0	0	0
 safebrowsing	6	3	0	0	0	0	0
 sandbox	55	38	0	0	0	0	0
 selection	0	0	0	0	0	0	0
 selector-text	0	0	0	0	0	0	0
-shell	229	33	1	0	0	0	0
+shell	225	33	0	0	0	0	0
 southstar	0	0	0	0	0	0	0
 southstar-ffi	0	0	0	0	0	0	0
 spellcheck	6	6	0	0	0	0	0
 sqlite	29	21	0	0	0	0	0
-static	0	0	0	0	0	0	0
 style	1	0	0	0	0	0	0
 svg	0	0	0	0	0	0	0
 text	432	302	0	0	0	0	0
@@ -151,7 +151,7 @@ threaddump	17	11	0	0	0	0	0
 unicode	0	0	0	0	0	0	0
 url	0	0	0	0	0	0	0
 video	0	0	0	0	0	0	0
-video-helper	7	3	1	0	0	0	0
+video-helper	6	3	0	0	0	0	0
 watchdog	23	14	0	0	0	0	0
 webaudio	0	0	0	0	0	0	0
 webcrypto	104	118	0	0	0	0	0
@@ -161,3 +161,4 @@ websocket	0	0	0	0	0	0	0
 webvtt	0	0	0	0	0	0	0
 woff2	2	1	0	0	0	0	0
 xml	0	0	0	0	0	0	0
+xtask	0	0	0	0	0	0	0

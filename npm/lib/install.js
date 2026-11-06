@@ -1,4 +1,4 @@
-// install.js: builds the browser release from source with meson, or copies a notarised macOS release where the product has one, and installs it inside the package.
+// install.js: builds the browser release from source with cargo xtask, or copies a notarised macOS release where the product has one, and installs it inside the package.
 'use strict';
 
 const fs = require('fs');
@@ -165,24 +165,6 @@ function logTail(file, count) {
   }
 }
 
-function progressReporter(label) {
-  let lastPercent = -1;
-  return (line) => {
-    const step = line.match(/^\[(\d+)\/(\d+)\]/);
-    if (!step) return;
-    const [done, total] = [Number(step[1]), Number(step[2])];
-    const percent = Math.floor((done * 100) / total);
-    if (percent === lastPercent) return;
-    if (process.stderr.isTTY) {
-      write(`\r[${product.packageName}] ${label}: ${done}/${total} (${percent}%)\x1b[K`);
-      if (done === total) write('\n');
-    } else if (percent % 10 === 0) {
-      log(`${label}: ${percent}%`);
-    }
-    lastPercent = percent;
-  };
-}
-
 async function buildFromSource(staging, work) {
   const env = buildEnvironment(product);
   preflight(product, env, {
@@ -201,18 +183,15 @@ async function buildFromSource(staging, work) {
   const logFile = buildLogPath();
   const logFd = fs.openSync(logFile, 'w');
   const source = path.join(work, product.sourceDirectory);
-  const build = path.join(work, 'build');
   log(`building ${product.name} ${product.version} from source; this takes several minutes`);
   log(`full build output: ${logFile}`);
   try {
     const tarArgs = ['-xzf', buildPath(tarball), '-C', buildPath(work)];
     await runLogged('tar', process.platform === 'win32' ? ['--force-local', ...tarArgs] : tarArgs, env, logFd);
-    log('configuring');
-    await runLogged('meson', ['setup', buildPath(build), buildPath(source), ...product.mesonOptions,
-      `--prefix=${buildPath(staging)}`], env, logFd);
-    await runLogged('meson', ['compile', '-C', buildPath(build)], env, logFd, progressReporter('compiling'));
-    log('installing');
-    await runLogged('meson', ['install', '-C', buildPath(build), '--quiet'], env, logFd);
+    log('compiling and installing');
+    await runLogged('cargo', ['run', '--quiet', '--release', '--locked',
+      '--manifest-path', buildPath(path.join(source, 'Cargo.toml')), '--package', 'southstar-xtask', '--',
+      'install', ...product.xtaskOptions, '--prefix', buildPath(staging)], env, logFd);
   } catch (error) {
     fs.closeSync(logFd);
     throw new InstallError(

@@ -166,7 +166,7 @@ See [npm/README.md](npm/README.md).
   session mode.
 - **UI** — tabs, bookmarks, history, downloads, find-in-page, printing and
   save-to-PDF, a JavaScript console, settings, headless mode, and a C
-  embedding API (`src/libsouthstar.h`). The interface
+  embedding API (`rust/capi/include/libsouthstar.h`). The interface
   follows the operating-system language, with UI translations for 13
   languages so far (`data/i18n/`).
 - **Extensions** — initial support for simple, page-facing WebExtensions
@@ -175,13 +175,17 @@ See [npm/README.md](npm/README.md).
 ## Build
 
 ```sh
-sudo apt install build-essential git pkg-config meson ninja-build cargo rustc \
+sudo apt install build-essential git pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
     libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
-meson setup builddir && meson compile -C builddir
-./builddir/src/gtk/southstar
+cargo xtask build
+./target/release/southstar
 ```
+
+`cargo xtask build` checks the installed libraries, picks the optional
+features they allow and builds a release; `cargo xtask run` builds and
+starts it, and `cargo xtask install --prefix /usr/local` installs it.
 
 Rust 1.91 or newer is required. Debian forky and sid and the rolling
 distributions ship it, and Ubuntu 24.04 packages it as `rustc-1.91` and
@@ -211,7 +215,7 @@ shell with the libraries from [docs/Windows.md](docs/Windows.md) installed.
 
 ### The `internet-browser-southstar` command
 
-`meson install` puts `internet-browser-southstar` beside `southstar` in the binary
+`cargo xtask install` puts `internet-browser-southstar` beside `southstar` in the binary
 directory, a symbolic link to it, so `internet-browser-southstar
 https://nordstjernen.org` starts Southstar. The name is Southstar's own, so it
 never starts Nordstjernen or Northstar installed beside it. The `.deb` and
@@ -226,7 +230,7 @@ MSIX package declares it as an app execution alias.
 
 Southstar is an independent engine — no upstream browser code.
 
-**In-tree**, with no git submodules or meson subprojects:
+**In-tree**, with no git submodules or vendored subprojects:
 [Boa](https://github.com/boa-dev/boa) (fork, no JIT, in `third_party/`),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)

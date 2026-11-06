@@ -76,8 +76,8 @@ which is also usable directly against any URL serving a testharness.js
 test:
 
 ```sh
-./builddir/src/gtk/southstar --wpt http://web-platform.test:8000/dom/events/CustomEvent.html
-./builddir/src/gtk/southstar --wpt --wpt-timeout-ms=30000 http://localhost:8000/some/test.html
+./target/release/southstar --wpt http://web-platform.test:8000/dom/events/CustomEvent.html
+./target/release/southstar --wpt --wpt-timeout-ms=30000 http://localhost:8000/some/test.html
 ```
 
 Output on stdout, one line per subtest:

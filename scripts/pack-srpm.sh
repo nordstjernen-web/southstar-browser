@@ -5,8 +5,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
-          | sed -E "s/.*version: '([^']+)'.*/\1/")
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
 FSVERSION=${VERSION//\~/-}
 FSVERSION=${FSVERSION//\//-}
 RPMVERSION=${VERSION//[!A-Za-z0-9.]/.}
@@ -32,11 +31,8 @@ trap 'rm -rf "$WORK"' EXIT
 git -C "$ROOT" archive --format=tar --prefix="${SLUG}/" HEAD \
     | tar -x -C "$WORK"
 
-if [ -d "$ROOT/subprojects/packagecache" ]; then
-    mkdir -p "$WORK/${SLUG}/subprojects/packagecache"
-    cp -a "$ROOT/subprojects/packagecache/." \
-          "$WORK/${SLUG}/subprojects/packagecache/"
-fi
+(cd "$WORK/${SLUG}" && cargo vendor --locked --versioned-dirs vendor \
+    >> .cargo/config.toml)
 
 tar -czf "$TARBALL" -C "$WORK" "${SLUG}"
 
@@ -52,8 +48,6 @@ URL:            https://github.com/nordstjernen-web/southstar-browser
 Source0:        ${SLUG}.tar.gz
 
 BuildRequires:  gcc
-BuildRequires:  meson >= 1.0
-BuildRequires:  ninja-build
 BuildRequires:  pkgconf-pkg-config
 BuildRequires:  cargo >= 1.91
 BuildRequires:  rust >= 1.91
@@ -82,7 +76,7 @@ Requires:       gtk4
 Requires:       uchardet
 
 %description
-Southstar is a small, free software web browser written in C with
+Southstar is a small, free software web browser written in Rust with
 GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
@@ -91,25 +85,17 @@ engine is used. SVG images are rendered in-engine.
 %setup -q -n ${SLUG}
 
 %build
-# A rebuild has no network: the vendored subprojects are in the tarball.
-meson setup builddir \\
-    --prefix=%{_prefix} \\
-    --libdir=%{_libdir} \\
-    --buildtype=release \\
-    -Db_lto=true \\
-    -Db_ndebug=true \\
-    -Dwebgpu=disabled \\
-    --wrap-mode=nodownload
-meson compile -C builddir
+# A rebuild has no network: the crates are vendored in the tarball.
+cargo xtask build --webgpu disabled
 
 %install
 rm -rf %{buildroot}
-DESTDIR=%{buildroot} meson install --no-rebuild -C builddir
+cargo xtask install --webgpu disabled --prefix %{_prefix} --destdir %{buildroot}
 rm %{buildroot}%{_bindir}/internet-browser-southstar
 
 # The browser statically compiles the engine; the embedding shared library
 # and its header serve external embedders only.
-rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_prefix}/lib/libsouthstar.so
 rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
 rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 

@@ -8,54 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use southstar_build::{Library, link_args, require};
-
-const ENGINE_LIBRARIES: [&str; 17] = [
-    "glib-2.0",
-    "gobject-2.0",
-    "gio-2.0",
-    "gmodule-2.0",
-    "cairo",
-    "cairo-ft",
-    "harfbuzz",
-    "fontconfig",
-    "freetype2",
-    "epoxy",
-    "libcrypto",
-    "zlib",
-    "uchardet",
-    "libpsl",
-    "sqlite3",
-    "libwebp",
-    "libwebpdemux",
-];
-
-const FEATURE_LIBRARIES: [(&str, &[&str]); 11] = [
-    (
-        "LIBAV",
-        &[
-            "libavformat",
-            "libavcodec",
-            "libavutil",
-            "libswscale",
-            "libswresample",
-        ],
-    ),
-    ("SDL", &["sdl2"]),
-    ("HTTP_BROTLI", &["libbrotlidec"]),
-    ("HTTP_ZSTD", &["libzstd"]),
-    ("WOFF2", &["libbrotlidec"]),
-    ("THAI", &["libthai"]),
-    ("AVIF", &["libavif"]),
-    ("POPPLER", &["poppler-glib"]),
-    ("ENCHANT", &["enchant-2"]),
-    ("VORBISFILE", &["vorbisfile"]),
-    ("OPUSFILE", &["opusfile"]),
-];
-
-fn feature(name: &str) -> bool {
-    env::var_os(format!("CARGO_FEATURE_{name}")).is_some()
-}
+use southstar_build::{Library, engine_link, hardening_link_args, require};
 
 fn out_dir() -> PathBuf {
     PathBuf::from(env::var_os("OUT_DIR").expect("cargo sets OUT_DIR"))
@@ -78,41 +31,34 @@ fn emit_link_args(target: &str, args: &[String]) {
     }
 }
 
+const ENGINE_BINS: [&str; 4] = [
+    "southstar",
+    "southstar-renderer",
+    "southstar-audio",
+    "southstar-video",
+];
+
 fn link_libraries(target_os: &str) {
-    let mut engine = ENGINE_LIBRARIES.to_vec();
-    if target_os == "linux" {
-        engine.push("libseccomp");
+    let link = engine_link(target_os, true);
+    let mut engine = link.engine;
+    engine.extend(link.system);
+    engine.extend(hardening_link_args(target_os));
+    if !matches!(target_os, "windows" | "macos") {
+        let script = out_dir().join("exe-local.map");
+        fs::write(
+            &script,
+            "{
+  local: *;
+};
+",
+        )
+        .expect("write exe-local.map");
+        engine.push(format!("-Wl,--version-script={}", script.display()));
     }
-    for (name, modules) in FEATURE_LIBRARIES {
-        if feature(name) {
-            engine.extend(modules);
-        }
+    emit_link_args("rustc-link-arg-bin=southstar", &link.shell);
+    for bin in ENGINE_BINS {
+        emit_link_args(&format!("rustc-link-arg-bin={bin}"), &engine);
     }
-    let engine_library = require(&engine);
-    let engine_args: Vec<String> = link_args(&engine_library)
-        .into_iter()
-        .filter(|arg| arg != "-lSDL2main" && arg != "-lmingw32")
-        .collect();
-    let shell_args: Vec<String> = link_args(&require(&["gtk4"]))
-        .into_iter()
-        .filter(|arg| !engine_args.contains(arg))
-        .collect();
-    emit_link_args("rustc-link-arg-bin=southstar", &shell_args);
-    emit_link_args("rustc-link-arg-bins", &engine_args);
-    let system: &[&str] = match target_os {
-        "windows" => &[
-            "-Wl,--stack,8388608",
-            "-lcrypt32",
-            "-lbcrypt",
-            "-ladvapi32",
-            "-lshell32",
-            "-luser32",
-        ],
-        "macos" => &["-framework", "OpenGL", "-framework", "AppKit", "-lobjc"],
-        _ => &["-lrt", "-lm"],
-    };
-    let system: Vec<String> = system.iter().map(|arg| (*arg).to_owned()).collect();
-    emit_link_args("rustc-link-arg-bins", &system);
 }
 
 fn compile_icons(root: &Path, gio: &Library) {
@@ -140,9 +86,16 @@ fn compile_icons(root: &Path, gio: &Library) {
     for flag in &gio.cflags {
         build.flag(flag);
     }
-    build
-        .link_lib_modifier("+whole-archive")
-        .compile("southstar_icons");
+    build.cargo_metadata(false);
+    for object in build.compile_intermediates() {
+        println!("cargo:rustc-link-arg-bin=southstar={}", object.display());
+    }
+}
+
+fn link_launcher() {
+    for library in ["-lshell32", "-luser32", "-lkernel32"] {
+        println!("cargo:rustc-link-arg-bin=southstar-launcher={library}");
+    }
 }
 
 fn compile_windows_icon(root: &Path) {
@@ -169,6 +122,12 @@ fn compile_windows_icon(root: &Path) {
         .unwrap_or_else(|err| panic!("southstar: cannot run {windres}: {err}"));
     assert!(status.success(), "southstar: {windres} failed");
     println!("cargo:rustc-link-arg-bin=southstar={}", object.display());
+    if southstar_build::feature_enabled("LAUNCHER") {
+        println!(
+            "cargo:rustc-link-arg-bin=southstar-launcher={}",
+            object.display()
+        );
+    }
 }
 
 fn bundle_files(root: &Path) -> Vec<(String, PathBuf)> {
@@ -216,9 +175,10 @@ fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     let root = source_root();
     write_bundle(&root);
-    link_libraries(&target_os);
     compile_icons(&root, &require(&["gio-2.0"]));
+    link_libraries(&target_os);
     if target_os == "windows" {
         compile_windows_icon(&root);
+        link_launcher();
     }
 }

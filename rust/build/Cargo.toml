@@ -1,6 +1,6 @@
 [package]
 name = "southstar-build"
-description = "Build-script helpers for a plain cargo build: system libraries through pkg-config, and C struct layouts probed from installed headers"
+description = "Build-script helpers: system libraries through pkg-config, the link arguments the engine needs, and C struct layouts probed from installed headers"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

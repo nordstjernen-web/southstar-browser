@@ -19,8 +19,6 @@ Group:          Productivity/Networking/Web/Browsers
 URL:            https://github.com/nordstjernen-web/southstar-browser
 
 BuildRequires:  gcc
-BuildRequires:  meson >= 1.0
-BuildRequires:  ninja
 BuildRequires:  pkgconfig
 BuildRequires:  cargo >= 1.91
 BuildRequires:  rust >= 1.91
@@ -56,7 +54,7 @@ Requires(post): update-alternatives
 Requires(postun): update-alternatives
 
 %description
-Southstar is a clean-room web browser written from scratch in C, with a
+Southstar is a clean-room web browser written from scratch in Rust, with a
 GTK 4 user interface and its own HTTP client. It is built to be small,
 secure, and readable by a single person end to end.
 
@@ -69,29 +67,26 @@ secure, and readable by a single person end to end.
 
 %prep
 %setup -q -c -T
-top=$(find "%{_sourcedir}" -name meson.build 2>/dev/null \
+top=$(find "%{_sourcedir}" -name rust-toolchain.toml 2>/dev/null \
       | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2-)
-echo "DIAG: top meson.build = ${top:-<none>}"
+echo "DIAG: top rust-toolchain.toml = ${top:-<none>}"
 echo "DIAG: %{_sourcedir} ="; ls -la "%{_sourcedir}"
 if [ -z "$top" ]; then
-    echo "DIAG: no meson.build under SOURCES; listing %{_builddir}:"
+    echo "DIAG: no rust-toolchain.toml under SOURCES; listing %{_builddir}:"
     ls -laR "%{_builddir}" | head -80
     exit 1
 fi
 cp -a "$(dirname "$top")"/. .
-test -f meson.build
+test -f Cargo.toml
 
 %build
 %ifarch i386 i486 i586 i686
-%global extra_meson -Dwasm=disabled
+%global extra_xtask --no-wasm
 %endif
-%meson \
-    -Dwebgpu=disabled \
-    %{?extra_meson}
-%meson_build
+cargo xtask build --webgpu disabled %{?extra_xtask}
 
 %install
-%meson_install
+cargo xtask install --webgpu disabled %{?extra_xtask} --prefix %{_prefix} --destdir %{buildroot}
 mkdir -p %{buildroot}%{_sysconfdir}/alternatives
 ln -sf %{_sysconfdir}/alternatives/internet-browser-southstar %{buildroot}%{_bindir}/internet-browser-southstar
 touch %{buildroot}%{_sysconfdir}/alternatives/internet-browser-southstar
@@ -100,7 +95,7 @@ touch %{buildroot}%{_sysconfdir}/alternatives/internet-browser-southstar
 # library and its development header are only needed by external embedders,
 # not the browser app. Drop them so the package is a clean application,
 # not a -devel library.
-rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_prefix}/lib/libsouthstar.so
 rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
 rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 

@@ -1,0 +1,17 @@
+[package]
+name = "southstar-xtask"
+description = "cargo xtask: configures, builds, runs and installs Southstar, probing the system libraries the way a configure step does"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[lints]
+workspace = true

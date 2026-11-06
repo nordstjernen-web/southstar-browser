@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 if (-not $Exe) {
     $root = Resolve-Path (Join-Path $PSScriptRoot "..")
-    $Exe = Join-Path $root "builddir\src\gtk\southstar.exe"
+    $Exe = Join-Path $root "target\release\southstar.exe"
 }
 
 if (-not (Test-Path -LiteralPath $Exe)) {
