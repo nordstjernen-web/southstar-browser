@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.8:
 ======
+* SVG: an outer `<svg width="100%" height="100%">` fills its container.
+  Its `width` and `height` attributes now map to the CSS properties, as
+  SVG 2 says; percentages were ignored and the element fell back to
+  300×150 and clipped the rest. Google Finance's price chart was cut to
+  its top-left corner.
+* SVG: `fill` and `stroke` keep the case of a `url()` reference, so a
+  gradient with a mixed-case id (`url(#varkUe-17)`) is found, and a
+  reference written as the page's full URL plus a fragment
+  (`url(https://host/page#id)`, as D3 charts write it) resolves to the
+  element in the document. Google Finance's chart gets its green area
+  fill and masks.
 * CSS gradients interpolate in premultiplied alpha, as CSS Images
   requires: a fade to `transparent` keeps the neighbouring stop's colour
   instead of passing through grey, and stops of different opacity blend
