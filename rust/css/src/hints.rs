@@ -322,6 +322,29 @@ fn is_svg_presentation_attr(name: &[u8]) -> bool {
     SVG_PRESENTATION_ATTRS.contains(&name)
 }
 
+fn append_outer_svg_size_hints(out: &mut Vec<u8>, el: Node<'_>) {
+    for (attr, property) in [(c"width", &b"width"[..]), (c"height", b"height")] {
+        let Some(value) = attr_bytes(el, attr).map(strip) else {
+            continue;
+        };
+        if value.is_empty() || value.iter().any(|c| b";{}!\\".contains(c)) {
+            continue;
+        }
+        let text = CString::new(value).unwrap_or_default();
+        let (number, end) = ffi::strtod(&text, 0);
+        if end == 0 || number < 0.0 {
+            continue;
+        }
+        out.extend_from_slice(property);
+        out.extend_from_slice(b": ");
+        out.extend_from_slice(value);
+        if end == value.len() {
+            out.extend_from_slice(b"px");
+        }
+        out.push(b';');
+    }
+}
+
 fn append_svg_presentation_hints(out: &mut Vec<u8>, el: Node<'_>) {
     for a in el.attrs() {
         let (Some(name), Some(value)) = (a.name(), a.value()) else {
@@ -815,6 +838,9 @@ pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
     }
     if el.flags() & FLAG_SVG_NS != 0 {
         append_svg_presentation_hints(&mut out, el);
+        if tag == b"svg" && el.parent().is_none_or(|p| p.flags() & FLAG_SVG_NS == 0) {
+            append_outer_svg_size_hints(&mut out, el);
+        }
     }
     (!out.is_empty()).then_some(out)
 }

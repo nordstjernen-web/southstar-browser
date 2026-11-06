@@ -163,8 +163,8 @@ pub fn url_id(s: &[u8]) -> Option<(Vec<u8>, usize)> {
     while end > start && is_ws(s[end - 1]) {
         end -= 1;
     }
-    if end > start && s[start] == b'#' {
-        start += 1;
+    if let Some(hash) = s[start..end].iter().rposition(|&c| c == b'#') {
+        start += hash + 1;
     }
     if end <= start {
         return None;

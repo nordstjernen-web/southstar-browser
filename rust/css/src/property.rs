@@ -779,10 +779,13 @@ fn paint_prop(t: &[u8]) -> Option<Value> {
         return Some(value);
     }
     let kw = lower(t);
+    if kw.starts_with(b"url(") {
+        return Some(Value::keyword(strip(t).to_vec()));
+    }
     let ok = matches!(
         kw.as_slice(),
         b"none" | b"currentcolor" | b"transparent" | b"context-fill" | b"context-stroke"
-    ) || kw.starts_with(b"url(");
+    );
     ok.then(|| Value::keyword(kw))
 }
 
