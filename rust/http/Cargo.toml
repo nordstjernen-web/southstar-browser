@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-http-wire = { path = "../http-wire", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
+southstar-http-wire = { path = "../http-wire", version = "=1.0.8-dev" }
 ml-kem = { version = "0.3.2", default-features = false, features = ["zeroize"] }
 ring = { version = "0.17.14", default-features = false }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }

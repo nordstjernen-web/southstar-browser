@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-css-syntax = { path = "../css-syntax", version = "=1.0.8" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.8" }
+southstar-css-syntax = { path = "../css-syntax", version = "=1.0.8-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.8-dev" }
 
 [lints]
 workspace = true

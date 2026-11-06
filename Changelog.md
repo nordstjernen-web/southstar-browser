@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.8:
+Southstar Browser 1.0.8-dev:
 ======
 * Flexbox: a row flex container with `height: 0` has a definite cross
   size of zero, so `align-items: center` centres a taller item on it and
