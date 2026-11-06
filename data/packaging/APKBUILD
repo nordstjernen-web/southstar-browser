@@ -19,7 +19,6 @@ makedepends="
 	brotli-dev
 	zstd-dev
 	uchardet-dev
-	libpsl-dev
 	sqlite-dev
 	libseccomp-dev
 	libwebp-dev

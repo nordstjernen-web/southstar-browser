@@ -1,8 +1,14 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.7:
+Southstar Browser 1.0.8-dev:
 ======
+* Network: the Public Suffix List that scopes cookies and decides
+  registrable domains (sites, cookie partitions, extension rules) is
+  compiled into Rust (`rust/psl`, generated from publicsuffix.org by
+  `scripts/gen-psl-table.py`) instead of coming from libpsl. It passes
+  the list's own test suite; IP addresses have no registrable domain.
+  libpsl is no longer a build dependency.
 * Network: gzip and deflate response bodies, and CompressionStream and
   DecompressionStream, are compressed and decompressed in Rust (flate2
   over zlib-rs, a Rust port of zlib) instead of the C zlib. The formats
@@ -27,6 +33,9 @@ Southstar Browser 1.0.7:
   recipes and the documentation use the new commands.
 * Fonts: the fontconfig registration of downloaded fonts documents each
   unsafe call, now that clippy checks it.
+
+Southstar Browser 1.0.7:
+======
 * Flexbox: a row flex container with `height: 0` has a definite cross
   size of zero, so `align-items: center` centres a taller item on it and
   the item overflows equally above and below, as in other browsers. A

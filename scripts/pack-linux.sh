@@ -91,7 +91,7 @@ fi
 if [ "$LIBC" = musl ]; then
     LIBC_REQ='- musl libc (Alpine 3.19+ era and later)'
     RUNTIME_INSTALL='    sudo apk add gtk4.0 libcrypto3 zlib brotli-libs zstd-libs uchardet poppler-glib libavif libwebp \
-        libseccomp libpsl sqlite-libs ca-certificates font-dejavu sdl2 # Alpine (musl)'
+        libseccomp sqlite-libs ca-certificates font-dejavu sdl2 # Alpine (musl)'
 else
     # Don't guess the glibc floor — read it from the binary we just built.
     GLIBC_MIN=$(objdump -T "$BUILT_DIR/southstar" 2>/dev/null \
@@ -99,11 +99,11 @@ else
         | tail -1 | cut -d_ -f2)
     LIBC_REQ="- glibc ${GLIBC_MIN:-2.38}+ (the build container's generation; check with: ldd --version)"
     RUNTIME_INSTALL='    sudo apt   install libgtk-4-1 libbrotli1 libzstd1 libuchardet0 libwebp7 \
-        libpoppler-glib8 libavif16 libpsl5 libseccomp2 libsqlite3-0 libsdl2-2.0-0   # Debian/Ubuntu
+        libpoppler-glib8 libavif16 libseccomp2 libsqlite3-0 libsdl2-2.0-0   # Debian/Ubuntu
     sudo dnf   install gtk4 openssl-libs brotli libzstd libuchardet poppler-glib libwebp \
-        libavif libpsl libseccomp sqlite-libs SDL2                     # Fedora/RHEL
+        libavif libseccomp sqlite-libs SDL2                     # Fedora/RHEL
     sudo zypper install libgtk-4-1 libbrotlidec1 libzstd1 libuchardet0 libwebp7 \
-        libpoppler-glib8 libavif16 libpsl5 libseccomp2 libsqlite3-0 libSDL2-2_0-0   # openSUSE'
+        libpoppler-glib8 libavif16 libseccomp2 libsqlite3-0 libSDL2-2_0-0   # openSUSE'
 fi
 
 rm -rf "$STAGE"
@@ -205,7 +205,7 @@ ${LIBC_REQ}
 - libpoppler-glib (PDF rendering)
 - libavif 16 (AVIF images — only in recent distro releases)
 - libwebp (WebP images)
-${WEBM_REQ_NOTE}- libpsl, libseccomp, libsqlite3
+${WEBM_REQ_NOTE}- libseccomp, libsqlite3
 - fontconfig + a font set; harfbuzz; freetype; libstdc++
 - ca-certificates (TLS trust store)
 - An X11 or Wayland session

@@ -49,7 +49,6 @@ jobs:
             mingw-w64-ucrt-x86_64-zstd
             mingw-w64-ucrt-x86_64-ca-certificates
             mingw-w64-ucrt-x86_64-uchardet
-            mingw-w64-ucrt-x86_64-libpsl
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libwebp
             mingw-w64-ucrt-x86_64-libavif

@@ -313,7 +313,7 @@ request that fails verification is never retried without it.
 
 - Cookies and the HTTP cache are partitioned per top-level **site**
   (scheme + registrable domain + port), where the registrable domain
-  comes from the Public Suffix List via libpsl. All subdomains within
+  comes from the Public Suffix List, compiled into `rust/psl`. All subdomains within
   the same registrable domain share one cookie jar and one cache
   partition; everything else is isolated. Third-party cookies are
   blocked by default.

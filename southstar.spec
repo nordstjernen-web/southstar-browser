@@ -31,7 +31,6 @@ BuildRequires:  pkgconfig(libssl)
 BuildRequires:  pkgconfig(zlib)
 BuildRequires:  pkgconfig(libbrotlidec)
 BuildRequires:  pkgconfig(libzstd)
-BuildRequires:  pkgconfig(libpsl)
 BuildRequires:  pkgconfig(libseccomp)
 BuildRequires:  pkgconfig(libavif)
 BuildRequires:  pkgconfig(libavcodec) >= 60

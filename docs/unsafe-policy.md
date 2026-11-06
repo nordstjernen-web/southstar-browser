@@ -10,7 +10,7 @@ leave safe Rust, and the amount of it may only go down.
 1. **System-library FFI.** Calls into the C libraries the browser links:
    GLib/GTK/Cairo/Pango, OpenSSL's libcrypto (WebCrypto), FFmpeg's libav\*,
    SDL2, zlib/brotli/zstd, libwebp/libavif, SQLite, libseccomp,
-   epoxy/OpenGL, wgpu-native, uchardet, libpsl and enchant. The
+   epoxy/OpenGL, wgpu-native, uchardet and enchant. The
    declarations and the calls live in the crate's `ffi.rs` or `ffi/`
    module, which hands the rest of the crate a safe API: owned Rust types
    in, owned Rust types out, no raw pointer crossing the module boundary.

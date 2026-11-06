@@ -241,7 +241,7 @@ allocation, the renderer/IPC boundary — with each fix landed as its own
 commit (the running detail lives in the git history). The fundamentals stay
 strong: memory-safe Rust parsers and TLS (rustls, with hybrid post-quantum
 key exchange), http/https-only scheme allow-listing with no HTTPS→HTTP
-redirect downgrade, public-suffix cookie scoping via libpsl, CRLF-filtered
+redirect downgrade, public-suffix cookie scoping from the built-in Public Suffix List, CRLF-filtered
 request headers, credentials never replayed across a redirect host,
 clamped/overflow-checked sizes on the untrusted IPC and layout paths,
 depth-limited recursive CSS parsers, and per-renderer Landlock + seccomp

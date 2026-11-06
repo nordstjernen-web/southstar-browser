@@ -23,7 +23,6 @@ pkgbase = southstar-browser
 	depends = libavif
 	depends = libepoxy
 	depends = libgcc
-	depends = libpsl
 	depends = libseccomp
 	depends = libvorbis
 	depends = libwebp

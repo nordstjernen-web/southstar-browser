@@ -12,28 +12,28 @@ System packages required on Debian / Ubuntu:
 
     sudo apt install build-essential pkg-config cargo rustc \
         libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-        libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
+        libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev
 
 On Fedora / RHEL:
 
     sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-        openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel libseccomp-devel \
+        openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel sqlite-devel libseccomp-devel \
         libwebp-devel SDL2-devel
 
 On openSUSE:
 
     sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-        libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel libseccomp-devel \
+        libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel sqlite3-devel libseccomp-devel \
         libwebp-devel libSDL2-devel
 
 On Arch Linux (see [Arch.md](Arch.md) for the package):
 
-    sudo pacman -S --needed base-devel rust gtk4 libepoxy openssl zlib brotli zstd uchardet libpsl sqlite libseccomp libwebp sdl2 ffmpeg
+    sudo pacman -S --needed base-devel rust gtk4 libepoxy openssl zlib brotli zstd uchardet sqlite libseccomp libwebp sdl2 ffmpeg
 
 On Alpine (musl libc):
 
     sudo apk add build-base linux-headers pkgconf cargo rust gtk4.0-dev \
-        libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev \
+        libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev sqlite-dev \
         libseccomp-dev libwebp-dev sdl2-dev
 
 The brotli and zstd packages are optional: without them the HTTP client

@@ -40,7 +40,7 @@ jobs:
       - name: Install build dependencies (Homebrew)
         run: |
           brew install pkg-config gtk4 libepoxy openssl@3 ccache \
-              brotli zstd uchardet libpsl sqlite webp libavif sdl2 dylibbundler nasm
+              brotli zstd uchardet sqlite webp libavif sdl2 dylibbundler nasm
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
       - name: Install Rust

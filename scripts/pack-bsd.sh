@@ -41,9 +41,9 @@ cp "$ROOT/COPYING" "$STAGE/" 2>/dev/null || true
 
 case "$OS" in
     freebsd)
-        RUNTIME='    pkg install gtk4 brotli zstd uchardet webp sqlite3 libpsl libepoxy' ;;
+        RUNTIME='    pkg install gtk4 brotli zstd uchardet webp sqlite3 libepoxy' ;;
     netbsd)
-        RUNTIME='    pkgin install gtk4 openssl brotli zstd uchardet sqlite3 libwebp libpsl libepoxy' ;;
+        RUNTIME='    pkgin install gtk4 openssl brotli zstd uchardet sqlite3 libwebp libepoxy' ;;
     *)
         RUNTIME='    install gtk4 and the other runtime libraries with your package manager' ;;
 esac
