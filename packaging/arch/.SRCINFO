@@ -7,6 +7,7 @@ pkgbase = southstar-browser
 	arch = aarch64
 	license = LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 	makedepends = cargo
+	depends = publicsuffix-list
 	depends = brotli
 	depends = cairo
 	depends = enchant

@@ -1,13 +1,16 @@
 [package]
 name = "southstar-psl"
-description = "The Public Suffix List and its algorithm: whether a domain is a public suffix and the registrable domain of a host, from a table generated from publicsuffix.org"
+description = "The Public Suffix List algorithm over the list the system or the browser bundle provides: whether a domain is a public suffix and the registrable domain of a host"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license = "(LicenseRef-NSL-1.0 OR GPL-3.0-or-later) AND MPL-2.0"
+license.workspace = true
 publish.workspace = true
 repository.workspace = true
 homepage.workspace = true
+
+[dependencies]
+southstar-url = { path = "../url", version = "=1.0.8-dev" }
 
 [lints]
 workspace = true

@@ -3,12 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
-* Network: the Public Suffix List that scopes cookies and decides
-  registrable domains (sites, cookie partitions, extension rules) is
-  compiled into Rust (`rust/psl`, generated from publicsuffix.org by
-  `scripts/gen-psl-table.py`) instead of coming from libpsl. It passes
-  the list's own test suite; IP addresses have no registrable domain.
-  libpsl is no longer a build dependency.
+* Network: cookie scoping and registrable domains (sites, cookie
+  partitions, extension rules) use the Public Suffix List through
+  `rust/psl`, in Rust, instead of libpsl. The list is read at first use
+  from the system (`/usr/share/publicsuffix/`, from the distribution's
+  publicsuffix package) or from the copy the Windows, macOS, AppImage and
+  tarball bundles ship in `share/southstar/`; `NS_PSL_FILE` names another
+  file. Without a list every host is its own site and `Domain=` cookies
+  stay host-only. IP addresses have no registrable domain. No list data
+  is compiled in, and libpsl is no longer a build dependency.
 * Network: gzip and deflate response bodies, and CompressionStream and
   DecompressionStream, are compressed and decompressed in Rust (flate2
   over zlib-rs, a Rust port of zlib) instead of the C zlib. The formats

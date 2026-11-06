@@ -77,6 +77,8 @@ strip "$APPDIR"/usr/bin/southstar* 2>/dev/null || true
 rm -rf "$APPDIR/usr/include" "$APPDIR/usr/lib" "$APPDIR/usr/lib64" \
        "$APPDIR/usr/lib32"
 
+"$ROOT/scripts/fetch-psl.sh" "$APPDIR/usr/share/southstar"
+
 install -dm755 "$APPDIR/usr/share/applications"
 install -m644 "$ROOT/data/southstar.desktop" \
     "$APPDIR/usr/share/applications/org.southstar.WebBrowser.desktop"

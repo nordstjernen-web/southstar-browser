@@ -152,6 +152,7 @@ cp "$ROOT/README.md" "$STAGE/"
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$STAGE/"
 cp "$ROOT/License.md" "$STAGE/"
 cp "$ROOT/COPYING" "$STAGE/"
+"$ROOT/scripts/fetch-psl.sh" "$STAGE/share/southstar"
 
 if [ "$WEBM" = 1 ]; then
     WEBM_REQ_NOTE='- FFmpeg libav* (libavformat / libavcodec / libavutil / libswscale /

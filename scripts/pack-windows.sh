@@ -170,6 +170,7 @@ fi
 mkdir -p "$APP/share/southstar"
 cp "$ROOT/License.md" "$APP/share/southstar/"
 cp "$ROOT/COPYING" "$APP/share/southstar/"
+"$ROOT/scripts/fetch-psl.sh" "$APP/share/southstar"
 
 # Third-party copyright + license notices required by the libraries we ship.
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$OUT/"

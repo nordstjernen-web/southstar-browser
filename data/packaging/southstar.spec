@@ -32,6 +32,7 @@ BuildRequires:  pkgconfig(fontconfig)
 BuildRequires:  pkgconfig(harfbuzz)
 BuildRequires:  pkgconfig(freetype2)
 BuildRequires:  pkgconfig(cairo-ft)
+Requires:       (publicsuffix-list or publicsuffix)
 
 Recommends:     mpv
 
