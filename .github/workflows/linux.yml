@@ -44,7 +44,7 @@ jobs:
             gcc pkg-config \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
-            libharfbuzz-dev libfontconfig-dev libfreetype-dev libthai-dev \
+            libharfbuzz-dev libfontconfig-dev libfreetype-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 
@@ -155,7 +155,7 @@ jobs:
             gcc pkg-config \
             libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
             libuchardet-dev libpsl-dev libsqlite3-dev \
-            libharfbuzz-dev libfontconfig-dev libfreetype-dev libthai-dev \
+            libharfbuzz-dev libfontconfig-dev libfreetype-dev \
             libwebp-dev libavif-dev libsdl2-dev libseccomp-dev ca-certificates \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 

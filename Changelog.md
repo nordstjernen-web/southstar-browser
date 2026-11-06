@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7:
 ======
+* Text: Thai, Lao, Khmer and Myanmar text is broken into words by ICU4X's
+  dictionary segmenter, in Rust, instead of libthai. Thai wraps at the
+  same words as before; Lao, Khmer and Myanmar, which libthai did not
+  know, now wrap at word boundaries instead of overflowing their box.
+  libthai is no longer a build dependency.
 * Build: Cargo replaces meson. `cargo xtask build` checks the system
   libraries, detects the optional ones and builds every executable and
   `libsouthstar`; `cargo xtask run` starts the browser and `cargo xtask

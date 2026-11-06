@@ -913,13 +913,21 @@ dependencies = [
  "core_maths",
  "databake",
  "icu_collections",
+ "icu_locale_fallback",
  "icu_provider",
+ "icu_segmenter_data",
  "potential_utf",
  "serde",
  "smallvec",
  "utf8_iter",
  "zerovec",
 ]
+
+[[package]]
+name = "icu_segmenter_data"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae293c039020f9ec10710af98d29ce6aa2051486638b49c9a6409f3b4a9e98ad"
 
 [[package]]
 name = "icu_time"
@@ -3826,6 +3834,7 @@ name = "southstar-text"
 version = "1.0.8-dev"
 dependencies = [
  "harfrust",
+ "icu_segmenter",
  "png",
  "read-fonts",
  "skrifa",

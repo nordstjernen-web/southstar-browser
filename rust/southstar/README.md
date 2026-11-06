@@ -47,7 +47,6 @@ with the packages listed in the repository's `docs/Windows.md`.
 | `http-brotli`, `http-zstd` | yes | `br` and `zstd` content encodings |
 | `woff2` | yes | WOFF2 web fonts |
 | `avif` | no | AVIF images (libavif) |
-| `thai` | no | Thai word breaking (libthai) |
 | `poppler` | no | PDF viewing (poppler-glib) |
 | `enchant` | no | spell-checking (enchant-2) |
 | `vorbisfile`, `opusfile` | no | native Ogg Vorbis and Opus audio without FFmpeg |

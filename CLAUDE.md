@@ -272,8 +272,9 @@ pixel-identical on the render tests. There is no GObject: `Layout`, `Font`,
 system Pango that GTK loads, and the crate is LGPL-2.0-or-later because it is
 a translation of LGPL code.
 
-The C libraries underneath stay: HarfBuzz, FreeType, fontconfig, cairo and,
-when found, libthai (cargo feature `thai`). Their FFI lives only in
+The C libraries underneath stay: HarfBuzz, FreeType, fontconfig and cairo.
+Thai, Lao, Khmer and Myanmar are broken into words by ICU4X's dictionary
+segmenter (`icu_segmenter`), in Rust. The C libraries' FFI lives only in
 `rust/text/src/ffi/`. Bidi and Unicode data are Rust: `rust/bidi`
 (`southstar-bidi`) implements UAX #9 from the spec, and passes all of
 BidiTest.txt and BidiCharacterTest.txt when `SOUTHSTAR_UCD_DIR` points at a
