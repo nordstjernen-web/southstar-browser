@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.7-dev:
 ======
+* Dependencies: cc 1.11.1, ctutils 0.4.8, flate2 1.1.11, smallvec
+  1.16.5, toml_edit 0.25.19, toml_datetime 1.1.3 and winnow 1.0.5. Boa
+  0.22.0 is still the latest release, so the fork is unchanged, and ICU4X
+  stays on 2.3 because Boa 0.22 requires `~2.3`.
 * CI: the Linux workflow no longer runs tests (the unit tests, the
   headless smoke checks, the Unicode bidi conformance files and the WPT
   slice), skips the merged crates.io check on pull requests, and caches
