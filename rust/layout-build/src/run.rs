@@ -93,7 +93,20 @@ fn collapse(c: &Collector<'_>, run_ws_mode: i32) -> Collapsed {
     if !trailing_preserved && text.last() == Some(&b' ') {
         text.pop();
     }
+    if text.last() == Some(&b'\n') && !atomic_follows_last_byte(c, &map, text.len()) {
+        text.pop();
+        let len = text.len();
+        for m in map.iter_mut().filter(|m| **m > len) {
+            *m = len;
+        }
+    }
     Collapsed { text, map }
+}
+
+fn atomic_follows_last_byte(c: &Collector<'_>, map: &[usize], text_len: usize) -> bool {
+    c.atomics
+        .iter()
+        .any(|&(start, _)| map[start.min(map.len() - 1)] >= text_len)
 }
 
 fn remap(start: usize, len: usize, buf_len: usize, c: &Collapsed) -> Option<(usize, usize)> {
