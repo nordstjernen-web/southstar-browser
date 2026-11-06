@@ -3,6 +3,17 @@ Changelog:
 
 Southstar Browser 1.0.8:
 ======
+* CSS gradients interpolate in premultiplied alpha, as CSS Images
+  requires: a fade to `transparent` keeps the neighbouring stop's colour
+  instead of passing through grey, and stops of different opacity blend
+  like other browsers. Fade-outs over text (duck.ai's "Les mer") were a
+  dark band.
+* A preserved newline that ends a block's inline content (`pre`,
+  `pre-wrap`, `pre-line`) no longer adds an empty line, as in other
+  browsers; chat bubbles whose text ends in a newline were a line too tall.
+* `background-size`, `background-position` and `mask-size` resolve
+  `em`, `ex`, `ch`, `cap`, `ic` and `lh` against the element's font size
+  and line height (they were 16px or 1px), so `100% 1lh` is one line tall.
 * Dependencies: cc 1.11.1, ctutils 0.4.8, flate2 1.1.11, smallvec
   1.16.5, toml_edit 0.25.19, toml_datetime 1.1.3 and winnow 1.0.5. Boa
   0.22.0 is still the latest release, so the fork is unchanged, and ICU4X
