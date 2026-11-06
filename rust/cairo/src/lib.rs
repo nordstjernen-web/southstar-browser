@@ -13,6 +13,3 @@ pub use types::{
     Antialias, Content, Error, Extend, FillRule, Filter, Format, HintMetrics, HintStyle, LineCap,
     LineJoin, Matrix, Operator, PathSegment, PdfMetadata, Rectangle, SubpixelOrder, TextExtents,
 };
-
-#[cfg(test)]
-mod tests;

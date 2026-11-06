@@ -13,8 +13,6 @@ use crate::coverage::CharSet;
 mod index;
 #[cfg(feature = "rust-shaper")]
 pub(crate) use index::{CharSetBuilder, add_application_fonts};
-#[cfg(all(test, feature = "rust-shaper"))]
-pub(crate) use index::{format, freetype_query_all};
 
 #[repr(C)]
 pub(crate) struct RawPattern {

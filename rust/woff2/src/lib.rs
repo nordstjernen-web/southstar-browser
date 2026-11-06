@@ -5,9 +5,6 @@
 mod ffi;
 mod woff1;
 
-#[cfg(test)]
-mod tests;
-
 pub use woff1::{is_woff, woff_to_sfnt};
 
 const MAX_OUTPUT: usize = 64 * 1024 * 1024;

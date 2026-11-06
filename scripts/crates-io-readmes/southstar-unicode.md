@@ -22,8 +22,8 @@ specification:
 - bidi classes, paired brackets and mirrored glyphs
 - a paragraph's embedding levels
 
-It passes all of `BidiTest.txt` and `BidiCharacterTest.txt` from the Unicode
-Character Database.
+It passed all of `BidiTest.txt` and `BidiCharacterTest.txt` from the Unicode
+Character Database when it was written.
 
 Both modules' tables are generated from the UCD by scripts in the repository,
 and are regenerated for a new Unicode version rather than edited by hand.

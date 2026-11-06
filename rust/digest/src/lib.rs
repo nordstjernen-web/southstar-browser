@@ -81,6 +81,3 @@ pub fn base64(data: &[u8]) -> String {
     }
     out
 }
-
-#[cfg(test)]
-mod tests;

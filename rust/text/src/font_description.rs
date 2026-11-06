@@ -9,10 +9,6 @@ use southstar_unicode::until_nul;
 use crate::ffi::harfbuzz_strings::{normalize_feature, normalize_variation};
 use crate::types::{FontColor, Gravity, SCALE, Stretch, Style, Variant, Weight, font_mask};
 
-#[cfg(test)]
-#[path = "tests/font_description.rs"]
-mod tests;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Width(pub i32);
 

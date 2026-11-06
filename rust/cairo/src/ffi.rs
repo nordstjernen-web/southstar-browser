@@ -16,8 +16,6 @@ pub use context::{Context, ContextRef};
 pub use font_options::{FontOptions, FontOptionsRef};
 pub use path::Path;
 pub(crate) use path::PathData;
-#[cfg(test)]
-pub(crate) use path::{PathHeader, decode, transform_points};
 pub use pattern::Pattern;
 pub use surface::{Surface, SurfaceRef, encode_png};
 

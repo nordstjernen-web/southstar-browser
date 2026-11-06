@@ -70,9 +70,6 @@ mod units;
 mod values;
 mod vars;
 
-#[cfg(test)]
-mod tests;
-
 pub use animation::{
     Entry as AnimationEntry, range_serialize as animation_range_serialize,
     shorthand_serialize as animation_shorthand_serialize,

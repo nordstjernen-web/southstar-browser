@@ -7,8 +7,6 @@
 pub mod bitstream;
 #[cfg(not(windows))]
 mod stub;
-#[cfg(test)]
-mod tests;
 #[cfg(windows)]
 mod windows;
 

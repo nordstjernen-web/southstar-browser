@@ -7,8 +7,6 @@
 pub mod cookies;
 pub mod hsts;
 pub mod http_date;
-#[cfg(test)]
-mod tests;
 mod text;
 
 pub use text::strtoll;

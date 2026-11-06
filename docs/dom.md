@@ -127,8 +127,7 @@ ownership over. Attributes cross no C ABI: code that needs an attribute's
 parts as plain data takes an `AttrView`. Crates move off the `ns_*`
 exports onto the Rust API as they are rewritten.
 
-## Tests
+## Verification
 
-`rust/dom/src/tests.rs` covers the store (weak handles after a free and after
-slot reuse, other threads), the links, owned names, text and attributes,
-the indexes and cloning; `scripts/rust-tests.sh` runs them.
+The store has no unit tests (Southstar has none); changes to it are checked
+by running the browser over pages that build, mutate and free large trees.

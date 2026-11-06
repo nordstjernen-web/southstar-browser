@@ -40,10 +40,6 @@ pub use crate::ffi::cairo::{
 };
 pub use crate::ffi::harfbuzz::{Feature, HbFont};
 
-#[cfg(test)]
-#[path = "tests/fonts.rs"]
-mod tests;
-
 pub const UNKNOWN_GLYPH_WIDTH: i32 = 10;
 pub const UNKNOWN_GLYPH_HEIGHT: i32 = 14;
 

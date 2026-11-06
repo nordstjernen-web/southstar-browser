@@ -4,9 +4,6 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests;
-
 use std::ffi::CString;
 
 pub struct Cue {

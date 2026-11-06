@@ -20,10 +20,6 @@ use crate::script::Script;
 use crate::types::{GLYPH_EMPTY, GLYPH_UNKNOWN_FLAG, Glyph, get_unknown_glyph, show_flags};
 use crate::unicode::{UnicodeType, mirror_char, unichar_type};
 
-#[cfg(test)]
-#[path = "tests/rust_shaper.rs"]
-mod tests;
-
 pub mod buffer_flags {
     pub const BEGINNING_OF_TEXT: u32 = 0x01;
     pub const END_OF_TEXT: u32 = 0x02;

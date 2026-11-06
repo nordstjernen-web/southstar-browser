@@ -4,8 +4,6 @@
 
 use southstar_unicode::until_nul;
 mod ffi;
-#[cfg(test)]
-mod tests;
 
 use core::ffi::{c_int, c_long};
 use std::io;

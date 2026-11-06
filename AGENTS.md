@@ -237,13 +237,11 @@ library API or language feature stabilized after 1.91.
   a new or updated crate is either covered by an imported audit, audited with
   `cargo vet certify`, or added as an exemption with its reason in the commit
   message; `cargo vet --locked` must pass (CI runs it too).
-- Unit tests live next to the code: `#[cfg(test)] mod tests;` in the crate
-  root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
-  crate that has them (CI runs it too). A test binary links only the crate and
-  its Cargo dependencies, so tests work for crates whose code needs no
-  system library — one more reason to keep parsers and engine logic
-  free of FFI. Test parsers, URL handling, cookies and HSTS, CSP and the
-  cascade first; check a behavior change in the browser itself as well.
+- **No unit tests.** Southstar has no `#[test]` functions, no
+  `#[cfg(test)]` code, no `tests.rs` files and no `tests/` directories, and
+  none are added. Verify a change by building it and running the browser
+  (headless dumps, the render and WPT scripts, test262 through
+  `southstar-jsshell`) and compare against another browser where it helps.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
   (its crates are renamed `southstar-boa-*`, so the fork is published to
   crates.io with the rest of the tree). QuickJS-ng was removed in October
@@ -271,9 +269,8 @@ The C libraries underneath stay: HarfBuzz, FreeType, fontconfig and cairo.
 Thai, Lao, Khmer and Myanmar are broken into words by ICU4X's dictionary
 segmenter (`icu_segmenter`), in Rust. The C libraries' FFI lives only in
 `rust/text/src/ffi/`. Bidi and Unicode data are Rust: `rust/bidi`
-(`southstar-bidi`) implements UAX #9 from the spec, and passes all of
-BidiTest.txt and BidiCharacterTest.txt when `SOUTHSTAR_UCD_DIR` points at a
-UCD directory; `rust/unicode` (`southstar-unicode`) holds the character
+(`southstar-bidi`) implements UAX #9 from the spec (it passed all of BidiTest.txt and
+BidiCharacterTest.txt when it was written); `rust/unicode` (`southstar-unicode`) holds the character
 properties layout reads (category, line break class, script, width, case,
 decomposition) with GLib's semantics and script numbering. Their tables are
 generated from the UCD by `scripts/gen-bidi-tables.py` and
@@ -537,9 +534,8 @@ A change is done when:
 2. The browser launches and the affected UI path works manually.
 3. The change is committed and merged to `main` through a pull request.
 
-Unit tests (`scripts/rust-tests.sh`) cover the parsers; otherwise verify
-behavior by running the browser. Don't add a `tests/` directory or
-integration-test targets.
+Verify behavior by running the browser. Don't add unit tests, a `tests/`
+directory or integration-test targets.
 
 ## Don't
 

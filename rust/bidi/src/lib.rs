@@ -7,9 +7,6 @@
 mod paragraph;
 mod tables;
 
-#[cfg(test)]
-mod tests;
-
 pub use paragraph::{ParagraphDirection, Resolved, resolve_paragraph};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

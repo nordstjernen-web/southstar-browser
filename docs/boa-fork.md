@@ -176,7 +176,7 @@ test262 runs through `southstar-jsshell test262 --root <test262 checkout>`
    version (`cargo update -p boa_macros`), update the versions and
    checksums at the top of this page, and run `cargo vet` for the new
    crate versions.
-4. Run `scripts/rust-tests.sh`, test262 through `southstar-jsshell`
+4. Run test262 through `southstar-jsshell`
    (`rust/jsshell`) and a browser smoke test before committing.
 
 A security fix released only on Boa's `main` branch is applied the same

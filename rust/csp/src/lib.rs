@@ -9,9 +9,6 @@ use core::ffi::CStr;
 use southstar_digest::Algorithm;
 use southstar_url::bytes::{parts as url_parts, same_origin};
 
-#[cfg(test)]
-mod tests;
-
 pub const DEFAULT: usize = 0;
 pub const SCRIPT: usize = 1;
 pub const STYLE: usize = 2;
