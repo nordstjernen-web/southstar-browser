@@ -102,7 +102,6 @@ jobs:
         id: build
         if: hashFiles('Cargo.toml') != ''
         shell: bash
-        env:
         run: |
           set -o pipefail
           export CC="ccache clang"

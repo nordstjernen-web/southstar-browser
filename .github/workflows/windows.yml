@@ -113,7 +113,6 @@ jobs:
       - name: Build
         id: build
         if: hashFiles('Cargo.toml') != ''
-        env:
         run: |
           set -o pipefail
           export CC="ccache clang"
