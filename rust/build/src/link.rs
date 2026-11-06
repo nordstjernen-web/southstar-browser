@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::{link_args, pkg_config, require};
 
-const ENGINE_LIBRARIES: [&str; 17] = [
+const ENGINE_LIBRARIES: [&str; 16] = [
     "glib-2.0",
     "gobject-2.0",
     "gio-2.0",
@@ -19,7 +19,6 @@ const ENGINE_LIBRARIES: [&str; 17] = [
     "freetype2",
     "epoxy",
     "libcrypto",
-    "zlib",
     "uchardet",
     "libpsl",
     "sqlite3",

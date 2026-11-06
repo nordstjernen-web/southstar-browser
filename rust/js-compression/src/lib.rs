@@ -1,16 +1,18 @@
-//! Southstar — the zlib codec behind CompressionStream and DecompressionStream: gzip, deflate and deflate-raw.
+//! Southstar — the deflate codec behind CompressionStream and DecompressionStream: gzip, deflate and deflate-raw.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
+
+mod codec;
 
 use std::cell::{Cell, RefCell};
 
 use southstar_js_engine::{Attributes, NativeFn, ObjectKind, Scope, Value};
 
-use crate::ffi::{Step, Zlib};
+use crate::codec::{Step, Zlib};
 
-pub use ffi::nsr_compression_install;
+pub use codec::nsr_compression_install;
 
 const MAX_OUTPUT: usize = 256 * 1024 * 1024;
 
@@ -43,7 +45,7 @@ fn create(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, Val
     };
     let decompress = scope.to_bool(&args[1]);
     let Some(zlib) = Zlib::new(decompress, bits) else {
-        return Err(ffi::internal_error(scope, "zlib initialization failed"));
+        return Err(codec::internal_error(scope, "zlib initialization failed"));
     };
     let codec = Codec {
         zlib: RefCell::new(zlib),
@@ -101,7 +103,7 @@ fn data_bytes(scope: &mut Scope<'_>, data: &Value) -> Result<Vec<u8>, Value> {
     match scope.object_kind(data) {
         Some(ObjectKind::TypedArray(_) | ObjectKind::DataView) => scope
             .view_data(data)
-            .ok_or_else(|| ffi::internal_error(scope, "zlib push: backing buffer unavailable")),
+            .ok_or_else(|| codec::internal_error(scope, "zlib push: backing buffer unavailable")),
         Some(ObjectKind::ArrayBuffer) => scope
             .array_buffer_bytes(data)
             .ok_or_else(|| scope.type_error("zlib push: ArrayBufferView expected")),
