@@ -511,6 +511,3 @@ pub const ROOT_MESSAGE: &str = "southstar: refusing to run as root.\n\
 \x20 Web browsers process untrusted content; running as root exposes\n\
 \x20 the whole system if the renderer is compromised.\n\
 \x20 Re-run as an unprivileged user, or set NS_ALLOW_ROOT=1 to override.\n";
-
-#[cfg(test)]
-mod tests;

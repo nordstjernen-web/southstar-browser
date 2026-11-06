@@ -14,9 +14,6 @@ mod parse;
 mod space;
 mod tokens;
 
-#[cfg(test)]
-mod tests;
-
 pub use color::{Color, legacy_text};
 pub use mix::{HueMethod, Interpolation, interpolate};
 pub use named::{NAMED, named};

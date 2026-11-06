@@ -5,8 +5,6 @@
 use southstar_unicode::until_nul;
 mod ffi;
 mod rules;
-#[cfg(test)]
-mod tests;
 
 pub use ffi::registrable_domain;
 

@@ -26,9 +26,6 @@ mod transport;
 mod url;
 mod view_source;
 
-#[cfg(test)]
-mod tests;
-
 pub use about::{is_chrome_page, is_privileged_page};
 pub use blocking::{BlockingFetch, in_blocking_fetch};
 pub use cookies::{

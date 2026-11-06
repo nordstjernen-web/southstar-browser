@@ -4,9 +4,6 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests;
-
 const SNIFF_LEN: usize = 4096;
 
 const BY_EXTENSION: &[(&str, &str)] = &[

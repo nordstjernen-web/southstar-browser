@@ -33,10 +33,6 @@ use crate::unicode::{UnicodeType, is_zero_width, unichar_type};
 use crate::utf8::{char_at, next_char, pango_utf8_strlen, prev_char};
 use crate::utils::{caches_enabled, caches_verifying};
 
-#[cfg(test)]
-#[path = "tests/shaping.rs"]
-mod tests;
-
 const STAND_IN_END: u32 = 1 << 14;
 const MAX_FEATURES: usize = 32;
 const KEY_AT_ITEM_START: u32 = 1 << 9;

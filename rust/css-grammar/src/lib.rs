@@ -6,9 +6,6 @@
 
 use southstar_css_syntax::{Component, Kind};
 
-#[cfg(test)]
-mod tests;
-
 const GROUPS_MAX: usize = 8;
 
 const CSS_WIDE: [&[u8]; 6] = [

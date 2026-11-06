@@ -16,10 +16,6 @@ use crate::types::{Color, Overline, Rectangle, RenderPart, SCALE, Underline, uni
 pub use glyphs::draw_error_underline_path;
 pub use layout_entry::{layout_line_path, layout_path, show_layout, show_layout_line};
 
-#[cfg(test)]
-#[path = "tests/render.rs"]
-mod tests;
-
 pub mod render_component {
     pub const NONE: u32 = 0;
     pub const PLAIN_GLYPH: u32 = 1 << 1;

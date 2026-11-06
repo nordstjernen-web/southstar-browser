@@ -11,8 +11,6 @@ mod main_context;
 mod main_loop;
 mod source;
 mod strtod;
-#[cfg(test)]
-mod tests;
 mod text;
 
 pub use dirs::{

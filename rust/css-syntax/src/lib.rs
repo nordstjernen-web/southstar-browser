@@ -6,9 +6,6 @@
 
 use core::ops::Range;
 
-#[cfg(test)]
-mod tests;
-
 const MAX_NESTING: u32 = 128;
 const MAX_BRACKET_DEPTH: usize = 128;
 

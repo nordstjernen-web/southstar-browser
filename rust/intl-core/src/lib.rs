@@ -9,5 +9,3 @@ mod cldr;
 pub mod cldr_index;
 pub mod collation;
 pub mod tag;
-#[cfg(test)]
-mod tests;

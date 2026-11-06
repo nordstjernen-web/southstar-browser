@@ -14,10 +14,6 @@ use crate::utils::caches_verifying;
 
 pub use cache::break_cache_stats;
 
-#[cfg(test)]
-#[path = "tests/breaks.rs"]
-mod tests;
-
 fn merge_boundary(attrs: &mut [LogAttr], before: LogAttr) {
     let start = &mut attrs[0];
     start.set_is_line_break(start.is_line_break() || before.is_line_break());

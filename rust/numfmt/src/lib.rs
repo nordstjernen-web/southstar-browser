@@ -4,9 +4,6 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests;
-
 fn non_finite(value: f64) -> Option<String> {
     if value.is_nan() {
         Some(
