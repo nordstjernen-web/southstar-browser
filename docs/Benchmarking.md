@@ -23,7 +23,7 @@ finished.) Example aggregate over the eleven light TodoMVC frameworks
 jQuery, Preact, Svelte, Lit), `iterationCount=1`:
 
 ```sh
-./builddir/src/gtk/southstar \
+./target/release/southstar \
   'http://localhost:8124/index.html?suite=TodoMVC-JavaScript-ES5,TodoMVC-JavaScript-ES6-Webpack,TodoMVC-WebComponents,TodoMVC-React,TodoMVC-React-Redux,TodoMVC-Backbone,TodoMVC-Vue,TodoMVC-jQuery,TodoMVC-Preact,TodoMVC-Svelte,TodoMVC-Lit&startAutomatically=true&iterationCount=1'
 ```
 
@@ -37,7 +37,7 @@ fresh-process runs when comparing the engine over time.
 git clone --depth 1 --branch release/3.1 \
     https://github.com/WebKit/Speedometer.git /tmp/spdm
 ( cd /tmp/spdm && python3 -m http.server 8124 & )
-./builddir/src/gtk/southstar --headless --dump=text --settle-ms=60000 \
+./target/release/southstar --headless --dump=text --settle-ms=60000 \
     'http://localhost:8124/index.html?suite=TodoMVC-JavaScript-ES5&startAutomatically=true&iterationCount=1'
 ```
 
@@ -100,7 +100,7 @@ To run the hosted benchmark headless and print its score (the run takes the
 whole `--settle-ms`, since the results page never goes idle):
 
 ```sh
-./builddir/src/gtk/southstar --headless --dump=none --settle-ms=600000 \
+./target/release/southstar --headless --dump=none --settle-ms=600000 \
     --eval='document.getElementById("result-number").textContent' \
     'https://browserbench.org/Speedometer3.1/?startAutomatically=true&iterationCount=1'
 ```
@@ -224,8 +224,8 @@ remain, both larger and correctness-sensitive, are:
 To reproduce the profile:
 
 ```sh
-meson setup builddir-prof --buildtype=debugoptimized -Db_lto=false
-meson compile -C builddir-prof
+RUSTFLAGS="-C force-frame-pointers=yes" CARGO_PROFILE_RELEASE_DEBUG=true \
+    cargo xtask build --lto off --target-dir target-prof
 # in one shell, start a long-settle run of a complex-DOM suite, then:
 scripts/sample-profile.sh <pid> 150
 ```

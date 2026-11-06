@@ -34,7 +34,7 @@ fn file_name(path: &Path) -> &std::ffi::OsStr {
     path.file_name().expect("a listed file has a name")
 }
 
-pub fn install(source: &Path, built: &Path, root: &Path) -> io::Result<()> {
+pub fn install(source: &Path, built: &Path, root: &Path, libdir: &Path) -> io::Result<()> {
     let windows = cfg!(windows);
     let exe = std::env::consts::EXE_SUFFIX;
     let bin = root.join("bin");
@@ -49,15 +49,15 @@ pub fn install(source: &Path, built: &Path, root: &Path) -> io::Result<()> {
     let (library, library_dir) = if windows {
         ("southstar.dll", bin.clone())
     } else if cfg!(target_os = "macos") {
-        ("libsouthstar.dylib", root.join("lib"))
+        ("libsouthstar.dylib", root.join(libdir))
     } else {
-        ("libsouthstar.so", root.join("lib"))
+        ("libsouthstar.so", root.join(libdir))
     };
     copy(&built.join(library), &library_dir.join(library))?;
     if windows && built.join("libsouthstar.dll.a").is_file() {
         copy(
             &built.join("libsouthstar.dll.a"),
-            &root.join("lib").join("libsouthstar.dll.a"),
+            &root.join(libdir).join("libsouthstar.dll.a"),
         )?;
     }
     copy(

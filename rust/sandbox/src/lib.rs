@@ -194,9 +194,9 @@ pub const DEV_DATA_DIRS: [&str; 4] = [
 pub const PREFIX_LIB_DIRS: [&str; 2] = ["../lib", "../lib64"];
 
 pub const DEV_ROOT_MARKERS: [&str; 3] = [
-    "../meson.build",
-    "../../meson.build",
-    "../../../meson.build",
+    "../rust-toolchain.toml",
+    "../../rust-toolchain.toml",
+    "../../../rust-toolchain.toml",
 ];
 
 pub const SECCOMP_ALLOWED: &[&str] = &[

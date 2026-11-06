@@ -33,7 +33,7 @@ jobs:
           copyback: true
           prepare: |
             pkg install -y \
-              meson ninja pkgconf bash zip ccache bzip2 git-lite \
+              pkgconf bash zip ccache bzip2 git-lite \
               gtk4 libepoxy brotli zstd uchardet webp libavif sdl2 \
               sqlite3 libpsl
             # FreeBSD's rust package lags behind the toolchain the build pins
@@ -45,7 +45,7 @@ jobs:
             # FreeBSD's freetype2.pc lists 'bzip2' in Requires.private, but
             # neither the base system nor the bzip2 package ships a bzip2.pc,
             # so cairo's pkg-config lookup (which pulls in freetype2) aborts
-            # meson setup. libbz2 lives in the base system; drop a matching
+            # the build. libbz2 lives in the base system; drop a matching
             # .pc into the pkgconf search path so the dependency resolves.
             mkdir -p /usr/local/libdata/pkgconfig
             printf '%s\n' \
@@ -67,9 +67,8 @@ jobs:
             rustc --version
             cargo --version
             export CC="ccache cc"
-            meson setup builddir --buildtype=release -Db_ndebug=true
-            meson compile -C builddir
-            if ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
+            cargo xtask build
+            if ./target/release/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
                && grep -q Southstar about.txt; then
               echo "headless smoke: ok"
             else
@@ -77,7 +76,7 @@ jobs:
             fi
             bash ./scripts/pack-bsd.sh freebsd
             ls -l dist/*-freebsd-x86_64.zip
-            rm -rf builddir
+            rm -rf target
 
       - name: Upload FreeBSD portable zip
         if: hashFiles('dist/*-freebsd-x86_64.zip') != ''

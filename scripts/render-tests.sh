@@ -9,7 +9,7 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-bin="$root/builddir/src/gtk/southstar"
+bin="${NS_BIN:-$root/target/release/southstar}"
 src="$root/data/render-tests"
 out="${1:-$root/render-tests-out}"
 port=8137

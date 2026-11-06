@@ -1,19 +1,13 @@
 Name:           southstar
 Version:        1.0.29
 Release:        1%{?dist}
-Summary:        Clean-room, hardened web browser written from scratch in C
+Summary:        Clean-room, hardened web browser written from scratch in Rust
 
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 URL:            https://github.com/nordstjernen-web/southstar-browser
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc
-BuildRequires:  meson >= 1.0
-%if 0%{?fedora} || 0%{?rhel}
-BuildRequires:  ninja-build
-%else
-BuildRequires:  ninja
-%endif
 BuildRequires:  pkgconfig
 BuildRequires:  cargo >= 1.91
 BuildRequires:  rust >= 1.91
@@ -46,7 +40,7 @@ ExclusiveOS:    linux
 
 %description
 Southstar is an independent, lightweight web browser built entirely
-from scratch in C, using GTK 4 for the UI and its own HTTP client for networking.
+from scratch in Rust, using GTK 4 for the UI and its own HTTP client for networking.
 It is a clean-room implementation with no upstream browser engine: the
 HTML parser (rust/html5), the JavaScript interpreter (Boa), and the
 image decoders (Rust crates) are all integrated in-tree. The engine is a
@@ -59,17 +53,15 @@ applications. It does not phone home and does not telemeter the user.
 
 %build
 # wgpu-native is not packaged.
-%meson \
-    -Dwebgpu=disabled
-%meson_build
+cargo xtask build --webgpu disabled
 
 %install
-%meson_install
+cargo xtask install --webgpu disabled --prefix %{_prefix} --destdir %{buildroot}
 
 # The browser statically compiles the engine; the embedding shared library
 # and its header serve external embedders only, so this stays an application
 # package rather than shipping a -devel surface.
-rm -f %{buildroot}%{_libdir}/libsouthstar.so
+rm -f %{buildroot}%{_prefix}/lib/libsouthstar.so
 rm -f %{buildroot}%{_includedir}/southstar/libsouthstar.h
 rmdir %{buildroot}%{_includedir}/southstar 2>/dev/null || :
 

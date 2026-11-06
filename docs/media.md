@@ -36,7 +36,7 @@ whose `libav.org` domain is unrelated despite the shared library-name prefix.
 libav demuxes the Matroska container
 and decodes **VP9/VP8** frames, which are scaled to BGRA and served through the
 same off-tick frame loop as the MPEG-1 path — both royalty-free codecs. It is
-**required on Linux and Windows** (`meson setup` fails without it, or with a
+**required on Linux and Windows** (`cargo xtask build` fails without it, or with a
 pre-6.0 FFmpeg) because YouTube and most modern sites serve VP9/WebM and the
 poster-and-overlay fallback there is unacceptable; on **macOS** it is
 auto-detected, and a build without the FFmpeg libraries carries no libav symbol

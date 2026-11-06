@@ -3,7 +3,7 @@
 Living plan for a web browser written from scratch in **Rust**,
 small enough for one person to audit end-to-end. It began in C and was
 ported module by module (`docs/rust-port.md`); the port is complete and the
-only C file left is `src/libsouthstar.h`, the embedding API's header. The
+only C file left is `rust/capi/include/libsouthstar.h`, the embedding API's header. The
 engine and all non-toolkit logic are crates of one Cargo workspace under
 `rust/`; the GUI is a thin **GTK 4** frontend (`rust/shell`) over them and
 the in-tree HTTP client (`rust/http`).
@@ -91,7 +91,7 @@ it carries no bespoke in-process renderer (the optional
 `--single-process` mode runs the same renderer on a thread). The
 `about:start` new-tab page provides a compact search-focused home page.
 
-The release version lives in the meson project definition.
+The release version lives in the workspace `Cargo.toml` (`scripts/set-version.py` sets it).
 
 ## Architecture & frontends
 
@@ -105,7 +105,7 @@ toolkit-agnostic:
   (`js-*` over the `js-engine` API) and media (`video`, `plmpeg`,
   `minimp3`). Frontend-agnostic pieces serve alternative GUIs: the headless
   driver (`headless`) and the `ns_browser` embedding API (`browser`,
-  declared in `src/libsouthstar.h`, linked as `libsouthstar`). Crates call
+  declared in `rust/capi/include/libsouthstar.h`, built as `libsouthstar` by `rust/capi`). Crates call
   each other through ordinary Rust APIs; the `ns_*` C ABI left over from
   the port is being removed, and `extern "C"` stays only at the real
   boundaries (the embedding API, GTK/Cairo/Pango, FFmpeg, OpenSSL, SDL and
@@ -229,8 +229,8 @@ shared-memory-framebuffer boundary (the GTK shell is a thin display
 client — see *Architecture & frontends*),
 the C-to-Rust port (`docs/rust-port.md`),
 6 APNG and animated-WebP playback,
-10 embeddable `libsouthstar` (built and header-installed
-from meson, `src/libsouthstar.h`),
+10 embeddable `libsouthstar` (built by `rust/capi` and installed with its
+header by `cargo xtask install`),
 15 Debian/Ubuntu `.deb` packaging (`scripts/pack-deb.sh`, built nightly by
 `scripts/nightly.sh`),
 the incremental restyle half of 18.
@@ -253,8 +253,8 @@ selection.
 
 ## How we work
 
-meson + ninja build the Cargo workspace (`rust/meson.build`); `cargo check`
-and a `-Dbuildtype=debug` tree keep the edit loop fast. `cargo fmt`,
+`cargo xtask build` configures and builds the Cargo workspace; `cargo check`
+and `cargo xtask build --debug` keep the edit loop fast. `cargo fmt`,
 `scripts/unsafe-budget.py --clippy`, `cargo deny` and `cargo vet` stay
 clean. Build and smoke-launch locally before pushing — the local machine is
 the build and run oracle. Commit small; push logical units to `origin/main`

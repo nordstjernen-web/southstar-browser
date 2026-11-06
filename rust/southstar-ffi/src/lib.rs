@@ -1,4 +1,4 @@
-//! Southstar — every ported module, gathered for the static libraries meson links into the C targets and the shell.
+//! Southstar — every engine module, gathered into the one library the executables and libsouthstar link.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

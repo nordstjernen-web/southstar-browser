@@ -3,15 +3,15 @@
 `npm/` is the [`southstar-browser`](https://www.npmjs.com/package/southstar-browser) package. It
 carries no binaries: the `postinstall` script, or the first `southstar` launch
 when install scripts are skipped, builds the release tag's source on the
-user's machine and installs it with `meson install` into `vendor/<version>/`
+user's machine and installs it with `cargo xtask install` into `vendor/<version>/`
 inside the package.
 
 ## How it works
 
 - `lib/product.js` is the only file specific to Southstar: the release
-  repository, the executable, the meson options, the build tools and the
+  repository, the executable, the `cargo xtask` options, the build tools and the
   required and optional libraries with their version floors and package names
-  per package manager. Keep the floors in step with meson.build and rust/meson.build. The other files
+  per package manager. Keep the floors in step with `rust/xtask/src/detect.rs`. The other files
   in `lib/` are the same in the Nordstjernen, Northstar and Southstar
   packages, so fix them in all three. (`install.js` also copies a notarised
   macOS release for a product whose `product.js` names one, which only

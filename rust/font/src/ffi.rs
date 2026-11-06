@@ -345,25 +345,29 @@ pub fn metric_alias(_family: &[u8]) -> Option<Vec<u8>> {
 #[cfg(feature = "fontconfig")]
 fn family_is(pattern: *mut c_void, family: &[u8]) -> bool {
     let mut internal = ptr::null();
+    // SAFETY: `pattern` is a live FcPattern, the object name is a NUL-terminated literal and `internal` is a valid out-pointer.
     let found =
         unsafe { fontconfig::FcPatternGetString(pattern, c"family".as_ptr(), 0, &mut internal) };
-    found == fontconfig::RESULT_MATCH
-        && !internal.is_null()
-        && unsafe { CStr::from_ptr(internal) }
-            .to_bytes()
-            .eq_ignore_ascii_case(family)
+    if found != fontconfig::RESULT_MATCH || internal.is_null() {
+        return false;
+    }
+    // SAFETY: FcPatternGetString returned a NUL-terminated string owned by `pattern`, which outlives this borrow.
+    let name = unsafe { CStr::from_ptr(internal) };
+    name.to_bytes().eq_ignore_ascii_case(family)
 }
 
 #[cfg(feature = "fontconfig")]
 fn apply_descriptors(pattern: *mut c_void, descriptors: Descriptors) {
     let mut variable = 0;
+    // SAFETY: `pattern` is a live FcPattern, the object name is a NUL-terminated literal and `variable` is a valid out-pointer.
     unsafe { fontconfig::FcPatternGetBool(pattern, c"variable".as_ptr(), 0, &mut variable) };
     if descriptors.weight > 0 && variable == 0 {
-        unsafe {
-            fontconfig::FcPatternDel(pattern, c"weight".as_ptr());
-            let weight = fontconfig::FcWeightFromOpenTypeDouble(descriptors.weight.into());
-            fontconfig::FcPatternAddDouble(pattern, c"weight".as_ptr(), weight);
-        }
+        // SAFETY: `pattern` is a live FcPattern and the object name is a NUL-terminated literal.
+        unsafe { fontconfig::FcPatternDel(pattern, c"weight".as_ptr()) };
+        // SAFETY: FcWeightFromOpenTypeDouble only converts its argument.
+        let weight = unsafe { fontconfig::FcWeightFromOpenTypeDouble(descriptors.weight.into()) };
+        // SAFETY: `pattern` is a live FcPattern and the object name is a NUL-terminated literal.
+        unsafe { fontconfig::FcPatternAddDouble(pattern, c"weight".as_ptr(), weight) };
     }
     let slant = match descriptors.slant {
         0 => return,
@@ -371,74 +375,128 @@ fn apply_descriptors(pattern: *mut c_void, descriptors: Descriptors) {
         3 => fontconfig::SLANT_OBLIQUE,
         _ => fontconfig::SLANT_ROMAN,
     };
-    unsafe {
-        fontconfig::FcPatternDel(pattern, c"slant".as_ptr());
-        fontconfig::FcPatternAddInteger(pattern, c"slant".as_ptr(), slant);
-    }
+    // SAFETY: `pattern` is a live FcPattern and the object name is a NUL-terminated literal.
+    unsafe { fontconfig::FcPatternDel(pattern, c"slant".as_ptr()) };
+    // SAFETY: `pattern` is a live FcPattern and the object name is a NUL-terminated literal.
+    unsafe { fontconfig::FcPatternAddInteger(pattern, c"slant".as_ptr(), slant) };
 }
 
+/// # Safety
+///
+/// `set` must point to a live FcFontSet that nothing else accesses while the returned slice is in use.
 #[cfg(feature = "fontconfig")]
 unsafe fn font_set_patterns<'a>(set: *mut fontconfig::FontSet) -> &'a mut [*mut c_void] {
+    // SAFETY: the caller guarantees `set` is a live FcFontSet with no other access while the slice lives.
     let set = unsafe { &mut *set };
     if set.fonts.is_null() || set.nfont <= 0 {
         return &mut [];
     }
+    // SAFETY: a font set's `fonts` array holds `nfont` initialized pattern pointers.
     unsafe { core::slice::from_raw_parts_mut(set.fonts, set.nfont as usize) }
 }
 
 #[cfg(feature = "fontconfig")]
-pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
+fn application_fonts() -> *mut fontconfig::FontSet {
+    // SAFETY: a null config selects the current fontconfig configuration.
+    unsafe { fontconfig::FcConfigGetFonts(ptr::null_mut(), fontconfig::SET_APPLICATION) }
+}
+
+#[cfg(feature = "fontconfig")]
+fn font_count(set: *mut fontconfig::FontSet) -> usize {
+    // SAFETY: `set` is null or a live FcFontSet owned by fontconfig.
+    unsafe { set.as_ref() }.map_or(0, |set| set.nfont.max(0) as usize)
+}
+
+#[cfg(feature = "fontconfig")]
+fn mark_added_fonts(
+    app_fonts: *mut fontconfig::FontSet,
+    first_added: usize,
+    family: &[u8],
+    descriptors: Descriptors,
+) {
+    let web_font_object = southstar_text::WEB_FONT_OBJECT;
+    // SAFETY: `app_fonts` is the configuration's live application font set, used only here.
+    let patterns = unsafe { font_set_patterns(app_fonts) };
+    for &pattern in patterns.iter().skip(first_added) {
+        // SAFETY: `pattern` belongs to the application font set and the object name is NUL-terminated.
+        unsafe { fontconfig::FcPatternAddBool(pattern, web_font_object.as_ptr(), 1) };
+        if family_is(pattern, family) {
+            apply_descriptors(pattern, descriptors);
+        }
+    }
+}
+
+#[cfg(feature = "fontconfig")]
+fn add_renamed_faces(
+    path: &CStr,
+    app_fonts: *mut fontconfig::FontSet,
+    family: &[u8],
+    css_family: &CStr,
+    descriptors: Descriptors,
+) {
     use fontconfig::*;
+    let web_font_object = southstar_text::WEB_FONT_OBJECT;
+    // SAFETY: FcFontSetCreate has no preconditions.
+    let faces = unsafe { FcFontSetCreate() };
+    if faces.is_null() {
+        return;
+    }
+    let mut count = 0;
+    // SAFETY: `path` is NUL-terminated, a null blanks cache is allowed, `count` is a valid out-pointer and `faces` is the live set created above.
+    unsafe {
+        FcFreeTypeQueryAll(
+            path.as_ptr(),
+            c_uint::MAX,
+            ptr::null_mut(),
+            &mut count,
+            faces,
+        )
+    };
+    // SAFETY: `faces` is the live set created above and nothing else accesses it.
+    let slots = unsafe { font_set_patterns(faces) };
+    for slot in slots {
+        let pattern = core::mem::replace(slot, ptr::null_mut());
+        if family_is(pattern, family) {
+            // SAFETY: `pattern` was taken out of `faces`, so this function owns it.
+            unsafe { FcPatternDestroy(pattern) };
+            continue;
+        }
+        // SAFETY: `pattern` is a live pattern this function owns and the object name is NUL-terminated.
+        unsafe { FcPatternDel(pattern, c"family".as_ptr()) };
+        // SAFETY: `pattern` is a live pattern this function owns and the object name is NUL-terminated.
+        unsafe { FcPatternDel(pattern, c"familylang".as_ptr()) };
+        // SAFETY: `pattern` is a live pattern and both strings are NUL-terminated; fontconfig copies the value.
+        unsafe { FcPatternAddString(pattern, c"family".as_ptr(), css_family.as_ptr()) };
+        // SAFETY: `pattern` is a live pattern and the object name is NUL-terminated.
+        unsafe { FcPatternAddBool(pattern, web_font_object.as_ptr(), 1) };
+        apply_descriptors(pattern, descriptors);
+        // SAFETY: `app_fonts` is the live application font set, which takes ownership of `pattern` on success.
+        if unsafe { FcFontSetAdd(app_fonts, pattern) } == 0 {
+            // SAFETY: the set refused `pattern`, so this function still owns it.
+            unsafe { FcPatternDestroy(pattern) };
+        }
+    }
+    // SAFETY: every pattern was moved out of `faces` above, so emptying it before destroying it frees nothing twice.
+    unsafe { (*faces).nfont = 0 };
+    // SAFETY: `faces` is the live set created above and holds no patterns now.
+    unsafe { FcFontSetDestroy(faces) };
+}
+
+#[cfg(feature = "fontconfig")]
+pub fn install_font_file(path: &CStr, family: &[u8], descriptors: Descriptors) {
     let Ok(css_family) = CString::new(family) else {
         return;
     };
-    let web_font_object = southstar_text::WEB_FONT_OBJECT;
-    unsafe {
-        let before = FcConfigGetFonts(ptr::null_mut(), SET_APPLICATION);
-        let first_added = before.as_ref().map_or(0, |set| set.nfont.max(0) as usize);
-        FcConfigAppFontAddFile(ptr::null_mut(), path.as_ptr());
-        let app_fonts = FcConfigGetFonts(ptr::null_mut(), SET_APPLICATION);
-        if app_fonts.is_null() {
-            return refresh_text_font_map();
-        }
-        for &pattern in font_set_patterns(app_fonts).iter().skip(first_added) {
-            FcPatternAddBool(pattern, web_font_object.as_ptr(), 1);
-            if family_is(pattern, family) {
-                apply_descriptors(pattern, descriptors);
-            }
-        }
-        let faces = if family.is_empty() {
-            ptr::null_mut()
-        } else {
-            FcFontSetCreate()
-        };
-        if !faces.is_null() {
-            let mut count = 0;
-            FcFreeTypeQueryAll(
-                path.as_ptr(),
-                c_uint::MAX,
-                ptr::null_mut(),
-                &mut count,
-                faces,
-            );
-            for slot in font_set_patterns(faces) {
-                let pattern = core::mem::replace(slot, ptr::null_mut());
-                if family_is(pattern, family) {
-                    FcPatternDestroy(pattern);
-                    continue;
-                }
-                FcPatternDel(pattern, c"family".as_ptr());
-                FcPatternDel(pattern, c"familylang".as_ptr());
-                FcPatternAddString(pattern, c"family".as_ptr(), css_family.as_ptr());
-                FcPatternAddBool(pattern, web_font_object.as_ptr(), 1);
-                apply_descriptors(pattern, descriptors);
-                if FcFontSetAdd(app_fonts, pattern) == 0 {
-                    FcPatternDestroy(pattern);
-                }
-            }
-            (*faces).nfont = 0;
-            FcFontSetDestroy(faces);
-        }
+    let first_added = font_count(application_fonts());
+    // SAFETY: a null config selects the current configuration and `path` is NUL-terminated.
+    unsafe { fontconfig::FcConfigAppFontAddFile(ptr::null_mut(), path.as_ptr()) };
+    let app_fonts = application_fonts();
+    if app_fonts.is_null() {
+        return refresh_text_font_map();
+    }
+    mark_added_fonts(app_fonts, first_added, family, descriptors);
+    if !family.is_empty() {
+        add_renamed_faces(path, app_fonts, family, &css_family, descriptors);
     }
     refresh_text_font_map();
 }

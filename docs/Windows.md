@@ -33,9 +33,6 @@ pacman -Sy --noconfirm --needed \
     base-devel \
     mingw-w64-ucrt-x86_64-clang \
     mingw-w64-ucrt-x86_64-pkgconf \
-    mingw-w64-ucrt-x86_64-meson \
-    mingw-w64-ucrt-x86_64-ninja \
-    mingw-w64-ucrt-x86_64-ccache \
     mingw-w64-ucrt-x86_64-gtk4 \
     mingw-w64-ucrt-x86_64-libepoxy \
     mingw-w64-ucrt-x86_64-curl \
@@ -49,7 +46,7 @@ pacman -Sy --noconfirm --needed \
     mingw-w64-ucrt-x86_64-ffmpeg
 ```
 
-`mingw-w64-ucrt-x86_64-ffmpeg` is **required**, not optional: meson fails on
+`mingw-w64-ucrt-x86_64-ffmpeg` is **required**, not optional: `cargo xtask build` fails on
 Windows without the `libav*` libraries (version 6.0 or newer), which carry
 inline WebM — VP9/VP8 video plus Opus/Vorbis audio. MSYS2's build is
 GPL-configured, which is fine for a local developer build; the
@@ -71,7 +68,7 @@ fresh box gets them in one command:
   builds reach `https://` without any env-var fiddling.
 - `mingw-w64-ucrt-x86_64-uchardet` is the charset detector used by
   `ns_html_decode_body`. Per `CLAUDE.md` it's a hard dependency;
-  without it `meson setup` fails the `uchardet` pkg-config check.
+  without it `cargo xtask build` fails the `uchardet` pkg-config check.
 - `mingw-w64-ucrt-x86_64-libwebp` is a hard build dependency for
   WebP. Both lossy VP8 — used by the BBC, Wikipedia thumbnails,
   and most modern CDNs — and lossless VP8L decode in-tree via
@@ -84,27 +81,33 @@ From the UCRT64 shell, in the checkout:
 
 ```sh
 cd /c/dev/southstar
-export CC="ccache clang"
-meson setup builddir
-meson compile -C builddir
+cargo xtask build
 ```
+
+For a quicker edit-and-run loop, `cargo xtask build --lto off --target-dir
+target-fast` builds an incremental release into `target-fast/release/`.
 
 The JavaScript engine is Boa (a patched fork in
 `third_party/boa_engine`), and the HTML and URL parsers are Southstar's own
-Rust crates, so the first `meson setup` does not touch the network
-for any of them. The
+Rust crates, so the first build fetches only the crates `Cargo.lock` pins
+and nothing else. The
 image decoders are Rust crates built by Cargo; no C image-decoder
 subproject remains.
 
 Build artifacts:
 
-- `builddir/src/gtk/southstar.exe` — the main binary (the thin GTK
-  shell; ~15 MB).
-- `builddir/src/southstar-renderer.exe` — the out-of-process,
+- `target/release/southstar.exe` — the main binary (the thin GTK
+  shell).
+- `target/release/southstar-renderer.exe` — the out-of-process,
   sandboxed renderer the shell spawns per tab. Ship it next to
   `southstar.exe` (the packaging scripts do).
+- `target/release/southstar-audio.exe`, `southstar-video.exe` — the
+  media helpers.
+- `target/release/southstar-launcher.exe` — the bundle launcher the
+  packages ship as the public `southstar.exe`.
+- `target/release/southstar.dll` — `libsouthstar`, the C embedding API.
 
-Running the exe directly out of `builddir` works as long as the
+Running the exe directly out of `target/release` works as long as the
 MSYS2 ucrt64 `bin` directory is on `PATH` (it is inside the
 UCRT64 shell; from PowerShell, prepend `C:\msys64\ucrt64\bin`).
 PowerShell smoke launches should use `scripts\smoke-windows.ps1`,
@@ -115,9 +118,9 @@ missing.
 Smoke test:
 
 ```sh
-./builddir/src/gtk/southstar.exe --print-config | head
-./builddir/src/gtk/southstar.exe --headless --dump=text about:start
-./builddir/src/gtk/southstar.exe https://lite.cnn.com   # opens a GTK 4 window
+./target/release/southstar.exe --print-config | head
+./target/release/southstar.exe --headless --dump=text about:start
+./target/release/southstar.exe https://lite.cnn.com   # opens a GTK 4 window
 powershell -ExecutionPolicy Bypass -File scripts\smoke-windows.ps1 about:start
 ```
 
@@ -155,8 +158,7 @@ Run it from the UCRT64 shell:
 ./scripts/pack-windows.sh
 ```
 
-The script builds (or reuses) a separate `builddir-release/`
-tree configured with `--buildtype=release`.
+The script builds a fat-LTO release with `cargo xtask build`.
 
 Typical output: 77 DLLs, ~86 MB. The bundle is portable — extract
 the whole `southstar-win64` folder to another Windows box and

@@ -1,4 +1,4 @@
-//! Southstar — the embedding API of src/libsouthstar.h: opening, laying out, painting, driving and querying a page.
+//! Southstar — the embedding API of rust/capi/include/libsouthstar.h: opening, laying out, painting, driving and querying a page.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

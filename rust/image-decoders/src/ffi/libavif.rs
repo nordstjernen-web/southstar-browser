@@ -1,4 +1,4 @@
-//! Southstar — libavif's decoder and YUV-to-RGB entry points, with struct offsets meson computes from the installed avif.h.
+//! Southstar — libavif's decoder and YUV-to-RGB entry points, with struct offsets the build script probes from the installed avif.h.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

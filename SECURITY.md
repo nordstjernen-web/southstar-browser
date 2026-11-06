@@ -59,13 +59,15 @@ arbitrary code execution outside the user's data directory. (Per-origin
 networking/storage broker are the next steps; today the renderer still
 does its own fetching and persistence.)
 
-### Compile-time hardening (`meson.build`)
+### Link-time hardening (`rust/build/src/link.rs`)
 
-PIE, full RELRO, non-executable stack, separate-code segments,
-`-fstack-protector-strong`, `-fstack-clash-protection`,
-`-fcf-protection=full` (Intel CET / AMD IBT), `_FORTIFY_SOURCE=3`
-(`=2` fallback), `-Wformat=2 -Wformat-security`. No JIT is used or
-linked — W^X holds for the whole process, so any RCE primitive has to
+PIE, full RELRO (`-z relro -z now`), non-executable stack,
+separate-code segments and section garbage collection on the ELF
+platforms; the executables export no symbols of their own (a
+`local: *` version script). The code is Rust, so the C compiler's
+stack-protector and `_FORTIFY_SOURCE` flags have nothing left to
+protect; Rust's own stack probes guard against stack clashes. No JIT is
+used or linked — W^X holds for the whole process, so any RCE primitive has to
 work without writable executable pages.
 
 ### Privilege drop (`src/security.c`)

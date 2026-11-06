@@ -9,7 +9,7 @@ mod install;
 mod options;
 
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command as Process, ExitCode};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -212,12 +212,16 @@ fn run(options: &Options, root: &Path) -> Result<(), String> {
             }
         }
         Command::Install => {
-            let prefix = options.prefix.strip_prefix("/").unwrap_or(&options.prefix);
+            let prefix: PathBuf = options
+                .prefix
+                .components()
+                .filter(|part| matches!(part, Component::Normal(_)))
+                .collect();
             let target = options
                 .destdir
                 .as_ref()
                 .map_or_else(|| options.prefix.clone(), |destdir| destdir.join(prefix));
-            install::install(root, &built, &target)
+            install::install(root, &built, &target, &options.libdir)
                 .map_err(|err| format!("install into {} failed: {err}", target.display()))?;
             eprintln!("southstar: installed into {}", target.display());
         }

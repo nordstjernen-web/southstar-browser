@@ -17,8 +17,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-VERSION=${VERSION:-$(grep -E "^[[:space:]]*version" "$ROOT/meson.build" | head -1 \
-          | sed -E "s/.*version: '([^']+)'.*/\1/")}
+VERSION=${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)}
 DEBARCH=$(dpkg --print-architecture 2>/dev/null || echo amd64)
 if [ -z "${DEB_DISTRO_TAG+set}" ] && [ -r /etc/os-release ]; then
     DEB_DISTRO_TAG=$(. /etc/os-release \

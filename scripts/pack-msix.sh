@@ -18,14 +18,14 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
-BUILDDIR=${BUILDDIR:-$ROOT/builddir-msix} \
-NS_MESON_SETUP_ARGS="${NS_MSIX_MESON_SETUP_ARGS:-}" \
+MSIX_TARGET=${NS_MSIX_TARGET_DIR:-$ROOT/target-msix}
+BUILT_DIR=$MSIX_TARGET/release \
+NS_XTASK_ARGS="--target-dir $MSIX_TARGET ${NS_MSIX_XTASK_ARGS:-}" \
     "$SCRIPT_DIR/pack-windows.sh"
 
-VERSION=$(grep -E "^[[:space:]]*version:" "$ROOT/meson.build" \
-          | head -1 | sed -E "s/.*'([^']+)'.*/\\1/")
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
 # The Store reserves the fourth (revision) field — it must be 0 on submission,
-# so map meson's Major.Minor.Build to X.Y.Z.0 rather
+# so map the version's Major.Minor.Build to X.Y.Z.0 rather
 # than passing a fourth field through.
 MSIX_VERSION=${NS_MSIX_VERSION:-$(awk -F. '{printf "%d.%d.%d.0", $1, $2, $3}' <<<"${VERSION%%-*}")}
 IDENTITY_NAME=${NS_MSIX_IDENTITY_NAME:-29567TheFreecivProject.SouthstarWebBrowser}

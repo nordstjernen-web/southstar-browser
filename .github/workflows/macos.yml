@@ -39,7 +39,7 @@ jobs:
 
       - name: Install build dependencies (Homebrew)
         run: |
-          brew install meson ninja pkg-config gtk4 libepoxy openssl@3 ccache \
+          brew install pkg-config gtk4 libepoxy openssl@3 ccache \
               brotli zstd uchardet libpsl sqlite webp libavif sdl2 dylibbundler nasm
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
 
@@ -95,20 +95,18 @@ jobs:
         run: |
           clang --version
           ccache --version | head -1
-          meson --version
-          ninja --version
           pkg-config --modversion gtk4
           pkg-config --modversion libcrypto
 
       - name: Build
         id: build
-        if: hashFiles('meson.build') != ''
+        if: hashFiles('Cargo.toml') != ''
         shell: bash
+        env:
         run: |
           set -o pipefail
           export CC="ccache clang"
-          meson setup builddir --werror 2>&1 | tee build.log
-          meson compile -C builddir 2>&1 | tee -a build.log
+          cargo xtask build 2>&1 | tee build.log
 
       - name: Publish build log on failure
         if: failure() && hashFiles('build.log') != ''
@@ -120,14 +118,6 @@ jobs:
             echo '```'
             tail -200 build.log
             echo '```'
-            if [ -f builddir/meson-logs/meson-log.txt ]; then
-              echo
-              echo '## meson-log.txt (last 200 lines)'
-              echo
-              echo '```'
-              tail -200 builddir/meson-logs/meson-log.txt
-              echo '```'
-            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: ccache stats
@@ -135,16 +125,16 @@ jobs:
         run: ccache --show-stats
 
       - name: Smoke test (binary present and executable)
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: hashFiles('target/release/southstar') != ''
         run: |
-          test -x builddir/src/gtk/southstar
-          file builddir/src/gtk/southstar
-          otool -L builddir/src/gtk/southstar | head -20
+          test -x target/release/southstar
+          file target/release/southstar
+          otool -L target/release/southstar | head -20
 
       - name: Headless smoke (about:start)
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: hashFiles('target/release/southstar') != ''
         run: |
-          ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt
+          ./target/release/southstar --headless --dump=text about:start > about.txt
           grep -q Southstar about.txt
 
       - name: Upload build log
@@ -158,11 +148,11 @@ jobs:
           retention-days: 14
 
       - name: Upload southstar binary
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: hashFiles('target/release/southstar') != ''
         uses: actions/upload-artifact@v7
         with:
           name: southstar-macos-${{ matrix.macos }}
-          path: builddir/src/gtk/southstar
+          path: target/release/southstar
           if-no-files-found: error
           retention-days: 14
 
@@ -170,7 +160,7 @@ jobs:
       # bundle is signed ad-hoc (still needs the xattr quarantine step on
       # download); with them it is signed for real and notarised below.
       - name: Import Developer ID signing identity
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: hashFiles('target/release/southstar') != ''
         continue-on-error: true
         env:
           MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
@@ -198,10 +188,10 @@ jobs:
 
       - name: Build .app bundle and .dmg
         id: pack
-        if: hashFiles('builddir/src/gtk/southstar') != ''
+        if: hashFiles('target/release/southstar') != ''
         continue-on-error: true
         env:
-          BUILDDIR: ${{ github.workspace }}/builddir
+          BUILT_DIR: ${{ github.workspace }}/target/release
           NS_PACK_AI: disabled
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
         run: |

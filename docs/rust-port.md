@@ -317,6 +317,13 @@ meson compile -C builddir` keeps working on every platform:
 At the end of the port (phase 9) the direction can flip: Cargo becomes the entry
 point and builds whatever C remains through `build.rs` and the `cc` crate.
 
+That flip happened in November 2026: `cargo xtask build` (`rust/xtask`) is the
+configure step and the build, `rust/southstar` builds the executables and
+`rust/capi` builds `libsouthstar`; meson, `rust/meson.build`,
+`scripts/cargo-build.py` and `src/` were removed. The layout probes moved into
+the crates' build scripts (`southstar_build::layout`). This section describes
+how the build worked during the port.
+
 ### 5.3 Keeping the C and Rust sides in agreement
 
 - The existing C headers stay the contract. Exports whose signatures use
@@ -1142,7 +1149,7 @@ checked with what already exists:
 
 | Check | Tool | Bar |
 |---|---|---|
-| Build | `meson compile -C builddir`, clippy, rustfmt | No warnings, every CI platform |
+| Build | `cargo xtask build` (`meson compile -C builddir` during the port), clippy, rustfmt | No warnings, every CI platform |
 | Smoke | `scripts/dev.sh smoke` | All fixtures match `data/baseline/` |
 | Rendering | `scripts/render-tests.sh` (the render fixtures, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
 | Web platform | `scripts/wpt-score.sh` | Slice score not lower (70,743 of 71,907 subtests on the 2026-07-13 slice) |
@@ -1210,7 +1217,7 @@ the existing ones, not a test suite.
 | D7 | Alternative HTTP backend: keep libnghttp2/ngtcp2 via FFI, or move to `h2`/`quinn` (needs an async runtime)? | Decided (October 2026): neither. libcurl and libnghttp2 are replaced by an in-tree Rust client, `rust/http`, on threads (no async runtime), with TLS through OpenSSL |
 | D8 | JS binding style: declarative macros/tables, or WebIDL-driven generation? | Settled in practice (October 2026): hand-written natives over `js-engine` with small registration tables; the whole of js.c was ported that way without a generator |
 | D9 | Replace WAMR with `wasmi`? | Yes, in phase 8 (done, October 2026) |
-| D10 | After the port: Cargo or meson as the build entry point? | Cargo, once only vendored C remains |
+| D10 | After the port: Cargo or meson as the build entry point? | Cargo. Done November 2026: `cargo xtask` replaced meson |
 | D11 | Which JavaScript engines get backends? | QuickJS-ng (default until the switch), Boa (the target default), and optionally Nova and quickjs-rust as experiments. Bellard's QuickJS is dropped (October 2026). Not V8 or SpiderMonkey (upstream browser engines), not `rquickjs` (C QuickJS underneath) |
 | D12 | Should a pure-Rust engine become the default? | Decided (October 2026): yes, Boa. QuickJS-ng and Boa coexist as configure options until Boa meets the bar in the JavaScript engine track; then Boa becomes the default and QuickJS is retired. Done 13 October 2026: Boa is the only engine |
 | D13 | Pure-Rust end state: replace all vendored C (the HTML library, WAMR, Wuffs, pl_mpeg/minimp3, QuickJS)? | Decided (October 2026): yes. System libraries behind FFI are decided separately |

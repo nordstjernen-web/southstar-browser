@@ -29,24 +29,26 @@ endif
 # wgpu-native is not packaged, so WebGPU is left out. AVIF and the audio
 # helper are required explicitly so a missing build dependency fails the build
 # instead of silently dropping a feature.
+XTASK_ARGS = --webgpu disabled --avif enabled --audio enabled --build-date $(BUILD_DATE)
+
 override_dh_auto_configure:
 ifneq ($(wildcard vendor/.),)
 	mkdir -p $(CARGO_HOME)
 	printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "%s"\n' \
 		'$(CURDIR)/vendor' > $(CARGO_HOME)/config.toml
 endif
-	dh_auto_configure -- \
-		-Dwebgpu=disabled \
-		-Davif=enabled \
-		-Daudio=enabled \
-		-Dbuild_date=$(BUILD_DATE)
+
+override_dh_auto_build:
+	cargo xtask build $(XTASK_ARGS)
+
+override_dh_auto_test:
 
 # libsouthstar.so and its header are the embedding API for other applications.
 # Nothing in this package links them and the library carries no SONAME
 # version, so they are not shipped.
 override_dh_auto_install:
-	dh_auto_install
+	cargo xtask install $(XTASK_ARGS) --prefix /usr --destdir $(CURDIR)/debian/southstar
 	rm debian/southstar/usr/bin/internet-browser-southstar
-	rm -f debian/southstar/usr/lib/$(DEB_HOST_MULTIARCH)/libsouthstar.so
+	rm -f debian/southstar/usr/lib/libsouthstar.so
 	rm -rf debian/southstar/usr/include
 	find debian/southstar/usr/lib -type d -empty -delete

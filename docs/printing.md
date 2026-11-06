@@ -75,7 +75,7 @@ printing leaves the page as it found it.
 kept honest against:
 
 ```sh
-./builddir/src/gtk/southstar --dump=print:/tmp/pagination.pdf \
+./target/release/southstar --dump=print:/tmp/pagination.pdf \
     data/render-tests/print-pagination.html
 ```
 

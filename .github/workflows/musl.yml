@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies (musl)
         run: |
           apk add --no-cache \
-            build-base clang ccache pkgconf meson ninja git \
+            build-base clang ccache pkgconf git \
             gtk4.0-dev libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev libwebp-dev libavif-dev sdl2-dev \
             libseccomp-dev ffmpeg-dev curl llvm-libunwind-dev \
             fontconfig font-dejavu ca-certificates file nodejs
@@ -57,9 +57,8 @@ jobs:
           RUSTFLAGS: -C target-feature=-crt-static
         run: |
           export CC="ccache clang"
-          meson setup builddir
-          meson compile -C builddir
-          file builddir/src/gtk/southstar
+          cargo xtask build
+          file target/release/southstar
 
       - name: ccache stats
         if: always()
@@ -69,8 +68,8 @@ jobs:
         env:
           NS_ALLOW_ROOT: '1'
         run: |
-          ldd builddir/src/gtk/southstar | grep -i musl || true
-          ./builddir/src/gtk/southstar \
+          ldd target/release/southstar | grep -i musl || true
+          ./target/release/southstar \
             --headless --url=https://example.com --dump=text > smoke.txt
           head -40 smoke.txt
           grep -qi example smoke.txt

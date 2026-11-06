@@ -1,6 +1,6 @@
 [package]
 name = "southstar-shell"
-description = "The static library meson links into the GTK shell: its ported files plus every module southstar-ffi carries"
+description = "The GTK shell: the browser window, tabs, toolbar, menus and the process that drives the renderers"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,6 @@ repository.workspace = true
 homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]

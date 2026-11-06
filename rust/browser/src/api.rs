@@ -1,4 +1,4 @@
-//! Southstar — the embedding API for Rust callers: an owned page and the process-wide calls, over the same internals as the C ABI of src/libsouthstar.h.
+//! Southstar — the embedding API for Rust callers: an owned page and the process-wide calls, over the same internals as the C ABI of rust/capi/include/libsouthstar.h.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

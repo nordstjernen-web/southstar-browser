@@ -1,4 +1,4 @@
-//! Southstar — compile-time lookup in a `name=value,…` layout string meson computes from C headers.
+//! Southstar — compile-time lookup in a `name=value,…` layout string the build scripts probe from C headers.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -16,7 +16,7 @@ pub const fn lookup(layout: &str, key: &str) -> i64 {
         }
         start = end + 1;
     }
-    panic!("layout value missing; reconfigure the build with meson")
+    panic!("layout value missing; add it to the crate's layout list and rebuild")
 }
 
 const fn entry_matches(bytes: &[u8], start: usize, end: usize, key: &[u8]) -> bool {

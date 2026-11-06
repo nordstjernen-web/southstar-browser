@@ -403,7 +403,7 @@ The loop, drivable end-to-end by a Claude session:
 3. Reproduce one test with full failure messages:
 
    ```sh
-   ./builddir/src/gtk/southstar --wpt http://web-platform.test:8000/dom/ranges/Range-attributes.html
+   ./target/release/southstar --wpt http://web-platform.test:8000/dom/ranges/Range-attributes.html
    ```
 
 4. Fix the engine, rebuild, and rerun just the affected area:

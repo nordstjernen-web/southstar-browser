@@ -5,7 +5,7 @@ Southstar ("Southstar Browser") is a web browser written from scratch in
 networking (see "HTTP client" below). Targets Linux, macOS, and Windows. It
 began in C and was ported to Rust module by module (`docs/rust-port.md`);
 the port is complete and the tree holds no C code of its own — the one C
-file left is `src/libsouthstar.h`, the embedding API's header.
+file left is `rust/capi/include/libsouthstar.h`, the embedding API's header.
 
 See `README.md` for the product vision. Southstar is a fresh
 implementation — there is no upstream browser engine, no fork,
@@ -29,12 +29,13 @@ Update Changelog.md
   `rust/webgpu` over the external
   [wgpu-native](https://github.com/gfx-rs/wgpu-native) library (the
   `webgpu.h`/`wgpu.h` headers are vendored in-tree under
-  `third_party/wgpu-native/`). The `webgpu` meson feature is `auto`: it is
-  built whenever wgpu-native is present (its pkg-config file, or
-  `-Dwgpu_native_root` pointing at an extracted release) and silently skipped
-  otherwise — so a stock build on a machine without wgpu-native still carries
-  **no** WebGPU symbol or dependency, exactly as before. `-Dwebgpu=enabled`
-  hard-requires it; `-Dwebgpu=disabled` never builds it. Even in a build that
+  `third_party/wgpu-native/`). `cargo xtask build --webgpu` is `auto` by
+  default: it is built whenever wgpu-native is present (its pkg-config file,
+  or `--wgpu-native-root` / `WGPU_NATIVE_ROOT` pointing at an extracted
+  release) and silently skipped otherwise — so a stock build on a machine
+  without wgpu-native still carries **no** WebGPU symbol or dependency,
+  exactly as before. `--webgpu enabled` hard-requires it; `--webgpu disabled`
+  never builds it. Even in a build that
   contains it, WebGPU is **off at runtime** until the browser is started with
   `--enable-webgpu` (which sets `NS_WEBGPU_ALLOW=1`, inherited by the
   sandboxed renderer); without that flag `navigator.gpu.requestAdapter()`
@@ -70,10 +71,10 @@ Update Changelog.md
   **VP9/VP8 video** (libav demux+decode → swscale → texture, in
   `rust/video/src/decode.rs`) and **Opus/Vorbis audio** (decoded in the helper,
   `rust/audio-helper`) for `.webm`/`.opus`/`.ogg` sources. It is **required on
-  Linux and Windows** (`libav_required` in `meson.build` — YouTube and most
+  Linux and Windows** (`cargo xtask build` refuses to build without it — YouTube and most
   modern sites serve VP9/WebM, so the external-player fallback there is
   unacceptable; the Windows CI/packaging builds a minimal LGPL FFmpeg via
-  `scripts/build-ffmpeg-lgpl.sh` and the `--werror` build fails without it)
+  `scripts/build-ffmpeg-lgpl.sh` and the build fails without it)
   and **auto-detected on macOS** (a stock build there without libav carries no
   libav symbol or dependency and behaves exactly as before). The version floor
   is FFmpeg 6.0's library sonames (libavcodec ≥ 60, libavutil ≥ 58, …) — the
@@ -140,11 +141,11 @@ This repo is driven by Codex in long uninterrupted sessions.
   external blockers. When stopping: one line on what's blocked.
 - **Never ask the user to run the build.** Run it yourself.
 - **Local machine is the build *and* run oracle.** The repo can be
-  driven from either a Linux box (GTK 4 / meson / Rust +
+  driven from either a Linux box (GTK 4 / Rust / `cargo xtask` +
   an X session at `DISPLAY=:0`) or a Windows 11 box via MSYS2
-  UCRT64 (same toolchain, same meson/ninja invocation; the binary
-  is `./builddir/src/gtk/southstar.exe`). Every commit must pass
-  `meson compile -C builddir` locally before pushing. Smoke-launch
+  UCRT64 (same toolchain, same `cargo xtask` invocation; the binary
+  is `./target/release/southstar.exe`). Every commit must pass
+  `cargo xtask build` locally before pushing. Smoke-launch
   the browser (in the background, then kill it) on material changes
   — that's the per-change correctness gate, not CI. See
   `docs/Windows.md` for the MSYS2 setup; the rest of this guide
@@ -158,22 +159,37 @@ This repo is driven by Codex in long uninterrupted sessions.
 
 ## Build / verify locally
 
-The intended build system is **meson + ninja**. From a clean checkout:
+The build system is **Cargo**, driven by `cargo xtask` (`rust/xtask`; the
+alias lives in `.cargo/config.toml`). From a clean checkout:
 
 ```sh
-meson setup builddir
-meson compile -C builddir
-./builddir/src/gtk/southstar
+cargo xtask build
+./target/release/southstar
 ```
+
+`cargo xtask build` is the configure step and the build in one: it checks
+the system libraries' version floors, detects the optional ones through
+pkg-config and builds with the matching cargo features (`cargo xtask
+features` prints them). Options: `--debug`, `--lto fat|thin|off`,
+`--overflow-checks`, `--audio`/`--avif`/`--webgpu auto|enabled|disabled`,
+`--wgpu-native-root DIR`, `--no-wasm`, `--no-rust-shaper`, `--build-date`
+and `--target-dir`. `cargo xtask run [options] [-- browser arguments]`
+builds and starts the browser; `cargo xtask install --prefix P [--destdir
+D]` installs the executables, `libsouthstar`, its header and the data
+files. The outputs land in `target/release/` (`target/debug/` with
+`--debug`): `southstar`, `southstar-renderer`, `southstar-audio`,
+`southstar-video`, `southstar-launcher.exe` on Windows, and
+`libsouthstar.so` / `southstar.dll`.
 
 ### Rust: the workspace
 
 All of Southstar is the Cargo workspace (`Cargo.toml`, one crate per
-directory under `rust/`). meson builds it: `rust/meson.build` runs
-`scripts/cargo-build.py`, which builds the static libraries the executables
-link (`rust/static` with everything in `rust/southstar-ffi`, plus the shell,
-helper and launcher libraries) and hands ninja cargo's dependency file, so
-Rust rebuilds only when Rust changes. Rust 1.91 or newer is required (the
+directory under `rust/`). `cargo xtask` drives cargo for two packages:
+`rust/southstar`, whose binaries are the browser, the renderer, the media
+helpers and the Windows launcher, and `rust/capi`, the `libsouthstar`
+shared library that exports the C API of `rust/capi/include/libsouthstar.h`.
+Their build scripts link the system libraries through `rust/build`
+(`southstar-build`). Rust 1.91 or newer is required (the
 compiler Ubuntu 24.04 packages as `rustc-1.91`; Debian forky and sid ship
 newer); `rust-toolchain.toml` pins 1.91.0 for rustup users, so local builds
 and CI compile with the minimum supported version. Don't use a standard
@@ -186,11 +202,11 @@ library API or language feature stabilized after 1.91.
   crate through an ordinary Rust API (a Cargo dependency, typed arguments,
   `String`/`Vec`/`Box` rather than `*mut c_char` and `g_malloc`) wherever the
   dependency graph allows, and keeps `extern "C"` for the real boundaries:
-  `src/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
+  `rust/capi/include/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
   the other system libraries. A new crate is added to `rust/southstar-ffi`
   (dependency plus `pub use`).
 - Southstar is published to crates.io, and `cargo install southstar`
-  (`rust/southstar`) builds the browser without meson. The workspace's crates
+  (`rust/southstar`) builds the browser from the published crates. The workspace's crates
   are not published one by one: `scripts/crates-io.py` merges them into the
   ~two dozen crates `scripts/crates-io-groups.toml` lists, each member a module
   with its `crate::`/`southstar_x::` paths rewritten, and CI checks that the
@@ -225,7 +241,7 @@ library API or language feature stabilized after 1.91.
   root and the tests in `src/tests.rs`. `scripts/rust-tests.sh` runs every
   crate that has them (CI runs it too). A test binary links only the crate and
   its Cargo dependencies, so tests work for crates whose code needs no
-  meson-supplied library — one more reason to keep parsers and engine logic
+  system library — one more reason to keep parsers and engine logic
   free of FFI. Test parsers, URL handling, cookies and HSTS, CSP and the
   cascade first; check a behavior change in the browser itself as well.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
@@ -419,7 +435,7 @@ rustls (see "HTTP client" above), not libssl.
 System packages required on Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential pkg-config meson ninja-build cargo rustc \
+sudo apt install build-essential pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
     libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libharfbuzz-dev libfontconfig-dev libfreetype-dev \
@@ -430,20 +446,20 @@ Optional: `libenchant-2-dev` (plus a dictionary such as `hunspell-en-us`)
 enables on-screen spell-checking of editable text. It is auto-detected —
 the build works without it and simply does no spell-checking. `libavif-dev` is optional too and adds
 AVIF decoding; it drags in a full AV1 decoder for a format that is rare
-on the web, so `-Davif=disabled` drops it.
+on the web, so `cargo xtask build --avif disabled` drops it.
 
 The FFmpeg libav\* dev packages in the command above (MSYS2
 `mingw-w64-ucrt-x86_64-ffmpeg`, or the LGPL build from
 `scripts/build-ffmpeg-lgpl.sh`) enable inline WebM playback (VP9/VP8 video
-+ Opus/Vorbis audio). **Required on Linux and Windows** (`meson setup` fails
-without them, or with a pre-6.0 FFmpeg); auto-detected on macOS, where without
++ Opus/Vorbis audio). **Required on Linux and Windows** (`cargo xtask build`
+fails without them, or with a pre-6.0 FFmpeg); auto-detected on macOS, where without
 them the build carries no libav dependency and WebM falls back to the
 external-player path. FFmpeg 6.0 or newer is required.
 
 On Fedora/RHEL:
 
 ```sh
-sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-devel \
+sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
     openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel \
     harfbuzz-devel fontconfig-devel freetype-devel \
     libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
@@ -454,7 +470,7 @@ sudo dnf install gcc pkgconf meson ninja-build cargo rust gtk4-devel libepoxy-de
 On openSUSE:
 
 ```sh
-sudo zypper install gcc pkgconf meson ninja cargo rust gtk4-devel libepoxy-devel \
+sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
     libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel \
     harfbuzz-devel fontconfig-devel freetype2-devel \
     libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
@@ -468,26 +484,36 @@ distributions ship it; Ubuntu 24.04 packages it as `rustc-1.91` and
 `/usr/lib/rust-1.91/bin` first on `PATH`). Elsewhere, Debian 13 included,
 install it with rustup, which reads `rust-toolchain.toml` and selects 1.91.0.
 
-`libseccomp` is required on Linux — `meson setup` fails without it.
+pkg-config and a C compiler are needed besides Rust: the build scripts
+compile the GTK icon resource and probe C struct layouts from the
+installed headers.
+
+`libseccomp` is required on Linux — `cargo xtask build` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.
 
 ### Fast iteration (recommended for agent loops)
 
-The default meson build is a release build with fat LTO and one codegen
-unit, so a clean build takes many minutes and every Rust change relinks the
-whole static library. For the edit-check loop use `cargo check -p <crate>`
-or `cargo clippy -p <crate>`, which take seconds; build the browser with
-meson to run it. A `meson setup build-debug -Dbuildtype=debug` tree builds
-the dev profile — no LTO, integer overflow checks on — which compiles much
-faster and runs slower. `-Doverflow_checks=true` turns the overflow checks on
-in a release build too (CI does).
+The default `cargo xtask build` is a release build with fat LTO and one
+codegen unit, so a clean build takes many minutes and every Rust change
+relinks the whole browser. For the edit-check loop use `cargo check -p
+<crate>` or `cargo clippy -p <crate>`, which take seconds; build the
+browser with `cargo xtask build` to run it. `cargo xtask build --debug`
+builds the dev profile into `target/debug/` — no LTO, integer overflow
+checks on — which compiles much faster and runs slower. `--overflow-checks`
+turns the overflow checks on in a release build too (CI does).
+
+For a release build you rebuild often, use `--lto off` (no LTO, 256 codegen
+units, incremental). It shares `target/release/` with the fat build, and
+cargo rebuilds whenever the profile settings change, so give it its own
+tree: `cargo xtask build --lto off --target-dir target-fast` (the browser
+is then `target-fast/release/southstar`). Pages load about 60% slower;
+`--lto thin` sits in between. Releases and packages keep `fat`.
 
 Optionally use the `lld` linker for faster final links
-(`CC_LD=lld meson setup builddir`). Not required.
+(`RUSTFLAGS=-Clink-arg=-fuse-ld=lld cargo xtask build`). Not required.
 
-`./scripts/dev.sh build` runs `meson setup` (only if needed) and
-`meson compile -C builddir` in one shot — use it instead of typing
-the two commands separately.
+`./scripts/dev.sh build` runs `cargo xtask build`, and `./scripts/dev.sh
+run` builds and starts the browser.
 
 ### WPT scoreboard
 
@@ -512,7 +538,7 @@ A change is done when:
 
 Unit tests (`scripts/rust-tests.sh`) cover the parsers; otherwise verify
 behavior by running the browser. Don't add a `tests/` directory or
-`meson test` targets.
+integration-test targets.
 
 ## Don't
 
@@ -537,7 +563,7 @@ behavior by running the browser. Don't add a `tests/` directory or
   gets a build with no WebGPU surface or dependency. Keep it behind the
   `--enable-webgpu` / `NS_WEBGPU_ALLOW` runtime gate, and don't make
   wgpu-native a hard/default dependency or vendor its library into the tree
-  (headers only) — a stock `meson setup builddir` on a clean machine must
+  (headers only) — a stock `cargo xtask build` on a clean machine must
   still produce a WebGPU-free binary.
 - Don't add telemetry, crash reporters, update pingers, or "studies"
   infrastructure. UI translation goes through `rust/i18n` and the

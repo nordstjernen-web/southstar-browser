@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fetch a pinned wgpu-native release for the host platform and print the
 # extracted root (containing lib/ and include/webgpu/) on stdout, so a build
-# can pass it to meson as -Dwgpu_native_root. Idempotent and cached; exits
+# can pass it to cargo xtask as --wgpu-native-root. Idempotent and cached; exits
 # non-zero (without printing a root) when wgpu-native is unavailable for the
 # platform or the download fails, so callers degrade to a WebGPU-free build.
 set -uo pipefail

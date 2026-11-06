@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Southstar — set the release version everywhere it is written: the workspace, meson, the Boa forks and every pinned internal dependency."""
+"""Southstar — set the release version everywhere it is written: the workspace, the Boa forks and every pinned internal dependency."""
 
 import re
 import subprocess
@@ -23,7 +23,6 @@ def main():
         sys.exit("usage: set-version.py VERSION")
     version = sys.argv[1]
     rewrite(ROOT / "Cargo.toml", r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', 1)
-    rewrite(ROOT / "meson.build", r"^(  version: )'[^']+'", rf"\1'{version}'", 1)
     for manifest in sorted(ROOT.glob("third_party/boa_*/Cargo.toml")):
         rewrite(manifest, r'(\[package\]\n(?:[^\[\n][^\n]*\n)*?version = )"[^"]+"', rf'\1"{version}"', 1)
     pinned = r'(version = )"=[^"]+"'

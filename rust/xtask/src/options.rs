@@ -20,6 +20,7 @@ options:
   --build-date YYYY-MM-DD     the date the About page shows (default today, UTC)
   --target-dir DIR            cargo's target directory
   --prefix DIR                install prefix (default /usr/local)
+  --libdir DIR                library directory under the prefix (default lib)
   --destdir DIR               staging root prepended to the prefix";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,7 @@ pub struct Options {
     pub build_date: Option<String>,
     pub target_dir: Option<PathBuf>,
     pub prefix: PathBuf,
+    pub libdir: PathBuf,
     pub destdir: Option<PathBuf>,
     pub passthrough: Vec<String>,
 }
@@ -103,6 +105,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
         build_date: None,
         target_dir: None,
         prefix: PathBuf::from("/usr/local"),
+        libdir: PathBuf::from("lib"),
         destdir: None,
         passthrough: Vec::new(),
     };
@@ -136,6 +139,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
             "--build-date" => options.build_date = Some(value()?),
             "--target-dir" => options.target_dir = Some(PathBuf::from(value()?)),
             "--prefix" => options.prefix = PathBuf::from(value()?),
+            "--libdir" => options.libdir = PathBuf::from(value()?),
             "--destdir" => options.destdir = Some(PathBuf::from(value()?)),
             _ => return Err(format!("unknown option {arg}\n\n{USAGE}")),
         }

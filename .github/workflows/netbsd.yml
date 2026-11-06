@@ -52,7 +52,7 @@ jobs:
             echo "PKG_PATH=$PKG_PATH"
             attempt=0
             until /usr/sbin/pkg_add -U \
-                meson ninja-build pkgconf bash zip ccache git-base \
+                pkgconf bash zip ccache git-base \
                 gtk4 openssl brotli zstd uchardet sqlite3 libwebp libavif libpsl SDL2
             do
               attempt=$((attempt + 1))
@@ -83,9 +83,8 @@ jobs:
             # and break cairo's 'pixman-1 >= 0.40.0' requirement.
             export PKG_CONFIG_PATH="/usr/pkg/lib/pkgconfig:/usr/X11R7/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
             export CC="ccache cc"
-            meson setup builddir --buildtype=release -Db_ndebug=true
-            meson compile -C builddir
-            if ./builddir/src/gtk/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
+            cargo xtask build
+            if ./target/release/southstar --headless --dump=text about:start > about.txt 2>/dev/null \
                && grep -q Southstar about.txt; then
               echo "headless smoke: ok"
             else
@@ -93,7 +92,7 @@ jobs:
             fi
             bash ./scripts/pack-bsd.sh netbsd
             ls -l dist/*-netbsd-x86_64.zip
-            rm -rf builddir
+            rm -rf target
 
       - name: Upload NetBSD portable zip
         if: hashFiles('dist/*-netbsd-x86_64.zip') != ''

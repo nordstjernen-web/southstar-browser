@@ -16,20 +16,18 @@ trap 'rc=$?; echo "nightly-distro-build($DISTRO): FAILED (exit $rc) at line $LIN
 install_apt() {
     apt-get update -qq
     apt-get install -y --no-install-recommends \
-        build-essential clang pkg-config ninja-build git zip unzip curl \
-        python3-pip dpkg-dev patchelf ca-certificates \
+        build-essential clang pkg-config git zip unzip curl \
+        dpkg-dev patchelf ca-certificates \
         libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev libuchardet-dev libpsl-dev \
         libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl2-dev
     apt-get install -y --no-install-recommends \
         libpoppler-glib-dev \
         libfontconfig-dev libharfbuzz-dev libfreetype-dev libthai-dev libavif-dev || true
     # FFmpeg libav* backs the inline WebM path (VP9/VP8 video + Opus/Vorbis
-    # audio). meson requires it on Linux, so this is not optional — its own
+    # audio). cargo xtask requires it on Linux, so this is not optional — its own
     # line to keep the failure legible when a mirror is missing the packages.
     apt-get install -y --no-install-recommends \
         libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
-    pip3 install --break-system-packages --upgrade 'meson>=1.4' \
-        || pip3 install --upgrade 'meson>=1.4'
     apt-get install -y --no-install-recommends cargo rustc
     if ! rust_new_enough; then
         if apt-get install -y --no-install-recommends rustc-1.91 cargo-1.91; then
@@ -65,7 +63,7 @@ install_zypper() {
         sleep $((i * 15))
     done
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
-        gcc clang pkgconf-pkg-config meson ninja git zip unzip curl \
+        gcc clang pkgconf-pkg-config git zip unzip curl \
         rpm-build patchelf ca-certificates \
         gtk4-devel libepoxy-devel libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel \
         sqlite3-devel libseccomp-devel libwebp-devel libavif-devel rust cargo
@@ -79,7 +77,7 @@ install_zypper() {
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
         libpoppler-glib-devel \
         fontconfig-devel harfbuzz-devel freetype-devel libthai-devel libavif-devel || true
-    # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). meson requires it on
+    # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). cargo xtask requires it on
     # Linux, so a failure here is fatal; if the default repos come up short,
     # the container needs Packman enabled.
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
@@ -89,7 +87,7 @@ install_zypper() {
 install_apk() {
     apk update -q
     apk add --no-cache \
-        build-base clang pkgconf meson ninja git zip alpine-sdk \
+        build-base clang pkgconf git zip alpine-sdk \
         linux-headers gtk4.0-dev libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev libpsl-dev sqlite-dev \
         libseccomp-dev libwebp-dev sdl2-dev rust cargo
     apk add --no-cache \
@@ -97,7 +95,7 @@ install_apk() {
         fontconfig-dev harfbuzz-dev freetype-dev libthai-dev libavif-dev || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). ffmpeg-dev provides
     # all of libavformat/libavcodec/libavutil/libswscale/libswresample, and
-    # meson requires them on Linux.
+    # cargo xtask requires them on Linux.
     apk add --no-cache ffmpeg-dev
 }
 

@@ -12,8 +12,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 "$SCRIPT_DIR/pack-windows.sh"
 
-VERSION=$(grep -E "^[[:space:]]*version:" "$ROOT/meson.build" \
-          | head -1 | sed -E "s/.*'([^']+)'.*/\\1/")
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)
 BUNDLE=$ROOT/dist/southstar-win64
 INSTALLER=$ROOT/dist/southstar-${VERSION}-win64-setup.exe
 NSI=$ROOT/data/installer/southstar.nsi

@@ -14,7 +14,7 @@ leave safe Rust, and the amount of it may only go down.
    declarations and the calls live in the crate's `ffi.rs` or `ffi/`
    module, which hands the rest of the crate a safe API: owned Rust types
    in, owned Rust types out, no raw pointer crossing the module boundary.
-2. **The embedding API.** The `ns_*` functions `src/libsouthstar.h`
+2. **The embedding API.** The `ns_*` functions `rust/capi/include/libsouthstar.h`
    declares for C embedders, and callbacks the C libraries above call back
    into (GTK signal handlers, GSource callbacks, libav I/O callbacks).
 3. **The JavaScript binding layer.** `rust/js-engine` and the Boa fork,
