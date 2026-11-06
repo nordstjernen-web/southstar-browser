@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8:
 ======
+* Flexbox: a row flex container with `height: 0` has a definite cross
+  size of zero, so `align-items: center` centres a taller item on it and
+  the item overflows equally above and below, as in other browsers. A
+  zero height was taken as no height and the item hung below; Google
+  Finance's "Add to list" button sat 18px low.
 * SVG: an outer `<svg width="100%" height="100%">` fills its container.
   Its `width` and `height` attributes now map to the CSS properties, as
   SVG 2 says; percentages were ignored and the element fell back to

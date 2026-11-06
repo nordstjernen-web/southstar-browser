@@ -33,8 +33,9 @@ fn cross_limits(b: BoxRef<'_>, parent_content_width: f64) -> CrossLimits {
     let mut explicit = 0.0;
     let mut definite = false;
     if is_length(hv) {
-        explicit = resolve_used_height(b, hv, parent_content_width, 0.0);
-        definite = explicit > 0.0;
+        let resolved = resolve_used_height(b, hv, parent_content_width, -1.0);
+        definite = resolved >= 0.0;
+        explicit = resolved.max(0.0);
     }
     let mut min = resolve_used_height(b, get(PropId::MinHeight), parent_content_width, -1.0);
     let mut max = resolve_used_height(b, get(PropId::MaxHeight), parent_content_width, -1.0);
