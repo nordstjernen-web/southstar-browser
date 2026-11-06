@@ -14,7 +14,7 @@ use southstar_style::{Kind, PropId as P, StyleRef, ValueRef};
 use southstar_video::BoxVideo;
 
 use crate::clip_shape::clip_to_shape;
-use crate::decor::{ANIM_TARGET_BG_COLOR, bg_size_px, rgba_anim};
+use crate::decor::{ANIM_TARGET_BG_COLOR, FontUnits, bg_size_px, rgba_anim};
 use crate::ffi::engine::{self, Texture, Video};
 use crate::filter::{
     TextureFit, apply_image_filter, filter_has_bitmap_effect, paint_texture_drop_shadows,
@@ -127,7 +127,7 @@ fn object_position_offset(
         if unit == UNIT_PERCENT {
             return delta * v / 100.0;
         }
-        return bg_size_px(v, unit, box_size);
+        return bg_size_px(v, unit, box_size, FontUnits::of(st));
     }
     delta * 0.5
 }

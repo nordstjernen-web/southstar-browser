@@ -20,8 +20,9 @@ use crate::radii::{
     CornerRadii, box_border_radii, fill_outer_shadow, rounded_rect_path, style_border_radii,
 };
 use crate::util::{
-    Rgba, UNIT_EM, UNIT_NUMBER, UNIT_PERCENT, UNIT_REM, UNIT_VH, UNIT_VMAX, UNIT_VMIN, UNIT_VW,
-    cmax, cmin, get, keyword, keyword_is, length_or, rgba_of, style_of,
+    Rgba, UNIT_CAP, UNIT_CH, UNIT_EM, UNIT_EX, UNIT_IC, UNIT_LH, UNIT_NUMBER, UNIT_PERCENT,
+    UNIT_REM, UNIT_RLH, UNIT_VH, UNIT_VMAX, UNIT_VMIN, UNIT_VW, cmax, cmin, get, keyword,
+    keyword_is, length_or, rgba_of, style_of,
 };
 
 pub const ANIM_TARGET_COLOR: AnimatedColor = AnimatedColor::Color;
@@ -39,10 +40,36 @@ pub fn rgba_anim(
     rgba_of(v, fallback)
 }
 
-pub fn bg_size_px(v: f64, unit: u32, basis: f64) -> f64 {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FontUnits {
+    pub font_size: f64,
+    pub line_height: f64,
+}
+
+impl FontUnits {
+    pub fn of(s: Option<StyleRef<'_>>) -> Self {
+        let font_size = length_or(get(s, P::FontSize), 16.0);
+        let line_height = crate::text::css_line_height_px(s);
+        Self {
+            font_size,
+            line_height: if line_height > 0.0 {
+                line_height
+            } else {
+                font_size * 1.2
+            },
+        }
+    }
+}
+
+pub fn bg_size_px(v: f64, unit: u32, basis: f64, font: FontUnits) -> f64 {
     match unit {
         UNIT_PERCENT => v * basis / 100.0,
-        UNIT_EM | UNIT_REM => v * 16.0,
+        UNIT_EM | UNIT_IC => v * font.font_size,
+        UNIT_EX | UNIT_CH => v * font.font_size * 0.5,
+        UNIT_CAP => v * font.font_size * 0.7,
+        UNIT_LH => v * font.line_height,
+        UNIT_REM => v * 16.0,
+        UNIT_RLH => v * 24.0,
         UNIT_VW => v * engine::viewport_w() / 100.0,
         UNIT_VH => v * engine::viewport_h() / 100.0,
         UNIT_VMIN => {
@@ -362,18 +389,15 @@ pub struct BgImage<'a> {
     pub pos_x: Option<ValueRef<'a>>,
     pub pos_y: Option<ValueRef<'a>>,
     pub pixelated: bool,
+    pub font: FontUnits,
 }
 
-fn bg_offset(v: Option<ValueRef<'_>>, span: f64) -> f64 {
+fn bg_offset(v: Option<ValueRef<'_>>, span: f64, font: FontUnits) -> f64 {
     let Some(v) = v else {
         return 0.0;
     };
     if let Some((len, unit)) = v.length() {
-        if unit == UNIT_PERCENT {
-            span * (len / 100.0)
-        } else {
-            len
-        }
+        bg_size_px(len, unit, span, font)
     } else if let Some((pct, px)) = v.calc() {
         span * (pct / 100.0) + px
     } else {
@@ -423,14 +447,14 @@ fn bg_tile(image: (f64, f64), p: &BgImage<'_>, area: (f64, f64, f64, f64)) -> Ti
                 draw_h = ihf * sc;
             }
         } else if let Some((v, unit)) = sz.length() {
-            draw_w = bg_size_px(v, unit, w);
+            draw_w = bg_size_px(v, unit, w, p.font);
             draw_h = draw_w * (ihf / iwf);
         } else if let Some(s) = sz.size() {
             if !s.w_auto {
-                draw_w = bg_size_px(s.w, s.w_unit, w);
+                draw_w = bg_size_px(s.w, s.w_unit, w, p.font);
             }
             if !s.h_auto {
-                draw_h = bg_size_px(s.h, s.h_unit, h);
+                draw_h = bg_size_px(s.h, s.h_unit, h, p.font);
             }
             if s.w_auto && !s.h_auto {
                 draw_w = draw_h * (iwf / ihf);
@@ -447,8 +471,8 @@ fn bg_tile(image: (f64, f64), p: &BgImage<'_>, area: (f64, f64, f64, f64)) -> Ti
     Tile {
         draw_w,
         draw_h,
-        off_x: bg_offset(p.pos_x, w - draw_w),
-        off_y: bg_offset(p.pos_y, h - draw_h),
+        off_x: bg_offset(p.pos_x, w - draw_w, p.font),
+        off_y: bg_offset(p.pos_y, h - draw_h, p.font),
         repeat_x,
         repeat_y,
     }
@@ -599,6 +623,70 @@ fn conic_color_at(gr: &Gradient, frac: f64) -> (f64, f64, f64, f64) {
     )
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ColorStop {
+    pub offset: f64,
+    pub rgba: [f64; 4],
+}
+
+const PREMULTIPLIED_STEPS: usize = 16;
+
+fn premultiplied_mix(from: [f64; 4], to: [f64; 4], t: f64) -> [f64; 4] {
+    let alpha = from[3] + (to[3] - from[3]) * t;
+    if alpha <= 0.0 {
+        return [0.0, 0.0, 0.0, 0.0];
+    }
+    let channel = |i: usize| {
+        let premultiplied = from[i] * from[3] + (to[i] * to[3] - from[i] * from[3]) * t;
+        (premultiplied / alpha).clamp(0.0, 1.0)
+    };
+    [channel(0), channel(1), channel(2), alpha]
+}
+
+fn with_alpha_zero_color(stop: [f64; 4], neighbour: [f64; 4]) -> [f64; 4] {
+    if stop[3] <= 0.0 {
+        [neighbour[0], neighbour[1], neighbour[2], 0.0]
+    } else {
+        stop
+    }
+}
+
+pub fn premultiplied_stops(stops: &[ColorStop]) -> Vec<ColorStop> {
+    let mut out = Vec::with_capacity(stops.len() * 2);
+    let Some(first) = stops.first() else {
+        return out;
+    };
+    if stops.len() == 1 {
+        out.push(*first);
+        return out;
+    }
+    for pair in stops.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let from = with_alpha_zero_color(a.rgba, b.rgba);
+        let to = with_alpha_zero_color(b.rgba, a.rgba);
+        out.push(ColorStop {
+            offset: a.offset,
+            rgba: from,
+        });
+        let alpha_varies = (from[3] - to[3]).abs() > f64::EPSILON;
+        let colour_varies = from[..3] != to[..3];
+        if alpha_varies && colour_varies && b.offset > a.offset {
+            for step in 1..PREMULTIPLIED_STEPS {
+                let t = step as f64 / PREMULTIPLIED_STEPS as f64;
+                out.push(ColorStop {
+                    offset: a.offset + (b.offset - a.offset) * t,
+                    rgba: premultiplied_mix(from, to, t),
+                });
+            }
+        }
+        out.push(ColorStop {
+            offset: b.offset,
+            rgba: to,
+        });
+    }
+    out
+}
+
 pub fn gradient_pattern(
     gr: &Gradient,
     border: (f64, f64, f64, f64),
@@ -657,14 +745,22 @@ pub fn gradient_pattern(
             Pattern::linear(x0, y0, x0 + 2.0 * dxh * period, y0 + 2.0 * dyh * period)
         }
     };
-    for (st, f) in gr.stops[..n].iter().zip(&frac) {
-        pat.add_color_stop_rgba(
-            f / period,
-            f64::from(st.r) / 255.0,
-            f64::from(st.g) / 255.0,
-            f64::from(st.b) / 255.0,
-            f64::from(st.a) / 255.0,
-        );
+    let stops: Vec<ColorStop> = gr.stops[..n]
+        .iter()
+        .zip(&frac)
+        .map(|(st, f)| ColorStop {
+            offset: f / period,
+            rgba: [
+                f64::from(st.r) / 255.0,
+                f64::from(st.g) / 255.0,
+                f64::from(st.b) / 255.0,
+                f64::from(st.a) / 255.0,
+            ],
+        })
+        .collect();
+    for st in premultiplied_stops(&stops) {
+        let [r, g, b, a] = st.rgba;
+        pat.add_color_stop_rgba(st.offset, r, g, b, a);
     }
     if gr.repeating != 0 {
         pat.set_extend(Extend::Repeat);
@@ -775,23 +871,28 @@ fn bg_repeat_axes(repeat: Option<ValueRef<'_>>) -> (bool, bool) {
     }
 }
 
-fn bg_gradient_tile_size(size: Option<ValueRef<'_>>, w: f64, h: f64) -> (f64, f64) {
+fn bg_gradient_tile_size(
+    size: Option<ValueRef<'_>>,
+    w: f64,
+    h: f64,
+    font: FontUnits,
+) -> (f64, f64) {
     let Some(sz) = size else {
         return (w, h);
     };
     if let Some((v, unit)) = sz.length() {
-        (bg_size_px(v, unit, w), h)
+        (bg_size_px(v, unit, w, font), h)
     } else if let Some(s) = sz.size() {
         (
             if s.w_auto {
                 w
             } else {
-                bg_size_px(s.w, s.w_unit, w)
+                bg_size_px(s.w, s.w_unit, w, font)
             },
             if s.h_auto {
                 h
             } else {
-                bg_size_px(s.h, s.h_unit, h)
+                bg_size_px(s.h, s.h_unit, h, font)
             },
         )
     } else {
@@ -809,12 +910,12 @@ pub fn paint_bg_gradient_layer(
 ) {
     let (x, y, w, h) = area;
     let (clip_x, clip_y, clip_w, clip_h) = clip;
-    let (tw, th) = bg_gradient_tile_size(p.size, w, h);
+    let (tw, th) = bg_gradient_tile_size(p.size, w, h, p.font);
     if tw <= 0.0 || th <= 0.0 || clip_w <= 0.0 || clip_h <= 0.0 {
         return;
     }
-    let tx = x + bg_offset(p.pos_x, w - tw);
-    let ty = y + bg_offset(p.pos_y, h - th);
+    let tx = x + bg_offset(p.pos_x, w - tw, p.font);
+    let ty = y + bg_offset(p.pos_y, h - th, p.font);
     let (tile_x, tile_y) = bg_repeat_axes(p.repeat);
     let covers_x = tx <= clip_x && tx + tw >= clip_x + clip_w;
     let covers_y = ty <= clip_y && ty + th >= clip_y + clip_h;
@@ -878,6 +979,7 @@ fn inline_bg_gradients(
             pos_x: layer(get(s, P::BackgroundPositionX), li),
             pos_y: layer(get(s, P::BackgroundPositionY), li),
             pixelated: false,
+            font: FontUnits::of(s),
         };
         paint_bg_gradient_layer(cr, gr, &p, rect, rect, radii);
     }
@@ -899,6 +1001,7 @@ fn inline_bg_image(
         pos_x: get(s, P::BackgroundPositionX),
         pos_y: get(s, P::BackgroundPositionY),
         pixelated: style_pixelated(s),
+        font: FontUnits::of(s),
     };
     paint_bg_image_core(cr, Some(img), &p, rect, rect, radii);
 }
@@ -1049,14 +1152,11 @@ fn paint_border_image_part(
     cr.restore();
 }
 
-fn border_image_edge_px(v: f64, unit: u32, border_px: f64, pct_basis: f64, font_size: f64) -> f64 {
+fn border_image_edge_px(v: f64, unit: u32, border_px: f64, pct_basis: f64, font: FontUnits) -> f64 {
     if unit == UNIT_NUMBER {
         return v * border_px;
     }
-    if unit == UNIT_EM {
-        return v * font_size;
-    }
-    bg_size_px(v, unit, pct_basis)
+    bg_size_px(v, unit, pct_basis, font)
 }
 
 fn paint_border_image(
@@ -1070,12 +1170,12 @@ fn paint_border_image(
     };
     let bi = southstar_style::border_image_params(s);
     let (border_x, border_y, border_w, border_h) = border;
-    let font_size = length_or(s.get(P::FontSize), 16.0);
+    let font = FontUnits::of(Some(s));
     let bd = b.border();
     let side = [bd.top, bd.right, bd.bottom, bd.left];
     let mut outset = [0.0; 4];
     for i in 0..4 {
-        outset[i] = border_image_edge_px(bi.outset[i], bi.outset_unit[i], side[i], 0.0, font_size);
+        outset[i] = border_image_edge_px(bi.outset[i], bi.outset_unit[i], side[i], 0.0, font);
     }
     let area_x = border_x - outset[3];
     let area_y = border_y - outset[0];
@@ -1153,7 +1253,7 @@ fn paint_border_image(
         width[i] = if bi.width_auto[i] != 0 {
             slice[i]
         } else {
-            border_image_edge_px(bi.width[i], bi.width_unit[i], side[i], pct_basis, font_size)
+            border_image_edge_px(bi.width[i], bi.width_unit[i], side[i], pct_basis, font)
         };
         if width[i] < 0.0 {
             width[i] = 0.0;
@@ -1468,6 +1568,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
         pos_x: get(s, P::MaskPositionX),
         pos_y: get(s, P::MaskPositionY),
         pixelated: false,
+        font: FontUnits::of(s),
     };
     let masked_fill = bg.a > 0.0
         && has_mask
@@ -1481,6 +1582,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
             pos_x: get(s, P::BackgroundPositionX),
             pos_y: get(s, P::BackgroundPositionY),
             pixelated: style_pixelated(s),
+            font: FontUnits::of(s),
         };
         paint_bg_image_core(cr, Some(img), &params, pos, clip, radii);
     }
@@ -1498,6 +1600,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
                 pos_x: layer(get(s, P::BackgroundPositionX), li),
                 pos_y: layer(get(s, P::BackgroundPositionY), li),
                 pixelated: false,
+                font: FontUnits::of(s),
             };
             paint_bg_gradient_layer(cr, gr, &params, lpos, lclip, radii);
             continue;
@@ -1514,6 +1617,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
             pos_x: layer(get(s, P::BackgroundPositionX), li),
             pos_y: layer(get(s, P::BackgroundPositionY), li),
             pixelated: style_pixelated(s),
+            font: FontUnits::of(s),
         };
         paint_bg_image_core(cr, Some(img), &params, lpos, lclip, radii);
     }
