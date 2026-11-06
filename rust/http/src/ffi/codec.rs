@@ -1,165 +1,10 @@
-//! Southstar — streaming content decoders for response bodies: gzip and deflate over zlib, br over libbrotlidec and zstd over libzstd.
+//! Southstar — streaming content decoders for response bodies: br over libbrotlidec and zstd over libzstd.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{c_char, c_int, c_uint, c_ulong, c_void};
-
-pub enum Failure {
-    Corrupt,
-    Stopped,
-}
-
-pub type Emit<'a> = dyn FnMut(&[u8]) -> bool + 'a;
-
-const OUT_CHUNK: usize = 16_384;
-
-#[repr(C)]
-struct ZStream {
-    next_in: *const u8,
-    avail_in: c_uint,
-    total_in: c_ulong,
-    next_out: *mut u8,
-    avail_out: c_uint,
-    total_out: c_ulong,
-    msg: *const c_char,
-    state: *mut c_void,
-    zalloc: *const c_void,
-    zfree: *const c_void,
-    opaque: *mut c_void,
-    data_type: c_int,
-    adler: c_ulong,
-    reserved: c_ulong,
-}
-
-unsafe extern "C" {
-    safe fn zlibVersion() -> *const c_char;
-    fn inflateInit2_(strm: *mut ZStream, bits: c_int, version: *const c_char, size: c_int)
-    -> c_int;
-    fn inflate(strm: *mut ZStream, flush: c_int) -> c_int;
-    fn inflateEnd(strm: *mut ZStream) -> c_int;
-}
-
-const Z_OK: c_int = 0;
-const Z_STREAM_END: c_int = 1;
-const Z_BUF_ERROR: c_int = -5;
-const Z_NO_FLUSH: c_int = 0;
-const Z_FINISH: c_int = 4;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Inflated {
-    Progress,
-    StreamEnd,
-    BufError,
-    Failed,
-}
-
-pub struct Inflate {
-    stream: Box<ZStream>,
-    finished: bool,
-}
-
-// SAFETY: the z_stream is reached only through `&mut Inflate`, zlib keeps no thread affinity, and
-// its input and output pointers are reset before every inflate call.
-unsafe impl Send for Inflate {}
-
-impl Inflate {
-    pub fn new(window_bits: i32) -> Option<Inflate> {
-        let mut stream = Box::new(ZStream {
-            next_in: core::ptr::null(),
-            avail_in: 0,
-            total_in: 0,
-            next_out: core::ptr::null_mut(),
-            avail_out: 0,
-            total_out: 0,
-            msg: core::ptr::null(),
-            state: core::ptr::null_mut(),
-            zalloc: core::ptr::null(),
-            zfree: core::ptr::null(),
-            opaque: core::ptr::null_mut(),
-            data_type: 0,
-            adler: 0,
-            reserved: 0,
-        });
-        // SAFETY: `stream` is a boxed, zeroed z_stream whose size is passed alongside it, and the
-        // version is zlib's own.
-        let rc = unsafe {
-            inflateInit2_(
-                &mut *stream,
-                window_bits,
-                zlibVersion(),
-                core::mem::size_of::<ZStream>() as c_int,
-            )
-        };
-        (rc == Z_OK).then(|| Inflate {
-            stream,
-            finished: false,
-        })
-    }
-
-    pub fn step(&mut self, input: &[u8], out: &mut [u8], finish: bool) -> (Inflated, usize, usize) {
-        let take = input.len().min(c_uint::MAX as usize);
-        let room = out.len().min(c_uint::MAX as usize);
-        self.stream.next_in = input.as_ptr();
-        self.stream.avail_in = take as c_uint;
-        self.stream.next_out = out.as_mut_ptr();
-        self.stream.avail_out = room as c_uint;
-        let flush = if finish { Z_FINISH } else { Z_NO_FLUSH };
-        // SAFETY: the stream was initialized by inflateInit2_, next_in/avail_in describe
-        // `input` and next_out/avail_out describe `out`, both live for the call.
-        let rc = unsafe { inflate(&mut *self.stream, flush) };
-        let consumed = take - self.stream.avail_in as usize;
-        let produced = room - self.stream.avail_out as usize;
-        let status = match rc {
-            Z_OK => Inflated::Progress,
-            Z_STREAM_END => Inflated::StreamEnd,
-            Z_BUF_ERROR => Inflated::BufError,
-            _ => Inflated::Failed,
-        };
-        (status, consumed, produced)
-    }
-
-    pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<usize, Failure> {
-        if self.finished {
-            return Ok(input.len());
-        }
-        let mut out = [0u8; OUT_CHUNK];
-        let mut rest = input;
-        loop {
-            let (status, consumed, produced) = self.step(rest, &mut out, false);
-            rest = &rest[consumed..];
-            if produced > 0 && !emit(&out[..produced]) {
-                return Err(Failure::Stopped);
-            }
-            match status {
-                Inflated::StreamEnd => {
-                    self.finished = true;
-                    return Ok(rest.len());
-                }
-                Inflated::Progress | Inflated::BufError => {
-                    if rest.is_empty() && produced < OUT_CHUNK {
-                        return Ok(0);
-                    }
-                    if consumed == 0 && produced == 0 {
-                        return Err(Failure::Corrupt);
-                    }
-                }
-                Inflated::Failed => return Err(Failure::Corrupt),
-            }
-        }
-    }
-}
-
-impl Drop for Inflate {
-    fn drop(&mut self) {
-        // SAFETY: the stream was initialized by inflateInit2_ (`new` returns None otherwise) and
-        // is ended exactly once, here.
-        unsafe { inflateEnd(&mut *self.stream) };
-    }
-}
-
 #[cfg(feature = "brotli")]
 mod brotli {
-    use super::{Emit, Failure, OUT_CHUNK};
+    use crate::inflate::{Emit, Failure, OUT_CHUNK};
     use core::ffi::{c_int, c_void};
 
     unsafe extern "C" {
@@ -252,7 +97,7 @@ mod brotli {
 
 #[cfg(feature = "zstd")]
 mod zstd {
-    use super::{Emit, Failure, OUT_CHUNK};
+    use crate::inflate::{Emit, Failure, OUT_CHUNK};
     use core::ffi::{c_int, c_uint, c_void};
 
     #[repr(C)]

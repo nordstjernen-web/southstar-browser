@@ -1,4 +1,4 @@
-//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list), its proxy choice from the environment, FTP URL parsing and the zstd window cap.
+//! Southstar — unit tests for the HTTP client's TLS key exchange (the X25519MLKEM768 hybrid and the configured group list), its proxy choice from the environment, FTP URL parsing, the zstd window cap and gzip and deflate body decoding.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -334,4 +334,119 @@ fn doh_cache_stays_bounded() {
         later,
     );
     assert_eq!(cache.len(), 1);
+}
+
+fn sample_body() -> Vec<u8> {
+    (0..20_000u32)
+        .flat_map(|i| format!("line {i} of a compressible body\n").into_bytes())
+        .collect()
+}
+
+fn encode(encoding: crate::decode::Encoding, body: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let level = flate2::Compression::default();
+    match encoding {
+        crate::decode::Encoding::Gzip => {
+            let mut encoder = flate2::write::GzEncoder::new(Vec::new(), level);
+            encoder.write_all(body).unwrap();
+            encoder.finish().unwrap()
+        }
+        _ => {
+            let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), level);
+            encoder.write_all(body).unwrap();
+            encoder.finish().unwrap()
+        }
+    }
+}
+
+fn raw_deflate(body: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut encoder =
+        flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(body).unwrap();
+    encoder.finish().unwrap()
+}
+
+fn decode_in_chunks(
+    encoding: crate::decode::Encoding,
+    data: &[u8],
+    chunk: usize,
+) -> Result<Vec<u8>, ()> {
+    let mut decoder = crate::decode::Decoder::new(&[encoding]).ok_or(())?;
+    let mut out = Vec::new();
+    for piece in data.chunks(chunk.max(1)) {
+        decoder
+            .feed(piece, &mut |bytes: &[u8]| {
+                out.extend_from_slice(bytes);
+                true
+            })
+            .map_err(|_| ())?;
+    }
+    decoder
+        .finish(&mut |bytes: &[u8]| {
+            out.extend_from_slice(bytes);
+            true
+        })
+        .map_err(|_| ())?;
+    Ok(out)
+}
+
+#[test]
+fn gzip_body_decodes_whole_and_byte_by_byte() {
+    let body = sample_body();
+    let gzip = encode(crate::decode::Encoding::Gzip, &body);
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Gzip, &gzip, gzip.len()),
+        Ok(body.clone())
+    );
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Gzip, &gzip, 1),
+        Ok(body)
+    );
+}
+
+#[test]
+fn concatenated_gzip_members_decode_in_order() {
+    let mut both = encode(crate::decode::Encoding::Gzip, b"first member, ");
+    both.extend(encode(crate::decode::Encoding::Gzip, b"second member"));
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Gzip, &both, 7),
+        Ok(b"first member, second member".to_vec())
+    );
+}
+
+#[test]
+fn deflate_accepts_zlib_wrapped_and_raw_streams() {
+    let body = sample_body();
+    let zlib = encode(crate::decode::Encoding::Deflate, &body);
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Deflate, &zlib, 1000),
+        Ok(body.clone())
+    );
+    let raw = raw_deflate(&body);
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Deflate, &raw, 3),
+        Ok(body)
+    );
+}
+
+#[test]
+fn corrupt_gzip_is_an_error() {
+    let mut gzip = encode(crate::decode::Encoding::Gzip, &sample_body());
+    let middle = gzip.len() / 2;
+    gzip[middle..middle + 16].fill(0xff);
+    assert_eq!(
+        decode_in_chunks(crate::decode::Encoding::Gzip, &gzip, 4096),
+        Err(())
+    );
+}
+
+#[test]
+fn inflate_rejects_unsupported_window_bits() {
+    assert!(crate::Inflate::new(15).is_some());
+    assert!(crate::Inflate::new(-15).is_some());
+    assert!(crate::Inflate::new(31).is_some());
+    assert!(crate::Inflate::new(47).is_some());
+    assert!(crate::Inflate::new(48).is_none());
+    assert!(crate::Inflate::new(7).is_none());
 }

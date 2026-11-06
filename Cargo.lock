@@ -2335,6 +2335,7 @@ version = "1.0.8-dev"
 name = "southstar-http"
 version = "1.0.8-dev"
 dependencies = [
+ "flate2",
  "ml-kem",
  "ring",
  "rustls",
@@ -2478,6 +2479,7 @@ dependencies = [
 name = "southstar-js-compression"
 version = "1.0.8-dev"
 dependencies = [
+ "flate2",
  "southstar-http",
  "southstar-js-engine",
 ]

@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.7:
 ======
+* Network: gzip and deflate response bodies, and CompressionStream and
+  DecompressionStream, are compressed and decompressed in Rust (flate2
+  over zlib-rs, a Rust port of zlib) instead of the C zlib. The formats
+  and their window-bit conventions are unchanged; gzip and deflate
+  decoding gains unit tests.
 * Text: Thai, Lao, Khmer and Myanmar text is broken into words by ICU4X's
   dictionary segmenter, in Rust, instead of libthai. Thai wraps at the
   same words as before; Lao, Khmer and Myanmar, which libthai did not
