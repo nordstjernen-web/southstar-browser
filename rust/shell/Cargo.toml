@@ -48,7 +48,6 @@ southstar-url = { path = "../url", version = "=1.0.8-dev" }
 southstar-watchdog = { path = "../watchdog", version = "=1.0.8-dev" }
 
 [features]
-rust-main = []
 avif = ["southstar-ffi/avif"]
 sdl = ["southstar-ffi/sdl"]
 fontconfig = ["southstar-ffi/fontconfig"]

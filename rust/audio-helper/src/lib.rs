@@ -9,13 +9,3 @@ mod mixer;
 mod mp3;
 
 pub use helper::run;
-
-#[cfg(not(feature = "rust-main"))]
-#[unsafe(no_mangle)]
-pub extern "C" fn main(
-    _argc: core::ffi::c_int,
-    _argv: *mut *mut core::ffi::c_char,
-) -> core::ffi::c_int {
-    run();
-    0
-}

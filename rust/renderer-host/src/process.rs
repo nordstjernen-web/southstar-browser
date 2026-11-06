@@ -134,23 +134,6 @@ pub fn run(args: &[&[u8]]) -> c_int {
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ns_renderer_main(argc: c_int, argv: *mut *mut c_char) -> c_int {
-    let argc = usize::try_from(argc).unwrap_or(0);
-    if argv.is_null() || argc == 0 {
-        return run(&[]);
-    }
-    // SAFETY: the C main passes `argc` argument pointers at `argv`, live for the whole process.
-    let argv = unsafe { core::slice::from_raw_parts(argv, argc) };
-    let args: Vec<&[u8]> = argv
-        .iter()
-        .take_while(|arg| !arg.is_null())
-        // SAFETY: each non-null argument is a NUL-terminated string live for the whole process.
-        .map(|&arg| unsafe { CStr::from_ptr(arg) }.to_bytes())
-        .collect();
-    run(&args)
-}
-
 #[cfg(unix)]
 mod sys {
     use core::ffi::{c_int, c_void};

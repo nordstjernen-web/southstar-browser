@@ -21,7 +21,6 @@ southstar-media-shm = { path = "../media-shm", version = "=1.0.8-dev" }
 southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.8-dev" }
 
 [features]
-rust-main = []
 seccomp = ["southstar-helper-ffi/seccomp"]
 
 [lints]

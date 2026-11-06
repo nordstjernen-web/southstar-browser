@@ -619,20 +619,6 @@ fn sandbox_proc_mode(single_process: bool) {
     southstar_sandbox::sandbox_init(self_exe_str());
 }
 
-#[cfg(not(feature = "rust-main"))]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn main(argc: c_int, argv: *mut *mut c_char) -> c_int {
-    let args: Vec<&CStr> = (0..usize::try_from(argc).unwrap_or(0))
-        .map(|i| argv.wrapping_add(i))
-        // SAFETY: the C runtime passes argc readable entries in argv, ending with a null pointer, and take_while stops there.
-        .map(|slot| unsafe { *slot })
-        .take_while(|a| !a.is_null())
-        // SAFETY: each argument is a NUL-terminated string that lives until the process exits.
-        .map(|a| unsafe { CStr::from_ptr(a) })
-        .collect();
-    run(&args)
-}
-
 pub fn run(args: &[&CStr]) -> c_int {
     #[cfg(windows)]
     if appmain::need_console(args) {

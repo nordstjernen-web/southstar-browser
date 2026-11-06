@@ -2,7 +2,7 @@
 # Each group becomes one published crate whose members are modules; every publishable crate
 # belongs to exactly one group, and "engine" takes whatever no other group names.
 
-unpublished = ["static", "launcher", "jsshell"]
+unpublished = ["capi", "jsshell", "xtask"]
 
 [southstar]
 description = "Southstar, a web browser written from scratch in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"

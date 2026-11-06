@@ -1,6 +1,6 @@
 [package]
-name = "southstar-static"
-description = "The static library meson links into the C targets other than the GTK shell: southstar-ffi as a staticlib"
+name = "southstar-capi"
+description = "libsouthstar, the C embedding API of include/libsouthstar.h: southstar-ffi as a shared library"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,11 +10,15 @@ repository.workspace = true
 homepage.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+name = "southstar"
+crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
 southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8-dev" }
+
+[build-dependencies]
+southstar-build = { path = "../build", version = "=1.0.8-dev" }
 
 [features]
 avif = ["southstar-ffi/avif"]
