@@ -10,8 +10,6 @@ mod ffi;
 pub mod ftp;
 mod inflate;
 mod proxy;
-#[cfg(test)]
-mod tests;
 mod tls;
 mod transfer;
 mod x25519_mlkem768;

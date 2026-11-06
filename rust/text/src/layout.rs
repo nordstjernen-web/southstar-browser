@@ -27,10 +27,6 @@ pub use line::{LayoutLine, LineRef};
 
 use extents::Extents;
 
-#[cfg(test)]
-#[path = "tests/layout.rs"]
-mod tests;
-
 pub type SharedContext = Arc<Mutex<Context>>;
 
 pub fn shared_context(context: Context) -> SharedContext {

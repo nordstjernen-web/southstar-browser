@@ -24,7 +24,7 @@ css-syntax	0	0	0	0	0	0	0
 datetime	0	0	0	0	0	0	0
 debuglog	0	0	0	0	0	0	0
 digest	0	0	0	0	0	0	0
-dom	14	0	0	0	0	0	0
+dom	13	0	0	0	0	0	0
 engine	0	0	0	0	0	0	0
 eventsource	0	0	0	0	0	0	0
 extensions	0	0	0	0	0	0	0
@@ -146,7 +146,7 @@ spellcheck	6	6	0	0	0	0	0
 sqlite	29	21	0	0	0	0	0
 style	1	0	0	0	0	0	0
 svg	0	0	0	0	0	0	0
-text	427	299	0	0	0	0	0
+text	356	252	0	0	0	0	0
 texture	0	0	0	0	0	0	0
 threaddump	17	11	0	0	0	0	0
 unicode	0	0	0	0	0	0	0

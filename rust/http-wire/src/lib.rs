@@ -9,5 +9,3 @@ pub mod h1;
 pub mod h2;
 pub mod hpack;
 mod hpack_tables;
-#[cfg(test)]
-mod tests;

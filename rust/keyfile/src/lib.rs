@@ -5,8 +5,6 @@
 #![forbid(unsafe_code)]
 
 use southstar_unicode::until_nul_str;
-#[cfg(test)]
-mod tests;
 
 fn is_key_name(key: &str) -> bool {
     !key.is_empty()

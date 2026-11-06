@@ -20,8 +20,7 @@ See `README.md` for the product vision and `CLAUDE.md` for working rules.
   over ring for TLS, the png/gif/zune-jpeg crates for image decode, and the
   pure-Rust wasmi interpreter for WebAssembly. `deny.toml` and `cargo vet`
   keep the tree small and audited.
-- **Tests where they pay** — unit tests for parsers and engine logic
-  (`scripts/rust-tests.sh`), conformance tracked by test262
+- **Tests where they pay** — no unit tests; conformance is tracked by test262
   (`southstar-jsshell test262`) and the WPT scoreboard
   (`docs/wpt-scores.md`); everything else is verified by running the
   browser.

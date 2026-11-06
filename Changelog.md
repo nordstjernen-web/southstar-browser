@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Source: the unit tests are gone (334 tests in 46 crates, their
+  `tests.rs` files and `tests/` directories, the test-only helpers and
+  `scripts/rust-tests.sh`), and the project adds none; changes are
+  verified by running the browser. AGENTS.md and CLAUDE.md state the rule.
 * Network: cookie scoping and registrable domains (sites, cookie
   partitions, extension rules) use the Public Suffix List through
   `rust/psl`, in Rust, instead of libpsl. The list is read at first use

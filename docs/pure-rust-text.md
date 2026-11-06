@@ -121,8 +121,8 @@ canonical singletons, Bidi_Mirroring_Glyph) are generated from the Unicode
 Verification:
 
 - **Conformance.** All 770,241 BidiTest.txt and 91,707
-  BidiCharacterTest.txt cases pass (`SOUTHSTAR_UCD_DIR` enables them; the
-  Linux CI downloads both files).
+  BidiCharacterTest.txt cases passed when the crate was written; the
+  harness went with the project's other unit tests.
 - **Reference implementation.** On 5,000,000 random paragraphs (all 23
   classes, brackets including canonical and compatibility forms, nesting
   past the 125-level limit, all four paragraph directions) the levels match

@@ -6,6 +6,4 @@ pub(crate) mod cairo;
 pub(crate) mod fontconfig;
 pub(crate) mod glib_lang;
 pub(crate) mod harfbuzz;
-#[cfg(all(test, feature = "rust-shaper"))]
-pub(crate) mod harfbuzz_shape_test;
 pub(crate) mod harfbuzz_strings;

@@ -8,9 +8,6 @@ use core::cell::Cell;
 
 use southstar_css_syntax::{Component, Kind};
 
-#[cfg(test)]
-mod tests;
-
 const MAX_DEPTH: u32 = 32;
 
 const SELECTOR_LIST_FUNCTIONS: &[&str] = &[

@@ -16,8 +16,6 @@ pub mod select;
 pub mod serialize;
 pub mod shadow;
 pub mod store;
-#[cfg(test)]
-mod tests;
 pub mod tree;
 
 pub use data::{Invalidator, Kind, NsNode};

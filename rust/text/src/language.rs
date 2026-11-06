@@ -12,10 +12,6 @@ use crate::script::Script;
 #[path = "language_table.rs"]
 mod table;
 
-#[cfg(test)]
-#[path = "tests/language.rs"]
-mod tests;
-
 const LANGUAGE_SEPARATORS: &[u8] = b";:, \t";
 
 const DEFAULT_SAMPLE: &str = "The quick brown fox jumps over the lazy dog.";

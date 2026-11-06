@@ -8,8 +8,6 @@ mod charref;
 mod entities;
 mod quirks;
 mod tags;
-#[cfg(test)]
-mod tests;
 mod tokenizer;
 mod tree;
 

@@ -11,10 +11,6 @@ use crate::types::{
     Weight, font_mask,
 };
 
-#[cfg(test)]
-#[path = "tests/attrs.rs"]
-mod tests;
-
 pub const ATTR_INDEX_FROM_TEXT_BEGINNING: u32 = 0;
 pub const ATTR_INDEX_TO_TEXT_END: u32 = u32::MAX;
 
