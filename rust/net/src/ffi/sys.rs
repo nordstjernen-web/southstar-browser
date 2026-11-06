@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -390,7 +390,7 @@ pub fn available_memory_bytes() -> u64 {
     }
     #[link(name = "kernel32")]
     unsafe extern "system" {
-        fn GlobalMemoryStatusEx(buffer: *mut MemoryStatusEx) -> c_int;
+        fn GlobalMemoryStatusEx(buffer: *mut MemoryStatusEx) -> core::ffi::c_int;
     }
     let mut status = MemoryStatusEx {
         length: core::mem::size_of::<MemoryStatusEx>() as u32,
@@ -420,7 +420,7 @@ pub fn available_memory_bytes() -> u64 {
             oldlenp: *mut usize,
             newp: *mut c_void,
             newlen: usize,
-        ) -> c_int;
+        ) -> core::ffi::c_int;
     }
     let mut mem = 0u64;
     let mut len = core::mem::size_of::<u64>();
@@ -441,10 +441,10 @@ pub fn available_memory_bytes() -> u64 {
 #[cfg(any(target_os = "openbsd", target_os = "solaris", target_os = "illumos"))]
 pub fn available_memory_bytes() -> u64 {
     unsafe extern "C" {
-        fn sysconf(name: c_int) -> core::ffi::c_long;
+        fn sysconf(name: core::ffi::c_int) -> core::ffi::c_long;
     }
-    const AVPHYS_PAGES: c_int = 501;
-    const PAGESIZE: c_int = if cfg!(target_os = "openbsd") { 28 } else { 11 };
+    const AVPHYS_PAGES: core::ffi::c_int = 501;
+    const PAGESIZE: core::ffi::c_int = if cfg!(target_os = "openbsd") { 28 } else { 11 };
     // SAFETY: sysconf takes a plain selector and only returns a value.
     let pages = unsafe { sysconf(AVPHYS_PAGES) };
     // SAFETY: sysconf takes a plain selector and only returns a value.
