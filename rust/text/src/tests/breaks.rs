@@ -25,6 +25,21 @@ fn line_breaks_between_words() {
 }
 
 #[test]
+fn thai_breaks_between_dictionary_words() {
+    let attrs = log_attrs("สวัสดีครับ");
+    assert!(attrs[6].is_line_break());
+    assert!(attrs[6].is_word_start());
+    assert!(!attrs[3].is_line_break());
+}
+
+#[test]
+fn lao_breaks_between_dictionary_words() {
+    let attrs = log_attrs("ພາສາລາວ");
+    assert!(attrs[4].is_line_break());
+    assert!(!attrs[2].is_line_break());
+}
+
+#[test]
 fn empty_text_has_one_attr() {
     let attrs = log_attrs("");
     assert_eq!(attrs.len(), 1);

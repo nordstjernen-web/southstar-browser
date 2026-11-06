@@ -162,11 +162,6 @@ pub fn configure(options: &Options) -> Result<Configuration, String> {
     enable("http-brotli", brotli, "HTTP brotli (libbrotlidec)");
     enable("woff2", brotli, "WOFF2 fonts (libbrotlidec)");
     enable("http-zstd", has("libzstd"), "HTTP zstd (libzstd)");
-    enable(
-        "thai",
-        at_least("libthai", "0.1.9"),
-        "Thai word breaking (libthai)",
-    );
     let avif = options.avif != Toggle::Disabled && has("libavif");
     if options.avif == Toggle::Enabled && !avif {
         return Err("AVIF was requested but libavif is not installed".to_owned());

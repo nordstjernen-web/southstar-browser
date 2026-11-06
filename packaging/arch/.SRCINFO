@@ -25,7 +25,6 @@ pkgbase = southstar-browser
 	depends = libgcc
 	depends = libpsl
 	depends = libseccomp
-	depends = libthai
 	depends = libvorbis
 	depends = libwebp
 	depends = openssl

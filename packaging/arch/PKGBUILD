@@ -26,7 +26,6 @@ depends=(
   libgcc
   libpsl
   libseccomp
-  libthai
   libvorbis
   libwebp
   openssl

@@ -270,8 +270,7 @@ drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
 **Optional**, auto-detected or build-time-selected:
 [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
-PDF), libavif (AVIF images), Enchant (spell checking), libthai (Thai word
-breaking), SDL2 (audio output for the `southstar-audio` helper; `-Daudio`),
+PDF), libavif (AVIF images), Enchant (spell checking), SDL2 (audio output for the `southstar-audio` helper; `-Daudio`),
 vorbisfile and opusfile (Ogg audio without FFmpeg), libbrotlidec and libzstd (`br` and `zstd` content
 decoding), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
 WebGPU).

@@ -29,7 +29,6 @@ makedepends="
 	fontconfig-dev
 	harfbuzz-dev
 	freetype-dev
-	libthai-dev
 	sdl2-dev
 	"
 source="$pkgname-$pkgver.tar.gz::https://github.com/nordstjernen-web/southstar-browser/archive/refs/tags/$pkgver.tar.gz"

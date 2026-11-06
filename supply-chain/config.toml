@@ -311,6 +311,10 @@ criteria = "safe-to-deploy"
 version = "2.3.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.icu_segmenter_data]]
+version = "2.3.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.icu_time]]
 version = "2.3.0"
 criteria = "safe-to-deploy"

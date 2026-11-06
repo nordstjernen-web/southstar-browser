@@ -1,9 +1,10 @@
-//! Southstar text — script-specific break tailoring for Arabic, the Indic scripts, Thai and Catalan Latin.
+//! Southstar text — script-specific break tailoring for Arabic, the Indic scripts, the dictionary-broken Southeast Asian scripts and Catalan Latin.
 //! Copyright 1999 Red Hat Software; 2006 Behdad Esfahbod; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
-#[cfg(feature = "thai")]
-use crate::ffi::thai;
+use icu_segmenter::LineSegmenter;
+use icu_segmenter::options::LineBreakOptions;
+
 use crate::script::Script;
 use crate::types::LogAttr;
 use crate::unicode;
@@ -114,24 +115,20 @@ fn break_indic(text: &str, script: Script, attrs: &mut [LogAttr]) {
     }
 }
 
-#[cfg(not(feature = "thai"))]
-fn break_thai(_text: &str, _attrs: &mut [LogAttr]) {}
-
-#[cfg(feature = "thai")]
-fn break_thai(text: &str, attrs: &mut [LogAttr]) {
-    let mut tis_text: Vec<u8> = text
-        .chars()
-        .map(|ch| thai::uni2tis(u32::from(ch)))
-        .collect();
-    tis_text.push(0);
-
-    let mut break_points = vec![0; tis_text.len()];
-    let found = thai::find_breaks(&tis_text, &mut break_points);
-
-    for &point in &break_points[..found] {
-        let Ok(index) = usize::try_from(point) else {
+fn break_dictionary(text: &str, attrs: &mut [LogAttr]) {
+    let segmenter = LineSegmenter::new_dictionary(LineBreakOptions::default());
+    let mut chars = text.char_indices().enumerate().peekable();
+    for offset in segmenter.segment_str(text) {
+        if offset == 0 || offset >= text.len() {
             continue;
+        }
+        while chars.next_if(|&(_, (byte, _))| byte < offset).is_some() {}
+        let Some(&(index, (byte, _))) = chars.peek() else {
+            break;
         };
+        if byte != offset {
+            continue;
+        }
         let attr = &mut attrs[index];
         if !attr.is_line_break() {
             attr.set_is_char_break(true);
@@ -199,7 +196,9 @@ pub(super) fn break_script(
         | Script::KANNADA
         | Script::MALAYALAM
         | Script::SINHALA => break_indic(text, script, attrs),
-        Script::THAI => break_thai(text, attrs),
+        Script::THAI | Script::LAO | Script::KHMER | Script::MYANMAR => {
+            break_dictionary(text, attrs);
+        }
         Script::LATIN => break_latin(paragraph, start, end, language, attrs),
         _ => return false,
     }
