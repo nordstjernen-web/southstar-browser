@@ -98,7 +98,7 @@ Install [Homebrew](https://brew.sh) if you do not already have it, then:
 
 ```sh
 brew install pkg-config gtk4 libepoxy openssl@3 \
-    brotli zstd uchardet libpsl sqlite webp sdl2 rust
+    brotli zstd uchardet sqlite webp sdl2 rust
 ```
 
 Homebrew installs to `/opt/homebrew` on Apple Silicon and `/usr/local` on

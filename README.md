@@ -177,7 +177,7 @@ See [npm/README.md](npm/README.md).
 ```sh
 sudo apt install build-essential git pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 cargo xtask build
 ./target/release/southstar
@@ -262,7 +262,6 @@ drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
 | OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
 | zlib | — | gzip/deflate content decoding |
 | uchardet | — | charset detection |
-| libpsl | — | public-suffix list for cookie scoping |
 | SQLite | — | IndexedDB persistent storage |
 | libwebp | — | WebP decoding (lossy, lossless and animated) |
 | libseccomp | — (Linux only) | syscall sandbox; no-op on macOS/Windows |

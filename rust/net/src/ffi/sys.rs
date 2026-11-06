@@ -1,11 +1,10 @@
-//! Southstar — the file system, clock and GLib calls behind file: and FTP responses and the network stores: file names and URIs, folders, stat, local times, content types and the public suffix list.
+//! Southstar — the file system, clock and GLib calls behind file: and FTP responses and the network stores: file names and URIs, folders, stat, local times, content types and the public suffix check.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::cmp::Ordering;
-use core::ffi::{CStr, c_char, c_int, c_void};
+use core::ffi::{CStr, c_int};
 
-use std::ffi::CString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -13,16 +12,6 @@ use southstar_config::util;
 use southstar_netutil::file_uri;
 
 const TMP_NAME_CHARS: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-unsafe extern "C" {
-    safe fn psl_builtin() -> *const c_void;
-    fn psl_is_public_suffix(psl: *const c_void, domain: *const c_char) -> c_int;
-}
-
-fn c(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
 
 fn io_message(error: &std::io::Error) -> Vec<u8> {
     let text = error.to_string();
@@ -305,14 +294,7 @@ pub fn write_file(path: &[u8], contents: &[u8]) -> bool {
 }
 
 pub fn is_public_suffix(domain: &[u8]) -> bool {
-    let psl = psl_builtin();
-    if psl.is_null() {
-        return false;
-    }
-    let domain = c(domain);
-    // SAFETY: `psl` is the non-null built-in list and `domain` a NUL-terminated string that
-    // outlives the call.
-    unsafe { psl_is_public_suffix(psl, domain.as_ptr()) != 0 }
+    southstar_psl::is_public_suffix(domain)
 }
 
 pub fn warn_read_failure(what: &CStr, path: &[u8], message: &[u8]) {

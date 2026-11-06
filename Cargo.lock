@@ -2075,6 +2075,7 @@ dependencies = [
  "southstar-digest",
  "southstar-glib",
  "southstar-js-engine",
+ "southstar-psl",
  "southstar-unicode",
 ]
 
@@ -3586,6 +3587,7 @@ dependencies = [
  "southstar-mime",
  "southstar-netstore",
  "southstar-netutil",
+ "southstar-psl",
  "southstar-sandbox",
  "southstar-unicode",
  "southstar-url",
@@ -3664,6 +3666,10 @@ dependencies = [
  "southstar-paint",
  "southstar-style",
 ]
+
+[[package]]
+name = "southstar-psl"
+version = "1.0.8-dev"
 
 [[package]]
 name = "southstar-raster"

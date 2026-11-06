@@ -36,6 +36,10 @@ members = ["plmpeg", "minimp3", "av", "media-foundation"]
 description = "Southstar's text layout, a Rust port of the Pango fork web-text-lib: itemization, line breaking, shaping and paragraph layout"
 members = ["text"]
 
+[southstar-psl]
+description = "Southstar's Public Suffix List: the publicsuffix.org rules and the registrable-domain algorithm cookies and sites use"
+members = ["psl"]
+
 [southstar-woff2]
 description = "Southstar's WOFF2 web-font decoder over libbrotlidec"
 members = ["woff2"]

@@ -1,9 +1,8 @@
-//! Southstar — the C ABI of the extension host, its rule regexes, and the file, GLib and libpsl calls behind it.
+//! Southstar — the C ABI of the extension host, its rule regexes, and the file and GLib calls behind it.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::{CStr, c_char};
-use southstar_unicode::c_string_until_nul;
+use core::ffi::CStr;
 use southstar_unicode::until_nul;
 use std::ffi::OsStr;
 use std::io::Write;
@@ -20,16 +19,6 @@ pub(crate) const SEARCHPATH_SEPARATOR: u8 = b':';
 const DIR_SEPARATOR: u8 = b'\\';
 #[cfg(not(windows))]
 const DIR_SEPARATOR: u8 = b'/';
-
-#[repr(C)]
-struct PslContext {
-    _private: [u8; 0],
-}
-
-unsafe extern "C" {
-    safe fn psl_builtin() -> *const PslContext;
-    fn psl_registrable_domain(psl: *const PslContext, domain: *const c_char) -> *const c_char;
-}
 
 pub(crate) struct Regex(regress::Regex);
 
@@ -240,14 +229,6 @@ pub(crate) fn write_private_file(path: &[u8], data: &[u8]) -> bool {
 }
 
 pub fn registrable_domain(host: &[u8]) -> Option<Vec<u8>> {
-    let psl = psl_builtin();
-    if psl.is_null() {
-        return None;
-    }
-    let host = c_string_until_nul(host);
-    // SAFETY: `psl` is the non-null built-in list and `host` a NUL-terminated string that
-    // outlives the call.
-    let domain = unsafe { psl_registrable_domain(psl, host.as_ptr()) };
-    // SAFETY: the result is null or points into `host`, which is still alive here.
-    unsafe { glib::bytes(domain) }.map(<[u8]>::to_vec)
+    let host = host.split(|&b| b == 0).next().unwrap_or_default();
+    southstar_psl::registrable_domain(host).map(<[u8]>::to_vec)
 }

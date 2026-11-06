@@ -24,7 +24,6 @@ depends=(
   libavif
   libepoxy
   libgcc
-  libpsl
   libseccomp
   libvorbis
   libwebp

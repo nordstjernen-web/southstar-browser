@@ -438,7 +438,7 @@ System packages required on Debian/Ubuntu:
 ```sh
 sudo apt install build-essential pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libharfbuzz-dev libfontconfig-dev libfreetype-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
@@ -461,7 +461,7 @@ On Fedora/RHEL:
 
 ```sh
 sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-    openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel libpsl-devel sqlite-devel \
+    openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel sqlite-devel \
     harfbuzz-devel fontconfig-devel freetype-devel \
     libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
 ```
@@ -472,7 +472,7 @@ On openSUSE:
 
 ```sh
 sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-    libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel libpsl-devel sqlite3-devel \
+    libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel sqlite3-devel \
     harfbuzz-devel fontconfig-devel freetype2-devel \
     libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
 ```

@@ -10,6 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+southstar-psl = { path = "../psl", version = "=1.0.8-dev" }
 southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
 southstar-mime = { path = "../mime", version = "=1.0.8-dev" }
 southstar-about-style = { path = "../about-style", version = "=1.0.8-dev" }

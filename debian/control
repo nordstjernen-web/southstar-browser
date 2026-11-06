@@ -15,7 +15,6 @@ Build-Depends:
  libbrotli-dev,
  libzstd-dev,
  libuchardet-dev,
- libpsl-dev,
  libsqlite3-dev,
  libseccomp-dev [linux-any],
  libwebp-dev,

@@ -52,7 +52,7 @@ Debian/Ubuntu:
 ```sh
 sudo apt install build-essential pkg-config \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libpsl-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
@@ -60,14 +60,14 @@ macOS ([Homebrew](https://brew.sh), plus `xcode-select --install`):
 
 ```sh
 brew install pkg-config gtk4 libepoxy openssl@3 \
-    brotli zstd uchardet libpsl sqlite webp sdl2 rust
+    brotli zstd uchardet sqlite webp sdl2 rust
 ```
 
 Windows: install [MSYS2](https://www.msys2.org) in `C:\msys64` (or set
 `MSYS2_ROOT`), then in its UCRT64 terminal:
 
 ```sh
-pacman -S --needed tar mingw-w64-ucrt-x86_64-{clang,pkgconf,rust,gtk4,libepoxy,openssl,uchardet,libpsl,sqlite3,libwebp,ffmpeg}
+pacman -S --needed tar mingw-w64-ucrt-x86_64-{clang,pkgconf,rust,gtk4,libepoxy,openssl,uchardet,sqlite3,libwebp,ffmpeg}
 ```
 
 The browser runs against the MSYS2 libraries it was built with, so keep MSYS2
