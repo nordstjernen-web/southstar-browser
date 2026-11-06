@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.7-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.8" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.8" }
 
 [lints]
 workspace = true

@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.7-dev:
+Southstar Browser 1.0.8:
 ======
 * Dependencies: cc 1.11.1, ctutils 0.4.8, flate2 1.1.11, smallvec
   1.16.5, toml_edit 0.25.19, toml_datetime 1.1.3 and winnow 1.0.5. Boa

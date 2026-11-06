@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.7-dev" }
-southstar-mime = { path = "../mime", version = "=1.0.7-dev" }
-southstar-about-style = { path = "../about-style", version = "=1.0.7-dev" }
-southstar-config = { path = "../config", version = "=1.0.7-dev" }
-southstar-debuglog = { path = "../debuglog", version = "=1.0.7-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.7-dev" }
-southstar-extensions = { path = "../extensions", version = "=1.0.7-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
-southstar-history = { path = "../history", version = "=1.0.7-dev" }
-southstar-html-util = { path = "../html-util", version = "=1.0.7-dev" }
-southstar-http = { path = "../http", version = "=1.0.7-dev" }
-southstar-http-cache = { path = "../http-cache", version = "=1.0.7-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.7-dev", default-features = false }
-southstar-netstore = { path = "../netstore", version = "=1.0.7-dev" }
-southstar-netutil = { path = "../netutil", version = "=1.0.7-dev" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.7-dev" }
-southstar-url = { path = "../url", version = "=1.0.7-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8" }
+southstar-mime = { path = "../mime", version = "=1.0.8" }
+southstar-about-style = { path = "../about-style", version = "=1.0.8" }
+southstar-config = { path = "../config", version = "=1.0.8" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.8" }
+southstar-digest = { path = "../digest", version = "=1.0.8" }
+southstar-extensions = { path = "../extensions", version = "=1.0.8" }
+southstar-glib = { path = "../glib", version = "=1.0.8" }
+southstar-history = { path = "../history", version = "=1.0.8" }
+southstar-html-util = { path = "../html-util", version = "=1.0.8" }
+southstar-http = { path = "../http", version = "=1.0.8" }
+southstar-http-cache = { path = "../http-cache", version = "=1.0.8" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.8", default-features = false }
+southstar-netstore = { path = "../netstore", version = "=1.0.8" }
+southstar-netutil = { path = "../netutil", version = "=1.0.8" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.8" }
+southstar-url = { path = "../url", version = "=1.0.8" }
 
 [features]
 avif = []

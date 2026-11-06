@@ -14,38 +14,38 @@ crate-type = ["staticlib", "rlib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.7-dev" }
-southstar-bookmarks = { path = "../bookmarks", version = "=1.0.7-dev" }
-southstar-browser = { path = "../browser", version = "=1.0.7-dev" }
-southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.7-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.7-dev" }
-southstar-config = { path = "../config", version = "=1.0.7-dev" }
-southstar-debuglog = { path = "../debuglog", version = "=1.0.7-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.7-dev" }
-southstar-engine = { path = "../engine", version = "=1.0.7-dev" }
-southstar-ffi = { path = "../southstar-ffi", version = "=1.0.7-dev" }
-southstar-font = { path = "../font", version = "=1.0.7-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.7-dev" }
-southstar-gtk = { path = "../gtk", version = "=1.0.7-dev" }
-southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.7-dev" }
-southstar-headless = { path = "../headless", version = "=1.0.7-dev" }
-southstar-history = { path = "../history", version = "=1.0.7-dev" }
-southstar-html-parser = { path = "../html-parser", version = "=1.0.7-dev" }
-southstar-http-cache = { path = "../http-cache", version = "=1.0.7-dev" }
-southstar-i18n = { path = "../i18n", version = "=1.0.7-dev" }
-southstar-media-shm = { path = "../media-shm", version = "=1.0.7-dev" }
-southstar-net = { path = "../net", version = "=1.0.7-dev" }
-southstar-netutil = { path = "../netutil", version = "=1.0.7-dev" }
-southstar-paint = { path = "../paint", version = "=1.0.7-dev" }
-southstar-renderer-client = { path = "../renderer-client", version = "=1.0.7-dev" }
-southstar-renderer-host = { path = "../renderer-host", version = "=1.0.7-dev" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.7-dev" }
-southstar-spellcheck = { path = "../spellcheck", version = "=1.0.7-dev" }
-southstar-svg = { path = "../svg", version = "=1.0.7-dev" }
-southstar-text = { path = "../text", version = "=1.0.7-dev" }
-southstar-threaddump = { path = "../threaddump", version = "=1.0.7-dev" }
-southstar-url = { path = "../url", version = "=1.0.7-dev" }
-southstar-watchdog = { path = "../watchdog", version = "=1.0.7-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8" }
+southstar-bookmarks = { path = "../bookmarks", version = "=1.0.8" }
+southstar-browser = { path = "../browser", version = "=1.0.8" }
+southstar-bytecode-cache = { path = "../bytecode-cache", version = "=1.0.8" }
+southstar-cairo = { path = "../cairo", version = "=1.0.8" }
+southstar-config = { path = "../config", version = "=1.0.8" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.8" }
+southstar-dom = { path = "../dom", version = "=1.0.8" }
+southstar-engine = { path = "../engine", version = "=1.0.8" }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8" }
+southstar-font = { path = "../font", version = "=1.0.8" }
+southstar-glib = { path = "../glib", version = "=1.0.8" }
+southstar-gtk = { path = "../gtk", version = "=1.0.8" }
+southstar-gtk-ffi = { path = "../gtk-ffi", version = "=1.0.8" }
+southstar-headless = { path = "../headless", version = "=1.0.8" }
+southstar-history = { path = "../history", version = "=1.0.8" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.8" }
+southstar-http-cache = { path = "../http-cache", version = "=1.0.8" }
+southstar-i18n = { path = "../i18n", version = "=1.0.8" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.8" }
+southstar-net = { path = "../net", version = "=1.0.8" }
+southstar-netutil = { path = "../netutil", version = "=1.0.8" }
+southstar-paint = { path = "../paint", version = "=1.0.8" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.8" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.8" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.8" }
+southstar-spellcheck = { path = "../spellcheck", version = "=1.0.8" }
+southstar-svg = { path = "../svg", version = "=1.0.8" }
+southstar-text = { path = "../text", version = "=1.0.8" }
+southstar-threaddump = { path = "../threaddump", version = "=1.0.8" }
+southstar-url = { path = "../url", version = "=1.0.8" }
+southstar-watchdog = { path = "../watchdog", version = "=1.0.8" }
 
 [features]
 rust-main = []
