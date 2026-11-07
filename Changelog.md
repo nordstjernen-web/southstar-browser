@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* JavaScript: invalid UTF-8 in a script no longer swallows the bytes after it. The
+  parser decoded every lead byte's continuation bytes unchecked, so in an external
+  script, which reaches it undecoded, `'\xC0\'` ended the string at the escaped
+  quote and user input escaped by a site could run as code. Invalid sequences now
+  become U+FFFD, as in every other browser.
 * Forms: `checkValidity()`, `reportValidity()` and `validity.patternMismatch`
   match the `pattern` attribute with the same bounded matcher as `:valid` and
   `:invalid`, so a script can no longer hang the page through validation on a

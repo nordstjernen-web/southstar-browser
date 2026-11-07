@@ -5,6 +5,7 @@ use std::io::{self, Bytes, Read};
 #[derive(Debug)]
 pub struct UTF8Input<R> {
     input: Bytes<R>,
+    peeked: Option<u8>,
 }
 
 impl<R: Read> UTF8Input<R> {
@@ -13,6 +14,7 @@ impl<R: Read> UTF8Input<R> {
         Self {
             #[allow(clippy::unbuffered_bytes)]
             input: iter.bytes(),
+            peeked: None,
         }
     }
 }
@@ -20,36 +22,45 @@ impl<R: Read> UTF8Input<R> {
 impl<R: Read> UTF8Input<R> {
     /// Retrieves the next byte
     fn next_byte(&mut self) -> io::Result<Option<u8>> {
+        if let Some(byte) = self.peeked.take() {
+            return Ok(Some(byte));
+        }
         self.input.next().transpose()
     }
 }
 
 impl<R: Read> ReadChar for UTF8Input<R> {
-    /// Retrieves the next unchecked char in u32 code point.
+    /// Retrieves the next char as a u32 code point, decoding like the
+    /// WHATWG UTF-8 decoder: an invalid or truncated sequence yields U+FFFD
+    /// and consumes only its own bytes, so it cannot swallow the quote,
+    /// backslash or newline after it. Encoded surrogates (WTF-8) are kept.
     fn next_char(&mut self) -> io::Result<Option<u32>> {
-        // Decode UTF-8
         let x = match self.next_byte()? {
-            Some(b) if b >= 128 => b,         // UTF-8 codepoint
-            b => return Ok(b.map(u32::from)), // ASCII or None
+            Some(b) if b >= 128 => b,
+            b => return Ok(b.map(u32::from)),
         };
 
-        // Multibyte case follows
-        // Decode from a byte combination out of: [[[x y] z] w]
-        // NOTE: Performance is sensitive to the exact formulation here
-        let init = utf8_first_byte(x, 2);
-        let y = self.next_byte()?.unwrap_or(0);
-        let mut ch = utf8_acc_cont_byte(init, y);
-        if x >= 0xE0 {
-            // [[x y z] w] case
-            // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
-            let z = self.next_byte()?.unwrap_or(0);
-            let y_z = utf8_acc_cont_byte(u32::from(y & CONT_MASK), z);
-            ch = (init << 12) | y_z;
-            if x >= 0xF0 {
-                // [x y z w] case
-                // use only the lower 3 bits of `init`
-                let w = self.next_byte()?.unwrap_or(0);
-                ch = ((init & 7) << 18) | utf8_acc_cont_byte(y_z, w);
+        let (mut ch, needed, mut lower, mut upper) = match x {
+            0xC2..=0xDF => (utf8_first_byte(x, 2), 1, 0x80, 0xBF),
+            0xE0 => (utf8_first_byte(x, 3), 2, 0xA0, 0xBF),
+            0xE1..=0xEF => (utf8_first_byte(x, 3), 2, 0x80, 0xBF),
+            0xF0 => (utf8_first_byte(x, 4), 3, 0x90, 0xBF),
+            0xF1..=0xF3 => (utf8_first_byte(x, 4), 3, 0x80, 0xBF),
+            0xF4 => (utf8_first_byte(x, 4), 3, 0x80, 0x8F),
+            _ => return Ok(Some(REPLACEMENT_CHARACTER)),
+        };
+        for _ in 0..needed {
+            match self.next_byte()? {
+                Some(byte) if (lower..=upper).contains(&byte) => {
+                    ch = utf8_acc_cont_byte(ch, byte);
+                    lower = 0x80;
+                    upper = 0xBF;
+                }
+                Some(byte) => {
+                    self.peeked = Some(byte);
+                    return Ok(Some(REPLACEMENT_CHARACTER));
+                }
+                None => return Ok(Some(REPLACEMENT_CHARACTER)),
             }
         }
 
@@ -57,12 +68,15 @@ impl<R: Read> ReadChar for UTF8Input<R> {
     }
 }
 
+/// U+FFFD, which replaces every invalid or truncated UTF-8 sequence.
+const REPLACEMENT_CHARACTER: u32 = 0xFFFD;
+
 /// Mask of the value bits of a continuation byte.
 const CONT_MASK: u8 = 0b0011_1111;
 
-/// Returns the initial codepoint accumulator for the first byte.
-/// The first byte is special, only want bottom 5 bits for width 2, 4 bits
-/// for width 3, and 3 bits for width 4.
+/// Returns the initial codepoint accumulator for the first byte of a
+/// sequence `width` bytes long: the bottom 5 bits for width 2, 4 bits for
+/// width 3 and 3 bits for width 4.
 fn utf8_first_byte(byte: u8, width: u32) -> u32 {
     u32::from(byte & (0x7F >> width))
 }
