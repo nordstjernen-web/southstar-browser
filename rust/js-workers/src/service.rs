@@ -11,7 +11,13 @@ use crate::ffi::{self, CFn, Js};
 use crate::worker::{self, Host, HostSpec, Owned, WorkerRef};
 use crate::{JsResult, arg, bind, get, get_index, length, push, set, set_str};
 
-const FETCH_DISPATCH: &str = "globalThis.__nd_sw_dispatch_fetch=function(id,url,method,headers,body){\
+const FETCH_DISPATCH: &str = "(function(){var fields=new WeakMap(),proto=null;\
+function fetchProto(){if(proto)return proto;proto=Object.create(Event.prototype);\
+['request','clientId','resultingClientId','replacesClientId','preloadResponse','handled'].forEach(function(k){\
+Object.defineProperty(proto,k,{get:function(){var f=fields.get(this);return f?f[k]:undefined;},enumerable:true,configurable:true});});\
+if(typeof FetchEvent==='function')Object.defineProperty(proto,'constructor',{value:FetchEvent,writable:true,configurable:true});\
+return proto;}\
+globalThis.__nd_sw_dispatch_fetch=function(id,url,method,headers,body){\
 var hobj={};try{for(var i=0;i<headers.length;i++){var s=headers[i];var c=s.indexOf(':');\
 if(c>0)hobj[s.slice(0,c).trim()]=s.slice(c+1).trim();}}catch(e){}\
 var init={method:method,headers:hobj};\
@@ -19,7 +25,8 @@ if(body&&method!=='GET'&&method!=='HEAD')init.body=body;\
 var req;try{req=new Request(url,init);}catch(e){req={url:url,method:method,headers:hobj};}\
 var responded=false,captured=null;\
 var ev;try{ev=new Event('fetch');}catch(e){ev={type:'fetch'};}\
-ev.request=req;ev.clientId='';ev.resultingClientId='';\
+try{Object.setPrototypeOf(ev,fetchProto());}catch(e){}\
+fields.set(ev,{request:req,clientId:'',resultingClientId:'',replacesClientId:'',preloadResponse:Promise.resolve(undefined),handled:Promise.resolve(undefined)});\
 ev.respondWith=function(r){responded=true;captured=r;};\
 ev.waitUntil=function(){};\
 try{self.dispatchEvent(ev);}catch(e){}\
@@ -30,7 +37,7 @@ return Promise.resolve(resp.arrayBuffer?resp.arrayBuffer():new ArrayBuffer(0)).t
 var hdrs=[];try{if(resp.headers&&resp.headers.forEach)resp.headers.forEach(function(v,k){hdrs.push(k);hdrs.push(v);});}catch(e){}\
 __nd_sw_fetch_result(id,1,resp.status||200,resp.statusText||'',hdrs,new Uint8Array(ab));});\
 }).catch(function(err){__nd_sw_fetch_result(id,2,String(err&&err.message||err));});\
-};";
+};})();";
 
 const INTERNAL: Attributes = Attributes {
     writable: true,
