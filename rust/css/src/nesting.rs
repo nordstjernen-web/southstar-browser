@@ -8,7 +8,7 @@ use crate::scan::{
 };
 
 const NEST_MAX_DEPTH: i32 = 128;
-const NEST_SELECTOR_BUDGET: usize = 16 * 1024 * 1024;
+const NEST_SELECTOR_BUDGET: usize = 64 * 1024;
 
 const GROUP_RULES: [&[u8]; 5] = [b"@media", b"@supports", b"@container", b"@layer", b"@scope"];
 
