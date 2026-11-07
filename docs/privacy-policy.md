@@ -16,7 +16,9 @@ other store fronts ask for the same URL.
 Southstar collects nothing. The browser has no telemetry, no
 crash reporting, no update pinger, no analytics, no accounts, and no
 "studies" infrastructure. It never phones home — the Southstar
-project operates no server that the browser talks to.
+project operates no server that the browser talks to. The only
+third-party service it contacts on its own is Google Safe Browsing,
+described below.
 
 ## Data the browser stores on your device
 
@@ -36,9 +38,19 @@ type, the links you click, and the resources those pages reference.
 Text typed into the search box is sent to your configured search
 engine (DuckDuckGo by default, changeable in settings).
 Clicking a media overlay hands the media URL to your system's
-external player. There are no background connections, prefetch
-services, safe-browsing lookups, or other third-party services
-built in.
+external player.
+The one background service is Google Safe Browsing, which is on by
+default and can be switched off in Settings ("Block dangerous sites").
+The browser downloads Google's lists of hash prefixes of known phishing,
+malware and unwanted-software addresses, about every 30 minutes, and
+checks each page you open against them on your device. Only when an
+address matches a prefix does it ask Google for the matching full
+hashes, sending that 4-byte prefix and never the address itself. No
+cookies or account information go with these requests, but Google sees
+your IP address, as it would for any connection. Google's own privacy
+policy covers the data it receives. Builds made without a Safe Browsing
+API key use only the local blocklist and make no such requests. There
+are no prefetch services or other third-party services built in.
 
 Websites you visit receive the information any browser sends them
 (your IP address, requested URLs, cookies they set) and are governed

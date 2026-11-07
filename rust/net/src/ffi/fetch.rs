@@ -633,6 +633,12 @@ pub fn fetch(f: &Fetch) -> Result<Response, Failure> {
             r.redirect_count = hops as c_int;
             return Ok(resp);
         }
+        if navigation && crate::safety::blocks_navigation(&next) {
+            r.error = Some(cstr(b"redirect to a blocked site stopped"));
+            r.final_url = Some(cstr(&next));
+            r.redirect_count = hops as c_int;
+            return Ok(resp);
+        }
         if url::origin_from(&base) != url::origin_from(&next) {
             request::strip_sensitive(&mut headers);
         }

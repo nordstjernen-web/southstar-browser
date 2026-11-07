@@ -1,12 +1,21 @@
-//! Southstar — local phishing/malware blocklist and warning interstitial.
+//! Southstar — phishing and malware checks (the local host list and Google Safe Browsing) and the warning interstitial.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use std::collections::BTreeSet;
 use std::ffi::{CStr, CString};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, PoisonError};
 
+mod canon;
 mod ffi;
+mod google;
+mod listfile;
+mod protobuf;
+mod status;
+
+pub use google::start;
+pub use status::rows as status_rows;
 
 pub const UNSAFE_CONTINUE_SCHEME: &[u8] = b"southstar-unsafe-continue:";
 
@@ -16,6 +25,106 @@ struct Lists {
 }
 
 static LISTS: Mutex<Option<Lists>> = Mutex::new(None);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Safe,
+    LocalList,
+    Malware,
+    SocialEngineering,
+    UnwantedSoftware,
+}
+
+impl Verdict {
+    fn rank(self) -> u8 {
+        match self {
+            Verdict::Safe => 0,
+            Verdict::UnwantedSoftware => 1,
+            Verdict::SocialEngineering => 2,
+            Verdict::LocalList => 3,
+            Verdict::Malware => 4,
+        }
+    }
+
+    pub(crate) fn worse(self, other: Verdict) -> Verdict {
+        if self.rank() >= other.rank() {
+            self
+        } else {
+            other
+        }
+    }
+
+    fn heading(self) -> &'static str {
+        match self {
+            Verdict::Malware => "Dangerous site ahead",
+            Verdict::UnwantedSoftware => "Site ahead offers harmful programs",
+            _ => "Deceptive site ahead",
+        }
+    }
+
+    fn summary(self) -> &'static str {
+        match self {
+            Verdict::SocialEngineering => concat!(
+                "Google Safe Browsing reports this site for phishing. It may pretend ",
+                "to be a site you trust to get your passwords, payment details or ",
+                "other personal information."
+            ),
+            Verdict::Malware => concat!(
+                "Google Safe Browsing reports that this site spreads malware. Visiting ",
+                "it may install programs that steal or damage the information on your device."
+            ),
+            Verdict::UnwantedSoftware => concat!(
+                "Google Safe Browsing reports that this site pushes unwanted software. ",
+                "It may try to get you to install programs that change your browser or ",
+                "slow down your device."
+            ),
+            _ => concat!(
+                "Southstar blocked this page because the site below is on your local list ",
+                "of known phishing or malware hosts. Attackers there may try to trick you ",
+                "into revealing passwords or payment details, or to install harmful software."
+            ),
+        }
+    }
+
+    fn details(self) -> &'static str {
+        match self {
+            Verdict::Safe | Verdict::LocalList => concat!(
+                "This check runs entirely on your device against a local list \u{2014} ",
+                "nothing about the page you visited was sent anywhere. "
+            ),
+            _ => concat!(
+                "Southstar checks addresses against a list of hash prefixes kept on your ",
+                "device. Only when one matches does it send Google a short prefix of the ",
+                "address\u{2019}s hash \u{2014} never the address itself \u{2014} to confirm ",
+                "the match. Advisory provided by Google. <a href=\"",
+                "https://developers.google.com/safe-browsing/v4/advisory\">",
+                "About Safe Browsing advisories</a>. "
+            ),
+        }
+    }
+}
+
+struct Counters {
+    checked: AtomicU64,
+    local_blocks: AtomicU64,
+    prefix_matches: AtomicU64,
+    searches: AtomicU64,
+    search_failures: AtomicU64,
+    google_blocks: AtomicU64,
+}
+
+static COUNTERS: Counters = Counters {
+    checked: AtomicU64::new(0),
+    local_blocks: AtomicU64::new(0),
+    prefix_matches: AtomicU64::new(0),
+    searches: AtomicU64::new(0),
+    search_failures: AtomicU64::new(0),
+    google_blocks: AtomicU64::new(0),
+};
+
+pub fn enabled() -> bool {
+    southstar_config::get().is_none_or(|c| c.safe_browsing != 0)
+}
 
 const BUNDLED_LISTS: [&CStr; 7] = [
     c"../Resources/share/southstar/safebrowsing.list",
@@ -54,15 +163,10 @@ const PAGE_HEAD: &str = concat!(
     ".btn.danger{background:#fff;color:#a01b12;border-color:#e0b6b2}",
     ".btn.danger:hover{background:#fbeeec}",
     ".tips{margin-top:24px;padding-top:18px;border-top:1px solid #ececf0;",
-    "color:#555;font-size:13px}",
+    "color:#555;font-size:13px}.tips a{color:#2f5fa8}",
     "</style></head><body><div class=\"card\">",
     "<div class=\"icon\">\u{26a0}\u{fe0f}</div>",
-    "<h1>Deceptive site ahead</h1>",
-    "<p class=\"summary\">Southstar blocked this page because the site ",
-    "below is on your local list of known phishing or malware hosts. ",
-    "Attackers there may try to trick you into revealing passwords or ",
-    "payment details, or to install harmful software.</p>",
-    "<p class=\"host\">",
+    "<h1>",
 );
 
 const PAGE_ACTIONS: &str = concat!(
@@ -76,8 +180,10 @@ const PAGE_TIPS: &str = concat!(
     "\">Continue anyway ",
     "(not recommended)</a>",
     "</div>",
-    "<div class=\"tips\">This check runs entirely on your device against a ",
-    "local list — nothing about the page you visited was sent anywhere. ",
+    "<div class=\"tips\">",
+);
+
+const PAGE_ADDRESS: &str = concat!(
     "The blocked address was <span style=\"font-family:ui-monospace,",
     "monospace;overflow-wrap:anywhere\">",
 );
@@ -148,8 +254,42 @@ pub fn allow_host(host: &[u8]) {
     });
 }
 
+fn host_allowed(host: &[u8]) -> bool {
+    let mut low = host.to_ascii_lowercase();
+    while low.last() == Some(&b'.') {
+        low.pop();
+    }
+    with_lists(|lists| lists.allowed.contains(&low))
+}
+
+pub(crate) fn local_host_count() -> usize {
+    with_lists(|lists| lists.blocked.len())
+}
+
+pub fn check_url(url: &[u8]) -> Verdict {
+    if !enabled() {
+        return Verdict::Safe;
+    }
+    let Some(host) = southstar_url::bytes::host_from(url) else {
+        return Verdict::Safe;
+    };
+    COUNTERS.checked.fetch_add(1, Ordering::Relaxed);
+    if host_allowed(&host) {
+        return Verdict::Safe;
+    }
+    if blocked(&host) {
+        COUNTERS.local_blocks.fetch_add(1, Ordering::Relaxed);
+        return Verdict::LocalList;
+    }
+    let verdict = google::check_url(url);
+    if verdict != Verdict::Safe {
+        COUNTERS.google_blocks.fetch_add(1, Ordering::Relaxed);
+    }
+    verdict
+}
+
 pub fn blocked(host: &[u8]) -> bool {
-    if host.is_empty() {
+    if host.is_empty() || !enabled() {
         return false;
     }
     with_lists(|lists| {
@@ -177,17 +317,23 @@ pub fn blocked(host: &[u8]) -> bool {
     })
 }
 
-pub fn interstitial(url: Option<&CStr>, host: Option<&CStr>) -> Vec<u8> {
+pub fn interstitial(url: Option<&CStr>, host: Option<&CStr>, verdict: Verdict) -> Vec<u8> {
     let url = url.unwrap_or_default();
     let host = host.unwrap_or_default();
     let continue_href =
         CString::new([UNSAFE_CONTINUE_SCHEME, url.to_bytes()].concat()).unwrap_or_default();
     [
         PAGE_HEAD.as_bytes(),
+        verdict.heading().as_bytes(),
+        b"</h1><p class=\"summary\">",
+        verdict.summary().as_bytes(),
+        b"</p><p class=\"host\">",
         &ffi::markup_escape(host),
         PAGE_ACTIONS.as_bytes(),
         &ffi::markup_escape(&continue_href),
         PAGE_TIPS.as_bytes(),
+        verdict.details().as_bytes(),
+        PAGE_ADDRESS.as_bytes(),
         &ffi::markup_escape(url),
         PAGE_TAIL.as_bytes(),
     ]

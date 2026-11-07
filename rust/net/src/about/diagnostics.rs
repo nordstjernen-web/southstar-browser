@@ -1,4 +1,4 @@
-//! Southstar — the diagnostics card on about:southstar: the system, the versions of Southstar and its libraries, the Rust build and the optional features compiled in.
+//! Southstar — the diagnostics card on about:southstar: the system, the versions of Southstar and its libraries, the Rust build, the optional features compiled in and Google Safe Browsing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -148,6 +148,13 @@ pub fn html() -> Vec<u8> {
     }
     for (key, on) in FEATURES {
         feature(&mut s, key, on);
+    }
+    if let Some(rows) = crate::safety::status_rows() {
+        s.extend_from_slice(b"<h3>Google Safe Browsing</h3>");
+        for (key, value) in rows {
+            let key = String::from_utf8_lossy(&sys::markup_escape(key.as_bytes())).into_owned();
+            kv(&mut s, &key, Some(value.as_bytes()));
+        }
     }
     s.extend_from_slice(b"</div>");
     s

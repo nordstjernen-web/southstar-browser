@@ -154,16 +154,22 @@ pub fn https_first_upgrade(url: &CStr) -> Option<CString> {
     southstar_net::https_first_upgrade(url.to_bytes()).and_then(|url| owned_text(&url))
 }
 
-pub fn safebrowsing_blocked(host: &CStr) -> bool {
-    southstar_safebrowsing::blocked(host.to_bytes())
+pub use southstar_safebrowsing::Verdict;
+
+pub fn safebrowsing_check_url(url: &CStr) -> Verdict {
+    southstar_safebrowsing::check_url(url.to_bytes())
 }
 
 pub fn safebrowsing_allow_host(host: &CStr) {
     southstar_safebrowsing::allow_host(host.to_bytes());
 }
 
-pub fn safebrowsing_interstitial(url: &CStr, host: &CStr) -> Option<CString> {
-    owned_text(&southstar_safebrowsing::interstitial(Some(url), Some(host)))
+pub fn safebrowsing_interstitial(url: &CStr, host: &CStr, verdict: Verdict) -> Option<CString> {
+    owned_text(&southstar_safebrowsing::interstitial(
+        Some(url),
+        Some(host),
+        verdict,
+    ))
 }
 
 pub struct ParsedDoc(pub(super) Option<Tree>);

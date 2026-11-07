@@ -1,6 +1,6 @@
 [package]
 name = "southstar-safebrowsing"
-description = "The local phishing/malware host blocklist and its warning interstitial"
+description = "Phishing and malware checks, the local host blocklist and Google Safe Browsing v5 in local-list mode, and their warning interstitial"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,6 +14,9 @@ southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
 southstar-config = { path = "../config", version = "=1.0.8-dev" }
 southstar-digest = { path = "../digest", version = "=1.0.8-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
+southstar-http = { path = "../http", version = "=1.0.8-dev" }
+southstar-net = { path = "../net", version = "=1.0.8-dev" }
+southstar-url = { path = "../url", version = "=1.0.8-dev" }
 
 [lints]
 workspace = true

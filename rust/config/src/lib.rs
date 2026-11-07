@@ -65,6 +65,7 @@ pub struct NsConfig {
     pub reduced_motion: c_int,
     pub do_not_track: GBoolean,
     pub global_privacy_control: GBoolean,
+    pub safe_browsing: GBoolean,
     pub strip_tracking_params: GBoolean,
     pub https_first: GBoolean,
     pub harden_allocator: GBoolean,
@@ -133,7 +134,7 @@ const fn flag(key: &'static str, default: bool) -> Field {
 const REFERER_STRICT_ORIGIN_WHEN_CROSS: i32 = 2;
 const COOKIE_FIRST_PARTY: i32 = 1;
 
-const FIELDS: [Field; 39] = [
+const FIELDS: [Field; 40] = [
     text("home_url", "about:start"),
     text("user_agent", ""),
     text("compat_mode", "chrome"),
@@ -155,6 +156,7 @@ const FIELDS: [Field; 39] = [
     number("reduced_motion", Kind::ReducedMotion, 0),
     flag("do_not_track", false),
     flag("global_privacy_control", false),
+    flag("safe_browsing", true),
     flag("strip_tracking_params", true),
     flag("https_first", true),
     flag("harden_allocator", true),
@@ -262,6 +264,7 @@ impl NsConfig {
         reduced_motion: 0,
         do_not_track: 0,
         global_privacy_control: 0,
+        safe_browsing: 0,
         strip_tracking_params: 0,
         https_first: 0,
         harden_allocator: 0,
@@ -306,6 +309,7 @@ impl NsConfig {
             "reduced_motion" => Slot::Number(&mut self.reduced_motion),
             "do_not_track" => Slot::Number(&mut self.do_not_track),
             "global_privacy_control" => Slot::Number(&mut self.global_privacy_control),
+            "safe_browsing" => Slot::Number(&mut self.safe_browsing),
             "strip_tracking_params" => Slot::Number(&mut self.strip_tracking_params),
             "https_first" => Slot::Number(&mut self.https_first),
             "harden_allocator" => Slot::Number(&mut self.harden_allocator),
@@ -648,6 +652,7 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>, default_language: &[u
     for (label, value) in [
         ("do_not_track          = ", config.do_not_track),
         ("global_privacy_control = ", config.global_privacy_control),
+        ("safe_browsing         = ", config.safe_browsing),
         ("strip_tracking_params = ", config.strip_tracking_params),
         ("https_first           = ", config.https_first),
         ("harden_allocator      = ", config.harden_allocator),
