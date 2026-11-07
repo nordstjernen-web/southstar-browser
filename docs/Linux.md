@@ -79,10 +79,8 @@ headers.
 
 `cargo xtask build` checks the libraries above, enables the optional
 features the installed ones allow (`cargo xtask features` lists them) and
-builds a fat-LTO release into `target/release/`. For a quick edit-and-run
-loop, `cargo xtask build --lto off --target-dir target-fast` builds an
-incremental release into `target-fast/release/`, and `cargo xtask build
---debug` the dev profile into `target/debug/`. `cargo xtask run` builds and
+builds a fat-LTO release into `target/release/`; `cargo xtask build
+--debug` builds the dev profile into `target/debug/`. `cargo xtask run` builds and
 starts the browser; `./scripts/dev.sh build` and `./scripts/dev.sh run` wrap
 the same commands.
 

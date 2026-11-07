@@ -125,8 +125,7 @@ cargo xtask build
 
 Boa (`third_party/boa_engine`) is in-tree,
 so the build needs no submodules; the first build fetches only the crates
-`Cargo.lock` pins. `cargo xtask build --lto off --target-dir target-fast`
-builds a quicker incremental release into `target-fast/release/`.
+`Cargo.lock` pins.
 
 ### Run
 
