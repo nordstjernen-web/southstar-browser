@@ -3,7 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use crate::scan::{
-    is_ws, scan_until, skip_comment, skip_to_block_end, skip_ws_comments, strip, trim_range,
+    is_ws, scan_until, skip_comment, skip_to_block_end, skip_ws_comments, starts_with_ci, strip,
+    trim_range,
 };
 
 const NEST_MAX_DEPTH: i32 = 128;
@@ -11,12 +12,8 @@ const NEST_SELECTOR_BUDGET: usize = 16 * 1024 * 1024;
 
 const GROUP_RULES: [&[u8]; 5] = [b"@media", b"@supports", b"@container", b"@layer", b"@scope"];
 
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
-}
-
 fn is_group_rule(prelude: &[u8]) -> bool {
-    GROUP_RULES.iter().any(|kw| starts_ci(prelude, kw))
+    GROUP_RULES.iter().any(|kw| starts_with_ci(prelude, kw))
 }
 
 pub(crate) fn block_body_end(s: &[u8], body_start: usize, block_end: usize) -> usize {
@@ -381,6 +378,6 @@ pub fn has_container_units(text: &[u8]) -> bool {
         (rest[0] == b'c' || rest[0] == b'C')
             && [&b"cqw"[..], b"cqh", b"cqi", b"cqb", b"cqmin", b"cqmax"]
                 .iter()
-                .any(|unit| starts_ci(rest, unit))
+                .any(|unit| starts_with_ci(rest, unit))
     })
 }

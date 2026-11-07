@@ -100,7 +100,7 @@ impl Counts {
     }
 }
 
-fn subject(sel: SelectorRef<'_>) -> Option<CompoundRef<'_>> {
+pub(crate) fn subject(sel: SelectorRef<'_>) -> Option<CompoundRef<'_>> {
     sel.len().checked_sub(1).and_then(|i| sel.compound(i))
 }
 

@@ -9,7 +9,8 @@ use std::ffi::CStr;
 use crate::calc;
 use crate::ffi::{self, Container};
 use crate::scan::{
-    is_ws, match_paren_quoted, skip_ws, split_ws_limit, split_ws_paren, starts_with_ci, strip,
+    contains, is_ws, match_paren_quoted, skip_ws, split_ws_limit, split_ws_paren, starts_with_ci,
+    strip,
 };
 use crate::units::{self, CQH, CQMAX, CQMIN, CQW, NUMBER, Unit};
 
@@ -290,12 +291,6 @@ fn substitute_tree_counting(text: &[u8], index: i32, count: i32) -> Vec<u8> {
         p += 1;
     }
     out
-}
-
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
-        .windows(needle.len())
-        .any(|window| window == needle)
 }
 
 fn is_math_function(text: &[u8]) -> bool {

@@ -5,11 +5,8 @@
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
+pub use southstar_style::box_style as style_of;
 use southstar_style::{PropId, StyleRef};
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
-}
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
@@ -22,12 +19,11 @@ pub use southstar_layout_sizing::{
 pub use southstar_layout_float::box_is_scroll_container;
 
 pub use southstar_layout_geom::dispatch::layout_box;
+pub use southstar_layout_geom::dispatch::shift_box_tree;
 
 pub fn overflow_scrolls(s: StyleRef<'_>, axis: PropId) -> bool {
     kw_scrolls(overflow_axis_keyword(Some(s), axis))
 }
-
-pub use southstar_layout_geom::dispatch::shift_box_tree;
 
 pub use southstar_layout_geom::flex::{
     align_is_baseline as flex_align_is_baseline, box_is_border_box as flex_box_is_border_box,

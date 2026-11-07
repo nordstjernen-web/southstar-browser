@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use southstar_cairo::{Context, ContextRef, Extend, Filter, Format, Matrix, Pattern, Surface};
 use southstar_dom::Node;
+use southstar_glib::clamp;
 use southstar_layout::{BoxKind, BoxRef, NsBox};
 use southstar_mat4::Mat4;
 use southstar_style::{Kind, PropId as P, ValueRef};
@@ -226,16 +227,6 @@ fn quad_box<'a>(q: &Quad3) -> Option<BoxRef<'a>> {
     Some(q.b)
 }
 
-fn clamp_like_c(x: f64, lo: f64, hi: f64) -> f64 {
-    if x > hi {
-        hi
-    } else if x < lo {
-        lo
-    } else {
-        x
-    }
-}
-
 fn quad_texture(q: &Qb<'_>, tw: i32, th: i32, k: f64, highlight: Option<&CStr>) -> Option<Surface> {
     let b = q.b;
     let mut cacheable = !b.dom_ptr().is_null()
@@ -382,7 +373,7 @@ fn paint_quad3(cr: ContextRef, quad: &Quad3, highlight: Option<&CStr>) {
             (maxy - miny) / cmax(quad.bh, 1.0),
         )
     };
-    k = clamp_like_c(k, 1.0, 3.0);
+    k = clamp(k, 1.0, 3.0);
     let maxdim = cmax(quad.bw, quad.bh);
     if maxdim > 0.0 && maxdim * k > 4096.0 {
         k = 4096.0 / maxdim;

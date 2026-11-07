@@ -6,6 +6,7 @@ use core::cmp::Ordering;
 use core::ffi::CStr;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use southstar_glib::{clamp, max, min};
 use southstar_style::{StyleRef, display_of};
 
 use crate::ffi::css::{
@@ -37,24 +38,6 @@ enum Phase {
     Before,
     Active,
     After,
-}
-
-fn gclamp(x: f64, lo: f64, hi: f64) -> f64 {
-    if x > hi {
-        hi
-    } else if x < lo {
-        lo
-    } else {
-        x
-    }
-}
-
-fn gmax(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-fn gmin(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
 }
 
 pub struct Event {
@@ -616,7 +599,7 @@ impl Shared {
     }
 
     fn chan_cancel(&mut self, node: NodePtr, ch: &mut Chan, now_us: i64) {
-        let elapsed = gclamp(ch.elapsed_ms(now_us), 0.0, ch.duration_ms);
+        let elapsed = clamp(ch.elapsed_ms(now_us), 0.0, ch.duration_ms);
         self.emit_prop(node, c"transitioncancel", ch.prop, elapsed);
         ch.active = false;
         ch.phase = Phase::Idle;
@@ -628,7 +611,7 @@ impl Shared {
         if old == cur {
             return;
         }
-        let start_el = gmax(gmin(-ch.delay_ms, ch.duration_ms), 0.0);
+        let start_el = max(min(-ch.delay_ms, ch.duration_ms), 0.0);
         match cur {
             Phase::Active => {
                 let at = if old == Phase::After {
@@ -710,7 +693,7 @@ impl Shared {
         if ch.active && ch.to.is_some() && to.equal(&Borrowed::of(ch.from.as_ref())) {
             let elapsed = ch.elapsed_ms(now_us);
             let p = if ch.duration_ms > 0.0 {
-                gclamp(elapsed / ch.duration_ms, 0.0, 1.0)
+                clamp(elapsed / ch.duration_ms, 0.0, 1.0)
             } else {
                 1.0
             };
@@ -803,11 +786,11 @@ impl Shared {
             } else {
                 1.0
             };
-            let raw_end = gclamp(raw_end, 0.0, 1.0);
+            let raw_end = clamp(raw_end, 0.0, 1.0);
             r.sample_at(directed_progress(last, raw_end, r.direction));
             return true;
         }
-        let iter_d = gmin(elapsed / r.duration_ms, 1e9);
+        let iter_d = min(elapsed / r.duration_ms, 1e9);
         let iter = iter_d as i32;
         let raw = (elapsed % r.duration_ms) / r.duration_ms;
         r.sample_at(directed_progress(iter, raw, r.direction));
@@ -828,8 +811,8 @@ impl Shared {
         let old = r.phase;
         let cur = r.phase_at(elapsed);
         let active = r.active_ms();
-        let start_el = gmax(
-            gmin(
+        let start_el = max(
+            min(
                 -r.delay_ms,
                 if active.is_finite() {
                     active
@@ -850,7 +833,7 @@ impl Shared {
                     };
                     self.emit(node, c"animationstart", &name, at);
                     r.started = true;
-                    r.iters_emitted = gmin(elapsed / gmax(r.duration_ms, 1e-9), 1e9) as i32;
+                    r.iters_emitted = min(elapsed / max(r.duration_ms, 1e-9), 1e9) as i32;
                     if old == Phase::After {
                         r.iters_emitted = r.last_iteration();
                     }
@@ -877,7 +860,7 @@ impl Shared {
             return;
         }
         if cur == Phase::Active && r.duration_ms > 0.0 {
-            let mut reached = gmin(elapsed / r.duration_ms, 1e9) as i32;
+            let mut reached = min(elapsed / r.duration_ms, 1e9) as i32;
             let last = r.last_iteration();
             if r.iterations.is_finite() && reached > last {
                 reached = last;
@@ -1129,7 +1112,7 @@ fn run_info(node: NodePtr, r: &Run, now_us: i64) -> Info {
     let mut elapsed = r.elapsed_ms(now_us) + r.delay_ms;
     if r.finished && !r.paused {
         let active = r.active_ms();
-        elapsed = gmax(
+        elapsed = max(
             elapsed,
             r.delay_ms + if active.is_finite() { active } else { 0.0 },
         );
@@ -1771,7 +1754,7 @@ impl Anim {
     pub fn opacity(&self, node: NodePtr) -> Option<f64> {
         self.prop_value(node, props::known().opacity)
             .opacity()
-            .map(|o| gclamp(o, 0.0, 1.0))
+            .map(|o| clamp(o, 0.0, 1.0))
     }
 
     pub fn transform(&self, node: NodePtr) -> Option<southstar_style::Transform> {
@@ -1864,7 +1847,7 @@ impl Anim {
                 .collect(),
         );
         r.start_us = now as f64;
-        r.duration_ms = gmax(t.duration_ms, 0.0);
+        r.duration_ms = max(t.duration_ms, 0.0);
         r.delay_ms = t.delay_ms;
         r.iterations = if t.iterations < 0.0 {
             0.0

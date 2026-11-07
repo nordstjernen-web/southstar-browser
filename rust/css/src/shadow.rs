@@ -2,11 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_glib::clamp;
 use southstar_unicode::c_string_until_nul;
 
 use crate::calc::{self, Parsed};
 use crate::color::{color_text, parse_color};
 use crate::math;
+use crate::property::text_is_ident;
 use crate::scan::{has_substitution, is_ws, scan_until, split_ws_limit, trim_range};
 use crate::text::{add_leading_zeros, normalize_negative_zero};
 use crate::units::{self, CAP, CH, EM, EX, IC, NUMBER, PERCENT, REM};
@@ -41,23 +43,6 @@ pub struct ShadowList {
 #[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(core::mem::size_of::<Shadow>() == 112 && core::mem::size_of::<ShadowList>() == 904);
-
-fn gclamp(value: f64, low: f64, high: f64) -> f64 {
-    if value > high {
-        high
-    } else if value < low {
-        low
-    } else {
-        value
-    }
-}
-
-fn text_is_ident(t: &[u8]) -> bool {
-    !t.is_empty()
-        && !t[0].is_ascii_digit()
-        && t.iter()
-            .all(|&c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
-}
 
 fn length_token(tok: &[u8], allow_negative: bool, out: &mut Vec<u8>) -> bool {
     let text = c_string_until_nul(tok);
@@ -234,12 +219,12 @@ fn parse_one(text: &[u8]) -> Option<Shadow> {
         x: lens[0],
         y: lens[1],
         blur: if n_lens >= 3 {
-            gclamp(lens[2], 0.0, 1000.0)
+            clamp(lens[2], 0.0, 1000.0)
         } else {
             0.0
         },
         spread: if n_lens >= 4 {
-            gclamp(lens[3], -1000.0, 1000.0)
+            clamp(lens[3], -1000.0, 1000.0)
         } else {
             0.0
         },

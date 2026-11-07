@@ -18,6 +18,7 @@ mod run;
 mod state;
 
 pub use build::{BuildInput, layout_build};
+pub use classify::node_has_media_metadata;
 pub use ffi::{
     abs_build_box, abs_pending_clear, abs_pending_entry, abs_pending_len, abs_static_run,
     abs_static_target, box_is_abs_placeholder, flat_parent, image_dimension_attr,

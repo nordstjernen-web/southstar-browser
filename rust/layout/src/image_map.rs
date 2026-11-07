@@ -6,17 +6,10 @@ use core::ffi::CStr;
 
 use southstar_dom::{Node, children};
 use southstar_glib as glib;
+use southstar_glib::{max, min};
 
 const MAX_DEPTH: i32 = 512;
 const SHADOW_ATTR: &CStr = c"data-nd-shadow-root";
-
-fn min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
 
 fn find_map<'a>(n: Node<'a>, name: &[u8], depth: i32) -> Option<Node<'a>> {
     if depth >= MAX_DEPTH {

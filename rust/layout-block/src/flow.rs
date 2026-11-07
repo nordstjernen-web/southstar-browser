@@ -11,10 +11,11 @@ use southstar_layout_float::{
     multicol_distributable_children,
 };
 use southstar_layout_geom::{
-    containing_block_definite_height, edges_into_box, height_keyword_stretches, length_resolve,
-    resolve_used_height, style_is_absolute_or_fixed,
+    containing_block_definite_height, edges_into_box, height_keyword_stretches, is_block_level,
+    is_length_or_calc, length_resolve, resolve_used_height, style_is_absolute_or_fixed,
 };
-use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
+use southstar_layout_sizing::{is_replaced, style_value};
+use southstar_style::{PropId, StyleRef, display_of};
 
 use crate::align::legacy_align_block_child;
 use crate::dispatch::{layout_box, shift_box_tree};
@@ -38,25 +39,12 @@ thread_local! {
     static INHERITED_FLOATS: RefCell<Option<Inherited>> = const { RefCell::new(None) };
 }
 
-const BOX_NORMAL: u8 = 0;
-const OUTER_BLOCK: u8 = 1;
-const INNER_RUBY: u8 = 5;
-const INTERNAL_NONE: u8 = 0;
-const INTERNAL_TABLE_CAPTION: u8 = 8;
 const LAYOUT_UNIT: f64 = 1.0 / 64.0;
 
 #[derive(Clone, Copy)]
 pub struct FlowStart {
     pub collapse_top_with_parent: bool,
     pub collapse_bottom_with_parent: bool,
-}
-
-fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
-}
-
-fn style_value(b: BoxRef<'_>, p: PropId) -> Option<ValueRef<'_>> {
-    style_of(b).and_then(|s| s.get(p))
 }
 
 pub fn block_height_is_auto(b: BoxRef<'_>, width_basis: f64) -> bool {
@@ -86,19 +74,8 @@ fn collapsed_margin(a: f64, b: f64) -> f64 {
     positive + negative
 }
 
-fn display_is_block_level(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.outer == OUTER_BLOCK
-        && d.inner != INNER_RUBY
-        && (d.internal == INTERNAL_NONE || d.internal == INTERNAL_TABLE_CAPTION)
-}
-
-fn is_replaced(c: BoxRef<'_>) -> bool {
-    matches!(c.kind(), BoxKind::Image | BoxKind::Video | BoxKind::Svg)
-}
-
 fn is_block_level_replaced(c: BoxRef<'_>) -> bool {
-    is_replaced(c) && display_is_block_level(display_of(style_of(c)))
+    is_replaced(c) && is_block_level(display_of(style_of(c)))
 }
 
 fn empty_block_collapses_through(c: BoxRef<'_>, clear: i32) -> bool {

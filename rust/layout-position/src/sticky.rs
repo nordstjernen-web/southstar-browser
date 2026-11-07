@@ -2,9 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_glib::{self as glib, GBoolean};
+use southstar_glib::{self as glib, GBoolean, max as c_max, min as c_min};
 use southstar_layout::BoxRef;
 use southstar_layout_geom::length_resolve;
+use southstar_layout_inline::{outer_height, outer_width};
 use southstar_style::{Kind, PropId, ValueRef};
 
 use crate::ffi::prop;
@@ -32,16 +33,6 @@ fn inset(v: Option<ValueRef<'_>>, basis: f64) -> Option<f64> {
     }
     let out = length_resolve(Some(v), basis, 0.0);
     out.is_finite().then_some(out)
-}
-
-fn outer_height(b: BoxRef<'_>) -> f64 {
-    let (m, p, e) = (b.margin(), b.padding(), b.border());
-    m.top + e.top + p.top + b.content_height() + p.bottom + e.bottom + m.bottom
-}
-
-fn outer_width(b: BoxRef<'_>) -> f64 {
-    let (m, p, e) = (b.margin(), b.padding(), b.border());
-    m.left + e.left + p.left + b.content_width() + p.right + e.right + m.right
 }
 
 fn content_origin(p: BoxRef<'_>) -> (f64, f64) {
@@ -140,14 +131,6 @@ pub fn scrollport_for(b: BoxRef<'_>) -> Option<(f64, f64, f64, f64)> {
 pub fn offset(b: BoxRef<'_>, vp_x0: f64, vp_y0: f64, vp_x1: f64, vp_y1: f64) -> (f64, f64) {
     let (x0, y0, x1, y1) = scrollport_for(b).unwrap_or((vp_x0, vp_y0, vp_x1, vp_y1));
     offset_in(b, x0, y0, x1, y1)
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
 }
 
 pub fn y_model(b: BoxRef<'_>, viewport_h: f64) -> (StickyY, bool) {

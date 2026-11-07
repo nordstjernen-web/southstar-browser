@@ -13,6 +13,7 @@ use southstar_layout_content::controls::{
     font_kerning, font_keyword, keyword_is, length_or,
 };
 use southstar_layout_content::{pseudo, tags};
+pub(crate) use southstar_paint::has_small_caps;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 use crate::atomic::{is_atomic_inline, node_is_frame_fallback};
@@ -28,12 +29,6 @@ const SMALL_CAPS_SCALE: f64 = 0.7;
 pub const WS_COLLAPSE: i32 = 0;
 pub const WS_PRESERVE: i32 = 1;
 pub const WS_PRE_LINE: i32 = 2;
-
-const BOX_NORMAL: u8 = 0;
-const INTERNAL_NONE: u8 = 0;
-const OUTER_INLINE: u8 = 0;
-const INNER_FLOW: u8 = 0;
-const INNER_RUBY: u8 = 5;
 
 pub struct WsRange {
     pub start: usize,
@@ -99,12 +94,7 @@ pub fn style_is_absolute_or_fixed(s: StyleRef<'_>) -> bool {
 }
 
 pub(crate) fn is_atomic_inline_display(s: StyleRef<'_>) -> bool {
-    let d = display_of(Some(s));
-    d.box_ == BOX_NORMAL
-        && d.internal == INTERNAL_NONE
-        && d.outer == OUTER_INLINE
-        && d.inner != INNER_FLOW
-        && d.inner != INNER_RUBY
+    southstar_layout_geom::is_atomic_inline(display_of(Some(s)))
 }
 
 pub fn white_space_mode(node: Node<'_>, styles: StyleTable) -> i32 {
@@ -745,10 +735,4 @@ fn inline_box_side_px(
         }
     }
     side
-}
-
-pub(crate) fn has_small_caps(variant: &[u8]) -> bool {
-    variant
-        .split(|&c| c == b' ')
-        .any(|w| w == b"small-caps" || w == b"all-small-caps")
 }

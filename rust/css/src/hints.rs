@@ -5,12 +5,14 @@
 use core::ffi::CStr;
 use std::ffi::CString;
 
-use southstar_dom::{FLAG_SVG_NS, Kind, Node, attrs, controls};
+use southstar_dom::{FLAG_SVG_NS, Kind, Node, controls};
 
 use crate::color;
+use crate::element_state::{attr, attr_bytes, named};
 use crate::ffi;
 use crate::frameset;
-use crate::scan::{strip, utf8_char};
+use crate::property::eq;
+use crate::scan::{is_gspace, strip, utf8_char};
 
 const QUIRKS: u32 = 1 << 5;
 const INT_HALF_MAX: i32 = i32::MAX / 2;
@@ -58,32 +60,12 @@ const GENERIC_FAMILIES: [&[u8]; 13] = [
     b"fangsong",
 ];
 
-fn is_html_space(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
-}
-
 fn skip_html_space(s: &[u8]) -> &[u8] {
-    &s[s.iter().take_while(|&&c| is_html_space(c)).count()..]
-}
-
-fn eq(a: &[u8], b: &[u8]) -> bool {
-    a.eq_ignore_ascii_case(b)
-}
-
-fn attr<'a>(el: Node<'a>, name: &CStr) -> Option<&'a CStr> {
-    attrs::get(el, name)
-}
-
-fn attr_bytes<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
-    attr(el, name).map(CStr::to_bytes)
+    &s[s.iter().take_while(|&&c| is_gspace(c)).count()..]
 }
 
 fn non_empty<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
     attr_bytes(el, name).filter(|v| !v.is_empty())
-}
-
-fn named(node: Option<Node<'_>>, tag: &[u8]) -> bool {
-    node.and_then(Node::element_name) == Some(tag)
 }
 
 fn parse_int(value: Option<&CStr>, default: i32, min: i32, max: i32) -> i32 {
@@ -141,8 +123,8 @@ fn legacy_color(input: &[u8]) -> (u8, u8, u8) {
 }
 
 fn attr_color(value: &[u8]) -> Option<[u8; 4]> {
-    let start = value.iter().position(|&c| !is_html_space(c))?;
-    let end = value.iter().rposition(|&c| !is_html_space(c))? + 1;
+    let start = value.iter().position(|&c| !is_gspace(c))?;
+    let end = value.iter().rposition(|&c| !is_gspace(c))? + 1;
     let stripped = &value[start..end];
     let text = CString::new(stripped).unwrap_or_default();
     let mut channels: color::Channels = [None; 4];

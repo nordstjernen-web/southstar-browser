@@ -289,14 +289,6 @@ pub(crate) fn consider_as_space(wc: u32) -> bool {
         || (0xe0100..=0xe01ef).contains(&wc)
 }
 
-fn same_font(a: Option<&Font>, b: Option<&Font>) -> bool {
-    match (a, b) {
-        (Some(a), Some(b)) => a.ptr_eq(b),
-        (None, None) => true,
-        _ => false,
-    }
-}
-
 impl<'a, 'i, 'l> ItemizeState<'a, 'i, 'l> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -588,7 +580,7 @@ impl<'a, 'i, 'l> ItemizeState<'a, 'i, 'l> {
                 return;
             };
 
-            if !force_break && same_font(item.analysis.font.as_ref(), font.as_ref()) {
+            if !force_break && item.analysis.font.as_ref() == font.as_ref() {
                 item.num_chars += 1;
                 return;
             }

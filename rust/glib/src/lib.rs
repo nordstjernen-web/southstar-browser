@@ -9,6 +9,7 @@ mod dirs;
 mod log;
 mod main_context;
 mod main_loop;
+mod num;
 mod source;
 mod strtod;
 mod text;
@@ -20,6 +21,7 @@ pub use dirs::{
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;
 pub use main_loop::{MainLoop, default_context_iteration, default_context_pending};
+pub use num::{clamp, max, min};
 #[cfg(unix)]
 pub use source::unix_signal_add_local;
 pub use source::{

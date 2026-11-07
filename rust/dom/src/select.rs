@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_unicode::utf8_skip;
+
 use crate::Node;
 use crate::{MAX_DEPTH, children};
 
@@ -20,17 +22,6 @@ fn text_skipping_scripts(node: Node, out: &mut Vec<u8>, depth: i32) {
         {
             text_skipping_scripts(child, out, depth + 1);
         }
-    }
-}
-
-fn utf8_skip(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
     }
 }
 

@@ -10,11 +10,10 @@ use std::collections::{HashMap, HashSet};
 use southstar_css_prop_syntax::{self as prop_syntax, SyntaxDef};
 use southstar_dom::Node;
 
+use crate::cascade::{ordered, same_revert_origin};
 use crate::scan::has_substitution;
 use crate::vars::{self, Lookup, Registration, Wide};
 
-const ORIGIN_PRESENTATIONAL: i32 = 1;
-const ORIGIN_AUTHOR: i32 = 2;
 const LAYER_NONE: i32 = i32::MAX;
 const GUARANTEED_INVALID: &[u8] = b"initial";
 const RESOLVE_DEPTH_MAX: usize = 256;
@@ -60,10 +59,6 @@ fn is_revert(kind: Wide) -> bool {
     matches!(kind, Wide::Revert | Wide::RevertLayer | Wide::RevertRule)
 }
 
-fn ordered(a: i32, b: i32, reversed: bool) -> Ordering {
-    if reversed { b.cmp(&a) } else { a.cmp(&b) }
-}
-
 fn cascade_order(a: &VarMatch<'_>, b: &VarMatch<'_>) -> Ordering {
     a.important
         .cmp(&b.important)
@@ -75,14 +70,6 @@ fn cascade_order(a: &VarMatch<'_>, b: &VarMatch<'_>) -> Ordering {
         .then(a.sheet_index.cmp(&b.sheet_index))
         .then(a.source_order.cmp(&b.source_order))
         .then(a.decl_order.cmp(&b.decl_order))
-}
-
-fn same_revert_origin(rollback: i32, candidate: i32) -> bool {
-    if rollback == ORIGIN_AUTHOR {
-        candidate == ORIGIN_AUTHOR || candidate == ORIGIN_PRESENTATIONAL
-    } else {
-        rollback == candidate
-    }
 }
 
 fn rolled_back_past(rollback: &VarMatch<'_>, prev: &VarMatch<'_>, kind: Wide) -> bool {

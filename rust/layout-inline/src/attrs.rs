@@ -5,6 +5,7 @@
 use core::ffi::CStr;
 
 use southstar_layout::{BoxKind, BoxRef, InlineAttr, inline_kind as k};
+pub(crate) use southstar_layout_geom::length_or;
 use southstar_paint::text_layout::{self, AttrList, Attribute, Layout, Rectangle};
 use southstar_style::{PropId, StyleRef, ValueRef, font_family_for_pango};
 
@@ -16,10 +17,6 @@ const UNIT_PX: u32 = 0;
 const STRUT_ROOT: u8 = 0;
 const STRUT_SHORTER: u8 = 1;
 const STRUT_SPACER: u8 = 2;
-
-pub(crate) fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
-    v.map_or(fallback, |v| v.length_or(fallback))
-}
 
 pub(crate) fn px_length(v: Option<ValueRef<'_>>) -> Option<f64> {
     v.and_then(ValueRef::length)
@@ -135,12 +132,12 @@ pub(crate) fn apply_layout_attrs(list: &AttrList, b: BoxRef<'_>) {
     }
 }
 
-pub(crate) fn outer_height(b: BoxRef<'_>) -> f64 {
+pub fn outer_height(b: BoxRef<'_>) -> f64 {
     let (m, p, e) = (b.margin(), b.padding(), b.border());
     m.top + e.top + p.top + b.content_height() + p.bottom + e.bottom + m.bottom
 }
 
-fn outer_width(b: BoxRef<'_>) -> f64 {
+pub fn outer_width(b: BoxRef<'_>) -> f64 {
     let (m, p, e) = (b.margin(), b.padding(), b.border());
     m.left + e.left + p.left + b.content_width() + p.right + e.right + m.right
 }

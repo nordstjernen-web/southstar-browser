@@ -4,14 +4,14 @@
 
 use southstar_layout::{BoxKind, BoxRef, children};
 use southstar_layout_geom::{
-    edges_from_style, flex_direction_of, length_or, length_resolve, style_is_absolute_or_fixed,
-    style_is_flex_container,
+    edges_from_style, flex_direction_of, is_length_or_calc, length_or, length_resolve,
+    style_is_absolute_or_fixed, style_is_flex_container,
 };
 use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef};
 
 use crate::ffi::{dom_of, parse_int, style_of, viewport_w};
 use crate::intrinsic::style_contains_inline_size;
-use crate::replaced::{is_length_or_calc, is_replaced};
+use crate::replaced::is_replaced;
 
 const UNIT_PX: u32 = 0;
 const UNIT_EM: u32 = 1;

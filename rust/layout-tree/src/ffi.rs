@@ -8,8 +8,7 @@ use std::sync::OnceLock;
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_style::StyleRef;
-
-pub use southstar_style::StyleTable as Styles;
+pub use southstar_style::{StyleTable as Styles, box_style as style_of};
 
 pub struct Builders {
     pub build_block: fn(Node<'_>, Styles) -> Option<BoxRef<'static>>,
@@ -36,10 +35,6 @@ fn builders() -> &'static Builders {
     BUILDERS
         .get()
         .expect("the box builders are installed before the first build")
-}
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
 }
 
 pub fn build_block(n: Node<'_>, styles: Styles) -> Option<BoxRef<'static>> {

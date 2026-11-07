@@ -4,13 +4,15 @@
 
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef, Edges};
+use southstar_layout_build::node_has_media_metadata;
 use southstar_layout_float::{float_side_of, style_is_grid_container};
 use southstar_layout_geom::{
     aspect_ratio_number, containing_block_definite_height, edges_from_style, edges_into_box,
-    flex_direction_of, height_keyword_stretches, length_resolve, resolve_height_with_basis,
-    resolve_used_height, style_is_absolute_or_fixed, style_is_flex_container, value_is_percent,
+    flex_direction_of, height_keyword_stretches, is_atomic_inline, is_length_or_calc,
+    length_resolve, resolve_height_with_basis, resolve_used_height, style_is_absolute_or_fixed,
+    style_is_flex_container, value_is_percent,
 };
-use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, display_of};
+use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
 use crate::ffi::{
     box_is_abs_placeholder, container_w, dom_of, image_dimension_attr, image_of, layout_box,
@@ -18,21 +20,8 @@ use crate::ffi::{
 };
 use crate::intrinsic::{measure_natural_width, min_width_of, size_keyword_is_intrinsic};
 
-const MEDIA_SRC_ATTR: &core::ffi::CStr = c"data-nd-media-src";
-const MEDIA_STREAM_ATTR: &core::ffi::CStr = c"data-nd-media-stream";
-
-const BOX_NORMAL: u8 = 0;
-const OUTER_INLINE: u8 = 0;
-const INNER_FLOW: u8 = 0;
-const INNER_RUBY: u8 = 5;
-const INTERNAL_NONE: u8 = 0;
-
 pub fn is_replaced(b: BoxRef<'_>) -> bool {
     matches!(b.kind(), BoxKind::Image | BoxKind::Video | BoxKind::Svg)
-}
-
-pub fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
 }
 
 pub fn style_value(b: BoxRef<'_>, prop: PropId) -> Option<ValueRef<'_>> {
@@ -41,20 +30,6 @@ pub fn style_value(b: BoxRef<'_>, prop: PropId) -> Option<ValueRef<'_>> {
 
 pub fn is_border_box(b: BoxRef<'_>) -> bool {
     style_value(b, PropId::BoxSizing).is_some_and(|v| v.is_keyword(c"border-box"))
-}
-
-fn display_is_atomic_inline(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.internal == INTERNAL_NONE
-        && d.outer == OUTER_INLINE
-        && d.inner != INNER_FLOW
-        && d.inner != INNER_RUBY
-}
-
-fn node_has_media_metadata(n: Option<Node<'_>>) -> bool {
-    n.is_some_and(|n| {
-        n.is_element() && (n.attr(MEDIA_SRC_ATTR).is_some() || n.attr(MEDIA_STREAM_ATTR).is_some())
-    })
 }
 
 fn flex_row_direction(dir: &[u8]) -> bool {
@@ -337,7 +312,7 @@ fn box_inline_size_is_definite(b: BoxRef<'_>) -> bool {
         }
         if style_is_absolute_or_fixed(Some(s))
             || float_side_of(Some(s)) >= 0
-            || display_is_atomic_inline(display_of(Some(s)))
+            || is_atomic_inline(display_of(Some(s)))
         {
             return false;
         }

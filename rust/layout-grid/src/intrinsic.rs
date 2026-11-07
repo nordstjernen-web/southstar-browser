@@ -4,15 +4,12 @@
 
 use southstar_css::{AUTO_REPEAT_NONE, TRACK_PX};
 use southstar_layout::{BoxRef, Edges, children};
+pub(crate) use southstar_layout_geom::is_length_or_calc;
 use southstar_layout_geom::{edges_from_style, length_resolve};
-use southstar_style::{Kind, PropId, StyleRef, ValueRef};
+use southstar_style::{PropId, StyleRef, ValueRef};
 
 use crate::ffi::{self, style_of};
 use crate::tracks::{MAX, count};
-
-pub(crate) fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
-}
 
 pub(crate) fn is_absolute_or_fixed(s: Option<StyleRef<'_>>) -> bool {
     s.and_then(|s| s.get(PropId::Position))

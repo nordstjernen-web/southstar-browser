@@ -26,6 +26,7 @@ use super::value::{NsCssValue, OwnedValue, Payload, c_dup};
 use crate::declarations;
 use crate::nesting;
 use crate::prop::Prop;
+use crate::scan::is_gspace;
 use crate::selector::{self, RuleSelectors};
 use crate::sheet::{self, FontFace, ScopeText, Stop, layer_join};
 
@@ -527,10 +528,6 @@ fn url_should_resolve(url: &[u8]) -> bool {
 
 fn url_resolve(base: &CStr, rel: &[u8]) -> Option<Vec<u8>> {
     southstar_url::bytes::resolve(Some(base.to_bytes()), rel)
-}
-
-fn is_gspace(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
 }
 
 fn raw_text_resolve_urls(text: &[u8], base: &CStr) -> Option<Vec<u8>> {

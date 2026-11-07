@@ -20,7 +20,7 @@ pub(crate) struct SheetDecl {
     pub important: bool,
 }
 
-fn c_string(text: &[u8]) -> CString {
+pub(crate) fn c_string(text: &[u8]) -> CString {
     CString::new(text).unwrap_or_default()
 }
 

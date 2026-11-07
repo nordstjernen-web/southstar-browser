@@ -9,6 +9,7 @@ use crate::ffi;
 use crate::gradient::math_text_has_unit;
 use crate::lex::{ident_serialize, read_ident};
 use crate::math::math_canonical;
+use crate::property::eq;
 use crate::scan::{scan_until, split_ws_limit, split_ws_paren, starts_with_ci, strip, trim_range};
 use crate::time;
 use crate::timing::{self, Timing};
@@ -154,10 +155,6 @@ impl Entry {
             document_timeline: true,
         }
     }
-}
-
-fn eq(a: &[u8], b: &[u8]) -> bool {
-    a.eq_ignore_ascii_case(b)
 }
 
 fn one_of(a: &[u8], words: &[&[u8]]) -> bool {

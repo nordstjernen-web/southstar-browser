@@ -13,6 +13,7 @@ use southstar_layout::paint_links::PaintLinks;
 use southstar_layout_build::{BuildInput, Passes};
 use southstar_layout_sizing::Measures;
 use southstar_paint::{LayoutLinks, LegendGap};
+pub use southstar_style::box_style as style_of;
 use southstar_style::{PropId, StyleRef, StyleTable, ValueRef};
 
 use crate::sticky;
@@ -31,10 +32,6 @@ pub struct Area {
     pub y: f64,
     pub w: f64,
     pub h: f64,
-}
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
 }
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
