@@ -245,7 +245,9 @@ library API or language feature stabilized after 1.91.
   `southstar-jsshell`) and compare against another browser where it helps.
 - **The JavaScript engine is Boa**, forked in-tree at `third_party/boa_engine`
   (its crates are renamed `southstar-boa-*`, so the fork is published to
-  crates.io with the rest of the tree). QuickJS-ng was removed in October
+  crates.io with the rest of the tree); its regular expression engine,
+  regress, is forked at `third_party/regress` (`southstar-regress`) for a
+  backtracking budget. QuickJS-ng was removed in October
   2026. Bindings use the `rust/js-engine` API (`Scope`, `Value`, `HostClass`);
   engine hooks the bindings need go into the Boa fork, and are listed in
   `docs/boa-fork.md` (`scripts/boa-fork-diff.py` shows the fork's patch).

@@ -190,3 +190,22 @@ shrinks this table at the next release; the goal is a fork that differs from
 upstream only in `Cargo.toml`, and then no fork at all. Only the
 `JsObject` identity functions stay local, and they leave with the C ABI
 they serve.
+
+## regress
+
+Boa's regular expression engine, [regress](https://github.com/ridiculousfish/regress),
+is forked next to it at `third_party/regress` as `southstar-regress`, a copy
+of the **0.12.0** release (crates.io sha256
+`32eef8b209c3c1c15dbad02c1f30f9539f00dc7253e0cbcdaae442a50a09d7c1`), with the
+library name `regress` kept. `rust/css`, `rust/extensions`, `boa_engine` and
+`boa_parser` depend on it, so the tree builds one copy of the engine.
+
+The fork adds one thing: a backtracking budget. `Regex::find_with_backtrack_limit`
+searches like `Regex::find` but returns `Err(BacktrackLimitExceeded)` once the
+classical backtracker has backtracked the given number of times
+(`MatchAttempter::backtracks_left` in `classicalbacktrack.rs`, counted in
+`try_backtrack`). Every other search is unlimited, as before. `rust/css`
+matches the HTML `pattern` attribute with a limit of 100,000 backtracks,
+because the style system evaluates it for `:valid` and `:invalid` without
+any script running, and regress has no other bound on catastrophic
+backtracking. `scripts/boa-fork-diff.py --crate regress` shows the patch.

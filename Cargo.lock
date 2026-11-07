@@ -1444,15 +1444,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
-name = "regress"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32eef8b209c3c1c15dbad02c1f30f9539f00dc7253e0cbcdaae442a50a09d7c1"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1780,7 +1771,6 @@ dependencies = [
  "pastey",
  "portable-atomic",
  "rand",
- "regress",
  "rustc-hash",
  "ryu-js",
  "serde",
@@ -1791,6 +1781,7 @@ dependencies = [
  "southstar-boa-interner",
  "southstar-boa-parser",
  "southstar-boa-string",
+ "southstar-regress",
  "static_assertions",
  "sys-locale",
  "tag_ptr",
@@ -1843,10 +1834,10 @@ dependencies = [
  "icu_properties",
  "num-bigint",
  "num-traits",
- "regress",
  "rustc-hash",
  "southstar-boa-ast",
  "southstar-boa-interner",
+ "southstar-regress",
 ]
 
 [[package]]
@@ -2003,7 +1994,6 @@ dependencies = [
 name = "southstar-css"
 version = "1.0.8-dev"
 dependencies = [
- "regress",
  "southstar-css-color",
  "southstar-css-grammar",
  "southstar-css-media",
@@ -2013,6 +2003,7 @@ dependencies = [
  "southstar-glib",
  "southstar-mat4",
  "southstar-numfmt",
+ "southstar-regress",
  "southstar-selector-text",
  "southstar-unicode",
  "southstar-url",
@@ -2125,12 +2116,12 @@ dependencies = [
 name = "southstar-extensions"
 version = "1.0.8-dev"
 dependencies = [
- "regress",
  "southstar-config",
  "southstar-digest",
  "southstar-glib",
  "southstar-js-engine",
  "southstar-psl",
+ "southstar-regress",
  "southstar-unicode",
 ]
 
@@ -3724,6 +3715,13 @@ dependencies = [
  "gif",
  "png",
  "zune-jpeg",
+]
+
+[[package]]
+name = "southstar-regress"
+version = "1.0.8-dev"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

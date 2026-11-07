@@ -16,7 +16,7 @@ southstar-config = { path = "../config", version = "=1.0.8-dev" }
 southstar-digest = { path = "../digest", version = "=1.0.8-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-js-engine = { path = "../js-engine", version = "=1.0.8-dev", default-features = false }
-regress = "0.12.0"
+regress = { package = "southstar-regress", path = "../../third_party/regress", version = "=1.0.8-dev" }
 
 [lints]
 workspace = true
