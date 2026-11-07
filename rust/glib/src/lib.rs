@@ -52,10 +52,6 @@ unsafe extern "C" {
     pub fn g_malloc(n_bytes: usize) -> *mut c_void;
     pub fn g_malloc0(n_bytes: usize) -> *mut c_void;
     pub fn g_free(mem: *mut c_void);
-    pub fn g_get_user_config_dir() -> *const c_char;
-    pub fn g_get_user_data_dir() -> *const c_char;
-    pub fn g_get_user_cache_dir() -> *const c_char;
-    pub fn g_get_language_names() -> *const *const c_char;
     pub fn g_error_free(error: *mut GError);
     pub fn g_path_get_dirname(file_name: *const c_char) -> *mut c_char;
 }
