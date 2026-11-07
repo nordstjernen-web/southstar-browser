@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Text layout: run, line and glyph-string extents saturate instead of
+  overflowing `i32` Pango units. A line wider than about 2.1 million pixels (a
+  300,000-character `<pre>`, 40 characters at `font-size: 65535px`, SVG text
+  with a huge `font-size`, or a web font with outsized glyphs) aborted builds
+  with overflow checks (the Linux CI build, `--debug`) and gave wrapped,
+  wrong extents in release builds. Found by the `svg` fuzz target.
 * Security: Google Safe Browsing. Every navigation and redirect is checked
   against Google's phishing, malware and unwanted-software lists (Safe Browsing
   v5, local-list mode) as well as the local blocklist, and a match shows a

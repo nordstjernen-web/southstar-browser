@@ -9,7 +9,8 @@ use crate::glyph_item::GlyphItem;
 use crate::item::{Item, analysis_flags};
 use crate::metrics::FontMetrics;
 use crate::types::{
-    GLYPH_EMPTY, Overline, Rectangle, SCALE, Underline, show_flags, units_floor, units_round,
+    GLYPH_EMPTY, Overline, Rectangle, SCALE, Underline, show_flags, span_union, units_floor,
+    units_round,
 };
 
 use super::{Layout, LayoutLine};
@@ -192,10 +193,7 @@ fn run_css_box(
         let spacing = ((line_height_factor * own.height as f32).ceil() as i32)
             .max(own.height + font_line_gap(font));
         apply_line_height(&mut own, spacing);
-        let top = rect.y.min(own.y);
-        let bottom = (rect.y + rect.height).max(own.y + own.height);
-        rect.y = top;
-        rect.height = bottom - top;
+        (rect.y, rect.height) = span_union(rect.y, rect.height, own.y, own.height);
     }
 }
 
@@ -246,9 +244,7 @@ pub(crate) fn run_extents_and_height(run: &GlyphItem, want_height: bool) -> RunE
         let strikethrough_thickness = m.strikethrough_thickness;
         let strikethrough_position = m.strikethrough_position;
 
-        let new_pos = ink.x.min(logical.x);
-        ink.width = (ink.x + ink.width).max(logical.x + logical.width) - new_pos;
-        ink.x = new_pos;
+        (ink.x, ink.width) = span_union(ink.x, ink.width, logical.x, logical.width);
 
         if properties.strikethrough && ink.height == 0 {
             ink.height = strikethrough_thickness;
@@ -422,10 +418,7 @@ fn unite_strut(layout: &Layout, ctx: &Context, logical: &mut Rectangle) {
     let Some(strut) = strut(layout, ctx) else {
         return;
     };
-    let top = logical.y.min(strut.y);
-    let bottom = (logical.y + logical.height).max(strut.y + strut.height);
-    logical.y = top;
-    logical.height = bottom - top;
+    (logical.y, logical.height) = span_union(logical.y, logical.height, strut.y, strut.height);
 }
 
 pub(crate) fn line_extents_and_height(
@@ -440,7 +433,7 @@ pub(crate) fn line_extents_and_height(
     let mut ink = Rectangle::default();
     let mut logical = Rectangle::default();
     let mut height = 0;
-    let mut x_pos = 0;
+    let mut x_pos: i32 = 0;
 
     for (i, run) in line.runs.iter().enumerate() {
         let extents = run_extents_and_height(run, true);
@@ -449,34 +442,34 @@ pub(crate) fn line_extents_and_height(
 
         if ink.width == 0 || ink.height == 0 {
             ink = run_ink;
-            ink.x += x_pos;
+            ink.x = ink.x.saturating_add(x_pos);
         } else if run_ink.width != 0 && run_ink.height != 0 {
-            let new_pos = ink.x.min(x_pos + run_ink.x);
-            ink.width = (ink.x + ink.width).max(x_pos + run_ink.x + run_ink.width) - new_pos;
-            ink.x = new_pos;
-
-            let new_pos = ink.y.min(run_ink.y);
-            ink.height = (ink.y + ink.height).max(run_ink.y + run_ink.height) - new_pos;
-            ink.y = new_pos;
+            (ink.x, ink.width) = span_union(
+                ink.x,
+                ink.width,
+                x_pos.saturating_add(run_ink.x),
+                run_ink.width,
+            );
+            (ink.y, ink.height) = span_union(ink.y, ink.height, run_ink.y, run_ink.height);
         }
 
-        let new_pos = logical.x.min(x_pos + run_logical.x);
-        logical.width =
-            (logical.x + logical.width).max(x_pos + run_logical.x + run_logical.width) - new_pos;
-        logical.x = new_pos;
+        (logical.x, logical.width) = span_union(
+            logical.x,
+            logical.width,
+            x_pos.saturating_add(run_logical.x),
+            run_logical.width,
+        );
 
         if i == 0 {
             logical.y = run_logical.y;
             logical.height = run_logical.height;
         } else {
-            let new_pos = logical.y.min(run_logical.y);
-            logical.height =
-                (logical.y + logical.height).max(run_logical.y + run_logical.height) - new_pos;
-            logical.y = new_pos;
+            (logical.y, logical.height) =
+                span_union(logical.y, logical.height, run_logical.y, run_logical.height);
         }
 
         height = height.max(extents.height.wrapping_abs());
-        x_pos += run_logical.width;
+        x_pos = x_pos.saturating_add(run_logical.width);
     }
 
     if line.runs.is_empty() {

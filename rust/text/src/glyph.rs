@@ -7,7 +7,7 @@ use crate::ffi::harfbuzz::{
 };
 use crate::font::{Font, glyph_extents_of};
 use crate::item::Analysis;
-use crate::types::{Glyph, GlyphUnit, LogAttr, Rectangle};
+use crate::types::{Glyph, GlyphUnit, LogAttr, Rectangle, span_union};
 use crate::utf8::{next_char, pointer_to_offset};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -73,7 +73,7 @@ impl GlyphString {
     ) -> (Rectangle, Rectangle) {
         let mut ink_rect = Rectangle::default();
         let mut logical_rect = Rectangle::default();
-        let mut x_pos = 0;
+        let mut x_pos: i32 = 0;
 
         for i in start..end.min(self.glyphs.len()) {
             let info = &self.glyphs[i];
@@ -81,39 +81,37 @@ impl GlyphString {
             let (glyph_ink, glyph_logical) = glyph_extents_of(font, info.glyph);
 
             if glyph_ink.width != 0 && glyph_ink.height != 0 {
+                let glyph_x = x_pos
+                    .saturating_add(glyph_ink.x)
+                    .saturating_add(geometry.x_offset);
+                let glyph_y = glyph_ink.y.saturating_add(geometry.y_offset);
                 if ink_rect.width == 0 || ink_rect.height == 0 {
-                    ink_rect.x = x_pos + glyph_ink.x + geometry.x_offset;
+                    ink_rect.x = glyph_x;
                     ink_rect.width = glyph_ink.width;
-                    ink_rect.y = glyph_ink.y + geometry.y_offset;
+                    ink_rect.y = glyph_y;
                     ink_rect.height = glyph_ink.height;
                 } else {
-                    let new_x = ink_rect.x.min(x_pos + glyph_ink.x + geometry.x_offset);
-                    ink_rect.width = (ink_rect.x + ink_rect.width)
-                        .max(x_pos + glyph_ink.x + glyph_ink.width + geometry.x_offset)
-                        - new_x;
-                    ink_rect.x = new_x;
-
-                    let new_y = ink_rect.y.min(glyph_ink.y + geometry.y_offset);
-                    ink_rect.height = (ink_rect.y + ink_rect.height)
-                        .max(glyph_ink.y + glyph_ink.height + geometry.y_offset)
-                        - new_y;
-                    ink_rect.y = new_y;
+                    (ink_rect.x, ink_rect.width) =
+                        span_union(ink_rect.x, ink_rect.width, glyph_x, glyph_ink.width);
+                    (ink_rect.y, ink_rect.height) =
+                        span_union(ink_rect.y, ink_rect.height, glyph_y, glyph_ink.height);
                 }
             }
 
-            logical_rect.width += geometry.width;
+            logical_rect.width = logical_rect.width.saturating_add(geometry.width);
             if i == start {
                 logical_rect.y = glyph_logical.y;
                 logical_rect.height = glyph_logical.height;
             } else {
-                let new_y = logical_rect.y.min(glyph_logical.y);
-                logical_rect.height = (logical_rect.y + logical_rect.height)
-                    .max(glyph_logical.y + glyph_logical.height)
-                    - new_y;
-                logical_rect.y = new_y;
+                (logical_rect.y, logical_rect.height) = span_union(
+                    logical_rect.y,
+                    logical_rect.height,
+                    glyph_logical.y,
+                    glyph_logical.height,
+                );
             }
 
-            x_pos += geometry.width;
+            x_pos = x_pos.saturating_add(geometry.width);
         }
 
         (ink_rect, logical_rect)

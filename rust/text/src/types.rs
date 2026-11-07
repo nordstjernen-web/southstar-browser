@@ -24,7 +24,7 @@ pub const fn get_unknown_glyph(wc: u32) -> Glyph {
 }
 
 pub const fn pixels(d: i32) -> i32 {
-    (d + 512) >> 10
+    d.saturating_add(512) >> 10
 }
 
 pub const fn pixels_floor(d: i32) -> i32 {
@@ -32,7 +32,7 @@ pub const fn pixels_floor(d: i32) -> i32 {
 }
 
 pub const fn pixels_ceil(d: i32) -> i32 {
-    (d + 1023) >> 10
+    d.saturating_add(1023) >> 10
 }
 
 pub const fn units_floor(d: i32) -> i32 {
@@ -40,11 +40,19 @@ pub const fn units_floor(d: i32) -> i32 {
 }
 
 pub const fn units_ceil(d: i32) -> i32 {
-    (d + (SCALE - 1)) & !(SCALE - 1)
+    d.saturating_add(SCALE - 1) & !(SCALE - 1)
 }
 
 pub const fn units_round(d: i32) -> i32 {
-    (d + (SCALE >> 1)) & !(SCALE - 1)
+    d.saturating_add(SCALE >> 1) & !(SCALE - 1)
+}
+
+pub fn span_union(pos: i32, len: i32, other_pos: i32, other_len: i32) -> (i32, i32) {
+    let start = pos.min(other_pos);
+    let end = pos
+        .saturating_add(len)
+        .max(other_pos.saturating_add(other_len));
+    (start, end.saturating_sub(start))
 }
 
 pub fn units_from_double(d: f64) -> i32 {
@@ -85,16 +93,16 @@ pub fn extents_to_pixels(inclusive: Option<&mut Rectangle>, nearest: Option<&mut
         let orig_y = r.y;
         r.x = pixels_floor(r.x);
         r.y = pixels_floor(r.y);
-        r.width = pixels_ceil(orig_x + r.width) - r.x;
-        r.height = pixels_ceil(orig_y + r.height) - r.y;
+        r.width = pixels_ceil(orig_x.saturating_add(r.width)) - r.x;
+        r.height = pixels_ceil(orig_y.saturating_add(r.height)) - r.y;
     }
     if let Some(r) = nearest {
         let orig_x = r.x;
         let orig_y = r.y;
         r.x = pixels(r.x);
         r.y = pixels(r.y);
-        r.width = pixels(orig_x + r.width) - r.x;
-        r.height = pixels(orig_y + r.height) - r.y;
+        r.width = pixels(orig_x.saturating_add(r.width)) - r.x;
+        r.height = pixels(orig_y.saturating_add(r.height)) - r.y;
     }
 }
 
