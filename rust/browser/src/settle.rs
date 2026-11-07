@@ -10,6 +10,7 @@ use crate::{images, page, scroll};
 const SETTLE_QUIET_TICKS: c_int = 3;
 const HOVER_RELAYOUT_MIN_US: i64 = 60000;
 const MAIN_LOOP_BATCH: c_int = 64;
+const MIN_TASK_SLICE_US: i64 = 4000;
 const TICK_GUARD: c_int = 4096;
 
 pub struct SettleState {
@@ -127,6 +128,7 @@ fn hover_relayout_gap(b: &NsBrowser) -> i64 {
 }
 
 fn pump_main_loop(deadline: i64) -> bool {
+    let deadline = deadline.max(southstar_glib::monotonic_us() + MIN_TASK_SLICE_US);
     let mut did_iter = false;
     let mut it = 0;
     while ffi::main_context_pending() {

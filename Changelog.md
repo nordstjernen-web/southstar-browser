@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Pages: timers, fetch results and other queued tasks get at least 4 ms
+  after every animation frame, so a page whose frame callback overruns the
+  frame budget (slowroads.io's loader) no longer starves its own network
+  loads and stays on its loading screen.
 * Build: `cargo xtask build` has one release build, fat LTO; the `--lto`
   option and the separate no-LTO tree are gone.
 * Source: duplicated helpers are merged into one copy each, about 1,600
