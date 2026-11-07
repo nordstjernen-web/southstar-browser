@@ -51,10 +51,13 @@ impl Zstd {
                 .decoder
                 .decode_from_to(&self.pending, &mut out)
                 .map_err(|_| Failure::Corrupt)?;
-            self.pending.drain(..read.min(self.pending.len()));
             if written > 0 && !emit(&out[..written]) {
                 return Err(Failure::Stopped);
             }
+            if read > self.pending.len() {
+                return Ok(());
+            }
+            self.pending.drain(..read);
             if self.decoder.is_finished() && self.decoder.can_collect() == 0 {
                 self.in_frame = false;
                 continue;
