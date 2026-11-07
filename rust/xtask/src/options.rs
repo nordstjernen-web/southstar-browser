@@ -9,7 +9,6 @@ pub const USAGE: &str =
 
 options:
   --debug                     build the dev profile (no LTO, overflow checks)
-  --lto fat|thin|off          link-time optimization of a release build (default fat)
   --overflow-checks           integer overflow checks in a release build
   --audio auto|enabled|disabled
   --avif auto|enabled|disabled
@@ -31,13 +30,6 @@ pub enum Toggle {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Lto {
-    Fat,
-    Thin,
-    Off,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Build,
     Run,
@@ -48,7 +40,6 @@ pub enum Command {
 pub struct Options {
     pub command: Command,
     pub debug: bool,
-    pub lto: Lto,
     pub overflow_checks: bool,
     pub audio: Toggle,
     pub avif: Toggle,
@@ -73,15 +64,6 @@ fn toggle(value: &str) -> Result<Toggle, String> {
     }
 }
 
-fn lto(value: &str) -> Result<Lto, String> {
-    match value {
-        "fat" => Ok(Lto::Fat),
-        "thin" => Ok(Lto::Thin),
-        "off" => Ok(Lto::Off),
-        other => Err(format!("expected fat, thin or off, not {other}")),
-    }
-}
-
 pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> {
     let mut args = args.into_iter();
     let command = match args.next().as_deref() {
@@ -94,7 +76,6 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
     let mut options = Options {
         command,
         debug: false,
-        lto: Lto::Fat,
         overflow_checks: false,
         audio: Toggle::Auto,
         avif: Toggle::Auto,
@@ -128,7 +109,6 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
             }
             "--debug" => options.debug = true,
             "--release" => options.debug = false,
-            "--lto" => options.lto = lto(&value()?)?,
             "--overflow-checks" => options.overflow_checks = true,
             "--audio" => options.audio = toggle(&value()?)?,
             "--avif" => options.avif = toggle(&value()?)?,

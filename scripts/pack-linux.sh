@@ -45,14 +45,9 @@ case "$WEBGPU_MODE" in
         fi ;;
 esac
 
-case "${NS_BUILD_LTO:-true}" in
-    false|0|off|no) LTO=off ;;
-    thin) LTO=thin ;;
-    *) LTO=fat ;;
-esac
 if [ -z "${NS_SKIP_BUILD:-}" ]; then
     (cd "$ROOT" && CARGO_BUILD_JOBS=${NS_BUILD_JOBS:-${CARGO_BUILD_JOBS:-}} \
-        cargo xtask build --lto "$LTO" \
+        cargo xtask build \
         ${NS_BUILD_DATE:+--build-date "$NS_BUILD_DATE"} \
         ${WEBGPU_ARGS[@]+"${WEBGPU_ARGS[@]}"})
 fi
