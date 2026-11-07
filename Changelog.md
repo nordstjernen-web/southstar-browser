@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* CSS: the nesting flattener's selector budget no longer grants every style sheet a
+  flat 16 MiB. A sheet of under 200 bytes nesting `a, b { … }` 18 deep expanded to
+  that much selector text and cost a second and up to 840 MB to parse, per sheet.
+  The budget is now 64 KiB plus 16 bytes per byte of input, so it stays linear in
+  the sheet's size; ordinary nested sheets flatten exactly as before.
 * Source: duplicated helpers are merged into one copy each, about 1,600
   lines fewer: the JavaScript bindings' property and argument helpers
   (js-engine's props module) and per-page tables, the layout predicates
