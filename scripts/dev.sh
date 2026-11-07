@@ -15,8 +15,7 @@ usage() {
 Usage: ./scripts/dev.sh <command> [args]
 
 Commands:
-  build [options]    Run 'cargo xtask build' (options as for cargo xtask,
-                     e.g. --lto off --target-dir target-fast).
+  build [options]    Run 'cargo xtask build' (options as for cargo xtask).
   run [-- args]      Run 'cargo xtask run': build, then start the browser.
   smoke              For each built-in fixture target, render headless and
                      diff against its baseline. Reports drift.

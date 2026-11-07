@@ -175,7 +175,7 @@ cargo xtask build
 `cargo xtask build` is the configure step and the build in one: it checks
 the system libraries' version floors, detects the optional ones through
 pkg-config and builds with the matching cargo features (`cargo xtask
-features` prints them). Options: `--debug`, `--lto fat|thin|off`,
+features` prints them). Options: `--debug`,
 `--overflow-checks`, `--audio`/`--avif`/`--webgpu auto|enabled|disabled`,
 `--wgpu-native-root DIR`, `--no-wasm`, `--no-rust-shaper`, `--build-date`
 and `--target-dir`. `cargo xtask run [options] [-- browser arguments]`
@@ -504,7 +504,7 @@ installed headers.
 `libseccomp` is required on Linux — `cargo xtask build` fails without it.
 On macOS and Windows it is not used and the syscall filter is a no-op.
 
-### Fast iteration (recommended for agent loops)
+### Iteration
 
 The default `cargo xtask build` is a release build with fat LTO and one
 codegen unit, so a clean build takes many minutes and every Rust change
@@ -515,14 +515,8 @@ builds the dev profile into `target/debug/` — no LTO, integer overflow
 checks on — which compiles much faster and runs slower. `--overflow-checks`
 turns the overflow checks on in a release build too (CI does).
 
-For a release build you rebuild often, use `--lto off` (no LTO, 256 codegen
-units, incremental). It shares `target/release/` with the fat build, and
-cargo rebuilds whenever the profile settings change, so give it its own
-tree: `cargo xtask build --lto off --target-dir target-fast` (the browser
-is then `target-fast/release/southstar`). On the Windows box a rebuild
-after touching one `rust/css` file took 31–47 s, against 870 s with the
-default `--lto fat`; a clean build took 469 s; pages load about 60%
-slower. `--lto thin` sits in between. Releases and packages keep `fat`.
+There is one release build: fat LTO, one codegen unit, into
+`target/release/`. Releases, packages and local testing all use it.
 
 Optionally use the `lld` linker for faster final links
 (`RUSTFLAGS=-Clink-arg=-fuse-ld=lld cargo xtask build`). Not required.

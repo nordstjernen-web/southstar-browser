@@ -225,7 +225,7 @@ To reproduce the profile:
 
 ```sh
 RUSTFLAGS="-C force-frame-pointers=yes" CARGO_PROFILE_RELEASE_DEBUG=true \
-    cargo xtask build --lto off --target-dir target-prof
+    cargo xtask build --target-dir target-prof
 # in one shell, start a long-settle run of a complex-DOM suite, then:
 scripts/sample-profile.sh <pid> 150
 ```

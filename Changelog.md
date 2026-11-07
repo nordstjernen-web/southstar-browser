@@ -10,6 +10,8 @@ Southstar Browser 1.0.8-dev:
   into `third_party/regress` with a backtracking budget, and a pattern that
   exhausts 100,000 backtracks is treated like one that does not compile: it does
   not constrain the value.
+* Build: `cargo xtask build` has one release build, fat LTO; the `--lto`
+  option and the separate no-LTO tree are gone.
 * Source: duplicated helpers are merged into one copy each, about 1,600
   lines fewer: the JavaScript bindings' property and argument helpers
   (js-engine's props module) and per-page tables, the layout predicates

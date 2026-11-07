@@ -8,7 +8,7 @@
 # frame pointers is enough:
 #
 #   RUSTFLAGS="-C force-frame-pointers=yes" CARGO_PROFILE_RELEASE_DEBUG=true \
-#       cargo xtask build --lto off --target-dir target-prof
+#       cargo xtask build --target-dir target-prof
 #
 # Usage: scripts/sample-profile.sh <pid> [num-samples]
 #   num-samples defaults to 120.
