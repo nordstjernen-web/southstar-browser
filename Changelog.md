@@ -8,6 +8,9 @@ Southstar Browser 1.0.8-dev:
   script, which reaches it undecoded, `'\xC0\'` ended the string at the escaped
   quote and user input escaped by a site could run as code. Invalid sequences now
   become U+FFFD, as in every other browser.
+* Network: HTTP dates (cookie `Expires`, cache dates) with a year above 9999 are
+  rejected. Such a year overflowed the timestamp arithmetic, which aborted builds
+  with overflow checks and gave release builds a wrapped, wrong time.
 * Forms: `checkValidity()`, `reportValidity()` and `validity.patternMismatch`
   match the `pattern` attribute with the same bounded matcher as `:valid` and
   `:invalid`, so a script can no longer hang the page through validation on a
