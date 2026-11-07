@@ -288,7 +288,7 @@ fn did_timeout(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Value
 }
 
 pub(crate) fn install_idle_deadline_interface(scope: &mut Scope<'_>, global: &Value) {
-    let ctor = crate::make_ctor(scope, "IdleDeadline", 0, crate::rtc::illegal_constructor);
+    let ctor = crate::make_constructor(scope, "IdleDeadline", 0, crate::rtc::illegal_constructor);
     let _ = scope.set(global, "IdleDeadline", ctor);
     let ctor = scope
         .get(global, "IdleDeadline")

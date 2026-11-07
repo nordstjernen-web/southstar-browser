@@ -12,36 +12,23 @@ struct Parsed {
     is_dir: bool,
 }
 
-fn is_space(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
-}
-
-fn strip(s: &[u8]) -> &[u8] {
-    let start = s.iter().position(|&c| !is_space(c)).unwrap_or(s.len());
-    let end = s
-        .iter()
-        .rposition(|&c| !is_space(c))
-        .map_or(start, |i| i + 1);
-    &s[start..end.max(start)]
-}
-
 fn split_fields(line: &[u8], max_fields: usize) -> Vec<&[u8]> {
     let mut parts = Vec::new();
     let mut p = 0;
     while p < line.len() && parts.len() + 1 < max_fields {
-        while p < line.len() && is_space(line[p]) {
+        while p < line.len() && line[p].is_ascii_whitespace() {
             p += 1;
         }
         if p == line.len() {
             break;
         }
         let start = p;
-        while p < line.len() && !is_space(line[p]) {
+        while p < line.len() && !line[p].is_ascii_whitespace() {
             p += 1;
         }
         parts.push(&line[start..p]);
     }
-    while p < line.len() && is_space(line[p]) {
+    while p < line.len() && line[p].is_ascii_whitespace() {
         p += 1;
     }
     if p < line.len() {
@@ -55,7 +42,7 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 fn real_name(name: &[u8]) -> Option<Vec<u8>> {
-    let name = strip(name);
+    let name = name.trim_ascii();
     (!name.is_empty() && name != b"." && name != b"..").then(|| name.to_vec())
 }
 
@@ -104,7 +91,7 @@ fn parse_dos(line: &[u8]) -> Option<Parsed> {
 }
 
 fn parse_line(line: &[u8]) -> Option<Parsed> {
-    let line = strip(line);
+    let line = line.trim_ascii();
     if line.is_empty() {
         return None;
     }

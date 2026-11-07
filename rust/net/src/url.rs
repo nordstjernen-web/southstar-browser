@@ -118,19 +118,6 @@ pub const USER_AGENT_FIREFOX: &str = concat!(
 pub const NAVIGATOR_PLATFORM: &str = concat!(platform!(navigator), "\0");
 pub const HINT_PLATFORM: &str = concat!(platform!(hint), "\0");
 
-fn is_space(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
-}
-
-fn strip(s: &[u8]) -> &[u8] {
-    let start = s.iter().position(|&c| !is_space(c)).unwrap_or(s.len());
-    let end = s
-        .iter()
-        .rposition(|&c| !is_space(c))
-        .map_or(start, |i| i + 1);
-    &s[start..end.max(start)]
-}
-
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
@@ -187,7 +174,7 @@ pub fn strip_tracking_params(url: &[u8], enabled: bool) -> Option<Vec<u8>> {
 pub fn parse_refresh(input: &[u8]) -> Option<(f64, Option<Vec<u8>>)> {
     let at = |i: usize| input.get(i).copied().unwrap_or(0);
     let mut p = 0;
-    while is_space(at(p)) {
+    while at(p).is_ascii_whitespace() {
         p += 1;
     }
     let digits = p;
@@ -209,16 +196,16 @@ pub fn parse_refresh(input: &[u8]) -> Option<(f64, Option<Vec<u8>>)> {
         p += 1;
     }
     if at(p) != 0 {
-        if at(p) != b';' && at(p) != b',' && !is_space(at(p)) {
+        if at(p) != b';' && at(p) != b',' && !at(p).is_ascii_whitespace() {
             return None;
         }
-        while is_space(at(p)) {
+        while at(p).is_ascii_whitespace() {
             p += 1;
         }
         if at(p) == b';' || at(p) == b',' {
             p += 1;
         }
-        while is_space(at(p)) {
+        while at(p).is_ascii_whitespace() {
             p += 1;
         }
     }
@@ -227,12 +214,12 @@ pub fn parse_refresh(input: &[u8]) -> Option<(f64, Option<Vec<u8>>)> {
         && at(p + 2).eq_ignore_ascii_case(&b'l')
     {
         let mut q = p + 3;
-        while is_space(at(q)) {
+        while at(q).is_ascii_whitespace() {
             q += 1;
         }
         if at(q) == b'=' {
             q += 1;
-            while is_space(at(q)) {
+            while at(q).is_ascii_whitespace() {
                 q += 1;
             }
             p = q;
@@ -247,7 +234,7 @@ pub fn parse_refresh(input: &[u8]) -> Option<(f64, Option<Vec<u8>>)> {
         Some(_) => {
             let end = rest
                 .iter()
-                .rposition(|&c| !is_space(c))
+                .rposition(|&c| !c.is_ascii_whitespace())
                 .map_or(0, |i| i + 1);
             Some(rest[..end].to_vec())
         }
@@ -317,7 +304,7 @@ pub fn raw_header_values(raw: &[u8], name: &[u8]) -> Option<Vec<u8>> {
         let eol = rest.iter().position(|&c| c == b'\n');
         let line = &rest[..eol.unwrap_or(rest.len())];
         if line.len() > n && line[n] == b':' && line[..n].eq_ignore_ascii_case(name) {
-            let value = strip(&line[n + 1..]);
+            let value = line[n + 1..].trim_ascii();
             match out.as_mut() {
                 None => out = Some(value.to_vec()),
                 Some(out) => {

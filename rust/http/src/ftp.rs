@@ -19,7 +19,7 @@ pub struct Location {
     pub file: Option<Vec<u8>>,
 }
 
-fn percent_decode(s: &[u8]) -> Vec<u8> {
+pub fn percent_decode(s: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(s.len());
     let mut i = 0;
     while i < s.len() {

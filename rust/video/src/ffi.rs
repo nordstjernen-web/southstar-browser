@@ -30,10 +30,7 @@ fn user_cache_dir() -> Vec<u8> {
     southstar_glib::user_cache_dir()
 }
 
-pub fn env_set(name: &CStr) -> bool {
-    name.to_str()
-        .is_ok_and(|name| std::env::var_os(name).is_some())
-}
+pub use southstar_glib::env_set;
 
 fn is_dir_separator(b: u8) -> bool {
     b == b'/' || (cfg!(windows) && b == b'\\')

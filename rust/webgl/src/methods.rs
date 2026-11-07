@@ -510,13 +510,6 @@ pub(crate) fn get_program_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]
     Ok(Value::int(v))
 }
 
-fn string_arg(s: &mut Scope<'_>, a: &[Value], i: usize, min_args: usize) -> Option<Vec<u8>> {
-    if a.len() < min_args {
-        return None;
-    }
-    bytes(s, &a[i])
-}
-
 pub(crate) fn bind_attrib_location(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     if let Some(attrib) = string_arg(s, a, 2, 3) {

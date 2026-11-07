@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use crate::negotiate::create_data_property;
 use southstar_js_engine::{Scope, Value};
 
 const MAX_SAFE_LENGTH: f64 = 9_007_199_254_740_991.0;
@@ -10,19 +11,11 @@ pub(crate) struct OptionsBag(Option<Value>);
 
 impl OptionsBag {
     pub(crate) fn coerce(scope: &mut Scope<'_>, options: &Value) -> Result<OptionsBag, Value> {
-        if options.is_undefined() {
-            return Ok(OptionsBag(None));
-        }
-        scope
-            .to_object(options)
-            .map(|object| OptionsBag(Some(object)))
+        crate::negotiate::options_object(scope, options).map(OptionsBag)
     }
 
     pub(crate) fn get(&self, scope: &mut Scope<'_>, key: &str) -> Result<Value, Value> {
-        match &self.0 {
-            Some(object) => scope.get(object, key),
-            None => Ok(Value::undefined()),
-        }
+        crate::negotiate::option_value(scope, self.0.as_ref(), key)
     }
 
     pub(crate) fn string(
@@ -521,16 +514,6 @@ pub(crate) fn ordinary_has_instance(
             return Ok(true);
         }
     }
-}
-
-pub(crate) fn create_data_property(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    key: &str,
-    value: Value,
-) -> Result<(), Value> {
-    let key = scope.string(key);
-    scope.define_entry(object, &key, value)
 }
 
 pub(crate) fn create_string_property(

@@ -2,11 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::int_prop;
+use southstar_js_engine::props::noop;
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::{
-    JsResult, array_length, bind, dom_exception, ffi, get, make_ctor, rejected, resolved, set,
-    set_str, truthy,
+    JsResult, array_length, bind, dom_exception, ffi, get, make_constructor, rejected, resolved,
+    set, set_str, truthy,
 };
 
 const MAX_CHANNELS: i32 = 32;
@@ -91,10 +93,6 @@ fn shape_ok(channels: i32, length: i32, sample_rate: f64) -> bool {
 
 fn return_this(_: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     Ok(this.clone())
-}
-
-fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
-    Ok(Value::undefined())
 }
 
 fn resolved_undefined(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
@@ -435,14 +433,9 @@ fn copy_into_channels(scope: &mut Scope<'_>, buffer: &Value, channels: i32, mix:
     }
 }
 
-fn int_field(scope: &mut Scope<'_>, object: &Value, key: &str) -> i32 {
-    let value = get(scope, object, key);
-    scope.to_int32(&value).unwrap_or(0)
-}
-
 fn start_rendering(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
-    let channels = int_field(scope, this, "_oacChannels");
-    let length = int_field(scope, this, "length");
+    let channels = int_prop(scope, this, "_oacChannels");
+    let length = int_prop(scope, this, "length");
     let rate = get(scope, this, "sampleRate");
     let sample_rate = scope.to_number(&rate).unwrap_or(f64::NAN);
     if !shape_ok(channels, length, sample_rate) {
@@ -527,10 +520,10 @@ fn offline_audio_context(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Js
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let realtime = make_ctor(scope, "AudioContext", 1, audio_context);
+    let realtime = make_constructor(scope, "AudioContext", 1, audio_context);
     set(scope, global, "AudioContext", realtime.clone());
     set(scope, global, "webkitAudioContext", realtime);
-    let offline = make_ctor(scope, "OfflineAudioContext", 3, offline_audio_context);
+    let offline = make_constructor(scope, "OfflineAudioContext", 3, offline_audio_context);
     set(scope, global, "OfflineAudioContext", offline.clone());
     set(scope, global, "webkitOfflineAudioContext", offline);
 }

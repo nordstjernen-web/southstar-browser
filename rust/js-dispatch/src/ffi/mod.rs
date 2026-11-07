@@ -6,6 +6,7 @@ pub(crate) mod exports;
 mod imports;
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap;
 
 use southstar_js_engine::{ContextHandle, Scope, Value};
 use southstar_js_forms::ClickState;
@@ -168,13 +169,6 @@ pub(crate) fn ctx_of(scope: &Scope<'_>) -> ContextHandle {
 
 pub(crate) fn in_context<R>(ctx: ContextHandle, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     ctx.with(f)
-}
-
-pub(crate) fn unwrap(value: &Value) -> Option<Element> {
-    if !value.is_object() {
-        return None;
-    }
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {

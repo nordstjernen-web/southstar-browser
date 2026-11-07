@@ -16,5 +16,6 @@ pub use intrinsic::{
     size_keyword_is_intrinsic,
 };
 pub use replaced::{
-    SavedGeometry, layout_image, measure_inline_atomics_begin, measure_inline_atomics_end,
+    SavedGeometry, is_replaced, layout_image, measure_inline_atomics_begin,
+    measure_inline_atomics_end, style_value,
 };

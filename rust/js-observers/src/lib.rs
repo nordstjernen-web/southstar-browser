@@ -4,6 +4,9 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) use southstar_js_engine::props::{
+    array_length, bind, bind_if_not_callable, get, set, set_index,
+};
 use southstar_unicode::until_nul_owned;
 mod ffi;
 mod intersection;
@@ -96,25 +99,6 @@ pub(crate) fn text_of(scope: &mut Scope<'_>, value: &Value) -> Result<Vec<u8>, V
     scope.to_bytes(value).map(until_nul_owned)
 }
 
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_index(scope: &mut Scope<'_>, object: &Value, index: u32, value: Value) {
-    let _ = scope.set_index(object, index, value);
-}
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let length = get(scope, array, "length");
-    scope.to_int32(&length).map_or(0, |n| n as u32)
-}
-
 pub(crate) fn number_or(scope: &mut Scope<'_>, value: &Value) -> Option<f64> {
     scope.to_number(value).ok()
 }
@@ -123,24 +107,6 @@ pub(crate) fn global_number(scope: &mut Scope<'_>, key: &str) -> Option<f64> {
     let global = scope.global();
     let value = get(scope, &global, key);
     number_or(scope, &value)
-}
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
-
-pub(crate) fn bind_if_not_callable(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &str,
-    arity: u32,
-    f: NativeFn,
-) {
-    let current = scope.get(object, name).ok();
-    if !current.is_some_and(|current| scope.is_function(&current)) {
-        bind(scope, object, name, arity, f);
-    }
 }
 
 pub(crate) fn new_instance<T: core::any::Any>(

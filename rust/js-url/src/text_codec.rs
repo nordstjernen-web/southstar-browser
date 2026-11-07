@@ -5,7 +5,7 @@
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::ffi::{self, HO_TEXT_DECODER, HO_TEXT_ENCODER};
-use crate::{JsResult, arg, bind_fn, get, illegal_invocation, set, truthy};
+use crate::{JsResult, arg, bind, get, illegal_invocation, set, truthy};
 
 const MAX_ARRAY_LIKE: u32 = 1 << 24;
 
@@ -217,7 +217,7 @@ fn encode_into(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult 
 
 pub(crate) fn encoder_ctor(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     let object = ffi::host_construct(scope, this, HO_TEXT_ENCODER)?;
-    crate::set_str(scope, &object, "encoding", b"utf-8");
+    crate::set_bytes(scope, &object, "encoding", b"utf-8");
     Ok(object)
 }
 
@@ -253,7 +253,7 @@ pub(crate) fn decoder_ctor(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     } else {
         (false, false)
     };
-    crate::set_str(scope, &object, "encoding", encoding.as_bytes());
+    crate::set_bytes(scope, &object, "encoding", encoding.as_bytes());
     set(scope, &object, "_mode", Value::int(mode.code()));
     set(scope, &object, "fatal", Value::boolean(fatal));
     set(scope, &object, "ignoreBOM", Value::boolean(ignore_bom));
@@ -502,13 +502,13 @@ fn decode(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let encoder = crate::proto_of(scope, global, "TextEncoder");
+    let encoder = crate::interface_prototype(scope, global, "TextEncoder");
     if encoder.is_object() {
-        bind_fn(scope, &encoder, "encode", 0, encode);
-        bind_fn(scope, &encoder, "encodeInto", 2, encode_into);
+        bind(scope, &encoder, "encode", 0, encode);
+        bind(scope, &encoder, "encodeInto", 2, encode_into);
     }
-    let decoder = crate::proto_of(scope, global, "TextDecoder");
+    let decoder = crate::interface_prototype(scope, global, "TextDecoder");
     if decoder.is_object() {
-        bind_fn(scope, &decoder, "decode", 0, decode);
+        bind(scope, &decoder, "decode", 0, decode);
     }
 }

@@ -3,15 +3,11 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use crate::nesting::block_body_end;
-use crate::scan::{is_ident, is_ws, scan_until, skip_to_block_end};
+use crate::scan::{is_ident, is_ws, scan_until, skip_to_block_end, starts_with_ci};
 
 const MAX_AT_NESTING: i32 = 32;
 const GROUP_RULES: [&[u8]; 5] = [b"@media", b"@supports", b"@container", b"@layer", b"@scope"];
 const LEGACY_PSEUDO_ELEMENTS: [&[u8]; 4] = [b"before", b"after", b"first-line", b"first-letter"];
-
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
-}
 
 fn contains(s: &[u8], needle: &[u8]) -> bool {
     s.windows(needle.len()).any(|w| w == needle)
@@ -47,7 +43,7 @@ fn rewrite_host_selectors(css: &[u8], marker: &[u8]) -> Vec<u8> {
     let mut p = 0;
     while p < css.len() {
         let rest = &css[p..];
-        if starts_ci(rest, b"::slotted(") {
+        if starts_with_ci(rest, b"::slotted(") {
             let inner = p + 10;
             let q = paren_body_end(css, inner);
             out.extend_from_slice(marker);
@@ -56,9 +52,9 @@ fn rewrite_host_selectors(css: &[u8], marker: &[u8]) -> Vec<u8> {
             p = past_close(css, q);
             continue;
         }
-        if starts_ci(rest, b":host") {
+        if starts_with_ci(rest, b":host") {
             let after = p + 5;
-            if starts_ci(&css[after..], b"-context(") {
+            if starts_with_ci(&css[after..], b"-context(") {
                 let q = paren_body_end(css, after + 9);
                 out.extend_from_slice(marker);
                 p = past_close(css, q);
@@ -230,7 +226,10 @@ impl Scoper<'_> {
             return seg;
         }
         let block_end = skip_to_block_end(s, seg, end);
-        if GROUP_RULES.iter().any(|kw| starts_ci(&s[prelude..], kw)) {
+        if GROUP_RULES
+            .iter()
+            .any(|kw| starts_with_ci(&s[prelude..], kw))
+        {
             self.out.extend_from_slice(&s[prelude..seg]);
             self.out.push(b'{');
             let body = seg + 1;

@@ -8,6 +8,7 @@ use std::ffi::CString;
 use core::ffi::CStr;
 
 use southstar_dom::Node;
+pub use southstar_glib::{clamp, max, min};
 use southstar_style::{Prop, PropId, StyleRef, UNIT_PERCENT, Value, parse_color};
 
 use crate::Ctx;
@@ -15,7 +16,7 @@ use crate::ffi::{
     CAP_BUTT, CAP_ROUND, CAP_SQUARE, FILL_EVEN_ODD, FILL_WINDING, JOIN_BEVEL, JOIN_MITER,
     JOIN_ROUND,
 };
-use crate::parse::{self, eq_ci, is_ws};
+use crate::parse::{self, eq_ci, is_ws, starts_ci};
 
 const DECL_MAX: usize = 256;
 
@@ -44,24 +45,6 @@ pub static STOP_COLOR: Prop = Prop::new(c"stop-color");
 pub static STOP_OPACITY: Prop = Prop::new(c"stop-opacity");
 pub static DISPLAY: Prop = Prop::new(c"display");
 pub static OPACITY: Prop = Prop::new(c"opacity");
-
-pub fn cmax(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-pub fn cmin(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-pub fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-    if x > hi {
-        hi
-    } else if x < lo {
-        lo
-    } else {
-        x
-    }
-}
 
 pub fn diag_basis(w: f64, h: f64) -> f64 {
     (w * w + h * h).sqrt() / core::f64::consts::SQRT_2
@@ -119,10 +102,6 @@ fn skip_ws(b: &[u8], mut pos: usize) -> usize {
         pos += 1;
     }
     pos
-}
-
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 
 pub fn parse_paint(text: &CStr, color: [f64; 4], out: &mut Paint) -> bool {
@@ -235,7 +214,7 @@ impl State {
             st.color = unit_rgba(c);
         }
         if let Some(v) = s.value(&FONT_SIZE) {
-            st.font_size = cmax(1.0, v.length_or(16.0));
+            st.font_size = max(1.0, v.length_or(16.0));
         }
         st
     }
@@ -419,7 +398,7 @@ impl<'a> Ctx<'a> {
             st.stroke_opacity = clamp(parse::length(Some(&v), 1.0, fs(st), 1.0), 0.0, 1.0);
         }
         if let Some(v) = self.prop(n, c"stroke-width") {
-            st.stroke_width = cmax(0.0, parse::length(Some(&v), basis, fs(st), 1.0));
+            st.stroke_width = max(0.0, parse::length(Some(&v), basis, fs(st), 1.0));
         }
         if let Some(v) = self.prop(n, c"stroke-linecap") {
             st.line_cap = cap_of(v.to_bytes());
@@ -428,7 +407,7 @@ impl<'a> Ctx<'a> {
             st.line_join = join_of(v.to_bytes());
         }
         if let Some(v) = self.prop(n, c"stroke-miterlimit") {
-            st.miter_limit = cmax(1.0, parse::length(Some(&v), 1.0, fs(st), 4.0));
+            st.miter_limit = max(1.0, parse::length(Some(&v), 1.0, fs(st), 4.0));
         }
         if let Some(v) = self.prop(n, c"stroke-dashoffset") {
             st.dash_offset = parse::length(Some(&v), basis, fs(st), 0.0);
@@ -446,7 +425,7 @@ impl<'a> Ctx<'a> {
             st.text_anchor = anchor_of(v.to_bytes());
         }
         if let Some(v) = self.prop(n, c"font-size") {
-            st.font_size = cmax(
+            st.font_size = max(
                 0.0,
                 parse::length(Some(&v), inherited_font_size, inherited_font_size, 16.0),
             );
@@ -493,10 +472,10 @@ impl<'a> Ctx<'a> {
             st.stroke_opacity = clamp(css_number(s, &STROKE_OPACITY, 1.0, 1.0), 0.0, 1.0);
         }
         if s.value(&STROKE_WIDTH).is_some() {
-            st.stroke_width = cmax(0.0, css_number(s, &STROKE_WIDTH, basis, 1.0));
+            st.stroke_width = max(0.0, css_number(s, &STROKE_WIDTH, basis, 1.0));
         }
         if s.value(&STROKE_MITERLIMIT).is_some() {
-            st.miter_limit = cmax(1.0, css_number(s, &STROKE_MITERLIMIT, 1.0, 4.0));
+            st.miter_limit = max(1.0, css_number(s, &STROKE_MITERLIMIT, 1.0, 4.0));
         }
         if s.value(&STROKE_DASHOFFSET).is_some() {
             st.dash_offset = css_number(s, &STROKE_DASHOFFSET, basis, 0.0);
@@ -529,7 +508,7 @@ impl<'a> Ctx<'a> {
             st.hidden = hidden_of(kw.to_bytes());
         }
         if s.value(&FONT_SIZE).is_some() {
-            let css_font_size = cmax(
+            let css_font_size = max(
                 0.0,
                 css_number(s, &FONT_SIZE, inherited_font_size, inherited_font_size),
             );

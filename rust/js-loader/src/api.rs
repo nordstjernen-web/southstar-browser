@@ -8,7 +8,7 @@ use southstar_dom::Node;
 use southstar_js_runtime::api::Page;
 
 use crate::ffi::{Js, PerfInfo};
-use crate::{Schedule, Task, compile, eval, fetch, hold, import_map, page, scan, schedule};
+use crate::{Schedule, Task, eval, fetch, hold, import_map, page, scan, schedule};
 
 #[derive(Clone, Default)]
 pub struct ScriptTasks(Vec<Task<'static>>);
@@ -147,9 +147,7 @@ pub fn run_inserted_scripts(js: Option<Page>, root: Node<'_>) {
     }
 }
 
-pub fn profile_enabled() -> bool {
-    compile::profile_enabled()
-}
+pub use southstar_engine::profile_enabled;
 
 pub fn run_content_scripts(js: Option<Page>, url: Option<&CStr>, document_start: bool) {
     eval::run_content_scripts(Js::of(js), url, document_start);

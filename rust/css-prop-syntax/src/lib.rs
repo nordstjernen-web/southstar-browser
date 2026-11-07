@@ -6,6 +6,7 @@
 
 use core::f64::consts::PI;
 use southstar_css_syntax::{self as css, Component, Kind};
+use southstar_glib::{max as c_max, min as c_min};
 use southstar_unicode::until_nul;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -163,14 +164,6 @@ fn len_unit_font_relative(unit: usize) -> bool {
 
 fn caseless(a: &[u8], b: &str) -> bool {
     a.eq_ignore_ascii_case(b.as_bytes())
-}
-
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
 }
 
 fn ascii_space(c: u8) -> bool {

@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use std::sync::OnceLock;
+use southstar_engine::profile_enabled;
 
 use southstar_glib as glib;
 use southstar_js_engine::{Attributes, Scope, Value};
@@ -116,11 +116,6 @@ pub(crate) fn attributes_type_is(scope: &mut Scope<'_>, attributes: &Value, want
         return false;
     };
     kind.is_string() && scope.to_bytes(&kind).is_ok_and(|kind| kind == want)
-}
-
-pub(crate) fn profile_enabled() -> bool {
-    static PROFILE: OnceLock<bool> = OnceLock::new();
-    *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
 }
 
 pub(crate) fn profile_begin() -> i64 {

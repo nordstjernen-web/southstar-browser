@@ -2,8 +2,6 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::path::PathBuf;
-
 use southstar_config::util as fs;
 use southstar_netstore::http_date;
 
@@ -202,16 +200,7 @@ mod acl {
     }
 }
 
-#[cfg(unix)]
-fn path(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
-}
-
-#[cfg(not(unix))]
-fn path(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
-}
+use southstar_glib::path_from_bytes_lossy as path;
 
 pub(crate) fn unlink(file: &[u8]) {
     let _ = std::fs::remove_file(path(file));
@@ -252,12 +241,7 @@ pub(crate) fn write_file_consistent(file: &[u8], body: &[u8]) -> Result<(), Vec<
     fs::write_atomic(&target, body, 0o600).map_err(|e| e.to_string().into_bytes())
 }
 
-pub(crate) fn now_seconds() -> i64 {
-    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(after) => after.as_secs() as i64,
-        Err(before) => -(before.duration().as_secs() as i64),
-    }
-}
+pub(crate) use southstar_glib::now_seconds;
 
 pub(crate) fn ascii_strtoll(text: &[u8]) -> i64 {
     fs::ascii_strtoll(text).unwrap_or(0)

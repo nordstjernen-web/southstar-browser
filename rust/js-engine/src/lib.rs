@@ -11,6 +11,8 @@ pub use backend::{
 use boa as backend;
 
 mod handles;
+mod page_list;
+pub mod props;
 mod realm_cache;
 mod table;
 
@@ -18,6 +20,7 @@ pub use handles::{
     CompileStringsFn, ContextHandle, InterruptFn, JobOutcome, MemoryUsage, ModuleLoadFn,
     ModuleNormalizeFn, RejectionTrackerFn, RuntimeHandle, RuntimeOptions,
 };
+pub use page_list::PageList;
 pub use realm_cache::RealmCache;
 pub use table::{
     GetterFn, GetterMagicFn, Prop, SetterFn, SetterMagicFn, accessor, accessor_magic, getter,

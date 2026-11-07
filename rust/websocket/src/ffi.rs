@@ -13,7 +13,7 @@ use southstar_http::{Received, Request, Upgraded};
 
 use crate::{
     ACCEPT_GUID, Assembly, Decoded, Decoder, Frame, OP_BINARY, OP_CLOSE, OP_PONG, OP_TEXT, Out,
-    Post, STATE_CLOSED, STATE_CLOSING, STATE_OPEN, Shared, base64, encode_frame, has_token, header,
+    Post, STATE_CLOSED, STATE_CLOSING, STATE_OPEN, Shared, encode_frame, has_token, header,
     ws_to_http,
 };
 
@@ -127,7 +127,7 @@ fn mask_key() -> [u8; 4] {
 
 fn accept_for(key: &[u8]) -> Vec<u8> {
     let input = [key, ACCEPT_GUID].concat();
-    base64(&southstar_digest::digest(Algorithm::Sha1, &input))
+    southstar_digest::base64(&southstar_digest::digest(Algorithm::Sha1, &input)).into_bytes()
 }
 
 fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
@@ -137,7 +137,7 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
     let target = southstar_http::parse_target(&http_url).ok_or_else(|| b"invalid URL".to_vec())?;
     let mut nonce = [0u8; 16];
     random(&mut nonce);
-    let key = base64(&nonce);
+    let key = southstar_digest::base64(&nonce).into_bytes();
     let mut lines = vec![
         b"Upgrade: websocket".to_vec(),
         b"Sec-WebSocket-Version: 13".to_vec(),

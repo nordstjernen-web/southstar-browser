@@ -11,25 +11,12 @@ mod ready;
 
 pub use ffi::install_runtime_hooks;
 
-use southstar_js_engine::{NativeFn, Scope, Value};
+pub(crate) use southstar_js_engine::props::{bind, set, set_str};
+use southstar_js_engine::{Scope, Value};
 
 pub use ffi::nsr_window_fontface_ctor;
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) {
-    let value = scope.string(text);
-    set(scope, object, key, value);
-}
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
 
 pub(crate) fn c_string(scope: &mut Scope<'_>, value: &Value) -> Value {
     let mut bytes = scope.to_bytes(value).unwrap_or_default();

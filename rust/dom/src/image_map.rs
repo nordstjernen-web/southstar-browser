@@ -4,6 +4,8 @@
 
 use core::ffi::CStr;
 
+use southstar_glib::{max as c_max, min as c_min};
+
 use crate::Node;
 use crate::{MAX_DEPTH, children};
 
@@ -42,14 +44,6 @@ fn point_in_poly(pts: &[f64], pairs: usize, x: f64, y: f64) -> bool {
         j = i;
     }
     inside
-}
-
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
 }
 
 fn shape_prefix(shape: &[u8], prefix: &[u8]) -> bool {

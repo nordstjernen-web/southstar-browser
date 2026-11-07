@@ -85,39 +85,11 @@ pub(crate) fn reassert(keep: &Weak<WebGl>) {
     }
 }
 
-fn parse_long(text: &[u8]) -> i64 {
-    let mut rest = text;
-    while let Some((&c, tail)) = rest.split_first() {
-        if matches!(c, b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r') {
-            rest = tail;
-        } else {
-            break;
-        }
-    }
-    let negative = rest.first() == Some(&b'-');
-    if matches!(rest.first(), Some(b'-' | b'+')) {
-        rest = &rest[1..];
-    }
-    let mut value: i64 = 0;
-    for &c in rest.iter().take_while(|c| c.is_ascii_digit()) {
-        value = value.saturating_mul(10).saturating_add(i64::from(c - b'0'));
-    }
-    if negative { -value } else { value }
-}
-
 fn dim(canvas: Option<WeakNode>, name: &core::ffi::CStr, default: i32) -> i32 {
     let Some(text) = host::canvas_node(canvas).and_then(|n| n.attr(name)) else {
         return default;
     };
-    let text = text.to_bytes();
-    if text.is_empty() {
-        return default;
-    }
-    let v = parse_long(text);
-    if v <= 0 {
-        return default;
-    }
-    v.min(8192) as i32
+    southstar_canvas::host::context_dimension(text.to_bytes(), default)
 }
 
 impl State {

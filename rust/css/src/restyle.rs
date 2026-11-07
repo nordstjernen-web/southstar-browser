@@ -8,11 +8,12 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard};
 
-use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Node, attrs};
+use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Node, ancestors_and_self, attrs, children};
 
 use crate::ffi::{AttrRef, CompoundRef, GroupRef, SelectorRef, SheetRef};
 use crate::hints::is_presentational_attr;
-use crate::matcher::{AddrSet, attr_value_matches};
+use crate::matcher::{AddrSet, addr, attr_value_matches};
+use crate::rule_index::subject;
 
 const DEPTH_MAX: i32 = 6;
 const SIBLING_SCAN_MAX: u32 = 256;
@@ -164,10 +165,6 @@ fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
     f(state().get_or_insert_with(State::default))
 }
 
-fn addr(node: Node<'_>) -> usize {
-    node.as_ptr() as usize
-}
-
 fn attr<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
     attrs::get(el, name).map(CStr::to_bytes)
 }
@@ -182,20 +179,8 @@ fn tokens(value: &[u8]) -> impl Iterator<Item = &[u8]> {
         .filter(|t| !t.is_empty())
 }
 
-fn children(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(node.first_child(), |child| child.next_sibling())
-}
-
-fn self_and_ancestors(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(Some(node), |n| n.parent())
-}
-
 fn compounds(sel: SelectorRef<'_>) -> impl Iterator<Item = CompoundRef<'_>> {
     (0..sel.len()).filter_map(move |i| sel.compound(i))
-}
-
-fn subject(sel: SelectorRef<'_>) -> Option<CompoundRef<'_>> {
-    sel.len().checked_sub(1).and_then(|i| sel.compound(i))
 }
 
 fn logical_groups(c: CompoundRef<'_>) -> impl Iterator<Item = GroupRef<'_>> {
@@ -612,7 +597,7 @@ impl Keys {
         self.structural_loose
             || self.structural.matches(parent)
             || children(parent).any(|c| c.is_element() && self.structural.matches(c))
-            || self_and_ancestors(parent).any(|a| self.structural_ancestors.matches(a))
+            || ancestors_and_self(parent).any(|a| self.structural_ancestors.matches(a))
     }
 
     fn key_change_is_sibling(&self, target: Node<'_>, name: &[u8], old: Option<&[u8]>) -> bool {
@@ -777,7 +762,7 @@ impl State {
             return;
         }
         let dirty = &mut self.dirty;
-        for node in self_and_ancestors(changed) {
+        for node in ancestors_and_self(changed) {
             if has.anchored(node) {
                 Self::mark_region(dirty, node);
             }

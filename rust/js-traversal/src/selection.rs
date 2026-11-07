@@ -5,7 +5,7 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, js_of};
-use crate::{JsResult, bind, noop, put};
+use crate::{JsResult, bind, noop, set};
 
 const SELECTION_METHODS: &[(&str, u32)] = &[
     ("removeAllRanges", 0),
@@ -77,25 +77,25 @@ pub(crate) fn client_rects(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
 pub(crate) fn clone_contents(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let text = ffi::selection_state(js_of(scope)).text;
     let fragment = scope.new_object();
-    put(scope, &fragment, "nodeType", Value::int(11));
+    set(scope, &fragment, "nodeType", Value::int(11));
     let name = scope.string("#document-fragment");
-    put(scope, &fragment, "nodeName", name);
+    set(scope, &fragment, "nodeName", name);
     let text = scope.string_from_bytes(&text);
-    put(scope, &fragment, "textContent", text);
+    set(scope, &fragment, "textContent", text);
     let children = scope.new_array();
-    put(scope, &fragment, "childNodes", children);
+    set(scope, &fragment, "childNodes", children);
     Ok(fragment)
 }
 
 fn make_range(scope: &mut Scope<'_>) -> Value {
     let collapsed = !has_range(scope);
     let range = scope.new_object();
-    put(scope, &range, "collapsed", Value::boolean(collapsed));
-    put(scope, &range, "startContainer", Value::null());
-    put(scope, &range, "endContainer", Value::null());
-    put(scope, &range, "startOffset", Value::int(0));
-    put(scope, &range, "endOffset", Value::int(0));
-    put(scope, &range, "commonAncestorContainer", Value::null());
+    set(scope, &range, "collapsed", Value::boolean(collapsed));
+    set(scope, &range, "startContainer", Value::null());
+    set(scope, &range, "endContainer", Value::null());
+    set(scope, &range, "startOffset", Value::int(0));
+    set(scope, &range, "endOffset", Value::int(0));
+    set(scope, &range, "commonAncestorContainer", Value::null());
     bind(scope, &range, "toString", 0, to_string);
     bind(scope, &range, "cloneContents", 0, clone_contents);
     bind(
@@ -123,14 +123,14 @@ fn always_false(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
 pub fn get_selection(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
     let has = has_range(scope);
     let selection = scope.new_object();
-    put(scope, &selection, "anchorNode", Value::null());
-    put(scope, &selection, "focusNode", Value::null());
-    put(scope, &selection, "anchorOffset", Value::int(0));
-    put(scope, &selection, "focusOffset", Value::int(0));
-    put(scope, &selection, "isCollapsed", Value::boolean(!has));
-    put(scope, &selection, "rangeCount", Value::int(i32::from(has)));
+    set(scope, &selection, "anchorNode", Value::null());
+    set(scope, &selection, "focusNode", Value::null());
+    set(scope, &selection, "anchorOffset", Value::int(0));
+    set(scope, &selection, "focusOffset", Value::int(0));
+    set(scope, &selection, "isCollapsed", Value::boolean(!has));
+    set(scope, &selection, "rangeCount", Value::int(i32::from(has)));
     let kind = scope.string(if has { "Range" } else { "None" });
-    put(scope, &selection, "type", kind);
+    set(scope, &selection, "type", kind);
     bind(scope, &selection, "toString", 0, to_string);
     bind(scope, &selection, "getRangeAt", 1, range_at);
     for &(name, arity) in SELECTION_METHODS {

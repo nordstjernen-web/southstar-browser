@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
+use crate::item_cache::mix_hash;
 use crate::types::LogAttr;
 use crate::utils::caches_enabled;
 use std::collections::HashMap;
@@ -38,13 +39,6 @@ static SHARD_TABLE: LazyLock<[RwLock<Shard>; SHARDS]> =
 static HITS: AtomicU64 = AtomicU64::new(0);
 static MISSES: AtomicU64 = AtomicU64::new(0);
 static SKIPS: AtomicU64 = AtomicU64::new(0);
-
-fn mix_hash(mut h: u32) -> u32 {
-    h ^= h >> 16;
-    h = h.wrapping_mul(0x7feb_352d);
-    h ^= h >> 15;
-    h
-}
 
 fn hash_text(text: &[u8]) -> Option<u32> {
     let mut hash: u32 = 5381;

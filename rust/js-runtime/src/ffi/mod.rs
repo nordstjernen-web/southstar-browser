@@ -593,7 +593,7 @@ pub(crate) fn set_active(js: Js) {
     record::set_active(js.some());
 }
 
-pub(crate) fn real_time_us() -> i64 {
+pub fn real_time_us() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or_else(

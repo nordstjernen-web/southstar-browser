@@ -544,7 +544,7 @@ pub fn build_player(sink: &mut Sink, v: &mut NsVideo, body: Option<&[u8]>) {
 pub fn extend_timed(player: &mut Player, data: &[u8]) -> bool {
     let t0 = southstar_glib::monotonic_us();
     let ok = player.extend(data);
-    if ffi::env_set(c"NS_PROFILE") {
+    if ffi::env_set("NS_PROFILE") {
         debug(&format!(
             "[profile] mse extend {:6.1}ms  {}b ok={}\n",
             (southstar_glib::monotonic_us() - t0) as f64 / 1000.0,

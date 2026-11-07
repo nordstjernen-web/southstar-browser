@@ -6,7 +6,7 @@ use core::ffi::CStr;
 
 use southstar_css::{AUTO_REPEAT_NONE, GridTracks};
 use southstar_layout::{BoxRef, children};
-use southstar_layout_geom::keyword_or;
+use southstar_layout_geom::{keyword_or, style_is_rtl};
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
 use crate::ffi::{self, TrackEdges, style_of};
@@ -31,11 +31,6 @@ fn template<'a>(s: Option<StyleRef<'a>>, columns: bool) -> Option<ValueRef<'a>> 
     s.and_then(|s| s.get(prop))
 }
 
-fn is_rtl(s: Option<StyleRef<'_>>) -> bool {
-    s.and_then(|s| s.get(PropId::Direction))
-        .is_some_and(|v| v.is_keyword(c"rtl"))
-}
-
 pub fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area> {
     let ct = cb.grid_tracks(true)?;
     let rt = cb.grid_tracks(false)?;
@@ -58,7 +53,7 @@ pub fn containing_block(cb: BoxRef<'_>, st: StyleRef<'_>) -> Option<Area> {
     let pad_y0 = cb.y() + m.top + b.top;
     let pad_x1 = pad_x0 + cb.content_width() + p.left + p.right;
     let pad_y1 = pad_y0 + cb.content_height() + p.top + p.bottom;
-    let rtl = is_rtl(cs);
+    let rtl = style_is_rtl(cs);
     let (mut x0, mut x1, mut y0, mut y1) = (pad_x0, pad_x1, pad_y0, pad_y1);
     if !ct.is_empty() && (cs_line != 0 || ce_line != 0) {
         let n = ct.len() as i32;
@@ -156,7 +151,7 @@ pub fn static_position(
     static_y: bool,
 ) {
     let cs = style_of(cb);
-    let rtl = is_rtl(cs);
+    let rtl = style_is_rtl(cs);
     let (m, p, b) = (abox.margin(), abox.padding(), abox.border());
     let outer_w = abox.content_width() + p.left + p.right + b.left + b.right + m.left + m.right;
     let outer_h = abox.content_height() + p.top + p.bottom + b.top + b.bottom + m.top + m.bottom;

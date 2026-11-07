@@ -3,22 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::utf8_skip;
 
 use crate::ffi;
 use crate::{Element, JsResult};
 
 const INDEX_SIZE_ERR: i32 = 1;
-
-fn sequence_len(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
-    }
-}
 
 fn unit_width(lead: u8) -> u64 {
     if (0xf0..=0xfd).contains(&lead) { 2 } else { 1 }
@@ -29,7 +19,7 @@ fn utf16_length(text: &[u8]) -> u64 {
     let mut p = 0;
     while p < text.len() {
         units += unit_width(text[p]);
-        p += sequence_len(text[p]);
+        p += utf8_skip(text[p]);
     }
     units
 }
@@ -43,7 +33,7 @@ fn utf16_offset(text: &[u8], offset: u64) -> usize {
             break;
         }
         units += width;
-        p += sequence_len(text[p]);
+        p += utf8_skip(text[p]);
     }
     p.min(text.len())
 }

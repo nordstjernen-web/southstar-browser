@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::{ancestors, children, controls, select};
+use southstar_js_engine::props::global_get;
 use southstar_js_engine::{NativeFn, Scope, Value};
 use southstar_unicode::until_nul_owned;
 
@@ -57,13 +58,6 @@ fn entries(scope: &mut Scope<'_>, this: &Value) -> Value {
     let entries = scope.new_array();
     let _ = scope.set(this, "_entries", entries.clone());
     entries
-}
-
-fn global_get(scope: &mut Scope<'_>, name: &str) -> Value {
-    let global = scope.global();
-    scope
-        .get(&global, name)
-        .unwrap_or_else(|_| Value::undefined())
 }
 
 fn is_instance(scope: &mut Scope<'_>, value: &Value, constructor: &Value) -> bool {

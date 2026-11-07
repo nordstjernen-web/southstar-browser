@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub use southstar_glib::{max as c_max, min as c_min};
 use southstar_layout::{BoxRef, children};
 use southstar_layout_geom::{edges_into_box, resolve_used_height};
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
@@ -9,14 +10,6 @@ use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 use crate::align::length_is_auto;
 use crate::dispatch::{layout_box, shift_box_tree};
 use crate::ffi::{measure_natural_width, min_width_of, style_of};
-
-pub fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-pub fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
 
 pub fn rendered_legend(b: BoxRef<'_>) -> Option<BoxRef<'_>> {
     children(b).find(|c| c.is_rendered_legend())

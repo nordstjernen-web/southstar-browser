@@ -2052,7 +2052,7 @@ pub fn inline_range_extents(
     Some((x0, y0 - b.y(), x1 - x0, y1 - y0))
 }
 
-fn has_small_caps(variant: &[u8]) -> bool {
+pub fn has_small_caps(variant: &[u8]) -> bool {
     variant
         .split(|&c| c == b' ')
         .any(|w| w == b"small-caps" || w == b"all-small-caps")

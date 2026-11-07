@@ -2,15 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use southstar_js_engine::props::string_value;
+pub(crate) use southstar_js_engine::props::{arg, get as prop, get_index as index, set, set_str};
 use std::rc::Rc;
 
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 pub(crate) type JsResult = Result<Value, Value>;
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
 
 pub(crate) fn defined(args: &[Value], index: usize) -> Option<&Value> {
     args.get(index).filter(|v| !v.is_undefined())
@@ -20,29 +18,9 @@ pub(crate) fn host<T: 'static>(value: &Value) -> Option<Rc<T>> {
     value.with_host(|h: &Rc<T>| h.clone())
 }
 
-pub(crate) fn prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn index(scope: &mut Scope<'_>, object: &Value, i: u32) -> Value {
-    scope
-        .get_index(object, i)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn string_of(scope: &mut Scope<'_>, value: &Value) -> Option<String> {
-    if value.is_string() {
-        scope.to_string(value).ok()
-    } else {
-        None
-    }
-}
-
 pub(crate) fn str_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<String> {
     let value = prop(scope, object, key);
-    string_of(scope, &value)
+    string_value(scope, &value)
 }
 
 pub(crate) fn u32_of(scope: &mut Scope<'_>, value: &Value) -> u32 {
@@ -82,15 +60,6 @@ pub(crate) fn array_len(scope: &mut Scope<'_>, array: &Value) -> u32 {
 
 pub(crate) fn uint(value: u32) -> Value {
     Value::int64(i64::from(value))
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    scope.set(object, key, value).ok();
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) {
-    let value = scope.string(text);
-    set(scope, object, key, value);
 }
 
 pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity: u32) {

@@ -4,11 +4,9 @@
 
 use core::ffi::CStr;
 use southstar_unicode::until_nul;
-use std::ffi::OsStr;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use southstar_glib as glib;
+use southstar_glib::{self as glib, os_bytes};
 
 #[cfg(windows)]
 pub(crate) const SEARCHPATH_SEPARATOR: u8 = b';';
@@ -36,26 +34,8 @@ impl Regex {
     }
 }
 
-#[cfg(unix)]
 fn path_of(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(OsStr::from_bytes(until_nul(bytes)))
-}
-
-#[cfg(not(unix))]
-fn path_of(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(until_nul(bytes)).into_owned())
-}
-
-#[cfg(unix)]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    text.as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    text.to_string_lossy().into_owned().into_bytes()
+    southstar_glib::path_from_bytes_lossy(until_nul(bytes))
 }
 
 fn is_dir_separator(c: u8) -> bool {
@@ -178,53 +158,16 @@ pub(crate) fn read_file(path: &[u8]) -> Option<Vec<u8>> {
     std::fs::read(path_of(path)).ok()
 }
 
-#[cfg(unix)]
-fn set_mode(path: &Path, mode: u32) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
-}
-
-#[cfg(not(unix))]
-fn set_mode(_path: &Path, _mode: u32) {}
-
 pub(crate) fn make_private_dir(path: &[u8]) {
-    let path = path_of(path);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        let _ = std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&path);
-    }
-    #[cfg(not(unix))]
-    let _ = std::fs::create_dir_all(&path);
-    set_mode(&path, 0o700);
-}
-
-fn write_atomically(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    let mut temp_name = path.as_os_str().to_owned();
-    temp_name.push(format!(".{}.tmp", std::process::id()));
-    let temp = PathBuf::from(temp_name);
-    let written = std::fs::File::create(&temp).and_then(|mut file| {
-        file.write_all(data)?;
-        file.sync_all()
-    });
-    match written.and_then(|()| std::fs::rename(&temp, path)) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = std::fs::remove_file(&temp);
-            Err(error)
-        }
-    }
+    southstar_config::util::make_private_dirs(&path_of(path));
 }
 
 pub(crate) fn write_private_file(path: &[u8], data: &[u8]) -> bool {
     let path = path_of(path);
-    if write_atomically(&path, data).is_err() {
+    if southstar_config::util::write_replacing(&path, data).is_err() {
         return false;
     }
-    set_mode(&path, 0o600);
+    let _ = southstar_config::util::set_mode(&path, 0o600);
     true
 }
 

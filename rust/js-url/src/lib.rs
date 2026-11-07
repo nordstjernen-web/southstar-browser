@@ -14,6 +14,9 @@ mod search_params;
 mod text_codec;
 mod url;
 
+pub(crate) use southstar_js_engine::props::{
+    arg, bind, get, interface_prototype, set, set_bytes, truthy,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -89,57 +92,13 @@ pub(crate) fn teardown(js: Js) {
     drop(page);
 }
 
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &[u8]) {
-    let value = scope.string_from_bytes(text);
-    set(scope, object, key, value);
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
 pub(crate) fn int64_prop(scope: &mut Scope<'_>, object: &Value, key: &str, fallback: i64) -> i64 {
     let value = get(scope, object, key);
     scope.to_int64(&value).unwrap_or(fallback)
 }
 
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
-
 pub(crate) fn is_nullish(value: &Value) -> bool {
     value.is_undefined() || value.is_null()
-}
-
-pub(crate) fn proto_of(scope: &mut Scope<'_>, global: &Value, name: &str) -> Value {
-    let ctor = get(scope, global, name);
-    if ctor.is_object() {
-        get(scope, &ctor, "prototype")
-    } else {
-        Value::undefined()
-    }
-}
-
-pub(crate) fn bind_fn(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &str,
-    arity: u32,
-    f: southstar_js_engine::NativeFn,
-) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
 }
 
 pub(crate) fn latin1_string(scope: &mut Scope<'_>, bytes: &[u8]) -> Value {

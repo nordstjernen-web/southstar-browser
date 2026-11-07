@@ -9,7 +9,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Credentials, HO_XHR, HO_XHR_UPLOAD, Js, Realm, Request, Response, cstring};
 use crate::headers;
-use crate::{JsResult, bool_prop, c_bytes, int_prop, is_nullish, prop, set, set_str};
+use crate::{JsResult, c_bytes, int_prop, is_nullish, prop, set, set_bytes, truthy};
 
 const SYNC_DEADLINE_US: i64 = 60 * 1_000_000;
 
@@ -104,11 +104,11 @@ fn progress(
 fn reset_response(scope: &mut Scope<'_>, obj: &Value) {
     set(scope, obj, "status", Value::int(0));
     for key in ["statusText", "responseText", "response"] {
-        set_str(scope, obj, key, b"");
+        set_bytes(scope, obj, key, b"");
     }
     set(scope, obj, "responseXML", Value::null());
-    set_str(scope, obj, "responseURL", b"");
-    set_str(scope, obj, "_responseHeaders", b"");
+    set_bytes(scope, obj, "responseURL", b"");
+    set_bytes(scope, obj, "_responseHeaders", b"");
 }
 
 fn get_response_header(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
@@ -138,7 +138,7 @@ fn get_all_response_headers(scope: &mut Scope<'_>, this: &Value, _args: &[Value]
 fn abort(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
     check(scope, this)?;
     let mut state = int_prop(scope, this, "_readyState");
-    let sent = bool_prop(scope, this, "_sendFlag");
+    let sent = truthy(scope, this, "_sendFlag");
     if (state == 1 && sent) || state == 2 || state == 3 {
         bump_generation(scope, this);
         set(scope, this, "_aborted", Value::boolean(true));
@@ -233,8 +233,8 @@ fn open(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     }
     let method = until_nul_owned(method);
     let normalized = headers::standard_method(&method).map_or(method, <[u8]>::to_vec);
-    set_str(scope, this, "_method", &normalized);
-    set_str(scope, this, "_url", &url);
+    set_bytes(scope, this, "_method", &normalized);
+    set_bytes(scope, this, "_url", &url);
     set(scope, this, "_sync", Value::boolean(!asynchronous));
     let list = scope.new_array();
     set(scope, this, "_headers", list);
@@ -253,7 +253,7 @@ fn set_request_header(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Js
         return Err(scope.type_error("setRequestHeader requires at least 2 arguments"));
     }
     let ready_state = int_prop(scope, this, "_readyState");
-    if ready_state != 1 || bool_prop(scope, this, "_sendFlag") {
+    if ready_state != 1 || truthy(scope, this, "_sendFlag") {
         return Err(ffi::throw_dom(
             scope,
             c"InvalidStateError",
@@ -318,7 +318,7 @@ fn pump_until_done(scope: &mut Scope<'_>, js: Js, this: &Value) {
 fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     check(scope, this)?;
     let ready_state = int_prop(scope, this, "_readyState");
-    if ready_state != 1 || bool_prop(scope, this, "_sendFlag") {
+    if ready_state != 1 || truthy(scope, this, "_sendFlag") {
         return Err(ffi::throw_dom(
             scope,
             c"InvalidStateError",
@@ -440,7 +440,7 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             body: body.unwrap_or_default(),
             content_type: effective_content_type.as_deref().map(cstring),
             headers: lines.iter().map(|h| cstring(h)).collect::<Vec<CString>>(),
-            credentials: if bool_prop(scope, this, "withCredentials") {
+            credentials: if truthy(scope, this, "withCredentials") {
                 Credentials::Include
             } else {
                 Credentials::SameOrigin
@@ -481,7 +481,7 @@ fn send(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
             }
         }
     }
-    if bool_prop(scope, this, "_sync") {
+    if truthy(scope, this, "_sync") {
         pump_until_done(scope, js, this);
     }
     Ok(Value::undefined())
@@ -493,11 +493,11 @@ pub(crate) fn construct(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) ->
     set(scope, &obj, "_gen", Value::int(0));
     set(scope, &obj, "status", Value::int(0));
     for key in ["statusText", "responseText", "response"] {
-        set_str(scope, &obj, key, b"");
+        set_bytes(scope, &obj, key, b"");
     }
     set(scope, &obj, "responseXML", Value::null());
     for key in ["responseType", "responseURL", "_responseHeaders"] {
-        set_str(scope, &obj, key, b"");
+        set_bytes(scope, &obj, key, b"");
     }
     set(scope, &obj, "timeout", Value::int(0));
     set(scope, &obj, "withCredentials", Value::boolean(false));
@@ -654,7 +654,7 @@ fn make_blob(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>) ->
     let _ = scope.set_index(&parts, 0, buffer);
     let options = scope.new_object();
     if let Some(kind) = content_type.filter(|k| !k.is_empty()) {
-        set_str(scope, &options, "type", kind);
+        set_bytes(scope, &options, "type", kind);
     }
     scope
         .construct(&ctor, &[parts, options])
@@ -688,7 +688,7 @@ fn make_document(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>
 fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Response) -> bool {
     let obj = &state.obj;
     let final_url = resp.final_url();
-    let cors_ok = if bool_prop(scope, obj, "withCredentials") {
+    let cors_ok = if truthy(scope, obj, "withCredentials") {
         headers::cors_allows_credentials(
             state.origin_url.as_deref(),
             final_url.as_deref(),
@@ -706,7 +706,7 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
         && !crate::fetch::final_url_connect_blocked(js, state.csp_realm, final_url.as_deref());
     let code = if allow { resp.status() as i32 } else { 0 };
     set(scope, obj, "status", Value::int(code));
-    set_str(
+    set_bytes(
         scope,
         obj,
         "statusText",
@@ -717,7 +717,7 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
     } else {
         Vec::new()
     };
-    set_str(scope, obj, "responseURL", &url);
+    set_bytes(scope, obj, "responseURL", &url);
     let same_origin = ffi::url_same_origin(state.origin_url.as_deref(), final_url.as_deref());
     let raw = resp.raw_headers();
     let all = if !allow {
@@ -729,7 +729,7 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
     } else {
         serialize_known(resp, None)
     };
-    set_str(scope, obj, "_responseHeaders", &all);
+    set_bytes(scope, obj, "_responseHeaders", &all);
     let body: &[u8] = if allow { resp.body() } else { &[] };
     let content_type = resp.content_type();
     let text = response_text(scope, obj, body, content_type.as_deref());
@@ -753,7 +753,7 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
 }
 
 fn finish_events(scope: &mut Scope<'_>, obj: &Value, network_error: bool, length: usize) {
-    if bool_prop(scope, obj, "_aborted") {
+    if truthy(scope, obj, "_aborted") {
         return;
     }
     let len = length as f64;
@@ -844,7 +844,7 @@ pub(crate) fn blocked(ticket: Ticket) {
             set(scope, obj, "status", Value::int(0));
             set_ready_state(scope, obj, 4);
             set(scope, obj, "_sendFlag", Value::boolean(false));
-            if !bool_prop(scope, obj, "_aborted") {
+            if !truthy(scope, obj, "_aborted") {
                 ffi::fire_event(scope, obj, c"readystatechange");
                 progress(scope, obj, "error", 0.0, 0.0, false);
                 progress(scope, obj, "loadend", 0.0, 0.0, false);

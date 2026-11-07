@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::array_length as length;
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Scope, Value};
 
 use crate::draw::{prepare_path_and_rule, restore_path, state};
@@ -12,19 +14,6 @@ type Result = core::result::Result<Value, Value>;
 const OPERATOR_CLEAR: i32 = 0;
 const DEFAULT_MITER_LIMIT: f64 = 10.0;
 const IMAGEDATA_MAX: i64 = 32767;
-
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
-}
-
-fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    scope
-        .get(array, "length")
-        .ok()
-        .and_then(|l| scope.to_int32(&l).ok())
-        .map_or(0, |n| n as u32)
-}
 
 fn cairo_of(st: &crate::ffi::state::CanvasState) -> Option<Context> {
     Some(st.context())
@@ -101,8 +90,8 @@ pub(crate) fn is_point_in_path(scope: &mut Scope<'_>, this: &Value, args: &[Valu
         return Ok(Value::boolean(false));
     }
     let i = usize::from(with_path);
-    let x = arg(scope, args, i);
-    let y = arg(scope, args, i + 1);
+    let x = number_arg(scope, args, i);
+    let y = number_arg(scope, args, i + 1);
     let Some(st) = state(scope, this) else {
         return Ok(Value::boolean(false));
     };
@@ -137,8 +126,8 @@ pub(crate) fn is_point_in_stroke(scope: &mut Scope<'_>, this: &Value, args: &[Va
         return Ok(Value::boolean(false));
     }
     let i = usize::from(with_path);
-    let x = arg(scope, args, i);
-    let y = arg(scope, args, i + 1);
+    let x = number_arg(scope, args, i);
+    let y = number_arg(scope, args, i + 1);
     let Some(st) = state(scope, this) else {
         return Ok(Value::boolean(false));
     };

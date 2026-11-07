@@ -20,7 +20,7 @@ mod page;
 mod tasks;
 
 pub use crate::ffi::record::AdoptedProtos;
-pub use crate::ffi::{Callbacks as PageCallbacks, NavigationTiming, NsJs};
+pub use crate::ffi::{Callbacks as PageCallbacks, NavigationTiming, NsJs, real_time_us};
 pub use enter::*;
 pub use hooks::*;
 pub use hooks_i::*;

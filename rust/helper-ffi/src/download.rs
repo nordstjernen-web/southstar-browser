@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::Write;
 use std::time::Duration;
 
-use southstar_http::{Fetch, Handler, Route, TlsSettings};
+use southstar_http::{Fetch, Handler, Route, TlsSettings, percent_decode};
 
 struct Sink {
     file: File,
@@ -32,24 +32,6 @@ impl Handler for Sink {
         self.written += data.len() as u64;
         true
     }
-}
-
-fn percent_decode(s: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(s.len());
-    let mut i = 0;
-    while i < s.len() {
-        if s[i] == b'%' && i + 2 < s.len() {
-            let hex = |c: u8| (c as char).to_digit(16);
-            if let (Some(h), Some(l)) = (hex(s[i + 1]), hex(s[i + 2])) {
-                out.push((h * 16 + l) as u8);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(s[i]);
-        i += 1;
-    }
-    out
 }
 
 fn base64_decode(input: &[u8]) -> Option<Vec<u8>> {

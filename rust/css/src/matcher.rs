@@ -7,7 +7,9 @@ use core::hash::{BuildHasherDefault, Hasher};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard};
 
-use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, attrs};
+use southstar_dom::{
+    FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, ancestors_and_self, attrs, children,
+};
 
 use crate::element_state;
 use crate::ffi::{self, CompoundRef, GroupRef, PseudoRef, RuleRef, ScopeRef, SelectorRef};
@@ -163,7 +165,7 @@ pub(crate) fn has_memo_end() {
     HAS_MEMO.set(None);
 }
 
-fn addr(node: Node<'_>) -> usize {
+pub(crate) fn addr(node: Node<'_>) -> usize {
     node.as_ptr() as usize
 }
 
@@ -173,14 +175,6 @@ fn raw_name(el: Node<'_>) -> Option<&[u8]> {
 
 fn named(node: Node<'_>, tag: &[u8]) -> bool {
     node.element_name() == Some(tag)
-}
-
-fn children(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(node.first_child(), |child| child.next_sibling())
-}
-
-fn self_and_ancestors(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(Some(node), |n| n.parent())
 }
 
 fn prev_element(node: Node<'_>) -> Option<Node<'_>> {
@@ -374,7 +368,7 @@ fn nth_matches(el: Node<'_>, pc: &PseudoRef) -> bool {
 }
 
 fn under(node: Option<Node<'_>>, el: Node<'_>) -> bool {
-    node.is_some_and(|n| self_and_ancestors(n).any(|a| a == el))
+    node.is_some_and(|n| ancestors_and_self(n).any(|a| a == el))
 }
 
 fn pseudo_matches(el: Node<'_>, pc: &PseudoRef) -> bool {
@@ -718,7 +712,7 @@ fn scope_root_matches(scope: ScopeRef<'_>, el: Node<'_>) -> bool {
 }
 
 fn scope_hops(root: Node<'_>, el: Node<'_>) -> Option<i32> {
-    self_and_ancestors(el)
+    ancestors_and_self(el)
         .position(|n| n == root)
         .map(|hops| hops as i32)
 }
@@ -727,7 +721,7 @@ fn scope_limit_excludes(scope: ScopeRef<'_>, root: Node<'_>, el: Node<'_>) -> bo
     let Some(limits) = scope.limits() else {
         return false;
     };
-    for n in self_and_ancestors(el) {
+    for n in ancestors_and_self(el) {
         if n.is_element() && group_matches_with_scope(Some(limits), n, Some(root)) {
             return true;
         }
@@ -743,7 +737,7 @@ fn scope_contains(scope: ScopeRef<'_>, root: Node<'_>, el: Node<'_>) -> bool {
 }
 
 fn scope_applies_to(scope: ScopeRef<'_>, el: Node<'_>) -> bool {
-    self_and_ancestors(el)
+    ancestors_and_self(el)
         .filter(|root| root.is_element())
         .any(|root| scope_root_matches(scope, root) && scope_contains(scope, root, el))
 }
@@ -768,7 +762,7 @@ pub(crate) fn rule_matches(
         return one(sel).then_some(0);
     };
     let mut best = 0;
-    for root in self_and_ancestors(el).filter(|n| n.is_element()) {
+    for root in ancestors_and_self(el).filter(|n| n.is_element()) {
         if !scope_root_matches(inner, root) || !scope_contains(inner, root, el) {
             continue;
         }

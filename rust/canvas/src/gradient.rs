@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::array_length as length;
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Scope, Value};
 use southstar_unicode::until_nul_owned;
 
@@ -9,11 +11,6 @@ use crate::ffi::cairo::{Extend, Pattern};
 use crate::raster::ConicStop;
 
 type Result = core::result::Result<Value, Value>;
-
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
-}
 
 fn hnum(scope: &mut Scope<'_>, obj: &Value, name: &str) -> f64 {
     crate::hidden::get(scope, obj, name)
@@ -28,14 +25,6 @@ fn field(scope: &mut Scope<'_>, obj: &Value, name: &str) -> f64 {
         .ok()
         .and_then(|v| scope.to_number(&v).ok())
         .unwrap_or(f64::NAN)
-}
-
-fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    scope
-        .get(array, "length")
-        .ok()
-        .and_then(|l| scope.to_int32(&l).ok())
-        .map_or(0, |n| n as u32)
 }
 
 fn stops(scope: &mut Scope<'_>, obj: &Value) -> Vec<ConicStop> {
@@ -158,7 +147,7 @@ pub(crate) fn add_color_stop(scope: &mut Scope<'_>, this: &Value, args: &[Value]
     if args.len() < 2 {
         return Ok(Value::undefined());
     }
-    let pos = arg(scope, args, 0);
+    let pos = number_arg(scope, args, 0);
     if !(0.0..=1.0).contains(&pos) {
         return Err(crate::api::throw_dom(
             scope,
@@ -223,7 +212,7 @@ pub(crate) fn create_linear_gradient(
     }
     let obj = crate::ffi::new_gradient(scope, this, b"linear");
     for (i, name) in ["_x0", "_y0", "_x1", "_y1"].into_iter().enumerate() {
-        let v = arg(scope, args, i);
+        let v = number_arg(scope, args, i);
         store(scope, &obj, name, v);
     }
     Ok(obj)
@@ -237,8 +226,8 @@ pub(crate) fn create_radial_gradient(
     if args.len() < 6 {
         return Ok(Value::null());
     }
-    let r0 = arg(scope, args, 2);
-    let r1 = arg(scope, args, 5);
+    let r0 = number_arg(scope, args, 2);
+    let r1 = number_arg(scope, args, 5);
     if r0 < 0.0 || r1 < 0.0 {
         return Err(crate::api::throw_dom(
             scope,
@@ -247,14 +236,14 @@ pub(crate) fn create_radial_gradient(
         ));
     }
     let obj = crate::ffi::new_gradient(scope, this, b"radial");
-    let x0 = arg(scope, args, 0);
+    let x0 = number_arg(scope, args, 0);
     store(scope, &obj, "_x0", x0);
-    let y0 = arg(scope, args, 1);
+    let y0 = number_arg(scope, args, 1);
     store(scope, &obj, "_y0", y0);
     store(scope, &obj, "_r0", r0);
-    let x1 = arg(scope, args, 3);
+    let x1 = number_arg(scope, args, 3);
     store(scope, &obj, "_x1", x1);
-    let y1 = arg(scope, args, 4);
+    let y1 = number_arg(scope, args, 4);
     store(scope, &obj, "_y1", y1);
     store(scope, &obj, "_r1", r1);
     Ok(obj)
@@ -266,7 +255,7 @@ pub(crate) fn create_conic_gradient(scope: &mut Scope<'_>, this: &Value, args: &
     }
     let obj = crate::ffi::new_gradient(scope, this, b"conic");
     for (i, name) in ["_angle", "_x0", "_y0"].into_iter().enumerate() {
-        let v = arg(scope, args, i);
+        let v = number_arg(scope, args, i);
         store(scope, &obj, name, v);
     }
     Ok(obj)

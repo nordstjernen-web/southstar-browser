@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::{get, noop};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi;
@@ -16,16 +17,6 @@ const ANIMATION_METHODS: [(&str, u32); 8] = [
     ("persist", 0),
     ("updatePlaybackRate", 1),
 ];
-
-fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    Ok(Value::undefined())
-}
-
-fn get_or_undefined(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
 
 fn call_listener(scope: &mut Scope<'_>, callback: &Value, animation: &Value, event: &Value) {
     if scope.is_function(callback) {
@@ -42,19 +33,19 @@ fn finish_job(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Va
     let _ = scope.set(&event, "type", kind);
     let _ = scope.set(&event, "target", animation.clone());
     let _ = scope.set(&event, "currentTarget", animation.clone());
-    let on_finish = get_or_undefined(scope, animation, "onfinish");
+    let on_finish = get(scope, animation, "onfinish");
     call_listener(scope, &on_finish, animation, &event);
-    let listeners = get_or_undefined(scope, animation, "_listeners");
+    let listeners = get(scope, animation, "_listeners");
     if listeners.is_array() {
-        let length = get_or_undefined(scope, &listeners, "length");
+        let length = get(scope, &listeners, "length");
         let length = scope.to_number(&length).unwrap_or(0.0) as u32;
         for index in 0..length {
             let entry = scope
                 .get_index(&listeners, index)
                 .unwrap_or_else(|_| Value::undefined());
-            let kind = get_or_undefined(scope, &entry, "type");
+            let kind = get(scope, &entry, "type");
             if scope.to_string(&kind).is_ok_and(|k| k == "finish") {
-                let callback = get_or_undefined(scope, &entry, "cb");
+                let callback = get(scope, &entry, "cb");
                 call_listener(scope, &callback, animation, &event);
             }
         }

@@ -5,7 +5,10 @@
 use core::ffi::CStr;
 
 use southstar_cairo::ContextRef;
+pub use southstar_glib::{max as cmax, min as cmin};
 use southstar_layout::BoxRef;
+pub use southstar_layout_geom::{keyword_is, length_or};
+pub use southstar_style::box_style as style_of;
 use southstar_style::{PropId, StyleRef, ValueRef};
 
 pub const UNIT_PX: u32 = 0;
@@ -31,14 +34,6 @@ pub const UNIT_REX: u32 = 19;
 pub const UNIT_RCH: u32 = 20;
 pub const UNIT_RCAP: u32 = 21;
 pub const UNIT_RIC: u32 = 22;
-
-pub fn cmin(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-pub fn cmax(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
 
 pub fn is_space(c: u8) -> bool {
     c == b' ' || (b'\t'..=b'\r').contains(&c)
@@ -83,20 +78,8 @@ pub fn rgba_of(v: Option<ValueRef<'_>>, fallback: Rgba) -> Rgba {
         .map_or(fallback, Rgba::from_bytes)
 }
 
-pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
-    v.map_or(fallback, |v| v.length_or(fallback))
-}
-
-pub fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
-}
-
 pub fn keyword(v: Option<ValueRef<'_>>) -> Option<&CStr> {
     v.and_then(ValueRef::keyword_text)
-}
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
 }
 
 pub fn get(s: Option<StyleRef<'_>>, prop: PropId) -> Option<ValueRef<'_>> {

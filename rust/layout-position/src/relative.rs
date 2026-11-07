@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::BoxRef;
+pub use southstar_layout_geom::length_is_auto;
 use southstar_layout_geom::{
     containing_block_definite_height, height_keyword_stretches, value_is_percent,
 };
@@ -11,10 +12,6 @@ use southstar_style::{Kind, PropId, StyleRef, UNIT_PERCENT, ValueRef};
 use crate::ffi::{dom_of, prop, shift_box_tree, style_of, viewport_h};
 
 const UNIT_EM: u32 = 1;
-
-pub fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| v.is_keyword(c"auto"))
-}
 
 fn style_is_relative(s: Option<StyleRef<'_>>) -> bool {
     s.and_then(|s| s.get(PropId::Position))

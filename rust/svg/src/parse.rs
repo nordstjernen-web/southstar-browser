@@ -71,7 +71,7 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
+pub(crate) fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
     s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 

@@ -444,13 +444,6 @@ pub(crate) fn clear_bufferfi(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> Js
     undefined()
 }
 
-fn string_arg(s: &mut Scope<'_>, a: &[Value], i: usize, min_args: usize) -> Option<Vec<u8>> {
-    if a.len() < min_args {
-        return None;
-    }
-    bytes(s, &a[i])
-}
-
 pub(crate) fn get_uniform_block_index(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     let index = string_arg(s, a, 1, 2).map_or(INVALID_INDEX, |block| {

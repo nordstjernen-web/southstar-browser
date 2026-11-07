@@ -20,40 +20,11 @@ pub use ffi::{
     video_event,
 };
 
-use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+pub(crate) use southstar_js_bind::make_constructor;
+pub(crate) use southstar_js_engine::props::{bind, get, set, set_str, truthy};
+use southstar_js_engine::{Scope, Value};
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
-
-const PROTOTYPE_ONLY_WRITABLE: Attributes = Attributes {
-    writable: true,
-    enumerable: false,
-    configurable: false,
-};
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) {
-    let value = scope.string(text);
-    set(scope, object, key, value);
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
 
 pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
     let length = get(scope, array, "length");
@@ -61,15 +32,6 @@ pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
         .to_number(&length)
         .map(|n| southstar_js_engine::int64_modulo(n) as u32)
         .unwrap_or(0)
-}
-
-pub(crate) fn make_ctor(scope: &mut Scope<'_>, name: &str, arity: u32, f: NativeFn) -> Value {
-    let function = scope.constructor_or_function(name, arity, f);
-    let proto = scope.new_object();
-    let _ = scope.define(&proto, "constructor", function.clone(), Attributes::METHOD);
-    let _ = scope.define_to_string_tag(&proto, name);
-    let _ = scope.define(&function, "prototype", proto, PROTOTYPE_ONLY_WRITABLE);
-    function
 }
 
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, message: &str) -> Value {

@@ -11,6 +11,7 @@ use std::ffi::CString;
 use southstar_cairo::{Context, ContextRef, Matrix, Operator, Pattern};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxKind, BoxRef, NsBox};
+use southstar_layout_geom::is_length_or_calc;
 use southstar_style::{Kind, PropId as P, StyleRef, ValueRef, display_of, parse_color};
 use std::rc::Rc;
 
@@ -798,10 +799,6 @@ fn is_block_like(kind: BoxKind) -> bool {
     )
 }
 
-fn has_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
-}
-
 fn scrollbar_colors(s: Option<StyleRef<'_>>) -> (Rgba, Rgba) {
     let mut thumb = Rgba::new(0.0, 0.0, 0.0, 0.40);
     let mut track = Rgba::new(0.0, 0.0, 0.0, 0.06);
@@ -1326,11 +1323,11 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
             ph = 0.0;
         }
         let explicit_h = style.is_some()
-            && (has_length_or_calc(get(style, P::MaxHeight))
-                || has_length_or_calc(get(style, P::Height)));
+            && (is_length_or_calc(get(style, P::MaxHeight))
+                || is_length_or_calc(get(style, P::Height)));
         let explicit_w = style.is_some()
-            && (has_length_or_calc(get(style, P::MaxWidth))
-                || has_length_or_calc(get(style, P::Width)));
+            && (is_length_or_calc(get(style, P::MaxWidth))
+                || is_length_or_calc(get(style, P::Width)));
         let sized_by_container = box_is_flex_or_grid_item(b);
         if (pw > 0.0 || explicit_w || sized_by_container)
             && (ph > 0.0 || explicit_h || sized_by_container)

@@ -76,7 +76,7 @@ fn orientation(scope: &mut Scope<'_>) -> Value {
     let _ = scope.set(&orientation, "angle", Value::int(0));
     let lock = scope.function("lock", 1, navigator::rejected_not_supported);
     let _ = scope.set(&orientation, "lock", lock);
-    let unlock = scope.function("unlock", 0, navigator::noop);
+    let unlock = scope.function("unlock", 0, southstar_js_bind::natives::noop);
     let _ = scope.set(&orientation, "unlock", unlock);
     event_target(scope, &orientation);
     let _ = scope.define_to_string_tag(&orientation, "ScreenOrientation");

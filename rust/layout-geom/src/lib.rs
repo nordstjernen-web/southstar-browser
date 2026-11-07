@@ -13,6 +13,7 @@ pub use hit::{node_is_form_hit_target, style_blocks_hit_testing};
 pub use text::{utf8_skip, vertical_stack_text};
 
 use core::ffi::CStr;
+use southstar_glib::{max as c_max, min as c_min};
 
 use southstar_layout::{BoxRef, Edges};
 use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, box_style, display_of};
@@ -44,16 +45,12 @@ pub const INNER_RUBY: u8 = 5;
 pub const INTERNAL_NONE: u8 = 0;
 pub const INTERNAL_TABLE_CAPTION: u8 = 8;
 
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
 pub fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
     v.is_some_and(|v| v.is_keyword(kw))
+}
+
+pub fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
+    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
 }
 
 pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
@@ -139,7 +136,7 @@ pub fn inline_text_indent_px(run: BoxRef<'_>, s: Option<StyleRef<'_>>, basis: f6
     text_indent_px(s, basis)
 }
 
-fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
+pub fn length_is_auto(v: Option<ValueRef<'_>>) -> bool {
     keyword_is(v, c"auto")
 }
 
@@ -512,6 +509,25 @@ pub fn edges_into_box(b: BoxRef<'_>, basis: f64) {
     b.set_margin(margin);
     b.set_padding(padding);
     b.set_border(border);
+}
+
+pub fn outer_width(c: BoxRef<'_>) -> f64 {
+    let (m, p, b) = (c.margin(), c.padding(), c.border());
+    c.content_width() + p.left + p.right + b.left + b.right + m.left + m.right
+}
+
+pub fn outer_height(c: BoxRef<'_>) -> f64 {
+    let (m, p, b) = (c.margin(), c.padding(), c.border());
+    c.content_height() + p.top + p.bottom + b.top + b.bottom + m.top + m.bottom
+}
+
+pub fn outer_size(c: BoxRef<'_>) -> (f64, f64) {
+    (outer_width(c), outer_height(c))
+}
+
+pub fn style_is_rtl(s: Option<StyleRef<'_>>) -> bool {
+    s.and_then(|s| s.get(PropId::Direction))
+        .is_some_and(|v| v.is_keyword(c"rtl"))
 }
 
 pub fn box_is_fixed(b: BoxRef<'_>) -> bool {

@@ -27,8 +27,8 @@ use southstar_dom::{Kind, Node, Tree, children};
 use southstar_style::{Prop, StyleRef, StyleTable, Value, parse_color};
 use southstar_texture::TextureRef;
 use state::{
-    DISPLAY, OPACITY, PaintKind, STOP_COLOR, STOP_OPACITY, State, clamp, cmax, cmin, css_number,
-    diag_basis, unit_rgba,
+    DISPLAY, OPACITY, PaintKind, STOP_COLOR, STOP_OPACITY, State, clamp, css_number, diag_basis,
+    max, min, unit_rgba,
 };
 
 const MAX_DEPTH: i32 = 24;
@@ -131,7 +131,7 @@ fn viewbox_matrix(n: Node<'_>, vw: f64, vh: f64) -> Matrix {
     }
     let (mut sx, mut sy) = (vw / w, vh / h);
     if !none {
-        let s = if slice { cmax(sx, sy) } else { cmin(sx, sy) };
+        let s = if slice { max(sx, sy) } else { min(sx, sy) };
         sx = s;
         sy = s;
     }
@@ -872,8 +872,8 @@ impl<'a> Ctx<'a> {
         let ctm = self.cr.matrix();
         let (cx1, cy1) = ctm.transform_point(cx1, cy1);
         let (cx2, cy2) = ctm.transform_point(cx2, cy2);
-        let w = (cmax(cx1, cx2) + ox).ceil() as i32;
-        let h = (cmax(cy1, cy2) + oy).ceil() as i32;
+        let w = (max(cx1, cx2) + ox).ceil() as i32;
+        let h = (max(cy1, cy2) + oy).ceil() as i32;
         let pixels = f64::from(w) * f64::from(h);
         if w <= 0 || h <= 0 || pixels > MAX_PIXELS || self.mask_pixels + pixels > MAX_MASK_PIXELS {
             return None;
@@ -1393,7 +1393,7 @@ pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
         DEFAULT_DIM_PX
     };
     if !size.has_width && !size.has_height && size.has_ratio && size.ratio > 0.0 {
-        let k = cmin(DEFAULT_OBJECT_W / size.ratio, DEFAULT_OBJECT_H);
+        let k = min(DEFAULT_OBJECT_W / size.ratio, DEFAULT_OBJECT_H);
         w = size.ratio * k;
         h = k;
     }
@@ -1404,7 +1404,7 @@ pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
         h = DEFAULT_DIM_PX;
     }
     if w > MAX_DIM_PX || h > MAX_DIM_PX {
-        let s = MAX_DIM_PX / cmax(w, h);
+        let s = MAX_DIM_PX / max(w, h);
         w *= s;
         h *= s;
     }

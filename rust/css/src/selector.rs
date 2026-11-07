@@ -8,6 +8,7 @@ use southstar_dom::attrs::name_bloom_bit;
 
 use crate::ffi;
 use crate::lex::{read_ident, read_string};
+use crate::property::eq as eq_ci;
 use crate::scan::{
     is_ident_start, is_ws, scan_until, skip_comment, skip_ws_comments, strip, trim_range,
 };
@@ -292,10 +293,6 @@ impl Selector {
             self.ancestor_hashes.push(hash);
         }
     }
-}
-
-fn eq_ci(a: &[u8], b: &[u8]) -> bool {
-    a.eq_ignore_ascii_case(b)
 }
 
 fn max_specificity(group: &[Selector]) -> [i32; 3] {

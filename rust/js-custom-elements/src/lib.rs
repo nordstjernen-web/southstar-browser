@@ -9,12 +9,13 @@ mod form_associated;
 mod reactions;
 mod registry;
 
+pub(crate) use southstar_js_engine::props::{arg, get, truthy};
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use southstar_dom::{Node, WeakNode};
-use southstar_js_engine::{Attributes, Scope, Value};
+use southstar_js_engine::{Attributes, Value};
 
 use crate::ffi::Js;
 
@@ -115,21 +116,6 @@ pub(crate) fn teardown(js: Js) {
         drop(upgrading);
     }
     drop(removed);
-}
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 pub fn name_valid(bytes: &[u8]) -> bool {

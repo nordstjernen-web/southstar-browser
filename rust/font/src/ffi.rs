@@ -9,9 +9,10 @@ use core::ffi::{c_int, c_uint, c_void};
 use core::ptr;
 #[cfg(feature = "fontconfig")]
 use core::ptr::NonNull;
-use std::ffi::{CString, OsStr};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::ffi::CString;
+use std::path::PathBuf;
+
+use southstar_glib::os_bytes;
 
 use crate::Descriptors;
 
@@ -75,39 +76,8 @@ fn build_filename(parts: &[&CStr]) -> Option<CString> {
     CString::new(joined).ok()
 }
 
-#[cfg(unix)]
 fn path_of(path: &CStr) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(OsStr::from_bytes(path.to_bytes()))
-}
-
-#[cfg(not(unix))]
-fn path_of(path: &CStr) -> PathBuf {
-    PathBuf::from(path.to_string_lossy().into_owned())
-}
-
-#[cfg(unix)]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    text.as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    text.to_string_lossy().into_owned().into_bytes()
-}
-
-fn make_private_dir(dir: &Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        let _ = std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(dir);
-    }
-    #[cfg(not(unix))]
-    let _ = std::fs::create_dir_all(dir);
+    southstar_glib::path_from_bytes_lossy(path.to_bytes())
 }
 
 fn home_dir() -> CString {
@@ -123,7 +93,7 @@ pub fn cache_dir() -> CString {
         None => build_filename(&[&home_dir(), c".cache"]).unwrap_or_default(),
     };
     let dir = build_filename(&[&base, c"southstar", c"webfonts"]).unwrap_or_default();
-    make_private_dir(&path_of(&dir));
+    let _ = southstar_config::util::make_dirs(&path_of(&dir), 0o700);
     dir
 }
 
@@ -132,25 +102,8 @@ pub fn build_path(dir: &CStr, name: &[u8]) -> Option<CString> {
     build_filename(&[dir, &name])
 }
 
-fn write_atomically(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    let mut temp_name = path.as_os_str().to_owned();
-    temp_name.push(format!(".{}.tmp", std::process::id()));
-    let temp = PathBuf::from(temp_name);
-    let written = std::fs::File::create(&temp).and_then(|mut file| {
-        file.write_all(data)?;
-        file.sync_all()
-    });
-    match written.and_then(|()| std::fs::rename(&temp, path)) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = std::fs::remove_file(&temp);
-            Err(error)
-        }
-    }
-}
-
 pub fn write_file(path: &CStr, data: &[u8]) -> bool {
-    write_atomically(&path_of(path), data).is_ok()
+    southstar_config::util::write_replacing(&path_of(path), data).is_ok()
 }
 
 #[cfg(feature = "fontconfig")]

@@ -7,6 +7,7 @@ use core::cmp::Ordering;
 use southstar_dom::Node;
 
 use crate::attr_fn;
+use crate::cascade::ordered;
 use crate::scan::strip_important;
 use crate::tree_count;
 
@@ -19,10 +20,6 @@ pub(crate) struct Pending {
     pub(crate) source_order: i32,
     pub(crate) important: bool,
     pub(crate) inline_style: bool,
-}
-
-fn ordered(a: i32, b: i32, reversed: bool) -> Ordering {
-    if reversed { b.cmp(&a) } else { a.cmp(&b) }
 }
 
 fn pending_order(a: &Pending, b: &Pending) -> Ordering {

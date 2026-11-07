@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::interface_prototype;
 use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
 
 use crate::ffi::{self, Js};
@@ -24,15 +25,6 @@ pub(crate) fn exception_message(scope: &mut Scope<'_>, exception: &Value) -> Str
     scope
         .to_string(exception)
         .unwrap_or_else(|_| "Script error.".to_owned())
-}
-
-fn interface_prototype(scope: &mut Scope<'_>, global: &Value, name: &str) -> Value {
-    let ctor = get(scope, global, name);
-    if ctor.is_object() {
-        get(scope, &ctor, "prototype")
-    } else {
-        Value::undefined()
-    }
 }
 
 pub(crate) fn adopt_global_proto(scope: &mut Scope<'_>, object: &Value, name: &str) {

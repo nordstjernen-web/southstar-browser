@@ -144,6 +144,17 @@ pub fn combining_class(ch: u32) -> u8 {
     )
 }
 
+pub fn utf8_skip(lead: u8) -> usize {
+    match lead {
+        0xc0..=0xdf => 2,
+        0xe0..=0xef => 3,
+        0xf0..=0xf7 => 4,
+        0xf8..=0xfb => 5,
+        0xfc..=0xfd => 6,
+        _ => 1,
+    }
+}
+
 pub fn is_wide(ch: u32) -> bool {
     let index = tables::WIDE_STARTS.partition_point(|&start| start <= ch);
     (index % 2 == 1) == tables::WIDE_FIRST

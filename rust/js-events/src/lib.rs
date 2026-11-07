@@ -13,6 +13,7 @@ pub(crate) mod ffi;
 mod install;
 
 use southstar_dom::Node;
+pub(crate) use southstar_js_engine::props::{arg, get, interface_prototype, set, truthy};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 pub use ffi::make_event;
@@ -48,21 +49,6 @@ pub(crate) const ALL: Attributes = Attributes {
     configurable: true,
 };
 
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
 pub(crate) fn bool_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> (bool, bool) {
     let value = get(scope, object, key);
     let defined = !value.is_undefined();
@@ -83,19 +69,6 @@ pub(crate) fn number_prop(scope: &mut Scope<'_>, object: &Value, key: &str, fall
         return fallback;
     }
     scope.to_number(&value).unwrap_or(f64::NAN)
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
-
-pub(crate) fn interface_prototype(scope: &mut Scope<'_>, global: &Value, name: &str) -> Value {
-    let ctor = get(scope, global, name);
-    if ctor.is_object() {
-        get(scope, &ctor, "prototype")
-    } else {
-        Value::undefined()
-    }
 }
 
 pub fn install_runtime_hooks() {

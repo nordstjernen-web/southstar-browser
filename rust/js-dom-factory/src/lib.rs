@@ -17,6 +17,7 @@ pub mod namespaces;
 pub use names::{valid_attr_name, valid_element_local_name};
 
 use southstar_dom::{Kind, Node};
+pub(crate) use southstar_js_engine::props::arg;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 pub use ffi::nsr_doc_wrapper_is_xml;
@@ -51,10 +52,6 @@ pub(crate) fn is_nullish(value: &Value) -> bool {
     value.is_null() || value.is_undefined()
 }
 
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
-
 pub(crate) fn optional_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<Option<Vec<u8>>> {
     if is_nullish(value) {
         return Ok(None);
@@ -64,7 +61,7 @@ pub(crate) fn optional_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<Op
 
 pub(crate) fn c_text(scope: &mut Scope<'_>, value: &Value) -> JsResult<Vec<u8>> {
     let mut bytes = scope.to_bytes(value)?;
-    let end = ffi::c_prefix(&bytes).len();
+    let end = ffi::until_nul(&bytes).len();
     bytes.truncate(end);
     Ok(bytes)
 }

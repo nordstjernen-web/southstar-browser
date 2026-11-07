@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_glib::clamp;
+
 mod ffi;
 
 const STYLE: &str = "<style>\
@@ -36,16 +38,6 @@ pub fn notice_html(url: Option<&[u8]>, message: &[u8]) -> Vec<u8> {
         b"</a></p></div></body></html>",
     ]
     .concat()
-}
-
-fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
-    if x > hi {
-        hi
-    } else if x < lo {
-        lo
-    } else {
-        x
-    }
 }
 
 #[cfg_attr(not(feature = "poppler"), allow(dead_code))]

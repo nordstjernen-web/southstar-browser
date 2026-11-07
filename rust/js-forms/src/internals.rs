@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::arg;
+use southstar_js_engine::props::global_get;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -168,17 +170,6 @@ impl Trace for States {
     fn trace(&self, visit: &mut dyn FnMut(&Value)) {
         visit(&self.set);
     }
-}
-
-fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
-
-fn global_get(scope: &mut Scope<'_>, name: &str) -> Value {
-    let global = scope.global();
-    scope
-        .get(&global, name)
-        .unwrap_or_else(|_| Value::undefined())
 }
 
 fn not_supported(scope: &mut Scope<'_>, message: &str) -> Value {

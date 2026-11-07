@@ -6,6 +6,8 @@
 
 use std::sync::Mutex;
 
+use southstar_glib::{max as c_max, min as c_min};
+
 const MAX_DEPTH: i32 = 32;
 const VIEWPORT_STACK: usize = 16;
 
@@ -472,14 +474,6 @@ impl Text<'_> {
 }
 
 type UnitFn = fn(f64, &[u8]) -> f64;
-
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
 
 fn length_unit_px(v: f64, unit: &[u8]) -> f64 {
     let is = |u: &str| caseless(unit, u);

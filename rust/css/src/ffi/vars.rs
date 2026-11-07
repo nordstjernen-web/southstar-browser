@@ -15,6 +15,7 @@ use southstar_dom::Node;
 use super::custom_props::QueryContext;
 use super::declarations::lookup_key;
 use super::registry::RegisteredProps;
+use crate::ffi::inline::c_string;
 use crate::vars::{self, Lookup, Registration};
 
 pub(super) type VarTable = HashMap<CString, CString>;
@@ -58,10 +59,6 @@ impl Drop for VarMap {
                 .and_then(|mut map| map.parent.take());
         }
     }
-}
-
-fn c_string(text: &[u8]) -> CString {
-    CString::new(text).unwrap_or_default()
 }
 
 struct Chain<'a> {

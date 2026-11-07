@@ -6,10 +6,10 @@ use southstar_layout::{BoxRef, children};
 use southstar_layout_float::{kw_scrolls, overflow_axis_keyword};
 use southstar_layout_geom::{
     aspect_ratio_number, containing_block_definite_height, height_keyword_stretches,
-    resolve_used_height, style_is_absolute_or_fixed,
+    is_length_or_calc, keyword_is, resolve_used_height, style_is_absolute_or_fixed,
 };
 use southstar_style::{
-    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, Kind, PropId, ValueRef,
+    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, PropId, ValueRef,
 };
 
 use crate::align::block_align_content_shift;
@@ -25,14 +25,6 @@ pub struct HeightInput {
     pub legend_extra: f64,
     pub border_box: bool,
     pub vert_extras: f64,
-}
-
-fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
-}
-
-fn keyword_is(v: Option<ValueRef<'_>>, kw: &core::ffi::CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
 }
 
 fn shift_in_flow_children(b: BoxRef<'_>, dy: f64) {

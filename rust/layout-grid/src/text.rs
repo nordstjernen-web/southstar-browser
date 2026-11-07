@@ -2,15 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use southstar_glib::{max as fmax, min as fmin};
+
 pub(crate) const ROWS_MAX: i32 = 4096;
-
-pub(crate) fn fmax(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-pub(crate) fn fmin(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
 
 fn is_space(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')

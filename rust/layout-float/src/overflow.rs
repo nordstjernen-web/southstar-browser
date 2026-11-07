@@ -7,17 +7,11 @@ use core::ffi::CStr;
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
-    style_creates_fixed_cb, style_is_absolute_or_fixed, style_is_flex_container,
+    is_block_level, style_creates_fixed_cb, style_is_absolute_or_fixed, style_is_flex_container,
 };
-use southstar_style::{Display, PropId, StyleRef, display_of};
+use southstar_style::{PropId, StyleRef, display_of};
 
 use crate::ffi::{dom_of, overflow_axis_keyword, style_of};
-
-const BOX_NORMAL: u8 = 0;
-const OUTER_BLOCK: u8 = 1;
-const INNER_RUBY: u8 = 5;
-const INTERNAL_NONE: u8 = 0;
-const INTERNAL_TABLE_CAPTION: u8 = 8;
 
 fn keyword(s: StyleRef<'_>, prop: PropId) -> Option<&[u8]> {
     s.get(prop)?.keyword_text().map(CStr::to_bytes)
@@ -120,13 +114,6 @@ fn style_is_multicol(s: Option<StyleRef<'_>>) -> bool {
         .is_some_and(|(v, _)| v > 0.0)
 }
 
-fn display_is_block_level(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.outer == OUTER_BLOCK
-        && d.inner != INNER_RUBY
-        && (d.internal == INTERNAL_NONE || d.internal == INTERNAL_TABLE_CAPTION)
-}
-
 pub fn style_is_grid_container(s: Option<StyleRef<'_>>) -> bool {
     display_of(s).is_grid_container()
 }
@@ -171,7 +158,7 @@ pub fn box_establishes_bfc(b: BoxRef<'_>) -> bool {
     {
         return true;
     }
-    display_is_block_level(display_of(style)) && overflow_establishes_bfc(style)
+    is_block_level(display_of(style)) && overflow_establishes_bfc(style)
 }
 
 fn is_column_candidate(c: BoxRef<'_>) -> bool {

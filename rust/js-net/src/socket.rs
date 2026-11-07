@@ -10,7 +10,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Js, Realm, Transport};
 use crate::headers;
-use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str};
+use crate::{JsResult, c_bytes, is_nullish, prop, set, set_bytes};
 
 const WS_CONNECTING: i32 = 0;
 const WS_OPEN: i32 = 1;
@@ -141,7 +141,7 @@ pub(crate) fn on_open(socket: &Socket) {
         set(scope, wrapper, "readyState", Value::int(1));
         if socket.kind == Kind::WebSocket {
             let protocol = socket.transport.borrow().protocol();
-            set_str(scope, wrapper, "protocol", &protocol);
+            set_bytes(scope, wrapper, "protocol", &protocol);
         }
         let event = ffi::socket_event(scope, c"open");
         dispatch(scope, wrapper, "onopen", event);
@@ -152,8 +152,8 @@ fn message_event(scope: &mut Scope<'_>, socket: &Socket, data: Value) -> Value {
     let event = ffi::socket_event(scope, c"message");
     set(scope, &event, "data", data);
     let origin = socket.js.page_url().unwrap_or_default();
-    set_str(scope, &event, "origin", &origin);
-    set_str(scope, &event, "lastEventId", b"");
+    set_bytes(scope, &event, "origin", &origin);
+    set_bytes(scope, &event, "lastEventId", b"");
     event
 }
 
@@ -203,7 +203,7 @@ pub(crate) fn on_close(socket: &Socket, code: i32, reason: &[u8], clean: bool) {
         let event = ffi::socket_event(scope, c"close");
         ffi::adopt_interface(scope, &event, c"CloseEvent");
         set(scope, &event, "code", Value::int(code));
-        set_str(scope, &event, "reason", reason);
+        set_bytes(scope, &event, "reason", reason);
         set(scope, &event, "wasClean", Value::boolean(clean));
         dispatch(scope, wrapper, "onclose", event);
     });
@@ -213,7 +213,7 @@ pub(crate) fn on_close(socket: &Socket, code: i32, reason: &[u8], clean: bool) {
 pub(crate) fn on_error(socket: &Socket, message: &[u8]) {
     with_socket(socket, |scope, wrapper| {
         let event = ffi::socket_event(scope, c"error");
-        set_str(scope, &event, "message", message);
+        set_bytes(scope, &event, "message", message);
         dispatch(scope, wrapper, "onerror", event);
     });
 }
@@ -228,9 +228,9 @@ pub(crate) fn on_event_message(socket: &Socket, kind: &[u8], data: &[u8], last_i
         let kind_c = ffi::cstring(kind);
         let event = ffi::socket_event(scope, &kind_c);
         ffi::adopt_interface(scope, &event, c"MessageEvent");
-        set_str(scope, &event, "data", data);
-        set_str(scope, &event, "lastEventId", last_id);
-        set_str(scope, &event, "origin", &socket.origin);
+        set_bytes(scope, &event, "data", data);
+        set_bytes(scope, &event, "lastEventId", last_id);
+        set_bytes(scope, &event, "origin", &socket.origin);
         let on_name = format!("on{}", String::from_utf8_lossy(kind));
         dispatch(scope, wrapper, &on_name, event);
     });
@@ -455,12 +455,12 @@ pub(crate) fn websocket_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value
         pin: RefCell::new(None),
     });
     let wrapper = new_wrapper(scope, &socket);
-    set_str(scope, &wrapper, "url", &target);
+    set_bytes(scope, &wrapper, "url", &target);
     set(scope, &wrapper, "readyState", Value::int(0));
     set(scope, &wrapper, "bufferedAmount", Value::int(0));
-    set_str(scope, &wrapper, "protocol", b"");
-    set_str(scope, &wrapper, "extensions", b"");
-    set_str(scope, &wrapper, "binaryType", b"blob");
+    set_bytes(scope, &wrapper, "protocol", b"");
+    set_bytes(scope, &wrapper, "extensions", b"");
+    set_bytes(scope, &wrapper, "binaryType", b"blob");
     define_constants(
         scope,
         &wrapper,
@@ -544,7 +544,7 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
     let with_credentials = args
         .get(1)
         .filter(|init| init.is_object())
-        .is_some_and(|init| crate::bool_prop(scope, init, "withCredentials"));
+        .is_some_and(|init| crate::truthy(scope, init, "withCredentials"));
     let socket = Rc::new(Socket {
         js,
         realm: Realm::of(scope),
@@ -554,7 +554,7 @@ pub(crate) fn event_source_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Va
         pin: RefCell::new(None),
     });
     let wrapper = new_wrapper(scope, &socket);
-    set_str(scope, &wrapper, "url", &target);
+    set_bytes(scope, &wrapper, "url", &target);
     set(scope, &wrapper, "readyState", Value::int(0));
     set(
         scope,

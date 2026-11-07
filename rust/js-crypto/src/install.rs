@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::bind;
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::{get, random, set, subtle};
@@ -20,11 +21,6 @@ const SUBTLE_METHODS: [(&str, u32, NativeFn); 12] = [
     ("wrapKey", 4, subtle::wrap_key),
     ("unwrapKey", 7, subtle::unwrap_key),
 ];
-
-fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
 
 fn new_subtle(scope: &mut Scope<'_>) -> Value {
     let subtle = scope.new_object();

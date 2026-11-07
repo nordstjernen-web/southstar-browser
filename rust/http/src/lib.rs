@@ -46,6 +46,7 @@ pub fn init() {
 }
 pub use decode::accept_encoding;
 pub use fetch::{Fetch, Route, Target, fetch, parse_target, resolve};
+pub use ftp::percent_decode;
 pub use inflate::{Inflate, Inflated};
 pub use proxy::{
     EnvLookup, Proxy, bypassed as proxy_bypassed, env_valid as env_proxies_valid,

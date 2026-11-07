@@ -4,16 +4,7 @@
 
 use std::ffi::CString;
 
-pub fn utf8_skip(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
-    }
-}
+pub use southstar_unicode::utf8_skip;
 
 pub fn vertical_stack_text(text: &[u8]) -> CString {
     let mut out = Vec::with_capacity(text.len() * 2);

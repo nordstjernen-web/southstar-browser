@@ -13,6 +13,7 @@ use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, InlineAttr};
 use southstar_style::{StyleRef, Transform, ValueRef};
 use southstar_texture::TextureRef;
+use southstar_unicode::utf8_skip;
 use southstar_video::BoxVideo;
 
 use crate::links;
@@ -256,17 +257,6 @@ pub fn unichar_isalpha(c: u32) -> bool {
 
 pub fn utf8_get_char(text: &CStr, pos: usize) -> u32 {
     southstar_layout::utf8_get_char(text.to_bytes(), pos)
-}
-
-fn utf8_skip(lead: u8) -> usize {
-    match lead {
-        0xc0..=0xdf => 2,
-        0xe0..=0xef => 3,
-        0xf0..=0xf7 => 4,
-        0xf8..=0xfb => 5,
-        0xfc..=0xfd => 6,
-        _ => 1,
-    }
 }
 
 pub fn utf8_next(text: &[u8], pos: usize) -> usize {

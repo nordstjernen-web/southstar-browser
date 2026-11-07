@@ -18,6 +18,7 @@ pub use ffi::{
 };
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_engine::props::arg;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -273,8 +274,4 @@ pub(crate) fn tree_root(n: Element) -> Element {
         n = parent;
     }
     n
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }

@@ -123,9 +123,7 @@ pub fn printerr_paint_profile(ms: f64, width: c_int, height: c_int) {
     printerr(format!("[profile] paint {ms:6.1}ms {width}x{height}\n").as_bytes());
 }
 
-pub fn env_set(name: &str) -> bool {
-    std::env::var_os(name).is_some()
-}
+pub use southstar_glib::env_set;
 
 fn hex_value(b: u8) -> Option<u8> {
     char::from(b).to_digit(16).map(|d| d as u8)

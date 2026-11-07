@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::cell::RefCell;
+use southstar_js_engine::PageList;
 
 use southstar_dom::WeakNode;
 use southstar_js_engine::Value;
@@ -44,31 +44,15 @@ struct Page {
 }
 
 thread_local! {
-    static PAGES: RefCell<Vec<(Js, Page)>> = const { RefCell::new(Vec::new()) };
+    static PAGES: PageList<Js, Page> = const { PageList::new() };
 }
 
 fn with_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = match pages.iter().position(|(owner, _)| *owner == js) {
-            Some(index) => index,
-            None => {
-                pages.push((js, Page::default()));
-                pages.len() - 1
-            }
-        };
-        f(&mut pages[index].1)
-    })
+    PAGES.with(|pages| pages.with(js, f))
 }
 
 fn peek_page<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow()
-            .iter()
-            .find(|(owner, _)| *owner == js)
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek(js, f))
 }
 
 pub(crate) fn dom_gen(js: Js) -> u64 {
@@ -148,12 +132,6 @@ pub(crate) fn set_live_protos(js: Js, protos: LiveProtos) {
 }
 
 pub(crate) fn teardown(js: Js) {
-    let page = PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        pages
-            .iter()
-            .position(|(owner, _)| *owner == js)
-            .map(|index| pages.swap_remove(index).1)
-    });
+    let page = PAGES.with(|pages| pages.take(js));
     drop(page);
 }

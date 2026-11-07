@@ -93,38 +93,11 @@ impl Ctx {
     }
 }
 
-fn parse_long(text: &[u8]) -> i64 {
-    let mut rest = text;
-    while let Some((&c, tail)) = rest.split_first() {
-        if matches!(c, b' ' | b'\t' | b'\n' | 0x0B | 0x0C | b'\r') {
-            rest = tail;
-        } else {
-            break;
-        }
-    }
-    let negative = rest.first() == Some(&b'-');
-    if matches!(rest.first(), Some(b'-' | b'+')) {
-        rest = &rest[1..];
-    }
-    let mut value: i64 = 0;
-    for &c in rest.iter().take_while(|c| c.is_ascii_digit()) {
-        value = value.saturating_mul(10).saturating_add(i64::from(c - b'0'));
-    }
-    if negative { -value } else { value }
-}
-
 fn canvas_dim(canvas: Option<WeakNode>, name: &CStr, default: i32) -> i32 {
     let Some(text) = canvas_attr(canvas, name) else {
         return default;
     };
-    if text.is_empty() {
-        return default;
-    }
-    let v = parse_long(&text);
-    if v <= 0 {
-        return default;
-    }
-    v.min(8192) as i32
+    southstar_canvas::host::context_dimension(&text, default)
 }
 
 fn context_of(value: &Value) -> Option<Rc<RefCell<Ctx>>> {

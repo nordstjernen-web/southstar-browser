@@ -1,19 +1,6 @@
-//! Southstar — the byte-string helpers the cookie and HSTS rules share: ASCII whitespace trimming and g_ascii_strtoll's decimal parsing.
+//! Southstar — g_ascii_strtoll's decimal parsing for the cookie rules.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-
-pub(crate) fn is_space(c: u8) -> bool {
-    matches!(c, b' ' | b'\t' | b'\n' | 0x0c | b'\r')
-}
-
-pub(crate) fn strip(s: &[u8]) -> &[u8] {
-    let start = s.iter().position(|&c| !is_space(c)).unwrap_or(s.len());
-    let end = s
-        .iter()
-        .rposition(|&c| !is_space(c))
-        .map_or(start, |i| i + 1);
-    &s[start..end.max(start)]
-}
 
 pub fn strtoll(text: &[u8]) -> (i64, usize) {
     let text = &text[..text.iter().position(|&b| b == 0).unwrap_or(text.len())];

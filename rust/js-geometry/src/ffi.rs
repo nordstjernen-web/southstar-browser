@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_void};
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -34,10 +35,6 @@ use southstar_canvas::nsr_dommatrix_make;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

@@ -3,11 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::{Kind, Node};
+use southstar_js_engine::props::int_prop;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, js_of, unwrap_node, wrap_node};
 use crate::selection::{bounding_client_rect, client_rects, clone_contents};
-use crate::{Element, JsResult, bind, get, noop, put};
+use crate::{Element, JsResult, bind, get, noop, set};
 
 const FLAG_FRAGMENT: u32 = 1 << 2;
 const MAX_DEPTH: i32 = 512;
@@ -28,27 +29,22 @@ const NOOP_METHODS: &[&str] = &[
     "comparePoint",
 ];
 
-fn int_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> i32 {
-    let value = get(scope, object, key);
-    scope.to_int32(&value).unwrap_or(0)
-}
-
 fn set_start(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if let Some(container) = args.first() {
-        put(scope, this, "startContainer", container.clone());
+        set(scope, this, "startContainer", container.clone());
     }
     if let Some(offset) = args.get(1) {
-        put(scope, this, "startOffset", offset.clone());
+        set(scope, this, "startOffset", offset.clone());
     }
     Ok(Value::undefined())
 }
 
 fn set_end(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     if let Some(container) = args.first() {
-        put(scope, this, "endContainer", container.clone());
+        set(scope, this, "endContainer", container.clone());
     }
     if let Some(offset) = args.get(1) {
-        put(scope, this, "endOffset", offset.clone());
+        set(scope, this, "endOffset", offset.clone());
     }
     let start = get(scope, this, "startContainer");
     let end = get(scope, this, "endContainer");
@@ -60,7 +56,7 @@ fn set_end(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     let start_offset = int_prop(scope, this, "startOffset");
     let end_offset = int_prop(scope, this, "endOffset");
     let collapsed = same_container && start_offset == end_offset;
-    put(scope, this, "collapsed", Value::boolean(collapsed));
+    set(scope, this, "collapsed", Value::boolean(collapsed));
     Ok(Value::undefined())
 }
 
@@ -70,16 +66,16 @@ fn select_node(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult 
     };
     let node = unwrap_node(target);
     let parent = scope.get(target, "parentNode")?;
-    put(scope, this, "startContainer", parent.clone());
-    put(scope, this, "endContainer", parent);
+    set(scope, this, "startContainer", parent.clone());
+    set(scope, this, "endContainer", parent);
     let index = node
         .and_then(|n| n.parent().map(|p| (n, p)))
         .map_or(0, |(n, p)| {
             southstar_dom::children(p).take_while(|&c| c != n).count() as i32
         });
-    put(scope, this, "startOffset", Value::int(index));
-    put(scope, this, "endOffset", Value::int(index + 1));
-    put(scope, this, "collapsed", Value::boolean(false));
+    set(scope, this, "startOffset", Value::int(index));
+    set(scope, this, "endOffset", Value::int(index + 1));
+    set(scope, this, "collapsed", Value::boolean(false));
     Ok(Value::undefined())
 }
 
@@ -88,15 +84,15 @@ fn select_node_contents(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
         return Ok(Value::undefined());
     };
     let node = unwrap_node(target);
-    put(scope, this, "startContainer", target.clone());
-    put(scope, this, "endContainer", target.clone());
+    set(scope, this, "startContainer", target.clone());
+    set(scope, this, "endContainer", target.clone());
     let count = node.map_or(0, |n| match (n.kind(), n.text()) {
         (Kind::Text, Some(text)) => text.to_bytes().len() as i32,
         _ => southstar_dom::children(n).count() as i32,
     });
-    put(scope, this, "startOffset", Value::int(0));
-    put(scope, this, "endOffset", Value::int(count));
-    put(scope, this, "collapsed", Value::boolean(count == 0));
+    set(scope, this, "startOffset", Value::int(0));
+    set(scope, this, "endOffset", Value::int(count));
+    set(scope, this, "collapsed", Value::boolean(count == 0));
     Ok(Value::undefined())
 }
 
@@ -115,9 +111,9 @@ fn collapse(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     };
     let container = get(scope, this, from.0);
     let offset = get(scope, this, from.1);
-    put(scope, this, to.0, container);
-    put(scope, this, to.1, offset);
-    put(scope, this, "collapsed", Value::boolean(true));
+    set(scope, this, to.0, container);
+    set(scope, this, to.1, offset);
+    set(scope, this, "collapsed", Value::boolean(true));
     Ok(Value::undefined())
 }
 
@@ -131,7 +127,7 @@ fn clone_range(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
         "collapsed",
     ] {
         let value = get(scope, this, key);
-        put(scope, &out, key, value);
+        set(scope, &out, key, value);
     }
     Ok(out)
 }
@@ -307,12 +303,12 @@ fn create_contextual_fragment(scope: &mut Scope<'_>, _: &Value, args: &[Value]) 
 
 fn make_range_object(scope: &mut Scope<'_>) -> Value {
     let range = scope.new_object();
-    put(scope, &range, "collapsed", Value::boolean(true));
-    put(scope, &range, "startContainer", Value::null());
-    put(scope, &range, "endContainer", Value::null());
-    put(scope, &range, "startOffset", Value::int(0));
-    put(scope, &range, "endOffset", Value::int(0));
-    put(scope, &range, "commonAncestorContainer", Value::null());
+    set(scope, &range, "collapsed", Value::boolean(true));
+    set(scope, &range, "startContainer", Value::null());
+    set(scope, &range, "endContainer", Value::null());
+    set(scope, &range, "startOffset", Value::int(0));
+    set(scope, &range, "endOffset", Value::int(0));
+    set(scope, &range, "commonAncestorContainer", Value::null());
     bind(scope, &range, "setStart", 2, set_start);
     bind(scope, &range, "setEnd", 2, set_end);
     bind(scope, &range, "selectNode", 1, select_node);

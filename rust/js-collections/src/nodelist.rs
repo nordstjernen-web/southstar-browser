@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use crate::live::string_prop;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::js_of;
@@ -88,11 +89,6 @@ fn item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     } else {
         value
     })
-}
-
-fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>> {
-    let value = scope.get(object, key).ok()?;
-    scope.to_bytes(&value).ok()
 }
 
 fn named_item(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {

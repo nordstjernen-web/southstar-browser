@@ -9,7 +9,7 @@ use southstar_glib::boolean;
 use southstar_style::{StyleRef, StyleTable};
 
 use crate::ffi::{Canvas, FORMAT_A8, Matrix, Segment, Surface, SvgGeometry};
-use crate::state::{State, cmax, cmin};
+use crate::state::{State, max, min};
 use crate::{
     Ctx, HEIGHT, MAX_DEPTH, MAX_NESTING, MAX_NODES, SVG_X, SVG_Y, WIDTH, attr_length, is_element,
     name_is, never_rendered, switch_choice, tag, viewbox_matrix, viewbox_size,
@@ -36,10 +36,10 @@ impl Extent {
             };
             return;
         }
-        self.x0 = cmin(self.x0, x);
-        self.x1 = cmax(self.x1, x);
-        self.y0 = cmin(self.y0, y);
-        self.y1 = cmax(self.y1, y);
+        self.x0 = min(self.x0, x);
+        self.x1 = max(self.x1, x);
+        self.y0 = min(self.y0, y);
+        self.y1 = max(self.y1, y);
     }
 
     fn add_mapped(&mut self, from: &Extent, to_outer: &Matrix) {

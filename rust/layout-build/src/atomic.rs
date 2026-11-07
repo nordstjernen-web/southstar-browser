@@ -6,6 +6,7 @@ use southstar_dom::{Kind as NodeKind, MAX_DEPTH, Node, children};
 use southstar_layout_content::controls::{
     is_atomic_inline_container, is_block_level, keyword_is, length_or,
 };
+use southstar_layout_geom::is_length_or_calc;
 use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 const BOX_NORMAL: u8 = 0;
@@ -19,10 +20,6 @@ fn is_flex_container(d: Display) -> bool {
 
 fn is_grid_container(d: Display) -> bool {
     d.box_ == BOX_NORMAL && d.internal == INTERNAL_NONE && d.inner == INNER_GRID
-}
-
-fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
 }
 
 fn button_has_replaced_child(n: Node<'_>, depth: i32) -> bool {

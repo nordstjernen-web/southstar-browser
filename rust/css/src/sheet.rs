@@ -11,10 +11,10 @@ use crate::ffi::{self, PageRule, SheetBuilder, SyntaxDef};
 use crate::lex::read_ident;
 use crate::nesting::{block_body_end, skip_invalid_qualified_rule};
 use crate::prop::Prop;
-use crate::property::{self, Body};
+use crate::property::{self, Body, eq};
 use crate::scan::{
     has_substitution, is_ident, is_ws, scan_until, skip_comment, skip_to_block_end,
-    skip_ws_comments, strip, trim_range,
+    skip_ws_comments, starts_with_ci, strip, trim_range,
 };
 use crate::selector::{self, PE_NONE};
 use crate::supports;
@@ -55,14 +55,6 @@ pub(crate) struct Stop {
     pub bg_color: [u8; 4],
     pub has_bg_color: bool,
     pub raw_props: Option<Vec<u8>>,
-}
-
-fn eq(a: &[u8], b: &[u8]) -> bool {
-    a.eq_ignore_ascii_case(b)
-}
-
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 
 fn scan_segment(s: &[u8], p: usize) -> (usize, u8) {
@@ -117,7 +109,7 @@ fn font_face_slant(value: &[u8]) -> i32 {
         SLANT_ROMAN
     } else if eq(value, b"italic") {
         SLANT_ITALIC
-    } else if starts_ci(value, b"oblique") {
+    } else if starts_with_ci(value, b"oblique") {
         SLANT_OBLIQUE
     } else {
         SLANT_AUTO

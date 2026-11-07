@@ -7,13 +7,9 @@ use std::collections::HashMap;
 use southstar_url::bytes::{Parts, is_http_or_https, parts};
 
 use crate::http_date;
-use crate::text::{is_space, strtoll};
+use crate::text::strtoll;
 
 const HTTP_ONLY: &[u8] = b"#HttpOnly_";
-
-fn chomp(s: &[u8]) -> &[u8] {
-    &s[..s.iter().rposition(|&c| !is_space(c)).map_or(0, |i| i + 1)]
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum SameSite {
@@ -113,7 +109,7 @@ pub fn header<'a>(
     let mut values: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
     for contents in jars {
         for raw in contents.split(|&c| c == b'\n') {
-            let mut line = chomp(raw);
+            let mut line = raw.trim_ascii_end();
             if line.is_empty() {
                 continue;
             }

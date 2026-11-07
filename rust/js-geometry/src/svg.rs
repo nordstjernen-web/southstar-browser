@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::PI;
+use southstar_js_engine::props::noop;
 use std::ffi::CStr;
 
 use southstar_dom::FLAG_SVG_NS;
@@ -611,10 +612,6 @@ const IDENTITY_PARTS: [f64; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
 pub fn create_svg_matrix(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
     Ok(ffi::dom_matrix(scope, IDENTITY_PARTS))
-}
-
-fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    Ok(Value::undefined())
 }
 
 pub fn create_svg_transform(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {

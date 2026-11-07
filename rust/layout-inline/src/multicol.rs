@@ -3,9 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_layout::{BoxKind, BoxPool, BoxRef, children, inline_kind};
+use southstar_layout_geom::keyword_is;
 use southstar_layout_tree::{append_child, clone_range};
 use southstar_paint::text_layout::{self, AttrList, Layout};
-use southstar_style::{PropId, StyleRef, ValueRef};
+use southstar_style::{PropId, StyleRef};
 
 use crate::{attrs, ffi};
 
@@ -24,10 +25,6 @@ fn attr_can_fragment(kind: u32) -> bool {
             | inline_kind::CARET
             | inline_kind::SELECTION
     )
-}
-
-fn keyword_is(v: Option<ValueRef<'_>>, kw: &core::ffi::CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
 }
 
 pub fn can_fragment(b: BoxRef<'_>, style: Option<StyleRef<'_>>, basis: f64) -> bool {

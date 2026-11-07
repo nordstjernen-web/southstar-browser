@@ -15,6 +15,7 @@ pub mod listeners;
 pub mod target;
 mod ui_events;
 
+pub(crate) use southstar_js_engine::props::{arg, get, set, truthy};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -178,27 +179,6 @@ pub(crate) fn with_c_key<R>(parts: &[&str], f: impl FnOnce(&core::ffi::CStr) -> 
         Ok(key) => f(key),
         Err(_) => f(c""),
     }
-}
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    match scope.get(object, key) {
-        Ok(value) => scope.to_bool(&value),
-        Err(_) => false,
-    }
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn same_object(a: &Value, b: &Value) -> bool {

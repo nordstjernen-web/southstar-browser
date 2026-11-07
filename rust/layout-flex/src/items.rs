@@ -4,10 +4,14 @@
 
 use core::ffi::CStr;
 
+pub use southstar_glib::max;
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
     containing_block_definite_height, height_keyword_stretches, keyword_or, length_resolve,
     resolve_height_with_basis, resolve_used_height, style_is_absolute_or_fixed, value_is_percent,
+};
+pub use southstar_layout_geom::{
+    is_length_or_calc as is_length, keyword_is as is_keyword, outer_height, outer_width,
 };
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
@@ -56,20 +60,8 @@ pub fn collect<'a>(container: BoxRef<'a>, out: &mut Vec<Item<'a>>) {
     );
 }
 
-pub fn max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
 pub fn value(b: BoxRef<'_>, prop: PropId) -> Option<ValueRef<'_>> {
     style_of(b).and_then(|s| s.get(prop))
-}
-
-pub fn is_length(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
-}
-
-pub fn is_keyword(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
 }
 
 pub fn has_auto(b: BoxRef<'_>, prop: PropId) -> bool {
@@ -84,16 +76,6 @@ pub fn outer_main_extras(c: BoxRef<'_>) -> f64 {
 pub fn vertical_extras(c: BoxRef<'_>) -> f64 {
     let (p, b) = (c.padding(), c.border());
     p.top + p.bottom + b.top + b.bottom
-}
-
-pub fn outer_height(c: BoxRef<'_>) -> f64 {
-    let (m, p, b) = (c.margin(), c.padding(), c.border());
-    c.content_height() + p.top + p.bottom + b.top + b.bottom + m.top + m.bottom
-}
-
-pub fn outer_width(c: BoxRef<'_>) -> f64 {
-    let (m, p, b) = (c.margin(), c.padding(), c.border());
-    c.content_width() + p.left + p.right + b.left + b.right + m.left + m.right
 }
 
 pub fn or_style<'a>(inherited: Option<StyleRef<'a>>, c: BoxRef<'a>) -> Option<StyleRef<'a>> {

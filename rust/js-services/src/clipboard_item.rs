@@ -4,7 +4,7 @@
 
 use southstar_js_engine::{Attributes, Scope, Value};
 
-use crate::{make_ctor, resolved};
+use crate::{make_constructor, resolved};
 
 const HIDDEN: Attributes = Attributes {
     writable: false,
@@ -70,6 +70,6 @@ fn construct(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Result<Value, 
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let ctor = make_ctor(scope, "ClipboardItem", 1, construct);
+    let ctor = make_constructor(scope, "ClipboardItem", 1, construct);
     let _ = scope.set(global, "ClipboardItem", ctor);
 }

@@ -7,6 +7,7 @@ use southstar_js_bind::{
     bind_constructor, bind_function, bind_int_constants, bind_native,
     bind_prototype_native_if_missing, make_constructor, prototype_of,
 };
+use southstar_js_engine::props::get;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::imports;
@@ -203,12 +204,6 @@ pub(crate) fn bind_url(scope: &mut Scope<'_>, global: &Value) {
     let _ = scope.set(global, "URL", url);
 }
 
-fn get_or_undefined(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
 fn eval_shape(scope: &mut Scope<'_>, source: &str, name: &str) -> Option<Value> {
     scope.eval_native_script(source, name).ok()
 }
@@ -232,7 +227,7 @@ fn install_window(js: Js, scope: &mut Scope<'_>) {
     install_window_tail(js, scope, &global);
     install_navigator_interface(js, scope);
     let _ = eval_shape(scope, HIDE_INTERNALS, "<hide-internals>");
-    let promise = get_or_undefined(scope, &global, "Promise");
+    let promise = get(scope, &global, "Promise");
     js.set_pristine_promise(promise);
 }
 
@@ -482,7 +477,7 @@ fn install_performance(js: Js, scope: &mut Scope<'_>, global: &Value) {
     for (constructor, name, arity, native) in observer_methods {
         bind_prototype_native_if_missing(scope, global, constructor, name, arity, native);
     }
-    let observer = get_or_undefined(scope, global, "PerformanceObserver");
+    let observer = get(scope, global, "PerformanceObserver");
     let entry_types = ffi::supported_entry_types(scope);
     let _ = scope.set(&observer, "supportedEntryTypes", entry_types);
 }
@@ -772,11 +767,11 @@ fn install_node_constants(scope: &mut Scope<'_>, global: &Value, element_proto: 
         let _ = scope.define(element_proto, name, Value::int(value), ENUMERABLE_ONLY);
     }
     for (index, carrier_name) in NODE_CARRIERS.into_iter().enumerate() {
-        let carrier = get_or_undefined(scope, global, carrier_name);
+        let carrier = get(scope, global, carrier_name);
         if !carrier.is_object() {
             continue;
         }
-        let proto = get_or_undefined(scope, &carrier, "prototype");
+        let proto = get(scope, &carrier, "prototype");
         let document_like = index >= FIRST_DOCUMENT_CARRIER;
         for (name, value) in NODE_CONSTANTS {
             let _ = scope.define(&carrier, name, Value::int(value), ENUMERABLE_ONLY);
@@ -792,27 +787,27 @@ fn install_node_constants(scope: &mut Scope<'_>, global: &Value, element_proto: 
         }
     }
     for carrier_name in ELEMENT_PROTO_CARRIERS {
-        let carrier = get_or_undefined(scope, global, carrier_name);
+        let carrier = get(scope, global, carrier_name);
         if !carrier.is_object() {
             continue;
         }
         let _ = scope.define(&carrier, "prototype", element_proto.clone(), WRITABLE_ONLY);
         let _ = scope.define(element_proto, "constructor", carrier, Attributes::METHOD);
     }
-    let event_target = get_or_undefined(scope, global, "EventTarget");
+    let event_target = get(scope, global, "EventTarget");
     if event_target.is_object() {
-        let event_target_proto = get_or_undefined(scope, &event_target, "prototype");
+        let event_target_proto = get(scope, &event_target, "prototype");
         if event_target_proto.is_object() {
             let _ = scope.set_prototype(element_proto, &event_target_proto);
         }
     }
-    let performance = get_or_undefined(scope, global, "performance");
+    let performance = get(scope, global, "performance");
     if performance.is_object() {
         ffi::performance_extend_event_target(scope, global, &performance);
     }
-    let event = get_or_undefined(scope, global, "Event");
+    let event = get(scope, global, "Event");
     if event.is_object() {
-        let proto = get_or_undefined(scope, &event, "prototype");
+        let proto = get(scope, &event, "prototype");
         for (name, value) in EVENT_PHASES {
             let _ = scope.define(&event, name, Value::int(value), FIXED);
             if proto.is_object() {

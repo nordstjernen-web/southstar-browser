@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-layout = { path = "../layout", version = "=1.0.8-dev" }
 southstar-layout-flex = { path = "../layout-flex", version = "=1.0.8-dev" }
 southstar-layout-float = { path = "../layout-float", version = "=1.0.8-dev" }

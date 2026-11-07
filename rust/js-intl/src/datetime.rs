@@ -136,18 +136,11 @@ struct Options(Option<Value>);
 
 impl Options {
     fn coerce(scope: &mut Scope<'_>, value: &Value) -> Result<Options, Value> {
-        if value.is_undefined() {
-            Ok(Options(None))
-        } else {
-            Ok(Options(Some(scope.to_object(value)?)))
-        }
+        crate::negotiate::options_object(scope, value).map(Options)
     }
 
     fn get(&self, scope: &mut Scope<'_>, key: &str) -> Result<Value, Value> {
-        match &self.0 {
-            Some(object) => scope.get(object, key),
-            None => Ok(Value::undefined()),
-        }
+        crate::negotiate::option_value(scope, self.0.as_ref(), key)
     }
 
     fn string(

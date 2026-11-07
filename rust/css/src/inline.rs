@@ -17,6 +17,7 @@ use crate::gaps;
 use crate::gradient::text_starts_gradient;
 use crate::grid;
 use crate::image::{self, text_starts_image_set};
+use crate::pending::is_custom;
 use crate::position;
 use crate::prop::Prop;
 use crate::property::{self, Body, Value, bg_token_is_box, eq, lower};
@@ -240,10 +241,6 @@ fn skip_at_rule(s: &[u8], p: usize, end: usize) -> usize {
         _ if stop > p => stop,
         _ => p + 1,
     }
-}
-
-fn is_custom(name: &[u8]) -> bool {
-    name.starts_with(b"--")
 }
 
 fn css_wide(value: &[u8]) -> bool {

@@ -6,6 +6,7 @@ use core::ffi::{CStr, c_int};
 
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
+pub use southstar_style::box_style as style_of;
 use southstar_style::{PropId, StyleRef};
 
 #[derive(Clone, Copy)]
@@ -41,10 +42,6 @@ impl FloatRef {
     pub fn placed_box<'a>(&self) -> Option<BoxRef<'a>> {
         self.b
     }
-}
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
 }
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {

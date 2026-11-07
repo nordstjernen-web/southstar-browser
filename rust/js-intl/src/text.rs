@@ -30,8 +30,13 @@ pub(crate) fn install(scope: &mut Scope<'_>, intl: &Value) {
         scope,
         intl,
         "DurationFormat",
-        duration::supported_locales_of,
+        service::common_supported_locales_of,
     );
-    service::install_supported_locales(scope, intl, "Segmenter", segmenter::supported_locales_of);
+    service::install_supported_locales(
+        scope,
+        intl,
+        "Segmenter",
+        service::common_supported_locales_of,
+    );
     let _ = segmenter::install(scope, intl);
 }

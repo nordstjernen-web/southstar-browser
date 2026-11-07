@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::cell::RefCell;
+use southstar_js_engine::PageList;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
@@ -70,49 +70,23 @@ pub(crate) struct Page {
 }
 
 thread_local! {
-    static PAGES: RefCell<Vec<(Js, Page)>> = const { RefCell::new(Vec::new()) };
+    static PAGES: PageList<Js, Page> = const { PageList::new() };
 }
 
 pub(crate) fn with<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = match pages.iter().position(|(owner, _)| *owner == js) {
-            Some(index) => index,
-            None => {
-                pages.push((js, Page::default()));
-                pages.len() - 1
-            }
-        };
-        f(&mut pages[index].1)
-    })
+    PAGES.with(|pages| pages.with(js, f))
 }
 
 pub(crate) fn peek<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow()
-            .iter()
-            .find(|(owner, _)| *owner == js)
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek(js, f))
 }
 
 pub(crate) fn peek_mut<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow_mut()
-            .iter_mut()
-            .find(|(owner, _)| *owner == js)
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek_mut(js, f))
 }
 
 pub(crate) fn take(js: Js) -> Option<Page> {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = pages.iter().position(|(owner, _)| *owner == js)?;
-        Some(pages.swap_remove(index).1)
-    })
+    PAGES.with(|pages| pages.take(js))
 }
 
 pub(crate) fn frame_entry<R>(js: Js, frame: Frame, f: impl FnOnce(&FrameEntry) -> R) -> Option<R> {

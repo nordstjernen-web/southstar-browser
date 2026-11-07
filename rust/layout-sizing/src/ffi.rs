@@ -9,10 +9,7 @@ use southstar_dom::Node;
 use southstar_image::ImageRef;
 use southstar_layout::{BoxRef, MediaRef};
 use southstar_style::StyleRef;
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
-}
+pub use southstar_style::box_style as style_of;
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()

@@ -156,14 +156,6 @@ fn font_line_gap(font: Option<&Font>) -> i32 {
     units_round(gap).max(0)
 }
 
-fn same_font(a: Option<&Font>, b: Option<&Font>) -> bool {
-    match (a, b) {
-        (Some(a), Some(b)) => a.ptr_eq(b),
-        (None, None) => true,
-        _ => false,
-    }
-}
-
 fn run_css_box(
     run: &GlyphItem,
     rect: &mut Rectangle,
@@ -175,7 +167,7 @@ fn run_css_box(
     let strut_font = analysis.strut_font();
     let fallback = absolute_line_height != 0
         && strut_font.is_some()
-        && !same_font(strut_font, font)
+        && strut_font != font
         && analysis.flags & analysis_flags::CENTERED_BASELINE == 0;
     let y_offset = run.y_offset;
     let mut own = *rect;

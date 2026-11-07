@@ -8,9 +8,10 @@ use std::collections::{HashMap, HashSet};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, NsBox};
 use southstar_layout_geom::{
-    flex_direction_of, keyword_or, style_is_absolute_or_fixed, style_is_flex_container,
+    flex_direction_of, keyword_or, outer_size, style_is_absolute_or_fixed, style_is_flex_container,
+    style_is_rtl,
 };
-use southstar_style::{PropId, StyleRef};
+use southstar_style::PropId;
 
 use crate::ffi::{Entry, dom_of, flex_align_is_baseline, flex_item_align, style_of};
 
@@ -228,11 +229,6 @@ pub struct StaticX {
     pub right: f64,
 }
 
-fn is_rtl(s: Option<StyleRef<'_>>) -> bool {
-    s.and_then(|s| s.get(PropId::Direction))
-        .is_some_and(|v| v.is_keyword(c"rtl"))
-}
-
 pub fn static_x_from_ancestors(
     cb: BoxRef<'_>,
     target: Node<'_>,
@@ -241,7 +237,7 @@ pub fn static_x_from_ancestors(
 ) -> StaticX {
     let mut out = StaticX {
         x: fallback,
-        rtl: is_rtl(style_of(cb)),
+        rtl: style_is_rtl(style_of(cb)),
         right: cb.x()
             + cb.margin().left
             + cb.border().left
@@ -278,7 +274,7 @@ pub fn static_x_from_ancestors(
         if best_depth == 0 || depth < best_depth {
             out.x = content_left(pb);
             out.right = out.x + pb.content_width();
-            out.rtl = is_rtl(style_of(pb));
+            out.rtl = style_is_rtl(style_of(pb));
             best_depth = depth;
         }
         if pb.same(cb) {
@@ -456,14 +452,6 @@ pub fn abs_flex_parent_box<'a>(dom: Node<'_>, map: &BoxMap<'a>) -> Option<BoxRef
     map.get(p)
 }
 
-fn outer_size(b: BoxRef<'_>) -> (f64, f64) {
-    let (m, p, e) = (b.margin(), b.padding(), b.border());
-    (
-        b.content_width() + p.left + p.right + e.left + e.right + m.left + m.right,
-        b.content_height() + p.top + p.bottom + e.top + e.bottom + m.top + m.bottom,
-    )
-}
-
 pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f64)> {
     let fs = style_of(fc).filter(|s| style_is_flex_container(Some(*s)))?;
     let origin_x = content_left(fc);
@@ -475,7 +463,7 @@ pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f6
     let wrap_reverse = fs
         .get(PropId::FlexWrap)
         .is_some_and(|v| v.is_keyword(c"wrap-reverse"));
-    let rtl = is_rtl(Some(fs));
+    let rtl = style_is_rtl(Some(fs));
     let (main_size, cross_size) = if row {
         (fc.content_width(), fc.content_height())
     } else {
@@ -490,7 +478,7 @@ pub fn flex_static_position(abox: BoxRef<'_>, fc: BoxRef<'_>) -> Option<(f64, f6
         main_reverse,
         rtl,
     );
-    let self_rtl = is_rtl(style_of(abox));
+    let self_rtl = style_is_rtl(style_of(abox));
     let cross = flex_cross_offset(
         flex_item_align(abox, keyword_or(Some(fs), PropId::AlignItems, c"stretch")),
         cross_free,

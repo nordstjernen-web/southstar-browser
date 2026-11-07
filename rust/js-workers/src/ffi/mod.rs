@@ -4,7 +4,8 @@
 
 mod imports;
 
-use core::ffi::{CStr, c_int};
+use core::ffi::CStr;
+pub(crate) use southstar_js_engine::props::dom_exception;
 use std::ffi::CString;
 use std::sync::Arc;
 
@@ -42,15 +43,6 @@ pub(crate) fn construct_message_channel(scope: &mut Scope<'_>, new_target: &Valu
 
 pub(crate) fn construct_broadcast_channel(scope: &mut Scope<'_>, new_target: &Value) -> JsResult {
     host::construct(scope, new_target, HostKind::BroadcastChannel)
-}
-
-pub(crate) fn dom_exception(
-    scope: &mut Scope<'_>,
-    name: &CStr,
-    code: c_int,
-    message: &CStr,
-) -> Value {
-    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn event_new(scope: &mut Scope<'_>) -> Value {

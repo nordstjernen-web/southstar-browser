@@ -8,8 +8,9 @@ use core::ffi::CStr;
 use southstar_css::{GridTracks, TRACK_AUTO, TRACK_FR, TRACK_PERCENT, TRACK_PX};
 use southstar_layout::{BoxKind, BoxRef, children};
 use southstar_layout_geom::{
-    clamp_height_minmax_px, edges_from_style, edges_into_box, keyword_or, length_resolve,
-    resolve_used_height, self_start_is_far_side, specified_height_to_content, value_is_percent,
+    clamp_height_minmax_px, edges_from_style, edges_into_box, keyword_is, keyword_or,
+    length_resolve, outer_height, resolve_used_height, self_start_is_far_side,
+    specified_height_to_content, value_is_percent,
 };
 use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
@@ -68,10 +69,6 @@ fn template_tracks(v: Option<ValueRef<'_>>) -> Option<&GridTracks> {
 
 fn pattern_tracks(v: Option<ValueRef<'_>>) -> Option<&GridTracks> {
     template_tracks(v).filter(|t| t.n > 0 && t.subgrid == 0)
-}
-
-fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
 }
 
 fn style_has(s: Option<StyleRef<'_>>, prop: PropId, kw: &CStr) -> bool {
@@ -169,11 +166,6 @@ fn relayout_stretched(c: BoxRef<'_>, h: f64, child_inherited: Option<StyleRef<'_
         ffi::shift(c, sx - c.x(), sy - c.y());
     }
     c.set_content_height(h);
-}
-
-fn outer_height(c: BoxRef<'_>) -> f64 {
-    let (m, p, b) = (c.margin(), c.padding(), c.border());
-    c.content_height() + p.top + p.bottom + b.top + b.bottom + m.top + m.bottom
 }
 
 fn columns_are_subgrid(s: Option<StyleRef<'_>>) -> bool {

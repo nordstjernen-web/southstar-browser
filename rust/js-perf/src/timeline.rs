@@ -286,7 +286,7 @@ pub(crate) fn start_frame_clock(js: Js, frame: usize) {
     }
     let origin = Origin {
         origin_us: coarsen_us(southstar_glib::monotonic_us()),
-        origin_real_ms: coarsen_real_ms(ffi::real_us()),
+        origin_real_ms: coarsen_real_ms(ffi::real_time_us()),
     };
     CLOCKS.with(|clocks| {
         clocks

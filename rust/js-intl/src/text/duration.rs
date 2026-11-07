@@ -232,14 +232,6 @@ pub(crate) fn constructor(
     Ok(scope.new_host_object(Some(&prototype), format))
 }
 
-pub(crate) fn supported_locales_of(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    service::supported_locales(scope, args, service::COMMON_LANGUAGES)
-}
-
 fn duration_sign(record: &Record) -> i32 {
     record
         .iter()

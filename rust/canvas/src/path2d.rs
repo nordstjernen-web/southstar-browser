@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_arg;
 use std::f64::consts::PI;
 
 use southstar_js_engine::{Scope, Value};
@@ -15,11 +16,6 @@ pub(crate) struct Path2D {
 
 fn path_of(scope: &mut Scope<'_>, this: &Value) -> Result<Context, Value> {
     path2d_context(this).ok_or_else(|| scope.type_error("Path2D expected"))
-}
-
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
 }
 
 fn to_number_or_nan(scope: &mut Scope<'_>, value: Result<Value, Value>) -> f64 {
@@ -183,7 +179,7 @@ pub(crate) fn extract_radii(scope: &mut Scope<'_>, v: &Value) -> ([f64; 4], bool
 pub(crate) fn move_to(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 2 {
-        let (x, y) = (arg(scope, args, 0), arg(scope, args, 1));
+        let (x, y) = (number_arg(scope, args, 0), number_arg(scope, args, 1));
         cr.move_to(x, y);
     }
     Ok(Value::undefined())
@@ -193,10 +189,10 @@ pub(crate) fn line_to(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
     let cr = path_of(scope, this)?;
     if args.len() >= 2 {
         if !cr.has_current_point() {
-            let (x, y) = (arg(scope, args, 0), arg(scope, args, 1));
+            let (x, y) = (number_arg(scope, args, 0), number_arg(scope, args, 1));
             cr.move_to(x, y);
         }
-        let (x, y) = (arg(scope, args, 0), arg(scope, args, 1));
+        let (x, y) = (number_arg(scope, args, 0), number_arg(scope, args, 1));
         cr.line_to(x, y);
     }
     Ok(Value::undefined())
@@ -214,7 +210,7 @@ pub(crate) fn bezier_curve_to(
 ) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 6 {
-        let v: Vec<f64> = (0..6).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..6).map(|i| number_arg(scope, args, i)).collect();
         cr.curve_to((v[0], v[1]), (v[2], v[3]), (v[4], v[5]));
     }
     Ok(Value::undefined())
@@ -227,7 +223,7 @@ pub(crate) fn quadratic_curve_to(
 ) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 4 {
-        let v: Vec<f64> = (0..4).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..4).map(|i| number_arg(scope, args, i)).collect();
         quadratic_to(&cr, (v[0], v[1]), (v[2], v[3]));
     }
     Ok(Value::undefined())
@@ -236,7 +232,7 @@ pub(crate) fn quadratic_curve_to(
 pub(crate) fn arc(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 5 {
-        let v: Vec<f64> = (0..5).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..5).map(|i| number_arg(scope, args, i)).collect();
         let ccw = args.len() >= 6 && scope.to_bool(&args[5]);
         cr.arc((v[0], v[1]), v[2], (v[3], v[4]), ccw);
     }
@@ -250,7 +246,7 @@ pub(crate) fn arc_to_method(
 ) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 5 {
-        let v: Vec<f64> = (0..5).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..5).map(|i| number_arg(scope, args, i)).collect();
         arc_to(&cr, (v[0], v[1]), (v[2], v[3]), v[4]);
     }
     Ok(Value::undefined())
@@ -263,7 +259,7 @@ pub(crate) fn ellipse_method(
 ) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 7 {
-        let v: Vec<f64> = (0..7).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..7).map(|i| number_arg(scope, args, i)).collect();
         let ccw = args.len() >= 8 && scope.to_bool(&args[7]);
         if v.iter().any(|n| !n.is_finite()) {
             return Ok(Value::undefined());
@@ -290,7 +286,7 @@ pub(crate) fn ellipse_method(
 pub(crate) fn rect(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<Value, Value> {
     let cr = path_of(scope, this)?;
     if args.len() >= 4 {
-        let v: Vec<f64> = (0..4).map(|i| arg(scope, args, i)).collect();
+        let v: Vec<f64> = (0..4).map(|i| number_arg(scope, args, i)).collect();
         cr.rectangle(v[0], v[1], v[2], v[3]);
     }
     Ok(Value::undefined())
@@ -306,10 +302,10 @@ pub(crate) fn round_rect(
         return Ok(Value::undefined());
     }
     let v = [
-        arg(scope, args, 0),
-        arg(scope, args, 1),
-        arg(scope, args, 2),
-        arg(scope, args, 3),
+        number_arg(scope, args, 0),
+        number_arg(scope, args, 1),
+        number_arg(scope, args, 2),
+        number_arg(scope, args, 3),
     ];
     let mut radii = [0.0; 4];
     if let Some(spec) = args.get(4) {

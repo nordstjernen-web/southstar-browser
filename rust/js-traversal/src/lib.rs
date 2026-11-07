@@ -16,7 +16,8 @@ pub use ffi::iters_pre_remove;
 
 use southstar_dom::Node;
 use southstar_dom::serialize::is_embedded_doc;
-use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+pub(crate) use southstar_js_engine::props::{arg, bind, get, noop, set, truthy};
+use southstar_js_engine::{Attributes, Scope, Value};
 
 pub use ffi::nsr_native_range;
 pub use ffi::nsr_tree_walker_install_proto;
@@ -34,34 +35,6 @@ pub(crate) const READ_ONLY: Attributes = Attributes {
     enumerable: true,
     configurable: true,
 };
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
-
-pub(crate) fn put(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    put(scope, object, name, function);
-}
-
-pub(crate) fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> JsResult {
-    Ok(Value::undefined())
-}
 
 pub(crate) fn hidden_child(node: Element) -> bool {
     is_embedded_doc(node) || (node.is_element() && node.attr(c"data-nd-shadow-root").is_some())

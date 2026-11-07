@@ -10,11 +10,12 @@ use std::ffi::CString;
 use std::sync::{Mutex, MutexGuard};
 
 use southstar_dom::{
-    FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, attrs, controls, internals, select,
-    serialize,
+    FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node, attrs, children, controls, internals,
+    select, serialize,
 };
 
 use crate::ffi;
+use crate::property::eq;
 use crate::scan::{is_gspace, is_ws, scan_until, strip, trim_range, utf8_char};
 use crate::selector::anb_int_strict;
 
@@ -112,11 +113,7 @@ pub(crate) fn reset_language_cache() {
     PRAGMA.with_borrow_mut(|pragma| pragma.valid = false);
 }
 
-fn eq(a: &[u8], b: &[u8]) -> bool {
-    a.eq_ignore_ascii_case(b)
-}
-
-fn attr<'a>(el: Node<'a>, name: &CStr) -> Option<&'a CStr> {
+pub(crate) fn attr<'a>(el: Node<'a>, name: &CStr) -> Option<&'a CStr> {
     attrs::get(el, name)
 }
 
@@ -124,20 +121,16 @@ fn has(el: Node<'_>, name: &CStr) -> bool {
     attr(el, name).is_some()
 }
 
-fn attr_bytes<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
+pub(crate) fn attr_bytes<'a>(el: Node<'a>, name: &CStr) -> Option<&'a [u8]> {
     attr(el, name).map(CStr::to_bytes)
 }
 
-fn named(node: Option<Node<'_>>, tag: &[u8]) -> bool {
+pub(crate) fn named(node: Option<Node<'_>>, tag: &[u8]) -> bool {
     node.and_then(Node::element_name) == Some(tag)
 }
 
 fn raw_name(el: Node<'_>) -> Option<&[u8]> {
     el.name().map(CStr::to_bytes)
-}
-
-fn children(node: Node<'_>) -> impl Iterator<Item = Node<'_>> {
-    core::iter::successors(node.first_child(), |child| child.next_sibling())
 }
 
 fn all_ws(text: &[u8]) -> bool {

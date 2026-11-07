@@ -3,6 +3,8 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_runtime::api::dom_exception;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -26,16 +28,8 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
 }
 
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
-}
-
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
     api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::null())
-}
-
-pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    scope.dom_exception_code(name.as_bytes(), code, message.as_bytes())
 }
 
 pub(crate) fn style_table(js: Js) -> Option<Rc<StyleMap>> {

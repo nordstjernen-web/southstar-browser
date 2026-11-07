@@ -62,7 +62,7 @@ pub(crate) struct Entry {
     pub(crate) revert: Option<Revert>,
 }
 
-fn ordered(a: i32, b: i32, reversed: bool) -> Ordering {
+pub(crate) fn ordered(a: i32, b: i32, reversed: bool) -> Ordering {
     if reversed { b.cmp(&a) } else { a.cmp(&b) }
 }
 
@@ -79,7 +79,7 @@ pub(crate) fn cascade_order(a: &Entry, b: &Entry) -> Ordering {
         .then(a.decl_order.cmp(&b.decl_order))
 }
 
-fn same_revert_origin(rollback: i32, candidate: i32) -> bool {
+pub(crate) fn same_revert_origin(rollback: i32, candidate: i32) -> bool {
     if rollback == ORIGIN_AUTHOR {
         candidate == ORIGIN_AUTHOR || candidate == ORIGIN_PRESENTATIONAL
     } else {

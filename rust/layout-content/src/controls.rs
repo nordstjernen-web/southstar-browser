@@ -6,10 +6,13 @@ use core::ffi::{CStr, c_int, c_uint};
 use core::ptr;
 
 use southstar_dom::Node;
+use southstar_glib::{max as c_max, min as c_min};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind};
 use southstar_layout_geom::{edges_from_style, length_resolve};
-pub use southstar_layout_geom::{keyword_is, length_or};
-use southstar_style::{Display, Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
+pub use southstar_layout_geom::{
+    is_atomic_inline_container, is_block_level, keyword_is, length_or,
+};
+use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef, display_of};
 
 use crate::ffi;
 
@@ -36,15 +39,6 @@ const UNIT_REX: u32 = 19;
 const UNIT_RCH: u32 = 20;
 const UNIT_RCAP: u32 = 21;
 const UNIT_RIC: u32 = 22;
-
-const BOX_NORMAL: u8 = 0;
-const OUTER_INLINE: u8 = 0;
-const OUTER_BLOCK: u8 = 1;
-const INNER_FLOW: u8 = 0;
-const INNER_TABLE: u8 = 2;
-const INNER_RUBY: u8 = 5;
-const INTERNAL_NONE: u8 = 0;
-const INTERNAL_TABLE_CAPTION: u8 = 8;
 
 const OBJECT_REPLACEMENT: &[u8] = "\u{FFFC}".as_bytes();
 
@@ -216,14 +210,6 @@ pub fn dim_px_basis(v: Option<ValueRef<'_>>, font_size: f64, basis: f64) -> f64 
     }
 }
 
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
 pub fn dim_px_clamped(
     s: Option<StyleRef<'_>>,
     props: [PropId; 3],
@@ -352,22 +338,6 @@ fn strips_chrome(s: StyleRef<'_>) -> bool {
     BORDER_STYLES
         .iter()
         .all(|&p| style_none_or_hidden(s.get(p)))
-}
-
-pub fn is_block_level(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.outer == OUTER_BLOCK
-        && d.inner != INNER_RUBY
-        && (d.internal == INTERNAL_NONE || d.internal == INTERNAL_TABLE_CAPTION)
-}
-
-pub fn is_atomic_inline_container(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.internal == INTERNAL_NONE
-        && d.outer == OUTER_INLINE
-        && d.inner != INNER_FLOW
-        && d.inner != INNER_RUBY
-        && d.inner != INNER_TABLE
 }
 
 fn prefers_css_chrome(kind: c_uint, dom: Option<Node<'_>>, s: Option<StyleRef<'_>>) -> bool {

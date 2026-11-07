@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) use southstar_js_engine::props::{array_length, bind, get, set, truthy};
 use southstar_unicode::until_nul_owned;
 pub mod class;
 mod context;
@@ -106,26 +107,6 @@ pub(crate) fn text_of(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
     scope.to_bytes(value).ok().map(until_nul_owned)
 }
 
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn truthy(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = get(scope, object, key);
-    scope.to_bool(&value)
-}
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
-
 pub(crate) fn bind_getter(
     scope: &mut Scope<'_>,
     object: &Value,
@@ -145,9 +126,4 @@ pub(crate) fn bind_getter(
 
 pub(crate) fn is_nullish(value: &Value) -> bool {
     value.is_undefined() || value.is_null()
-}
-
-pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let length = get(scope, array, "length");
-    scope.to_int32(&length).map_or(0, |n| n as u32)
 }

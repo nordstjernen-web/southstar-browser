@@ -7,6 +7,7 @@
 mod ffi;
 
 use core::ffi::CStr;
+use southstar_glib::max;
 use std::ffi::CString;
 
 pub use ffi::paint_math;
@@ -33,10 +34,6 @@ impl Extent {
             descent: fpx * 0.2,
         }
     }
-}
-
-fn max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
 }
 
 fn text_is_blank(text: Option<&CStr>) -> bool {

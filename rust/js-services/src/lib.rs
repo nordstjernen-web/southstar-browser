@@ -22,12 +22,13 @@ pub use ffi::{
     timers_pending,
 };
 
+pub(crate) use southstar_js_bind::{make_constructor, natives::resolved};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Instant;
 
-use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
+use southstar_js_engine::Value;
 
 use crate::ffi::Js;
 
@@ -39,27 +40,6 @@ pub use ffi::nsr_services_clear_timer;
 pub use ffi::nsr_services_queue_microtask;
 pub use ffi::nsr_services_set_interval;
 pub use ffi::nsr_services_set_timeout;
-
-const PROTOTYPE_ONLY_WRITABLE: Attributes = Attributes {
-    writable: true,
-    enumerable: false,
-    configurable: false,
-};
-
-pub(crate) fn make_ctor(scope: &mut Scope<'_>, name: &str, arity: u32, f: NativeFn) -> Value {
-    let function = scope.constructor_or_function(name, arity, f);
-    let proto = scope.new_object();
-    let _ = scope.define(&proto, "constructor", function.clone(), Attributes::METHOD);
-    let _ = scope.define_to_string_tag(&proto, name);
-    let _ = scope.define(&function, "prototype", proto, PROTOTYPE_ONLY_WRITABLE);
-    function
-}
-
-pub(crate) fn resolved(scope: &mut Scope<'_>, value: Value) -> Result<Value, Value> {
-    let (promise, resolve, _reject) = scope.new_promise()?;
-    scope.call(&resolve, &Value::undefined(), &[value])?;
-    Ok(promise)
-}
 
 #[derive(Default)]
 pub(crate) struct Page {

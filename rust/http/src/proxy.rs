@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, TcpStream, ToSocketAddrs};
 
 use crate::ffi::socket;
+use crate::ftp::percent_decode;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -23,24 +24,6 @@ pub struct Proxy {
     pub port: u16,
     pub user: Option<Vec<u8>>,
     pub password: Option<Vec<u8>>,
-}
-
-fn percent_decode(s: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(s.len());
-    let mut i = 0;
-    while i < s.len() {
-        if s[i] == b'%' && i + 2 < s.len() {
-            let hex = |c: u8| (c as char).to_digit(16);
-            if let (Some(h), Some(l)) = (hex(s[i + 1]), hex(s[i + 2])) {
-                out.push((h * 16 + l) as u8);
-                i += 3;
-                continue;
-            }
-        }
-        out.push(s[i]);
-        i += 1;
-    }
-    out
 }
 
 pub fn parse(spec: &[u8]) -> Option<Proxy> {

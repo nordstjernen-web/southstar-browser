@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_dom::Kind;
@@ -44,13 +45,6 @@ fn utf16_length(text: &CStr) -> i32 {
         index += utf8_sequence_length(lead);
     }
     units
-}
-
-fn c_string_prefix(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
 }
 
 pub fn text_length(scope: &mut Scope<'_>, this: &Value) -> JsResult {
@@ -115,7 +109,7 @@ pub fn set_data(scope: &mut Scope<'_>, this: &Value, value: &Value) -> JsResult<
     let node = ffi::unwrap_node(this);
     if let Some(object) = node.filter(|&n| is_object_element(Some(n))) {
         let bytes = scope.to_bytes(value)?;
-        let text = c_string_prefix(&bytes);
+        let text = until_nul(&bytes);
         let js = ffi::js_of(scope);
         let changed = object
             .attr(c"data")

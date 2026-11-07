@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::{PI, SQRT_2};
+use southstar_glib::{max, min};
 use southstar_unicode::c_string_until_nul;
 use std::borrow::Cow;
 use std::ffi::CStr;
@@ -13,7 +14,7 @@ use crate::calc;
 use crate::color::{self, color_text};
 use crate::ffi;
 use crate::position;
-use crate::scan::{skip_ws, split_ws_paren, starts_with_ci, strip};
+use crate::scan::{contains, skip_ws, split_ws_paren, starts_with_ci, strip};
 use crate::units::{self, NUMBER, PERCENT};
 
 pub(crate) const STOPS_MAX: usize = 32;
@@ -207,12 +208,6 @@ pub(crate) fn token_is_length_pct(t: &[u8]) -> bool {
         Some((v, unit)) => unit != NUMBER || v == 0.0,
         None => false,
     }
-}
-
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
-        .windows(needle.len())
-        .any(|window| window == needle)
 }
 
 fn token_is_angle(t: &[u8]) -> bool {
@@ -1302,14 +1297,6 @@ pub fn angle(gr: &Gradient, w: f64, h: f64) -> f64 {
     }
 }
 
-fn gmin(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
-}
-
-fn gmax(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
 pub fn radii(gr: &Gradient, w: f64, h: f64, cx: f64, cy: f64) -> (f64, f64) {
     let dl = cx.abs();
     let dr = (w - cx).abs();
@@ -1326,37 +1313,37 @@ pub fn radii(gr: &Gradient, w: f64, h: f64, cx: f64, cy: f64) -> (f64, f64) {
             };
         }
         SIZE_CLOSEST_SIDE => {
-            rx = gmin(dl, dr);
-            ry = gmin(dt, db);
+            rx = min(dl, dr);
+            ry = min(dt, db);
             if gr.circle != 0 {
-                rx = gmin(rx, ry);
+                rx = min(rx, ry);
                 ry = rx;
             }
         }
         SIZE_FARTHEST_SIDE => {
-            rx = gmax(dl, dr);
-            ry = gmax(dt, db);
+            rx = max(dl, dr);
+            ry = max(dt, db);
             if gr.circle != 0 {
-                rx = gmax(rx, ry);
+                rx = max(rx, ry);
                 ry = rx;
             }
         }
         SIZE_CLOSEST_CORNER => {
             if gr.circle != 0 {
-                rx = (gmin(dl, dr) * gmin(dl, dr) + gmin(dt, db) * gmin(dt, db)).sqrt();
+                rx = (min(dl, dr) * min(dl, dr) + min(dt, db) * min(dt, db)).sqrt();
                 ry = rx;
             } else {
-                rx = gmin(dl, dr) * SQRT_2;
-                ry = gmin(dt, db) * SQRT_2;
+                rx = min(dl, dr) * SQRT_2;
+                ry = min(dt, db) * SQRT_2;
             }
         }
         _ => {
             if gr.circle != 0 {
-                rx = (gmax(dl, dr) * gmax(dl, dr) + gmax(dt, db) * gmax(dt, db)).sqrt();
+                rx = (max(dl, dr) * max(dl, dr) + max(dt, db) * max(dt, db)).sqrt();
                 ry = rx;
             } else {
-                rx = gmax(dl, dr) * SQRT_2;
-                ry = gmax(dt, db) * SQRT_2;
+                rx = max(dl, dr) * SQRT_2;
+                ry = max(dt, db) * SQRT_2;
             }
         }
     }

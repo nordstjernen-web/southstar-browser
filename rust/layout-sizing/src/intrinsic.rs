@@ -6,10 +6,12 @@ use core::ffi::CStr;
 use core::sync::atomic::{AtomicI32, Ordering};
 
 use southstar_css::TRACK_PX;
+use southstar_glib::{max as c_max, min as c_min};
 use southstar_layout::{BoxKind, BoxRef, children};
 use southstar_layout_float::{float_side_of, overflow_establishes_bfc, style_is_grid_container};
 use southstar_layout_geom::{
-    edges_from_style, flex_direction_of, length_resolve, style_is_flex_container, value_is_percent,
+    edges_from_style, flex_direction_of, is_length_or_calc, keyword_is, length_resolve,
+    style_is_flex_container, value_is_percent,
 };
 use southstar_style::{Kind, PropId, StyleRef, ValueRef};
 
@@ -19,9 +21,8 @@ use crate::ffi::{
     inline_natural_width, style_of, table_intrinsic_width,
 };
 use crate::replaced::{
-    inline_atomic_measure_basis, is_border_box, is_length_or_calc, is_replaced,
-    replaced_intrinsic_contribution, replaced_width_is_cyclic, replaced_width_is_percent,
-    style_value,
+    inline_atomic_measure_basis, is_border_box, is_replaced, replaced_intrinsic_contribution,
+    replaced_width_is_cyclic, replaced_width_is_percent, style_value,
 };
 
 const UNIT_PX: u32 = 0;
@@ -36,10 +37,6 @@ pub fn size_keyword_is_intrinsic(v: Option<ValueRef<'_>>) -> bool {
             b"min-content" | b"max-content" | b"fit-content"
         )
     })
-}
-
-fn keyword_is(v: Option<ValueRef<'_>>, kw: &CStr) -> bool {
-    v.is_some_and(|v| v.is_keyword(kw))
 }
 
 pub fn style_contains_inline_size(s: Option<StyleRef<'_>>) -> bool {
@@ -369,14 +366,6 @@ fn flex_contribution_clamp_to_basis(c: BoxRef<'_>, contribution: f64, preferred:
         return base;
     }
     contribution
-}
-
-fn c_max(a: f64, b: f64) -> f64 {
-    if a > b { a } else { b }
-}
-
-fn c_min(a: f64, b: f64) -> f64 {
-    if a < b { a } else { b }
 }
 
 fn flex_row_item_min_contribution(c: BoxRef<'_>, child_style: Option<StyleRef<'_>>) -> f64 {

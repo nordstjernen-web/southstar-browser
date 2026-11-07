@@ -10,7 +10,7 @@ use crate::content;
 use crate::declarations;
 use crate::ffi::{self, SyntaxDef};
 use crate::image::quoted_end;
-use crate::scan::{is_ident, scan_until, split_ws_paren, strip, trim_range};
+use crate::scan::{is_ident, scan_until, split_ws_paren, starts_with_ci, strip, trim_range};
 use crate::units;
 
 const FALLBACK_DEPTH_MAX: i32 = 8;
@@ -26,10 +26,6 @@ enum Kind {
 
 fn contains(text: &[u8], needle: &[u8]) -> bool {
     text.windows(needle.len()).any(|w| w == needle)
-}
-
-fn starts_ci(s: &[u8], prefix: &[u8]) -> bool {
-    s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 
 fn string_quote(text: &[u8]) -> Vec<u8> {
@@ -56,7 +52,7 @@ fn attr_kind(ty: Option<&[u8]>) -> Option<Kind> {
     if ty.eq_ignore_ascii_case(b"raw-string") {
         return Some(Kind::String);
     }
-    if starts_ci(ty, b"type(") && ty.last() == Some(&b')') {
+    if starts_with_ci(ty, b"type(") && ty.last() == Some(&b')') {
         let inner = strip(&ty[5..ty.len() - 1]);
         if inner == b"*" {
             return Some(Kind::Any);
@@ -188,7 +184,7 @@ pub(crate) fn substitute(
         {
             url_depth -= i32::from(url);
         }
-        if starts_ci(&text[p..], b"attr(") && (p == 0 || !is_ident(text[p - 1])) {
+        if starts_with_ci(&text[p..], b"attr(") && (p == 0 || !is_ident(text[p - 1])) {
             if url_depth > 0 {
                 *tainted = true;
             }

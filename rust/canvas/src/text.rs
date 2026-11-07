@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::state::CanvasState;
@@ -75,11 +76,6 @@ fn text_arg(scope: &mut Scope<'_>, v: &Value) -> core::result::Result<Vec<u8>, V
         bytes.truncate(nul);
     }
     Ok(bytes)
-}
-
-fn number(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
 }
 
 fn baseline_shift(baseline: Option<&[u8]>, baseline_offset: f64, logical_bottom: f64) -> f64 {
@@ -164,10 +160,10 @@ fn draw_text(scope: &mut Scope<'_>, this: &Value, args: &[Value], stroke: bool) 
     crate::style::sync(scope, this, &st);
     let text = text_arg(scope, &args[0])?;
     let at = Placement {
-        x: number(scope, args, 1),
-        y: number(scope, args, 2),
+        x: number_arg(scope, args, 1),
+        y: number_arg(scope, args, 2),
         max_width: if args.len() >= 4 {
-            number(scope, args, 3)
+            number_arg(scope, args, 3)
         } else {
             0.0
         },

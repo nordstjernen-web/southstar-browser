@@ -10,6 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
 southstar-image = { path = "../image", version = "=1.0.8-dev" }

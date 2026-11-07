@@ -119,14 +119,6 @@ pub(crate) fn constructor(
     Ok(scope.new_host_object(Some(&prototype), segmenter))
 }
 
-pub(crate) fn supported_locales_of(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    service::supported_locales(scope, args, service::COMMON_LANGUAGES)
-}
-
 fn resolved_options(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Result<Value, Value> {
     let segmenter: Segmenter =
         service::receiver(scope, this, "Intl.Segmenter.prototype.resolvedOptions")?;

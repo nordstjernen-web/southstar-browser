@@ -88,7 +88,7 @@ pub fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
         return Ok(Value::null());
     }
     let ns = optional_text(scope, &args[0])?
-        .map(|ns| ffi::c_prefix(&ns).to_vec())
+        .map(|ns| ffi::until_nul(&ns).to_vec())
         .filter(|ns| !ns.is_empty());
     let name = scope.to_bytes(&args[1])?;
     if let Err(error) = names::validate_element_ns(ns.as_deref(), &name) {
@@ -227,7 +227,7 @@ pub fn create_attribute(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> 
 
 pub fn create_attribute_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {
     require(scope, args, 2, "2 arguments required")?;
-    let ns = optional_text(scope, &args[0])?.map(|ns| ffi::c_prefix(&ns).to_vec());
+    let ns = optional_text(scope, &args[0])?.map(|ns| ffi::until_nul(&ns).to_vec());
     let qname = scope.to_bytes(&args[1])?;
     if qname.contains(&0) {
         return Err(ffi::name_error(

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Scope, Value};
 
 use crate::draw::state;
@@ -10,11 +11,6 @@ use crate::ffi::cairo::Filter;
 type Result = core::result::Result<Value, Value>;
 
 const MAX_SIDE: i64 = 32767;
-
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
-}
 
 fn int(scope: &mut Scope<'_>, v: Option<&Value>) -> i32 {
     v.and_then(|v| scope.to_int32(v).ok()).unwrap_or(0)
@@ -41,18 +37,18 @@ pub(crate) fn draw_image(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let [sx, sy, sw, sh, dx, dy, dw, dh] = if args.len() >= 9 {
         let mut v = [0.0; 8];
         for (i, slot) in v.iter_mut().enumerate() {
-            *slot = arg(scope, args, i + 1);
+            *slot = number_arg(scope, args, i + 1);
         }
         v
     } else if args.len() >= 5 {
-        let dx = arg(scope, args, 1);
-        let dy = arg(scope, args, 2);
-        let dw = arg(scope, args, 3);
-        let dh = arg(scope, args, 4);
+        let dx = number_arg(scope, args, 1);
+        let dy = number_arg(scope, args, 2);
+        let dw = number_arg(scope, args, 3);
+        let dh = number_arg(scope, args, 4);
         [0.0, 0.0, tw, th, dx, dy, dw, dh]
     } else {
-        let dx = arg(scope, args, 1);
-        let dy = arg(scope, args, 2);
+        let dx = number_arg(scope, args, 1);
+        let dy = number_arg(scope, args, 2);
         [0.0, 0.0, tw, th, dx, dy, tw, th]
     };
     if sw <= 0.0 || sh <= 0.0 || dw <= 0.0 || dh <= 0.0 {

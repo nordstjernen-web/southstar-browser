@@ -6,11 +6,8 @@ use southstar_cairo::Matrix;
 use southstar_dom::Node;
 use southstar_layout::BoxRef;
 use southstar_mat4::Mat4;
+pub use southstar_style::box_style as style_of;
 use southstar_style::{StyleRef, Transform};
-
-pub fn style_of(b: BoxRef<'_>) -> Option<StyleRef<'_>> {
-    southstar_style::box_style(b)
-}
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()

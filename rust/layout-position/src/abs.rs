@@ -7,8 +7,8 @@ use core::ffi::CStr;
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_layout_geom::{
-    edges_from_style, height_keyword_stretches, length_resolve, resolve_height_with_basis,
-    style_creates_fixed_cb, value_is_percent,
+    edges_from_style, height_keyword_stretches, is_length_or_calc, length_resolve, outer_size,
+    resolve_height_with_basis, style_creates_fixed_cb, value_is_percent,
 };
 use southstar_style::{Kind, PropId, StyleRef, StyleTable, ValueRef};
 
@@ -134,14 +134,6 @@ fn can_host_fixed(anc: BoxRef<'_>) -> bool {
         b = bx.parent();
     }
     true
-}
-
-fn outer_size(b: BoxRef<'_>) -> (f64, f64) {
-    let (m, p, e) = (b.margin(), b.padding(), b.border());
-    (
-        b.content_width() + p.left + p.right + e.left + e.right + m.left + m.right,
-        b.content_height() + p.top + p.bottom + e.top + e.bottom + m.top + m.bottom,
-    )
 }
 
 fn inset_or_zero(v: Option<ValueRef<'_>>, basis: f64) -> Option<f64> {
@@ -322,10 +314,6 @@ fn height_within_limits(
 
 fn is_set(v: Option<ValueRef<'_>>) -> bool {
     v.is_some_and(|v| !length_is_auto(Some(v)) && matches!(v.kind(), Kind::Length | Kind::Calc))
-}
-
-fn is_length_or_calc(v: Option<ValueRef<'_>>) -> bool {
-    v.is_some_and(|v| matches!(v.kind(), Kind::Length | Kind::Calc))
 }
 
 struct Ctx<'a, 'o> {

@@ -13,6 +13,7 @@ mod key;
 mod random;
 mod subtle;
 
+pub(crate) use southstar_js_engine::props::{arg, get, set, set_str};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 pub use ffi::nsr_crypto_install_window;
@@ -22,25 +23,6 @@ pub use ffi::nsr_crypto_install_worker;
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 
 pub(crate) const HIDDEN_WRITABLE: Attributes = Attributes::METHOD;
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) {
-    let value = scope.string(text);
-    set(scope, object, key, value);
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
 
 pub(crate) fn c_string(scope: &mut Scope<'_>, value: &Value) -> Option<String> {
     scope.to_string(value).ok()

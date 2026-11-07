@@ -2,6 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_bind::natives::{
+    self, empty_array, noop, resolved, resolved_empty_array, resolved_false, resolved_undefined,
+};
+use southstar_js_engine::props::{bind, set_str};
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::{self, CMethod};
@@ -136,25 +140,9 @@ fn device_memory() -> i32 {
     bucket
 }
 
-fn method(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    let _ = scope.set(object, name, function);
-}
-
 fn c_method(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, which: CMethod) {
     let function = ffi::c_method(scope, name, arity, which);
     let _ = scope.set(object, name, function);
-}
-
-fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) {
-    let value = scope.string(text);
-    let _ = scope.set(object, key, value);
-}
-
-fn resolved(scope: &mut Scope<'_>, value: Value) -> Result<Value, Value> {
-    let (promise, resolve, _reject) = scope.new_promise()?;
-    scope.call(&resolve, &Value::undefined(), &[value])?;
-    Ok(promise)
 }
 
 fn reject_dom(scope: &mut Scope<'_>, name: &str, message: &str) -> Result<Value, Value> {
@@ -185,33 +173,8 @@ fn reject_message(scope: &mut Scope<'_>, message: &str) -> Result<Value, Value> 
     scope.rejected_promise(&error)
 }
 
-pub(crate) fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    Ok(Value::undefined())
-}
-
-fn returns_null(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    Ok(Value::null())
-}
-
 fn returns_false(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
     Ok(Value::boolean(false))
-}
-
-fn empty_array(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    Ok(scope.new_array())
-}
-
-fn resolved_undefined(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    resolved(scope, Value::undefined())
-}
-
-fn resolved_false(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    resolved(scope, Value::boolean(false))
-}
-
-fn resolved_empty_array(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    let array = scope.new_array();
-    resolved(scope, array)
 }
 
 pub(crate) fn rejected_not_supported(
@@ -335,8 +298,8 @@ fn ua_data_to_json(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<V
 fn user_agent_data(scope: &mut Scope<'_>) -> Value {
     let data = scope.new_object();
     low_entropy_hints(scope, &data);
-    method(scope, &data, "getHighEntropyValues", 1, high_entropy_values);
-    method(scope, &data, "toJSON", 0, ua_data_to_json);
+    bind(scope, &data, "getHighEntropyValues", 1, high_entropy_values);
+    bind(scope, &data, "toJSON", 0, ua_data_to_json);
     data
 }
 
@@ -435,9 +398,9 @@ fn clipboard_write_text(scope: &mut Scope<'_>, _: &Value, args: &[Value]) -> Res
 
 fn clipboard(scope: &mut Scope<'_>) -> Value {
     let clipboard = scope.new_object();
-    method(scope, &clipboard, "writeText", 1, clipboard_write_text);
-    method(scope, &clipboard, "readText", 0, reject_not_allowed);
-    method(scope, &clipboard, "read", 0, reject_not_allowed);
+    bind(scope, &clipboard, "writeText", 1, clipboard_write_text);
+    bind(scope, &clipboard, "readText", 0, reject_not_allowed);
+    bind(scope, &clipboard, "read", 0, reject_not_allowed);
     if let Ok(install) = scope.eval_native_script(CLIPBOARD_WRITE, "<clipboard-write>") {
         let _ = scope.call(
             &install,
@@ -575,31 +538,31 @@ fn network_information(scope: &mut Scope<'_>) -> Value {
 
 fn geolocation(scope: &mut Scope<'_>) -> Value {
     let geolocation = scope.new_object();
-    method(
+    bind(
         scope,
         &geolocation,
         "getCurrentPosition",
         3,
         get_current_position,
     );
-    method(scope, &geolocation, "watchPosition", 3, watch_position);
-    method(scope, &geolocation, "clearWatch", 1, noop);
+    bind(scope, &geolocation, "watchPosition", 3, watch_position);
+    bind(scope, &geolocation, "clearWatch", 1, noop);
     geolocation
 }
 
 fn permissions(scope: &mut Scope<'_>) -> Value {
     let permissions = scope.new_object();
-    method(scope, &permissions, "query", 1, permissions_query);
+    bind(scope, &permissions, "query", 1, permissions_query);
     let _ = scope.define_to_string_tag(&permissions, "Permissions");
     permissions
 }
 
 fn media_devices(scope: &mut Scope<'_>) -> Value {
     let devices = scope.new_object();
-    method(scope, &devices, "getUserMedia", 1, reject_not_found);
-    method(scope, &devices, "getDisplayMedia", 1, reject_not_found);
-    method(scope, &devices, "enumerateDevices", 0, resolved_empty_array);
-    method(scope, &devices, "getSupportedConstraints", 0, noop);
+    bind(scope, &devices, "getUserMedia", 1, reject_not_found);
+    bind(scope, &devices, "getDisplayMedia", 1, reject_not_found);
+    bind(scope, &devices, "enumerateDevices", 0, resolved_empty_array);
+    bind(scope, &devices, "getSupportedConstraints", 0, noop);
     let listeners = scope.new_array();
     let _ = scope.set(&devices, "_listeners", listeners);
     ffi::bind_event_target(scope, &devices);
@@ -612,10 +575,10 @@ fn media_devices(scope: &mut Scope<'_>) -> Value {
 fn empty_plugin_array(scope: &mut Scope<'_>, with_refresh: bool) -> Value {
     let list = scope.new_object();
     let _ = scope.define(&list, "length", Value::int(0), ENUMERABLE_CONFIGURABLE);
-    method(scope, &list, "item", 1, returns_null);
-    method(scope, &list, "namedItem", 1, returns_null);
+    bind(scope, &list, "item", 1, natives::null);
+    bind(scope, &list, "namedItem", 1, natives::null);
     if with_refresh {
-        method(scope, &list, "refresh", 0, noop);
+        bind(scope, &list, "refresh", 0, noop);
     }
     list
 }
@@ -640,9 +603,9 @@ fn user_activation(scope: &mut Scope<'_>) -> Value {
 
 fn storage_manager(scope: &mut Scope<'_>) -> Value {
     let storage = scope.new_object();
-    method(scope, &storage, "estimate", 0, storage_estimate);
-    method(scope, &storage, "persist", 0, resolved_false);
-    method(scope, &storage, "persisted", 0, resolved_false);
+    bind(scope, &storage, "estimate", 0, storage_estimate);
+    bind(scope, &storage, "persist", 0, resolved_false);
+    bind(scope, &storage, "persisted", 0, resolved_false);
     storage
 }
 
@@ -695,18 +658,18 @@ pub(crate) fn window(scope: &mut Scope<'_>) -> Value {
     let devices = media_devices(scope);
     let _ = scope.set(&navigator, "mediaDevices", devices);
 
-    method(scope, &navigator, "share", 1, rejected_not_supported);
-    method(scope, &navigator, "canShare", 1, noop);
-    method(scope, &navigator, "vibrate", 1, noop);
+    bind(scope, &navigator, "share", 1, rejected_not_supported);
+    bind(scope, &navigator, "canShare", 1, noop);
+    bind(scope, &navigator, "vibrate", 1, noop);
     c_method(scope, &navigator, "sendBeacon", 2, CMethod::SendBeacon);
-    method(
+    bind(
         scope,
         &navigator,
         "registerProtocolHandler",
         2,
         register_protocol_handler,
     );
-    method(scope, &navigator, "unregisterProtocolHandler", 2, noop);
+    bind(scope, &navigator, "unregisterProtocolHandler", 2, noop);
 
     if ffi::has_client_hints(&ua) {
         let data = user_agent_data(scope);
@@ -718,12 +681,12 @@ pub(crate) fn window(scope: &mut Scope<'_>) -> Value {
     let mime_types = empty_plugin_array(scope, false);
     let _ = scope.set(&navigator, "mimeTypes", mime_types);
 
-    method(scope, &navigator, "javaEnabled", 0, returns_false);
-    method(scope, &navigator, "taintEnabled", 0, returns_false);
-    method(scope, &navigator, "getAutoplayPolicy", 1, noop);
-    method(scope, &navigator, "getBattery", 0, get_battery);
-    method(scope, &navigator, "getGamepads", 0, empty_array);
-    method(
+    bind(scope, &navigator, "javaEnabled", 0, returns_false);
+    bind(scope, &navigator, "taintEnabled", 0, returns_false);
+    bind(scope, &navigator, "getAutoplayPolicy", 1, noop);
+    bind(scope, &navigator, "getBattery", 0, get_battery);
+    bind(scope, &navigator, "getGamepads", 0, empty_array);
+    bind(
         scope,
         &navigator,
         "requestMIDIAccess",
@@ -761,15 +724,15 @@ pub(crate) fn window(scope: &mut Scope<'_>) -> Value {
     let storage = storage_manager(scope);
     let _ = scope.set(&navigator, "storage", storage);
 
-    method(
+    bind(
         scope,
         &navigator,
         "getInstalledRelatedApps",
         0,
         resolved_empty_array,
     );
-    method(scope, &navigator, "setAppBadge", 1, resolved_undefined);
-    method(scope, &navigator, "clearAppBadge", 0, resolved_undefined);
+    bind(scope, &navigator, "setAppBadge", 1, resolved_undefined);
+    bind(scope, &navigator, "clearAppBadge", 0, resolved_undefined);
     navigator
 }
 

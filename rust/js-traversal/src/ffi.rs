@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use southstar_js_runtime::api::dom_exception;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::ffi::CString;
 
 use southstar_dom::{Node, Tree};
@@ -40,13 +42,6 @@ pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Opti
     api::main_context(js.ptr()).with(f)
 }
 
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    if !value.is_object() {
-        return None;
-    }
-    api::unwrap_element(value)
-}
-
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {
     api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::undefined())
 }
@@ -72,10 +67,6 @@ pub(crate) fn track_orphan(js: Js, node: Element) {
 pub(crate) fn parse_html(source: &[u8]) -> Tree {
     let end = source.iter().position(|&c| c == 0).unwrap_or(source.len());
     southstar_html_parser::parse_document(&source[..end], true)
-}
-
-pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    api::dom_exception(scope, name, code, message)
 }
 
 pub fn nsr_window_get_selection(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult {

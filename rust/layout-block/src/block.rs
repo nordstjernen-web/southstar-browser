@@ -7,13 +7,13 @@ use core::sync::atomic::{AtomicI32, Ordering};
 use southstar_layout::BoxRef;
 use southstar_layout_float::{box_establishes_bfc, style_is_grid_container};
 use southstar_layout_geom::{
-    edges_into_box, flex_direction_of, height_keyword_stretches, keyword_or, length_resolve,
-    style_is_absolute_or_fixed, style_is_flex_container,
+    edges_into_box, flex_direction_of, height_keyword_stretches, is_atomic_inline_container,
+    keyword_or, length_resolve, style_is_absolute_or_fixed, style_is_flex_container,
 };
 use southstar_style::{
     CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_FIT_CONTENT, CALC_SIZE_MAX_CONTENT,
-    CALC_SIZE_MIN_CONTENT, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, CalcSize, Display, Kind, PropId,
-    StyleRef, ValueRef, display_of,
+    CALC_SIZE_MIN_CONTENT, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, CalcSize, Kind, PropId, StyleRef,
+    ValueRef, display_of,
 };
 
 use crate::align::length_is_auto;
@@ -29,22 +29,6 @@ use southstar_layout_geom::flex::{grow_of, wraps};
 
 const GRID_NESTING_MAX: i32 = 64;
 static GRID_NESTING: AtomicI32 = AtomicI32::new(0);
-
-const BOX_NORMAL: u8 = 0;
-const OUTER_INLINE: u8 = 0;
-const INNER_FLOW: u8 = 0;
-const INNER_TABLE: u8 = 2;
-const INNER_RUBY: u8 = 5;
-const INTERNAL_NONE: u8 = 0;
-
-fn display_is_atomic_inline_container(d: Display) -> bool {
-    d.box_ == BOX_NORMAL
-        && d.internal == INTERNAL_NONE
-        && d.outer == OUTER_INLINE
-        && d.inner != INNER_FLOW
-        && d.inner != INNER_RUBY
-        && d.inner != INNER_TABLE
-}
 
 fn keyword_bytes(v: Option<ValueRef<'_>>) -> Option<&[u8]> {
     v.filter(|v| v.kind() == Kind::Keyword)
@@ -92,7 +76,7 @@ fn calc_size_width(
     base: f64,
 ) -> f64 {
     let avail = non_negative(avail);
-    let shrinks = display_is_atomic_inline_container(display_of(style_of(b)));
+    let shrinks = is_atomic_inline_container(display_of(style_of(b)));
     let fit = || {
         let mn = min_width_of(b, mi);
         measure_natural_width(b, mi).min(avail).max(mn)
@@ -178,7 +162,7 @@ fn used_width(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) -> UsedW
         cw = non_negative(cw);
         explicit_width = true;
         intrinsic_width = true;
-    } else if !flex_col_item_stretch && display_is_atomic_inline_container(display_of(style)) {
+    } else if !flex_col_item_stretch && is_atomic_inline_container(display_of(style)) {
         let avail = non_negative(pcw - horiz_total);
         if height_keyword_stretches(wv) {
             cw = avail;

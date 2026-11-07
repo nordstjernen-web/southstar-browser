@@ -382,33 +382,6 @@ impl Decoder {
 
 pub const ACCEPT_GUID: &[u8] = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-const B64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-pub fn base64(input: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(input.len().div_ceil(3) * 4);
-    for chunk in input.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
-        out.push(B64[(n >> 18) as usize & 63]);
-        out.push(B64[(n >> 12) as usize & 63]);
-        out.push(if chunk.len() > 1 {
-            B64[(n >> 6) as usize & 63]
-        } else {
-            b'='
-        });
-        out.push(if chunk.len() > 2 {
-            B64[n as usize & 63]
-        } else {
-            b'='
-        });
-    }
-    out
-}
-
 pub fn header<'a>(headers: &'a [(Vec<u8>, Vec<u8>)], name: &[u8]) -> Option<&'a [u8]> {
     headers
         .iter()

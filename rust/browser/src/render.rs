@@ -8,7 +8,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use southstar_layout::{BoxRef, children};
 
 use crate::ffi::{self, Cairo, LayerPlan, NsBrowser, PixelBuf, Surface, TileTarget, VpLayerInfo};
-use crate::{images, page};
+use crate::{images, page, settle};
 
 const VP_LAYER_PAD: f64 = 24.0;
 const FRAME_DUMP_EVERY: u32 = 30;
@@ -27,20 +27,6 @@ fn target_ok(buf: &PixelBuf<'_>) -> bool {
     buf.width > 0 && buf.height > 0 && buf.stride >= buf.width * 4
 }
 
-fn note_videos(b: &NsBrowser) {
-    if let (Some(videos), Some(layout)) = (b.videos(), b.layout()) {
-        videos.discover(layout, b.doc());
-        if let Some(layout) = b.layout() {
-            videos.note_layout(
-                layout,
-                b.cur_scroll_x.get(),
-                b.cur_scroll_y.get(),
-                b.cur_scale.get(),
-            );
-        }
-    }
-}
-
 fn set_view(b: &NsBrowser, scroll_x: c_int, scroll_y: c_int, height: c_int, scale: f64) {
     b.cur_scroll_x.set(f64::from(scroll_x));
     b.cur_scroll_y.set(f64::from(scroll_y));
@@ -52,7 +38,7 @@ pub fn note_viewport(b: &NsBrowser, scroll_x: c_int, scroll_y: c_int, height: c_
     set_view(b, scroll_x, scroll_y, height, scale);
     ffi::set_hit_viewport(b.cur_scroll_x.get(), b.cur_scroll_y.get());
     images::ensure_images(b);
-    note_videos(b);
+    settle::note_videos(b);
 }
 
 pub fn note_composited_viewport(
@@ -102,7 +88,7 @@ pub fn render_rgba(
     let scale = valid_scale(scale);
     set_view(b, scroll_x, scroll_y, out.height, scale);
     images::ensure_images(b);
-    note_videos(b);
+    settle::note_videos(b);
     let Some(surface) = Surface::image(out.width, out.height) else {
         return -1;
     };
