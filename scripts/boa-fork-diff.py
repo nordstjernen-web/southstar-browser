@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Southstar — diff the forked Boa crates in third_party against the crates.io releases they fork, verified by the registry checksums."""
+"""Southstar — diff the forked Boa crates (and regress) in third_party against the crates.io releases they fork, verified by the registry checksums."""
 
 import argparse
 import hashlib
@@ -16,7 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CRATES = ("boa_engine", "boa_parser", "boa_ast", "boa_gc", "boa_interner", "boa_string")
-INDEX = "https://index.crates.io/bo/a_/{0}"
+FORKS = CRATES + ("regress",)
+INDEX = "https://index.crates.io/{0}/{1}"
 DOWNLOAD = "https://static.crates.io/crates/{0}/{0}-{1}.crate"
 COMPARED = ("src", "Cargo.toml")
 
@@ -36,8 +37,16 @@ def fetch(url):
         return response.read()
 
 
+def index_prefix(crate):
+    if len(crate) <= 2:
+        return str(len(crate))
+    if len(crate) == 3:
+        return f"3/{crate[0]}"
+    return f"{crate[:2]}/{crate[2:4]}"
+
+
 def registry_checksum(crate, version):
-    for line in fetch(INDEX.format(crate)).decode().splitlines():
+    for line in fetch(INDEX.format(index_prefix(crate), crate)).decode().splitlines():
         entry = json.loads(line)
         if entry["vers"] == version:
             return entry["cksum"]
@@ -108,7 +117,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stat", action="store_true", help="print a per-file summary")
     parser.add_argument("--version", help="upstream release to compare (default: the fork's)")
-    parser.add_argument("--crate", choices=CRATES, help="compare one forked crate (default: all)")
+    parser.add_argument("--crate", choices=FORKS, help="compare one forked crate (default: the Boa crates)")
     args = parser.parse_args()
     crates = (args.crate,) if args.crate else CRATES
     with tempfile.TemporaryDirectory() as scratch:
