@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Network: HTTP dates (cookie `Expires`, cache dates) with a year above 9999 are
+  rejected. Such a year overflowed the timestamp arithmetic, which aborted builds
+  with overflow checks and gave release builds a wrapped, wrong time.
 * Forms: `checkValidity()`, `reportValidity()` and `validity.patternMismatch`
   match the `pattern` attribute with the same bounded matcher as `:valid` and
   `:invalid`, so a script can no longer hang the page through validation on a

@@ -231,7 +231,7 @@ pub fn parse(text: &[u8]) -> Option<i64> {
     }
     let (hour, minute, second) = time.unwrap_or((0, 0, 0));
     let (day, month, year) = (day?, month?, year?);
-    if day > 31 || year < 1583 || !(1..=12).contains(&month) {
+    if day > 31 || !(1583..=9999).contains(&year) || !(1..=12).contains(&month) {
         return None;
     }
     let days = days_from_civil(year, month, day);
