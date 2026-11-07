@@ -472,6 +472,9 @@ mod linux {
         for base in [&data, &cache].into_iter().flatten() {
             rules.allow(fs_rw, &own_dir(base, &[b"southstar"]));
         }
+        if !renderer && let Some(state) = glib_dir(glib::user_state_dir) {
+            rules.allow(fs_rw, &own_dir(&state, &[b"southstar"]));
+        }
         if let Some(cache) = &cache {
             rules.allow(fs_rw, &own_dir(cache, &[b"southstar", b"cache"]));
         }
@@ -831,6 +834,10 @@ mod macos {
         ] {
             let base = glib_dir(get).unwrap_or_default();
             subpath(&mut profile, Some(&own_dir(&base, &[b"southstar"])));
+        }
+        if !is_renderer() {
+            let state = glib_dir(glib::user_state_dir).unwrap_or_default();
+            subpath(&mut profile, Some(&own_dir(&state, &[b"southstar"])));
         }
         subpath(&mut profile, download_dir().as_deref());
         for dir in remembered(&WRITABLE_DIRS) {

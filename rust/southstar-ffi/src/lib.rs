@@ -98,6 +98,7 @@ pub use southstar_layout_table;
 pub use southstar_layout_tree;
 pub use southstar_mat4;
 pub use southstar_mathml;
+pub use southstar_mcp;
 pub use southstar_mic;
 pub use southstar_net;
 pub use southstar_netutil;

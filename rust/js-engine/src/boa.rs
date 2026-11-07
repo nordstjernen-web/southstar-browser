@@ -48,6 +48,10 @@ pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 
 pub const ENGINE_NAME: &str = "boa";
 
+pub fn with_trusted_source<R>(name: &str, f: impl FnOnce() -> R) -> R {
+    access::with_trusted_source(name, f)
+}
+
 pub fn engine_version() -> String {
     "boa_engine 0.22".to_owned()
 }

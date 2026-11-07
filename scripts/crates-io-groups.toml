@@ -73,7 +73,7 @@ members = []
 
 [southstar-runtime]
 description = "Southstar's browser runtime: the browser core, the renderer process and its client, headless mode and the watchdog"
-members = ["browser", "headless", "renderer-host", "renderer-client", "watchdog", "ffi"]
+members = ["browser", "headless", "renderer-host", "renderer-client", "watchdog", "mcp", "ffi"]
 
 [southstar-shell]
 description = "Southstar's GTK 4 shell: windows, tabs, chrome and the GTK bindings it uses"

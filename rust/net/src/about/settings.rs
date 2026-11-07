@@ -47,7 +47,7 @@ pub fn json() -> Vec<u8> {
                 "\"do_not_track\":{},\"global_privacy_control\":{},",
                 "\"strip_tracking_params\":{},\"https_first\":{},",
                 "\"images_enabled\":{},\"javascript_enabled\":{},",
-                "\"webgl_enabled\":{},",
+                "\"webgl_enabled\":{},\"remote_control\":{},",
                 "\"local_storage_enabled\":{},\"cache_enabled\":{}}}"
             ),
             c.map_or(1, |c| c.cookie_policy),
@@ -58,6 +58,7 @@ pub fn json() -> Vec<u8> {
             on(|c| c.images_enabled),
             on(|c| c.javascript_enabled),
             on(|c| c.webgl_enabled),
+            on(|c| c.remote_control),
             on(|c| c.local_storage_enabled),
             on(|c| c.cache_enabled),
         )
@@ -68,7 +69,7 @@ pub fn json() -> Vec<u8> {
 
 type Switch = fn(&mut NsConfig) -> &mut GBoolean;
 
-const SWITCHES: [(&str, Switch); 9] = [
+const SWITCHES: [(&str, Switch); 10] = [
     ("do_not_track", |c| &mut c.do_not_track),
     ("global_privacy_control", |c| &mut c.global_privacy_control),
     ("strip_tracking_params", |c| &mut c.strip_tracking_params),
@@ -78,6 +79,7 @@ const SWITCHES: [(&str, Switch); 9] = [
     ("webgl_enabled", |c| &mut c.webgl_enabled),
     ("local_storage_enabled", |c| &mut c.local_storage_enabled),
     ("cache_enabled", |c| &mut c.cache_enabled),
+    ("remote_control", |c| &mut c.remote_control),
 ];
 
 pub fn save(form: &[u8]) {

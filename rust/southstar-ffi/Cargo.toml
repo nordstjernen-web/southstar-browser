@@ -125,6 +125,7 @@ southstar-watchdog = { path = "../watchdog", version = "=1.0.8-dev" }
 southstar-engine = { path = "../engine", version = "=1.0.8-dev" }
 southstar-headless = { path = "../headless", version = "=1.0.8-dev" }
 southstar-idb = { path = "../idb", version = "=1.0.8-dev" }
+southstar-mcp = { path = "../mcp", version = "=1.0.8-dev" }
 southstar-webaudio = { path = "../webaudio", version = "=1.0.8-dev" }
 southstar-websocket = { path = "../websocket", version = "=1.0.8-dev" }
 southstar-woff2 = { path = "../woff2", version = "=1.0.8-dev", optional = true }

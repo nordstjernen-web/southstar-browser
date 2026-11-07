@@ -156,6 +156,81 @@ impl Widget {
         // SAFETY: self is a live widget and name null or NUL-terminated.
         unsafe { sys::gtk_widget_set_cursor_from_name(self.as_ptr(), name) };
     }
+
+    pub fn is_mapped(&self) -> bool {
+        // SAFETY: self is a live widget.
+        unsafe { sys::gtk_widget_get_mapped(self.as_ptr()) != 0 }
+    }
+
+    fn renderer(&self) -> Option<NonNull<sys::GskRenderer>> {
+        // SAFETY: self is a live widget; the native is borrowed from it.
+        let native = unsafe { sys::gtk_widget_get_native(self.as_ptr()) };
+        if native.is_null() {
+            return None;
+        }
+        // SAFETY: native is the widget's live GtkNative; the renderer is borrowed from it.
+        NonNull::new(unsafe { sys::gtk_native_get_renderer(native) })
+    }
+
+    fn render_texture(&self, width: c_int, height: c_int) -> Option<Texture> {
+        let (w, h) = (self.width(), self.height());
+        if w <= 1 || h <= 1 || width < 1 || height < 1 || !self.is_mapped() {
+            return None;
+        }
+        let renderer = self.renderer()?;
+        // SAFETY: self is a live widget; the paintable returned is a new reference.
+        let raw = unsafe { sys::gtk_widget_paintable_new(self.as_ptr()) };
+        if raw.is_null() {
+            return None;
+        }
+        // SAFETY: raw is a new, non-null reference the Object takes over and releases.
+        let paintable = unsafe { Object::from_full(raw.cast()) };
+        // SAFETY: gtk_snapshot_new has no preconditions and returns a new snapshot.
+        let snapshot = unsafe { sys::gtk_snapshot_new() };
+        let (sx, sy) = (width as f32 / w as f32, height as f32 / h as f32);
+        // SAFETY: snapshot is the live snapshot just created.
+        unsafe { sys::gtk_snapshot_scale(snapshot, sx, sy) };
+        // SAFETY: the paintable and the snapshot are live, and the paintable records into the snapshot only during the call.
+        unsafe {
+            sys::gdk_paintable_snapshot(
+                paintable.as_ptr().cast(),
+                snapshot,
+                f64::from(w),
+                f64::from(h),
+            )
+        };
+        // SAFETY: consumes the snapshot, which nothing uses afterwards; the node is a new reference or null.
+        let node = NonNull::new(unsafe { sys::gtk_snapshot_free_to_node(snapshot) })?;
+        let bounds = GrapheneRect::new(0.0, 0.0, width as f32, height as f32);
+        // SAFETY: renderer is the widget's realized renderer and node a live render node; bounds outlives the call.
+        let texture =
+            unsafe { sys::gsk_renderer_render_texture(renderer.as_ptr(), node.as_ptr(), &bounds) };
+        // SAFETY: drops the node reference gtk_snapshot_free_to_node returned.
+        unsafe { sys::gsk_render_node_unref(node.as_ptr()) };
+        // SAFETY: a non-null texture is a new reference the Texture takes over.
+        (!texture.is_null()).then(|| Texture(unsafe { Object::from_full(texture.cast()) }))
+    }
+
+    pub fn render_png(&self, width: c_int, height: c_int) -> Option<(Vec<u8>, c_int, c_int)> {
+        let texture = self.render_texture(width, height)?;
+        // SAFETY: texture is live; the bytes are a new reference released below.
+        let bytes = unsafe { sys::gdk_texture_save_to_png_bytes(texture.as_ptr()) };
+        if bytes.is_null() {
+            return None;
+        }
+        let mut len = 0usize;
+        // SAFETY: bytes is live and len a writable local; the data stays valid until the unref below.
+        let data = unsafe { sys::g_bytes_get_data(bytes, &mut len) };
+        let png = if data.is_null() {
+            Vec::new()
+        } else {
+            // SAFETY: data points at len readable bytes owned by the live GBytes.
+            unsafe { core::slice::from_raw_parts(data.cast::<u8>(), len) }.to_vec()
+        };
+        // SAFETY: releases the reference gdk_texture_save_to_png_bytes returned.
+        unsafe { sys::g_bytes_unref(bytes) };
+        (!png.is_empty()).then(|| (png, texture.width(), texture.height()))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]

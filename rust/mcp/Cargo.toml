@@ -1,0 +1,17 @@
+[package]
+name = "southstar-mcp"
+description = "Remote control over the Model Context Protocol: the --mcp stdio server, its control-channel client, the JSON it speaks and the in-page helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.8-dev" }
+
+[lints]
+workspace = true

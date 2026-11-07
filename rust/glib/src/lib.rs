@@ -15,7 +15,7 @@ mod text;
 
 pub use dirs::{
     download_dir, home_dir, language_names, system_data_dirs, tmp_dir, user_cache_dir,
-    user_config_dir, user_data_dir, user_runtime_dir,
+    user_config_dir, user_data_dir, user_runtime_dir, user_state_dir,
 };
 pub use log::{LogLevel, log, monotonic_us, warning};
 pub use main_context::MainContext;

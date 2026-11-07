@@ -79,6 +79,7 @@ pub struct NsConfig {
     pub cache_enabled: GBoolean,
     pub tls_allow_insecure_override: GBoolean,
     pub watchdog_enabled: GBoolean,
+    pub remote_control: GBoolean,
     pub private_mode: GBoolean,
     pub cache_cap_mb: c_int,
     pub js_eval_budget_ms: c_int,
@@ -132,7 +133,7 @@ const fn flag(key: &'static str, default: bool) -> Field {
 const REFERER_STRICT_ORIGIN_WHEN_CROSS: i32 = 2;
 const COOKIE_FIRST_PARTY: i32 = 1;
 
-const FIELDS: [Field; 38] = [
+const FIELDS: [Field; 39] = [
     text("home_url", "about:start"),
     text("user_agent", ""),
     text("compat_mode", "chrome"),
@@ -168,6 +169,7 @@ const FIELDS: [Field; 38] = [
     flag("cache_enabled", true),
     flag("tls_allow_insecure_override", false),
     flag("watchdog_enabled", true),
+    flag("remote_control", false),
     number("cache_cap_mb", Kind::Int, 256),
     number("js_eval_budget_ms", Kind::Int, 60000),
     number("js_memory_cap_mb", Kind::Int, 2048),
@@ -274,6 +276,7 @@ impl NsConfig {
         cache_enabled: 0,
         tls_allow_insecure_override: 0,
         watchdog_enabled: 0,
+        remote_control: 0,
         private_mode: 0,
         cache_cap_mb: 0,
         js_eval_budget_ms: 0,
@@ -317,6 +320,7 @@ impl NsConfig {
             "cache_enabled" => Slot::Number(&mut self.cache_enabled),
             "tls_allow_insecure_override" => Slot::Number(&mut self.tls_allow_insecure_override),
             "watchdog_enabled" => Slot::Number(&mut self.watchdog_enabled),
+            "remote_control" => Slot::Number(&mut self.remote_control),
             "cache_cap_mb" => Slot::Number(&mut self.cache_cap_mb),
             "js_eval_budget_ms" => Slot::Number(&mut self.js_eval_budget_ms),
             "js_memory_cap_mb" => Slot::Number(&mut self.js_memory_cap_mb),
@@ -661,6 +665,7 @@ fn render_dump(config: &mut NsConfig, path: Option<&[u8]>, default_language: &[u
             config.tls_allow_insecure_override,
         ),
         ("watchdog_enabled      = ", config.watchdog_enabled),
+        ("remote_control        = ", config.remote_control),
         ("private_mode          = ", config.private_mode),
     ] {
         line(label, flag_name(value).as_bytes());

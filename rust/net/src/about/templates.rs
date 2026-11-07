@@ -363,6 +363,11 @@ const SETTINGS_BODY: &str = concat!(
         "HTTPS first",
         "Try a secure connection before plain HTTP on every site."
     ),
+    switch!(
+        "remote_control",
+        "Allow remote control",
+        "Let a local agent such as Claude Code drive this browser over MCP."
+    ),
     "</div></section>\n",
     "<section id=\"content\"><h2>Content</h2><div class=\"card\">\n",
     switch!(
@@ -416,7 +421,7 @@ const SETTINGS_TAIL: &str = concat!(
     "var toggles=['do_not_track','global_privacy_control',",
     "'strip_tracking_params','https_first','images_enabled',",
     "'javascript_enabled','webgl_enabled','local_storage_enabled',",
-    "'cache_enabled'];\n",
+    "'cache_enabled','remote_control'];\n",
     "var loaded=false,toastTimer=0;\n",
     "function toast(t){var s=$('status');s.textContent=t;s.className='toast show';",
     "clearTimeout(toastTimer);toastTimer=setTimeout(function(){",

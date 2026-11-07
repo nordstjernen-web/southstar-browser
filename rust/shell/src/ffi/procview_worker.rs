@@ -553,10 +553,19 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
             post(res);
         }
         REQ_EXPORT => do_export(v, r),
-        REQ_CONSOLE => text_res(v, r.seq, RES_CONSOLE, |_| {}, Renderer::console_poll),
+        REQ_CONSOLE => {
+            let remote = r.remote;
+            text_res(
+                v,
+                r.seq,
+                RES_CONSOLE,
+                |out| out.remote = remote,
+                Renderer::console_poll,
+            );
+        }
         REQ_EVAL => {
             let src = arg(r.query).unwrap_or_default();
-            let (tab, inspect) = (r.dump_tab, r.inspect);
+            let (tab, inspect, remote) = (r.dump_tab, r.inspect, r.remote);
             text_res(
                 v,
                 r.seq,
@@ -564,6 +573,7 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
                 |out| {
                     out.dump_tab = tab;
                     out.inspect = inspect;
+                    out.remote = remote;
                 },
                 |p| p.eval(src),
             );

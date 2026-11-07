@@ -369,6 +369,8 @@ pub(crate) fn eval_script_source(
     js.swap_current_doc(previous_doc);
 }
 
+const TRUSTED_ORIGIN: &str = "devtools-console";
+
 pub(crate) fn eval_source(js: Js, src: &CStr, origin: Option<&CStr>) -> Option<Vec<u8>> {
     if js.halted() || js.in_pump() {
         return None;
@@ -380,7 +382,12 @@ pub(crate) fn eval_source(js: Js, src: &CStr, origin: Option<&CStr>) -> Option<V
             line: 1,
             ..ScriptOptions::default()
         };
-        match scope.eval_script_bytes(src.to_bytes(), &options) {
+        let mut run = || scope.eval_script_bytes(src.to_bytes(), &options);
+        let evaluated = match origin.filter(|o| o.to_bytes() == TRUSTED_ORIGIN.as_bytes()) {
+            Some(_) => southstar_js_engine::with_trusted_source(TRUSTED_ORIGIN, run),
+            None => run(),
+        };
+        match evaluated {
             Err(exception) => {
                 let message =
                     c_message(scope, &exception).unwrap_or_else(|| b"(no message)".to_vec());

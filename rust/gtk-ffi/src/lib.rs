@@ -65,6 +65,8 @@ opaque!(
     GdkPixbufFormat,
     Cairo,
     CairoPattern,
+    GskRenderer,
+    GskRenderNode,
 );
 
 #[repr(C)]
@@ -495,6 +497,24 @@ unsafe extern "C" {
     pub fn gtk_widget_get_native(widget: *mut GtkWidget) -> *mut GtkNative;
     pub fn gtk_widget_get_scale_factor(widget: *mut GtkWidget) -> c_int;
     pub fn gtk_native_get_surface(native: *mut GtkNative) -> *mut GdkSurface;
+    pub fn gtk_native_get_renderer(native: *mut GtkNative) -> *mut GskRenderer;
+    pub fn gtk_widget_paintable_new(widget: *mut GtkWidget) -> *mut GdkPaintable;
+    pub fn gtk_snapshot_new() -> *mut GtkSnapshot;
+    pub fn gtk_snapshot_scale(snapshot: *mut GtkSnapshot, factor_x: c_float, factor_y: c_float);
+    pub fn gtk_snapshot_free_to_node(snapshot: *mut GtkSnapshot) -> *mut GskRenderNode;
+    pub fn gdk_paintable_snapshot(
+        paintable: *mut GdkPaintable,
+        snapshot: *mut GtkSnapshot,
+        width: c_double,
+        height: c_double,
+    );
+    pub fn gsk_renderer_render_texture(
+        renderer: *mut GskRenderer,
+        root: *mut GskRenderNode,
+        viewport: *const GrapheneRect,
+    ) -> *mut GdkTexture;
+    pub fn gsk_render_node_unref(node: *mut GskRenderNode);
+    pub fn gdk_texture_save_to_png_bytes(texture: *mut GdkTexture) -> *mut GBytes;
     pub fn gtk_adjustment_get_upper(adjustment: *mut GtkAdjustment) -> c_double;
     pub fn gtk_gesture_drag_new() -> *mut GtkGesture;
     pub fn gtk_gesture_set_state(gesture: *mut GtkGesture, state: c_int) -> GBoolean;
