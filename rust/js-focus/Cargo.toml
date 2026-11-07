@@ -13,7 +13,6 @@ homepage.workspace = true
 southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-js-engine = { path = "../js-engine", version = "=1.0.8-dev", default-features = false }
 southstar-js-forms = { path = "../js-forms", version = "=1.0.8-dev" }
 southstar-js-frames = { path = "../js-frames", version = "=1.0.8-dev" }

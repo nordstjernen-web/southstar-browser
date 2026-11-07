@@ -11,7 +11,6 @@ homepage.workspace = true
 
 [dependencies]
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-image = { path = "../image", version = "=1.0.8-dev" }
 southstar-js-collections = { path = "../js-collections", version = "=1.0.8-dev" }
 southstar-js-cssom = { path = "../js-cssom", version = "=1.0.8-dev" }

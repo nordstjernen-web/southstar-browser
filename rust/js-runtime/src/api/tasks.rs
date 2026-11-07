@@ -167,10 +167,6 @@ pub fn attach_idle(js: Option<Page>, func: impl FnOnce() + 'static) -> SourceId 
     glue::attach_idle(Js::of(js), func)
 }
 
-pub fn glib_context(js: Option<Page>) -> southstar_glib::MainContext {
-    glue::context_of(Js::of(js))
-}
-
 pub fn budget_enter(js: Option<Page>) -> i64 {
     Js::of(js).map_or(0, budget::push)
 }

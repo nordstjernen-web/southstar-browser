@@ -12,7 +12,6 @@ homepage.workspace = true
 [dependencies]
 southstar-debuglog = { path = "../debuglog", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-js-bind = { path = "../js-bind", version = "=1.0.8-dev", default-features = false }
 southstar-js-engine = { path = "../js-engine", version = "=1.0.8-dev", default-features = false }
 southstar-js-focus = { path = "../js-focus", version = "=1.0.8-dev" }

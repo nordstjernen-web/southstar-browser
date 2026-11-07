@@ -14,7 +14,6 @@ southstar-cairo = { path = "../cairo", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-html-parser = { path = "../html-parser", version = "=1.0.8-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.8-dev" }
 southstar-netutil = { path = "../netutil", version = "=1.0.8-dev" }
 southstar-style = { path = "../style", version = "=1.0.8-dev" }
 southstar-text = { path = "../text", version = "=1.0.8-dev" }

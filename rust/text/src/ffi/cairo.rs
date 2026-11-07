@@ -898,7 +898,6 @@ unsafe extern "C" {
     fn cairo_rel_line_to(cr: *mut RawCairo, dx: c_double, dy: c_double);
     fn cairo_new_path(cr: *mut RawCairo);
     fn cairo_translate(cr: *mut RawCairo, tx: c_double, ty: c_double);
-    fn cairo_user_to_device_distance(cr: *mut RawCairo, dx: *mut c_double, dy: *mut c_double);
     fn cairo_has_current_point(cr: *mut RawCairo) -> c_int;
     fn cairo_get_current_point(cr: *mut RawCairo, x: *mut c_double, y: *mut c_double);
     fn cairo_surface_has_show_text_glyphs(surface: *mut RawSurface) -> c_int;
@@ -1014,13 +1013,6 @@ impl CairoContext {
     pub fn translate(&self, tx: f64, ty: f64) {
         // SAFETY: the context is live.
         unsafe { cairo_translate(self.raw(), tx, ty) };
-    }
-
-    pub fn user_to_device_distance(&self, dx: f64, dy: f64) -> (f64, f64) {
-        let mut distance = (dx, dy);
-        // SAFETY: the context is live and both outputs are writable locals.
-        unsafe { cairo_user_to_device_distance(self.raw(), &mut distance.0, &mut distance.1) };
-        distance
     }
 
     pub fn has_current_point(&self) -> bool {

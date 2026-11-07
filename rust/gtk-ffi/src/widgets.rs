@@ -11,7 +11,6 @@ pub type GSourceFunc = unsafe extern "C" fn(data: *mut c_void) -> GBoolean;
 pub type GClosureNotify = Option<unsafe extern "C" fn(data: *mut c_void, closure: *mut c_void)>;
 
 pub const SOURCE_REMOVE: GBoolean = 0;
-pub const SOURCE_CONTINUE: GBoolean = 1;
 pub const CONNECT_AFTER: c_uint = 1;
 
 pub const ALIGN_START: c_int = 1;
@@ -32,7 +31,6 @@ pub const STATE_FLAG_FOCUS_WITHIN: c_uint = 1 << 14;
 pub const STYLE_PROVIDER_PRIORITY_APPLICATION: c_uint = 600;
 pub const APPLICATION_NON_UNIQUE: c_uint = 1 << 5;
 pub const FILE_TEST_IS_REGULAR: c_uint = 1 << 0;
-pub const FILE_TEST_IS_SYMLINK: c_uint = 1 << 1;
 pub const FILE_TEST_IS_DIR: c_uint = 1 << 2;
 pub const FILE_TEST_EXISTS: c_uint = 1 << 4;
 pub const SHIFT_MASK: c_uint = 1 << 0;
@@ -41,12 +39,6 @@ pub const KEY_RETURN: c_uint = 0xff0d;
 pub const KEY_KP_ENTER: c_uint = 0xff8d;
 pub const KEY_ESCAPE: c_uint = 0xff1b;
 pub const KEY_F11: c_uint = 0xffc8;
-
-#[repr(C)]
-pub struct GByteArray {
-    pub data: *mut u8,
-    pub len: c_uint,
-}
 
 unsafe extern "C" {
     pub fn g_signal_connect_data(
@@ -83,11 +75,6 @@ unsafe extern "C" {
     pub fn g_simple_action_set_enabled(action: *mut c_void, enabled: GBoolean);
     pub fn g_action_map_add_action(map: *mut c_void, action: *mut c_void);
     pub fn g_action_map_lookup_action(map: *mut c_void, name: *const c_char) -> *mut c_void;
-    pub fn g_action_group_activate_action(
-        group: *mut c_void,
-        action_name: *const c_char,
-        parameter: *mut c_void,
-    );
     pub fn g_menu_new() -> *mut c_void;
     pub fn g_menu_item_new(label: *const c_char, detailed_action: *const c_char) -> *mut c_void;
     pub fn g_menu_item_set_attribute_value(

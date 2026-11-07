@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Source: unused code is removed: 40 crate dependencies nothing
+  referred to and public functions, constants and FFI imports that no
+  caller used.
 * Source: the user, temporary, download and system data directories and
   the user's languages are resolved in Rust, following GLib's rules on
   each platform (XDG variables and their defaults, user-dirs.dirs, the
