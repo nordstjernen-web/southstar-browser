@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Network: `Content-Encoding: zstd` responses are decoded in Rust
+  (ruzstd) instead of libzstd, with the same 8 MiB window cap; zstd is
+  always available and no longer depends on a system library.
 * CI: the Linux workflow only builds the browser. The job that ran
   `cargo fmt`, clippy with the unsafe budget, `cargo deny`, `cargo vet`
   and the crates.io check is gone; those run locally before pushing.

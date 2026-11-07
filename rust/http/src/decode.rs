@@ -58,7 +58,7 @@ enum State {
     #[cfg(feature = "brotli")]
     Brotli(Box<crate::brotli::Brotli>),
     #[cfg(feature = "zstd")]
-    Zstd(crate::ffi::codec::Zstd),
+    Zstd(Box<crate::zstd::Zstd>),
 }
 
 pub struct Decoder {
@@ -93,7 +93,7 @@ impl State {
             #[cfg(feature = "brotli")]
             Encoding::Brotli => Some(State::Brotli(Box::new(crate::brotli::Brotli::new()?))),
             #[cfg(feature = "zstd")]
-            Encoding::Zstd => Some(State::Zstd(crate::ffi::codec::Zstd::new()?)),
+            Encoding::Zstd => Some(State::Zstd(Box::new(crate::zstd::Zstd::new()?))),
             #[allow(unreachable_patterns)]
             _ => None,
         })

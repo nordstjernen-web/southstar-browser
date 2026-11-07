@@ -15,6 +15,8 @@ mod proxy;
 mod tls;
 mod transfer;
 mod x25519_mlkem768;
+#[cfg(feature = "zstd")]
+mod zstd;
 
 use southstar_http_wire::{frame, h1, h2};
 

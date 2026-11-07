@@ -523,6 +523,10 @@ criteria = "safe-to-deploy"
 version = "1.0.23"
 criteria = "safe-to-deploy"
 
+[[exemptions.ruzstd]]
+version = "0.9.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.ryu]]
 version = "1.0.23"
 criteria = "safe-to-deploy"

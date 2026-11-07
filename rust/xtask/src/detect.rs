@@ -158,7 +158,7 @@ pub fn configure(options: &Options) -> Result<Configuration, String> {
     enable("opusfile", sdl && has("opusfile"), "native Opus (opusfile)");
     enable("http-brotli", true, "HTTP brotli (brotli-decompressor)");
     enable("woff2", true, "WOFF2 fonts (brotli-decompressor)");
-    enable("http-zstd", has("libzstd"), "HTTP zstd (libzstd)");
+    enable("http-zstd", true, "HTTP zstd (ruzstd)");
     let avif = options.avif != Toggle::Disabled && has("libavif");
     if options.avif == Toggle::Enabled && !avif {
         return Err("AVIF was requested but libavif is not installed".to_owned());
