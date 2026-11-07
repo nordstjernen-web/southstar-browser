@@ -108,13 +108,7 @@ pub fn html() -> Vec<u8> {
     kv(&mut s, "Text layout", Some(b"rust/text (in-tree)"));
     kv(&mut s, "Cairo", v.cairo.as_deref());
     kv(&mut s, "SQLite", v.sqlite.as_deref());
-    let webp = format!(
-        "{}.{}.{}",
-        (v.webp >> 16) & 0xff,
-        (v.webp >> 8) & 0xff,
-        v.webp & 0xff
-    );
-    kv(&mut s, "libwebp", Some(webp.as_bytes()));
+    kv(&mut s, "WebP", Some(b"image-webp (Rust)"));
     if cfg!(feature = "libav") {
         kv(&mut s, "Video (FFmpeg libav*)", v.libav.as_deref());
     }

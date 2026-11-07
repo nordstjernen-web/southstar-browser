@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 southstar-av = { path = "../av", version = "=1.0.8-dev", optional = true }
 southstar-raster = { path = "../raster", version = "=1.0.8-dev" }
+image-webp = { version = "0.2", default-features = false }
 southstar-texture = { path = "../texture", version = "=1.0.8-dev" }
 
 [features]

@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Images: WebP stills and animations are decoded in Rust (image-webp)
+  instead of libwebp; the pixels are unchanged. libwebp is no longer a
+  build dependency.
 * Network: `Content-Encoding: zstd` responses are decoded in Rust
   (ruzstd) instead of libzstd, with the same 8 MiB window cap; zstd is
   always available and no longer depends on a system library.

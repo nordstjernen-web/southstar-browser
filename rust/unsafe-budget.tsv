@@ -46,7 +46,7 @@ http-wire	0	0	0	0	0	0	0
 i18n	0	0	0	0	0	0	0
 idb	0	0	0	0	0	0	0
 image	16	6	0	0	0	0	0
-image-decoders	27	18	0	0	0	0	0
+image-decoders	16	9	0	0	0	0	0
 intl-core	0	0	0	0	0	0	0
 ipc	11	8	0	0	0	0	0
 js-attrs	0	0	0	0	0	0	0
@@ -122,7 +122,7 @@ media-shm	19	11	0	0	0	0	0
 mic	6	5	0	0	0	0	0
 mime	0	0	0	0	0	0	0
 minimp3	0	0	0	0	0	0	0
-net	25	13	0	0	0	0	0
+net	25	12	0	0	0	0	0
 netstore	0	0	0	0	0	0	0
 netutil	2	1	0	0	0	0	0
 numfmt	0	0	0	0	0	0	0

@@ -229,7 +229,7 @@ const SOUTHSTAR_TAIL: &str = concat!(
     "<p>It bundles third-party open-source software under ",
     "the MIT, BSD, Apache\u{a0}2.0, LGPL, MPL and zlib licenses, ",
     "including Boa, png, gif, zune-jpeg, GTK\u{a0}4, Cairo, ",
-    "OpenSSL, uchardet, libwebp, SQLite and the Public Suffix List. Each ",
+    "OpenSSL, uchardet, image-webp, SQLite and the Public Suffix List. Each ",
     "component\u{2019}s copyright notice and full license text is ",
     "reproduced in the notices.</p>",
     "<div class=\"actions\">",

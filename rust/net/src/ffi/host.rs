@@ -17,7 +17,6 @@ unsafe extern "C" {
     fn g_get_os_info(key: *const c_char) -> *mut c_char;
     safe fn cairo_version_string() -> *const c_char;
     safe fn sqlite3_libversion() -> *const c_char;
-    safe fn WebPGetDecoderVersion() -> c_int;
     safe fn OpenSSL_version(kind: c_int) -> *const c_char;
 }
 
@@ -181,7 +180,6 @@ pub struct Versions {
     pub glib: [u32; 3],
     pub cairo: Option<Vec<u8>>,
     pub sqlite: Option<Vec<u8>>,
-    pub webp: i32,
     pub libav: Option<Vec<u8>>,
     pub openssl: Option<Vec<u8>>,
     pub networking: Vec<u8>,
@@ -229,7 +227,6 @@ pub fn versions() -> Versions {
         glib: glib_version(),
         cairo: cairo_version(),
         sqlite: sqlite_version(),
-        webp: WebPGetDecoderVersion(),
         libav: libav_version(),
         openssl: openssl_version(),
         networking: southstar_http::description().to_vec(),
