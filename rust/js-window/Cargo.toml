@@ -14,7 +14,6 @@ southstar-canvas = { path = "../canvas", version = "=1.0.8-dev" }
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
 southstar-css-media = { path = "../css-media", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-js-clone = { path = "../js-clone", version = "=1.0.8-dev" }
 southstar-js-engine = { path = "../js-engine", version = "=1.0.8-dev", default-features = false }
 southstar-js-frames = { path = "../js-frames", version = "=1.0.8-dev" }

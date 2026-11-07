@@ -117,10 +117,6 @@ impl Language {
         language_matches(Some(self), range_list)
     }
 
-    pub fn sample_string(self) -> &'static str {
-        language_get_sample_string(Some(self))
-    }
-
     pub fn scripts(self) -> &'static [Script] {
         language_get_scripts(Some(self))
     }

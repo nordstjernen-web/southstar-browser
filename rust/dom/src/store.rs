@@ -128,14 +128,6 @@ pub(crate) fn drop_attr(slot: &'static AttrSlot) {
     let _ = ATTRS.try_with(|store| store.give_back(slot));
 }
 
-pub fn live_nodes() -> usize {
-    NODES.try_with(|store| store.live.get()).unwrap_or(0)
-}
-
-pub fn live_attrs() -> usize {
-    ATTRS.try_with(|store| store.live.get()).unwrap_or(0)
-}
-
 #[derive(Clone, Copy)]
 pub struct WeakNode {
     slot: &'static NodeSlot,

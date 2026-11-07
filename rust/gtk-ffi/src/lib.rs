@@ -534,9 +534,6 @@ pub struct GTypeQuery {
 }
 
 pub const CAIRO_FORMAT_ARGB32: CairoFormat = 0;
-pub const CAIRO_ANTIALIAS_BEST: c_int = 6;
-pub const CAIRO_LINE_CAP_ROUND: c_int = 1;
-pub const CAIRO_LINE_JOIN_ROUND: c_int = 1;
 pub const SCROLL_UNIT_SURFACE: c_int = 1;
 pub const EVENT_CONTROLLER_SCROLL_BOTH_AXES: c_uint = 1 | 2;
 pub const EVENT_CONTROLLER_SCROLL_KINETIC: c_uint = 1 << 3;

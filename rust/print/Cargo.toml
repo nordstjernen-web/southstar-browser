@@ -12,7 +12,6 @@ homepage.workspace = true
 [dependencies]
 southstar-cairo = { path = "../cairo", version = "=1.0.8-dev" }
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
 southstar-layout = { path = "../layout", version = "=1.0.8-dev" }
 southstar-paint = { path = "../paint", version = "=1.0.8-dev" }
 southstar-style = { path = "../style", version = "=1.0.8-dev" }

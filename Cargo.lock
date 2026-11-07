@@ -2416,9 +2416,6 @@ dependencies = [
 [[package]]
 name = "southstar-http-wire"
 version = "1.0.8-dev"
-dependencies = [
- "southstar-unicode",
-]
 
 [[package]]
 name = "southstar-i18n"
@@ -2484,12 +2481,10 @@ name = "southstar-js-attrs"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-js-collections",
  "southstar-js-document",
  "southstar-js-dom-factory",
  "southstar-js-engine",
- "southstar-js-events",
  "southstar-js-forms",
  "southstar-js-mutation",
  "southstar-js-reflect",
@@ -2527,7 +2522,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
 ]
@@ -2581,7 +2575,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-collections",
  "southstar-js-engine",
  "southstar-js-runtime",
@@ -2593,7 +2586,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-debuglog",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-bind",
  "southstar-js-engine",
  "southstar-js-focus",
@@ -2618,7 +2610,6 @@ dependencies = [
  "southstar-js-collections",
  "southstar-js-custom-elements",
  "southstar-js-engine",
- "southstar-js-events",
  "southstar-js-focus",
  "southstar-js-frames",
  "southstar-js-loader",
@@ -2636,7 +2627,6 @@ name = "southstar-js-dom-factory"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-html-parser",
  "southstar-js-custom-elements",
  "southstar-js-dispatch",
@@ -2655,7 +2645,6 @@ name = "southstar-js-elements"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-image",
  "southstar-js-collections",
  "southstar-js-cssom",
@@ -2686,11 +2675,7 @@ dependencies = [
 name = "southstar-js-events"
 version = "1.0.8-dev"
 dependencies = [
- "southstar-canvas",
  "southstar-dom",
- "southstar-glib",
- "southstar-js-clone",
- "southstar-js-collections",
  "southstar-js-cssom",
  "southstar-js-custom-elements",
  "southstar-js-dispatch",
@@ -2709,7 +2694,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-engine",
  "southstar-js-forms",
  "southstar-js-frames",
@@ -2807,7 +2791,6 @@ name = "southstar-js-html"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-html-parser",
  "southstar-js-attrs",
  "southstar-js-collections",
@@ -2832,7 +2815,6 @@ dependencies = [
  "southstar-js-engine",
  "southstar-js-perf",
  "southstar-js-runtime",
- "southstar-layout",
  "southstar-net",
  "southstar-url",
 ]
@@ -2862,7 +2844,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-canvas",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-attrs",
  "southstar-js-bind",
  "southstar-js-collections",
@@ -2964,7 +2945,6 @@ name = "southstar-js-media"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-js-dispatch",
  "southstar-js-engine",
  "southstar-js-events",
@@ -2984,7 +2964,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-collections",
  "southstar-js-custom-elements",
  "southstar-js-engine",
@@ -3018,7 +2997,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-attrs",
  "southstar-js-collections",
  "southstar-js-custom-elements",
@@ -3026,7 +3004,6 @@ dependencies = [
  "southstar-js-document",
  "southstar-js-dom-factory",
  "southstar-js-engine",
- "southstar-js-events",
  "southstar-js-forms",
  "southstar-js-frames",
  "southstar-js-images",
@@ -3045,7 +3022,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-engine",
  "southstar-js-geometry",
  "southstar-js-perf",
@@ -3137,10 +3113,8 @@ name = "southstar-js-reflect"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-js-document",
  "southstar-js-engine",
- "southstar-js-events",
  "southstar-js-forms",
  "southstar-js-geometry",
  "southstar-js-images",
@@ -3199,7 +3173,6 @@ name = "southstar-js-shadow"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-js-custom-elements",
  "southstar-js-engine",
  "southstar-js-focus",
@@ -3238,10 +3211,8 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-collections",
  "southstar-js-engine",
- "southstar-js-events",
  "southstar-js-mutation",
  "southstar-js-runtime",
  "southstar-style",
@@ -3254,7 +3225,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-dispatch",
  "southstar-js-engine",
  "southstar-js-events",
@@ -3272,7 +3242,6 @@ name = "southstar-js-traversal"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-html-parser",
  "southstar-js-engine",
  "southstar-js-geometry",
@@ -3310,7 +3279,6 @@ dependencies = [
  "southstar-css",
  "southstar-css-media",
  "southstar-dom",
- "southstar-glib",
  "southstar-js-clone",
  "southstar-js-engine",
  "southstar-js-frames",
@@ -3439,7 +3407,6 @@ name = "southstar-layout-flex"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-float",
  "southstar-layout-geom",
@@ -3473,7 +3440,6 @@ name = "southstar-layout-grid"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-float",
  "southstar-layout-geom",
@@ -3547,7 +3513,6 @@ name = "southstar-layout-query"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-geom",
  "southstar-style",
@@ -3559,7 +3524,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-image",
  "southstar-layout",
  "southstar-layout-build",
@@ -3584,7 +3548,6 @@ name = "southstar-layout-tree"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
  "southstar-layout-content",
  "southstar-layout-geom",
@@ -3717,7 +3680,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-cairo",
  "southstar-css",
- "southstar-glib",
  "southstar-layout",
  "southstar-paint",
  "southstar-style",
@@ -3877,7 +3839,6 @@ version = "1.0.8-dev"
 dependencies = [
  "southstar-css",
  "southstar-dom",
- "southstar-glib",
  "southstar-layout",
 ]
 
@@ -3889,7 +3850,6 @@ dependencies = [
  "southstar-dom",
  "southstar-glib",
  "southstar-html-parser",
- "southstar-layout",
  "southstar-netutil",
  "southstar-style",
  "southstar-text",
@@ -3984,7 +3944,6 @@ dependencies = [
  "southstar-config",
  "southstar-dom",
  "southstar-glctx",
- "southstar-glib",
  "southstar-js-engine",
  "southstar-js-runtime",
  "southstar-unicode",
@@ -4025,7 +3984,6 @@ version = "1.0.8-dev"
 dependencies = [
  "brotli-decompressor",
  "miniz_oxide 0.9.1",
- "southstar-glib",
 ]
 
 [[package]]

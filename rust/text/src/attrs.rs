@@ -317,10 +317,6 @@ pub fn attr_background_new(red: u16, green: u16, blue: u16) -> Attribute {
     Attribute::new(AttrValue::Background(Color { red, green, blue }))
 }
 
-pub fn attr_size_new(size: i32) -> Attribute {
-    Attribute::new(AttrValue::Size(size))
-}
-
 pub fn attr_size_new_absolute(size: i32) -> Attribute {
     Attribute::new(AttrValue::AbsoluteSize(size))
 }

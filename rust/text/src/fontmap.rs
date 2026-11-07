@@ -1083,13 +1083,6 @@ impl FontFamily {
             .collect()
     }
 
-    pub fn list_faces(&self) -> Vec<FontFace> {
-        if self.0.fontmap.strong_count() == 0 {
-            return Vec::new();
-        }
-        self.faces().to_vec()
-    }
-
     pub fn face(&self, name: Option<&str>) -> Option<FontFace> {
         self.faces()
             .iter()
