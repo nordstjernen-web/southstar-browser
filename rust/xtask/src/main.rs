@@ -14,7 +14,7 @@ use std::process::{Command as Process, ExitCode};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use detect::Configuration;
-use options::{Command, Lto, Options};
+use options::{Command, Options};
 
 const CAPI_FEATURES: [&str; 12] = [
     "libav",
@@ -163,20 +163,6 @@ fn cargo_build(
         .env("NS_RUSTC_VERSION", rustc_version());
     if options.overflow_checks {
         command.env("CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS", "true");
-    }
-    match options.lto {
-        Lto::Fat => {}
-        Lto::Thin => {
-            command
-                .env("CARGO_PROFILE_RELEASE_LTO", "thin")
-                .env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "16");
-        }
-        Lto::Off => {
-            command
-                .env("CARGO_PROFILE_RELEASE_LTO", "off")
-                .env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "256")
-                .env("CARGO_PROFILE_RELEASE_INCREMENTAL", "true");
-        }
     }
     if let Some(wgpu) = &configuration.wgpu_native_root {
         command.env("WGPU_NATIVE_ROOT", wgpu);

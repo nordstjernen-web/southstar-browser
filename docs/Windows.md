@@ -83,9 +83,6 @@ cd /c/dev/southstar
 cargo xtask build
 ```
 
-For a quicker edit-and-run loop, `cargo xtask build --lto off --target-dir
-target-fast` builds an incremental release into `target-fast/release/`.
-
 The JavaScript engine is Boa (a patched fork in
 `third_party/boa_engine`), and the HTML and URL parsers are Southstar's own
 Rust crates, so the first build fetches only the crates `Cargo.lock` pins
