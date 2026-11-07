@@ -386,6 +386,11 @@ pub struct Regex {
     cr: CompiledRegex,
 }
 
+/// The error of [`Regex::find_with_backtrack_limit`] when the search ran out
+/// of backtracks before it finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BacktrackLimitExceeded;
+
 impl From<CompiledRegex> for Regex {
     fn from(cr: CompiledRegex) -> Self {
         Self { cr }
@@ -436,6 +441,17 @@ impl Regex {
     /// Searches `text` to find the first match.
     pub fn find(&self, text: &str) -> Option<Match> {
         self.find_iter(text).next()
+    }
+
+    /// Searches `text` to find the first match like [`Regex::find`], but gives
+    /// up after `limit` backtracks and returns `Err(BacktrackLimitExceeded)`,
+    /// so a pattern that backtracks catastrophically cannot run unbounded.
+    pub fn find_with_backtrack_limit(
+        &self,
+        text: &str,
+        limit: u64,
+    ) -> Result<Option<Match>, BacktrackLimitExceeded> {
+        classicalbacktrack::BacktrackExecutor::find_with_backtrack_limit(&self.cr, text, limit)
     }
 
     /// Searches `text`, returning an iterator over non-overlapping matches.

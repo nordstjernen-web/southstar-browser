@@ -1,6 +1,6 @@
 //! Classical backtracking execution engine
 
-use crate::api::Match;
+use crate::api::{BacktrackLimitExceeded, Match};
 use crate::bytesearch;
 use crate::cursor;
 use crate::cursor::{Backward, Direction, Forward};
@@ -73,6 +73,8 @@ pub(crate) struct MatchAttempter<'a, Input: InputIndexer> {
     re: &'a CompiledRegex,
     bts: Vec<BacktrackInsn<Input>>,
     s: State<Input::Position>,
+    backtracks_left: u64,
+    budget_exhausted: bool,
 }
 
 impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
@@ -84,6 +86,8 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
                 loops: vec![LoopData::new(entry); re.loops as usize],
                 groups: vec![GroupData::new(); re.groups as usize],
             },
+            backtracks_left: u64::MAX,
+            budget_exhausted: false,
         }
     }
 
@@ -499,6 +503,12 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         pos: &mut Input::Position,
         _dir: Dir,
     ) -> bool {
+        if self.backtracks_left == 0 {
+            self.budget_exhausted = true;
+            self.bts.truncate(1);
+            return false;
+        }
+        self.backtracks_left -= 1;
         loop {
             // We always have a single Exhausted instruction backstopping our stack,
             // so we do not need to check for empty bts.
@@ -1086,6 +1096,9 @@ impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
                 }
                 return Some(self.successful_match(pos, end));
             }
+            if self.matcher.budget_exhausted {
+                return None;
+            }
             // Didn't find it at this position, try the next one.
             pos = inp.next_right_pos(pos)?;
         }
@@ -1129,6 +1142,27 @@ impl<Input: InputIndexer> exec::MatchProducer for BacktrackExecutor<'_, Input> {
             StartPredicate::ByteBracket(bitmap) => {
                 self.next_match_with_prefix_search(pos, next_start, bitmap)
             }
+        }
+    }
+}
+
+impl<'r, 't> BacktrackExecutor<'r, Utf8Input<'t>> {
+    /// Finds the first match in `text`, giving up after `limit` backtracks.
+    pub(crate) fn find_with_backtrack_limit(
+        re: &'r CompiledRegex,
+        text: &'t str,
+        limit: u64,
+    ) -> Result<Option<Match>, BacktrackLimitExceeded> {
+        let mut executor = <Self as exec::Executor<'r, 't>>::new(re, text);
+        executor.matcher.backtracks_left = limit;
+        let found = match exec::MatchProducer::initial_position(&executor, 0) {
+            Some(pos) => exec::MatchProducer::next_match(&mut executor, pos, &mut None),
+            None => None,
+        };
+        if executor.matcher.budget_exhausted {
+            Err(BacktrackLimitExceeded)
+        } else {
+            Ok(found)
         }
     }
 }

@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Forms: matching an input's `pattern` attribute is bounded. `:valid` and `:invalid`
+  ran the page's pattern through a backtracking regular expression engine with no
+  limit on every style match, so `<input pattern="(a+)+">` with a 40-character
+  value could stall the renderer for hours without any script. regress is forked
+  into `third_party/regress` with a backtracking budget, and a pattern that
+  exhausts 100,000 backtracks is treated like one that does not compile: it does
+  not constrain the value.
 * Source: duplicated helpers are merged into one copy each, about 1,600
   lines fewer: the JavaScript bindings' property and argument helpers
   (js-engine's props module) and per-page tables, the layout predicates
