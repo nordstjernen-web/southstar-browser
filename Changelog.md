@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Service workers: a `fetch` handler sees `event.request`, `clientId`
+  and `preloadResponse`. They were set where only the engine could read
+  them, so handlers such as `event.request.method` threw on every request.
 * Source: unused code is removed: 40 crate dependencies nothing
   referred to and public functions, constants and FFI imports that no
   caller used.
