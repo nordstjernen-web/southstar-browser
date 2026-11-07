@@ -130,7 +130,7 @@ fn write_control(json: &str) -> bool {
     match write_private(&path, json.as_bytes()) {
         Ok(()) => true,
         Err(e) => {
-            glib::warning(&format!(
+            glib::warning(format!(
                 "remote control: cannot write {}: {e}",
                 path.display()
             ));
@@ -198,9 +198,9 @@ fn serve_connection(shared: Arc<Shared>, id: u64, stream: TcpStream) {
     let Ok(read_half) = stream.try_clone() else {
         return;
     };
+    let _ = read_half.set_read_timeout(Some(AUTH_TIMEOUT));
     let mut writer = stream;
     let mut reader = BufReader::new(read_half);
-    let _ = writer.set_read_timeout(Some(AUTH_TIMEOUT));
     let deadline = Instant::now() + AUTH_TIMEOUT;
     let mut authed = false;
     while shared.open.load(Ordering::SeqCst) {
@@ -234,7 +234,7 @@ fn serve_connection(shared: Arc<Shared>, id: u64, stream: TcpStream) {
         }
         if !authed {
             authed = true;
-            let _ = writer.set_read_timeout(None);
+            let _ = reader.get_ref().set_read_timeout(None);
             mark_authed(&shared, id);
         }
         let (tx, rx) = mpsc::channel();
@@ -306,7 +306,7 @@ fn start() {
     let listener = match TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))) {
         Ok(l) => l,
         Err(e) => {
-            glib::warning(&format!("remote control: cannot listen on 127.0.0.1: {e}"));
+            glib::warning(format!("remote control: cannot listen on 127.0.0.1: {e}"));
             return;
         }
     };

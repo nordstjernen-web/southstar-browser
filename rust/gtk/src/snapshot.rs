@@ -178,9 +178,13 @@ impl Widget {
             return None;
         }
         let renderer = self.renderer()?;
-        // SAFETY: self is a live widget; the paintable is a new reference the Object releases.
-        let paintable =
-            unsafe { Object::from_full(sys::gtk_widget_paintable_new(self.as_ptr()).cast()) };
+        // SAFETY: self is a live widget; the paintable returned is a new reference.
+        let raw = unsafe { sys::gtk_widget_paintable_new(self.as_ptr()) };
+        if raw.is_null() {
+            return None;
+        }
+        // SAFETY: raw is a new, non-null reference the Object takes over and releases.
+        let paintable = unsafe { Object::from_full(raw.cast()) };
         // SAFETY: gtk_snapshot_new has no preconditions and returns a new snapshot.
         let snapshot = unsafe { sys::gtk_snapshot_new() };
         let (sx, sy) = (width as f32 / w as f32, height as f32 / h as f32);

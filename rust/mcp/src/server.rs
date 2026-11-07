@@ -19,6 +19,7 @@ const LAUNCH_WAIT_MS: u64 = 45_000;
 const JS_TIMEOUT: Duration = Duration::from_secs(30);
 const WAIT_MAX_MS: f64 = 30_000.0;
 const SCROLL_TICK_PX: f64 = 100.0;
+const UTF8_BOM: &[u8] = &[0xef, 0xbb, 0xbf];
 
 #[derive(Default)]
 struct ToolResult {
@@ -1167,8 +1168,9 @@ pub fn run(self_exe: Option<PathBuf>) -> i32 {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     while let Ok(Some(line)) = read_line(&mut input, MAX_LINE) {
+        let line = line.strip_prefix(UTF8_BOM).unwrap_or(&line);
         if !line.is_empty() {
-            handle_message(&mut m, &mut out, &line);
+            handle_message(&mut m, &mut out, line);
         }
     }
     m.drop_channel();
