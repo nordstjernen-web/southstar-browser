@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Network: a zstd-encoded response no longer hangs its decoding thread when a
+  network read ends inside or just before the frame's 4-byte checksum. ruzstd
+  reports four bytes read there without consuming them, and the decoder looped on
+  that report forever at full CPU; it now waits for the next chunk instead.
 * Source: duplicated helpers are merged into one copy each, about 1,600
   lines fewer: the JavaScript bindings' property and argument helpers
   (js-engine's props module) and per-page tables, the layout predicates
