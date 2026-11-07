@@ -2,16 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub use southstar_js_engine::props::noop;
 use southstar_js_engine::{Scope, Value};
 
 pub fn resolved(scope: &mut Scope<'_>, value: Value) -> Result<Value, Value> {
     let (promise, resolve, _reject) = scope.new_promise()?;
     let _ = scope.call(&resolve, &Value::undefined(), &[value]);
     Ok(promise)
-}
-
-pub fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    Ok(Value::undefined())
 }
 
 pub fn null(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {

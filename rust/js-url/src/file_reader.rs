@@ -9,7 +9,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, HO_FILE_READER, Js, Source};
 use crate::{
-    ALL, JsResult, bind_fn, get, illegal_invocation, int64_prop, page_holding, set,
+    ALL, JsResult, bind, get, illegal_invocation, int64_prop, page_holding, set,
     with_existing_page, with_page,
 };
 
@@ -285,7 +285,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
         let function = scope.function(how.name(), 1, f);
         let _ = scope.define(&proto, how.name(), function, ALL);
     }
-    bind_fn(scope, &proto, "abort", 0, abort);
+    bind(scope, &proto, "abort", 0, abort);
     for (name, value) in [("EMPTY", EMPTY), ("LOADING", LOADING), ("DONE", DONE)] {
         let _ = scope.define(&ctor, name, Value::int(value), Attributes::ENUMERABLE);
         let _ = scope.define(&proto, name, Value::int(value), Attributes::ENUMERABLE);

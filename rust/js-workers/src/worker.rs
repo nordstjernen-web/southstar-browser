@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use southstar_js_engine::{ObjectKind, Scope, Value};
 
 use crate::ffi::{self, Ctx, Js, MainContext, MainLoop};
-use crate::{JsResult, PLAIN, arg, flag, get, get_index, length, ports, push, set, set_str};
+use crate::{JsResult, PLAIN, arg, get, get_index, length, ports, push, set, set_str, truthy};
 
 const SCRIPT_BYTES_MAX: usize = 32 * 1024 * 1024;
 const MESSAGE_BYTES_MAX: usize = 16 * 1024 * 1024;
@@ -346,7 +346,7 @@ fn transfer_port(
     if queue.is_array() {
         for i in 0..length(scope, &queue) {
             let mut item = get_index(scope, &queue, i);
-            if item.is_object() && flag(scope, &item, "_portMessage") {
+            if item.is_object() && truthy(scope, &item, "_portMessage") {
                 item = get(scope, &item, "data");
             }
             if let Ok(mut followup) = message_new(scope, &message.host, &item, &Value::undefined())
@@ -417,7 +417,7 @@ fn walk_transfers(
         let item = get_index(scope, &transfer, i);
         let is_buffer = matches!(scope.object_kind(&item), Some(ObjectKind::ArrayBuffer));
         if !detach && item.is_object() {
-            let detached = is_buffer && flag(scope, &item, "detached");
+            let detached = is_buffer && truthy(scope, &item, "detached");
             if seen.iter().any(|s| s.same_object(&item)) || detached {
                 nontransferable = true;
             }
@@ -469,10 +469,10 @@ fn transfer_ports(scope: &mut Scope<'_>, args: &[Value]) -> Value {
 
 pub(crate) fn bridge_deliver(scope: &mut Scope<'_>, id: u64, data: &Value) {
     let port = bridge_lookup(scope, id);
-    if !port.is_object() || flag(scope, &port, "_closed") {
+    if !port.is_object() || truthy(scope, &port, "_closed") {
         return;
     }
-    if flag(scope, &port, "_started") {
+    if truthy(scope, &port, "_started") {
         ports::deliver(scope, &port, data, None);
         return;
     }
@@ -685,7 +685,7 @@ fn deliver_owner(message: Message) {
         }
         ffi::dispatch_engine_event(scope, &target, &event);
         if let Some(report) = report.filter(|r| !r.load_error)
-            && !flag(scope, &event, "defaultPrevented")
+            && !truthy(scope, &event, "defaultPrevented")
         {
             ffi::report_error_event_in(js, ctx, report);
         }
@@ -759,7 +759,7 @@ fn deliver_worker(message: Message) {
         freeze(scope, &ports);
         set(scope, &event, "ports", ports);
         if connect {
-            let proto = crate::proto_of(scope, &global, "MessageEvent");
+            let proto = crate::interface_prototype(scope, &global, "MessageEvent");
             if proto.is_object() {
                 let _ = scope.set_prototype(&event, &proto);
             }

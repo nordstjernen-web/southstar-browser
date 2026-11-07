@@ -75,17 +75,11 @@ impl Options {
     }
 
     pub(crate) fn coerced(scope: &mut Scope<'_>, options: &Value) -> Result<Options, Value> {
-        if options.is_undefined() {
-            return Ok(Options(None));
-        }
-        scope.to_object(options).map(|object| Options(Some(object)))
+        crate::negotiate::options_object(scope, options).map(Options)
     }
 
     fn get(&self, scope: &mut Scope<'_>, key: &str) -> Result<Value, Value> {
-        match &self.0 {
-            Some(object) => scope.get(object, key),
-            None => Ok(Value::undefined()),
-        }
+        crate::negotiate::option_value(scope, self.0.as_ref(), key)
     }
 
     pub(crate) fn string(
@@ -333,6 +327,14 @@ pub(crate) fn resolve_numbering(
         None => found,
     };
     (locale, numbering)
+}
+
+pub(crate) fn common_supported_locales_of(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    supported_locales(scope, args, COMMON_LANGUAGES)
 }
 
 pub(crate) fn supported_locales(

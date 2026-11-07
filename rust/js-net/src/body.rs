@@ -6,7 +6,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Js};
 use crate::headers;
-use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str};
+use crate::{JsResult, c_bytes, is_nullish, prop, set, set_bytes};
 
 const BODY_CONSUMER_SOURCE: &str = "(function(){\
  function encodeStr(s){\
@@ -232,7 +232,7 @@ fn install_body(scope: &mut Scope<'_>, object: &Value, body: &Value, null_when_e
             set(scope, object, "_bodyBuffer", buffer);
         }
         set_raw(scope, object, body.clone());
-        set_str(scope, object, "_bodyCT", b"text/plain;charset=UTF-8");
+        set_bytes(scope, object, "_bodyCT", b"text/plain;charset=UTF-8");
         return;
     }
     if body.is_object() {
@@ -241,7 +241,7 @@ fn install_body(scope: &mut Scope<'_>, object: &Value, body: &Value, null_when_e
                 set(scope, object, "_bodyBuffer", buffer);
             }
             if let Some(content_type) = serialized.content_type {
-                set_str(scope, object, "_bodyCT", &content_type);
+                set_bytes(scope, object, "_bodyCT", &content_type);
             }
             let empty = scope.string("");
             set_raw(scope, object, empty);
@@ -267,7 +267,7 @@ fn install_body(scope: &mut Scope<'_>, object: &Value, body: &Value, null_when_e
             if kind.is_string()
                 && let Some(kind) = c_bytes(scope, &kind).filter(|k| !k.is_empty())
             {
-                set_str(scope, object, "_bodyCT", &kind);
+                set_bytes(scope, object, "_bodyCT", &kind);
             }
             let empty = scope.string("");
             set_raw(scope, object, empty);
@@ -358,7 +358,7 @@ pub(crate) fn response_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value]
     install_body(scope, &object, &body, true);
     set(scope, &object, "bodyUsed", Value::boolean(false));
     set(scope, &object, "status", Value::int(status));
-    set_str(
+    set_bytes(
         scope,
         &object,
         "statusText",
@@ -370,8 +370,8 @@ pub(crate) fn response_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value]
         "ok",
         Value::boolean((200..300).contains(&status)),
     );
-    set_str(scope, &object, "type", b"default");
-    set_str(scope, &object, "url", b"");
+    set_bytes(scope, &object, "type", b"default");
+    set_bytes(scope, &object, "url", b"");
     set(scope, &object, "redirected", Value::boolean(false));
     let headers_object = crate::fetch::make_headers(scope, &headers_init);
     set(scope, &object, "headers", headers_object);
@@ -523,7 +523,7 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     };
     let keepalive = match init.map(|init| prop(scope, init, "keepalive")) {
         Some(given) if !given.is_undefined() => scope.to_bool(&given),
-        _ => input_request.is_some_and(|input| crate::bool_prop(scope, input, "keepalive")),
+        _ => input_request.is_some_and(|input| crate::truthy(scope, input, "keepalive")),
     };
     let signal = request_signal(scope, input_request, init)?;
     let page = Js::of(scope).page_url().filter(|p| !p.is_empty());

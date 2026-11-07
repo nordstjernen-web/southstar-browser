@@ -7,7 +7,7 @@ use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::{unwrap_node, wrap_node};
 use crate::{
-    Element, JsResult, READ_ONLY, bind, get, hidden_child, put, set_instance_proto, truthy,
+    Element, JsResult, READ_ONLY, bind, get, hidden_child, set, set_instance_proto, truthy,
 };
 
 pub(crate) const ACCEPT: i32 = 1;
@@ -75,7 +75,7 @@ pub(crate) fn filter(scope: &mut Scope<'_>, object: &Value, node: Element) -> Js
             "Failed to execute 'acceptNode' on 'NodeFilter': The provided value is not callable.",
         ));
     }
-    put(scope, object, "_active", Value::boolean(true));
+    set(scope, object, "_active", Value::boolean(true));
     let argument = wrap_node(scope, node);
     let this = if is_function {
         Value::undefined()
@@ -83,7 +83,7 @@ pub(crate) fn filter(scope: &mut Scope<'_>, object: &Value, node: Element) -> Js
         filter
     };
     let result = scope.call(&callback, &this, &[argument]);
-    put(scope, object, "_active", Value::boolean(false));
+    set(scope, object, "_active", Value::boolean(false));
     let result = result?;
     scope.to_int32(&result)
 }
@@ -104,7 +104,7 @@ pub(crate) fn init_common(scope: &mut Scope<'_>, object: &Value, args: &[Value])
         _ => Value::null(),
     };
     let _ = scope.define(object, "filter", filter, READ_ONLY);
-    put(scope, object, "_active", Value::boolean(false));
+    set(scope, object, "_active", Value::boolean(false));
 }
 
 fn node_prop(scope: &mut Scope<'_>, walker: &Value, name: &str) -> Option<Element> {
@@ -114,7 +114,7 @@ fn node_prop(scope: &mut Scope<'_>, walker: &Value, name: &str) -> Option<Elemen
 
 fn set_current(scope: &mut Scope<'_>, walker: &Value, node: Element) -> Value {
     let wrapped = wrap_node(scope, node);
-    put(scope, walker, "currentNode", wrapped);
+    set(scope, walker, "currentNode", wrapped);
     wrap_node(scope, node)
 }
 
@@ -361,7 +361,7 @@ fn current_set(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsResult 
             "Failed to set the 'currentNode' property on 'TreeWalker': The provided value is not of type 'Node'.",
         ));
     }
-    put(scope, this, CURRENT_SLOT, value);
+    set(scope, this, CURRENT_SLOT, value);
     Ok(Value::undefined())
 }
 

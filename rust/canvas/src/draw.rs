@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::array_length;
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use std::rc::Rc;
@@ -51,11 +53,6 @@ pub(crate) fn state(scope: &mut Scope<'_>, this: &Value) -> Option<Rc<CanvasStat
 
 fn main_context(st: &CanvasState) -> Context {
     st.context()
-}
-
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
 }
 
 pub(crate) fn with_shadow(st: &CanvasState, mut draw: impl FnMut(&Context)) {
@@ -146,10 +143,10 @@ fn on_own_path(cr: &Context, draw: impl FnOnce(&Context)) {
 
 fn rect_args(scope: &mut Scope<'_>, args: &[Value]) -> [f64; 4] {
     [
-        arg(scope, args, 0),
-        arg(scope, args, 1),
-        arg(scope, args, 2),
-        arg(scope, args, 3),
+        number_arg(scope, args, 0),
+        number_arg(scope, args, 1),
+        number_arg(scope, args, 2),
+        number_arg(scope, args, 3),
     ]
 }
 
@@ -356,14 +353,6 @@ const OWN: Attributes = Attributes {
     enumerable: true,
     configurable: true,
 };
-
-fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    scope
-        .get(array, "length")
-        .ok()
-        .and_then(|l| scope.to_int32(&l).ok())
-        .map_or(0, |n| n as u32)
-}
 
 pub(crate) fn save(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result {
     let Some(st) = state(scope, this) else {

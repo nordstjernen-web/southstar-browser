@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -345,10 +346,6 @@ pub(crate) fn events_suspended(js: Js) -> bool {
 
 pub(crate) fn in_main_realm_scope(js: Js, f: impl FnOnce()) {
     api::in_realm(js.ptr(), api::main_realm(js.ptr()), f);
-}
-
-pub(crate) fn unwrap(value: &Value) -> Option<Node<'static>> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn iframe_document(js: Js) -> Option<Node<'static>> {

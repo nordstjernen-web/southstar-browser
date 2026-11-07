@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use southstar_unicode::until_nul;
 use std::ffi::CString;
 
@@ -35,10 +36,6 @@ fn c_bytes(bytes: &[u8]) -> CString {
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {

@@ -4,6 +4,7 @@
 
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
+use southstar_unicode::until_nul;
 
 use crate::ffi;
 
@@ -60,13 +61,6 @@ pub(crate) fn current_document_for(scope: &mut Scope<'_>, window: &Value) -> Opt
     Some(doc)
 }
 
-fn c_string_prefix(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
-}
-
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
     needle.is_empty()
         || haystack
@@ -81,7 +75,7 @@ pub(crate) fn find(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
     let Ok(needle) = scope.to_bytes(needle) else {
         return Ok(Value::boolean(false));
     };
-    let needle = c_string_prefix(&needle);
+    let needle = until_nul(&needle);
     if needle.is_empty() {
         return Ok(Value::boolean(false));
     }
@@ -94,7 +88,7 @@ pub(crate) fn find(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Resu
     };
     let found = doc.is_some_and(|doc| {
         let text = doc.collect_text();
-        let haystack = c_string_prefix(&text);
+        let haystack = until_nul(&text);
         if case_sensitive {
             contains(haystack, needle)
         } else {

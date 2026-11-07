@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_length as length;
 use std::cell::Cell;
 
 use southstar_js_engine::{Attributes, ContextHandle, Scope, Value};
@@ -21,11 +22,6 @@ const HIDDEN: Attributes = Attributes {
 
 thread_local! {
     static ENGINE_EVENT: Cell<usize> = const { Cell::new(0) };
-}
-
-fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let value = get(scope, array, "length");
-    scope.to_number(&value).map_or(0, |n| n as u32)
 }
 
 fn entry_kind_is(scope: &mut Scope<'_>, entry: &Value, kind: &str) -> bool {

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::controls;
+use southstar_js_engine::props::number_length as length;
 use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_unicode::until_nul_owned;
 
@@ -21,13 +22,6 @@ const REPLACEABLE: Attributes = Attributes {
     enumerable: false,
     configurable: true,
 };
-
-fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let value = scope
-        .get(array, "length")
-        .unwrap_or_else(|_| Value::undefined());
-    scope.to_number(&value).map_or(0, |n| n as u32)
-}
 
 fn items(scope: &mut Scope<'_>, array: &Value) -> Vec<Value> {
     let count = length(scope, array);

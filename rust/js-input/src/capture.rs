@@ -2,16 +2,10 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_length as array_length;
 use southstar_js_engine::{Scope, Value};
 
 const CAPTURES: &str = "_pointerCaptures";
-
-fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    scope
-        .get(array, "length")
-        .and_then(|length| scope.to_number(&length))
-        .map_or(0, |length| length as u32)
-}
 
 fn capture_index(scope: &mut Scope<'_>, captures: &Value, id: i32) -> Option<u32> {
     if !captures.is_array() {

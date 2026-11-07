@@ -5,6 +5,7 @@
 mod imports;
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::ffi::CString;
 use std::rc::Rc;
 
@@ -59,13 +60,6 @@ pub(crate) fn current_url_fragment(js: Js) -> Option<Vec<u8>> {
     let hash = url.iter().position(|&c| c == b'#')?;
     let fragment = &url[hash + 1..];
     (!fragment.is_empty()).then(|| fragment.to_vec())
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    if !value.is_object() {
-        return None;
-    }
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Option<Element>) -> Value {

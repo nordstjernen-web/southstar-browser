@@ -6,6 +6,7 @@ use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 
 use crate::{Element, JsResult};
 
@@ -13,10 +14,6 @@ use southstar_js_forms::nsr_submit_event_ctor;
 
 fn js_of(scope: &Scope<'_>) -> Option<Page> {
     Page::current(scope)
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

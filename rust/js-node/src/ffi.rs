@@ -5,6 +5,8 @@
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
+use southstar_unicode::until_nul;
 
 use crate::Element;
 
@@ -30,17 +32,8 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
     Page::current(scope).map(Js)
 }
 
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
-}
-
 pub(crate) fn dom_exception(scope: &mut Scope<'_>, name: &str, code: i32, message: &str) -> Value {
-    scope.dom_exception_code(name.as_bytes(), code, c_prefix(message.as_bytes()))
-}
-
-fn c_prefix(bytes: &[u8]) -> &[u8] {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    &bytes[..end]
+    scope.dom_exception_code(name.as_bytes(), code, until_nul(message.as_bytes()))
 }
 
 pub(crate) fn new_text(text: &[u8]) -> Element {

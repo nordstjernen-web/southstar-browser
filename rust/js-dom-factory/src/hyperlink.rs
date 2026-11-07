@@ -43,7 +43,8 @@ fn anchor_url(node: Element, js: Option<Js>) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn resolved_href(node: Element, js: Option<Js>) -> Option<Vec<u8>> {
-    anchor_url(node, js).or_else(|| ffi::attr(node, c"href").map(|raw| ffi::c_prefix(raw).to_vec()))
+    anchor_url(node, js)
+        .or_else(|| ffi::attr(node, c"href").map(|raw| ffi::until_nul(raw).to_vec()))
 }
 
 pub fn part_get(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
@@ -57,7 +58,7 @@ pub fn part_get(scope: &mut Scope<'_>, this: &Value, magic: c_int) -> JsResult {
             return Ok(scope.string(""));
         };
         let resolved = node.and_then(|n| resolved_href(n, js));
-        let out = resolved.unwrap_or_else(|| ffi::c_prefix(raw).to_vec());
+        let out = resolved.unwrap_or_else(|| ffi::until_nul(raw).to_vec());
         return Ok(scope.string_from_bytes(&out));
     };
     let href = anchor_url(node, js);

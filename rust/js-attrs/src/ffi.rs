@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use southstar_unicode::c_string_until_nul;
 mod imports;
 
@@ -30,10 +31,6 @@ const LIVE_ATTRIBUTES: i32 = 12;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

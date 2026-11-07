@@ -11,16 +11,13 @@ pub mod rendered;
 
 use southstar_dom::Node;
 use southstar_js_engine::Value;
+pub(crate) use southstar_js_engine::props::arg;
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 pub(crate) type Element = Node<'static>;
 
 pub(crate) const MAX_DEPTH: i32 = 512;
 pub(crate) const FLAG_CDATA: u32 = 1 << 10;
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
 
 pub(crate) fn name_is(node: Node<'_>, tag: &str) -> bool {
     node.name()

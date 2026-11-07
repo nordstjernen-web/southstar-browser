@@ -16,6 +16,7 @@ pub use ffi::install_runtime_hooks;
 pub use ffi::qcache_invalidate;
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_engine::props::arg;
 
 use southstar_dom::serialize::is_embedded_doc;
 use southstar_dom::{FLAG_FOREIGN_NS, FLAG_SVG_NS, Kind, MAX_DEPTH, Node};
@@ -54,10 +55,6 @@ pub fn make_live(scope: &mut Scope<'_>, owner: &Value, kind: c_int, param: Optio
         Some(kind) => live::make(scope, owner, kind, param, None),
         None => Value::undefined(),
     }
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn is_shadow_root(node: Element) -> bool {

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_bind::host::construct as host_construct;
 use southstar_unicode::until_nul;
 
 use southstar_glib as glib;
@@ -122,14 +123,6 @@ pub(crate) fn dom_exception(
         code,
         &message.to_string_lossy(),
     )
-}
-
-pub(crate) fn host_construct(
-    scope: &mut Scope<'_>,
-    new_target: &Value,
-    kind: HostKind,
-) -> JsResult {
-    host::construct(scope, new_target, kind)
 }
 
 pub(crate) fn host_is(value: &Value, kind: HostKind) -> bool {

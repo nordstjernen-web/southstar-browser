@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::{get, noop};
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi;
@@ -48,20 +49,6 @@ const CONSTANT: Attributes = Attributes {
     configurable: false,
 };
 
-fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-fn returns_null(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    Ok(Value::null())
-}
-
-fn noop(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> Result<Value, Value> {
-    Ok(Value::undefined())
-}
-
 fn set_if_missing(scope: &mut Scope<'_>, global: &Value, name: &str, value: Value) {
     if !scope.has_property(global, name).unwrap_or(false) {
         let _ = scope.set(global, name, value);
@@ -100,7 +87,7 @@ fn install_xpath_result(scope: &mut Scope<'_>, global: &Value) {
         return;
     }
     for (name, arity) in [("iterateNext", 0), ("snapshotItem", 1)] {
-        let function = scope.function(name, arity, returns_null);
+        let function = scope.function(name, arity, southstar_js_bind::natives::null);
         let _ = scope.set(&proto, name, function);
     }
     for (name, value) in XPATH_RESULT_TYPES {

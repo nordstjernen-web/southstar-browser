@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::cell::RefCell;
+use southstar_js_engine::PageList;
 use std::collections::HashSet;
 
 use southstar_dom::{Node, WeakNode};
@@ -27,41 +27,19 @@ pub(crate) struct Page {
 }
 
 thread_local! {
-    static PAGES: RefCell<Vec<(usize, Page)>> = const { RefCell::new(Vec::new()) };
+    static PAGES: PageList<usize, Page> = const { PageList::new() };
 }
 
 pub(crate) fn with_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = match pages.iter().position(|(owner, _)| *owner == js.key()) {
-            Some(index) => index,
-            None => {
-                pages.push((js.key(), Page::default()));
-                pages.len() - 1
-            }
-        };
-        f(&mut pages[index].1)
-    })
+    PAGES.with(|pages| pages.with(js.key(), f))
 }
 
 pub(crate) fn with_existing<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow_mut()
-            .iter_mut()
-            .find(|(owner, _)| *owner == js.key())
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek_mut(js.key(), f))
 }
 
 pub(crate) fn peek_page<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow()
-            .iter()
-            .find(|(owner, _)| *owner == js.key())
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek(js.key(), f))
 }
 
 pub(crate) fn has_pending_roots(js: Js) -> bool {
@@ -105,13 +83,7 @@ pub(crate) fn forget_roots_in(js: Js, root: Node<'_>) {
 }
 
 pub(crate) fn teardown(js: Js) {
-    let page = PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        pages
-            .iter()
-            .position(|(owner, _)| *owner == js.key())
-            .map(|index| pages.swap_remove(index).1)
-    });
+    let page = PAGES.with(|pages| pages.take(js.key()));
     if let Some(page) = page {
         if let Some(source) = page.async_source {
             js.source_remove(source);

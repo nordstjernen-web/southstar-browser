@@ -6,7 +6,7 @@ use southstar_js_engine::{Scope, Value};
 use southstar_url::bytes::Parts;
 
 use crate::ffi::{self, Js};
-use crate::{JsResult, arg, is_nullish, set, set_str};
+use crate::{JsResult, arg, is_nullish, set, set_bytes};
 
 const HELPER_SOURCE: &str = include_str!("url_helper.js");
 
@@ -17,17 +17,17 @@ const INTERFACE_SOURCE: &str = "(function(){\
 })()";
 
 fn set_parts(scope: &mut Scope<'_>, object: &Value, parts: &Parts) {
-    set_str(scope, object, "href", &parts.href);
-    set_str(scope, object, "protocol", &parts.protocol);
-    set_str(scope, object, "host", &parts.host);
-    set_str(scope, object, "hostname", &parts.hostname);
-    set_str(scope, object, "port", &parts.port);
-    set_str(scope, object, "origin", &parts.origin);
-    set_str(scope, object, "pathname", &parts.pathname);
-    set_str(scope, object, "search", &parts.search);
-    set_str(scope, object, "hash", &parts.hash);
-    set_str(scope, object, "username", &parts.username);
-    set_str(scope, object, "password", &parts.password);
+    set_bytes(scope, object, "href", &parts.href);
+    set_bytes(scope, object, "protocol", &parts.protocol);
+    set_bytes(scope, object, "host", &parts.host);
+    set_bytes(scope, object, "hostname", &parts.hostname);
+    set_bytes(scope, object, "port", &parts.port);
+    set_bytes(scope, object, "origin", &parts.origin);
+    set_bytes(scope, object, "pathname", &parts.pathname);
+    set_bytes(scope, object, "search", &parts.search);
+    set_bytes(scope, object, "hash", &parts.hash);
+    set_bytes(scope, object, "username", &parts.username);
+    set_bytes(scope, object, "password", &parts.password);
 }
 
 fn parts_object(scope: &mut Scope<'_>, href: &[u8]) -> Value {
@@ -88,14 +88,14 @@ fn data_object(scope: &mut Scope<'_>, resolved: &[u8]) -> Value {
             set(scope, &object, "searchParams", params);
         }
         None => {
-            set_str(scope, &object, "href", resolved);
+            set_bytes(scope, &object, "href", resolved);
             for key in ["protocol", "host", "hostname", "port"] {
-                set_str(scope, &object, key, b"");
+                set_bytes(scope, &object, key, b"");
             }
-            set_str(scope, &object, "origin", b"null");
-            set_str(scope, &object, "pathname", b"/");
+            set_bytes(scope, &object, "origin", b"null");
+            set_bytes(scope, &object, "pathname", b"/");
             for key in ["search", "hash", "username", "password"] {
-                set_str(scope, &object, key, b"");
+                set_bytes(scope, &object, key, b"");
             }
             let params = crate::search_params::from_query(scope, b"");
             set(scope, &object, "searchParams", params);

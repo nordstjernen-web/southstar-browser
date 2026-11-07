@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 use core::ffi::{c_int, c_long};
+use southstar_js_engine::props::arg;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use southstar_datetime as dt;
@@ -364,10 +365,6 @@ fn scan_pair(s: &[u8]) -> Option<(c_int, c_int)> {
     }
     let (second, _) = scan_int(s, at + 1)?;
     Some((first, second))
-}
-
-fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 fn text_of(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {

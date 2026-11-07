@@ -14,6 +14,8 @@ mod plural;
 mod text;
 
 use southstar_intl_core::{cldr_index, collation, tag};
+use southstar_js_engine::props::arg;
+use southstar_js_engine::props::array_length as length;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 const HIDDEN: Attributes = Attributes {
@@ -23,10 +25,6 @@ const HIDDEN: Attributes = Attributes {
 };
 
 type Method = (&'static str, NativeFn, u32);
-
-fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
 
 fn lang_subtag(locale: &[u8]) -> Vec<u8> {
     locale
@@ -39,13 +37,6 @@ fn lang_subtag(locale: &[u8]) -> Vec<u8> {
 
 fn object_property(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Value> {
     scope.get(object, key).ok().filter(Value::is_object)
-}
-
-fn length(scope: &mut Scope<'_>, object: &Value) -> u32 {
-    scope
-        .get(object, "length")
-        .and_then(|length| scope.to_int32(&length))
-        .map_or(0, |length| length as u32)
 }
 
 fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity: u32) {

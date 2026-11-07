@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -39,13 +40,6 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
 
 pub(crate) fn main_scope<R>(js: Js, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
     api::main_context(js.ptr()).with(f)
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    if !value.is_object() {
-        return None;
-    }
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

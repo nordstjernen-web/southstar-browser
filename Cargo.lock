@@ -2638,6 +2638,7 @@ dependencies = [
  "southstar-js-mutation",
  "southstar-js-reflect",
  "southstar-js-runtime",
+ "southstar-unicode",
  "southstar-url",
  "southstar-xml",
 ]
@@ -2661,6 +2662,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-shadow",
  "southstar-layout",
+ "southstar-unicode",
  "southstar-url",
 ]
 
@@ -2947,6 +2949,7 @@ name = "southstar-js-media"
 version = "1.0.8-dev"
 dependencies = [
  "southstar-dom",
+ "southstar-js-bind",
  "southstar-js-dispatch",
  "southstar-js-engine",
  "southstar-js-events",
@@ -3016,6 +3019,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-top-layer",
  "southstar-js-traversal",
+ "southstar-unicode",
 ]
 
 [[package]]
@@ -3124,6 +3128,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-js-services",
  "southstar-js-top-layer",
+ "southstar-unicode",
  "southstar-url",
 ]
 

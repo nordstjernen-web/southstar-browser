@@ -4,7 +4,7 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use crate::{HIDDEN, JsResult, PLAIN, arg, bind, ffi, flag, get, get_index, length, push, set};
+use crate::{HIDDEN, JsResult, PLAIN, arg, bind, ffi, get, get_index, length, push, set, truthy};
 
 pub(crate) struct Transfer {
     pub old: Value,
@@ -38,7 +38,7 @@ fn freeze(scope: &mut Scope<'_>, array: &Value) {
 pub(crate) fn deliver(scope: &mut Scope<'_>, port: &Value, data: &Value, ports: Option<&Value>) {
     let shipped_to = get(scope, port, "_shipped_to");
     if shipped_to.is_object() {
-        if flag(scope, &shipped_to, "_started") {
+        if truthy(scope, &shipped_to, "_started") {
             let undefined = Value::undefined();
             deliver(scope, &shipped_to, data, Some(ports.unwrap_or(&undefined)));
             return;
@@ -54,7 +54,7 @@ pub(crate) fn deliver(scope: &mut Scope<'_>, port: &Value, data: &Value, ports: 
         }
         return;
     }
-    if flag(scope, port, "_closed") {
+    if truthy(scope, port, "_closed") {
         return;
     }
     ffi::with_receiving_realm(scope, port, |scope, realm, other_realm| {
@@ -108,7 +108,7 @@ pub(crate) fn deliver(scope: &mut Scope<'_>, port: &Value, data: &Value, ports: 
 }
 
 pub(crate) fn enable(scope: &mut Scope<'_>, port: &Value) {
-    let was = flag(scope, port, "_started");
+    let was = truthy(scope, port, "_started");
     set(scope, port, "_started", Value::boolean(true));
     if was {
         return;
@@ -119,7 +119,7 @@ pub(crate) fn enable(scope: &mut Scope<'_>, port: &Value) {
     }
     for i in 0..length(scope, &queue) {
         let item = get_index(scope, &queue, i);
-        if flag(scope, &item, "_portMessage") {
+        if truthy(scope, &item, "_portMessage") {
             let data = get(scope, &item, "data");
             let ports = get(scope, &item, "ports");
             ffi::queue_delivery(scope, &[port.clone(), data, ports]);
@@ -182,7 +182,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
             "Failed to execute 'postMessage' on 'MessagePort': 1 argument required, but only 0 present.",
         ));
     };
-    if flag(scope, this, "_closed") {
+    if truthy(scope, this, "_closed") {
         return Ok(Value::undefined());
     }
     let bridge = bridge_id(scope, this);
@@ -215,7 +215,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
     if pair.is_undefined() || pair.is_null() {
         return Ok(Value::undefined());
     }
-    if flag(scope, &pair, "_started") {
+    if truthy(scope, &pair, "_started") {
         ffi::queue_delivery(scope, &[pair, cloned, moved.new]);
     } else {
         let mut queue = get(scope, &pair, "_queue");
@@ -230,7 +230,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
 }
 
 fn signal_aborted(scope: &mut Scope<'_>, signal: &Value) -> bool {
-    signal.is_object() && flag(scope, signal, "aborted")
+    signal.is_object() && truthy(scope, signal, "aborted")
 }
 
 fn entry_signal_aborted(scope: &mut Scope<'_>, entry: &Value) -> bool {
@@ -394,7 +394,7 @@ pub(crate) fn transfer_prepare(
         }
         let bad = seen.iter().any(|s| s.same_object(&item))
             || source.is_some_and(|source| source.same_object(&item))
-            || flag(realm, &item, "_shipped");
+            || truthy(realm, &item, "_shipped");
         seen.push(item.clone());
         if bad {
             return None;
@@ -440,7 +440,7 @@ pub(crate) fn message_channel(
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let port = crate::proto_of(scope, global, "MessagePort");
+    let port = crate::interface_prototype(scope, global, "MessagePort");
     if port.is_object() {
         bind(scope, &port, "close", 0, close);
         bind(scope, &port, "postMessage", 1, post_message);

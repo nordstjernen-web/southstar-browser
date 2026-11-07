@@ -8,6 +8,8 @@ pub(crate) mod ffi;
 pub mod links;
 pub mod wire;
 
+pub(crate) use southstar_js_engine::props::global_get;
+pub(crate) use southstar_js_engine::props::{get, number_length as length};
 use std::collections::HashMap;
 
 use southstar_js_engine::{Attributes, ElementType, ObjectKey, ObjectKind, Scope, Value};
@@ -47,22 +49,6 @@ const GEOMETRY: [(&str, &str); 7] = [
 
 pub(crate) fn fail<T>(scope: &mut Scope<'_>) -> Result<T> {
     Err(ffi::data_clone_error(scope))
-}
-
-pub(crate) fn get(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
-pub(crate) fn global_get(scope: &mut Scope<'_>, key: &str) -> Value {
-    let global = scope.global();
-    get(scope, &global, key)
-}
-
-pub(crate) fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let len = get(scope, array, "length");
-    scope.to_number(&len).map_or(0, |n| n as u32)
 }
 
 pub(crate) fn instance_of(scope: &mut Scope<'_>, value: &Value, constructor: &Value) -> bool {

@@ -465,7 +465,7 @@ fn html_in_html(back: &Live) -> bool {
         .is_some_and(|root| root.flags() & (FLAG_SVG_NS | FLAG_FOREIGN_NS | FLAG_XML_DOC) == 0)
 }
 
-fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>> {
+pub(crate) fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>> {
     let value = scope.get(object, key).ok()?;
     scope.to_bytes(&value).ok()
 }

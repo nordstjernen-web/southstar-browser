@@ -8,6 +8,7 @@ mod natives;
 mod tables;
 
 use core::ffi::c_int;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 
 use southstar_dom::Node;
 use southstar_js_collections as collections;
@@ -38,10 +39,6 @@ pub(crate) enum Members {
     DataProperty = 10,
     ValueProperty = 11,
     OptionsMethods = 12,
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Node<'static>> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn live_collection_kind(value: &Value) -> c_int {

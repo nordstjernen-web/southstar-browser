@@ -11,6 +11,7 @@ mod scroll_touch;
 mod transfer;
 mod wpt;
 
+pub(crate) use southstar_js_engine::props::{arg, set};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -74,16 +75,8 @@ pub(crate) fn teardown(js: Js) {
     PAGES.with(|pages| pages.borrow_mut().remove(&js));
 }
 
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
 pub(crate) fn put(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
     let _ = scope.define(object, key, value, PROPERTY);
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn number_arg(scope: &mut Scope<'_>, args: &[Value], index: usize) -> f64 {

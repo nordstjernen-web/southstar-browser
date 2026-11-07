@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::noop;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::{self, Js, NavigationTiming};
@@ -47,10 +48,6 @@ fn to_json(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Value, Va
         }
     }
     Ok(out)
-}
-
-fn noop(_: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    Ok(Value::undefined())
 }
 
 fn timing_get(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Value, Value> {

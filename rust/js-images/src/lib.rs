@@ -6,7 +6,7 @@
 
 mod ffi;
 
-use core::cell::{Cell, RefCell};
+use core::cell::Cell;
 use core::ffi::CStr;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -15,6 +15,7 @@ use std::rc::Rc;
 use southstar_dom::{Node, WeakNode};
 use southstar_glib::SourceId;
 use southstar_image::ImageRef;
+use southstar_js_engine::PageList;
 
 use ffi::{Js, Realm};
 
@@ -56,31 +57,15 @@ struct Page {
 }
 
 thread_local! {
-    static PAGES: RefCell<Vec<(Js, Page)>> = const { RefCell::new(Vec::new()) };
+    static PAGES: PageList<Js, Page> = const { PageList::new() };
 }
 
 fn with_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = match pages.iter().position(|(owner, _)| *owner == js) {
-            Some(index) => index,
-            None => {
-                pages.push((js, Page::default()));
-                pages.len() - 1
-            }
-        };
-        f(&mut pages[index].1)
-    })
+    PAGES.with(|pages| pages.with(js, f))
 }
 
 fn peek_page<R>(js: Js, f: impl FnOnce(&Page) -> R) -> Option<R> {
-    PAGES.with(|pages| {
-        pages
-            .borrow()
-            .iter()
-            .find(|(owner, _)| *owner == js)
-            .map(|(_, page)| f(page))
-    })
+    PAGES.with(|pages| pages.peek(js, f))
 }
 
 fn key(el: Element) -> WeakNode {
@@ -100,11 +85,7 @@ fn is_current(load: &Rc<Load>) -> bool {
 }
 
 fn remove(js: Js, el: Element) {
-    let old = PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let (_, page) = pages.iter_mut().find(|(owner, _)| *owner == js)?;
-        page.loads.remove(&key(el))
-    });
+    let old = PAGES.with(|pages| pages.peek_mut(js, |page| page.loads.remove(&key(el))));
     drop(old);
 }
 
@@ -345,10 +326,6 @@ pub(crate) fn forget(js: Js, el: Element) {
 }
 
 pub(crate) fn teardown(js: Js) {
-    let page = PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = pages.iter().position(|(owner, _)| *owner == js)?;
-        Some(pages.swap_remove(index).1)
-    });
+    let page = PAGES.with(|pages| pages.take(js));
     drop(page);
 }

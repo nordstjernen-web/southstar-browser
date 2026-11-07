@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::arg;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -98,10 +99,6 @@ fn proto_of(value: &Value, pick: fn(&RealmHandle) -> &Value) -> Option<Value> {
 
 fn realm_or_error(scope: &mut Scope<'_>, value: &Value) -> Result<Rc<Realm>, Value> {
     realm_of(value).ok_or_else(|| scope.type_error("wasm realm is gone"))
-}
-
-fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 fn require_new(scope: &mut Scope<'_>, this: &Value, name: &str) -> Result<(), Value> {

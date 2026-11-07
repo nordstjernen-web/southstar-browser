@@ -2,12 +2,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::string_value;
 use std::time::Instant;
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
 use crate::ffi::{self, Js};
-use crate::{navigator, page_or_new, with_page};
+use crate::{page_or_new, with_page};
 
 const LOG_METHODS: &[&str] = &[
     "log",
@@ -83,14 +84,6 @@ fn text_unless_undefined(scope: &mut Scope<'_>, value: &Value) -> Option<String>
     }
 }
 
-fn text_if_string(scope: &mut Scope<'_>, value: &Value) -> Option<String> {
-    if value.is_string() {
-        scope.to_string(value).ok()
-    } else {
-        None
-    }
-}
-
 fn error_fields(scope: &mut Scope<'_>, value: &Value) -> [Value; 3] {
     ["name", "message", "stack"]
         .map(|key| scope.get(value, key).unwrap_or_else(|_| Value::undefined()))
@@ -115,8 +108,8 @@ fn append_error(scope: &mut Scope<'_>, out: &mut String, value: &Value) {
 fn append_object(scope: &mut Scope<'_>, out: &mut String, value: &Value) {
     let [name, message, stack] = error_fields(scope, value);
     if stack.is_string() {
-        let name = text_if_string(scope, &name).filter(|n| !n.is_empty());
-        let message = text_if_string(scope, &message).filter(|m| !m.is_empty());
+        let name = string_value(scope, &name).filter(|n| !n.is_empty());
+        let message = string_value(scope, &message).filter(|m| !m.is_empty());
         let stack = scope.to_string(&stack).ok();
         if let Some(name) = &name {
             out.push_str(name);
@@ -347,7 +340,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
     bind(scope, &console, "timeEnd", time_end);
     bind(scope, &console, "timeLog", time_log);
     for name in NOOP_METHODS {
-        bind(scope, &console, name, navigator::noop);
+        bind(scope, &console, name, southstar_js_bind::natives::noop);
     }
     let memory = scope.new_object();
     let _ = scope.set(&console, "memory", memory);

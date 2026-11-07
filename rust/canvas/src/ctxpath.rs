@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::number_arg;
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::cairo::Context;
@@ -15,15 +16,10 @@ fn context(scope: &mut Scope<'_>, this: &Value) -> Option<Context> {
     crate::ffi::context_cairo(scope, this)
 }
 
-fn arg(scope: &mut Scope<'_>, args: &[Value], i: usize) -> f64 {
-    args.get(i)
-        .map_or(0.0, |v| scope.to_number(v).unwrap_or(f64::NAN))
-}
-
 fn args<const N: usize>(scope: &mut Scope<'_>, values: &[Value]) -> [f64; N] {
     let mut out = [0.0; N];
     for (i, slot) in out.iter_mut().enumerate() {
-        *slot = arg(scope, values, i);
+        *slot = number_arg(scope, values, i);
     }
     out
 }

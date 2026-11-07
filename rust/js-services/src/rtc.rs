@@ -2,9 +2,11 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_bind::natives::{empty_array, resolved_empty_array, resolved_undefined};
+use southstar_js_engine::props::bind;
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
 
-use crate::{ffi, make_ctor, resolved};
+use crate::{ffi, make_constructor, resolved};
 
 const EVENT_HANDLERS: &[&str] = &[
     "onconnectionstatechange",
@@ -32,11 +34,6 @@ const NULL_PROPERTIES: &[&str] = &[
 fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &str) -> Result<(), Value> {
     let value = scope.string(text);
     scope.set(object, key, value)
-}
-
-fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    let _ = scope.set(object, name, function);
 }
 
 fn object_with_prototype(scope: &mut Scope<'_>, constructor: &str) -> Value {
@@ -137,19 +134,6 @@ fn set_local_description(
     resolved(scope, Value::undefined())
 }
 
-fn resolved_undefined(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    resolved(scope, Value::undefined())
-}
-
-fn resolved_empty_array(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    let array = scope.new_array();
-    resolved(scope, array)
-}
-
-fn empty_array(scope: &mut Scope<'_>, _: &Value, _: &[Value]) -> Result<Value, Value> {
-    Ok(scope.new_array())
-}
-
 fn close(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> Result<Value, Value> {
     for key in ["connectionState", "iceConnectionState", "signalingState"] {
         set_str(scope, this, key, "closed")?;
@@ -187,12 +171,12 @@ pub(crate) fn illegal_constructor(
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let ctor = make_ctor(scope, "RTCPeerConnection", 1, peer_connection);
+    let ctor = make_constructor(scope, "RTCPeerConnection", 1, peer_connection);
     let proto = scope
         .get(&ctor, "prototype")
         .unwrap_or_else(|_| Value::undefined());
     let _ = scope.set(global, "RTCPeerConnection", ctor);
-    let channel = make_ctor(scope, "RTCDataChannel", 0, illegal_constructor);
+    let channel = make_constructor(scope, "RTCDataChannel", 0, illegal_constructor);
     let _ = scope.set(global, "RTCDataChannel", channel);
     let methods: [(&str, u32, NativeFn); 11] = [
         ("createDataChannel", 2, create_data_channel),

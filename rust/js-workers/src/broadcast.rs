@@ -4,7 +4,7 @@
 
 use southstar_js_engine::{Scope, Value};
 
-use crate::{JsResult, bind, ffi, flag, get, get_index, length, push, set};
+use crate::{JsResult, bind, ffi, get, get_index, length, push, set, truthy};
 
 const REGISTRY: &str = "__ns_broadcast_channels";
 
@@ -34,7 +34,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
             "Failed to execute 'postMessage' on 'BroadcastChannel': 1 argument required, but only 0 present.",
         ));
     };
-    if flag(scope, this, "_closed") {
+    if truthy(scope, this, "_closed") {
         return Err(ffi::dom_exception(
             scope,
             c"InvalidStateError",
@@ -59,7 +59,7 @@ pub(crate) fn post_message(scope: &mut Scope<'_>, this: &Value, args: &[Value]) 
         if channel.same_object(this) {
             continue;
         }
-        let closed = flag(scope, &channel, "_closed");
+        let closed = truthy(scope, &channel, "_closed");
         let channel_name = get(scope, &channel, "name");
         let channel_name = crate::text(scope, &channel_name);
         let channel_origin = get(scope, &channel, "_origin");
@@ -130,7 +130,7 @@ pub(crate) fn construct(scope: &mut Scope<'_>, new_target: &Value, args: &[Value
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
-    let channel = crate::proto_of(scope, global, "BroadcastChannel");
+    let channel = crate::interface_prototype(scope, global, "BroadcastChannel");
     if channel.is_object() {
         bind(scope, &channel, "close", 0, close);
         bind(scope, &channel, "postMessage", 1, post_message);

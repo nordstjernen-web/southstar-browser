@@ -22,6 +22,7 @@ pub use ffi::{
 
 use southstar_dom::Node;
 use southstar_js_engine::Value;
+pub(crate) use southstar_js_engine::props::arg;
 
 pub use ffi::nsr_box_for_this;
 pub use ffi::nsr_make_dom_rect;
@@ -38,10 +39,6 @@ pub struct Rect {
     pub y: f64,
     pub w: f64,
     pub h: f64,
-}
-
-pub(crate) fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
 }
 
 pub(crate) fn name_is(node: Node<'_>, tag: &str) -> bool {

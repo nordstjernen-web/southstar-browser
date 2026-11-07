@@ -3,16 +3,12 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_dom::Kind;
+pub(crate) use southstar_js_engine::props::bind;
 use southstar_js_engine::{NativeFn, Scope, Value};
 
 use crate::{ALL, ENUMERABLE_CONFIGURABLE, Element, HIDDEN, JsResult, ffi, get, set, truthy};
 
 const SHADOW_ATTR: &core::ffi::CStr = c"data-nd-shadow-root";
-
-pub(crate) fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
 
 pub(crate) fn prevent_default(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult {
     if !truthy(scope, this, "_passive_active") && truthy(scope, this, "cancelable") {

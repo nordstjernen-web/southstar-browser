@@ -5,7 +5,7 @@
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::{self, HO_ABORT_CONTROLLER, HO_ABORT_SIGNAL, Js, Realm};
-use crate::{JsResult, bool_prop, is_nullish, prop, set, set_str};
+use crate::{JsResult, is_nullish, prop, set, set_bytes, truthy};
 
 pub(crate) struct AbortTimeout {
     realm: Realm,
@@ -47,7 +47,7 @@ fn throw_if_aborted(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsR
     if !ffi::host_is(this, HO_ABORT_SIGNAL) {
         return Err(illegal(scope));
     }
-    if !bool_prop(scope, this, "aborted") {
+    if !truthy(scope, this, "aborted") {
         return Ok(Value::undefined());
     }
     let reason = prop(scope, this, "reason");
@@ -62,7 +62,7 @@ fn controller_abort(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         return Err(illegal(scope));
     }
     let signal = prop(scope, this, "signal");
-    if signal.is_object() && !bool_prop(scope, &signal, "aborted") {
+    if signal.is_object() && !truthy(scope, &signal, "aborted") {
         set(scope, &signal, "aborted", Value::boolean(true));
         let reason = match args.first().filter(|r| !r.is_undefined()) {
             Some(reason) => reason.clone(),
@@ -80,7 +80,7 @@ fn static_abort(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResul
 }
 
 fn propagate(scope: &mut Scope<'_>, combined: &Value, source: &Value) {
-    if bool_prop(scope, combined, "aborted") {
+    if truthy(scope, combined, "aborted") {
         return;
     }
     let mut reason = if source.is_object() {
@@ -105,7 +105,7 @@ fn follow(scope: &mut Scope<'_>, combined: &Value, signal: &Value) {
     if !signal.is_object() {
         return;
     }
-    if bool_prop(scope, signal, "aborted") {
+    if truthy(scope, signal, "aborted") {
         propagate(scope, combined, signal);
         return;
     }
@@ -171,13 +171,13 @@ pub(crate) fn timeout_fired(ticket: TimeoutTicket) {
         return;
     };
     entry.realm.enter(|scope| {
-        if bool_prop(scope, &entry.signal, "aborted") {
+        if truthy(scope, &entry.signal, "aborted") {
             return;
         }
         set(scope, &entry.signal, "aborted", Value::boolean(true));
         let reason = scope.new_error();
-        set_str(scope, &reason, "name", b"TimeoutError");
-        set_str(scope, &reason, "message", b"signal timed out");
+        set_bytes(scope, &reason, "name", b"TimeoutError");
+        set_bytes(scope, &reason, "message", b"signal timed out");
         set(scope, &entry.signal, "reason", reason);
         ffi::fire_event(scope, &entry.signal, c"abort");
     });

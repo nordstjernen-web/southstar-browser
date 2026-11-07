@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::arg;
 use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::store::{Area, QuotaExceeded, Write};
@@ -16,10 +17,6 @@ const BUILTIN_NAMES: [&str; 7] = [
     "clear",
     "key",
 ];
-
-fn arg(args: &[Value], index: usize) -> Value {
-    args.get(index).cloned().unwrap_or_else(Value::undefined)
-}
 
 fn quota_exceeded(scope: &mut Scope<'_>) -> Value {
     let message = "Storage quota exceeded";

@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap;
 
 use southstar_dom::Node;
 use southstar_js_engine::{ContextHandle, Scope, Value};
@@ -153,10 +154,6 @@ impl Js {
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
-}
-
-pub(crate) fn unwrap(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {

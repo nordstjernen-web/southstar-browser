@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_long, c_void};
+pub(crate) use southstar_js_runtime::api::real_time_us;
 use std::ffi::CString;
 
 use southstar_dom::Node;
@@ -44,15 +45,6 @@ fn long(value: c_long) -> i64 {
 
 fn bytes(text: Option<&CStr>) -> Option<&[u8]> {
     text.map(CStr::to_bytes)
-}
-
-pub(crate) fn real_us() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or_else(
-            |before| -i64::try_from(before.duration().as_micros()).unwrap_or(i64::MAX),
-            |after| i64::try_from(after.as_micros()).unwrap_or(i64::MAX),
-        )
 }
 
 pub(crate) fn page_time_origin_us(js: Js) -> i64 {

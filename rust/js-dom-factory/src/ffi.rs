@@ -5,6 +5,9 @@
 mod imports;
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_engine::props::dom_exception;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
+pub(crate) use southstar_unicode::until_nul;
 use std::ffi::CString;
 
 use southstar_dom::{AttrView, Node, Tree};
@@ -33,21 +36,8 @@ pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
     Page::current(scope).map(Js)
 }
 
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
-}
-
 pub(crate) fn wrap(scope: &mut Scope<'_>, node: Element) -> Value {
     api::make_element(scope, Some(node)).unwrap_or_else(|_| Value::null())
-}
-
-pub(crate) fn dom_exception(
-    scope: &mut Scope<'_>,
-    name: &CStr,
-    code: i32,
-    message: &CStr,
-) -> Value {
-    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn name_error(scope: &mut Scope<'_>, error: NameError) -> Value {
@@ -98,14 +88,7 @@ pub(crate) fn in_template_content(node: Element) -> bool {
 }
 
 pub(crate) fn cstring(bytes: &[u8]) -> CString {
-    CString::new(c_prefix(bytes)).unwrap_or_default()
-}
-
-pub(crate) fn c_prefix(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
+    CString::new(until_nul(bytes)).unwrap_or_default()
 }
 
 pub(crate) fn set_attr(node: Element, name: &CStr, value: &[u8]) {
@@ -154,9 +137,9 @@ pub(crate) fn realm_document(
     southstar_js_document::make_realm_document(
         scope,
         doc,
-        info.url.map(c_prefix),
-        info.charset.map(c_prefix),
-        info.content_type.map(c_prefix),
+        info.url.map(until_nul),
+        info.charset.map(until_nul),
+        info.content_type.map(until_nul),
         info.is_xml,
         true,
     )
@@ -171,11 +154,11 @@ pub(crate) fn doc_base_url(js: Option<Js>) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn resolve_url(base: Option<&[u8]>, href: &[u8]) -> Option<Vec<u8>> {
-    southstar_url::bytes::resolve(base.map(c_prefix), href)
+    southstar_url::bytes::resolve(base.map(until_nul), href)
 }
 
 pub(crate) fn url_part(href: &[u8], magic: c_int) -> Option<Vec<u8>> {
-    let p = southstar_url::bytes::parts(c_prefix(href))?;
+    let p = southstar_url::bytes::parts(until_nul(href))?;
     Some(match magic {
         hyperlink::PROTOCOL => p.protocol,
         hyperlink::HOST => p.host,
@@ -192,11 +175,11 @@ pub(crate) fn url_part(href: &[u8], magic: c_int) -> Option<Vec<u8>> {
 }
 
 pub(crate) fn set_url_component(href: &[u8], component: &CStr, value: &[u8]) -> Option<Vec<u8>> {
-    southstar_url::bytes::set_component(c_prefix(href), component.to_bytes(), value)
+    southstar_url::bytes::set_component(until_nul(href), component.to_bytes(), value)
 }
 
 pub(crate) fn set_attr_recorded(js: Option<Js>, node: Element, name: &CStr, value: &[u8]) {
-    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, c_prefix(value));
+    southstar_js_mutation::set_attr_recorded(raw_js(js), node, name, until_nul(value));
 }
 
 pub(crate) fn reflect_href_get(scope: &mut Scope<'_>, this: &Value) -> JsResult {
@@ -226,22 +209,22 @@ pub(crate) fn target_method(
 }
 
 pub(crate) fn parse_xml_reporting(source: &[u8]) -> (Option<Tree>, c_int, c_int) {
-    match southstar_xml::parse_document(c_prefix(source)) {
+    match southstar_xml::parse_document(until_nul(source)) {
         Ok(doc) => (Some(doc), 1, 1),
         Err((line, column)) => (None, line, column),
     }
 }
 
 pub(crate) fn parse_xml(source: &[u8]) -> Option<Tree> {
-    southstar_xml::parse_document(c_prefix(source)).ok()
+    southstar_xml::parse_document(until_nul(source)).ok()
 }
 
 pub(crate) fn parse_html(source: &[u8]) -> Tree {
-    southstar_html_parser::parse_document(c_prefix(source), false)
+    southstar_html_parser::parse_document(until_nul(source), false)
 }
 
 pub(crate) fn parse_html_fragment(source: &[u8]) -> Tree {
-    southstar_html_parser::parse_fragment_for_tag(c"", c_prefix(source), false)
+    southstar_html_parser::parse_fragment_for_tag(c"", until_nul(source), false)
 }
 
 pub(crate) fn mark_scripts_already_started(root: Element) {

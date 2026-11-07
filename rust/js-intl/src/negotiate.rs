@@ -9,21 +9,36 @@ use southstar_js_engine::{Scope, Value};
 use crate::cldr_index;
 use crate::tag::{self, LanguageId, LocaleId};
 
+pub(crate) fn options_object(
+    scope: &mut Scope<'_>,
+    options: &Value,
+) -> Result<Option<Value>, Value> {
+    if options.is_undefined() {
+        return Ok(None);
+    }
+    scope.to_object(options).map(Some)
+}
+
+pub(crate) fn option_value(
+    scope: &mut Scope<'_>,
+    options: Option<&Value>,
+    key: &str,
+) -> Result<Value, Value> {
+    match options {
+        Some(object) => scope.get(object, key),
+        None => Ok(Value::undefined()),
+    }
+}
+
 pub(crate) struct Options(Option<Value>);
 
 impl Options {
     pub(crate) fn coerce(scope: &mut Scope<'_>, options: &Value) -> Result<Options, Value> {
-        if options.is_undefined() {
-            return Ok(Options(None));
-        }
-        scope.to_object(options).map(|object| Options(Some(object)))
+        options_object(scope, options).map(Options)
     }
 
     pub(crate) fn get(&self, scope: &mut Scope<'_>, key: &str) -> Result<Value, Value> {
-        match &self.0 {
-            Some(object) => scope.get(object, key),
-            None => Ok(Value::undefined()),
-        }
+        option_value(scope, self.0.as_ref(), key)
     }
 
     pub(crate) fn string(

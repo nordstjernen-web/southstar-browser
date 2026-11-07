@@ -3,7 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-use std::cell::RefCell;
+use southstar_js_engine::PageList;
 
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node, WeakNode};
 use southstar_js_engine::{Scope, Value};
@@ -23,25 +23,16 @@ struct Page {
 }
 
 thread_local! {
-    static PAGES: RefCell<Vec<(usize, Page)>> = const { RefCell::new(Vec::new()) };
+    static PAGES: PageList<usize, Page> = const { PageList::new() };
 }
 
 fn with_page<R>(js: Js, f: impl FnOnce(&mut Page) -> R) -> R {
-    PAGES.with(|pages| {
-        let mut pages = pages.borrow_mut();
-        let index = match pages.iter().position(|(owner, _)| *owner == js.key()) {
-            Some(index) => index,
-            None => {
-                pages.push((js.key(), Page::default()));
-                pages.len() - 1
-            }
-        };
-        f(&mut pages[index].1)
-    })
+    PAGES.with(|pages| pages.with(js.key(), f))
 }
 
 pub(crate) fn teardown(js: Js) {
-    PAGES.with(|pages| pages.borrow_mut().retain(|(owner, _)| *owner != js.key()));
+    let page = PAGES.with(|pages| pages.take(js.key()));
+    drop(page);
 }
 
 pub(crate) fn dynamic_markup_active(js: Js) -> bool {

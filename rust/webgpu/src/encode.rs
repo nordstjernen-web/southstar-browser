@@ -337,7 +337,7 @@ pub(crate) fn pass_set_index_buffer(
     let Some(buffer) = crate::gpu::raw_buffer(&b) else {
         return Ok(Value::undefined());
     };
-    let format = if crate::util::string_of(scope, &args[1]).as_deref() == Some("uint16") {
+    let format = if crate::util::string_value(scope, &args[1]).as_deref() == Some("uint16") {
         INDEX_FORMAT_UINT16
     } else {
         INDEX_FORMAT_UINT32

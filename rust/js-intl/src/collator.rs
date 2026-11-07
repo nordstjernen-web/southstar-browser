@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use crate::supported_locales_of;
 use core::cell::RefCell;
 use core::cmp::Ordering;
 
@@ -222,15 +223,6 @@ fn resolved_options(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> Res
     let case_first = scope.string(&resolved.case_first);
     create_data_property(scope, &options, "caseFirst", case_first)?;
     Ok(options)
-}
-
-fn supported_locales_of(
-    scope: &mut Scope<'_>,
-    _this: &Value,
-    args: &[Value],
-) -> Result<Value, Value> {
-    let requested = negotiate::canonicalize_locale_list(scope, &arg(args, 0))?;
-    negotiate::supported_locales(scope, &requested, &arg(args, 1))
 }
 
 pub(crate) fn install(scope: &mut Scope<'_>, intl: &Value) -> Value {

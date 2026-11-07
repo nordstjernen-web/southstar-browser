@@ -12,6 +12,7 @@ homepage.workspace = true
 [dependencies]
 southstar-css = { path = "../css", version = "=1.0.8-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
 southstar-js-attrs = { path = "../js-attrs", version = "=1.0.8-dev" }
 southstar-js-collections = { path = "../js-collections", version = "=1.0.8-dev" }
 southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.8-dev" }

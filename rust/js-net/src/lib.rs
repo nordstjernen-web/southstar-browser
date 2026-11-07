@@ -4,6 +4,8 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) use southstar_js_engine::props::{get as prop, set, set_bytes, truthy};
+pub(crate) use southstar_js_engine::props::{global_get as global_ctor, int_prop};
 use southstar_unicode::until_nul_owned;
 mod abort;
 mod beacon;
@@ -142,12 +144,6 @@ pub(crate) fn c_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
     scope.to_bytes(value).ok().map(until_nul_owned)
 }
 
-pub(crate) fn prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Value {
-    scope
-        .get(object, key)
-        .unwrap_or_else(|_| Value::undefined())
-}
-
 pub(crate) fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> Option<Vec<u8>> {
     let value = prop(scope, object, key);
     if value.is_string() {
@@ -155,25 +151,6 @@ pub(crate) fn string_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> O
     } else {
         None
     }
-}
-
-pub(crate) fn bool_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    let value = prop(scope, object, key);
-    scope.to_bool(&value)
-}
-
-pub(crate) fn int_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> i32 {
-    let value = prop(scope, object, key);
-    scope.to_int32(&value).unwrap_or(0)
-}
-
-pub(crate) fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-pub(crate) fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &[u8]) {
-    let value = scope.string_from_bytes(text);
-    set(scope, object, key, value);
 }
 
 pub(crate) fn is_nullish(value: &Value) -> bool {
@@ -191,18 +168,9 @@ pub(crate) fn call_method(scope: &mut Scope<'_>, object: &Value, name: &str, arg
     }
 }
 
-pub(crate) fn global_ctor(scope: &mut Scope<'_>, name: &str) -> Value {
-    let global = scope.global();
-    prop(scope, &global, name)
-}
-
 pub(crate) fn proto_of(scope: &mut Scope<'_>, name: &str) -> Value {
-    let ctor = global_ctor(scope, name);
-    if ctor.is_object() {
-        prop(scope, &ctor, "prototype")
-    } else {
-        Value::undefined()
-    }
+    let global = scope.global();
+    southstar_js_engine::props::interface_prototype(scope, &global, name)
 }
 
 pub(crate) fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {

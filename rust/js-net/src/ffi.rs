@@ -4,6 +4,7 @@
 
 use core::cell::{Cell, RefCell};
 use core::ffi::{CStr, c_int, c_long};
+pub(crate) use southstar_js_bind::host::construct as host_construct;
 use southstar_unicode::until_nul_owned;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -128,7 +129,7 @@ fn bind_c(scope: &mut Scope<'_>, object: &Value, name: &str, f: NativeFn, arity:
 
 pub(crate) fn socket_event(scope: &mut Scope<'_>, kind: &CStr) -> Value {
     let event = nsr_event_new(scope).unwrap_or_else(|_| Value::undefined());
-    crate::set_str(scope, &event, "type", kind.to_bytes());
+    crate::set_bytes(scope, &event, "type", kind.to_bytes());
     crate::set(scope, &event, "bubbles", Value::boolean(false));
     crate::set(scope, &event, "cancelable", Value::boolean(false));
     crate::set(scope, &event, "defaultPrevented", Value::boolean(false));
@@ -428,14 +429,6 @@ pub(crate) fn serialize_form_body(scope: &mut Scope<'_>, value: &Value) -> Optio
         });
     }
     None
-}
-
-pub(crate) fn host_construct(
-    scope: &mut Scope<'_>,
-    new_target: &Value,
-    kind: HostKind,
-) -> JsResult {
-    host::construct(scope, new_target, kind)
 }
 
 pub(crate) fn host_new(scope: &mut Scope<'_>, kind: HostKind) -> JsResult {

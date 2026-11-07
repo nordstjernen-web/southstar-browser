@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 use std::cell::RefCell;
 use std::collections::HashSet;
 
@@ -26,10 +27,6 @@ fn raw_js(js: Option<Js>) -> Option<Page> {
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
     Page::current(scope).map(Js)
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) use southstar_js_engine::props::get_index as index;
 use southstar_unicode::until_nul_owned;
 pub mod checkable;
 pub mod collection;
@@ -129,12 +130,6 @@ pub(crate) fn length(scope: &mut Scope<'_>, array: &Value) -> u32 {
         .get(array, "length")
         .unwrap_or_else(|_| Value::undefined());
     uint32(scope, &len)
-}
-
-pub(crate) fn index(scope: &mut Scope<'_>, object: &Value, i: u32) -> Value {
-    scope
-        .get_index(object, i)
-        .unwrap_or_else(|_| Value::undefined())
 }
 
 pub(crate) fn c_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+pub(crate) use southstar_js_engine::props::arg;
 use std::rc::Rc;
 
 use southstar_js_engine::{ElementType, Scope, Value};
@@ -13,10 +14,6 @@ pub(crate) const KIND_SYNC: u8 = 8;
 pub(crate) const KIND_LOCATION: u8 = 11;
 
 pub(crate) type JsResult = Result<Value, Value>;
-
-pub(crate) fn arg(args: &[Value], i: usize) -> Value {
-    args.get(i).cloned().unwrap_or_else(Value::undefined)
-}
 
 pub(crate) fn int(s: &mut Scope<'_>, args: &[Value], i: usize) -> i32 {
     let Some(v) = args.get(i) else {
@@ -56,6 +53,18 @@ pub(crate) fn boolean(s: &mut Scope<'_>, args: &[Value], i: usize) -> bool {
 
 pub(crate) fn bytes(s: &mut Scope<'_>, v: &Value) -> Option<Vec<u8>> {
     s.to_bytes(v).ok()
+}
+
+pub(crate) fn string_arg(
+    s: &mut Scope<'_>,
+    a: &[Value],
+    i: usize,
+    min_args: usize,
+) -> Option<Vec<u8>> {
+    if a.len() < min_args {
+        return None;
+    }
+    bytes(s, &a[i])
 }
 
 pub(crate) fn name(args: &[Value], i: usize) -> u32 {

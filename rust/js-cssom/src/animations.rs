@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use southstar_anim::{AnimInfo, AnimTiming};
+use southstar_js_engine::props::string_value;
 use southstar_js_engine::{Scope, Value};
 use southstar_style::PropId;
 
@@ -249,14 +250,6 @@ fn number_or(scope: &mut Scope<'_>, value: &Value, fallback: f64) -> f64 {
     scope.to_number(value).unwrap_or(fallback)
 }
 
-fn string_option(scope: &mut Scope<'_>, value: &Value) -> Option<String> {
-    if value.is_string() {
-        scope.to_string(value).ok()
-    } else {
-        None
-    }
-}
-
 pub(crate) fn animate(
     scope: &mut Scope<'_>,
     _this: &Value,
@@ -291,9 +284,9 @@ pub(crate) fn animate(
     let fill = scope.get(timing, "fill")?;
     let easing = scope.get(timing, "easing")?;
     let iterations = number_or(scope, &iterations, 1.0);
-    let direction = string_option(scope, &direction);
-    let fill = string_option(scope, &fill);
-    let easing = string_option(scope, &easing);
+    let direction = string_value(scope, &direction);
+    let fill = string_value(scope, &fill);
+    let easing = string_value(scope, &easing);
     let t = AnimTiming {
         duration_ms: number_or(scope, &duration, 0.0),
         delay_ms: number_or(scope, &delay, 0.0),

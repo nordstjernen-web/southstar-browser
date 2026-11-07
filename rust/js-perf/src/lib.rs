@@ -2,6 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_js_engine::props::{
+    array_length, bind, bind_if_not_callable, interface_prototype, set, set_bytes, truthy,
+};
 use southstar_unicode::until_nul_owned;
 mod entry;
 mod ffi;
@@ -85,80 +88,30 @@ fn illegal_invocation(scope: &mut Scope<'_>) -> Value {
     scope.type_error("Illegal invocation")
 }
 
-fn set(scope: &mut Scope<'_>, object: &Value, key: &str, value: Value) {
-    let _ = scope.set(object, key, value);
-}
-
-fn set_str(scope: &mut Scope<'_>, object: &Value, key: &str, text: &[u8]) {
-    let value = scope.string_from_bytes(text);
-    set(scope, object, key, value);
-}
-
-fn bind(scope: &mut Scope<'_>, object: &Value, name: &str, arity: u32, f: NativeFn) {
-    let function = scope.function(name, arity, f);
-    set(scope, object, name, function);
-}
-
-fn bind_if_not_callable(
-    scope: &mut Scope<'_>,
-    object: &Value,
-    name: &str,
-    arity: u32,
-    f: NativeFn,
-) {
-    let current = scope.get(object, name).ok();
-    if !current.is_some_and(|current| scope.is_function(&current)) {
-        bind(scope, object, name, arity, f);
-    }
-}
-
 fn bind_to_json(scope: &mut Scope<'_>, object: &Value) {
     bind(scope, object, "toJSON", 0, object::own_data_props_to_json);
 }
 
 fn adopt_global_prototype(scope: &mut Scope<'_>, object: &Value, interface: &str) {
     let global = scope.global();
-    let ctor = scope
-        .get(&global, interface)
-        .unwrap_or_else(|_| Value::undefined());
-    let proto = if ctor.is_object() {
-        scope
-            .get(&ctor, "prototype")
-            .unwrap_or_else(|_| Value::undefined())
-    } else {
-        Value::undefined()
-    };
+    let proto = interface_prototype(scope, &global, interface);
     if proto.is_object() {
         let _ = scope.set_prototype(object, &proto);
     }
 }
 
-fn array_length(scope: &mut Scope<'_>, array: &Value) -> u32 {
-    let Ok(length) = scope.get(array, "length") else {
-        return 0;
-    };
-    scope.to_int32(&length).map_or(0, |n| n as u32)
-}
-
-fn bool_prop(scope: &mut Scope<'_>, object: &Value, key: &str) -> bool {
-    match scope.get(object, key) {
-        Ok(value) => !value.is_undefined() && scope.to_bool(&value),
-        Err(_) => false,
-    }
-}
-
 fn entry_to_js(scope: &mut Scope<'_>, entry: &Entry) -> Value {
     let o = scope.new_object();
-    set_str(scope, &o, "name", &entry.name);
-    set_str(scope, &o, "entryType", &entry.kind);
+    set_bytes(scope, &o, "name", &entry.name);
+    set_bytes(scope, &o, "entryType", &entry.kind);
     set(scope, &o, "startTime", Value::number(entry.start_time));
     set(scope, &o, "duration", Value::number(entry.duration));
     if entry.is(b"resource") {
         let end = entry.start_time + entry.duration;
         let initiator = entry.initiator_type.as_deref().unwrap_or(b"other");
-        set_str(scope, &o, "initiatorType", initiator);
+        set_bytes(scope, &o, "initiatorType", initiator);
         let protocol = entry.next_hop_protocol.as_deref().unwrap_or_default();
-        set_str(scope, &o, "nextHopProtocol", protocol);
+        set_bytes(scope, &o, "nextHopProtocol", protocol);
         set(scope, &o, "workerStart", Value::number(0.0));
         set(scope, &o, "redirectStart", Value::number(0.0));
         set(scope, &o, "redirectEnd", Value::number(0.0));
@@ -198,7 +151,7 @@ fn entry_to_js(scope: &mut Scope<'_>, entry: &Entry) -> Value {
         } else {
             b"non-blocking"
         };
-        set_str(scope, &o, "renderBlockingStatus", blocking);
+        set_bytes(scope, &o, "renderBlockingStatus", blocking);
         adopt_global_prototype(scope, &o, "PerformanceResourceTiming");
     }
     bind_to_json(scope, &o);
@@ -214,13 +167,13 @@ fn navigation_entry(scope: &mut Scope<'_>, js: Js) -> Value {
     };
     let t = ffi::navigation_timing(js).unwrap_or_default();
     let complete = t.load_event_end_ms;
-    set_str(scope, &o, "name", &url);
-    set_str(scope, &o, "entryType", b"navigation");
+    set_bytes(scope, &o, "name", &url);
+    set_bytes(scope, &o, "entryType", b"navigation");
     set(scope, &o, "startTime", Value::number(0.0));
     set(scope, &o, "duration", Value::number(complete));
-    set_str(scope, &o, "type", b"navigate");
-    set_str(scope, &o, "initiatorType", b"navigation");
-    set_str(scope, &o, "nextHopProtocol", b"h2");
+    set_bytes(scope, &o, "type", b"navigate");
+    set_bytes(scope, &o, "initiatorType", b"navigation");
+    set_bytes(scope, &o, "nextHopProtocol", b"h2");
     set(scope, &o, "redirectCount", Value::int(0));
     set(scope, &o, "workerStart", Value::number(0.0));
     let fields = [
@@ -266,8 +219,8 @@ fn navigation_entry(scope: &mut Scope<'_>, js: Js) -> Value {
 
 fn paint_entry(scope: &mut Scope<'_>, name: &[u8], start: f64) -> Value {
     let o = scope.new_object();
-    set_str(scope, &o, "name", name);
-    set_str(scope, &o, "entryType", b"paint");
+    set_bytes(scope, &o, "name", name);
+    set_bytes(scope, &o, "entryType", b"paint");
     set(scope, &o, "startTime", Value::number(start));
     set(scope, &o, "duration", Value::number(0.0));
     bind_to_json(scope, &o);
@@ -425,8 +378,8 @@ fn mark_like_result(
     duration: f64,
 ) -> Value {
     let r = scope.new_object();
-    set_str(scope, &r, "name", name);
-    set_str(scope, &r, "entryType", kind);
+    set_bytes(scope, &r, "name", name);
+    set_bytes(scope, &r, "entryType", kind);
     set(scope, &r, "startTime", Value::number(start));
     set(scope, &r, "duration", Value::number(duration));
     r
@@ -908,7 +861,7 @@ pub(crate) fn observe(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Re
     let Some(timeline) = timeline::timeline(js).filter(|t| t.has_entries()) else {
         return Ok(Value::undefined());
     };
-    if bool_prop(scope, options, "buffered") {
+    if truthy(scope, options, "buffered") {
         for entry in timeline.entries() {
             if entry.realm == observer.realm && observer.wants(&entry.kind) {
                 observer.record(entry);

@@ -3,6 +3,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
+pub(crate) use southstar_js_engine::props::dom_exception;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
+use southstar_unicode::until_nul;
 
 use southstar_js_engine::{Attributes, Scope, Value};
 use southstar_js_runtime::api;
@@ -19,10 +22,6 @@ use southstar_js_services::nsr_element_async_method;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Js {
     Js(Page::current(scope))
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn attr(node: Element, name: &CStr) -> Option<&'static [u8]> {
@@ -60,27 +59,11 @@ pub(crate) fn current_url(js: Js) -> Vec<u8> {
 pub(crate) fn resolved_url(scope: &mut Scope<'_>, js: Js, href: &'static [u8]) -> Value {
     let resolved = southstar_js_document::doc_base_url(js.0)
         .filter(|base| !base.is_empty())
-        .and_then(|base| southstar_url::bytes::resolve(Some(&base), c_prefix(href)));
+        .and_then(|base| southstar_url::bytes::resolve(Some(&base), until_nul(href)));
     match resolved {
         Some(url) => scope.string_from_bytes(&url),
-        None => scope.string_from_bytes(c_prefix(href)),
+        None => scope.string_from_bytes(until_nul(href)),
     }
-}
-
-fn c_prefix(bytes: &[u8]) -> &[u8] {
-    bytes
-        .iter()
-        .position(|&b| b == 0)
-        .map_or(bytes, |end| &bytes[..end])
-}
-
-pub(crate) fn dom_exception(
-    scope: &mut Scope<'_>,
-    name: &CStr,
-    code: i32,
-    message: &CStr,
-) -> Value {
-    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_submit_trigger(node: Element) -> bool {

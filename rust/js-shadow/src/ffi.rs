@@ -5,6 +5,7 @@
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 use southstar_js_runtime::api::Page;
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap_node;
 
 use crate::Element;
 
@@ -16,10 +17,6 @@ use southstar_js_geometry::nsr_document_elements_from_point;
 
 pub(crate) fn js_of(scope: &Scope<'_>) -> Option<Js> {
     Page::current(scope).map(Js)
-}
-
-pub(crate) fn unwrap_node(value: &Value) -> Option<Element> {
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap_node(scope: &mut Scope<'_>, node: Element) -> Value {

@@ -8,7 +8,7 @@ use southstar_js_engine::{Attributes, Scope, Value};
 
 use crate::ffi::{self, Cancellable, Credentials, Js, Realm, Request, Response, cstring};
 use crate::headers;
-use crate::{JsResult, c_bytes, is_nullish, prop, set, set_str, string_prop};
+use crate::{JsResult, c_bytes, is_nullish, prop, set, set_bytes, string_prop};
 
 const BODY_BYTES_MAX: usize = 32 * 1024 * 1024;
 
@@ -119,7 +119,7 @@ fn defer_stream_body(
         .filter(|then| scope.is_function(then));
     let (Ok(drain_promise), Some(then)) = (drain_promise, then) else {
         let error = scope.new_error();
-        set_str(
+        set_bytes(
             scope,
             &error,
             "message",
@@ -405,7 +405,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     .filter(|s| s.is_object());
     if let Some(signal) = signal {
-        if crate::bool_prop(scope, &signal, "aborted") {
+        if crate::truthy(scope, &signal, "aborted") {
             reject_with_abort(scope, &state.reject, Some(&signal));
             return Ok(promise);
         }
@@ -648,7 +648,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
         Value::boolean(allow && (200..300).contains(&resp.status())),
     );
     set(scope, &r, "status", Value::int(status as i32));
-    set_str(
+    set_bytes(
         scope,
         &r,
         "statusText",
@@ -659,7 +659,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
     } else {
         Vec::new()
     };
-    set_str(scope, &r, "url", &url);
+    set_bytes(scope, &r, "url", &url);
     let kind: &[u8] = if !allow {
         b"opaque"
     } else if ffi::url_same_origin(origin_url.as_deref(), final_url.as_deref()) {
@@ -667,7 +667,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
     } else {
         b"cors"
     };
-    set_str(scope, &r, "type", kind);
+    set_bytes(scope, &r, "type", kind);
     set(
         scope,
         &r,
@@ -704,7 +704,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
                 continue;
             }
             let name = String::from_utf8_lossy(name).into_owned();
-            set_str(scope, &init, &name, &value);
+            set_bytes(scope, &init, &name, &value);
         }
     }
     let headers_object = make_headers(scope, &init);

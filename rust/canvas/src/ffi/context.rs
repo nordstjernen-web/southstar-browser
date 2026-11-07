@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use core::ffi::CStr;
+pub(crate) use southstar_js_engine::props::dom_exception;
 
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
@@ -12,15 +12,6 @@ use super::state::{CanvasState, Node, js_of};
 
 pub(crate) fn ctx2d_of(st: &CanvasState) -> Option<Value> {
     st.ctx2d()
-}
-
-pub(crate) fn dom_exception(
-    scope: &mut Scope<'_>,
-    name: &CStr,
-    code: i32,
-    message: &CStr,
-) -> Value {
-    scope.dom_exception_code(name.to_bytes(), code, message.to_bytes())
 }
 
 pub(crate) fn is_worker(scope: &Scope<'_>) -> bool {

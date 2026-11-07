@@ -3,6 +3,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+pub(crate) use southstar_js_runtime::api::unwrap_element as unwrap;
 use southstar_unicode::c_string_until_nul;
 
 use southstar_dom::Node;
@@ -211,13 +212,6 @@ pub(crate) fn frame_sandbox_blocks_scripts(node: Element) -> bool {
 
 pub(crate) fn frame_realm_window(scope: &Scope<'_>, iframe: Element) -> Value {
     (api::frames_hooks().frame_realm_window)(Page::current(scope), iframe)
-}
-
-pub(crate) fn unwrap(value: &Value) -> Option<Element> {
-    if !value.is_object() {
-        return None;
-    }
-    api::unwrap_element(value)
 }
 
 pub(crate) fn wrap(scope: &mut Scope<'_>, el: Element) -> Value {
