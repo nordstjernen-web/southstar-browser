@@ -49,41 +49,12 @@ impl Flags {
     }
 }
 
-fn regexp_test(scope: &mut Scope<'_>, value: &[u8], pattern: &[u8]) -> Option<bool> {
-    let global = scope.global();
-    let ctor = scope.get(&global, "RegExp").ok()?;
-    if !scope.is_function(&ctor) {
-        return None;
-    }
-    let flags = scope.string("v");
-    let source = scope.string_from_bytes(pattern);
-    if scope.construct(&ctor, &[source, flags.clone()]).is_err() {
-        return Some(true);
-    }
-    let anchored = [&b"^(?:"[..], pattern, b")$"].concat();
-    let anchored = scope.string_from_bytes(&anchored);
-    let Ok(re) = scope.construct(&ctor, &[anchored, flags]) else {
-        return Some(true);
-    };
-    let test = scope
-        .get(&re, "test")
-        .unwrap_or_else(|_| Value::undefined());
-    let subject = scope.string_from_bytes(value);
-    match scope.call(&test, &re, &[subject]) {
-        Ok(result) => Some(scope.to_bool(&result)),
-        Err(_) => Some(true),
-    }
-}
-
 fn value_matches_pattern(value: &[u8], pattern: Option<&[u8]>) -> bool {
     let Some(pattern) = pattern.filter(|p| !p.is_empty()) else {
         return true;
     };
     if pattern.len() > PATTERN_MAX_LEN || value.len() > PATTERN_VALUE_MAX_LEN {
         return false;
-    }
-    if let Some(matched) = ffi::with_pattern_scope(|scope| regexp_test(scope, value, pattern)) {
-        return matched;
     }
     southstar_css::pattern_matches(pattern, value).unwrap_or(true)
 }

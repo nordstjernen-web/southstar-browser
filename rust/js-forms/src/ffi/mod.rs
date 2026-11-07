@@ -148,10 +148,6 @@ pub(crate) fn multipart_boundary() -> Vec<u8> {
     southstar_net::multipart_boundary()
 }
 
-pub(crate) fn with_pattern_scope<R>(f: impl FnOnce(&mut Scope<'_>) -> Option<R>) -> Option<R> {
-    api::pattern_context().with(f).flatten()
-}
-
 pub(crate) fn url_is_valid_absolute(url: &[u8]) -> bool {
     southstar_url::bytes::is_valid_absolute(&until_nul_owned(url.to_vec()))
 }

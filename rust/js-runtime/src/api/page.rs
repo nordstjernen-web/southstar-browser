@@ -73,10 +73,6 @@ pub fn main_realm(js: Option<Page>) -> ContextHandle {
     Js::of(js).map_or(ContextHandle::NULL, Js::main_realm)
 }
 
-pub fn pattern_context() -> ContextHandle {
-    glue::active_js().map_or(ContextHandle::NULL, Js::main_or_current)
-}
-
 pub fn module_context(js: Option<Page>) -> ContextHandle {
     Js::of(js).map_or(ContextHandle::NULL, |js| {
         js.st().module_ctx.get().or(js.ctx())
