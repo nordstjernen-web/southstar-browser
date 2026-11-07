@@ -1,99 +1,6 @@
-//! Southstar — streaming content decoders for response bodies: br over libbrotlidec and zstd over libzstd.
+//! Southstar — the streaming zstd decoder for response bodies, over libzstd.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
-
-#[cfg(feature = "brotli")]
-mod brotli {
-    use crate::inflate::{Emit, Failure, OUT_CHUNK};
-    use core::ffi::{c_int, c_void};
-
-    unsafe extern "C" {
-        fn BrotliDecoderCreateInstance(
-            alloc: *const c_void,
-            free: *const c_void,
-            opaque: *mut c_void,
-        ) -> *mut c_void;
-        fn BrotliDecoderDecompressStream(
-            state: *mut c_void,
-            avail_in: *mut usize,
-            next_in: *mut *const u8,
-            avail_out: *mut usize,
-            next_out: *mut *mut u8,
-            total_out: *mut usize,
-        ) -> c_int;
-        fn BrotliDecoderDestroyInstance(state: *mut c_void);
-    }
-
-    const SUCCESS: c_int = 1;
-    const NEEDS_MORE_INPUT: c_int = 2;
-    const NEEDS_MORE_OUTPUT: c_int = 3;
-
-    pub struct Brotli {
-        state: *mut c_void,
-        finished: bool,
-    }
-
-    // SAFETY: the decoder state is owned by this value, reached only through `&mut Brotli`, and
-    // libbrotlidec keeps no thread affinity.
-    unsafe impl Send for Brotli {}
-
-    impl Brotli {
-        pub fn new() -> Option<Brotli> {
-            // SAFETY: null allocator functions and opaque select brotli's default allocator.
-            let state = unsafe {
-                BrotliDecoderCreateInstance(
-                    core::ptr::null(),
-                    core::ptr::null(),
-                    core::ptr::null_mut(),
-                )
-            };
-            (!state.is_null()).then(|| Brotli {
-                state,
-                finished: false,
-            })
-        }
-
-        pub fn feed(&mut self, input: &[u8], emit: &mut Emit) -> Result<(), Failure> {
-            let mut next_in = input.as_ptr();
-            let mut avail_in = input.len();
-            let mut out = [0u8; OUT_CHUNK];
-            while !self.finished {
-                let mut next_out = out.as_mut_ptr();
-                let mut avail_out = OUT_CHUNK;
-                // SAFETY: `state` is the live decoder, next_in/avail_in describe the rest of
-                // `input` and next_out/avail_out the rest of `out`, and total_out may be null.
-                let rc = unsafe {
-                    BrotliDecoderDecompressStream(
-                        self.state,
-                        &mut avail_in,
-                        &mut next_in,
-                        &mut avail_out,
-                        &mut next_out,
-                        core::ptr::null_mut(),
-                    )
-                };
-                let produced = OUT_CHUNK - avail_out;
-                if produced > 0 && !emit(&out[..produced]) {
-                    return Err(Failure::Stopped);
-                }
-                match rc {
-                    SUCCESS => self.finished = true,
-                    NEEDS_MORE_INPUT => return Ok(()),
-                    NEEDS_MORE_OUTPUT => {}
-                    _ => return Err(Failure::Corrupt),
-                }
-            }
-            Ok(())
-        }
-    }
-
-    impl Drop for Brotli {
-        fn drop(&mut self) {
-            // SAFETY: `state` is the non-null decoder `new` created, destroyed exactly once, here.
-            unsafe { BrotliDecoderDestroyInstance(self.state) };
-        }
-    }
-}
 
 #[cfg(feature = "zstd")]
 mod zstd {
@@ -188,7 +95,5 @@ mod zstd {
     }
 }
 
-#[cfg(feature = "brotli")]
-pub use brotli::Brotli;
 #[cfg(feature = "zstd")]
 pub use zstd::Zstd;

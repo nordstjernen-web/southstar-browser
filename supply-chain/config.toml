@@ -23,6 +23,14 @@ url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/
 version = "0.6.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.alloc-no-stdlib]]
+version = "2.0.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.alloc-stdlib]]
+version = "0.2.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.arrayvec]]
 version = "0.7.8"
 criteria = "safe-to-deploy"
@@ -45,6 +53,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.boa_macros]]
 version = "0.22.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.brotli-decompressor]]
+version = "5.0.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.bytemuck]]

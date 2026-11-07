@@ -40,7 +40,7 @@ history	4	0	1	0	0	0	0
 html-parser	0	0	0	0	0	0	0
 html-util	6	5	0	0	0	0	0
 html5	0	0	0	0	0	0	0
-http	29	19	0	0	0	0	0
+http	24	16	0	0	0	0	0
 http-cache	9	6	0	0	0	0	0
 http-wire	0	0	0	0	0	0	0
 i18n	0	0	0	0	0	0	0
@@ -160,6 +160,6 @@ webgl	62	6	0	0	0	0	0
 webgpu	68	72	0	0	0	0	0
 websocket	0	0	0	0	0	0	0
 webvtt	0	0	0	0	0	0	0
-woff2	2	1	0	0	0	0	0
+woff2	0	0	0	0	0	0	0
 xml	0	0	0	0	0	0	0
 xtask	0	0	0	0	0	0	0

@@ -56,7 +56,7 @@ enum State {
     Sniffing(Vec<u8>),
     Inflate(Inflate),
     #[cfg(feature = "brotli")]
-    Brotli(crate::ffi::codec::Brotli),
+    Brotli(Box<crate::brotli::Brotli>),
     #[cfg(feature = "zstd")]
     Zstd(crate::ffi::codec::Zstd),
 }
@@ -91,7 +91,7 @@ impl State {
             Encoding::Gzip => Some(State::Gzip(Inflate::new(15 + 32)?)),
             Encoding::Deflate => Some(State::Sniffing(Vec::new())),
             #[cfg(feature = "brotli")]
-            Encoding::Brotli => Some(State::Brotli(crate::ffi::codec::Brotli::new()?)),
+            Encoding::Brotli => Some(State::Brotli(Box::new(crate::brotli::Brotli::new()?))),
             #[cfg(feature = "zstd")]
             Encoding::Zstd => Some(State::Zstd(crate::ffi::codec::Zstd::new()?)),
             #[allow(unreachable_patterns)]

@@ -25,7 +25,7 @@ const ENGINE_LIBRARIES: [&str; 15] = [
     "libwebpdemux",
 ];
 
-const FEATURE_LIBRARIES: [(&str, &[&str]); 10] = [
+const FEATURE_LIBRARIES: [(&str, &[&str]); 8] = [
     (
         "LIBAV",
         &[
@@ -37,9 +37,7 @@ const FEATURE_LIBRARIES: [(&str, &[&str]); 10] = [
         ],
     ),
     ("SDL", &["sdl2"]),
-    ("HTTP_BROTLI", &["libbrotlidec"]),
     ("HTTP_ZSTD", &["libzstd"]),
-    ("WOFF2", &["libbrotlidec"]),
     ("AVIF", &["libavif"]),
     ("POPPLER", &["poppler-glib"]),
     ("ENCHANT", &["enchant-2"]),
