@@ -156,9 +156,8 @@ pub fn configure(options: &Options) -> Result<Configuration, String> {
         "native Vorbis (vorbisfile)",
     );
     enable("opusfile", sdl && has("opusfile"), "native Opus (opusfile)");
-    let brotli = has("libbrotlidec");
-    enable("http-brotli", brotli, "HTTP brotli (libbrotlidec)");
-    enable("woff2", brotli, "WOFF2 fonts (libbrotlidec)");
+    enable("http-brotli", true, "HTTP brotli (brotli-decompressor)");
+    enable("woff2", true, "WOFF2 fonts (brotli-decompressor)");
     enable("http-zstd", has("libzstd"), "HTTP zstd (libzstd)");
     let avif = options.avif != Toggle::Disabled && has("libavif");
     if options.avif == Toggle::Enabled && !avif {

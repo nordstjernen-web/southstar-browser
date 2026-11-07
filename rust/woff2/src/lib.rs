@@ -2,7 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-mod ffi;
+#![forbid(unsafe_code)]
+
 mod woff1;
 
 pub use woff1::{is_woff, woff_to_sfnt};
@@ -596,7 +597,7 @@ fn decompress(compressed: &[u8], size: usize) -> Option<Vec<u8>> {
     let mut stream = Vec::new();
     stream.try_reserve_exact(size.max(1)).ok()?;
     stream.resize(size, 0);
-    (ffi::brotli_decompress(compressed, &mut stream)? == size).then_some(stream)
+    (brotli_decompress(compressed, &mut stream)? == size).then_some(stream)
 }
 
 pub fn is_woff2(data: &[u8]) -> bool {
@@ -627,4 +628,29 @@ pub fn to_sfnt(data: &[u8]) -> Option<Sfnt> {
         bytes: assemble_sfnt(flavor, &tables, size),
         cff: flavor == OTTO,
     })
+}
+
+fn brotli_decompress(input: &[u8], output: &mut [u8]) -> Option<usize> {
+    use brotli_decompressor::{BrotliDecompressStream, BrotliResult, BrotliState, StandardAlloc};
+    let mut state = BrotliState::new(
+        StandardAlloc::default(),
+        StandardAlloc::default(),
+        StandardAlloc::default(),
+    );
+    let mut available_in = input.len();
+    let mut input_offset = 0;
+    let mut available_out = output.len();
+    let mut output_offset = 0;
+    let mut total_out = 0;
+    let result = BrotliDecompressStream(
+        &mut available_in,
+        &mut input_offset,
+        input,
+        &mut available_out,
+        &mut output_offset,
+        output,
+        &mut total_out,
+        &mut state,
+    );
+    matches!(result, BrotliResult::ResultSuccess).then_some(output_offset)
 }

@@ -13,13 +13,14 @@ homepage.workspace = true
 southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
 southstar-http-wire = { path = "../http-wire", version = "=1.0.8-dev" }
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+brotli-decompressor = { version = "5", optional = true, default-features = false, features = ["std"] }
 ml-kem = { version = "0.3.2", default-features = false, features = ["zeroize"] }
 ring = { version = "0.17.14", default-features = false }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 zeroize = { version = "1.8", default-features = false }
 
 [features]
-brotli = []
+brotli = ["dep:brotli-decompressor"]
 zstd = []
 
 [lints]

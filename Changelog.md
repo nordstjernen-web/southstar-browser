@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Network and fonts: brotli is decoded in Rust (brotli-decompressor)
+  instead of libbrotlidec, both for `Content-Encoding: br` responses and
+  for WOFF2 web fonts, so `br` and WOFF2 are always available and no
+  longer depend on a system library.
 * Source: the unit tests are gone (334 tests in 46 crates, their
   `tests.rs` files and `tests/` directories, the test-only helpers and
   `scripts/rust-tests.sh`), and the project adds none; changes are
