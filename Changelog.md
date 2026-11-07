@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Source: the user, temporary, download and system data directories and
+  the user's languages are resolved in Rust, following GLib's rules on
+  each platform (XDG variables and their defaults, user-dirs.dirs, the
+  Windows known folders and locale), instead of by GLib. Profiles stay
+  where they were.
 * Images: WebP stills and animations are decoded in Rust (image-webp)
   instead of libwebp; the pixels are unchanged. libwebp is no longer a
   build dependency.
