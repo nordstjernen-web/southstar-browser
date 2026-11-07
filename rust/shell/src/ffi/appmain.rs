@@ -620,6 +620,9 @@ fn sandbox_proc_mode(single_process: bool) {
 }
 
 pub fn run(args: &[&CStr]) -> c_int {
+    if appmain::flag_given(args, b"--mcp") {
+        return southstar_mcp::run(std::env::current_exe().ok());
+    }
     #[cfg(windows)]
     if appmain::need_console(args) {
         win32::attach_parent_console();
@@ -727,6 +730,9 @@ pub fn run(args: &[&CStr]) -> c_int {
                 0
             };
             southstar_watchdog::child_arm_hang_monitor(budget);
+        }
+        if appmain::flag_given(args, b"--remote-control") {
+            super::remotectl::request();
         }
         let session = southstar_watchdog::session_arg(args.iter().skip(1).copied());
         let recover = southstar_watchdog::child_is_recovery();

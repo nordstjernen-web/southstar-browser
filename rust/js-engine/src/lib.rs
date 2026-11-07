@@ -6,7 +6,7 @@ mod boa;
 
 pub use backend::{
     BufferBytes, BufferView, ENGINE_NAME, Engine, ObjectKey, PropertyDefinition, PropertyKey,
-    Scope, SetFlags, SharedMemory, Value, engine_version,
+    Scope, SetFlags, SharedMemory, Value, engine_version, with_trusted_source,
 };
 use boa as backend;
 

@@ -27,6 +27,13 @@ use crate::window as rules;
 
 const WINDOW_KEY: &CStr = c"ns-procwindow";
 const PW_KEY: &CStr = c"ns-pw";
+const TAB_ID_KEY: &CStr = c"ns-tab-id";
+
+thread_local! {
+    static WINDOWS: RefCell<Vec<Weak<ProcWindow>>> = const { RefCell::new(Vec::new()) };
+    static NEXT_TAB_ID: Cell<c_int> = const { Cell::new(1) };
+    static REMOTE_STATUS: RefCell<Option<String>> = const { RefCell::new(None) };
+}
 
 const EVT_TITLE: c_int = 0;
 const EVT_URL: c_int = 1;
@@ -64,6 +71,7 @@ pub struct ProcWindow {
     address: gtk::Entry,
     address_click_focuses: Cell<bool>,
     zoom_button: gtk::Button,
+    remote_badge: gtk::Button,
     back: gtk::Button,
     forward: gtk::Button,
     reload: gtk::Button,
@@ -584,6 +592,8 @@ impl ProcWindow {
             return;
         };
         page.object().set_data(PW_KEY, Some(self.me.clone()));
+        let tab_id = NEXT_TAB_ID.with(|next| next.replace(next.get() + 1));
+        page.object().set_data(TAB_ID_KEY, Some(tab_id));
 
         let (tabbtn, tab) = self.tab_button(&page, private_mode);
         let wrapper = tab.wrapper.clone();
@@ -1408,6 +1418,17 @@ fn build_window(
     zoom.set_visible(false);
     zoom.connect_clicked(on(me, act_reset_zoom_indicator));
 
+    let remote_badge = gtk::Button::with_label(c"");
+    remote_badge.set_has_frame(false);
+    remote_badge.add_css_class(c"ns-remote-badge");
+    remote_badge.set_valign(gtk_sys::ALIGN_CENTER);
+    remote_badge.set_tooltip_text(Some(tr(c"Stop remote control")));
+    remote_badge.set_visible(false);
+    remote_badge.connect_clicked(on(me, |pw| {
+        super::remotectl::stop_by_user();
+        pw.set_status(tr(c"Remote control stopped"));
+    }));
+
     let bookmarks_button = nav_button(c"southstar-bookmarks-symbolic", tr(c"Bookmarks"));
     let weak_bookmarks = bookmarks_button.downgrade();
     bookmarks_button.connect_clicked(on(me, move |pw| {
@@ -1444,6 +1465,7 @@ fn build_window(
         &*home,
         &*address,
         &*zoom,
+        &*remote_badge,
         &*bookmarks_button,
         &*downloads_btn,
         &*menu_button,
@@ -1495,6 +1517,7 @@ fn build_window(
         address,
         address_click_focuses: Cell::new(false),
         zoom_button: zoom,
+        remote_badge,
         back,
         forward,
         reload,
@@ -1524,6 +1547,12 @@ pub fn proc_window_new(
         .object()
         .set_data(WINDOW_KEY, Some(Rc::clone(&pw)));
     install_shortcuts(&pw, app, &app_window);
+    WINDOWS.with(|w| {
+        let mut w = w.borrow_mut();
+        w.retain(|pw| pw.strong_count() > 0);
+        w.push(Rc::downgrade(&pw));
+    });
+    pw.apply_remote_status();
 
     if let Some(settings) = gtk::default_settings() {
         let ids = [
@@ -1603,5 +1632,135 @@ impl ProcWindow {
 
     pub fn status(&self, text: &CStr) {
         self.set_status(text);
+    }
+}
+
+pub struct RemoteTab {
+    pub id: c_int,
+    pub window: c_int,
+    pub active: bool,
+    pub view: View,
+}
+
+fn windows() -> Vec<Rc<ProcWindow>> {
+    WINDOWS.with(|w| w.borrow().iter().filter_map(Weak::upgrade).collect())
+}
+
+fn page_tab_id(page: &Widget) -> c_int {
+    page.object().data::<c_int>(TAB_ID_KEY).unwrap_or(0)
+}
+
+fn find_tab(id: c_int) -> Option<(Rc<ProcWindow>, Widget)> {
+    let all = windows();
+    if id <= 0 {
+        let pw = all.last()?.clone();
+        let page = pw.notebook.current()?;
+        return Some((pw, page));
+    }
+    all.into_iter().find_map(|pw| {
+        let page = pw.notebook.pages().find(|p| page_tab_id(p) == id)?;
+        Some((pw, page))
+    })
+}
+
+pub fn remote_tabs() -> Vec<RemoteTab> {
+    let all = windows();
+    let mut out = Vec::new();
+    for (index, pw) in all.iter().enumerate() {
+        let current = pw.notebook.current();
+        for page in pw.notebook.pages() {
+            if let Some(view) = view::for_page(&page) {
+                out.push(RemoteTab {
+                    id: page_tab_id(&page),
+                    window: index as c_int + 1,
+                    active: index + 1 == all.len() && current.as_ref() == Some(&page),
+                    view,
+                });
+            }
+        }
+    }
+    out
+}
+
+pub fn remote_tab_view(id: c_int) -> Option<View> {
+    find_tab(id).and_then(|(_, page)| view::for_page(&page))
+}
+
+pub fn remote_tab_id(v: View) -> c_int {
+    v.page().map_or(0, |page| page_tab_id(&page))
+}
+
+pub fn remote_tab_new(url: &CStr) -> c_int {
+    let Some(pw) = windows().pop() else {
+        return 0;
+    };
+    pw.add_tab(url, true);
+    pw.current_view().map_or(0, remote_tab_id)
+}
+
+pub fn remote_tab_close(id: c_int) -> bool {
+    let Some((pw, page)) = find_tab(id) else {
+        return false;
+    };
+    if pw.notebook.n_pages() <= 1 && windows().len() <= 1 {
+        return false;
+    }
+    pw.close_page(&page);
+    true
+}
+
+pub fn remote_tab_select(id: c_int, present: bool) -> bool {
+    let Some((pw, page)) = find_tab(id) else {
+        return false;
+    };
+    if let Some(idx) = pw.notebook.page_num(&page)
+        && pw.notebook.current().as_ref() != Some(&page)
+    {
+        pw.notebook.set_current_page(idx);
+    }
+    if present {
+        pw.present();
+    }
+    true
+}
+
+pub fn remote_tab_load(id: c_int, url: &CStr) -> bool {
+    let Some((pw, page)) = find_tab(id) else {
+        return false;
+    };
+    let Some(v) = view::for_page(&page) else {
+        return false;
+    };
+    let resolved = normalize_url(url);
+    if Some(v) == pw.current_view() {
+        pw.address.set_text(&resolved);
+    }
+    v.load(&resolved);
+    true
+}
+
+pub fn set_remote_status(controller: Option<&str>) {
+    REMOTE_STATUS.with(|s| *s.borrow_mut() = controller.map(str::to_owned));
+    for pw in windows() {
+        pw.apply_remote_status();
+    }
+}
+
+impl ProcWindow {
+    fn apply_remote_status(&self) {
+        let status = REMOTE_STATUS.with(|s| s.borrow().clone());
+        let Some(status) = status else {
+            self.remote_badge.set_visible(false);
+            return;
+        };
+        let text = if status.is_empty() {
+            tr_string(c"Remote control")
+        } else {
+            format!("{} {status}", tr_string(c"Controlled by"))
+        };
+        let text = cstring(text);
+        self.remote_badge.set_label(&text);
+        self.remote_badge.set_accessible_label(&text);
+        self.remote_badge.set_visible(true);
     }
 }

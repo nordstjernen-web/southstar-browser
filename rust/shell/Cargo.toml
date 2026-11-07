@@ -32,6 +32,7 @@ southstar-history = { path = "../history", version = "=1.0.8-dev" }
 southstar-html-parser = { path = "../html-parser", version = "=1.0.8-dev" }
 southstar-http-cache = { path = "../http-cache", version = "=1.0.8-dev" }
 southstar-i18n = { path = "../i18n", version = "=1.0.8-dev" }
+southstar-mcp = { path = "../mcp", version = "=1.0.8-dev" }
 southstar-media-shm = { path = "../media-shm", version = "=1.0.8-dev" }
 southstar-net = { path = "../net", version = "=1.0.8-dev" }
 southstar-netutil = { path = "../netutil", version = "=1.0.8-dev" }

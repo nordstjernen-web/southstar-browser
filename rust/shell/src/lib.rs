@@ -9,6 +9,7 @@ mod ffi;
 mod icons;
 mod pagelayers;
 mod procview;
+mod remote;
 mod taskmgr;
 mod titlerow;
 mod window;

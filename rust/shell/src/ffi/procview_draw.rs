@@ -568,7 +568,7 @@ fn scroll_local(v: *mut NsProcView) {
     }
 }
 
-fn queue_wheel_scroll(v: *mut NsProcView, dx: f64, dy: f64) {
+pub(super) fn queue_wheel_scroll(v: *mut NsProcView, dx: f64, dy: f64) {
     let state = view(v);
     if state.opened == 0 {
         return;

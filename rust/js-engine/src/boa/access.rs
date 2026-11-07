@@ -18,6 +18,37 @@ const IDLE_FRAME_DEPTH: usize = 1;
 thread_local! {
     static NATIVE_FRAME_DEPTHS: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
     static ENGINE_PATHS: RefCell<HashSet<PathBuf>> = RefCell::new(HashSet::new());
+    static TRUSTED_SOURCES: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
+}
+
+struct TrustedEntry;
+
+impl Drop for TrustedEntry {
+    fn drop(&mut self) {
+        TRUSTED_SOURCES.with(|names| names.borrow_mut().pop());
+    }
+}
+
+pub(crate) fn with_trusted_source<R>(name: &str, f: impl FnOnce() -> R) -> R {
+    TRUSTED_SOURCES.with(|names| names.borrow_mut().push(PathBuf::from(name)));
+    let _entry = TrustedEntry;
+    f()
+}
+
+pub(crate) fn stack_is_trusted(ctx: &Context) -> bool {
+    let Some(name) = TRUSTED_SOURCES.with(|names| names.borrow().last().cloned()) else {
+        return false;
+    };
+    let depth = ctx.frame_depth();
+    let mut saw_source = false;
+    for index in IDLE_FRAME_DEPTH..depth {
+        match ctx.frame_source_path(index) {
+            Some(SourcePath::Path(path)) if *path == name => saw_source = true,
+            Some(SourcePath::Eval) if saw_source => {}
+            _ => return false,
+        }
+    }
+    saw_source
 }
 
 pub(crate) struct HostEntry;

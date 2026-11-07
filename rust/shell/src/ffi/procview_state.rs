@@ -82,6 +82,7 @@ pub struct Req {
     pub tiles: TilesReq,
     pub have: *mut c_char,
     pub hold: *mut c_char,
+    pub remote: c_int,
 }
 
 #[repr(C)]
@@ -136,6 +137,7 @@ pub struct Res {
     pub inspect: GBoolean,
     pub print_pages: Option<Box<PrintedPages>>,
     pub print_setup: PrintSetup,
+    pub remote: c_int,
 }
 
 pub struct FindBar {

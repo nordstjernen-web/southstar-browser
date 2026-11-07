@@ -379,6 +379,10 @@ impl Scope<'_> {
         super::access::is_host_access(self.cx())
     }
 
+    pub fn stack_is_trusted(&mut self) -> bool {
+        super::access::stack_is_trusted(self.cx())
+    }
+
     pub fn is_host_caller(&mut self) -> bool {
         super::access::is_host_caller(self.cx())
     }

@@ -3,6 +3,23 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Remote control over MCP: `southstar --mcp` is a Model Context
+  Protocol server (stdio, protocol 2025-06-18, also 2025-03-26 and
+  2024-11-05) that lets a local agent such as Claude Code drive the
+  browser window: tabs, navigation, an accessibility-style page outline
+  with element refs, find, real mouse clicks, hover, typing, key
+  presses, wheel scrolling, form values, screenshots, JavaScript
+  (awaiting promises) and the console. The browser listens only when
+  Settings → Privacy → "Allow remote control" is on or it was started
+  with `--remote-control`: on 127.0.0.1, with a 256-bit token in
+  `remote-control.json` in the user state directory (mode 0600, outside
+  every directory the sandboxed renderer may read), at most four
+  connections and a 10 s authentication deadline. An orange
+  "Controlled by …" toolbar badge shows while a client is connected;
+  clicking it stops remote control. Evaluations with the
+  devtools-console origin may compile strings despite the page's CSP,
+  but only while every script on the stack belongs to that evaluation.
+  See docs/remote-control.md.
 * Service workers: a `fetch` handler sees `event.request`, `clientId`
   and `preloadResponse`. They were set where only the engine could read
   them, so handlers such as `event.request.method` threw on every request.

@@ -31,6 +31,10 @@ pub fn user_cache_dir() -> Vec<u8> {
     env_dir("XDG_CACHE_HOME").unwrap_or_else(platform::cache_dir)
 }
 
+pub fn user_state_dir() -> Vec<u8> {
+    env_dir("XDG_STATE_HOME").unwrap_or_else(platform::state_dir)
+}
+
 pub fn user_runtime_dir() -> Vec<u8> {
     env_dir("XDG_RUNTIME_DIR").unwrap_or_else(user_cache_dir)
 }
@@ -125,6 +129,10 @@ mod platform {
 
     pub(super) fn cache_dir() -> Vec<u8> {
         joined(&home_dir(), &[".cache"])
+    }
+
+    pub(super) fn state_dir() -> Vec<u8> {
+        joined(&home_dir(), &[".local", "state"])
     }
 
     pub(super) fn tmp_dir() -> Vec<u8> {
@@ -306,6 +314,10 @@ mod platform {
 
     pub(super) fn data_dir() -> Vec<u8> {
         known_folder(&LOCAL_APP_DATA).unwrap_or_else(|| joined(&home_dir(), &[".local", "share"]))
+    }
+
+    pub(super) fn state_dir() -> Vec<u8> {
+        data_dir()
     }
 
     pub(super) fn cache_dir() -> Vec<u8> {

@@ -173,7 +173,7 @@ pub(super) fn start_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) 
     });
 }
 
-fn request_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
+pub(super) fn request_link(v: *mut NsProcView, x: c_int, y: c_int, action: c_int) {
     if !opened(v) {
         return;
     }
@@ -257,7 +257,7 @@ fn start_key(v: *mut NsProcView, kind: c_int, keyval: c_uint, state: GdkModifier
     start_key_full(v, kind, keyval, state, None);
 }
 
-fn start_key_text(v: *mut NsProcView, kind: c_int, text: &[u8]) {
+pub(super) fn start_key_text(v: *mut NsProcView, kind: c_int, text: &[u8]) {
     if !opened(v) || text.is_empty() {
         return;
     }
@@ -272,7 +272,7 @@ fn start_key_text(v: *mut NsProcView, kind: c_int, text: &[u8]) {
     });
 }
 
-fn start_release(v: *mut NsProcView, x: c_int, y: c_int) {
+pub(super) fn start_release(v: *mut NsProcView, x: c_int, y: c_int) {
     if !opened(v) {
         return;
     }
@@ -297,7 +297,7 @@ pub(super) fn start_select(v: *mut NsProcView, kind: c_int, x: c_int, y: c_int) 
     });
 }
 
-fn start_click(v: *mut NsProcView, x: c_int, y: c_int, mods: c_int) {
+pub(super) fn start_click(v: *mut NsProcView, x: c_int, y: c_int, mods: c_int) {
     if !opened(v) {
         return;
     }
@@ -538,7 +538,7 @@ fn is_cntrl(c: u32) -> bool {
     southstar_unicode::is_control(c)
 }
 
-fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) -> bool {
+pub(super) fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) -> bool {
     if !opened(v) {
         return false;
     }
@@ -611,7 +611,7 @@ fn on_key(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) -> bool {
     }
 }
 
-fn on_key_released(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) {
+pub(super) fn on_key_released(v: *mut NsProcView, keyval: c_uint, state: GdkModifierType) {
     if opened(v) {
         start_key(v, 1, keyval, state);
     }

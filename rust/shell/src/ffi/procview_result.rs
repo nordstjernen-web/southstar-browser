@@ -68,7 +68,7 @@ const DEV_TAB_PERFORMANCE: c_int = 2;
 const DEV_TAB_LAYOUT: c_int = 3;
 const DEV_TAB_ELEMENTS: c_int = 4;
 
-fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
+pub(super) fn text<'a>(s: *const c_char) -> Option<&'a CStr> {
     // SAFETY: every string a reply carries is null or NUL-terminated and owned by the reply, which outlives its dispatch.
     (!s.is_null()).then(|| unsafe { CStr::from_ptr(s) })
 }
@@ -974,7 +974,9 @@ pub(super) unsafe extern "C" fn on_result(data: *mut c_void) -> GBoolean {
     // SAFETY: data is the reply the worker queued for this idle source, which hands it over once.
     let res = unsafe { &mut *data.cast::<Res>() };
     let v = res.view;
-    if view(v).closed == 0 {
+    if res.remote != 0 {
+        super::procview_remote::finish(v, res);
+    } else if view(v).closed == 0 {
         dispatch(v, res);
     }
     free_res(data.cast());

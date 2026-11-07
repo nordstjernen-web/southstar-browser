@@ -488,6 +488,7 @@ fn compile_strings_allowed(
         return false;
     }
     scope.is_host_access()
+        || scope.stack_is_trusted()
         || record::with_realm_csp(js.some(), callee, |csp| {
             csp.is_none_or(southstar_csp::Csp::eval_allowed)
         })

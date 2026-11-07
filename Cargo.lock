@@ -2229,6 +2229,7 @@ dependencies = [
  "southstar-layout-tree",
  "southstar-mat4",
  "southstar-mathml",
+ "southstar-mcp",
  "southstar-mic",
  "southstar-net",
  "southstar-netutil",
@@ -3569,6 +3570,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "southstar-mcp"
+version = "1.0.8-dev"
+dependencies = [
+ "southstar-glib",
+ "southstar-renderer-client",
+]
+
+[[package]]
 name = "southstar-media-foundation"
 version = "1.0.8-dev"
 
@@ -3803,6 +3812,7 @@ dependencies = [
  "southstar-html-parser",
  "southstar-http-cache",
  "southstar-i18n",
+ "southstar-mcp",
  "southstar-media-shm",
  "southstar-net",
  "southstar-netutil",

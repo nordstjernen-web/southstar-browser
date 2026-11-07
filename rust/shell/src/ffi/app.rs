@@ -117,6 +117,7 @@ fn on_activate(ctx: &Context, app: &Application) {
         pw.add_tab_full(url, true, ctx.private_mode);
     }
     pw.start_session_timer();
+    super::remotectl::init();
 }
 
 fn mtime_seconds(path: &Path) -> Option<i64> {
@@ -209,6 +210,7 @@ pub(super) fn ns_procapp_run(
     let app = Application::new(rules::APP_ID, southstar_gtk::APPLICATION_NON_UNIQUE);
     app.connect_activate(move |app| on_activate(&ctx, app));
     let status = app.run();
+    super::remotectl::shutdown();
     drop(app);
     southstar_history::shutdown();
     southstar_net::shutdown();

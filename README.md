@@ -178,6 +178,10 @@ See [npm/README.md](npm/README.md).
   languages so far (`data/i18n/`).
 - **Extensions** — initial support for simple, page-facing WebExtensions
   ([docs/extensions.md](docs/extensions.md)).
+- **Remote control** — an opt-in, loopback-only MCP server
+  (`southstar --mcp`) lets a local agent such as Claude Code drive and
+  inspect the browser window
+  ([docs/remote-control.md](docs/remote-control.md)).
 
 ## Build
 
