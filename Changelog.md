@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Source: duplicated helpers are merged into one copy each, about 1,600
+  lines fewer: the JavaScript bindings' property and argument helpers
+  (js-engine's props module) and per-page tables, the layout predicates
+  and GLib-style number helpers, and the network, path, time and file
+  helpers. Behaviour and rendering are unchanged.
 * Remote control over MCP: `southstar --mcp` is a Model Context
   Protocol server (stdio, protocol 2025-06-18, also 2025-03-26 and
   2024-11-05) that lets a local agent such as Claude Code drive the
