@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Security: web fonts whose `head.unitsPerEm` is outside OpenType's 16–16384
+  are rejected, as OTS does in other browsers. A font with `unitsPerEm` 0
+  overflowed the `skrifa` autohinter's coordinates: builds with overflow checks
+  (the Linux CI build, `--debug`) aborted the renderer, release builds drew
+  mangled glyphs. Found by the `fonts` fuzz target.
 * Security: Google Safe Browsing. Every navigation and redirect is checked
   against Google's phishing, malware and unwanted-software lists (Safe Browsing
   v5, local-list mode) as well as the local blocklist, and a match shows a
