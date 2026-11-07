@@ -48,7 +48,7 @@ fn settle_quiet(b: &NsBrowser) -> bool {
     !ffi::main_context_pending()
 }
 
-fn note_videos(b: &NsBrowser) {
+pub(crate) fn note_videos(b: &NsBrowser) {
     if let (Some(videos), Some(layout)) = (b.videos(), b.layout()) {
         videos.discover(layout, b.doc());
         if let Some(layout) = b.layout() {

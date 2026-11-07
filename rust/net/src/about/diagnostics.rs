@@ -137,7 +137,7 @@ pub fn html() -> Vec<u8> {
     s.extend_from_slice(b"<h3>Features</h3>");
     feature(&mut s, "WebGL (3D canvas)", true);
     if cfg!(feature = "webgpu") {
-        let state = if sys::env_set(c"NS_WEBGPU_ALLOW") {
+        let state = if sys::env_set("NS_WEBGPU_ALLOW") {
             "Enabled (--enable-webgpu)"
         } else {
             "Built \u{2014} start with --enable-webgpu"

@@ -107,11 +107,11 @@ pub struct Cache {
 }
 
 fn helper_enabled() -> bool {
-    ffi::env_set(c"NS_VIDEO_HELPER")
+    ffi::env_set("NS_VIDEO_HELPER")
 }
 
 fn dbg_audio() -> bool {
-    ffi::env_set(c"NS_DBG_AUDIO")
+    ffi::env_set("NS_DBG_AUDIO")
 }
 
 fn debug(message: &str) {
@@ -1176,7 +1176,7 @@ impl Cache {
                 v.base_us = now_us - us(v.cur_time);
             }
             let mut elapsed = (now_us - v.base_us) as f64 / 1e6;
-            if ffi::env_set(c"NS_DBG_CLOCK") && v.mse_id != 0 {
+            if ffi::env_set("NS_DBG_CLOCK") && v.mse_id != 0 {
                 debug(&format!(
                     "[clock] elapsed={elapsed:.2} prev={:.2} cur={:.2} edge={:.2}\n",
                     v.prev_tick_time,

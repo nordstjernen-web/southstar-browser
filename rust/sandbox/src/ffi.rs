@@ -17,6 +17,17 @@ use southstar_glib::{self as glib, LogLevel};
 unsafe extern "C" {
     #[cfg(target_os = "linux")]
     fn g_printerr(format: *const c_char, ...);
+    fn geteuid() -> u32;
+    fn getuid() -> u32;
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn is_root() -> bool {
+    // SAFETY: geteuid has no preconditions and touches no memory.
+    let effective = unsafe { geteuid() };
+    // SAFETY: getuid has no preconditions and touches no memory.
+    let real = unsafe { getuid() };
+    effective == 0 || real == 0
 }
 
 fn log(level: LogLevel, message: &str) {
@@ -246,16 +257,6 @@ mod linux {
         fn syscall(number: c_long, ...) -> c_long;
         pub(super) fn prctl(option: c_int, ...) -> c_int;
         fn _exit(status: c_int) -> !;
-        fn geteuid() -> u32;
-        fn getuid() -> u32;
-    }
-
-    pub(super) fn is_root() -> bool {
-        // SAFETY: geteuid has no preconditions and touches no memory.
-        let effective = unsafe { geteuid() };
-        // SAFETY: getuid has no preconditions and touches no memory.
-        let real = unsafe { getuid() };
-        effective == 0 || real == 0
     }
 
     pub(super) fn set_no_new_privs() -> bool {
@@ -798,16 +799,6 @@ mod macos {
             position: u32,
             options: c_int,
         ) -> c_int;
-        fn geteuid() -> u32;
-        fn getuid() -> u32;
-    }
-
-    pub(super) fn is_root() -> bool {
-        // SAFETY: geteuid has no preconditions and touches no memory.
-        let effective = unsafe { geteuid() };
-        // SAFETY: getuid has no preconditions and touches no memory.
-        let real = unsafe { getuid() };
-        effective == 0 || real == 0
     }
 
     fn subpath(profile: &mut Vec<u8>, dir: Option<&[u8]>) {
@@ -1340,11 +1331,7 @@ pub fn csprng_fill(buf: &mut [u8]) -> bool {
 pub fn refuse_root() -> bool {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        #[cfg(target_os = "linux")]
-        let root = linux::is_root();
-        #[cfg(target_os = "macos")]
-        let root = macos::is_root();
-        if !root {
+        if !is_root() {
             return true;
         }
         if env_flag(c"NS_ALLOW_ROOT") {

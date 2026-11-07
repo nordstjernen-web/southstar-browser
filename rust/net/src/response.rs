@@ -48,10 +48,7 @@ pub struct Response {
     pub(crate) redirect_count: c_int,
 }
 
-pub fn cstr(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
+pub use southstar_unicode::c_string_until_nul as cstr;
 
 pub(crate) fn text(value: &Option<CString>) -> Option<&[u8]> {
     value.as_deref().map(CStr::to_bytes)

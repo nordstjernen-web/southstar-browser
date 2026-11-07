@@ -4,8 +4,6 @@
 
 use std::collections::HashMap;
 
-use crate::text::strip;
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Scope {
     Host,
@@ -30,7 +28,7 @@ pub fn parse_list(content: &[u8]) -> Hosts {
         .position(|&b| b == 0)
         .unwrap_or(content.len())];
     for line in content.split(|&c| c == b'\n') {
-        let line = strip(line);
+        let line = line.trim_ascii();
         if line.is_empty() || line[0] == b'#' {
             continue;
         }
@@ -42,7 +40,7 @@ pub fn parse_list(content: &[u8]) -> Hosts {
             Some(host) => (host, Scope::WithSubdomains),
             None => (entry, Scope::Host),
         };
-        let expiry = strip(&line[space + 1..]);
+        let expiry = line[space + 1..].trim_ascii();
         let expires = if expiry == UNLIMITED {
             None
         } else {
@@ -145,9 +143,12 @@ pub fn parse_policy(value: &[u8]) -> Policy {
         subdomains: false,
     };
     for directive in value.split(|&c| c == b';') {
-        let directive = strip(directive);
+        let directive = directive.trim_ascii();
         let (name, arg) = match directive.iter().position(|&c| c == b'=') {
-            Some(eq) => (strip(&directive[..eq]), Some(strip(&directive[eq + 1..]))),
+            Some(eq) => (
+                directive[..eq].trim_ascii(),
+                Some(directive[eq + 1..].trim_ascii()),
+            ),
             None => (directive, None),
         };
         if name.eq_ignore_ascii_case(b"max-age") {
@@ -175,7 +176,7 @@ pub fn is_ip_literal(host: &[u8]) -> bool {
 pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: i64) -> Vec<u8> {
     let mut out = Vec::new();
     for line in existing.split(|&c| c == b'\n') {
-        let trimmed = strip(line);
+        let trimmed = line.trim_ascii();
         if trimmed.is_empty() {
             continue;
         }
@@ -184,7 +185,7 @@ pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: 
         let entry = entry.strip_prefix(b".").unwrap_or(entry);
         let expired = fields
             .next()
-            .and_then(|at| parse_expiry(strip(at)))
+            .and_then(|at| parse_expiry(at.trim_ascii()))
             .is_some_and(|at| at <= now);
         if trimmed[0] != b'#' && (expired || entry.eq_ignore_ascii_case(host)) {
             continue;

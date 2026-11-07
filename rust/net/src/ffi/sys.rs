@@ -241,12 +241,7 @@ pub fn random_u32() -> u32 {
     util::random_u32()
 }
 
-pub fn now_seconds() -> i64 {
-    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
-        Ok(after) => after.as_secs() as i64,
-        Err(before) => -(before.duration().as_secs() as i64),
-    }
-}
+pub use southstar_glib::now_seconds;
 
 fn is_symlink(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())

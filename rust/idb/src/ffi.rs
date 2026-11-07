@@ -4,32 +4,15 @@
 
 use core::ffi::CStr;
 use southstar_unicode::until_nul;
-use std::ffi::{CString, OsStr};
-use std::path::{Path, PathBuf};
+use std::ffi::CString;
+use std::path::PathBuf;
 
+use southstar_glib::os_bytes;
 use southstar_js_engine::{Scope, Value};
 use southstar_js_runtime::api;
 
-#[cfg(unix)]
 fn path_of(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(OsStr::from_bytes(until_nul(bytes)))
-}
-
-#[cfg(not(unix))]
-fn path_of(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(until_nul(bytes)).into_owned())
-}
-
-#[cfg(unix)]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    text.as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-fn os_bytes(text: &OsStr) -> Vec<u8> {
-    text.to_string_lossy().into_owned().into_bytes()
+    southstar_glib::path_from_bytes_lossy(until_nul(bytes))
 }
 
 pub fn sha256_hex(input: &[u8]) -> Vec<u8> {
@@ -50,28 +33,8 @@ pub fn build_filename(parts: &[&[u8]]) -> Vec<u8> {
     os_bytes(joined.as_os_str())
 }
 
-#[cfg(unix)]
-fn make_private(path: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
-}
-
-#[cfg(not(unix))]
-fn make_private(_path: &Path) {}
-
 pub fn make_private_dir(dir: &[u8]) {
-    let dir = path_of(dir);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        let _ = std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&dir);
-    }
-    #[cfg(not(unix))]
-    let _ = std::fs::create_dir_all(&dir);
-    make_private(&dir);
+    southstar_config::util::make_private_dirs(&path_of(dir));
 }
 
 pub fn unlink(path: &[u8]) {

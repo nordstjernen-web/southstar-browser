@@ -252,7 +252,4 @@ pub fn rust_info() -> RustInfo {
     }
 }
 
-pub fn env_set(name: &CStr) -> bool {
-    name.to_str()
-        .is_ok_and(|name| std::env::var_os(name).is_some())
-}
+pub use southstar_glib::env_set;

@@ -124,14 +124,40 @@ pub fn path_from_bytes(bytes: &[u8]) -> Option<std::path::PathBuf> {
 }
 
 #[cfg(unix)]
-pub fn path_bytes(path: &std::path::Path) -> Vec<u8> {
+pub fn path_from_bytes_lossy(bytes: &[u8]) -> std::path::PathBuf {
     use std::os::unix::ffi::OsStrExt;
-    path.as_os_str().as_bytes().to_vec()
+    std::ffi::OsStr::from_bytes(bytes).into()
 }
 
 #[cfg(not(unix))]
+pub fn path_from_bytes_lossy(bytes: &[u8]) -> std::path::PathBuf {
+    String::from_utf8_lossy(bytes).into_owned().into()
+}
+
+#[cfg(unix)]
+pub fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+    use std::os::unix::ffi::OsStrExt;
+    text.as_bytes().to_vec()
+}
+
+#[cfg(not(unix))]
+pub fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+    text.to_string_lossy().into_owned().into_bytes()
+}
+
 pub fn path_bytes(path: &std::path::Path) -> Vec<u8> {
-    path.to_string_lossy().into_owned().into_bytes()
+    os_bytes(path.as_os_str())
+}
+
+pub fn env_set(name: &str) -> bool {
+    std::env::var_os(name).is_some()
+}
+
+pub fn now_seconds() -> i64 {
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(after) => after.as_secs() as i64,
+        Err(before) => -(before.duration().as_secs() as i64),
+    }
 }
 
 #[cfg(unix)]

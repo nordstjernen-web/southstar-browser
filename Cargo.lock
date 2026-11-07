@@ -2262,6 +2262,7 @@ dependencies = [
 name = "southstar-font"
 version = "1.0.8-dev"
 dependencies = [
+ "southstar-config",
  "southstar-digest",
  "southstar-glib",
  "southstar-net",

@@ -6,7 +6,6 @@ pub(crate) mod ffi;
 
 use core::ffi::CStr;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use southstar_js_engine::{Attributes, NativeFn, Scope, Value};
@@ -48,10 +47,7 @@ fn cache() -> MutexGuard<'static, Cache> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-fn c(bytes: &[u8]) -> CString {
-    let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-    CString::new(&bytes[..end]).unwrap_or_default()
-}
+use southstar_unicode::c_string_until_nul as c;
 
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()

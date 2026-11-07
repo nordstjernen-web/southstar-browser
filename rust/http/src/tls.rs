@@ -223,12 +223,6 @@ fn would_block(error: &io::Error) -> bool {
     ) || socket::retryable(error.raw_os_error().unwrap_or(0))
 }
 
-fn unbracketed(host: &str) -> &str {
-    host.strip_prefix('[')
-        .and_then(|h| h.strip_suffix(']'))
-        .unwrap_or(host)
-}
-
 pub struct Tls {
     conn: ClientConnection,
     tcp: TcpStream,
@@ -270,7 +264,8 @@ impl Tls {
     ) -> Result<Tls, Handshake> {
         let failed = |certificate| Handshake::Failed { certificate };
         let config = config(verify, h2, settings).map_err(|_| failed(None))?;
-        let name = ServerName::try_from(unbracketed(host).to_owned()).map_err(|_| failed(None))?;
+        let name = ServerName::try_from(crate::client::resolve_host(host).to_owned())
+            .map_err(|_| failed(None))?;
         let conn = ClientConnection::new(config, name).map_err(|_| failed(None))?;
         let mut tls = Tls { conn, tcp };
         loop {

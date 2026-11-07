@@ -124,12 +124,7 @@ pub(crate) fn storage_path_for_origin(origin: &str) -> Option<String> {
     let data_dir = String::from_utf8(glib::user_data_dir()).ok()?;
     let separator = std::path::MAIN_SEPARATOR;
     let dir = format!("{data_dir}{separator}southstar{separator}localstorage");
-    let mut builder = std::fs::DirBuilder::new();
-    builder.recursive(true);
-    #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-    let _ = builder.create(&dir);
-    restrict_mode(Path::new(&dir), 0o700);
+    southstar_config::util::make_private_dirs(Path::new(&dir));
     Some(format!("{dir}{separator}{hash}.ini"))
 }
 
@@ -161,7 +156,7 @@ fn write_snapshot(snapshot: &Snapshot) {
             snapshot.path
         ));
     }
-    restrict_mode(path, 0o600);
+    let _ = southstar_config::util::set_mode(path, 0o600);
 }
 
 fn replace_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
@@ -184,15 +179,6 @@ fn write_synced(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     std::io::Write::write_all(&mut file, contents)?;
     file.sync_all()
 }
-
-#[cfg(unix)]
-fn restrict_mode(path: &Path, mode: u32) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode));
-}
-
-#[cfg(not(unix))]
-fn restrict_mode(_path: &Path, _mode: u32) {}
 
 pub(crate) fn cancel_flush(page: &Page) {
     if let Some(source) = page.flush_source.take() {

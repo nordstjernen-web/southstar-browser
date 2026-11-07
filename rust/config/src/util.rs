@@ -21,16 +21,7 @@ pub fn os_path(path: &[u8]) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-#[cfg(unix)]
-pub fn path_bytes(path: &Path) -> Vec<u8> {
-    use std::os::unix::ffi::OsStrExt;
-    path.as_os_str().as_bytes().to_vec()
-}
-
-#[cfg(not(unix))]
-pub fn path_bytes(path: &Path) -> Vec<u8> {
-    path.to_string_lossy().into_owned().into_bytes()
-}
+pub use southstar_glib::path_bytes;
 
 fn is_separator(byte: u8) -> bool {
     byte == b'/' || (cfg!(windows) && byte == b'\\')
@@ -131,6 +122,28 @@ pub fn set_mode(path: &Path, mode: u32) -> io::Result<()> {
     {
         let _ = (path, mode);
         Ok(())
+    }
+}
+
+pub fn make_private_dirs(path: &Path) {
+    let _ = make_dirs(path, 0o700);
+    let _ = set_mode(path, 0o700);
+}
+
+pub fn write_replacing(path: &Path, data: &[u8]) -> io::Result<()> {
+    let mut temp_name = path.as_os_str().to_owned();
+    temp_name.push(format!(".{}.tmp", std::process::id()));
+    let temp = PathBuf::from(temp_name);
+    let written = File::create(&temp).and_then(|mut file| {
+        file.write_all(data)?;
+        file.sync_all()
+    });
+    match written.and_then(|()| fs::rename(&temp, path)) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = fs::remove_file(&temp);
+            Err(error)
+        }
     }
 }
 

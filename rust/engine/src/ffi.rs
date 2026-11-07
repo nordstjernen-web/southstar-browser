@@ -296,7 +296,7 @@ pub fn restyle(req: &Relayout<'_>) -> Option<Rc<StyleMap>> {
     Some(styles)
 }
 
-fn profile_enabled() -> bool {
+pub fn profile_enabled() -> bool {
     static PROFILE: OnceLock<bool> = OnceLock::new();
     *PROFILE.get_or_init(|| std::env::var_os("NS_PROFILE").is_some())
 }

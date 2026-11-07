@@ -5,7 +5,6 @@
 use core::ffi::c_int;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
 
 use crate::ffi::sdl::AudioStream;
 use crate::mixer::{DEVICE_RATE, MAX_FLOATS, MAX_SECONDS};
@@ -78,16 +77,7 @@ pub fn append_stereo(pcm: &mut Option<Vec<f32>>, stereo: &[f32]) -> bool {
     true
 }
 
-#[cfg(unix)]
-pub fn path(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
-}
-
-#[cfg(not(unix))]
-pub fn path(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(String::from_utf8_lossy(bytes).into_owned())
-}
+pub use southstar_glib::path_from_bytes_lossy as path;
 
 pub fn file_size(bytes: &[u8]) -> i64 {
     std::fs::metadata(path(bytes)).map_or(-1, |m| m.len() as i64)
