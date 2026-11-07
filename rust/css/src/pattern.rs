@@ -8,6 +8,7 @@ const PATTERN_BACKTRACK_LIMIT: u64 = 100_000;
 
 pub fn pattern_matches(pattern: &[u8], value: &[u8]) -> Option<bool> {
     let pattern = core::str::from_utf8(pattern).ok()?;
+    Regex::with_flags(pattern, "v").ok()?;
     let regex = Regex::with_flags(&format!("^(?:{pattern})$"), "v").ok()?;
     regex
         .find_with_backtrack_limit(&String::from_utf8_lossy(value), PATTERN_BACKTRACK_LIMIT)

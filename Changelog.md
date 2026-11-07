@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Forms: `checkValidity()`, `reportValidity()` and `validity.patternMismatch`
+  match the `pattern` attribute with the same bounded matcher as `:valid` and
+  `:invalid`, so a script can no longer hang the page through validation on a
+  pattern such as `(a+)+`. Validation no longer calls the page's global
+  `RegExp`, which a page could replace; a pattern that does not compile on its
+  own still constrains nothing.
 * Network: a zstd-encoded response no longer hangs its decoding thread when a
   network read ends inside or just before the frame's 4-byte checksum. ruzstd
   reports four bytes read there without consuming them, and the decoder looped on

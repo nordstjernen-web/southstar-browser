@@ -155,10 +155,6 @@ pub(crate) fn dispatch_window_only_event(js: Js, doc: Option<Node<'_>>, kind: &s
     crate::events::dispatch_window_only_event(js.some(), doc, kind, event);
 }
 
-pub(crate) fn active_js() -> Option<Js> {
-    Js::of(super::record::active())
-}
-
 pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     super::wrapper::unwrap(value)
 }
