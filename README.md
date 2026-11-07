@@ -11,7 +11,7 @@ and JavaScript standards, written in Rust.
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).
 
-![Southstar Browser playing a YouTube video](docs/screenshot.png)
+![Southstar Browser showing Google Finance](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
@@ -31,7 +31,7 @@ Supported platforms:
 CI builds Linux on every push and pull request and FreeBSD and NetBSD
 nightly; the Windows, macOS and musl workflows run only when started by hand.
 
-**Version:** 1.0.6 (`main` is 1.0.7-dev).
+**Version:** 1.0.7 (`main` is 1.0.8-dev).
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 
@@ -48,7 +48,7 @@ web-platform-tests slice passes 95% of its subtests
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The browser is about 385,000 lines of Rust in some 161
+**Minimalism.** The browser is about 385,000 lines of Rust in some 163
 crates under `rust/`, excluding the vendored Boa fork and generated tables —
 small enough for one person to read and audit end-to-end.
 
@@ -63,6 +63,12 @@ small enough for one person to read and audit end-to-end.
 - [ ] Bring the Boa build up to and past the QuickJS-era browser on the WPT
       slice, Acid3, speed and memory.
 - [x] Pass all of test262 (52,133 of 52,133; `southstar-jsshell test262`).
+- [x] Build with Cargo alone: `cargo xtask` replaced meson, and the tree
+      holds no C code of its own.
+- [ ] Replace the C libraries underneath with Rust where a mature Rust
+      implementation exists. Done: zlib, brotli, zstd, libwebp, libthai
+      and libpsl. Next: libseccomp, OpenSSL's libcrypto (WebCrypto) and the
+      GLib calls outside the UI.
 
 How the port was done (the processes, the engine's data model and the order
 the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
@@ -128,9 +134,9 @@ See [npm/README.md](npm/README.md).
   HTTP CONNECT and SOCKS proxies, plus HSTS, CSP, subresource-integrity
   checks, partitioned cookies, speculative subresource loading, request
   coalescing and a `Vary`-aware HTTP cache.
-- **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg`
-  and an in-tree BMP decoder) read PNG/APNG, GIF, BMP and JPEG; libwebp
-  decodes lossy, lossless and animated WebP; ICO and SVG are rendered
+- **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg`,
+  `image-webp` and an in-tree BMP decoder) read PNG/APNG, GIF, BMP, JPEG and
+  lossy, lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF and inline PDF support.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
@@ -176,8 +182,8 @@ See [npm/README.md](npm/README.md).
 
 ```sh
 sudo apt install build-essential git pkg-config cargo rustc \
-    libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libgtk-4-dev libepoxy-dev libssl-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libsdl2-dev publicsuffix \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 cargo xtask build
 ./target/release/southstar
@@ -186,6 +192,7 @@ cargo xtask build
 `cargo xtask build` checks the installed libraries, picks the optional
 features they allow and builds a release; `cargo xtask run` builds and
 starts it, and `cargo xtask install --prefix /usr/local` installs it.
+`cargo xtask features` prints what the installed libraries enable.
 
 Rust 1.91 or newer is required. Debian forky and sid and the rolling
 distributions ship it, and Ubuntu 24.04 packages it as `rustc-1.91` and
@@ -241,13 +248,19 @@ Southstar is an independent engine — no upstream browser code.
 **Rust crates** from crates.io, pinned in `Cargo.lock` and fetched by Cargo
 at build time (see `debian/README.source` for an offline, vendored build):
 the [png](https://crates.io/crates/png), [gif](https://crates.io/crates/gif) and [zune-jpeg](https://crates.io/crates/zune-jpeg) crates
-(memory-safe image decoding), [rustls](https://github.com/rustls/rustls) with
+(memory-safe image decoding),
+[image-webp](https://crates.io/crates/image-webp) (WebP),
+[flate2](https://crates.io/crates/flate2) over [zlib-rs](https://crates.io/crates/zlib-rs),
+[brotli-decompressor](https://crates.io/crates/brotli-decompressor) and
+[ruzstd](https://crates.io/crates/ruzstd) (gzip, deflate, brotli and zstd),
+ICU4X's [icu_segmenter](https://crates.io/crates/icu_segmenter) (Thai, Lao,
+Khmer and Myanmar word breaking), [rustls](https://github.com/rustls/rustls) with
 [ring](https://github.com/briansmith/ring) and RustCrypto's
 [ml-kem](https://crates.io/crates/ml-kem) (TLS with post-quantum key exchange),
 and [wasmi](https://github.com/wasmi-labs/wasmi) (WebAssembly); web fonts are
 shaped by [HarfRust](https://github.com/harfbuzz/harfrust) and
 drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
-(`-Drust-shaper=false` leaves them on HarfBuzz and FreeType).
+(`cargo xtask build --no-rust-shaper` leaves them on HarfBuzz and FreeType).
 
 **Required system libraries:**
 
@@ -260,18 +273,22 @@ drawn from [skrifa](https://github.com/googlefonts/fontations) outlines
 | fontconfig, FreeType | fontconfig ≥ 2.15 | font matching and font files |
 | libepoxy | — | OpenGL/ES function dispatch for WebGL |
 | OpenSSL (libcrypto) | — | WebCrypto (`crypto.subtle`) |
-| zlib | — | gzip/deflate content decoding |
 | uchardet | — | charset detection |
 | SQLite | — | IndexedDB persistent storage |
-| libwebp | — | WebP decoding (lossy, lossless and animated) |
 | libseccomp | — (Linux only) | syscall sandbox; no-op on macOS/Windows |
+
+**At runtime** the browser reads the
+[Public Suffix List](https://publicsuffix.org) (cookie scoping and sites)
+from the system's `/usr/share/publicsuffix/` (Debian/Ubuntu `publicsuffix`,
+Fedora/Arch `publicsuffix-list`); the Windows, macOS, AppImage and tarball
+bundles ship a copy. Without it every host is its own site and `Domain=`
+cookies stay host-only.
 
 **Optional**, auto-detected or build-time-selected:
 [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
 required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
-PDF), libavif (AVIF images), Enchant (spell checking), SDL2 (audio output for the `southstar-audio` helper; `-Daudio`),
-vorbisfile and opusfile (Ogg audio without FFmpeg), libbrotlidec and libzstd (`br` and `zstd` content
-decoding), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
+PDF), libavif (AVIF images), Enchant (spell checking), SDL2 (audio output for the `southstar-audio` helper; `--audio`),
+vorbisfile and opusfile (Ogg audio without FFmpeg), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
 WebGPU).
 
 ## License
