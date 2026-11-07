@@ -507,10 +507,6 @@ criteria = "safe-to-deploy"
 version = "0.8.11"
 criteria = "safe-to-deploy"
 
-[[exemptions.regress]]
-version = "0.12.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.ring]]
 version = "0.17.14"
 criteria = "safe-to-deploy"

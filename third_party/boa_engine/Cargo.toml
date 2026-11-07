@@ -348,7 +348,9 @@ version = "1.15.0"
 version = "0.10.2"
 
 [dependencies.regress]
-version = "0.12.0"
+package = "southstar-regress"
+version = "=1.0.8-dev"
+path = "../regress"
 features = ["utf16"]
 
 [dependencies.rustc-hash]

@@ -22,7 +22,7 @@ southstar-mat4 = { path = "../mat4", version = "=1.0.8-dev" }
 southstar-numfmt = { path = "../numfmt", version = "=1.0.8-dev" }
 southstar-selector-text = { path = "../selector-text", version = "=1.0.8-dev" }
 southstar-url = { path = "../url", version = "=1.0.8-dev" }
-regress = "0.12.0"
+regress = { package = "southstar-regress", path = "../../third_party/regress", version = "=1.0.8-dev" }
 
 [features]
 avif = []
