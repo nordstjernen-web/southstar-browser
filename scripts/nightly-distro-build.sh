@@ -116,8 +116,7 @@ if [ -z "${NS_BUILD_JOBS:-}" ]; then
     [ "$jobs" -gt "$cores" ] && jobs=$cores
     export NS_BUILD_JOBS=$jobs
 fi
-export NS_BUILD_LTO=${NS_BUILD_LTO:-false}
-echo "nightly-distro-build($DISTRO): building with -j${NS_BUILD_JOBS} lto=${NS_BUILD_LTO} (mem-bounded)"
+echo "nightly-distro-build($DISTRO): building with -j${NS_BUILD_JOBS} (mem-bounded)"
 
 ./scripts/pack-linux.sh
 
