@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Security: Google Safe Browsing. Every navigation and redirect is checked
+  against Google's phishing, malware and unwanted-software lists (Safe Browsing
+  v5, local-list mode) as well as the local blocklist, and a match shows a
+  warning page that names the threat. The hash-prefix lists are kept on the
+  device in the cache directory and verified against Google's checksum; only a
+  4-byte prefix is sent to Google, and only when an address matches one. On by
+  default, switched off with Settings → Privacy → "Block dangerous sites".
+  about:southstar shows the status, the list sizes and update times, and this
+  process's lookup counters. The API key is read from
+  `NS_SAFE_BROWSING_API_KEY` at build time, which the release workflows take
+  from a repository secret; a build without a key keeps the local blocklist
+  only.
 * JavaScript: invalid UTF-8 in a script no longer swallows the bytes after it. The
   parser decoded every lead byte's continuation bytes unchecked, so in an external
   script, which reaches it undecoded, `'\xC0\'` ended the string at the escaped

@@ -157,20 +157,18 @@ See [npm/README.md](npm/README.md).
   laid out over `rust/text` and Cairo and embedded inline on the text baseline.
 - **Spell checking** — optional, via Enchant: misspelled words in editable
   text get a red wavy underline, honouring the `spellcheck` attribute.
-- **Safe browsing** — a top-level navigation's host is checked against a local
-  SHA-256 blocklist before it is fetched, entirely on-device; a match shows a
-  full-page warning. The list shipped in `data/safebrowsing.list` holds only
-  test entries and nothing updates it, so it protects against nothing until
-  you supply your own in `~/.config/southstar/safebrowsing.list` (or point
-  `NS_SAFEBROWSING_LIST` at one).
+- **Safe browsing** — every top-level navigation and redirect is checked
+  against Google Safe Browsing and a local SHA-256 host blocklist; a match
+  shows a full-page warning (see [Google Safe Browsing](#google-safe-browsing)).
 - **Process-per-tab** — each tab's engine runs in its own sandboxed
   `southstar-renderer` process; the GTK app is a thin shell that blits the
   renderer's shared-memory framebuffer and forwards input over an IPC control
   channel, so a page can't take down the UI. `--single-process` runs
   every tab's engine in the shell process instead.
 - **Privacy** — no telemetry or update pings, standards-compliant client
-  hints, local-only safe browsing, partitioned cookies and a `--private`
-  session mode.
+  hints, safe browsing that checks addresses on the device and sends Google
+  only a 4-byte hash prefix on a match, partitioned cookies and a `--private`
+  session mode ([docs/privacy-policy.md](docs/privacy-policy.md)).
 - **UI** — tabs, bookmarks, history, downloads, find-in-page, printing and
   save-to-PDF, a JavaScript console, settings, headless mode, and a C
   embedding API (`rust/capi/include/libsouthstar.h`). The interface
@@ -182,6 +180,20 @@ See [npm/README.md](npm/README.md).
   (`southstar --mcp`) lets a local agent such as Claude Code drive and
   inspect the browser window
   ([docs/remote-control.md](docs/remote-control.md)).
+
+## Google Safe Browsing
+
+Southstar warns before opening a site that
+[Google Safe Browsing](https://safebrowsing.google.com/) lists as phishing,
+malware or unwanted software, checking every navigation and redirect.
+
+- **Private by design.** Google's hash-prefix lists are kept on your device.
+  Only a 4-byte hash prefix is sent to Google, and only when an address
+  matches one, never the address itself.
+- **On by default.** Turn it off under Settings → Privacy → "Block dangerous
+  sites". about:southstar shows its status and list sizes.
+- **Builds without a key** (`NS_SAFE_BROWSING_API_KEY` at compile time) use
+  only the local blocklist, `~/.config/southstar/safebrowsing.list`.
 
 ## Build
 

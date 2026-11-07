@@ -45,6 +45,7 @@ pub fn json() -> Vec<u8> {
             concat!(
                 "\",\"cookie_policy\":{},",
                 "\"do_not_track\":{},\"global_privacy_control\":{},",
+                "\"safe_browsing\":{},",
                 "\"strip_tracking_params\":{},\"https_first\":{},",
                 "\"images_enabled\":{},\"javascript_enabled\":{},",
                 "\"webgl_enabled\":{},\"remote_control\":{},",
@@ -53,6 +54,7 @@ pub fn json() -> Vec<u8> {
             c.map_or(1, |c| c.cookie_policy),
             on(|c| c.do_not_track),
             on(|c| c.global_privacy_control),
+            on(|c| c.safe_browsing),
             on(|c| c.strip_tracking_params),
             on(|c| c.https_first),
             on(|c| c.images_enabled),
@@ -69,9 +71,10 @@ pub fn json() -> Vec<u8> {
 
 type Switch = fn(&mut NsConfig) -> &mut GBoolean;
 
-const SWITCHES: [(&str, Switch); 10] = [
+const SWITCHES: [(&str, Switch); 11] = [
     ("do_not_track", |c| &mut c.do_not_track),
     ("global_privacy_control", |c| &mut c.global_privacy_control),
+    ("safe_browsing", |c| &mut c.safe_browsing),
     ("strip_tracking_params", |c| &mut c.strip_tracking_params),
     ("https_first", |c| &mut c.https_first),
     ("images_enabled", |c| &mut c.images_enabled),

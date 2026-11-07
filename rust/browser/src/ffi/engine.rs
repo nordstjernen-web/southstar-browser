@@ -208,6 +208,13 @@ pub fn init_subsystems() {
     southstar_paint::register_font_oracle();
     southstar_spellcheck::init();
     southstar_bytecode_cache::init();
+    southstar_net::set_safety_hooks(southstar_net::SafetyHooks {
+        blocks_navigation: |url| {
+            southstar_safebrowsing::check_url(url) != southstar_safebrowsing::Verdict::Safe
+        },
+        status_rows: southstar_safebrowsing::status_rows,
+    });
+    southstar_safebrowsing::start();
 }
 
 fn webgpu_allowed() -> bool {

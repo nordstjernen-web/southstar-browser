@@ -354,6 +354,11 @@ const SETTINGS_BODY: &str = concat!(
         "Tell sites not to sell or share your data."
     ),
     switch!(
+        "safe_browsing",
+        "Block dangerous sites",
+        "Warn before opening known phishing and malware sites, using Google Safe Browsing and a local list."
+    ),
+    switch!(
         "strip_tracking_params",
         "Strip tracking parameters",
         "Remove utm_ and similar tags from links you open."
@@ -418,7 +423,7 @@ const SETTINGS_TAIL: &str = concat!(
     "{n:'Bing',u:'https://www.bing.com/search?q=%s'},",
     "{n:'Brave',u:'https://search.brave.com/search?q=%s'},",
     "{n:'Wikipedia',u:'https://en.wikipedia.org/w/index.php?search=%s'}];\n",
-    "var toggles=['do_not_track','global_privacy_control',",
+    "var toggles=['do_not_track','global_privacy_control','safe_browsing',",
     "'strip_tracking_params','https_first','images_enabled',",
     "'javascript_enabled','webgl_enabled','local_storage_enabled',",
     "'cache_enabled','remote_control'];\n",

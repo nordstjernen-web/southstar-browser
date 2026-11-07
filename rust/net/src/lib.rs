@@ -21,6 +21,7 @@ mod netlog;
 mod request;
 mod response;
 pub mod route;
+mod safety;
 mod storage;
 mod transport;
 mod url;
@@ -57,6 +58,7 @@ pub use netlog::{
 };
 pub use request::CORS_MODE_LINE;
 pub use response::{Response, Timing as ResponseTiming};
+pub use safety::{SafetyHooks, set_safety_hooks};
 pub use url::{
     has_client_hints, is_nosniff as header_is_nosniff, origin_from, parse_refresh,
     raw_header_values, referer_for, same_origin,

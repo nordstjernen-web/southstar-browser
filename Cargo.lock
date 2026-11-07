@@ -3777,7 +3777,10 @@ dependencies = [
  "southstar-config",
  "southstar-digest",
  "southstar-glib",
+ "southstar-http",
+ "southstar-net",
  "southstar-unicode",
+ "southstar-url",
 ]
 
 [[package]]

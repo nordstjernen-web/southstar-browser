@@ -64,7 +64,7 @@ members = ["css", "css-color", "css-grammar", "css-media", "css-prop-syntax", "c
 description = "Southstar's storage and support code: the HTTP cache, cookies, history, CSP, Intl data, image decoders and WebCrypto"
 members = [
     "http-cache", "netstore", "history", "csp", "intl-core", "webcrypto", "image-decoders",
-    "bytecode-cache", "safebrowsing", "pdf",
+    "bytecode-cache", "pdf",
 ]
 
 [southstar-engine]
@@ -73,7 +73,7 @@ members = []
 
 [southstar-runtime]
 description = "Southstar's browser runtime: the browser core, the renderer process and its client, headless mode and the watchdog"
-members = ["browser", "headless", "renderer-host", "renderer-client", "watchdog", "mcp", "ffi"]
+members = ["browser", "safebrowsing", "headless", "renderer-host", "renderer-client", "watchdog", "mcp", "ffi"]
 
 [southstar-shell]
 description = "Southstar's GTK 4 shell: windows, tabs, chrome and the GTK bindings it uses"

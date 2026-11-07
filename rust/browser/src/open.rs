@@ -148,8 +148,8 @@ fn resolve_local_path(url: &CStr) -> Option<CString> {
     ffi::local_file_uri(url)
 }
 
-fn show_interstitial(url: &CStr, host: &CStr, view: &Viewport) -> Page {
-    let html = ffi::safebrowsing_interstitial(url, host);
+fn show_interstitial(url: &CStr, host: &CStr, verdict: ffi::Verdict, view: &Viewport) -> Page {
+    let html = ffi::safebrowsing_interstitial(url, host, verdict);
     let doc = ffi::html_parse(html.as_deref(), true);
     drop(html);
     ffi::create_browser(ffi::Created {
@@ -164,6 +164,13 @@ fn show_interstitial(url: &CStr, host: &CStr, view: &Viewport) -> Page {
         url: Some(url),
         timing: None,
     })
+}
+
+fn blocked_landing(resp: &Response, requested: &CStr) -> Option<(CString, CString, ffi::Verdict)> {
+    let landed = resp.final_url().filter(|landed| *landed != requested)?;
+    let host = ffi::url_host_from(landed)?;
+    let verdict = ffi::safebrowsing_check_url(landed);
+    (verdict != ffi::Verdict::Safe).then(|| (landed.to_owned(), host, verdict))
 }
 
 fn error_page(resp: &mut Response, fetch_url: &CStr) {
@@ -227,9 +234,11 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
 
     if post.is_none()
         && let Some(host) = ffi::url_host_from(url)
-        && ffi::safebrowsing_blocked(&host)
     {
-        return Some(show_interstitial(url, &host, view));
+        let verdict = ffi::safebrowsing_check_url(url);
+        if verdict != ffi::Verdict::Safe {
+            return Some(show_interstitial(url, &host, verdict, view));
+        }
     }
 
     let file_url = resolve_local_path(url);
@@ -261,6 +270,11 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
             user_activated,
             None,
         );
+        if let Some((landed, host, verdict)) =
+            upgraded.as_ref().and_then(|r| blocked_landing(r, url))
+        {
+            return Some(show_interstitial(&landed, &host, verdict, view));
+        }
         if let Some(r) = upgraded.filter(|r| r.error().is_none() && r.has_body()) {
             fetch_url = https_url;
             resp = Some(r);
@@ -276,6 +290,9 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
             post,
         ),
     };
+    if let Some((landed, host, verdict)) = resp.as_ref().and_then(|r| blocked_landing(r, url)) {
+        return Some(show_interstitial(&landed, &host, verdict, view));
+    }
     if let Some(r) = resp.as_mut()
         && post.is_none()
         && (r.error().is_some() || r.status() >= 400)
