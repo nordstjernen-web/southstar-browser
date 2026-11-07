@@ -71,8 +71,8 @@ stays that way.
 keywords, the functions imported through `extern` blocks, the
 `no_mangle`/`export_name` exports, `static mut` items and the hits of the
 three documentation lints above, and compares them with
-`rust/unsafe-budget.tsv`. CI runs it on every push and pull request and
-publishes the crates that changed in the job summary.
+`rust/unsafe-budget.tsv`. Run it locally before pushing; CI does not run
+it.
 
 - A count above its budget fails the build.
 - A count below its budget also fails until the budget is lowered with

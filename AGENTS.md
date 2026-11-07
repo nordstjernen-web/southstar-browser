@@ -154,8 +154,9 @@ This repo is driven by Codex in long uninterrupted sessions.
   `main` and every PR targeting `main`, plus manual `workflow_dispatch`;
   FreeBSD and NetBSD run nightly. The Windows, macOS and musl workflows are
   disabled: they run only when started by hand (`workflow_dispatch`).
-  The local machine is still the primary correctness gate before
-  pushing; CI provides cross-platform sanity coverage.
+  The Linux workflow only builds the browser (`cargo xtask build`);
+  fmt, clippy, the unsafe budget, `cargo deny` and `cargo vet` are run
+  locally before pushing, which is the correctness gate.
 
 ## Build / verify locally
 
@@ -209,8 +210,8 @@ library API or language feature stabilized after 1.91.
   (`rust/southstar`) builds the browser from the published crates. The workspace's crates
   are not published one by one: `scripts/crates-io.py` merges them into the
   ~two dozen crates `scripts/crates-io-groups.toml` lists, each member a module
-  with its `crate::`/`southstar_x::` paths rewritten, and CI checks that the
-  merged crates build. A new crate goes into a group there ("engine" takes the
+  with its `crate::`/`southstar_x::` paths rewritten, and `python3 scripts/crates-io.py check` checks that
+  the merged crates build. A new crate goes into a group there ("engine" takes the
   rest) and embeds only files inside its own directory.
   `scripts/set-version.py` sets the version everywhere it is written;
   `scripts/crates-io.py publish` publishes a release.
@@ -232,11 +233,11 @@ library API or language feature stabilized after 1.91.
   `cssparser`, `selectors`, `url`, `encoding_rs`, …) count as upstream browser
   engine code and stay out. `deny.toml` enforces that list, RustSec
   advisories, licences compatible with NSL-1.0 OR GPL-3.0-or-later and
-  crates.io as the only source: `cargo deny check` must pass (the Linux CI
-  build runs it on every push). `supply-chain/` holds the `cargo vet` record:
+  crates.io as the only source: `cargo deny check` must pass (run it
+  locally; CI only builds). `supply-chain/` holds the `cargo vet` record:
   a new or updated crate is either covered by an imported audit, audited with
   `cargo vet certify`, or added as an exemption with its reason in the commit
-  message; `cargo vet --locked` must pass (CI runs it too).
+  message; `cargo vet --locked` must pass.
 - **No unit tests.** Southstar has no `#[test]` functions, no
   `#[cfg(test)]` code, no `tests.rs` files and no `tests/` directories, and
   none are added. Verify a change by building it and running the browser

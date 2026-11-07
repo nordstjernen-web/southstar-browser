@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* CI: the Linux workflow only builds the browser. The job that ran
+  `cargo fmt`, clippy with the unsafe budget, `cargo deny`, `cargo vet`
+  and the crates.io check is gone; those run locally before pushing.
 * Network and fonts: brotli is decoded in Rust (brotli-decompressor)
   instead of libbrotlidec, both for `Content-Encoding: br` responses and
   for WOFF2 web fonts, so `br` and WOFF2 are always available and no
