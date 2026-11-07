@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* JavaScript: invalid UTF-8 in a script no longer swallows the bytes after it. The
+  parser decoded every lead byte's continuation bytes unchecked, so in an external
+  script, which reaches it undecoded, `'\xC0\'` ended the string at the escaped
+  quote and user input escaped by a site could run as code. Invalid sequences now
+  become U+FFFD, as in every other browser.
 * Network: HTTP dates (cookie `Expires`, cache dates) with a year above 9999 are
   rejected. Such a year overflowed the timestamp arithmetic, which aborted builds
   with overflow checks and gave release builds a wrapped, wrong time.
