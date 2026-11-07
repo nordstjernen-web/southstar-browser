@@ -17,7 +17,7 @@ const FLOORS: [(&str, &str); 6] = [
     ("fontconfig", "2.15"),
 ];
 
-const REQUIRED: [&str; 14] = [
+const REQUIRED: [&str; 12] = [
     "gmodule-2.0",
     "cairo-ft",
     "freetype2",
@@ -25,8 +25,6 @@ const REQUIRED: [&str; 14] = [
     "libcrypto",
     "uchardet",
     "sqlite3",
-    "libwebp",
-    "libwebpdemux",
     "glib-2.0",
     "gio-2.0",
     "cairo",

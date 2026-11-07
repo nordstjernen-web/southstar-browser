@@ -67,6 +67,10 @@ criteria = "safe-to-deploy"
 version = "1.12.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.byteorder-lite]]
+version = "0.1.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.calendrical_calculations]]
 version = "0.2.4"
 criteria = "safe-to-deploy"
@@ -331,6 +335,10 @@ criteria = "safe-to-deploy"
 version = "2.3.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.image-webp]]
+version = "0.2.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.indexmap]]
 version = "2.14.2"
 criteria = "safe-to-deploy"
@@ -473,6 +481,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.proc-macro2]]
 version = "1.0.107"
+criteria = "safe-to-deploy"
+
+[[exemptions.quick-error]]
+version = "2.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]

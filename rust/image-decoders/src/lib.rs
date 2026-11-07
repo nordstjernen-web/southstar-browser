@@ -1,13 +1,13 @@
-//! Southstar — image decoders: PNG/APNG, GIF, BMP and JPEG in pure Rust, ICO/CUR containers over them, and WebP stills and animations over libwebp.
+//! Southstar — image decoders: PNG/APNG, GIF, BMP and JPEG in pure Rust, ICO/CUR containers over them, and WebP stills and animations over image-webp.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 mod ffi;
+mod webp;
 
 pub use southstar_raster as raster;
 
 pub use ffi::Buffer;
-use ffi::libwebp::{self, AnimDecoder};
 use southstar_texture::TextureRef;
 
 pub struct Decoded {
@@ -234,49 +234,31 @@ fn webp_canvas_ok(width: u32, height: u32) -> bool {
         && u64::from(width) * u64::from(height) <= WEBP_MAX_PIXELS
 }
 
-fn webp_still(data: &[u8]) -> Option<Pixels> {
+fn webp_canvas(data: &[u8]) -> Option<(webp::Decoder<'_>, webp::Info, usize, Buffer)> {
     if !webp_supports(data) || data.len() > WEBP_MAX_INPUT {
         return None;
     }
-    let (w, h) = libwebp::info(data)?;
-    if w <= 0 || h <= 0 || !webp_canvas_ok(w as u32, h as u32) {
+    let decoder = webp::Decoder::new(data)?;
+    let info = decoder.info();
+    if !webp_canvas_ok(info.width, info.height) {
         return None;
     }
-    let stride = w as usize * 4;
-    let mut buffer = Buffer::try_new(stride * h as usize)?;
-    if data.get(12..16) == Some(b"VP8L") {
-        if !libwebp::decode_straight_bgra(data, &mut buffer, stride) {
-            return None;
-        }
-        raster::premultiply_bgra(&mut buffer);
-    } else if !libwebp::decode_premultiplied_bgra(data, &mut buffer, stride) {
-        return None;
-    }
-    Some(Pixels {
-        buffer,
-        width: w,
-        height: h,
-        stride,
-    })
+    let stride = info.width as usize * 4;
+    let buffer = Buffer::try_new(stride * info.height as usize)?;
+    Some((decoder, info, stride, buffer))
 }
 
-fn webp_animation_first_frame(data: &[u8]) -> Option<Pixels> {
-    if !webp_supports(data) || data.len() > WEBP_MAX_INPUT {
-        return None;
-    }
-    let mut decoder = AnimDecoder::new(data)?;
-    let info = decoder.info()?;
-    if !webp_canvas_ok(info.canvas_width, info.canvas_height) || !decoder.has_more_frames() {
-        return None;
-    }
-    let (frame, _) = decoder.next_frame()?;
-    let stride = info.canvas_width as usize * 4;
-    let mut buffer = Buffer::try_new(stride * info.canvas_height as usize)?;
-    buffer.copy_from_slice(frame);
-    Some(Pixels {
+fn webp_still(data: &[u8]) -> Option<Pixels> {
+    let (mut decoder, info, stride, mut buffer) = webp_canvas(data)?;
+    let decoded = if info.animated {
+        decoder.next_frame(&mut buffer).is_some()
+    } else {
+        decoder.still(&mut buffer)
+    };
+    decoded.then_some(Pixels {
         buffer,
-        width: info.canvas_width as i32,
-        height: info.canvas_height as i32,
+        width: info.width as i32,
+        height: info.height as i32,
         stride,
     })
 }
@@ -330,39 +312,27 @@ pub fn decode_avif(data: &[u8]) -> Option<Pixels> {
 }
 
 pub fn decode_webp(data: &[u8]) -> Option<Pixels> {
-    webp_still(data).or_else(|| webp_animation_first_frame(data))
-}
-
-fn frame_delay_ms(prev_ts: i32, ts: i32) -> i32 {
-    ts.wrapping_sub(prev_ts).max(0)
+    webp_still(data)
 }
 
 pub fn decode_webp_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
-    if !webp_supports(data) || data.len() > WEBP_MAX_INPUT {
+    let (mut decoder, info, stride, _) = webp_canvas(data)?;
+    if !info.animated || info.frame_count < 2 || info.frame_count > WEBP_MAX_FRAMES {
         return None;
     }
-    let mut decoder = AnimDecoder::new(data)?;
-    let info = decoder.info()?;
-    if info.frame_count < 2
-        || info.frame_count > WEBP_MAX_FRAMES
-        || !webp_canvas_ok(info.canvas_width, info.canvas_height)
-    {
-        return None;
-    }
-    let (width, height) = (info.canvas_width as i32, info.canvas_height as i32);
-    let stride = info.canvas_width as usize * 4;
-    let size = stride * info.canvas_height as usize;
+    let (width, height) = (info.width as i32, info.height as i32);
+    let size = stride * info.height as usize;
     let mut frames = Vec::new();
-    let mut prev_ts = 0;
     let mut total = 0usize;
-    while decoder.has_more_frames() {
-        let (frame, ts) = decoder.next_frame()?;
+    for _ in 0..info.frame_count {
         if total + size > WEBP_MAX_TOTAL_BYTES {
             break;
         }
-        total += size;
         let mut buffer = Buffer::try_new(size)?;
-        buffer.copy_from_slice(frame);
+        let Some(delay_ms) = decoder.next_frame(&mut buffer) else {
+            break;
+        };
+        total += size;
         frames.push(Frame {
             pixels: Pixels {
                 buffer,
@@ -370,9 +340,8 @@ pub fn decode_webp_animation(data: &[u8]) -> Option<(Vec<Frame>, i32, i32)> {
                 height,
                 stride,
             },
-            delay_ms: frame_delay_ms(prev_ts, ts),
+            delay_ms: i32::try_from(delay_ms).unwrap_or(i32::MAX),
         });
-        prev_ts = ts;
     }
     (frames.len() >= 2).then_some((frames, width, height))
 }
