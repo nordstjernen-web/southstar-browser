@@ -275,9 +275,13 @@ impl Mcp {
         Err(last)
     }
 
-    fn page_call(&mut self, tab: i64, call: &str) -> Result<String, String> {
-        let js = format!("({}).{}", crate::PAGE_HELPER, call);
-        let resp = self.call("eval", tab, &format!("\"js\":{}", quoted(&js)))?;
+    fn page_call(&mut self, tab: i64, function: &str, args: &str) -> Result<String, String> {
+        let request = format!("{{\"fn\":{},\"args\":[{args}]}}", quoted(function));
+        let resp = self.call(
+            "remote_call",
+            tab,
+            &format!("\"request\":{}", quoted(&request)),
+        )?;
         let text = result(&resp)
             .and_then(|r| r.str("text"))
             .ok_or_else(|| "the page returned nothing".to_owned())?;
@@ -327,7 +331,7 @@ fn resolve_target(
     required: bool,
 ) -> Option<Target> {
     if let Some(reference) = args.str("ref").filter(|s| !s.is_empty()) {
-        let point = match m.page_call(tab, &format!("point({})", quoted(reference))) {
+        let point = match m.page_call(tab, "point", &quoted(reference)) {
             Ok(text) => json::parse(text.as_bytes()),
             Err(e) => {
                 r.fail(&e);
@@ -408,7 +412,7 @@ fn do_click(m: &mut Mcp, args: &Value, r: &mut ToolResult, count: i64) {
     match m.call("click", tab, &fields) {
         Ok(resp) => {
             if count == 2 {
-                let _ = m.page_call(tab, &format!("dblclick({},{})", t.vx as i64, t.vy as i64));
+                let _ = m.page_call(tab, "dblclick", &format!("{},{}", t.vx as i64, t.vy as i64));
             }
             r.add(if count == 2 {
                 "\nDouble-clicked."
@@ -563,8 +567,8 @@ fn tool_scroll(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
     }
 }
 
-fn page_tool(m: &mut Mcp, args: &Value, r: &mut ToolResult, call: &str) {
-    match m.page_call(arg_tab(args), call) {
+fn page_tool(m: &mut Mcp, args: &Value, r: &mut ToolResult, function: &str, call_args: &str) {
+    match m.page_call(arg_tab(args), function, call_args) {
         Ok(text) => r.add(&text),
         Err(e) => r.fail(&e),
     }
@@ -575,8 +579,8 @@ fn tool_form_input(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
         r.fail("ref and value are required");
         return;
     };
-    let call = format!("setValue({},{})", quoted(reference), value.to_json());
-    page_tool(m, args, r, &call);
+    let call = format!("{},{}", quoted(reference), value.to_json());
+    page_tool(m, args, r, "setValue", &call);
 }
 
 fn tool_read_page(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
@@ -585,7 +589,7 @@ fn tool_read_page(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
         .filter(|f| !f.is_empty())
         .unwrap_or("all");
     let max = args.num("max_chars").unwrap_or(40000.0) as i64;
-    page_tool(m, args, r, &format!("readPage({},{max})", quoted(filter)));
+    page_tool(m, args, r, "readPage", &format!("{},{max}", quoted(filter)));
 }
 
 fn tool_find(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
@@ -594,12 +598,12 @@ fn tool_find(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
         return;
     };
     let limit = args.num("limit").unwrap_or(20.0) as i64;
-    page_tool(m, args, r, &format!("find({},{limit})", quoted(query)));
+    page_tool(m, args, r, "find", &format!("{},{limit}", quoted(query)));
 }
 
 fn tool_get_page_text(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
     let max = args.num("max_chars").unwrap_or(100_000.0) as i64;
-    page_tool(m, args, r, &format!("pageText({max})"));
+    page_tool(m, args, r, "pageText", &format!("{max}"));
 }
 
 fn tool_javascript(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
@@ -613,7 +617,7 @@ fn tool_javascript(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
         return;
     };
     let deadline = Instant::now() + JS_TIMEOUT;
-    let mut text = m.page_call(tab, &format!("run({})", quoted(code)));
+    let mut text = m.page_call(tab, "run", &quoted(code));
     loop {
         let v = match text {
             Ok(t) => json::parse(t.as_bytes()).unwrap_or(Value::Null),
@@ -631,7 +635,7 @@ fn tool_javascript(m: &mut Mcp, args: &Value, r: &mut ToolResult) {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
-            text = m.page_call(tab, &format!("poll({})", pending as i64));
+            text = m.page_call(tab, "poll", &format!("{}", pending as i64));
             continue;
         }
         match v.str("error") {

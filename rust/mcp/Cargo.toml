@@ -1,6 +1,6 @@
 [package]
 name = "southstar-mcp"
-description = "Remote control over the Model Context Protocol: the --mcp stdio server, its control-channel client, the JSON it speaks and the in-page helper"
+description = "Remote control over the Model Context Protocol: the --mcp stdio server, its control-channel client and the JSON it speaks"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

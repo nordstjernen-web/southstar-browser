@@ -155,6 +155,7 @@ pub(crate) struct Record {
     current_doc: Cell<Option<WeakNode>>,
     raf_frame_ctx: Cell<Option<WeakNode>>,
     pristine_promise: RefCell<Value>,
+    remote_helper: RefCell<Value>,
     layout_root: Cell<Option<BoxRef<'static>>>,
     pinned_wrappers_set: RefCell<Option<HashMap<WeakNode, Value>>>,
     cookie_value: RefCell<Option<CString>>,
@@ -224,6 +225,7 @@ pub(crate) fn alloc() -> Page {
         current_doc: Cell::new(None),
         raf_frame_ctx: Cell::new(None),
         pristine_promise: RefCell::new(Value::undefined()),
+        remote_helper: RefCell::new(Value::undefined()),
         layout_root: Cell::new(None),
         pinned_wrappers_set: RefCell::new(None),
         cookie_value: RefCell::new(None),
@@ -388,6 +390,12 @@ pub(crate) fn set_pristine_promise(js: &Record, promise: Value) {
     drop(js.pristine_promise.replace(promise));
 }
 
+pub(crate) fn set_remote_helper(js: Option<Page>, helper: Value) {
+    if let Some(js) = record(js) {
+        drop(js.remote_helper.replace(helper));
+    }
+}
+
 pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, pinned: Option<Value>) {
     let wrapper = n.js_wrapper();
     if wrapper.is_null() {
@@ -429,10 +437,11 @@ pub(crate) fn free_pinned_set(js: &Record) {
 
 pub(crate) fn free_realm_values(js: &Record) {
     let pristine = js.pristine_promise.replace(Value::undefined());
+    let remote = js.remote_helper.replace(Value::undefined());
     let protos = js.protos.take();
     let document = js.proto_document.replace(Value::undefined());
     let per_tag = js.per_tag_protos.take();
-    drop((pristine, protos, document, per_tag));
+    drop((pristine, remote, protos, document, per_tag));
 }
 
 pub(crate) fn free_platform_globals(js: &Record) {
@@ -1206,6 +1215,10 @@ pub(crate) fn navigator_brand(js: Option<Page>) -> Value {
 
 pub(crate) fn pristine_promise(js: Option<Page>) -> Value {
     record(js).map_or_else(Value::undefined, |js| js.pristine_promise.borrow().clone())
+}
+
+pub(crate) fn remote_helper(js: Option<Page>) -> Value {
+    record(js).map_or_else(Value::undefined, |js| js.remote_helper.borrow().clone())
 }
 
 pub(crate) fn layout_root(js: Option<Page>) -> Option<BoxRef<'static>> {

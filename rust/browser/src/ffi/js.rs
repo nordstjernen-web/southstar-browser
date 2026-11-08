@@ -118,6 +118,11 @@ impl Js {
         out.append(southstar_js_page::dump_stats(self.page()).as_bytes());
     }
 
+    pub fn remote_call(self, request: &str) -> Option<CString> {
+        southstar_js_loader::remote_call(self.page(), request)
+            .and_then(|out| super::glib::owned_text(&out))
+    }
+
     pub fn eval(self, src: &CStr, origin: &CStr) -> Option<CString> {
         southstar_js_loader::eval_source(self.page(), src, Some(origin))
             .and_then(|out| super::glib::owned_text(&out))

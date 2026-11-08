@@ -6,7 +6,7 @@ use core::cell::{Cell, RefCell};
 use core::ffi::{c_int, c_uint};
 use std::collections::HashMap;
 
-use southstar_glib as glib;
+use southstar_glib::{self as glib, GBoolean};
 use southstar_gtk as gtk;
 use southstar_gtk_ffi::GdkModifierType;
 
@@ -47,7 +47,7 @@ fn usable(v: View) -> bool {
     state.closed == 0 && state.opened != 0
 }
 
-fn send(v: View, kind: c_int, js: Option<&[u8]>, cb: TextFn) {
+fn send(v: View, kind: c_int, js: Option<&[u8]>, remote_call: bool, cb: TextFn) {
     let state = view(v.raw());
     if state.closed != 0 {
         cb(None);
@@ -58,6 +58,7 @@ fn send(v: View, kind: c_int, js: Option<&[u8]>, cb: TextFn) {
         v.raw(),
         new_req(kind, |r| {
             r.remote = id;
+            r.remote_call = GBoolean::from(remote_call);
             if let Some(js) = js {
                 r.query = glib::strdup(js);
             }
@@ -87,11 +88,15 @@ pub(super) fn finish(v: *mut NsProcView, res: &Res) {
 }
 
 pub fn eval(v: View, js: &[u8], cb: TextFn) {
-    send(v, REQ_EVAL, Some(js), cb);
+    send(v, REQ_EVAL, Some(js), false, cb);
+}
+
+pub fn remote_call(v: View, request: &[u8], cb: TextFn) {
+    send(v, REQ_EVAL, Some(request), true, cb);
 }
 
 pub fn console(v: View, cb: TextFn) {
-    send(v, REQ_CONSOLE, None, cb);
+    send(v, REQ_CONSOLE, None, false, cb);
 }
 
 fn to_page(v: View, x: f64, y: f64, page: bool) -> (c_int, c_int) {

@@ -565,7 +565,8 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
         }
         REQ_EVAL => {
             let src = arg(r.query).unwrap_or_default();
-            let (tab, inspect, remote) = (r.dump_tab, r.inspect, r.remote);
+            let (tab, inspect, remote, remote_call) =
+                (r.dump_tab, r.inspect, r.remote, r.remote_call != 0);
             text_res(
                 v,
                 r.seq,
@@ -575,7 +576,13 @@ fn handle(v: *mut NsProcView, req: *mut Req) {
                     out.inspect = inspect;
                     out.remote = remote;
                 },
-                |p| p.eval(src),
+                |p| {
+                    if remote_call {
+                        p.remote_call(src)
+                    } else {
+                        p.eval(src)
+                    }
+                },
             );
         }
         REQ_DUMP => {

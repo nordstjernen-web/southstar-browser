@@ -83,6 +83,7 @@ pub struct Req {
     pub have: *mut c_char,
     pub hold: *mut c_char,
     pub remote: c_int,
+    pub remote_call: GBoolean,
 }
 
 #[repr(C)]
