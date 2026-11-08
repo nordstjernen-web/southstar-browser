@@ -19,7 +19,6 @@ pub(crate) const TABLE_MAX_ELEMENTS: usize = 10_000_000;
 
 pub(crate) struct HostState {
     pub realm: Weak<Realm>,
-    /// Caps every linear memory and table the store creates or grows, so a module's declared minimum or an in-module `memory.grow` cannot exceed what the JS API already allows.
     pub limits: StoreLimits,
 }
 

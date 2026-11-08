@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: WebAssembly memories and tables a module declares or grows are
+  capped like the JS API's (512 MiB per memory, 10 million table elements). A
+  module's own memory section, or `memory.grow` inside it, was uncapped: a
+  23-byte module made instantiation allocate about 4 GB. Found by the `wasm`
+  fuzz target.
 
 Southstar Browser 1.0.8:
 ======
