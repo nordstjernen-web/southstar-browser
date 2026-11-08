@@ -91,23 +91,18 @@ pub(crate) fn shape_get_extents(
     if n_chars <= 0 {
         return (Rectangle::default(), Rectangle::default());
     }
+    let repeat = shape_logical.width.saturating_mul(n_chars - 1);
     let ink = Rectangle {
-        x: shape_ink
-            .x
-            .min(shape_ink.x + shape_logical.width * (n_chars - 1)),
-        width: shape_ink
-            .width
-            .max(shape_ink.width + shape_logical.width * (n_chars - 1)),
+        x: shape_ink.x.min(shape_ink.x.saturating_add(repeat)),
+        width: shape_ink.width.max(shape_ink.width.saturating_add(repeat)),
         y: shape_ink.y,
         height: shape_ink.height,
     };
     let logical = Rectangle {
-        x: shape_logical
-            .x
-            .min(shape_logical.x + shape_logical.width * (n_chars - 1)),
+        x: shape_logical.x.min(shape_logical.x.saturating_add(repeat)),
         width: shape_logical
             .width
-            .max(shape_logical.width + shape_logical.width * (n_chars - 1)),
+            .max(shape_logical.width.saturating_add(repeat)),
         y: shape_logical.y,
         height: shape_logical.height,
     };
