@@ -8,6 +8,13 @@ Southstar Browser 1.0.8-dev:
   overflowed the `skrifa` autohinter's coordinates: builds with overflow checks
   (the Linux CI build, `--debug`) aborted the renderer, release builds drew
   mangled glyphs. Found by the `fonts` fuzz target.
+* Text layout: glyph-string, run, line and layout extents saturate instead of
+  overflowing `i32` Pango units. A layout taller than about 2.1 million pixels
+  (a paragraph broken after every character at `font-size: 2048px` in a font with tall glyphs), or a line that wide (a
+  300,000-character `<pre>`, 40 characters at `font-size: 65535px`, SVG text
+  with a huge `font-size`, or a web font with outsized glyphs) aborted builds
+  with overflow checks (the Linux CI build, `--debug`) and gave wrapped,
+  wrong extents in release builds. Found by the `svg` fuzz target.
 * Security: Google Safe Browsing. Every navigation and redirect is checked
   against Google's phishing, malware and unwanted-software lists (Safe Browsing
   v5, local-list mode) as well as the local blocklist, and a match shows a

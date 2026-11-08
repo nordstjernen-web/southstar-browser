@@ -17,7 +17,7 @@ use crate::shape::install_layout_hooks;
 use crate::tabs::TabArray;
 use crate::types::{
     Alignment, Direction, EllipsizeMode, GLYPH_UNKNOWN_FLAG, LogAttr, Rectangle, SCALE, WrapMode,
-    extents_to_pixels, units_round,
+    extents_to_pixels, span_union, units_round,
 };
 use crate::utf8::{next_char, pango_utf8_strlen, pointer_to_offset};
 
@@ -859,16 +859,16 @@ impl Layout {
             Some(&previous) if !first_line && self.line_spacing != 0.0 => {
                 (previous as f32 + self.line_spacing * height as f32) as i32
             }
-            _ => y_offset - line_logical.y,
+            _ => y_offset.saturating_sub(line_logical.y),
         };
 
         let mut ink = line_ink;
-        ink.x = line_ink.x + x_offset;
-        ink.y = new_baseline + line_ink.y;
+        ink.x = line_ink.x.saturating_add(x_offset);
+        ink.y = new_baseline.saturating_add(line_ink.y);
 
         let mut logical = line_logical;
-        logical.x = line_logical.x + x_offset;
-        logical.y = new_baseline + line_logical.y;
+        logical.x = line_logical.x.saturating_add(x_offset);
+        logical.y = new_baseline.saturating_add(line_logical.y);
 
         if let Some(baseline) = baseline {
             *baseline = new_baseline;
@@ -944,17 +944,18 @@ impl Layout {
                 if line_index == 0 {
                     ink_rect = line_ink_layout;
                 } else {
-                    let new_pos = ink_rect.x.min(line_ink_layout.x);
-                    ink_rect.width = (ink_rect.x + ink_rect.width)
-                        .max(line_ink_layout.x + line_ink_layout.width)
-                        - new_pos;
-                    ink_rect.x = new_pos;
-
-                    let new_pos = ink_rect.y.min(line_ink_layout.y);
-                    ink_rect.height = (ink_rect.y + ink_rect.height)
-                        .max(line_ink_layout.y + line_ink_layout.height)
-                        - new_pos;
-                    ink_rect.y = new_pos;
+                    (ink_rect.x, ink_rect.width) = span_union(
+                        ink_rect.x,
+                        ink_rect.width,
+                        line_ink_layout.x,
+                        line_ink_layout.width,
+                    );
+                    (ink_rect.y, ink_rect.height) = span_union(
+                        ink_rect.y,
+                        ink_rect.height,
+                        line_ink_layout.y,
+                        line_ink_layout.height,
+                    );
                 }
             }
 
@@ -965,17 +966,23 @@ impl Layout {
                     logical_rect.x = line_logical_layout.x;
                     logical_rect.width = line_logical_layout.width;
                 } else {
-                    let new_pos = logical_rect.x.min(line_logical_layout.x);
-                    logical_rect.width = (logical_rect.x + logical_rect.width)
-                        .max(line_logical_layout.x + line_logical_layout.width)
-                        - new_pos;
-                    logical_rect.x = new_pos;
+                    (logical_rect.x, logical_rect.width) = span_union(
+                        logical_rect.x,
+                        logical_rect.width,
+                        line_logical_layout.x,
+                        line_logical_layout.width,
+                    );
                 }
-                logical_rect.height =
-                    line_logical_layout.y + line_logical_layout.height - logical_rect.y;
+                logical_rect.height = line_logical_layout
+                    .y
+                    .saturating_add(line_logical_layout.height)
+                    .saturating_sub(logical_rect.y);
             }
 
-            y_offset = line_logical_layout.y + line_logical_layout.height + self.spacing;
+            y_offset = line_logical_layout
+                .y
+                .saturating_add(line_logical_layout.height)
+                .saturating_add(self.spacing);
         }
 
         if want_ink {
