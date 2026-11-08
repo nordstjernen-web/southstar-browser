@@ -9,15 +9,17 @@ use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
 
 use southstar_js_engine::{Scope, Trace, Value};
-use wasmi::{Engine, Memory, Store, StoreContextMut};
+use wasmi::{Engine, Memory, Store, StoreContextMut, StoreLimits, StoreLimitsBuilder};
 
 use crate::ffi::{self, Entry};
 
 pub(crate) const PAGE_SIZE: u64 = 65536;
 pub(crate) const MEMORY_MAX_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const TABLE_MAX_ELEMENTS: usize = 10_000_000;
 
 pub(crate) struct HostState {
     pub realm: Weak<Realm>,
+    pub limits: StoreLimits,
 }
 
 pub(crate) struct View {
@@ -58,12 +60,20 @@ pub(crate) fn engine() -> &'static Engine {
 impl Realm {
     pub fn new() -> Rc<Realm> {
         Rc::new_cyclic(|weak| Realm {
-            store: RefCell::new(Store::new(
-                engine(),
-                HostState {
-                    realm: weak.clone(),
-                },
-            )),
+            store: RefCell::new({
+                let mut store = Store::new(
+                    engine(),
+                    HostState {
+                        realm: weak.clone(),
+                        limits: StoreLimitsBuilder::new()
+                            .memory_size(MEMORY_MAX_BYTES as usize)
+                            .table_elements(TABLE_MAX_ELEMENTS)
+                            .build(),
+                    },
+                );
+                store.limiter(|state| &mut state.limits);
+                store
+            }),
             entry: Entry::new(),
             imports: RefCell::new(HashMap::new()),
             next_instance: Cell::new(0),
