@@ -32,7 +32,7 @@ Supported platforms:
 CI builds Linux on every push and pull request and FreeBSD and NetBSD
 nightly; the Windows, macOS and musl workflows run only when started by hand.
 
-**Version:** 1.0.8.
+**Version:** 1.0.8 (`main` is 1.0.9-dev).
 [Changelog.md](Changelog.md) lists its changes and the Nordstjernen releases
 it grew from.
 

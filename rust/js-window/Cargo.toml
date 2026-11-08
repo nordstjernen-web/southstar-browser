@@ -10,21 +10,21 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-canvas = { path = "../canvas", version = "=1.0.8" }
-southstar-css = { path = "../css", version = "=1.0.8" }
-southstar-css-media = { path = "../css-media", version = "=1.0.8" }
-southstar-dom = { path = "../dom", version = "=1.0.8" }
-southstar-js-clone = { path = "../js-clone", version = "=1.0.8" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.8", default-features = false }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.8" }
-southstar-js-geometry = { path = "../js-geometry", version = "=1.0.8" }
-southstar-js-net = { path = "../js-net", version = "=1.0.8" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.8" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.8" }
-southstar-js-services = { path = "../js-services", version = "=1.0.8" }
-southstar-layout-hit = { path = "../layout-hit", version = "=1.0.8" }
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-url = { path = "../url", version = "=1.0.8" }
+southstar-canvas = { path = "../canvas", version = "=1.0.9-dev" }
+southstar-css = { path = "../css", version = "=1.0.9-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.9-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
+southstar-js-clone = { path = "../js-clone", version = "=1.0.9-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.9-dev" }
+southstar-js-geometry = { path = "../js-geometry", version = "=1.0.9-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.9-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.9-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev" }
+southstar-js-services = { path = "../js-services", version = "=1.0.9-dev" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.9-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-url = { path = "../url", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true

@@ -13,8 +13,8 @@ homepage.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-southstar-http = { path = "../http", version = "=1.0.8" }
-southstar-sandbox = { path = "../sandbox", version = "=1.0.8" }
+southstar-http = { path = "../http", version = "=1.0.9-dev" }
+southstar-sandbox = { path = "../sandbox", version = "=1.0.9-dev" }
 
 [features]
 seccomp = ["southstar-sandbox/seccomp"]

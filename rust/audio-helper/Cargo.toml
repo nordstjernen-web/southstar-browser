@@ -13,13 +13,13 @@ homepage.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.8", features = ["resample"] }
-southstar-glib = { path = "../glib", version = "=1.0.8" }
-southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.8" }
-southstar-http = { path = "../http", version = "=1.0.8" }
-southstar-media-shm = { path = "../media-shm", version = "=1.0.8" }
-southstar-minimp3 = { path = "../minimp3", version = "=1.0.8" }
-southstar-plmpeg = { path = "../plmpeg", version = "=1.0.8" }
+southstar-av = { path = "../av", version = "=1.0.9-dev", features = ["resample"] }
+southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.9-dev" }
+southstar-http = { path = "../http", version = "=1.0.9-dev" }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.9-dev" }
+southstar-minimp3 = { path = "../minimp3", version = "=1.0.9-dev" }
+southstar-plmpeg = { path = "../plmpeg", version = "=1.0.9-dev" }
 
 [features]
 libav = []
@@ -28,7 +28,7 @@ opusfile = []
 seccomp = ["southstar-helper-ffi/seccomp"]
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.8" }
+southstar-build = { path = "../build", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true

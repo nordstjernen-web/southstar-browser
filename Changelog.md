@@ -1,6 +1,9 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.9-dev:
+======
+
 Southstar Browser 1.0.8:
 ======
 * Text rendering: the strikethrough position is averaged over a run's glyphs

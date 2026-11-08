@@ -10,16 +10,16 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-browser = { path = "../browser", version = "=1.0.8" }
-southstar-cairo = { path = "../cairo", version = "=1.0.8" }
-southstar-glib = { path = "../glib", version = "=1.0.8" }
-southstar-image = { path = "../image", version = "=1.0.8" }
-southstar-ipc = { path = "../ipc", version = "=1.0.8" }
-southstar-net = { path = "../net", version = "=1.0.8" }
-southstar-renderer-client = { path = "../renderer-client", version = "=1.0.8" }
-southstar-threaddump = { path = "../threaddump", version = "=1.0.8" }
-southstar-url = { path = "../url", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-browser = { path = "../browser", version = "=1.0.9-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.9-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
+southstar-image = { path = "../image", version = "=1.0.9-dev" }
+southstar-ipc = { path = "../ipc", version = "=1.0.9-dev" }
+southstar-net = { path = "../net", version = "=1.0.9-dev" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.9-dev" }
+southstar-threaddump = { path = "../threaddump", version = "=1.0.9-dev" }
+southstar-url = { path = "../url", version = "=1.0.9-dev" }
 
 [features]
 sdl = []

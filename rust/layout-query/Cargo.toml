@@ -10,10 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.8" }
-southstar-layout = { path = "../layout", version = "=1.0.8" }
-southstar-layout-geom = { path = "../layout-geom", version = "=1.0.8" }
-southstar-style = { path = "../style", version = "=1.0.8" }
+southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.9-dev" }
+southstar-style = { path = "../style", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true
