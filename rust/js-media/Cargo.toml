@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-dom = { path = "../dom", version = "=1.0.8" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.8" }
-southstar-js-bind = { path = "../js-bind", version = "=1.0.8", default-features = false }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.8", default-features = false }
-southstar-js-events = { path = "../js-events", version = "=1.0.8" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.8" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.8", default-features = false }
-southstar-js-services = { path = "../js-services", version = "=1.0.8" }
-southstar-mic = { path = "../mic", version = "=1.0.8" }
-southstar-url = { path = "../url", version = "=1.0.8" }
-southstar-video = { path = "../video", version = "=1.0.8" }
-southstar-webaudio = { path = "../webaudio", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.9-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.9-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
+southstar-js-events = { path = "../js-events", version = "=1.0.9-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.9-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default-features = false }
+southstar-js-services = { path = "../js-services", version = "=1.0.9-dev" }
+southstar-mic = { path = "../mic", version = "=1.0.9-dev" }
+southstar-url = { path = "../url", version = "=1.0.9-dev" }
+southstar-video = { path = "../video", version = "=1.0.9-dev" }
+southstar-webaudio = { path = "../webaudio", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true

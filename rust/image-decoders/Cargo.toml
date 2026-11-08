@@ -10,16 +10,16 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.8", optional = true }
-southstar-raster = { path = "../raster", version = "=1.0.8" }
+southstar-av = { path = "../av", version = "=1.0.9-dev", optional = true }
+southstar-raster = { path = "../raster", version = "=1.0.9-dev" }
 image-webp = { version = "0.2", default-features = false }
-southstar-texture = { path = "../texture", version = "=1.0.8" }
+southstar-texture = { path = "../texture", version = "=1.0.9-dev" }
 
 [features]
 avif = ["dep:southstar-av"]
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.8" }
+southstar-build = { path = "../build", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true

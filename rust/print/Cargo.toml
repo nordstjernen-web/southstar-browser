@@ -10,11 +10,11 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo", version = "=1.0.8" }
-southstar-css = { path = "../css", version = "=1.0.8" }
-southstar-layout = { path = "../layout", version = "=1.0.8" }
-southstar-paint = { path = "../paint", version = "=1.0.8" }
-southstar-style = { path = "../style", version = "=1.0.8" }
+southstar-cairo = { path = "../cairo", version = "=1.0.9-dev" }
+southstar-css = { path = "../css", version = "=1.0.9-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.9-dev" }
+southstar-style = { path = "../style", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true

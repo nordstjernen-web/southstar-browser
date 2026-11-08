@@ -10,21 +10,21 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8" }
-southstar-cairo = { path = "../cairo", version = "=1.0.8" }
-southstar-css = { path = "../css", version = "=1.0.8" }
-southstar-digest = { path = "../digest", version = "=1.0.8" }
-southstar-dom = { path = "../dom", version = "=1.0.8" }
-southstar-glib = { path = "../glib", version = "=1.0.8" }
-southstar-image = { path = "../image", version = "=1.0.8" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.8", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.8" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.8" }
-southstar-layout = { path = "../layout", version = "=1.0.8" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.8" }
-southstar-text = { path = "../text", version = "=1.0.8" }
-southstar-texture = { path = "../texture", version = "=1.0.8" }
-southstar-video = { path = "../video", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.9-dev" }
+southstar-css = { path = "../css", version = "=1.0.9-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.9-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
+southstar-image = { path = "../image", version = "=1.0.9-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.9-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.9-dev" }
+southstar-text = { path = "../text", version = "=1.0.9-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.9-dev" }
+southstar-video = { path = "../video", version = "=1.0.9-dev" }
 
 [features]
 webgpu = []
