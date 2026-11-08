@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Security: web fonts whose `head.unitsPerEm` is outside OpenType's 16–16384
+  are rejected, as OTS does in other browsers. A font with `unitsPerEm` 0
+  overflowed the `skrifa` autohinter's coordinates: builds with overflow checks
+  (the Linux CI build, `--debug`) aborted the renderer, release builds drew
+  mangled glyphs. Found by the `fonts` fuzz target.
 * Text layout: glyph-string, run, line and layout extents saturate instead of
   overflowing `i32` Pango units. A layout taller than about 2.1 million pixels
   (a paragraph broken after every character at `font-size: 2048px` in a font with tall glyphs), or a line that wide (a
