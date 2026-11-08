@@ -10,16 +10,16 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
-southstar-css = { path = "../css", version = "=1.0.8-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.8-dev", default-features = false }
-southstar-js-forms = { path = "../js-forms", version = "=1.0.8-dev" }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.8-dev" }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.8-dev" }
-southstar-js-mutation = { path = "../js-mutation", version = "=1.0.8-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.8-dev", default-features = false }
-southstar-js-window = { path = "../js-window", version = "=1.0.8-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8" }
+southstar-css = { path = "../css", version = "=1.0.8" }
+southstar-dom = { path = "../dom", version = "=1.0.8" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.8", default-features = false }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.8" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.8" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.8" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.8" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.8", default-features = false }
+southstar-js-window = { path = "../js-window", version = "=1.0.8" }
 
 [lints]
 workspace = true

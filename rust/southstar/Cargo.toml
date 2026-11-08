@@ -37,26 +37,26 @@ path = "src/launcher.rs"
 required-features = ["launcher"]
 
 [dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.8-dev" }
-southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8-dev" }
-southstar-renderer-host = { path = "../renderer-host", version = "=1.0.8-dev" }
-southstar-audio-helper = { path = "../audio-helper", version = "=1.0.8-dev", optional = true }
-southstar-video-helper = { path = "../video-helper", version = "=1.0.8-dev", optional = true }
-southstar-launcher = { path = "../launcher", version = "=1.0.8-dev", optional = true }
+southstar-shell = { path = "../shell", version = "=1.0.8" }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.8" }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.8", optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.8", optional = true }
+southstar-launcher = { path = "../launcher", version = "=1.0.8", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.8-dev", features = ["seccomp", "egl"] }
-southstar-audio-helper = { path = "../audio-helper", version = "=1.0.8-dev", features = ["seccomp"], optional = true }
-southstar-video-helper = { path = "../video-helper", version = "=1.0.8-dev", features = ["seccomp"], optional = true }
+southstar-shell = { path = "../shell", version = "=1.0.8", features = ["seccomp", "egl"] }
+southstar-audio-helper = { path = "../audio-helper", version = "=1.0.8", features = ["seccomp"], optional = true }
+southstar-video-helper = { path = "../video-helper", version = "=1.0.8", features = ["seccomp"], optional = true }
 
 [target.'cfg(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.8-dev", features = ["egl"] }
+southstar-shell = { path = "../shell", version = "=1.0.8", features = ["egl"] }
 
 [target.'cfg(windows)'.dependencies]
-southstar-shell = { path = "../shell", version = "=1.0.8-dev", features = ["fontconfig"] }
+southstar-shell = { path = "../shell", version = "=1.0.8", features = ["fontconfig"] }
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.8-dev" }
+southstar-build = { path = "../build", version = "=1.0.8" }
 cc = "1.2"
 
 [features]
