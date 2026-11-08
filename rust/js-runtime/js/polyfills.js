@@ -6,19 +6,6 @@
         try { delete global.__ndWorkerHeadersOnly; } catch (e) {}
     }
 
-    function nativeize(fn) {
-        return fn;
-    }
-
-    if (typeof global.PerformanceObserver === 'function' &&
-        !Array.isArray(global.PerformanceObserver.supportedEntryTypes)) {
-        try {
-            global.PerformanceObserver.supportedEntryTypes = [
-                'mark', 'measure', 'navigation', 'resource', 'paint'
-            ];
-        } catch (e) {}
-    }
-
 
 
     function defineCtor(name, ctor) {
@@ -106,14 +93,6 @@
             Object.setPrototypeOf(ctor, parent);
         }
         replaceCtor(name, ctor);
-    }
-
-    function idlConstants(ctor, table) {
-        Object.keys(table).forEach(function (key) {
-            var desc = { value: table[key], writable: false, enumerable: true, configurable: false };
-            Object.defineProperty(ctor, key, desc);
-            Object.defineProperty(ctor.prototype, key, desc);
-        });
     }
 
     function idlEventHandlers(proto, types, stateOf) {
@@ -319,7 +298,6 @@
     });
     defineCtor('URLSearchParams', USP);
 
-    function normHeader(k) { return String(k).toLowerCase(); }
     var HTTP_WS = /^[\t\n\r ]+|[\t\n\r ]+$/g;
     var HDR_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
     var HDR_BADVAL = /[\0\n\r]/;
@@ -473,7 +451,6 @@
     Object.defineProperty(Headers.prototype, Symbol.toStringTag, {
         value: 'Headers', configurable: true
     });
-    nativeize(Headers, 'Headers');
     try { Object.defineProperty(Headers, 'length', { value: 0 }); } catch (e) {}
     defineCtor('Headers', Headers);
 
@@ -875,17 +852,6 @@
     }
     if (!ndWorkerScope) defineCtor('Sanitizer', Sanitizer);
 
-    if (typeof global.queueMicrotask !== 'function') {
-        defineCtor('queueMicrotask', function (cb) {
-            Promise.resolve().then(cb);
-        });
-    }
-
-    function ndMediaTask(fn) {
-        if (typeof queueMicrotask === 'function') queueMicrotask(fn);
-        else setTimeout(fn, 0);
-    }
-
     function ndDomError(name, message) {
         if (typeof global.DOMException === 'function') {
             try { return new global.DOMException(message || name, name); }
@@ -1017,11 +983,9 @@
     var mediaSources = new WeakMap();
     var sourceBuffers = new WeakMap();
     var sourceBufferLists = new WeakMap();
-    var mediaSourceHandles = new WeakMap();
     var mediaSourceOf = idlBrand(mediaSources);
     var sourceBufferOf = idlBrand(sourceBuffers);
     var sourceBufferListOf = idlBrand(sourceBufferLists);
-    var mediaSourceHandleOf = idlBrand(mediaSourceHandles);
 
     class SourceBufferList {
         constructor() { throw idlIllegalConstructor('SourceBufferList'); }
@@ -1185,7 +1149,7 @@
         var s = mediaSources.get(ms);
         if (s.readyState !== 'ended') return;
         s.readyState = 'open';
-        ndMediaTask(function () { idlFireEvent(ms, 'sourceopen'); });
+        queueMicrotask(function () { idlFireEvent(ms, 'sourceopen'); });
     }
 
     function mediaSourceRefreshBlob(ms) {
@@ -1286,7 +1250,7 @@
             s.objectURL = url;
             mediaSourceRefreshBlob(ms);
         }
-        ndMediaTask(function () { mediaSourceOpen(ms); });
+        queueMicrotask(function () { mediaSourceOpen(ms); });
         return url;
     }
 
@@ -1325,10 +1289,7 @@
         }
         get handle() {
             var s = mediaSourceOf(this);
-            if (!s.handle) {
-                s.handle = Object.create(MediaSourceHandle.prototype);
-                mediaSourceHandles.set(s.handle, { mediaSource: this });
-            }
+            if (!s.handle) s.handle = Object.create(MediaSourceHandle.prototype);
             return s.handle;
         }
         addSourceBuffer(type) {
@@ -1439,7 +1400,7 @@
         s.taskSeq++;
         if (!s.updating) return;
         s.updating = false;
-        ndMediaTask(function () {
+        queueMicrotask(function () {
             idlFireEvent(buffer, 'abort');
             idlFireEvent(buffer, 'updateend');
         });
@@ -1448,10 +1409,10 @@
     function sourceBufferUpdate(buffer, s, work) {
         s.updating = true;
         var seq = ++s.taskSeq;
-        ndMediaTask(function () {
+        queueMicrotask(function () {
             if (seq === s.taskSeq) idlFireEvent(buffer, 'updatestart');
         });
-        ndMediaTask(function () {
+        queueMicrotask(function () {
             if (seq === s.taskSeq) work();
         });
     }
@@ -1902,20 +1863,6 @@
         global.URL.__ndMediaSourceObjectURL = true;
     }
 
-    if (typeof global.URL === 'function' &&
-        typeof global.URL.canParse !== 'function') {
-        global.URL.canParse = function (url, base) {
-            try { new global.URL(url, base); return true; }
-            catch (e) { return false; }
-        };
-    }
-    if (typeof global.URL === 'function' &&
-        typeof global.URL.parse !== 'function') {
-        global.URL.parse = function (url, base) {
-            try { return new global.URL(url, base); }
-            catch (e) { return null; }
-        };
-    }
 
     function XMLSerializer() {
         if (!(this instanceof XMLSerializer)) return new XMLSerializer();
@@ -2158,16 +2105,6 @@
                 }
             }
             if (elementProto) {
-                function camelToAttr(key) {
-                    return 'data-' + String(key).replace(/[A-Z]/g, function (c) {
-                        return '-' + c.toLowerCase();
-                    });
-                }
-                function attrToCamel(name) {
-                    return name.slice(5).replace(/-([a-z])/g, function (_, c) {
-                        return c.toUpperCase();
-                    });
-                }
                 function defineFrameAccessor(name, getter) {
                     if (Object.getOwnPropertyDescriptor(elementProto, name)) return;
                     var nativeGet = null;
@@ -2202,59 +2139,6 @@
                         closed: true
                     };
                 });
-                if (!('dataset' in probe)) {
-                    Object.defineProperty(elementProto, 'dataset', {
-                        configurable: true,
-                        get: function () {
-                            var el = this;
-                            return new Proxy({}, {
-                                get: function (t, key) {
-                                    if (typeof key !== 'string') return undefined;
-                                    var v = el.getAttribute(camelToAttr(key));
-                                    return v == null ? undefined : v;
-                                },
-                                set: function (t, key, value) {
-                                    if (typeof key !== 'string') return false;
-                                    if (/-[a-z]/.test(key))
-                                        throw new SyntaxError(
-                                            "'-' must not be followed by a lowercase " +
-                                            'letter in a dataset name');
-                                    el.setAttribute(camelToAttr(key), String(value));
-                                    return true;
-                                },
-                                has: function (t, key) {
-                                    if (typeof key !== 'string') return false;
-                                    return el.hasAttribute(camelToAttr(key));
-                                },
-                                deleteProperty: function (t, key) {
-                                    if (typeof key !== 'string') return false;
-                                    el.removeAttribute(camelToAttr(key));
-                                    return true;
-                                },
-                                ownKeys: function () {
-                                    var out = [];
-                                    var attrs = el.attributes;
-                                    var n = attrs ? attrs.length : 0;
-                                    for (var i = 0; i < n; i++) {
-                                        var nm = attrs[i].name;
-                                        if (nm.indexOf('data-') === 0)
-                                            out.push(attrToCamel(nm));
-                                    }
-                                    return out;
-                                },
-                                getOwnPropertyDescriptor: function (t, key) {
-                                    if (typeof key !== 'string') return undefined;
-                                    if (!el.hasAttribute(camelToAttr(key))) return undefined;
-                                    return {
-                                        enumerable: true, configurable: true,
-                                        writable: true,
-                                        value: el.getAttribute(camelToAttr(key))
-                                    };
-                                }
-                            });
-                        }
-                    });
-                }
             }
         }
     } catch (e) { /* prototype may be locked; tolerate */ }
@@ -4351,253 +4235,6 @@
         idlExpose(CacheStorage, 'CacheStorage', null);
         cacheStorageOf = idlSingletonBrand(CacheStorage.prototype, { stores: new Map() });
         try { global.caches = Object.create(CacheStorage.prototype); } catch (e) {}
-    }
-
-    if (typeof Object.hasOwn !== 'function') {
-        Object.hasOwn = function (obj, prop) {
-            if (obj == null) throw new TypeError('Object.hasOwn: null/undefined');
-            return Object.prototype.hasOwnProperty.call(Object(obj), prop);
-        };
-    }
-
-    if (typeof Object.fromEntries !== 'function') {
-        Object.fromEntries = function (iter) {
-            var out = {};
-            if (iter == null) throw new TypeError('Object.fromEntries: null/undefined');
-            var it = iter[Symbol.iterator] ? iter[Symbol.iterator]() : null;
-            if (it) {
-                for (var step = it.next(); !step.done; step = it.next()) {
-                    var pair = step.value;
-                    if (pair == null) throw new TypeError('Object.fromEntries: bad pair');
-                    out[String(pair[0])] = pair[1];
-                }
-            } else if (typeof iter.length === 'number') {
-                for (var i = 0; i < iter.length; i++) {
-                    var p = iter[i];
-                    if (p == null) continue;
-                    out[String(p[0])] = p[1];
-                }
-            } else {
-                var keys = Object.keys(iter);
-                for (var k = 0; k < keys.length; k++) out[keys[k]] = iter[keys[k]];
-            }
-            return out;
-        };
-    }
-
-    if (typeof Promise.withResolvers !== 'function') {
-        Promise.withResolvers = function () {
-            var resolve, reject;
-            var promise = new Promise(function (res, rej) {
-                resolve = res; reject = rej;
-            });
-            return { promise: promise, resolve: resolve, reject: reject };
-        };
-    }
-
-    if (typeof Promise.any !== 'function') {
-        Promise.any = function (iter) {
-            var arr = [];
-            var it = iter[Symbol.iterator] ? iter[Symbol.iterator]() : null;
-            if (it) {
-                for (var step = it.next(); !step.done; step = it.next()) arr.push(step.value);
-            } else {
-                for (var i = 0; i < iter.length; i++) arr.push(iter[i]);
-            }
-            return new Promise(function (resolve, reject) {
-                if (arr.length === 0) {
-                    var err = new Error('All promises were rejected');
-                    err.name = 'AggregateError';
-                    err.errors = [];
-                    reject(err);
-                    return;
-                }
-                var errors = new Array(arr.length);
-                var remaining = arr.length;
-                arr.forEach(function (p, idx) {
-                    Promise.resolve(p).then(resolve, function (e) {
-                        errors[idx] = e;
-                        if (--remaining === 0) {
-                            var aerr = new Error('All promises were rejected');
-                            aerr.name = 'AggregateError';
-                            aerr.errors = errors;
-                            reject(aerr);
-                        }
-                    });
-                });
-            });
-        };
-    }
-
-    if (typeof Promise.allSettled !== 'function') {
-        Promise.allSettled = function (iter) {
-            var arr = [];
-            var it = iter[Symbol.iterator] ? iter[Symbol.iterator]() : null;
-            if (it) {
-                for (var step = it.next(); !step.done; step = it.next()) arr.push(step.value);
-            } else {
-                for (var i = 0; i < iter.length; i++) arr.push(iter[i]);
-            }
-            return Promise.all(arr.map(function (p) {
-                return Promise.resolve(p).then(
-                    function (v) { return { status: 'fulfilled', value: v }; },
-                    function (e) { return { status: 'rejected',  reason: e }; }
-                );
-            }));
-        };
-    }
-
-    if (typeof Array.prototype.findLast !== 'function') {
-        defineMethod(Array.prototype, 'findLast', function (pred, thisArg) {
-            for (var i = this.length - 1; i >= 0; i--)
-                if (pred.call(thisArg, this[i], i, this)) return this[i];
-            return undefined;
-        });
-    }
-    if (typeof Array.prototype.findLastIndex !== 'function') {
-        defineMethod(Array.prototype, 'findLastIndex', function (pred, thisArg) {
-            for (var i = this.length - 1; i >= 0; i--)
-                if (pred.call(thisArg, this[i], i, this)) return i;
-            return -1;
-        });
-    }
-    if (typeof Array.prototype.toSorted !== 'function') {
-        defineMethod(Array.prototype, 'toSorted', function (cmp) {
-            return this.slice().sort(cmp);
-        });
-    }
-    if (typeof Array.prototype.toReversed !== 'function') {
-        defineMethod(Array.prototype, 'toReversed', function () {
-            return this.slice().reverse();
-        });
-    }
-    if (typeof Array.prototype.toSpliced !== 'function') {
-        defineMethod(Array.prototype, 'toSpliced', function (start, count) {
-            var copy = this.slice();
-            var args = Array.prototype.slice.call(arguments);
-            copy.splice.apply(copy, args);
-            return copy;
-        });
-    }
-    if (typeof Array.prototype.with !== 'function') {
-        defineMethod(Array.prototype, 'with', function (idx, value) {
-            var len = this.length;
-            if (idx < 0) idx += len;
-            if (idx < 0 || idx >= len) throw new RangeError('with: index out of range');
-            var copy = this.slice();
-            copy[idx] = value;
-            return copy;
-        });
-    }
-
-    if (typeof Object.groupBy !== 'function') {
-        Object.groupBy = function (iter, keyFn) {
-            var out = Object.create(null);
-            var idx = 0;
-            var arr = iter && typeof iter.length === 'number' && typeof iter !== 'string'
-                ? iter : Array.from(iter);
-            for (var i = 0; i < arr.length; i++) {
-                var key = keyFn(arr[i], idx++);
-                if (!Object.prototype.hasOwnProperty.call(out, key)) out[key] = [];
-                out[key].push(arr[i]);
-            }
-            return out;
-        };
-    }
-    if (typeof Map !== 'undefined' && typeof Map.groupBy !== 'function') {
-        Map.groupBy = function (iter, keyFn) {
-            var m = new Map();
-            var idx = 0;
-            var arr = iter && typeof iter.length === 'number' && typeof iter !== 'string'
-                ? iter : Array.from(iter);
-            for (var i = 0; i < arr.length; i++) {
-                var key = keyFn(arr[i], idx++);
-                if (!m.has(key)) m.set(key, []);
-                m.get(key).push(arr[i]);
-            }
-            return m;
-        };
-    }
-
-    if (typeof String.prototype.replaceAll !== 'function') {
-        defineMethod(String.prototype, 'replaceAll', function (search, replacement) {
-            if (search instanceof RegExp) {
-                if (!search.global)
-                    throw new TypeError('replaceAll called with a non-global RegExp');
-                return this.replace(search, replacement);
-            }
-            var s = String(this);
-            var needle = String(search);
-            if (needle === '') {
-                if (typeof replacement === 'function') {
-                    var out = '';
-                    for (var i = 0; i <= s.length; i++) {
-                        out += String(replacement('', i, s));
-                        if (i < s.length) out += s.charAt(i);
-                    }
-                    return out;
-                }
-                return Array.prototype.join.call(s, replacement) + replacement;
-            }
-            var parts = s.split(needle);
-            if (typeof replacement === 'function') {
-                var pos = 0, idx = 0;
-                var result = '';
-                for (var j = 0; j < parts.length; j++) {
-                    result += parts[j];
-                    if (j < parts.length - 1) {
-                        pos += parts[j].length;
-                        result += String(replacement(needle, pos, s));
-                        pos += needle.length;
-                    }
-                }
-                return result;
-            }
-            return parts.join(String(replacement));
-        });
-    }
-
-    if (typeof globalThis.structuredClone !== 'function') {
-        defineCtor('structuredClone', function (value) {
-            return structClone(value, new Map());
-        });
-    }
-    function structClone(v, seen) {
-        if (v == null || typeof v !== 'object') return v;
-        if (seen.has(v)) return seen.get(v);
-        if (v instanceof Date) return new Date(v.getTime());
-        if (v instanceof RegExp) return new RegExp(v.source, v.flags);
-        if (v instanceof ArrayBuffer) {
-            var c = new ArrayBuffer(v.byteLength);
-            new Uint8Array(c).set(new Uint8Array(v));
-            return c;
-        }
-        if (ArrayBuffer.isView && ArrayBuffer.isView(v))
-            return new v.constructor(v);
-        if (v instanceof Map) {
-            var nm = new Map(); seen.set(v, nm);
-            v.forEach(function (val, key) {
-                nm.set(structClone(key, seen), structClone(val, seen));
-            });
-            return nm;
-        }
-        if (v instanceof Set) {
-            var ns = new Set(); seen.set(v, ns);
-            v.forEach(function (val) { ns.add(structClone(val, seen)); });
-            return ns;
-        }
-        if (Array.isArray(v)) {
-            var na = new Array(v.length); seen.set(v, na);
-            for (var i = 0; i < v.length; i++) na[i] = structClone(v[i], seen);
-            return na;
-        }
-        var no = {};
-        seen.set(v, no);
-        for (var k in v) {
-            if (Object.prototype.hasOwnProperty.call(v, k))
-                no[k] = structClone(v[k], seen);
-        }
-        return no;
     }
 
     (function () {
@@ -7234,7 +6871,7 @@
 
         function matrixFromInit(init) {
             var d = dictionary(init, 'DOMMatrixInit');
-            var m = identity(), i, present = {};
+            var m = identity(), i;
             for (i = 0; i < ALIASES.length; i++) {
                 var alias = d[ALIASES[i][0]], field = d[FIELDS[ALIASES[i][1]]];
                 if (alias !== undefined && field !== undefined &&
@@ -7544,15 +7181,6 @@
 
     if (ndWorkerScope) return;
 
-    if (typeof Symbol !== 'undefined') {
-        if (typeof Symbol.dispose === 'undefined') {
-            try { Symbol.dispose = Symbol('Symbol.dispose'); } catch (e) {}
-        }
-        if (typeof Symbol.asyncDispose === 'undefined') {
-            try { Symbol.asyncDispose = Symbol('Symbol.asyncDispose'); } catch (e) {}
-        }
-    }
-
 
     if (typeof QuotaExceededError !== 'function') {
         var QuotaErr = function (message, options) {
@@ -7571,19 +7199,6 @@
         defineCtor('QuotaExceededError', QuotaErr);
     }
 
-
-    if (typeof Event !== 'undefined' && Event.prototype &&
-        typeof Event.prototype.composedPath !== 'function') {
-        defineMethod(Event.prototype, 'composedPath', function () {
-            var path = [];
-            var node = this.target || this.currentTarget;
-            while (node) {
-                path.push(node);
-                node = node.parentNode || null;
-            }
-            return path;
-        });
-    }
 
     var navigator = global.navigator;
     if (navigator && !navigator.locks) {
@@ -7629,54 +7244,37 @@
         } catch (e) {}
     }
 
-    if (navigator && typeof navigator.share !== 'function') {
-        try {
-            Object.defineProperty(navigator, 'share', {
-                configurable: true, enumerable: true,
-                value: nativeize(function share() {
-                    var err = new Error('Web Share API not supported');
-                    err.name = 'NotSupportedError';
-                    return Promise.reject(err);
-                })
-            });
-            Object.defineProperty(navigator, 'canShare', {
-                configurable: true, enumerable: true,
-                value: nativeize(function canShare() { return false; })
-            });
-        } catch (e) {}
-    }
-
     if (navigator) {
         try {
             Object.defineProperty(navigator, 'canShare', {
                 configurable: true, enumerable: true,
-                value: nativeize(function canShare() { return false; })
+                value: function canShare() { return false; }
             });
         } catch (e) {}
         try {
             Object.defineProperty(navigator, 'vibrate', {
                 configurable: true, enumerable: true,
-                value: nativeize(function vibrate(pattern) {
+                value: function vibrate(pattern) {
                     var list = Array.isArray(pattern) ? pattern : [pattern];
                     for (var i = 0; i < list.length; i++) {
                         var v = Number(list[i]);
                         if (!isFinite(v) || v < 0) return false;
                     }
                     return true;
-                })
+                }
             });
         } catch (e) {}
         try {
             Object.defineProperty(navigator, 'getAutoplayPolicy', {
                 configurable: true, enumerable: true,
-                value: nativeize(function getAutoplayPolicy() { return 'allowed'; })
+                value: function getAutoplayPolicy() { return 'allowed'; }
             });
         } catch (e) {}
         if (navigator.mediaDevices) {
             try {
                 Object.defineProperty(navigator.mediaDevices, 'getSupportedConstraints', {
                     configurable: true, enumerable: true,
-                    value: nativeize(function getSupportedConstraints() {
+                    value: function getSupportedConstraints() {
                         return {
                             width: true, height: true, aspectRatio: true,
                             frameRate: true, facingMode: true, resizeMode: true,
@@ -7684,7 +7282,7 @@
                             echoCancellation: true, noiseSuppression: true,
                             autoGainControl: true, deviceId: true, groupId: true
                         };
-                    })
+                    }
                 });
             } catch (e) {}
 
@@ -7808,7 +7406,7 @@
                     return makeStream(tracks);
                 }
 
-                md.getUserMedia = nativeize(function getUserMedia(constraints) {
+                md.getUserMedia = function getUserMedia(constraints) {
                     constraints = constraints || {};
                     var wantVideo = !!constraints.video;
                     var wantAudio = !!constraints.audio;
@@ -7827,9 +7425,9 @@
                             pending.push({ wantVideo: wantVideo, wantAudio: wantAudio,
                                            resolve: resolve, reject: reject });
                     });
-                });
+                };
 
-                md.enumerateDevices = nativeize(function enumerateDevices() {
+                md.enumerateDevices = function enumerateDevices() {
                     return new Promise(function (resolve) {
                         var list = typeof globalThis.__nd_camera_enumerate === 'function'
                             ? globalThis.__nd_camera_enumerate() : [];
@@ -7841,7 +7439,7 @@
                             };
                         }));
                     });
-                });
+                };
 
                 globalThis.__nd_camera_resolve_pending = function (allow) {
                     var q = pending; pending = [];
@@ -7860,21 +7458,6 @@
                     });
                 };
             })();
-        }
-        if (navigator.userAgentData &&
-            typeof navigator.userAgentData.toJSON !== 'function') {
-            try {
-                Object.defineProperty(navigator.userAgentData, 'toJSON', {
-                    configurable: true, enumerable: false,
-                    value: function () {
-                        return {
-                            brands: this.brands || [],
-                            mobile: !!this.mobile,
-                            platform: String(this.platform || '')
-                        };
-                    }
-                });
-            } catch (e) {}
         }
     }
 
@@ -8000,10 +7583,10 @@
             });
             Object.defineProperty(global.Notification, 'requestPermission', {
                 configurable: true, enumerable: true,
-                value: nativeize(function requestPermission(callback) {
+                value: function requestPermission(callback) {
                     if (typeof callback === 'function') callback('default');
                     return Promise.resolve('default');
-                })
+                }
             });
         } catch (e) {}
     }
@@ -8267,73 +7850,24 @@
         } catch (e) {}
     }
 
-    if (!global.navigation) {
-        try {
-            var makeNavEntry = function () {
-                return {
-                    id: '0',
-                    key: '0',
-                    index: 0,
-                    url: String(global.location && global.location.href || ''),
-                    sameDocument: true,
-                    getState: function () { return null; }
-                };
-            };
-            var makeNavResult = function () {
-                var done = Promise.resolve(makeNavEntry());
-                return { committed: done, finished: done };
-            };
-            Object.defineProperty(global, 'navigation', {
-                configurable: true, enumerable: true,
-                value: {
-                    currentEntry: makeNavEntry(),
-                    transition: null,
-                    activation: null,
-                    canGoBack: false,
-                    canGoForward: false,
-                    onnavigate: null,
-                    onnavigatesuccess: null,
-                    onnavigateerror: null,
-                    oncurrententrychange: null,
-                    entries: function () { return [this.currentEntry]; },
-                    updateCurrentEntry: function (options) {
-                        if (options && 'state' in options) this._state = options.state;
-                    },
-                    navigate: function (url) {
-                        if (url != null) this.currentEntry.url = String(url);
-                        return makeNavResult();
-                    },
-                    reload: function () { return makeNavResult(); },
-                    traverseTo: function () { return makeNavResult(); },
-                    back: function () { return makeNavResult(); },
-                    forward: function () { return makeNavResult(); },
-                    addEventListener: function () {},
-                    removeEventListener: function () {},
-                    dispatchEvent: function () { return true; }
-                }
-            });
-        } catch (e) {}
-    }
-
     if (typeof global.trustedTypes === 'undefined') {
         var trustedValue = new WeakMap();
         function makeTrustedCtor(name) {
             var ctor = function () { throw new TypeError('Illegal constructor'); };
-            nativeize(ctor, name);
             var proto = {};
             Object.defineProperty(proto, 'toString', {
                 configurable: true, writable: true,
-                value: nativeize(function toString() {
+                value: function toString() {
                     if (!trustedValue.has(this)) throw new TypeError('Illegal invocation');
                     return trustedValue.get(this);
-                }, 'toString')
+                }
             });
             Object.defineProperty(proto, 'toJSON', {
                 configurable: true, writable: true,
-                value: nativeize(function toJSON() {
+                value: function toJSON() {
                     if (!trustedValue.has(this)) throw new TypeError('Illegal invocation');
                     return trustedValue.get(this);
-                }, 'toJSON')
+                }
             });
             Object.defineProperty(proto, Symbol.toStringTag,
                 { value: name, configurable: true });
@@ -8353,14 +7887,13 @@
         }
         var policyRules = new WeakMap();
         function TrustedTypePolicy() { throw new TypeError('Illegal constructor'); }
-        nativeize(TrustedTypePolicy, 'TrustedTypePolicy');
         ['HTML', 'Script', 'ScriptURL'].forEach(function (kind) {
             var method = 'create' + kind;
             var Ctor = kind === 'HTML' ? TrustedHTMLCtor
                 : kind === 'Script' ? TrustedScriptCtor : TrustedScriptURLCtor;
             Object.defineProperty(TrustedTypePolicy.prototype, method, {
                 configurable: true, writable: true,
-                value: nativeize(function (input) {
+                value: function (input) {
                     var record = policyRules.get(this);
                     if (!record) throw new TypeError('Illegal invocation');
                     var rule = record.rules[method];
@@ -8368,16 +7901,16 @@
                     var args = Array.prototype.slice.call(arguments, 1);
                     var value = rule.apply(undefined, [input].concat(args));
                     return trusted(Ctor, value);
-                }, method)
+                }
             });
         });
         Object.defineProperty(TrustedTypePolicy.prototype, 'name', {
             configurable: true, enumerable: true,
-            get: nativeize(function name() {
+            get: function name() {
                 var record = policyRules.get(this);
                 if (!record) throw new TypeError('Illegal invocation');
                 return record.name;
-            }, 'get name')
+            }
         });
         Object.defineProperty(TrustedTypePolicy.prototype, Symbol.toStringTag,
             { value: 'TrustedTypePolicy', configurable: true });
@@ -8389,9 +7922,8 @@
             static require(o) { try { return o.#factory; } catch { throw new TypeError('Illegal invocation'); } } };
         function requireFactory(value) { FactoryBrand.require(value); }
         function TrustedTypePolicyFactory() { throw new TypeError('Illegal constructor'); }
-        nativeize(TrustedTypePolicyFactory, 'TrustedTypePolicyFactory');
         var factoryProto = TrustedTypePolicyFactory.prototype;
-        defineMethod(factoryProto, 'createPolicy', nativeize(function createPolicy(name, rules) {
+        defineMethod(factoryProto, 'createPolicy', function createPolicy(name, rules) {
             requireFactory(this);
             name = String(name);
             if (name === 'default' && defaultPolicy) throw new TypeError('Policy already exists');
@@ -8407,47 +7939,47 @@
             policyRules.set(policy, { name: name, rules: savedRules });
             if (name === 'default') defaultPolicy = policy;
             return policy;
-        }, 'createPolicy'));
-        defineMethod(factoryProto, 'isHTML', nativeize(function isHTML(value) {
+        });
+        defineMethod(factoryProto, 'isHTML', function isHTML(value) {
             requireFactory(this);
             return trustedValue.has(value) && value instanceof TrustedHTMLCtor;
-        }, 'isHTML'));
-        defineMethod(factoryProto, 'isScript', nativeize(function isScript(value) {
+        });
+        defineMethod(factoryProto, 'isScript', function isScript(value) {
             requireFactory(this);
             return trustedValue.has(value) && value instanceof TrustedScriptCtor;
-        }, 'isScript'));
-        defineMethod(factoryProto, 'isScriptURL', nativeize(function isScriptURL(value) {
+        });
+        defineMethod(factoryProto, 'isScriptURL', function isScriptURL(value) {
             requireFactory(this);
             return trustedValue.has(value) && value instanceof TrustedScriptURLCtor;
-        }, 'isScriptURL'));
-        defineMethod(factoryProto, 'getAttributeType', nativeize(function getAttributeType() {
+        });
+        defineMethod(factoryProto, 'getAttributeType', function getAttributeType() {
             requireFactory(this);
             return null;
-        }, 'getAttributeType'));
-        defineMethod(factoryProto, 'getPropertyType', nativeize(function getPropertyType() {
+        });
+        defineMethod(factoryProto, 'getPropertyType', function getPropertyType() {
             requireFactory(this);
             return null;
-        }, 'getPropertyType'));
+        });
         Object.defineProperty(factoryProto, 'emptyHTML', {
             configurable: true, enumerable: true,
-            get: nativeize(function emptyHTML() {
+            get: function emptyHTML() {
                 requireFactory(this);
                 return trusted(TrustedHTMLCtor, '');
-            }, 'get emptyHTML')
+            }
         });
         Object.defineProperty(factoryProto, 'emptyScript', {
             configurable: true, enumerable: true,
-            get: nativeize(function emptyScript() {
+            get: function emptyScript() {
                 requireFactory(this);
                 return trusted(TrustedScriptCtor, '');
-            }, 'get emptyScript')
+            }
         });
         Object.defineProperty(factoryProto, 'defaultPolicy', {
             configurable: true, enumerable: true,
-            get: nativeize(function defaultPolicyGetter() {
+            get: function defaultPolicyGetter() {
                 requireFactory(this);
                 return defaultPolicy;
-            }, 'get defaultPolicy')
+            }
         });
         Object.defineProperty(factoryProto, Symbol.toStringTag,
             { value: 'TrustedTypePolicyFactory', configurable: true });
@@ -8459,47 +7991,6 @@
         });
     }
 
-    if (typeof global.scheduler === 'undefined') {
-        defineCtor('scheduler', {
-            postTask: function (callback, options) {
-                var priority = options && options.priority;
-                var delay = (options && options.delay) || 0;
-                var signal = options && options.signal;
-                return new Promise(function (resolve, reject) {
-                    if (signal && signal.aborted) {
-                        reject(signal.reason || new Error('AbortError'));
-                        return;
-                    }
-                    var fire = function () {
-                        if (signal && signal.aborted) {
-                            reject(signal.reason || new Error('AbortError'));
-                            return;
-                        }
-                        try { resolve(callback()); } catch (e) { reject(e); }
-                    };
-                    if (priority === 'background' || delay > 0) {
-                        setTimeout(fire, delay);
-                    } else {
-                        Promise.resolve().then(fire);
-                    }
-                    if (signal && typeof signal.addEventListener === 'function') {
-                        signal.addEventListener('abort', function () {
-                            reject(signal.reason || new Error('AbortError'));
-                        });
-                    }
-                });
-            },
-            yield: function () {
-                if (typeof setTimeout === 'function') {
-                    return new Promise(function (resolve) {
-                        setTimeout(resolve, 0);
-                    });
-                }
-                return Promise.resolve();
-            }
-        });
-    }
-
     if (navigator) {
         try {
             if (!navigator.scheduling) {
@@ -8508,11 +7999,6 @@
                     value: {
                         isInputPending: function () { return false; }
                     }
-                });
-            } else if (typeof navigator.scheduling.isInputPending !== 'function') {
-                Object.defineProperty(navigator.scheduling, 'isInputPending', {
-                    configurable: true, enumerable: true,
-                    value: function () { return false; }
                 });
             }
         } catch (e) {}
@@ -8961,194 +8447,6 @@
         } catch (e) {}
     }
 
-
-    var doc = global.document;
-    if (doc && doc.implementation) {
-        var liveImpl = doc.implementation;
-        var realCreate = liveImpl && liveImpl.createHTMLDocument;
-        var realCreateBroken = true;
-        try {
-            var probe = realCreate && realCreate.call(liveImpl, '');
-            if (probe && probe.body) realCreateBroken = false;
-        } catch (e) { realCreateBroken = true; }
-
-        if (realCreateBroken) {
-            var stubElement = function (tag) {
-                var children = [];
-                var attrs = {};
-                var innerHtml = '';
-                var textContent = '';
-                var el = {
-                    nodeType: 1,
-                    tagName: String(tag).toUpperCase(),
-                    nodeName: String(tag).toUpperCase(),
-                    nodeValue: null,
-                    childNodes: children,
-                    children: children,
-                    parentNode: null,
-                    parentElement: null,
-                    ownerDocument: null,
-                    style: {},
-                    href: '',
-                    src: '',
-                    appendChild: function (n) {
-                        if (n) { children.push(n); if (n && typeof n === 'object') { try { n.parentNode = el; n.parentElement = el; } catch (e) {} } }
-                        return n;
-                    },
-                    removeChild: function (n) {
-                        var i = children.indexOf(n);
-                        if (i >= 0) children.splice(i, 1);
-                        if (n && typeof n === 'object') { try { n.parentNode = null; n.parentElement = null; } catch (e) {} }
-                        return n;
-                    },
-                    insertBefore: function (n, ref) {
-                        var i = ref ? children.indexOf(ref) : -1;
-                        if (i < 0) children.push(n); else children.splice(i, 0, n);
-                        if (n && typeof n === 'object') { try { n.parentNode = el; n.parentElement = el; } catch (e) {} }
-                        return n;
-                    },
-                    replaceChild: function (n, ref) {
-                        var i = children.indexOf(ref);
-                        if (i >= 0) { children.splice(i, 1, n); if (n && typeof n === 'object') { try { n.parentNode = el; n.parentElement = el; } catch (e) {} } }
-                        return ref;
-                    },
-                    contains: function (n) { return children.indexOf(n) >= 0; },
-                    cloneNode: function () { var c = stubElement(tag); c.innerHTML = innerHtml; return c; },
-                    setAttribute: function (k, v) { attrs[String(k)] = String(v == null ? '' : v); },
-                    getAttribute: function (k) { var v = attrs[String(k)]; return v === undefined ? null : v; },
-                    hasAttribute: function (k) { return Object.prototype.hasOwnProperty.call(attrs, String(k)); },
-                    removeAttribute: function (k) { delete attrs[String(k)]; },
-                    hasAttributes: function () { return Object.keys(attrs).length > 0; },
-                    addEventListener: function () {},
-                    removeEventListener: function () {},
-                    dispatchEvent: function () { return true; },
-                    getElementsByTagName: function () { return []; },
-                    getElementsByClassName: function () { return []; },
-                    querySelector: function () { return null; },
-                    querySelectorAll: function () { return []; },
-                    closest: function () { return null; },
-                    matches: function () { return false; },
-                    classList: {
-                        add: function () {}, remove: function () {},
-                        toggle: function () { return false; },
-                        contains: function () { return false; },
-                        replace: function () {},
-                    },
-                    attributes: attrs,
-                };
-                Object.defineProperty(el, 'firstChild', { configurable: true, get: function () { return children[0] || null; } });
-                Object.defineProperty(el, 'lastChild', { configurable: true, get: function () { return children[children.length - 1] || null; } });
-                Object.defineProperty(el, 'firstElementChild', { configurable: true, get: function () {
-                    for (var i = 0; i < children.length; i++) if (children[i] && children[i].nodeType === 1) return children[i];
-                    return null;
-                } });
-                Object.defineProperty(el, 'lastElementChild', { configurable: true, get: function () {
-                    for (var i = children.length - 1; i >= 0; i--) if (children[i] && children[i].nodeType === 1) return children[i];
-                    return null;
-                } });
-                Object.defineProperty(el, 'nextSibling', { configurable: true, get: function () {
-                    var p = el.parentNode;
-                    if (!p || !p.childNodes) return null;
-                    var i = p.childNodes.indexOf(el);
-                    return (i >= 0 && i + 1 < p.childNodes.length) ? p.childNodes[i + 1] : null;
-                } });
-                Object.defineProperty(el, 'previousSibling', { configurable: true, get: function () {
-                    var p = el.parentNode;
-                    if (!p || !p.childNodes) return null;
-                    var i = p.childNodes.indexOf(el);
-                    return (i > 0) ? p.childNodes[i - 1] : null;
-                } });
-                Object.defineProperty(el, 'innerHTML', {
-                    configurable: true, enumerable: true,
-                    get: function () { return innerHtml; },
-                    set: function (v) {
-                        innerHtml = String(v == null ? '' : v);
-                        children.length = 0;
-                        var depth = 0;
-                        var re = /<(\/?)([\w-]+)([^>]*)>/g, m;
-                        while ((m = re.exec(innerHtml)) !== null) {
-                            if (m[1] === '/') {
-                                if (depth > 0) depth--;
-                            } else {
-                                var selfClose = m[3].slice(-1) === '/' || /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/i.test(m[2]);
-                                if (depth === 0) {
-                                    var child = stubElement(m[2]);
-                                    child.parentNode = el; child.parentElement = el;
-                                    children.push(child);
-                                }
-                                if (!selfClose) depth++;
-                            }
-                        }
-                    },
-                });
-                Object.defineProperty(el, 'textContent', {
-                    configurable: true, enumerable: true,
-                    get: function () { return textContent; },
-                    set: function (v) { textContent = String(v == null ? '' : v); children.length = 0; },
-                });
-                Object.defineProperty(el, 'outerHTML', {
-                    configurable: true, enumerable: true,
-                    get: function () { return '<' + tag + '>' + innerHtml + '</' + tag + '>'; },
-                    set: function () {},
-                });
-                return el;
-            };
-
-            var stubBody = function () { return stubElement('body'); };
-
-            var stubDocument = function (title) {
-                var docStub = {
-                    nodeType: 9,
-                    nodeName: '#document',
-                    title: title == null ? '' : String(title),
-                    contentType: 'text/html',
-                    compatMode: 'CSS1Compat',
-                    location: { href: '' },
-                    body: stubBody(),
-                    head: stubElement('head'),
-                    documentElement: stubElement('html'),
-                    createElement: function (tag) { return stubElement(tag); },
-                    createTextNode: function (t) { return { nodeType: 3, nodeValue: String(t == null ? '' : t), data: String(t == null ? '' : t) }; },
-                    createComment: function (t) { return { nodeType: 8, nodeValue: String(t == null ? '' : t), data: String(t == null ? '' : t) }; },
-                    createDocumentFragment: function () {
-                        var frag = stubElement('#document-fragment');
-                        frag.nodeType = 11; frag.nodeName = '#document-fragment'; frag.tagName = undefined;
-                        return frag;
-                    },
-                    getElementsByTagName: function () { return []; },
-                    getElementsByClassName: function () { return []; },
-                    getElementById: function () { return null; },
-                    querySelector: function () { return null; },
-                    querySelectorAll: function () { return []; },
-                    addEventListener: function () {},
-                    removeEventListener: function () {},
-                    dispatchEvent: function () { return true; },
-                };
-                docStub.implementation = {
-                    hasFeature: function () { return true; },
-                    createHTMLDocument: stubDocument,
-                    createDocument: function () { return stubDocument(''); },
-                    createDocumentType: function () { return {}; },
-                };
-                return docStub;
-            };
-
-            try {
-                Object.defineProperty(doc, 'implementation', {
-                    configurable: true, enumerable: true,
-                    get: function () {
-                        return {
-                            hasFeature: function () { return true; },
-                            createHTMLDocument: stubDocument,
-                            createDocument: function () { return stubDocument(''); },
-                            createDocumentType: function () { return {}; },
-                        };
-                    },
-                });
-            } catch (e) {}
-        }
-    }
-
     (function () {
         var doc = global.document;
         if (!doc || typeof doc.createElement !== 'function') return;
@@ -9404,7 +8702,7 @@
         var CSSStyleRule = ctorFor('CSSStyleRule', CSSGroupingRule.prototype);
         var CSSConditionRule = ctorFor('CSSConditionRule', CSSGroupingRule.prototype);
         var CSSMediaRule = ctorFor('CSSMediaRule', CSSConditionRule.prototype);
-        var CSSSupportsRule = ctorFor('CSSSupportsRule', CSSConditionRule.prototype);
+        ctorFor('CSSSupportsRule', CSSConditionRule.prototype);
         var CSSFontFaceRule = ctorFor('CSSFontFaceRule', CSSRule.prototype);
         var CSSPageRule = ctorFor('CSSPageRule', CSSRule.prototype);
         var CSSImportRule = ctorFor('CSSImportRule', CSSRule.prototype);
@@ -9412,9 +8710,9 @@
         var CSSKeyframesRule = ctorFor('CSSKeyframesRule', CSSRule.prototype);
         var CSSCounterStyleRule = ctorFor('CSSCounterStyleRule', CSSRule.prototype);
         var CSSPropertyRule = ctorFor('CSSPropertyRule', CSSRule.prototype);
-        var CSSLayerBlockRule = ctorFor('CSSLayerBlockRule', CSSGroupingRule.prototype);
+        ctorFor('CSSLayerBlockRule', CSSGroupingRule.prototype);
         var CSSContainerRule = ctorFor('CSSContainerRule', CSSConditionRule.prototype);
-        var CSSScopeRule = ctorFor('CSSScopeRule', CSSGroupingRule.prototype);
+        ctorFor('CSSScopeRule', CSSGroupingRule.prototype);
         var CSSPositionTryRule = ctorFor('CSSPositionTryRule', CSSRule.prototype);
         var CSSPositionTryDescriptors = ctorFor('CSSPositionTryDescriptors',
             global.CSSStyleDeclaration ? global.CSSStyleDeclaration.prototype
@@ -9616,7 +8914,7 @@
             if (!s || typeof s.__notify !== 'function' || s.__ndDirty) return;
             if (!sheetFlushQueued) {
                 sheetFlushQueued = true;
-                ndMediaTask(flushSheets);
+                queueMicrotask(flushSheets);
             }
             var cost = 1;
             try { cost += s.cssRules.length; } catch (e) {}
@@ -9643,7 +8941,7 @@
             try {
                 Object.defineProperty(flushingComputedStyle, 'length', { value: 1 });
                 Object.defineProperty(global, 'getComputedStyle', {
-                    value: nativeize(flushingComputedStyle),
+                    value: flushingComputedStyle,
                     writable: true, configurable: true, enumerable: true
                 });
             } catch (e) {}
@@ -11016,10 +10314,6 @@
         }
         if (global.Element && global.Element.prototype)
             defSheet(global.Element.prototype);
-        else {
-            defSheet(global.HTMLStyleElement && global.HTMLStyleElement.prototype);
-            defSheet(global.HTMLLinkElement && global.HTMLLinkElement.prototype);
-        }
 
         try {
             var styleSheetsDef = {
@@ -11101,15 +10395,6 @@
                 err.name = name;
                 return err;
             }
-        }
-
-        function rangeEx(code) {
-            var err = new Error('RangeException ' + code);
-            err.name = 'RangeException';
-            err.code = code;
-            err.BAD_BOUNDARYPOINTS_ERR = 1;
-            err.INVALID_NODE_TYPE_ERR = 2;
-            return err;
         }
 
         function isCharData(n) {
@@ -11912,7 +11197,6 @@
             });
         })();
 
-        nativeize(NdRange, 'Range');
         try { Object.defineProperty(NdRange, 'length', { value: 0 }); } catch (e) {}
         global.Range = NdRange;
         global.__ndCreateRange = function (ownerDoc) {
@@ -12535,7 +11819,6 @@
                 Object.defineProperty(wrapCreate, 'length',
                     { value: 1, configurable: true });
             } catch (e) {}
-            nativeize(wrapCreate, 'createElement');
             document.createElement = wrapCreate;
         }
     })();
@@ -12845,15 +12128,12 @@
                     frames.push(frame);
                 }
             } else if (typeof input === 'object') {
-                var propMax = 0, names = [];
+                var names = [];
                 for (var p in input) {
                     if (!Object.prototype.hasOwnProperty.call(input, p) ||
                         p === 'offset' || p === 'easing' || p === 'composite') continue;
                     names.push(p);
-                    var v = input[p];
-                    propMax = Math.max(propMax, Array.isArray(v) ? v.length : 1);
                 }
-                if (propMax < 2) propMax = 2;
                 var byOffset = {};
                 names.forEach(function (p) {
                     var v = input[p];
@@ -12924,7 +12204,6 @@
             var merged = [];
             raw.forEach(function (f) {
                 if (f.count === 0) return;
-                var last = merged[merged.length - 1];
                 var target = null;
                 for (var i = merged.length - 1; i >= 0; i--) {
                     if (merged[i].offset === f.offset && merged[i].easing === f.easing &&

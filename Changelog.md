@@ -3,6 +3,19 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* JavaScript: about 720 lines of dead code removed from the bundled page and
+  worker polyfills. Fallbacks for features the engine always provides never
+  ran: the ES2019–2024 built-ins Boa implements (`Object.hasOwn`,
+  `Promise.any`, `Array.prototype.toSorted`, `Object.groupBy`,
+  `String.prototype.replaceAll` and the rest), `Symbol.dispose`,
+  `structuredClone`, `queueMicrotask`, `URL.canParse`/`URL.parse`,
+  `Event.composedPath`, `navigator.share`, `navigator.userAgentData.toJSON`,
+  `window.navigation`, `scheduler`, `HTMLElement.dataset` and a stub
+  `DOMImplementation.createHTMLDocument`. That last fallback's probe also
+  stops building a throwaway document on every page load. Unused helpers
+  (`idlConstants`, `normHeader`, `rangeEx`, the identity `nativeize`) and
+  unread bindings went with them. Measured with branch coverage in a page,
+  an iframe and a worker; the features behave as before.
 * Security: a web page can no longer take over the remote-control (MCP)
   helper. The helper cached itself under `Symbol.for('southstar.remote')`, so
   a page could plant its own object there and decide what `read_page`,
