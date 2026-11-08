@@ -1,6 +1,6 @@
 [package]
 name = "southstar-image-decoders"
-description = "Image decoders: PNG/APNG, GIF, JPEG and BMP through southstar-raster, ICO/CUR containers, and WebP (still and animated) over libwebp"
+description = "Image decoders: PNG/APNG, GIF, JPEG and BMP through southstar-raster, ICO/CUR containers, and WebP (still and animated) over image-webp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

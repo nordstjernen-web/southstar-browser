@@ -92,7 +92,18 @@ Update Changelog.md
   language at startup through the in-tree catalogue lookup (`rust/i18n`,
   `data/i18n/*.lang`); English is the fallback for any string a catalogue
   does not cover. No gettext dependency.
-- Does not phone home, does not telemeter the user.
+- Does not phone home, does not telemeter the user. The one default
+  connection to a third party is Google Safe Browsing (`rust/safebrowsing`),
+  and only in builds given `NS_SAFE_BROWSING_API_KEY` at compile time: it
+  downloads Google's hash-prefix lists and sends a 4-byte hash prefix only
+  when an address matches one, never the address. It is on by default, can
+  be turned off in Settings → Privacy, and falls back to the local
+  `safebrowsing.list` host list. Never commit the key. Don't add other
+  default third-party connections.
+- `southstar --mcp` (`rust/mcp`) is a Model Context Protocol server over
+  stdio that lets the user's local agent drive the browser window (tabs,
+  navigation, page outline, clicks, typing, screenshots). It is a local
+  remote-control interface, not a web API: pages cannot see or reach it.
 - Make good descriptive commit messages always
 
 ## Comments policy
@@ -292,14 +303,14 @@ outlives a layout, so the crate caches finished glyph strings process-wide
   difference; run it over the affected pages after touching the cache key.
   `NS_PANGO_SHAPE_CACHE=0` disables the caches.
 - **`@font-face` web fonts take the pure-Rust font path by default**
-  (`-Drust-shaper`, cargo feature `rust-shaper`, on by default): HarfRust
+  (cargo feature `rust-shaper`, on by default): HarfRust
   shapes, `read-fonts` answers table queries and builds the fontconfig
   pattern, and `skrifa` outlines and color glyphs (COLR, CBDT, sbix) are
   painted through a cairo user font, so a downloaded font never reaches
   FreeType, HarfBuzz or cairo-ft. A web font `read-fonts` can't parse is not
   installed. System fonts keep the C path. `NS_RUST_FONTS=web|all|off`
   picks the fonts at runtime (`off`, or `NS_TEXT_SHAPER=harfbuzz`, is the C
-  path only); `-Drust-shaper=false` builds without it.
+  path only); `cargo xtask build --no-rust-shaper` builds without it.
   `docs/pure-rust-text.md` has the details.
 
 ### HTML parser: `rust/html5`
@@ -339,8 +350,8 @@ stays good.
 
 ### Image decoding: pure-Rust decoders
 
-PNG/APNG, GIF, BMP and JPEG bytes are decoded in Rust by
-`rust/image-decoders` (`src/raster/`): the `png` crate (including APNG
+PNG/APNG, GIF, BMP and JPEG bytes are decoded in Rust by `rust/raster`
+(`southstar-raster`): the `png` crate (including APNG
 frames), the `gif` crate and `zune-jpeg`, plus a small in-tree BMP decoder
 (core/info/V2–V5 headers, 1/2/4/8-bit palettes, RLE4/RLE8, bit fields,
 24/32-bit, top-down). They draw into premultiplied BGRA canvases with the
@@ -348,9 +359,10 @@ same premultiplication, compositing, disposal and delay rules the former
 Wuffs chain used, so PNG, GIF and BMP pixels are unchanged; JPEG differs
 from Wuffs by a few levels of IDCT rounding. No orientation is applied
 from EXIF. `ns_image_decode_bytes` (`rust/image`) is the whole chain:
-ICO, then PNG/GIF/BMP/JPEG, then WebP
-(all `rust/image-decoders`, WebP over libwebp), then AVIF when built, then SVG in-engine
-(`rust/svg`). Nothing follows — gdk-pixbuf no longer decodes page
+ICO, then PNG/GIF/BMP/JPEG, then WebP — lossy, lossless and animated, over
+the `image-webp` crate in `rust/image-decoders/src/webp.rs` — then AVIF
+(libavif) when built, then SVG in-engine (`rust/svg`). AVIF is the only
+image format that still reaches a C decoder. Nothing follows — gdk-pixbuf no longer decodes page
 images, so an unsupported format simply fails to decode rather than
 reaching a loader plugin installed on the user's machine.
 
@@ -371,7 +383,7 @@ Servo's `url` and `idna` crates stay out (D1).
 
 All networking goes through `rust/http` (`southstar-http`), an HTTP client
 written from scratch in Rust; libcurl and libnghttp2 are not used, and its
-only crates.io dependencies are the TLS stack below. It speaks HTTP/1.1 and HTTP/2 with its own framing,
+only crates.io dependencies are the TLS stack and the body decoders below. It speaks HTTP/1.1 and HTTP/2 with its own framing,
 flow control and HPACK (the static table and Huffman code are generated from
 RFC 7541); those wire formats — HTTP/1.1 heads and chunked bodies, HTTP/2
 frames, HPACK and the sans-I/O `h2::Connection` — live in `rust/http-wire`,
@@ -384,8 +396,10 @@ insecure-certificate override, the CA bundle or else the Windows root store
 or `SSL_CERT_DIR`), so handshakes and certificate parsing are memory-safe Rust;
 key exchange prefers the hybrid post-quantum X25519MLKEM768, built from
 RustCrypto's `ml-kem` and ring's X25519 in `x25519_mlkem768.rs`. Don't bring
-libssl back. gzip/deflate go through zlib and br/zstd through
-libbrotlidec/libzstd when present (`rust/http/src/ffi/codec.rs`). HTTP/2
+libssl back. Content encodings are decoded in Rust: gzip and deflate by
+`flate2` over `zlib-rs`, br by `brotli-decompressor` and zstd by `ruzstd`
+(the default `http-brotli` and `http-zstd` features); zlib, libbrotlidec and
+libzstd are not linked. HTTP/2
 connections are pooled per `scheme://host:port` and **multiplex concurrent
 requests over one connection**: an I/O thread per connection drives the
 sans-I/O `h2::Connection`, workers queue a request and wait for its stream
@@ -403,13 +417,20 @@ Extend `rust/http`; don't reintroduce libcurl. DNS over HTTPS (RFC 8484,
 `NS_DOH_URL`) names a resolver; answers are cached for their TTL, at most 1024
 hosts. Not supported: HTTP/3, TLS Encrypted Client Hello.
 
+The Public Suffix List (cookie scoping, sites) is `rust/psl`, which reads the
+list at first use from the system (`/usr/share/publicsuffix/`: Debian/Ubuntu
+`publicsuffix`, Fedora/Arch `publicsuffix-list`) or from the copy the
+Windows, macOS, AppImage and tarball bundles ship; the MPL-licensed list is
+never compiled in. Without it every host is its own site and `Domain=`
+cookies stay host-only. libpsl is not used.
+
 ### WebAssembly: wasmi
 
 The `WebAssembly` JS API (`compile`, `instantiate`, `Memory`,
 `Table`, `Global`, externref) is implemented in `rust/js-wasm` over
 [wasmi](https://github.com/wasmi-labs/wasmi), a pure-Rust interpreter
-from crates.io with no JIT. It runs wasm-bindgen bundles. `-Dwasm=disabled`
-drops the crate and the `WebAssembly` global.
+from crates.io with no JIT. It runs wasm-bindgen bundles. `cargo xtask
+build --no-wasm` drops the crate and the `WebAssembly` global.
 
 ### Charset detection: uchardet
 
@@ -420,19 +441,6 @@ to identify the charset, then `g_convert`s to UTF-8. No
 hand-rolled BOM / HTTP-charset / meta-charset sniffing — uchardet
 handles all of that internally. The Latin-1 fallback only fires
 if uchardet can't classify the bytes at all.
-
-### WebP: libwebp
-
-Required dependency (Debian/Ubuntu `libwebp-dev`, Fedora/RHEL
-`libwebp-devel`, openSUSE `libwebp-devel`, Alpine `libwebp-dev`,
-MSYS2 `mingw-w64-ucrt-x86_64-libwebp`, Homebrew `webp`). WebP —
-lossy VP8 (the dominant variant served by the BBC, Wikipedia
-thumbnails, and most modern CDNs), lossless VP8L, and **animated
-WebP** (via libwebpdemux's `WebPAnimDecoder`, playing like animated
-GIFs) — is decoded by `rust/image-decoders/src/ffi/libwebp.rs`, tried right after
-the PNG/GIF/BMP/JPEG decoders. No gdk-pixbuf loader, no
-`loaders.cache` registration, and no sandbox interaction is
-involved; the old `webp-pixbuf-loader` runtime dependency is gone.
 
 ### Web Cryptography: OpenSSL libcrypto
 
@@ -449,8 +457,8 @@ System packages required on Debian/Ubuntu:
 
 ```sh
 sudo apt install build-essential pkg-config cargo rustc \
-    libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libgtk-4-dev libepoxy-dev libssl-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libsdl2-dev publicsuffix \
     libharfbuzz-dev libfontconfig-dev libfreetype-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
@@ -473,9 +481,9 @@ On Fedora/RHEL:
 
 ```sh
 sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-    openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel sqlite-devel \
+    openssl-devel uchardet-devel sqlite-devel publicsuffix-list \
     harfbuzz-devel fontconfig-devel freetype-devel \
-    libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
+    libseccomp-devel SDL2-devel ffmpeg-devel
 ```
 
 (`ffmpeg-devel` comes from RPM Fusion.)
@@ -484,9 +492,9 @@ On openSUSE:
 
 ```sh
 sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
-    libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel sqlite3-devel \
+    libopenssl-devel libuchardet-devel sqlite3-devel publicsuffix \
     harfbuzz-devel fontconfig-devel freetype2-devel \
-    libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
+    libseccomp-devel libSDL2-devel ffmpeg-devel
 ```
 
 (`ffmpeg-devel` comes from Packman.)
