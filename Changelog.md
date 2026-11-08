@@ -5,7 +5,7 @@ Southstar Browser 1.0.8-dev:
 ======
 * Text layout: glyph-string, run, line and layout extents saturate instead of
   overflowing `i32` Pango units. A layout taller than about 2.1 million pixels
-  (about 1,100 lines at `font-size: 2048px`), or a line that wide (a
+  (a paragraph broken after every character at `font-size: 2048px` in a font with tall glyphs), or a line that wide (a
   300,000-character `<pre>`, 40 characters at `font-size: 65535px`, SVG text
   with a huge `font-size`, or a web font with outsized glyphs) aborted builds
   with overflow checks (the Linux CI build, `--debug`) and gave wrapped,
