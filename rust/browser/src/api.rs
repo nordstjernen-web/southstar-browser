@@ -354,6 +354,10 @@ impl Page {
         text(input::eval(self.browser(), src).as_deref())
     }
 
+    pub fn remote_call(&self, request: &str) -> Option<Vec<u8>> {
+        text(input::remote_call(self.browser(), request).as_deref())
+    }
+
     pub fn media_at(&self, x: c_int, y: c_int) -> Option<Media> {
         let found = hit::media_at(self.browser(), x, y)?;
         Some(Media {

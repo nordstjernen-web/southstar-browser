@@ -127,6 +127,14 @@ impl Js {
         api::halted(self.0)
     }
 
+    pub(crate) fn remote_helper(self) -> Value {
+        api::remote_helper(self.0)
+    }
+
+    pub(crate) fn set_remote_helper(self, helper: Value) {
+        api::set_remote_helper(self.0, helper);
+    }
+
     pub(crate) fn in_pump(self) -> bool {
         api::in_pump(self.0)
     }

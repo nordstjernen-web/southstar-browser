@@ -110,11 +110,18 @@ navigation, call `read_page` or `find` again.
   `tools/list` and `tools/call`, and keeps one connection to the browser
   open for the session. It also holds the small JSON parser and writer
   that both ends use (`rust/mcp/src/json.rs`).
-- **`rust/mcp/js/remote-page.js`** is the page-side helper that
+- **`rust/js-loader/js/remote-page.js`** is the helper behind
   `read_page`, `find`, `form_input`, `get_page_text`, `double_click` and
-  `javascript` evaluate through the renderer's console-eval path
-  (origin `devtools-console`). It stores itself under
-  `Symbol.for('southstar.remote')`.
+  `javascript`. The server sends a JSON request (`{"fn": …, "args": […]}`)
+  with the `remote_call` command, and the renderer runs the helper in a
+  JavaScript realm of its own, created on the page's first remote call
+  and kept in the page record. Page script cannot name, replace or reach
+  it, and the helper's built-ins (`JSON`, `Map`, `WeakMap`, `Array`, …)
+  are that realm's own, so a page that patches its own built-ins does not
+  change what the helper returns. The helper reads the page through the
+  page's global object, so the DOM methods it calls are still the page's:
+  treat what it reports as page content, which a page can make
+  misleading, like anything else it shows.
 
 ## Security model
 
@@ -145,13 +152,11 @@ navigation, call `read_page` or `find` again.
   remote control for agents you trust, and stop it when you are done.
   Any program running as your user can read the control file, just as it
   could read your cookies.
-- **The page's CSP.** The `javascript` tool's code may compile strings
-  (the helper uses an indirect `eval`) even on a page whose
-  Content-Security-Policy lacks `'unsafe-eval'`. This holds only while
-  every script on the stack belongs to that devtools-console evaluation.
-  Any page function on the stack keeps the page's policy in force, so
-  pages cannot use the helper (which they can reach through
-  `Symbol.for`) to evaluate strings.
+- **The page's CSP.** The `javascript` tool's code is evaluated by the
+  renderer as a devtools-console script, so it may compile strings even
+  on a page whose Content-Security-Policy lacks `'unsafe-eval'`. This
+  holds only while every script on the stack belongs to that evaluation.
+  Any page function on the stack keeps the page's policy in force.
 - **Web content cannot change the setting.** `about:settings` answers
   only requests from the browser chrome.
 

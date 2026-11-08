@@ -157,6 +157,10 @@ pub fn eval_source(js: Option<Page>, src: &CStr, origin: Option<&CStr>) -> Optio
     eval::eval_source(live(js)?, src, origin)
 }
 
+pub fn remote_call(js: Option<Page>, request: &str) -> Option<Vec<u8>> {
+    eval::remote_call(live(js)?, request)
+}
+
 pub fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {
     crate::ffi::decode_data_url(url)
 }

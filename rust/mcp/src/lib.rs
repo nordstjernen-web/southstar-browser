@@ -1,4 +1,4 @@
-//! Southstar — remote control over MCP: the control file both ends share, the JSON they speak, the in-page helper and the --mcp stdio server.
+//! Southstar — remote control over MCP: the control file both ends share, the JSON they speak and the --mcp stdio server.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -12,8 +12,6 @@ use std::path::PathBuf;
 pub use server::run;
 
 pub const CONTROL_FILE: &str = "remote-control.json";
-
-pub const PAGE_HELPER: &str = include_str!("../js/remote-page.js");
 
 pub fn state_dir() -> PathBuf {
     let base =

@@ -705,6 +705,15 @@ fn dispatch(req: Value, reply: Reply) {
             remote::eval(v, js.as_bytes(), text_reply(op));
             return;
         }
+        "remote_call" => {
+            let Some(request) = req.str("request") else {
+                op.finish(Err("missing request".into()));
+                return;
+            };
+            arm_timeout(&op);
+            remote::remote_call(v, request.as_bytes(), text_reply(op));
+            return;
+        }
         "console" => {
             arm_timeout(&op);
             remote::console(v, text_reply(op));

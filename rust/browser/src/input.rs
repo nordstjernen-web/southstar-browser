@@ -359,6 +359,19 @@ pub fn eval(b: &NsBrowser, src: &CStr) -> Option<CString> {
     let js = b.js()?;
     page::damp_reset(b);
     let res = js.eval_console(src);
+    settle_eval(b, js);
+    res
+}
+
+pub fn remote_call(b: &NsBrowser, request: &str) -> Option<CString> {
+    let js = b.js()?;
+    page::damp_reset(b);
+    let res = js.remote_call(request);
+    settle_eval(b, js);
+    res
+}
+
+fn settle_eval(b: &NsBrowser, js: ffi::Js) {
     if js.run_animation_frame() {
         b.dirty.set(true);
     }
@@ -366,7 +379,6 @@ pub fn eval(b: &NsBrowser, src: &CStr) -> Option<CString> {
         b.dirty.set(true);
     }
     relayout_if_dirty(b);
-    res
 }
 
 fn note_mutation(b: &NsBrowser) {

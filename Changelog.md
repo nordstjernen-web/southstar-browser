@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a web page can no longer take over the remote-control (MCP)
+  helper. The helper cached itself under `Symbol.for('southstar.remote')`, so
+  a page could plant its own object there and decide what `read_page`,
+  `find`, `form_input` and the other page tools reported to the agent, and
+  where its clicks went. The renderer now runs the helper in a JavaScript
+  realm of its own and keeps it in the page record, out of page script's
+  reach; the `--mcp` server sends a JSON request (`remote_call`) instead of
+  helper source.
 * Security: WebAssembly memories and tables a module declares or grows are
   capped like the JS API's (512 MiB per memory, 10 million table elements). A
   module's own memory section, or `memory.grow` inside it, was uncapped: a

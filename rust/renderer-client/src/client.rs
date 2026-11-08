@@ -685,6 +685,10 @@ impl Renderer {
         self.text_request("/eval", "src", Some(src))
     }
 
+    pub fn remote_call(&mut self, request: &[u8]) -> Text {
+        self.text_request("/remote-call", "request", Some(request))
+    }
+
     pub fn dump(&mut self, kind: &[u8]) -> Text {
         self.text_request("/dump", "kind", Some(kind))
     }

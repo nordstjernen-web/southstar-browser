@@ -403,6 +403,83 @@ pub(crate) fn eval_source(js: Js, src: &CStr, origin: Option<&CStr>) -> Option<V
     Some(out)
 }
 
+const REMOTE_HELPER: &str = include_str!("../js/remote-page.js");
+const REMOTE_FACTORY_KEY: &str = "factory";
+
+fn install_remote_factory(scope: &mut Scope<'_>) -> Result<(), Value> {
+    let options = ScriptOptions {
+        name: Some(b"<remote-control>"),
+        line: 1,
+        hide_source: true,
+        ..ScriptOptions::default()
+    };
+    let factory = scope.eval_script_bytes(REMOTE_HELPER.as_bytes(), &options)?;
+    let global = scope.global();
+    scope.set(&global, REMOTE_FACTORY_KEY, factory)
+}
+
+fn remote_helper(js: Js, scope: &mut Scope<'_>) -> Result<Value, Value> {
+    let existing = js.remote_helper();
+    if !existing.is_undefined() {
+        return Ok(existing);
+    }
+    let helper_global = scope.new_realm(install_remote_factory)?;
+    let factory = scope.get(&helper_global, REMOTE_FACTORY_KEY)?;
+    let page = scope.global();
+    let helper = scope.call(&factory, &Value::undefined(), &[page])?;
+    js.set_remote_helper(helper.clone());
+    Ok(helper)
+}
+
+fn remote_dispatch(js: Js, scope: &mut Scope<'_>, request: &str) -> Result<Value, Value> {
+    let helper = remote_helper(js, scope)?;
+    let request = scope.string(request);
+    let reply = scope.call(&helper, &Value::undefined(), &[request])?;
+    if !reply.is_object() {
+        return Ok(reply);
+    }
+    let code = scope.get(&reply, "code")?;
+    let settle = scope.get(&reply, "settle")?;
+    let code = scope.to_bytes(&code)?;
+    let options = ScriptOptions {
+        name: Some(TRUSTED_ORIGIN.as_bytes()),
+        line: 1,
+        ..ScriptOptions::default()
+    };
+    let run = || scope.eval_script_bytes(until_nul(&code), &options);
+    let (value, threw) = match southstar_js_engine::with_trusted_source(TRUSTED_ORIGIN, run) {
+        Ok(value) => (value, false),
+        Err(exception) => (exception, true),
+    };
+    scope.call(
+        &settle,
+        &Value::undefined(),
+        &[value, Value::boolean(threw)],
+    )
+}
+
+pub(crate) fn remote_call(js: Js, request: &str) -> Option<Vec<u8>> {
+    if js.halted() || js.in_pump() {
+        return None;
+    }
+    let budget = js.budget_enter();
+    let out = js
+        .main_realm()
+        .enter(|scope| match remote_dispatch(js, scope, request) {
+            Ok(value) => c_message(scope, &value).unwrap_or_else(|| b"undefined".to_vec()),
+            Err(exception) => {
+                let message =
+                    c_message(scope, &exception).unwrap_or_else(|| b"(no message)".to_vec());
+                let mut out = b"error: ".to_vec();
+                out.extend_from_slice(&message);
+                out
+            }
+        });
+    js.drain_microtasks();
+    js.budget_leave(budget);
+    Some(out)
+}
+
 pub(crate) fn run_content_scripts(js: Js, url: Option<&CStr>, document_start: bool) {
     if let Some(script) = js.content_scripts_for_url(url, document_start) {
         run_content_script(js, &script);

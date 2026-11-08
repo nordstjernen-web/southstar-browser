@@ -1011,6 +1011,15 @@ impl<F: Framebuffer> Session<F> {
                 let result = self.cur.as_ref().and_then(|cur| cur.eval(&src));
                 reply_str(fd, "text", result.as_deref());
             }
+            b"/remote-call" => {
+                let request = text(body, "request").unwrap_or_default();
+                self.frame_valid = false;
+                let result = self
+                    .cur
+                    .as_ref()
+                    .and_then(|cur| cur.remote_call(&request.to_string_lossy()));
+                reply_str(fd, "text", result.as_deref());
+            }
             b"/video-event" => {
                 let token = text(body, "token");
                 let kind = text(body, "kind");

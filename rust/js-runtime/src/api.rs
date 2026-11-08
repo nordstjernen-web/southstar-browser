@@ -252,6 +252,14 @@ pub fn pristine_promise(js: Option<Page>) -> Value {
     record::pristine_promise(js)
 }
 
+pub fn remote_helper(js: Option<Page>) -> Value {
+    record::remote_helper(js)
+}
+
+pub fn set_remote_helper(js: Option<Page>, helper: Value) {
+    record::set_remote_helper(js, helper);
+}
+
 pub fn register_element_class(scope: &mut Scope<'_>, proto: Value) {
     wrapper::register_element_class(scope, proto);
 }
