@@ -38,6 +38,8 @@ struct LineState {
     underline_rect: Rectangle,
     strikethrough: bool,
     strikethrough_rect: Rectangle,
+    strikethrough_y_sum: i64,
+    strikethrough_height_sum: i64,
     strikethrough_glyphs: i32,
     overline: i32,
     overline_rect: Rectangle,
@@ -69,20 +71,26 @@ pub fn shape_get_extents(
     if n_chars <= 0 {
         return (Rectangle::default(), Rectangle::default());
     }
-    let repeat = shape_logical.width * (n_chars - 1);
+    let repeat = shape_logical.width.saturating_mul(n_chars - 1);
     let ink = Rectangle {
-        x: shape_ink.x.min(shape_ink.x + repeat),
+        x: shape_ink.x.min(shape_ink.x.saturating_add(repeat)),
         y: shape_ink.y,
-        width: shape_ink.width.max(shape_ink.width + repeat),
+        width: shape_ink.width.max(shape_ink.width.saturating_add(repeat)),
         height: shape_ink.height,
     };
     let logical = Rectangle {
-        x: shape_logical.x.min(shape_logical.x + repeat),
+        x: shape_logical.x.min(shape_logical.x.saturating_add(repeat)),
         y: shape_logical.y,
-        width: shape_logical.width.max(shape_logical.width + repeat),
+        width: shape_logical
+            .width
+            .max(shape_logical.width.saturating_add(repeat)),
         height: shape_logical.height,
     };
     (ink, logical)
+}
+
+fn span_end(rect: &Rectangle) -> i32 {
+    rect.x.saturating_add(rect.width)
 }
 
 fn part_to_component(part: RenderPart) -> u32 {
@@ -296,19 +304,22 @@ impl<'a> CairoRenderer<'a> {
         let num_glyphs = state.strikethrough_glyphs;
 
         if state.strikethrough && num_glyphs > 0 {
+            let average = |sum: i64| (sum / i64::from(num_glyphs)) as i32;
             self.draw_rectangle(
                 RenderPart::Strikethrough,
                 rect.x,
-                rect.y / num_glyphs,
+                average(state.strikethrough_y_sum),
                 rect.width,
-                rect.height / num_glyphs,
+                average(state.strikethrough_height_sum),
             );
         }
 
         state.strikethrough = false;
         state.strikethrough_glyphs = 0;
+        state.strikethrough_y_sum = 0;
+        state.strikethrough_height_sum = 0;
         let rect = &mut state.strikethrough_rect;
-        rect.x += rect.width;
+        rect.x = rect.x.saturating_add(rect.width);
         rect.width = 0;
         rect.y = 0;
         rect.height = 0;
@@ -327,7 +338,7 @@ impl<'a> CairoRenderer<'a> {
         let underline_position = metrics.underline_position();
 
         let mut new_rect = Rectangle {
-            x: base_x + ink_rect.x.min(logical_rect.x),
+            x: base_x.saturating_add(ink_rect.x.min(logical_rect.x)),
             y: base_y,
             width: ink_rect.width.max(logical_rect.width),
             height: underline_thickness,
@@ -338,7 +349,11 @@ impl<'a> CairoRenderer<'a> {
                 new_rect.y -= underline_position;
             }
             Some(Underline::Low) => {
-                new_rect.y += ink_rect.y + ink_rect.height + underline_thickness;
+                new_rect.y = new_rect
+                    .y
+                    .saturating_add(ink_rect.y)
+                    .saturating_add(ink_rect.height)
+                    .saturating_add(underline_thickness);
             }
             Some(Underline::SingleLine | Underline::DoubleLine | Underline::ErrorLine) => {
                 new_rect.y -= underline_position;
@@ -358,7 +373,7 @@ impl<'a> CairoRenderer<'a> {
             && new_rect.y == current.y
             && new_rect.height == current.height
         {
-            current.width = new_rect.x + new_rect.width - current.x;
+            current.width = span_end(&new_rect).saturating_sub(current.x);
         } else {
             self.draw_underline(state);
             state.underline_rect = new_rect;
@@ -379,7 +394,7 @@ impl<'a> CairoRenderer<'a> {
         let ascent = metrics.ascent();
 
         let mut new_rect = Rectangle {
-            x: base_x + ink_rect.x.min(logical_rect.x),
+            x: base_x.saturating_add(ink_rect.x.min(logical_rect.x)),
             y: base_y,
             width: ink_rect.width.max(logical_rect.width),
             height: underline_thickness,
@@ -401,7 +416,7 @@ impl<'a> CairoRenderer<'a> {
             && new_rect.y == current.y
             && new_rect.height == current.height
         {
-            current.width = new_rect.x + new_rect.width - current.x;
+            current.width = span_end(&new_rect).saturating_sub(current.x);
         } else {
             self.draw_overline(state);
             state.overline_rect = new_rect;
@@ -424,20 +439,26 @@ impl<'a> CairoRenderer<'a> {
         let strikethrough_position = metrics.strikethrough_position();
 
         let new_rect = Rectangle {
-            x: base_x + ink_rect.x.min(logical_rect.x),
-            y: (base_y - strikethrough_position) * num_glyphs,
+            x: base_x.saturating_add(ink_rect.x.min(logical_rect.x)),
+            y: 0,
             width: ink_rect.width.max(logical_rect.width),
-            height: strikethrough_thickness * num_glyphs,
+            height: 0,
         };
+        let glyphs = i64::from(num_glyphs);
+        let y_sum = i64::from(base_y.saturating_sub(strikethrough_position)) * glyphs;
+        let height_sum = i64::from(strikethrough_thickness) * glyphs;
 
         if state.strikethrough {
             let current = &mut state.strikethrough_rect;
-            current.width = new_rect.x + new_rect.width - current.x;
-            current.y += new_rect.y;
-            current.height += new_rect.height;
-            state.strikethrough_glyphs += num_glyphs;
+            current.width = span_end(&new_rect).saturating_sub(current.x);
+            state.strikethrough_y_sum = state.strikethrough_y_sum.saturating_add(y_sum);
+            state.strikethrough_height_sum =
+                state.strikethrough_height_sum.saturating_add(height_sum);
+            state.strikethrough_glyphs = state.strikethrough_glyphs.saturating_add(num_glyphs);
         } else {
             state.strikethrough_rect = new_rect;
+            state.strikethrough_y_sum = y_sum;
+            state.strikethrough_height_sum = height_sum;
             state.strikethrough = true;
             state.strikethrough_glyphs = num_glyphs;
         }
@@ -545,7 +566,7 @@ impl<'a> CairoRenderer<'a> {
         y: i32,
         mut line_logical_extents: impl FnMut() -> Rectangle,
     ) {
-        let mut x_off = 0;
+        let mut x_off: i32 = 0;
         let mut overall_rect: Option<Rectangle> = None;
         let mut state = LineState::default();
 
@@ -586,42 +607,44 @@ impl<'a> CairoRenderer<'a> {
                 glyph_string_width = run.glyphs.get_width();
             }
 
-            state.logical_rect_end = x + x_off + glyph_string_width;
+            state.logical_rect_end = x.saturating_add(x_off).saturating_add(glyph_string_width);
 
-            x_off += run.start_x_offset;
+            x_off = x_off.saturating_add(run.start_x_offset);
             let mut y_off = run.y_offset;
 
             if centered_baseline {
                 let logical_rect = logical.unwrap_or_default();
                 let is_hinted = (logical_rect.y | logical_rect.height) & (SCALE - 1) == 0;
-                let mut adjustment = logical_rect.y + logical_rect.height / 2;
+                let mut adjustment = logical_rect.y.saturating_add(logical_rect.height / 2);
                 if is_hinted {
                     adjustment = units_round(adjustment);
                 }
-                y_off += adjustment;
+                y_off = y_off.saturating_add(adjustment);
             }
+            let run_x = x.saturating_add(x_off);
+            let run_y = y.saturating_sub(y_off);
 
             if self.color[RenderPart::Background as usize].is_some() {
                 let overall = *overall_rect.get_or_insert_with(&mut line_logical_extents);
                 self.draw_rectangle(
                     RenderPart::Background,
-                    x + x_off,
-                    y + overall.y,
+                    run_x,
+                    y.saturating_add(overall.y),
                     glyph_string_width,
                     overall.height,
                 );
             }
 
             if shape_attr.is_none() {
-                self.draw_glyph_item(text, run, x + x_off, y - y_off);
+                self.draw_glyph_item(text, run, run_x, run_y);
             }
 
             if decorated {
                 let metrics = metrics_of(font, run.item.analysis.language);
                 let ink = ink.unwrap_or_default();
                 let logical = logical.unwrap_or_default();
-                let base_x = x + x_off;
-                let base_y = y - y_off;
+                let base_x = run_x;
+                let base_y = run_y;
 
                 if self.underline != UNDERLINE_NONE {
                     self.add_underline(&mut state, &metrics, base_x, base_y, &ink, &logical);
@@ -652,8 +675,9 @@ impl<'a> CairoRenderer<'a> {
                 self.draw_strikethrough(&mut state);
             }
 
-            x_off += glyph_string_width;
-            x_off += run.end_x_offset;
+            x_off = x_off
+                .saturating_add(glyph_string_width)
+                .saturating_add(run.end_x_offset);
         }
 
         self.draw_underline(&mut state);

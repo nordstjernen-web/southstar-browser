@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.8-dev:
 ======
+* Text rendering: the strikethrough position is averaged over a run's glyphs
+  in 64-bit sums, and the renderer's x positions, decorations and shape-attribute
+  extents saturate. A struck-through paragraph lost its strikethrough below about
+  27,000 px in release builds (the `y × glyphs` sum overflowed) and aborted
+  builds with overflow checks; very wide SVG text did the same in the renderer's
+  x offsets. Found by the `svg` fuzz target.
 * Security: web fonts whose `head.unitsPerEm` is outside OpenType's 16–16384
   are rejected, as OTS does in other browsers. A font with `unitsPerEm` 0
   overflowed the `skrifa` autohinter's coordinates: builds with overflow checks
