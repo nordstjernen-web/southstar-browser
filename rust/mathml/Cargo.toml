@@ -10,11 +10,11 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-cairo = { path = "../cairo", version = "=1.0.8-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
-southstar-paint = { path = "../paint", version = "=1.0.8-dev" }
-southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.8" }
+southstar-dom = { path = "../dom", version = "=1.0.8" }
+southstar-glib = { path = "../glib", version = "=1.0.8" }
+southstar-paint = { path = "../paint", version = "=1.0.8" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8" }
 
 [lints]
 workspace = true

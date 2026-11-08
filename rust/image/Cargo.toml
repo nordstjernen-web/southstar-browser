@@ -10,14 +10,14 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.8-dev" }
-southstar-config = { path = "../config", version = "=1.0.8-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.8-dev" }
-southstar-image-decoders = { path = "../image-decoders", version = "=1.0.8-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.8-dev" }
-southstar-net = { path = "../net", version = "=1.0.8-dev" }
-southstar-svg = { path = "../svg", version = "=1.0.8-dev" }
-southstar-texture = { path = "../texture", version = "=1.0.8-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.8" }
+southstar-config = { path = "../config", version = "=1.0.8" }
+southstar-glib = { path = "../glib", version = "=1.0.8" }
+southstar-image-decoders = { path = "../image-decoders", version = "=1.0.8" }
+southstar-layout = { path = "../layout", version = "=1.0.8" }
+southstar-net = { path = "../net", version = "=1.0.8" }
+southstar-svg = { path = "../svg", version = "=1.0.8" }
+southstar-texture = { path = "../texture", version = "=1.0.8" }
 
 [features]
 avif = ["southstar-image-decoders/avif"]

@@ -15,10 +15,10 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8-dev" }
+southstar-ffi = { path = "../southstar-ffi", version = "=1.0.8" }
 
 [build-dependencies]
-southstar-build = { path = "../build", version = "=1.0.8-dev" }
+southstar-build = { path = "../build", version = "=1.0.8" }
 
 [features]
 avif = ["southstar-ffi/avif"]
