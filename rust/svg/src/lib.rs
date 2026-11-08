@@ -36,6 +36,7 @@ const MAX_NESTING: i32 = 256;
 const MAX_NODES: i32 = 60000;
 const MAX_INPUT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_DIM_PX: f64 = 8192.0;
+const CAIRO_COORD_LIMIT: f64 = 4_194_304.0;
 const MAX_PIXELS: f64 = 4096.0 * 4096.0;
 const DEFAULT_DIM_PX: f64 = 512.0;
 const DEFAULT_OBJECT_W: f64 = 300.0;
@@ -955,10 +956,27 @@ impl<'a> Ctx<'a> {
         ))
     }
 
+    fn within_cairo_range(&self, x: f64, y: f64, width: f64, height: f64) -> bool {
+        [
+            (x, y),
+            (x + width, y),
+            (x, y + height),
+            (x + width, y + height),
+        ]
+        .into_iter()
+        .all(|(ux, uy)| {
+            let (dx, dy) = self.cr.user_to_device(ux, uy);
+            dx.abs() <= CAIRO_COORD_LIMIT && dy.abs() <= CAIRO_COORD_LIMIT
+        })
+    }
+
     fn render_text(&mut self, n: Node<'a>, st: &State) {
-        let Some((layout, x, top, _, _)) = self.text_layout(n, st) else {
+        let Some((layout, x, top, width, height)) = self.text_layout(n, st) else {
             return;
         };
+        if !self.within_cairo_range(x, top, width, height) {
+            return;
+        }
         self.cr.move_to(x, top);
         self.cr.layout_path(&layout);
         drop(layout);
