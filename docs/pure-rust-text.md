@@ -11,7 +11,8 @@ carets, OpenType metrics, font extents, GSUB feature support) from
 through a cairo user font (see "Drawing") and has its color glyphs (COLR v0
 and v1, CBDT, sbix) painted in Rust (see "Color glyphs"), so neither FreeType
 nor HarfBuzz reads a web font to shape or draw it. A web font `read-fonts`
-cannot parse is not installed at all. HarfRust matched HarfBuzz exactly in
+cannot parse, or whose `head.unitsPerEm` is outside OpenType's 16–16384 (the
+range OTS enforces in other browsers), is not installed at all. HarfRust matched HarfBuzz exactly in
 97% of a 22,000-case corpus, with no glyph or cluster differences. Web fonts
 are also indexed from `read-fonts` (see "Web fonts"), so FreeType never opens
 a downloaded font. Step 4 is done: `rust/bidi` replaced FriBiDi and
