@@ -123,7 +123,7 @@
   }
 
   function textOf(el) {
-    var t = '';
+    var t;
     try { t = el.innerText; } catch (e) { t = ''; }
     if (typeof t !== 'string' || !t) t = el.textContent || '';
     return t;
@@ -315,7 +315,7 @@
       seen.add(el);
       hits.push(describe(el, role(el), rect));
     }
-    var bySelector = null;
+    var bySelector;
     try { bySelector = document.querySelectorAll(q); } catch (e) { bySelector = null; }
     if (bySelector && bySelector.length) {
       for (var i = 0; i < bySelector.length && hits.length < limit; i++) add(bySelector[i]);
