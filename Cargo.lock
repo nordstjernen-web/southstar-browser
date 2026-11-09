@@ -3761,6 +3761,7 @@ dependencies = [
  "southstar-browser",
  "southstar-cairo",
  "southstar-glib",
+ "southstar-http",
  "southstar-image",
  "southstar-ipc",
  "southstar-net",

@@ -209,6 +209,26 @@ fn security_of(resp: &Response, fetch_url: &CStr) -> c_int {
     }
 }
 
+pub fn open_html(html: &[u8], url: &CStr, view: &Viewport) -> Page {
+    let _ = PENDING_REFERRER.lock().ok().and_then(|mut p| p.take());
+    let _ = PENDING_INITIATOR.lock().ok().and_then(|mut p| p.take());
+    PENDING_USER_ACTIVATED.store(-1, Ordering::Relaxed);
+    let scripting = southstar_config::get().is_none_or(|c| c.javascript_enabled != 0);
+    let doc = ffi::html_parse_bytes(html, scripting);
+    ffi::create_browser(ffi::Created {
+        doc,
+        base: ffi::dup_text(url),
+        view,
+        bfcache_ok: false,
+        refresh_header: None,
+        doc_language: None,
+        csp_header: None,
+        doc_charset: ffi::dup_text(c"UTF-8"),
+        url: Some(url),
+        timing: None,
+    })
+}
+
 pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page> {
     if url.is_empty() {
         return None;

@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Renderer protocol: new requests for embedders. `/hello` answers the
+  protocol version and engine version. `/screenshot` returns a PNG of any
+  region of the document at any scale. `/pdf` prints the page to a paged PDF
+  with real text, honouring `@media print` and `@page`, with the sheet size,
+  landscape, margins, scale, page ranges, title, author and date, and header
+  and footer texts (`{page}`, `{pages}`, `{title}`, `{url}`, `{date}`).
+  `/download-start`, `/download-poll` and `/download-cancel` fetch a file
+  with the page's cookies into a staging file in the cache directory.
+  `/capability` answers a camera or WebGL request by kind. `/open` takes an
+  `html` string to show as the document at the given URL.
 * Security: an embedder can limit what a renderer may reach (`/policy`):
   nothing at all, no `file:` URLs, no private or loopback addresses, and host
   allow and deny lists with `*.` wildcards. It covers every request of the

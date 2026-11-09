@@ -9,10 +9,12 @@ use core::ptr::NonNull;
 use std::ffi::CString;
 
 use crate::ffi::{self, NsBrowser, PixelBuf, StrBufOwned};
-use crate::{build, callbacks, hit, input, open, page, query, render, scroll, settle};
+use crate::{build, callbacks, hit, images, input, open, page, query, render, scroll, settle};
 
 pub use crate::ffi::{LayerPlan, PrintPages, PrintSetup, StickyY, VpLayerInfo};
 pub use crate::hit::Found;
+pub use crate::query::PdfLayout;
+pub use southstar_engine::{MarginSlot, PdfDocument, iso8601_utc};
 
 pub struct Post {
     pub body: Vec<u8>,
@@ -127,6 +129,15 @@ impl Page {
             content_type: post.content_type.as_deref(),
         });
         open::open(url, &view, post.as_ref())
+    }
+
+    pub fn open_html(html: &[u8], url: &CStr, width: c_int, height: f64, settle_ms: c_int) -> Page {
+        let view = open::Viewport {
+            width,
+            height,
+            settle_ms,
+        };
+        open::open_html(html, url, &view)
     }
 
     pub fn busy(&self) -> bool {
@@ -431,6 +442,19 @@ impl Page {
 
     pub fn print_pages(&self) -> Option<(PrintPages, PrintSetup)> {
         query::print_pages(self.browser())
+    }
+
+    pub fn write_pdf(
+        &self,
+        path: &CStr,
+        layout: &PdfLayout,
+        doc: &PdfDocument<'_>,
+    ) -> Option<usize> {
+        query::write_pdf(self.browser(), path, layout, doc)
+    }
+
+    pub fn wait_images(&self) {
+        images::wait_images(self.browser());
     }
 
     pub fn note_viewport(&self, scroll_x: c_int, scroll_y: c_int, height: c_int, scale: f64) {

@@ -104,6 +104,15 @@ pub fn write_capture(layout: BoxRef<'_>, path: &CStr, pdf: bool) -> c_int {
     }
 }
 
+pub fn write_pdf_document(
+    layout: BoxRef<'_>,
+    path: &CStr,
+    setup: &PrintSetup,
+    doc: &southstar_engine::PdfDocument<'_>,
+) -> Option<usize> {
+    southstar_engine::write_pdf_document(layout, path, setup, doc)
+}
+
 pub fn dump_text(layout: BoxRef<'_>, out: &StrBufOwned) {
     out.append(&southstar_engine::dump_text(layout));
 }

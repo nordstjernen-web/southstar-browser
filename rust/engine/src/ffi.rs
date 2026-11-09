@@ -50,6 +50,8 @@ pub fn box_dom(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
 }
 
+pub const LABEL_POINTS: f64 = 8.0;
+
 pub struct Capture {
     cr: Context,
     surface: Surface,
@@ -95,6 +97,22 @@ impl Capture {
 
     pub fn draw_sheet(&self, root: BoxRef, setup: &PrintSetup, scale: f64, top: f64, bottom: f64) {
         southstar_print::draw_page(self.cr.as_ref(), root, setup, scale, top, bottom);
+    }
+
+    pub fn set_metadata(&self, key: PdfMetadata, value: &CStr) {
+        self.surface.as_ref().set_pdf_metadata(key, value);
+    }
+
+    pub fn draw_label(&self, x: f64, baseline: f64, align: f64, text: &CStr) {
+        let cr = self.cr.as_ref();
+        cr.save();
+        cr.identity_matrix();
+        cr.set_font_size(LABEL_POINTS);
+        let extents = cr.text_extents(text);
+        cr.move_to(x - extents.x_advance * align, baseline);
+        cr.set_source_rgb(0.3, 0.3, 0.3);
+        cr.show_text(text);
+        cr.restore();
     }
 
     pub fn write_png(self, path: &CStr) -> Result<(), Vec<u8>> {

@@ -229,9 +229,10 @@ const DISABLE_ENV: [(&str, &str); 9] = [
     ("NS_NO_PRELOAD_SCAN", "speculative_preload"),
     ("NS_NO_ASYNC_IMG_DECODE", "async_image_decode"),
 ];
-const VALUE_ENV: [(&str, &str); 8] = [
+const VALUE_ENV: [(&str, &str); 9] = [
     ("NS_HOME_URL", "home_url"),
     ("NS_USER_AGENT", "user_agent"),
+    ("NS_ACCEPT_LANGUAGE", "accept_language"),
     ("NS_COMPAT_MODE", "compat_mode"),
     ("NS_HTTP_PROXY", "http_proxy"),
     ("NS_HTTPS_PROXY", "https_proxy"),
