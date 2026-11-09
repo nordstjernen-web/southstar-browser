@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Southstar for Java — Maven build of the library and the browser, and the version both builds use.
+     Copyright 2026 Andreas Røsdal
+     SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.southstar</groupId>
+  <artifactId>southstar-java</artifactId>
+  <version>1.0.9-dev</version>
+  <packaging>jar</packaging>
+
+  <name>Southstar for Java</name>
+  <description>A web browser for the JVM, and the embedding library it is built
+    on: fetch, lay out, script and render web pages with the Southstar engine
+    in its sandboxed southstar-renderer process.</description>
+  <url>https://github.com/nordstjernen-web/southstar-browser</url>
+  <inceptionYear>2026</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>Nordstjernen Source License v1.0</name>
+      <url>https://raw.githubusercontent.com/nordstjernen-web/southstar-browser/main/License.md</url>
+      <distribution>repo</distribution>
+      <comments>LicenseRef-NSL-1.0; dual-licensed, at your option, with GPL-3.0-or-later</comments>
+    </license>
+    <license>
+      <name>GNU General Public License, version 3 or later</name>
+      <url>https://www.gnu.org/licenses/gpl-3.0.txt</url>
+      <distribution>repo</distribution>
+      <comments>GPL-3.0-or-later; dual-licensed, at your option, with LicenseRef-NSL-1.0</comments>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Andreas Røsdal</name>
+      <url>https://github.com/nordstjernen-web/southstar-browser</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/nordstjernen-web/southstar-browser.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/nordstjernen-web/southstar-browser.git</developerConnection>
+    <url>https://github.com/nordstjernen-web/southstar-browser</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/nordstjernen-web/southstar-browser/issues</url>
+  </issueManagement>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+    <maven.compiler.release>21</maven.compiler.release>
+    <main.class>org.southstar.app.Browser</main.class>
+  </properties>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>src/main/resources-filtered</directory>
+        <filtering>true</filtering>
+      </resource>
+      <resource>
+        <directory>${project.basedir}/..</directory>
+        <includes>
+          <include>License.md</include>
+          <include>COPYING</include>
+          <include>THIRD-PARTY-LICENSES.md</include>
+        </includes>
+        <targetPath>META-INF</targetPath>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+            <arg>-Werror</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+            <manifestEntries>
+              <Automatic-Module-Name>org.southstar</Automatic-Module-Name>
+              <Implementation-Title>Southstar</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.8.0</version>
+        <configuration>
+          <doclint>none</doclint>
+          <notimestamp>true</notimestamp>
+        </configuration>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

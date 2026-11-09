@@ -237,6 +237,24 @@ native Ogg audio are optional cargo features (`avif`, `thai`, `poppler`,
 `enchant`, `vorbisfile`, `opusfile`). On Windows, run it from an MSYS2 MINGW64
 shell with the libraries from [docs/Windows.md](docs/Windows.md) installed.
 
+### The Java shell
+
+`java/` holds a second shell for the same engine: a desktop browser in plain
+Java (Swing) and an embedding library, `org.southstar:southstar-java`, that
+drive `southstar-renderer` over its stdio protocol. No native code is loaded
+into the JVM; each page runs in a sandboxed renderer process of its own. It
+needs JDK 21 and the renderer from `cargo xtask build`:
+
+```sh
+cargo xtask build
+cd java && gradle build
+java -jar build/libs/southstar-java-*.jar https://example.com
+```
+
+The library adds HTML-to-PDF and PNG rendering, a per-page resource policy
+(no network, public web only, or host allow and deny lists), downloads, and
+a headless MCP server for agents. See [java/README.md](java/README.md).
+
 ### The `internet-browser-southstar` command
 
 `cargo xtask install` puts `internet-browser-southstar` beside `southstar` in the binary

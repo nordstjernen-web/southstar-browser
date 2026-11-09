@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Java shell: `java/` is a web browser for the JVM and a Java library over
+  Southstar's engine, ported from Nordstjernen Sol's Java shell. The Swing
+  browser (`java -jar southstar-java.jar URL`) has back, forward, reload,
+  home, an address bar with a security badge, find in page, zoom, text
+  selection and the clipboard, downloads, camera prompts, page audio through
+  `southstar-audio`, save as PDF and a JavaScript console. The library
+  (`org.southstar.browser`: `Engine`, `BrowserContext`, `Page`,
+  `HtmlRenderer`) navigates, scripts, screenshots and prints pages, and
+  `org.southstar.agent` offers the browser tools to agents and serves them
+  as a headless MCP server. It is pure Java: every page runs in a sandboxed
+  `southstar-renderer` process of its own, driven over the stdio renderer
+  protocol, and no native code is loaded into the JVM. Built with Gradle or
+  Maven on JDK 21; the jar finds the renderer of a `cargo xtask build` by
+  itself. Sol's in-process JNI path and linked popup windows are not part of
+  it.
 * Renderer protocol: new requests for embedders. `/hello` answers the
   protocol version and engine version. `/screenshot` returns a PNG of any
   region of the document at any scale. `/pdf` prints the page to a paged PDF

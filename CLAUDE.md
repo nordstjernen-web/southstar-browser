@@ -104,6 +104,16 @@ Update Changelog.md
   stdio that lets the user's local agent drive the browser window (tabs,
   navigation, page outline, clicks, typing, screenshots). It is a local
   remote-control interface, not a web API: pages cannot see or reach it.
+- `java/` is the Java shell: a pure-Java Swing browser and library
+  (`org.southstar`, JDK 21, Gradle or Maven) that drives `southstar-renderer`
+  over the stdio renderer protocol (`rust/renderer-host/src/serve.rs`). It
+  loads no native code: no JNI, the engine never runs in the JVM. A renderer
+  route the Java client calls keeps the request and reply shapes it expects;
+  `/hello` reports protocol version 1, and a change to the protocol that an
+  older jar cannot speak bumps it. The embedder's resource policy (`/policy`)
+  lives in `rust/http/src/policy.rs` and is checked on every request, upgrade,
+  FTP fetch and preconnect, and on the resolved addresses of direct
+  connections.
 - Make good descriptive commit messages always
 
 ## Comments policy
