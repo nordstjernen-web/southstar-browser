@@ -267,10 +267,12 @@ Median-of-3 over the loadable Speedometer 3.1 TodoMVC workloads
 
 The query-bound suites move most: jQuery-Complex-DOM -7.5%, Preact-Complex-DOM
 -7.6%, Preact -6.5%, React -6.2%, Backbone -3.8%. The same engine path serves
-the Speedometer `main` (4.0-alpha, "speedometer next") workloads, which share
-the TodoMVC suites; `scripts/speedometer4-bench.sh` drives those directly
-(it fetches the `main` branch and generates a page driver from
-`default-tests.mjs` the same way the 3.1 harness does from `tests.mjs`).
+the Speedometer `main` (4.0-alpha, "speedometer next") workloads, which shared
+the TodoMVC suites at the time. A `scripts/speedometer4-bench.sh` driver
+generated their page driver from `default-tests.mjs`; it was removed once
+Speedometer `main` moved its workloads out of `resources/todomvc/` and its
+suite list into `config.json`, so the 4.0-alpha numbers below can no longer be
+rerun as they stand.
 
 ## Batched `innerHTML` replacement records (2026-06-07)
 

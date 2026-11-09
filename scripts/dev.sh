@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Southstar dev helper: smoke-tests a built-in list of local fixtures through
-# the headless engine.
+# the headless engine and renders the visual fixtures in data/render-tests/.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -21,6 +21,8 @@ Commands:
                      diff against its baseline. Reports drift.
   baseline <target>  Render one target and (re)write its baseline.
   baselines          Refresh baselines from every built-in fixture target.
+  render-tests [dir] Render every data/render-tests/ fixture to a PNG in dir
+                     (default ./render-tests-out) for inspection by eye.
 
 Each target in the list is '[mode ]url', where mode is text (default),
 layout, or dom. text/dom baselines are <slug>.txt/<slug>.dom.txt;
@@ -30,6 +32,7 @@ geometry (text-free, fixed-size fixtures) so the diff is font-stable.
 Env:
   NS_BIN   path to southstar binary (default: $BIN)
   NS_BASE  baseline dir                (default: $BASE)
+  NS_TEST_VIEWPORT  render-tests viewport width (default: 800)
 EOF
 }
 
@@ -131,6 +134,30 @@ cmd_baselines() {
     done < <(smoke_targets)
 }
 
+cmd_render_tests() {
+    local src="$ROOT/data/render-tests"
+    local out="${1:-$ROOT/render-tests-out}"
+    local port=8137
+    local vw="${NS_TEST_VIEWPORT:-800}"
+    [ -x "$BIN" ] || { echo "build first: scripts/dev.sh build" >&2; exit 1; }
+    mkdir -p "$out"
+    python3 -m http.server "$port" --directory "$src" >/dev/null 2>&1 &
+    RENDER_SERVER=$!
+    trap 'kill "$RENDER_SERVER" 2>/dev/null || true' EXIT
+    sleep 1
+    local f name
+    for f in "$src"/*.html; do
+        name=$(basename "$f" .html)
+        if "$BIN" --headless --url="http://127.0.0.1:$port/$name.html" \
+               --dump="png:$out/$name.png" --viewport="$vw" >/dev/null 2>&1; then
+            echo "  $name.png"
+        else
+            echo "  $name FAILED" >&2
+        fi
+    done
+    echo "Rendered into $out"
+}
+
 cmd_build() {
     cd "$ROOT"
     cargo xtask build "$@"
@@ -147,5 +174,6 @@ case "${1:-}" in
     smoke)     cmd_smoke ;;
     baseline)  shift; cmd_baseline "${1:?url required}" ;;
     baselines) cmd_baselines ;;
+    render-tests) shift; cmd_render_tests "$@" ;;
     *)         usage ; exit 2 ;;
 esac
