@@ -16,6 +16,12 @@ Southstar Browser 1.0.9-dev:
   (`idlConstants`, `normHeader`, `rangeEx`, the identity `nativeize`) and
   unread bindings went with them. Measured with branch coverage in a page,
   an iframe and a worker; the features behave as before.
+* Security: SVG text placed millions of pixels away is no longer drawn. A 36-byte
+  SVG with `<text y=55555555>` and a few invalid bytes made cairo dereference
+  a null pointer while filling the glyph path (cairo keeps coordinates in 24.8
+  fixed point, about ±8.4 million pixels), so any page could crash the renderer
+  with an `<img>`. Text whose box leaves ±4,194,304 device pixels, far beyond
+  any surface, is skipped. Found by the `svg` fuzz target.
 * Security: a web page can no longer take over the remote-control (MCP)
   helper. The helper cached itself under `Symbol.for('southstar.remote')`, so
   a page could plant its own object there and decide what `read_page`,
