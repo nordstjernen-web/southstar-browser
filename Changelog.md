@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: an embedder can limit what a renderer may reach (`/policy`):
+  nothing at all, no `file:` URLs, no private or loopback addresses, and host
+  allow and deny lists with `*.` wildcards. It covers every request of the
+  page, redirects, `fetch`, WebSocket, EventSource, FTP and preconnects; with
+  private addresses blocked, a public name that resolves to one is refused as
+  well. The GTK shell sets no policy. `NS_ACCEPT_LANGUAGE` overrides the
+  `Accept-Language` header.
 * Style: a document no longer inherits the styles of the document before it.
   Incremental restyling reused the previous pass's styles when the document
   node had the same address and the same style sheets; DOM slots are

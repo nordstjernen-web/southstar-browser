@@ -125,6 +125,14 @@ pub fn respond<S: Sink>(
     if !url.starts_with(b"file:") {
         return None;
     }
+    if !southstar_http::policy::allows_files() {
+        return Some(Response {
+            final_url: url.to_vec(),
+            status: 0,
+            error: Some(southstar_http::policy::REFUSED.as_bytes().to_vec()),
+            content_type: None,
+        });
+    }
     if !access_allowed(top_url) {
         return Some(Response {
             final_url: url.to_vec(),

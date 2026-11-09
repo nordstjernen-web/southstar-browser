@@ -15,6 +15,7 @@ use crate::ffi::socket::{self, ConnectError, PollFd, Wake};
 use crate::frame;
 use crate::h1;
 use crate::h2::{Connection, Event};
+use crate::policy;
 use crate::proxy::{self, Kind, Proxy};
 use crate::tls::{self, Handshake, Io, Settings, Tls};
 use crate::transfer::{Handler, Transfer};
@@ -312,9 +313,9 @@ fn tcp_connect(
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(TcpStream, SocketAddr), String> {
     let (mut stream, addr) = match &req.proxy {
-        Some(p) => tcp_connect_to(&p.host, p.port, deadline, cancelled)
+        Some(p) => tcp_connect_to(&p.host, p.port, false, deadline, cancelled)
             .map_err(|e| format!("proxy {}:{}: {e}", p.host, p.port))?,
-        None => tcp_connect_to(req.host, req.port, deadline, cancelled)?,
+        None => tcp_connect_to(req.host, req.port, true, deadline, cancelled)?,
     };
     let Some(p) = &req.proxy else {
         return Ok((stream, addr));
@@ -336,6 +337,7 @@ fn tcp_connect(
 pub(crate) fn tcp_connect_to(
     host_name: &str,
     port: u16,
+    direct: bool,
     deadline: Instant,
     cancelled: &dyn Fn() -> bool,
 ) -> Result<(TcpStream, SocketAddr), String> {
@@ -360,6 +362,13 @@ pub(crate) fn tcp_connect_to(
     };
     if addrs.is_empty() {
         return Err(format!("could not resolve host {host_name}"));
+    }
+    let addrs: Vec<SocketAddr> = addrs
+        .into_iter()
+        .filter(|addr| !direct || policy::allows_address(addr.ip()))
+        .collect();
+    if addrs.is_empty() {
+        return Err(String::from(policy::REFUSED));
     }
     let remaining = || {
         deadline
@@ -1133,7 +1142,20 @@ fn wait_stream(conn: &Conn, token: u64, t: &mut Transfer) -> StreamResult {
     }
 }
 
+fn refused() -> Outcome {
+    let mut out = failed(String::from(policy::REFUSED));
+    out.connect_failed = true;
+    out
+}
+
 pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
+    if !policy::allows_host(req.host) {
+        return refused();
+    }
+    perform_unchecked(req, handler)
+}
+
+pub(crate) fn perform_unchecked(req: &Request, handler: &mut dyn Handler) -> Outcome {
     let mut out = Outcome::new();
     let start = Instant::now();
     let deadline = start
@@ -1336,6 +1358,9 @@ impl Upgraded {
 }
 
 pub fn upgrade(req: &Request, abort: &dyn Fn() -> bool) -> Result<Upgraded, String> {
+    if !policy::allows_host(req.host) {
+        return Err(String::from(policy::REFUSED));
+    }
     let start = Instant::now();
     let deadline = start
         .checked_add(req.connect_timeout)
@@ -1423,6 +1448,9 @@ pub(crate) fn h1_head_upgrade(req: &Request) -> Vec<u8> {
 }
 
 pub fn preconnect(req: &Request, abort: &dyn Fn() -> bool) {
+    if !policy::allows_host(req.host) {
+        return;
+    }
     let origin = origin_key(req);
     {
         let mut guard = pool_lock();

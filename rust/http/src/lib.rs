@@ -11,6 +11,7 @@ mod fetch;
 mod ffi;
 pub mod ftp;
 mod inflate;
+pub mod policy;
 mod proxy;
 mod tls;
 mod transfer;
