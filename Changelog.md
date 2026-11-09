@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Style: a document no longer inherits the styles of the document before it.
+  Incremental restyling reused the previous pass's styles when the document
+  node had the same address and the same style sheets; DOM slots are
+  recycled, so after a page with a `<title>` or `<script>`, a page that
+  reused that slot for its `<body>` took the old element's `display: none`
+  and showed nothing. The pass is now keyed on the document's slot
+  generation as well.
 * Development scripts: four fewer shell scripts. `render-tests.sh` is now
   `scripts/dev.sh render-tests [dir]`. `render-screenshots.sh` (a Windows-only
   site list that no longer exists) and `wpt-local.sh` (covered by

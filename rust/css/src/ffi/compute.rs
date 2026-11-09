@@ -494,9 +494,9 @@ fn retained(out: &StyleMap) -> Styles {
         .collect()
 }
 
-fn interaction_key(doc: usize, sheets: u64, containers: u64) -> PassKey {
+fn interaction_key(doc: Option<Node<'_>>, sheets: u64, containers: u64) -> PassKey {
     PassKey {
-        doc,
+        doc: doc.map(Node::downgrade),
         sheets,
         containers,
         focus: Node::ptr_or_null(focus_node()) as usize,
@@ -566,7 +566,7 @@ fn compute(
         && eligible
         && incremental::zoom_allows_reuse(zoom());
     let containers = container_map_signature();
-    let key = interaction_key(doc as usize, sig, containers);
+    let key = interaction_key(doc_node, sig, containers);
     let previous = incremental_state(|state| state.previous.take());
     let active = usable && previous.as_ref().is_some_and(|p| p.key == key);
 
@@ -606,7 +606,7 @@ fn compute(
 
     if usable {
         let current = Previous {
-            key: interaction_key(doc as usize, sig, containers),
+            key: interaction_key(doc_node, sig, containers),
             styles: retained(&out),
         };
         let stale = incremental_state(|state| {
