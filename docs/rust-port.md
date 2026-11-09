@@ -1151,10 +1151,10 @@ checked with what already exists:
 |---|---|---|
 | Build | `cargo xtask build` (`meson compile -C builddir` during the port), clippy, rustfmt | No warnings, every CI platform |
 | Smoke | `scripts/dev.sh smoke` | All fixtures match `data/baseline/` |
-| Rendering | `scripts/render-tests.sh` (the render fixtures, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
+| Rendering | `scripts/dev.sh render-tests` (the render fixtures, headless PNG dumps) | Pixel-identical to the build of the previous commit (JPEG decoder swap excepted, phase 2) |
 | Web platform | `scripts/wpt-score.sh` | Slice score not lower (70,743 of 71,907 subtests on the 2026-07-13 slice) |
 | JavaScript | `scripts/test262-run.sh` | Not lower |
-| Performance | `scripts/speedometer-bench.sh`, `speedometer4-bench.sh` | Within noise |
+| Performance | `scripts/speedometer-bench.sh` | Within noise |
 | Manual | Launch the browser, exercise the changed path | As `CLAUDE.md` requires |
 
 The rendering check needs one small addition: a script that dumps the render

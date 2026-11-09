@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Development scripts: four fewer shell scripts. `render-tests.sh` is now
+  `scripts/dev.sh render-tests [dir]`. `render-screenshots.sh` (a Windows-only
+  site list that no longer exists) and `wpt-local.sh` (covered by
+  `wpt-run.sh --no-serve`) are removed. So is `speedometer4-bench.sh`:
+  Speedometer `main` moved its workloads out of `resources/todomvc/` and its
+  suites into `config.json`, so the script no longer ran;
+  `speedometer-bench.sh` still drives Speedometer 3.1.
 * JavaScript: about 720 lines of dead code removed from the bundled page and
   worker polyfills. Fallbacks for features the engine always provides never
   ran: the ES2019–2024 built-ins Boa implements (`Object.hasOwn`,
