@@ -1,0 +1,8 @@
+.gradle/
+build/
+target/
+out/
+/*.png
+/*.pdf
+*.iml
+.idea/

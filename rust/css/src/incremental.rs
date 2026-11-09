@@ -2,6 +2,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_dom::WeakNode;
+
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 
@@ -18,7 +20,7 @@ pub(crate) fn zoom_allows_reuse(zoom: f64) -> bool {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PassKey {
-    pub doc: usize,
+    pub doc: Option<WeakNode>,
     pub sheets: u64,
     pub containers: u64,
     pub focus: usize,

@@ -1,0 +1,113 @@
+/* Southstar for Java — Gradle build of the library and the browser; pom.xml holds the version. */
+
+plugins {
+    id 'java-library'
+    id 'application'
+    id 'maven-publish'
+}
+
+group = 'org.southstar'
+version = new groovy.xml.XmlSlurper().parse(file('pom.xml')).version.text()
+
+application {
+    mainClass = 'org.southstar.app.Browser'
+}
+
+def generateVersionProperties = tasks.register('generateVersionProperties') {
+    def outDir = layout.buildDirectory.dir('generated/version')
+    def projectVersion = version
+    inputs.property('version', projectVersion)
+    outputs.dir(outDir)
+    doLast {
+        def f = outDir.get().file('org/southstar/app/version.properties').asFile
+        f.parentFile.mkdirs()
+        f.text = "version=${projectVersion}\n"
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir generateVersionProperties
+        }
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Werror']
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
+tasks.named('jar') {
+    from('..') {
+        include 'License.md', 'COPYING', 'THIRD-PARTY-LICENSES.md'
+        into 'META-INF'
+    }
+    manifest {
+        attributes(
+            'Automatic-Module-Name': 'org.southstar',
+            'Main-Class': 'org.southstar.app.Browser',
+            'Implementation-Title': 'Southstar',
+            'Implementation-Version': version,
+        )
+    }
+}
+
+publishing {
+    publications {
+        library(MavenPublication) {
+            from components.java
+            artifactId = 'southstar-java'
+            pom {
+                name = 'Southstar for Java'
+                description = 'A web browser for the JVM, and the embedding library it is ' +
+                    'built on: fetch, lay out, script and render web pages with the Southstar ' +
+                    'engine in its sandboxed southstar-renderer process.'
+                url = 'https://github.com/nordstjernen-web/southstar-browser'
+                inceptionYear = '2026'
+                licenses {
+                    license {
+                        name = 'Nordstjernen Source License v1.0'
+                        url = 'https://raw.githubusercontent.com/nordstjernen-web/southstar-browser/main/License.md'
+                        distribution = 'repo'
+                        comments = 'LicenseRef-NSL-1.0; dual-licensed, at your option, with GPL-3.0-or-later'
+                    }
+                    license {
+                        name = 'GNU General Public License, version 3 or later'
+                        url = 'https://www.gnu.org/licenses/gpl-3.0.txt'
+                        distribution = 'repo'
+                        comments = 'GPL-3.0-or-later; dual-licensed, at your option, with LicenseRef-NSL-1.0'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'Andreas Røsdal'
+                        url = 'https://github.com/nordstjernen-web/southstar-browser'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/nordstjernen-web/southstar-browser.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/nordstjernen-web/southstar-browser.git'
+                    url = 'https://github.com/nordstjernen-web/southstar-browser'
+                }
+                issueManagement {
+                    system = 'GitHub Issues'
+                    url = 'https://github.com/nordstjernen-web/southstar-browser/issues'
+                }
+            }
+        }
+    }
+}

@@ -21,6 +21,7 @@ the code and the plan.
 - [media.md](media.md) — how `<video>`/`<audio>` play (MPEG-1, optional WebM, the audio helper, WebVTT `<track>` captions, external-player fallback).
 - [Proxy.md](Proxy.md) — proxies and VPNs.
 - [extensions.md](extensions.md) — the scoped WebExtensions support (content scripts and a slice of `browser.*`).
+- [../java/README.md](../java/README.md) — the Java shell: a Swing browser and a Java library over the sandboxed `southstar-renderer` process, its resource policy, PDF and PNG capture, and the headless MCP server.
 - [remote-control.md](remote-control.md) — driving the browser from a local agent over MCP (`southstar --mcp`, the `--remote-control` channel, its tools and security model).
 - [privacy-policy.md](privacy-policy.md) — what the browser does and does not collect.
 

@@ -10,6 +10,8 @@ use southstar_ipc::{
     atol, json_double, json_escape, json_string, json_value, response_head, write_message,
 };
 
+use crate::capture;
+use crate::downloads::{self, State};
 use crate::engine::{self, Page, Post, PrintPages, PrintSetup};
 use crate::tiles::{self, Tiles, View};
 
@@ -18,6 +20,7 @@ const SCROLL_ACTIVE_US: i64 = 150_000;
 const SCROLL_TICK_GAP_US: i64 = 250_000;
 const ZOOM_MIN: f64 = 0.25;
 const TICK_BUDGET_MS: c_int = 16;
+const PROTOCOL_VERSION: c_int = 1;
 
 pub trait Framebuffer {
     fn bytes(&mut self) -> &mut [u8];
@@ -168,6 +171,55 @@ fn reply_str(fd: c_int, key: &str, value: Option<&[u8]>) {
 
 fn empty_ok(fd: c_int) {
     respond(fd, 200, "text/plain", b"", b"");
+}
+
+fn hello(fd: c_int) {
+    json_reply(
+        fd,
+        &format!(
+            "{{\"protocol\":{PROTOCOL_VERSION},\"engine\":\"southstar\",\"version\":\"{}\"}}",
+            env!("CARGO_PKG_VERSION")
+        ),
+    );
+}
+
+fn set_policy(body: &[u8]) {
+    use southstar_http::policy::{self, Policy};
+    let hosts = |key: &str| {
+        json_value(body, key.as_bytes())
+            .and_then(json_string)
+            .map(|list| policy::host_list(&list))
+    };
+    policy::set(Policy {
+        offline: long(body, "offline") != 0,
+        block_files: long(body, "block_file") != 0,
+        block_private: long(body, "block_private") != 0,
+        allow_hosts: hosts("allow_hosts"),
+        deny_hosts: hosts("deny_hosts").unwrap_or_default(),
+    });
+}
+
+fn download_status(fd: c_int, body: &[u8]) {
+    let status = downloads::poll(long(body, "id") as i64);
+    let state = status.as_ref().map_or(State::Failed, |s| s.state) as c_int;
+    let field = |pick: fn(&downloads::Status) -> &[u8]| escaped(status.as_ref().map(pick));
+    let error = status
+        .as_ref()
+        .map_or(&b"unknown download"[..], |s| &s.error[..]);
+    json_reply(
+        fd,
+        &format!(
+            "{{\"known\":{},\"state\":{state},\"bytes\":{},\"total\":{},\"path\":\"{}\",\
+             \"final_url\":\"{}\",\"content_type\":\"{}\",\"error\":\"{}\"}}",
+            c_int::from(status.is_some()),
+            status.as_ref().map_or(0, |s| s.bytes),
+            status.as_ref().map_or(0, |s| s.total),
+            field(|s| &s.path),
+            field(|s| &s.final_url),
+            field(|s| &s.content_type),
+            escaped(Some(error)),
+        ),
+    );
 }
 
 impl<F: Framebuffer> Session<F> {
@@ -547,8 +599,9 @@ impl<F: Framebuffer> Session<F> {
         if dpr > 0.0 {
             engine::set_device_pixel_ratio(None, dpr);
         }
-        let restored = match (&url, history) {
-            (Some(url), true) => self.bfcache_take(url),
+        let html = json_value(body, b"html").and_then(json_string);
+        let restored = match (&url, history, &html) {
+            (Some(url), true, None) => self.bfcache_take(url),
             _ => None,
         };
         let page_nav = self.page_nav.take();
@@ -581,6 +634,9 @@ impl<F: Framebuffer> Session<F> {
                 engine::set_device_pixel_ratio(Some(&page), dpr);
             }
             Some(page)
+        } else if let Some(html) = &html {
+            let base = url.clone().unwrap_or_else(|| c"about:blank".to_owned());
+            Some(Page::open_html(html, &base, vw, f64::from(vh), settle))
         } else if let Some(url) = &url {
             let stashed = posted.filter(|p| p.url.as_deref() == Some(url.as_c_str()));
             Page::open(
@@ -764,6 +820,34 @@ impl<F: Framebuffer> Session<F> {
         reply_str(self.ctrl_w, "text", result.as_deref());
     }
 
+    fn resolve_capability(&mut self, path: &[u8], body: &[u8]) {
+        let kind = match path {
+            b"/webgl" => Some(b"webgl".to_vec()),
+            b"/camera" => Some(b"camera".to_vec()),
+            _ => text(body, "kind").map(CString::into_bytes),
+        };
+        let origin = text(body, "origin");
+        let allow = long(body, "allow") != 0;
+        let resolved = match (self.cur.as_ref(), kind.as_deref(), &origin) {
+            (Some(cur), Some(b"webgl"), Some(origin)) => {
+                cur.resolve_webgl(origin, allow);
+                true
+            }
+            (Some(cur), Some(b"camera"), Some(origin)) => {
+                cur.resolve_camera(origin, allow);
+                true
+            }
+            _ => false,
+        };
+        self.frame_valid = false;
+        let status = if resolved || path != b"/capability" {
+            200
+        } else {
+            400
+        };
+        respond(self.ctrl_w, status, "text/plain", b"", b"");
+    }
+
     pub fn handle(&mut self, path: &[u8], body: &[u8]) -> bool {
         let fd = self.ctrl_w;
         let xy = |body: &[u8]| (long(body, "x") as c_int, long(body, "y") as c_int);
@@ -772,18 +856,42 @@ impl<F: Framebuffer> Session<F> {
                 empty_ok(fd);
                 return true;
             }
-            b"/webgl" | b"/camera" => {
-                let origin = text(body, "origin");
-                let allow = long(body, "allow") as c_int != 0;
-                if let (Some(cur), Some(origin)) = (self.cur.as_ref(), &origin) {
-                    if path == b"/webgl" {
-                        cur.resolve_webgl(origin, allow);
-                    } else {
-                        cur.resolve_camera(origin, allow);
-                    }
-                }
-                self.frame_valid = false;
+            b"/hello" => hello(fd),
+            b"/webgl" | b"/camera" | b"/capability" => self.resolve_capability(path, body),
+            b"/policy" => {
+                set_policy(body);
                 empty_ok(fd);
+            }
+            b"/screenshot" => {
+                self.frame_valid = false;
+                let shot = self
+                    .cur
+                    .as_ref()
+                    .and_then(|cur| capture::screenshot(cur, body));
+                let (w, h, png) = shot.unwrap_or_default();
+                let headers = format!("X-W: {w}\r\nX-H: {h}\r\n");
+                respond(fd, 200, "image/png", headers.as_bytes(), &png);
+            }
+            b"/pdf" => {
+                self.frame_valid = false;
+                let printed = self.cur.as_ref().and_then(|cur| capture::pdf(cur, body));
+                let (pages, pdf) = printed.unwrap_or_default();
+                let headers = format!("X-Pages: {pages}\r\n");
+                respond(fd, 200, "application/pdf", headers.as_bytes(), &pdf);
+            }
+            b"/download-start" => {
+                let url = text(body, "url");
+                let top = self.cur.as_ref().and_then(Page::url);
+                let id = url.as_ref().map_or(0, |url| {
+                    let top = top.as_deref().filter(|t| !t.is_empty());
+                    downloads::start(url.as_bytes(), top.or(Some(url.as_bytes())))
+                });
+                json_reply(fd, &format!("{{\"id\":{id}}}"));
+            }
+            b"/download-poll" => download_status(fd, body),
+            b"/download-cancel" => {
+                downloads::cancel(long(body, "id") as i64);
+                json_reply(fd, "{\"ok\":1}");
             }
             b"/colorscheme" => {
                 engine::set_color_scheme(long(body, "dark") as c_int != 0);

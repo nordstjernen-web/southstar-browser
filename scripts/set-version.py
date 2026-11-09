@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Southstar — set the release version everywhere it is written: the workspace, the Boa forks and every pinned internal dependency."""
+"""Southstar — set the release version everywhere it is written: the workspace, the Boa forks, every pinned internal dependency and the Java build."""
 
 import re
 import subprocess
@@ -30,6 +30,7 @@ def main():
         text = manifest.read_text(encoding="utf-8")
         if re.search(pinned, text):
             manifest.write_text(re.sub(pinned, rf'\1"={version}"', text), encoding="utf-8")
+    rewrite(ROOT / "java" / "pom.xml", r"(<artifactId>southstar-java</artifactId>\n  <version>)[^<]+(</version>)", rf"\g<1>{version}\g<2>", 1)
     subprocess.run(["cargo", "update", "--workspace", "--offline"], cwd=ROOT, check=True)
 
 

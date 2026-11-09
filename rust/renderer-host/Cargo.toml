@@ -14,6 +14,7 @@ southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
 southstar-browser = { path = "../browser", version = "=1.0.9-dev" }
 southstar-cairo = { path = "../cairo", version = "=1.0.9-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
+southstar-http = { path = "../http", version = "=1.0.9-dev" }
 southstar-image = { path = "../image", version = "=1.0.9-dev" }
 southstar-ipc = { path = "../ipc", version = "=1.0.9-dev" }
 southstar-net = { path = "../net", version = "=1.0.9-dev" }

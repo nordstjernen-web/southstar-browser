@@ -3,6 +3,45 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Java shell: `java/` is a web browser for the JVM and a Java library over
+  Southstar's engine, ported from Nordstjernen Sol's Java shell. The Swing
+  browser (`java -jar southstar-java.jar URL`) has back, forward, reload,
+  home, an address bar with a security badge, find in page, zoom, text
+  selection and the clipboard, downloads, camera prompts, page audio through
+  `southstar-audio`, save as PDF and a JavaScript console. The library
+  (`org.southstar.browser`: `Engine`, `BrowserContext`, `Page`,
+  `HtmlRenderer`) navigates, scripts, screenshots and prints pages, and
+  `org.southstar.agent` offers the browser tools to agents and serves them
+  as a headless MCP server. It is pure Java: every page runs in a sandboxed
+  `southstar-renderer` process of its own, driven over the stdio renderer
+  protocol, and no native code is loaded into the JVM. Built with Gradle or
+  Maven on JDK 21; the jar finds the renderer of a `cargo xtask build` by
+  itself. Sol's in-process JNI path and linked popup windows are not part of
+  it.
+* Renderer protocol: new requests for embedders. `/hello` answers the
+  protocol version and engine version. `/screenshot` returns a PNG of any
+  region of the document at any scale. `/pdf` prints the page to a paged PDF
+  with real text, honouring `@media print` and `@page`, with the sheet size,
+  landscape, margins, scale, page ranges, title, author and date, and header
+  and footer texts (`{page}`, `{pages}`, `{title}`, `{url}`, `{date}`).
+  `/download-start`, `/download-poll` and `/download-cancel` fetch a file
+  with the page's cookies into a staging file in the cache directory.
+  `/capability` answers a camera or WebGL request by kind. `/open` takes an
+  `html` string to show as the document at the given URL.
+* Security: an embedder can limit what a renderer may reach (`/policy`):
+  nothing at all, no `file:` URLs, no private or loopback addresses, and host
+  allow and deny lists with `*.` wildcards. It covers every request of the
+  page, redirects, `fetch`, WebSocket, EventSource, FTP and preconnects; with
+  private addresses blocked, a public name that resolves to one is refused as
+  well. The GTK shell sets no policy. `NS_ACCEPT_LANGUAGE` overrides the
+  `Accept-Language` header.
+* Style: a document no longer inherits the styles of the document before it.
+  Incremental restyling reused the previous pass's styles when the document
+  node had the same address and the same style sheets; DOM slots are
+  recycled, so after a page with a `<title>` or `<script>`, a page that
+  reused that slot for its `<body>` took the old element's `display: none`
+  and showed nothing. The pass is now keyed on the document's slot
+  generation as well.
 * Development scripts: four fewer shell scripts. `render-tests.sh` is now
   `scripts/dev.sh render-tests [dir]`. `render-screenshots.sh` (a Windows-only
   site list that no longer exists) and `wpt-local.sh` (covered by

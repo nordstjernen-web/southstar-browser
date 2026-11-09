@@ -172,6 +172,68 @@ pub fn print_pages(b: &NsBrowser) -> Option<(PrintPages, PrintSetup)> {
     Some((pages, setup))
 }
 
+pub struct PdfLayout {
+    pub setup: PrintSetup,
+    pub page_rule: bool,
+    pub print_media: bool,
+}
+
+fn scaled(setup: &PrintSetup, scale: f64) -> PrintSetup {
+    PrintSetup {
+        width: setup.width / scale,
+        height: setup.height / scale,
+        margin_top: setup.margin_top / scale,
+        margin_right: setup.margin_right / scale,
+        margin_bottom: setup.margin_bottom / scale,
+        margin_left: setup.margin_left / scale,
+    }
+}
+
+fn relayout_for(b: &NsBrowser, setup: &PrintSetup) -> bool {
+    let (w, h) = content_box(setup);
+    if w <= 0 || h <= 0.0 {
+        return false;
+    }
+    b.vw.set(w);
+    b.vh.set(h);
+    page::relayout(b);
+    true
+}
+
+pub fn write_pdf(
+    b: &NsBrowser,
+    path: &CStr,
+    layout: &PdfLayout,
+    doc: &southstar_engine::PdfDocument<'_>,
+) -> Option<usize> {
+    b.doc()?;
+    images::wait_images(b);
+    let saved = (b.vw.get(), b.vh.get());
+    ffi::css_set_print_media(layout.print_media);
+    let mut setup = layout.setup;
+    let mut ready = relayout_for(b, &scaled(&setup, doc.scale));
+    if ready && layout.page_rule && ffi::apply_page_rule(&mut setup) {
+        ready = relayout_for(b, &scaled(&setup, doc.scale));
+    }
+    let written = if ready {
+        ffi::paint_set_js(b.js());
+        ffi::paint_set_anim(b.anim());
+        let written = b
+            .layout()
+            .and_then(|root| ffi::write_pdf_document(root, path, &scaled(&setup, doc.scale), doc));
+        ffi::paint_set_anim(None);
+        ffi::paint_set_js(None);
+        written
+    } else {
+        None
+    };
+    ffi::css_set_print_media(false);
+    b.vw.set(saved.0);
+    b.vh.set(saved.1);
+    page::relayout(b);
+    written
+}
+
 pub fn utf8_boundary(s: &[u8], off: usize) -> usize {
     if off >= s.len() {
         return s.len();

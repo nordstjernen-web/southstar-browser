@@ -169,9 +169,9 @@ fn connect(
     abort: &dyn Fn() -> bool,
 ) -> Result<TcpStream, String> {
     let Some(p) = proxy else {
-        return client::tcp_connect_to(host, port, deadline, abort).map(|(s, _)| s);
+        return client::tcp_connect_to(host, port, true, deadline, abort).map(|(s, _)| s);
     };
-    let (mut stream, _) = client::tcp_connect_to(&p.host, p.port, deadline, abort)
+    let (mut stream, _) = client::tcp_connect_to(&p.host, p.port, false, deadline, abort)
         .map_err(|e| format!("proxy {}:{}: {e}", p.host, p.port))?;
     let target = client::resolve_host(host);
     let result = match p.kind {
@@ -232,6 +232,11 @@ pub fn get(
         out.error = Some(String::from("invalid FTP URL"));
         return out;
     };
+    if !crate::policy::allows_host(&loc.host) {
+        out.connect_failed = true;
+        out.error = Some(String::from(crate::policy::REFUSED));
+        return out;
+    }
     let deadline = start
         .checked_add(timeout)
         .unwrap_or_else(|| start + Duration::from_secs(3600));

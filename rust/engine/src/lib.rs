@@ -13,6 +13,10 @@ pub use fetch::{linked_css_known, linked_css_redirected_away, linked_css_text};
 pub use styles::layout_perf;
 pub use timings::{ResourceTiming, take_resource_timings};
 
+use core::ffi::CStr;
+use std::ffi::CString;
+
+use southstar_cairo::PdfMetadata;
 use southstar_layout::{BoxKind, BoxRef};
 
 use crate::ffi::{Capture, Out};
@@ -121,6 +125,98 @@ pub fn write_pdf_paged(root: BoxRef, path: &core::ffi::CStr, setup: &ffi::PrintS
         capture.show_page();
     }
     0
+}
+
+pub struct MarginSlot {
+    pub page: usize,
+    pub pages: usize,
+    pub column: usize,
+    pub footer: bool,
+}
+
+pub struct PdfDocument<'a> {
+    pub scale: f64,
+    pub selected: &'a dyn Fn(usize) -> bool,
+    pub title: Option<&'a CStr>,
+    pub author: Option<&'a CStr>,
+    pub creation_date: Option<&'a CStr>,
+    pub margin_text: &'a dyn Fn(&MarginSlot) -> Option<CString>,
+}
+
+fn draw_margin_texts(
+    capture: &Capture,
+    setup: &ffi::PrintSetup,
+    points: f64,
+    slot: MarginSlot,
+    slot_text: &dyn Fn(&MarginSlot) -> Option<CString>,
+) {
+    let width = setup.width * points;
+    let columns = [
+        (setup.margin_left * points, 0.0),
+        (width / 2.0, 0.5),
+        (width - setup.margin_right * points, 1.0),
+    ];
+    let header = setup.margin_top * points / 2.0 + ffi::LABEL_POINTS / 3.0;
+    let footer =
+        setup.height * points - setup.margin_bottom * points / 2.0 + ffi::LABEL_POINTS / 3.0;
+    for footer_row in [false, true] {
+        for (column, (x, align)) in columns.into_iter().enumerate() {
+            let at = MarginSlot {
+                column,
+                footer: footer_row,
+                ..slot
+            };
+            if let Some(text) = slot_text(&at) {
+                capture.draw_label(x, if footer_row { footer } else { header }, align, &text);
+            }
+        }
+    }
+}
+
+pub fn write_pdf_document(
+    root: BoxRef,
+    path: &CStr,
+    setup: &ffi::PrintSetup,
+    doc: &PdfDocument,
+) -> Option<usize> {
+    let page_h = setup.height - setup.margin_top - setup.margin_bottom;
+    if page_h <= 1.0 || page_h.is_nan() || doc.scale <= 0.0 || doc.scale.is_nan() {
+        return None;
+    }
+    let offsets = ffi::page_offsets(root, page_h);
+    let points = PT_PER_PX * doc.scale;
+    let capture = Capture::pdf(path, setup.width * points, setup.height * points)?;
+    let metadata = [
+        (PdfMetadata::Title, doc.title),
+        (PdfMetadata::Author, doc.author),
+        (PdfMetadata::CreateDate, doc.creation_date),
+    ];
+    for (key, value) in metadata {
+        if let Some(value) = value.filter(|v| !v.is_empty()) {
+            capture.set_metadata(key, value);
+        }
+    }
+    let pages = offsets.len();
+    let mut written = 0;
+    for i in (0..pages).filter(|i| (doc.selected)(i + 1)) {
+        capture.draw_sheet(
+            root,
+            setup,
+            points,
+            offsets.top(i),
+            offsets.bottom(i, page_h),
+        );
+        let slot = MarginSlot {
+            page: i + 1,
+            pages,
+            column: 0,
+            footer: false,
+        };
+        draw_margin_texts(&capture, setup, points, slot, doc.margin_text);
+        capture.show_page();
+        written += 1;
+    }
+    Some(written)
 }
 
 pub fn print_recordings(root: BoxRef, setup: &ffi::PrintSetup) -> Vec<Capture> {

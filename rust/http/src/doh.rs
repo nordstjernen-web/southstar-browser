@@ -7,7 +7,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::client::{Request, perform};
+use crate::client::{Request, perform_unchecked};
 use crate::fetch::parse_target;
 use crate::tls::Settings;
 use crate::transfer::Handler;
@@ -215,7 +215,7 @@ fn ask(
         body: Vec::new(),
         abort,
     };
-    let outcome = perform(&request, &mut collect);
+    let outcome = perform_unchecked(&request, &mut collect);
     if !outcome.ok || outcome.status != 200 {
         return None;
     }
