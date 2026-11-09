@@ -238,6 +238,10 @@ impl Canvas {
         self.cr().move_to(x, y);
     }
 
+    pub fn user_to_device(&self, x: f64, y: f64) -> (f64, f64) {
+        self.cr().user_to_device(x, y)
+    }
+
     pub fn line_to(&self, x: f64, y: f64) {
         self.cr().line_to(x, y);
     }
