@@ -783,7 +783,7 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
             abs_url.as_deref()
         };
         schedule::mark_source(js, iframe, Some(&origin), marked_url);
-        sandbox = origin::mark_cross_origin(js, &iorigin, sandbox);
+        sandbox = origin::mark_cross_origin(js, iframe, &iorigin, sandbox);
         let shown = make_realm_document(js, iframe, built, &iorigin, content_type, sandbox);
         run_document(
             js,

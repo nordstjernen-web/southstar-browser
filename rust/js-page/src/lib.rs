@@ -19,6 +19,9 @@ pub use ffi::{dump_stats, run_scripts_in_doc};
 pub fn install_runtime_hooks() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
+        southstar_js_runtime::api::set_realm_hooks(southstar_js_runtime::api::RealmHooks {
+            finish_shapes: install::finish_shapes,
+        });
         southstar_canvas::install_runtime_hooks();
         southstar_idb::install_runtime_hooks();
         southstar_js_attrs::install_runtime_hooks();

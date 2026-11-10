@@ -154,11 +154,13 @@ pub(crate) fn frame_referrer(js: Js, iframe: Node<'_>, frame_url: Option<&CStr>)
     load::referer_for(frame_url, holder_url.as_deref(), policy).unwrap_or_default()
 }
 
-pub(crate) fn mark_cross_origin(js: Js, iorigin: &CStr, flags: u32) -> u32 {
-    let page_url = load::page_url(js);
-    let cross_url = page_url.as_deref().is_some_and(|page_url| {
-        !southstar_url::bytes::same_origin(iorigin.to_bytes(), page_url.to_bytes())
-    });
+pub(crate) fn mark_cross_origin(js: Js, iframe: Node<'_>, iorigin: &CStr, flags: u32) -> u32 {
+    let differs = |other: Option<CString>| {
+        other.is_some_and(|other| {
+            !southstar_url::bytes::same_origin(iorigin.to_bytes(), other.to_bytes())
+        })
+    };
+    let cross_url = differs(load::page_url(js)) || differs(load::node_frame_url(iframe));
     if cross_url || opaque_by_sandbox(flags) {
         flags | CROSS_ORIGIN
     } else {

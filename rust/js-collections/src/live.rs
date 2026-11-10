@@ -168,6 +168,7 @@ pub(crate) fn make(
         } else {
             protos.node
         };
+        let proto = crate::ffi::isolated_proto(scope, &proto);
         let _ = scope.set_prototype(&object, &proto);
     }
     object

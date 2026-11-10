@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: cross-origin frames no longer share script objects with the page
+  that embeds them. Such a frame gets its own copies of the platform's native
+  functions and prototypes, runs the engine's bundled scripts (`Blob`,
+  `Headers`, streams, `DOMRect`, IndexedDB and the rest) in its own realm, and
+  receives copies of the values engine code hands it, so it cannot reach or
+  change the embedder's built-in prototypes and the embedder cannot observe
+  the frame through its own. A frame nested inside a cross-origin frame is now
+  treated as cross-origin when it differs from its parent, not only from the
+  top page; before, a frame matching the top page's origin could read a cross-
+  origin parent's document. Starting a cross-origin frame takes about 300 ms
+  longer, since it evaluates the bundled scripts itself. This completes audit
+  finding S-01.
 * Security: smaller hardening from the audit. The embedder's private-address
   policy sees the IPv4 address inside NAT64, 6to4 and Teredo IPv6 addresses;
   the HSTS list keeps its newest 10,000 hosts; a freed DOM node's weak handles

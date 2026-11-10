@@ -288,6 +288,10 @@ pub fn eval_polyfills(js: Option<Page>) {
     record::eval_polyfills(js);
 }
 
+pub fn bundled_sources() -> [&'static str; 2] {
+    record::bundled_sources()
+}
+
 pub fn release_pinned_wrappers(js: Option<Page>) {
     each(js, teardown::release_pinned_wrappers);
 }

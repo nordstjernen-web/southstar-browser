@@ -363,6 +363,31 @@ fn realm_clone(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult
     Ok(cloner::clone_into(Js::of_ctx(cx), cx, value))
 }
 
+fn run_bundled(scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
+    let names = ["<frame-polyfills>", "<frame-streaming>"];
+    for (source, name) in api::bundled_sources().into_iter().zip(names) {
+        drop(scope.eval_native_script(source, name));
+    }
+    (api::realm_hooks().finish_shapes)(scope);
+    Ok(Value::undefined())
+}
+
+pub(crate) fn run_bundled_function(ctx: Ctx) -> Value {
+    ctx.enter(|scope| scope.function("runBundled", 0, run_bundled))
+}
+
+fn localize(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+    let Some(value) = args.first() else {
+        return Ok(Value::undefined());
+    };
+    let cx = scope_ctx(scope);
+    Ok(cloner::localize_into(Js::of_ctx(cx), cx, value))
+}
+
+pub(crate) fn localize_function(ctx: Ctx) -> Value {
+    ctx.enter(|scope| scope.function("localize", 1, localize))
+}
+
 pub(crate) fn child_frame_of_function(ctx: Ctx) -> Value {
     ctx.enter(|scope| scope.function("childFrameOf", 2, iframe_child_frame_of))
 }
@@ -526,6 +551,7 @@ pub fn install_runtime_hooks() {
         realms_same_origin: |js, a1, a2| realms_same_origin(Some(js), a1, a2),
         schedule_static_iframes,
         realm_proto_for: |js, a1, a2| realm_proto_for(Some(js), a1, a2),
+        isolated_proto_for,
         frame_realm_window,
         frame_realm_document,
     });
@@ -542,6 +568,13 @@ fn realm_proto_for(js: Option<Page>, realm: ContextHandle, proto: &Value) -> Val
         return proto.clone();
     };
     cloner::proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
+}
+
+fn isolated_proto_for(js: Option<Page>, realm: ContextHandle, proto: &Value) -> Value {
+    let (Some(cx), js) = (Ctx::from_handle(realm), Js::of(js)) else {
+        return proto.clone();
+    };
+    cloner::isolated_proto_for(js, cx, proto).unwrap_or_else(|| proto.clone())
 }
 
 fn frame_realm_window(js: Option<Page>, frame: Node<'_>) -> Value {

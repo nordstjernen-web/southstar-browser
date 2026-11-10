@@ -163,7 +163,7 @@ fn install_location(scope: &mut Scope<'_>, global: &Value, document: &Value, url
     let _ = scope.eval_native_script(LOCATION_FORWARD, "<location-forward>");
 }
 
-fn finish_shapes(scope: &mut Scope<'_>) {
+pub(crate) fn finish_shapes(scope: &mut Scope<'_>) {
     let global = scope.global();
     ffi::install_on(scope, ffi::Installer::EventAttributeGetters, &global);
     southstar_js_interfaces::install_navigator_shape(scope);
