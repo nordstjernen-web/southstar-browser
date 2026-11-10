@@ -54,28 +54,33 @@ fn is_frame_owner(node: Node<'_>) -> bool {
     )
 }
 
-fn framing_blocked(embedder: &CStr, framed: &CStr, resp: &Response) -> bool {
+fn trim_space(mut value: &[u8]) -> &[u8] {
+    while let [first, rest @ ..] = value {
+        if !glib_space(*first) {
+            break;
+        }
+        value = rest;
+    }
+    while let [rest @ .., last] = value {
+        if !glib_space(*last) {
+            break;
+        }
+        value = rest;
+    }
+    value
+}
+
+fn framing_blocked_by(embedder: &CStr, framed: &CStr, resp: &Response) -> bool {
     if let Some(options) = non_empty(resp.xframe_options()) {
-        let mut value = options.to_bytes();
-        while let [first, rest @ ..] = value {
-            if !glib_space(*first) {
-                break;
+        for value in options.to_bytes().split(|&b| b == b',').map(trim_space) {
+            if value.eq_ignore_ascii_case(b"deny") {
+                return true;
             }
-            value = rest;
-        }
-        while let [rest @ .., last] = value {
-            if !glib_space(*last) {
-                break;
+            if value.eq_ignore_ascii_case(b"sameorigin")
+                && !southstar_url::bytes::same_origin(framed.to_bytes(), embedder.to_bytes())
+            {
+                return true;
             }
-            value = rest;
-        }
-        if value.eq_ignore_ascii_case(b"deny") {
-            return true;
-        }
-        if value.eq_ignore_ascii_case(b"sameorigin")
-            && !southstar_url::bytes::same_origin(framed.to_bytes(), embedder.to_bytes())
-        {
-            return true;
         }
     }
     if let Some(header) = non_empty(resp.csp_header())
@@ -84,6 +89,30 @@ fn framing_blocked(embedder: &CStr, framed: &CStr, resp: &Response) -> bool {
         return true;
     }
     false
+}
+
+fn outer_ancestor_urls(js: Js, iframe: Node<'_>) -> Vec<CString> {
+    let mut urls: Vec<CString> = southstar_dom::ancestors(iframe)
+        .filter(|node| is_frame_owner(*node))
+        .filter_map(|frame| frame.attr(c"data-nd-frame-url"))
+        .map(CStr::to_owned)
+        .collect();
+    urls.extend(load::page_url(js));
+    urls.retain(|url| southstar_url::bytes::is_http_or_https(url.to_bytes()));
+    urls
+}
+
+fn framing_blocked(
+    js: Js,
+    iframe: Node<'_>,
+    embedder: &CStr,
+    framed: &CStr,
+    resp: &Response,
+) -> bool {
+    framing_blocked_by(embedder, framed, resp)
+        || outer_ancestor_urls(js, iframe)
+            .iter()
+            .any(|ancestor| framing_blocked_by(ancestor, framed, resp))
 }
 
 fn kind_name(kind: FrameKind) -> (&'static [u8], &'static [u8]) {
@@ -276,7 +305,7 @@ fn fetch_source(
         }
     }
     match &resp {
-        Some(response) if framing_blocked(origin, &abs_url, response) => {
+        Some(response) if framing_blocked(js, iframe, origin, &abs_url, response) => {
             if load::log_enabled(js) {
                 load::log_line(
                     js,
