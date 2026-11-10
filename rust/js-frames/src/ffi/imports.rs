@@ -11,7 +11,6 @@ pub(crate) use crate::links::nsr_realmdoc_deny_cookie;
 pub(crate) use crate::links::nsr_window_addEventListener;
 pub(crate) use crate::links::nsr_window_bind_post_message;
 pub(crate) use crate::links::nsr_window_cancelAnimationFrame;
-pub(crate) use crate::links::nsr_window_current_document_for;
 pub(crate) use crate::links::nsr_window_dispatchEvent;
 pub(crate) use crate::links::nsr_window_make_post_message;
 pub(crate) use crate::links::nsr_window_removeEventListener;

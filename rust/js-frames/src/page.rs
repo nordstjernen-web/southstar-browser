@@ -12,6 +12,7 @@ use southstar_dom::{Kind, MAX_DEPTH, Node, WeakNode};
 use southstar_js_engine::Value;
 
 use crate::cloner::Shared;
+use crate::cross_window::CrossWindow;
 use crate::ffi::Js;
 use crate::ffi::ctx::Ctx;
 use crate::pristine::Pristine;
@@ -68,6 +69,7 @@ pub(crate) struct Page {
     pub natives: Option<Rc<Pristine>>,
     pub navigators: HashMap<i32, Frame>,
     pub next_navigator: i32,
+    pub cross_windows: Vec<CrossWindow>,
 }
 
 thread_local! {

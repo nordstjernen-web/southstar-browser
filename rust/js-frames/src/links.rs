@@ -30,6 +30,7 @@ pub struct JsWindowLinks {
     pub window_current_document_for: fn(&mut Scope<'_>, &Value) -> Option<Node<'static>>,
     pub window_make_post_message: fn(&mut Scope<'_>, &Value) -> Value,
     pub window_bind_post_message: fn(&mut Scope<'_>, &Value),
+    pub window_post_message_from: fn(&mut Scope<'_>, &Value, &Value, &[Value]) -> Native,
 }
 
 static JS_WINDOW_LINKS: OnceLock<JsWindowLinks> = OnceLock::new();
@@ -69,6 +70,15 @@ pub(crate) fn nsr_window_make_post_message(scope: &mut Scope<'_>, window: &Value
 
 pub(crate) fn nsr_window_bind_post_message(scope: &mut Scope<'_>, global: &Value) {
     (js_window_links().window_bind_post_message)(scope, global)
+}
+
+pub(crate) fn nsr_window_post_message_from(
+    scope: &mut Scope<'_>,
+    target: &Value,
+    source: &Value,
+    args: &[Value],
+) -> Native {
+    (js_window_links().window_post_message_from)(scope, target, source, args)
 }
 
 pub struct JsDispatchLinks {

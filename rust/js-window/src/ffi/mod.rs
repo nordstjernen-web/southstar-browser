@@ -620,6 +620,7 @@ pub fn install_runtime_hooks() {
         window_current_document_for: crate::ffi::nsr_window_current_document_for,
         window_make_post_message: crate::ffi::nsr_window_make_post_message,
         window_bind_post_message: crate::ffi::nsr_window_bind_post_message,
+        window_post_message_from: message::post_message_between,
     });
     southstar_js_runtime::links::set_js_window_links(southstar_js_runtime::links::JsWindowLinks {
         window_open_method: crate::ffi::nsr_window_open_method,

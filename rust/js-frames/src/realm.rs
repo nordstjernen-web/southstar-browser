@@ -63,18 +63,10 @@ pub(crate) fn make_scope(
 }
 
 pub(crate) fn cross_origin_window(ctx: Ctx, target: Value) -> Value {
-    let global = ctx.global();
-    let Some(maker) = ctx.eval_hidden(bootstrap::CROSS_WINDOW, c"<cross-window>") else {
-        return Value::null();
-    };
-    if !ctx.is_function(&maker) {
-        return Value::null();
-    }
-    ctx.call(&maker, &Value::undefined(), &[global, target])
-        .unwrap_or_else(Value::null)
+    crate::cross_window::cross_origin_window(ctx, target)
 }
 
-fn parent_realm(js: Js, iframe: Option<Node<'_>>) -> Ctx {
+pub(crate) fn parent_realm(js: Js, iframe: Option<Node<'_>>) -> Ctx {
     iframe
         .and_then(|iframe| iframe.parent())
         .and_then(|parent| node_realm(js, parent))
@@ -129,7 +121,7 @@ fn run_global_bootstrap(
         .and_then(|iframe| iframe.attr(c"name"))
         .map_or(&b""[..], |name| name.to_bytes());
     let frame_name = fctx.enter(|scope| scope.string_from_bytes(frame_name));
-    let child_frame_of = ffi::child_frame_of_function(fctx);
+    let cross_window = crate::cross_window::wrap_function(fctx);
     let post_message = ffi::make_post_message(fctx, window);
     let doc = text_or_undefined(fctx, doc_url);
     let realm_clone = ffi::realm_clone_function(fctx);
@@ -150,7 +142,7 @@ fn run_global_bootstrap(
         platform,
         frame_element,
         frame_name,
-        child_frame_of,
+        cross_window,
         post_message,
         doc,
         realm_clone,

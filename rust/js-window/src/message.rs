@@ -184,6 +184,36 @@ fn event_prototype(realm: Realm) -> Value {
         .unwrap_or_else(Value::undefined)
 }
 
+fn source_for(scope: &mut Scope<'_>, receiver: &Value, target: &Value, source: &Value) -> Value {
+    if !source.is_object() {
+        return Value::null();
+    }
+    if source.same_object(receiver) || source.same_object(target) {
+        return receiver.clone();
+    }
+    let same_origin = match (origin_of(scope, source), origin_of(scope, receiver)) {
+        (Some(from), Some(to)) => from != b"null" && from.eq_ignore_ascii_case(&to),
+        _ => false,
+    };
+    if same_origin {
+        return source.clone();
+    }
+    let receiving = window_realm(scope, receiver);
+    receiving
+        .enter(|realm_scope| ffi::cross_origin_window(realm_scope, source))
+        .filter(Value::is_object)
+        .unwrap_or_else(Value::null)
+}
+
+pub(crate) fn post_message_between(
+    scope: &mut Scope<'_>,
+    target: &Value,
+    source: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    post_from_caller(scope, target, source, args)
+}
+
 pub(crate) fn deliver(scope: &mut Scope<'_>, target: &Value, event: &Value) {
     let js = ffi::js_of(scope);
     let realm = message_realm(scope, target);
@@ -205,22 +235,9 @@ pub(crate) fn deliver(scope: &mut Scope<'_>, target: &Value, event: &Value) {
     };
     set(scope, event, "target", actual.clone());
     set(scope, event, "currentTarget", actual.clone());
-    if forwarded.is_object()
-        && let Some(main) = main_realm(js)
-    {
-        let source = get(scope, event, "source");
-        let parent_global = main
-            .enter(|main_scope| main_scope.global())
-            .unwrap_or_else(Value::undefined);
-        if source.same_object(target) {
-            set(scope, event, "source", actual.clone());
-        } else if source.same_object(&parent_global) {
-            let parent_proxy = get(scope, &actual, "__ndParentWindowProxy");
-            if parent_proxy.is_object() {
-                set(scope, event, "source", parent_proxy);
-            }
-        }
-    }
+    let source = get(scope, event, "source");
+    let seen = source_for(scope, &actual, target, &source);
+    set(scope, event, "source", seen);
     let deliver = get(scope, &actual, "__nsDeliverMessage");
     if scope.is_function(&deliver) {
         let budget = ffi::budget_enter(js);
@@ -330,18 +347,11 @@ fn post(scope: &mut Scope<'_>, posted: Posted<'_>) -> Result<Value, Value> {
     let source_global = window_or_global(scope, &source_override, caller);
     let source_origin = origin_of(scope, &source_global);
     let source_outward = outward_of(ffi::js_of(scope), &source_global);
-    let mut source = if source_outward.is_object() {
-        ffi::cross_origin_window(scope, &source_outward)
+    let source = if source_outward.is_object() {
+        source_outward
     } else {
-        source_global.clone()
+        source_global
     };
-    if !source.is_object() {
-        source = if source_outward.is_object() {
-            source_outward
-        } else {
-            source_global
-        };
-    }
 
     let event = ffi::target_make_event(scope, &target, "message");
     set(scope, &event, "data", data);

@@ -19,8 +19,8 @@ use southstar_layout::BoxRef;
 
 use self::imports::*;
 use crate::page::{self, Frame};
-use crate::{cloner, globals, origin, owner, queue, realm};
-use ctx::{Ctx, PropertyKey};
+use crate::{cloner, globals, origin, queue, realm};
+use ctx::Ctx;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Js(Option<Page>);
@@ -38,7 +38,7 @@ impl Js {
         self.0.is_none()
     }
 
-    fn ptr(self) -> Option<Page> {
+    pub(crate) fn ptr(self) -> Option<Page> {
         self.0
     }
 }
@@ -342,19 +342,6 @@ pub(crate) fn mark_mutated(js: Js) {
     api::mark_mutated(js.ptr());
 }
 
-fn iframe_child_frame_of(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
-    let [window, key, ..] = args else {
-        return Ok(Value::undefined());
-    };
-    let doc = nsr_window_current_document_for(scope, window);
-    match ctx::property_key(scope, key)? {
-        PropertyKey::Index(index) => owner::child_frame_window(scope, doc, index, None, true),
-        PropertyKey::Name(name) => {
-            owner::child_frame_window(scope, doc, 0, Some(name.as_c_str()), true)
-        }
-    }
-}
-
 fn realm_clone(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
     let Some(value) = args.first() else {
         return Ok(Value::undefined());
@@ -386,10 +373,6 @@ fn localize(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
 
 pub(crate) fn localize_function(ctx: Ctx) -> Value {
     ctx.enter(|scope| scope.function("localize", 1, localize))
-}
-
-pub(crate) fn child_frame_of_function(ctx: Ctx) -> Value {
-    ctx.enter(|scope| scope.function("childFrameOf", 2, iframe_child_frame_of))
 }
 
 fn navigate_own_frame(
