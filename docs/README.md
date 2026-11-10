@@ -24,6 +24,7 @@ the code and the plan.
 - [../java/README.md](../java/README.md) — the Java shell: a Swing browser and a Java library over the sandboxed `southstar-renderer` process, its resource policy, PDF and PNG capture, and the headless MCP server.
 - [remote-control.md](remote-control.md) — driving the browser from a local agent over MCP (`southstar --mcp`, the `--remote-control` channel, its tools and security model).
 - [privacy-policy.md](privacy-policy.md) — what the browser does and does not collect.
+- [security-audit-2026-11.md](security-audit-2026-11.md) — source review for security vulnerabilities, November 2026: findings, fixes and what was not covered.
 
 ## Building
 
