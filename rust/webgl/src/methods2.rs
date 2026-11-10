@@ -25,21 +25,21 @@ macro_rules! simple {
 }
 
 simple! {
-    delete_vertex_array(|_s, a| gl::delete_vertex_array(name(a, 0)));
-    bind_vertex_array(|_s, a| gl::bind_vertex_array(if a.is_empty() { 0 } else { name(a, 0) }));
+    delete_vertex_array(|_s, a| gl::delete_vertex_array(name(a, 0, KIND_VERTEX_ARRAY)));
+    bind_vertex_array(|_s, a| gl::bind_vertex_array(if a.is_empty() { 0 } else { name(a, 0, KIND_VERTEX_ARRAY) }));
     vertex_attrib_divisor(|s, a| gl::vertex_attrib_divisor(uint(s, a, 0), uint(s, a, 1)));
     blit_framebuffer(|s, a| gl::blit_framebuffer(
         int(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3),
         int(s, a, 4), int(s, a, 5), int(s, a, 6), int(s, a, 7),
         uint(s, a, 8), uint(s, a, 9)));
     framebuffer_texture_layer(|s, a| gl::framebuffer_texture_layer(
-        uint(s, a, 0), uint(s, a, 1), name(a, 2), int(s, a, 3), int(s, a, 4)));
+        uint(s, a, 0), uint(s, a, 1), name(a, 2, KIND_TEXTURE), int(s, a, 3), int(s, a, 4)));
     read_buffer(|s, a| gl::read_buffer(uint(s, a, 0)));
-    delete_sampler(|_s, a| gl::delete_sampler(name(a, 0)));
-    bind_sampler(|s, a| gl::bind_sampler(uint(s, a, 0), if a.len() >= 2 { name(a, 1) } else { 0 }));
-    sampler_parameter_i(|s, a| gl::sampler_parameter_i(name(a, 0), uint(s, a, 1), int(s, a, 2)));
-    sampler_parameter_f(|s, a| gl::sampler_parameter_f(name(a, 0), uint(s, a, 1), float(s, a, 2)));
-    uniform_block_binding(|s, a| gl::uniform_block_binding(name(a, 0), uint(s, a, 1), uint(s, a, 2)));
+    delete_sampler(|_s, a| gl::delete_sampler(name(a, 0, KIND_SAMPLER)));
+    bind_sampler(|s, a| gl::bind_sampler(uint(s, a, 0), if a.len() >= 2 { name(a, 1, KIND_SAMPLER) } else { 0 }));
+    sampler_parameter_i(|s, a| gl::sampler_parameter_i(name(a, 0, KIND_SAMPLER), uint(s, a, 1), int(s, a, 2)));
+    sampler_parameter_f(|s, a| gl::sampler_parameter_f(name(a, 0, KIND_SAMPLER), uint(s, a, 1), float(s, a, 2)));
+    uniform_block_binding(|s, a| gl::uniform_block_binding(name(a, 0, KIND_PROGRAM), uint(s, a, 1), uint(s, a, 2)));
     copy_tex_sub_image_3d(|s, a| gl::copy_tex_sub_image_3d(
         uint(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3), int(s, a, 4),
         int(s, a, 5), int(s, a, 6), int(s, a, 7), int(s, a, 8)));
@@ -47,10 +47,10 @@ simple! {
         uint(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3), int(s, a, 4)));
     vertex_attrib_i4ui(|s, a| gl::vertex_attrib_i4ui(
         uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), uint(s, a, 3), uint(s, a, 4)));
-    delete_query(|_s, a| gl::delete_query(name(a, 0)));
-    begin_query(|s, a| gl::begin_query(uint(s, a, 0), name(a, 1)));
+    delete_query(|_s, a| gl::delete_query(name(a, 0, KIND_QUERY)));
+    begin_query(|s, a| gl::begin_query(uint(s, a, 0), name(a, 1, KIND_QUERY)));
     end_query(|s, a| gl::end_query(uint(s, a, 0)));
-    delete_transform_feedback(|_s, a| gl::delete_transform_feedback(name(a, 0)));
+    delete_transform_feedback(|_s, a| gl::delete_transform_feedback(name(a, 0, KIND_TRANSFORM_FEEDBACK)));
 }
 
 pub(crate) fn create_vertex_array(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
@@ -70,19 +70,19 @@ pub(crate) fn create_transform_feedback(s: &mut Scope<'_>, this: &Value, _a: &[V
 }
 
 pub(crate) fn is_vertex_array(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_vertex_array)
+    is_object(s, t, a, gl::is_vertex_array, KIND_VERTEX_ARRAY)
 }
 
 pub(crate) fn is_sampler(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_sampler)
+    is_object(s, t, a, gl::is_sampler, KIND_SAMPLER)
 }
 
 pub(crate) fn is_query(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_query)
+    is_object(s, t, a, gl::is_query, KIND_QUERY)
 }
 
 pub(crate) fn is_transform_feedback(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_transform_feedback)
+    is_object(s, t, a, gl::is_transform_feedback, KIND_TRANSFORM_FEEDBACK)
 }
 
 pub(crate) fn draw_arrays_instanced(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
@@ -303,7 +303,11 @@ pub(crate) fn bind_buffer_base(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> 
     let g = current(s, this)?;
     let target = uint(s, a, 0);
     let index = uint(s, a, 1);
-    let buffer = if a.len() >= 3 { name(a, 2) } else { 0 };
+    let buffer = if a.len() >= 3 {
+        name(a, 2, KIND_BUFFER)
+    } else {
+        0
+    };
     if !indexed_target_ok(target) {
         g.st.borrow_mut().injected_error = INVALID_ENUM;
         return undefined();
@@ -316,7 +320,11 @@ pub(crate) fn bind_buffer_range(s: &mut Scope<'_>, this: &Value, a: &[Value]) ->
     let g = current(s, this)?;
     let target = uint(s, a, 0);
     let index = uint(s, a, 1);
-    let buffer = if a.len() >= 3 { name(a, 2) } else { 0 };
+    let buffer = if a.len() >= 3 {
+        name(a, 2, KIND_BUFFER)
+    } else {
+        0
+    };
     let offset = int(s, a, 3);
     let size = int(s, a, 4);
     if !indexed_target_ok(target) {
@@ -442,14 +450,16 @@ pub(crate) fn clear_bufferfi(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> Js
 pub(crate) fn get_uniform_block_index(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     let index = string_arg(s, a, 1, 2).map_or(INVALID_INDEX, |block| {
-        gl::get_uniform_block_index(name(a, 0), &block)
+        gl::get_uniform_block_index(name(a, 0, KIND_PROGRAM), &block)
     });
     Ok(uint_value(index))
 }
 
 pub(crate) fn get_frag_data_location(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
-    let loc = string_arg(s, a, 1, 2).map_or(-1, |out| gl::get_frag_data_location(name(a, 0), &out));
+    let loc = string_arg(s, a, 1, 2).map_or(-1, |out| {
+        gl::get_frag_data_location(name(a, 0, KIND_PROGRAM), &out)
+    });
     Ok(Value::int(loc))
 }
 
@@ -613,7 +623,7 @@ pub(crate) fn tex_sub_image_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> 
 pub(crate) fn get_query_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     let pname = uint(s, a, 1);
-    let v = gl::get_query_objectui(name(a, 0), pname);
+    let v = gl::get_query_objectui(name(a, 0, KIND_QUERY), pname);
     if pname == QUERY_RESULT_AVAILABLE {
         return Ok(Value::boolean(v != 0));
     }
@@ -638,7 +648,14 @@ pub(crate) fn end_transform_feedback(s: &mut Scope<'_>, this: &Value, _a: &[Valu
 pub(crate) fn bind_transform_feedback(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     let target = uint(s, a, 0);
-    gl::bind_transform_feedback(target, if a.len() >= 2 { name(a, 1) } else { 0 });
+    gl::bind_transform_feedback(
+        target,
+        if a.len() >= 2 {
+            name(a, 1, KIND_TRANSFORM_FEEDBACK)
+        } else {
+            0
+        },
+    );
     g.st.borrow_mut().elem_data.clear();
     undefined()
 }
@@ -680,7 +697,7 @@ pub(crate) fn transform_feedback_varyings(
     }
     let names = string_list(s, &a[1], n);
     let mode = uint(s, a, 2);
-    gl::transform_feedback_varyings(name(a, 0), &names, mode);
+    gl::transform_feedback_varyings(name(a, 0, KIND_PROGRAM), &names, mode);
     undefined()
 }
 
@@ -710,7 +727,7 @@ pub(crate) fn get_active_uniforms(s: &mut Scope<'_>, this: &Value, a: &[Value]) 
         indices.push(v as u32);
     }
     let pname = uint(s, a, 2);
-    let out = gl::get_active_uniforms(name(a, 0), &indices, pname);
+    let out = gl::get_active_uniforms(name(a, 0, KIND_PROGRAM), &indices, pname);
     number_array(s, out.into_iter().map(Value::int))
 }
 
@@ -720,7 +737,7 @@ pub(crate) fn get_active_uniform_block_parameter(
     a: &[Value],
 ) -> JsResult {
     let _g = current(s, this)?;
-    let program = name(a, 0);
+    let program = name(a, 0, KIND_PROGRAM);
     let index = uint(s, a, 1);
     let pname = uint(s, a, 2);
     if pname == UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES {
@@ -748,7 +765,7 @@ pub(crate) fn get_active_uniform_block_name(
     a: &[Value],
 ) -> JsResult {
     let _g = current(s, this)?;
-    let program = name(a, 0);
+    let program = name(a, 0, KIND_PROGRAM);
     let index = uint(s, a, 1);
     let block = gl::get_active_uniform_block_name(program, index);
     Ok(s.string_from_bytes(&block))
@@ -764,7 +781,7 @@ pub(crate) fn get_uniform_indices(s: &mut Scope<'_>, this: &Value, a: &[Value]) 
         return Ok(s.new_array());
     }
     let names = string_list(s, &a[1], n);
-    let indices = gl::get_uniform_indices(name(a, 0), &names);
+    let indices = gl::get_uniform_indices(name(a, 0, KIND_PROGRAM), &names);
     number_array(s, indices.into_iter().map(uint_value))
 }
 
@@ -803,7 +820,9 @@ pub(crate) fn delete_sync(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
     };
     if let Some(sync) = sync_of(&g, v) {
         gl::delete_sync(sync);
-        g.st.borrow_mut().syncs.remove(&(name(a, 0) as i32));
+        g.st.borrow_mut()
+            .syncs
+            .remove(&(name(a, 0, KIND_SYNC) as i32));
     }
     undefined()
 }
@@ -865,7 +884,7 @@ pub(crate) fn get_indexed_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]
 
 pub(crate) fn get_sampler_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
-    let sampler = name(a, 0);
+    let sampler = name(a, 0, KIND_SAMPLER);
     let pname = uint(s, a, 1);
     match pname {
         TEXTURE_MAX_LOD | TEXTURE_MIN_LOD => Ok(Value::number(f64::from(

@@ -67,22 +67,28 @@ pub(crate) fn string_arg(
     bytes(s, &a[i])
 }
 
-pub(crate) fn name(args: &[Value], i: usize) -> u32 {
-    args.get(i).and_then(host::object_of).map_or(0, |(_, n)| n)
+fn owned(value: &Value, kind: u8) -> Option<u32> {
+    let (found, name, owner) = host::object_of(value)?;
+    let g = crate::context::active().upgrade()?;
+    if found == kind && owner == g.id {
+        return Some(name);
+    }
+    g.foreign_object.set(true);
+    None
+}
+
+pub(crate) fn name(args: &[Value], i: usize, kind: u8) -> u32 {
+    args.get(i).and_then(|v| owned(v, kind)).unwrap_or(0)
 }
 
 pub(crate) fn location(args: &[Value], i: usize) -> i32 {
-    match args.get(i).and_then(host::object_of) {
-        Some((KIND_LOCATION, n)) => n as i32,
-        _ => -1,
-    }
+    args.get(i)
+        .and_then(|v| owned(v, KIND_LOCATION))
+        .map_or(-1, |n| n as i32)
 }
 
 pub(crate) fn sync_id(v: &Value) -> Option<i32> {
-    match host::object_of(v) {
-        Some((KIND_SYNC, n)) => Some(n as i32),
-        _ => None,
-    }
+    owned(v, KIND_SYNC).map(|n| n as i32)
 }
 
 pub(crate) fn context(s: &mut Scope<'_>, this: &Value) -> Result<Rc<WebGl>, Value> {

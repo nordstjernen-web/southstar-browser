@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: WebGL calls check the kind and the owning context of every object
+  argument. `bindTexture` with a buffer, or with a texture from another
+  canvas, now raises `INVALID_OPERATION` instead of binding whichever object
+  had that number, which could be one of the context's internal drawing-buffer
+  objects (audit finding S-16).
 * Security: WebGL storage is zero-initialised. `bufferData(size)`,
   `texStorage2D`/`texStorage3D`,
   `renderbufferStorage`/`renderbufferStorageMultisample`, `copyTexImage2D`

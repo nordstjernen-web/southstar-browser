@@ -3,9 +3,10 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ptr;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use southstar_dom::WeakNode;
 use southstar_js_runtime::api::Page;
@@ -65,7 +66,11 @@ pub(crate) struct WebGl {
     pub(crate) version: i32,
     pub(crate) attrs: Attributes,
     pub(crate) st: RefCell<State>,
+    pub(crate) id: u64,
+    pub(crate) foreign_object: Cell<bool>,
 }
+
+static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
     static ACTIVE: RefCell<Weak<WebGl>> = const { RefCell::new(Weak::new()) };
@@ -478,6 +483,8 @@ impl WebGl {
             version,
             attrs,
             st: RefCell::new(st),
+            id: NEXT_CONTEXT_ID.fetch_add(1, Ordering::Relaxed),
+            foreign_object: Cell::new(false),
         });
         if !ok {
             return None;
