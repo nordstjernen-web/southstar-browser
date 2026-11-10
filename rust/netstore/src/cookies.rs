@@ -10,6 +10,11 @@ use crate::http_date;
 use crate::text::strtoll;
 
 const HTTP_ONLY: &[u8] = b"#HttpOnly_";
+const MAX_PAIR_BYTES: usize = 4096;
+const MAX_PER_DOMAIN: usize = 180;
+const MAX_IN_JAR: usize = 3000;
+
+type Identity = (Vec<u8>, Vec<u8>, Vec<u8>);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum SameSite {
@@ -105,8 +110,8 @@ pub fn header<'a>(
         &url.pathname
     };
     let is_https = url.protocol.eq_ignore_ascii_case(b"https:");
-    let mut order: Vec<Vec<u8>> = Vec::new();
-    let mut values: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    let mut sent: Vec<(Vec<u8>, Vec<u8>, usize)> = Vec::new();
+    let mut index: HashMap<Identity, usize> = HashMap::new();
     for contents in jars {
         for raw in contents.split(|&c| c == b'\n') {
             let mut line = raw.trim_ascii_end();
@@ -131,21 +136,26 @@ pub fn header<'a>(
                 && (expiry == 0 || expiry >= now)
                 && SameSite::of_line(&f).allowed_in(context);
             if matched && !f[5].is_empty() {
-                if !values.contains_key(f[5]) {
-                    order.push(f[5].to_vec());
+                let key = (f[5].to_vec(), f[0].to_ascii_lowercase(), f[2].to_vec());
+                match index.get(&key) {
+                    Some(&at) => sent[at].1 = f[6].to_vec(),
+                    None => {
+                        index.insert(key, sent.len());
+                        sent.push((f[5].to_vec(), f[6].to_vec(), f[2].len()));
+                    }
                 }
-                values.insert(f[5].to_vec(), f[6].to_vec());
             }
         }
     }
+    sent.sort_by_key(|(_, _, path_len)| core::cmp::Reverse(*path_len));
     let mut out = Vec::new();
-    for name in &order {
+    for (name, value, _) in &sent {
         if !out.is_empty() {
             out.extend_from_slice(b"; ");
         }
         out.extend_from_slice(name);
         out.push(b'=');
-        out.extend_from_slice(values.get(name).map_or(&b""[..], Vec::as_slice));
+        out.extend_from_slice(value);
     }
     (!out.is_empty()).then_some(out)
 }
@@ -274,6 +284,77 @@ pub struct Cookie {
     pub include_subdomains: bool,
     pub path: Vec<u8>,
     pub now: i64,
+    pub secure_origin: bool,
+}
+
+fn is_ip_literal(host: &[u8]) -> bool {
+    host.contains(&b':')
+        || (!host.is_empty() && host.iter().all(|c| c.is_ascii_digit() || *c == b'.'))
+}
+
+fn bare_domain(domain: &[u8]) -> &[u8] {
+    domain.strip_prefix(b".").unwrap_or(domain)
+}
+
+fn domains_overlap(a: &[u8], b: &[u8]) -> bool {
+    let (a, b) = (bare_domain(a), bare_domain(b));
+    let (long, short) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+    let tail = &long[long.len() - short.len()..];
+    tail.eq_ignore_ascii_case(short)
+        && (long.len() == short.len() || long[long.len() - short.len() - 1] == b'.')
+}
+
+fn shadows_secure(jar: &[u8], cookie: &Cookie) -> bool {
+    jar.split(|&c| c == b'\n').any(|line| {
+        let f = fields(line.strip_prefix(HTTP_ONLY).unwrap_or(line));
+        if f.len() < 7 || !f[3].eq_ignore_ascii_case(b"TRUE") {
+            return false;
+        }
+        let expiry = expiry_of(f[4]);
+        f[5] == cookie.name.as_slice()
+            && (expiry == 0 || expiry >= cookie.now)
+            && domains_overlap(f[0], &cookie.file_domain)
+            && path_matches(&cookie.path, f[2])
+    })
+}
+
+fn line_domain(line: &[u8]) -> &[u8] {
+    let line = line.strip_prefix(HTTP_ONLY).unwrap_or(line);
+    line.split(|&c| c == b'\t').next().unwrap_or_default()
+}
+
+fn is_cookie_line(line: &[u8]) -> bool {
+    !line.is_empty() && (line[0] != b'#' || line.starts_with(HTTP_ONLY))
+}
+
+fn evict_oldest(jar: Vec<u8>, domain: &[u8]) -> Vec<u8> {
+    let lines: Vec<&[u8]> = jar.split(|&c| c == b'\n').collect();
+    let cookies = lines.iter().filter(|line| is_cookie_line(line));
+    let in_jar = cookies.clone().count();
+    let in_domain = cookies
+        .filter(|line| line_domain(line).eq_ignore_ascii_case(domain))
+        .count();
+    let mut drop_domain = in_domain.saturating_sub(MAX_PER_DOMAIN);
+    let mut drop_any = (in_jar - drop_domain).saturating_sub(MAX_IN_JAR);
+    if drop_domain == 0 && drop_any == 0 {
+        return jar;
+    }
+    let mut out = Vec::with_capacity(jar.len());
+    for line in lines.iter().filter(|line| !line.is_empty()) {
+        if is_cookie_line(line) {
+            if drop_domain > 0 && line_domain(line).eq_ignore_ascii_case(domain) {
+                drop_domain -= 1;
+                continue;
+            }
+            if drop_any > 0 {
+                drop_any -= 1;
+                continue;
+            }
+        }
+        out.extend_from_slice(line);
+        out.push(b'\n');
+    }
+    out
 }
 
 pub fn parse(
@@ -291,7 +372,7 @@ pub fn parse(
     let eq = pair.iter().position(|&c| c == b'=').filter(|&e| e > 0)?;
     let name = trim_blanks(&pair[..eq]);
     let value = trim_blanks(&pair[eq + 1..]);
-    if name.is_empty() {
+    if name.is_empty() || name.len() + value.len() > MAX_PAIR_BYTES {
         return None;
     }
     let a = semi.map_or_else(Attributes::default, |s| parse_attributes(&cookie[s..], now));
@@ -320,7 +401,14 @@ pub fn parse(
             if !ok || d.is_empty() || is_public_suffix(&d.to_ascii_lowercase()) {
                 return None;
             }
-            ([&b"."[..], d].concat(), true)
+            if is_ip_literal(host) {
+                if !host.eq_ignore_ascii_case(d) {
+                    return None;
+                }
+                (host.clone(), false)
+            } else {
+                ([&b"."[..], d].concat(), true)
+            }
         }
         None => (host.clone(), false),
     };
@@ -336,6 +424,7 @@ pub fn parse(
         include_subdomains,
         path,
         now,
+        secure_origin: is_https,
     })
 }
 
@@ -348,8 +437,12 @@ pub fn store(jar: Option<&[u8]>, cookie: &Cookie, from_http: bool) -> Vec<u8> {
         include_subdomains,
         path,
         now,
+        secure_origin,
     } = cookie;
     if a.httponly && !from_http {
+        return jar.unwrap_or_default().to_vec();
+    }
+    if !secure_origin && shadows_secure(jar.unwrap_or_default(), cookie) {
         return jar.unwrap_or_default().to_vec();
     }
     let (name, value, file_domain, path, now) =
@@ -419,6 +512,7 @@ pub fn store(jar: Option<&[u8]>, cookie: &Cookie, from_http: bool) -> Vec<u8> {
         out.push(b'\t');
         out.extend_from_slice(a.same_site.name());
         out.push(b'\n');
+        return evict_oldest(out, file_domain);
     }
     out
 }
