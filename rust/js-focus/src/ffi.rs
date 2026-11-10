@@ -210,6 +210,10 @@ pub(crate) fn frame_sandbox_blocks_scripts(node: Element) -> bool {
     southstar_js_frames::sandbox_blocks_scripts(node)
 }
 
+pub(crate) fn frame_sandbox_blocks_downloads(node: Element) -> bool {
+    southstar_js_frames::sandbox_blocks_downloads(node)
+}
+
 pub(crate) fn frame_realm_window(scope: &Scope<'_>, iframe: Element) -> Value {
     (api::frames_hooks().frame_realm_window)(Page::current(scope), iframe)
 }

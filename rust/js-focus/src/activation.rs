@@ -2,7 +2,9 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::cell::Cell;
 use std::ffi::CString;
+use std::time::{Duration, Instant};
 
 use southstar_dom::ancestors;
 use southstar_js_engine::Scope;
@@ -137,6 +139,28 @@ fn run_javascript_url(js: Js, act: Element, code: &[u8]) {
     }
 }
 
+const UNPROMPTED_DOWNLOAD_GAP: Duration = Duration::from_secs(30);
+
+thread_local! {
+    static LAST_UNPROMPTED_DOWNLOAD: Cell<Option<Instant>> = const { Cell::new(None) };
+}
+
+fn download_permitted(js: Js) -> bool {
+    if js.has_transient_activation() {
+        return true;
+    }
+    let now = Instant::now();
+    LAST_UNPROMPTED_DOWNLOAD.with(|last| {
+        let allowed = last
+            .get()
+            .is_none_or(|then| now.duration_since(then) >= UNPROMPTED_DOWNLOAD_GAP);
+        if allowed {
+            last.set(Some(now));
+        }
+        allowed
+    })
+}
+
 fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
     let href = act.attr(c"href").map(|h| h.to_bytes().to_vec());
     if let Some(code) = href
@@ -153,6 +177,9 @@ fn activate_link(scope: &mut Scope<'_>, js: Js, act: Element) {
     }
     let resolved = ffi::anchor_resolved_href(js, act);
     if let Some(filename) = act.attr(c"download").map(CString::from) {
+        if ffi::frame_sandbox_blocks_downloads(act) || !download_permitted(js) {
+            return;
+        }
         let url = resolved.as_deref().unwrap_or(&href);
         if js.request_download(url, &filename) {
             return;
