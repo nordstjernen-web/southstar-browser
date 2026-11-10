@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Regular expressions stop at the script time limit: a search that
+  backtracks catastrophically (`/^(.*\d|^(.*|dR\b)+b)+? dYYYYYYYY|/` on a
+  40-character string runs for hours) now ends with the script when the
+  eval budget or the long-running script monitor fires, as a loop does,
+  instead of running past both and freezing the tab. regress calls Boa's
+  interrupt handler every 65,536 backtracks; searches without a handler are
+  unchanged. Found by the `js_builtins` fuzz target.
 * Java shell: `java/` is a web browser for the JVM and a Java library over
   Southstar's engine, ported from Nordstjernen Sol's Java shell. The Swing
   browser (`java -jar southstar-java.jar URL`) has back, forward, reload,

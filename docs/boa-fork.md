@@ -47,7 +47,7 @@ of each (`--crate boa_parser` limits it to one). On
 
 | Change | Files | Used by `rust/js-engine` for | Upstream? |
 | --- | --- | --- | --- |
-| `Context::set_interrupt_handler`, polled every 1024 loop back-edges and calls, stops a script with the uncatchable `RuntimeLimitError::Interrupted` | `vm/mod.rs`, `context/mod.rs`, `error/mod.rs`, `vm/opcode/iteration/loop_ops.rs` | halting a realm, a closing worker, the eval budget and the long-running script monitor (`rust/js-runtime/src/interrupt.rs`) | yes: a general embedder need |
+| `Context::set_interrupt_handler`, polled every 1024 loop back-edges and calls and every 65,536 backtracks of a regular expression search (`RegExpBuiltinExec` passes it to regress's `find_from*_interruptible`), stops a script with the uncatchable `RuntimeLimitError::Interrupted` | `vm/mod.rs`, `context/mod.rs`, `error/mod.rs`, `vm/opcode/iteration/loop_ops.rs`, `builtins/regexp/mod.rs` | halting a realm, a closing worker, the eval budget and the long-running script monitor (`rust/js-runtime/src/interrupt.rs`) | yes: a general embedder need |
 | `Context::set_native_stack_limit`: calls fail with the recursion error once the native stack, which host calls re-entering the VM grow, reaches the given depth below where it was set | `vm/mod.rs`, `context/mod.rs` | the page and worker runtimes' `RuntimeOptions::stack_size`, which lets them raise the call depth limit from 512 to 10,000 frames without overflowing the thread's stack (`boa/runtime.rs`) | yes: a general embedder need |
 | The call-depth and native-stack limits throw a catchable `RangeError` ("Maximum call stack size exceeded"), as V8 and SpiderMonkey do, instead of the uncatchable `RuntimeLimitError::Recursion` | `vm/mod.rs` | every page: scripts probe the stack depth or fall back from deep recursion by catching it (x.com's bot check recursed until it caught one) | yes: web compatibility |
 | The native-stack limit also covers parsing and the recursion that does not pass through a call, with the same `RangeError`: `Parser::set_native_stack_floor` makes the recursive productions (assignment, short-circuit, exponentiation, unary and member expressions, statements, statement list items, binding patterns) fail with `Error::StackExhausted`, and the loops that build left-nested trees (binary and comma operators, member and call chains) reserve 512 bytes of the limit per level for the passes that later recurse over the tree (scope analysis, early errors, compilation, drop); every engine call site passes the context's floor. `Context::check_native_stack` guards `JSON.stringify`, the `JSON.parse` reviver, `Array.prototype.flat`/`flatMap`, the prototype-chain step of `[[Get]]`, `[[Set]]` and `[[HasProperty]]`, every proxy internal method and bound function calls | `boa_parser`: `error/mod.rs`, `parser/{mod,cursor/mod}.rs`, `expression/{mod,unary}.rs`, `expression/assignment/{mod,exponentiation}.rs`, `expression/left_hand_side/{member,call}.rs`, `statement/mod.rs`; `boa_engine`: `vm/mod.rs`, `error/mod.rs`, `script.rs`, `module/mod.rs`, `builtins/{eval,function,shadow_realm,json,array,proxy}/mod.rs`, `builtins/function/bound.rs`, `object/internal_methods/mod.rs` | every page: 330 nested array literals, 150 nested functions, a 24,000-term `+` chain, `JSON.stringify` of 8,000 nested arrays or a 40,000-object prototype chain overflowed the renderer's 8 MiB stack and killed the tab | yes: robustness |
@@ -201,7 +201,7 @@ of the **0.12.0** release (crates.io sha256
 library name `regress` kept. `rust/css`, `rust/extensions`, `boa_engine` and
 `boa_parser` depend on it, so the tree builds one copy of the engine.
 
-The fork adds one thing: a backtracking budget. `Regex::find_with_backtrack_limit`
+The fork adds two things. The first is a backtracking budget. `Regex::find_with_backtrack_limit`
 searches like `Regex::find` but returns `Err(BacktrackLimitExceeded)` once the
 classical backtracker has backtracked the given number of times
 (`MatchAttempter::backtracks_left` in `classicalbacktrack.rs`, counted in
@@ -209,4 +209,14 @@ classical backtracker has backtracked the given number of times
 matches the HTML `pattern` attribute with a limit of 100,000 backtracks,
 because the style system evaluates it for `:valid` and `:invalid` without
 any script running, and regress has no other bound on catastrophic
-backtracking. `scripts/boa-fork-diff.py --crate regress` shows the patch.
+backtracking.
+
+The second is an interrupt callback. `Regex::find_from_interruptible` and its
+`_utf16` and `_ucs2` variants find the first match at or after a start index
+like `find_from`, but call a `Rc<dyn Fn() -> bool>` every 65,536 backtracks
+(`MatchAttempter::interrupted`) and return `Err(Interrupted)` once it returns
+true. Boa passes its interrupt handler, so the eval budget and the
+long-running script monitor stop a script stuck in a regular expression that
+backtracks catastrophically, as they stop one stuck in a loop; before, a
+single search ran to the end, hours for a 40-character subject.
+`scripts/boa-fork-diff.py --crate regress` shows the patch.
