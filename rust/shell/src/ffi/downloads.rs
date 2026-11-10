@@ -91,6 +91,8 @@ fn fetch(fetch: &Fetch) -> Option<u64> {
     Some(body.len() as u64)
 }
 
+const MAX_RUNNING: usize = 4;
+
 fn begin(row: Rc<Row>, job: Fetch) {
     static NEXT_ID: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
     let id = NEXT_ID.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
@@ -99,7 +101,15 @@ fn begin(row: Rc<Row>, job: Fetch) {
         progress.pulse();
         ControlFlow::Continue(())
     })));
-    RUNNING.with_borrow_mut(|running| running.insert(id, row));
+    let busy = RUNNING.with_borrow_mut(|running| {
+        let busy = running.len() >= MAX_RUNNING;
+        running.insert(id, row);
+        busy
+    });
+    if busy {
+        finish(id, None);
+        return;
+    }
     let started = std::thread::Builder::new()
         .name("ns-download".into())
         .spawn(move || {

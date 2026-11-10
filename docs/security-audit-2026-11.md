@@ -370,6 +370,17 @@ memory or fill the Downloads directory. The shell also trusts the
 renderer-reported page URL when deciding that a `file:` download is allowed.
 Filename sanitising is sound.
 
+**Status: partly fixed, not exercised.** A click on `<a download>` without
+transient user activation starts at most one download every 30 seconds per
+renderer, a sandboxed frame without `allow-downloads` starts none, and the
+shell runs at most four downloads at once; further ones fail in the downloads
+list. The `file:` concern is already covered: the shell accepts a local page
+only for a load it started itself (`pending_local` in
+`rust/shell/src/ffi/procview_result.rs`). **Still open:** a download is still
+read whole into the shell's memory, up to 1 GiB each; streaming to a file
+needs a streaming sink in `rust/net`. Headless mode does not surface download
+requests, so this was built and smoke-run only.
+
 **Fix.** Require user activation, or one prompt per origin for repeated
 downloads; honour `allow-downloads`; stream to a temporary file under a size
 cap; have the shell allow `file:` downloads only in a tab it navigated to a

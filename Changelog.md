@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: downloads. A page can no longer start a stream of downloads from
+  script: without a recent user gesture, a click on a download link starts at
+  most one download every 30 seconds, a sandboxed frame needs `allow-
+  downloads`, and the browser runs at most four downloads at a time (audit
+  finding S-08, partly fixed).
 * Security: a WebSocket opened from a cross-site frame no longer sends the
   embedding site's `SameSite=Lax` and `Strict` cookies, and an HTTPS frame
   inside an HTTP page can no longer open `ws://` (audit finding S-07).
