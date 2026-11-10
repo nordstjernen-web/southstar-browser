@@ -6,6 +6,7 @@ mod args;
 mod buffers;
 mod consts;
 mod context;
+mod essl;
 pub(crate) mod ffi;
 mod fresh;
 mod install;

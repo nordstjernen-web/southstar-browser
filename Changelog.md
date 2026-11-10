@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: WebGL shader source is checked before the GPU driver compiles it.
+  Characters outside the GLSL ES set, over-long tokens, identifiers reserved
+  by WebGL, very deep nesting, a desktop `#version` and macros that expand
+  without bound are refused with a compile error (audit finding S-17, partly
+  fixed).
 * Security: the video helper's shared frame ring sizes are computed with
   overflow checks, and on Windows a shared mapping that already exists under
   the helper's name is refused instead of silently reused (audit finding S-15,

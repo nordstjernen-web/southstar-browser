@@ -8,6 +8,7 @@ use crate::args::*;
 use crate::buffers::ELEMENT_SLOT;
 use crate::consts::*;
 use crate::context::WebGl;
+use crate::essl;
 use crate::ffi::gl;
 use crate::ffi::host::{self, GlObject};
 use crate::fresh;
@@ -447,14 +448,18 @@ fn with_version_prefix(source: Vec<u8>) -> Vec<u8> {
 }
 
 pub(crate) fn shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
-    let _g = current(s, this)?;
+    let g = current(s, this)?;
     if a.len() < 2 {
         return undefined();
     }
     if let Some(source) = bytes(s, &a[1])
         && source.len() <= MAX_SHADER
     {
-        gl::shader_source(name(a, 0, KIND_SHADER), &with_version_prefix(source));
+        let checked = match essl::violation(&source, g.version) {
+            Some(reason) => essl::rejected_source(reason),
+            None => with_version_prefix(source),
+        };
+        gl::shader_source(name(a, 0, KIND_SHADER), &checked);
     }
     undefined()
 }
