@@ -81,6 +81,12 @@ pub fn report_uncaught(js: Option<Page>, exception: &Value, origin: Option<&str>
     }
 }
 
+pub fn report_muted_error(js: Option<Page>) {
+    if let Some(js) = live(js) {
+        crate::errors::report_error_event(js, Some("Script error."), None, 0, 0, &Value::null());
+    }
+}
+
 pub fn report_handler_exception(
     js: Option<Page>,
     scope: &mut Scope<'_>,

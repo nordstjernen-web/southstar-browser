@@ -150,6 +150,7 @@ pub fn install_runtime_hooks() {
         window_for_document: crate::api::window_for_document,
         fire_element_handlers: crate::api::fire_element_handlers,
         report_uncaught: crate::api::report_uncaught,
+        report_muted_error: crate::api::report_muted_error,
         report_handler_exception: crate::api::report_handler_exception,
         init_flags: crate::api::init_flags,
     });

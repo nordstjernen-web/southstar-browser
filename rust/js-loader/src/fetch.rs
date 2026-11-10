@@ -189,7 +189,19 @@ fn run_external(
         }
         Some(body) => {
             if !body.is_empty() {
-                js.eval_script_source(n, body, Some(&abs_url), ScriptKind::of(is_module, true));
+                let shares_errors = n.attr(c"crossorigin").is_some();
+                let muted = !is_module
+                    && origin
+                        .zip(fetched.response.as_ref())
+                        .is_some_and(|(origin, resp)| {
+                            let document = origin.to_bytes();
+                            let shared = resp.same_origin_as(document, &abs_url)
+                                || (shares_errors && resp.readable_from(document, &abs_url));
+                            !shared
+                        });
+                crate::eval::with_muted_errors(muted, || {
+                    js.eval_script_source(n, body, Some(&abs_url), ScriptKind::of(is_module, true));
+                });
             }
             loaded = true;
         }
@@ -240,7 +252,9 @@ pub(crate) fn run_script_element(js: Js, n: Node, origin: Option<&CStr>) {
             js.log(&line(&[b"CSP blocked: inline <script> on ", shown(origin)]));
             continue;
         }
-        js.eval_script_source(n, text, origin, ScriptKind::of(is_module, false));
+        crate::eval::with_muted_errors(false, || {
+            js.eval_script_source(n, text, origin, ScriptKind::of(is_module, false));
+        });
     }
 }
 
