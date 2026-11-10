@@ -97,11 +97,6 @@ Southstar Browser 1.0.9-dev:
   events and promises no longer lead to the embedder's prototypes. Interfaces
   defined in script are still shared between a frame and its embedder (audit
   finding S-01, partly fixed).
-* Security audit: `docs/security-audit-2026-11.md` records a source review
-  of the tree for security vulnerabilities — twenty findings with their
-  files, severity and fixes, led by cross-origin frames sharing live objects
-  with their embedder — and the areas the review did not reach. No code
-  changes.
 * Regular expressions stop at the script time limit: a search that
   backtracks catastrophically (`/^(.*\d|^(.*|dR\b)+b)+? dYYYYYYYY|/` on a
   40-character string runs for hours) now ends with the script when the
