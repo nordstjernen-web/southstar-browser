@@ -91,8 +91,23 @@ fn v4_is_public(ip: Ipv4Addr) -> bool {
         || a >= 240)
 }
 
+fn embedded_v4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let joined = |high: u16, low: u16| Ipv4Addr::from((u32::from(high) << 16) | u32::from(low));
+    match ip.segments() {
+        [0x64, 0xff9b, 0, 0, 0, 0, high, low] | [0x64, 0xff9b, 1, _, _, _, high, low] => {
+            Some(joined(high, low))
+        }
+        [0x2002, high, low, ..] => Some(joined(high, low)),
+        [0x2001, 0, _, _, _, _, high, low] => Some(joined(!high, !low)),
+        _ => None,
+    }
+}
+
 fn v6_is_public(ip: Ipv6Addr) -> bool {
     if let Some(v4) = ip.to_ipv4_mapped() {
+        return v4_is_public(v4);
+    }
+    if let Some(v4) = embedded_v4(ip) {
         return v4_is_public(v4);
     }
     let first = ip.segments()[0];

@@ -343,6 +343,13 @@ impl JsArrayBuffer {
     pub fn data_mut(&self) -> Option<GcRefMut<'_, [u8]>> {
         GcRefMut::try_map(self.inner.borrow_mut(), |o| o.data_mut().bytes_mut())
     }
+
+    /// Whether this is an immutable `ArrayBuffer`, which a host must not write to either.
+    #[inline]
+    #[must_use]
+    pub fn is_immutable(&self) -> bool {
+        self.inner.borrow().data().is_immutable()
+    }
 }
 
 impl From<JsArrayBuffer> for JsObject {

@@ -997,6 +997,9 @@ impl Scope<'_> {
     ) -> Option<R> {
         let object = value.0.as_object()?.clone();
         if let Ok(buffer) = JsArrayBuffer::from_object(object.clone()) {
+            if buffer.is_immutable() {
+                return None;
+            }
             let mut data = buffer.data_mut()?;
             return Some(f(&mut data));
         }
@@ -1005,6 +1008,9 @@ impl Scope<'_> {
         let length = array.byte_length(self.cx()).ok()?;
         let buffer =
             JsArrayBuffer::from_object(array.buffer(self.cx()).ok()?.as_object()?.clone()).ok()?;
+        if buffer.is_immutable() {
+            return None;
+        }
         let mut data = buffer.data_mut()?;
         let bytes = data.get_mut(byte_offset..byte_offset.checked_add(length)?)?;
         Some(f(bytes))

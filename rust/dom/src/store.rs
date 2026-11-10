@@ -131,7 +131,7 @@ pub(crate) fn drop_attr(slot: &'static AttrSlot) {
 #[derive(Clone, Copy)]
 pub struct WeakNode {
     slot: &'static NodeSlot,
-    generation: u32,
+    generation: u64,
 }
 
 impl WeakNode {

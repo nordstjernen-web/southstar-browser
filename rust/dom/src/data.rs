@@ -434,7 +434,7 @@ impl AttrSlot {
 }
 
 pub(crate) struct NodeSlot {
-    pub(crate) generation: Cell<u32>,
+    pub(crate) generation: Cell<u64>,
     pub(crate) kind: Cell<Kind>,
     pub(crate) flags: Cell<u32>,
     pub(crate) attr_gen: Cell<u32>,
