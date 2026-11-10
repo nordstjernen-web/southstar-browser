@@ -19,6 +19,8 @@ pub struct Target {
 }
 
 pub fn parse_target(url: &[u8]) -> Option<Target> {
+    let canonical = southstar_url::bytes::resolve(None, url)?;
+    let url = canonical.as_slice();
     let (https, rest) = if url.len() > 8 && url[..8].eq_ignore_ascii_case(b"https://") {
         (true, &url[8..])
     } else if url.len() > 7 && url[..7].eq_ignore_ascii_case(b"http://") {
@@ -85,89 +87,8 @@ pub fn parse_target(url: &[u8]) -> Option<Target> {
     })
 }
 
-fn has_scheme(s: &[u8]) -> bool {
-    match s.iter().position(|&c| c == b':') {
-        Some(i) if i > 0 => {
-            s[0].is_ascii_alphabetic()
-                && s[..i]
-                    .iter()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'+' | b'-' | b'.'))
-        }
-        _ => false,
-    }
-}
-
-fn remove_dots(path: &[u8]) -> Vec<u8> {
-    let mut out: Vec<&[u8]> = Vec::new();
-    let segments: Vec<&[u8]> = path.split(|&c| c == b'/').collect();
-    let last = segments.len().saturating_sub(1);
-    for (i, seg) in segments.iter().enumerate() {
-        match *seg {
-            b"." => {
-                if i == last {
-                    out.push(b"");
-                }
-            }
-            b".." => {
-                if out.len() > 1 {
-                    out.pop();
-                }
-                if i == last {
-                    out.push(b"");
-                }
-            }
-            s => out.push(s),
-        }
-    }
-    out.join(&b'/')
-}
-
 pub fn resolve(base: &[u8], location: &[u8]) -> Option<Vec<u8>> {
-    let location = location.trim_ascii();
-    if has_scheme(location) {
-        return Some(location.to_vec());
-    }
-    let scheme_end = base.windows(3).position(|w| w == b"://")? + 3;
-    if let Some(rest) = location.strip_prefix(b"//") {
-        return Some([&base[..scheme_end], rest].concat());
-    }
-    let after = &base[scheme_end..];
-    let authority_end = scheme_end
-        + after
-            .iter()
-            .position(|&c| matches!(c, b'/' | b'?' | b'#'))
-            .unwrap_or(after.len());
-    let origin = &base[..authority_end];
-    let base_path_full = &base[authority_end..];
-    let base_path_full = &base_path_full[..base_path_full
-        .iter()
-        .position(|&c| c == b'#')
-        .unwrap_or(base_path_full.len())];
-    let query_at = base_path_full.iter().position(|&c| c == b'?');
-    let base_path = &base_path_full[..query_at.unwrap_or(base_path_full.len())];
-    if location.is_empty() {
-        return Some([origin, base_path_full].concat());
-    }
-    if location[0] == b'?' {
-        return Some([origin, base_path, location].concat());
-    }
-    if location[0] == b'#' {
-        return Some([origin, base_path_full, location].concat());
-    }
-    let (loc_path, loc_tail) = match location.iter().position(|&c| c == b'?' || c == b'#') {
-        Some(i) => location.split_at(i),
-        None => (location, &b""[..]),
-    };
-    let merged = if loc_path.first() == Some(&b'/') {
-        loc_path.to_vec()
-    } else {
-        let dir = match base_path.iter().rposition(|&c| c == b'/') {
-            Some(i) => &base_path[..=i],
-            None => b"/",
-        };
-        [dir, loc_path].concat()
-    };
-    Some([origin, &remove_dots(&merged), loc_tail].concat())
+    southstar_url::bytes::resolve(Some(base), location.trim_ascii())
 }
 
 pub struct Route {

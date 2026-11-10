@@ -2392,6 +2392,7 @@ dependencies = [
  "ruzstd",
  "southstar-http-wire",
  "southstar-unicode",
+ "southstar-url",
  "zeroize",
 ]
 

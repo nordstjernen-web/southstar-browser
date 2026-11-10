@@ -129,7 +129,7 @@ impl Handler for Transfer<'_> {
     }
 
     fn body(&mut self, data: &[u8]) -> bool {
-        if self.source.shared.exiting() || self.parser.fatal {
+        if self.source.shared.exiting() || self.parser.fatal || !self.parser.opened {
             return false;
         }
         let source = Arc::clone(&self.source);
