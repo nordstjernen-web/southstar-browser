@@ -251,11 +251,6 @@ impl Ctx {
         self.try_enter(|scope| scope.new_object_with_proto(prototype))
     }
 
-    pub fn new_object(self) -> Value {
-        self.try_enter(|scope| scope.new_object())
-            .unwrap_or_else(Value::undefined)
-    }
-
     pub fn eval_hidden(self, source: &str, name: &CStr) -> Option<Value> {
         let name = name.to_string_lossy();
         self.try_enter(|scope| scope.eval_native_script(source, &name).ok())

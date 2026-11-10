@@ -16,8 +16,6 @@ use crate::sandbox;
 pub(crate) struct FrameRealm {
     pub ctx: Ctx,
     pub window: Value,
-    pub location: Value,
-    pub history: Value,
 }
 
 pub(crate) fn frame_of(node: Node<'_>) -> Frame {
@@ -110,7 +108,7 @@ fn run_global_bootstrap(
     window: &Value,
     parent_global: &Value,
     urls: FrameUrls<'_>,
-) -> Option<(Value, Value)> {
+) -> Option<()> {
     let FrameUrls {
         initial_url,
         doc_url,
@@ -153,10 +151,7 @@ fn run_global_bootstrap(
         navigate,
     ];
     let result = fctx.call(&maker, &Value::undefined(), &args)?;
-    if !result.is_object() {
-        return None;
-    }
-    Some((fctx.get(&result, "location"), fctx.get(&result, "history")))
+    result.is_object().then_some(())
 }
 
 pub(crate) fn make_realm_context(
@@ -185,7 +180,7 @@ pub(crate) fn make_realm_context(
     cloner::prepare_frame_realm(js, fctx, document);
     let window = fctx.global();
     let parent_global = parent_realm(js, iframe).global();
-    let (location, history) = run_global_bootstrap(
+    run_global_bootstrap(
         js,
         fctx,
         iframe,
@@ -200,12 +195,7 @@ pub(crate) fn make_realm_context(
     )?;
     cloner::install_singletons(js, fctx, &parent_global, &window);
     ffi::finish_frame_realm(js, fctx, &window, &parent_global);
-    Some(FrameRealm {
-        ctx: fctx,
-        window,
-        location,
-        history,
-    })
+    Some(FrameRealm { ctx: fctx, window })
 }
 
 pub(crate) fn store_window(js: Js, iframe: Node<'_>, window: &Value) {

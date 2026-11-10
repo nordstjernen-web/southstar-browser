@@ -155,6 +155,13 @@ Separately, `run_modules` redefines `window`, `self`, `top`, `parent`,
 `document`, `location` and `history` on that realm's global for the duration
 of a frame's module evaluation, including microtask drains.
 
+**Status: fixed.** A cross-origin frame, or a sandboxed one without `allow-
+same-origin`, whose realm could not be made now runs no script at all, classic
+or module. A frame that has a realm runs its modules there directly; the
+embedder's `window`, `document`, `location` and `history` are no longer
+swapped for the frame's while they evaluate. Checked headless with module
+scripts in a cross-origin and a same-origin frame.
+
 **Fix.** Fail closed: a cross-origin frame, or a sandboxed one without
 `allow-same-origin`, runs no script when it has no realm. Remove the global
 swapping in `run_modules` now that modules evaluate in the frame realm.
