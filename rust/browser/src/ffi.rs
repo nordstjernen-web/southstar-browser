@@ -285,7 +285,20 @@ impl NsBrowser {
         }
     }
 
+    pub fn release_layout_before_styles(&self) {
+        if self.layout().is_none() {
+            return;
+        }
+        self.search_active.set(None);
+        self.selection_clear();
+        if let Some(js) = self.js() {
+            js.set_layout_root(None);
+        }
+        self.take_layout();
+    }
+
     pub fn drop_styles(&self) {
+        self.release_layout_before_styles();
         drop(self.styles.take());
     }
 

@@ -687,6 +687,14 @@ that keep this sound (`rust/browser/src/page.rs:157–162`,
 and `compute_cascade()` are public and replace the map without touching the
 layout.
 
+**Status: mitigated.** `NsBrowser::drop_styles` and `compute_cascade`, the two
+places that drop or replace the style map, now release the layout first (with
+the selection, search highlight and script layout root that point into it), so
+a caller that forgets the order gets a page without a layout until the next
+relayout, not boxes pointing at recycled styles. Boxes still hold raw style
+pointers, and changing a style in place after layout is still prevented only
+by where the engine does it.
+
 **Fix.** Boxes hold a `RetainedStyle`, as SVG already does, or the layout
 root holds the `Rc<StyleMap>`.
 

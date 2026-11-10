@@ -64,6 +64,7 @@ impl NsBrowser {
     pub fn compute_cascade(&self) {
         let base = self.base_url.get();
         let styles = southstar_engine::compute_cascade(&self.engine_page(base.as_deref()));
+        self.release_layout_before_styles();
         self.styles.replace(Some(styles));
     }
 
