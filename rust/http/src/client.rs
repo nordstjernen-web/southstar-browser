@@ -533,6 +533,9 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
             break;
         };
         let line = buf[start..end].to_vec();
+        if line.iter().any(|&b| matches!(b, 0 | 0x0a | 0x0d)) {
+            return false;
+        }
         if line.is_empty() {
             if t.informational {
                 t.informational = false;
@@ -561,6 +564,9 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
             t.h1_header_line(&line);
         }
     }
+    if !headers_complete {
+        return false;
+    }
     let first_byte = t.ms_since_start();
     t.first_byte_ms = Some(first_byte);
     if request_method(req).eq_ignore_ascii_case(b"HEAD") || t.status == 204 || t.status == 304 {
@@ -568,6 +574,7 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
     }
     let mut decoder = chunked.then(h1::Chunked::new);
     let mut received: i64 = 0;
+    let mut truncated = false;
     let mut pending = if headers_complete && pos < buf.len() {
         buf[pos..].to_vec()
     } else {
@@ -580,6 +587,7 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
             if let Some(chunks) = decoder.as_mut() {
                 let mut body = Vec::new();
                 if chunks.feed(&data, &mut body).is_err() {
+                    truncated = true;
                     break;
                 }
                 data = body;
@@ -610,11 +618,14 @@ fn run_http1(req: &Request, stream: &mut Stream, t: &mut Transfer, with_cookie: 
         };
         match n {
             Some(n) if n > 0 => pending.extend_from_slice(&tmp[..n]),
-            _ => break,
+            _ => {
+                truncated = decoder.is_some() || content_length.is_some();
+                break;
+            }
         }
     }
     t.finish();
-    status_parsed
+    status_parsed && !truncated
 }
 
 #[derive(Default)]
@@ -1163,11 +1174,22 @@ fn is_one_token(text: &[u8]) -> bool {
     !text.is_empty() && text.iter().all(|&b| b > 0x20 && b != 0x7f)
 }
 
+const BAD_PORTS: [u16; 83] = [
+    0, 1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101,
+    102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427,
+    465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990,
+    993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667,
+    6668, 6669, 6679, 6697, 10080,
+];
+
 fn target_is_sound(req: &Request) -> bool {
-    is_one_token(req.path) && is_one_token(req.authority) && is_one_token(req.host.as_bytes())
+    is_one_token(req.path)
+        && is_one_token(req.authority)
+        && is_one_token(req.host.as_bytes())
+        && !BAD_PORTS.contains(&req.port)
 }
 
-const UNSOUND_TARGET: &str = "request target contains a space or control character";
+const UNSOUND_TARGET: &str = "request target has a restricted port, a space or a control character";
 
 pub(crate) fn perform_unchecked(req: &Request, handler: &mut dyn Handler) -> Outcome {
     if !target_is_sound(req) {

@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: the HTTP client is stricter about what a server or a redirect
+  may hand it. Redirects followed by `southstar_http::fetch` (EventSource,
+  the media helpers, Safe Browsing, DNS over HTTPS) are resolved and split
+  into host and path by the URL parser every other check uses, instead of a
+  second hand-written one that disagreed about backslashes and `@`, which
+  let a redirect pass a same-origin check while connecting elsewhere. A
+  response header line with a bare CR, LF or NUL fails the response. An
+  HTTP/1.1 response that ends before its headers are complete, before its
+  `Content-Length` is reached or before the last chunk is a failed transfer
+  and is not cached. Requests to the Fetch standard's restricted ports
+  (25, 110, 6667 and the rest) are refused. An EventSource delivers nothing
+  from a response that did not open the stream.
 * Security: `new WebSocket(url)` and `new EventSource(url)` throw a
   `SyntaxError` for an address the URL parser rejects. They used to fall
   back to the string as written, which a second, lenient parser then split
