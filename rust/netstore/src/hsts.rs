@@ -20,6 +20,7 @@ pub type Hosts = HashMap<Vec<u8>, Entry>;
 
 const UNLIMITED: &[u8] = b"unlimited";
 const LAST_EXPIRY: i64 = 253_402_300_799;
+const MAX_ENTRIES: usize = 10_000;
 
 pub fn parse_list(content: &[u8]) -> Hosts {
     let mut hosts = HashMap::new();
@@ -200,6 +201,28 @@ pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: 
         out.extend_from_slice(host);
         out.push(b' ');
         out.extend_from_slice(&expiry_text(now.saturating_add(max_age).min(LAST_EXPIRY)));
+        out.push(b'\n');
+    }
+    newest_entries(out)
+}
+
+fn is_entry(line: &[u8]) -> bool {
+    !line.is_empty() && line[0] != b'#'
+}
+
+fn newest_entries(list: Vec<u8>) -> Vec<u8> {
+    let entries = list.split(|&c| c == b'\n').filter(|l| is_entry(l)).count();
+    let mut excess = entries.saturating_sub(MAX_ENTRIES);
+    if excess == 0 {
+        return list;
+    }
+    let mut out = Vec::with_capacity(list.len());
+    for line in list.split(|&c| c == b'\n').filter(|l| !l.is_empty()) {
+        if excess > 0 && is_entry(line) {
+            excess -= 1;
+            continue;
+        }
+        out.extend_from_slice(line);
         out.push(b'\n');
     }
     out

@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: smaller hardening from the audit. The embedder's private-address
+  policy sees the IPv4 address inside NAT64, 6to4 and Teredo IPv6 addresses;
+  the HSTS list keeps its newest 10,000 hosts; a freed DOM node's weak handles
+  cannot come back to life after 2^31 reuses of its slot; and
+  `crypto.getRandomValues`, `readPixels` and other host writes refuse an
+  immutable `ArrayBuffer` (audit finding S-21).
 * Hardening: dropping or recomputing a page's computed styles releases its
   layout first, so layout boxes can never be left pointing at freed styles
   (audit finding S-20).

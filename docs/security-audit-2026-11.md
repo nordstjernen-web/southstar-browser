@@ -34,29 +34,37 @@ medium findings (uninitialised memory, a bounds check that a deleted buffer
 defeats), and the cookie store lets a plain-HTTP response replace a `Secure`
 cookie.
 
-| ID | Severity | Confidence | Finding |
-|----|----------|------------|---------|
-| S-01 | High | Confirmed (not executed) | Cross-origin frames exchange live object references with their embedder |
-| S-02 | Medium | Needs verification | Frame scripts run in the embedder's realm when no frame realm can be made |
-| S-03 | Medium | Confirmed | Cookie store: insecure origin overwrites `Secure` cookies; no size or count limits |
-| S-04 | Medium | Confirmed / driver-dependent | WebGL exposes uninitialised GPU memory |
-| S-05 | Medium | Likely | WebGL draw validation is keyed on reusable GL buffer names |
-| S-06 | Medium | Confirmed unsound; no live misuse found | DOM string accessors return borrows that a safe mutation frees |
-| S-07 | Low–Medium | Confirmed | WebSocket SameSite and mixed-content checks use the top-level page, not the calling document |
-| S-08 | Low–Medium | Confirmed | Script-triggered downloads need no user gesture and are buffered in the shell |
-| S-09 | Low | Confirmed | `fetch()` does not validate the method as an HTTP token |
-| S-10 | Low | Likely | A page can dismiss the Safe Browsing interstitial for its own host |
-| S-11 | Low | Likely | `X-Frame-Options` / `frame-ancestors` check only the immediate embedder |
-| S-12 | Low | Confirmed | CORS preflight cache ignores credentials mode |
-| S-13 | Low | Confirmed | Seccomp allow-list is wider than SECURITY.md implies |
-| S-14 | Low | Confirmed | Ancestor check stops at 512 levels, so script can build a cyclic DOM |
-| S-15 | Low | Likely | Shell maps helper-created shared memory the helper can shrink |
-| S-16 | Low | Confirmed | WebGL object arguments ignore object kind and owning context |
-| S-17 | Low | Confirmed | Shader source reaches the driver compiler unvalidated |
-| S-18 | Low | Confirmed | WebGL permission is allow-by-default; SECURITY.md says otherwise |
-| S-19 | Low | Confirmed | WebAssembly has no execution budget |
-| S-20 | Low | Confirmed | Box tree holds raw style pointers kept valid only by call order |
-| S-21 | Info | — | Smaller notes |
+| ID | Severity | Confidence | Finding | Status |
+|----|----------|------------|---------|--------|
+| S-01 | High | Confirmed (not executed) | Cross-origin frames exchange live object references with their embedder | Partly fixed |
+| S-02 | Medium | Needs verification | Frame scripts run in the embedder's realm when no frame realm can be made | Fixed |
+| S-03 | Medium | Confirmed | Cookie store: insecure origin overwrites `Secure` cookies; no size or count limits | Fixed |
+| S-04 | Medium | Confirmed / driver-dependent | WebGL exposes uninitialised GPU memory | Fixed |
+| S-05 | Medium | Likely | WebGL draw validation is keyed on reusable GL buffer names | Fixed |
+| S-06 | Medium | Confirmed unsound; no live misuse found | DOM string accessors return borrows that a safe mutation frees | Fixed (mitigated) |
+| S-07 | Low–Medium | Confirmed | WebSocket SameSite and mixed-content checks use the top-level page, not the calling document | Fixed, not exercised |
+| S-08 | Low–Medium | Confirmed | Script-triggered downloads need no user gesture and are buffered in the shell | Partly fixed |
+| S-09 | Low | Confirmed | `fetch()` does not validate the method as an HTTP token | Fixed |
+| S-10 | Low | Likely | A page can dismiss the Safe Browsing interstitial for its own host | Fixed, not exercised |
+| S-11 | Low | Likely | `X-Frame-Options` / `frame-ancestors` check only the immediate embedder | Fixed |
+| S-12 | Low | Confirmed | CORS preflight cache ignores credentials mode | Fixed |
+| S-13 | Low | Confirmed | Seccomp allow-list is wider than SECURITY.md implies | Mostly fixed |
+| S-14 | Low | Confirmed | Ancestor check stops at 512 levels, so script can build a cyclic DOM | Fixed |
+| S-15 | Low | Likely | Shell maps helper-created shared memory the helper can shrink | Partly fixed |
+| S-16 | Low | Confirmed | WebGL object arguments ignore object kind and owning context | Fixed |
+| S-17 | Low | Confirmed | Shader source reaches the driver compiler unvalidated | Partly fixed |
+| S-18 | Low | Confirmed | WebGL permission is allow-by-default; SECURITY.md says otherwise | Documentation corrected |
+| S-19 | Low | Confirmed | WebAssembly has no execution budget | Fixed |
+| S-20 | Low | Confirmed | Box tree holds raw style pointers kept valid only by call order | Mitigated |
+| S-21 | Info | — | Smaller notes | Four of the notes fixed |
+
+The **Status** column records what was done about each finding in the
+pull requests that followed this report (nordstjernen-web/southstar-browser
+332 to 352); each finding below has a status paragraph with what was
+changed, how it was checked and what is still open. Every fix was built in
+a debug build and run headless on Linux x86-64 with software GL; none was
+run in a release build, in the GTK shell, on a hardware GPU or on Windows or
+macOS.
 
 ## Findings
 
@@ -732,6 +740,20 @@ root holds the `Rc<StyleMap>`.
   before the first field access.
 - **Overflow checks** are off in release builds and on in CI. Shipping with
   them on would turn wraps like the one in S-15 into aborts.
+
+**Status of the smaller notes.** Fixed: the embedder policy treats NAT64
+(`64:ff9b::/96`, `64:ff9b:1::/48`), 6to4 and Teredo addresses by the IPv4
+address they carry; the HSTS list keeps its newest 10,000 hosts; `WeakNode`
+generations are 64-bit; host writes through `Scope::with_buffer_bytes_mut`
+refuse an immutable `ArrayBuffer` (`crypto.getRandomValues` on one throws).
+Left as they were: no certificate revocation checking and no per-host
+confirmation for the insecure-certificate override; resolved-address checks
+behind a proxy; the HSTS list is still global, so it can still be used as a
+supercookie; `X-ND-*` control lines still share the header list;
+`about:settings-save` still rests on the renderer-side check;
+`Scope::object_from_identity` is still a safe function; libav and libavif
+layouts are still not checked against the loaded library's version; release
+builds still have overflow checks off.
 
 ## Done well
 
