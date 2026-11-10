@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: cookies. A response over plain HTTP can no longer replace or
+  shadow a site's `Secure` cookie. Cookies with the same name and different
+  paths or domains are all sent, longest path first, instead of the last one
+  read winning. A cookie over 4096 bytes is refused, a domain keeps its newest
+  180 cookies and a jar its newest 3000, and `Domain=` is not honoured for IP-
+  address hosts (audit finding S-03).
 * Security: a cross-origin or sandboxed frame whose script realm cannot be
   created no longer has its scripts run in its embedder's realm, and a frame's
   module scripts no longer replace the embedder's `window` and `document`

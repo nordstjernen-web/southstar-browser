@@ -193,6 +193,13 @@ if !same && !dead {
 - `Domain=` is accepted for IP-literal hosts (not exploitable while jars are
   site-keyed).
 
+**Status: fixed.** A cookie set from a plain-HTTP origin is dropped when a
+live `Secure` cookie of the same name domain-matches it and its path covers
+the new one. The `Cookie` header is keyed on name, domain and path and lists
+longer paths first. A name and value over 4096 bytes are refused, a domain
+keeps its newest 180 cookies and a jar its newest 3000, and `Domain=` on an
+IP-literal host must equal the host.
+
 **Fix.** Refuse a non-HTTPS set when a live `Secure` cookie of the same name
 domain-matches. Key the header on (name, domain, path) and send every match,
 longest path first. Cap name plus value at 4096 bytes and cookies per domain
