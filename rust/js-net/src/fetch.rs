@@ -509,10 +509,13 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     let cross_origin = (crate::ascii_starts_with(&send_url, b"http://")
         || crate::ascii_starts_with(&send_url, b"https://"))
         && !ffi::url_same_origin(top.as_deref(), Some(&send_url));
+    let credentialed = matches!(request.credentials, Credentials::Include);
     let preflight = cross_origin
         .then(|| crate::preflight::needed(&use_method, content_type.as_deref(), &extras))
         .flatten()
-        .filter(|preflight| no_cors || !preflight.cached(request.url.as_bytes(), top.as_deref()));
+        .filter(|preflight| {
+            no_cors || !preflight.cached(request.url.as_bytes(), top.as_deref(), credentialed)
+        });
     let Some(preflight) = preflight else {
         request.send(cancellable.as_ref(), move |resp, error| {
             done(Ticket { js, id }, resp, error);
@@ -531,7 +534,7 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
         request.document.as_ref(),
     );
     check.send(cancellable.clone().as_ref(), move |resp, _error| {
-        if preflight.passed(&resp, top.as_deref(), request.url.as_bytes()) {
+        if preflight.passed(&resp, top.as_deref(), request.url.as_bytes(), credentialed) {
             request.send(cancellable.as_ref(), move |resp, error| {
                 done(Ticket { js, id }, resp, error);
             });

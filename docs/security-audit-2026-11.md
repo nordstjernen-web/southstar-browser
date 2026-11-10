@@ -467,6 +467,15 @@ credentials; a redirected preflight is accepted. The final response check is
 correct, so nothing unreadable becomes readable — a non-simple credentialed
 request may be sent when the server agreed only to the anonymous form.
 
+**Status: fixed.** A cached grant records whether its preflight was for a
+credentialed request and an anonymous grant is not reused for `credentials:
+'include'`; `*` in `Access-Control-Allow-Methods` and `-Headers` counts only
+without credentials; a credentialed preflight must itself allow credentials; a
+redirected preflight fails. Reproduced headless against a local server: the
+old build sent the credentialed `PUT` on the anonymous wildcard grant, the new
+one sends a second preflight and blocks it, while an explicit grant still
+works for both.
+
 **Fix.** Add the credentials flag to the grant key, ignore `*` with
 credentials, fail a redirected preflight.
 
