@@ -109,6 +109,21 @@ machinery protects cloned platform properties. Neither stops ordinary
 property reads and writes on a leaked object. Whether individual DOM natives
 check the calling realm was not examined.
 
+**Status: partly fixed.** Run headless with a page on `127.0.0.1` framing one
+on `localhost`, the unpatched build showed both directions. The frame
+bootstrap now takes `fetch`, `URL`, `Event`, `DOMException`, `Range` and the
+cross-window `postMessage` from the pristine snapshot cloned into the frame's
+realm, copies only pristine platform values into a cross-origin frame, and
+does not give its `location` a shared prototype: the embedder's overrides no
+longer see the frame, and the frame's events, promises, `location` and
+`history` are its own realm's. **Still open:** about 120 interfaces defined in
+script (`Blob`, `Headers`, the streams, `DOMRect`, `DOMException`, the
+IndexedDB and CSSOM rule classes, …) are shared with a frame by the realm
+cloner (`rust/js-frames/src/cloner.rs`, `forwarder_property`) together with
+their prototype objects, so a cross-origin frame can still reach and modify
+the embedder's `Object.prototype` through them. Closing that needs each realm
+to have its own copy of those interfaces, or per-site renderers.
+
 **Fix.** A cross-origin bootstrap must not touch `realWin` dynamically.
 Capture the natives it needs once from the pristine snapshot, or bind
 frame-realm `fetch`, `URL`, `Event` and `DOMException` from Rust as
