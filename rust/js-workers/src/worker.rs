@@ -1153,9 +1153,10 @@ pub(crate) fn import_scripts(scope: &mut Scope<'_>, _this: &Value, args: &[Value
         let (ok, error) = eval_script(js, &body, &final_url, None);
         ffi::set_current_url(js, previous.as_deref());
         if !ok {
+            let shown = error.filter(|_| ffi::url_same_origin(&base, &final_url));
             return Err(scope.type_error(&format!(
                 "importScripts: {}",
-                error.as_deref().unwrap_or("evaluation failed")
+                shown.as_deref().unwrap_or("evaluation failed")
             )));
         }
     }

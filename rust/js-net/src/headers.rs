@@ -173,10 +173,11 @@ pub(crate) fn raw_headers_have(raw: Option<&[u8]>, name: &[u8]) -> bool {
 }
 
 fn local_or_same_origin(doc_url: Option<&[u8]>, resp_url: Option<&[u8]>) -> bool {
+    let from_about = doc_url.is_some_and(|doc| doc.starts_with(b"about:"));
     resp_url.is_some_and(|resp| {
-        [&b"data:"[..], b"blob:", b"about:"]
-            .iter()
-            .any(|p| resp.starts_with(p))
+        resp.starts_with(b"data:")
+            || resp.starts_with(b"blob:")
+            || (from_about && resp.starts_with(b"about:"))
     }) || ffi::url_same_origin(doc_url, resp_url)
 }
 

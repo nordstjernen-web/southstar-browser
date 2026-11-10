@@ -675,7 +675,7 @@ fn resolve_response(scope: &mut Scope<'_>, js: Js, state: &FetchState, resp: &Re
         scope,
         &r,
         "redirected",
-        Value::boolean(resp.redirect_count() > 0),
+        Value::boolean(allow && resp.redirect_count() > 0),
     );
     set(
         scope,

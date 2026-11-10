@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::CStr;
 use southstar_unicode::until_nul;
 use std::ffi::CString;
@@ -21,6 +22,17 @@ const CONTENT_SCRIPT_NATIVES: [&str; 6] = [
     "__nd_ext_platform",
     "__nd_ext_uilang",
 ];
+
+thread_local! {
+    static MUTED_ERRORS: Cell<bool> = const { Cell::new(false) };
+}
+
+pub(crate) fn with_muted_errors<R>(muted: bool, f: impl FnOnce() -> R) -> R {
+    let previous = MUTED_ERRORS.replace(muted);
+    let result = f();
+    MUTED_ERRORS.set(previous);
+    result
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScriptKind {
@@ -195,7 +207,11 @@ fn eval_classic(
     compile::profile_eval(started, src.len(), cache_hit, origin);
     if let Err(exception) = &result {
         log_error_with_stack(js, scope, exception, or_default(origin, c"inline"), true);
-        js.report_uncaught(exception, origin);
+        if MUTED_ERRORS.get() {
+            js.report_muted_error();
+        } else {
+            js.report_uncaught(exception, origin);
+        }
     }
     drop(result);
     js.drain_microtasks();

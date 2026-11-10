@@ -23,6 +23,16 @@ Southstar Browser 1.0.9-dev:
   script, and a message's `source` is replaced for a receiver of another
   origin before the event is delivered rather than by the receiver's own
   script.
+* Security: an error thrown while a classic script from another origin is
+  evaluated reaches `window.onerror` and `error` listeners as
+  `"Script error."` with no file name, position or error object, unless the
+  element has `crossorigin` and the response admits the document. The real
+  message used to be reported, so loading another origin's non-script
+  resource as a script leaked parts of it through the syntax error text.
+  `importScripts` likewise no longer puts a cross-origin script's
+  evaluation error into the exception it throws. An opaque `no-cors`
+  response reports `redirected` as `false`, and `fetch("about:…")` from a
+  web page is no longer treated as readable.
 * Security: module scripts are fetched as the standard asks. A static or
   dynamic `import`, a JSON module and `<script type="module" src>` from
   another origin need an `Access-Control-Allow-Origin` that admits the

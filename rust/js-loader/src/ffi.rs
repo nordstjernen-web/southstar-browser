@@ -98,6 +98,12 @@ impl Response {
         self.0.final_url().filter(|url| !url.is_empty())
     }
 
+    pub(crate) fn same_origin_as(&self, document: &[u8], requested: &CStr) -> bool {
+        let fetched = self.final_url().unwrap_or(requested).to_bytes();
+        !southstar_url::bytes::is_http_or_https(fetched)
+            || southstar_url::bytes::same_origin(document, fetched)
+    }
+
     pub(crate) fn readable_from(&self, document: &[u8], requested: &CStr) -> bool {
         let fetched = self.final_url().unwrap_or(requested).to_bytes();
         if !southstar_url::bytes::is_http_or_https(fetched)
@@ -319,6 +325,10 @@ impl Js {
         if let Some(js) = self.0 {
             (api::document_hooks().flush_write)(js);
         }
+    }
+
+    pub(crate) fn report_muted_error(self) {
+        southstar_js_runtime::events::report_muted_error(self.0)
     }
 
     pub(crate) fn report_uncaught(self, exception: &Value, origin: Option<&CStr>) {

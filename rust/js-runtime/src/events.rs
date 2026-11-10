@@ -15,6 +15,7 @@ pub struct EventHooks {
     pub window_for_document: fn(Option<Page>, &mut Scope<'_>, Option<Node<'_>>) -> Value,
     pub fire_element_handlers: fn(Option<Page>, Node<'_>, &str, &Value),
     pub report_uncaught: fn(Option<Page>, &Value, Option<&str>),
+    pub report_muted_error: fn(Option<Page>),
     pub report_handler_exception: fn(Option<Page>, &mut Scope<'_>, Option<&str>, &Value),
     pub init_flags: fn(&str, bool) -> (bool, bool),
 }
@@ -28,6 +29,7 @@ impl EventHooks {
         window_for_document: |_, _, _| Value::null(),
         fire_element_handlers: |_, _, _, _| {},
         report_uncaught: |_, _, _| {},
+        report_muted_error: |_| {},
         report_handler_exception: |_, _, _, _| {},
         init_flags: |_, _| (false, false),
     };
@@ -88,6 +90,10 @@ pub fn window_for_document(
 
 pub fn fire_element_handlers(js: Option<Page>, element: Node<'_>, kind: &str, event: &Value) {
     (hooks().fire_element_handlers)(js, element, kind, event)
+}
+
+pub fn report_muted_error(js: Option<Page>) {
+    (hooks().report_muted_error)(js)
 }
 
 pub fn report_uncaught(js: Option<Page>, exception: &Value, origin: Option<&str>) {
