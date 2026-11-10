@@ -62,7 +62,14 @@ pub(crate) fn note_videos(b: &NsBrowser) {
     }
 }
 
+fn free_replaced_strings(b: &NsBrowser) {
+    if b.js().is_none_or(|js| !js.running_script()) {
+        southstar_dom::free_retired();
+    }
+}
+
 pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
+    free_replaced_strings(b);
     let now = southstar_glib::monotonic_us();
     if now >= state.deadline_us {
         return true;
@@ -145,6 +152,7 @@ fn pump_main_loop(deadline: i64) -> bool {
 
 pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
     let budget_ms = budget_ms.max(0);
+    free_replaced_strings(b);
     if b.refresh_due_us.get() != 0
         && !b.pending_nav.is_set()
         && southstar_glib::monotonic_us() >= b.refresh_due_us.get()

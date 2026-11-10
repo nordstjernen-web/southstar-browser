@@ -310,6 +310,16 @@ shape it permits. The sampled callers (`js-mutation`, `js-storage`,
 `js-forms`, `js-focus`) copy before calling out, but there are over a
 hundred borrow sites in the `js-*` crates.
 
+**Status: fixed (mitigated without changing the API).** Node strings are now
+always heap allocations, and on a thread that runs page script a replaced or
+freed name, text or attribute value is parked (`rust/dom/src/reclaim.rs`) and
+only freed at the start of a browser tick when no script is running. A borrow
+held across a mutation, or across script, therefore reads stale text, not
+freed memory or a reused inline buffer. The accessors keep their signatures,
+so the rule in `docs/dom.md` still stands for correctness; a string appended
+to in place can also still change under a borrow. A script that replaces
+strings in a loop keeps the old ones until its task ends.
+
 **Fix.** Return owned or reference-counted strings; or expose closure
 accessors guarded by a per-slot borrow flag; or at minimum mark the
 borrowing accessors `unsafe` so every call site falls under the unsafe

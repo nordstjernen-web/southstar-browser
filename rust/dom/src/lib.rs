@@ -12,6 +12,7 @@ pub mod index;
 pub mod internals;
 pub mod node;
 mod owned;
+mod reclaim;
 pub mod select;
 pub mod serialize;
 pub mod shadow;
@@ -22,6 +23,7 @@ pub use data::{Invalidator, Kind, NsNode};
 pub use handle::{Attr, AttrView, Node};
 pub use index::NodeArray;
 pub use owned::Tree;
+pub use reclaim::{defer_on_this_thread, free_retired};
 pub use store::WeakNode;
 
 pub const MAX_DEPTH: i32 = 512;
