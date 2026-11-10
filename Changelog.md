@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: `new WebSocket(url)` and `new EventSource(url)` throw a
+  `SyntaxError` for an address the URL parser rejects. They used to fall
+  back to the string as written, which a second, lenient parser then split
+  into a host and a path, so a page could put spaces, CR and LF into the
+  request line and write request lines and headers of its own to any host
+  and port. The HTTP client also refuses to send a request whose path, host
+  or authority holds a space or a control character, over HTTP/1.1 and
+  HTTP/2 and for the WebSocket upgrade.
 * Security: cross-origin frames no longer share script objects with the page
   that embeds them. Such a frame gets its own copies of the platform's native
   functions and prototypes, runs the engine's bundled scripts (`Blob`,

@@ -380,10 +380,15 @@ fn page_origin(js: Js, realm: Realm) -> Option<Vec<u8>> {
 fn resolve_target(scope: &mut Scope<'_>, js: Js, url: &Value) -> JsResult<Vec<u8>> {
     let raw = until_nul_owned(scope.to_bytes(url)?);
     let page = js.page_url();
-    Ok(page
-        .as_deref()
-        .and_then(|page| ffi::url_resolve(Some(page), &raw))
-        .unwrap_or(raw))
+    match ffi::url_resolve(page.as_deref(), &raw) {
+        Some(resolved) => Ok(resolved),
+        None => Err(ffi::throw_dom(
+            scope,
+            c"SyntaxError",
+            12,
+            "The URL is invalid",
+        )),
+    }
 }
 
 fn define_constants(scope: &mut Scope<'_>, object: &Value, names: &[&str]) {
