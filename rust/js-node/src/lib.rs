@@ -15,7 +15,7 @@ mod validity;
 
 use core::ffi::CStr;
 
-use southstar_dom::{Kind, MAX_DEPTH, Node};
+use southstar_dom::{Kind, Node};
 use southstar_js_engine::{Scope, Value};
 
 use crate::ffi::Js;
@@ -42,22 +42,7 @@ pub(crate) fn is_detached_document(node: Element) -> bool {
 }
 
 pub(crate) fn within(node: Element, root: Element) -> bool {
-    if node == root {
-        return true;
-    }
-    let mut depth = 0;
-    let mut cursor = node.parent();
-    while let Some(ancestor) = cursor {
-        if depth >= MAX_DEPTH {
-            break;
-        }
-        depth += 1;
-        if ancestor == root {
-            return true;
-        }
-        cursor = ancestor.parent();
-    }
-    false
+    southstar_dom::ancestors_and_self(node).any(|ancestor| ancestor == root)
 }
 
 pub(crate) fn hierarchy_error(scope: &mut Scope<'_>, message: &str) -> Value {
