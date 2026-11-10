@@ -527,6 +527,12 @@ deepest node raises no `HierarchyRequestError` and creates a parent cycle.
 Unbounded walkers such as `ancestors_and_self` (`rust/dom/src/lib.rs:41–43`)
 then never return, and the script interrupt cannot stop a native loop.
 
+**Status: fixed.** Reproduced headless: the unpatched build hung on the deep
+self-insert. `within()` in `rust/js-node` and `inclusive_ancestor()` in
+`rust/js-html` now walk to the real root, so `appendChild`, `insertBefore`,
+`replaceChildren` and `insertAdjacentElement` raise `HierarchyRequestError` at
+any depth.
+
 **Fix.** Make the check exact (walk to the real root), or reject insertions
 beyond a maximum tree depth.
 

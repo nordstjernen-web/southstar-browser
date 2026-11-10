@@ -11,7 +11,7 @@ pub mod positional;
 mod sanitize;
 pub mod text;
 
-use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, MAX_DEPTH, Node};
+use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind, Node};
 use southstar_js_engine::Value;
 
 pub use ffi::nsr_xml_serializer_ctor;
@@ -35,22 +35,7 @@ pub(crate) fn scripting_enabled(node: Element) -> bool {
 }
 
 pub(crate) fn inclusive_ancestor(ancestor: Element, node: Element) -> bool {
-    if node == ancestor {
-        return true;
-    }
-    let mut depth = 0;
-    let mut cursor = node.parent();
-    while let Some(parent) = cursor {
-        if depth >= MAX_DEPTH {
-            break;
-        }
-        depth += 1;
-        if parent == ancestor {
-            return true;
-        }
-        cursor = parent.parent();
-    }
-    false
+    southstar_dom::ancestors_and_self(node).any(|parent| parent == ancestor)
 }
 
 pub(crate) fn children(node: Element) -> Vec<Element> {

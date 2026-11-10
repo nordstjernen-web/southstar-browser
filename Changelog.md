@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: inserting a node into its own descendant is refused at any depth.
+  Below 512 levels the check used to give up, script could build a tree that
+  contains itself, and the tab hung (audit finding S-14).
 * Security: the renderer's seccomp filter is tighter. It can no longer create
   namespaces through `clone`, signal or re-limit other processes of the same
   user, or attach to System V shared memory; SECURITY.md describes what the
