@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Hardening: dropping or recomputing a page's computed styles releases its
+  layout first, so layout boxes can never be left pointing at freed styles
+  (audit finding S-20).
 * Security: WebAssembly can be interrupted. An endless loop in a wasm function
   is stopped by the long-running script monitor, the eval budget or a closing
   worker, as a JavaScript loop is; before, nothing could stop it. Modules with
