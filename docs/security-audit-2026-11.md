@@ -605,6 +605,19 @@ None of WebGL's GLSL ES restrictions are enforced, so driver compilers —
 C and C++ with a long crash history — parse arbitrary page input inside the
 renderer.
 
+**Status: partly fixed.** `rust/webgl/src/essl.rs` checks shader source before
+the driver sees it: only the GLSL ES character set outside comments, tokens no
+longer than 256 (WebGL 1) or 1024 (WebGL 2) characters, no `webgl_` or
+`_webgl_` identifiers, bracket nesting no deeper than 256, `#version` only
+`100` or `300 es`, at most 4096 macros and no object-like macro chain that
+expands past a million tokens. A source that fails is replaced by an `#error`
+line, so compilation fails with the reason in the info log. Checked headless
+on software GL with valid and hostile shaders. **Not covered:** this is a
+lexical filter, not a GLSL ES validator. Grammar, loop restrictions,
+`#extension` and `#pragma` names and nested function-like macro calls still go
+to the driver, and `getShaderSource` returns the `#error` line for a refused
+shader. No real site's shaders were run through it.
+
 **Fix.** A small in-tree ESSL checker that enforces the WebGL limits
 (identifier length, nesting depth, reserved names, directives) before
 compiling; prefer ES contexts with robustness.
