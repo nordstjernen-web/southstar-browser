@@ -341,6 +341,13 @@ fetch and XHR use the requesting document and send only `SameSite=None`.
 WebSocket mixed-content check also uses the top page, so an HTTPS frame in an
 HTTP page may open `ws://`.
 
+**Status: fixed, not exercised.** `for_subresource` takes the origin of the
+document that opened the socket and treats the handshake as cross-site unless
+both that origin and the top-level page are same-site with the target. The
+mixed-content check refuses `ws://` when either the calling document or the
+top page is HTTPS. In local tests WebSocket handshakes carried no cookies in
+either build, so the SameSite change was checked by reading only.
+
 **Fix.** Pass the requesting document's URL to `for_subresource` as the
 SameSite initiator, and base the mixed-content check on the calling
 document.

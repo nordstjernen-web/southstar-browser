@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a WebSocket opened from a cross-site frame no longer sends the
+  embedding site's `SameSite=Lax` and `Strict` cookies, and an HTTPS frame
+  inside an HTTP page can no longer open `ws://` (audit finding S-07).
 * Security: a name, text or attribute value borrowed from a DOM node stays
   valid memory when script replaces it. Replaced node strings are freed only
   between tasks, when no script is running, so engine code that reads a
