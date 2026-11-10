@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a CORS preflight answered for an anonymous request is no longer
+  reused for a request with credentials, `*` in a preflight's allowed methods
+  and headers does not apply to credentialed requests, and a redirected
+  preflight fails (audit finding S-12).
 * Security: `X-Frame-Options` and CSP `frame-ancestors` are checked against
   every ancestor frame up to the top page, not just the immediate embedder,
   and an `X-Frame-Options` header with several comma-separated values is

@@ -25,6 +25,7 @@ struct Grant {
     url: Vec<u8>,
     methods: Vec<u8>,
     headers: Vec<u8>,
+    credentialed: bool,
     expires: Instant,
 }
 
@@ -83,11 +84,11 @@ pub(crate) fn needed(
     })
 }
 
-fn listed(list: &[u8], item: &[u8], case_sensitive: bool) -> bool {
+fn listed(list: &[u8], item: &[u8], case_sensitive: bool, wildcard: bool) -> bool {
     list.split(|&c| c == b',')
         .map(<[u8]>::trim_ascii)
         .any(|entry| {
-            entry == b"*"
+            (wildcard && entry == b"*")
                 || if case_sensitive {
                     entry == item
                 } else {
@@ -153,17 +154,18 @@ impl Preflight {
         }
     }
 
-    fn allowed_by(&self, methods: &[u8], allowed_headers: &[u8]) -> bool {
-        let method_ok =
-            SIMPLE_METHODS.contains(&self.method.as_slice()) || listed(methods, &self.method, true);
+    fn allowed_by(&self, methods: &[u8], allowed_headers: &[u8], credentialed: bool) -> bool {
+        let wildcard = !credentialed;
+        let method_ok = SIMPLE_METHODS.contains(&self.method.as_slice())
+            || listed(methods, &self.method, true, wildcard);
         method_ok
             && self
                 .header_names
                 .iter()
-                .all(|name| listed(allowed_headers, name, false))
+                .all(|name| listed(allowed_headers, name, false, wildcard))
     }
 
-    pub(crate) fn cached(&self, url: &[u8], origin_url: Option<&[u8]>) -> bool {
+    pub(crate) fn cached(&self, url: &[u8], origin_url: Option<&[u8]>, credentialed: bool) -> bool {
         let Some(origin) = ffi::url_origin_from(origin_url) else {
             return false;
         };
@@ -173,11 +175,12 @@ impl Preflight {
         grants.iter().any(|grant| {
             grant.origin == origin
                 && grant.url == url
-                && self.allowed_by(&grant.methods, &grant.headers)
+                && (grant.credentialed || !credentialed)
+                && self.allowed_by(&grant.methods, &grant.headers, credentialed)
         })
     }
 
-    fn remember(&self, url: &[u8], origin_url: Option<&[u8]>, raw: &[u8]) {
+    fn remember(&self, url: &[u8], origin_url: Option<&[u8]>, raw: &[u8], credentialed: bool) {
         let lifetime = max_age(raw);
         let Some(origin) = ffi::url_origin_from(origin_url).filter(|_| !lifetime.is_zero()) else {
             return;
@@ -191,12 +194,22 @@ impl Preflight {
             url: url.to_vec(),
             methods: header_value(raw, b"access-control-allow-methods"),
             headers: header_value(raw, b"access-control-allow-headers"),
+            credentialed,
             expires: Instant::now() + lifetime,
         });
     }
 
-    pub(crate) fn passed(&self, resp: &Response, origin_url: Option<&[u8]>, url: &[u8]) -> bool {
+    pub(crate) fn passed(
+        &self,
+        resp: &Response,
+        origin_url: Option<&[u8]>,
+        url: &[u8],
+        credentialed: bool,
+    ) -> bool {
         if resp.is_null() || resp.error().is_some() || !(200..300).contains(&resp.status()) {
+            return false;
+        }
+        if resp.redirect_count() > 0 {
             return false;
         }
         let final_url = resp.final_url();
@@ -208,11 +221,21 @@ impl Preflight {
             return false;
         }
         let raw = resp.raw_headers().unwrap_or_default();
+        if credentialed
+            && !headers::cors_allows_credentials(
+                origin_url,
+                final_url.as_deref(),
+                resp.cors_allow_origin().as_deref(),
+                Some(&raw),
+            )
+        {
+            return false;
+        }
         let methods = header_value(&raw, b"access-control-allow-methods");
         let allowed_headers = header_value(&raw, b"access-control-allow-headers");
-        let allowed = self.allowed_by(&methods, &allowed_headers);
+        let allowed = self.allowed_by(&methods, &allowed_headers, credentialed);
         if allowed {
-            self.remember(url, origin_url, &raw);
+            self.remember(url, origin_url, &raw, credentialed);
         }
         allowed
     }
