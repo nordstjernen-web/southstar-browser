@@ -144,8 +144,17 @@ socket, so it normally needs no `/dev/shm` name at all.
   processes or other tabs to reach. TSYNC propagates the filter to every
   thread. The renderer also gets an argument filter: `mmap` and
   `mprotect` (and `pkey_mprotect`) fail when asked for memory that is
-  writable and executable at once, so W^X is enforced by the kernel
-  rather than only by having no JIT; and `socket(AF_UNIX, …)` fails,
+  writable and executable at once, so memory cannot be both at the same
+  moment (it can still be written first and made executable afterwards,
+  which the software GL driver's shader compiler relies on); `clone`
+  fails with any namespace flag and `clone3` answers `ENOSYS`, so the
+  namespaces `unshare` is denied are not reachable through them; `kill`,
+  `tgkill`, `rt_sigqueueinfo` and `rt_tgsigqueueinfo` work only on the
+  renderer's own process, `tkill`, `pidfd_open` and `pidfd_send_signal`
+  fail, `prlimit64`, `sched_setattr` and `setpriority` work only on the
+  caller, and System V shared memory and semaphores fail, so a
+  compromised renderer cannot signal, re-limit or attach to the memory of
+  other processes of the same user; and `socket(AF_UNIX, …)` fails,
   because Landlock does not govern connecting to a Unix socket by path, so
   this is what keeps a compromised renderer off the user's D-Bus session
   bus and `systemd --user`. Mapping a writable file or `memfd` read+exec
