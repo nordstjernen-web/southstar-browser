@@ -152,7 +152,7 @@ fn show_interstitial(url: &CStr, host: &CStr, verdict: ffi::Verdict, view: &View
     let html = ffi::safebrowsing_interstitial(url, host, verdict);
     let doc = ffi::html_parse(html.as_deref(), true);
     drop(html);
-    ffi::create_browser(ffi::Created {
+    let page = ffi::create_browser(ffi::Created {
         doc,
         base: ffi::dup_text(url),
         view,
@@ -163,7 +163,9 @@ fn show_interstitial(url: &CStr, host: &CStr, verdict: ffi::Verdict, view: &View
         doc_charset: ffi::dup_text(c"UTF-8"),
         url: Some(url),
         timing: None,
-    })
+    });
+    page.browser().interstitial.set(true);
+    page
 }
 
 fn blocked_landing(resp: &Response, requested: &CStr) -> Option<(CString, CString, ffi::Verdict)> {

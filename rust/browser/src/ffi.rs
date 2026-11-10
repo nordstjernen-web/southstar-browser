@@ -204,6 +204,7 @@ pub struct NsBrowser {
     pub pending_audio: StrBuf,
     pub refresh_url: Text,
     pub refresh_due_us: Cell<i64>,
+    pub interstitial: Cell<bool>,
     pending_post_body: RefCell<Option<Vec<u8>>>,
     pending_post_ct: Text,
     pub caret_byte: Cell<usize>,

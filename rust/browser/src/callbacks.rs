@@ -52,7 +52,7 @@ pub fn allows_navigation_url(b: &NsBrowser, url: Option<&CStr>) -> bool {
         return from.is_some_and(southstar_net::is_chrome_page);
     }
     if url.starts_with(UNSAFE_CONTINUE_SCHEME) {
-        return continues_interstitial(url, from);
+        return b.interstitial.get() && continues_interstitial(url, from);
     }
     true
 }

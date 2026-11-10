@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: only the Safe Browsing warning page itself can continue past the
+  warning. A page can no longer navigate to the internal continue address for
+  its own host and so allow-list that host without the user seeing the warning
+  (audit finding S-10).
 * Security: `fetch()` and `new Request()` refuse a method that is not an HTTP
   token, so a method containing spaces can no longer put extra words on the
   request line (audit finding S-09).
