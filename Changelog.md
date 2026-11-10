@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Docs: `SECURITY.md` is rewritten from the current code and is half
+  its former length. It no longer describes the C sources, OpenSSL TLS, a
+  Windows media handoff or a runtime kept across same-origin navigations,
+  none of which exist any more, and it now covers extensions, remote
+  control, the embedding protocol, Safe Browsing and the decoders in use.
+  The known limits list what the sandbox on each platform does not cover.
 * Security: the HTTP client is stricter about what a server or a redirect
   may hand it. Redirects followed by `southstar_http::fetch` (EventSource,
   the media helpers, Safe Browsing, DNS over HTTPS) are resolved and split

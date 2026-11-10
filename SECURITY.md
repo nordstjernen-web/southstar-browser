@@ -4,527 +4,254 @@ Southstar is a small independent web browser. Security fixes ship from
 `main`; only the latest tagged release is supported.
 
 ## Reporting
-Report security issues by e-mail to:  andreas.rosdal@hotmail.com
 
-Please include the version (shown in the About Southstar dialog),
-your OS, a minimal reproducer (URL or self-contained HTML), and your
-assessment of the impact.
+Report security issues by e-mail to: andreas.rosdal@hotmail.com
+
+Please include the version (shown in the About Southstar dialog), your OS,
+a minimal reproducer (a URL or self-contained HTML) and your assessment of
+the impact.
 
 ## Threat model
 
-Southstar treats the Internet with the outmost suspicion. The attacker controls fetched
-HTML, CSS, JavaScript, images, fonts, media, and PDFs. The user, the
-kernel, and the local filesystem outside the sandbox allow-list are
-trusted.
+The attacker controls everything fetched from the network: HTML, CSS,
+JavaScript, images, fonts, media and PDFs. The user, the kernel and the
+local file system outside the sandbox are trusted.
 
 **In scope**
 
-- Memory-safety bugs in our `unsafe` Rust (see `docs/unsafe-policy.md`
-  for where it is allowed): out-of-bounds reads/writes, use-after-free,
-  data races; integer overflow; and panics reachable from web content.
-- Linux sandbox escapes — both layers: the Landlock filesystem
-  allow-list and the seccomp-bpf syscall allow-list.
-- Windows process-mitigation bypass — the policies set via
-  `SetProcessMitigationPolicy` at startup (ASLR, strict handle
-  checks, extension-point disable, image-load restrictions,
-  child-process block).
-- Same-origin, cookie, and HTTP-cache partitioning bypass.
-- HSTS, mixed-content, and CSP enforcement bypass.
-- URL-bar spoofing (IDN homograph, scheme confusion, etc.).
+- Memory-safety bugs in Southstar's `unsafe` Rust (`docs/unsafe-policy.md`
+  says where it is allowed) and panics reachable from web content.
+- Escapes from the Linux renderer sandbox (Landlock and seccomp).
+- Same-origin policy, CORS, cookie and cache partitioning bypass.
+- HSTS, mixed-content and CSP bypass.
+- Address-bar spoofing.
+- A web page reaching the remote-control listener or the embedding protocol.
 
 **Out of scope**
 
-- Bugs in third-party libraries (OpenSSL, GTK 4, GLib, Boa,
-  the png/gif/zune-jpeg crates, …). Report upstream; we update when fixes ship.
-- Features we deliberately don't implement: WebRTC, EME/DRM, service
-  workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
-  implemented and on by default: a site gets a context without being
-  asked first, the browser then reports that site so the user can block
-  it, and WebGL can be turned off for every site in Settings. Its GL
-  entry points, shader checks and the driver behind them are therefore
-  reachable by any page.
-  WebGPU is an **experimental**, opt-in feature —
-  absent unless the build has wgpu-native and the browser is started with
-  `--enable-webgpu`. MSE and inline WebM/MP4
-  playback *are* implemented; their decoders are in scope above.)
-- CPU-level side channels (Spectre-class).
-- Attacks that already require local code execution as the same user.
+- Bugs in third-party code: GTK, FFmpeg, poppler, HarfBuzz, FreeType,
+  libavif, uchardet, OpenSSL libcrypto, GPU drivers and the crates.io
+  dependencies. Report those upstream; Southstar updates when fixes ship.
+- CPU side channels (Spectre class).
+- Attacks that already need code execution as the same user.
+- Anything that needs a debugging switch (`NS_NO_SANDBOX` and the like).
 
-## Defenses
+## Architecture
 
-The browser renders each tab's untrusted content in its own
-sandboxed renderer process (`southstar-renderer`); the GTK shell
-is a thin, engine-free display/input process that spawns the renderers
-and blits their shared-memory framebuffers. Defenses are layered so that
-a memory-safety bug in the engine is confined to a per-tab renderer
-process that holds the strongest sandbox, and does not immediately yield
-arbitrary code execution outside the user's data directory. (Per-origin
-*site* isolation — one renderer per site rather than per tab — and a
-networking/storage broker are the next steps; today the renderer still
-does its own fetching and persistence.)
+- **One renderer process per tab.** `southstar-renderer` parses and runs all
+  untrusted content and holds the strongest sandbox. The GTK shell displays
+  the renderer's shared-memory framebuffer and forwards input. A tab keeps
+  its renderer across sites: there is no per-site process isolation, and the
+  renderer does its own networking and storage.
+- **Media helpers.** Audio is decoded and played by `southstar-audio`, MSE
+  video by `southstar-video`; other video decodes in the renderer.
+- **No JIT.** JavaScript runs in Boa (an interpreter, forked in
+  `third_party/boa_engine`) and WebAssembly in wasmi (an interpreter), so
+  the browser generates no machine code.
+- **A fresh JavaScript runtime for every page load.** Nothing in script
+  memory survives a navigation. A script that runs past its budget (60 s by
+  default) is halted.
+- **Frames are realms of one engine.** A cross-origin frame, or a sandboxed
+  one without `allow-same-origin`, has its own built-ins and reaches its
+  parent, top and child windows only through a proxy made of native
+  functions (`postMessage`, navigation, `closed`, `length`, `close`,
+  `focus`, `blur`, `frames`); page script never holds the other origin's
+  window. This boundary stops script. It does not contain a memory-safety
+  bug, because all frames of a tab share one process.
 
-Frames of a tab share that renderer and its script engine, each in a realm
-of its own. A cross-origin frame, or a sandboxed one without
-`allow-same-origin`, is cut off from its embedder inside the engine: it
-gets its own copies of the platform's native functions and prototypes,
-evaluates the engine's bundled scripts in its own realm, and reaches its
-parent and top only through a proxy that allows `postMessage`, navigation
-and the few other cross-origin members. Values that engine code in the
-embedder's realm hands to such a frame are copied into the frame's realm
-first, so nothing the frame can reach has the embedder's `Object.prototype`
-behind it. A frame counts as cross-origin when its origin differs from its
-parent document's or from the top page's. This is a boundary inside one
-process: it stops script, not a memory-safety bug.
+## Process confinement
 
-### Link-time hardening (`rust/build/src/link.rs`)
+| | Renderer | Shell | Media helpers |
+|---|---|---|---|
+| Linux | Landlock, seccomp with argument filters | Landlock (wider), no seccomp | Landlock (wider), seccomp without argument filters |
+| macOS | Seatbelt, writes only | Seatbelt, writes only | none |
+| Windows | mitigation policies, no child processes | mitigation policies | none |
 
-PIE, full RELRO (`-z relro -z now`), non-executable stack,
-separate-code segments and section garbage collection on the ELF
-platforms; the executables export no symbols of their own (a
-`local: *` version script). The code is Rust, so the C compiler's
-stack-protector and `_FORTIFY_SOURCE` flags have nothing left to
-protect; Rust's own stack probes guard against stack clashes. No JIT is
-used or linked — W^X holds for the whole process, so any RCE primitive has to
-work without writable executable pages.
+### Linux (`rust/sandbox`)
 
-### Privilege drop (`src/security.c`)
+Both layers are installed before the renderer handles its first request.
+`PR_SET_NO_NEW_PRIVS` is set, and the browser refuses to start as root.
 
-- Linux/macOS: refuses to start as root — prints a diagnostic and exits
-  before any page is loaded.
-- Windows: when launched elevated it *drops* Administrator rights by
-  relaunching itself with the desktop shell's medium-integrity token
-  (`CreateProcessWithTokenW`) and exiting the elevated instance, so the
-  browsing session runs unprivileged. It verifies the shell token is not
-  itself elevated first, so a fully elevated session cannot loop. When
-  de-elevation is impossible it falls back to a plain-language dialog
-  offering to quit (default) or run as Administrator anyway.
-- `NS_ALLOW_ROOT=1` overrides on every platform — keep the elevated
-  process and skip the de-elevation and the prompt.
-- Sets `PR_SET_NO_NEW_PRIVS` before installing the seccomp filter, so
-  setuid binaries cannot be used to gain privileges after a compromise.
-
-### Linux sandbox
-
-Two independent layers, both default-deny, both installed before any HTML
-is parsed. They describe the **per-tab renderer process**
-(`ns_browser_sandbox`, applied by the `southstar-renderer` entry point
-in `rust/renderer-host/src/process.rs`), which parses all untrusted
-content and therefore holds the strongest confinement. The thin UI shell
-parses no untrusted bytes but must `fork`/`execve` the renderer processes,
-so it runs under a **widened Landlock** (executable renderer directory,
-`/dev/shm` writable to cover the non-`memfd` shared-memory fallback, and
-read+write on the GPU device nodes `/dev/dri` and `/dev/nvidia*` that GTK's
-OpenGL / Vulkan drivers open to draw the window) and
-**no seccomp** — the real syscall confinement lives in the renderers. The
-renderer framebuffer itself is an anonymous `memfd` passed over the control
-socket, so it normally needs no `/dev/shm` name at all.
-
-- **Landlock (filesystem).** Read-only access to system libraries
-  (`/usr`, `/lib`, `/lib64`), `/etc`, the CA bundle, font caches,
-  `/dev/urandom`, the X11 / Wayland sockets, the `$XAUTHORITY` file
-  itself, and the XDG config, data and cache directories (`~/.config`,
-  `~/.local/share`, `~/.cache`). Read+write access to
+- **Landlock, renderer.** Read access to the system directories (`/usr`,
+  `/lib`, `/etc`), `/proc`, `/sys`, `/run`, fonts, themes and
+  `~/.config/southstar`. Write access only to
   `~/.config/southstar/cookies`, `~/.local/share/southstar`,
-  `~/.cache/southstar`, and `southstar/` inside the GLib runtime
-  directory (`$XDG_RUNTIME_DIR/southstar`), where the renderer writes
-  page exports and print sheets for the shell. The rest of
-  `~/.config/southstar` — `southstar.conf`, `bookmarks.txt`,
-  `safebrowsing.list` — is read-only for the renderer: only the shell
-  writes the configuration, so a compromised renderer cannot turn on
-  WebGL (which widens every later renderer's sandbox to the GPU device
-  nodes), set a proxy or change the home page for the rest of the
-  browser. The renderer gets nothing
-  else in the runtime directory — not the D-Bus and systemd sockets there —
-  no `$XAUTHORITY`, no `/dev/snd` (audio plays in the separate helper) and
-  no Downloads directory; those rules belong to the shell's wider ruleset
-  only. While WebGL is enabled or WebGPU was turned on
-  with `--enable-webgpu`, also read+write on the GPU device nodes
-  `/dev/dri` and `/dev/nvidia*`, which the driver behind those APIs opens
-  to render on the GPU; with WebGL off in Settings and WebGPU not turned
-  on, the renderer gets no access to them. The rest of `$HOME` — `~/.ssh`,
-  `~/.aws`, `~/.netrc`, shell history — is **not** reachable, also when
-  `$XAUTHORITY` is `~/.Xauthority`; other applications' state kept under
-  the XDG directories (other browsers' profiles among it) is readable.
-  No directory the renderer can write to is also executable.
-- **seccomp-bpf (syscalls).** Default-deny allow-list: the filter is
-  built with `SCMP_ACT_ERRNO(EPERM)` as the default action and then
-  permits only the ~266 syscalls the browser actually needs
-  (`SECCOMP_ALLOWED` in `rust/sandbox/src/lib.rs`); every other
-  syscall returns `EPERM`. `execve` / `execveat` are not on the list, so
-  a compromised renderer cannot pivot to another interpreter or binary
-  even if Landlock would have allowed reading it. `ptrace`, `bpf`,
-  `keyctl`, `mount`, `unshare`, `userfaultfd`, the `io_uring_*` family,
-  `perf_event_open`, `kexec_load`, and the module syscalls are likewise
-  absent from the allow-list, and so are `bind`, `listen`, `accept` and
-  `accept4`: the renderer and the media helpers only ever connect out,
-  so a compromised one cannot open a loopback service for other
-  processes or other tabs to reach. TSYNC propagates the filter to every
-  thread. The renderer also gets an argument filter: `mmap` and
-  `mprotect` (and `pkey_mprotect`) fail when asked for memory that is
-  writable and executable at once, so memory cannot be both at the same
-  moment (it can still be written first and made executable afterwards,
-  which the software GL driver's shader compiler relies on); `clone`
-  fails with any namespace flag and `clone3` answers `ENOSYS`, so the
-  namespaces `unshare` is denied are not reachable through them; `kill`,
-  `tgkill`, `rt_sigqueueinfo` and `rt_tgsigqueueinfo` work only on the
-  renderer's own process, `tkill`, `pidfd_open` and `pidfd_send_signal`
-  fail, `prlimit64`, `sched_setattr` and `setpriority` work only on the
-  caller, and System V shared memory and semaphores fail, so a
-  compromised renderer cannot signal, re-limit or attach to the memory of
-  other processes of the same user; and `socket(AF_UNIX, …)` fails,
-  because Landlock does not govern connecting to a Unix socket by path, so
-  this is what keeps a compromised renderer off the user's D-Bus session
-  bus and `systemd --user`. Mapping a writable file or `memfd` read+exec
-  is still possible (GPU drivers load code that way, lazily, when WebGL
-  first runs), so this narrows rather than closes code injection.
-- **Media decoding.** Southstar decodes a fixed, in-tree set of media
-  rather than shelling out to an external player: MPEG-1 (`rust/plmpeg`) and
-  MP3 (`rust/minimp3`) always, plus WebM/VP9/VP8 video and Opus/Vorbis audio
-  through FFmpeg's `libav*` where it is built in. Video frames decode
-  inside the seccomp + Landlock renderer, so attacker-controlled codec
-  bytes stay within the strongest sandbox; audio and out-of-process MSE
-  video decode in the `southstar-audio` / `southstar-video` helper
-  processes, which on Linux run under the **same** Landlock + seccomp
-  profile (`src/security.c`), applied before the first byte is decoded.
-  On macOS and Windows those helpers are not yet syscall-confined, so a
-  decoder memory-safety bug there runs with the helper's own privileges
-  (a known gap). A media type outside the in-tree set is not played: the
-  renderer shows a poster/overlay and only *resolves* the URL
-  (`ns_browser_media_at`) for an embedder — the GTK shell launches
-  nothing. Which URL a page's `<video>`/`<audio>` resolves to is
-  discovered only from **standards-based** metadata (OpenGraph, JSON-LD
-  `VideoObject`, Twitter Cards); the media path carries no site-specific
-  scraping, hardcoded hostnames, or private-API spoofing.
+  `~/.cache/southstar` and `$XDG_RUNTIME_DIR/southstar`. The configuration
+  file, bookmarks and the local block list are read-only, so a compromised
+  renderer cannot change settings. No access to the rest of `$HOME`
+  (`~/.ssh`, documents, other applications' data), to the Downloads
+  directory, to `$XAUTHORITY` or to `/dev/snd`. No directory is both
+  writable and executable. The GPU device nodes are writable while WebGL is
+  enabled (the default) or WebGPU was turned on.
+- **seccomp, renderer.** A default-deny list of about 260 system calls;
+  everything else returns `EPERM`. Not on the list: `execve`, `fork`,
+  `ptrace`, `bpf`, `mount`, `unshare`, `setns`, `keyctl`, `userfaultfd`,
+  `io_uring_*`, `perf_event_open`, `bind`, `listen` and `accept`. Argument
+  filters refuse memory that is writable and executable at once, namespace
+  flags on `clone` (`clone3` answers `ENOSYS`), signals to any other
+  process, System V shared memory and `socket(AF_UNIX)`, which keeps the
+  renderer off the D-Bus session bus.
+- **Shell.** It parses no page content but must start the renderers and
+  talk to the display server, so it has a wider Landlock rule set
+  (Downloads, the whole runtime directory, the GPU) and no seccomp filter.
+- **Media helpers.** They apply the wider Landlock rules and the system
+  call list, without the renderer's argument filters, before reading the
+  first command.
 
-Both layers can be disabled for debugging with `NS_NO_SANDBOX=1` /
-`NS_NO_SECCOMP=1`. Don't use those in normal operation. These switches,
-`NS_ALLOW_ROOT` and `NS_REQUIRE_SANDBOX` count as set only for a value
-other than empty, `0`, `false`, `no` or `off`. By default the
-sandbox is best-effort: on a kernel without Landlock or seccomp the
-renderer logs a warning and continues **unconfined**. Set
-`NS_REQUIRE_SANDBOX=1` to make that fail-closed — a renderer (or media
-helper) that cannot install its filesystem and syscall confinement then
-refuses to run rather than process untrusted content unsandboxed.
+The sandbox is best-effort: on a kernel without Landlock or seccomp the
+process logs a warning and runs unconfined. `NS_REQUIRE_SANDBOX=1` makes
+that fatal. `NS_NO_SANDBOX=1` and `NS_NO_SECCOMP=1` turn the layers off for
+debugging, and `NS_ALLOW_ROOT=1` allows running as root. A switch counts as
+set for any value other than empty, `0`, `false`, `no` or `off`.
 
-### macOS sandbox
+Executables are linked with full RELRO, a non-executable stack and separate
+code segments, and export no symbols.
 
-macOS has no Landlock or seccomp, but it ships the **Seatbelt** sandbox
-(`sandbox_init(3)`, `<sandbox.h>`) — a per-process, voluntary, post-launch
-confinement applied from an inline Sandbox Profile Language (SBPL) policy.
-This is the same mechanism Chromium and Firefox use for their macOS renderer
-sandboxes. Southstar applies it from the `__APPLE__` arm of
-`ns_security_sandbox_init` (`src/security.c`), to **both** the per-tab
-`southstar-renderer` and the UI shell, before any HTML is parsed.
+### macOS
 
-- **Filesystem write-confinement.** The profile is `(allow default)` then
-  `(deny file-write*)` then a re-allow of the same write set the Linux
-  Landlock layer permits: the per-user `~/.config/southstar`,
-  `~/.local/share/southstar`, `~/.cache/southstar`, the GLib runtime
-  dir, the user's Downloads directory, the system temp roots
-  (`/private/var/folders`, `/private/tmp`, `/tmp`) and `/dev`. The rest of
-  `$HOME` — `~/.ssh`, `~/.aws`, other browsers' state, shell history, the
-  user's documents — is **not writable**, so a compromised renderer cannot
-  tamper with files, drop persistence, or modify the user's data. Writable
-  directories added at runtime (`ns_security_add_writable_dir`) are folded in
-  the same way.
-- **What it does *not* cover.** Unlike the Linux pairing, there is no
-  syscall-level filter (no seccomp analogue is applied), and reads, network,
-  and `exec` are left to `(allow default)` — the renderer does its own
-  networking, so a blanket network deny is not possible there. This is a
-  filesystem-integrity boundary, narrower than the Linux renderer's
-  read+syscall confinement; it is the macOS half of the same intent, not a
-  full equivalent.
-- **Caveats.** SBPL is undocumented and varies across macOS releases, and
-  `sandbox_init` is marked deprecated (since 10.7) yet remains the API every
-  major browser relies on; Apple keeps it working. The call **fails open** —
-  if the profile is rejected the process logs a warning and continues
-  unconfined rather than refusing to start. Disable for debugging with
-  `NS_NO_SANDBOX=1`.
+The renderer and the shell apply a Seatbelt profile (`sandbox_init`) that
+denies file writes outside Southstar's own directories, Downloads and the
+temporary directories. Reads, network access and `exec` are not restricted,
+there is no system-call filter, and the profile fails open with a warning.
+The App Sandbox is not used because it forbids starting the renderer
+processes (`docs/macOS.md`).
 
-The App Sandbox / entitlements container is deliberately **not** used: it
-forbids `fork`/`execve` of sibling executables, which is exactly how each
-tab's renderer is spawned, so adopting it would require re-architecting the
-helpers as XPC services (see [`docs/macOS.md`](docs/macOS.md)).
+### Windows
 
-### Windows process mitigations
+The renderer and the shell set these process mitigation policies at
+startup: forced image relocation, strict handle checks, extension points
+disabled, and no image loads from remote or low-integrity locations. The
+renderer also may not create child processes. There is no file-system
+sandbox, no restricted token and no AppContainer. `NS_NO_WIN32_MITIGATIONS=1`
+turns the policies off for debugging.
 
-Windows has no direct Landlock or seccomp-bpf equivalent that a
-user-space GTK process can apply to itself. Instead the browser
-hardens itself at startup via `SetProcessMitigationPolicy`, called
-from `ns_security_win32_mitigations_init` in `src/security.c`
-**before** any DLL we don't statically link is touched. Five
-policies, named by their `winnt.h` constants, all best-effort (an
-unsupported policy on an older Windows just returns `FALSE` and is
-skipped); the untrusted renderer gets all five, the GUI shell the
-first four (it must spawn renderer subprocesses):
+When started elevated, the browser relaunches itself with the desktop
+shell's unelevated token and exits. If that fails it asks whether to quit
+(the default) or continue.
 
-- **ASLR** (`ProcessASLRPolicy`, `EnableForceRelocateImages`) —
-  relocate images even if they were not linked with
-  `/DYNAMICBASE`. Bottom-up and high-entropy randomization come from
-  the PE header; `DisallowStrippedImages` is left off because it
-  would refuse a system or third-party DLL that has no relocations.
-- **StrictHandleCheck** (`ProcessStrictHandleCheckPolicy`, flags
-  `0x03`) — raise an exception on invalid handle use and lock the
-  setting permanently. Catches double-close, UAF-of-handle bugs.
-- **DisableExtensionPoints**
-  (`ProcessExtensionPointDisablePolicy`, flags `0x01`) — block
-  `AppInit_DLLs`, WinSock Layered Service Providers, Image File
-  Execution Options debuggers, and a few other legacy injection
-  vectors that load DLLs into every process on the box.
-- **ImageLoad restrictions** (`ProcessImageLoadPolicy`, flags
-  `0x07`) — `NoRemoteImages` (no DLL loads from UNC/mapped
-  network drives), `NoLowMandatoryLabelImages` (no DLL loads from
-  Low-IL filesystem locations), `PreferSystem32Images` (resolve
-  ambiguous DLL names against system32 first). Mitigates DLL
-  planting and search-order hijacks.
-- **ChildProcess block** (`ProcessChildProcessPolicy`, flags
-  `0x01`) — no `CreateProcess` from this process, so a compromised
-  renderer cannot directly pivot to `cmd.exe` / `powershell` / another
-  binary. Applied **only to the untrusted renderer** (via
-  `ns_browser_sandbox`); the process-per-tab GUI shell legitimately
-  spawns renderer subprocesses and so passes `allow_child_processes`
-  to skip this one policy while keeping the other five. Audio/video
-  handoff goes through `ShellExecuteW`, which the shell performs
-  out-of-process (not as our child) and only after the URL passes the
-  same remote-scheme check used elsewhere
-  (`http`/`https`/`ftp`/`rtsp`/`rtmp`; `file://` and local paths are
-  refused on Windows so a media link can never launch a local
-  executable).
+## Network
 
-`ProcessDynamicCodePolicy` (no writable-executable memory) is not
-applied. The renderer legitimately needs executable memory: the GPU
-driver behind WebGL compiles shaders.
-Earlier releases listed it here, but the call passed policy 7, which is
-`ProcessControlFlowGuardPolicy` and cannot be enabled after start, and
-the "ASLR" call passed policy 0, `ProcessDEPPolicy`, which is always on
-for a 64-bit process -- neither did anything.
+All requests go through the in-tree HTTP client (`rust/http`).
 
-There is no per-path filesystem sandbox; Windows AppContainer
-would provide one but requires a manifest and code-signing
-integration we don't have yet. The closest equivalents — Low
-Integrity Level drop and AppContainer — are tracked as future
-work.
+- **TLS** is rustls: TLS 1.2 and 1.3, certificate and host-name
+  verification always on, roots from the CA bundle or the system store.
+- **HTTPS first.** A top-level `http://` navigation is tried over HTTPS
+  first. HSTS is recorded and persisted.
+- **Certificate errors.** The `tls_allow_insecure_override` setting (off by
+  default) lets the user continue past a certificate error for the top-level
+  page only, never for an HSTS host. That request carries and stores no
+  cookies, and its connection is not reused. Subresources are never fetched
+  without verification.
+- **Redirects** go to `http` or `https` only, at most ten, and are resolved
+  by the same URL parser as every other check.
+- **Malformed traffic is refused**: request targets with spaces or control
+  characters, the Fetch standard's blocked ports, header lines with a bare
+  CR or LF, and HTTP/1.1 responses that end early.
+- **Mixed content.** An HTTPS page cannot load scripts, modules or workers,
+  or use `fetch`, `XMLHttpRequest` or WebSocket, over plain HTTP.
+- **DNS over HTTPS** is off unless the user names a resolver.
+- **Safe Browsing** is active only in builds given an API key. It downloads
+  hash-prefix lists and sends a 4-byte hash prefix on a match, never the
+  address. It can be turned off in Settings.
 
-Plus `ns_security_refuse_root`: elevation is detected with
-`CheckTokenMembership` against the Built-in Administrators SID.
-Unlike the Linux path it does not merely refuse — it relaunches the
-browser under the desktop shell's token (`CreateProcessWithTokenW`)
-and exits the elevated instance, so the session ends up unprivileged.
-A `MessageBox` with a run-anyway option and a `stderr` diagnostic are
-the fallback when de-elevation cannot be done; `NS_ALLOW_ROOT=1` skips
-both.
+## Web security model
 
-The whole mitigation suite can be disabled for debugging with
-`NS_NO_WIN32_MITIGATIONS=1`. Don't use that in normal operation.
+- **Partitioning.** Cookies and the HTTP cache are partitioned by top-level
+  site (scheme, registrable domain from the Public Suffix List, port).
+  Third-party cookies are blocked by default. IndexedDB is keyed by the top
+  page's origin.
+- **Cookies** honour `HttpOnly`, `Secure`, `SameSite`, `Path`, `Domain`, the
+  `__Host-` and `__Secure-` prefixes and expiry. `HttpOnly` cookies are
+  never visible to script, and `document.cookie` cannot set `Secure` from an
+  insecure page or a `Domain` outside the document's host.
+- **`file:` documents** are opaque origins: a local page cannot read other
+  files, and a web page cannot load `file:` URLs.
+- **CORS** applies to `fetch`, `XMLHttpRequest`, module scripts and
+  `crossorigin` resources. Opaque responses expose no body, status, headers
+  or redirect flag. Errors from cross-origin scripts are reported as
+  "Script error." while the script is first evaluated.
+- **CSP** enforces `default-src`, `script-src`, `style-src`, `img-src`,
+  `media-src`, `connect-src`, `font-src`, `frame-src`, `child-src`,
+  `worker-src`, `object-src`, `base-uri`, `form-action` and
+  `frame-ancestors`, with nonces, hashes and `'strict-dynamic'`.
+- **Also enforced:** Subresource Integrity, `X-Frame-Options`,
+  `X-Content-Type-Options: nosniff`, and the MIME type and status of module
+  scripts.
+- **`<iframe sandbox>`** is enforced, and nested frames inherit the
+  intersection: scripts, same-origin, forms, modals, popups, downloads and
+  top navigation.
+- **Permissions.** Camera and microphone need the user's answer to a prompt
+  for each origin. Geolocation is always denied. WebRTC and EME are stubs
+  that connect to nothing and offer no key system.
+- **Address bar.** Hosts are shown in Punycode, so an internationalized
+  look-alike domain appears as `xn--…`.
 
-### Network
+## Parsers and decoders
 
-The in-tree Rust HTTP client (`rust/http`) drives every fetch with TLS
-verification enabled: OpenSSL checks the peer chain against the CA bundle
-(or, on Windows without one, the system root store) and the host name with
-`SSL_set1_host`, partial wildcards refused. Redirects may only go to
-`http`/`https` URLs, subresource redirects are clamped to HTTPS once the
-initial scheme is HTTPS, there are at most ten redirects, and responses
-have an explicit size cap. HSTS state is recorded and persisted by
-`rust/net/src/hsts.rs`. Mixed-content sub-resources (http inside an https
-document) are blocked. The `tls_allow_insecure_override` setting, off by
-default, lets the user proceed past a certificate error only for the
-top-level navigation itself, never for an HSTS host; that retried
-navigation sends no cookies, stores none from the reply, and its
-connection is never kept in the HTTP/2 pool for later requests. A
-subresource, frame, `fetch()`, worker, media, WebSocket or EventSource
-request that fails verification is never retried without it.
+Everything below runs in the sandboxed renderer unless noted.
 
-### Origin isolation
+| Input | Decoder |
+|---|---|
+| HTML, CSS, URLs, XML | in-tree Rust (`rust/html5`, `rust/css`, `rust/url`) |
+| PNG, GIF, BMP, ICO, JPEG, WebP, SVG | Rust (`png`, `gif`, `zune-jpeg`, `image-webp`, in-tree) |
+| AVIF | libavif (C), when built |
+| Web fonts | Rust (`read-fonts`, `skrifa`, HarfRust) |
+| System fonts | FreeType, HarfBuzz (C) |
+| MPEG-1, MP2, MP3 | in-tree Rust (`rust/plmpeg`, `rust/minimp3`) |
+| WebM, Opus, Vorbis, MP4 | FFmpeg `libav*` (C); H.264 and AAC by Media Foundation on Windows |
+| PDF | poppler (C), when built |
+| Character set detection | uchardet (C) |
 
-- Cookies and the HTTP cache are partitioned per top-level **site**
-  (scheme + registrable domain + port), where the registrable domain
-  comes from the Public Suffix List, which `rust/psl` reads at first use
-  from the system (`/usr/share/publicsuffix/`) or the copy the Windows,
-  macOS, AppImage and tarball bundles ship (`share/southstar/`). Without
-  the list every host is its own site and `Domain=` cookies stay host-only. All subdomains within
-  the same registrable domain share one cookie jar and one cache
-  partition; everything else is isolated. Third-party cookies are
-  blocked by default.
-- Every `file:` document is an opaque origin. A local page still loads
-  its own scripts, style sheets and images, but `fetch()` and
-  `XMLHttpRequest` cannot read another `file:` URL or a directory
-  listing, a `file:` frame is cross-origin to its embedder, and a
-  `file:` image drawn into a canvas taints it, so an HTML file opened
-  from the downloads folder cannot read the rest of the disk.
-- CSP (`default-src`, `script-src`, `style-src`, `img-src`,
-  `media-src`, `connect-src`, `font-src`, `frame-src`,
-  `frame-ancestors`) is parsed and enforced for both inline and
-  external resources, including nonce and hash matches. Host source
-  expressions match scheme, host (with `*.` wildcard), port (defaulting
-  to the scheme's default), and path (left-anchored if the source ends
-  in `/`, exact otherwise). `*` follows CSP3 semantics — it matches
-  network schemes only, never `data:`, `blob:`, `filesystem:`, or
-  `javascript:`.
-- Subresource Integrity (`integrity="sha256-…"` / `sha384-` / `sha512-`)
-  is verified against the response body before scripts or stylesheets
-  are applied.
-- The URL bar shows every host in its ASCII Punycode form, as the WHATWG
-  URL parser serializes it, so an internationalized look-alike such as
-  `аррӏе.com` (Cyrillic) appears as `xn--80ak6aa92e.com`. There is no
-  Unicode display of IDN hosts yet, so there is no script-mixing profile
-  to get wrong.
+No image format falls back to a plugin loader. Image sizes are capped at
+16384 pixels per side and 64 megapixels. The CSS parsers and the layout
+tree walkers have fixed depth limits, so nested input cannot exhaust the
+stack.
 
-### On-disk state
+## Local interfaces and state
 
-Config, cookies, cache, HSTS, Alt-Svc, and bookmarks live under the
-XDG dirs above with owner-only permissions (`0700` directories, `0600`
-files on Unix; ACL-tightened on Windows). The HTTP cache is keyed on
-`SHA-256(URL || partition)`, so cache filenames never embed
-attacker-controlled bytes and no path-traversal is possible.
+- **Remote control** (`southstar --mcp`) is off by default. When the user
+  turns it on, the shell listens on a random loopback port and requires a
+  random token, kept in a file only the user can read.
+- **Embedding.** The renderer protocol runs over the renderer's own pipes
+  and is not reachable from web content. An embedder's resource policy is
+  checked on every request, upgrade and preconnect and on the resolved
+  address of direct connections.
+- **Extensions** are loaded only from the user's `extensions` directory;
+  there is no store and no install prompt. They can run content scripts,
+  block requests and keep storage.
+- **Files.** Southstar's directories are created `0700` and its files
+  `0600` on Unix. Cache, cookie-jar and storage file names are SHA-256
+  hashes, never bytes chosen by a site.
+- **Downloads** are named safely, capped at 1 GiB, and executable types
+  wait for the user's consent.
 
-### Parsers
+## Known limits
 
-- HTML is parsed exclusively by `rust/html5`, a memory-safe Rust tokenizer
-  and tree builder written from the WHATWG HTML Standard.
-- URL parsing routes through `rust/url`, Southstar's WHATWG URL parser.
-- PNG/APNG, GIF, BMP, and JPEG bytes are decoded in safe Rust by the
-  `png`, `gif` and `zune-jpeg` crates and an in-tree BMP decoder. SVG is rendered in-engine. Nothing else decodes
-  images: there is no plugin-loaded fallback decoder, so the set of
-  parsers exposed to untrusted bytes is fixed at build time. Decoding
-  happens inside the sandboxed renderer.
-- Charset sniffing is delegated to uchardet, not hand-rolled.
-- The engine's own parsers bound attacker-controlled nesting and sizes.
-  The recursive CSS parsers — selectors, `@supports`, `@media` queries,
-  `var()` fallbacks, and `color-mix()` — all carry depth caps, the
-  background-layer list is torn down iteratively, and layout's box-tree
-  walkers stop at a fixed depth, so a pathologically nested stylesheet or
-  DOM cannot exhaust the stack. Sizes from untrusted sources — decoded
-  image dimensions and the renderer's `X-W`/`X-H`/`X-Stride` reply
-  headers — are clamped before any `width × height`/`stride × height`
-  multiplication, so a crafted dimension cannot integer-overflow a
-  bounds check or allocation. `filter: blur()` likewise clamps its
-  radius before building the convolution window.
-
-### JavaScript
-
-JavaScript runs in [Boa](https://github.com/boa-dev/boa), a pure-Rust
-bytecode interpreter (a patched fork in `third_party/boa_engine`) — no JIT, no machine-code generation. The DOM/JS bridge
-invalidates opaque pointers on node free and re-validates on every
-call, so DOM mutation cannot dangle a JS-held handle.
-
-Each tab has its own JavaScript runtime (`rust/js-runtime` creates it with
-`RuntimeHandle::new`: one Boa `Context` with its own job queue and module
-loader) and its main realm in it (`new_context`, a fresh Boa realm); tabs do
-not share JS state, and each tab's renderer is a separate process. A page's
-scripts run under an eval budget and a 60 s absolute monitor: the runtime
-installs an interrupt handler in the Boa fork, which polls it on loop
-back-edges and calls, and a script past either deadline is halted
-(`rust/js-runtime/src/budget.rs`, `interrupt.rs`). Within a single tab, navigating across origins (e.g. from
-`news.example.com` to `evil.com`) tears down the runtime and starts a
-fresh one, so attacker-controlled globals (`window.foo = secret;`),
-prototype pollution, leftover module state, and any other in-memory
-JS residue from the previous origin cannot reach the new origin's
-scripts. Same-origin navigation reuses the existing runtime so
-sessionStorage and history work as expected.
-
-Iframes are rendered. An `<iframe src>` is fetched through the same
-hardened network pipeline as any other resource (TLS verification,
-`http`/`https` only, mixed-content blocking, redirect clamp, response-size
-cap, CSP `frame-src`); `srcdoc` is parsed inline. The content document is
-parsed by `rust/html5` and laid out in place.
-
-A loaded frame gets its own Boa realm (own global object and built-ins),
-but **within the parent tab's single runtime** — there is no separate
-runtime, heap, or OS process per frame. The frame sees its own
-`window`, `document`, `location`, and `history`, and `top`/`parent`/`self`/
-`frames` are redirected to the frame itself rather than exposing the parent's
-real global. This is a best-effort JavaScript-level boundary for ordinary
-content, **not** a hard security boundary the way per-tab runtimes or the
-cross-origin top-level navigation teardown (above) are: a memory-safety bug
-or a Proxy escape in one frame is not contained from the rest of the
-document's origin. Treat frame isolation as defence-in-depth, not as an
-origin sandbox.
-
-The `sandbox` attribute is parsed and enforced, with nested frames
-inheriting the intersection of their ancestors' sandboxes:
-
-- No `allow-scripts` (or no `sandbox` allowing it) blocks the frame's
-  scripts from running at all.
-- No `allow-same-origin` makes the frame opaque-origin: `localStorage`
-  and `sessionStorage` throw `SecurityError`, and `document.cookie` reads
-  empty and ignores writes.
-- No `allow-forms` blocks form submission; no `allow-modals` neutralises
-  `alert`/`confirm`/`prompt`/`print`; no `allow-popups` makes
-  `window.open` return `null`.
-
-A plain `<iframe>` with no `sandbox` attribute runs its scripts. Cross-
-document `postMessage` between a frame and its parent is currently limited
-(see Known gaps).
-
-### Cookies and the `document.cookie` surface
-
-Network cookies live in a per-site, Netscape-format cookie jar on disk
-(`rust/net/src/cookies.rs`). They are parsed, scoped, and re-sent by the
-network stack, honouring `HttpOnly`,
-`Secure`, `SameSite`, `Path`, `Domain`, and expiry. At navigation the
-non-`HttpOnly` cookies for the document's origin are read back out of
-the jar (`southstar_net::cookies_for_js`) and seeded into
-`document.cookie`, and the `document.cookie` setter writes back into that
-same per-site jar (`southstar_net::cookie_store_from_js`) — so a cookie set
-from JS is sent on the next request. A `document.cookie` read re-reads the
-jar whenever `southstar_net::cookie_jar_version` says it changed, so a
-cookie set or deleted over the network, by this page or another tab, is
-visible to the next read. Writes to a jar are serialised by a process-wide
-lock and an exclusive lock on `cookies/.lock`, so concurrent responses and
-renderer processes cannot overwrite each other's cookies. `HttpOnly`
-cookies are written to the jar
-with a `#HttpOnly_` line prefix that the JS read path skips, so they
-stay invisible to script.
-
-The `document.cookie` setter:
-
-- Caps input length at 4 KiB.
-- Requires a non-empty `name`.
-- Maintains a per-tab in-memory mirror for synchronous read-back, then
-  persists to the network jar.
-- Parses attributes after the first `;`. `Max-Age` (seconds) and
-  `Expires` (HTTP-date, parsed by `rust/net/src/http_date.rs`) set the jar expiry;
-  `Max-Age<=0` or a past `Expires` deletes the named cookie. `Secure`
-  is rejected outright from non-HTTPS origins. `Domain` is range-checked
-  against the document host before it widens scope; absent, the cookie
-  is stored host-only. `Path` defaults to `/`.
-
-## Known gaps
-
-- **Iframe isolation is JS-level, not a runtime or process boundary.**
-  A loaded frame has its own realm but shares the parent tab's runtime,
-  heap and process; its separate `window`/`document`/`location` and
-  redirected `top`/`parent` are not a true cross-origin sandbox.
-  Cross-document `postMessage` is correspondingly limited. A
-  per-origin/per-frame runtime would close this and is tracked as future
-  work; until then, do not rely on a cross-origin frame being contained
-  from the embedding origin.
-- **No per-path filesystem sandbox on Windows.** The mitigation
-  suite restricts the *process* (no remote DLL loads, no dynamic
-  code, no child processes, etc.) but does not allow-list the
-  files the renderer can read or write the way Landlock does on
-  Linux. AppContainer or Low-Integrity-Level drop would close
-  this; both require additional integration work (manifest /
-  capability declarations / re-routed config paths) and are
-  tracked as future work.
-- **Every renderer shares the on-disk cookie jars, HTTP cache,
-  localStorage and IndexedDB.** The renderer does its own fetching and
-  persistence, so a compromised renderer can read every site's cookies
-  from `~/.config/southstar/cookies` and write a cache entry that a tab
-  for another origin will load. Per-site renderers and a
-  networking/storage broker in the shell are the fix and are tracked as
-  future work; the configuration file is already out of the renderer's
-  writable set.
-- **Downloads are fetched by the shell.** A download started by a page
-  is fetched by the GTK shell's own network stack (TLS, HTTP/2,
-  decompression) rather than by the sandboxed renderer. It is capped at
-  1 GiB, partitioned by the page and named safely, and executable file
-  types wait for the user, but the parsing happens outside the renderer
-  sandbox until the renderer streams the bytes to the shell.
-- **The audio helper fetches helper-played media itself.** `.mp3` (and
-  `.opus`/`.ogg`/`.webm` with libav) sources pass the page's CSP
-  `media-src` and mixed-content checks in the renderer, but the helper's
-  own fetch sends no cookies, a distinct User-Agent and bypasses the
-  HTTP cache, so a server can tell the decoder's request from the
-  engine's.
+- **No site isolation.** Every renderer does its own networking and can
+  read and write the cookie jars, HTTP cache, `localStorage`, IndexedDB,
+  history, extensions and Safe Browsing lists of the whole profile. A
+  compromised renderer therefore reaches other sites' data and can persist
+  into later sessions. A broker in the shell is the planned fix.
+- **Frames share a process.** Cross-origin frame isolation is enforced by
+  the script engine only.
+- **The Linux renderer reads more than it needs:** all of `/proc`, `/sys`
+  and `/run`, and the camera device nodes whatever the user answered.
+  The camera and microphone decision is kept in the renderer.
+- **The media helpers are weaker than the renderer** on Linux and
+  unconfined on macOS and Windows. The audio helper fetches its media
+  itself. With a distribution FFmpeg, media bytes are probed against every
+  demuxer that library was built with.
+- **macOS and Windows have no read or system-call confinement.** A
+  compromised renderer there can read the user's files.
+- **Passive mixed content is not blocked.** An HTTPS page can load images
+  and style sheets over HTTP.
+- **`localStorage` is keyed by origin only**, not by top-level site.
+- **The address bar shows the URL's user-name part** and decodes
+  percent-escapes for display.
+- **Not enforced:** the CSP `sandbox` directive, and the `js_memory_cap_mb`
+  setting.
+- **Cross-origin script errors** thrown later, from a handler or a timer,
+  are reported in full.
+- **Extension content scripts run in the page's realm**, so a page can
+  interfere with them.
+- **Downloads are fetched by the shell**, outside the renderer sandbox.

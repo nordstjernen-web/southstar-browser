@@ -301,7 +301,7 @@ Updates ship only through the store — no self-update.
   Downloads, and the system temp roots — the same write set the Linux
   Landlock layer allows. It is a filesystem-integrity boundary only (no
   syscall/network confinement) and fails open. Disable with
-  `NS_NO_SANDBOX=1`. See [`SECURITY.md`](../SECURITY.md#macos-sandbox). The
+  `NS_NO_SANDBOX=1`. See [`SECURITY.md`](../SECURITY.md#macos). The
   refuse-root check also applies — `southstar` exits with status 77 if
   launched via `sudo` unless `NS_ALLOW_ROOT=1` is set.
 - **Keyboard shortcuts.** Every accelerator uses GTK's `<Primary>`
