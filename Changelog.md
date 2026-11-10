@@ -11,6 +11,18 @@ Southstar Browser 1.0.9-dev:
   and port. The HTTP client also refuses to send a request whose path, host
   or authority holds a space or a control character, over HTTP/1.1 and
   HTTP/2 and for the WebSocket upgrade.
+* Security: the window object a document of another origin is handed
+  (`iframe.contentWindow`, `parent`, `top`, `event.source`) no longer keeps
+  the real window in script. The proxy was built by script that closed over
+  the other document's global and passed it through `Array.prototype.concat`,
+  `Function.prototype.apply`, `WeakMap.prototype.has` and
+  `Object.defineProperty` as the page had left them, so a page that replaced
+  one of those received the other origin's window, in either direction. The
+  proxy's script now holds only native functions bound to the target
+  (`rust/js-frames/src/cross_window.rs`), the proxies are remembered outside
+  script, and a message's `source` is replaced for a receiver of another
+  origin before the event is delivered rather than by the receiver's own
+  script.
 * Security: cross-origin frames no longer share script objects with the page
   that embeds them. Such a frame gets its own copies of the platform's native
   functions and prototypes, runs the engine's bundled scripts (`Blob`,

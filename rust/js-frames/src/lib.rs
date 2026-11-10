@@ -7,6 +7,7 @@
 mod api;
 mod bootstrap;
 mod cloner;
+mod cross_window;
 mod exposed;
 mod ffi;
 mod globals;
