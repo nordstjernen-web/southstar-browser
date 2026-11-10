@@ -658,6 +658,18 @@ would alias the first, which the single-view detach in `memory_grow` relies
 on not happening (whether wasmi's defaults enable multi-memory was not
 checked).
 
+**Status: fixed.** The wasmi engine meters fuel. A call from script runs in
+slices of 16 million fuel units through wasmi's resumable calls, and between
+slices asks the engine's interrupt check (a new `Context::interrupt_requested`
+in the Boa fork), so a halted realm, a closing worker, the eval budget and the
+long-running script monitor stop WebAssembly as they stop script. A start
+function gets a fixed budget of 2^31 units. Multi-memory is switched off,
+since the JavaScript API layer hands out one memory object per instance.
+Checked headless in a debug build: calls, a JavaScript import that throws and
+a 300,000-iteration loop behave as before, and an infinite wasm loop that the
+old build never left is stopped when the 60-second monitor fires. Fuel
+metering costs some interpreter speed, which was not measured.
+
 **Fix.** Enable fuel or epoch interruption and drive it from the same
 interrupt callback as scripts; map views by `Memory` identity.
 

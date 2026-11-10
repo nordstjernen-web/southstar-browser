@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: WebAssembly can be interrupted. An endless loop in a wasm function
+  is stopped by the long-running script monitor, the eval budget or a closing
+  worker, as a JavaScript loop is; before, nothing could stop it. Modules with
+  more than one memory are refused (audit finding S-19).
 * Documentation: SECURITY.md no longer says WebGL is off by default behind a
   per-site prompt. It is on by default; the browser reports the site using it
   so the user can block it, and Settings turns it off everywhere (audit
