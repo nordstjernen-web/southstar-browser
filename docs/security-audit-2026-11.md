@@ -634,6 +634,12 @@ user answers. SECURITY.md describes WebGL as "off by default and gated
 behind a per-site trust prompt"; CLAUDE.md says enabled by default. S-04,
 S-05, S-16 and S-17 all sit behind this gate.
 
+**Status: fixed in the documentation.** Allow-by-default is the intended
+design (`CLAUDE.md`: enabled by default, can be disabled in Settings, reports
+active use), so the code is unchanged and SECURITY.md now says what it does: a
+site gets a context without being asked, the browser reports the site so the
+user can block it, and WebGL can be turned off in Settings.
+
 **Fix.** Either return `false` while a decision is pending, or correct
 SECURITY.md.
 
