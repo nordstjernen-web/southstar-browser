@@ -8,6 +8,7 @@ use crate::args::*;
 use crate::consts::*;
 use crate::context::WebGl;
 use crate::ffi::gl;
+use crate::fresh;
 use crate::limits::{self, MAX_ALLOC};
 use crate::methods::*;
 
@@ -27,10 +28,6 @@ simple! {
     delete_vertex_array(|_s, a| gl::delete_vertex_array(name(a, 0)));
     bind_vertex_array(|_s, a| gl::bind_vertex_array(if a.is_empty() { 0 } else { name(a, 0) }));
     vertex_attrib_divisor(|s, a| gl::vertex_attrib_divisor(uint(s, a, 0), uint(s, a, 1)));
-    tex_storage_2d(|s, a| gl::tex_storage_2d(
-        uint(s, a, 0), int(s, a, 1), uint(s, a, 2), int(s, a, 3), int(s, a, 4)));
-    renderbuffer_storage_multisample(|s, a| gl::renderbuffer_storage_multisample(
-        uint(s, a, 0), int(s, a, 1), uint(s, a, 2), int(s, a, 3), int(s, a, 4)));
     blit_framebuffer(|s, a| gl::blit_framebuffer(
         int(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3),
         int(s, a, 4), int(s, a, 5), int(s, a, 6), int(s, a, 7),
@@ -50,8 +47,6 @@ simple! {
         uint(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3), int(s, a, 4)));
     vertex_attrib_i4ui(|s, a| gl::vertex_attrib_i4ui(
         uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), uint(s, a, 3), uint(s, a, 4)));
-    tex_storage_3d(|s, a| gl::tex_storage_3d(
-        uint(s, a, 0), int(s, a, 1), uint(s, a, 2), int(s, a, 3), int(s, a, 4), int(s, a, 5)));
     delete_query(|_s, a| gl::delete_query(name(a, 0)));
     begin_query(|s, a| gl::begin_query(uint(s, a, 0), name(a, 1)));
     end_query(|s, a| gl::end_query(uint(s, a, 0)));
@@ -496,6 +491,64 @@ pub(crate) fn get_internalformat_parameter(
     let mut vals = vec![0i32; count as usize];
     gl::get_internalformativ(target, format, pname, &mut vals);
     int_array(s, &vals)
+}
+
+fn tex_storage(
+    g: &WebGl,
+    target: u32,
+    levels: i32,
+    internal: u32,
+    size: (i32, i32, i32),
+    volume: bool,
+) {
+    let mut st = g.st.borrow_mut();
+    if !fresh::storage_known(internal) {
+        st.injected_error = INVALID_ENUM;
+        return;
+    }
+    let (w, h, d) = size;
+    let allocated = fresh::succeeded(&mut st, || {
+        if volume {
+            gl::tex_storage_3d(target, levels, internal, w, h, d);
+        } else {
+            gl::tex_storage_2d(target, levels, internal, w, h);
+        }
+    });
+    if allocated {
+        fresh::zero_storage(g.version, target, levels, internal, size);
+    }
+}
+
+pub(crate) fn tex_storage_2d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let size = (int(s, a, 3), int(s, a, 4), 1);
+    tex_storage(&g, uint(s, a, 0), int(s, a, 1), uint(s, a, 2), size, false);
+    undefined()
+}
+
+pub(crate) fn tex_storage_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let size = (int(s, a, 3), int(s, a, 4), int(s, a, 5));
+    tex_storage(&g, uint(s, a, 0), int(s, a, 1), uint(s, a, 2), size, true);
+    undefined()
+}
+
+pub(crate) fn renderbuffer_storage_multisample(
+    s: &mut Scope<'_>,
+    this: &Value,
+    a: &[Value],
+) -> JsResult {
+    let g = current(s, this)?;
+    let (target, samples, format) = (uint(s, a, 0), int(s, a, 1), uint(s, a, 2));
+    let (w, h) = (int(s, a, 3), int(s, a, 4));
+    let mut st = g.st.borrow_mut();
+    let allocated = fresh::succeeded(&mut st, || {
+        gl::renderbuffer_storage_multisample(target, samples, format, w, h);
+    });
+    if allocated {
+        fresh::clear_renderbuffer(&mut st, g.version, format);
+    }
+    undefined()
 }
 
 pub(crate) fn tex_image_3d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {

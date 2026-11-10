@@ -159,8 +159,6 @@ gl_entry_points! {
         bind_buffer_base = epoxy_glBindBufferBase(target: u32, index: u32, buffer: u32);
         bind_buffer_range = epoxy_glBindBufferRange(
             target: u32, index: u32, buffer: u32, offset: isize, size: isize);
-        copy_tex_image_2d = epoxy_glCopyTexImage2D(
-            target: u32, level: i32, format: u32, x: i32, y: i32, w: i32, h: i32, border: i32);
         copy_tex_sub_image_2d = epoxy_glCopyTexSubImage2D(
             target: u32, level: i32, xoff: i32, yoff: i32, x: i32, y: i32, w: i32, h: i32);
         copy_tex_sub_image_3d = epoxy_glCopyTexSubImage3D(

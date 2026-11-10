@@ -237,6 +237,16 @@ receives recycled driver memory. Renderers are per tab, so that can include
 a cross-origin frame's WebGL pixels or decoded media. Textures created by
 `texImage2D(…, null)` are already zero-filled.
 
+**Status: fixed.** `rust/webgl/src/fresh.rs` zero-initialises what WebGL
+allocates: `bufferData(size)` for every target, the drawing buffer's colour,
+depth and stencil on creation and on resize, every level, face and layer of
+`texStorage2D`/`texStorage3D` textures, and renderbuffers (through a scratch
+framebuffer, with the page's clear state saved and restored). `copyTexImage2D`
+allocates zeroed and copies only the part inside the drawing buffer.
+`texStorage*` with a format outside the WebGL 2 table raises `INVALID_ENUM`.
+Run on software GL the calls work and leave GL state as it was; the leak
+itself does not show there, since fresh memory is zero.
+
 **Fix.** Zero-fill `bufferData(size)` for every target. Clear every level,
 layer and attachment after `texStorage*`, `renderbufferStorage*` and
 drawing-buffer reallocation. Make `copyTexImage2D` zero the region outside
