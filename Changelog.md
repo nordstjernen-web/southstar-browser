@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: `fetch()` and `new Request()` refuse a method that is not an HTTP
+  token, so a method containing spaces can no longer put extra words on the
+  request line (audit finding S-09).
 * Security: downloads. A page can no longer start a stream of downloads from
   script: without a recent user gesture, a click on a download link starts at
   most one download every 30 seconds, a sandboxed frame needs `allow-

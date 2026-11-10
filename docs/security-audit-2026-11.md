@@ -399,6 +399,13 @@ non-token bytes reach the request line, and `"TRACE x"` is not `TRACE`.
 HTTP/1.1 connections are never reused and cross-origin non-simple methods
 are preflighted, which limits the impact to lenient servers and proxies.
 
+**Status: fixed.** `fetch()` and the `Request` constructor reject a method
+that is not an HTTP token with `TypeError`, alongside the forbidden methods,
+and the HTTP client no longer puts a non-token method on the request line at
+all (it falls back to `GET` or `POST`, as it already did for CR and LF).
+Checked headless: `'GET /x HTTP/1.1 '`, `'TRACE x'` and `'pat ch'` are
+refused, `QUERY` and `get` are sent.
+
 **Fix.** Reject with `TypeError` unless `headers::is_token(method)`; make
 `h1::request_head` refuse a method, path or authority containing a space or
 control byte.

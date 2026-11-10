@@ -364,10 +364,10 @@ pub(crate) fn fetch(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> JsRe
     }
     if let Some(m) = method
         .as_deref()
-        .filter(|m| headers::is_forbidden_method(m))
+        .filter(|m| headers::is_forbidden_method(m) || !headers::is_token(m))
     {
         let message = format!(
-            "fetch: '{}' is a forbidden method",
+            "fetch: '{}' is not a permitted method",
             String::from_utf8_lossy(m)
         );
         let error = scope.type_error(&message);

@@ -118,11 +118,15 @@ fn is_reserved(name: &[u8]) -> bool {
     RESERVED.iter().any(|r| r.eq_ignore_ascii_case(name))
 }
 
+fn is_token_byte(b: u8) -> bool {
+    b > 0x20 && b < 0x7f && !b"(),/:;<=>?@[\\]{}\"".contains(&b)
+}
+
 fn request_method<'a>(req: &Request<'a>) -> &'a [u8] {
     if req.method.is_empty() {
         return b"GET";
     }
-    if req.method.iter().any(|&b| b == b'\r' || b == b'\n') {
+    if !req.method.iter().all(|&b| is_token_byte(b)) {
         return if req.body.is_empty() { b"GET" } else { b"POST" };
     }
     req.method
