@@ -65,6 +65,16 @@ pub(crate) fn type_supported(n: Node) -> bool {
     }
 }
 
+pub(crate) fn content_type_is_json(ct: &[u8]) -> bool {
+    let essence = ct
+        .split(|&b| b == b';')
+        .next()
+        .unwrap_or_default()
+        .trim_ascii()
+        .to_ascii_lowercase();
+    essence == b"application/json" || essence == b"text/json" || essence.ends_with(b"+json")
+}
+
 pub fn content_type_is_javascript(ct: &[u8]) -> bool {
     const OK: [&[u8]; 10] = [
         b"text/javascript",
