@@ -442,6 +442,16 @@ interstitial, by a renderer-side flag set when it is shown.
 victim page → protected victim page passes. Multiple or comma-joined header
 values are not handled either.
 
+**Status: fixed.** `framing_blocked` checks `X-Frame-Options` and `frame-
+ancestors` against the immediate embedder and against every outer frame's
+document and the top page (http and https ancestors). A comma-joined `X-Frame-
+Options` is split, so `SAMEORIGIN, DENY` blocks; before, such a value matched
+neither word and the page was framed. Checked headless against a local server:
+the comma-joined case was framed cross-site by the old build and is refused
+now, and same-origin double framing still renders. The old build did not
+render the cross-site double-framed page in this test either, so that half of
+the finding was not reproduced.
+
 **Fix.** Walk every ancestor frame URL and require each to pass.
 
 ### S-12 — CORS preflight cache ignores credentials mode

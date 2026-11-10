@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: `X-Frame-Options` and CSP `frame-ancestors` are checked against
+  every ancestor frame up to the top page, not just the immediate embedder,
+  and an `X-Frame-Options` header with several comma-separated values is
+  honoured instead of ignored (audit finding S-11).
 * Security: only the Safe Browsing warning page itself can continue past the
   warning. A page can no longer navigate to the internal continue address for
   its own host and so allow-list that host without the user seeing the warning
