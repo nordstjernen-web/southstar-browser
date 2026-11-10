@@ -564,6 +564,8 @@ mod os {
         kind: u32,
     }
 
+    const ERROR_ALREADY_EXISTS: i32 = 183;
+
     unsafe extern "system" {
         fn OpenFileMappingA(access: u32, inherit: c_int, name: *const c_char) -> Handle;
         fn CreateFileMappingA(
@@ -660,6 +662,10 @@ mod os {
             )
         };
         if handle.is_null() {
+            return None;
+        }
+        if std::io::Error::last_os_error().raw_os_error() == Some(ERROR_ALREADY_EXISTS) {
+            close_handle(handle);
             return None;
         }
         Some(SharedMemory {

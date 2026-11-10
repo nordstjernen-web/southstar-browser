@@ -552,6 +552,15 @@ multiplies `stride * height` in `u32`, which wraps in release builds
 (harmless today because `frame()` rejects the result), and on Windows
 `CreateFileMappingA` silently opens an existing object of the same name.
 
+**Status: partly fixed.** `Ring::create` computes the stride, frame and ring
+sizes with checked arithmetic, and on Windows a mapping whose name already
+exists is refused (`ERROR_ALREADY_EXISTS`); the Windows path was type-checked
+for `x86_64-pc-windows-gnu` but not run. **Still open:** the shell still maps
+a named object the helper created and can truncate, so a compromised helper
+can still crash the shell with `SIGBUS`. Closing that needs the helper to hand
+over a sealed `memfd`, which means a socket between shell and helper where
+there are now only pipes.
+
 **Fix.** Create the memory in the shell, or pass a `memfd` sealed against
 shrinking, as the renderer framebuffer does. Use `checked_mul`. Treat
 `ERROR_ALREADY_EXISTS` as failure.
