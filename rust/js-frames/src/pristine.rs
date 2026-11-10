@@ -12,6 +12,7 @@ use crate::ffi::{self, Js};
 use crate::page;
 
 const MAX_CHAIN: usize = 16;
+const INSTANCE_DEPTH: usize = 3;
 
 const GLOBALS_SNAPSHOT: &str = "(function(g){ var out = Object.create(null); var names = Object.getOwnPropertyNames(g); for (var i = 0; i < names.length; i++) { try { out[names[i]] = Object.getOwnPropertyDescriptor(g, names[i]); } catch (e) {} } return out; })(globalThis)";
 
@@ -32,6 +33,18 @@ impl Pristine {
 
     pub fn globals(&self) -> &Value {
         &self.globals
+    }
+
+    pub fn global_value(&self, realm: Ctx, name: &str) -> Value {
+        if !self.globals.is_object() {
+            return Value::undefined();
+        }
+        let descriptor = realm.get(&self.globals, name);
+        if descriptor.is_object() {
+            realm.get(&descriptor, "value")
+        } else {
+            Value::undefined()
+        }
     }
 }
 
@@ -82,6 +95,17 @@ impl Recorder {
         self.record_chain(&prototype);
     }
 
+    fn record_instance(&mut self, object: &Value, depth: usize) {
+        if depth > INSTANCE_DEPTH || self.realm.is_function(object) || !self.record(object) {
+            return;
+        }
+        let prototype = self.realm.prototype(object);
+        self.record_chain(&prototype);
+        for value in self.values_of(object) {
+            self.record_instance(&value, depth + 1);
+        }
+    }
+
     fn values_of(&self, object: &Value) -> Vec<Value> {
         let identity = object.object_identity() as usize;
         self.holders
@@ -112,6 +136,7 @@ fn record(realm: Ctx) -> Pristine {
     if recorder.record(&global) {
         for value in recorder.values_of(&global) {
             recorder.record_interface(&value);
+            recorder.record_instance(&value, 0);
         }
     }
     let globals = realm
@@ -137,4 +162,24 @@ pub(crate) fn snapshot(js: Js) {
 
 pub(crate) fn current(js: Js) -> Option<Rc<Pristine>> {
     page::peek(js, |page| page.pristine.clone()).flatten()
+}
+
+pub(crate) fn snapshot_natives(js: Js) {
+    if js.is_null() {
+        return;
+    }
+    let natives = Rc::new(record(ffi::main_realm(js)));
+    let replaced = page::with(js, |page| page.natives.replace(natives));
+    drop(replaced);
+}
+
+pub(crate) fn natives(js: Js) -> Option<Rc<Pristine>> {
+    page::peek(js, |page| page.natives.clone()).flatten()
+}
+
+pub(crate) fn for_frame(js: Js, isolated: bool) -> Option<Rc<Pristine>> {
+    isolated
+        .then(|| natives(js))
+        .flatten()
+        .or_else(|| current(js))
 }

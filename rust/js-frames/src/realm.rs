@@ -9,6 +9,7 @@ use crate::bootstrap;
 use crate::cloner;
 use crate::ffi::ctx::Ctx;
 use crate::ffi::{self, Js};
+use crate::origin::CROSS_ORIGIN;
 use crate::owner;
 use crate::page::{self, Frame};
 use crate::sandbox;
@@ -134,6 +135,12 @@ fn run_global_bootstrap(
     let realm_clone = ffi::realm_clone_function(fctx);
     let window_events = owner::frame_window_events(fctx);
     let navigate = ffi::navigate_frame_function(js, fctx, iframe);
+    let natives = if sandbox & CROSS_ORIGIN != 0 {
+        owner::native_platform_names(js)
+    } else {
+        Value::undefined()
+    };
+    let run_bundled = ffi::run_bundled_function(fctx);
     let args = [
         window.clone(),
         parent_global.clone(),
@@ -149,6 +156,8 @@ fn run_global_bootstrap(
         realm_clone,
         window_events,
         navigate,
+        natives,
+        run_bundled,
     ];
     let result = fctx.call(&maker, &Value::undefined(), &args)?;
     result.is_object().then_some(())
@@ -177,7 +186,7 @@ pub(crate) fn make_realm_context(
         }
     };
     ffi::adopt_frame_clock(js, iframe, fctx);
-    cloner::prepare_frame_realm(js, fctx, document);
+    cloner::prepare_frame_realm(js, fctx, document, sandbox & CROSS_ORIGIN != 0);
     let window = fctx.global();
     let parent_global = parent_realm(js, iframe).global();
     run_global_bootstrap(
@@ -194,6 +203,12 @@ pub(crate) fn make_realm_context(
         },
     )?;
     cloner::install_singletons(js, fctx, &parent_global, &window);
+    if sandbox & CROSS_ORIGIN != 0 {
+        let location = fctx.get(&window, "location");
+        if location.is_object() {
+            fctx.set(document, "location", location);
+        }
+    }
     ffi::finish_frame_realm(js, fctx, &window, &parent_global);
     Some(FrameRealm { ctx: fctx, window })
 }

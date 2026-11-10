@@ -237,3 +237,8 @@ pub fn install_runtime_hooks() {
         },
     );
 }
+
+pub(crate) fn isolated_proto(scope: &mut Scope<'_>, proto: &Value) -> Value {
+    let page = Page::current(scope);
+    (api::frames_hooks().isolated_proto_for)(page, scope.handle(), proto)
+}

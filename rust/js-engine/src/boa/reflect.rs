@@ -4,8 +4,9 @@
 
 use boa_engine::native_function::NativeFunctionObject;
 use boa_engine::object::FunctionObjectBuilder;
+use boa_engine::object::builtins::{JsFunction, JsPromise};
 use boa_engine::property::PropertyDescriptor as BoaPropertyDescriptor;
-use boa_engine::{JsObject, JsString, JsValue, NativeFunction};
+use boa_engine::{Context, JsError, JsObject, JsResult, JsString, JsValue, NativeFunction};
 
 use std::sync::Mutex;
 
@@ -13,6 +14,82 @@ use super::{Scope, Value};
 use crate::{HostClass, PropertyDescriptor};
 
 static CLASSES: Mutex<Vec<&'static HostClass>> = Mutex::new(Vec::new());
+
+const REALM_CHAIN_LIMIT: usize = 64;
+
+fn belongs_to_realm(value: &JsValue, ctx: &Context) -> bool {
+    let Some(mut object) = value.as_object() else {
+        return true;
+    };
+    let root = ctx.intrinsics().constructors().object().prototype();
+    for _ in 0..REALM_CHAIN_LIMIT {
+        if JsObject::equals(&object, &root) {
+            return true;
+        }
+        match object.prototype() {
+            Some(parent) => object = parent,
+            None => return false,
+        }
+    }
+    false
+}
+
+fn into_realm(value: JsValue, localize: &JsObject, ctx: &mut Context) -> JsValue {
+    if belongs_to_realm(&value, ctx) {
+        return value;
+    }
+    let foreign = value
+        .as_object()
+        .and_then(|object| JsPromise::from_object(object).ok());
+    let Some(foreign) = foreign else {
+        let copied = localize
+            .call(&JsValue::undefined(), &[value], ctx)
+            .unwrap_or_default();
+        return if belongs_to_realm(&copied, ctx) {
+            copied
+        } else {
+            JsValue::undefined()
+        };
+    };
+    let (promise, resolvers) = JsPromise::new_pending(ctx);
+    let fulfilled = settling(resolvers.resolve, localize.clone(), ctx);
+    let rejected = settling(resolvers.reject, localize.clone(), ctx);
+    match foreign.then(Some(fulfilled), Some(rejected), ctx) {
+        Ok(_) => promise.into(),
+        Err(_) => JsValue::undefined(),
+    }
+}
+
+fn settling(settle: JsFunction, localize: JsObject, ctx: &Context) -> JsFunction {
+    NativeFunction::from_copy_closure_with_captures(
+        |_this, args, (settle, localize): &(JsFunction, JsObject), ctx| {
+            let value = args.first().cloned().unwrap_or_default();
+            let value = into_realm(value, localize, ctx);
+            settle.call(&JsValue::undefined(), &[value], ctx)
+        },
+        (settle, localize),
+    )
+    .to_js_function(ctx.realm())
+}
+
+fn forward(
+    target: &JsObject,
+    this: &JsValue,
+    args: &[JsValue],
+    localize: Option<&JsObject>,
+    ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let Some(localize) = localize else {
+        return target.call(this, args, ctx);
+    };
+    match target.call(this, args, ctx) {
+        Ok(result) => Ok(into_realm(result, localize, ctx)),
+        Err(error) => match error.into_opaque(ctx) {
+            Ok(thrown) => Err(JsError::from_opaque(into_realm(thrown, localize, ctx))),
+            Err(limit) => Err(limit),
+        },
+    }
+}
 
 pub(super) fn remember_class(class: &'static HostClass) {
     if let Ok(mut classes) = CLASSES.lock()
@@ -105,10 +182,15 @@ impl Scope<'_> {
         name: &str,
         length: i32,
         constructor: bool,
+        localize: Option<&Value>,
     ) -> Result<Value, Value> {
         let target = self.object(target)?;
+        let localize = match localize {
+            Some(localize) => Some(self.object(localize)?),
+            None => None,
+        };
         let native = NativeFunction::from_copy_closure_with_captures(
-            move |this, args, target: &JsObject, ctx| {
+            move |this, args, (target, localize): &(JsObject, Option<JsObject>), ctx| {
                 if constructor
                     && target.is_constructor()
                     && let Some(new_target) = this.as_constructor()
@@ -122,9 +204,9 @@ impl Scope<'_> {
                 } else {
                     this.clone()
                 };
-                target.call(&this, args, ctx)
+                forward(target, &this, args, localize.as_ref(), ctx)
             },
-            target,
+            (target, localize),
         );
         let realm = self.cx().realm().clone();
         let function = FunctionObjectBuilder::new(&realm, native)

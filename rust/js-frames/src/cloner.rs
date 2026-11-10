@@ -97,6 +97,9 @@ const ALL: Attributes = Attributes {
     configurable: true,
 };
 const MAX_DEPTH: u32 = 32;
+const LOCALIZED_DEPTH: u32 = 6;
+const LOCALIZED_ITEMS: i32 = 1 << 20;
+const SHELL_CHAIN: usize = 16;
 
 pub(crate) type Shared = Rc<RefCell<Cloner>>;
 
@@ -105,6 +108,7 @@ pub(crate) struct Cloner {
     dst: Ctx,
     memo: HashMap<usize, (Value, Value)>,
     pristine: Option<Rc<Pristine>>,
+    isolated: bool,
 }
 
 fn identity(value: &Value) -> usize {
@@ -124,12 +128,19 @@ fn data_descriptor(value: Value, like: &Descriptor) -> Descriptor {
 }
 
 impl Cloner {
-    fn new(src: Ctx, main: Ctx, dst: Ctx, pristine: Option<Rc<Pristine>>) -> Cloner {
+    fn new(
+        src: Ctx,
+        main: Ctx,
+        dst: Ctx,
+        pristine: Option<Rc<Pristine>>,
+        isolated: bool,
+    ) -> Cloner {
         let mut cloner = Cloner {
             src,
             dst,
             memo: HashMap::new(),
             pristine,
+            isolated,
         };
         cloner.seed(src);
         if main != src {
@@ -225,6 +236,14 @@ impl Cloner {
         }
     }
 
+    fn shared(&self, value: &Value) -> Value {
+        if self.isolated {
+            Value::undefined()
+        } else {
+            value.clone()
+        }
+    }
+
     fn clone_value(&mut self, value: &Value, depth: u32) -> Value {
         if !value.is_object() {
             return value.clone();
@@ -233,10 +252,10 @@ impl Cloner {
             return hit.clone();
         }
         if depth > MAX_DEPTH {
-            return value.clone();
+            return self.shared(value);
         }
         let Some(mut out) = self.dst.clone_native_function(value) else {
-            return value.clone();
+            return self.shared(value);
         };
         if out.is_undefined() {
             if self.src.is_function(value) {
@@ -244,7 +263,7 @@ impl Cloner {
             }
             match self.new_shell(value) {
                 Some(shell) => out = shell,
-                None => return value.clone(),
+                None => return self.shared(value),
             }
         }
         self.put(value, &out);
@@ -376,7 +395,9 @@ impl Cloner {
         } else {
             0
         };
-        self.dst.new_forwarder(function, &name, length, constructor)
+        let localize = self.isolated.then(|| ffi::localize_function(self.dst));
+        self.dst
+            .new_forwarder(function, &name, length, constructor, localize.as_ref())
     }
 
     fn ctor_owns_proto(&self, constructor: &Value) -> bool {
@@ -395,7 +416,12 @@ impl Cloner {
         let Some(desc) = self.src.own_property(function, key) else {
             return;
         };
-        if !desc.accessor && is_proto && desc.value.is_object() && !self.ctor_owns_proto(function) {
+        if !self.isolated
+            && !desc.accessor
+            && is_proto
+            && desc.value.is_object()
+            && !self.ctor_owns_proto(function)
+        {
             self.put(&desc.value, &desc.value);
             self.dst.define(out, key, &desc);
             return;
@@ -406,7 +432,7 @@ impl Cloner {
     fn clone_js_function(&mut self, function: &Value, depth: u32) -> Value {
         let constructor = self.fn_is_interface(function);
         let Some(out) = self.forwarder_for(function, constructor) else {
-            return function.clone();
+            return self.shared(function);
         };
         self.put(function, &out);
         let src = self.src;
@@ -464,7 +490,7 @@ impl Cloner {
 
     fn clone_storage(&mut self, value: &Value, area: i32) -> Value {
         let Some(out) = ffi::new_storage(self.dst, area) else {
-            return value.clone();
+            return self.shared(value);
         };
         self.put(value, &out);
         out
@@ -474,21 +500,33 @@ impl Cloner {
         self.src.is_plain_object(value) && depth <= 3 && !value.is_array()
     }
 
+    fn clone_instance_property(&mut self, out: &Value, key: &Key, desc: &Descriptor, depth: u32) {
+        if desc.accessor {
+            self.clone_descriptor_into(out, key, desc, depth);
+        } else {
+            let cloned = self.clone_instance(&desc.value, depth + 1);
+            self.dst.define(out, key, &data_descriptor(cloned, desc));
+        }
+    }
+
     fn clone_instance_properties(&mut self, value: &Value, out: &Value, depth: u32) {
         let src = self.src;
         src.copy_private_elements(value, out);
+        if self.isolated
+            && let Some(pristine) = self.pristine.clone()
+            && let Some(properties) = pristine.own_properties(value)
+        {
+            for (key, desc) in properties {
+                self.clone_instance_property(out, key, desc, depth);
+            }
+            return;
+        }
         let Some(keys) = src.own_keys(value, Keys::StringsAndSymbols) else {
             return;
         };
         for key in &keys {
-            let Some(desc) = src.own_property(value, key) else {
-                continue;
-            };
-            if desc.accessor {
-                self.clone_descriptor_into(out, key, &desc, depth);
-            } else {
-                let cloned = self.clone_instance(&desc.value, depth + 1);
-                self.dst.define(out, key, &data_descriptor(cloned, &desc));
+            if let Some(desc) = src.own_property(value, key) {
+                self.clone_instance_property(out, key, &desc, depth);
             }
         }
     }
@@ -501,7 +539,7 @@ impl Cloner {
             proto
         };
         let Some(out) = self.dst.new_object_proto(&cloned_proto) else {
-            return value.clone();
+            return self.shared(value);
         };
         self.put(value, &out);
         self.clone_instance_properties(value, &out, depth);
@@ -519,9 +557,189 @@ impl Cloner {
             return self.clone_storage(value, area);
         }
         if !self.instance_is_plain(value, depth) {
-            return value.clone();
+            return if self.isolated {
+                self.localize(value, depth)
+            } else {
+                value.clone()
+            };
         }
         self.clone_plain_instance(value, depth)
+    }
+
+    fn localized_buffer(&mut self, value: &Value) -> Option<Value> {
+        let src = self.src;
+        let element = src.try_enter(|scope| scope.typed_array_element(value))?;
+        let bytes = src
+            .try_enter(|scope| scope.with_buffer_bytes_mut(value, |bytes| bytes.to_vec()))
+            .flatten()?;
+        self.dst
+            .try_enter(|scope| match element {
+                Some(element) => scope.new_typed_array(element, &bytes).ok(),
+                None => scope.new_array_buffer(&bytes).ok(),
+            })
+            .flatten()
+    }
+
+    fn localized_array(&mut self, value: &Value, depth: u32) -> Value {
+        let src = self.src;
+        let length = src
+            .to_int32(&src.get(value, "length"))
+            .clamp(0, LOCALIZED_ITEMS) as u32;
+        let out = self.dst.enter(|scope| scope.new_array());
+        for index in 0..length {
+            let item = src
+                .try_enter(|scope| scope.get_index(value, index).ok())
+                .flatten()
+                .unwrap_or_else(Value::undefined);
+            let item = self.localize(&item, depth + 1);
+            self.dst
+                .try_enter(|scope| scope.set_index(&out, index, item).ok());
+        }
+        out
+    }
+
+    fn localized_error(&mut self, value: &Value) -> Value {
+        let (src, dst) = (self.src, self.dst);
+        let out = dst.enter(|scope| scope.new_error());
+        for field in ["name", "message"] {
+            let text = src.get(value, field);
+            if text.is_string() {
+                let key = Key::new(dst, &std::ffi::CString::new(field).unwrap_or_default());
+                dst.define_value(&out, &key, text, ALL);
+            }
+        }
+        out
+    }
+
+    fn bound(&mut self, function: &Value, this: &Value) -> Value {
+        let own = self.clone_value(function, 0);
+        let dst = self.dst;
+        let bind = dst.get(&own, "bind");
+        if !dst.is_function(&own) || !dst.is_function(&bind) {
+            return Value::undefined();
+        }
+        dst.call(&bind, &own, core::slice::from_ref(this))
+            .unwrap_or_else(Value::undefined)
+    }
+
+    fn holder_properties(&self, holder: &Value) -> Vec<(Key, Descriptor)> {
+        let src = self.src;
+        src.own_keys(holder, Keys::StringsAndSymbols)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|key| {
+                let descriptor = src.own_property(holder, &key)?;
+                Some((key, descriptor))
+            })
+            .collect()
+    }
+
+    fn bind_member(&mut self, out: &Value, host: &Value, key: &Key, desc: &Descriptor, depth: u32) {
+        let src = self.src;
+        let copy = if desc.accessor {
+            Descriptor {
+                value: Value::undefined(),
+                getter: self.bound(&desc.getter, host),
+                setter: self.bound(&desc.setter, host),
+                accessor: true,
+                configurable: true,
+                enumerable: desc.enumerable,
+                writable: false,
+            }
+        } else if src.is_function(&desc.value) {
+            data_descriptor(self.bound(&desc.value, host), desc)
+        } else {
+            data_descriptor(self.localize(&desc.value, depth + 1), desc)
+        };
+        self.dst.define(out, key, &copy);
+    }
+
+    fn bound_shell(&mut self, host: &Value, depth: u32) -> Value {
+        let (src, dst) = (self.src, self.dst);
+        let Some(out) = dst.new_object_proto(&dst.prototype(&dst.new_object_literal())) else {
+            return Value::undefined();
+        };
+        let constructor = Key::new(src, c"constructor");
+        let mut holder = host.clone();
+        for _ in 0..SHELL_CHAIN {
+            if !holder.is_object() || src.is_function(&holder) {
+                break;
+            }
+            let pristine = self.pristine.clone();
+            let live;
+            let properties = match pristine
+                .as_ref()
+                .and_then(|pristine| pristine.own_properties(&holder))
+            {
+                Some(recorded) => recorded,
+                None => {
+                    live = self.holder_properties(&holder);
+                    &live
+                }
+            };
+            for (key, desc) in properties {
+                if key.same(&constructor) || dst.has_own(&out, key) == Some(true) {
+                    continue;
+                }
+                self.bind_member(&out, host, key, desc, depth);
+            }
+            holder = src.prototype(&holder);
+            if self.lookup(&holder).is_some() {
+                break;
+            }
+        }
+        out
+    }
+
+    fn localized_object(&mut self, value: &Value, depth: u32) -> Value {
+        let src = self.src;
+        let proto = src.prototype(value);
+        let proto = if proto.is_object() {
+            self.clone_value(&proto, 0)
+        } else {
+            proto
+        };
+        let Some(out) = self.dst.new_object_proto(&proto) else {
+            return Value::undefined();
+        };
+        for (key, desc) in self.holder_properties(value) {
+            if desc.accessor {
+                self.clone_descriptor_into(&out, &key, &desc, depth);
+            } else {
+                let item = self.localize(&desc.value, depth + 1);
+                self.dst.define(&out, &key, &data_descriptor(item, &desc));
+            }
+        }
+        out
+    }
+
+    fn localize(&mut self, value: &Value, depth: u32) -> Value {
+        if !value.is_object() {
+            return value.clone();
+        }
+        if let Some(hit) = self.lookup(value) {
+            return hit.clone();
+        }
+        if depth > LOCALIZED_DEPTH {
+            return Value::undefined();
+        }
+        let src = self.src;
+        if src.is_function(value) {
+            return self.clone_value(value, 0);
+        }
+        if let Some(buffer) = self.localized_buffer(value) {
+            return buffer;
+        }
+        if value.is_array() {
+            return self.localized_array(value, depth);
+        }
+        if src.try_enter(|scope| scope.is_error(value)) == Some(true) {
+            return self.localized_error(value);
+        }
+        if src.is_plain_object(value) {
+            return self.localized_object(value, depth);
+        }
+        self.bound_shell(value, depth)
     }
 
     fn adopt_navigator_value(&mut self, mine: &Value, key: &Key, values: &Value) {
@@ -603,9 +821,35 @@ impl Cloner {
         }
     }
 
+    fn install_pristine_singleton(&mut self, frame_global: &Value, name: &str) {
+        let dst = self.dst;
+        let key = Key::new(dst, &std::ffi::CString::new(name).unwrap_or_default());
+        if dst
+            .own_property(frame_global, &key)
+            .is_some_and(|desc| desc.accessor || !desc.value.is_undefined())
+        {
+            return;
+        }
+        let Some(pristine) = self.pristine.clone() else {
+            return;
+        };
+        let source = pristine.global_value(self.src, name);
+        if !source.is_object() {
+            return;
+        }
+        let own = self.clone_instance(&source, 0);
+        if own.is_object() {
+            dst.define_value(frame_global, &key, own, ALL);
+        }
+    }
+
     fn install_singletons(&mut self, parent_global: &Value, frame_global: &Value) {
         for name in SINGLETON_NAMES {
-            self.install_singleton(parent_global, frame_global, name);
+            if self.isolated {
+                self.install_pristine_singleton(frame_global, name);
+            } else {
+                self.install_singleton(parent_global, frame_global, name);
+            }
         }
         let nav = self.dst.get(frame_global, "navigator");
         self.register_navigator(&nav);
@@ -621,6 +865,10 @@ fn lookup(js: Js, dst: Ctx) -> Option<Shared> {
 }
 
 fn cloner_for(js: Js, dst: Ctx) -> Shared {
+    cloner_with(js, dst, false)
+}
+
+fn cloner_with(js: Js, dst: Ctx, isolated: bool) -> Shared {
     if let Some(found) = lookup(js, dst) {
         return found;
     }
@@ -629,7 +877,8 @@ fn cloner_for(js: Js, dst: Ctx) -> Shared {
         main,
         main,
         dst,
-        pristine::current(js),
+        pristine::for_frame(js, isolated),
+        isolated,
     )));
     let replaced = page::with(js, |page| {
         page.cloners_made = true;
@@ -639,8 +888,8 @@ fn cloner_for(js: Js, dst: Ctx) -> Shared {
     cloner
 }
 
-pub(crate) fn prepare_frame_realm(js: Js, dst: Ctx, document: &Value) {
-    let cloner = cloner_for(js, dst);
+pub(crate) fn prepare_frame_realm(js: Js, dst: Ctx, document: &Value, isolated: bool) {
+    let cloner = cloner_with(js, dst, isolated);
     if let Ok(mut cloner) = cloner.try_borrow_mut() {
         cloner.clone_class_protos();
         cloner.adopt_in_place(document);
@@ -654,6 +903,16 @@ pub(crate) fn install_singletons(js: Js, dst: Ctx, parent_global: &Value, frame_
     }
 }
 
+pub(crate) fn localize_into(js: Js, dst: Ctx, value: &Value) -> Value {
+    let Some(cloner) = lookup(js, dst) else {
+        return Value::undefined();
+    };
+    match cloner.try_borrow_mut() {
+        Ok(mut cloner) => cloner.localize(value, 0),
+        Err(_) => Value::undefined(),
+    }
+}
+
 pub(crate) fn clone_into(js: Js, dst: Ctx, value: &Value) -> Value {
     let Some(cloner) = lookup(js, dst) else {
         return value.clone();
@@ -661,6 +920,15 @@ pub(crate) fn clone_into(js: Js, dst: Ctx, value: &Value) -> Value {
     match cloner.try_borrow_mut() {
         Ok(mut cloner) => cloner.clone_value(value, 0),
         Err(_) => value.clone(),
+    }
+}
+
+pub(crate) fn isolated_proto_for(js: Js, realm: Ctx, proto: &Value) -> Option<Value> {
+    let isolated = lookup(js, realm)?.try_borrow().ok()?.isolated;
+    if isolated {
+        proto_for(js, realm, proto)
+    } else {
+        None
     }
 }
 

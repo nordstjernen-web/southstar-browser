@@ -229,6 +229,13 @@ pub(crate) fn child_frame_window(
     Ok(Value::undefined())
 }
 
+pub(crate) fn native_platform_names(js: Js) -> Value {
+    pristine::natives(js)
+        .map(|natives| natives.globals().clone())
+        .filter(Value::is_object)
+        .unwrap_or_else(Value::undefined)
+}
+
 pub(crate) fn platform_names(js: Js, ctx: Ctx) -> Value {
     if let Some(pristine) = pristine::current(js)
         && pristine.globals().is_object()

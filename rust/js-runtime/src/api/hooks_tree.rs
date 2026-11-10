@@ -51,6 +51,7 @@ pub struct FramesHooks {
     pub realms_same_origin: fn(Page, ContextHandle, ContextHandle) -> bool,
     pub schedule_static_iframes: fn(Option<Page>, Node<'_>),
     pub realm_proto_for: fn(Page, ContextHandle, &Value) -> Value,
+    pub isolated_proto_for: fn(Option<Page>, ContextHandle, &Value) -> Value,
     pub frame_realm_window: fn(Option<Page>, Node<'_>) -> Value,
     pub frame_realm_document: fn(Option<Page>, Node<'_>) -> Value,
 }
@@ -79,12 +80,25 @@ impl FramesHooks {
         realms_same_origin: |_, _, _| true,
         schedule_static_iframes: |_, _| {},
         realm_proto_for: |_, _, proto| proto.clone(),
+        isolated_proto_for: |_, _, proto| proto.clone(),
         frame_realm_window: |_, _| Value::null(),
         frame_realm_document: |_, _| Value::null(),
     };
 }
 
 hook_table!(FramesHooks, FRAMES, set_frames_hooks, frames_hooks);
+
+pub struct RealmHooks {
+    pub finish_shapes: fn(&mut southstar_js_engine::Scope<'_>),
+}
+
+impl RealmHooks {
+    const NONE: RealmHooks = RealmHooks {
+        finish_shapes: |_| {},
+    };
+}
+
+hook_table!(RealmHooks, REALM, set_realm_hooks, realm_hooks);
 
 pub struct MutationHooks {
     pub init: fn(Page),

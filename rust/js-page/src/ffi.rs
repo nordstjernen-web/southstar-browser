@@ -204,6 +204,7 @@ impl Js {
     }
 
     pub fn eval_polyfills(self) {
+        southstar_js_frames::snapshot_native_platform(self.0);
         api::eval_polyfills(self.0);
     }
 

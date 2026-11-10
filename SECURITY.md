@@ -63,6 +63,19 @@ arbitrary code execution outside the user's data directory. (Per-origin
 networking/storage broker are the next steps; today the renderer still
 does its own fetching and persistence.)
 
+Frames of a tab share that renderer and its script engine, each in a realm
+of its own. A cross-origin frame, or a sandboxed one without
+`allow-same-origin`, is cut off from its embedder inside the engine: it
+gets its own copies of the platform's native functions and prototypes,
+evaluates the engine's bundled scripts in its own realm, and reaches its
+parent and top only through a proxy that allows `postMessage`, navigation
+and the few other cross-origin members. Values that engine code in the
+embedder's realm hands to such a frame are copied into the frame's realm
+first, so nothing the frame can reach has the embedder's `Object.prototype`
+behind it. A frame counts as cross-origin when its origin differs from its
+parent document's or from the top page's. This is a boundary inside one
+process: it stops script, not a memory-safety bug.
+
 ### Link-time hardening (`rust/build/src/link.rs`)
 
 PIE, full RELRO (`-z relro -z now`), non-executable stack,

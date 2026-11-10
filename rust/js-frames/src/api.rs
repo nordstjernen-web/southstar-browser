@@ -98,6 +98,10 @@ pub fn snapshot_platform(js: Option<Page>) {
     pristine::snapshot(Js::of(js));
 }
 
+pub fn snapshot_native_platform(js: Option<Page>) {
+    pristine::snapshot_natives(Js::of(js));
+}
+
 pub fn clear_initial_blank_frames(js: Option<Page>) {
     page::peek_mut(Js::of(js), |page| page.initial_blank.clear());
 }

@@ -228,9 +228,14 @@ impl Ctx {
         name: &str,
         length: i32,
         constructor: bool,
+        localize: Option<&Value>,
     ) -> Option<Value> {
-        self.try_enter(|scope| scope.new_forwarder(target, name, length, constructor).ok())
-            .flatten()
+        self.try_enter(|scope| {
+            scope
+                .new_forwarder(target, name, length, constructor, localize)
+                .ok()
+        })
+        .flatten()
     }
 
     pub fn registered_classes(self) -> Vec<&'static HostClass> {
@@ -245,6 +250,11 @@ impl Ctx {
 
     pub fn set_class_proto(self, class: &HostClass, prototype: Value) {
         self.try_enter(|scope| scope.set_class_prototype(class, prototype));
+    }
+
+    pub fn new_object_literal(self) -> Value {
+        self.try_enter(|scope| scope.new_object())
+            .unwrap_or_else(Value::undefined)
     }
 
     pub fn new_object_proto(self, prototype: &Value) -> Option<Value> {

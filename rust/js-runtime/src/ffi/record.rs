@@ -1141,6 +1141,10 @@ pub(crate) fn eval_polyfills(js: Option<Page>) {
     eval_bundled(js, STREAMING, c"<streaming>");
 }
 
+pub(crate) fn bundled_sources() -> [&'static str; 2] {
+    [POLYFILLS, STREAMING].map(|source| source.strip_suffix('\0').unwrap_or(source))
+}
+
 pub(crate) fn snapshot_platform_globals(js: Option<Page>) {
     let Some(record) = record(js) else {
         return;
