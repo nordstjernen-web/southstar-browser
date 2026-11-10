@@ -38,7 +38,11 @@ trusted.
   the png/gif/zune-jpeg crates, …). Report upstream; we update when fixes ship.
 - Features we deliberately don't implement: WebRTC, EME/DRM, service
   workers, browser extensions, JIT, "AI" web APIs. (WebGL *is*
-  implemented, off by default and gated behind a per-site trust prompt.
+  implemented and on by default: a site gets a context without being
+  asked first, the browser then reports that site so the user can block
+  it, and WebGL can be turned off for every site in Settings. Its GL
+  entry points, shader checks and the driver behind them are therefore
+  reachable by any page.
   WebGPU is an **experimental**, opt-in feature —
   absent unless the build has wgpu-native and the browser is started with
   `--enable-webgpu`. MSE and inline WebM/MP4

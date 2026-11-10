@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Documentation: SECURITY.md no longer says WebGL is off by default behind a
+  per-site prompt. It is on by default; the browser reports the site using it
+  so the user can block it, and Settings turns it off everywhere (audit
+  finding S-18).
 * Security: WebGL shader source is checked before the GPU driver compiles it.
   Characters outside the GLSL ES set, over-long tokens, identifiers reserved
   by WebGL, very deep nesting, a desktop `#version` and macros that expand
