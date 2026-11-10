@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security audit: `docs/security-audit-2026-11.md` records a source review
+  of the tree for security vulnerabilities — twenty findings with their
+  files, severity and fixes, led by cross-origin frames sharing live objects
+  with their embedder — and the areas the review did not reach. No code
+  changes.
 * Regular expressions stop at the script time limit: a search that
   backtracks catastrophically (`/^(.*\d|^(.*|dR\b)+b)+? dYYYYYYYY|/` on a
   40-character string runs for hours) now ends with the script when the
