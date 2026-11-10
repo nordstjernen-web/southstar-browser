@@ -538,6 +538,12 @@ pub(crate) fn request_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value])
     let normalized = method.as_deref().and_then(headers::normalize_method);
     if normalized
         .as_deref()
+        .is_some_and(|m| headers::is_forbidden_method(m) || !headers::is_token(m))
+    {
+        return Err(scope.type_error("Request: not a permitted method"));
+    }
+    if normalized
+        .as_deref()
         .is_some_and(|m| m == b"GET" || m == b"HEAD")
         && !is_nullish(&body)
     {
