@@ -47,7 +47,14 @@ pub(crate) fn undefined() -> JsResult {
 
 pub(crate) fn new_object(s: &mut Scope<'_>, g: &WebGl, name: u32, kind: u8) -> Value {
     let proto = host::api_proto(s, g.canvas, OBJECT_IFACES[kind as usize]);
-    s.new_host_object(proto.is_object().then_some(&proto), GlObject { kind, name })
+    s.new_host_object(
+        proto.is_object().then_some(&proto),
+        GlObject {
+            kind,
+            name,
+            owner: g.id,
+        },
+    )
 }
 
 pub(crate) fn wrap(s: &mut Scope<'_>, g: &WebGl, name: u32, kind: u8) -> Value {
@@ -137,25 +144,25 @@ simple! {
         uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), uint(s, a, 3)));
     stencil_mask_separate(|s, a| gl::stencil_mask_separate(uint(s, a, 0), uint(s, a, 1)));
     active_texture(|s, a| gl::active_texture(uint(s, a, 0)));
-    delete_shader(|_s, a| gl::delete_shader(name(a, 0)));
-    compile_shader(|_s, a| gl::compile_shader(name(a, 0)));
-    delete_program(|_s, a| gl::delete_program(name(a, 0)));
-    attach_shader(|_s, a| gl::attach_shader(name(a, 0), name(a, 1)));
-    detach_shader(|_s, a| gl::detach_shader(name(a, 0), name(a, 1)));
-    link_program(|_s, a| gl::link_program(name(a, 0)));
-    validate_program(|_s, a| gl::validate_program(name(a, 0)));
-    use_program(|_s, a| gl::use_program(name(a, 0)));
-    delete_texture(|_s, a| gl::delete_texture(name(a, 0)));
-    bind_texture(|s, a| gl::bind_texture(uint(s, a, 0), name(a, 1)));
+    delete_shader(|_s, a| gl::delete_shader(name(a, 0, KIND_SHADER)));
+    compile_shader(|_s, a| gl::compile_shader(name(a, 0, KIND_SHADER)));
+    delete_program(|_s, a| gl::delete_program(name(a, 0, KIND_PROGRAM)));
+    attach_shader(|_s, a| gl::attach_shader(name(a, 0, KIND_PROGRAM), name(a, 1, KIND_SHADER)));
+    detach_shader(|_s, a| gl::detach_shader(name(a, 0, KIND_PROGRAM), name(a, 1, KIND_SHADER)));
+    link_program(|_s, a| gl::link_program(name(a, 0, KIND_PROGRAM)));
+    validate_program(|_s, a| gl::validate_program(name(a, 0, KIND_PROGRAM)));
+    use_program(|_s, a| gl::use_program(name(a, 0, KIND_PROGRAM)));
+    delete_texture(|_s, a| gl::delete_texture(name(a, 0, KIND_TEXTURE)));
+    bind_texture(|s, a| gl::bind_texture(uint(s, a, 0), name(a, 1, KIND_TEXTURE)));
     tex_parameter_i(|s, a| gl::tex_parameter_i(uint(s, a, 0), uint(s, a, 1), int(s, a, 2)));
     tex_parameter_f(|s, a| gl::tex_parameter_f(uint(s, a, 0), uint(s, a, 1), float(s, a, 2)));
     generate_mipmap(|s, a| gl::generate_mipmap(uint(s, a, 0)));
     framebuffer_texture_2d(|s, a| gl::framebuffer_texture_2d(
-        uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), name(a, 3), int(s, a, 4)));
+        uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), name(a, 3, KIND_TEXTURE), int(s, a, 4)));
     framebuffer_renderbuffer(|s, a| gl::framebuffer_renderbuffer(
-        uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), name(a, 3)));
-    delete_renderbuffer(|_s, a| gl::delete_renderbuffer(name(a, 0)));
-    bind_renderbuffer(|s, a| gl::bind_renderbuffer(uint(s, a, 0), name(a, 1)));
+        uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), name(a, 3, KIND_RENDERBUFFER)));
+    delete_renderbuffer(|_s, a| gl::delete_renderbuffer(name(a, 0, KIND_RENDERBUFFER)));
+    bind_renderbuffer(|s, a| gl::bind_renderbuffer(uint(s, a, 0), name(a, 1, KIND_RENDERBUFFER)));
     enable_vertex_attrib_array(|s, a| gl::enable_vertex_attrib_array(uint(s, a, 0)));
     disable_vertex_attrib_array(|s, a| gl::disable_vertex_attrib_array(uint(s, a, 0)));
     copy_tex_sub_image_2d(|s, a| gl::copy_tex_sub_image_2d(
@@ -239,6 +246,9 @@ pub(crate) fn get_error(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResu
             err = st.injected_error;
         }
         st.injected_error = NO_ERROR;
+    }
+    if g.foreign_object.take() && err == NO_ERROR {
+        err = INVALID_OPERATION;
     }
     Ok(Value::int(err as i32))
 }
@@ -443,7 +453,7 @@ pub(crate) fn shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
     if let Some(source) = bytes(s, &a[1])
         && source.len() <= MAX_SHADER
     {
-        gl::shader_source(name(a, 0), &with_version_prefix(source));
+        gl::shader_source(name(a, 0, KIND_SHADER), &with_version_prefix(source));
     }
     undefined()
 }
@@ -451,7 +461,7 @@ pub(crate) fn shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
 pub(crate) fn get_shader_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     let pname = uint(s, a, 1);
-    let v = gl::get_shaderiv(name(a, 0), pname);
+    let v = gl::get_shaderiv(name(a, 0, KIND_SHADER), pname);
     if pname == COMPILE_STATUS || pname == DELETE_STATUS {
         return Ok(Value::boolean(v != 0));
     }
@@ -472,7 +482,12 @@ fn object_log(s: &mut Scope<'_>, kind: gl::LogKind, object: u32, len_pname: u32)
 
 pub(crate) fn get_shader_info_log(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
-    object_log(s, gl::LogKind::ShaderInfo, name(a, 0), INFO_LOG_LENGTH)
+    object_log(
+        s,
+        gl::LogKind::ShaderInfo,
+        name(a, 0, KIND_SHADER),
+        INFO_LOG_LENGTH,
+    )
 }
 
 pub(crate) fn get_shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
@@ -480,14 +495,19 @@ pub(crate) fn get_shader_source(s: &mut Scope<'_>, this: &Value, a: &[Value]) ->
     object_log(
         s,
         gl::LogKind::ShaderSource,
-        name(a, 0),
+        name(a, 0, KIND_SHADER),
         SHADER_SOURCE_LENGTH,
     )
 }
 
 pub(crate) fn get_program_info_log(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
-    object_log(s, gl::LogKind::ProgramInfo, name(a, 0), INFO_LOG_LENGTH)
+    object_log(
+        s,
+        gl::LogKind::ProgramInfo,
+        name(a, 0, KIND_PROGRAM),
+        INFO_LOG_LENGTH,
+    )
 }
 
 pub(crate) fn create_program(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
@@ -499,7 +519,7 @@ pub(crate) fn create_program(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> J
 pub(crate) fn get_program_parameter(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
     let pname = uint(s, a, 1);
-    let v = gl::get_programiv(name(a, 0), pname);
+    let v = gl::get_programiv(name(a, 0, KIND_PROGRAM), pname);
     if pname == LINK_STATUS || pname == VALIDATE_STATUS || pname == DELETE_STATUS {
         return Ok(Value::boolean(v != 0));
     }
@@ -510,22 +530,24 @@ pub(crate) fn bind_attrib_location(s: &mut Scope<'_>, this: &Value, a: &[Value])
     let _g = current(s, this)?;
     if let Some(attrib) = string_arg(s, a, 2, 3) {
         let index = uint(s, a, 1);
-        gl::bind_attrib_location(name(a, 0), index, &attrib);
+        gl::bind_attrib_location(name(a, 0, KIND_PROGRAM), index, &attrib);
     }
     undefined()
 }
 
 pub(crate) fn get_attrib_location(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let _g = current(s, this)?;
-    let loc =
-        string_arg(s, a, 1, 2).map_or(-1, |attrib| gl::get_attrib_location(name(a, 0), &attrib));
+    let loc = string_arg(s, a, 1, 2).map_or(-1, |attrib| {
+        gl::get_attrib_location(name(a, 0, KIND_PROGRAM), &attrib)
+    });
     Ok(Value::int(loc))
 }
 
 pub(crate) fn get_uniform_location(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
-    let loc =
-        string_arg(s, a, 1, 2).map_or(-1, |uniform| gl::get_uniform_location(name(a, 0), &uniform));
+    let loc = string_arg(s, a, 1, 2).map_or(-1, |uniform| {
+        gl::get_uniform_location(name(a, 0, KIND_PROGRAM), &uniform)
+    });
     if loc < 0 {
         return Ok(Value::null());
     }
@@ -534,7 +556,7 @@ pub(crate) fn get_uniform_location(s: &mut Scope<'_>, this: &Value, a: &[Value])
 
 fn active_var(s: &mut Scope<'_>, this: &Value, a: &[Value], which: gl::ActiveKind) -> JsResult {
     let g = current(s, this)?;
-    let program = name(a, 0);
+    let program = name(a, 0, KIND_PROGRAM);
     let index = uint(s, a, 1);
     let active = gl::active_variable(which, program, index, 255);
     Ok(active_info(s, &g, active))
@@ -601,7 +623,7 @@ pub(crate) fn create_renderbuffer(s: &mut Scope<'_>, this: &Value, _a: &[Value])
 
 pub(crate) fn delete_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
-    let n = name(a, 0);
+    let n = name(a, 0, KIND_BUFFER);
     if n != 0 {
         let mut st = g.st.borrow_mut();
         st.buffer_sizes.remove(&n);
@@ -618,7 +640,7 @@ pub(crate) fn bind_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
         g.st.borrow_mut().injected_error = INVALID_ENUM;
         return undefined();
     }
-    gl::bind_buffer(target, name(a, 1));
+    gl::bind_buffer(target, name(a, 1, KIND_BUFFER));
     undefined()
 }
 
@@ -1344,7 +1366,7 @@ pub(crate) fn tex_sub_image_2d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> 
 pub(crate) fn delete_framebuffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     if !a.is_empty() {
-        let n = name(a, 0);
+        let n = name(a, 0, KIND_FRAMEBUFFER);
         if n != 0 {
             let mut st = g.st.borrow_mut();
             if st.user_draw_fbo == n {
@@ -1362,14 +1384,18 @@ pub(crate) fn delete_framebuffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -
         }
     }
     let _g = current(s, this)?;
-    gl::delete_framebuffer(name(a, 0));
+    gl::delete_framebuffer(name(a, 0, KIND_FRAMEBUFFER));
     undefined()
 }
 
 pub(crate) fn bind_framebuffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
     let g = current(s, this)?;
     let target = uint(s, a, 0);
-    let f = if a.len() >= 2 { name(a, 1) } else { 0 };
+    let f = if a.len() >= 2 {
+        name(a, 1, KIND_FRAMEBUFFER)
+    } else {
+        0
+    };
     let mut st = g.st.borrow_mut();
     match target {
         FRAMEBUFFER => {
@@ -1439,34 +1465,37 @@ pub(crate) fn is_object(
     this: &Value,
     a: &[Value],
     test: fn(u32) -> u8,
+    kind: u8,
 ) -> JsResult {
-    let _g = current(s, this)?;
-    let n = if a.is_empty() { 0 } else { name(a, 0) };
+    let g = current(s, this)?;
+    let flagged = g.foreign_object.get();
+    let n = if a.is_empty() { 0 } else { name(a, 0, kind) };
+    g.foreign_object.set(flagged);
     Ok(Value::boolean(n != 0 && test(n) != 0))
 }
 
 pub(crate) fn is_buffer(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_buffer)
+    is_object(s, t, a, gl::is_buffer, KIND_BUFFER)
 }
 
 pub(crate) fn is_program(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_program)
+    is_object(s, t, a, gl::is_program, KIND_PROGRAM)
 }
 
 pub(crate) fn is_shader(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_shader)
+    is_object(s, t, a, gl::is_shader, KIND_SHADER)
 }
 
 pub(crate) fn is_texture(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_texture)
+    is_object(s, t, a, gl::is_texture, KIND_TEXTURE)
 }
 
 pub(crate) fn is_framebuffer(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_framebuffer)
+    is_object(s, t, a, gl::is_framebuffer, KIND_FRAMEBUFFER)
 }
 
 pub(crate) fn is_renderbuffer(s: &mut Scope<'_>, t: &Value, a: &[Value]) -> JsResult {
-    is_object(s, t, a, gl::is_renderbuffer)
+    is_object(s, t, a, gl::is_renderbuffer, KIND_RENDERBUFFER)
 }
 
 fn target_parameter(
@@ -1546,7 +1575,7 @@ pub(crate) fn get_attached_shaders(s: &mut Scope<'_>, this: &Value, a: &[Value])
     if a.is_empty() || !a[0].is_object() {
         return Ok(Value::null());
     }
-    let shaders = gl::get_attached_shaders(name(a, 0));
+    let shaders = gl::get_attached_shaders(name(a, 0, KIND_PROGRAM));
     let arr = s.new_array();
     for (i, shader) in shaders.into_iter().enumerate() {
         let v = wrap(s, &g, shader, KIND_SHADER);

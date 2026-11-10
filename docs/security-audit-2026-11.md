@@ -487,6 +487,12 @@ hold the lowest names. No memory-unsafe consequence was found, because the
 pixel-transfer wrappers re-check sizes against live GL state, but it
 undermines the host's invariants and compounds S-05.
 
+**Status: fixed.** Every WebGL object records the context that made it, and
+each argument site names the kind it expects (`name(a, i, KIND_…)`). An object
+of another kind or another context is treated as null and `getError` reports
+`INVALID_OPERATION`; the same check covers uniform locations and sync objects.
+The context's internal objects have no wrappers, so a page cannot name them.
+
 **Fix.** `name()` takes the expected kind and the calling context and raises
 `INVALID_OPERATION` on a mismatch; keep internal names out of the page's
 reach.

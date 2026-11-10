@@ -112,10 +112,11 @@ pub(crate) fn drawimage_source(
 pub(crate) struct GlObject {
     pub(crate) kind: u8,
     pub(crate) name: u32,
+    pub(crate) owner: u64,
 }
 
-pub(crate) fn object_of(value: &Value) -> Option<(u8, u32)> {
-    value.with_host(|o: &GlObject| (o.kind, o.name))
+pub(crate) fn object_of(value: &Value) -> Option<(u8, u32, u64)> {
+    value.with_host(|o: &GlObject| (o.kind, o.name, o.owner))
 }
 
 pub(crate) struct ContextHost {
