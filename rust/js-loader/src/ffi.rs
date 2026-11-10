@@ -98,6 +98,22 @@ impl Response {
         self.0.final_url().filter(|url| !url.is_empty())
     }
 
+    pub(crate) fn readable_from(&self, document: &[u8], requested: &CStr) -> bool {
+        let fetched = self.final_url().unwrap_or(requested).to_bytes();
+        if !southstar_url::bytes::is_http_or_https(fetched)
+            || southstar_url::bytes::same_origin(document, fetched)
+        {
+            return true;
+        }
+        let Some(allowed) = self.0.cors_allow_origin() else {
+            return false;
+        };
+        let allowed = allowed.to_bytes().trim_ascii();
+        allowed == b"*"
+            || southstar_url::bytes::origin_from(document)
+                .is_some_and(|origin| !origin.is_empty() && allowed.eq_ignore_ascii_case(&origin))
+    }
+
     pub(crate) fn nosniff(&self) -> bool {
         self.0
             .x_content_type_options()

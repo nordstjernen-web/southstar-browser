@@ -157,6 +157,19 @@ fn run_external(
         js.dispatch_resource_event(n, c"error");
         return;
     }
+    if is_module
+        && let Some(resp) = &fetched.response
+        && resp.error().is_none()
+        && !origin.is_none_or(|origin| resp.readable_from(origin.to_bytes(), &abs_url))
+    {
+        js.log(&line(&[
+            b"CORS blocked: module script ",
+            abs_url.to_bytes(),
+        ]));
+        drop(fetched);
+        js.dispatch_resource_event(n, c"error");
+        return;
+    }
     let mut loaded = false;
     let body = fetched
         .response
@@ -337,6 +350,66 @@ fn reference_error(scope: &mut Scope<'_>, message: &[u8]) -> Value {
     scope.reference_error(&String::from_utf8_lossy(message))
 }
 
+fn is_https(url: Option<&CStr>) -> bool {
+    url.is_some_and(|url| starts_with(url, b"https://"))
+}
+
+fn module_request_refused(
+    js: Js,
+    url: &CStr,
+    document: Option<&CStr>,
+    top_url: Option<&CStr>,
+) -> Option<&'static [u8]> {
+    if (is_https(document) || is_https(top_url)) && starts_with(url, b"http://") {
+        return Some(b"mixed content");
+    }
+    if !js.is_null() && !js.csp_allows(None, CSP_SCRIPT, url, top_url, None, false) {
+        return Some(b"blocked by Content-Security-Policy script-src");
+    }
+    None
+}
+
+fn module_response_refused(
+    js: Js,
+    url: &CStr,
+    resp: &ffi::Response,
+    json: bool,
+    document: Option<&CStr>,
+    top_url: Option<&CStr>,
+) -> Option<&'static [u8]> {
+    if let Some(final_url) = resp.final_url().filter(|final_url| *final_url != url)
+        && let Some(why) = module_request_refused(js, final_url, document, top_url)
+    {
+        return Some(why);
+    }
+    if resp.status() != 200 {
+        return Some(b"non-200 status");
+    }
+    let typed = resp.content_type().is_some_and(|ct| {
+        if json {
+            crate::content_type_is_json(ct.to_bytes())
+        } else {
+            content_type_is_javascript(ct.to_bytes())
+        }
+    });
+    if !typed {
+        return Some(b"not a JavaScript or JSON MIME type");
+    }
+    let readable = document.is_none_or(|document| resp.readable_from(document.to_bytes(), url));
+    if !readable {
+        return Some(b"cross-origin without Access-Control-Allow-Origin");
+    }
+    None
+}
+
+fn module_refused(js: Js, scope: &mut Scope<'_>, name: &CStr, why: &[u8]) -> Value {
+    if !js.is_null() {
+        js.log(&line(&[b"module ", name.to_bytes(), b": ", why]));
+    }
+    let message = line(&[b"module fetch failed: ", name.to_bytes()]);
+    scope.type_error(&String::from_utf8_lossy(&message))
+}
+
 pub(crate) fn module_source(
     js: Js,
     scope: &mut Scope<'_>,
@@ -372,10 +445,28 @@ pub(crate) fn module_source(
         ]);
         return Err(reference_error(scope, &message));
     }
+    let top_url = js.module_top_url();
+    let document = js.document_url(scope).or_else(|| top_url.clone());
+    if let Some(why) = module_request_refused(js, name, document.as_deref(), top_url.as_deref()) {
+        return Err(module_refused(js, scope, name, why));
+    }
     count_load(js, true, 0);
     let info = js.module_perf_info(scope.handle());
-    let top_url = js.module_top_url();
     let fetched = js.fetch(name, top_url.as_deref(), !json, c"script", &info);
+    if let Some(resp) = &fetched.response
+        && resp.error().is_none()
+        && let Some(why) = module_response_refused(
+            js,
+            name,
+            resp,
+            json,
+            document.as_deref(),
+            top_url.as_deref(),
+        )
+    {
+        drop(fetched);
+        return Err(module_refused(js, scope, name, why));
+    }
     let body = fetched
         .response
         .as_ref()

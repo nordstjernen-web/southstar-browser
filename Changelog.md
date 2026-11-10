@@ -23,6 +23,14 @@ Southstar Browser 1.0.9-dev:
   script, and a message's `source` is replaced for a receiver of another
   origin before the event is delivered rather than by the receiver's own
   script.
+* Security: module scripts are fetched as the standard asks. A static or
+  dynamic `import`, a JSON module and `<script type="module" src>` from
+  another origin need an `Access-Control-Allow-Origin` that admits the
+  document; the response must be a 200 with a JavaScript MIME type (a JSON
+  one for `with { type: "json" }`); and the address, also after a redirect,
+  must pass `script-src` and may not be `http:` on an `https:` page. Before,
+  `import data from "https://other.example/api.json" with { type: "json" }`
+  handed any page the parsed response of another origin.
 * Security: cross-origin frames no longer share script objects with the page
   that embeds them. Such a frame gets its own copies of the platform's native
   functions and prototypes, runs the engine's bundled scripts (`Blob`,
