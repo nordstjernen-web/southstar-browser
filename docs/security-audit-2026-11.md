@@ -422,6 +422,12 @@ the whole host. A page on a host that is not itself flagged can navigate to
 the continue URL for a flagged path on the same host, and the user never
 sees the warning.
 
+**Status: fixed, not exercised.** The page the browser builds for the warning
+is marked (`NsBrowser::interstitial`), and `allows_navigation_url` accepts
+`southstar-unsafe-continue:` only from that page, with the host check kept. I
+could not get a local blocklist entry to trigger the interstitial in headless
+mode, so this is checked by reading only.
+
 **Fix.** Accept the scheme only when the current document is the
 interstitial, by a renderer-side flag set when it is shown.
 
