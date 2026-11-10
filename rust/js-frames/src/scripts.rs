@@ -17,6 +17,7 @@ use crate::origin::{self, CROSS_ORIGIN};
 use crate::page;
 use crate::realm::{self, FrameRealm, frame_of};
 use crate::restore;
+use crate::sandbox;
 
 const ALREADY_STARTED: &CStr = c"data-nd-script-already-started";
 const EXPOSE_SCAN_CAP: usize = 131072;
@@ -394,14 +395,6 @@ fn run_in_page_realm(js: Js, concat: &[u8], exposed: &ExposedNames, run: &PageRe
     });
 }
 
-fn module_scope(ctx: Ctx, made: &FrameRealm) -> Value {
-    let scope = ctx.new_object();
-    ctx.set(&scope, "window", made.window.clone());
-    ctx.set(&scope, "location", made.location.clone());
-    ctx.set(&scope, "history", made.history.clone());
-    scope
-}
-
 pub(crate) fn run(
     js: Js,
     content_root: Node<'_>,
@@ -447,12 +440,15 @@ pub(crate) fn run(
     };
     let realm_window = made.as_ref().filter(|made| made.window.is_object());
 
+    let isolated = sandbox & CROSS_ORIGIN != 0
+        || (sandbox & sandbox::ACTIVE != 0 && sandbox & sandbox::ALLOW_SAME_ORIGIN == 0);
+
     match realm_window {
         Some(made) if !collected.classic.is_empty() || has_handlers || reuse_blank.is_some() => {
             publish_realm_window(js, iframe, iframe_doc, &made.window, sandbox);
             run_in_realm(js, made, iframe, &collected.classic);
         }
-        _ if !collected.concat.is_empty() => run_in_page_realm(
+        _ if !isolated && !collected.concat.is_empty() => run_in_page_realm(
             js,
             &collected.concat,
             &collected.exposed,
@@ -469,18 +465,13 @@ pub(crate) fn run(
 
     let origin_bytes = Some(origin.to_bytes());
     match realm_window {
-        Some(made) if !collected.modules.is_empty() => {
-            let scope = module_scope(ffi::current_realm(js), made);
-            realm::run_modules(
-                js,
-                &collected.modules,
-                origin_bytes,
-                iframe_doc,
-                &scope,
-                sandbox,
-            );
+        Some(_) => {
+            for module in &collected.modules {
+                ffi::run_script_element(js, *module, origin_bytes);
+            }
         }
-        _ => realm::run_modules(
+        None if isolated => {}
+        None => realm::run_modules(
             js,
             &collected.modules,
             origin_bytes,

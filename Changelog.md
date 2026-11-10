@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a cross-origin or sandboxed frame whose script realm cannot be
+  created no longer has its scripts run in its embedder's realm, and a frame's
+  module scripts no longer replace the embedder's `window` and `document`
+  while they evaluate (audit finding S-02).
 * Security: a cross-origin frame's window no longer calls into its embedder's
   global. `fetch`, `URL`, `Event`, `DOMException` and `Range` in a frame come
   from the frame's own realm, so a page that replaces its own `window.fetch`
