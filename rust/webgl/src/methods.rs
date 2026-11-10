@@ -9,6 +9,7 @@ use crate::consts::*;
 use crate::context::WebGl;
 use crate::ffi::gl;
 use crate::ffi::host::{self, GlObject};
+use crate::fresh;
 use crate::limits::{self, MAX_ALLOC, MAX_SHADER};
 
 pub(crate) const HIDDEN_ACTIVEINFO: i32 = 7;
@@ -155,13 +156,8 @@ simple! {
         uint(s, a, 0), uint(s, a, 1), uint(s, a, 2), name(a, 3)));
     delete_renderbuffer(|_s, a| gl::delete_renderbuffer(name(a, 0)));
     bind_renderbuffer(|s, a| gl::bind_renderbuffer(uint(s, a, 0), name(a, 1)));
-    renderbuffer_storage(|s, a| gl::renderbuffer_storage(
-        uint(s, a, 0), uint(s, a, 1), int(s, a, 2), int(s, a, 3)));
     enable_vertex_attrib_array(|s, a| gl::enable_vertex_attrib_array(uint(s, a, 0)));
     disable_vertex_attrib_array(|s, a| gl::disable_vertex_attrib_array(uint(s, a, 0)));
-    copy_tex_image_2d(|s, a| gl::copy_tex_image_2d(
-        uint(s, a, 0), int(s, a, 1), uint(s, a, 2), int(s, a, 3),
-        int(s, a, 4), int(s, a, 5), int(s, a, 6), int(s, a, 7)));
     copy_tex_sub_image_2d(|s, a| gl::copy_tex_sub_image_2d(
         uint(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3),
         int(s, a, 4), int(s, a, 5), int(s, a, 6), int(s, a, 7)));
@@ -626,6 +622,63 @@ pub(crate) fn bind_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
     undefined()
 }
 
+pub(crate) fn renderbuffer_storage(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let (target, format) = (uint(s, a, 0), uint(s, a, 1));
+    let (w, h) = (int(s, a, 2), int(s, a, 3));
+    let mut st = g.st.borrow_mut();
+    if fresh::succeeded(&mut st, || gl::renderbuffer_storage(target, format, w, h)) {
+        fresh::clear_renderbuffer(&mut st, g.version, format);
+    }
+    undefined()
+}
+
+pub(crate) fn copy_tex_image_2d(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let (target, level, internal) = (uint(s, a, 0), int(s, a, 1), uint(s, a, 2));
+    let (x, y, w, h) = (int(s, a, 3), int(s, a, 4), int(s, a, 5), int(s, a, 6));
+    let border = int(s, a, 7);
+    let mut st = g.st.borrow_mut();
+    let Some(pixel) = fresh::upload_format(internal) else {
+        st.injected_error = INVALID_ENUM;
+        return undefined();
+    };
+    let Some(zero) = fresh::zero_pixels(g.version, (w, h), pixel) else {
+        st.injected_error = INVALID_VALUE;
+        return undefined();
+    };
+    let unpack = fresh::Unpack::neutral(g.version);
+    let allocated = fresh::succeeded(&mut st, || {
+        let data = Some(zero.as_slice()).filter(|zero| !zero.is_empty());
+        gl::tex_image_2d(target, level, internal as i32, (w, h), border, pixel, data);
+    });
+    unpack.restore();
+    if !allocated {
+        return undefined();
+    }
+    let (mut left, mut bottom, mut right, mut top) =
+        (x, y, x.saturating_add(w), y.saturating_add(h));
+    if st.user_read_fbo == 0 {
+        left = left.max(0);
+        bottom = bottom.max(0);
+        right = right.min(st.w);
+        top = top.min(st.h);
+    }
+    if right > left && top > bottom {
+        gl::copy_tex_sub_image_2d(
+            target,
+            level,
+            left - x,
+            bottom - y,
+            left,
+            bottom,
+            right - left,
+            top - bottom,
+        );
+    }
+    undefined()
+}
+
 fn stored_buffer_size(target: u32) -> usize {
     gl::get_target_parameter(gl::TargetQuery::Buffer, target, BUFFER_SIZE).max(0) as usize
 }
@@ -648,12 +701,8 @@ pub(crate) fn buffer_data(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
         }
         let size = size as usize;
         let mut st = g.st.borrow_mut();
-        if is_elem {
-            let zero = (size > 0).then(|| vec![0u8; size]);
-            gl::buffer_data(target, size, zero.as_deref(), usage);
-        } else {
-            gl::buffer_data(target, size, None, usage);
-        }
+        let zero = (size > 0).then(|| vec![0u8; size]);
+        gl::buffer_data(target, size, zero.as_deref(), usage);
         let stored = stored_buffer_size(target);
         st.set_buffer_size(bn, stored);
         if is_elem && stored == size {

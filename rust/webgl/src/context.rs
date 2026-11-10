@@ -13,6 +13,7 @@ use southstar_js_runtime::api::Page;
 use crate::consts::*;
 use crate::ffi::gl;
 use crate::ffi::host::{self, GlContext, Surface};
+use crate::fresh;
 use crate::limits;
 
 #[derive(Clone, Copy)]
@@ -149,7 +150,17 @@ impl State {
         }
     }
 
-    pub(crate) fn alloc_storage(&mut self, attrs: &Attributes, w: i32, h: i32) -> bool {
+    pub(crate) fn bound_framebuffers(&self) -> (u32, u32) {
+        (self.bound_draw_fbo, self.bound_read_fbo)
+    }
+
+    pub(crate) fn alloc_storage(
+        &mut self,
+        version: i32,
+        attrs: &Attributes,
+        w: i32,
+        h: i32,
+    ) -> bool {
         let ds_format = if attrs.depth && attrs.stencil {
             DEPTH24_STENCIL8
         } else if attrs.stencil {
@@ -169,6 +180,8 @@ impl State {
 
         self.bind_framebuffer(FRAMEBUFFER, self.fbo);
         gl::bind_texture(TEXTURE_2D, self.color_tex);
+        let unpack = fresh::Unpack::neutral(version);
+        let zero = fresh::zero_pixels(version, (w, h), (RGBA, UNSIGNED_BYTE));
         gl::tex_image_2d(
             TEXTURE_2D,
             0,
@@ -176,8 +189,9 @@ impl State {
             (w, h),
             0,
             (RGBA, UNSIGNED_BYTE),
-            None,
+            zero.as_deref().filter(|zero| !zero.is_empty()),
         );
+        unpack.restore();
         gl::tex_parameter_i(TEXTURE_2D, TEXTURE_MIN_FILTER, LINEAR);
         gl::tex_parameter_i(TEXTURE_2D, TEXTURE_MAG_FILTER, LINEAR);
         gl::tex_parameter_i(TEXTURE_2D, TEXTURE_WRAP_S, CLAMP_TO_EDGE);
@@ -224,7 +238,12 @@ impl State {
 
         let target = self.draw_target();
         self.bind_framebuffer(FRAMEBUFFER, target);
-        gl::check_framebuffer_status(FRAMEBUFFER) == FRAMEBUFFER_COMPLETE
+        let complete = gl::check_framebuffer_status(FRAMEBUFFER) == FRAMEBUFFER_COMPLETE;
+        if complete {
+            fresh::clear_bound_framebuffer(version, attrs.depth, attrs.stencil);
+        }
+        self.bind_current_targets();
+        complete
     }
 
     fn mark_dirty(&mut self) -> bool {
@@ -451,7 +470,7 @@ impl WebGl {
             st.msaa_depth_rb = gl::gen_renderbuffer();
         }
         let (w, h) = (st.w, st.h);
-        let ok = st.alloc_storage(&attrs, w, h);
+        let ok = st.alloc_storage(version, &attrs, w, h);
         let g = Rc::new(WebGl {
             gl,
             js,
@@ -510,7 +529,7 @@ impl WebGl {
         }
         st.w = w;
         st.h = h;
-        st.alloc_storage(&self.attrs, w, h);
+        st.alloc_storage(self.version, &self.attrs, w, h);
         gl::viewport(0, 0, w, h);
         true
     }

@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: WebGL storage is zero-initialised. `bufferData(size)`,
+  `texStorage2D`/`texStorage3D`,
+  `renderbufferStorage`/`renderbufferStorageMultisample`, `copyTexImage2D`
+  outside the framebuffer and the drawing buffer after a canvas resize no
+  longer hand a page whatever the GPU driver last had in that memory (audit
+  finding S-04).
 * Security: cookies. A response over plain HTTP can no longer replace or
   shadow a site's `Secure` cookie. Cookies with the same name and different
   paths or domains are all sent, longest path first, instead of the last one

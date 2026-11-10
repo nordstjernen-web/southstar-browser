@@ -26,7 +26,7 @@ fn type_bytes(kind: u32) -> usize {
     }
 }
 
-fn pixel_bytes(format: u32, kind: u32) -> usize {
+pub(crate) fn pixel_bytes(format: u32, kind: u32) -> usize {
     match kind {
         UNSIGNED_SHORT_5_6_5 | UNSIGNED_SHORT_4_4_4_4 | UNSIGNED_SHORT_5_5_5_1 => 2,
         UNSIGNED_INT_2_10_10_10_REV
