@@ -27,9 +27,11 @@ pub struct RingView(Arc<SharedMemory>);
 
 impl Ring {
     pub fn create(width: u32, height: u32) -> Option<Ring> {
-        let stride = (width * 4 + 63) & !63;
-        let frame_bytes = stride * height;
-        let total = HEADER_BYTES + frame_bytes as usize * VIDEO_RING_SLOTS as usize;
+        let stride = width.checked_mul(4)?.checked_add(63)? & !63;
+        let frame_bytes = stride.checked_mul(height)?;
+        let total = (frame_bytes as usize)
+            .checked_mul(VIDEO_RING_SLOTS as usize)?
+            .checked_add(HEADER_BYTES)?;
         let name = format!(
             "/nsvid-{}-{}",
             std::process::id(),

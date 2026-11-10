@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: the video helper's shared frame ring sizes are computed with
+  overflow checks, and on Windows a shared mapping that already exists under
+  the helper's name is refused instead of silently reused (audit finding S-15,
+  partly fixed).
 * Security: inserting a node into its own descendant is refused at any depth.
   Below 512 levels the check used to give up, script could build a tree that
   contains itself, and the tab hung (audit finding S-14).
