@@ -27,7 +27,11 @@ pub struct Credentials {
     context: Context,
 }
 
-pub fn for_subresource(target: &[u8], top_url: Option<&[u8]>) -> Option<Credentials> {
+pub fn for_subresource(
+    target: &[u8],
+    top_url: Option<&[u8]>,
+    initiator: Option<&[u8]>,
+) -> Option<Credentials> {
     let effective_top = top_url.unwrap_or(target);
     let partition = request::partition_of(
         url::site_from(effective_top).as_deref(),
@@ -40,7 +44,12 @@ pub fn for_subresource(target: &[u8], top_url: Option<&[u8]>) -> Option<Credenti
         target: target.to_vec(),
         jar: storage::cookie_jar_path(Some(&partition), false)?,
         js_jar: storage::cookie_jar_path(Some(&partition), true),
-        context: request::cookie_context(false, None, top_url, target),
+        context: [initiator, top_url]
+            .into_iter()
+            .flatten()
+            .map(|from| request::cookie_context(false, None, Some(from), target))
+            .find(|context| *context != Context::SameSite)
+            .unwrap_or(Context::SameSite),
     })
 }
 

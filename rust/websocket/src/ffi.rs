@@ -155,8 +155,12 @@ fn handshake(socket: &Arc<Socket>) -> Result<Connection, Vec<u8>> {
             .concat(),
         );
     }
-    let credentials =
-        southstar_net::credentials::for_subresource(&http_url, socket.top_url.as_deref());
+    let initiator = shared.origin.as_deref().map(until_nul);
+    let credentials = southstar_net::credentials::for_subresource(
+        &http_url,
+        socket.top_url.as_deref(),
+        initiator.filter(|origin| !origin.is_empty()),
+    );
     let route = southstar_net::route::route(&http_url, &target.host);
     let request = Request {
         url: &http_url,

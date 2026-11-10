@@ -431,12 +431,11 @@ pub(crate) fn websocket_ctor(scope: &mut Scope<'_>, _this: &Value, args: &[Value
     {
         target = replace_prefix(&target, b"ws://", b"wss://").unwrap_or(target);
     }
-    let page = js.page_url();
-    if page
-        .as_deref()
-        .is_some_and(|p| crate::ascii_starts_with(p, b"https://"))
-        && crate::ascii_starts_with(&target, b"ws://")
-    {
+    let secure_context = [js.document_url(Realm::caller(scope)), js.page_url()]
+        .iter()
+        .flatten()
+        .any(|url| crate::ascii_starts_with(url, b"https://"));
+    if secure_context && crate::ascii_starts_with(&target, b"ws://") {
         return Err(scope.type_error("WebSocket: mixed content (ws:// not allowed from https://)"));
     }
     if !js.csp_allows_connect(Realm::caller(scope), &target) {
