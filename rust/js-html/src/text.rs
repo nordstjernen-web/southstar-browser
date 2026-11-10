@@ -247,6 +247,14 @@ pub fn insert_adjacent_element(scope: &mut Scope<'_>, this: &Value, args: &[Valu
     let Some(position) = check_adjacent(scope, target, &position, false, Some(child))? else {
         return Ok(Value::null());
     };
+    if inclusive_ancestor(child, target) {
+        return Err(ffi::dom_exception(
+            scope,
+            c"HierarchyRequestError",
+            HIERARCHY_REQUEST_ERR,
+            c"The new child element contains the parent.",
+        ));
+    }
     let js = ffi::js_of(scope);
     if let Some(js) = js {
         ffi::unorphan(js, child);
