@@ -581,8 +581,10 @@ mod seccomp {
 
     const SCMP_ACT_ALLOW: u32 = 0x7fff_0000;
     const SCMP_ACT_ERRNO_EPERM: u32 = 0x0005_0000 | 1;
+    const SCMP_ACT_ERRNO_ENOSYS: u32 = 0x0005_0000 | 38;
     const SCMP_FLTATR_CTL_TSYNC: c_int = 4;
     const SCMP_CMP_MASKED_EQ: c_int = 7;
+    const SCMP_CMP_NE: c_int = 1;
     const NR_SCMP_ERROR: c_int = -1;
     const TIOCSTI: u64 = 0x5412;
     const TIOCLINUX: u64 = 0x541C;
@@ -681,10 +683,14 @@ mod seccomp {
             unsafe { seccomp_attr_set(self.0.as_ptr(), SCMP_FLTATR_CTL_TSYNC, 1) };
         }
 
-        fn add(&self, action: u32, syscall: c_int, compare: Option<&ArgCmp>) -> c_int {
-            let (count, compare) =
-                compare.map_or((0, ptr::null()), |compare| (1, compare as *const ArgCmp));
-            // SAFETY: self.0 is a live filter context and compare is null with count 0 or one live ArgCmp with count 1, copied during the call.
+        fn add(&self, action: u32, syscall: c_int, compare: &[ArgCmp]) -> c_int {
+            let count = compare.len() as c_uint;
+            let compare = if compare.is_empty() {
+                ptr::null()
+            } else {
+                compare.as_ptr()
+            };
+            // SAFETY: self.0 is a live filter context and compare is null with count 0 or points at count live ArgCmp values, copied during the call.
             unsafe { seccomp_rule_add_array(self.0.as_ptr(), action, syscall, count, compare) }
         }
 
@@ -707,13 +713,91 @@ mod seccomp {
         unsafe { seccomp_syscall_resolve_name(name.as_ptr()) }
     }
 
+    const NAMESPACE_FLAGS: [u64; 7] = [
+        0x0002_0000,
+        0x0200_0000,
+        0x0400_0000,
+        0x0800_0000,
+        0x1000_0000,
+        0x2000_0000,
+        0x4000_0000,
+    ];
+
+    const RENDERER_REFUSED: [&str; 11] = [
+        "tkill",
+        "pidfd_open",
+        "pidfd_send_signal",
+        "shmget",
+        "shmat",
+        "shmctl",
+        "shmdt",
+        "semget",
+        "semop",
+        "semctl",
+        "semtimedop",
+    ];
+
+    const OWN_PROCESS_ONLY: [&str; 4] = ["kill", "tgkill", "rt_sigqueueinfo", "rt_tgsigqueueinfo"];
+
+    fn differs(arg: c_uint, value: u64) -> ArgCmp {
+        ArgCmp {
+            arg,
+            op: SCMP_CMP_NE,
+            datum_a: value,
+            datum_b: 0,
+        }
+    }
+
+    fn confine_renderer(filter: &Filter) -> c_int {
+        let pid = u64::from(std::process::id());
+        let mut rules: Vec<(&str, u32, Vec<ArgCmp>)> = Vec::new();
+        rules.push(("clone3", SCMP_ACT_ERRNO_ENOSYS, Vec::new()));
+        for flag in NAMESPACE_FLAGS {
+            let has_flag = ArgCmp {
+                arg: 0,
+                op: SCMP_CMP_MASKED_EQ,
+                datum_a: flag,
+                datum_b: flag,
+            };
+            rules.push(("clone", SCMP_ACT_ERRNO_EPERM, vec![has_flag]));
+        }
+        for name in RENDERER_REFUSED {
+            rules.push((name, SCMP_ACT_ERRNO_EPERM, Vec::new()));
+        }
+        for name in OWN_PROCESS_ONLY {
+            rules.push((name, SCMP_ACT_ERRNO_EPERM, vec![differs(0, pid)]));
+        }
+        rules.push((
+            "prlimit64",
+            SCMP_ACT_ERRNO_EPERM,
+            vec![differs(0, 0), differs(0, pid)],
+        ));
+        rules.push(("sched_setattr", SCMP_ACT_ERRNO_EPERM, vec![differs(0, 0)]));
+        rules.push(("setpriority", SCMP_ACT_ERRNO_EPERM, vec![differs(1, 0)]));
+        for (name, action, compare) in rules {
+            let nr = resolve(name);
+            if nr == NR_SCMP_ERROR {
+                continue;
+            }
+            let rc = filter.add(action, nr, &compare);
+            if rc != 0 {
+                return rc;
+            }
+        }
+        0
+    }
+
     fn deny_matching<'a>(rules: impl IntoIterator<Item = &'a Deny>) -> c_int {
         const ENOMEM: c_int = 12;
         let Some(filter) = Filter::new(SCMP_ACT_ALLOW) else {
             return -ENOMEM;
         };
         filter.synchronize_threads();
-        let mut rc = 0;
+        let mut rc = if is_renderer() {
+            confine_renderer(&filter)
+        } else {
+            0
+        };
         for rule in rules {
             if rc != 0 {
                 break;
@@ -728,7 +812,7 @@ mod seccomp {
                 datum_a: rule.mask,
                 datum_b: rule.value,
             };
-            rc = filter.add(SCMP_ACT_ERRNO_EPERM, nr, Some(&compare));
+            rc = filter.add(SCMP_ACT_ERRNO_EPERM, nr, &[compare]);
         }
         if rc == 0 {
             rc = filter.load();
@@ -765,7 +849,7 @@ mod seccomp {
             if nr == NR_SCMP_ERROR {
                 continue;
             }
-            filter.add(SCMP_ACT_ALLOW, nr, None);
+            filter.add(SCMP_ACT_ALLOW, nr, &[]);
         }
         let rc = filter.load();
         if rc != 0 {

@@ -496,6 +496,18 @@ credentials, fail a redirected preflight.
 - The W^X rule blocks only simultaneous write and execute; map writable,
   write, then `mprotect` executable passes.
 
+**Status: mostly fixed.** The renderer's argument filter now refuses `clone`
+with any namespace flag and answers `clone3` with `ENOSYS` (glibc falls back
+to `clone`); limits `kill`, `tgkill`, `rt_sigqueueinfo` and
+`rt_tgsigqueueinfo` to the renderer's own process and `prlimit64`,
+`sched_setattr` and `setpriority` to the caller; and refuses `tkill`,
+`pidfd_open`, `pidfd_send_signal` and System V shared memory and semaphores.
+Checked headless: the filters load, threads start, and DOM, fetch and WebGL
+pages run. **Left as it was:** `ioctl` and `prctl` are not filtered further
+(GPU drivers need a wide `ioctl` surface), and `mprotect` may still make
+written memory executable, because the software GL driver compiles shaders
+that way; SECURITY.md now says so instead of claiming W^X is enforced.
+
 **Fix.** Filter `clone` to thread-creation flags and answer `clone3` with
 `ENOSYS`; restrict the `kill` family and `prlimit64` to the caller's own
 process; drop SysV IPC if unused; allow-list `prctl` options; consider

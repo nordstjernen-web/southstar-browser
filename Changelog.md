@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: the renderer's seccomp filter is tighter. It can no longer create
+  namespaces through `clone`, signal or re-limit other processes of the same
+  user, or attach to System V shared memory; SECURITY.md describes what the
+  write-or-execute rule does and does not cover (audit finding S-13).
 * Security: a CORS preflight answered for an anonymous request is no longer
   reused for a request with credentials, `*` in a preflight's allowed methods
   and headers does not apply to credentialed requests, and a redirected
