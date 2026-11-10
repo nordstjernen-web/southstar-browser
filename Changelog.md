@@ -3,6 +3,14 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a cross-origin frame's window no longer calls into its embedder's
+  global. `fetch`, `URL`, `Event`, `DOMException` and `Range` in a frame come
+  from the frame's own realm, so a page that replaces its own `window.fetch`
+  or `window.URL` no longer receives the framed document's global or the
+  addresses it visits, and a cross-origin frame's `location`, `history`,
+  events and promises no longer lead to the embedder's prototypes. Interfaces
+  defined in script are still shared between a frame and its embedder (audit
+  finding S-01, partly fixed).
 * Security audit: `docs/security-audit-2026-11.md` records a source review
   of the tree for security vulnerabilities — twenty findings with their
   files, severity and fixes, led by cross-origin frames sharing live objects
