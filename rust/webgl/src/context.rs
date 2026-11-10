@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use southstar_dom::WeakNode;
 use southstar_js_runtime::api::Page;
 
+use crate::buffers::Buffers;
 use crate::consts::*;
 use crate::ffi::gl;
 use crate::ffi::host::{self, GlContext, Surface};
@@ -68,6 +69,7 @@ pub(crate) struct WebGl {
     pub(crate) st: RefCell<State>,
     pub(crate) id: u64,
     pub(crate) foreign_object: Cell<bool>,
+    pub(crate) buffers: RefCell<Buffers>,
 }
 
 static NEXT_CONTEXT_ID: AtomicU64 = AtomicU64::new(1);
@@ -269,6 +271,11 @@ impl State {
         if name != 0 {
             self.buffer_sizes.insert(name, size);
         }
+    }
+
+    pub(crate) fn forget_buffer(&mut self, name: u32) {
+        self.buffer_sizes.remove(&name);
+        self.elem_clear(name);
     }
 
     pub(crate) fn elem_clear(&mut self, name: u32) {
@@ -485,6 +492,7 @@ impl WebGl {
             st: RefCell::new(st),
             id: NEXT_CONTEXT_ID.fetch_add(1, Ordering::Relaxed),
             foreign_object: Cell::new(false),
+            buffers: RefCell::new(Buffers::default()),
         });
         if !ok {
             return None;
@@ -501,6 +509,13 @@ impl WebGl {
             }
         }
         Some(g)
+    }
+
+    pub(crate) fn attach_buffer(&self, slot: u32, buffer: u32) {
+        let released = self.buffers.borrow_mut().attach(slot, buffer);
+        if let Some(released) = released {
+            self.st.borrow_mut().forget_buffer(released);
+        }
     }
 
     pub(crate) fn mark_dirty(&self) {
