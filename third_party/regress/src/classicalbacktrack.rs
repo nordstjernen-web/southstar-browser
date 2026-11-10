@@ -1,6 +1,6 @@
 //! Classical backtracking execution engine
 
-use crate::api::{BacktrackLimitExceeded, Match};
+use crate::api::{BacktrackLimitExceeded, Interrupted, Match};
 use crate::bytesearch;
 use crate::cursor;
 use crate::cursor::{Backward, Direction, Forward};
@@ -17,8 +17,25 @@ use crate::scm::SingleCharMatcher;
 use crate::types::{CaptureGroupID, GroupData, IP, LoopData, LoopID, MAX_CAPTURE_GROUPS};
 use crate::util::DebugCheckIndex;
 #[cfg(not(feature = "std"))]
+use alloc::rc::Rc;
+#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::ops::Range;
+#[cfg(feature = "std")]
+use std::rc::Rc;
+
+/// How many backtracks pass between two calls of an interrupt callback.
+const INTERRUPT_INTERVAL: u32 = 1 << 16;
+
+/// A callback that stops a search when it returns true.
+#[derive(Clone)]
+pub(crate) struct Interrupt(pub(crate) Rc<dyn Fn() -> bool>);
+
+impl core::fmt::Debug for Interrupt {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Interrupt")
+    }
+}
 
 #[derive(Clone, Debug)]
 enum BacktrackInsn<Input: InputIndexer> {
@@ -75,6 +92,8 @@ pub(crate) struct MatchAttempter<'a, Input: InputIndexer> {
     s: State<Input::Position>,
     backtracks_left: u64,
     budget_exhausted: bool,
+    interrupt: Option<Interrupt>,
+    interrupt_countdown: u32,
 }
 
 impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
@@ -88,6 +107,8 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
             },
             backtracks_left: u64::MAX,
             budget_exhausted: false,
+            interrupt: None,
+            interrupt_countdown: INTERRUPT_INTERVAL,
         }
     }
 
@@ -494,6 +515,20 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         matched != negate
     }
 
+    /// Calls the interrupt callback every [`INTERRUPT_INTERVAL`] backtracks.
+    #[inline(always)]
+    fn interrupted(&mut self) -> bool {
+        let Some(interrupt) = &self.interrupt else {
+            return false;
+        };
+        self.interrupt_countdown -= 1;
+        if self.interrupt_countdown > 0 {
+            return false;
+        }
+        self.interrupt_countdown = INTERRUPT_INTERVAL;
+        (interrupt.0)()
+    }
+
     /// Attempt to backtrack.
     /// \return true if we backtracked, false if we exhaust the backtrack stack.
     fn try_backtrack<Dir: Direction>(
@@ -503,7 +538,7 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
         pos: &mut Input::Position,
         _dir: Dir,
     ) -> bool {
-        if self.backtracks_left == 0 {
+        if self.backtracks_left == 0 || self.interrupted() {
             self.budget_exhausted = true;
             self.bts.truncate(1);
             return false;
@@ -1142,6 +1177,26 @@ impl<Input: InputIndexer> exec::MatchProducer for BacktrackExecutor<'_, Input> {
             StartPredicate::ByteBracket(bitmap) => {
                 self.next_match_with_prefix_search(pos, next_start, bitmap)
             }
+        }
+    }
+}
+
+impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
+    /// Finds the first match at or after `start`, stopping when `interrupt` returns true.
+    pub(crate) fn first_match_interruptible(
+        mut self,
+        start: usize,
+        interrupt: Rc<dyn Fn() -> bool>,
+    ) -> Result<Option<Match>, Interrupted> {
+        self.matcher.interrupt = Some(Interrupt(interrupt));
+        let found = match exec::MatchProducer::initial_position(&self, start) {
+            Some(pos) => exec::MatchProducer::next_match(&mut self, pos, &mut None),
+            None => None,
+        };
+        if self.matcher.budget_exhausted {
+            Err(Interrupted)
+        } else {
+            Ok(found)
         }
     }
 }

@@ -2,6 +2,7 @@ use crate::classicalbacktrack;
 use crate::emit;
 use crate::exec;
 use crate::indexing;
+use crate::indexing::Utf8Input;
 use crate::insn::CompiledRegex;
 use crate::optimizer;
 use crate::parse;
@@ -20,9 +21,12 @@ use crate::util::to_char_sat;
 #[cfg(not(feature = "std"))]
 use alloc::{
     boxed::Box,
+    rc::Rc,
     string::{String, ToString},
     vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::rc::Rc;
 use core::{fmt, iter::FusedIterator, str::FromStr};
 
 pub use parse::Error;
@@ -391,6 +395,11 @@ pub struct Regex {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BacktrackLimitExceeded;
 
+/// The error of the `find_from*_interruptible` searches when the interrupt
+/// callback stopped the search before it finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Interrupted;
+
 impl From<CompiledRegex> for Regex {
     fn from(cr: CompiledRegex) -> Self {
         Self { cr }
@@ -452,6 +461,52 @@ impl Regex {
         limit: u64,
     ) -> Result<Option<Match>, BacktrackLimitExceeded> {
         classicalbacktrack::BacktrackExecutor::find_with_backtrack_limit(&self.cr, text, limit)
+    }
+
+    /// Finds the first match in `text` at or after `start` like
+    /// [`Regex::find_from`], calling `interrupt` every 65,536 backtracks and
+    /// returning `Err(Interrupted)` once it returns true, so an embedder can
+    /// stop a search that backtracks catastrophically.
+    pub fn find_from_interruptible(
+        &self,
+        text: &str,
+        start: usize,
+        interrupt: Rc<dyn Fn() -> bool>,
+    ) -> Result<Option<Match>, Interrupted> {
+        assert!(
+            start >= text.len() || text.is_char_boundary(start),
+            "start index is not on a char boundary"
+        );
+        <classicalbacktrack::BacktrackExecutor<'_, Utf8Input<'_>> as exec::Executor<'_, '_>>::new(
+            &self.cr, text,
+        )
+        .first_match_interruptible(start, interrupt)
+    }
+
+    /// [`Regex::find_from_interruptible`] over UTF-16 text.
+    #[cfg(feature = "utf16")]
+    pub fn find_from_utf16_interruptible(
+        &self,
+        text: &[u16],
+        start: usize,
+        interrupt: Rc<dyn Fn() -> bool>,
+    ) -> Result<Option<Match>, Interrupted> {
+        let input = Utf16Input::new(text, self.cr.flags.unicode);
+        classicalbacktrack::BacktrackExecutor::new(input, MatchAttempter::new(&self.cr, input.left_end()))
+            .first_match_interruptible(start, interrupt)
+    }
+
+    /// [`Regex::find_from_interruptible`] over UCS-2 text.
+    #[cfg(feature = "utf16")]
+    pub fn find_from_ucs2_interruptible(
+        &self,
+        text: &[u16],
+        start: usize,
+        interrupt: Rc<dyn Fn() -> bool>,
+    ) -> Result<Option<Match>, Interrupted> {
+        let input = Ucs2Input::new(text, self.cr.flags.unicode);
+        classicalbacktrack::BacktrackExecutor::new(input, MatchAttempter::new(&self.cr, input.left_end()))
+            .first_match_interruptible(start, interrupt)
     }
 
     /// Searches `text`, returning an iterator over non-overlapping matches.

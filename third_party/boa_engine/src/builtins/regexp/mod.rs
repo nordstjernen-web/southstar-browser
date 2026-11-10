@@ -13,7 +13,7 @@ use crate::{
     Context, JsArgs, JsData, JsExpect, JsResult, JsString,
     builtins::{BuiltInObject, array::Array, string},
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
-    error::JsNativeError,
+    error::{JsNativeError, RuntimeLimitError},
     js_string,
     object::{
         CONSTRUCTOR, IndexedProperties, JsObject, internal_methods::get_prototype_from_constructor,
@@ -1393,31 +1393,56 @@ impl RegExp {
 
         // 13.b. Let inputIndex be the index into input of the character that was obtained from element lastIndex of S.
         // 13.c. Let r be matcher(input, inputIndex).
-        let r: Option<regress::Match> = match (full_unicode, input.as_str().variant()) {
-            (true | false, JsStrVariant::Latin1(bytes)) => {
-                if let Some(text) = bytes
-                    .is_ascii()
-                    .then(|| std::str::from_utf8(bytes).ok())
-                    .flatten()
-                {
-                    // ASCII text is its own UTF-8 encoding, with one byte per code unit, so the
-                    // UTF-8 matcher sees the same characters at the same indices without a copy.
-                    matcher.find_from(text, last_index as usize).next()
-                } else {
-                    // NOTE: regress does not support latin1 encoding.
-                    let input = input.to_vec();
+        let start = last_index as usize;
+        let interrupt = context
+            .vm
+            .interrupt_handler
+            .as_ref()
+            .map(|handler| handler.0.clone());
+        let r: Result<Option<regress::Match>, regress::Interrupted> =
+            match (full_unicode, input.as_str().variant(), interrupt) {
+                (_, JsStrVariant::Latin1(bytes), interrupt) => {
+                    if let Some(text) = bytes
+                        .is_ascii()
+                        .then(|| std::str::from_utf8(bytes).ok())
+                        .flatten()
+                    {
+                        // ASCII text is its own UTF-8 encoding, with one byte per code unit, so the
+                        // UTF-8 matcher sees the same characters at the same indices without a copy.
+                        match interrupt {
+                            Some(interrupt) => {
+                                matcher.find_from_interruptible(text, start, interrupt)
+                            }
+                            None => Ok(matcher.find_from(text, start).next()),
+                        }
+                    } else {
+                        // NOTE: regress does not support latin1 encoding.
+                        let input = input.to_vec();
 
-                    // NOTE: We can use the faster ucs2 variant since there will never be two byte unicode.
-                    matcher.find_from_ucs2(&input, last_index as usize).next()
+                        // NOTE: We can use the faster ucs2 variant since there will never be two byte unicode.
+                        match interrupt {
+                            Some(interrupt) => {
+                                matcher.find_from_ucs2_interruptible(&input, start, interrupt)
+                            }
+                            None => Ok(matcher.find_from_ucs2(&input, start).next()),
+                        }
+                    }
                 }
-            }
-            (true, JsStrVariant::Utf16(input)) => {
-                matcher.find_from_utf16(input, last_index as usize).next()
-            }
-            (false, JsStrVariant::Utf16(input)) => {
-                matcher.find_from_ucs2(input, last_index as usize).next()
-            }
-        };
+                (true, JsStrVariant::Utf16(input), Some(interrupt)) => {
+                    matcher.find_from_utf16_interruptible(input, start, interrupt)
+                }
+                (true, JsStrVariant::Utf16(input), None) => {
+                    Ok(matcher.find_from_utf16(input, start).next())
+                }
+                (false, JsStrVariant::Utf16(input), Some(interrupt)) => {
+                    matcher.find_from_ucs2_interruptible(input, start, interrupt)
+                }
+                (false, JsStrVariant::Utf16(input), None) => {
+                    Ok(matcher.find_from_ucs2(input, start).next())
+                }
+            };
+        // A search the embedder's interrupt handler stopped ends the script, as a loop does.
+        let r = r.map_err(|regress::Interrupted| RuntimeLimitError::Interrupted)?;
 
         let Some(match_value) = r else {
             // d. If r is failure, then
