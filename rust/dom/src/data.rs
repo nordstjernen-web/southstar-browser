@@ -8,6 +8,7 @@ use std::ffi::CString;
 
 use crate::Node;
 use crate::index::Indexes;
+use crate::reclaim;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -283,34 +284,23 @@ impl Name {
     }
 }
 
-const INLINE: usize = 24;
+const EMPTY: &[u8] = &[0];
 
-pub(crate) enum NulString {
-    Inline { len: u8, buf: [u8; INLINE] },
-    Heap(Vec<u8>),
-}
+pub(crate) struct NulString(Vec<u8>);
 
 impl NulString {
     pub(crate) fn new(bytes: &[u8]) -> Self {
-        if bytes.len() < INLINE {
-            let mut buf = [0; INLINE];
-            buf[..bytes.len()].copy_from_slice(bytes);
-            return NulString::Inline {
-                len: bytes.len() as u8,
-                buf,
-            };
+        if bytes.is_empty() {
+            return NulString(Vec::new());
         }
         let mut buf = Vec::with_capacity(bytes.len() + 1);
         buf.extend_from_slice(bytes);
         buf.push(0);
-        NulString::Heap(buf)
+        NulString(buf)
     }
 
     fn with_nul(&self) -> &[u8] {
-        match self {
-            NulString::Inline { len, buf } => &buf[..=usize::from(*len)],
-            NulString::Heap(buf) => buf,
-        }
+        if self.0.is_empty() { EMPTY } else { &self.0 }
     }
 
     pub(crate) fn bytes(&self) -> &[u8] {
@@ -325,28 +315,27 @@ impl NulString {
         self.with_nul().as_ptr().cast()
     }
 
+    pub(crate) fn retire(self) {
+        reclaim::retire_bytes(self.0);
+    }
+
     pub(crate) fn push(&mut self, more: &[u8]) {
-        match self {
-            NulString::Heap(buf) => {
-                buf.pop();
-                buf.extend_from_slice(more);
-                buf.push(0);
-            }
-            NulString::Inline { len, buf } => {
-                let old = usize::from(*len);
-                let total = old + more.len();
-                if total < INLINE {
-                    buf[old..total].copy_from_slice(more);
-                    *len = total as u8;
-                    return;
-                }
-                let mut heap = Vec::with_capacity((total + 1).next_power_of_two());
-                heap.extend_from_slice(&buf[..old]);
-                heap.extend_from_slice(more);
-                heap.push(0);
-                *self = NulString::Heap(heap);
-            }
+        if more.is_empty() {
+            return;
         }
+        let old = self.0.len().saturating_sub(1);
+        let total = old + more.len() + 1;
+        if total <= self.0.capacity() {
+            self.0.pop();
+            self.0.extend_from_slice(more);
+            self.0.push(0);
+            return;
+        }
+        let mut grown = Vec::with_capacity(total.next_power_of_two());
+        grown.extend_from_slice(&self.0[..old]);
+        grown.extend_from_slice(more);
+        grown.push(0);
+        reclaim::retire_bytes(core::mem::replace(&mut self.0, grown));
     }
 }
 
@@ -363,6 +352,12 @@ pub(crate) struct AttrName {
 }
 
 impl AttrName {
+    fn retire(self) {
+        if self.namespaced.is_some() || matches!(self.name, Name::Owned(_)) {
+            reclaim::retire(reclaim::Retired::AttrName(self));
+        }
+    }
+
     fn empty() -> AttrName {
         AttrName {
             name: Name::Common(c""),
@@ -407,13 +402,14 @@ impl AttrSlot {
             name: Name::new(attr.name),
             namespaced,
             lowercase: !attr.name.iter().any(u8::is_ascii_uppercase),
-        });
-        self.replace_value(NulString::new(attr.value));
+        })
+        .retire();
+        self.replace_value(NulString::new(attr.value)).retire();
     }
 
     pub(crate) fn vacate(&self) {
-        drop(self.replace_qualified(AttrName::empty()));
-        drop(self.replace_value(NulString::new(b"")));
+        self.replace_qualified(AttrName::empty()).retire();
+        self.replace_value(NulString::new(b"")).retire();
     }
 
     pub(crate) fn qualified(&self) -> &AttrName {
@@ -539,8 +535,10 @@ impl NodeSlot {
     }
 
     pub(crate) fn vacate(&self) {
-        drop(self.replace_name(None));
-        drop(self.replace_text(None));
+        reclaim::retire_name(self.replace_name(None));
+        if let Some(text) = self.replace_text(None) {
+            text.retire();
+        }
         for attr in self.replace_attrs(Vec::new()) {
             crate::store::drop_attr(attr);
         }

@@ -83,6 +83,14 @@ A string or attribute borrowed from a node (`name()`, `text()`, `attr()`,
 `Attr::value()`) stays good until that same field of that node is replaced
 or the node is freed: don't hold one across a call that edits the node.
 
+Holding one too long reads stale text but not freed memory. Node strings are
+always heap allocations, and on a thread that runs page script
+(`defer_on_this_thread`) a replaced name, text or attribute value is parked
+in `rust/dom/src/reclaim.rs` rather than freed. The browser frees the parked
+strings at the start of a tick, when no script is running
+(`southstar_dom::free_retired` from `rust/browser/src/settle.rs`). Parser
+threads free at once, as before.
+
 ## Owning a subtree
 
 A parent owns its children, and a template owns its contents. A subtree with

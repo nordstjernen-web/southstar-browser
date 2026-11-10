@@ -136,6 +136,10 @@ impl Js {
         api::in_pump(self.page())
     }
 
+    pub fn running_script(self) -> bool {
+        api::in_pump(self.page()) || api::eval_depth(self.page()) > 0
+    }
+
     pub fn free(self) {
         api::free(self.0);
     }

@@ -15,6 +15,7 @@ use crate::data::{
 };
 use crate::index::Indexes;
 use crate::node::{KIND_COMMENT, KIND_DOCTYPE, KIND_DOCUMENT, KIND_ELEMENT, KIND_TEXT};
+use crate::reclaim;
 use crate::store::{self, WeakNode};
 
 #[derive(Clone, Copy)]
@@ -143,7 +144,7 @@ impl<'a> Node<'a> {
     }
 
     pub fn set_name(self, name: &[u8]) {
-        self.slot.replace_name(Some(Name::new(name)));
+        reclaim::retire_name(self.slot.replace_name(Some(Name::new(name))));
     }
 
     pub fn text(self) -> Option<&'a CStr> {
@@ -163,7 +164,9 @@ impl<'a> Node<'a> {
     }
 
     pub fn set_text(self, text: &[u8]) {
-        self.slot.replace_text(Some(NulString::new(text)));
+        if let Some(old) = self.slot.replace_text(Some(NulString::new(text))) {
+            old.retire();
+        }
     }
 
     pub fn append_text(self, more: &[u8]) {
@@ -443,7 +446,7 @@ impl<'a> Attr<'a> {
     }
 
     pub fn set_value(self, value: &[u8]) {
-        drop(self.slot.replace_value(NulString::new(value)));
+        self.slot.replace_value(NulString::new(value)).retire();
     }
 
     pub fn view(self) -> AttrView<'a> {

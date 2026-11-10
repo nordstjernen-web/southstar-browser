@@ -318,6 +318,7 @@ pub(crate) fn create_context(page: Page, js: &Record) -> bool {
 pub(crate) fn init_tables(js: &Record, page: bool) {
     js.pinned_wrappers_set.replace(Some(HashMap::new()));
     if page {
+        southstar_dom::defer_on_this_thread();
         js.frame_ctxs.replace(Some(Vec::new()));
         js.cookie_buckets.replace(Some(HashMap::new()));
     }

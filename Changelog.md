@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a name, text or attribute value borrowed from a DOM node stays
+  valid memory when script replaces it. Replaced node strings are freed only
+  between tasks, when no script is running, so engine code that reads a
+  string, runs script and reads it again cannot touch freed memory (audit
+  finding S-06).
 * Security: a deleted WebGL buffer that another vertex array still draws from
   can no longer be confused with a new, larger buffer that received its
   number, which let a draw read past the end of the old buffer. Deleted
