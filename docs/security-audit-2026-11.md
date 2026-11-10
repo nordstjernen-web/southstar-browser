@@ -271,6 +271,16 @@ vertices beyond the small buffer. The result is an information leak or a
 crash wherever the driver does not enforce robust buffer access. The
 element-buffer shadow and `uniform_blocks_bound` follow the same pattern.
 
+**Status: fixed.** Reproduced on the unpatched build with software GL: after
+deleting a 16-byte buffer still attached to another vertex array and creating
+a 1 MB buffer, a draw past the 16 bytes went through.
+`rust/webgl/src/buffers.rs` now records which vertex array slot holds which
+buffer. A deleted buffer that another vertex array still holds keeps its size
+entry and its GL name is retired: `createBuffer` never hands a retired name
+out, and a deleted buffer's wrapper can no longer be bound. The name is
+released when the last vertex array lets go of it. The same draw is now
+refused.
+
 **Fix.** Give each `WebGLBuffer` a never-reused host id and track attribute,
 element and indexed bindings per VAO in the host. As a stopgap, defer
 `glDeleteBuffers` while any VAO, transform feedback object or indexed binding

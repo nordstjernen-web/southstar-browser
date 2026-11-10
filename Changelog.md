@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Security: a deleted WebGL buffer that another vertex array still draws from
+  can no longer be confused with a new, larger buffer that received its
+  number, which let a draw read past the end of the old buffer. Deleted
+  buffers and vertex arrays can no longer be bound (audit finding S-05).
 * Security: WebGL calls check the kind and the owning context of every object
   argument. `bindTexture` with a buffer, or with a texture from another
   canvas, now raises `INVALID_OPERATION` instead of binding whichever object

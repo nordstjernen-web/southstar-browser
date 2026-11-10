@@ -9,6 +9,7 @@ use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::context::{WebGl, active, reassert};
 use crate::ffi::host;
+use crate::methods::KIND_BUFFER;
 
 pub(crate) const KIND_SYNC: u8 = 8;
 pub(crate) const KIND_LOCATION: u8 = 11;
@@ -70,7 +71,8 @@ pub(crate) fn string_arg(
 fn owned(value: &Value, kind: u8) -> Option<u32> {
     let (found, name, owner) = host::object_of(value)?;
     let g = crate::context::active().upgrade()?;
-    if found == kind && owner == g.id {
+    let stale = kind == KIND_BUFFER && !g.buffers.borrow().is_live(name);
+    if found == kind && owner == g.id && !stale {
         return Some(name);
     }
     g.foreign_object.set(true);

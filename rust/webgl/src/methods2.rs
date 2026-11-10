@@ -25,8 +25,6 @@ macro_rules! simple {
 }
 
 simple! {
-    delete_vertex_array(|_s, a| gl::delete_vertex_array(name(a, 0, KIND_VERTEX_ARRAY)));
-    bind_vertex_array(|_s, a| gl::bind_vertex_array(if a.is_empty() { 0 } else { name(a, 0, KIND_VERTEX_ARRAY) }));
     vertex_attrib_divisor(|s, a| gl::vertex_attrib_divisor(uint(s, a, 0), uint(s, a, 1)));
     blit_framebuffer(|s, a| gl::blit_framebuffer(
         int(s, a, 0), int(s, a, 1), int(s, a, 2), int(s, a, 3),
@@ -54,7 +52,32 @@ simple! {
 }
 
 pub(crate) fn create_vertex_array(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
-    gen_object(s, this, KIND_VERTEX_ARRAY, gl::gen_vertex_array)
+    let g = current(s, this)?;
+    let n = g.buffers.borrow_mut().create_vertex_array();
+    Ok(wrap(s, &g, n, KIND_VERTEX_ARRAY))
+}
+
+pub(crate) fn delete_vertex_array(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let n = name(a, 0, KIND_VERTEX_ARRAY);
+    let released = g.buffers.borrow_mut().delete_vertex_array(n);
+    let mut st = g.st.borrow_mut();
+    for buffer in released {
+        st.forget_buffer(buffer);
+    }
+    gl::delete_vertex_array(n);
+    undefined()
+}
+
+pub(crate) fn bind_vertex_array(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsResult {
+    let g = current(s, this)?;
+    let n = name(a, 0, KIND_VERTEX_ARRAY);
+    if g.buffers.borrow_mut().bind_vertex_array(n) {
+        gl::bind_vertex_array(n);
+    } else {
+        g.st.borrow_mut().injected_error = INVALID_OPERATION;
+    }
+    undefined()
 }
 
 pub(crate) fn create_sampler(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
@@ -176,6 +199,7 @@ pub(crate) fn vertex_attrib_i_pointer(s: &mut Scope<'_>, this: &Value, a: &[Valu
     let index = uint(s, a, 0);
     let kind = uint(s, a, 2);
     gl::vertex_attrib_i_pointer(index, size, kind, stride, offset as usize);
+    g.attach_buffer(index, limits::bound_buffer(ARRAY_BUFFER));
     undefined()
 }
 

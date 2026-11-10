@@ -5,6 +5,7 @@
 use southstar_js_engine::{ElementType, Scope, Value};
 
 use crate::args::*;
+use crate::buffers::ELEMENT_SLOT;
 use crate::consts::*;
 use crate::context::WebGl;
 use crate::ffi::gl;
@@ -606,7 +607,9 @@ pub(crate) fn gen_object(
 }
 
 pub(crate) fn create_buffer(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
-    gen_object(s, this, KIND_BUFFER, gl::gen_buffer)
+    let g = current(s, this)?;
+    let n = g.buffers.borrow_mut().create();
+    Ok(wrap(s, &g, n, KIND_BUFFER))
 }
 
 pub(crate) fn create_texture(s: &mut Scope<'_>, this: &Value, _a: &[Value]) -> JsResult {
@@ -625,9 +628,9 @@ pub(crate) fn delete_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsR
     let g = current(s, this)?;
     let n = name(a, 0, KIND_BUFFER);
     if n != 0 {
-        let mut st = g.st.borrow_mut();
-        st.buffer_sizes.remove(&n);
-        st.elem_clear(n);
+        if g.buffers.borrow_mut().delete(n) {
+            g.st.borrow_mut().forget_buffer(n);
+        }
         gl::delete_buffer(n);
     }
     undefined()
@@ -640,7 +643,11 @@ pub(crate) fn bind_buffer(s: &mut Scope<'_>, this: &Value, a: &[Value]) -> JsRes
         g.st.borrow_mut().injected_error = INVALID_ENUM;
         return undefined();
     }
-    gl::bind_buffer(target, name(a, 1, KIND_BUFFER));
+    let buffer = name(a, 1, KIND_BUFFER);
+    gl::bind_buffer(target, buffer);
+    if target == ELEMENT_ARRAY_BUFFER {
+        g.attach_buffer(ELEMENT_SLOT, buffer);
+    }
     undefined()
 }
 
@@ -796,6 +803,7 @@ pub(crate) fn vertex_attrib_pointer(s: &mut Scope<'_>, this: &Value, a: &[Value]
         return undefined();
     }
     gl::vertex_attrib_pointer(index, size, kind, normalized, stride, offset as usize);
+    g.attach_buffer(index, limits::bound_buffer(ARRAY_BUFFER));
     undefined()
 }
 
