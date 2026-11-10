@@ -1159,7 +1159,20 @@ pub fn perform(req: &Request, handler: &mut dyn Handler) -> Outcome {
     perform_unchecked(req, handler)
 }
 
+fn is_one_token(text: &[u8]) -> bool {
+    !text.is_empty() && text.iter().all(|&b| b > 0x20 && b != 0x7f)
+}
+
+fn target_is_sound(req: &Request) -> bool {
+    is_one_token(req.path) && is_one_token(req.authority) && is_one_token(req.host.as_bytes())
+}
+
+const UNSOUND_TARGET: &str = "request target contains a space or control character";
+
 pub(crate) fn perform_unchecked(req: &Request, handler: &mut dyn Handler) -> Outcome {
+    if !target_is_sound(req) {
+        return failed(String::from(UNSOUND_TARGET));
+    }
     let mut out = Outcome::new();
     let start = Instant::now();
     let deadline = start
@@ -1364,6 +1377,9 @@ impl Upgraded {
 pub fn upgrade(req: &Request, abort: &dyn Fn() -> bool) -> Result<Upgraded, String> {
     if !policy::allows_host(req.host) {
         return Err(String::from(policy::REFUSED));
+    }
+    if !target_is_sound(req) {
+        return Err(String::from(UNSOUND_TARGET));
     }
     let start = Instant::now();
     let deadline = start
