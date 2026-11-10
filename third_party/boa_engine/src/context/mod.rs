@@ -639,6 +639,17 @@ impl Context {
         self.vm.interrupt_handler = handler.map(crate::vm::InterruptHandler);
     }
 
+    /// Asks the embedder's interrupt check now, for host code that runs long without
+    /// returning to the VM; `false` when no handler is set.
+    #[inline]
+    #[must_use]
+    pub fn interrupt_requested(&self) -> bool {
+        self.vm
+            .interrupt_handler
+            .as_ref()
+            .is_some_and(|interrupt| (interrupt.0)())
+    }
+
     /// Limits the native stack that script execution may use below the current frame to
     /// `bytes`, past which calls fail like exceeding the recursion limit; `0` removes the limit.
     #[inline]

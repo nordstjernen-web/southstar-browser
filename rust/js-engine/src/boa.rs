@@ -277,6 +277,10 @@ impl Scope<'_> {
         self.ctx
     }
 
+    pub fn interrupt_requested(&self) -> bool {
+        self.ctx.interrupt_requested()
+    }
+
     fn error(&mut self, error: JsError) -> Value {
         match error.into_opaque(self.cx()) {
             Ok(value) => Value(value),

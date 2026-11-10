@@ -9,12 +9,14 @@ use std::rc::Rc;
 use southstar_js_engine::{Attributes, Scope, Trace, Value};
 use wasmi::{
     Caller, Extern, ExternType, Func, FuncType, Global, Instance, Memory, MemoryType, Module,
-    Mutability, Ref, RefType, StoreContextMut, Table, TableType, Val, ValType,
+    Mutability, Ref, RefType, ResumableCall, StoreContextMut, Table, TableType, Val, ValType,
 };
 
 use crate::convert::{self, Raw};
 use crate::ffi;
-use crate::realm::{HostState, MEMORY_MAX_BYTES, PAGE_SIZE, Realm, RealmHandle, engine};
+use crate::realm::{
+    FUEL_SLICE, HostState, MEMORY_MAX_BYTES, PAGE_SIZE, Realm, RealmHandle, START_FUEL, engine,
+};
 use crate::sections;
 use crate::{named_error, to_u32_index};
 
@@ -154,12 +156,32 @@ fn call_function(
         .collect();
     let stale = realm.pending.borrow_mut().take();
     drop(stale);
-    let outcome = ffi::entered(scope, &realm.entry, || {
+    let mut step = ffi::entered(scope, &realm.entry, || {
         realm.with_store(|mut ctx| {
             let inputs: Vec<Val> = raws.into_iter().map(|raw| raw.into_val(&mut ctx)).collect();
-            func.call(&mut ctx, &inputs, &mut outputs)
+            ctx.set_fuel(FUEL_SLICE)?;
+            func.call_resumable(&mut ctx, &inputs, &mut outputs)
         })
     });
+    let outcome = loop {
+        match step {
+            Ok(ResumableCall::Finished) => break Ok(()),
+            Ok(ResumableCall::HostTrap(trap)) => break Err(trap.into_host_error()),
+            Ok(ResumableCall::OutOfFuel(_)) if scope.interrupt_requested() => {
+                break Err(wasmi::Error::new("interrupted"));
+            }
+            Ok(ResumableCall::OutOfFuel(paused)) => {
+                let fuel = FUEL_SLICE.max(paused.required_fuel());
+                step = ffi::entered(scope, &realm.entry, || {
+                    realm.with_store(|mut ctx| {
+                        ctx.set_fuel(fuel)?;
+                        paused.resume(&mut ctx, &mut outputs)
+                    })
+                });
+            }
+            Err(error) => break Err(error),
+        }
+    };
     realm.sync_views(scope);
     if let Err(error) = outcome {
         let pending = realm.pending.borrow_mut().take();
@@ -420,7 +442,10 @@ pub(crate) fn instantiate(
     let stale = realm.pending.borrow_mut().take();
     drop(stale);
     let outcome = ffi::entered(scope, &realm.entry, || {
-        realm.with_store(|mut ctx| Instance::new(&mut ctx, &module, &externs))
+        realm.with_store(|mut ctx| {
+            ctx.set_fuel(START_FUEL)?;
+            Instance::new(&mut ctx, &module, &externs)
+        })
     });
     realm.sync_views(scope);
     let instance = match outcome {

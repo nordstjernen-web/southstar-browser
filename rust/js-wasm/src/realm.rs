@@ -52,9 +52,17 @@ pub(crate) struct RealmHandle {
     pub protos: Protos,
 }
 
+pub(crate) const FUEL_SLICE: u64 = 16 * 1024 * 1024;
+pub(crate) const START_FUEL: u64 = 1 << 31;
+
 pub(crate) fn engine() -> &'static Engine {
     static ENGINE: OnceLock<Engine> = OnceLock::new();
-    ENGINE.get_or_init(Engine::default)
+    ENGINE.get_or_init(|| {
+        let mut config = wasmi::Config::default();
+        config.consume_fuel(true);
+        config.wasm_multi_memory(false);
+        Engine::new(&config)
+    })
 }
 
 impl Realm {
