@@ -107,9 +107,13 @@ pub(super) fn viewport_h(v: *mut NsProcView) -> c_int {
     if h > 0 { h } else { 1 }
 }
 
-pub(super) fn cur_scale(v: *mut NsProcView) -> f64 {
+pub(super) fn cur_zoom(v: *mut NsProcView) -> f64 {
     let scale = view(v).scale;
     if scale > 0.0 { scale } else { 1.0 }
+}
+
+pub(super) fn cur_scale(v: *mut NsProcView) -> f64 {
+    cur_zoom(v) * crate::uiscale::scale()
 }
 
 fn device_scale(v: *mut NsProcView) -> f64 {

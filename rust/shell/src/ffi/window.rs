@@ -510,9 +510,9 @@ impl ProcWindow {
         } else {
             c"southstar-page-symbolic"
         });
-        icon.set_pixel_size(16);
+        icon.set_pixel_size(crate::uiscale::px(16));
         let spinner = gtk::Spinner::new();
-        spinner.set_size_request(16, 16);
+        spinner.set_size_request(crate::uiscale::px(16), crate::uiscale::px(16));
         spinner.set_visible(false);
         if private_mode {
             tabbtn.set_tooltip_text(Some(tr(c"Private tab")));
@@ -887,7 +887,7 @@ fn view_event(pw: &ProcWindow, v: View, page: &Widget, evt: c_int, text: Option<
                     Some(fav) => icon.set_from_texture(&fav),
                     None => icons::image_set(icon, c"southstar-page-symbolic"),
                 }
-                icon.set_pixel_size(16);
+                icon.set_pixel_size(crate::uiscale::px(16));
             }
         }
         _ => {}
@@ -1183,7 +1183,7 @@ impl ProcWindow {
     fn build_bookmarks_popover(&self) -> gtk::Popover {
         let vbox = gtk::Box::new(gtk::ORIENTATION_VERTICAL, 4);
         vbox.set_margins(6, 6, 6, 6);
-        vbox.set_size_request(320, -1);
+        vbox.set_size_request(crate::uiscale::px(320), -1);
 
         let add = gtk::Button::with_label(if self.current_page_bookmarked() {
             tr(c"Remove this bookmark")
@@ -1339,7 +1339,7 @@ fn build_window(
     match initial_size {
         Some((w, h)) => window.set_default_size(w, h),
         None => {
-            window.set_default_size(1024, 768);
+            window.set_default_size(crate::uiscale::px(1024), crate::uiscale::px(768));
             window.maximize();
         }
     }

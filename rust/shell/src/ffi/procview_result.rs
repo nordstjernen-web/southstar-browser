@@ -21,7 +21,7 @@ use super::procview_draw::{
     set_named_cursor, start_render, tiles_apply, tiles_leave,
 };
 use super::procview_input::{
-    area, cur_scale, hadj, maybe_update_viewport, new_req, ns_pv_css_viewport_h,
+    area, cur_scale, cur_zoom, hadj, maybe_update_viewport, new_req, ns_pv_css_viewport_h,
     ns_pv_css_viewport_w, page_dpr, push_req, push_req_front, start_hover, start_link,
     start_select, vadj, view,
 };
@@ -316,7 +316,7 @@ fn step_history(v: *mut NsProcView, delta: c_int) {
 fn set_zoom(v: *mut NsProcView, scale: f64) {
     let permille = nav::zoom_permille(scale);
     let clamped = f64::from(permille) / 1000.0;
-    if clamped == cur_scale(v) {
+    if clamped == cur_zoom(v) {
         return;
     }
     view(v).scale = clamped;
@@ -1151,11 +1151,11 @@ pub(super) fn ns_proc_view_focus(v: *mut NsProcView) {
 }
 
 pub(super) fn ns_proc_view_zoom_in(v: *mut NsProcView) {
-    set_zoom(v, nav::zoom_step(cur_scale(v), 1));
+    set_zoom(v, nav::zoom_step(cur_zoom(v), 1));
 }
 
 pub(super) fn ns_proc_view_zoom_out(v: *mut NsProcView) {
-    set_zoom(v, nav::zoom_step(cur_scale(v), -1));
+    set_zoom(v, nav::zoom_step(cur_zoom(v), -1));
 }
 
 pub(super) fn ns_proc_view_zoom_reset(v: *mut NsProcView) {
@@ -1166,6 +1166,6 @@ pub(super) fn ns_proc_view_zoom_percent(v: *mut NsProcView) -> c_int {
     if v.is_null() {
         100
     } else {
-        nav::zoom_percent(cur_scale(v))
+        nav::zoom_percent(cur_zoom(v))
     }
 }

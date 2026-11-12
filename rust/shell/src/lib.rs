@@ -12,6 +12,7 @@ mod procview;
 mod remote;
 mod taskmgr;
 mod titlerow;
+mod uiscale;
 mod window;
 
 pub use ffi::appmain::run;

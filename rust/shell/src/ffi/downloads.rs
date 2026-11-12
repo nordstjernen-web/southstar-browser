@@ -249,7 +249,7 @@ fn window_for(parent: &Widget) -> DownloadsWindow {
     }
     let window = gtk::Window::new();
     window.set_title(tr(c"Downloads"));
-    window.set_default_size(460, 420);
+    window.set_default_size(crate::uiscale::px(460), crate::uiscale::px(420));
     window.set_transient_for(Some(parent));
     window.set_hide_on_close(true);
 
