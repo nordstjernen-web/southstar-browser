@@ -579,7 +579,7 @@ pub(super) fn build_search_bar(v: *mut NsProcView, overlay: &Overlay) {
     bx.add_css_class(c"toolbar");
 
     let entry = SearchEntry::new();
-    entry.set_size_request(220, -1);
+    entry.set_size_request(crate::uiscale::px(220), -1);
     entry.set_accessible_label(tr(c"Find in page"));
     entry.connect_search_changed(move || request_find(v, 0));
     entry.connect_activate(move || request_find(v, 1));
@@ -588,7 +588,7 @@ pub(super) fn build_search_bar(v: *mut NsProcView, overlay: &Overlay) {
     entry.connect_stop_search(move || search_close(v));
 
     let label = Label::new(c"");
-    label.set_size_request(56, -1);
+    label.set_size_request(crate::uiscale::px(56), -1);
 
     let prev = icon_button(
         c"go-up-symbolic",
@@ -889,7 +889,7 @@ fn build_console_window(v: *mut NsProcView) {
 
     let window = Window::new();
     window.set_title(tr(c"Developer Tools"));
-    window.set_default_size(720, 420);
+    window.set_default_size(crate::uiscale::px(720), crate::uiscale::px(420));
     window.set_destroy_with_parent(true);
     window.set_child(&bx);
     window.connect_close_request(move || {

@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* Windows: the browser follows the display scale setting at 125%, 150%
+  and 175%. GTK on Windows scales widgets by whole factors only, so at
+  those settings only the interface text grew; the tab strip, toolbar
+  icons, buttons and web pages stayed at 100% size. Pages are now laid
+  out and painted at the display scale (`devicePixelRatio` 1.5 at 150%)
+  and the browser's own interface scales with it. Page zoom still reads
+  100%. `NS_UI_SCALE` overrides the factor. Ported from Northstar #240.
 * Docs: `SECURITY.md` is rewritten from the current code and is half
   its former length. It no longer describes the C sources, OpenSSL TLS, a
   Windows media handoff or a runtime kept across same-origin navigations,

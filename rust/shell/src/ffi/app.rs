@@ -63,7 +63,15 @@ fn install_chrome_css() {
         return;
     };
     let provider = CssProvider::new();
-    provider.load_from_string(&cstring(crate::chrome::CHROME_CSS));
+    let scale = crate::uiscale::scale();
+    let mut css = crate::uiscale::scale_css(crate::chrome::CHROME_CSS, scale);
+    if scale > 1.0 {
+        css.push_str(&format!(
+            "headerbar windowcontrols > button > image {{ -gtk-icon-size: {}px; }}",
+            crate::uiscale::px(16)
+        ));
+    }
+    provider.load_from_string(&cstring(css));
     display.add_style_provider(
         &provider,
         southstar_gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,

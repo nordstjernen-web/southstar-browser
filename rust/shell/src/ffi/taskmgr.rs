@@ -239,7 +239,7 @@ fn dump_window(tm: &Shared) -> gtk::TextView {
     let window = gtk::Window::new();
     window.set_title(tr(c"Thread dump"));
     window.set_transient_for(Some(&tm.borrow().parent));
-    window.set_default_size(680, 480);
+    window.set_default_size(crate::uiscale::px(680), crate::uiscale::px(480));
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_vexpand(true);
     let text = gtk::TextView::new();
@@ -328,7 +328,7 @@ pub fn show(parent: &Widget, notebook: &Widget) {
     ));
     win.set_title(&title);
     win.set_transient_for(Some(parent));
-    win.set_default_size(720, 380);
+    win.set_default_size(crate::uiscale::px(720), crate::uiscale::px(380));
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::sys::SELECTION_SINGLE);
