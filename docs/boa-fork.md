@@ -66,6 +66,7 @@ of each (`--crate boa_parser` limits it to one). On
 | `JsObject::copy_private_elements_to`: gives another object the private fields, methods and accessors of this one | `object/jsobject.rs` | `Scope::copy_private_elements`: a frame realm's copy of a platform singleton (`trustedTypes`) keeps the private brand its methods check |  no: an artefact of cloning platform objects into frame realms |
 | `JsObject::get_function_realm` made `pub` | `object/operations.rs` | `Scope::function_handle`: the realm a callback is re-entered in | yes, trivially |
 | The legacy `Date.parse` fallback: month and weekday names, `/`, `-`, `,` and space separated dates, 12/24-hour times, zone names and offsets; ISO fractions past milliseconds ignored | `builtins/date/utils.rs` | `Date.parse(String(new Date()))` and the other strings every browser accepts | yes: the format is implementation-defined, and every other engine accepts these |
+| Typed array element conversion (`TypedArrayKind::to_element_f64`, used by `new T(otherTypedArray)` for a different element type) wraps modulo 2^n through ToInt32 instead of Rust's saturating `as` cast: `new Uint8Array(new Int8Array([-39]))` held 0, not 217, and `new Uint16Array(new Int8Array([-1]))` 0, not 65535 | `builtins/typed_array/mod.rs` | Emscripten's in-memory file system copies the wasm heap (`Int8Array`) into a `Uint8Array`; every byte above 127 read back as 0 (JetStream 2's tsf-wasm) | yes |
 | `JsObject::{identity, from_identity}`: a `JsObject` as a raw pointer and back | `object/jsobject.rs` | the weak wrapper identity a DOM node keeps, and the WebGL and performance-observer wrapper lookups | no: scaffolding of the C port, removed as that ABI goes; the arena DOM and GC-traced bindings replace it |
 | `finalizer_safe` reads the `GC_DROPPING` thread-local only while some thread is sweeping, counted by a process-wide `THREADS_DROPPING` atomic: on windows-gnu, which has no native TLS, every `thread_local!` access runs `guard::enable` (a fenced atomic round trip and `FlsSetValue`), and `Gc::drop` calls `finalizer_safe` on every drop, half of the JS time in Speedometer | `boa_gc`: `lib.rs` | every `Gc` drop | yes |
 | The collection threshold after a collection is twice the bytes still live, at least 4 MiB, instead of rising to live/0.7 only when live exceeded 70% of it (a full mark after every 43% of growth, never lowered) | `boa_gc`: `lib.rs` | every allocation | yes |
@@ -222,4 +223,15 @@ true. Boa passes its interrupt handler, so the eval budget and the
 long-running script monitor stop a script stuck in a regular expression that
 backtracks catastrophically, as they stop one stuck in a loop; before, a
 single search ran to the end, hours for a 40-character subject.
+
+The third is a fix: the backtracker's start predicate is used whatever the
+crate features. Upstream's `BacktrackExecutor::next_match` ignored it whenever
+the `utf16` feature was on — and Boa always turns it on — so every search tried
+every start position. A pattern anchored with `^` (and no `m` flag) was tried at
+each index of the subject only to fail at the anchor, and a pattern with a
+literal or byte-set prefix never used the `memchr`-style search. A lexer that
+calls `rest.match(/^…/)` on the remaining source, as JetStream 2's
+OfflineAssembler does, was quadratic. The byte searches still run only on
+ASCII and UTF-8 input (`CODE_UNITS_ARE_BYTES`); UTF-16 input tries each
+position as before, apart from the anchored case.
 `scripts/boa-fork-diff.py --crate regress` shows the patch.
