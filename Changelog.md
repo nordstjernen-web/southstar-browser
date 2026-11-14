@@ -3,6 +3,28 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* JavaScript engine: the Boa fork follows Boa's `main` branch (commit
+  bea404d1 of 2026-11-10, 62 commits past the 0.22 release) instead of
+  0.22. From upstream: `with` calls resolve their binding once,
+  `Promise.try` returns the callback's promise when it can,
+  `JSON.parse` accepts lone surrogate escapes, iterator opcodes are
+  simpler, a `ToInt32` opcode for `x | 0` patterns, `Map`/`Set` iterators
+  keep their place after `clear()`, string-to-number conversion rejects
+  signed `Infinity` forms and non-decimal literals, and a
+  `CompletePropertyDescriptor` type inside the engine. Features both
+  sides had implemented keep the fork's version. test262 results are
+  unchanged. Upstream's `main` allocated an empty code block for the call
+  frame of every native function call (`Math.floor`, `push`, every DOM
+  method), which made such calls up to three times slower and Speedometer
+  about a quarter slower; the frames now share one block, and the merged
+  engine runs Speedometer as fast as before.
+* Rust 1.95 or newer is required (it was 1.91), the minimum of Boa's
+  `main`. Ubuntu 24.04 is no longer supported: its packages are dropped
+  from the releases, and Ubuntu 26.04 builds with its versioned
+  `rustc-1.97` and `cargo-1.97`. Debian 13 still builds with rustup.
+* `scripts/boa-fork-diff.py` diffs the fork against the Boa commit it
+  follows, and no longer fails on Windows when the patch holds characters
+  outside the console code page.
 * JavaScript: `new Uint8Array(int8Array)` and the other typed array
   constructors that copy from an array of a different element type
   clamped values instead of wrapping them: −39 became 0 rather than 217.

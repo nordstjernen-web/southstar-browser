@@ -5,16 +5,16 @@ const fs = require('fs');
 const path = require('path');
 const { version } = require('../package.json');
 
-const RUST_MINIMUM = '1.91';
+const RUST_MINIMUM = '1.95';
 const rustupAccepted = process.platform === 'win32' ? [] : ['rustup'];
-const rustNote = 'Debian 13 and Alpine 3.22 package a Rust older than 1.91: use rustup (https://rustup.rs) there, or rustc-1.91 and cargo-1.91 on Ubuntu 24.04';
+const rustNote = 'Debian 13 and Alpine 3.22 package a Rust older than 1.95: use rustup (https://rustup.rs) there, or rustc-1.97 and cargo-1.97 on Ubuntu 26.04';
 const rustUpgrade = [
   `Rust ${RUST_MINIMUM} or newer is needed. Install it for your user with rustup, which also picks up the`,
   'toolchain pinned in rust-toolchain.toml:',
   '',
   "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
   '',
-  'On Ubuntu 24.04 the packaged one works too: sudo apt install rustc-1.91 cargo-1.91',
+  'On Ubuntu 26.04 the packaged one works too: sudo apt install rustc-1.97 cargo-1.97',
 ];
 
 function versionedRustDirectories() {
@@ -41,7 +41,7 @@ module.exports = {
   xtaskOptions: [],
   windowsEnv: { CC: 'clang' },
   extraPath: () => (process.platform === 'linux' ? versionedRustDirectories().slice(0, 1) : []),
-  supportedDistributions: 'Ubuntu 24.04, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch Linux, Alpine 3.21 or newer',
+  supportedDistributions: 'Ubuntu 26.04, Debian 13, Fedora 40, openSUSE Tumbleweed, Arch Linux, Alpine 3.21 or newer',
 
   tools: [
     { label: 'pkg-config', probe: ['pkg-config', 'pkgconf'],

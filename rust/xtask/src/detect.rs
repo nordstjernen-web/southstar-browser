@@ -99,7 +99,7 @@ fn check_floors(os: &str) -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "Southstar needs system libraries this machine lacks:\n{}\nInstall their development packages; Ubuntu 24.04, Debian 13 and Fedora 40 are the oldest releases that ship all of them.",
+        "Southstar needs system libraries this machine lacks:\n{}\nInstall their development packages; Ubuntu 26.04, Debian 13 and Fedora 40 are the oldest releases supported.",
         unmet.join("\n")
     ))
 }

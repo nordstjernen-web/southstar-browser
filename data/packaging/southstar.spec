@@ -9,8 +9,8 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  gcc
 BuildRequires:  pkgconfig
-BuildRequires:  cargo >= 1.91
-BuildRequires:  rust >= 1.91
+BuildRequires:  cargo >= 1.95
+BuildRequires:  rust >= 1.95
 BuildRequires:  pkgconfig(gtk4) >= 4.6
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libssl)

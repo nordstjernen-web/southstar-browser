@@ -15,6 +15,7 @@ use crate::{
     Context, JsNativeError, JsObject, JsResult, JsValue,
     builtins::{OrdinaryObject, function::ConstructorKind},
     context::intrinsics::StandardConstructors,
+    environments::EnvironmentStack,
     object::{
         FunctionObjectBuilder, JsData, JsFunction, JsPromise,
         internal_methods::{
@@ -23,6 +24,7 @@ use crate::{
         },
     },
     realm::Realm,
+    vm::{CallFrame, CallFrameFlags},
 };
 
 mod continuation;
@@ -396,9 +398,18 @@ pub(crate) fn native_function_call(
         .shadow_stack
         .push_native(pc, name, native_source_info);
 
-    let mut realm = realm.unwrap_or_else(|| context.realm().clone());
+    let realm = realm.unwrap_or_else(|| context.realm().clone());
 
-    context.swap_realm(&mut realm);
+    // Push a lightweight frame for the native call so the frame stack
+    // correctly represents the spec's execution context stack (§10.3).
+    let native_frame = CallFrame::new(
+        context.vm.native_code_block.clone(),
+        None,
+        EnvironmentStack::new(),
+        realm.clone(),
+    )
+    .with_flags(CallFrameFlags::REGISTERS_ALREADY_PUSHED | CallFrameFlags::NATIVE_FRAME);
+    context.vm.frames.push(native_frame);
     context.vm.native_active_function = Some(this_function_object);
     let previous_caller_realm =
         std::mem::replace(&mut context.vm.native_caller_realm, Some(realm.clone()));
@@ -422,7 +433,7 @@ pub(crate) fn native_function_call(
     context.vm.native_script_realm = previous_script_realm;
 
     context.vm.native_active_function = None;
-    context.swap_realm(&mut realm);
+    context.vm.frames.pop();
 
     context.vm.shadow_stack.pop();
     context.vm.recycle_native_arguments(args);
@@ -466,9 +477,17 @@ fn native_function_construct(
         .shadow_stack
         .push_native(pc, name, native_source_info);
 
-    let mut realm = realm.unwrap_or_else(|| context.realm().clone());
+    let realm = realm.unwrap_or_else(|| context.realm().clone());
 
-    context.swap_realm(&mut realm);
+    // Push a lightweight frame for the native construct call.
+    let native_frame = CallFrame::new(
+        context.vm.native_code_block.clone(),
+        None,
+        EnvironmentStack::new(),
+        realm.clone(),
+    )
+    .with_flags(CallFrameFlags::REGISTERS_ALREADY_PUSHED | CallFrameFlags::NATIVE_FRAME);
+    context.vm.frames.push(native_frame);
     context.vm.native_active_function = Some(this_function_object);
     let previous_script_realm = enter_script_realm(context, &realm);
 
@@ -510,7 +529,7 @@ fn native_function_construct(
         });
 
     context.vm.native_active_function = None;
-    context.swap_realm(&mut realm);
+    context.vm.frames.pop();
 
     context.vm.shadow_stack.pop();
     context.vm.recycle_native_arguments(args);

@@ -38,12 +38,12 @@ command that installs it on your system. Optional libraries (Brotli and zstd
 compression, audio, PDF, Ogg audio, AVIF, spell-checking) are reported as a
 warning naming the features the build will lack.
 
-Rust 1.91 or newer is required. With [rustup](https://rustup.rs) installed,
+Rust 1.95 or newer is required. With [rustup](https://rustup.rs) installed,
 the toolchain pinned in `rust-toolchain.toml` is fetched automatically. Debian
-13 and Alpine 3.22 package an older Rust, so use rustup there; on Ubuntu 24.04
-the `rustc-1.91` and `cargo-1.91` packages work too.
+13 and Alpine 3.22 package an older Rust, so use rustup there; on Ubuntu 26.04
+the `rustc-1.97` and `cargo-1.97` packages work too.
 
-The build needs Ubuntu 24.04, Debian 13, Fedora 40, openSUSE Tumbleweed,
+The build needs Ubuntu 26.04, Debian 13, Fedora 40, openSUSE Tumbleweed,
 Arch Linux, Alpine 3.21 or a newer distribution: older releases ship a GTK,
 HarfBuzz, Cairo or FFmpeg that is too old.
 

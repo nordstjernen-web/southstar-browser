@@ -33,7 +33,7 @@ sudo apt install build-essential pkg-config \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
-Rust 1.91 or newer is required. On Windows, build from an MSYS2 MINGW64 shell
+Rust 1.95 or newer is required. On Windows, build from an MSYS2 UCRT64 shell
 with the packages listed in the repository's `docs/Windows.md`.
 
 ## Features

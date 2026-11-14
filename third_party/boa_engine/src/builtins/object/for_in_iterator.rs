@@ -117,7 +117,7 @@ impl ForInIterator {
                     PropertyKey::Symbol(_) => continue,
                 };
                 iterator.visited_keys.push(key);
-                if desc.expect_enumerable() {
+                if desc.enumerable() {
                     return Ok(Some(JsValue::new(name)));
                 }
             }

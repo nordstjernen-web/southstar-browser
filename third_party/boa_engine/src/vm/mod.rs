@@ -102,6 +102,10 @@ pub struct Vm {
     /// without `new`; native constructors are invoked with `undefined`.
     pub(crate) native_constructor_receiver: JsValue,
 
+    /// The empty code block of the frames pushed for native calls, shared by all of them so a
+    /// native call does not allocate one.
+    pub(crate) native_code_block: Gc<CodeBlock>,
+
     /// Empty argument vectors of finished native calls, reused by the next ones.
     argument_buffers: Vec<Vec<JsValue>>,
 
@@ -451,14 +455,16 @@ impl Vm {
 
     /// Creates a new virtual machine.
     pub(crate) fn new(realm: Realm) -> Self {
+        let native_code_block = Gc::new(CodeBlock::new(JsString::default(), 0, true));
         let mut frames = Vec::with_capacity(16);
         frames.push(CallFrame::new(
-            Gc::new(CodeBlock::new(JsString::default(), 0, true)),
+            native_code_block.clone(),
             None,
             EnvironmentStack::new(),
             realm,
         ));
         Self {
+            native_code_block,
             frames,
             stack: Stack::new(1024),
             return_value: JsValue::undefined(),

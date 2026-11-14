@@ -9,7 +9,7 @@ include /usr/share/dpkg/pkg-info.mk
 # build is reproducible.
 BUILD_DATE := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +%Y-%m-%d)
 
-# Ubuntu ships newer compilers as versioned packages (rustc-1.91, cargo-1.91)
+# Ubuntu ships newer compilers as versioned packages (rustc-1.97, cargo-1.97)
 # under /usr/lib/rust-1.NN/bin; use the newest one installed.
 RUST_VERSIONED_BIN := $(lastword $(shell ls -d /usr/lib/rust-1.*/bin 2>/dev/null | sort -V))
 ifneq ($(RUST_VERSIONED_BIN),)

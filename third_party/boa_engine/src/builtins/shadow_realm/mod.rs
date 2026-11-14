@@ -701,20 +701,20 @@ fn wrapped_function_call(
     // 1. Let callerContext be the running execution context.
     // 2. Let calleeContext be PrepareForWrappedFunctionCall(F).
     // 3. Assert: calleeContext is now the running execution context.
-    let (target, mut realm) = {
+    let (target, realm) = {
         let wrapped = obj.downcast_ref::<WrappedFunction>().js_expect(
             "wrapped function exotic method should only be callable from wrapped function objects",
         )?;
         (wrapped.target.clone(), wrapped.realm.clone())
     };
-    context.swap_realm(&mut realm);
+    let previous_realm = context.enter_realm(realm);
 
     // 4. Let result be Completion(OrdinaryWrappedFunctionCall(F, thisArgument, argumentsList)).
     let result = ordinary_wrapped_function_call(&target, &this, &args, context)
         .map_err(|error| error.inject_realm(context.realm().clone()));
 
     // 5. Remove calleeContext from the execution context stack and restore callerContext as the running execution context.
-    context.swap_realm(&mut realm);
+    context.enter_realm(previous_realm);
 
     // 6. Return ? result.
     context.vm.stack.push(result?);

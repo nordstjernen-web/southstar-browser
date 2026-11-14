@@ -415,12 +415,14 @@ impl CodeBlock {
             | Instruction::StoreUndefined { dst }
             | Instruction::Exception { dst }
             | Instruction::This { dst }
+            | Instruction::ThisForObjectEnvironmentName { dst }
             | Instruction::NewTarget { dst }
             | Instruction::ImportMeta { dst }
             | Instruction::CreateMappedArgumentsObject { dst }
             | Instruction::CreateUnmappedArgumentsObject { dst }
             | Instruction::RestParameterInit { dst }
             | Instruction::StoreNewArray { dst } => format!("dst:{dst}"),
+            Instruction::ToInt32 { dst, src } => format!("dst:{dst}, src:{src}"),
             Instruction::Add { lhs, rhs, dst }
             | Instruction::Sub { lhs, rhs, dst }
             | Instruction::Div { lhs, rhs, dst }
@@ -483,9 +485,6 @@ impl CodeBlock {
             }
             Instruction::StoreDouble { value, dst } => {
                 format!("value:{value}, dst:{dst}")
-            }
-            Instruction::ThisForObjectEnvironmentName { dst, value, index } => {
-                format!("dst:{dst}, value:{value}, index:{index}")
             }
             Instruction::StoreLiteral { index, dst }
             | Instruction::GetFunction { index, dst }
@@ -868,16 +867,9 @@ impl CodeBlock {
             Instruction::IteratorDone { dst }
             | Instruction::IteratorValue { dst }
             | Instruction::IteratorResult { dst }
-            | Instruction::IteratorToArray { dst }
             | Instruction::IteratorStackEmpty { dst }
             | Instruction::StoreEmptyObject { dst } => {
                 format!("dst:{dst}")
-            }
-            Instruction::IteratorFinishAsyncNext { resume_kind, value } => {
-                format!("resume_kind:{resume_kind}, value:{value}")
-            }
-            Instruction::IteratorReturn { value, called } => {
-                format!("value:{value}, called:{called}")
             }
             Instruction::PushPrivateEnvironment {
                 class,
@@ -1016,7 +1008,9 @@ impl CodeBlock {
             | Instruction::Reserved52
             | Instruction::Reserved53
             | Instruction::Reserved54
-            | Instruction::Reserved55 => unreachable!("Reserved opcodes are unreachable"),
+            | Instruction::Reserved55
+            | Instruction::Reserved56
+            | Instruction::Reserved57 => unreachable!("Reserved opcodes are unreachable"),
         }
     }
 }

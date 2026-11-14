@@ -46,6 +46,7 @@ impl CodeBlock {
                 | Instruction::Move { .. }
                 | Instruction::PopIntoRegister { .. }
                 | Instruction::PushFromRegister { .. }
+                | Instruction::ToInt32 { .. }
                 | Instruction::Add { .. }
                 | Instruction::Sub { .. }
                 | Instruction::Div { .. }
@@ -336,12 +337,9 @@ impl CodeBlock {
                 | Instruction::IteratorPop { .. }
                 | Instruction::IteratorPush { .. }
                 | Instruction::IteratorUpdateResult { .. }
-                | Instruction::IteratorFinishAsyncNext { .. }
                 | Instruction::IteratorValue { .. }
                 | Instruction::IteratorResult { .. }
                 | Instruction::IteratorDone { .. }
-                | Instruction::IteratorToArray { .. }
-                | Instruction::IteratorReturn { .. }
                 | Instruction::IteratorStackEmpty { .. }
                 | Instruction::ValueNotNullOrUndefined { .. }
                 | Instruction::RestParameterInit { .. }
@@ -433,7 +431,9 @@ impl CodeBlock {
                 | Instruction::Reserved52
                 | Instruction::Reserved53
                 | Instruction::Reserved54
-                | Instruction::Reserved55 => unreachable!("Reserved opcodes are unreachable"),
+                | Instruction::Reserved55
+                | Instruction::Reserved56
+                | Instruction::Reserved57 => unreachable!("Reserved opcodes are unreachable"),
             }
         }
 

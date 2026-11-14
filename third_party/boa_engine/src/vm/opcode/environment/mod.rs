@@ -95,22 +95,22 @@ pub(crate) struct ThisForObjectEnvironmentName;
 
 impl ThisForObjectEnvironmentName {
     #[inline(always)]
-    pub(super) fn operation(
-        (dst, value, index): (RegisterOperand, RegisterOperand, IndexOperand),
-        context: &mut Context,
-    ) -> JsResult<()> {
-        let mut binding_locator =
-            context.vm.frame().code_block.bindings[usize::from(index)].clone();
-        context.find_runtime_binding(&mut binding_locator)?;
+    pub(super) fn operation(dst: RegisterOperand, context: &mut Context) -> JsResult<()> {
+        // The preceding `GetNameAndLocator` opcode already resolved the binding and
+        // pushed the resolved locator onto the binding stack. Reuse that resolution
+        // to derive the `this` value (`WithBaseObject`) instead of scanning the
+        // environment chain again, so `HasBinding` (and the binding object's
+        // `[[HasProperty]]` trap) runs exactly once, as required by the specification.
+        let (binding_locator, _) = context
+            .vm
+            .frame_mut()
+            .binding_stack
+            .pop()
+            .js_expect("locator should have been pushed by GetNameAndLocator")?;
         let this = context
-            .object_environment_of(&binding_locator)
+            .this_from_resolved_object_environment_binding(&binding_locator)
             .map_or(JsValue::undefined(), Into::into);
-        let result = context.get_binding(&binding_locator)?.ok_or_else(|| {
-            let name = binding_locator.name().to_std_string_escaped();
-            JsNativeError::reference().with_message(format!("{name} is not defined"))
-        })?;
         context.vm.set_register(dst.into(), this);
-        context.vm.set_register(value.into(), result);
         Ok(())
     }
 }

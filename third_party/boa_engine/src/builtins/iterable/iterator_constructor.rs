@@ -409,7 +409,7 @@ impl IteratorConstructor {
             };
 
             // c. If desc is not undefined and desc.[[Enumerable]] is true, then
-            if !desc.is_some_and(|desc| desc.expect_enumerable()) {
+            if !desc.is_some_and(|desc| desc.enumerable()) {
                 continue;
             }
 

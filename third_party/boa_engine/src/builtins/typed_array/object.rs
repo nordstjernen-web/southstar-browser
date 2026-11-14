@@ -14,7 +14,7 @@ use crate::{
             ordinary_prevent_extensions, ordinary_set, ordinary_try_get,
         },
     },
-    property::{PropertyDescriptor, PropertyKey},
+    property::{CompletePropertyDescriptor, PropertyDescriptor, PropertyKey},
 };
 use boa_gc::{Finalize, Trace};
 use boa_macros::js_str;
@@ -402,7 +402,7 @@ pub(crate) fn typed_array_exotic_get_own_property(
     obj: &JsObject,
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
-) -> JsResult<Option<PropertyDescriptor>> {
+) -> JsResult<Option<CompletePropertyDescriptor>> {
     let p = match key {
         PropertyKey::String(key) => {
             // 1.a. Let numericIndex be CanonicalNumericIndexString(P).
@@ -423,13 +423,11 @@ pub(crate) fn typed_array_exotic_get_own_property(
         // iv. If IsImmutableBuffer(O.[[ViewedArrayBuffer]]) is true, set mutable to false.
         // v. Return the PropertyDescriptor { [[Value]]: value, [[Writable]]: mutable, [[Enumerable]]: true, [[Configurable]]: mutable }.
         let mutable = !is_immutable_typed_array(obj);
-        return Ok(value.map(|v| {
-            PropertyDescriptor::builder()
-                .value(v)
-                .writable(mutable)
-                .enumerable(true)
-                .configurable(mutable)
-                .build()
+        return Ok(value.map(|value| CompletePropertyDescriptor::Data {
+            value,
+            writable: mutable,
+            enumerable: true,
+            configurable: mutable,
         }));
     }
 
@@ -503,7 +501,7 @@ pub(crate) fn typed_array_exotic_define_own_property(
             // 3. NOTE: Attempting to redefine an immutable value always fails, even if the
             //    new value would be cast to the current value.
             // 4. Return ValidateAndApplyPropertyDescriptor(O, P, false, Desc, current).
-            return Ok(is_compatible_property_descriptor(false, desc, current));
+            return Ok(is_compatible_property_descriptor(obj, false, desc, current));
         }
 
         // ii. If Desc has a [[Configurable]] field and Desc.[[Configurable]] is false, return false.

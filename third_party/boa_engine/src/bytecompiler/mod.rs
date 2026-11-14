@@ -27,6 +27,7 @@ mod env;
 mod expression;
 mod function;
 mod generator;
+mod iterator;
 mod jump_control;
 mod module;
 mod register;
@@ -88,7 +89,7 @@ pub(crate) use declarations::{
     global_declaration_instantiation_context, prepare_eval_declaration_instantiation,
 };
 pub(crate) use function::FunctionCompiler;
-pub(crate) use jump_control::JumpControlInfo;
+pub(crate) use jump_control::{JumpControlInfo, ReturnValueLocation};
 pub(crate) use register::*;
 
 pub(crate) trait ToJsString {
@@ -555,6 +556,13 @@ pub struct ByteCompiler<'ctx> {
     /// Whether the next call compiled is in tail position, set by
     /// [`ByteCompiler::compile_tail_expr_to_stack`].
     pub(crate) tail_call: bool,
+    /// Register that holds an explicit `return` value while `finally` blocks execute.
+    ///
+    /// Values are kept in a dedicated register instead of the value stack so that
+    /// abrupt completions inside a `finally` block (e.g. `break`) cannot leave
+    /// stale values behind for an outer pending `return` to read.
+    /// Allocated lazily by the first `return` that passes through a `finally`.
+    pending_return_slot: Option<u32>,
 
     /// Used to handle exception throws that escape the async function types.
     ///
@@ -685,6 +693,7 @@ impl<'ctx> ByteCompiler<'ctx> {
             jump_info: Vec::new(),
             dispose_capabilities: Vec::new(),
             tail_call: false,
+            pending_return_slot: None,
             async_handler: None,
             json_parse,
             variable_scope,
@@ -726,6 +735,18 @@ impl<'ctx> ByteCompiler<'ctx> {
 
     pub(crate) fn interner(&self) -> &Interner {
         self.interner
+    }
+
+    /// Returns the register used to hold an explicit `return` value while
+    /// `finally` blocks execute, allocating it on first use.
+    pub(crate) fn pending_return_slot(&mut self) -> u32 {
+        if let Some(slot) = self.pending_return_slot {
+            slot
+        } else {
+            let slot = self.register_allocator.alloc_persistent().index();
+            self.pending_return_slot = Some(slot);
+            slot
+        }
     }
 
     fn get_or_insert_literal(&mut self, literal: Literal) -> u32 {
@@ -2799,13 +2820,19 @@ impl<'ctx> ByteCompiler<'ctx> {
                                 unreachable!("with binding cannot be local")
                             }
                         };
+                        // Resolve the binding exactly once. `GetNameAndLocator` fetches
+                        // the callee value and records the resolved locator on the
+                        // binding stack; `ThisForObjectEnvironmentName` then derives the
+                        // `this` value (`WithBaseObject`) from that same locator without
+                        // re-scanning the environment chain. This guarantees `HasBinding`
+                        // (and the binding object's `[[HasProperty]]` trap) runs once, as
+                        // required by the specification.
                         let this = self.register_allocator.alloc();
                         let value = self.register_allocator.alloc();
-                        self.bytecode.emit_this_for_object_environment_name(
-                            this.variable(),
-                            value.variable(),
-                            index.into(),
-                        );
+                        self.bytecode
+                            .emit_get_name_and_locator(value.variable(), index.into());
+                        self.bytecode
+                            .emit_this_for_object_environment_name(this.variable());
                         self.push_from_register(&this);
                         self.push_from_register(&value);
                         self.register_allocator.dealloc(value);
@@ -2912,7 +2939,7 @@ impl<'ctx> ByteCompiler<'ctx> {
         if let Some(async_handler) = self.async_handler {
             self.patch_handler(async_handler);
         }
-        self.r#return(false);
+        self.r#return(ReturnValueLocation::InAccumulator);
 
         let final_bytecode_len = self.next_opcode_location();
 

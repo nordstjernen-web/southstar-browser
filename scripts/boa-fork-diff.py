@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Southstar — diff the forked Boa crates (and regress) in third_party against the crates.io releases they fork, verified by the registry checksums."""
+"""Southstar — diff the forked Boa crates (and regress) in third_party against what they fork: a crates.io release, verified by the registry checksum, or a Boa git commit."""
 
 import argparse
 import hashlib
@@ -20,15 +20,16 @@ FORKS = CRATES + ("regress",)
 INDEX = "https://index.crates.io/{0}/{1}"
 DOWNLOAD = "https://static.crates.io/crates/{0}/{0}-{1}.crate"
 COMPARED = ("src", "Cargo.toml")
+COMMIT_ARCHIVE = "https://codeload.github.com/boa-dev/boa/tar.gz/{0}"
 
 
 def fork_dir(crate):
     return ROOT / "third_party" / crate
 
 
-def fork_version(crate):
+def fork_metadata(crate):
     with (fork_dir(crate) / "Cargo.toml").open("rb") as manifest:
-        return tomllib.load(manifest)["package"]["metadata"]["southstar"]["upstream-version"]
+        return tomllib.load(manifest)["package"]["metadata"]["southstar"]
 
 
 def fetch(url):
@@ -66,9 +67,22 @@ def unpack(crate, version, into):
     return Path(into) / "release" / prefix
 
 
-def copy(source_root, into):
+def unpack_commit(crate, commit, into):
+    archive_path = Path(into) / f"boa-{commit}.tar.gz"
+    if not archive_path.exists():
+        archive_path.write_bytes(fetch(COMMIT_ARCHIVE.format(commit)))
+    root = f"boa-{commit}/core/{crate.removeprefix('boa_')}/"
+    with tarfile.open(archive_path, mode="r:gz") as archive:
+        members = [m for m in archive.getmembers() if m.name.startswith(root)]
+        if not members:
+            sys.exit(f"boa-fork-diff: {crate} is not in Boa commit {commit}")
+        archive.extractall(Path(into) / "commit", members=members, filter="data")
+    return Path(into) / "commit" / root
+
+
+def copy(source_root, into, names=COMPARED):
     into.mkdir(parents=True, exist_ok=True)
-    for name in COMPARED:
+    for name in names:
         source = source_root / name
         if source.is_dir():
             shutil.copytree(source, into / name)
@@ -79,15 +93,23 @@ def copy(source_root, into):
 
 def patch(crates, version, scratch):
     for crate in crates:
-        release = unpack(crate, version or fork_version(crate), scratch)
-        copy(release, Path(scratch) / "upstream" / crate)
-        copy(fork_dir(crate), Path(scratch) / "fork" / crate)
+        metadata = fork_metadata(crate)
+        commit = None if version else metadata.get("upstream-commit")
+        if commit:
+            upstream = unpack_commit(crate, commit, scratch)
+            names = ("src",)
+        else:
+            upstream = unpack(crate, version or metadata["upstream-version"], scratch)
+            names = COMPARED
+        copy(upstream, Path(scratch) / "upstream" / crate, names)
+        copy(fork_dir(crate), Path(scratch) / "fork" / crate, names)
     result = subprocess.run(
         ["git", "diff", "--no-index", "--no-prefix", "upstream", "fork"],
         cwd=scratch,
         check=False,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode > 1:
         sys.exit(result.stderr)

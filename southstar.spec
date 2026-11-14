@@ -20,8 +20,8 @@ URL:            https://github.com/nordstjernen-web/southstar-browser
 
 BuildRequires:  gcc
 BuildRequires:  pkgconfig
-BuildRequires:  cargo >= 1.91
-BuildRequires:  rust >= 1.91
+BuildRequires:  cargo >= 1.95
+BuildRequires:  rust >= 1.95
 BuildRequires:  update-desktop-files
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(enchant-2)

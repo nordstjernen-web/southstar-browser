@@ -15,7 +15,7 @@ use super::{
 use crate::{
     Context, JsResult,
     object::{JsObject, shape::slot::SlotAttributes},
-    property::{DescriptorKind, PropertyDescriptor, PropertyKey},
+    property::{CompletePropertyDescriptor, PropertyDescriptor, PropertyKey},
     value::JsValue,
 };
 
@@ -95,8 +95,8 @@ pub fn ordinary_define_own_property_of(
     let context = &mut InternalMethodPropertyContext::new(context);
     let current = ordinary_get_own_property(object, key, context)?;
     let extensible = object.__is_extensible__(context)?;
-    Ok(validate_and_apply_property_descriptor(
-        Some((object, key)),
+    Ok(validate_and_apply_property_descriptor::<true>(
+        (object, key),
         extensible,
         desc,
         current,
@@ -140,12 +140,12 @@ fn lookup(
     key: &PropertyKey,
     receiver: &JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
-) -> JsResult<Option<PropertyDescriptor>> {
+) -> JsResult<Option<CompletePropertyDescriptor>> {
     uncacheable(context);
     if let Some(hooks) = HOOKS.get()
         && let Some(desc) = hooks.get_own_property(obj, key, receiver, context)?
     {
-        return Ok(Some(desc));
+        return Ok(Some(desc.complete_property_descriptor()));
     }
     ordinary_get_own_property(obj, key, context)
 }
@@ -154,24 +154,22 @@ fn host_get_own_property(
     obj: &JsObject,
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
-) -> JsResult<Option<PropertyDescriptor>> {
+) -> JsResult<Option<CompletePropertyDescriptor>> {
     let receiver = JsValue::from(obj.clone());
     lookup(obj, key, &receiver, context)
 }
 
 fn read(
-    desc: &PropertyDescriptor,
+    desc: &CompletePropertyDescriptor,
     receiver: &JsValue,
     context: &mut InternalMethodPropertyContext<'_>,
 ) -> JsResult<JsValue> {
-    match desc.kind() {
-        DescriptorKind::Data {
-            value: Some(value), ..
-        } => Ok(value.clone()),
-        DescriptorKind::Accessor { get: Some(get), .. } if !get.is_undefined() => {
+    match desc {
+        CompletePropertyDescriptor::Data { value, .. } => Ok(value.clone()),
+        CompletePropertyDescriptor::Accessor { get: Some(get), .. } => {
             get.call(receiver, &[], context)
         }
-        _ => Ok(JsValue::undefined()),
+        CompletePropertyDescriptor::Accessor { get: None, .. } => Ok(JsValue::undefined()),
     }
 }
 
