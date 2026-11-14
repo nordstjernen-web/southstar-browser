@@ -30,6 +30,9 @@ pub fn get_bounding_client_rect(scope: &mut Scope<'_>, this: &Value, _args: &[Va
         if let Some(r) = crate::svg::client_rect(scope, node) {
             rect = r;
             got_box = true;
+        } else if let Some(r) = crate::math::client_rect(scope, node) {
+            rect = r;
+            got_box = true;
         } else if let Some(r) = inline_rect_for_this(scope, this) {
             rect = r;
             got_box = true;
@@ -48,6 +51,7 @@ pub fn get_client_rects(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) ->
     let arr = scope.new_array();
     if box_for_this(scope, this).is_none()
         && crate::svg::client_rect(scope, ffi::unwrap_node(this)).is_none()
+        && crate::math::client_rect(scope, ffi::unwrap_node(this)).is_none()
         && inline_rect_for_this(scope, this).is_none()
     {
         return Ok(arr);

@@ -1961,6 +1961,7 @@ dependencies = [
  "southstar-js-runtime",
  "southstar-layout",
  "southstar-numfmt",
+ "southstar-raster",
  "southstar-text",
  "southstar-texture",
  "southstar-unicode",
@@ -2783,6 +2784,7 @@ dependencies = [
  "southstar-layout-hit",
  "southstar-layout-query",
  "southstar-mat4",
+ "southstar-mathml",
  "southstar-style",
  "southstar-svg",
 ]

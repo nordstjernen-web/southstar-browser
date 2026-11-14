@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_dom::serialize::{self, Options};
+use southstar_dom::serialize::{self, Options, is_embedded_doc, is_shadow_root_marked};
 use southstar_dom::{FLAG_SCRIPTING_DISABLED, Kind};
 use southstar_js_engine::{Scope, Value};
 
@@ -90,7 +90,9 @@ fn clear_children_collect(js: Option<Js>, n: Element) -> Vec<Element> {
         return Vec::new();
     };
     let mut removed = Vec::new();
-    while let Some(child) = n.first_child() {
+    let mut light = children(n);
+    light.retain(|child| !is_embedded_doc(*child) && !is_shadow_root_marked(*child));
+    for child in light {
         ffi::ce_disconnect_subtree(js, child);
         child.detach();
         ffi::track_orphan(js, child);

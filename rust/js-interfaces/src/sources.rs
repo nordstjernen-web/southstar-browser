@@ -206,7 +206,7 @@ pub(crate) const ELEMENT_SHAPES_MEMBERS: &[(&str, &str)] = &[
     (
         "HTMLElement",
         concat!(
-            "accessKey attachInternals attributeStyleMap autocapitalize autocorrect ",
+            "accessKey accessKeyLabel attachInternals attributeStyleMap autocapitalize autocorrect ",
             "autofocus blur click contentEditable dataset dir draggable editContext ",
             "enterKeyHint focus focusGroup focusGroupStart hidden hidePopover inert ",
             "innerText inputMode isContentEditable lang nonce offsetHeight offsetLeft ",

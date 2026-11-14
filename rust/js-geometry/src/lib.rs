@@ -9,6 +9,7 @@ pub(crate) mod ffi;
 pub mod hit;
 pub mod links;
 mod lookup;
+mod math;
 pub mod metrics;
 pub mod scroll;
 pub mod smil;

@@ -106,6 +106,19 @@ impl Surface {
         self.0.as_ref().to_png().ok()
     }
 
+    pub fn jpeg(&self, quality: u8) -> Option<Vec<u8>> {
+        self.read_pixels(|data, stride, (width, height)| {
+            southstar_raster::encode_jpeg(
+                data,
+                usize::try_from(width).ok()?,
+                usize::try_from(height).ok()?,
+                stride,
+                quality,
+            )
+        })
+        .flatten()
+    }
+
     pub fn fill_opaque_black(&self) {
         let cr = cairo::Context::new(self.0.as_ref());
         let cr = cr.as_ref();
