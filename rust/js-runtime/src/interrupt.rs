@@ -2,7 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use crate::budget::MONITOR_LIMIT_US;
+use crate::budget::monitor_limit_us;
 use crate::ffi::{self, Js};
 
 const STACK_LIMIT: usize = 5 * 1024 * 1024;
@@ -22,7 +22,7 @@ pub(crate) fn should_interrupt(js: Js) -> bool {
         js.halt();
         ffi::warn(&format!(
             "[js] monitor: page JavaScript ran longer than {} s — halting it",
-            MONITOR_LIMIT_US / 1_000_000
+            monitor_limit_us() / 1_000_000
         ));
         return true;
     }

@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::ffi::{CStr, c_int};
 
 use southstar_cairo::ContextRef;
@@ -10,35 +11,74 @@ use southstar_paint::text_layout::{self, FontDescription, Layout};
 
 pub const PANGO_SCALE: f64 = 1024.0;
 
-pub struct Canvas<'a>(ContextRef<'a>);
+pub struct Canvas<'a> {
+    cr: Option<ContextRef<'a>>,
+    probe: Option<Node<'a>>,
+    probed: Cell<Option<[f64; 4]>>,
+}
 
-impl Canvas<'_> {
+impl<'a> Canvas<'a> {
+    pub fn probing(target: Node<'a>) -> Canvas<'a> {
+        Canvas {
+            cr: None,
+            probe: Some(target),
+            probed: Cell::new(None),
+        }
+    }
+
+    pub fn note(&self, node: Node<'_>, rect: [f64; 4]) {
+        if self
+            .probe
+            .is_some_and(|target| target.as_ptr() == node.as_ptr())
+        {
+            self.probed.set(Some(rect));
+        }
+    }
+
+    pub fn probed(&self) -> Option<[f64; 4]> {
+        self.probed.get()
+    }
+
     pub fn save(&self) {
-        self.0.save();
+        if let Some(cr) = self.cr {
+            cr.save();
+        }
     }
 
     pub fn restore(&self) {
-        self.0.restore();
+        if let Some(cr) = self.cr {
+            cr.restore();
+        }
     }
 
     pub fn move_to(&self, x: f64, y: f64) {
-        self.0.move_to(x, y);
+        if let Some(cr) = self.cr {
+            cr.move_to(x, y);
+        }
     }
 
     pub fn line_to(&self, x: f64, y: f64) {
-        self.0.line_to(x, y);
+        if let Some(cr) = self.cr {
+            cr.line_to(x, y);
+        }
     }
 
     pub fn stroke(&self) {
-        self.0.stroke();
+        if let Some(cr) = self.cr {
+            cr.stroke();
+        }
     }
 
     pub fn set_line_width(&self, width: f64) {
-        self.0.set_line_width(width);
+        if let Some(cr) = self.cr {
+            cr.set_line_width(width);
+        }
     }
 
     pub fn set_source_rgba(&self, [r, g, b, a]: [f64; 4]) {
-        self.0.set_source_rgba(r, g, b, a);
+        if let Some(cr) = self.cr {
+            cr.set_source_rgba(r, g, b, a);
+        }
     }
 }
 
@@ -71,7 +111,9 @@ impl Token {
     }
 
     pub fn show(&self, canvas: &Canvas<'_>) {
-        self.0.show(canvas.0);
+        if let Some(cr) = canvas.cr {
+            self.0.show(cr);
+        }
     }
 }
 
@@ -92,5 +134,10 @@ pub fn paint_math(
     font_px: f64,
     rgba: [f64; 4],
 ) {
-    crate::paint(&Canvas(cr), math, x, y, font_px, rgba);
+    let canvas = Canvas {
+        cr: Some(cr),
+        probe: None,
+        probed: Cell::new(None),
+    };
+    crate::paint(&canvas, math, x, y, font_px, rgba);
 }

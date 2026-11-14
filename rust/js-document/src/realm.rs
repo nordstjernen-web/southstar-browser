@@ -463,6 +463,11 @@ fn append_write(scope: &mut Scope<'_>, this: &Value, args: &[Value], newline: bo
     if newline {
         buffer.push(b'\n');
     }
+    if let Some(host) = frame_host(doc) {
+        replace_children(js, doc, &buffer);
+        ffi::set_attr(host, c"data-nd-doc-written", c"1");
+        ffi::pending_iframe_add(js, host);
+    }
     let buffer = scope.string_from_bytes(&buffer);
     let _ = scope.set(this, WRITE_BUFFER, buffer);
 }
@@ -502,11 +507,14 @@ pub(crate) fn close(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResul
     let Some(current) = scope.get(this, WRITE_BUFFER).ok().filter(Value::is_string) else {
         return Ok(Value::undefined());
     };
-    if let Ok(markup) = scope.to_bytes(&current) {
-        replace_children(js, doc, &markup);
-    }
+    let markup = scope.to_bytes(&current).unwrap_or_default();
     let _ = scope.set(this, WRITE_BUFFER, Value::undefined());
-    if let Some(host) = frame_host(doc) {
+    let host = frame_host(doc);
+    if host.is_some() && !markup.is_empty() {
+        return Ok(Value::undefined());
+    }
+    replace_children(js, doc, &markup);
+    if let Some(host) = host {
         ffi::set_attr(host, c"data-nd-doc-written", c"1");
         ffi::pending_iframe_add(js, host);
         ffi::mark_mutated(js);

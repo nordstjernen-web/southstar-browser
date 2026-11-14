@@ -21,6 +21,7 @@ southstar-layout = { path = "../layout", version = "=1.0.10-dev" }
 southstar-layout-hit = { path = "../layout-hit", version = "=1.0.10-dev" }
 southstar-layout-query = { path = "../layout-query", version = "=1.0.10-dev" }
 southstar-mat4 = { path = "../mat4", version = "=1.0.10-dev" }
+southstar-mathml = { path = "../mathml", version = "=1.0.10-dev" }
 southstar-style = { path = "../style", version = "=1.0.10-dev" }
 southstar-svg = { path = "../svg", version = "=1.0.10-dev" }
 

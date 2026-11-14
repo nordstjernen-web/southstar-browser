@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use southstar_dom::serialize::{is_embedded_doc, is_shadow_root_marked};
 use southstar_dom::{MAX_DEPTH, Node, children};
 
 use crate::ffi::{self, Js};
@@ -53,12 +54,18 @@ pub(crate) fn orphan(js: Option<Js>, node: Element) {
     node.free_tree();
 }
 
+fn light_children(parent: Element) -> Vec<Element> {
+    children(parent)
+        .filter(|kid| !is_embedded_doc(*kid) && !is_shadow_root_marked(*kid))
+        .collect()
+}
+
 pub(crate) fn clear_children(js: Option<Js>, parent: Element) {
     let Some(js) = js else {
         tree::clear_children(parent);
         return;
     };
-    for kid in children(parent).collect::<Vec<_>>() {
+    for kid in light_children(parent) {
         kid.detach();
         record::index_child_changes(Some(js), parent, &[], &[kid]);
         track(js, kid);
@@ -81,7 +88,7 @@ pub(crate) fn orphan_children(js: Option<Js>, parent: Element) {
         tree::clear_children(parent);
         return;
     };
-    for kid in children(parent).collect::<Vec<_>>() {
+    for kid in light_children(parent) {
         prune(js, kid, 0);
         kid.detach();
         record::index_child_changes(Some(js), parent, &[], &[kid]);
@@ -98,7 +105,7 @@ pub(crate) fn replace_all(js: Option<Js>, parent: Element, added: Option<Element
         return;
     };
     let mut removed = Vec::new();
-    while let Some(kid) = parent.first_child() {
+    for kid in light_children(parent) {
         ffi::ce_disconnect_subtree(js, kid);
         kid.detach();
         track(js, kid);

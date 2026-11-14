@@ -3,6 +3,35 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* JetStream 2 runs. Its driver builds every benchmark in a nested iframe
+  with `document.write`, and three things stopped it before the first
+  test: `iframe.textContent = ""` (and `innerHTML` or `innerText`)
+  threw away the frame's document, because the
+  document is kept as a hidden child of the `<iframe>` — a shadow root
+  went the same way when its host's children were replaced; scripts
+  written into a frame with `document.write` did not run until
+  `document.close()`, which JetStream only calls after the benchmark has
+  reported back, so they are now parsed on each write and run from the
+  next task; and a script is still stopped after `js_eval_budget_ms`
+  (60 s by default), but the setting may now be raised up to an hour, or
+  overridden with `NS_JS_EVAL_BUDGET_MS`, for pages that compute for
+  minutes in one script.
+* A `<meta http-equiv="Content-Security-Policy">` in a framed document
+  applies to that frame. Only the response header did, so a frame whose
+  policy came from its markup could still call `eval()` and run inline
+  script the policy forbids.
+* `canvas.toDataURL("image/jpeg", quality)`, `toBlob` and
+  `OffscreenCanvas.convertToBlob` encode JPEG (an in-tree baseline
+  encoder, 4:4:4, default quality 0.92) instead of answering with a PNG.
+* MathML: `<mspace>` takes its `width`, `height` and `depth`, and
+  `getBoundingClientRect()` / `getClientRects()` of an element inside
+  `<math>` return the rectangle the formula's layout gave it rather than
+  an empty one.
+* `XMLHttpRequest.responseXML` is the parsed document for
+  `responseType = "document"` and for XML responses read with the
+  default type; it was always `null`. `input.files` is a `FileList`
+  (`instanceof FileList`, no array methods) and `accessKeyLabel` exists
+  on HTML elements.
 
 Southstar Browser 1.0.9:
 ======

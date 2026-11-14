@@ -15,6 +15,15 @@ const CACHE_SLOT: Attributes = Attributes {
     configurable: true,
 };
 
+const FILE_LIST_BRAND: &str = "(function (files) {
+    if (typeof FileList !== 'function') return;
+    Object.defineProperty(files, Symbol.iterator, {
+        value: Array.prototype[Symbol.iterator], writable: true, configurable: true
+    });
+    Object.defineProperty(files, 'item', { enumerable: false });
+    Object.setPrototypeOf(files, FileList.prototype);
+})";
+
 fn base_name(path: &[u8]) -> &[u8] {
     let slash = path.iter().rposition(|&b| b == b'/');
     let separator = if cfg!(windows) {
@@ -86,6 +95,8 @@ pub fn get_files(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResu
     }
     let item = ffi::named_map_item_function(scope);
     scope.set(&files, "item", item)?;
+    let brand = scope.eval_script(FILE_LIST_BRAND, "<file-list>")?;
+    scope.call(&brand, &Value::undefined(), core::slice::from_ref(&files))?;
     let stored = scope.string_from_bytes(path.as_deref().map_or(b"", CStr::to_bytes));
     scope.define(this, "__nd_files_path", stored, CACHE_SLOT)?;
     scope.define(this, "__nd_files_cache", files.clone(), CACHE_SLOT)?;

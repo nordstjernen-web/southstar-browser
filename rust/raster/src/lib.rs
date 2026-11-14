@@ -1,4 +1,4 @@
-//! Southstar — PNG/APNG, GIF, BMP and JPEG decoding to premultiplied BGRA canvases, still and animated.
+//! Southstar — PNG/APNG, GIF, BMP and JPEG decoding to premultiplied BGRA canvases, still and animated, and JPEG encoding.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -7,9 +7,11 @@
 mod bmp;
 mod gif;
 mod jpeg;
+mod jpeg_encode;
 mod pixel;
 mod png;
 
+pub use jpeg_encode::encode_jpeg;
 pub use pixel::{Canvas, premultiply_bgra};
 
 pub const MAX_DIM: u32 = 16384;

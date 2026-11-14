@@ -5,6 +5,7 @@
 use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
+use southstar_csp::Csp;
 use southstar_dom::{Kind, Node};
 use southstar_js_engine::Value;
 
@@ -665,6 +666,52 @@ fn run_written_scripts(js: Js, iframe: Node<'_>) {
     });
 }
 
+fn meta_policy(root: Node<'_>) -> Option<Csp> {
+    let mut merged: Option<Csp> = None;
+    let mut pending = vec![root];
+    while let Some(node) = pending.pop() {
+        if node.kind() == Kind::Document {
+            continue;
+        }
+        let is_policy = node.element_name() == Some(b"meta")
+            && node.attr(c"http-equiv").is_some_and(|name| {
+                name.to_bytes()
+                    .eq_ignore_ascii_case(b"content-security-policy")
+            });
+        if is_policy
+            && let Some(mut parsed) =
+                non_empty(node.attr(c"content")).and_then(|content| Csp::parse(content.to_bytes()))
+        {
+            match &mut merged {
+                Some(csp) => csp.merge(&mut parsed),
+                None => merged = Some(parsed),
+            }
+        }
+        pending.extend(southstar_dom::children(node));
+    }
+    merged
+}
+
+fn apply_meta_policy(js: Js, iframe: Node<'_>, root: Node<'_>) {
+    let Some(mut meta) = meta_policy(root) else {
+        return;
+    };
+    let inherited = match page::own_policy(js, iframe) {
+        Some(own) => own.map(|csp| (*csp).clone()),
+        None => ffi::page_csp(js),
+    };
+    let policy = match inherited {
+        Some(mut base) => {
+            base.merge(&mut meta);
+            base
+        }
+        None => meta,
+    };
+    page::update_frame(js, frame_of(iframe), |entry| {
+        entry.policy = FramePolicy::Own(Some(Rc::new(policy)));
+    });
+}
+
 pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     if js.is_null() || ffi::halted(js) || ffi::current_document(js).is_none() {
         return;
@@ -725,7 +772,7 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     let policy = match &resp {
         Some(resp) if !local_scheme => FramePolicy::Own(
             non_empty(resp.csp_header())
-                .and_then(|header| southstar_csp::Csp::parse(header.to_bytes()))
+                .and_then(|header| Csp::parse(header.to_bytes()))
                 .map(Rc::new),
         ),
         _ => FramePolicy::Inherit,
@@ -774,6 +821,7 @@ pub(crate) fn load_now(js: Js, iframe: Node<'_>) {
     }
 
     if let Some(built) = &built {
+        apply_meta_policy(js, iframe, built.root);
         ffi::set_attr(iframe, c"data-nd-frame-loaded", Some(c"1"));
         load::mark_attr_dirty(iframe, c"data-nd-frame-loaded");
         let iorigin = non_empty(abs_url.as_deref()).unwrap_or(&origin).to_owned();

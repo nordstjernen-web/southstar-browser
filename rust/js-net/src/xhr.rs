@@ -669,6 +669,18 @@ fn make_blob(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>) ->
         .unwrap_or_else(|_| Value::null())
 }
 
+fn is_xml_type(content_type: Option<&[u8]>) -> bool {
+    let Some(content_type) = content_type else {
+        return false;
+    };
+    let end = content_type
+        .iter()
+        .position(|&b| b == b';')
+        .unwrap_or(content_type.len());
+    let essence = content_type[..end].trim_ascii().to_ascii_lowercase();
+    essence == b"text/xml" || essence == b"application/xml" || essence.ends_with(b"+xml")
+}
+
 fn make_document(scope: &mut Scope<'_>, body: &[u8], content_type: Option<&[u8]>) -> Value {
     let ctor = crate::global_ctor(scope, "DOMParser");
     if !scope.is_constructor(&ctor) {
@@ -756,6 +768,14 @@ fn store_response(scope: &mut Scope<'_>, js: Js, state: &XhrState, resp: &Respon
         Some(b"document") => make_document(scope, body, content_type.as_deref()),
         _ => response_text(scope, obj, body, content_type.as_deref()),
     };
+    let document = match kind.as_deref() {
+        Some(b"document") => response.clone(),
+        None | Some(b"") if !body.is_empty() && is_xml_type(content_type.as_deref()) => {
+            make_document(scope, body, content_type.as_deref())
+        }
+        _ => Value::null(),
+    };
+    set(scope, obj, "responseXML", document);
     set(scope, obj, "response", response);
     allow
 }

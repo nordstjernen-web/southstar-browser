@@ -236,9 +236,61 @@ fn make_blob(scope: &mut Scope<'_>, data: &[u8], kind: &str) -> Result<Value, Va
     scope.construct(&blob_ctor, &[parts, options])
 }
 
-fn png_blob(scope: &mut Scope<'_>, surface: &Surface) -> Result<Value, Value> {
-    match surface.png() {
-        Some(png) => make_blob(scope, &png, "image/png"),
+const DEFAULT_JPEG_QUALITY: f64 = 0.92;
+
+struct Encoded {
+    bytes: Vec<u8>,
+    kind: &'static str,
+}
+
+fn jpeg_quality(scope: &mut Scope<'_>, quality: Option<&Value>) -> u8 {
+    let fraction = quality
+        .filter(|value| value.is_number())
+        .and_then(|value| scope.to_number(value).ok())
+        .filter(|fraction| (0.0..=1.0).contains(fraction))
+        .unwrap_or(DEFAULT_JPEG_QUALITY);
+    (fraction * 100.0).round().clamp(1.0, 100.0) as u8
+}
+
+fn encode_surface(
+    scope: &mut Scope<'_>,
+    surface: &Surface,
+    kind: Option<&Value>,
+    quality: Option<&Value>,
+) -> Option<Encoded> {
+    let wants_jpeg = kind
+        .filter(|kind| kind.is_string())
+        .and_then(|kind| scope.to_string(kind).ok())
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("image/jpeg"));
+    if wants_jpeg {
+        let quality = jpeg_quality(scope, quality);
+        if let Some(bytes) = surface.jpeg(quality) {
+            return Some(Encoded {
+                bytes,
+                kind: "image/jpeg",
+            });
+        }
+    }
+    surface.png().map(|bytes| Encoded {
+        bytes,
+        kind: "image/png",
+    })
+}
+
+fn encoded_blob(
+    scope: &mut Scope<'_>,
+    surface: &Surface,
+    options: Option<&Value>,
+) -> Result<Value, Value> {
+    let (kind, quality) = match options.filter(|options| options.is_object()) {
+        Some(options) => (
+            Some(scope.get(options, "type")?),
+            Some(scope.get(options, "quality")?),
+        ),
+        None => (None, None),
+    };
+    match encode_surface(scope, surface, kind.as_ref(), quality.as_ref()) {
+        Some(encoded) => make_blob(scope, &encoded.bytes, encoded.kind),
         None => Ok(Value::null()),
     }
 }
@@ -246,7 +298,7 @@ fn png_blob(scope: &mut Scope<'_>, surface: &Surface) -> Result<Value, Value> {
 pub(crate) fn convert_to_blob(
     scope: &mut Scope<'_>,
     this: &Value,
-    _: &[Value],
+    args: &[Value],
 ) -> Result<Value, Value> {
     let (promise, resolve, reject) = scope.new_promise()?;
     let el = crate::api::offscreen_node(this);
@@ -263,7 +315,7 @@ pub(crate) fn convert_to_blob(
                 "Tainted canvases may not be exported.",
             ));
         } else {
-            outcome = png_blob(scope, &st.surface());
+            outcome = encoded_blob(scope, &st.surface(), args.first());
         }
     }
     let (settle, value) = match outcome {
@@ -274,15 +326,15 @@ pub(crate) fn convert_to_blob(
     Ok(promise)
 }
 
-fn png_bytes_object(scope: &mut Scope<'_>, png: &[u8]) -> Result<Value, Value> {
+fn encoded_bytes_object(scope: &mut Scope<'_>, encoded: &Encoded) -> Result<Value, Value> {
     let global = scope.global();
     let u8_ctor = scope.get(&global, "Uint8Array")?;
-    let buffer = scope.new_array_buffer(png)?;
+    let buffer = scope.new_array_buffer(&encoded.bytes)?;
     let bytes = scope.construct(&u8_ctor, &[buffer])?;
     let blob = scope.new_object();
     scope.set(&blob, "__ndBlobBytes", bytes)?;
-    scope.set(&blob, "size", Value::int64(png.len() as i64))?;
-    let kind = scope.string("image/png");
+    scope.set(&blob, "size", Value::int64(encoded.bytes.len() as i64))?;
+    let kind = scope.string(encoded.kind);
     scope.set(&blob, "type", kind)?;
     Ok(blob)
 }
@@ -314,9 +366,9 @@ pub fn element_to_blob(
     }
     let mut blob = Value::null();
     if let Some(surface) = state.map(|st| st.surface())
-        && let Some(png) = surface.png()
+        && let Some(encoded) = encode_surface(scope, &surface, args.get(1), args.get(2))
     {
-        blob = png_bytes_object(scope, &png).unwrap_or_else(|_| Value::null());
+        blob = encoded_bytes_object(scope, &encoded).unwrap_or_else(|_| Value::null());
     }
     let _ = scope.call(&callback, &Value::undefined(), &[blob]);
     Ok(Value::undefined())
@@ -325,7 +377,7 @@ pub fn element_to_blob(
 pub fn element_to_data_url(
     scope: &mut Scope<'_>,
     this: &Value,
-    _: &[Value],
+    args: &[Value],
 ) -> Result<Value, Value> {
     let el = host::unwrap_element(this);
     let js = crate::ffi::state::js_of(scope);
@@ -343,10 +395,10 @@ pub fn element_to_data_url(
             "Tainted canvases may not be exported.",
         ));
     }
-    match surface.png() {
-        Some(png) => {
-            let mut url = b"data:image/png;base64,".to_vec();
-            url.extend_from_slice(southstar_digest::base64(&png).as_bytes());
+    match encode_surface(scope, &surface, args.first(), args.get(1)) {
+        Some(encoded) => {
+            let mut url = [b"data:", encoded.kind.as_bytes(), b";base64,"].concat();
+            url.extend_from_slice(southstar_digest::base64(&encoded.bytes).as_bytes());
             Ok(scope.string_from_bytes(&url))
         }
         None => Ok(scope.string("data:,")),

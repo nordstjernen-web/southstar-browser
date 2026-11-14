@@ -208,6 +208,10 @@ pub(crate) fn unwrap_element(value: &Value) -> Option<Node<'static>> {
     api::unwrap_element(value)
 }
 
+pub(crate) fn page_csp(js: Js) -> Option<southstar_csp::Csp> {
+    api::with_realm_csp(js.ptr(), api::main_realm(js.ptr()), |csp| csp.cloned())
+}
+
 pub(crate) fn ce_main_doc(js: Js) -> Option<Node<'static>> {
     api::ce_main_doc(js.ptr())
 }

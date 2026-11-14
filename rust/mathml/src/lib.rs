@@ -593,7 +593,72 @@ fn token_text(node: Node) -> CString {
     stripped(&node.collect_text())
 }
 
+fn length_px(text: &CStr, fpx: f64) -> Option<f64> {
+    let text = text.to_str().ok()?.trim();
+    let split = text
+        .find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-' | '+')))
+        .unwrap_or(text.len());
+    let number: f64 = text[..split].parse().ok()?;
+    let scale = match text[split..].to_ascii_lowercase().as_str() {
+        "px" => 1.0,
+        "em" => fpx,
+        "ex" => fpx * 0.5,
+        "pt" => 96.0 / 72.0,
+        "pc" => 16.0,
+        "in" => 96.0,
+        "cm" => 96.0 / 2.54,
+        "mm" => 96.0 / 25.4,
+        "" if number == 0.0 => 1.0,
+        _ => return None,
+    };
+    Some(number * scale)
+}
+
+fn space_extent(node: Node, fpx: f64) -> Extent {
+    let length = |name: &CStr| {
+        node.attr(name)
+            .and_then(|text| length_px(text, fpx))
+            .map(|px| max(px, 0.0))
+    };
+    let (width, height, depth) = (length(c"width"), length(c"height"), length(c"depth"));
+    if width.is_none() && height.is_none() && depth.is_none() {
+        return Extent {
+            width: fpx * 0.4,
+            ascent: 0.0,
+            descent: 0.0,
+        };
+    }
+    Extent {
+        width: width.unwrap_or(0.0),
+        ascent: height.unwrap_or(0.0),
+        descent: depth.unwrap_or(0.0),
+    }
+}
+
 fn render(
+    canvas: Option<&Canvas>,
+    node: Option<Node>,
+    fpx: f64,
+    depth: i32,
+    x: f64,
+    by: f64,
+) -> Extent {
+    let extent = render_node(canvas, node, fpx, depth, x, by);
+    if let (Some(canvas), Some(node)) = (canvas, node) {
+        canvas.note(
+            node,
+            [
+                x,
+                by - extent.ascent,
+                extent.width,
+                extent.ascent + extent.descent,
+            ],
+        );
+    }
+    extent
+}
+
+fn render_node(
     canvas: Option<&Canvas>,
     node: Option<Node>,
     fpx: f64,
@@ -633,11 +698,7 @@ fn render(
         return render_seq(None, node, fpx, depth, 0.0, 0.0);
     }
     if is("mspace") {
-        return Extent {
-            width: fpx * 0.4,
-            ascent: 0.0,
-            descent: 0.0,
-        };
+        return space_extent(node, fpx);
     }
     if is("msup") || is("msub") {
         return render_script(canvas, node, fpx, depth, x, by, is("msup"));
@@ -682,6 +743,13 @@ fn render(
 pub fn measure(math: Option<Node>, font_px: f64) -> (f64, f64, f64) {
     let e = render(None, math, font_px, 0, 0.0, 0.0);
     (e.width, e.ascent, e.descent)
+}
+
+pub fn element_rect(math: Node, target: Node, font_px: f64) -> Option<[f64; 4]> {
+    let e = render(None, Some(math), font_px, 0, 0.0, 0.0);
+    let canvas = Canvas::probing(target);
+    render(Some(&canvas), Some(math), font_px, 0, 0.0, e.ascent);
+    canvas.probed()
 }
 
 pub(crate) fn paint(canvas: &Canvas, math: Node, x: f64, y: f64, font_px: f64, rgba: [f64; 4]) {
