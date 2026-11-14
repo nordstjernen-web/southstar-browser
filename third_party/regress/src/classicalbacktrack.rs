@@ -6,7 +6,6 @@ use crate::cursor;
 use crate::cursor::{Backward, Direction, Forward};
 use crate::exec;
 use crate::indexing::{AsciiInput, ElementType, InputIndexer, Utf8Input};
-#[cfg(not(feature = "utf16"))]
 use crate::insn::StartPredicate;
 use crate::insn::{CompiledRegex, Insn, LoopFields};
 use crate::matchers;
@@ -1084,7 +1083,6 @@ impl<Input: InputIndexer> BacktrackExecutor<'_, Input> {
 
     /// \return the next match for an anchored regex that only matches at the start.
     /// This avoids any string searching and only tries matching at the given position.
-    #[cfg(not(feature = "utf16"))]
     fn next_match_anchored(
         &mut self,
         pos: Input::Position,
@@ -1152,11 +1150,11 @@ impl<Input: InputIndexer> exec::MatchProducer for BacktrackExecutor<'_, Input> {
         pos: Input::Position,
         next_start: &mut Option<Input::Position>,
     ) -> Option<Match> {
-        // When UTF-16 support is active prefix search is not used due to the different encoding.
-        #[cfg(feature = "utf16")]
-        return self.next_match_with_prefix_search(pos, next_start, &bytesearch::EmptyString {});
-
-        #[cfg(not(feature = "utf16"))]
+        // Southstar: the start predicate holds for every input encoding. A start-anchored regex
+        // is tried at one position only; the byte searches run only where code units are bytes
+        // (`next_match_with_prefix_search` checks `CODE_UNITS_ARE_BYTES`), so UTF-16 and UCS-2
+        // input still tries every position. Upstream skipped the predicate whenever the `utf16`
+        // feature was enabled, which made `str.match(/^x/)` scan the whole string.
         match &self.matcher.re.start_pred {
             StartPredicate::Arbitrary => {
                 self.next_match_with_prefix_search(pos, next_start, &bytesearch::EmptyString {})

@@ -554,16 +554,19 @@ impl TypedArrayKind {
     /// Convert `value` into the typed array element corresponding to this `TypedArrayKind`,
     /// assuming the `ContentType` of this kind is `Number`.
     pub(crate) fn to_element_f64(self, value: f64) -> TypedArrayElement {
+        // ToInt8, ToUint8, ToInt16, ToUint16, ToInt32 and ToUint32 wrap modulo 2^n; a Rust `as`
+        // cast from f64 saturates instead, so the integer kinds go through ToInt32 and truncate.
+        let wrapped = crate::builtins::number::f64_to_int32(value);
         match self {
-            TypedArrayKind::Int8 => TypedArrayElement::Int8(value as i8),
-            TypedArrayKind::Uint8 => TypedArrayElement::Uint8(value as u8),
+            TypedArrayKind::Int8 => TypedArrayElement::Int8(wrapped as i8),
+            TypedArrayKind::Uint8 => TypedArrayElement::Uint8(wrapped as u8),
             TypedArrayKind::Uint8Clamped => {
                 TypedArrayElement::Uint8Clamped(ClampedU8(JsValue::f64_to_uint8_clamp(value)))
             }
-            TypedArrayKind::Int16 => TypedArrayElement::Int16(value as i16),
-            TypedArrayKind::Uint16 => TypedArrayElement::Uint16(value as u16),
-            TypedArrayKind::Int32 => TypedArrayElement::Int32(value as i32),
-            TypedArrayKind::Uint32 => TypedArrayElement::Uint32(value as u32),
+            TypedArrayKind::Int16 => TypedArrayElement::Int16(wrapped as i16),
+            TypedArrayKind::Uint16 => TypedArrayElement::Uint16(wrapped as u16),
+            TypedArrayKind::Int32 => TypedArrayElement::Int32(wrapped),
+            TypedArrayKind::Uint32 => TypedArrayElement::Uint32(wrapped as u32),
             #[cfg(feature = "float16")]
             TypedArrayKind::Float16 => {
                 TypedArrayElement::Float16(Float16(float16::f16::from_f64(value)))

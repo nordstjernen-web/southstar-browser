@@ -3,6 +3,21 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* JavaScript: `new Uint8Array(int8Array)` and the other typed array
+  constructors that copy from an array of a different element type
+  clamped values instead of wrapping them: −39 became 0 rather than 217.
+  Programs compiled with Emscripten copy their memory that way, so every
+  file they wrote to their in-memory file system lost each byte above
+  127. A Boa bug, fixed in the fork; JetStream 2's tsf-wasm runs.
+* Regular expressions: a search no longer tries every position of the
+  subject when it cannot match there. `str.match(/^…/)` without the `m`
+  flag tries position 0 only, and a pattern that starts with a known
+  character or set of characters jumps to its next occurrence in ASCII
+  text. The engine skipped both whenever UTF-16 support was compiled in,
+  which it always is in Southstar (a bug in regress, fixed in the fork).
+  An anchored match against a 64 KB string took 200 µs and takes 2 µs;
+  a lexer that matches `^`-patterns against the rest of its input is no
+  longer quadratic.
 * WebAssembly works inside frames. A frame got a copy of the top page's
   `WebAssembly` object, whose constructors made objects with the top
   page's prototypes, so `new WebAssembly.Memory(...) instanceof
