@@ -5,8 +5,8 @@ Maintainer: Andreas Røsdal <andreas.rosdal@gmail.com>
 Build-Depends:
  debhelper-compat (= 13),
  pkg-config,
- cargo (>= 1.91) | cargo-1.91,
- rustc (>= 1.91) | rustc-1.91,
+ cargo (>= 1.95) | cargo-1.97,
+ rustc (>= 1.95) | rustc-1.97,
  libglib2.0-dev,
  libgtk-4-dev (>= 4.14),
  libepoxy-dev,

@@ -488,9 +488,8 @@ impl Promise {
 
     /// [`Promise.try ( callback, ...args )`][spec]
     ///
-    /// Calls the given function and returns a promise that is resolved with its result if the
-    /// function completes normally and rejected if it throws. A promise of the same constructor
-    /// returned by the function is returned as is.
+    /// Calls the given function and returns a promise rejected with what it throws, or resolved
+    /// with what it returns. A returned promise made by the same constructor is returned as is.
     ///
     /// [spec]: https://tc39.es/ecma262/#sec-promise.try
     pub(crate) fn r#try(
@@ -503,32 +502,22 @@ impl Promise {
 
         // 1. Let ctor be the this value.
         // 2. If ctor is not an Object, throw a TypeError exception.
-        let ctor = this.as_object().ok_or_else(|| {
+        let c = this.as_object().ok_or_else(|| {
             JsNativeError::typ().with_message("Promise.try() called on a non-object")
         })?;
 
         // 3. Let status be Completion(Call(callback, undefined, args)).
-        match callback.call(&JsValue::undefined(), callback_args, context) {
+        let status = callback.call(&JsValue::undefined(), callback_args, context);
+
+        match status {
             // 4. If status is an abrupt completion, then
-            Err(err) => {
-                let value = err.into_opaque(context)?;
-
-                // a. Let promiseCapability be ? NewPromiseCapability(ctor).
-                let promise_capability = PromiseCapability::new(&ctor, context)?;
-
-                // b. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
-                promise_capability.functions.reject.call(
-                    &JsValue::undefined(),
-                    &[value],
-                    context,
-                )?;
-
-                // c. Return promiseCapability.[[Promise]].
-                Ok(promise_capability.promise.clone().into())
-            }
+            //     a. Let promiseCapability be ? NewPromiseCapability(ctor).
+            //     b. Perform ? Call(promiseCapability.[[Reject]], undefined, « status.[[Value]] »).
+            //     c. Return promiseCapability.[[Promise]].
+            Err(err) => Self::promise_reject(&c, err, context).map(JsValue::from),
             // 5. Else,
             //     a. Return ? PromiseResolve(ctor, ! status).
-            Ok(value) => Self::promise_resolve(&ctor, value, context).map(Into::into),
+            Ok(value) => Self::promise_resolve(&c, value, context).map(JsValue::from),
         }
     }
 
@@ -1256,7 +1245,7 @@ impl Promise {
 
             // b. If desc is not undefined and desc.[[Enumerable]] is true, then
             if let Some(desc) = desc
-                && desc.expect_enumerable()
+                && desc.enumerable()
             {
                 // i. Let value be ? Get(promises, key).
                 let value = promises.get(key.clone(), context)?;

@@ -1,5 +1,6 @@
 use crate::{
-    Context, JsNativeError, JsResult, JsString, JsSymbol, JsValue,
+    Context, JsResult, JsString, JsSymbol, JsValue,
+    error::JsNativeError,
     object::{JsObject, PrivateName},
 };
 use boa_ast::scope::{BindingLocator, BindingLocatorScope, Scope};
@@ -588,6 +589,21 @@ impl Context {
         }
     }
 
+    /// Returns the `this` value (`WithBaseObject`) for an already-resolved binding
+    /// locator, without performing another lookup on the environment chain.
+    ///
+    /// Per the specification, the `this` value of a function call whose callee is a
+    /// reference with an Environment Record base is obtained from that already
+    /// resolved record via `WithBaseObject`. Reusing the resolution avoids
+    /// re-running `HasBinding` (and therefore avoids invoking the binding object's
+    /// `[[HasProperty]]` trap a second time).
+    pub(crate) fn this_from_resolved_object_environment_binding(
+        &self,
+        locator: &BindingLocator,
+    ) -> Option<JsObject> {
+        self.object_environment_of(locator)
+    }
+
     /// Checks if the binding pointed by `locator` is initialized.
     ///
     /// # Panics
@@ -655,13 +671,23 @@ impl Context {
                 Environment::Object(obj) => {
                     let key = locator.name().clone();
                     let obj = obj.clone();
-                    if !obj.has_property(key.clone(), self)? {
-                        if self.vm.frame().strict() {
-                            return Ok(None);
-                        }
-                        return Ok(Some(JsValue::undefined()));
+                    // `GetBindingValue` (9.1.1.2.6): step 2 performs `HasProperty`
+                    // before step 4's `Get`. If the binding is gone (e.g. it was
+                    // deleted by an `@@unscopables` getter during `HasBinding`),
+                    // step 3 returns `undefined` in sloppy mode or throws a
+                    // `ReferenceError` in strict mode.
+                    if obj.has_property(key.clone(), self)? {
+                        obj.get(key, self).map(Some)
+                    } else if self.vm.frame().code_block.strict() {
+                        Err(JsNativeError::reference()
+                            .with_message(format!(
+                                "{} is not defined",
+                                locator.name().to_std_string_escaped()
+                            ))
+                            .into())
+                    } else {
+                        Ok(Some(JsValue::undefined()))
                     }
-                    obj.get(key, self).map(Some)
                 }
             },
         }

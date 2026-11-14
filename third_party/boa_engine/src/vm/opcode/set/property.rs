@@ -1,5 +1,6 @@
 use crate::JsExpect;
 use crate::JsValue;
+use crate::property::CompletePropertyDescriptor;
 use crate::value::JsVariant;
 use crate::vm::opcode::{IndexOperand, RegisterOperand};
 use crate::{
@@ -258,7 +259,7 @@ impl SetPropertyGetterByName {
         let set = object
             .__get_own_property__(&name, &mut InternalMethodPropertyContext::new(context))?
             .as_ref()
-            .and_then(PropertyDescriptor::set)
+            .and_then(CompletePropertyDescriptor::set)
             .cloned();
         object.__define_own_property__(
             &name,
@@ -302,7 +303,7 @@ impl SetPropertyGetterByValue {
         let set = object
             .__get_own_property__(&name, &mut InternalMethodPropertyContext::new(context))?
             .as_ref()
-            .and_then(PropertyDescriptor::set)
+            .and_then(CompletePropertyDescriptor::set)
             .cloned();
         object.__define_own_property__(
             &name,
@@ -351,7 +352,7 @@ impl SetPropertySetterByName {
         let get = object
             .__get_own_property__(&name, &mut InternalMethodPropertyContext::new(context))?
             .as_ref()
-            .and_then(PropertyDescriptor::get)
+            .and_then(CompletePropertyDescriptor::get)
             .cloned();
         object.__define_own_property__(
             &name,
@@ -396,7 +397,7 @@ impl SetPropertySetterByValue {
         let get = object
             .__get_own_property__(&name, &mut InternalMethodPropertyContext::new(context))?
             .as_ref()
-            .and_then(PropertyDescriptor::get)
+            .and_then(CompletePropertyDescriptor::get)
             .cloned();
         object.__define_own_property__(
             &name,

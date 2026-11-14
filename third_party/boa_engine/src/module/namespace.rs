@@ -12,7 +12,7 @@ use crate::object::internal_methods::{
     ordinary_has_property, ordinary_own_property_keys, ordinary_try_get,
 };
 use crate::object::{JsData, JsPrototype};
-use crate::property::{PropertyDescriptor, PropertyKey};
+use crate::property::{CompletePropertyDescriptor, PropertyDescriptor, PropertyKey};
 use crate::{Context, JsExpect, JsResult, JsString, JsValue, js_string, object::JsObject};
 use crate::{JsNativeError, Module};
 
@@ -252,7 +252,7 @@ fn module_namespace_exotic_get_own_property(
     obj: &JsObject,
     key: &PropertyKey,
     context: &mut InternalMethodPropertyContext<'_>,
-) -> JsResult<Option<PropertyDescriptor>> {
+) -> JsResult<Option<CompletePropertyDescriptor>> {
     // 1. If IsSymbolLikeNamespaceKey(P, O) is true, return OrdinaryGetOwnProperty(O, P).
     if is_symbol_like_namespace_key(obj, key) {
         return ordinary_get_own_property(obj, key, context);
@@ -283,14 +283,12 @@ fn module_namespace_exotic_get_own_property(
     let value = obj.get(key, context)?;
 
     // 5. Return PropertyDescriptor { [[Value]]: value, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: false }.
-    Ok(Some(
-        PropertyDescriptor::builder()
-            .value(value)
-            .writable(true)
-            .enumerable(true)
-            .configurable(false)
-            .build(),
-    ))
+    Ok(Some(CompletePropertyDescriptor::Data {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: false,
+    }))
 }
 
 /// [`[[DefineOwnProperty]] ( P, Desc )`][spec]
@@ -327,7 +325,11 @@ fn module_namespace_exotic_define_own_property(
 
     // 8. If Desc has a [[Value]] field, return SameValue(Desc.[[Value]], current.[[Value]]).
     // 9. Return true.
-    Ok(desc.value().is_none_or(|v| v == current.expect_value()))
+    Ok(desc.value().is_none_or(|v| {
+        v == current
+            .value()
+            .expect("should always be a data property descriptor")
+    }))
 }
 
 /// [`[[HasProperty]] ( P )`][spec]

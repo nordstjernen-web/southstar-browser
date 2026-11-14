@@ -11,7 +11,7 @@
 
 [package]
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "1.95.0"
 name = "southstar-boa-gc"
 version = "1.0.10-dev"
 authors = ["boa-dev"]
@@ -170,3 +170,4 @@ private_intra_doc_links = "warn"
 
 [package.metadata.southstar]
 upstream-version = "0.22.0"
+upstream-commit = "bea404d173bf74a64b7c7ae39b1bc2da639abeee"

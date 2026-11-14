@@ -1,12 +1,18 @@
 # The Boa fork
 
 Southstar's JavaScript engine is [Boa](https://github.com/boa-dev/boa).
-Six of its crates are forked into `third_party/`, each a copy of the
-**0.22.0** release from crates.io. The forks are published to crates.io as
-`southstar-boa-*` packages at Southstar's version, and keep their library
-names, so `rust/js-engine` depends on `boa_engine = { package =
+Six of its crates are forked into `third_party/`. They began as copies of the
+**0.22.0** release from crates.io and, since November 2026, follow Boa's
+`main` branch: commit
+[`bea404d1`](https://github.com/boa-dev/boa/commit/bea404d173bf74a64b7c7ae39b1bc2da639abeee)
+(2026-11-10, 62 commits past 0.22.0) is merged in. The forks are published to
+crates.io as `southstar-boa-*` packages at Southstar's version, and keep their
+library names, so `rust/js-engine` depends on `boa_engine = { package =
 "southstar-boa-engine", … }` and the code is unchanged. Each fork records the
-release it copies in `[package.metadata.southstar] upstream-version`:
+release it started from in `[package.metadata.southstar] upstream-version`
+and the `main` commit it tracks in `upstream-commit`. The 0.22.0 sources,
+which are identical to the `v0.22` tag, were checked against these crates.io
+checksums:
 
 | Crate | crates.io sha256 |
 | --- | --- |
@@ -16,6 +22,8 @@ release it copies in `[package.metadata.southstar] upstream-version`:
 | `boa_gc` | `af82119558ab1002d1978c8459b53a3ebb506177d29a3aca37c07c1777b1d966` |
 | `boa_interner` | `317c631e791f5cb7d0017e43c0a758b0eaffd40c34c4c360e2a6be7752b78cd1` |
 | `boa_string` | `30bf86c2bcff5bf2547acbfc516c5d3108ca527cb131511d749bf6fbef762c0e` |
+
+Boa's `main` requires Rust 1.95, so Southstar does too.
 
 `boa_engine` carries a small set of embedder hooks; the parser and the AST
 were forked for syntax that 0.22 does not parse, `boa_gc` for the cost of
@@ -37,11 +45,38 @@ python3 scripts/boa-fork-diff.py --stat   # per-file summary
 python3 scripts/boa-fork-diff.py          # the whole patch
 ```
 
-The script downloads the releases the forks' `Cargo.toml` files name, checks
-them against the crates.io index checksums and diffs `src/` and `Cargo.toml`
-of each (`--crate boa_parser` limits it to one). On
-2026-10-15 the difference is 12,299 added and 1,492 removed lines in 140 files;
-148 of the removed lines are the `Cargo.toml` trims below.
+For a fork that names an `upstream-commit`, the script downloads that Boa
+commit from GitHub and diffs `src/` (upstream's manifests inherit from its
+workspace, so `Cargo.toml` is left out); otherwise it downloads the release
+the fork names, checks it against the crates.io index checksum and diffs
+`src/` and `Cargo.toml` (`--crate boa_parser` limits it to one crate,
+`--version 0.22.0` compares with a release instead). Against `bea404d1` the
+difference is 15,243 added and 3,939 removed lines in 184 files.
+
+## Taking a newer Boa
+
+The update to `bea404d1` was a three-way merge: the `v0.22` sources as the
+base, the fork as one side and `main`'s `core/*/src` as the other. Where both
+sides implemented the same feature — `Iterator.zip`, `Uint8Array` base64 and
+hex, `Iterator.prototype.join`, the `Iterator` constructor, `Promise.try` —
+one implementation was kept: the fork's, except for `Promise.try`, and
+upstream's duplicate files (`builtin_uint8.rs`, `hex.rs`) and its
+`data-encoding` dependency were dropped. Where both fixed the same bug,
+upstream's fix was taken: a `return` value parked in a register across
+`finally` blocks (`ReturnValueLocation`) and `with` calls resolving the binding
+once (`GetNameAndLocator` before `ThisForObjectEnvironmentName`); the fork's
+tail calls still win when a `return` is in tail position inside a `finally`.
+The fork's inline caches, `for-in` stepping, lazy iterator results and host
+object hooks stay, adapted to upstream's `CompletePropertyDescriptor`. The
+opcode table keeps every opcode of both sides within its 256 slots. Upstream's
+`main` pushes a call frame for every native call so that the frame stack
+carries the running realm, and gave each such frame a freshly allocated empty
+`CodeBlock`; the fork keeps one in `Vm::native_code_block` and shares it, since
+a native frame never runs bytecode (without this the merged engine was about a
+quarter slower on Speedometer). test262
+(tc39/test262 of 2026-11-14) passes 52,249 of 52,308 tests both before and
+after the merge, with the same 59 failures, all in tests newer than the
+October count.
 
 ## What the fork adds
 

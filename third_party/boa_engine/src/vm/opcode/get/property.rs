@@ -1,7 +1,7 @@
 use boa_string::StaticJsStrings;
 
 use crate::{
-    Context, JsResult, JsValue, js_string,
+    Context, JsExpect, JsResult, JsValue, js_string,
     object::{internal_methods::InternalMethodPropertyContext, shape::slot::SlotAttributes},
     property::PropertyKey,
     vm::{
@@ -47,7 +47,7 @@ fn get_by_name<const LENGTH: bool>(
             let prototype = object_borrowed
                 .shape()
                 .prototype()
-                .expect("prototype should have value");
+                .js_expect("prototype should have value")?;
             let prototype = prototype.borrow();
             prototype.properties().storage[slot.index as usize].clone()
         } else {
@@ -56,11 +56,10 @@ fn get_by_name<const LENGTH: bool>(
 
         drop(object_borrowed);
         if slot.attributes.has_get() && result.is_object() {
-            result =
-                result
-                    .as_object()
-                    .expect("should contain getter")
-                    .call(receiver, &[], context)?;
+            result = result
+                .as_object()
+                .js_expect("should contain getter")?
+                .call(receiver, &[], context)?;
         }
         context.vm.set_register(dst.into(), result);
         return Ok(());

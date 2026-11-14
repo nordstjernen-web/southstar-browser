@@ -60,7 +60,7 @@ was ported to Rust module by module; how the port was done is recorded in
 ## Download
 
 Each [GitHub release](https://github.com/nordstjernen-web/southstar-browser/releases)
-carries x86-64 Linux `.deb` packages for Ubuntu 24.04 and 26.04, Debian 13,
+carries x86-64 Linux `.deb` packages for Ubuntu 26.04, Debian 13,
 forky and sid, and a portable Linux zip, built by the `release` workflow.
 On other platforms, build from source (below). The per-platform build and
 packaging notes are in [docs/](docs/README.md).
@@ -194,11 +194,12 @@ features they allow and builds a release; `cargo xtask run` builds and
 starts it, and `cargo xtask install --prefix /usr/local` installs it.
 `cargo xtask features` prints what the installed libraries enable.
 
-Rust 1.91 or newer is required. Debian forky and sid and the rolling
-distributions ship it, and Ubuntu 24.04 packages it as `rustc-1.91` and
-`cargo-1.91` (put `/usr/lib/rust-1.91/bin` first on `PATH`). Elsewhere,
-Debian 13 included, install it with [rustup](https://rustup.rs), which reads
-`rust-toolchain.toml` and selects 1.91.0 in this tree. Windows, Fedora, openSUSE and macOS
+Rust 1.95 or newer is required. Debian forky and sid and the rolling
+distributions ship it, and Ubuntu 26.04 packages it as `rustc-1.97` and
+`cargo-1.97` (put `/usr/lib/rust-1.97/bin` first on `PATH`); older Ubuntu
+releases are not supported. Elsewhere, Debian 13 included, install it with
+[rustup](https://rustup.rs), which reads `rust-toolchain.toml` and selects
+1.95.0 in this tree. Windows, Fedora, openSUSE and macOS
 instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).

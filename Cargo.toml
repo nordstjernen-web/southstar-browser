@@ -6,7 +6,7 @@ exclude = ["third_party"]
 [workspace.package]
 version = "1.0.10-dev"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.95"
 license = "LicenseRef-NSL-1.0 OR GPL-3.0-or-later"
 publish = false
 repository = "https://github.com/nordstjernen-web/southstar-browser"
