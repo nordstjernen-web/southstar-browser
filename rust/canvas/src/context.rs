@@ -12,6 +12,7 @@ use crate::ffi::state::{CanvasState, Node};
 const KIND_2D: i32 = 1;
 const KIND_WEBGL: i32 = 2;
 const KIND_WEBGPU: i32 = 3;
+const KIND_BITMAP: i32 = 4;
 
 #[derive(Clone, Copy, PartialEq)]
 enum ContextType {
@@ -78,11 +79,10 @@ fn get_2d(
     offscreen: bool,
     options: &Value,
 ) -> Value {
-    if let Some(existing) = host::ctx2d_of(st) {
-        return existing;
-    }
     if st.context_kind() != 0 {
-        return Value::null();
+        return host::ctx2d_of(st)
+            .filter(|_| st.context_kind() == KIND_2D)
+            .unwrap_or_else(Value::null);
     }
     let (attrs, opaque) = attrs_2d(scope, options);
     if opaque {
@@ -91,6 +91,64 @@ fn get_2d(
     let obj = crate::ffi::ctx2d_new(scope, el, canvas, offscreen, attrs);
     st.attach_ctx2d(scope, &obj, KIND_2D);
     obj
+}
+
+fn get_bitmap_renderer(scope: &mut Scope<'_>, st: &CanvasState, el: Node, canvas: &Value) -> Value {
+    if st.context_kind() != 0 {
+        return host::ctx2d_of(st)
+            .filter(|_| st.context_kind() == KIND_BITMAP)
+            .unwrap_or_else(Value::null);
+    }
+    let obj = crate::ffi::bitmap_renderer_new(scope, el, canvas);
+    st.attach_ctx2d(scope, &obj, KIND_BITMAP);
+    obj
+}
+
+pub(crate) fn transfer_from_image_bitmap(
+    scope: &mut Scope<'_>,
+    this: &Value,
+    args: &[Value],
+) -> Result<Value, Value> {
+    let js = crate::ffi::state::js_of(scope);
+    let el = crate::hidden::node(this);
+    let state = if el.is_null() || js.is_null() {
+        None
+    } else {
+        crate::state::state_for(js, el)
+    };
+    let Some(st) = state else {
+        return Err(scope.type_error("Illegal invocation"));
+    };
+    let bitmap = args.first().filter(|bitmap| !bitmap.is_null());
+    let source = match bitmap {
+        Some(bitmap) => match crate::bitmap::surface_of(bitmap) {
+            Some(source) => Some(source),
+            None if crate::bitmap::is(bitmap) => {
+                return Err(crate::api::throw_dom(
+                    scope,
+                    "InvalidStateError",
+                    "The input ImageBitmap has been detached.",
+                ));
+            }
+            None => {
+                return Err(scope.type_error(
+                    "Failed to execute 'transferFromImageBitmap' on \
+                     'ImageBitmapRenderingContext': parameter 1 is not of type 'ImageBitmap'.",
+                ));
+            }
+        },
+        None => None,
+    };
+    let surface = st.surface();
+    surface.clear();
+    st.origin_clean.set(true);
+    if let (Some(source), Some(bitmap)) = (source, bitmap) {
+        source.surface.paint_onto(&surface, (0.0, 0.0), true);
+        st.origin_clean.set(source.origin_clean);
+        crate::bitmap::close(scope, bitmap, &[])?;
+    }
+    crate::ffi::mark_mutated(scope);
+    Ok(Value::undefined())
 }
 
 fn get_by_type(
@@ -129,8 +187,9 @@ fn get_by_type(
             }
             Ok(gpu)
         }
-        ContextType::Unknown | ContextType::Bitmap => {
-            if !offscreen || kind == ContextType::Bitmap {
+        ContextType::Bitmap => Ok(get_bitmap_renderer(scope, st, el, canvas)),
+        ContextType::Unknown => {
+            if !offscreen {
                 return Ok(Value::null());
             }
             Err(scope.type_error(

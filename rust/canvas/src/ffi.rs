@@ -20,10 +20,10 @@ pub(crate) use draw::{ctx_state, mark_mutated};
 pub(crate) use source::drawimage_source;
 
 pub(crate) use objects::{
-    canvas_realm, canvas_state_for, computed_color, context_cairo, ctx2d_new, decode_image,
-    drawimage_source_surface, element_attr, in_realm, is_image_bitmap, is_path2d, new_gradient,
-    new_imagedata, new_imagedata_from, new_in_realm, new_offscreen_canvas_node, new_pattern,
-    new_textmetrics, path2d_context, set_element_attr, with_bitmap, with_hidden,
+    bitmap_renderer_new, canvas_realm, canvas_state_for, computed_color, context_cairo, ctx2d_new,
+    decode_image, drawimage_source_surface, element_attr, in_realm, is_image_bitmap, is_path2d,
+    new_gradient, new_imagedata, new_imagedata_from, new_in_realm, new_offscreen_canvas_node,
+    new_pattern, new_textmetrics, path2d_context, set_element_attr, with_bitmap, with_hidden,
 };
 
 pub(crate) fn font_string(css: &[u8]) -> Option<Vec<u8>> {

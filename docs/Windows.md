@@ -1,6 +1,6 @@
 # Southstar on Windows — build, run, package
 
-https://apps.microsoft.com/detail/9nw8t7w5z4pl
+https://apps.microsoft.com/detail/9N9J5HRNJ7RQ
 
 This document records the working setup for building and packaging
 Southstar on Windows. The Windows CI workflow

@@ -111,17 +111,60 @@ fn lookup(starts: &[u32], values: &[u8], ch: u32) -> u8 {
     values[index.saturating_sub(1)]
 }
 
+const LOW: usize = 0x300;
+
+const fn low_values(starts: &[u32], values: &[u8]) -> [u8; LOW] {
+    let mut low = [0; LOW];
+    let mut index = 0;
+    let mut ch = 0;
+    while ch < LOW {
+        while index + 1 < starts.len() && starts[index + 1] <= ch as u32 {
+            index += 1;
+        }
+        low[ch] = values[index];
+        ch += 1;
+    }
+    low
+}
+
+static CATEGORY_LOW: [u8; LOW] = low_values(&tables::CATEGORY_STARTS, &tables::CATEGORY_VALUES);
+static LINE_BREAK_LOW: [u8; LOW] =
+    low_values(&tables::LINE_BREAK_STARTS, &tables::LINE_BREAK_VALUES);
+static SCRIPT_LOW: [u8; LOW] = low_values(&tables::SCRIPT_STARTS, &tables::SCRIPT_VALUES);
+
+fn lookup_with_low(low: &[u8; LOW], starts: &[u32], values: &[u8], ch: u32) -> u8 {
+    match low.get(ch as usize) {
+        Some(&value) => value,
+        None => lookup(starts, values, ch),
+    }
+}
+
 pub fn category(ch: u32) -> Category {
-    let index = lookup(&tables::CATEGORY_STARTS, &tables::CATEGORY_VALUES, ch);
+    let index = lookup_with_low(
+        &CATEGORY_LOW,
+        &tables::CATEGORY_STARTS,
+        &tables::CATEGORY_VALUES,
+        ch,
+    );
     CATEGORIES[usize::from(index)]
 }
 
 pub fn line_break(ch: u32) -> u8 {
-    lookup(&tables::LINE_BREAK_STARTS, &tables::LINE_BREAK_VALUES, ch)
+    lookup_with_low(
+        &LINE_BREAK_LOW,
+        &tables::LINE_BREAK_STARTS,
+        &tables::LINE_BREAK_VALUES,
+        ch,
+    )
 }
 
 pub fn script(ch: u32) -> u8 {
-    lookup(&tables::SCRIPT_STARTS, &tables::SCRIPT_VALUES, ch)
+    lookup_with_low(
+        &SCRIPT_LOW,
+        &tables::SCRIPT_STARTS,
+        &tables::SCRIPT_VALUES,
+        ch,
+    )
 }
 
 pub fn script_count() -> usize {

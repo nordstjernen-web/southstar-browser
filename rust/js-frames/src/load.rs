@@ -623,6 +623,10 @@ fn finish_written_document(js: Js, iframe: Node<'_>) -> bool {
     }
     ffi::set_attr(iframe, c"data-nd-frame-loaded", Some(c"1"));
     load::mark_attr_dirty(iframe, c"data-nd-frame-loaded");
+    if non_empty(iframe.attr(c"data-nd-frame-url")).is_none() {
+        let embedder = load::node_frame_url(iframe).or_else(|| load::page_url(js));
+        schedule::mark_source(js, iframe, non_empty(embedder.as_deref()), None);
+    }
     run_written_scripts(js, iframe);
     ffi::mark_mutated(js);
     load::schedule_pending_script_drain(js);

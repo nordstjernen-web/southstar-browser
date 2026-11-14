@@ -10,7 +10,7 @@ use southstar_unicode::until_nul_owned;
 use crate::ffi;
 use crate::ffi::state::Node;
 use crate::hidden::{self, KIND_CTX2D, KIND_GRADIENT, KIND_IMAGEDATA, KIND_OFFSCREEN};
-use crate::hidden::{KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
+use crate::hidden::{KIND_BITMAP_RENDERER, KIND_OFFSCREEN_CTX2D, KIND_PATTERN, KIND_TEXTMETRICS};
 use crate::{bitmap, context, ctxmisc, ctxpath, draw, gradient, images, path2d, text};
 
 const MAX_UNSIGNED_LONG_LONG: f64 = 18446744073709551615.0;
@@ -237,6 +237,14 @@ static PATH2D_METHODS: [Method; 11] = [
 
 static IMAGE_BITMAP_METHODS: [Method; 1] = [native("close", bitmap::close, 0)];
 
+static BITMAP_RENDERER_ATTRS: [AttrDef; 1] = [attr("canvas", Readonly)];
+
+static BITMAP_RENDERER_METHODS: [Method; 1] = [native(
+    "transferFromImageBitmap",
+    context::transfer_from_image_bitmap,
+    1,
+)];
+
 static OFFSCREEN_METHODS: [Method; 3] = [
     native("convertToBlob", context::convert_to_blob, 0),
     native("getContext", context::offscreen_get_context, 1),
@@ -256,8 +264,9 @@ const TABLE_TEXTMETRICS: usize = 5;
 const TABLE_OFFSCREEN: usize = 6;
 const TABLE_PATH2D: usize = 7;
 const TABLE_IMAGEBITMAP: usize = 8;
+const TABLE_BITMAP_RENDERER: usize = 9;
 
-static TABLES: [Table; 9] = [
+static TABLES: [Table; 10] = [
     Table {
         iface: "CanvasRenderingContext2D",
         brand: Brand::Kind(KIND_CTX2D),
@@ -312,15 +321,22 @@ static TABLES: [Table; 9] = [
         attrs: &[],
         methods: &IMAGE_BITMAP_METHODS,
     },
+    Table {
+        iface: "ImageBitmapRenderingContext",
+        brand: Brand::Kind(KIND_BITMAP_RENDERER),
+        attrs: &BITMAP_RENDERER_ATTRS,
+        methods: &BITMAP_RENDERER_METHODS,
+    },
 ];
 
-const ILLEGAL_CTOR_NAMES: [&str; 6] = [
+const ILLEGAL_CTOR_NAMES: [&str; 7] = [
     "CanvasRenderingContext2D",
     "OffscreenCanvasRenderingContext2D",
     "CanvasGradient",
     "CanvasPattern",
     "TextMetrics",
     "ImageBitmap",
+    "ImageBitmapRenderingContext",
 ];
 
 fn branded(brand: Brand, value: &Value) -> bool {
@@ -630,7 +646,7 @@ macro_rules! illegal_ctors {
                 illegal_constructor(scope, this, $index)
             }
         )*
-        const ILLEGAL_CTORS: [NativeFn; 6] = [$($name),*];
+        const ILLEGAL_CTORS: [NativeFn; 7] = [$($name),*];
     };
 }
 
@@ -640,7 +656,8 @@ illegal_ctors!(
     illegal_gradient = 2,
     illegal_pattern = 3,
     illegal_textmetrics = 4,
-    illegal_image_bitmap = 5
+    illegal_image_bitmap = 5,
+    illegal_bitmap_renderer = 6
 );
 
 fn install_illegal(scope: &mut Scope<'_>, global: &Value, index: usize, table: usize) {
@@ -664,6 +681,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value, window: bool) {
     install_illegal(scope, global, 3, TABLE_PATTERN);
     install_illegal(scope, global, 4, TABLE_TEXTMETRICS);
     install_illegal(scope, global, 5, TABLE_IMAGEBITMAP);
+    install_illegal(scope, global, 6, TABLE_BITMAP_RENDERER);
     bitmap::define_members(scope);
     let ctor = scope.constructor_or_function("ImageData", 2, imagedata_construct);
     let proto = interface(scope, global, "ImageData", ctor, None);
