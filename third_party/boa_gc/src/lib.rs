@@ -555,6 +555,39 @@ pub fn force_collect() {
     });
 }
 
+/// Marks the heap as a collection would, without the handles `discount` passes to
+/// [`Gc::discount_handle`] counting as roots, lets `inspect` read the result with
+/// [`Gc::is_marked`], and clears the marks again. Nothing is finalized or freed.
+///
+/// An embedder that roots objects with handles of its own (a wrapper it keeps for a native
+/// node, say) learns from this which of them nothing else can reach, cycles through the objects
+/// they hold included, and can then let them go.
+///
+/// Neither closure may allocate a garbage collected value or run a collection.
+pub fn mark_without<R>(discount: impl FnOnce(), inspect: impl FnOnce() -> R) -> R {
+    BOA_GC.with(|current| {
+        let gc = current.borrow();
+        Collector::trace_non_roots(&gc);
+        discount();
+        let mut tracer = Tracer::new();
+        let _unreachables = Collector::mark_heap(&mut tracer, &gc.strongs, &gc.weaks, &gc.weak_maps);
+        let result = inspect();
+        for node in &gc.strongs {
+            // SAFETY: nothing was freed since the collector last left every node valid.
+            let node_ref = unsafe { node.as_ref() };
+            node_ref.header.unmark();
+            node_ref.reset_non_root_count();
+        }
+        for ephemeron in &gc.weaks {
+            // SAFETY: nothing was freed since the collector last left every ephemeron valid.
+            let header = unsafe { ephemeron.as_ref() }.header();
+            header.unmark();
+            header.reset_non_root_count();
+        }
+        result
+    })
+}
+
 #[cfg(test)]
 mod test;
 

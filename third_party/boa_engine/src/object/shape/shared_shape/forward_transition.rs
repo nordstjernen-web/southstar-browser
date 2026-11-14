@@ -37,11 +37,24 @@ impl<T: Debug + Trace + Finalize> TransitionMap<T> {
     }
 }
 
+/// The address of a prototype object, or zero for a `null` prototype.
+///
+/// The prototype transitions are keyed by this address rather than by the prototype itself: a
+/// key that held the object would keep every prototype a shape ever transitioned to alive, and
+/// with it the realm the prototype's constructor belongs to, for as long as the shape lives (the
+/// root shape lives as long as the context). An entry is only used while its weak shape can be
+/// upgraded, and a live shape holds its prototype, so no other object can have that address.
+fn prototype_address(prototype: &JsPrototype) -> usize {
+    prototype
+        .as_ref()
+        .map_or(0, |object| object.identity() as usize)
+}
+
 /// The internal representation of [`ForwardTransition`].
 #[derive(Default, Debug, Trace, Finalize)]
 struct Inner {
     properties: Option<Box<TransitionMap<TransitionKey>>>,
-    prototypes: Option<Box<TransitionMap<JsPrototype>>>,
+    prototypes: Option<Box<TransitionMap<usize>>>,
 }
 
 /// Holds a forward reference to a previously created transition.
@@ -66,7 +79,7 @@ impl ForwardTransition {
     }
 
     /// Insert a prototype transition.
-    pub(super) fn insert_prototype(&self, key: JsPrototype, value: &Gc<SharedShapeInner>) {
+    pub(super) fn insert_prototype(&self, key: &JsPrototype, value: &Gc<SharedShapeInner>) {
         let mut this = self.inner.borrow_mut();
         let prototypes = this.prototypes.get_or_insert_with(Box::default);
 
@@ -74,7 +87,9 @@ impl ForwardTransition {
             prototypes.map.retain(|_, v| v.is_upgradable());
         }
 
-        prototypes.map.insert(key, WeakGc::new(value));
+        prototypes
+            .map
+            .insert(prototype_address(key), WeakGc::new(value));
     }
 
     /// Get a property transition, return [`None`] otherwise.
@@ -88,7 +103,7 @@ impl ForwardTransition {
     pub(super) fn get_prototype(&self, key: &JsPrototype) -> Option<WeakGc<SharedShapeInner>> {
         let this = self.inner.borrow();
         let transitions = this.prototypes.as_ref()?;
-        transitions.map.get(key).cloned()
+        transitions.map.get(&prototype_address(key)).cloned()
     }
 
     /// Prunes the [`WeakGc`]s that have been garbage collected.

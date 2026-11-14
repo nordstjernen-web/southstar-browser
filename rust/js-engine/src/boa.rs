@@ -46,6 +46,10 @@ mod table;
 
 pub use class::{PropertyDefinition, PropertyKey, SetFlags};
 
+pub fn mark_without<R>(discount: impl FnOnce(), inspect: impl FnOnce() -> R) -> R {
+    boa_gc::mark_without(discount, inspect)
+}
+
 pub const ENGINE_NAME: &str = "boa";
 
 pub fn with_trusted_source<R>(name: &str, f: impl FnOnce() -> R) -> R {
@@ -185,6 +189,16 @@ impl Value {
 
     pub fn object_key(&self) -> Option<ObjectKey> {
         self.0.as_object().map(|o| ObjectKey(o.clone()))
+    }
+
+    pub fn discount_handle(&self) {
+        if let Some(object) = self.0.as_object() {
+            object.discount_handle();
+        }
+    }
+
+    pub fn is_marked(&self) -> bool {
+        self.0.as_object().is_none_or(|object| object.is_marked())
     }
 
     pub fn same_object(&self, other: &Value) -> bool {

@@ -3,6 +3,27 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Memory: DOM nodes and frame realms that no script can reach are freed
+  while the page lives, not only when it is closed. Three things kept
+  them: the JavaScript engine's shape table held every prototype object
+  it had ever seen, and with each one the realm it came from, so the
+  global of every document a frame had shown stayed alive (a Boa bug,
+  fixed in the fork); a frame's realm stayed registered after the frame
+  navigated; and the wrapper of every node a script had touched was a
+  permanent root, so a removed node, and whatever its properties pointed
+  at, was only released with the page. Now a frame's old realm is held
+  weakly once the frame shows another document, the wrappers and
+  listeners of its detached nodes are released with it, and before each
+  sweep the collector works out which detached subtrees are unreachable
+  — cycles through their own properties included — and frees them.
+  Subtrees that can still fire events by themselves (images, scripts,
+  stylesheets, media) are kept as before. An iframe navigated between
+  pages that each hold 20 MB no longer grows by 20 MB per navigation,
+  and five Speedometer 3.1 suites run three times over leave 5 to 25 MB
+  of JavaScript heap after a collection where two rounds used to leave
+  50 MB (the last suite of each round is still kept until the page
+  goes). `window.frameElement` is looked up when read instead of being
+  held by the frame.
 * JetStream 2 runs. Its driver builds every benchmark in a nested iframe
   with `document.write`, and three things stopped it before the first
   test: `iframe.textContent = ""` (and `innerHTML` or `innerText`)

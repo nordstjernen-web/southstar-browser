@@ -19,7 +19,7 @@ use boa_engine::module::{
 };
 use boa_engine::object::builtins::{JsFunction, JsPromise};
 use boa_engine::prelude::{Finalize, JsData, Trace};
-use boa_engine::realm::Realm;
+use boa_engine::realm::{Realm, WeakRealm};
 use boa_engine::{Context, JsError, JsNativeError, JsObject, JsResult, JsString, JsValue, Module};
 
 use super::{Compiled, Scope, Value};
@@ -37,9 +37,23 @@ pub(super) struct BoaRuntime {
     records: RefCell<Vec<usize>>,
 }
 
+enum HeldRealm {
+    Strong(Realm),
+    Weak(WeakRealm),
+}
+
+impl HeldRealm {
+    fn get(&self) -> Option<Realm> {
+        match self {
+            HeldRealm::Strong(realm) => Some(realm.clone()),
+            HeldRealm::Weak(realm) => realm.upgrade(),
+        }
+    }
+}
+
 pub(super) struct RealmRecord {
     runtime: Weak<BoaRuntime>,
-    realm: Realm,
+    realm: RefCell<HeldRealm>,
     opaque: Cell<*mut c_void>,
 }
 
@@ -532,7 +546,7 @@ impl BoaRuntime {
     fn record(self: &Rc<Self>, realm: Realm, opaque: *mut c_void) -> ContextHandle {
         let record = Rc::new(RealmRecord {
             runtime: Rc::downgrade(self),
-            realm: realm.clone(),
+            realm: RefCell::new(HeldRealm::Strong(realm.clone())),
             opaque: Cell::new(opaque),
         });
         let handle = ContextHandle(Rc::as_ptr(&record).cast_mut().cast());
@@ -671,13 +685,14 @@ impl ContextHandle {
     pub fn with<R>(self, f: impl FnOnce(&mut Scope<'_>) -> R) -> Option<R> {
         let record = self.record()?;
         let runtime = record.runtime.upgrade()?;
+        let realm = record.realm.borrow().get()?;
         let result = runtime.with_context(|ctx| {
             let current = ctx.realm().clone();
             let _host = super::access::enter(ctx);
-            if current == record.realm {
+            if current == realm {
                 return f(&mut Scope::of(ctx));
             }
-            let previous = ctx.enter_realm(record.realm.clone());
+            let previous = ctx.enter_realm(realm);
             let result = f(&mut Scope::of(ctx));
             ctx.enter_realm(previous);
             result
@@ -707,12 +722,30 @@ impl ContextHandle {
             return;
         };
         let key = self.0 as usize;
-        record.realm.host_defined_mut().remove::<RealmTag>();
+        let realm = record.realm.borrow().get();
+        if let Some(realm) = &realm {
+            realm.host_defined_mut().remove::<RealmTag>();
+        }
         if let Some(runtime) = record.runtime.upgrade() {
             runtime.records.borrow_mut().retain(|&r| r != key);
-            runtime.loader.forget_realm(&record.realm);
+            if let Some(realm) = &realm {
+                runtime.loader.forget_realm(realm);
+            }
         }
         drop(unregister(&RECORDS, key));
+    }
+
+    pub fn retire(self) {
+        let Some(record) = self.record() else {
+            return;
+        };
+        let Some(realm) = record.realm.borrow().get() else {
+            return;
+        };
+        if let Some(runtime) = record.runtime.upgrade() {
+            runtime.loader.forget_realm(&realm);
+        }
+        record.realm.replace(HeldRealm::Weak(realm.downgrade()));
     }
 }
 

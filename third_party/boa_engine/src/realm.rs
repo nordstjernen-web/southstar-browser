@@ -22,7 +22,7 @@ use crate::{
 use boa_ast::scope::Scope;
 use boa_engine::JsValue;
 use boa_engine::property::{Attribute, PropertyDescriptor, PropertyKey};
-use boa_gc::{Finalize, Gc, GcRef, GcRefCell, GcRefMut, Trace};
+use boa_gc::{Finalize, Gc, GcRef, GcRefCell, GcRefMut, Trace, WeakGc};
 use rustc_hash::FxHashMap;
 
 /// Representation of a Realm.
@@ -31,6 +31,30 @@ use rustc_hash::FxHashMap;
 #[derive(Clone, Trace, Finalize)]
 pub struct Realm {
     inner: Gc<Inner>,
+}
+
+/// A reference to a [`Realm`] that does not keep it alive.
+///
+/// An embedder that tracks realms by handle holds one for a realm whose document has gone, so the
+/// handle keeps working for code of that realm that is still reachable without the embedder's
+/// table being what keeps the realm, and everything reachable from its global object, alive.
+#[derive(Clone, Trace, Finalize)]
+pub struct WeakRealm {
+    inner: WeakGc<Inner>,
+}
+
+impl WeakRealm {
+    /// Returns the realm, if it has not been collected.
+    #[must_use]
+    pub fn upgrade(&self) -> Option<Realm> {
+        self.inner.upgrade().map(|inner| Realm { inner })
+    }
+}
+
+impl std::fmt::Debug for WeakRealm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WeakRealm").finish_non_exhaustive()
+    }
 }
 
 impl Eq for Realm {}
@@ -83,6 +107,14 @@ struct Inner {
 }
 
 impl Realm {
+    /// Returns a reference to this realm that does not keep it alive.
+    #[must_use]
+    pub fn downgrade(&self) -> WeakRealm {
+        WeakRealm {
+            inner: WeakGc::new(&self.inner),
+        }
+    }
+
     /// Create a new [`Realm`].
     #[inline]
     pub fn create(hooks: &dyn HostHooks, root_shape: &RootShape) -> JsResult<Self> {

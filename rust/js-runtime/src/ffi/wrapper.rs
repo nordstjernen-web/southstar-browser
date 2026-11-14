@@ -269,11 +269,8 @@ fn define_doctype(scope: &mut Scope<'_>, obj: &Value, n: Node<'_>) {
     }
 }
 
-fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
-    let page = js.map(Js::page);
-    let proto = super::record::kind_proto_value(page, Some(n));
-    let proto = proto.unwrap_or_else(Value::undefined);
-    let node_realm = match js {
+fn owner_realm(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> ContextHandle {
+    match js {
         Some(js) if (crate::api::frames_hooks().cloners_made)(js.page()) => {
             let realm = (crate::api::frames_hooks().node_realm_context)(js.page(), n);
             if realm.is_null() {
@@ -290,7 +287,13 @@ fn kind_proto(scope: &mut Scope<'_>, js: Option<Js>, n: Node<'_>) -> Value {
             }
         }
         _ => ContextHandle::NULL,
-    };
+    }
+}
+
+fn kind_proto(js: Option<Js>, n: Node<'_>, node_realm: ContextHandle) -> Value {
+    let page = js.map(Js::page);
+    let proto = super::record::kind_proto_value(page, Some(n));
+    let proto = proto.unwrap_or_else(Value::undefined);
     if let Some(page) = page
         && !node_realm.is_null()
         && proto.is_object()
@@ -318,7 +321,8 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
     let obj = scope.new_traced_instance(&ELEMENT_CLASS, None, ElementData::new(Some(n)))?;
     n.set_js_wrapper(obj.object_identity());
     n.set_js_invalidate(Some(invalidate_wrapper));
-    let proto = kind_proto(scope, js, n);
+    let node_realm = owner_realm(scope, js, n);
+    let proto = kind_proto(js, n, node_realm);
     if proto.is_object() {
         let _ = scope.set_prototype(&obj, &proto);
     }
@@ -332,7 +336,12 @@ pub(crate) fn make(scope: &mut Scope<'_>, n: Node<'static>) -> Result<Value, Val
         imports::nsr_install_body_reflected_handlers(scope, &obj);
     }
     if let Some(js) = js {
-        super::record::pin_wrapper(js.some(), n, &obj);
+        let realm = if node_realm.is_null() {
+            scope.calling_frame_handle()
+        } else {
+            node_realm
+        };
+        super::record::pin_wrapper(js.some(), n, &obj, realm);
     }
     Ok(obj)
 }

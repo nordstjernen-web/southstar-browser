@@ -118,6 +118,17 @@ impl JsObject {
         }
     }
 
+    /// Stops one handle to the object from counting as a root, inside [`boa_gc::mark_without`].
+    pub fn discount_handle(&self) {
+        Gc::discount_handle(&self.inner);
+    }
+
+    /// Returns whether the object was reached, inside [`boa_gc::mark_without`].
+    #[must_use]
+    pub fn is_marked(&self) -> bool {
+        Gc::is_marked(&self.inner)
+    }
+
     /// Returns the address of the object's allocation, which identifies it while it is alive.
     #[must_use]
     pub fn identity(&self) -> *mut std::ffi::c_void {
