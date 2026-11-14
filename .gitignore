@@ -72,5 +72,7 @@ __pycache__/
 # Cargo build output (cargo xtask build --target-dir target-fast and the like)
 /target/
 /target-*/
+# Packaging leftovers of the forked crates (cargo package inside third_party/)
+/third_party/*/target/
 
 /rust/southstar/bundle/
