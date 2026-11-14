@@ -129,6 +129,15 @@ const SHIM_CONSTRUCTORS: &[(&str, u32)] = &[
     ("CryptoKey", 0),
 ];
 
+const SVG_ANIMATION_CONSTRUCTORS: &[&str] = &[
+    "SVGAnimationElement",
+    "SVGAnimateElement",
+    "SVGSetElement",
+    "SVGAnimateTransformElement",
+    "SVGAnimateMotionElement",
+    "SVGMPathElement",
+];
+
 const NAVIGATOR_CONSTRUCTORS: &[&str] = &[
     "NavigatorUAData",
     "PluginArray",
@@ -265,7 +274,10 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
         "HTMLMediaElement",
         MEDIA_CONSTANTS.iter().copied(),
     );
-    for &name in NAVIGATOR_CONSTRUCTORS {
+    for &name in NAVIGATOR_CONSTRUCTORS
+        .iter()
+        .chain(SVG_ANIMATION_CONSTRUCTORS)
+    {
         bind_constructor(scope, global, name, 0, Native::IllegalConstructor);
     }
     bind_constructor(

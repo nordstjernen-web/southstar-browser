@@ -3,6 +3,29 @@ Changelog:
 
 Southstar Browser 1.0.9-dev:
 ======
+* SVG: SMIL animation runs. `<animate>`, `<set>`, `<animateTransform>` and
+  `<animateMotion>` (with `path`, `<mpath>` or `values`, and `rotate`) used
+  to do nothing. Supported: `values`/`from`/`to`/`by`, `keyTimes`,
+  `keySplines`, `calcMode` (linear, discrete, paced, spline), `dur`,
+  `repeatCount`, `repeatDur`, `end`, `restart`, `fill="freeze"`, `additive`
+  and `accumulate`; `begin` and `end` take offsets, another animation's
+  `id.begin` / `id.end`, and events such as `click` or `id.mouseover+1s`.
+  Colours, lengths, number lists, path data and transforms interpolate,
+  other values step. The DOM attributes keep their base values; `animVal`
+  reads the animated one. `<svg>` gains `pauseAnimations()`,
+  `unpauseAnimations()`, `animationsPaused()`, `getCurrentTime()` and
+  `setCurrentTime()`, so a page that calls them without a check no longer
+  throws a `TypeError`; animation elements gain `beginElement()`,
+  `beginElementAt()`, `endElement()`, `endElementAt()`, `getStartTime()`,
+  `getSimpleDuration()` and `targetElement`, fire `beginEvent`, `endEvent`
+  and `repeatEvent` (`TimeEvent`) and run `onbegin`, `onend` and `onrepeat`.
+  `SVGAnimationElement`, `SVGAnimateElement`, `SVGSetElement`,
+  `SVGAnimateTransformElement`, `SVGAnimateMotionElement` and
+  `SVGMPathElement` exist. An SVG used as an `<img>` or a CSS background
+  animates too, at any drawn size. Mouse events inside an inline `<svg>`
+  now target the shape under the pointer (fill and stroke, honouring
+  `pointer-events: none`, and the `<use>` for instanced content) rather
+  than the `<svg>` element. Ported from Nordstjernen #1103.
 * Windows: the browser follows the display scale setting at 125%, 150%
   and 175%. GTK on Windows scales widgets by whole factors only, so at
   those settings only the interface text grew; the tab strip, toolbar

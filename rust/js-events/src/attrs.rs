@@ -391,6 +391,8 @@ static ATTRS: &[Attr] = &[
     attr("TextUpdateEvent", "text", Kind::Str, false),
     attr("TextUpdateEvent", "updateRangeEnd", Kind::Number, false),
     attr("TextUpdateEvent", "updateRangeStart", Kind::Number, false),
+    attr("TimeEvent", "detail", Kind::Number, false),
+    attr("TimeEvent", "view", Kind::Null, false),
     attr("ToggleEvent", "newState", Kind::Str, false),
     attr("ToggleEvent", "oldState", Kind::Str, false),
     attr("ToggleEvent", "source", Kind::Null, false),

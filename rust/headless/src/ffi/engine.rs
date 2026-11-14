@@ -269,7 +269,7 @@ pub fn write_pdf_paged(root: Option<BoxRef<'_>>, path: Option<&CStr>, setup: &Pr
     }
 }
 
-pub use southstar_layout_hit::{hit_form_dom, hit_inline_dom, hit_link};
+pub use southstar_layout_hit::{hit_form_dom, hit_inline_dom, hit_link, hit_svg_shape};
 
 pub use southstar_layout_query::collect_videos;
 

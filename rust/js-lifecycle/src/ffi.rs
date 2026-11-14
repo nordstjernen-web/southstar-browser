@@ -147,6 +147,10 @@ impl Js {
         }
     }
 
+    pub fn fire_element_handlers(self, target: Node<'_>, kind: &str, event: &Value) {
+        southstar_js_dispatch::fire_element_handlers(self.0, target, kind, event);
+    }
+
     pub fn dispatch_window_only(self, document: Option<Node<'_>>, kind: &CStr, event: Value) {
         southstar_js_dispatch::dispatch_window_only_event(
             self.0,
@@ -342,6 +346,10 @@ pub fn needs_tick(js: Page) -> bool {
 
 pub fn dispatch_anim_events(js: Page, anim: AnimHandle) {
     events::dispatch_anim_events(Js::of_page(js), anim);
+}
+
+pub fn dispatch_smil_events(js: Option<Page>, timeline: &southstar_svg::smil::Smil) {
+    events::dispatch_smil_events(js.map(Js::of_page), timeline);
 }
 
 pub fn fire_media_load_events(js: Page, layout: Option<BoxRef<'_>>) {

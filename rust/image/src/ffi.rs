@@ -20,6 +20,7 @@ use southstar_texture::TextureRef;
 use crate::RetryState;
 
 const CACHE_BUDGET_BYTES: i64 = 256 * 1024 * 1024;
+const SVG_ANIMATION_LINGER_US: i64 = 300_000;
 
 #[derive(Default)]
 struct State {
@@ -48,6 +49,59 @@ struct State {
     anim_start_us: i64,
     anim_current: usize,
     anim_total_ms: c_int,
+    svg: Option<SvgAnimation>,
+}
+
+struct SvgAnimation {
+    source: Vec<u8>,
+    doc: Option<southstar_svg::AnimatedDoc>,
+    failed: bool,
+    stale: bool,
+    wanted_us: Cell<i64>,
+}
+
+impl SvgAnimation {
+    fn new(source: Vec<u8>) -> SvgAnimation {
+        SvgAnimation {
+            source,
+            doc: None,
+            failed: false,
+            stale: false,
+            wanted_us: Cell::new(0),
+        }
+    }
+
+    fn wanted(&self, now_us: i64) -> bool {
+        now_us - self.wanted_us.get() < SVG_ANIMATION_LINGER_US
+    }
+
+    fn advance(&mut self, now_us: i64) -> bool {
+        if self.doc.is_none() && !self.failed {
+            self.doc = southstar_svg::AnimatedDoc::parse(&self.source);
+            self.failed = self.doc.is_none();
+        }
+        if self.doc.as_ref().is_some_and(|doc| doc.tick(now_us)) {
+            self.stale = true;
+        }
+        self.stale && self.wanted(now_us)
+    }
+
+    fn animating(&self, now_us: i64) -> bool {
+        !self.failed
+            && self.wanted(now_us)
+            && self
+                .doc
+                .as_ref()
+                .is_none_or(southstar_svg::AnimatedDoc::animating)
+    }
+
+    fn take_frame(&mut self) -> Option<TextureRef> {
+        self.wanted_us.set(southstar_glib::monotonic_us());
+        if !core::mem::take(&mut self.stale) {
+            return None;
+        }
+        self.doc.as_ref()?.render()
+    }
 }
 
 pub struct Image {
@@ -121,6 +175,14 @@ impl<'a> ImageRef<'a> {
     }
 
     pub fn texture(self) -> Option<TextureRef> {
+        if self.read(|s| s.svg.is_some()) {
+            self.write(|s| {
+                if let Some(frame) = s.svg.as_mut().and_then(SvgAnimation::take_frame) {
+                    s.texture = Some(frame);
+                    s.render_cache = None;
+                }
+            });
+        }
         self.read(|s| s.texture.clone())
     }
 
@@ -296,6 +358,7 @@ impl Eq for ImageCache {}
 struct Decoded {
     tex: Option<TextureRef>,
     frames: Option<Vec<AnimFrame>>,
+    svg: Option<Vec<u8>>,
     w: c_int,
     h: c_int,
 }
@@ -326,6 +389,7 @@ fn purge(cache: &mut CacheState, img: &mut State) {
     cache.total_bytes -= img.bytes;
     img.bytes = 0;
     img.anim_frames = None;
+    img.svg = None;
     img.texture = None;
     img.render_cache = None;
     img.anim_current = 0;
@@ -459,6 +523,9 @@ impl ImageCache {
         let mut any = false;
         for image in self.images() {
             image.write(|img| {
+                if img.svg.as_mut().is_some_and(|svg| svg.advance(now_us)) {
+                    any = true;
+                }
                 let anim = img.anim_frames.as_deref().unwrap_or_default();
                 if anim.len() < 2 || img.anim_total_ms <= 0 {
                     return;
@@ -477,8 +544,13 @@ impl ImageCache {
     }
 
     pub fn animating(self) -> bool {
+        let now_us = southstar_glib::monotonic_us();
         self.images().into_iter().any(|image| {
-            image.read(|img| img.loaded && img.anim_frames.as_ref().is_some_and(|a| a.len() > 1))
+            image.read(|img| {
+                img.loaded
+                    && (img.anim_frames.as_ref().is_some_and(|a| a.len() > 1)
+                        || img.svg.as_ref().is_some_and(|svg| svg.animating(now_us)))
+            })
         })
     }
 
@@ -544,16 +616,24 @@ fn fire_pending(pending: &Pending) {
 }
 
 pub fn decode_bytes(bytes: &[u8]) -> Option<(TextureRef, i32, i32)> {
+    decode_still(bytes).map(|(texture, w, h, _)| (texture, w, h))
+}
+
+fn decode_still(bytes: &[u8]) -> Option<(TextureRef, i32, i32, bool)> {
     if bytes.is_empty() {
         return None;
     }
     if let Some(decoded) = decode_builtin(bytes) {
-        return Some((decoded.texture, decoded.width, decoded.height));
+        return Some((decoded.texture, decoded.width, decoded.height, false));
     }
     if crate::bytes_blocked_on_platform(bytes) || !southstar_svg::looks_like_svg(bytes) {
         return None;
     }
-    southstar_svg::decode_bytes(bytes)
+    southstar_svg::decode_bytes(bytes).map(|(texture, w, h)| (texture, w, h, true))
+}
+
+fn animated_svg_source(bytes: &[u8], is_svg: bool) -> Option<Vec<u8>> {
+    (is_svg && southstar_svg::source_animated(bytes)).then(|| bytes.to_vec())
 }
 
 fn decode_builtin(bytes: &[u8]) -> Option<decoders::Decoded> {
@@ -735,17 +815,26 @@ fn decode_body(bytes: &[u8]) -> Decoded {
         return Decoded {
             tex: None,
             frames: Some(anim.frames),
+            svg: None,
             w: anim.w,
             h: anim.h,
         };
     }
-    let (tex, w, h) =
-        decode_bytes(bytes).map_or((None, 0, 0), |(texture, w, h)| (Some(texture), w, h));
-    Decoded {
-        tex,
-        frames: None,
-        w,
-        h,
+    match decode_still(bytes) {
+        Some((texture, w, h, is_svg)) => Decoded {
+            tex: Some(texture),
+            frames: None,
+            svg: animated_svg_source(bytes, is_svg),
+            w,
+            h,
+        },
+        None => Decoded {
+            tex: None,
+            frames: None,
+            svg: None,
+            w: 0,
+            h: 0,
+        },
     }
 }
 
@@ -767,6 +856,7 @@ fn apply_decoded_state(img: &mut State, d: Decoded, content_type: Option<&[u8]>,
         img.loaded = true;
     } else if let Some(tex) = d.tex {
         img.texture = Some(tex);
+        img.svg = d.svg.map(SvgAnimation::new);
         img.natural_width = d.w;
         img.natural_height = d.h;
         img.loaded = true;
@@ -853,6 +943,7 @@ mod task {
         let decoded = decoded.unwrap_or(Decoded {
             tex: None,
             frames: None,
+            svg: None,
             w: 0,
             h: 0,
         });
@@ -1111,9 +1202,10 @@ fn insert_encoded(cache: ImageCache, url: &CStr, bytes: &[u8]) -> Option<ImageRe
             s.anim_start_us = southstar_glib::monotonic_us();
         }));
     }
-    let (texture, w, h) = decode_bytes(bytes)?;
+    let (texture, w, h, is_svg) = decode_still(bytes)?;
     Some(insert_loaded(cache, url, |s| {
         s.texture = Some(texture);
+        s.svg = animated_svg_source(bytes, is_svg).map(SvgAnimation::new);
         s.natural_width = w;
         s.natural_height = h;
     }))

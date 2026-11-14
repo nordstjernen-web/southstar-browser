@@ -164,7 +164,9 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     let dom = match (form_target, inline_target, &link) {
         (Some(d), _, _) | (None, Some(d), _) => Some(d),
         (None, None, Some(link)) => link.dom,
-        (None, None, None) => hit.and_then(ffi::box_dom),
+        (None, None, None) => {
+            ffi::hit_svg_shape(layout, x, y).or_else(|| hit.and_then(ffi::box_dom))
+        }
     };
     let Some(mut dom) = dom else {
         fc.set_focused(None);
@@ -583,6 +585,7 @@ fn rightclick(fc: &Ctx, x: f64, y: f64) {
     let hit = layout.and_then(|l| ffi::hit_test(Some(l), x, y));
     let dom = form_target
         .or(inline_target)
+        .or_else(|| layout.and_then(|l| ffi::hit_svg_shape(l, x, y)))
         .or_else(|| hit.and_then(ffi::box_dom));
     let (Some(dom), Some(js)) = (dom, fc.js) else {
         return;

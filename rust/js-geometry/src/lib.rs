@@ -11,6 +11,7 @@ pub mod links;
 mod lookup;
 pub mod metrics;
 pub mod scroll;
+pub mod smil;
 pub mod svg;
 pub mod visibility;
 

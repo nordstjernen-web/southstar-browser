@@ -15,8 +15,6 @@ use southstar_svg::{Matrix, SvgGeometry};
 use crate::boxes::{accumulate_transform, border_box, box_for_this, point_to_client};
 use crate::{Element, JsResult, Rect, arg, cmax, cmin, ffi};
 
-const ANIM_ATTR_MAX: usize = 63;
-
 fn is_svg_name(n: Element) -> bool {
     n.name()
         .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(b"svg"))
@@ -634,27 +632,6 @@ pub fn create_svg_transform(scope: &mut Scope<'_>, _this: &Value, _args: &[Value
     Ok(t)
 }
 
-pub fn begin_element(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {
-    let Some(n) = ffi::unwrap_node(this).filter(|n| n.flags() & FLAG_SVG_NS != 0) else {
-        return Ok(Value::undefined());
-    };
-    let Some(parent) = n.parent() else {
-        return Ok(Value::undefined());
-    };
-    let attr = n.attr(c"attributeName").filter(|a| !a.is_empty());
-    if let (Some(attr), Some(to)) = (attr, n.attr(c"to")) {
-        let mut name = b"data-nd-anim-".to_vec();
-        name.extend_from_slice(attr.to_bytes());
-        name.truncate(ANIM_ATTR_MAX);
-        ffi::set_attr_recorded(ffi::js_of(scope), parent, &name, to.to_bytes());
-    }
-    Ok(Value::undefined())
-}
-
-pub fn set_current_time(_scope: &mut Scope<'_>, _this: &Value, _args: &[Value]) -> JsResult {
-    Ok(Value::undefined())
-}
-
 fn svg_length_unit(suffix: &[u8]) -> i32 {
     const UNITS: [(&[u8], i32); 8] = [
         (b"em", 3),
@@ -704,11 +681,9 @@ fn svg_length(scope: &mut Scope<'_>, text: &CStr) -> Value {
 
 pub(crate) fn animated_length(scope: &mut Scope<'_>, n: Element, attr: &CStr) -> Value {
     let base = n.attr(attr).unwrap_or(c"0");
-    let mut anim_name = b"data-nd-anim-".to_vec();
-    anim_name.extend_from_slice(attr.to_bytes());
-    anim_name.truncate(ANIM_ATTR_MAX);
-    let anim_name = std::ffi::CString::new(anim_name).unwrap_or_default();
-    let anim = n.attr(&anim_name).filter(|a| !a.is_empty()).unwrap_or(base);
+    southstar_svg::smil::refresh(n);
+    let animated = southstar_svg::smil::attr(n, attr).filter(|a| !a.is_empty());
+    let anim = animated.as_deref().unwrap_or(base);
     let animated = scope.new_object();
     let base_value = svg_length(scope, base);
     let _ = scope.set(&animated, "baseVal", base_value);

@@ -46,6 +46,11 @@ pub fn hit_node(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     walks::hit_node(root, x, y)
 }
 
+pub fn hit_svg_shape(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
+    let (hit, local_x, local_y) = hit_test_local(root, x, y)?;
+    ffi::svg_shape_at(hit, local_x, local_y)
+}
+
 pub fn hit_form_dom(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     walks::form_hit(root, x, y, None)
 }

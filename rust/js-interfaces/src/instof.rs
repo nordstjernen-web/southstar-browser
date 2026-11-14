@@ -13,6 +13,7 @@ const SHADOW_ATTR: &core::ffi::CStr = c"data-nd-shadow-root";
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Match {
     Tag(&'static str),
+    SvgTag(&'static str),
     Node,
     Element,
     Document,
@@ -112,6 +113,18 @@ pub(crate) const INTERFACES: &[(&str, Match)] = &[
     ("DocumentType", Match::Doctype),
     ("HTMLElement", Match::HtmlElement),
     ("ShadowRoot", Match::Shadow),
+    (
+        "SVGAnimationElement",
+        Match::SvgTag("animate set animateTransform animateMotion"),
+    ),
+    ("SVGAnimateElement", Match::SvgTag("animate")),
+    ("SVGSetElement", Match::SvgTag("set")),
+    (
+        "SVGAnimateTransformElement",
+        Match::SvgTag("animateTransform"),
+    ),
+    ("SVGAnimateMotionElement", Match::SvgTag("animateMotion")),
+    ("SVGMPathElement", Match::SvgTag("mpath")),
 ];
 
 const BASE_INTERFACES: &[&str] = &[
@@ -134,6 +147,12 @@ const BASE_INTERFACES: &[&str] = &[
     "SVGElement",
     "SVGAElement",
     "SVGSVGElement",
+    "SVGAnimationElement",
+    "SVGAnimateElement",
+    "SVGSetElement",
+    "SVGAnimateTransformElement",
+    "SVGAnimateMotionElement",
+    "SVGMPathElement",
     "MathMLElement",
     "Event",
     "UIEvent",
@@ -181,6 +200,14 @@ fn tag_match(tags: &str, node: Node<'_>) -> bool {
         .is_some_and(|name| tags.split(' ').any(|tag| tag.as_bytes() == name.to_bytes()))
 }
 
+fn svg_tag_match(tags: &str, node: Node<'_>) -> bool {
+    node.kind() == Kind::Element
+        && node.flags() & FLAG_SVG_NS != 0
+        && node
+            .name()
+            .is_some_and(|name| tags.split(' ').any(|tag| tag.as_bytes() == name.to_bytes()))
+}
+
 fn is_shadow_host_attr(node: Node<'_>) -> bool {
     node.kind() == Kind::Element && node.attr(SHADOW_ATTR).is_some()
 }
@@ -189,6 +216,7 @@ fn kind_match(kind: Match, node: Node<'_>) -> bool {
     match kind {
         Match::Node => true,
         Match::Tag(tags) => tag_match(tags, node),
+        Match::SvgTag(tags) => svg_tag_match(tags, node),
         Match::Text => node.kind() == Kind::Text,
         Match::Comment => node.kind() == Kind::Comment,
         Match::CharData => matches!(node.kind(), Kind::Text | Kind::Comment),

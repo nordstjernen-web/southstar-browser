@@ -1,4 +1,4 @@
-//! Southstar — the animation and transition events drained from the animation engine, and the load events of images and videos layout has finished.
+//! Southstar — the animation and transition events drained from the animation engine, the SMIL timing events, and the load events of images and videos layout has finished.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -8,6 +8,7 @@ use southstar_anim::{AnimEvent, AnimHandle};
 use southstar_dom::Node;
 use southstar_js_engine::{Scope, Value};
 use southstar_layout::BoxRef;
+use southstar_svg::smil::{self, EventKind, Smil};
 
 use crate::ffi::{self, Js};
 
@@ -128,6 +129,38 @@ pub(crate) fn dispatch_anim_events(js: Js, anim: AnimHandle) {
     for event in anim.take_events() {
         anim_event(js, &event);
     }
+}
+
+fn smil_event(js: Js, node: Node<'static>, kind: EventKind, iteration: i32) -> bool {
+    let event_type = kind.event_type();
+    let handler = kind.handler();
+    if !node.has_js_wrapper() && node.attr(handler).is_none() {
+        smil::dom_event(node, event_type.to_bytes());
+        return false;
+    }
+    let Some(event) = js.ctx().with(|scope| {
+        let event = ffi::make_event(scope, event_type, Some(node));
+        let _ = scope.set(&event, "bubbles", Value::boolean(false));
+        let _ = scope.set(&event, "cancelable", Value::boolean(false));
+        let _ = scope.set(&event, "detail", Value::int(iteration));
+        event
+    }) else {
+        return false;
+    };
+    js.dispatch_built(Some(node), event_type, event.clone());
+    js.fire_element_handlers(node, &handler.to_string_lossy()[2..], &event);
+    true
+}
+
+pub(crate) fn dispatch_smil_events(js: Option<Js>, timeline: &Smil) {
+    let Some(js) = js.filter(|js| !js.is_null() && !js.ctx().is_null()) else {
+        timeline.settle_events();
+        return;
+    };
+    if js.halted() || js.in_pump() {
+        return;
+    }
+    timeline.drain_events(|node, kind, iteration| smil_event(js, node, kind, iteration));
 }
 
 #[derive(Default)]

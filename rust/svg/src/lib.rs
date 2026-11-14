@@ -5,22 +5,27 @@
 #![forbid(unsafe_code)]
 
 mod ffi;
+mod hit;
 mod measure;
 mod parse;
+pub mod smil;
 mod state;
 
+use core::cell::Cell;
 use core::f64::consts::PI;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::CString;
 
 use core::ffi::CStr;
 
 pub use ffi::{Canvas, Matrix, SvgGeometry, SvgSize};
+pub use hit::hit_node;
 pub use measure::{node_geometry, node_text_length};
 
 use ffi::{
-    EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, PANGO_SCALE, Pattern,
-    Segment, Surface, TextLayout,
+    EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, PANGO_SCALE, Path,
+    Pattern, Segment, Surface, TextLayout,
 };
 use parse::{eq_ci, is_ws};
 use southstar_dom::{Kind, Node, Tree, children};
@@ -68,6 +73,8 @@ pub struct Ctx<'a> {
     mask_pixels: f64,
     vw: f64,
     vh: f64,
+    animated_only: Cell<bool>,
+    hit: Option<hit::Hit<'a>>,
 }
 
 fn name_is(n: Node<'_>, tag: &[u8]) -> bool {
@@ -86,16 +93,88 @@ fn attr_ci(n: Node<'_>, name: &CStr, value: &[u8]) -> bool {
     n.attr(name).is_some_and(|v| eq_ci(v.to_bytes(), value))
 }
 
+fn attr<'a>(n: Node<'a>, name: &CStr) -> Option<Cow<'a, CStr>> {
+    match smil::attr(n, name) {
+        Some(animated) => Some(Cow::Owned(animated)),
+        None => n.attr(name).map(Cow::Borrowed),
+    }
+}
+
 fn attr_length(n: Node<'_>, name: &CStr, basis: f64, fs: f64, fallback: f64) -> f64 {
-    match n.attr(name) {
-        Some(s) => parse::length(Some(s), basis, fs, fallback),
+    match attr(n, name) {
+        Some(s) => parse::length(Some(&s), basis, fs, fallback),
         None => fallback,
     }
 }
 
+fn local_transform(n: Node<'_>) -> (Matrix, bool) {
+    let (mut local, mut any) = parse::transform(attr(n, c"transform").as_deref());
+    if let Some(motion) = smil::attr(n, smil::MOTION_ATTR) {
+        let (along, moved) = parse::transform(Some(&motion));
+        if moved {
+            local = Matrix::multiply(&local, &along);
+            any = true;
+        }
+    }
+    (local, any)
+}
+
+pub(crate) fn path_polyline(d: &CStr) -> Vec<smil::PathPoint> {
+    let Some(surface) = Surface::image(FORMAT_A8, 1, 1) else {
+        return Vec::new();
+    };
+    let cr = Canvas::on(&surface);
+    parse::path_data(cr.clone(), d);
+    current_polyline(&cr)
+}
+
+fn current_polyline(cr: &Canvas) -> Vec<smil::PathPoint> {
+    const CURVE_STEPS: usize = 48;
+    let mut out = Vec::new();
+    let Some(path) = cr.copy_path().filter(Path::ok) else {
+        return out;
+    };
+    let point = |x: f64, y: f64, starts_subpath: bool| smil::PathPoint {
+        x,
+        y,
+        starts_subpath,
+    };
+    let (mut cx, mut cy, mut sx, mut sy) = (0.0, 0.0, 0.0, 0.0);
+    for segment in path.segments() {
+        match segment {
+            Segment::MoveTo(x, y) => {
+                (cx, cy, sx, sy) = (x, y, x, y);
+                out.push(point(x, y, true));
+            }
+            Segment::LineTo(x, y) => {
+                (cx, cy) = (x, y);
+                out.push(point(x, y, false));
+            }
+            Segment::CurveTo([x1, y1, x2, y2, x3, y3]) => {
+                for step in 1..=CURVE_STEPS {
+                    let t = step as f64 / CURVE_STEPS as f64;
+                    let u = 1.0 - t;
+                    let (a, b, c, e) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+                    out.push(point(
+                        a * cx + b * x1 + c * x2 + e * x3,
+                        a * cy + b * y1 + c * y2 + e * y3,
+                        false,
+                    ));
+                }
+                (cx, cy) = (x3, y3);
+            }
+            Segment::Close => {
+                (cx, cy) = (sx, sy);
+                out.push(point(sx, sy, false));
+            }
+        }
+    }
+    out
+}
+
 fn viewbox_matrix(n: Node<'_>, vw: f64, vh: f64) -> Matrix {
     let mut out = Matrix::identity();
-    let Some([x, y, w, h]) = parse::viewbox(n.attr(c"viewBox")) else {
+    let Some([x, y, w, h]) = parse::viewbox(attr(n, c"viewBox").as_deref()) else {
         return out;
     };
     if w <= 0.0 || h <= 0.0 || vw <= 0.0 || vh <= 0.0 {
@@ -103,7 +182,7 @@ fn viewbox_matrix(n: Node<'_>, vw: f64, vh: f64) -> Matrix {
     }
     let (mut slice, mut none) = (false, false);
     let (mut ax, mut ay) = (0.5, 0.5);
-    if let Some(par) = n.attr(c"preserveAspectRatio") {
+    if let Some(par) = attr(n, c"preserveAspectRatio") {
         for part in par
             .to_bytes()
             .split(|c| matches!(c, b' ' | b'\t' | b'\r' | b'\n'))
@@ -145,7 +224,7 @@ fn viewbox_matrix(n: Node<'_>, vw: f64, vh: f64) -> Matrix {
 }
 
 fn viewbox_size(n: Node<'_>, w: f64, h: f64) -> (f64, f64) {
-    parse::viewbox_size(n.attr(c"viewBox")).unwrap_or((w, h))
+    parse::viewbox_size(attr(n, c"viewBox").as_deref()).unwrap_or((w, h))
 }
 
 fn g_strip(s: &[u8]) -> &[u8] {
@@ -362,6 +441,8 @@ impl<'a> Ctx<'a> {
             mask_pixels: 0.0,
             vw,
             vh,
+            animated_only: Cell::new(false),
+            hit: None,
         }
     }
 
@@ -414,11 +495,11 @@ impl<'a> Ctx<'a> {
         self.by_id(&h[1..])
     }
 
-    fn inherited_attr(&mut self, n: Node<'a>, name: &CStr) -> Option<&'a CStr> {
+    fn inherited_attr(&mut self, n: Node<'a>, name: &CStr) -> Option<Cow<'a, CStr>> {
         let mut cur = Some(n);
         for _ in 0..MAX_HREF_CHAIN {
             let c = cur?;
-            if let Some(v) = c.attr(name) {
+            if let Some(v) = attr(c, name) {
                 return Some(v);
             }
             cur = self.href_target(c);
@@ -454,7 +535,7 @@ impl<'a> Ctx<'a> {
         fs: f64,
         fallback: f64,
     ) -> (f64, bool) {
-        let s = self.style(n);
+        let s = self.style(n).filter(|_| smil::attr(n, attr).is_none());
         if let Some(s) = s
             && let Some(v) = s.value(prop)
         {
@@ -503,9 +584,9 @@ impl<'a> Ctx<'a> {
         let fs = st.font_size;
         let tag = tag(n);
         match tag {
-            b"path" => match n.attr(c"d").filter(|d| !d.is_empty()) {
+            b"path" => match attr(n, c"d").filter(|d| !d.is_empty()) {
                 Some(d) => {
-                    parse::path_data(cr, d);
+                    parse::path_data(cr, &d);
                     true
                 }
                 None => false,
@@ -594,10 +675,10 @@ impl<'a> Ctx<'a> {
                 true
             }
             b"polyline" | b"polygon" => {
-                let Some(pts) = n.attr(c"points") else {
+                let Some(pts) = attr(n, c"points") else {
                     return false;
                 };
-                let pts = parse::points(pts);
+                let pts = parse::points(&pts);
                 let Some(&(x0, y0)) = pts.first() else {
                     return false;
                 };
@@ -687,7 +768,7 @@ impl<'a> Ctx<'a> {
         let len = |ctx: &mut Ctx<'a>, name: &CStr, basis: f64, fallback: f64| match ctx
             .inherited_attr(g, name)
         {
-            Some(s) => parse::length(Some(s), basis, fs, fallback),
+            Some(s) => parse::length(Some(&s), basis, fs, fallback),
             None => fallback,
         };
         let pat = if linear {
@@ -716,7 +797,9 @@ impl<'a> Ctx<'a> {
         };
         let owner = self.stops_owner(g)?;
         self.add_stops(&pat, owner, st, alpha);
-        pat.set_extend(extend_of(self.inherited_attr(g, c"spreadMethod")));
+        pat.set_extend(extend_of(
+            self.inherited_attr(g, c"spreadMethod").as_deref(),
+        ));
         let mut m = Matrix::identity();
         if obb {
             if bw <= 0.0 || bh <= 0.0 {
@@ -726,7 +809,7 @@ impl<'a> Ctx<'a> {
             m.scale(bw, bh);
         }
         if let Some(gt) = self.inherited_attr(g, c"gradientTransform") {
-            let (t, any) = parse::transform(Some(gt));
+            let (t, any) = parse::transform(Some(&gt));
             if any {
                 m = Matrix::multiply(&t, &m);
             }
@@ -820,7 +903,7 @@ impl<'a> Ctx<'a> {
     }
 
     fn apply_transform_attr(&self, n: Node<'a>) {
-        let (m, any) = parse::transform(n.attr(c"transform"));
+        let (m, any) = local_transform(n);
         if any {
             self.cr.transform(&m);
         }
@@ -980,6 +1063,9 @@ impl<'a> Ctx<'a> {
         self.cr.move_to(x, top);
         self.cr.layout_path(&layout);
         drop(layout);
+        if self.hit_current_path(n, st) {
+            return;
+        }
         self.paint_current_path(st);
     }
 
@@ -1031,7 +1117,7 @@ impl<'a> Ctx<'a> {
         }
         cr.transform(&vm);
         let (ow, oh) = (self.vw, self.vh);
-        if let Some((w, h)) = parse::viewbox_size(marker.attr(c"viewBox")) {
+        if let Some((w, h)) = parse::viewbox_size(attr(marker, c"viewBox").as_deref()) {
             self.vw = w;
             self.vh = h;
         }
@@ -1110,6 +1196,7 @@ impl<'a> Ctx<'a> {
         }
         if self
             .style(n)
+            .filter(|_| smil::attr(n, c"display").is_none())
             .and_then(|s| s.keyword(&DISPLAY))
             .is_some_and(|d| d.to_bytes() == b"none")
         {
@@ -1120,7 +1207,10 @@ impl<'a> Ctx<'a> {
     }
 
     fn opacity(&self, n: Node<'a>, st: &State) -> f64 {
-        match self.style(n).filter(|s| s.value(&OPACITY).is_some()) {
+        match self
+            .style(n)
+            .filter(|s| s.value(&OPACITY).is_some() && smil::attr(n, c"opacity").is_none())
+        {
             Some(s) => clamp(css_number(s, &OPACITY, 1.0, 1.0), 0.0, 1.0),
             None => match self.prop(n, c"opacity") {
                 Some(o) => clamp(parse::length(Some(&o), 1.0, st.font_size, 1.0), 0.0, 1.0),
@@ -1142,9 +1232,9 @@ impl<'a> Ctx<'a> {
         cr.new_path();
         cr.transform(&viewbox_matrix(n, w, h));
         let (ow, oh) = (self.vw, self.vh);
-        match n.attr(c"viewBox") {
+        match attr(n, c"viewBox") {
             Some(vb) => {
-                if let Some((vw, vh)) = parse::viewbox_size(Some(vb)) {
+                if let Some((vw, vh)) = parse::viewbox_size(Some(&vb)) {
                     self.vw = vw;
                     self.vh = vh;
                 }
@@ -1168,6 +1258,7 @@ impl<'a> Ctx<'a> {
         let x = attr_length(n, c"x", self.vw, fs, 0.0);
         let y = attr_length(n, c"y", self.vh, fs, 0.0);
         cr.translate(x, y);
+        let outer_owner = self.hit_enter_use(n);
         self.depth += 1;
         self.use_depth += 1;
         if name_is(t, b"symbol") {
@@ -1183,12 +1274,16 @@ impl<'a> Ctx<'a> {
         }
         self.use_depth -= 1;
         self.depth -= 1;
+        self.hit_leave_use(outer_owner);
     }
 
     fn render_shape(&mut self, n: Node<'a>, st: &State) {
         let cr = self.cr.clone();
         cr.new_path();
         if self.shape_path(n, st) {
+            if self.hit_current_path(n, st) {
+                return;
+            }
             let markable = matches!(tag(n), b"path" | b"line" | b"polyline" | b"polygon");
             let kept = if markable { cr.copy_path() } else { None };
             self.paint_current_path(st);
@@ -1219,7 +1314,12 @@ impl<'a> Ctx<'a> {
         let cr = self.cr.clone();
         cr.save();
         self.apply_transform_attr(n);
-        let Ok(mask) = self.mask_surface(n, &st) else {
+        let mask = if self.hit.is_some() {
+            Ok(None)
+        } else {
+            self.mask_surface(n, &st)
+        };
+        let Ok(mask) = mask else {
             cr.restore();
             return;
         };
@@ -1299,8 +1399,8 @@ pub fn intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
     };
     let (mut has_w, mut has_h, mut has_r) = (false, false, false);
     let dim = |name: &CStr| {
-        let s = svg.attr(name).filter(|s| !s.to_bytes().contains(&b'%'))?;
-        let v = parse::length(Some(s), 0.0, 16.0, 0.0);
+        let s = attr(svg, name).filter(|s| !s.to_bytes().contains(&b'%'))?;
+        let v = parse::length(Some(&s), 0.0, 16.0, 0.0);
         (v > 0.0).then_some(v)
     };
     if let Some(w) = dim(c"width") {
@@ -1311,7 +1411,7 @@ pub fn intrinsic_size(svg: Option<Node<'_>>) -> SvgSize {
         out.height = h;
         has_h = true;
     }
-    if let Some((w, h)) = parse::viewbox_size(svg.attr(c"viewBox")) {
+    if let Some((w, h)) = parse::viewbox_size(attr(svg, c"viewBox").as_deref()) {
         out.ratio = w / h;
         has_r = true;
     }
@@ -1343,20 +1443,28 @@ pub fn render_node(
     if width <= 0.0 || height <= 0.0 {
         return;
     }
-    let mut ctx = Ctx::new(cr.clone(), svg, styles, width, height);
-    let mut st = State::inherited(inherited);
-    cr.save();
-    cr.rectangle(0.0, 0.0, width, height);
-    cr.clip();
-    cr.new_path();
-    cr.transform(&viewbox_matrix(svg, width, height));
-    if let Some((w, h)) = parse::viewbox_size(svg.attr(c"viewBox")) {
-        ctx.vw = w;
-        ctx.vh = h;
+    let mut ctx = Ctx::new(cr, svg, styles, width, height);
+    ctx.render_tree(inherited);
+}
+
+impl<'a> Ctx<'a> {
+    fn render_tree(&mut self, inherited: Option<StyleRef<'_>>) {
+        let (cr, svg) = (self.cr.clone(), self.root);
+        let (width, height) = (self.vw, self.vh);
+        let mut st = State::inherited(inherited);
+        cr.save();
+        cr.rectangle(0.0, 0.0, width, height);
+        cr.clip();
+        cr.new_path();
+        cr.transform(&viewbox_matrix(svg, width, height));
+        if let Some((w, h)) = parse::viewbox_size(attr(svg, c"viewBox").as_deref()) {
+            self.vw = w;
+            self.vh = h;
+        }
+        self.apply_node(&mut st, svg);
+        self.render_children(svg, &st);
+        cr.restore();
     }
-    ctx.apply_node(&mut st, svg);
-    ctx.render_children(svg, &st);
-    cr.restore();
 }
 
 pub fn render_root(cr: Canvas, svg: Node<'_>, width: f64, height: f64) {
@@ -1396,9 +1504,7 @@ pub fn render_bytes(cr: Canvas, data: &[u8], width: f64, height: f64) -> bool {
     true
 }
 
-pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
-    let doc = parse_svg(data)?;
-    let root = find_root(doc.root())?;
+fn raster_size(root: Node<'_>) -> (i32, i32) {
     let size = intrinsic_size(Some(root));
     let mut w = if size.has_width {
         size.width
@@ -1431,21 +1537,72 @@ pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
         w *= s;
         h *= s;
     }
-    let iw = clamp((w - 0.001).ceil(), 1.0, MAX_DIM_PX) as i32;
-    let ih = clamp((h - 0.001).ceil(), 1.0, MAX_DIM_PX) as i32;
+    (
+        clamp((w - 0.001).ceil(), 1.0, MAX_DIM_PX) as i32,
+        clamp((h - 0.001).ceil(), 1.0, MAX_DIM_PX) as i32,
+    )
+}
+
+fn rasterize(root: Node<'_>, iw: i32, ih: i32) -> Option<TextureRef> {
     let surf = Surface::image(FORMAT_ARGB32, iw, ih)?;
-    {
-        render_node(
-            Canvas::on(&surf),
-            root,
-            f64::from(iw),
-            f64::from(ih),
-            StyleTable::none(),
-            None,
-        );
-    }
+    render_node(
+        Canvas::on(&surf),
+        root,
+        f64::from(iw),
+        f64::from(ih),
+        StyleTable::none(),
+        None,
+    );
     surf.flush();
-    drop(doc);
-    let tex = surf.into_texture(iw, ih)?;
+    surf.into_texture(iw, ih)
+}
+
+pub fn decode_bytes(data: &[u8]) -> Option<(TextureRef, i32, i32)> {
+    let doc = parse_svg(data)?;
+    let root = find_root(doc.root())?;
+    let (iw, ih) = raster_size(root);
+    let tex = rasterize(root, iw, ih)?;
     Some((tex, iw, ih))
+}
+
+pub fn source_animated(data: &[u8]) -> bool {
+    let has = |needle: &[u8]| data.windows(needle.len()).any(|w| w == needle);
+    has(b"<animate") || has(b"<set")
+}
+
+pub struct AnimatedDoc {
+    smil: smil::Smil,
+    root: Node<'static>,
+    width: i32,
+    height: i32,
+    _tree: Tree,
+}
+
+impl AnimatedDoc {
+    pub fn parse(data: &[u8]) -> Option<AnimatedDoc> {
+        let tree = parse_svg(data)?;
+        let root = find_root(tree.root())?;
+        let (width, height) = raster_size(root);
+        Some(AnimatedDoc {
+            smil: smil::Smil::new(tree.root(), southstar_glib::monotonic_us()),
+            root,
+            width,
+            height,
+            _tree: tree,
+        })
+    }
+
+    pub fn tick(&self, now_us: i64) -> bool {
+        let changed = self.smil.tick(now_us);
+        self.smil.settle_events();
+        changed
+    }
+
+    pub fn animating(&self) -> bool {
+        self.smil.has_active()
+    }
+
+    pub fn render(&self) -> Option<TextureRef> {
+        rasterize(self.root, self.width, self.height)
+    }
 }

@@ -72,6 +72,10 @@ impl Js {
         southstar_js_lifecycle::dispatch_anim_events(self.handle(), anim);
     }
 
+    pub fn dispatch_smil_events(js: Option<Js>, timeline: &southstar_svg::smil::Smil) {
+        southstar_js_lifecycle::dispatch_smil_events(js.map(Js::handle), timeline);
+    }
+
     pub fn run_animation_frame(self) -> bool {
         southstar_js_lifecycle::run_animation_frame(self.handle())
     }

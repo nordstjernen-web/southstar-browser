@@ -68,6 +68,15 @@ fn free_replaced_strings(b: &NsBrowser) {
     }
 }
 
+fn tick_smil(b: &NsBrowser, now: i64) -> bool {
+    let Some(timeline) = b.smil() else {
+        return false;
+    };
+    let changed = timeline.tick(now);
+    ffi::Js::dispatch_smil_events(b.js(), &timeline);
+    changed
+}
+
 pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
     free_replaced_strings(b);
     let now = southstar_glib::monotonic_us();
@@ -93,6 +102,7 @@ pub fn settle_tick(b: &NsBrowser, state: &mut SettleState) -> bool {
             b.dirty.set(true);
         }
     }
+    tick_smil(b, now);
     if let (Some(anim), Some(js)) = (b.anim(), b.js()) {
         js.dispatch_anim_events(anim);
     }
@@ -203,6 +213,9 @@ pub fn tick(b: &NsBrowser, budget_ms: c_int) -> bool {
                 b.dirty.set(true);
             }
         }
+        if tick_smil(b, now) {
+            changed = true;
+        }
         if let (Some(anim), Some(js)) = (b.anim(), b.js()) {
             js.dispatch_anim_events(anim);
         }
@@ -250,6 +263,7 @@ pub fn animating(b: &NsBrowser) -> bool {
         || b.js().is_some_and(ffi::Js::has_pending_animation_frame)
         || b.js().is_some_and(ffi::Js::needs_tick)
         || b.anim().is_some_and(|anim| anim.has_active())
+        || b.smil().is_some_and(|timeline| timeline.has_active())
         || b.images().is_some_and(ffi::Images::animating)
         || b.videos().is_some_and(ffi::Videos::animating)
 }

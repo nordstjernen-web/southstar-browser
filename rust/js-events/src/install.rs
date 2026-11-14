@@ -117,6 +117,7 @@ const EVENT_SUBCLASSES: &[&str] = &[
     "ToggleEvent",
     "FormDataEvent",
     "TrackEvent",
+    "TimeEvent",
     "MediaStreamTrackEvent",
     "CookieChangeEvent",
     "AnimationPlaybackEvent",

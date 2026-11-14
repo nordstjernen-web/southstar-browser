@@ -1907,6 +1907,7 @@ dependencies = [
  "southstar-selection",
  "southstar-spellcheck",
  "southstar-style",
+ "southstar-svg",
  "southstar-unicode",
  "southstar-url",
  "southstar-video",
@@ -2334,6 +2335,7 @@ dependencies = [
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-style",
+ "southstar-svg",
  "southstar-unicode",
  "southstar-url",
  "southstar-video",
@@ -2593,6 +2595,7 @@ dependencies = [
  "southstar-js-shadow",
  "southstar-js-url",
  "southstar-js-window",
+ "southstar-svg",
 ]
 
 [[package]]
@@ -2914,6 +2917,7 @@ dependencies = [
  "southstar-js-url",
  "southstar-js-window",
  "southstar-layout",
+ "southstar-svg",
  "southstar-video",
 ]
 
@@ -3470,6 +3474,7 @@ dependencies = [
  "southstar-mat4",
  "southstar-paint",
  "southstar-style",
+ "southstar-svg",
 ]
 
 [[package]]

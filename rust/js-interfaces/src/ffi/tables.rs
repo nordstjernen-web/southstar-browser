@@ -65,7 +65,7 @@ pub(crate) static TLIST_PROTO: [Prop; 10] = [
 pub(crate) static VALIDITY_PROTO_FUNCS: [Prop; 1] =
     [accessor("valid", Some(adapt::validity_get_valid), None)];
 
-pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 509] = [
+pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 519] = [
     method("getNumberOfChars", 0, natives::element_get_number_of_chars),
     method("getSVGDocument", 0, frames::owner::svg_document),
     accessor(
@@ -769,6 +769,22 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 509] = [
         geometry::svg::get_sub_string_length,
     ),
     method("getPointAtLength", 1, geometry::svg::get_point_at_length),
+    method("pauseAnimations", 0, geometry::smil::pause_animations),
+    method("unpauseAnimations", 0, geometry::smil::unpause_animations),
+    method("animationsPaused", 0, geometry::smil::animations_paused),
+    method("getCurrentTime", 0, geometry::smil::get_current_time),
+    method("setCurrentTime", 1, geometry::smil::set_current_time),
+    method("beginElement", 0, geometry::smil::begin_element),
+    method("beginElementAt", 1, geometry::smil::begin_element),
+    method("endElement", 0, geometry::smil::end_element),
+    method("endElementAt", 1, geometry::smil::end_element),
+    method("getStartTime", 0, geometry::smil::get_start_time),
+    method("getSimpleDuration", 0, geometry::smil::get_simple_duration),
+    accessor(
+        "targetElement",
+        Some(adapt::element_get_smil_target_element),
+        Some(elements::element::ignore),
+    ),
     method("createSVGPoint", 0, geometry::svg::create_svg_point),
     method("createSVGRect", 0, geometry::svg::create_svg_rect),
     method("createSVGMatrix", 0, geometry::svg::create_svg_matrix),
@@ -1331,8 +1347,6 @@ pub(crate) static ELEMENT_PROTO_FUNCS: [Prop; 509] = [
         Some(natives::element_dimension_setter),
         9,
     ),
-    method("beginElement", 0, geometry::svg::begin_element),
-    method("setCurrentTime", 1, geometry::svg::set_current_time),
     accessor_magic(
         "start",
         Some(reflect::numeric::int_get),

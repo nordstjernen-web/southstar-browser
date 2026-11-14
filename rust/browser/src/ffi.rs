@@ -23,6 +23,7 @@ use southstar_dom::{Node, Tree, WeakNode};
 use southstar_engine::CssCache;
 use southstar_layout::{BoxPool, BoxRef};
 use southstar_selection::{NsSelection, Selection};
+use southstar_svg::smil::Smil;
 
 pub use dom::*;
 pub use engine::*;
@@ -163,6 +164,7 @@ pub struct NsBrowser {
     styles: RefCell<Option<Rc<StyleMap>>>,
     js: Cell<Option<Js>>,
     anim: RefCell<Option<Anim>>,
+    smil: RefCell<Option<Smil>>,
     images: Cell<Option<Images>>,
     videos: Cell<Option<Videos>>,
     css_cache: Cell<Option<CssCache>>,
@@ -261,6 +263,10 @@ impl NsBrowser {
 
     pub fn anim(&self) -> Option<Anim> {
         self.anim.borrow().clone()
+    }
+
+    pub fn smil(&self) -> Option<Smil> {
+        self.smil.borrow().clone()
     }
 
     pub fn images(&self) -> Option<Images> {
@@ -371,6 +377,7 @@ impl NsBrowser {
             js.set_style_table(None);
         }
         drop(self.anim.take());
+        drop(self.smil.take());
         self.free_layout();
         self.drop_styles();
         drop(self.restyled.take());
@@ -518,6 +525,13 @@ pub fn attach_caches(b: &NsBrowser) {
 
 pub fn set_anim(b: &NsBrowser, anim: Anim) {
     drop(b.anim.replace(Some(anim)));
+}
+
+pub fn start_smil(b: &NsBrowser) {
+    let timeline = b
+        .doc()
+        .map(|doc| Smil::new(doc, southstar_glib::monotonic_us()));
+    drop(b.smil.replace(timeline));
 }
 
 pub fn wire_js_callbacks(b: &NsBrowser, js: Js) {

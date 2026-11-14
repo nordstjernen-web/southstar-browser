@@ -4,10 +4,10 @@
 
 use southstar_cairo::Matrix;
 use southstar_dom::Node;
-use southstar_layout::BoxRef;
+use southstar_layout::{BoxKind, BoxRef};
 use southstar_mat4::Mat4;
 pub use southstar_style::box_style as style_of;
-use southstar_style::{StyleRef, Transform};
+use southstar_style::{StyleRef, StyleTable, Transform};
 
 pub fn dom_of(b: BoxRef<'_>) -> Option<Node<'_>> {
     b.dom()
@@ -44,6 +44,23 @@ pub fn viewport_size() -> (f64, f64) {
 pub use southstar_layout_position::sticky_offset;
 
 pub use southstar_layout::image_map_area;
+
+pub fn svg_shape_at(b: BoxRef<'_>, local_x: f64, local_y: f64) -> Option<Node<'static>> {
+    if b.kind() != BoxKind::Svg {
+        return None;
+    }
+    let (m, bd, p) = (b.margin(), b.border(), b.padding());
+    let styles = southstar_style::svg_styles(b);
+    southstar_svg::hit_node(
+        b.dom()?,
+        b.content_width(),
+        b.content_height(),
+        StyleTable::new(styles.as_ref()),
+        style_of(b),
+        local_x - (b.x() + m.left + bd.left + p.left),
+        local_y - (b.y() + m.top + bd.top + p.top),
+    )
+}
 
 pub use southstar_paint::{
     inline_xy_to_byte, pick_3d as paint_3d_pick, registered_3d as paint_3d_registered,

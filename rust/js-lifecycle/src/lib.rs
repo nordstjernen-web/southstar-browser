@@ -16,8 +16,9 @@ use crate::ffi::Js;
 
 pub use crate::ffi::install_runtime_hooks;
 pub use crate::ffi::{
-    clear_lifecycle, dispatch_anim_events, fire_media_load_events, has_pending_animation_frame,
-    has_pending_work, needs_tick, raf_count, reset_lifecycle, run_animation_frame, start_lifecycle,
+    clear_lifecycle, dispatch_anim_events, dispatch_smil_events, fire_media_load_events,
+    has_pending_animation_frame, has_pending_work, needs_tick, raf_count, reset_lifecycle,
+    run_animation_frame, start_lifecycle,
 };
 
 #[derive(Default)]

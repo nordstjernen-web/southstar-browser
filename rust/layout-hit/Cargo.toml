@@ -21,6 +21,7 @@ southstar-layout-position = { path = "../layout-position", version = "=1.0.9-dev
 southstar-mat4 = { path = "../mat4", version = "=1.0.9-dev" }
 southstar-paint = { path = "../paint", version = "=1.0.9-dev" }
 southstar-style = { path = "../style", version = "=1.0.9-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true
