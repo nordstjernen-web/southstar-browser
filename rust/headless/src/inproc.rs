@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use southstar_css::StyleMap;
 use southstar_dom::{Node, WeakNode, ancestors_and_self};
 use southstar_layout::BoxRef;
+use southstar_svg::smil::Smil;
 
 use crate::ffi::{
     self, Anim, CssCache, Document, ImageCache, Js, NavigationTiming, PrintSetup, Relayout,
@@ -117,6 +118,7 @@ pub struct Ctx {
     pub image_cache: Option<ImageCache>,
     pub video_cache: Option<VideoCache>,
     pub anim: Option<Anim>,
+    pub smil: Smil,
     pub css_cache: CssCache,
     pub styles: RefCell<Option<Rc<StyleMap>>>,
     pub layout: Cell<Option<BoxRef<'static>>>,
@@ -142,6 +144,11 @@ impl Ctx {
 
     pub fn set_focused(&self, n: Option<Node>) {
         self.focused.set(n.map(Node::downgrade));
+    }
+
+    fn tick_smil(&self, now_us: i64) {
+        self.smil.tick(now_us);
+        Js::dispatch_smil_events(self.js, &self.smil);
     }
 
     fn request(&self) -> Relayout<'_> {
@@ -274,6 +281,7 @@ impl<'a> Settle<'a> {
         if let (Some(anim), Some(js)) = (fc.anim.clone(), fc.js) {
             js.dispatch_anim_events(anim);
         }
+        fc.tick_smil(now);
         if let Some(js) = fc.js {
             js.run_animation_frame();
         }
@@ -721,6 +729,7 @@ pub fn run_one(
         image_cache,
         video_cache,
         anim: anim.clone(),
+        smil: Smil::new(doc.node(), southstar_glib::monotonic_us()),
         css_cache,
         styles: RefCell::new(Some(styles)),
         layout: Cell::new(None),
@@ -851,6 +860,7 @@ pub fn run_one(
                 anim.rebase(0);
                 anim.tick(0);
             }
+            ctx.tick_smil(ctx.smil.origin_us());
             ffi::paint_set_anim(anim.clone());
             let initial = ffi::suffix_before_ext(o.out_path, c"-initial");
             rc = write_capture(ctx.layout(), initial.as_deref(), o.dump, &print_setup);
@@ -874,6 +884,7 @@ pub fn run_one(
                 }
                 anim.tick(end);
             }
+            ctx.tick_smil(ctx.smil.origin_us() + i64::from(time_ms) * 1000);
             ffi::paint_set_anim(anim.clone());
             let rc2 = write_capture(ctx.layout(), o.out_path, o.dump, &print_setup);
             let path = o.out_path.map_or(&b"(null)"[..], CStr::to_bytes);

@@ -274,6 +274,17 @@ pub fn install(scope: &mut Scope<'_>, global: &Value) {
     let svg_element = proto_of(scope, global, "SVGElement");
     chain_proto(scope, global, "SVGAElement", &svg_element);
     let svga_element = proto_of(scope, global, "SVGAElement");
+    chain_proto(scope, global, "SVGAnimationElement", &svg_element);
+    chain_proto(scope, global, "SVGMPathElement", &svg_element);
+    let svg_animation_element = proto_of(scope, global, "SVGAnimationElement");
+    for name in [
+        "SVGAnimateElement",
+        "SVGSetElement",
+        "SVGAnimateTransformElement",
+        "SVGAnimateMotionElement",
+    ] {
+        chain_proto(scope, global, name, &svg_animation_element);
+    }
     if svg_element.is_object() {
         ffi::install_members(scope, &svg_element, Members::Dataset);
     }

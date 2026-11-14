@@ -107,6 +107,7 @@ native_getters! {
     media_get_src_object => media::element::src_object,
     dialog_get_return_value => top_layer::dialog::get_return_value,
     element_get_owner_svg_element => geometry::svg::get_owner_svg_element,
+    element_get_smil_target_element => geometry::smil::get_target_element,
     element_get_whole_text => text::rendered::get_whole_text,
     element_get_offset_top => geometry::metrics::get_offset_top,
     element_get_offset_left => geometry::metrics::get_offset_left,

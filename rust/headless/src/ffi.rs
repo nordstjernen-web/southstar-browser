@@ -31,10 +31,10 @@ pub use engine::{
     VideoCache, anim_observe, apply_render_page_rule, collect_videos, compute_cascade,
     css_set_active_node, css_set_doc_language, css_set_print_media, css_set_target_fragment,
     css_set_viewport, decode_body, dump_layout, dump_text, error_page, fetch, fetch_images,
-    free_layout, hit_form_dom, hit_inline_dom, hit_link, image_document, json_document,
-    load_keyframes, navigate, node_dump, paint_set_anim, paint_set_js, print_setup_default,
-    relayout, restyle, suffix_before_ext, url_resolve, video_sources, write_pdf, write_pdf_paged,
-    write_png, xml_document,
+    free_layout, hit_form_dom, hit_inline_dom, hit_link, hit_svg_shape, image_document,
+    json_document, load_keyframes, navigate, node_dump, paint_set_anim, paint_set_js,
+    print_setup_default, relayout, restyle, suffix_before_ext, url_resolve, video_sources,
+    write_pdf, write_pdf_paged, write_png, xml_document,
 };
 pub use js::{
     DragSession, Js, NavigationTiming, bind_video_events, consume_mutated, eval_source, js_page,

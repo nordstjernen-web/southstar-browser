@@ -177,6 +177,9 @@ pub fn hit_node(root: BoxRef<'_>, x: f64, y: f64) -> Option<Node<'_>> {
     let hit = crate::tree::hit_test(root, x, y);
     let (local_x, local_y) = crate::tree::last_local();
     let mut target = hit.and_then(ffi::dom_of);
+    if let Some(shape) = hit.and_then(|hit| ffi::svg_shape_at(hit, local_x, local_y)) {
+        target = Some(shape);
+    }
     if let Some(m) = inline_dom(root, x, y) {
         target = Some(m);
     }

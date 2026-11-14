@@ -109,6 +109,9 @@ pub(crate) const HANDLER_NAMES: &[&str] = &[
     "onwebkitanimationstart",
     "onwebkittransitionend",
     "onwheel",
+    "onbegin",
+    "onend",
+    "onrepeat",
 ];
 
 const COMPILED_PREFIX: &str = "\u{fffd}";

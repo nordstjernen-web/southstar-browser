@@ -350,7 +350,7 @@ fn lone_point(ctx: &Ctx<'_>) -> Option<(f64, f64)> {
 }
 
 fn local_matrix(ctx: &mut Ctx<'_>, n: Node<'_>, st: &State) -> (Matrix, Matrix) {
-    let (mut local, _) = crate::parse::transform(n.attr(c"transform"));
+    let (mut local, _) = crate::local_transform(n);
     let mut viewport = Matrix::identity();
     if !name_is(n, b"svg") {
         return (local, viewport);

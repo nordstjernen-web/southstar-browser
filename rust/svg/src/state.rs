@@ -17,6 +17,7 @@ use crate::ffi::{
     JOIN_ROUND,
 };
 use crate::parse::{self, eq_ci, is_ws, starts_ci};
+use crate::smil;
 
 const DECL_MAX: usize = 256;
 
@@ -327,6 +328,12 @@ impl<'a> Ctx<'a> {
     }
 
     pub fn prop(&self, n: Node<'a>, name: &CStr) -> Option<Cow<'a, CStr>> {
+        if let Some(animated) = smil::attr(n, name) {
+            return Some(Cow::Owned(animated));
+        }
+        if self.animated_only.get() {
+            return None;
+        }
         let v = match style_decl(n, name) {
             Some(decl) => Cow::Owned(decl),
             None => Cow::Borrowed(n.attr(name)?),
@@ -365,25 +372,25 @@ impl<'a> Ctx<'a> {
         matches!(parent_color, Some(Value::Color(pc)) if pc == color)
     }
 
-    pub fn apply_node(&self, st: &mut State, n: Node<'a>) {
-        let s = self.style(n);
-        let basis = diag_basis(self.vw, self.vh);
-        let inherited_font_size = st.font_size;
-        let mut font_size_from_attr = false;
-
-        match s.and_then(|s| s.value(&COLOR)).map(|v| v.get()) {
-            Some(Value::Color(c)) => {
-                if !self.color_inherited_outside_instance(n, c) {
-                    st.color = unit_rgba(c);
-                }
-            }
-            _ => {
-                if let Some(c) = self.prop(n, c"color").and_then(|c| parse_color(&c)) {
-                    st.color = unit_rgba(c);
-                }
-            }
+    fn apply_color_attr(&self, st: &mut State, n: Node<'a>) {
+        if let Some(c) = self.prop(n, c"color").and_then(|c| parse_color(&c)) {
+            st.color = unit_rgba(c);
         }
+    }
 
+    fn apply_animated(&self, st: &mut State, n: Node<'a>, inherited_font_size: f64) {
+        if !smil::node_animated(n) {
+            return;
+        }
+        self.animated_only.set(true);
+        self.apply_color_attr(st, n);
+        self.apply_attrs(st, n, inherited_font_size);
+        self.animated_only.set(false);
+    }
+
+    fn apply_attrs(&self, st: &mut State, n: Node<'a>, inherited_font_size: f64) -> bool {
+        let basis = diag_basis(self.vw, self.vh);
+        let mut font_size_from_attr = false;
         let fs = |st: &State| st.font_size;
         if let Some(v) = self.prop(n, c"fill") {
             parse_paint(&v, st.color, &mut st.fill);
@@ -459,7 +466,24 @@ impl<'a> Ctx<'a> {
         if let Some(v) = self.prop(n, c"vector-effect") {
             st.non_scaling_stroke = eq_ci(v.to_bytes(), b"non-scaling-stroke");
         }
+        font_size_from_attr
+    }
 
+    pub fn apply_node(&self, st: &mut State, n: Node<'a>) {
+        let s = self.style(n);
+        let basis = diag_basis(self.vw, self.vh);
+        let inherited_font_size = st.font_size;
+
+        match s.and_then(|s| s.value(&COLOR)).map(|v| v.get()) {
+            Some(Value::Color(c)) => {
+                if !self.color_inherited_outside_instance(n, c) {
+                    st.color = unit_rgba(c);
+                }
+            }
+            _ => self.apply_color_attr(st, n),
+        }
+
+        let font_size_from_attr = self.apply_attrs(st, n, inherited_font_size);
         let Some(s) = s else {
             return;
         };
@@ -525,6 +549,7 @@ impl<'a> Ctx<'a> {
         if let Some(Value::Keyword(Some(family))) = s.value(&FONT_FAMILY).map(|v| v.get()) {
             st.font_family = Some(family.to_owned());
         }
+        self.apply_animated(st, n, inherited_font_size);
     }
 }
 

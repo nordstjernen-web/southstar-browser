@@ -31,6 +31,7 @@ southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.9-dev" }
 southstar-js-url = { path = "../js-url", version = "=1.0.9-dev" }
 southstar-js-window = { path = "../js-window", version = "=1.0.9-dev" }
 southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.9-dev" }
 southstar-video = { path = "../video", version = "=1.0.9-dev" }
 
 [lints]

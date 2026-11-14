@@ -122,12 +122,6 @@ pub(crate) fn observer_schedule_tick(js: Js) {
     api::observer_schedule_tick(js.0);
 }
 
-pub(crate) fn set_attr_recorded(js: Js, node: Element, name: &[u8], value: &[u8]) {
-    let name = CString::new(name).unwrap_or_default();
-    let value = CString::new(value).unwrap_or_default();
-    (api::mutation_hooks().set_attr_recorded)(js.0, node, &name, value.to_bytes());
-}
-
 pub(crate) fn find_by_dom<'a>(root: BoxRef<'a>, node: Element) -> Option<BoxRef<'a>> {
     crate::lookup::find_by_dom(root, node.as_ptr().cast())
 }

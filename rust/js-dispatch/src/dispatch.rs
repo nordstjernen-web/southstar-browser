@@ -78,6 +78,7 @@ pub(crate) fn dispatch_built(js: Js, target: Element, kind: &str, event: Value) 
     if js.is_null() {
         return (false, false);
     }
+    southstar_svg::smil::dom_event(target, kind.as_bytes());
     let saved_ctx = js.ctx();
     let target_doc = nearest_document(Some(target));
     let target_ctx = target_doc

@@ -39,6 +39,7 @@ southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default
 southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.9-dev" }
 southstar-js-window = { path = "../js-window", version = "=1.0.9-dev" }
 southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.9-dev" }
 southstar-layout-hit = { path = "../layout-hit", version = "=1.0.9-dev" }
 southstar-layout-query = { path = "../layout-query", version = "=1.0.9-dev" }
 southstar-net = { path = "../net", version = "=1.0.9-dev" }

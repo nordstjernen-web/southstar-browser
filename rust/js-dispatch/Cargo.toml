@@ -23,6 +23,7 @@ southstar-js-services = { path = "../js-services", version = "=1.0.9-dev" }
 southstar-js-shadow = { path = "../js-shadow", version = "=1.0.9-dev" }
 southstar-js-url = { path = "../js-url", version = "=1.0.9-dev" }
 southstar-js-window = { path = "../js-window", version = "=1.0.9-dev" }
+southstar-svg = { path = "../svg", version = "=1.0.9-dev" }
 
 [lints]
 workspace = true
