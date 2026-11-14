@@ -10,23 +10,23 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
-southstar-csp = { path = "../csp", version = "=1.0.9-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
-southstar-html-parser = { path = "../html-parser", version = "=1.0.9-dev" }
-southstar-js-collections = { path = "../js-collections", version = "=1.0.9-dev" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.9-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
-southstar-js-focus = { path = "../js-focus", version = "=1.0.9-dev" }
-southstar-js-frames = { path = "../js-frames", version = "=1.0.9-dev" }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.9-dev" }
-southstar-js-mutation = { path = "../js-mutation", version = "=1.0.9-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default-features = false }
-southstar-js-traversal = { path = "../js-traversal", version = "=1.0.9-dev" }
-southstar-js-window = { path = "../js-window", version = "=1.0.9-dev" }
-southstar-net = { path = "../net", version = "=1.0.9-dev" }
-southstar-url = { path = "../url", version = "=1.0.9-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-csp = { path = "../csp", version = "=1.0.9" }
+southstar-dom = { path = "../dom", version = "=1.0.9" }
+southstar-glib = { path = "../glib", version = "=1.0.9" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.9" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.9" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.9" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
+southstar-js-focus = { path = "../js-focus", version = "=1.0.9" }
+southstar-js-frames = { path = "../js-frames", version = "=1.0.9" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.9" }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.9" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9", default-features = false }
+southstar-js-traversal = { path = "../js-traversal", version = "=1.0.9" }
+southstar-js-window = { path = "../js-window", version = "=1.0.9" }
+southstar-net = { path = "../net", version = "=1.0.9" }
+southstar-url = { path = "../url", version = "=1.0.9" }
 
 [lints]
 workspace = true

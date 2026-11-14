@@ -13,9 +13,9 @@ homepage.workspace = true
 rust-shaper = ["dep:harfrust", "dep:png", "dep:read-fonts", "dep:skrifa"]
 
 [dependencies]
-southstar-bidi = { path = "../bidi", version = "=1.0.9-dev" }
-southstar-cairo = { path = "../cairo", version = "=1.0.9-dev" }
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-bidi = { path = "../bidi", version = "=1.0.9" }
+southstar-cairo = { path = "../cairo", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
 harfrust = { version = "0.15", optional = true, default-features = false, features = ["std"] }
 icu_segmenter = { version = "~2.3.0", default-features = false, features = ["compiled_data"] }
 png = { version = "0.18", optional = true, default-features = false }

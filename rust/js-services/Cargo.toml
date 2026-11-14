@@ -10,19 +10,19 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
-southstar-camera = { path = "../camera", version = "=1.0.9-dev" }
-southstar-config = { path = "../config", version = "=1.0.9-dev" }
-southstar-css-media = { path = "../css-media", version = "=1.0.9-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
-southstar-js-bind = { path = "../js-bind", version = "=1.0.9-dev", default-features = false }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
-southstar-js-net = { path = "../js-net", version = "=1.0.9-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default-features = false }
-southstar-mic = { path = "../mic", version = "=1.0.9-dev" }
-southstar-net = { path = "../net", version = "=1.0.9-dev" }
-southstar-netutil = { path = "../netutil", version = "=1.0.9-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-camera = { path = "../camera", version = "=1.0.9" }
+southstar-config = { path = "../config", version = "=1.0.9" }
+southstar-css-media = { path = "../css-media", version = "=1.0.9" }
+southstar-dom = { path = "../dom", version = "=1.0.9" }
+southstar-glib = { path = "../glib", version = "=1.0.9" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.9", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
+southstar-js-net = { path = "../js-net", version = "=1.0.9" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9", default-features = false }
+southstar-mic = { path = "../mic", version = "=1.0.9" }
+southstar-net = { path = "../net", version = "=1.0.9" }
+southstar-netutil = { path = "../netutil", version = "=1.0.9" }
 
 [lints]
 workspace = true

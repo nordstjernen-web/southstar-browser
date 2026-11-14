@@ -13,43 +13,43 @@ homepage.workspace = true
 libav = []
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
-southstar-anim = { path = "../anim", version = "=1.0.9-dev" }
-southstar-config = { path = "../config", version = "=1.0.9-dev" }
-southstar-css = { path = "../css", version = "=1.0.9-dev" }
-southstar-css-media = { path = "../css-media", version = "=1.0.9-dev" }
-southstar-debuglog = { path = "../debuglog", version = "=1.0.9-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.9-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
-southstar-forms = { path = "../forms", version = "=1.0.9-dev" }
-southstar-engine = { path = "../engine", version = "=1.0.9-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
-southstar-html-parser = { path = "../html-parser", version = "=1.0.9-dev" }
-southstar-html-util = { path = "../html-util", version = "=1.0.9-dev" }
-southstar-image = { path = "../image", version = "=1.0.9-dev" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.9-dev" }
-southstar-js-focus = { path = "../js-focus", version = "=1.0.9-dev" }
-southstar-js-forms = { path = "../js-forms", version = "=1.0.9-dev" }
-southstar-js-input = { path = "../js-input", version = "=1.0.9-dev" }
-southstar-js-lifecycle = { path = "../js-lifecycle", version = "=1.0.9-dev" }
-southstar-js-loader = { path = "../js-loader", version = "=1.0.9-dev" }
-southstar-js-media = { path = "../js-media", version = "=1.0.9-dev" }
-southstar-js-page = { path = "../js-page", version = "=1.0.9-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default-features = false }
-southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.9-dev" }
-southstar-js-window = { path = "../js-window", version = "=1.0.9-dev" }
-southstar-layout = { path = "../layout", version = "=1.0.9-dev" }
-southstar-svg = { path = "../svg", version = "=1.0.9-dev" }
-southstar-layout-hit = { path = "../layout-hit", version = "=1.0.9-dev" }
-southstar-layout-query = { path = "../layout-query", version = "=1.0.9-dev" }
-southstar-net = { path = "../net", version = "=1.0.9-dev" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.9-dev" }
-southstar-paint = { path = "../paint", version = "=1.0.9-dev" }
-southstar-renderer-client = { path = "../renderer-client", version = "=1.0.9-dev" }
-southstar-renderer-host = { path = "../renderer-host", version = "=1.0.9-dev" }
-southstar-style = { path = "../style", version = "=1.0.9-dev" }
-southstar-url = { path = "../url", version = "=1.0.9-dev" }
-southstar-video = { path = "../video", version = "=1.0.9-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-anim = { path = "../anim", version = "=1.0.9" }
+southstar-config = { path = "../config", version = "=1.0.9" }
+southstar-css = { path = "../css", version = "=1.0.9" }
+southstar-css-media = { path = "../css-media", version = "=1.0.9" }
+southstar-debuglog = { path = "../debuglog", version = "=1.0.9" }
+southstar-digest = { path = "../digest", version = "=1.0.9" }
+southstar-dom = { path = "../dom", version = "=1.0.9" }
+southstar-forms = { path = "../forms", version = "=1.0.9" }
+southstar-engine = { path = "../engine", version = "=1.0.9" }
+southstar-glib = { path = "../glib", version = "=1.0.9" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.9" }
+southstar-html-util = { path = "../html-util", version = "=1.0.9" }
+southstar-image = { path = "../image", version = "=1.0.9" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.9" }
+southstar-js-focus = { path = "../js-focus", version = "=1.0.9" }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.9" }
+southstar-js-input = { path = "../js-input", version = "=1.0.9" }
+southstar-js-lifecycle = { path = "../js-lifecycle", version = "=1.0.9" }
+southstar-js-loader = { path = "../js-loader", version = "=1.0.9" }
+southstar-js-media = { path = "../js-media", version = "=1.0.9" }
+southstar-js-page = { path = "../js-page", version = "=1.0.9" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9", default-features = false }
+southstar-js-top-layer = { path = "../js-top-layer", version = "=1.0.9" }
+southstar-js-window = { path = "../js-window", version = "=1.0.9" }
+southstar-layout = { path = "../layout", version = "=1.0.9" }
+southstar-svg = { path = "../svg", version = "=1.0.9" }
+southstar-layout-hit = { path = "../layout-hit", version = "=1.0.9" }
+southstar-layout-query = { path = "../layout-query", version = "=1.0.9" }
+southstar-net = { path = "../net", version = "=1.0.9" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.9" }
+southstar-paint = { path = "../paint", version = "=1.0.9" }
+southstar-renderer-client = { path = "../renderer-client", version = "=1.0.9" }
+southstar-renderer-host = { path = "../renderer-host", version = "=1.0.9" }
+southstar-style = { path = "../style", version = "=1.0.9" }
+southstar-url = { path = "../url", version = "=1.0.9" }
+southstar-video = { path = "../video", version = "=1.0.9" }
 
 [lints]
 workspace = true

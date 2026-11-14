@@ -10,14 +10,14 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-css = { path = "../css", version = "=1.0.9-dev" }
-southstar-dom = { path = "../dom", version = "=1.0.9-dev" }
-southstar-js-collections = { path = "../js-collections", version = "=1.0.9-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
-southstar-js-mutation = { path = "../js-mutation", version = "=1.0.9-dev" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9-dev", default-features = false }
-southstar-style = { path = "../style", version = "=1.0.9-dev" }
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
+southstar-css = { path = "../css", version = "=1.0.9" }
+southstar-dom = { path = "../dom", version = "=1.0.9" }
+southstar-js-collections = { path = "../js-collections", version = "=1.0.9" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
+southstar-js-mutation = { path = "../js-mutation", version = "=1.0.9" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9", default-features = false }
+southstar-style = { path = "../style", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
 
 [lints]
 workspace = true

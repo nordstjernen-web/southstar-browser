@@ -9,7 +9,7 @@
 
   <groupId>org.southstar</groupId>
   <artifactId>southstar-java</artifactId>
-  <version>1.0.9-dev</version>
+  <version>1.0.9</version>
   <packaging>jar</packaging>
 
   <name>Southstar for Java</name>
