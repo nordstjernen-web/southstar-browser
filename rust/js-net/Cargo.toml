@@ -10,18 +10,18 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
-southstar-csp = { path = "../csp", version = "=1.0.9" }
-southstar-eventsource = { path = "../eventsource", version = "=1.0.9" }
-southstar-glib = { path = "../glib", version = "=1.0.9" }
-southstar-js-bind = { path = "../js-bind", version = "=1.0.9", default-features = false }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.9" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9", default-features = false }
-southstar-js-url = { path = "../js-url", version = "=1.0.9" }
-southstar-net = { path = "../net", version = "=1.0.9" }
-southstar-url = { path = "../url", version = "=1.0.9" }
-southstar-websocket = { path = "../websocket", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
+southstar-csp = { path = "../csp", version = "=1.0.10-dev" }
+southstar-eventsource = { path = "../eventsource", version = "=1.0.10-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.10-dev" }
+southstar-js-bind = { path = "../js-bind", version = "=1.0.10-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.10-dev", default-features = false }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.10-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.10-dev", default-features = false }
+southstar-js-url = { path = "../js-url", version = "=1.0.10-dev" }
+southstar-net = { path = "../net", version = "=1.0.10-dev" }
+southstar-url = { path = "../url", version = "=1.0.10-dev" }
+southstar-websocket = { path = "../websocket", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true

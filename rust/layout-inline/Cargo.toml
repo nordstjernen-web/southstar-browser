@@ -10,18 +10,18 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-css = { path = "../css", version = "=1.0.9" }
-southstar-dom = { path = "../dom", version = "=1.0.9" }
-southstar-layout = { path = "../layout", version = "=1.0.9" }
-southstar-layout-build = { path = "../layout-build", version = "=1.0.9" }
-southstar-layout-content = { path = "../layout-content", version = "=1.0.9" }
-southstar-layout-float = { path = "../layout-float", version = "=1.0.9" }
-southstar-layout-geom = { path = "../layout-geom", version = "=1.0.9" }
-southstar-layout-sizing = { path = "../layout-sizing", version = "=1.0.9" }
-southstar-layout-tree = { path = "../layout-tree", version = "=1.0.9" }
-southstar-mathml = { path = "../mathml", version = "=1.0.9" }
-southstar-paint = { path = "../paint", version = "=1.0.9" }
-southstar-style = { path = "../style", version = "=1.0.9" }
+southstar-css = { path = "../css", version = "=1.0.10-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.10-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.10-dev" }
+southstar-layout-build = { path = "../layout-build", version = "=1.0.10-dev" }
+southstar-layout-content = { path = "../layout-content", version = "=1.0.10-dev" }
+southstar-layout-float = { path = "../layout-float", version = "=1.0.10-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.10-dev" }
+southstar-layout-sizing = { path = "../layout-sizing", version = "=1.0.10-dev" }
+southstar-layout-tree = { path = "../layout-tree", version = "=1.0.10-dev" }
+southstar-mathml = { path = "../mathml", version = "=1.0.10-dev" }
+southstar-paint = { path = "../paint", version = "=1.0.10-dev" }
+southstar-style = { path = "../style", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true

@@ -13,11 +13,11 @@ homepage.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.9", features = ["scale"] }
-southstar-media-shm = { path = "../media-shm", version = "=1.0.9" }
+southstar-av = { path = "../av", version = "=1.0.10-dev", features = ["scale"] }
+southstar-media-shm = { path = "../media-shm", version = "=1.0.10-dev" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.9" }
+southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.10-dev" }
 
 [features]
 seccomp = ["southstar-helper-ffi/seccomp"]

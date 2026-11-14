@@ -10,15 +10,15 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
-southstar-cairo = { path = "../cairo", version = "=1.0.9" }
-southstar-config = { path = "../config", version = "=1.0.9" }
-southstar-dom = { path = "../dom", version = "=1.0.9" }
-southstar-glctx = { path = "../glctx", version = "=1.0.9" }
-southstar-canvas = { path = "../canvas", version = "=1.0.9", default-features = false }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9" }
-southstar-url = { path = "../url", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.10-dev" }
+southstar-config = { path = "../config", version = "=1.0.10-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.10-dev" }
+southstar-glctx = { path = "../glctx", version = "=1.0.10-dev" }
+southstar-canvas = { path = "../canvas", version = "=1.0.10-dev", default-features = false }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.10-dev", default-features = false }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.10-dev" }
+southstar-url = { path = "../url", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true

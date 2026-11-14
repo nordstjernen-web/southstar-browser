@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-datetime = { path = "../datetime", version = "=1.0.9" }
-southstar-glib = { path = "../glib", version = "=1.0.9" }
-southstar-html-util = { path = "../html-util", version = "=1.0.9" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.9" }
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
-southstar-url = { path = "../url", version = "=1.0.9" }
+southstar-datetime = { path = "../datetime", version = "=1.0.10-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.10-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.10-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.10-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
+southstar-url = { path = "../url", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true
