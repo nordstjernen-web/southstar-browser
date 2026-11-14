@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.9-dev:
+Southstar Browser 1.0.9:
 ======
 * SVG: SMIL animation runs. `<animate>`, `<set>`, `<animateTransform>` and
   `<animateMotion>` (with `path`, `<mpath>` or `values`, and `rotate`) used

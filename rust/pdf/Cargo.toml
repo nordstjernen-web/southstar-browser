@@ -10,10 +10,10 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.9-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
-southstar-html-util = { path = "../html-util", version = "=1.0.9-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-digest = { path = "../digest", version = "=1.0.9" }
+southstar-glib = { path = "../glib", version = "=1.0.9" }
+southstar-html-util = { path = "../html-util", version = "=1.0.9" }
 
 [features]
 poppler = []

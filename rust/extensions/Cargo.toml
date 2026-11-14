@@ -10,13 +10,13 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-psl = { path = "../psl", version = "=1.0.9-dev" }
-southstar-unicode = { path = "../unicode", version = "=1.0.9-dev" }
-southstar-config = { path = "../config", version = "=1.0.9-dev" }
-southstar-digest = { path = "../digest", version = "=1.0.9-dev" }
-southstar-glib = { path = "../glib", version = "=1.0.9-dev" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9-dev", default-features = false }
-regress = { package = "southstar-regress", path = "../../third_party/regress", version = "=1.0.9-dev" }
+southstar-psl = { path = "../psl", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-config = { path = "../config", version = "=1.0.9" }
+southstar-digest = { path = "../digest", version = "=1.0.9" }
+southstar-glib = { path = "../glib", version = "=1.0.9" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
+regress = { package = "southstar-regress", path = "../../third_party/regress", version = "=1.0.9" }
 
 [lints]
 workspace = true
