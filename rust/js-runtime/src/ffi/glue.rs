@@ -212,6 +212,10 @@ pub(crate) fn orphan_count(js: Js) -> usize {
     (api::mutation_hooks().orphan_count)(js.page())
 }
 
+pub(crate) fn orphans_snapshot(js: Js) -> Option<Vec<Node<'static>>> {
+    (api::mutation_hooks().orphans_snapshot)(js.page())
+}
+
 pub(crate) fn collect_orphans(js: Js) -> Vec<Node<'static>> {
     (api::mutation_hooks().collect_orphans)(js.page())
 }

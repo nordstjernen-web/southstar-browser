@@ -206,7 +206,7 @@ impl SharedShape {
         let new_shape = Self::new(new_inner_shape);
 
         self.forward_transitions()
-            .insert_prototype(prototype, &new_shape.inner);
+            .insert_prototype(&prototype, &new_shape.inner);
 
         new_shape
     }

@@ -113,10 +113,7 @@ fn run_global_bootstrap(
     }
     let url = initial_url_value(fctx, initial_url);
     let platform = owner::platform_names(js, fctx);
-    let frame_element = match iframe {
-        Some(iframe) => ffi::make_element(ffi::current_realm(js), iframe),
-        None => Value::null(),
-    };
+    let frame_element = ffi::frame_element_function(js, fctx, iframe);
     let frame_name = iframe
         .and_then(|iframe| iframe.attr(c"name"))
         .map_or(&b""[..], |name| name.to_bytes());
@@ -155,6 +152,15 @@ fn run_global_bootstrap(
     result.is_object().then_some(())
 }
 
+pub(crate) fn discard(js: Js, realm: Ctx) {
+    let cloner = page::peek_mut(js, |page| {
+        page.initial_blank.retain(|_, blank| *blank != realm);
+        page.cloners.remove(&realm)
+    });
+    drop(cloner);
+    ffi::retire_frame_context(js, realm);
+}
+
 pub(crate) fn make_realm_context(
     js: Js,
     iframe: Option<Node<'_>>,
@@ -171,8 +177,12 @@ pub(crate) fn make_realm_context(
         None => {
             let fctx = ffi::new_frame_context(js)?;
             if let Some(iframe) = iframe {
-                page::update_frame(js, frame_of(iframe), |entry| entry.realm = Some(fctx));
+                let replaced =
+                    page::update_frame(js, frame_of(iframe), |entry| entry.realm.replace(fctx));
                 ffi::move_timeline(js, iframe, fctx);
+                if let Some(replaced) = replaced {
+                    discard(js, replaced);
+                }
             }
             fctx
         }

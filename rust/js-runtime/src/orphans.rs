@@ -28,6 +28,9 @@ pub(crate) fn sweep(js: Js) {
         return;
     }
     state.last_orphan_sweep_us.set(now);
+    if let Some(roots) = glue::orphans_snapshot(js) {
+        ffi::record::release_unreachable_orphans(js.some(), &roots);
+    }
     glue::run_gc(js);
     for root in glue::collect_orphans(js) {
         glue::free_orphan_subtree(js, root);

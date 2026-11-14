@@ -306,6 +306,17 @@ impl<T: Trace + ?Sized> Gc<T> {
 
     #[inline(always)]
     #[allow(clippy::inline_always)]
+    /// Stops one handle to the allocation from counting as a root, inside [`crate::mark_without`].
+    pub fn discount_handle(this: &Self) {
+        this.inner().inc_non_root_count();
+    }
+
+    /// Returns whether the allocation was reached, inside [`crate::mark_without`].
+    #[must_use]
+    pub fn is_marked(this: &Self) -> bool {
+        this.inner().is_marked()
+    }
+
     pub(crate) fn inner_ptr(&self) -> NonNull<GcBox<T>> {
         debug_assert!(finalizer_safe());
         self.inner_ptr

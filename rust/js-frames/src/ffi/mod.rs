@@ -164,6 +164,10 @@ pub(crate) fn new_frame_context(js: Js) -> Option<Ctx> {
     Ctx::from_handle(api::new_frame_context(js.ptr()))
 }
 
+pub(crate) fn retire_frame_context(js: Js, ctx: Ctx) {
+    api::retire_frame_context(js.ptr(), ctx.handle());
+}
+
 pub(crate) fn move_timeline(js: Js, frame: Node<'_>, ctx: Ctx) {
     southstar_js_perf::move_frame_timeline(js.ptr(), frame, ctx.handle());
 }
@@ -407,18 +411,53 @@ fn navigate_own_frame(
     Ok(Value::boolean(true))
 }
 
-pub(crate) fn navigate_frame_function(js: Js, ctx: Ctx, frame: Option<Node<'_>>) -> Value {
-    let Some(frame) = frame.filter(|_| !js.is_null()) else {
-        return Value::undefined();
-    };
-    let id = page::with(js, |page| {
+fn register_frame(js: Js, frame: Node<'_>) -> i32 {
+    page::with(js, |page| {
         page.navigators
             .retain(|_, known| frame_node(*known).is_some());
         let id = page.next_navigator;
         page.next_navigator = page.next_navigator.wrapping_add(1);
         page.navigators.insert(id, crate::realm::frame_of(frame));
         id
-    });
+    })
+}
+
+fn own_frame_element(
+    scope: &mut Scope<'_>,
+    _this: &Value,
+    _args: &[Value],
+    data: &[Value],
+) -> JsResult {
+    let Some(id) = data.first() else {
+        return Ok(Value::null());
+    };
+    let id = scope.to_int32(id)?;
+    let js = Js::of_ctx(scope_ctx(scope));
+    if js.is_null() {
+        return Ok(Value::null());
+    }
+    let frame = page::peek(js, |page| page.navigators.get(&id).copied())
+        .flatten()
+        .and_then(frame_node);
+    Ok(match frame {
+        Some(frame) => make_element(current_realm(js), frame),
+        None => Value::null(),
+    })
+}
+
+pub(crate) fn frame_element_function(js: Js, ctx: Ctx, frame: Option<Node<'_>>) -> Value {
+    let Some(frame) = frame.filter(|_| !js.is_null()) else {
+        return Value::null();
+    };
+    let id = register_frame(js, frame);
+    ctx.enter(|scope| scope.bound_function("frameElement", 0, own_frame_element, &[Value::int(id)]))
+}
+
+pub(crate) fn navigate_frame_function(js: Js, ctx: Ctx, frame: Option<Node<'_>>) -> Value {
+    let Some(frame) = frame.filter(|_| !js.is_null()) else {
+        return Value::undefined();
+    };
+    let id = register_frame(js, frame);
     ctx.enter(|scope| scope.bound_function("navigate", 1, navigate_own_frame, &[Value::int(id)]))
 }
 
@@ -457,12 +496,11 @@ fn forget_node(js: Option<Page>, node: Node<'_>) {
     if js.is_null() {
         return;
     }
-    page::peek_mut(js, |page| {
-        if let Some(entry) = page.frames.get_mut(&crate::realm::frame_of(node)) {
-            entry.url = None;
-            entry.referrer = None;
-        }
-    });
+    let frame = crate::realm::frame_of(node);
+    let entry = page::peek_mut(js, |page| page.frames.remove(&frame)).flatten();
+    if let Some(realm) = entry.and_then(|entry| entry.realm) {
+        realm::discard(js, realm);
+    }
 }
 
 fn teardown(js: Option<Page>) {

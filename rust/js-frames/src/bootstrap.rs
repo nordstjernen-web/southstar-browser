@@ -139,7 +139,7 @@ pub(crate) const SCOPE: &str = concat!(
 );
 
 pub(crate) const GLOBAL: &str = concat!(
-    "(function(G, realWin, iframeDoc, initialURL, sandbox, platformNames, frameEl, frameName, crossWindow, framePostMessage, docURL, realmClone, windowEvents, navigate, nativeNames, runBundled){",
+    "(function(G, realWin, iframeDoc, initialURL, sandbox, platformNames, frameElOf, frameName, crossWindow, framePostMessage, docURL, realmClone, windowEvents, navigate, nativeNames, runBundled){",
     "  var url = initialURL || 'about:blank';",
     "  var shown = docURL || '';",
     "  function vis(){ return shown || url; }",
@@ -293,11 +293,13 @@ pub(crate) const GLOBAL: &str = concat!(
     "      Object.defineProperty(iframeDoc, k, { configurable: true, enumerable: true, value: shared });",
     "    });",
     "  } catch (e) {}",
-    "  def('frameElement', { value: crossOrigin ? null : (frameEl || null), writable: true });",
+    "  def('frameElement', {",
+    "    get: function(){ return crossOrigin || !frameElOf ? null : (frameElOf() || null); },",
+    "    set: function(v){ Object.defineProperty(G, 'frameElement', { value: v, writable: true, configurable: true }); } });",
     "  function frameSize(prop, fallback){",
     "    return { configurable: true, enumerable: true,",
     "      get: function(){",
-    "        try { var v = frameEl && frameEl[prop]; if (typeof v === 'number' && v >= 0) return v; } catch (e) {}",
+    "        try { var el = frameElOf && frameElOf(), v = el && el[prop]; if (typeof v === 'number' && v >= 0) return v; } catch (e) {}",
     "        var outer = realWin[fallback]; return typeof outer === 'number' ? outer : 0; },",
     "      set: function(v){ Object.defineProperty(G, fallback, { value: v, writable: true, configurable: true, enumerable: true }); } };",
     "  }",

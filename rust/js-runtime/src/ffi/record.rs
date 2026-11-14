@@ -157,7 +157,7 @@ pub(crate) struct Record {
     pristine_promise: RefCell<Value>,
     remote_helper: RefCell<Value>,
     layout_root: Cell<Option<BoxRef<'static>>>,
-    pinned_wrappers_set: RefCell<Option<HashMap<WeakNode, Value>>>,
+    pinned_wrappers_set: RefCell<Option<HashMap<WeakNode, Pinned>>>,
     cookie_value: RefCell<Option<CString>>,
     cookie_version: Cell<u64>,
     cookie_buckets: RefCell<Option<HashMap<CString, CString>>>,
@@ -333,16 +333,164 @@ pub(crate) fn has_pinned_set(js: Option<Page>) -> bool {
     record(js).is_some_and(|js| js.pinned_wrappers_set.borrow().is_some())
 }
 
-pub(crate) fn pin_wrapper(js: Option<Page>, n: Node<'_>, wrapper: &Value) -> bool {
+struct Pinned {
+    wrapper: Value,
+    realm: ContextHandle,
+}
+
+pub(crate) fn pin_wrapper(
+    js: Option<Page>,
+    n: Node<'_>,
+    wrapper: &Value,
+    realm: ContextHandle,
+) -> bool {
     let Some(js) = record(js) else {
         return false;
+    };
+    let pinned = Pinned {
+        wrapper: wrapper.clone(),
+        realm,
     };
     let previous = js
         .pinned_wrappers_set
         .borrow_mut()
         .as_mut()
-        .map(|set| set.insert(n.downgrade(), wrapper.clone()));
+        .map(|set| set.insert(n.downgrade(), pinned));
     previous.is_some()
+}
+
+fn in_document(node: Node<'_>, document: Option<Node<'_>>) -> bool {
+    let root = core::iter::successors(Some(node), |n| n.parent()).last();
+    root.is_some() && root == document
+}
+
+const LOADING_ELEMENTS: [&[u8]; 10] = [
+    b"img", b"image", b"script", b"link", b"audio", b"video", b"source", b"track", b"object",
+    b"embed",
+];
+
+struct Wrapped {
+    own: Vec<Node<'static>>,
+    framed: Vec<Node<'static>>,
+    loads: bool,
+}
+
+fn subtree_wrapped(root: Node<'static>) -> Wrapped {
+    let mut wrapped = Wrapped {
+        own: Vec::new(),
+        framed: Vec::new(),
+        loads: false,
+    };
+    let mut pending = vec![(root, false)];
+    while let Some((node, in_frame)) = pending.pop() {
+        if !in_frame
+            && node
+                .element_name()
+                .is_some_and(|name| LOADING_ELEMENTS.contains(&name))
+        {
+            wrapped.loads = true;
+        }
+        if node.has_js_wrapper() {
+            if in_frame {
+                wrapped.framed.push(node);
+            } else {
+                wrapped.own.push(node);
+            }
+        }
+        pending.extend(node.tpl_content().map(|content| (content, in_frame)));
+        pending.extend(southstar_dom::children(node).map(|child| {
+            let framed = in_frame || matches!(child.kind(), Kind::Document);
+            (child, framed)
+        }));
+    }
+    wrapped
+}
+
+pub(crate) fn release_unreachable_orphans(js: Option<Page>, roots: &[Node<'static>]) {
+    let Some(record) = record(js) else {
+        return;
+    };
+    let trees: Vec<Wrapped> = roots
+        .iter()
+        .filter(|root| root.parent().is_none())
+        .map(|&root| subtree_wrapped(root))
+        .filter(|tree| !tree.loads && (!tree.own.is_empty() || !tree.framed.is_empty()))
+        .collect();
+    if trees.is_empty() {
+        return;
+    }
+    let released: Vec<(Node<'static>, Option<Pinned>)> = {
+        let mut pinned = record.pinned_wrappers_set.borrow_mut();
+        let Some(set) = pinned.as_mut() else {
+            return;
+        };
+        let unreachable: Vec<bool> = southstar_js_engine::mark_without(
+            || {
+                for node in trees
+                    .iter()
+                    .flat_map(|tree| tree.own.iter().chain(&tree.framed))
+                {
+                    if let Some(pinned) = set.get(&node.downgrade()) {
+                        pinned.wrapper.discount_handle();
+                    }
+                }
+            },
+            || {
+                trees
+                    .iter()
+                    .map(|tree| {
+                        tree.own.iter().all(|node| {
+                            set.get(&node.downgrade())
+                                .is_some_and(|pinned| !pinned.wrapper.is_marked())
+                        })
+                    })
+                    .collect()
+            },
+        );
+        trees
+            .iter()
+            .zip(unreachable)
+            .filter(|(_, unreachable)| *unreachable)
+            .flat_map(|(tree, _)| tree.own.iter().chain(&tree.framed))
+            .map(|node| (*node, set.remove(&node.downgrade())))
+            .collect()
+    };
+    for (node, pinned) in released {
+        detach_wrapper(&record, node, pinned.map(|pinned| pinned.wrapper));
+    }
+}
+
+pub(crate) fn release_realm_wrappers(js: Option<Page>, realm: ContextHandle) {
+    let Some(record) = record(js) else {
+        return;
+    };
+    let document = record.ce_main_doc();
+    if document.is_none() {
+        return;
+    }
+    let released: Vec<(WeakNode, Pinned)> = {
+        let mut pinned = record.pinned_wrappers_set.borrow_mut();
+        let Some(set) = pinned.as_mut() else {
+            return;
+        };
+        let detached: Vec<WeakNode> = set
+            .iter()
+            .filter(|(node, pinned)| {
+                pinned.realm == realm && !node.get().is_some_and(|n| in_document(n, document))
+            })
+            .map(|(node, _)| *node)
+            .collect();
+        detached
+            .into_iter()
+            .filter_map(|node| set.remove(&node).map(|pinned| (node, pinned)))
+            .collect()
+    };
+    for (node, pinned) in released {
+        if let (Some(page), Some(node)) = (js, node.get()) {
+            (crate::api::dispatch_hooks().forget_node)(page, node);
+        }
+        drop(pinned);
+    }
 }
 
 pub(crate) fn unpin_wrapper(js: Option<Page>, n: Node<'_>) -> bool {
@@ -362,7 +510,11 @@ pub(crate) fn take_pinned_wrappers(js: Option<Page>) -> Vec<(WeakNode, Value)> {
         js.pinned_wrappers_set
             .borrow_mut()
             .as_mut()
-            .map_or_else(Vec::new, |set| set.drain().collect())
+            .map_or_else(Vec::new, |set| {
+                set.drain()
+                    .map(|(key, pinned)| (key, pinned.wrapper))
+                    .collect()
+            })
     })
 }
 
@@ -373,7 +525,7 @@ fn pinned_wrappers(js: Option<Page>) -> Vec<(WeakNode, Value)> {
             .as_ref()
             .map_or_else(Vec::new, |set| {
                 set.iter()
-                    .map(|(key, wrapper)| (*key, wrapper.clone()))
+                    .map(|(key, pinned)| (*key, pinned.wrapper.clone()))
                     .collect()
             })
     })
@@ -1125,6 +1277,18 @@ pub(crate) fn free_frame_contexts(js: Option<Page>) {
     for ctx in frames.unwrap_or_default() {
         ctx.free();
     }
+}
+
+pub(crate) fn retire_frame_context(js: Option<Page>, ctx: ContextHandle) {
+    let Some(record) = record(js) else {
+        return;
+    };
+    if let Some(frames) = record.frame_ctxs.borrow_mut().as_mut() {
+        frames.retain(|frame| *frame != ctx);
+    }
+    drop(record);
+    release_realm_wrappers(js, ctx);
+    ctx.retire();
 }
 
 pub(crate) fn frame_context_count(js: Option<Page>) -> u32 {

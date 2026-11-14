@@ -497,6 +497,10 @@ pub fn free_frame_contexts(js: Option<Page>) {
     record::free_frame_contexts(js);
 }
 
+pub fn retire_frame_context(js: Option<Page>, ctx: ContextHandle) {
+    record::retire_frame_context(js, ctx);
+}
+
 pub fn new_frame_context(js: Option<Page>) -> ContextHandle {
     record::new_frame_context(js)
 }
