@@ -10,21 +10,21 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
-southstar-cairo = { path = "../cairo", version = "=1.0.9" }
-southstar-css = { path = "../css", version = "=1.0.9" }
-southstar-digest = { path = "../digest", version = "=1.0.9" }
-southstar-dom = { path = "../dom", version = "=1.0.9" }
-southstar-glib = { path = "../glib", version = "=1.0.9" }
-southstar-image = { path = "../image", version = "=1.0.9" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
-southstar-js-images = { path = "../js-images", version = "=1.0.9" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9" }
-southstar-layout = { path = "../layout", version = "=1.0.9" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.9" }
-southstar-text = { path = "../text", version = "=1.0.9" }
-southstar-texture = { path = "../texture", version = "=1.0.9" }
-southstar-video = { path = "../video", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
+southstar-cairo = { path = "../cairo", version = "=1.0.10-dev" }
+southstar-css = { path = "../css", version = "=1.0.10-dev" }
+southstar-digest = { path = "../digest", version = "=1.0.10-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.10-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.10-dev" }
+southstar-image = { path = "../image", version = "=1.0.10-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.10-dev", default-features = false }
+southstar-js-images = { path = "../js-images", version = "=1.0.10-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.10-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.10-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.10-dev" }
+southstar-text = { path = "../text", version = "=1.0.10-dev" }
+southstar-texture = { path = "../texture", version = "=1.0.10-dev" }
+southstar-video = { path = "../video", version = "=1.0.10-dev" }
 
 [features]
 webgpu = []

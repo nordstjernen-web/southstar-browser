@@ -10,8 +10,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
-southstar-dom = { path = "../dom", version = "=1.0.9" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
+southstar-dom = { path = "../dom", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true

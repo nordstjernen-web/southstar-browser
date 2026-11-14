@@ -10,12 +10,12 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-css-color = { path = "../css-color", version = "=1.0.9" }
-southstar-css-media = { path = "../css-media", version = "=1.0.9" }
-southstar-css-syntax = { path = "../css-syntax", version = "=1.0.9" }
-southstar-glib = { path = "../glib", version = "=1.0.9" }
-southstar-numfmt = { path = "../numfmt", version = "=1.0.9" }
-southstar-unicode = { path = "../unicode", version = "=1.0.9" }
+southstar-css-color = { path = "../css-color", version = "=1.0.10-dev" }
+southstar-css-media = { path = "../css-media", version = "=1.0.10-dev" }
+southstar-css-syntax = { path = "../css-syntax", version = "=1.0.10-dev" }
+southstar-glib = { path = "../glib", version = "=1.0.10-dev" }
+southstar-numfmt = { path = "../numfmt", version = "=1.0.10-dev" }
+southstar-unicode = { path = "../unicode", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true

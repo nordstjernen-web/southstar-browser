@@ -10,17 +10,17 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.9" }
-southstar-js-cssom = { path = "../js-cssom", version = "=1.0.9" }
-southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.9" }
-southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.9" }
-southstar-js-shadow = { path = "../js-shadow", version = "=1.0.9" }
-southstar-js-engine = { path = "../js-engine", version = "=1.0.9", default-features = false }
-southstar-js-forms = { path = "../js-forms", version = "=1.0.9" }
-southstar-js-net = { path = "../js-net", version = "=1.0.9" }
-southstar-js-perf = { path = "../js-perf", version = "=1.0.9" }
-southstar-js-runtime = { path = "../js-runtime", version = "=1.0.9" }
-southstar-js-services = { path = "../js-services", version = "=1.0.9" }
+southstar-dom = { path = "../dom", version = "=1.0.10-dev" }
+southstar-js-cssom = { path = "../js-cssom", version = "=1.0.10-dev" }
+southstar-js-custom-elements = { path = "../js-custom-elements", version = "=1.0.10-dev" }
+southstar-js-dispatch = { path = "../js-dispatch", version = "=1.0.10-dev" }
+southstar-js-shadow = { path = "../js-shadow", version = "=1.0.10-dev" }
+southstar-js-engine = { path = "../js-engine", version = "=1.0.10-dev", default-features = false }
+southstar-js-forms = { path = "../js-forms", version = "=1.0.10-dev" }
+southstar-js-net = { path = "../js-net", version = "=1.0.10-dev" }
+southstar-js-perf = { path = "../js-perf", version = "=1.0.10-dev" }
+southstar-js-runtime = { path = "../js-runtime", version = "=1.0.10-dev" }
+southstar-js-services = { path = "../js-services", version = "=1.0.10-dev" }
 
 [lints]
 workspace = true
