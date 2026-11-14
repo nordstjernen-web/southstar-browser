@@ -3,6 +3,32 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* WebAssembly works inside frames. A frame got a copy of the top page's
+  `WebAssembly` object, whose constructors made objects with the top
+  page's prototypes, so `new WebAssembly.Memory(...) instanceof
+  WebAssembly.Memory` was false in a frame (likewise `Table`, `Global`,
+  `Module`, `Instance`, and the memory's `buffer` against the frame's
+  `ArrayBuffer`). Emscripten checks exactly that and gives up; each
+  frame realm now has its own `WebAssembly`. JetStream 2's WebAssembly
+  tests, which hung, run to a score.
+* A frame that was never loaded and is filled with `document.write`
+  takes its embedder's address as its base, as a loaded `about:blank`
+  frame does. Without one a `blob:` URL could not be matched to its
+  origin there, so `new Worker(blobURL)` fired `error` and an
+  `XMLHttpRequest` for it never finished (JetStream 2's worker tests
+  hung), and `location.href` read as the embedder's address instead of
+  `about:blank`.
+* `canvas.getContext("bitmaprenderer")` returns an
+  `ImageBitmapRenderingContext` whose `transferFromImageBitmap()` shows
+  the bitmap and detaches it (`null` clears the canvas).
+* Text: the Unicode category, line-break class and script of code points
+  below U+0300 are read from a direct table instead of a binary search
+  (the category lookup alone was 1.8% of a Speedometer 3.1 run).
+* Docs: the README's Roadmap section is gone and its facts are checked
+  against the tree: 39 interface translations, not 13; 164 crates and
+  about 390,000 lines; no `thai` cargo feature; MSYS2 UCRT64, not
+  MINGW64; the regress fork is listed; the screenshot shows Duck.ai.
+  `docs/Windows.md` linked another browser's Store page.
 * Memory: DOM nodes and frame realms that no script can reach are freed
   while the page lives, not only when it is closed. Three things kept
   them: the JavaScript engine's shape table held every prototype object

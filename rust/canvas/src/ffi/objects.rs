@@ -232,6 +232,19 @@ pub(crate) fn ctx2d_new(
     obj
 }
 
+pub(crate) fn bitmap_renderer_new(scope: &mut Scope<'_>, el: Node, canvas: &Value) -> Value {
+    let realm = canvas_realm(scope, el);
+    let obj = new_in_realm(
+        scope,
+        realm,
+        hidden::KIND_BITMAP_RENDERER,
+        "ImageBitmapRenderingContext",
+    );
+    hidden::set_node(&obj, el);
+    hidden::set(scope, &obj, "canvas", canvas.clone());
+    obj
+}
+
 pub(crate) fn offscreen_node(obj: &Value) -> Node {
     if hidden::is(obj, hidden::KIND_OFFSCREEN) {
         hidden::node(obj)

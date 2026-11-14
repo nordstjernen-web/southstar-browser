@@ -12,7 +12,7 @@ and JavaScript standards, written in Rust.
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).
 
-![Southstar Browser showing Google Finance](docs/screenshot.png)
+![Southstar Browser showing Duck.ai](docs/screenshot.png)
 
 **JavaScript engine:** Southstar runs page JavaScript on
 [Boa](https://github.com/boa-dev/boa), a JavaScript engine written in Rust
@@ -49,30 +49,13 @@ web-platform-tests slice passes 95% of its subtests
 **Security.** Each tab's engine runs in its own sandboxed process (seccomp +
 Landlock on Linux) behind an IPC + shared-memory-framebuffer boundary. No JIT.
 
-**Minimalism.** The browser is about 385,000 lines of Rust in some 163
+**Minimalism.** The browser is about 390,000 lines of Rust in 164
 crates under `rust/`, excluding the vendored Boa fork and generated tables —
-small enough for one person to read and audit end-to-end.
+small enough for one person to read and audit end-to-end. It began in C and
+was ported to Rust module by module; how the port was done is recorded in
+[docs/rust-port.md](docs/rust-port.md).
 
 <img src="docs/southstar-now.png" alt="Southstar Now!" width="140">
-
-## Roadmap
-
-- [x] Start from Nordstjernen: import the C codebase with its history, rename
-      it to Southstar Browser, and remove the Android, iOS and Java versions.
-- [x] Rewrite the browser in Rust: every C module ported, QuickJS-ng
-      replaced by Boa, and the vendored C decoders replaced by Rust ports.
-- [ ] Bring the Boa build up to and past the QuickJS-era browser on the WPT
-      slice, Acid3, speed and memory.
-- [x] Pass all of test262 (52,133 of 52,133; `southstar-jsshell test262`).
-- [x] Build with Cargo alone: `cargo xtask` replaced meson, and the tree
-      holds no C code of its own.
-- [ ] Replace the C libraries underneath with Rust where a mature Rust
-      implementation exists. Done: zlib, brotli, zstd, libwebp, libthai
-      and libpsl. Next: libseccomp, OpenSSL's libcrypto (WebCrypto) and the
-      GLib calls outside the UI.
-
-How the port was done (the processes, the engine's data model and the order
-the modules moved in) is recorded in [docs/rust-port.md](docs/rust-port.md).
 
 ## Download
 
@@ -172,7 +155,7 @@ See [npm/README.md](npm/README.md).
 - **UI** — tabs, bookmarks, history, downloads, find-in-page, printing and
   save-to-PDF, a JavaScript console, settings, headless mode, and a C
   embedding API (`rust/capi/include/libsouthstar.h`). The interface
-  follows the operating-system language, with UI translations for 13
+  follows the operating-system language, with UI translations for 39
   languages so far (`data/i18n/`).
 - **Extensions** — initial support for simple, page-facing WebExtensions
   ([docs/extensions.md](docs/extensions.md)).
@@ -232,10 +215,10 @@ southstar
 ```
 
 On first start it writes its translations and license texts to
-`~/.cargo/share/southstar`. AVIF, Thai word breaking, PDF, spell-checking and
-native Ogg audio are optional cargo features (`avif`, `thai`, `poppler`,
-`enchant`, `vorbisfile`, `opusfile`). On Windows, run it from an MSYS2 MINGW64
-shell with the libraries from [docs/Windows.md](docs/Windows.md) installed.
+`~/.cargo/share/southstar`. AVIF, PDF, spell-checking and native Ogg audio
+are optional cargo features (`avif`, `poppler`, `enchant`, `vorbisfile`,
+`opusfile`). On Windows, run it from an MSYS2 UCRT64 shell with the
+libraries from [docs/Windows.md](docs/Windows.md) installed.
 
 ### The Java shell
 
@@ -273,7 +256,9 @@ MSIX package declares it as an app execution alias.
 Southstar is an independent engine — no upstream browser code.
 
 **In-tree**, with no git submodules or vendored subprojects:
-[Boa](https://github.com/boa-dev/boa) (fork, no JIT, in `third_party/`),
+[Boa](https://github.com/boa-dev/boa) (fork, no JIT, in `third_party/`) and
+its regular expression engine [regress](https://github.com/ridiculousfish/regress)
+(fork, `third_party/regress`),
 [pl_mpeg](https://github.com/phoboslab/pl_mpeg)
 (MPEG-1 video + MP2 audio, ported to Rust) and [minimp3](https://github.com/lieff/minimp3)
 (MP3, ported to Rust), plus the wgpu-native C headers

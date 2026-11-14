@@ -15,6 +15,7 @@ pub(crate) const KIND_PATTERN: i32 = 3;
 pub(crate) const KIND_IMAGEDATA: i32 = 4;
 pub(crate) const KIND_TEXTMETRICS: i32 = 5;
 pub(crate) const KIND_OFFSCREEN: i32 = 6;
+pub(crate) const KIND_BITMAP_RENDERER: i32 = 7;
 
 pub(crate) struct Hidden {
     pub kind: i32,

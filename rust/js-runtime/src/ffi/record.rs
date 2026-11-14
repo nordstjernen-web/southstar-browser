@@ -1073,6 +1073,8 @@ pub(crate) fn frame_realm_finish(
     }
     (interfaces.link_interface_ctors)(fctx);
     (interfaces.lock_global_prototypes)(fctx);
+    #[cfg(feature = "wasm")]
+    fctx.with(|scope| drop(southstar_js_wasm::install(scope, frame_global)));
     let attr_class = (crate::api::attrs_hooks().class_id)();
     fctx.with(|scope| {
         southstar_js_brand::brand_node_interfaces(
