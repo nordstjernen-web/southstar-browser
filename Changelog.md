@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `text-decoration-thickness` and `text-underline-offset` are painted, and
+  the `text-decoration` shorthand takes a thickness (`underline 4px blue`).
+  Dotted, dashed and custom-sized decorations take the decorated text's
+  colour and font size, so a dashed link underline is no longer black and
+  thin.
 * CSS `backdrop-filter` (and `-webkit-backdrop-filter`): the colour
   filters and `blur()` run over what is painted behind the element, inside
   its border box and rounded corners, so frosted-glass headers, menus and
