@@ -96,10 +96,6 @@ version = "1.0.229"
 features = ["derive"]
 optional = true
 
-[dependencies.strum]
-version = "0.28"
-features = ["derive"]
-
 [lints.clippy]
 dbg_macro = "warn"
 print_stderr = "warn"

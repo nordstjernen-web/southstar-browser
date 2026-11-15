@@ -19,6 +19,8 @@ use crate::{
 
 use super::{BuiltInBuilder, IntrinsicObject};
 
+pub(crate) mod random;
+
 #[cfg(test)]
 mod tests;
 
@@ -767,7 +769,7 @@ impl Math {
     #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn random(_: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
         // NOTE: Each Math.random function created for distinct realms must produce a distinct sequence of values from successive calls.
-        Ok(rand::random::<f64>().into())
+        Ok(random::random_f64().into())
     }
 
     /// Round a number to the nearest integer.

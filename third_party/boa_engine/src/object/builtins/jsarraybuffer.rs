@@ -90,7 +90,7 @@ impl JsArrayBuffer {
     /// # let context = &mut Context::default();
     ///
     /// // Create a buffer from a chunk of data
-    /// let data_block = AlignedVec::from_iter(0, 0..5);
+    /// let data_block = AlignedVec::from_iter(0..5);
     /// let array_buffer = JsArrayBuffer::from_byte_block(data_block, context)?;
     ///
     /// assert_eq!(
@@ -125,7 +125,7 @@ impl JsArrayBuffer {
         Ok(Self { inner: obj })
     }
 
-    pub fn from_byte_block(byte_block: AlignedVec<u8>, context: &mut Context) -> JsResult<Self> {
+    pub fn from_byte_block(byte_block: AlignedVec, context: &mut Context) -> JsResult<Self> {
         let constructor = context
             .intrinsics()
             .constructors()
@@ -194,7 +194,7 @@ impl JsArrayBuffer {
     /// # // Initialize context
     /// # let context = &mut Context::default();
     /// // Create a buffer from a chunk of data
-    /// let data_block = AlignedVec::from_iter(0, 0..5);
+    /// let data_block = AlignedVec::from_iter(0..5);
     /// let array_buffer = JsArrayBuffer::from_byte_block(data_block, context)?;
     ///
     /// // Take the inner buffer
@@ -226,7 +226,7 @@ impl JsArrayBuffer {
     /// # // Initialize context
     /// # let context = &mut Context::default();
     /// // Create a buffer from a chunk of data
-    /// let data_block = AlignedVec::from_iter(0, 0..5);
+    /// let data_block = AlignedVec::from_iter(0..5);
     /// let array_buffer = JsArrayBuffer::from_byte_block(data_block, context)?;
     ///
     /// // Take the inner buffer
@@ -241,7 +241,7 @@ impl JsArrayBuffer {
     /// # }
     /// ```
     #[inline]
-    pub fn detach(&self, detach_key: &JsValue) -> JsResult<AlignedVec<u8>> {
+    pub fn detach(&self, detach_key: &JsValue) -> JsResult<AlignedVec> {
         self.inner
             .borrow_mut()
             .data_mut()
@@ -266,7 +266,7 @@ impl JsArrayBuffer {
     /// # // Initialize context
     /// # let context = &mut Context::default();
     /// // Create a buffer from a chunk of data
-    /// let data_block = AlignedVec::from_iter(0, 0..5);
+    /// let data_block = AlignedVec::from_iter(0..5);
     /// let array_buffer = JsArrayBuffer::from_byte_block(data_block, context)?;
     ///
     /// // Get a reference to the data.
@@ -296,7 +296,7 @@ impl JsArrayBuffer {
     /// # use boa_engine::{Context, JsResult, JsValue};
     /// # fn main() -> JsResult<()> {
     /// let context = &mut Context::default();
-    /// let data = AlignedVec::from_iter(0, [1u8, 2, 3, 4]);
+    /// let data = AlignedVec::from_iter([1u8, 2, 3, 4]);
     /// let buffer = JsArrayBuffer::from_byte_block(data, context)?;
     /// assert_eq!(buffer.to_vec(), Some(vec![1u8, 2, 3, 4]));
     ///
@@ -324,7 +324,7 @@ impl JsArrayBuffer {
     /// # // Initialize context
     /// # let context = &mut Context::default();
     /// // Create a buffer from a chunk of data
-    /// let data_block = AlignedVec::from_iter(0, 0..5);
+    /// let data_block = AlignedVec::from_iter(0..5);
     /// let array_buffer = JsArrayBuffer::from_byte_block(data_block, context)?;
     ///
     /// // Get a reference to the data.
@@ -396,7 +396,7 @@ mod tests {
     fn array_buffer_to_vec_roundtrip_and_detach() {
         let context = &mut Context::default();
 
-        let data = AlignedVec::from_iter(0, [1u8, 2, 3, 4, 5]);
+        let data = AlignedVec::from_iter([1u8, 2, 3, 4, 5]);
         let buffer = JsArrayBuffer::from_byte_block(data, context).unwrap();
 
         assert_eq!(buffer.to_vec(), Some(vec![1u8, 2, 3, 4, 5]));
@@ -409,7 +409,7 @@ mod tests {
     fn array_buffer_to_vec_empty() {
         let context = &mut Context::default();
 
-        let data = AlignedVec::from_iter(0, []);
+        let data = AlignedVec::from_iter([]);
         let buffer = JsArrayBuffer::from_byte_block(data, context).unwrap();
 
         assert_eq!(buffer.to_vec(), Some(Vec::new()));

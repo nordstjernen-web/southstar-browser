@@ -170,7 +170,7 @@ impl CodeBlock {
                     graph.add_edge(previous_pc, pc, None, Color::None, EdgeStyle::Line);
                 }
                 Instruction::PushScope { .. } => {
-                    let random = rand::random();
+                    let random = crate::builtins::math::random::random_f64();
 
                     graph.add_node(
                         previous_pc,

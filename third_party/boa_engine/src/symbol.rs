@@ -29,7 +29,6 @@ use boa_gc::{Finalize, Trace};
 use tag_ptr::{Tagged, UnwrappedTagged};
 
 use boa_macros::{JsData, js_str};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use std::{
     hash::{Hash, Hasher},
@@ -60,7 +59,7 @@ fn get_id() -> Option<u64> {
 }
 
 /// List of well known symbols.
-#[derive(Debug, Clone, Copy, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 enum WellKnown {
     AsyncIterator,
@@ -82,6 +81,25 @@ enum WellKnown {
 }
 
 impl WellKnown {
+    const ALL: [Self; 16] = [
+        Self::AsyncIterator,
+        Self::HasInstance,
+        Self::IsConcatSpreadable,
+        Self::Iterator,
+        Self::Match,
+        Self::MatchAll,
+        Self::Replace,
+        Self::Search,
+        Self::Species,
+        Self::Split,
+        Self::ToPrimitive,
+        Self::ToStringTag,
+        Self::Unscopables,
+        Self::Dispose,
+        Self::AsyncDispose,
+        Self::Metadata,
+    ];
+
     const fn description(self) -> JsString {
         match self {
             Self::AsyncIterator => StaticJsStrings::SYMBOL_ASYNC_ITERATOR,
@@ -129,7 +147,7 @@ impl WellKnown {
     }
 
     fn from_tag(tag: usize) -> Option<Self> {
-        Self::try_from_primitive(u8::try_from(tag).ok()?).ok()
+        Self::ALL.get(tag).copied()
     }
 }
 

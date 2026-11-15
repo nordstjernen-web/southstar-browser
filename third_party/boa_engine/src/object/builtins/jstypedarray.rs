@@ -1075,9 +1075,7 @@ macro_rules! JsTypedArrayType {
             where
                 I: IntoIterator<Item = $element>,
             {
-                let bytes = AlignedVec::from_iter(
-                    0,
-                    elements
+                let bytes = AlignedVec::from_iter(elements
                     .into_iter()
                     .flat_map(<$element>::to_ne_bytes)
                 );

@@ -660,7 +660,7 @@ impl Reader<'_, '_, '_> {
         let len = self.u32()? as usize;
         let bytes = self.take(len)?.to_vec();
         let Some(max) = max else {
-            let block = AlignedVec::from_iter(0, bytes);
+            let block = AlignedVec::from_slice(&bytes);
             let buffer = JsArrayBuffer::from_byte_block(block, self.cx());
             return Ok(self.thrown(buffer)?.into());
         };

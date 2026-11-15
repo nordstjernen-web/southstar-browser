@@ -1031,7 +1031,7 @@ impl Scope<'_> {
     }
 
     pub fn new_typed_array(&mut self, kind: ElementType, bytes: &[u8]) -> Result<Value, Value> {
-        let block = AlignedVec::from_iter(0, bytes.iter().copied());
+        let block = AlignedVec::from_slice(bytes);
         let buffer = JsArrayBuffer::from_byte_block(block, self.cx()).map_err(|e| self.error(e))?;
         let ctx = self.cx();
         let array: Result<JsValue, JsError> = match kind {
@@ -1179,7 +1179,7 @@ impl Scope<'_> {
     }
 
     pub fn new_array_buffer(&mut self, bytes: &[u8]) -> Result<Value, Value> {
-        let block = AlignedVec::from_iter(0, bytes.iter().copied());
+        let block = AlignedVec::from_slice(bytes);
         JsArrayBuffer::from_byte_block(block, self.cx())
             .map(|buffer| Value(buffer.into()))
             .map_err(|e| self.error(e))
