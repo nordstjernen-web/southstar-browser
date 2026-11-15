@@ -22,6 +22,7 @@ use core::ffi::CStr;
 pub use ffi::{Canvas, Matrix, SvgGeometry, SvgSize};
 pub use hit::hit_node;
 pub use measure::{node_geometry, node_text_length};
+pub use parse::path_data;
 
 use ffi::{
     EXTEND_PAD, EXTEND_REFLECT, EXTEND_REPEAT, FORMAT_A8, FORMAT_ARGB32, PANGO_SCALE, Path,

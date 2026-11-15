@@ -1,8 +1,9 @@
-//! Southstar — building the clip-path basic shapes (inset, circle, ellipse, polygon, xywh, rect) against a box's border box.
+//! Southstar — building the clip-path basic shapes (inset, circle, ellipse, polygon, xywh, rect, path and shape) against a box's border box.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::f64::consts::{PI, SQRT_2};
+use std::ffi::CString;
 
 use southstar_cairo::{ContextRef, FillRule};
 use southstar_layout::BoxRef;
@@ -337,6 +338,132 @@ fn reference_box(b: BoxRef<'_>, geometry_box: Option<&[u8]>) -> Rect {
     }
 }
 
+fn fill_rule_prefix(parts: &mut Vec<&[u8]>) -> bool {
+    match parts.first().map(|p| p.trim_ascii()) {
+        Some(b"evenodd") => {
+            parts.remove(0);
+            true
+        }
+        Some(b"nonzero") => {
+            parts.remove(0);
+            false
+        }
+        _ => false,
+    }
+}
+
+fn path_args(args: &[u8]) -> Option<(bool, String)> {
+    let mut parts = split_top(args, |c| c == b',');
+    let even_odd = fill_rule_prefix(&mut parts);
+    let rest = parts.join(&b',').trim_ascii().to_vec();
+    let inner = rest
+        .strip_prefix(b"\"")
+        .and_then(|s| s.strip_suffix(b"\""))
+        .or_else(|| rest.strip_prefix(b"'").and_then(|s| s.strip_suffix(b"'")))?;
+    Some((even_odd, String::from_utf8_lossy(inner).into_owned()))
+}
+
+fn shape_pair(ws: &[&[u8]], r: Rect, font_size: f64) -> Option<(f64, f64)> {
+    Some((
+        length(ws.first()?, r.w, font_size)?,
+        length(ws.get(1)?, r.h, font_size)?,
+    ))
+}
+
+fn shape_command(part: &[u8], r: Rect, font_size: f64) -> Option<String> {
+    let ws = words(part);
+    let (verb, rest) = ws.split_first()?;
+    let (mode, args) = rest
+        .split_first()
+        .map_or((&b""[..], &[][..]), |(m, a)| (*m, a));
+    let relative = mode == b"by";
+    let letter = |abs: char| {
+        if relative {
+            abs.to_ascii_lowercase()
+        } else {
+            abs
+        }
+    };
+    let pair = |ws: &[&[u8]]| shape_pair(ws, r, font_size);
+    Some(match *verb {
+        b"close" => "Z".to_owned(),
+        b"move" | b"line" => {
+            let (x, y) = pair(args)?;
+            format!(
+                "{} {x} {y}",
+                letter(if *verb == b"move" { 'M' } else { 'L' })
+            )
+        }
+        b"hline" => format!("{} {}", letter('H'), length(args.first()?, r.w, font_size)?),
+        b"vline" => format!("{} {}", letter('V'), length(args.first()?, r.h, font_size)?),
+        b"curve" | b"smooth" => {
+            let (x, y) = pair(args)?;
+            let controls: Vec<(f64, f64)> = args
+                .iter()
+                .position(|w| *w == b"with")
+                .map(|at| {
+                    split_top(&args[at + 1..].join(&b' '), |c| c == b'/')
+                        .iter()
+                        .filter_map(|c| pair(&words(c)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            match (*verb, controls.as_slice()) {
+                (b"curve", [c1, c2]) => format!(
+                    "{} {} {} {} {} {x} {y}",
+                    letter('C'),
+                    c1.0,
+                    c1.1,
+                    c2.0,
+                    c2.1
+                ),
+                (b"curve", [c1]) => format!("{} {} {} {x} {y}", letter('Q'), c1.0, c1.1),
+                (b"smooth", [c2]) => format!("{} {} {} {x} {y}", letter('S'), c2.0, c2.1),
+                (b"smooth", []) => format!("{} {x} {y}", letter('T')),
+                _ => return None,
+            }
+        }
+        b"arc" => {
+            let (x, y) = pair(args)?;
+            let of = args.iter().position(|w| *w == b"of")?;
+            let rx = length(args.get(of + 1)?, r.w, font_size)?;
+            let ry_token = args
+                .get(of + 2)
+                .filter(|w| w.first().is_some_and(|c| c.is_ascii_digit() || *c == b'.'))
+                .or_else(|| args.get(of + 1))?;
+            let ry = length(ry_token, r.h, font_size)?;
+            let sweep = u8::from(args.contains(&&b"cw"[..]));
+            let large = u8::from(args.contains(&&b"large"[..]));
+            let rotate = args
+                .iter()
+                .position(|w| *w == b"rotate")
+                .and_then(|at| args.get(at + 1))
+                .and_then(|w| core::str::from_utf8(w.strip_suffix(b"deg").unwrap_or(w)).ok())
+                .and_then(|t| t.parse::<f64>().ok())
+                .unwrap_or(0.0);
+            format!("{} {rx} {ry} {rotate} {large} {sweep} {x} {y}", letter('A'))
+        }
+        _ => return None,
+    })
+}
+
+fn shape_args(args: &[u8], r: Rect, font_size: f64) -> Option<(bool, String)> {
+    let mut parts = split_top(args, |c| c == b',');
+    let even_odd = fill_rule_prefix(&mut parts);
+    let (first, commands) = parts.split_first()?;
+    let start = words(first);
+    if start.first() != Some(&&b"from"[..]) {
+        return None;
+    }
+    let (x, y) = shape_pair(&start[1..], r, font_size)?;
+    let mut data = format!("M {x} {y}");
+    for part in commands {
+        data.push(' ');
+        data.push_str(&shape_command(part, r, font_size)?);
+    }
+    Some((even_odd, data))
+}
+
 pub fn clip_to_shape(cr: ContextRef, b: BoxRef<'_>, value: &[u8], font_size: f64) -> bool {
     let ws = words(value);
     let is_box = |w: &&[u8]| w.ends_with(b"-box");
@@ -365,6 +492,24 @@ pub fn clip_to_shape(cr: ContextRef, b: BoxRef<'_>, value: &[u8], font_size: f64
         b"polygon" => {
             if !polygon(cr, args, r, font_size) {
                 return false;
+            }
+        }
+        b"path" | b"shape" => {
+            let (even_odd, data) = if &shape[..open] == b"path" {
+                path_args(args)
+            } else {
+                shape_args(args, r, font_size)
+            }
+            .unwrap_or((false, String::new()));
+            let Some(data) = CString::new(data).ok().filter(|d| !d.is_empty()) else {
+                return false;
+            };
+            cr.save();
+            cr.translate(r.x, r.y);
+            southstar_svg::path_data(southstar_svg::Canvas::from(cr), &data);
+            cr.restore();
+            if even_odd {
+                cr.set_fill_rule(FillRule::EvenOdd);
             }
         }
         _ => return false,
