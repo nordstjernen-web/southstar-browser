@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `content: url(...)` on `::before` and `::after` renders the image (link
+  and list icons, external-link markers), inline, inline-block or block,
+  on inline and block hosts, through the same image cache and fetch as
+  `<img>`.
 * CSS containment: `contain: paint` (and `content`, `strict`) clips the
   box's contents to its padding box, and `contain: size` (and `strict`)
   sizes a box without its contents, taking its height from
