@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* CSS `backdrop-filter` (and `-webkit-backdrop-filter`): the colour
+  filters and `blur()` run over what is painted behind the element, inside
+  its border box and rounded corners, so frosted-glass headers, menus and
+  dialogs render. A fixed or sticky element with a backdrop filter is
+  painted with the page rather than as a separate viewport layer, so its
+  backdrop is the page under it.
 * CSS `filter` applies to every element, not only images: the element and
   its descendants are painted as a group and the colour filters, `blur()`
   (scaled to device pixels) and `drop-shadow()` run over that group.

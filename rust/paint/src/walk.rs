@@ -1129,6 +1129,9 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         }
     }
 
+    if !box_offscreen && let Some(f) = filter::backdrop_filter(b) {
+        filter::paint_backdrop(cr, b, f);
+    }
     let first_group_hole = with(|w| w.holes.borrow().len());
     if grouped {
         cr.push_group();

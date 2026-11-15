@@ -11,6 +11,7 @@ use southstar_style::{Kind, PropId as P, ValueRef, parse_color};
 
 use crate::blur::box_blur_argb;
 use crate::ffi::engine;
+use crate::radii::{box_border_radii, rounded_rect_path};
 use crate::util::{Rgba, is_space, rgba_of, skip_spaces, style_of};
 
 fn strtod(text: &[u8], pos: usize) -> Option<(f64, usize)> {
@@ -572,4 +573,112 @@ fn apply_scaled_image_filter(
         let r = ((blur_radius * scale + 0.5) as i32).min(512);
         box_blur_argb(data, stride, w, h, r);
     }
+}
+
+fn filter_blur_radius(filter: &[u8]) -> f64 {
+    let mut radius: f64 = 0.0;
+    let mut p = 0;
+    while let Some(f) = filter_function_next(filter, p) {
+        if name_is(f.name, b"blur") {
+            radius = radius.max(parse_filter_amount(filter, f.body));
+        }
+        p = f.next;
+    }
+    radius
+}
+
+pub fn backdrop_filter(b: BoxRef<'_>) -> Option<&CStr> {
+    let filter = style_of(b)?
+        .get(P::BackdropFilter)
+        .filter(|v| v.kind() == Kind::Keyword)
+        .and_then(ValueRef::keyword_text)?;
+    filter_has_bitmap_effect(Some(filter)).then_some(filter)
+}
+
+fn device_bounds(cr: ContextRef, rect: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    let (x, y, w, h) = rect;
+    [
+        cr.user_to_device(x, y),
+        cr.user_to_device(x + w, y),
+        cr.user_to_device(x, y + h),
+        cr.user_to_device(x + w, y + h),
+    ]
+    .iter()
+    .fold(
+        (
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ),
+        |(x0, y0, x1, y1), &(cx, cy)| (x0.min(cx), y0.min(cy), x1.max(cx), y1.max(cy)),
+    )
+}
+
+struct PixelRect {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+}
+
+fn backdrop_pixels(src: SurfaceRef, at: &PixelRect) -> Option<Surface> {
+    let backdrop = Surface::image(Format::Argb32, at.w, at.h)?;
+    src.with_data(|from, from_stride| {
+        backdrop.as_ref().with_data_mut(|to, to_stride| {
+            let row = at.w as usize * 4;
+            let left = at.x as usize * 4;
+            for y in 0..at.h as usize {
+                let start = (at.y as usize + y) * from_stride + left;
+                to[y * to_stride..y * to_stride + row].copy_from_slice(&from[start..start + row]);
+            }
+        })
+    })??;
+    Some(backdrop)
+}
+
+pub fn paint_backdrop(cr: ContextRef, b: BoxRef<'_>, filter: &CStr) {
+    let target = cr.group_target();
+    let surf = target.as_ref();
+    let (tw, th) = (surf.width(), surf.height());
+    if tw <= 0 || th <= 0 {
+        return;
+    }
+    let rect = crate::three_d::box_border_rect(b);
+    let k = device_scale(cr);
+    let pad = (filter_blur_radius(filter.to_bytes()) * k * 2.0).ceil();
+    let (off_x, off_y) = surf.device_offset();
+    let (dx0, dy0, dx1, dy1) = device_bounds(cr, rect);
+    let x0 = (dx0 + off_x - pad).floor().max(0.0) as i32;
+    let y0 = (dy0 + off_y - pad).floor().max(0.0) as i32;
+    let x1 = (dx1 + off_x + pad).ceil().min(f64::from(tw)) as i32;
+    let y1 = (dy1 + off_y + pad).ceil().min(f64::from(th)) as i32;
+    let at = PixelRect {
+        x: x0,
+        y: y0,
+        w: x1 - x0,
+        h: y1 - y0,
+    };
+    if at.w <= 0 || at.h <= 0 {
+        return;
+    }
+    let Some(backdrop) = backdrop_pixels(surf, &at) else {
+        return;
+    };
+    backdrop.as_ref().with_data_mut(|data, stride| {
+        apply_scaled_image_filter(data, stride as i32, at.w, at.h, Some(filter), k);
+    });
+    let (x, y, w, h) = rect;
+    cr.save();
+    rounded_rect_path(cr, x, y, w, h, box_border_radii(Some(b)));
+    cr.clip();
+    cr.identity_matrix();
+    cr.set_operator(Operator::Source);
+    cr.set_source_surface(
+        backdrop.as_ref(),
+        f64::from(at.x) - off_x,
+        f64::from(at.y) - off_y,
+    );
+    cr.paint();
+    cr.restore();
 }
