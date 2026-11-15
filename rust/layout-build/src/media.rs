@@ -98,6 +98,24 @@ fn decode_data_image(url: &CStr, key: &CStr) -> Option<MediaHandle> {
     }
 }
 
+fn cached_image(url: &CStr) -> Option<MediaHandle> {
+    let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
+    let cache = cache?;
+    let abs = ffi::url_resolve(base.as_deref(), url);
+    let key = abs.as_deref().unwrap_or(url);
+    decode_data_image(url, key).or_else(|| ffi::image_cache_peek(cache, key))
+}
+
+pub fn build_generated_image_box(url: &CStr) -> BoxRef<'static> {
+    let b = BoxPool::new_box(KIND_IMAGE);
+    let m = b.ensure_media();
+    m.set_image_src(Some(url));
+    m.set_image_density(1.0);
+    m.set_declared_image_size(false);
+    m.set_image(cached_image(url));
+    b
+}
+
 pub fn build_image_box(n: Node<'_>) -> BoxRef<'static> {
     let (url, img, density) = ffi::choose_img_url(n);
     let url = url.as_deref();
@@ -118,17 +136,8 @@ pub fn build_image_box(n: Node<'_>) -> BoxRef<'static> {
     }
     let declared = b.content_width() > 0.0 && b.content_height() > 0.0;
     m.set_declared_image_size(declared);
-    let mut image = None;
-    let (cache, base) = state::with(|st| (st.image_cache, st.base_url.clone()));
-    if let Some(cache) = cache {
-        let abs = url.and_then(|u| ffi::url_resolve(base.as_deref(), u));
-        let key = abs.as_deref().or(url);
-        if let (Some(u), Some(k)) = (url, key) {
-            image = decode_data_image(u, k);
-        }
-        if image.is_none() {
-            image = key.and_then(|k| ffi::image_cache_peek(cache, k));
-        }
+    let image = url.and_then(cached_image);
+    if state::with(|st| st.image_cache.is_some()) {
         m.set_image(image);
     }
     if !declared

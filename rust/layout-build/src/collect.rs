@@ -351,7 +351,16 @@ impl<'a> Collector<'a> {
             }
             return;
         }
+        let image = content
+            .and_then(ValueRef::keyword_text)
+            .and_then(|raw| crate::generated::content_image_url(raw.to_bytes()));
         if is_atomic_inline_display(ps) {
+            if let Some(url) = &image {
+                let b = crate::generated::pseudo_block_with_text(ps, None);
+                southstar_layout_tree::append_child(b, crate::generated::image_run(None, url));
+                self.push_atomic(b);
+                return;
+            }
             let txt = content
                 .and_then(ValueRef::keyword_text)
                 .and_then(|raw| pseudo::resolve_content(raw.to_bytes(), Some(host)));
@@ -362,7 +371,10 @@ impl<'a> Collector<'a> {
         let side = |p| length_or(ps.get(p), 0.0);
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::MarginLeft));
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::PaddingLeft));
-        self.pseudo_text(ps, content, host);
+        match &image {
+            Some(url) => self.push_atomic(crate::media::build_generated_image_box(url)),
+            None => self.pseudo_text(ps, content, host),
+        }
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::PaddingRight));
         append_inline_spacer(&mut self.out, &mut self.attrs, side(PropId::MarginRight));
     }

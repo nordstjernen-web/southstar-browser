@@ -1,9 +1,10 @@
-//! Southstar — the boxes ::before and ::after generate: inline runs with their colour and font attributes and edge spacers, atomic and block-level pseudo boxes, absolutely positioned pseudos, and generated text appended to a block's last run.
+//! Southstar — the boxes ::before and ::after generate: inline runs with their colour and font attributes and edge spacers, content images, atomic and block-level pseudo boxes, absolutely positioned pseudos, and generated text appended to a block's last run.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
 use core::ptr;
+use std::ffi::CString;
 
 use southstar_dom::Node;
 use southstar_layout::{BoxKind, BoxPool, BoxRef, InlineAtomic, InlineAttr, inline_kind};
@@ -17,7 +18,7 @@ use southstar_style::{PropId, StyleRef, ValueRef, display_of};
 
 use crate::collect::OBJECT_REPLACEMENT;
 use crate::ffi;
-use crate::media::{KIND_BLOCK, collect_box_bg_image};
+use crate::media::{KIND_BLOCK, build_generated_image_box, collect_box_bg_image};
 use crate::state::{self, AbsEntry};
 
 fn text_collapses(ps: StyleRef<'_>) -> bool {
@@ -107,6 +108,37 @@ fn content_keyword<'a>(ps: StyleRef<'a>) -> Option<&'a CStr> {
     ps.get(PropId::Content).and_then(ValueRef::keyword_text)
 }
 
+pub(crate) fn content_image_url(content: &[u8]) -> Option<CString> {
+    let content = content.trim_ascii();
+    let head = content.get(..4)?;
+    if !head.eq_ignore_ascii_case(b"url(") {
+        return None;
+    }
+    let close = content.iter().position(|&c| c == b')')?;
+    let rest = content[close + 1..].trim_ascii();
+    if !rest.is_empty() && !rest.starts_with(b"/") {
+        return None;
+    }
+    let inner = content[4..close].trim_ascii();
+    let unquoted = match inner {
+        [q @ (b'"' | b'\''), body @ .., last] if last == q => body,
+        _ => inner,
+    };
+    (!unquoted.is_empty())
+        .then(|| CString::new(unquoted).ok())
+        .flatten()
+}
+
+pub(crate) fn image_run(style: Option<StyleRef<'_>>, url: &CStr) -> BoxRef<'static> {
+    let image = build_generated_image_box(url);
+    let run = BoxPool::new_inline();
+    run.set_style(style.map_or(ptr::null(), StyleRef::as_ptr));
+    run.set_text_bytes(OBJECT_REPLACEMENT);
+    image.set_parent(Some(run));
+    run.put_atomics(Some(&[InlineAtomic::new(0, image)]));
+    run
+}
+
 pub fn build_pseudo_inline_for(
     ps: Option<StyleRef<'_>>,
     host: Option<Node<'_>>,
@@ -117,6 +149,19 @@ pub fn build_pseudo_inline_for(
     }
     let kw = content_keyword(ps)?;
     let inline_atomic = is_atomic_inline(display_of(Some(ps)));
+    if let Some(url) = content_image_url(kw.to_bytes()) {
+        if !inline_atomic {
+            return Some(image_run(Some(ps), &url));
+        }
+        let inner = pseudo_block_with_text(ps, None);
+        append_child(inner, image_run(None, &url));
+        let run = BoxPool::new_inline();
+        run.set_style(ps.as_ptr());
+        run.set_text_bytes(OBJECT_REPLACEMENT);
+        inner.set_parent(Some(run));
+        run.put_atomics(Some(&[InlineAtomic::new(0, inner)]));
+        return Some(run);
+    }
     let resolved = match pseudo::resolve_content(kw.to_bytes(), host) {
         Some(r) => r,
         None if inline_atomic => Vec::new(),
@@ -224,6 +269,11 @@ pub fn build_pseudo_block_for(
     let d = display_of(Some(ps));
     if ps.get(PropId::Display).is_none() || d.is_none() || d.outer == OUTER_INLINE {
         return None;
+    }
+    if let Some(url) = content_image_url(kw.to_bytes()) {
+        let block = pseudo_block_with_text(ps, None);
+        append_child(block, image_run(None, &url));
+        return Some(block);
     }
     let resolved = if kw.is_empty() {
         Vec::new()
