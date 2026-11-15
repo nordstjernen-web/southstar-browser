@@ -130,13 +130,12 @@ fn tracks_text(tracks: &Tracks, specified: Option<&[u8]>) -> Vec<u8> {
         if open {
             out.push(b']');
         }
-        if i == n {
+        let Some(track) = tracks.tracks[..n].get(i) else {
             break;
-        }
+        };
         if !out.is_empty() {
             out.push(b' ');
         }
-        let track = &tracks.tracks[i];
         match track.kind {
             TRACK_PX => out.extend_from_slice(&[g(track.v), b"px".to_vec()].concat()),
             TRACK_PERCENT => out.extend_from_slice(&[g(track.v), b"%".to_vec()].concat()),

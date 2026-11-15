@@ -252,7 +252,7 @@ fn search_name(engine: &[u8]) -> Vec<u8> {
     };
     match sys::registrable_domain(&host).filter(|r| !r.is_empty()) {
         Some(registrable) => registrable,
-        None => host.strip_prefix(b"www.").unwrap_or(&host).to_vec(),
+        None => host.trim_prefix(b"www.").to_vec(),
     }
 }
 

@@ -30,20 +30,16 @@ install_apt() {
         libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
     apt-get install -y --no-install-recommends cargo rustc
     if ! rust_new_enough; then
-        if apt-get install -y --no-install-recommends rustc-1.97 cargo-1.97; then
-            export PATH="/usr/lib/rust-1.97/bin:$PATH"
-        else
-            install_rustup
-        fi
+        install_rustup
     fi
 }
 
 rust_new_enough() {
-    rustc --version | awk '{ split($2, v, "."); exit !(v[1] > 1 || (v[1] == 1 && v[2] >= 95)) }'
+    rustc --version | awk '{ split($2, v, "."); exit !(v[1] > 1 || (v[1] == 1 && v[2] >= 100)) }'
 }
 
 install_rustup() {
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs         | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs         | sh -s -- -y --profile minimal --default-toolchain 1.100.0
     export PATH="$HOME/.cargo/bin:$PATH"
 }
 

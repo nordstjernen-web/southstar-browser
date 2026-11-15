@@ -321,10 +321,9 @@ fn rule_item(t: &[u8]) -> Option<RuleItem> {
             (1, s)
         } else if let Some(w) = width_item(tok) {
             (0, w)
-        } else if let Some(c) = color_item(tok) {
-            (2, c)
         } else {
-            return None;
+            let c = color_item(tok)?;
+            (2, c)
         };
         if item[slot].is_some() {
             return None;

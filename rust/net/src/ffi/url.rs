@@ -29,7 +29,7 @@ pub fn https_first_upgrade(url: &[u8]) -> Option<Vec<u8>> {
 }
 
 fn without_nul(s: &'static str) -> &'static str {
-    s.strip_suffix('\0').unwrap_or(s)
+    s.trim_suffix('\0')
 }
 
 pub fn is_mobile_mode() -> bool {

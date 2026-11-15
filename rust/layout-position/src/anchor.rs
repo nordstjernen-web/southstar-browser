@@ -253,10 +253,7 @@ impl<'a> Env<'_, 'a> {
             .get(candidate)
             .and_then(|s| s.keyword_of(PropId::Position))
             .is_some_and(|k| k == c"absolute" || k == c"fixed");
-        if positioned && !self.order.precedes(candidate, self.target) {
-            return false;
-        }
-        true
+        !(positioned && !self.order.precedes(candidate, self.target))
     }
 
     fn named(&mut self, name: &[u8]) -> Option<Rect> {
@@ -771,21 +768,11 @@ fn flip_start(i: &mut Inputs) {
     i.margin.swap(BOTTOM, RIGHT);
     i.size.swap(0, 1);
     i.size_changed = [true; 2];
-    for k in 0..4 {
-        remap(
-            &mut i.inset[k],
-            Context::Inset,
-            &transpose_side,
-            &transpose_size,
-        );
+    for inset in &mut i.inset {
+        remap(inset, Context::Inset, &transpose_side, &transpose_size);
     }
-    for k in 0..2 {
-        remap(
-            &mut i.size[k],
-            Context::Size,
-            &transpose_side,
-            &transpose_size,
-        );
+    for size in &mut i.size {
+        remap(size, Context::Size, &transpose_side, &transpose_size);
     }
     i.area = transpose_area(&i.area);
     core::mem::swap(&mut i.justify, &mut i.align);

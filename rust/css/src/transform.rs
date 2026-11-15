@@ -828,8 +828,12 @@ fn g(v: f64) -> Vec<u8> {
 
 pub(crate) fn serialize(tf: &Transform) -> Vec<u8> {
     let mut out = Vec::new();
-    for i in 0..(tf.n_ops.max(0) as usize).min(OPS_MAX) {
-        let op = &tf.ops[i];
+    for (i, op) in tf
+        .ops
+        .iter()
+        .enumerate()
+        .take((tf.n_ops.max(0) as usize).min(OPS_MAX))
+    {
         if i > 0 {
             out.push(b' ');
         }
@@ -961,8 +965,12 @@ pub fn is_3d(tf: &Transform) -> bool {
 
 pub fn to_mat4(tf: &Transform, bw: f64, bh: f64) -> Mat4 {
     let mut out = Mat4::IDENTITY;
-    for i in 0..(tf.n_ops.max(0) as usize).min(OPS_MAX) {
-        let mut op = tf.ops[i];
+    for mut op in tf
+        .ops
+        .iter()
+        .copied()
+        .take((tf.n_ops.max(0) as usize).min(OPS_MAX))
+    {
         let default = if op.kind == SCALE { 1.0 } else { 0.0 };
         for field in [
             &mut op.a,

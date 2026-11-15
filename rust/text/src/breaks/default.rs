@@ -372,10 +372,8 @@ fn word_break_type(wc: u32, ty: T, break_type: B, script: Script, prev_wb: Wb) -
                     wb = Wb::ALetter;
                 }
             }
-            0x07 => {
-                if wc == 0x070F {
-                    wb = Wb::ALetter;
-                }
+            0x07 if wc == 0x070F => {
+                wb = Wb::ALetter;
             }
             _ => {}
         }
@@ -388,10 +386,8 @@ fn word_break_type(wc: u32, ty: T, break_type: B, script: Script, prev_wb: Wb) -
                     wb = Wb::Numeric;
                 }
             }
-            B::InfixSeparator => {
-                if wc != 0x003A && wc != 0xFE13 && wc != 0x002E {
-                    wb = Wb::MidNum;
-                }
+            B::InfixSeparator if wc != 0x003A && wc != 0xFE13 && wc != 0x002E => {
+                wb = Wb::MidNum;
             }
             _ => {}
         }
@@ -458,10 +454,10 @@ fn word_break_type(wc: u32, ty: T, break_type: B, script: Script, prev_wb: Wb) -
                     wb = Wb::ALetter;
                 }
             }
-            T::LowercaseLetter | T::ModifierLetter | T::TitlecaseLetter | T::UppercaseLetter => {
-                if alphabetic {
-                    wb = Wb::ALetter;
-                }
+            T::LowercaseLetter | T::ModifierLetter | T::TitlecaseLetter | T::UppercaseLetter
+                if alphabetic =>
+            {
+                wb = Wb::ALetter;
             }
             _ => {}
         }

@@ -788,11 +788,11 @@ pub fn paint_bg_gradient_core(
             bnd.push(k as f64 / BASE as f64);
         }
         let off = gr.from_deg / 360.0;
-        for s in 0..gr.n_stops as usize {
+        for stop in gr.stops.iter().take(gr.n_stops as usize) {
             if bnd.len() >= CAP {
                 break;
             }
-            let mut rel_pos = gr.stops[s].pos - off;
+            let mut rel_pos = stop.pos - off;
             rel_pos -= rel_pos.floor();
             bnd.push(rel_pos);
             if bnd.len() < CAP {

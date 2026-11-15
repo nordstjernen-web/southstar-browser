@@ -351,7 +351,7 @@ fn parse_duration(text: &str) -> Option<Record> {
     let (negative, rest) = if let Some(rest) = text.strip_prefix(['-', '\u{2212}']) {
         (true, rest)
     } else {
-        (false, text.strip_prefix('+').unwrap_or(text))
+        (false, text.trim_prefix('+'))
     };
     let rest = rest.strip_prefix(['P', 'p'])?;
     let (date, time) = match rest.find(['T', 't']) {

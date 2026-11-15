@@ -356,13 +356,16 @@ how the build worked during the port.
 
 ### 5.4 Toolchain version
 
-The minimum is **Rust 1.95**, pinned by `rust-toolchain.toml` (D3). It was
+The minimum is **Rust 1.100**, pinned by `rust-toolchain.toml` (D3). It was
 1.85 (the 2024 edition, Debian 13's compiler) at first, then 1.91 because Boa
 needed it, briefly 1.99, back to 1.91 for Ubuntu 24.04's `rustc-1.91`, and
 1.95 since the fork moved to Boa's `main` branch, which requires it (November
 2026). Ubuntu 24.04 support was dropped then: Ubuntu 26.04 packages
 `rustc-1.97`, Debian forky and sid ship 1.97 and 1.98, and Debian 13 builds
-with rustup.
+with rustup. It was raised to 1.100 in November 2026 for the never type,
+the allocator API, `Vec::from_fn`, `DropGuard` and `trim_prefix`; no
+distribution packaged 1.100 then except MSYS2, so the Linux builds use
+rustup.
 The original question, which `gtk4` crate version the MSRV allows, went away:
 the shell uses the hand-written `rust/gtk-ffi`, not gtk-rs.
 
@@ -374,10 +377,10 @@ The workflows that build today all gain a Rust toolchain:
 |---|---|---|
 | `linux.yml` | Ubuntu 26.04, GCC | rustup, pinned |
 | `macos.yml` | macOS 26 arm64 | rustup, pinned |
-| `windows.yml` | MSYS2 UCRT64 | MSYS2's `rust` package, `x86_64-pc-windows-gnu` (newer than the pinned 1.95) |
+| `windows.yml` | MSYS2 UCRT64 | MSYS2's `rust` package, `x86_64-pc-windows-gnu` (at least the pinned 1.100) |
 | `musl.yml` | Alpine 3.24 | rustup, pinned (Alpine's `rust` lags behind; built without `crt-static`, like Alpine's own toolchain) |
 | `freebsd.yml`, `netbsd.yml` | VMs, nightly | rustup, pinned (the `pkg`/pkgsrc `rust` lags behind) |
-| `release.yml` | `ubuntu:26.04`, `debian:trixie`, `debian:forky`, `debian:sid` containers | distro packages when they reach 1.95 (Ubuntu's versioned `rustc-1.97` is tried); rustup otherwise, pinned to 1.95.0 |
+| `release.yml` | `ubuntu:26.04`, `debian:trixie`, `debian:forky`, `debian:sid` containers | distro packages when they reach 1.100; rustup otherwise, pinned to 1.100.0 |
 
 Every workflow adds `cargo clippy --all-targets -- -D warnings` and
 `cargo fmt --check`, the Rust form of "no new warnings". Linux runs on every
@@ -1212,7 +1215,7 @@ the existing ones, not a test suite.
 |---|---|---|
 | D1 | Do Servo/Firefox-origin crates (`html5ever`, `cssparser`, `selectors`, `url`, `encoding_rs`, `chardetng`) count as "upstream browser engine code"? | Yes — keep them out; keep uchardet behind FFI and replace the vendored HTML library with Southstar's own parsers (phase 9, D13) |
 | D2 | Incremental port in place (this plan) or a clean rewrite in a new tree? | Incremental: the C browser already passes 98% of the tracked WPT slice, and a rewrite would have to reach that bar again before it could replace anything |
-| D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | Decided (October 2026): 1.91, the version Boa needed and Ubuntu 24.04 packaged (`rustc-1.91`), pinned in `rust-toolchain.toml`; it was briefly 1.99. Raised to 1.95 in November 2026 with the move to Boa `main`, and Ubuntu 24.04 dropped; Ubuntu 26.04 (`rustc-1.97`), Debian forky and sid build with their packaged compilers, Debian 13 with rustup; gtk-rs is no longer used, so its 1.92 floor does not apply |
+| D3 | MSRV: 1.85 with `gtk4` 0.10, or ≥ 1.92 with newer gtk-rs and backported distro compilers? | Decided (October 2026): 1.91, the version Boa needed and Ubuntu 24.04 packaged (`rustc-1.91`), pinned in `rust-toolchain.toml`; it was briefly 1.99. Raised to 1.95 in November 2026 with the move to Boa `main`, and Ubuntu 24.04 dropped; raised to 1.100 in November 2026 for the never type and the new library APIs, so every Linux build uses rustup until distributions package it. At 1.95, Ubuntu 26.04 (`rustc-1.97`), Debian forky and sid build with their packaged compilers, Debian 13 with rustup; gtk-rs is no longer used, so its 1.92 floor does not apply |
 | D4 | Commit vendored crates (`cargo vendor`) to the repo, or ship them only in source tarballs (with OBS's `cargo_vendor` service for the openSUSE build)? | Open. Recommendation: commit them under `vendor/`: it matches "vendored in-tree", keeps the offline Debian and OBS builds simple, and the dependency budget keeps it small. Nothing is vendored yet apart from the Boa fork, which is source the project modifies rather than a cache of crates.io |
 | D5 | Keep the no-comments rule in Rust, including no `// SAFETY:` comments? | Keep it; confine `unsafe` to `ffi` modules |
 | D6 | May ported Rust carry `#[test]` unit tests? | No, per the existing rule; parity checks in §8 |

@@ -87,7 +87,7 @@ impl Url {
                     return;
                 }
                 self.query = Some(String::new());
-                parse_with_override(self, value.strip_prefix('?').unwrap_or(value), State::Query);
+                parse_with_override(self, value.trim_prefix('?'), State::Query);
             }
             Setter::Hash => {
                 if value.is_empty() {
@@ -95,11 +95,7 @@ impl Url {
                     return;
                 }
                 self.fragment = Some(String::new());
-                parse_with_override(
-                    self,
-                    value.strip_prefix('#').unwrap_or(value),
-                    State::Fragment,
-                );
+                parse_with_override(self, value.trim_prefix('#'), State::Fragment);
             }
         }
     }

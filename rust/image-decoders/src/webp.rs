@@ -56,7 +56,7 @@ impl<'a> Decoder<'a> {
         for (src, dst) in self
             .scratch
             .chunks_exact(source_channels)
-            .zip(out.chunks_exact_mut(4))
+            .zip(out.as_chunks_mut::<4>().0)
         {
             dst[0] = src[2];
             dst[1] = src[1];

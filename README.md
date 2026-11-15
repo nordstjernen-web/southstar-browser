@@ -6,6 +6,8 @@ Southstar Browser
 [![crates.io](https://img.shields.io/crates/v/southstar?style=flat-square)](https://crates.io/crates/southstar)
 [![Docs](https://img.shields.io/docsrs/southstar-engine?style=flat-square)](https://docs.rs/southstar-engine)
 [![Dependency status](https://deps.rs/repo/github/nordstjernen-web/southstar-browser/status.svg?style=flat-square)](https://deps.rs/repo/github/nordstjernen-web/southstar-browser)
+[![Rust 1.100+](https://img.shields.io/badge/rust-1.100%2B-orange?style=flat-square&logo=rust)](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/)
+[![Linux build](https://img.shields.io/github/actions/workflow/status/nordstjernen-web/southstar-browser/linux.yml?branch=main&style=flat-square&label=linux%20build)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/linux.yml)
 [![Best viewed in Southstar Browser](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
@@ -196,12 +198,15 @@ features they allow and builds a release; `cargo xtask run` builds and
 starts it, and `cargo xtask install --prefix /usr/local` installs it.
 `cargo xtask features` prints what the installed libraries enable.
 
-Rust 1.95 or newer is required. Debian forky and sid and the rolling
-distributions ship it, and Ubuntu 26.04 packages it as `rustc-1.97` and
-`cargo-1.97` (put `/usr/lib/rust-1.97/bin` first on `PATH`); older Ubuntu
-releases are not supported. Elsewhere, Debian 13 included, install it with
-[rustup](https://rustup.rs), which reads `rust-toolchain.toml` and selects
-1.95.0 in this tree. Windows, Fedora, openSUSE and macOS
+Rust 1.100 or newer is required. Install it with [rustup](https://rustup.rs),
+which reads `rust-toolchain.toml` and selects 1.100.0 in this tree; keep it
+current with
+
+```sh
+rustup update stable
+```
+
+A distribution's packaged compiler works once it reaches 1.100. Windows, Fedora, openSUSE and macOS
 instructions are in
 [docs/](docs/README.md); keyboard, mouse and touch controls are in
 [docs/Controls.md](docs/Controls.md).

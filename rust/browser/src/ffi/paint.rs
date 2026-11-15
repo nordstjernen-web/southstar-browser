@@ -326,7 +326,7 @@ pub fn render_doc_tile(
     begin();
     let query = b.search_query.get();
     let sel = b.selection_if_range();
-    let upper: Vec<Option<Cairo>> = (0..n_upper).map(|index| tile.upper(index)).collect();
+    let upper: Vec<Option<Cairo>> = Vec::from_fn(n_upper, |index| tile.upper(index));
     let upper_refs: Vec<Option<ContextRef<'_>>> =
         upper.iter().map(|cr| cr.as_ref().map(Cairo::cr)).collect();
     let (ok, used) = southstar_paint::doc_layers(

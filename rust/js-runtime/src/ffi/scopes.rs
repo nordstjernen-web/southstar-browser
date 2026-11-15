@@ -170,9 +170,9 @@ pub(crate) fn top_document(doc: Option<Node<'_>>) -> Option<Node<'_>> {
                 current = Some(parent);
                 break;
             }
-            match parent.parent() {
-                Some(next) => parent = next,
-                None => return None,
+            {
+                let next = parent.parent()?;
+                parent = next
             }
         }
     }

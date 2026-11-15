@@ -92,7 +92,7 @@ fn log_exception(scope: &mut Scope<'_>, error: &Value, kind: &str) {
 }
 
 fn dispatch(scope: &mut Scope<'_>, target: &Value, on_name: &str, event: Value) {
-    let kind = on_name.strip_prefix("on").unwrap_or(on_name);
+    let kind = on_name.trim_prefix("on");
     let entered = ffi::enter_handler_realm(scope, target, kind);
     let handler = prop(scope, target, on_name);
     if scope.is_function(&handler)

@@ -67,7 +67,7 @@ fn stream_file_name_ok(name: &[u8]) -> bool {
     let Some((&kind, rest)) = stem.split_first() else {
         return false;
     };
-    let rest = rest.strip_prefix(b"-").unwrap_or(rest);
+    let rest = rest.trim_prefix(b"-");
     let Some((pid, token)) = rest
         .iter()
         .position(|&b| b == b'-')
@@ -81,7 +81,7 @@ fn stream_file_name_ok(name: &[u8]) -> bool {
 
 pub fn stream_file_parts(url: &[u8]) -> Option<(&[u8], &[u8])> {
     let rest = url.strip_prefix(b"file://")?;
-    let path = rest.strip_prefix(b"localhost").unwrap_or(rest);
+    let path = rest.trim_prefix(b"localhost");
     let split = path.iter().rposition(|&b| b == b'/' || b == b'\\')?;
     let (dir, name) = (&path[..split], &path[split + 1..]);
     (!dir.is_empty() && stream_file_name_ok(name)).then_some((dir, name))

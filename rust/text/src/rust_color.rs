@@ -179,7 +179,9 @@ fn decode_bitmap(bitmap: &BitmapGlyph<'_>) -> Option<(u32, u32, Vec<u32>)> {
             }
             let count = (width * height) as usize;
             let pixels: Vec<u32> = bytes
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .take(count)
                 .map(|bgra| u32::from_le_bytes([bgra[0], bgra[1], bgra[2], bgra[3]]))
                 .collect();

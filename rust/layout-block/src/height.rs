@@ -276,7 +276,7 @@ fn contain_intrinsic_height(style: Option<StyleRef<'_>>) -> Option<f64> {
         .iter()
         .filter(|w| w.as_slice() != b"auto")
         .map(|w| {
-            let number = w.strip_suffix(b"px").unwrap_or(w);
+            let number = w.trim_suffix(b"px");
             core::str::from_utf8(number).ok()?.parse::<f64>().ok()
         })
         .collect::<Option<Vec<f64>>>()?;

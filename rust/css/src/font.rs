@@ -890,7 +890,7 @@ fn feature_settings_items(s: &[u8]) -> Option<Vec<(String, i64)>> {
 }
 
 fn is_integer_token(text: &[u8]) -> bool {
-    let digits = text.strip_prefix(b"+").unwrap_or(text);
+    let digits = text.trim_prefix(b"+");
     !digits.is_empty() && digits.iter().all(u8::is_ascii_digit)
 }
 

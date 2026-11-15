@@ -419,9 +419,9 @@ fn scrollable_overflow_size(b: BoxRef<'_>) -> (f64, f64) {
         let wrap_reverse = keyword_is(style, PropId::FlexWrap, &[c"wrap-reverse"]);
         if wrap_reverse {
             if column {
-                flip_x = !flip_x;
+                flip_x.toggle();
             } else {
-                flip_y = !flip_y;
+                flip_y.toggle();
             }
         }
     }

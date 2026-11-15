@@ -178,10 +178,7 @@ fn serialize_start_tag(node: Node, out: &mut Vec<u8>) -> bool {
         out.push(b'"');
     }
     out.push(b'>');
-    if node.name().is_some() && is_void(name) {
-        return false;
-    }
-    true
+    !(node.name().is_some() && is_void(name))
 }
 
 fn html_attr_name(out: &mut Vec<u8>, attr: crate::Attr<'_>) {

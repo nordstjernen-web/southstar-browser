@@ -590,9 +590,9 @@ impl WebGl {
         let fbo = st.fbo;
         st.bind_framebuffer(FRAMEBUFFER, fbo);
         if st.surf.is_none() {
-            match Surface::new(w, h) {
-                Some(surf) => st.surf = Some(surf),
-                None => return None,
+            {
+                let surf = Surface::new(w, h)?;
+                st.surf = Some(surf)
             }
         }
         let st = &mut *st;

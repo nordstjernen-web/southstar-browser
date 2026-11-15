@@ -134,7 +134,7 @@ fn starts_with_tag(text: &[u8], tag: &[u8]) -> bool {
 }
 
 fn markup(data: &[u8]) -> Option<&'static str> {
-    let text = data.strip_prefix(b"\xef\xbb\xbf").unwrap_or(data);
+    let text = data.trim_prefix(b"\xef\xbb\xbf");
     let start = text.iter().position(|b| !b.is_ascii_whitespace())?;
     let text = &text[start..];
     if starts_with_tag(text, b"<!doctype html") || starts_with_tag(text, b"<html") {

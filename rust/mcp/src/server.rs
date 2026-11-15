@@ -1172,7 +1172,7 @@ pub fn run(self_exe: Option<PathBuf>) -> i32 {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     while let Ok(Some(line)) = read_line(&mut input, MAX_LINE) {
-        let line = line.strip_prefix(UTF8_BOM).unwrap_or(&line);
+        let line = line.trim_prefix(UTF8_BOM);
         if !line.is_empty() {
             handle_message(&mut m, &mut out, line);
         }

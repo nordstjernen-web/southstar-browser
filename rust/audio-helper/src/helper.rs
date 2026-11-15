@@ -147,7 +147,7 @@ fn write_temp_from_url(url: &[u8]) -> Option<Vec<u8>> {
 
 fn local_path_for(url: &[u8]) -> Option<(Vec<u8>, Option<Vec<u8>>)> {
     if let Some(rest) = url.strip_prefix(b"file://") {
-        let rest = rest.strip_prefix(b"localhost").unwrap_or(rest);
+        let rest = rest.trim_prefix(b"localhost");
         return Some((rest.to_vec(), None));
     }
     if url.starts_with(b"http://") || url.starts_with(b"https://") || url.starts_with(b"data:") {

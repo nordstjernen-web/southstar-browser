@@ -356,7 +356,7 @@ pub fn available_memory_bytes() -> u64 {
             .iter()
             .position(|c| !c.is_ascii_whitespace())
             .unwrap_or(rest.len())..];
-        let rest = rest.strip_prefix(b"+").unwrap_or(rest);
+        let rest = rest.trim_prefix(b"+");
         let digits = rest.iter().take_while(|c| c.is_ascii_digit()).count();
         if digits == 0 {
             continue;

@@ -75,8 +75,7 @@ impl GlyphString {
         let mut logical_rect = Rectangle::default();
         let mut x_pos: i32 = 0;
 
-        for i in start..end.min(self.glyphs.len()) {
-            let info = &self.glyphs[i];
+        for (i, info) in self.glyphs.iter().enumerate().take(end).skip(start) {
             let geometry = &info.geometry;
             let (glyph_ink, glyph_logical) = glyph_extents_of(font, info.glyph);
 

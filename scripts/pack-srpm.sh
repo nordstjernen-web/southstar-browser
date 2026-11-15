@@ -49,8 +49,8 @@ Source0:        ${SLUG}.tar.gz
 
 BuildRequires:  gcc
 BuildRequires:  pkgconf-pkg-config
-BuildRequires:  cargo >= 1.95
-BuildRequires:  rust >= 1.95
+BuildRequires:  cargo >= 1.100
+BuildRequires:  rust >= 1.100
 BuildRequires:  pkgconfig(gtk4)
 BuildRequires:  pkgconfig(epoxy)
 BuildRequires:  pkgconfig(libcrypto)

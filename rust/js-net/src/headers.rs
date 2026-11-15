@@ -131,7 +131,7 @@ fn trim_tabs_spaces(mut value: &[u8]) -> &[u8] {
 
 pub(crate) fn raw_header_lines(raw: &[u8]) -> impl Iterator<Item = (&[u8], &[u8])> {
     raw.split(|&b| b == b'\n').filter_map(|line| {
-        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = line.trim_suffix(b"\r");
         let colon = line.iter().position(|&b| b == b':')?;
         Some((&line[..colon], trim_tabs_spaces(&line[colon + 1..])))
     })

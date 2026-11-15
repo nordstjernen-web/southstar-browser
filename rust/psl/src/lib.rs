@@ -115,7 +115,7 @@ fn is_ip_literal(host: &[u8]) -> bool {
 }
 
 fn normalized(domain: &[u8]) -> Option<&[u8]> {
-    let domain = domain.strip_suffix(b".").unwrap_or(domain);
+    let domain = domain.trim_suffix(b".");
     let empty_label = domain.is_empty()
         || domain.starts_with(b".")
         || domain.windows(2).any(|pair| pair == b"..");

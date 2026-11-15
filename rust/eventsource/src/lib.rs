@@ -150,7 +150,7 @@ impl Parser {
         let (field, value) = match line.iter().position(|&c| c == b':') {
             Some(colon) => {
                 let value = &line[colon + 1..];
-                (&line[..colon], value.strip_prefix(b" ").unwrap_or(value))
+                (&line[..colon], value.trim_prefix(b" "))
             }
             None => (line, &b""[..]),
         };

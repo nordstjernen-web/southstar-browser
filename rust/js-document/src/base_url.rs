@@ -11,7 +11,7 @@ use crate::ffi::{self, Js};
 
 fn base_elements(doc: Element) -> Vec<Element> {
     southstar_dom::index::tag_lookup(doc, c"base", |nodes| {
-        (0..nodes.len()).map(|i| nodes.get(i)).collect()
+        Vec::from_fn(nodes.len(), |i| nodes.get(i))
     })
     .unwrap_or_default()
 }

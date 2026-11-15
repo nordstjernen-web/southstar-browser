@@ -82,7 +82,7 @@ pub fn parse(url: &[u8]) -> Option<Location> {
     if host.is_empty() || !host.iter().all(u8::is_ascii_graphic) {
         return None;
     }
-    let path = path.strip_prefix(b"/").unwrap_or(path);
+    let path = path.trim_prefix(b"/");
     let path = match path.iter().rposition(|&c| c == b';') {
         Some(semi) if path[semi..].starts_with(b";type=") => &path[..semi],
         _ => path,

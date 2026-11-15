@@ -570,7 +570,7 @@ pub(crate) fn detach_wrapper(js: &Record, n: Node<'_>, pinned: Option<Value>) {
 }
 
 fn eval_bundled(js: Option<Page>, source: &str, origin: &CStr) {
-    let source = source.strip_suffix('\0').unwrap_or(source);
+    let source = source.trim_suffix('\0');
     (crate::api::loader_hooks().eval)(js, source.as_bytes(), Some(origin));
 }
 
@@ -1308,7 +1308,7 @@ pub(crate) fn eval_polyfills(js: Option<Page>) {
 }
 
 pub(crate) fn bundled_sources() -> [&'static str; 2] {
-    [POLYFILLS, STREAMING].map(|source| source.strip_suffix('\0').unwrap_or(source))
+    [POLYFILLS, STREAMING].map(|source| source.trim_suffix('\0'))
 }
 
 pub(crate) fn snapshot_platform_globals(js: Option<Page>) {

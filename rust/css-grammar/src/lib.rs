@@ -267,7 +267,7 @@ impl<'a> Matcher<'a> {
         if term.first() == Some(&b'<') {
             return self.type_match(term, c);
         }
-        let word = term.strip_suffix(b"*").unwrap_or(term);
+        let word = term.trim_suffix(b"*");
         let name = self.value(c);
         (c.kind == Kind::Ident && name.eq_ignore_ascii_case(word))
             .then(|| name.to_ascii_lowercase())

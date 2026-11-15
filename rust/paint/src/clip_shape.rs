@@ -89,7 +89,7 @@ fn position(ws: &[&[u8]], r: Rect, font_size: f64) -> (f64, f64) {
             }
             horizontal_next = !horizontal;
         } else if *w == b"center" {
-            horizontal_next = !horizontal_next;
+            horizontal_next.toggle();
         } else if horizontal_next {
             x = length(w, r.w, font_size).unwrap_or(x);
             horizontal_next = false;

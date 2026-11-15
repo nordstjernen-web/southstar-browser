@@ -41,5 +41,5 @@ pub fn route(target: &[u8], host: &str) -> Route {
 
 pub fn user_agent() -> &'static [u8] {
     let ua = url::user_agent_for_mode(None).as_bytes();
-    ua.strip_suffix(b"\0").unwrap_or(ua)
+    ua.trim_suffix(b"\0")
 }

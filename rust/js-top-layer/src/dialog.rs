@@ -78,7 +78,7 @@ fn sync_open_dialogs(js: Js) {
         return;
     };
     let all: Vec<Element> = index::tag_lookup(doc, c"dialog", |list| {
-        (0..list.len()).map(|i| list.get(i)).collect()
+        Vec::from_fn(list.len(), |i| list.get(i))
     })
     .unwrap_or_default();
     let mut insert_at = 0;

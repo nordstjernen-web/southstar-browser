@@ -202,7 +202,7 @@ pub fn text(v: View, text: &str) -> bool {
         if i > 0 {
             key(v, crate::procview::input::KEY_RETURN, 0);
         }
-        let line = line.strip_suffix('\r').unwrap_or(line);
+        let line = line.trim_suffix('\r');
         if !line.is_empty() {
             start_key_text(v.raw(), 2, line.as_bytes());
         }
