@@ -60,14 +60,6 @@ const BOOK: &str = concat!(
     "</p></body></html>",
 );
 
-const TAGLINES: [&str; 5] = [
-    "Southstar the unique web browser",
-    "S\u{f8}rstjernen the unique web browser",
-    "Sydstj\u{e4}rnan the unique web browser",
-    "\u{c9}toile du Sud the unique web browser",
-    "S\u{fc}dstern the unique web browser",
-];
-
 const LOGO_GIF: &[u8] = include_bytes!("../data/southstar.gif");
 
 const LOGO_PATHS: [&str; 4] = [
@@ -269,11 +261,7 @@ fn start_page() -> Vec<u8> {
         &sys::markup_escape(&search_name(&engine)),
     );
     let page = substitute(&page, b"__ND_LOGO_MARK__", &logo_markup());
-    substitute(
-        &page,
-        b"__ND_TAGLINE__",
-        TAGLINES[sys::random_below(TAGLINES.len() as i32)].as_bytes(),
-    )
+    substitute(&page, b"__ND_VERSION__", templates::VERSION.as_bytes())
 }
 
 fn southstar_page() -> Vec<u8> {

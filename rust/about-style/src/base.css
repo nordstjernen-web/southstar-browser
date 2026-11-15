@@ -4,6 +4,7 @@
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:999px;border:1px solid transparent;font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;background:var(--field);color:var(--text)}
 .btn:hover{text-decoration:none;filter:brightness(.96)}

@@ -10,6 +10,14 @@ Southstar Browser 1.0.10-dev:
   (southstar-av in the audio helper, southstar-glib in spell checking,
   southstar-image in the camera) are optional or Linux-only, so cargo no
   longer reports them unused.
+* The new tab page puts search first: a small logo, no heading or random
+  tagline, a "Search or enter address" field that names the search engine
+  to screen readers, and one quiet row of links (History, Settings, About
+  Southstar) in place of the four large tiles; the footer is the version.
+  Typing an address there accepts the schemes the address bar does
+  (`about:`, `file:`, `data:`, `view-source:` and anything with `://`).
+  All about: pages show a focus outline on links, buttons and fields when
+  moving through them with the keyboard.
 * about:southstar is reorganized: the header names the version and build
   date and has a Copy version info button that copies the diagnostics as
   text; a short Privacy card says what Southstar sends and to whom; the
