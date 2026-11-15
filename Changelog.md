@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `docs/css-status.md` rates Southstar's CSS support row by row on the
+  template of Blitz's CSS status page, checked against the engine source.
 * The README shows docs.rs and deps.rs status badges. The workspace lists
   its crates by path, so deps.rs checks the dependencies of every crate in
   the tree, and `cargo xtask build` stops when a crate is missing from it.
