@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Background images and gradients on `html` (or on `body` when `html` has
+  none) cover the whole canvas, positioned from the root box, as the
+  background colour already did; a page whose short body carries a
+  gradient no longer shows it only behind the content.
 * Smooth scrolling: `scrollTo`/`scrollBy` with `behavior: 'smooth'`, and
   page scrolls, `scrollIntoView` and in-page anchor jumps on a document
   whose root has `scroll-behavior: smooth`, glide to their target over
