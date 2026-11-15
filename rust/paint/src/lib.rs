@@ -22,6 +22,7 @@ pub mod text_layout;
 mod three_d;
 mod util;
 mod walk;
+mod wrap;
 
 pub use api::{
     apply_css_line_spacing, apply_font_features, apply_i18n, apply_inline_font,
@@ -37,3 +38,4 @@ pub use inline::has_small_caps;
 pub use links::{LayoutLinks, LegendGap, install_layout_links};
 pub use three_d::HitTest;
 pub use walk::VpCapture;
+pub use wrap::apply_text_wrap_style;
