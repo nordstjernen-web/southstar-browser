@@ -10,8 +10,9 @@ supported. [CSS-compatibility.md](CSS-compatibility.md) is the module-by-module
 map with the details, and [HTML-compatibility.md](HTML-compatibility.md) covers
 HTML.
 
-Snapshot: 2026-11-15. Of the template's 254 rows, 186 are ✅, 15 ⚠️ and 53 ❌
-(Blitz's own page shows about 136 ✅ on the same rows).
+Snapshot: 2026-11-15. Of the template's 254 rows, 199 are ✅, 12 ⚠️ and 43 ❌
+(Blitz's own page shows about 136 ✅ on the same rows). Background images and
+gradients on `html` or `body` cover the whole canvas, as in other browsers.
 
 **Legend:** ✅ supported · ⚠️ partial · 🚧 in progress · ❌ not supported
 (❌ *parsed* means the value is accepted, cascaded and serialized but not
@@ -61,7 +62,7 @@ rendered).
 |---------|:--:|-------|
 | `opacity` | ✅ | |
 | `visibility` | ✅ | `visible` / `hidden` / `collapse` |
-| `contain: layout` | ❌ | parsed |
+| `contain: layout` | ✅ | contains floats and is the containing block of fixed and absolute descendants |
 | `contain: paint` | ✅ | clips to the padding box (also `content`, `strict`) |
 | `contain: style` | ❌ | parsed |
 | `contain: size` | ✅ | height ignores the contents, from `contain-intrinsic-size` or zero (also `strict`) |
@@ -124,11 +125,11 @@ rendered).
 | `font-stretch` | ✅ | |
 | `font-feature-settings` | ✅ | |
 | `font-variant-ligatures` | ✅ | |
-| `font-variant-numeric` | ⚠️ | parsed; reachable through `font-feature-settings` |
-| `font-variant-caps` | ⚠️ | `small-caps` renders (synthesized when the font lacks them); other values parsed |
-| `font-variant-east-asian` | ❌ | parsed |
-| `font-variant-position` | ❌ | parsed |
-| `font-variant-alternates` | ❌ | parsed |
+| `font-variant-numeric` | ✅ | mapped to `lnum`/`onum`/`pnum`/`tnum`/`frac`/`afrc`/`ordn`/`zero` |
+| `font-variant-caps` | ✅ | `small-caps` (synthesized when the font lacks them) and the OpenType caps features |
+| `font-variant-east-asian` | ✅ | |
+| `font-variant-position` | ✅ | `subs` / `sups` |
+| `font-variant-alternates` | ⚠️ | `historical-forms`; the `@font-feature-values` functions are not supported |
 | `font-variant-emoji` | ❌ | parsed |
 | `font-variation-settings` | ✅ | |
 | `font-optical-sizing` | ❌ | parsed |
@@ -175,12 +176,12 @@ rendered).
 | `-webkit-text-fill-color` | ✅ | |
 | `text-decoration-skip-ink` | ❌ | parsed |
 | `quotes` | ✅ | |
-| `text-underline-position` | ❌ | parsed |
+| `text-underline-position` | ✅ | `under` clears descenders; `left` / `right` (vertical text) are ignored |
 | `line-break` | ❌ | parsed; breaking follows UAX #14 with the Thai/Arabic/Indic tailorings |
-| `-webkit-text-stroke` | ❌ | |
+| `-webkit-text-stroke` | ✅ | per text run |
 | `box-decoration-break` | ❌ | parsed |
 | `text-align-last` | ❌ | |
-| `paint-order` | ⚠️ | SVG text and shapes only |
+| `paint-order` | ✅ | SVG, and stroke-before-fill on HTML text |
 | `text-justify` | ❌ | parsed |
 | `text-decoration-inset` | ❌ | |
 
@@ -197,7 +198,7 @@ rendered).
 | `background-origin` | ✅ | |
 | `background-attachment: scroll` | ✅ | |
 | `background-attachment: fixed` | ✅ | |
-| `background-attachment: local` | ❌ | |
+| `background-attachment: local` | ✅ | |
 
 ## Flexbox
 
@@ -208,7 +209,7 @@ rendered).
 | `flex-shrink` | ✅ | |
 | `flex-grow` | ✅ | |
 | `flex-basis` | ✅ | |
-| `-webkit-box-*` | ⚠️ | `display: -webkit-box` lays out as flex and `-webkit-box-orient` is honoured with `-webkit-line-clamp`; the other legacy box properties are not |
+| `-webkit-box-*` | ✅ | orient, pack, align, direction, flex and ordinal-group map onto flexbox |
 
 ## Grid
 
@@ -345,7 +346,7 @@ these are read from presentation attributes and from CSS.
 | Feature | Status | Notes |
 |---------|:--:|-------|
 | `scroll-behavior` | ✅ | `smooth` glides script, `scrollIntoView` and anchor scrolls of the page; also `behavior: 'smooth'` in `scrollTo`/`scrollBy` |
-| `overscroll-behavior` | ❌ | parsed |
+| `overscroll-behavior` | ✅ | `contain` / `none` stop wheel scroll chaining |
 | `scroll-snap-type` | ✅ | |
 | `scroll-snap-align` | ✅ | |
 | `scroll-margin` | ✅ | |
@@ -376,7 +377,7 @@ these are read from presentation attributes and from CSS.
 | `container-type` | ✅ | `@container` size and style queries, container units |
 | `speak` | ❌ | |
 | `container` | ✅ | shorthand with `container-name` |
-| `field-sizing` | ❌ | parsed |
+| `field-sizing` | ✅ | text inputs and textareas |
 
 ## Multi-column layout
 
@@ -386,7 +387,7 @@ these are read from presentation attributes and from CSS.
 | `column-width` | ✅ | |
 | `column-fill` | ❌ | parsed; columns are always balanced |
 | `column-rule` | ✅ | |
-| `column-span` | ❌ | parsed |
+| `column-span` | ✅ | `all` spans every column; the flow around it is balanced in segments |
 
 ## Anchor positioning
 
