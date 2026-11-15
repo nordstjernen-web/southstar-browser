@@ -1,4 +1,5 @@
 //! Southstar text — glyph items: an item with its shaped glyphs, split at clusters, re-attributed, letter- and word-spaced and walked cluster by cluster.
+//!
 //! Copyright 2002 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

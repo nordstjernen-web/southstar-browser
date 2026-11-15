@@ -1,4 +1,5 @@
-//! Southstar — flexbox layout ported from layout.c: single-line and wrapping row containers and column containers, with flex base sizes, resolved flexible lengths, cross sizes, alignment, gaps and auto margins.
+//! Southstar — flexbox layout: single-line and wrapping row containers and column containers, with flex base sizes, resolved flexible lengths, cross sizes, alignment, gaps and auto margins.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

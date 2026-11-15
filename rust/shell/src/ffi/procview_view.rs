@@ -1,4 +1,5 @@
 //! Southstar — the tab view's lifetime: building its widgets, the worker it starts, its reference count and its teardown.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

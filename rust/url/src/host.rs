@@ -1,4 +1,5 @@
 //! Southstar — the URL Standard's host parser and serializer: domains through IDNA, IPv4 and IPv6 addresses and opaque hosts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

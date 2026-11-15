@@ -1,4 +1,5 @@
 //! Southstar — the JavaScript that builds a frame's window: the global bootstrap run in a frame realm, the scope wrapped around frame scripts run in the page realm, and the cross-origin window proxy.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

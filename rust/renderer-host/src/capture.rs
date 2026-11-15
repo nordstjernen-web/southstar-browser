@@ -1,4 +1,5 @@
 //! Southstar — captures an embedder asks the renderer for: a PNG of a region of the document, and the page printed to a paged PDF.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — a computed style's lifetime: the pool styles come from, the counted reference the style table and other crates hold on one, and the clone style sharing hands an element.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

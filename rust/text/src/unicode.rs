@@ -1,4 +1,5 @@
 //! Southstar text — Unicode character properties from rust/unicode, with GLib's numeric category and line break codes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

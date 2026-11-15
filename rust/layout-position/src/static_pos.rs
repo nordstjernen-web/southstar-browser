@@ -1,4 +1,5 @@
 //! Southstar — the static position of an absolutely positioned box: where it would have been laid out in its block, inline, or flex parent.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

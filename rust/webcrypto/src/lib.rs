@@ -1,4 +1,5 @@
 //! Southstar — SubtleCrypto primitives over OpenSSL libcrypto: digests, HMAC, AES, RSA, ECDSA/ECDH, Ed25519/X25519, PBKDF2 and HKDF.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

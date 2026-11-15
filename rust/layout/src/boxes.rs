@@ -1,4 +1,5 @@
 //! Southstar — the layout box, its inline attribute, link and atomic records, and the borrowed box handle every layout crate reads and writes it through.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

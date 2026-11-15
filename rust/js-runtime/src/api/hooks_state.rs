@@ -1,4 +1,5 @@
 //! Southstar — the typed tables through which the page record reaches the binding crates above it that keep per-page state: storage, blob URLs, the window, timers, workers, animation frames, media and the per-page caches torn down with the page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

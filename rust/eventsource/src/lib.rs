@@ -1,4 +1,5 @@
 //! Southstar — EventSource / Server-Sent Events: the stream parser, the response-header checks and the reconnecting worker.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

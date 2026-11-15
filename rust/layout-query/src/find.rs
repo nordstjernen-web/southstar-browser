@@ -1,4 +1,5 @@
 //! Southstar — find-in-page over the laid-out text runs: counting the matches of a needle, the first run with a match below or above a scroll offset and the ordinal of a run's first match.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

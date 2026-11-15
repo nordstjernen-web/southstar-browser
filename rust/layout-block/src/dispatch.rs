@@ -1,4 +1,5 @@
 //! Southstar — laying out one box by its kind, the container-query dimensions it sees, and shifting a laid-out subtree.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

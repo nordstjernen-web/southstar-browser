@@ -1,4 +1,5 @@
 //! Southstar — microphone capture for getUserMedia audio and Web Audio: a mono ring buffer and its time-domain and frequency views.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

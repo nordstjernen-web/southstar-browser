@@ -1,4 +1,5 @@
 //! Southstar — writes the Google Safe Browsing API key from NS_SAFE_BROWSING_API_KEY into OUT_DIR, or nothing when it is unset or malformed.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

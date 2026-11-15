@@ -1,4 +1,5 @@
 //! Southstar — the libcairo declarations, made once for every drawing crate, and the safe wrappers over them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

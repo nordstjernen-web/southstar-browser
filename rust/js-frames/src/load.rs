@@ -1,4 +1,5 @@
 //! Southstar — loading a frame's document: fetching its source under the page's CSP and framing rules, building the document the response describes, and running it with its scripts and load events.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

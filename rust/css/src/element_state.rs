@@ -1,4 +1,5 @@
 //! Southstar — the element state behind pseudo-classes: form controls (:checked, :default, :indeterminate, :valid, :invalid, :in-range, :read-write, :placeholder-shown, :blank, :required, :disabled), links and :visited, :target, :lang(), :dir(), :empty, :heading() and the media, popover and dialog states.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

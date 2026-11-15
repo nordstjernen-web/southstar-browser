@@ -1,4 +1,5 @@
 //! Southstar — script evaluation: classic scripts and modules in the page, frame and module realms, the module loader, content scripts and the error lines they log.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

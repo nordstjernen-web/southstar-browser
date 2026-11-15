@@ -1,4 +1,5 @@
 //! Southstar text — bidirectional text: character directions, a paragraph's base direction and its embedding levels.
+//!
 //! Copyright 2002, 2008 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

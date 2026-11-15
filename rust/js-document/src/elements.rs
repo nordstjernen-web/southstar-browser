@@ -1,4 +1,5 @@
 //! Southstar — the document's element getters: documentElement, body and its setter, head, scrollingElement, activeElement, currentScript, scripts and anchors.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

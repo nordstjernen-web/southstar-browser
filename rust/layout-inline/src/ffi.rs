@@ -1,4 +1,5 @@
 //! Southstar — the inline entry points paint calls, the mathml and form-control calls inline layout makes, and the sibling-crate helpers it borrows.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

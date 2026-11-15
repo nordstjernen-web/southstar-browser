@@ -1,4 +1,5 @@
 //! Southstar — the CSS content property and its pieces: strings with their escapes, counter() and counters() with counter styles and symbols(), attr(), quotes and images, in canonical form, and the identifiers and CSS-wide keywords they are checked against.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

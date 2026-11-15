@@ -1,4 +1,5 @@
 //! Southstar — a block's used height from its content, height, aspect-ratio, min/max and stretch keywords, then align-content, centred control content, scroll extents, and size containment from content-visibility and contain.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

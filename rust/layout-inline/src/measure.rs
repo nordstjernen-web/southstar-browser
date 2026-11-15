@@ -1,4 +1,5 @@
 //! Southstar — measuring a laid-out southstar-text paragraph, with a per-thread cache keyed by the layout's settings, attributes, text and font.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

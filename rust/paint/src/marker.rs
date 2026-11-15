@@ -1,4 +1,5 @@
 //! Southstar — list item markers: ordinals with start, value and reversed, the counter styles, ::marker content, and painting outside markers as text, glyph shapes or images.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

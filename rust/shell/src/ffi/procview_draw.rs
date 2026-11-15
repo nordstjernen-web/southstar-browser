@@ -1,4 +1,5 @@
 //! Southstar — the tab view's drawing area, page frame and tile snapshot, cursors, scroll adjustments, wheel and fling scrolling, and the render and tick requests that keep the page painted.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — BMP decoding: core, info and V2–V5 headers, 1/2/4/8-bit palettes, RLE4 and RLE8, 16- and 32-bit bit fields, 24- and 32-bit pixels, bottom-up and top-down rows.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

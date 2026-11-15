@@ -1,4 +1,5 @@
 //! Southstar — the Rust API other crates call to collect, schedule and run a page's scripts and to evaluate source in it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

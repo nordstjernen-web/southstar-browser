@@ -1,4 +1,5 @@
 //! Southstar text — fontsets: the fonts fontconfig sorted for one description, loaded lazily and searched for the font covering a character.
+//!
 //! Copyright 2001 Red Hat Software, 2003 Keith Packard; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

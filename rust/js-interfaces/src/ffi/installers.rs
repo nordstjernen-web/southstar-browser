@@ -1,4 +1,5 @@
 //! Southstar — installs the DOM property tables: the engine classes and their prototypes, per-interface members, the document's own functions and the proto tables the page setup asks for.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

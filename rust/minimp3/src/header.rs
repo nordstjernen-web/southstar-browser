@@ -1,4 +1,5 @@
 //! Southstar — reading an MPEG audio frame header: version, layer, rates, stereo mode and frame size. Ported from minimp3 by lieff (CC0).
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the svg intrinsic-size call sizing makes, the measures the formatting-context crates install, and the helpers sizing borrows from the other layout crates.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

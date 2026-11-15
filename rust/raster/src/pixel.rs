@@ -1,4 +1,5 @@
 //! Southstar — the premultiplied BGRA canvas decoders draw into, with the 8- and 16-bit premultiplication and source-over arithmetic Wuffs used, so decoded pixels stay bit-identical.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

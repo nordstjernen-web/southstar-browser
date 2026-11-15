@@ -1,4 +1,5 @@
 //! Southstar — the host objects southstar-jsshell installs in every realm: print and test262's $262.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

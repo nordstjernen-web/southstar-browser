@@ -1,4 +1,5 @@
 //! Southstar text — the fontconfig calls that index a web font without FreeType: character sets, language sets, ranges and the application font set.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

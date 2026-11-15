@@ -1,4 +1,5 @@
 //! Southstar — TextEncoder and TextDecoder over UTF-8, UTF-16LE/BE and windows-1252, with streaming and BOM handling.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

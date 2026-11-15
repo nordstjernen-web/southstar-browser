@@ -1,4 +1,5 @@
 //! Southstar — the per-thread box store whose slots are recycled rather than deallocated, and the box-tree links, text, attribute, link and atomic arrays tree building rewrites.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

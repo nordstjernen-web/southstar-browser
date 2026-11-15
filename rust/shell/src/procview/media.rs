@@ -1,4 +1,5 @@
 //! Southstar — the tab's media helpers: which X-Audio commands reach the audio and video helpers, the video overlay's rectangle and state, and which queued frame to show.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

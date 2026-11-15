@@ -1,4 +1,5 @@
 //! Southstar — the Rust-ABI entry points of the binding crates the window bindings call, resolved at link time because those crates sit beside this one in a cyclic graph.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

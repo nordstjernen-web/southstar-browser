@@ -1,4 +1,5 @@
 //! Southstar â€” GTK event controllers and input-method contexts whose signals take Rust closures through trampolines of each signal's exact C signature.
+//!
 //! Copyright 2026 Andreas RÃ¸sdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

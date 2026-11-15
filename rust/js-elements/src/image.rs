@@ -1,4 +1,5 @@
-//! Southstar — the <img> state getters: complete, naturalWidth, naturalHeight and currentSrc.
+//! Southstar — the `<img>` state getters: complete, naturalWidth, naturalHeight and currentSrc.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

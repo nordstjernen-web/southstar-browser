@@ -1,4 +1,5 @@
 //! Southstar — where the network layer keeps its files: the per-user data and cookie folders, the throwaway private-mode folder, the HSTS and Alt-Svc files, and clearing cookies and site storage.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

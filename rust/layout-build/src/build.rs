@@ -1,4 +1,5 @@
 //! Southstar — building and laying out a document: the per-build state, the counter and text-input-column passes, block layout, positioned boxes and paint bounds.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

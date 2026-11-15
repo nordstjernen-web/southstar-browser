@@ -1,4 +1,5 @@
 //! Southstar — what a page's script engine and media ask of the embedder, and its camera answer: console lines, navigations, downloads, window actions, the clipboard, selection commands, audio and media control.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

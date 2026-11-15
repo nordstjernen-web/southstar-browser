@@ -1,4 +1,5 @@
 //! Southstar — document.open, write, writeln and close on the page's document: the script-inserted markup buffer and where it is parsed into the tree.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

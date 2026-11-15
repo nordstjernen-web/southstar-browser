@@ -1,4 +1,5 @@
 //! Southstar — the pipeline calls of the page lifecycle: cascade and relayout, captures, CSS state, layout, paint, selection and the image, video and animation caches.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

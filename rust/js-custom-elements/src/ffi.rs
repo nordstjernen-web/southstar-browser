@@ -1,4 +1,5 @@
 //! Southstar — the custom element entry points for other crates and the page record's hooks, and the page-record calls they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

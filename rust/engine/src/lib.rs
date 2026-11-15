@@ -1,4 +1,5 @@
 //! Southstar — the synchronous page pipeline shared by the drivers: fetches, style sheets, relayout, captures and dumps.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

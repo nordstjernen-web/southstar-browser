@@ -1,4 +1,5 @@
 //! Southstar — the request queue: asynchronous fetches on their own threads with the result handed back to the caller's main context, blocking fetches, the limits of 32 fetches at once and 6 per host, sharing in-flight and preloaded responses, preconnects, blob: URLs, idling and shutdown.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

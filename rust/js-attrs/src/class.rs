@@ -1,4 +1,5 @@
 //! Southstar — the DOMTokenList, DOMStringMap and Attr host classes: token lists and their indexed properties, dataset and its named properties, and Attr nodes with their shared state.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

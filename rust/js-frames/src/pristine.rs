@@ -1,4 +1,5 @@
 //! Southstar — the page realm's platform properties as they stood before page script ran, so a frame realm gets the built-ins rather than the page's patches of them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

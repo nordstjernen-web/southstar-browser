@@ -1,4 +1,5 @@
 //! Southstar — the checks WebGL makes on shader source before a GPU driver's compiler sees it: character set, token length, reserved names, nesting, the version directive and macro expansion size.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

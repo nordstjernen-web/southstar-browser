@@ -1,4 +1,5 @@
 //! Southstar — text entries, the search entry and its match signals, and appending to a text view's buffer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

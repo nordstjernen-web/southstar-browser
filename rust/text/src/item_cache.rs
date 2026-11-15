@@ -1,4 +1,5 @@
 //! Southstar text — the cross-layout cache of itemised paragraphs, keyed on the text, its attributes, its offset and the context's state.
+//!
 //! Copyright 2026 Northstar contributors; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

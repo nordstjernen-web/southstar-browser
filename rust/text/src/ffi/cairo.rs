@@ -1,4 +1,5 @@
 //! Southstar text — cairo for text: font options, matrices, FreeType-backed and user scaled fonts, and the drawing calls glyphs need.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

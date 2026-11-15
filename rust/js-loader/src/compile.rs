@@ -1,4 +1,5 @@
 //! Southstar — compiled-script bookkeeping: the bytecode cache over classic scripts and modules, import attributes, import.meta (url, main and resolve) and the script profiler's report lines.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the layout passes a build runs over the finished box tree, which the positioning crate installs, and the builders tree and form-control code call back into.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

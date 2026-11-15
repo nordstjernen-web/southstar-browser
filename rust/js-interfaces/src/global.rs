@@ -1,4 +1,5 @@
 //! Southstar — the window global's WebIDL shape: its prototype chain and immutable prototypes, the navigator and web API singletons, and namespace objects.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — fetching a URL: one hop with its synthesized responses, cache lookup and revalidation, cookies, request headers and logging, the redirect loop around it, the Accept lines per destination and the coalescing key.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

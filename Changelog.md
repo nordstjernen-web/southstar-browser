@@ -34,6 +34,13 @@ Southstar Browser 1.0.10-dev:
   seccomp row shows only on Linux, the breadcrumb is gone and diagnostics
   rows stack on narrow windows. Headless renders honour
   `NS_COLOR_SCHEME=dark`.
+* The crate documentation on docs.rs reads cleanly: module summaries no
+  longer end in the copyright and licence lines, HTML element names show
+  instead of vanishing as tags, stale "ported from layout.c" and curl
+  wording is gone, and each merged crate's front page is its README with
+  links to its modules. southstar-engine is documented with the `wasm`
+  feature, and `scripts/crates-io.py check` now also runs `cargo doc` with
+  broken links and invalid HTML tags as errors.
 * No crates.io crate is built in two versions any more, except
   miniz_oxide, which the png crate itself uses in two. The Boa fork
   replaced dashmap, num_enum, rand, futures-concurrency, dynify, aligned-vec

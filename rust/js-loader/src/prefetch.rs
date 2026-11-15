@@ -1,4 +1,5 @@
 //! Southstar — starting the fetches of a module's static imports as soon as its source is known, so the loader's one-at-a-time requests find them in flight.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

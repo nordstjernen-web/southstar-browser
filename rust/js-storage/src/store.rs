@@ -1,4 +1,5 @@
 //! Southstar — the two storage areas of a page: their items, the 5 MiB quota, and the session and local areas shared by every page of the renderer, per partition and per origin.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

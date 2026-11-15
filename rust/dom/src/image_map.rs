@@ -1,4 +1,5 @@
 //! Southstar — client-side image maps: the area of a usemap under a point and its link.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

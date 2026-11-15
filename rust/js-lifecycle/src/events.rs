@@ -1,4 +1,5 @@
 //! Southstar — the animation and transition events drained from the animation engine, the SMIL timing events, and the load events of images and videos layout has finished.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

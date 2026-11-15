@@ -1,4 +1,5 @@
 //! Southstar — CSS colour values for the style engine, parsed and resolved by southstar-css-color.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

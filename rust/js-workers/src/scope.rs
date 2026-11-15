@@ -1,4 +1,5 @@
 //! Southstar — the worker global scope: its console, performance clock, location and the WebIDL shape of the global object.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of computing a document's styles: the walk that gathers, shares or cascades each element's style and its pseudo-elements', framed documents with their own sheets and viewport, and the incremental restyle that reuses the previous pass's styles for clean elements.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — one HTTP, HTTPS or FTP hop over the in-tree Rust HTTP client: the request the fetch path builds, the result it reads back, the jar's cookies and HSTS recording, written into the body and header sinks, directly or through an HTTP or SOCKS proxy.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the animation and transition lists a value keeps, and the ones a computed style's longhands give.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

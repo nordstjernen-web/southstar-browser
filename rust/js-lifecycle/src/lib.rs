@@ -1,4 +1,5 @@
 //! Southstar — requestAnimationFrame and the animation-frame tick, scrollend, animation and media load events, and the page lifecycle tick.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

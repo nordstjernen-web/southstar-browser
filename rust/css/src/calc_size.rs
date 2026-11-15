@@ -1,4 +1,5 @@
 //! Southstar — calc-size(): a sizing basis and a calculation linear in `size`, parsed into a calc value with its canonical text, interpolated, and serialized.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

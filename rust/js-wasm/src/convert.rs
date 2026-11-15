@@ -1,4 +1,5 @@
 //! Southstar — conversion of values between JavaScript and WebAssembly, following the ToWebAssemblyValue and ToJSValue rules of the JS API.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — form submission and reset: requestSubmit(), submit(), reset(), submit and reset buttons, method=dialog and the SubmitEvent constructor.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

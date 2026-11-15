@@ -1,4 +1,5 @@
 //! Southstar — CSS container queries: the query containers laid out for a page, the stack of ancestor containers while styles cascade, container-relative units, and @container conditions parsed, serialized and evaluated against the nearest matching container.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

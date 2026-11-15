@@ -2,8 +2,8 @@
 
 The browser engine of [Southstar](https://github.com/nordstjernen-web/southstar-browser):
 everything between a parsed document and pixels on the screen. In the
-Southstar repository it is about 85 small crates. Their dependencies
-interlock, so they are published together, each as a module.
+Southstar repository it is 87 small crates. Their dependencies interlock,
+so they are published together, each as a module.
 
 **JavaScript.** The `js_*` modules bind the web platform to
 [Boa](https://github.com/boa-dev/boa), through Southstar's fork
@@ -13,12 +13,13 @@ interlock, so they are published together, each as a module.
 - the CSSOM, observers, custom elements and shadow DOM;
 - `fetch`, `XMLHttpRequest`, WebSockets and `EventSource`;
 - storage, IndexedDB, workers, `Intl` and Temporal;
-- WebAssembly through [wasmi](https://crates.io/crates/wasmi), with the
-  `wasm` feature.
+- WebAssembly through [wasmi](https://crates.io/crates/wasmi), in
+  `js_wasm` with the `wasm` feature.
 
-The engine passes all of test262.
+The engine is checked against test262, which runs through Southstar's
+`southstar-jsshell`.
 
-**Layout.** The `layout*` modules implement:
+**Layout.** The `layout` module and its `layout_*` siblings implement:
 - block, inline, float and positioned layout;
 - flexbox, grid and tables;
 - intrinsic sizing, hit testing and layout queries.
@@ -33,11 +34,22 @@ The engine passes all of test262.
   (experimental, behind a runtime flag)
 - `print`
 
-**Network and media.**
-- `net`: the page fetch path. Redirects, cookies, HSTS, the cache, CSP,
-  partitioning and `about:` pages.
+**Network.**
+- `net`: the page fetch path. Redirects, cookies, HSTS, the cache,
+  partitioning and `about:` pages. The Content Security Policy it enforces
+  is parsed by `southstar-support`.
+- `websocket` and `eventsource`.
+
+**Storage.** `idb` keeps IndexedDB in per-origin SQLite files.
+
+**Media.**
 - `video`: inline MPEG-1 and WebM playback.
-- `webaudio`, `camera` and `idb`.
+- `webaudio`: offline Web Audio rendering.
+- `camera`: the camera permission and webcam frame conversion.
+
+The documentation on docs.rs is built with the `wasm` feature. It leaves
+out `webgpu`, which needs the external
+[wgpu-native](https://github.com/gfx-rs/wgpu-native) library.
 
 Part of the browser that `cargo install southstar` builds. The API follows
 the browser's needs and is not stable.

@@ -1,4 +1,5 @@
 //! Southstar — which @font-face rules a page needs: the families a font-family list names, the code points styled with each family, and unicode-range matching.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

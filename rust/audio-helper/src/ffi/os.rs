@@ -1,4 +1,5 @@
 //! Southstar — confining the helper with the renderer's Landlock and seccomp profile on Linux once its device and network are up.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

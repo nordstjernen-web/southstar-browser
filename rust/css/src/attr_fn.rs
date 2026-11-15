@@ -1,4 +1,5 @@
 //! Southstar — attr() substituted into a declaration value: the attribute read as a quoted string, as any value, against a type() syntax or with a unit, falling back through nested fallbacks, and the taint that keeps attribute text, and values chosen by it, out of url() and the image functions.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

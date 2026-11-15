@@ -1,4 +1,5 @@
-//! Southstar — a document's base URL: the href of its first <base> element with one, resolved against the document's own URL.
+//! Southstar — a document's base URL: the href of its first `<base>` element with one, resolved against the document's own URL.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

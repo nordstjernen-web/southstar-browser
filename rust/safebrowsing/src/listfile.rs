@@ -1,4 +1,5 @@
 //! Southstar — the Safe Browsing hash-prefix list files in the cache directory: atomic saves, binary search on disk and the one-updater lock.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — finding the layout box generated for a DOM node, with a per-thread map built once the page's layout root is searched repeatedly.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

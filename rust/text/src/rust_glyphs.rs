@@ -1,4 +1,5 @@
 //! Southstar text — outlines, extents and font extents of Rust-backed fonts, read through skrifa the way cairo-ft and FreeType load them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

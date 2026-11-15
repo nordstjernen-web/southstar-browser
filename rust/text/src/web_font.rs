@@ -1,4 +1,5 @@
 //! Southstar text — web fonts indexed for fontconfig from read-fonts, giving the patterns FcFreeTypeQueryAll gives without FreeType opening the file.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

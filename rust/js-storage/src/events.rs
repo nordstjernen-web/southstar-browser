@@ -1,4 +1,5 @@
 //! Southstar — the storage event: built on every change, queued, and delivered to the other frames of the page and then to the window.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

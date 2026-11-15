@@ -1,4 +1,5 @@
 //! Southstar — the owner of the libswscale scaler that turns decoded frames into BGRA.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

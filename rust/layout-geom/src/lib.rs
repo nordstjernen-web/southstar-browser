@@ -1,4 +1,5 @@
 //! Southstar — the length, height and edge resolution the layout crates share: CSS lengths against a basis, used and definite heights, min/max clamping, box edges, and the style predicates and keywords layout reads.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

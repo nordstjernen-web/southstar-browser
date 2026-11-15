@@ -1,4 +1,5 @@
 //! Southstar — the MPEG program stream demuxer: pack and system headers, PES packets, duration and seeking. Ported from pl_mpeg by Dominic Szablewski (MIT).
+//!
 //! Copyright 2019 Dominic Szablewski
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT

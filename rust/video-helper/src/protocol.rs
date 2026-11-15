@@ -1,4 +1,5 @@
 //! Southstar — the helper's line protocol: commands from the shell on stdin, events back on stdout, and the table of up to four players.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

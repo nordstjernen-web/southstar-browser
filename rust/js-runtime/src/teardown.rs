@@ -1,4 +1,5 @@
 //! Southstar — freeing a realm: every per-page state's teardown in order, the pinned wrappers, the orphaned subtrees and the engine.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

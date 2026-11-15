@@ -1,4 +1,5 @@
 //! Southstar — var() and if() substituted into a value: custom properties looked up through an element's variable map, CSS-wide keywords and registered initial values, fallbacks, the branch if() picks, and the expansion budget that keeps self-referencing variables from growing without bound.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

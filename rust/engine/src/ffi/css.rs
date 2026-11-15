@@ -1,4 +1,5 @@
 //! Southstar — style sheets and their imports, the CSS parse caches, frame viewports for media queries, the cascade and the render context.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

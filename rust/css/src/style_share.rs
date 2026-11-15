@@ -1,4 +1,5 @@
 //! Southstar — sharing computed styles between elements: the per-pass table that maps the key an element's parent, root font size, container context and matched declarations make to the style first computed for it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

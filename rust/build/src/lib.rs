@@ -1,4 +1,5 @@
 //! Southstar build — build-script helpers for a plain cargo build: system libraries through pkg-config, and C layouts probed from installed headers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the constant tables of the MP3 decoder: Huffman codebooks, scalefactor bands and filterbank windows. Ported from minimp3 by lieff (CC0).
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

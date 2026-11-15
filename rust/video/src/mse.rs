@@ -1,4 +1,5 @@
 //! Southstar — Media Source Extensions streams: the appended video and audio bytes per stream, their init segments, chunk time ranges and generations.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

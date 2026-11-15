@@ -1,4 +1,5 @@
 //! Southstar — the southstar-text attributes an inline run is shaped with: spacing, inline font runs, atomic inline shapes, line-height struts and stretched text inputs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

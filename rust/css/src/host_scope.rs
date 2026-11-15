@@ -1,4 +1,5 @@
 //! Southstar — a shadow tree's or framed document's style sheet scoped to its host: :host, :host(), :host-context() and ::slotted() rewritten to the host's scope attribute, and every other selector confined beneath it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

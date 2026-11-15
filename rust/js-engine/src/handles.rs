@@ -1,4 +1,5 @@
 //! Southstar — engine-neutral handles to a runtime and to a context (one realm), the options a runtime is created with and the outcome of running one pending job.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

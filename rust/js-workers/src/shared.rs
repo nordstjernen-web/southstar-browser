@@ -1,4 +1,5 @@
 //! Southstar — SharedWorker: one worker thread per (constructor origin, script URL, name) that every same-origin page and frame in the renderer connects to through its own MessagePort.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

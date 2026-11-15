@@ -1,4 +1,5 @@
 //! Southstar — what a frame's scripts run in the page realm may change and the page gets back afterwards: the intrinsic prototypes' enumerable keys, Zone, and the native event, timer and custom element bindings.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

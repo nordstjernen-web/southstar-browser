@@ -1,4 +1,5 @@
 //! Southstar — the topmost box under a point: a painting-order walk that defers positioned layers to the end of their stacking scope, then tests each box's own area, honouring an open modal dialog.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

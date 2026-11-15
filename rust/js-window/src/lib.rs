@@ -1,4 +1,5 @@
 //! Southstar — the window's bindings: History, the Navigation API, Location, window.open, postMessage, session history, the browsing-context members, named access and the page's fragment navigation, scroll and page transition glue.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

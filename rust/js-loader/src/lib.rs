@@ -1,4 +1,5 @@
 //! Southstar — script, module and stylesheet loading: which scripts run when, import maps, module fetching and the load and error events of script and link elements.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

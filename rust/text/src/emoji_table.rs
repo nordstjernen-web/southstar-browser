@@ -1,4 +1,5 @@
 //! Southstar text — the Unicode 17 emoji property tables, generated from web-text-lib's pango-emoji-table.h.
+//!
 //! Copyright 2025 Unicode, Inc.; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

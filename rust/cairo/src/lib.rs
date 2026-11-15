@@ -1,4 +1,5 @@
 //! Southstar — safe, single-threaded wrappers over the system libcairo; its objects are interior-mutable and every call goes through a handle that keeps them alive.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

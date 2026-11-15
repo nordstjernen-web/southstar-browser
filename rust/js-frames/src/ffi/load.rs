@@ -1,4 +1,5 @@
 //! Southstar — the calls loading a frame's document makes: fetching, decoding and parsing it, the engine state its load runs under and the page events it fires.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

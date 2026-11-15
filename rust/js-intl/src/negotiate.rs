@@ -1,4 +1,5 @@
 //! Southstar — the ECMA-402 locale and option abstract operations every Intl constructor shares.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

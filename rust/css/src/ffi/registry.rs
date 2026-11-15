@@ -1,4 +1,5 @@
 //! Southstar — registered custom properties: CSS.registerProperty()'s process-wide registry, and the per-pass table of @property rules and script registrations the cascade checks custom properties against.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

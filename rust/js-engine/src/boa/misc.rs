@@ -1,4 +1,5 @@
 //! Southstar — the remaining neutral scope helpers on Boa: object identities; import.meta; engine-private names, brands and bytecode are not available, so they report nothing.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

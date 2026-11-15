@@ -1,4 +1,5 @@
 //! Southstar — @supports conditions and CSS.supports(): declarations tried by parsing them as a rule, selector() through the selector parser, font-tech() and font-format() and other functions as unsupported, combined with not, and and or.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

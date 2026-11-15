@@ -1,4 +1,5 @@
 //! Southstar — the image decode chain and the per-page image cache: MIME support, retry back-off, animation frames and the memory budget.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

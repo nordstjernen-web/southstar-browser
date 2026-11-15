@@ -1,4 +1,5 @@
 //! Southstar — the about: page templates: the new-tab page, about:southstar and the settings page, with the placeholders filled per request.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

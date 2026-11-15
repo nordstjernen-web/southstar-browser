@@ -1,4 +1,5 @@
 //! Southstar — expanding one declaration into the longhand declarations css.c stores: `all`, the border, outline, background, mask, position, grid, gap, place, columns, text-decoration, font, flex, list-style, border-radius, inset, margin and padding shorthands, the white-space, text-wrap, text-emphasis, -webkit-text-stroke and font-synthesis keyword shorthands, and the legacy and logical aliases.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — itemization: cutting a paragraph into items of one bidi level, script, language, font, width class and emoji presentation.
+//!
 //! Copyright 2000, 2006 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

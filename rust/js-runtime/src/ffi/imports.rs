@@ -1,4 +1,5 @@
 //! Southstar — the Rust-ABI entry points of the binding crates that realm setup and teardown call back into, resolved at link time because those crates sit above this one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

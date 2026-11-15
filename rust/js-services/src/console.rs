@@ -1,4 +1,5 @@
 //! Southstar — the window console: formatting arguments into log lines, count, time and the namespace object.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

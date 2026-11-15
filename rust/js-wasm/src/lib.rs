@@ -1,4 +1,5 @@
 //! Southstar — the WebAssembly JavaScript API over the wasmi interpreter, installed into each page and worker realm.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

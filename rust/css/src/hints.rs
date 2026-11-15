@@ -1,4 +1,5 @@
 //! Southstar — presentational hints: the declarations an element's legacy HTML attributes (bgcolor, width and height, align, border, cellpadding, font color, face and size, body margins, table rules and frame, ...) and SVG presentation attributes stand for.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of element state: the pseudo-class test css.c's matcher delegates, the target fragment, visited links and the document language, with the Unicode, pattern and URL checks they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

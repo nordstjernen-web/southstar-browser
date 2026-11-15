@@ -1,4 +1,5 @@
 //! Southstar — the opt-in loopback control channel that lets a local MCP client drive the browser window.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

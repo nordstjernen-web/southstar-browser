@@ -1,4 +1,5 @@
 //! Southstar — the engine as the renderer host sees it: the browser crate's page API plus the favicon fetch, the network log and print sheets written out as PNG.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

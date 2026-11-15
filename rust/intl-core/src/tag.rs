@@ -1,4 +1,5 @@
 //! Southstar — Unicode BCP 47 locale identifiers: the UTS #35 grammar, canonicalization and likely subtags.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

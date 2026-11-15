@@ -1,4 +1,5 @@
-//! Southstar — the URL and density an <img> loads: a <picture>'s first matching <source>, the lazy-loading data-* attributes sites use, then srcset and src, preferring a real URL over a data: placeholder.
+//! Southstar — the URL and density an `<img>` loads: a `<picture>`'s first matching `<source>`, the lazy-loading data-* attributes sites use, then srcset and src, preferring a real URL over a data: placeholder.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

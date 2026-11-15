@@ -1,4 +1,5 @@
 //! Southstar — the popover attribute and state machine: show, hide and toggle, the auto and hint stacks, light dismiss and the toggle tasks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

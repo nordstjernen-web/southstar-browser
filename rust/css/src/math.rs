@@ -1,4 +1,5 @@
 //! Southstar — the canonical spelling of CSS math values: sums of numbers, percentages and dimensions folded to one calc() with their units converted and sorted, and other math functions reduced to their computed calc() when they resolve without a percentage.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

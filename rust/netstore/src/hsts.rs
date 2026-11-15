@@ -1,4 +1,5 @@
 //! Southstar — the HSTS host list's rules over bytes: curl's file format, host lookup with includeSubDomains and expiry, Strict-Transport-Security parsing and rewriting the list.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

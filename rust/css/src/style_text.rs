@@ -1,4 +1,5 @@
-//! Southstar — the style text a <style> element or adopted shadow sheet contributes: its text joined, dropped when its media query fails, and scoped to the shadow host or framed document it sits in.
+//! Southstar — the style text a `<style>` element or adopted shadow sheet contributes: its text joined, dropped when its media query fails, and scoped to the shadow host or framed document it sits in.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

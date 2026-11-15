@@ -1,4 +1,5 @@
 //! Southstar — building the box tree for a DOM subtree: documents and frames, replaced and form-control boxes, slots and shadow roots, display: contents, flex and grid items, rendered fieldset legends and the runs, blocks and anonymous tables of a block container.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

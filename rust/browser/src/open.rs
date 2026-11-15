@@ -1,4 +1,5 @@
 //! Southstar — opening a page: the safe-browsing gate, local paths, HTTPS-first, error pages, turning images, PDFs, JSON, XML and text into documents, parsing and the security state.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

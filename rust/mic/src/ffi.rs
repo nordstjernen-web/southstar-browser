@@ -1,4 +1,5 @@
 //! Southstar — microphone capture over SDL2's audio capture device: acquiring, releasing and reading the captured signal.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

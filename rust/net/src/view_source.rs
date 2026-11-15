@@ -1,4 +1,5 @@
 //! Southstar — view-source: documents, the fetched markup shown with its tags, attributes, values, comments and doctypes highlighted.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

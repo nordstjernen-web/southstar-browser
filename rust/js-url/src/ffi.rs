@@ -1,4 +1,5 @@
 //! Southstar — the C ABI and Rust-ABI entry points of the URL, codec, object-URL, blob: URL registry and FileReader bindings, and the realm and net calls they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

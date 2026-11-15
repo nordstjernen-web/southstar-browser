@@ -1,4 +1,5 @@
 //! Southstar — UI scale for displays GTK does not scale itself: GTK on Windows scales widgets by whole factors only, so at 125%, 150% or 175% it scales text and leaves every pixel length at 100%.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

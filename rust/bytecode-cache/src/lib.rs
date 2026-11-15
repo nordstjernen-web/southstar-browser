@@ -1,4 +1,5 @@
 //! Southstar — JavaScript bytecode cache: an LRU in memory over versioned files on disk, keyed by the source's SHA-256.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

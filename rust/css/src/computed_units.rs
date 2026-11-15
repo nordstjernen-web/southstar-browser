@@ -1,4 +1,5 @@
 //! Southstar — units resolved in a computed style: the element's font size in px, then em, rem, ex, ch, lh, rlh, viewport and container units, percentages in line-height, and infinite or NaN calc() results clamped, across lengths, calc() values, shadows, grid tracks, transforms and sizes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

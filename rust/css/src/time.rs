@@ -1,4 +1,5 @@
 //! Southstar — CSS time values: checking that an expression of numbers, s and ms and the math functions is a time, its value in seconds, and the specified and computed spelling of a list of them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

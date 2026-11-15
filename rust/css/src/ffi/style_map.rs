@@ -1,4 +1,5 @@
 //! Southstar — one style pass's result: every element's computed style keyed by its node, holding a reference on each.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

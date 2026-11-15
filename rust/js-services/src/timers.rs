@@ -1,4 +1,5 @@
 //! Southstar — setTimeout, setInterval and requestIdleCallback: each page's timers, the GLib sources that fire them and IdleDeadline.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

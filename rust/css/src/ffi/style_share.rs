@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of style sharing: the share key built from css.c's match arrays for an element and its pseudo-elements, looked up and stored in the per-pass share table.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — drawing whole layouts and layout lines with the cairo text renderer, shown or added to the current path.
+//!
 //! Copyright 2004 Red Hat, Inc.; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

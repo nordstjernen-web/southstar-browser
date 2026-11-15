@@ -1,4 +1,5 @@
 //! Southstar GLib — the user and system directories and the user's languages, resolved the way GLib resolves them, without GLib.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

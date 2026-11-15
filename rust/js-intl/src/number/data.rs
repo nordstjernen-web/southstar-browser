@@ -1,4 +1,5 @@
 //! Southstar — the compact locale data Intl.NumberFormat formats with: symbols, patterns, compact names, currencies, units and digits.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

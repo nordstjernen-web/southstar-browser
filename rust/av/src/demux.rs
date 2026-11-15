@@ -1,4 +1,5 @@
 //! Southstar — owners of a libav demuxer opened on a file or an in-memory buffer, and borrowed views of its streams and codec parameters.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — font metrics: ascent, descent, height, average widths and decoration line positions in Pango units.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

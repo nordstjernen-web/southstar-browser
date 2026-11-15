@@ -1,4 +1,5 @@
 //! Southstar — MutationObserver, IntersectionObserver and ResizeObserver: each page's observers, the records they queue and the ticks that deliver them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

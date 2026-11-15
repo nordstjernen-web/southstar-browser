@@ -1,4 +1,5 @@
 //! Southstar — frameset presentational hints: the grid tracks a frameset's rows and cols lists of dimensions stand for, and the frame borders frameborder and border turn off.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

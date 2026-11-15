@@ -1,4 +1,5 @@
 //! Southstar — the interface installers' links to the rest of the engine: the realm record, the other binding crates, and the exports the page and worker setup call.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

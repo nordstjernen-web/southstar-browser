@@ -1,4 +1,5 @@
 //! Southstar — what is under the pointer: links, the cursor, media elements and their URLs, find-in-page and click-to-play video.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

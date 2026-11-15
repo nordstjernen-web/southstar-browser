@@ -1,4 +1,5 @@
 //! Southstar — the element-internals state of custom elements: form association, submission entries, validity, the last form owner and disabled state, and the custom states :state() matches.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

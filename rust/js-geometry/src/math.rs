@@ -1,4 +1,5 @@
 //! Southstar — MathML geometry: the client rectangle of an element inside a formula, read back from the formula's own layout.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

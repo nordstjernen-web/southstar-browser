@@ -1,4 +1,5 @@
 //! Southstar — the script engine handle of a page and the script engine calls the lifecycle makes on it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

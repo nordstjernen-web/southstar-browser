@@ -1,4 +1,5 @@
 //! Southstar — running a loaded frame document's scripts: in the frame's own realm when it gets one, otherwise in the page realm under the frame's scope, then its module scripts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

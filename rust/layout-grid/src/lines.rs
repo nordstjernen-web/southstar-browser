@@ -1,4 +1,5 @@
 //! Southstar — resolving grid-row and grid-column placements to line numbers through numbers, named lines and template areas.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

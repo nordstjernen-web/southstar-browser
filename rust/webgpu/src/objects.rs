@@ -1,4 +1,5 @@
 //! Southstar — the WebGPU host objects: what each wraps and how it is built with its methods.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

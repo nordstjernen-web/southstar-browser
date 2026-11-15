@@ -1,4 +1,5 @@
 //! Southstar — click(), synthetic click activation and keyboard activation of links, buttons, checkables and summaries.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

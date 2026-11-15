@@ -1,4 +1,5 @@
 //! Southstar — the shell executable's entry point: process bootstrap, headless dispatch and the out-of-process GTK shell.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

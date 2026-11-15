@@ -1,4 +1,5 @@
 //! Southstar — wrapping row flex containers: breaking items into lines, per-line flexing and alignment, align-content and wrap-reverse.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

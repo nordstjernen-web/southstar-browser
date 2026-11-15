@@ -1,4 +1,5 @@
 //! Southstar text — the cross-layout cache of shaped runs, keyed on everything HarfBuzz reads, stored a word at a time where that is safe.
+//!
 //! Copyright 2026 Northstar contributors; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

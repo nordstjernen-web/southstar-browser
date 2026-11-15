@@ -1,4 +1,5 @@
 //! Southstar — the generated-content and form-control entry points layout.c calls, and the layout.c, css, glib and text-layout calls they make back, behind safe wrappers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

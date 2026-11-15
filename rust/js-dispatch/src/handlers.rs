@@ -1,4 +1,5 @@
 //! Southstar — event handlers: inline on* content attributes compiled per realm, the IDL handler properties and their accessors, the window's and document's handlers, and window.event while a listener runs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the Rust-ABI entry points of the engine crates the frame bindings call, resolved at link time.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

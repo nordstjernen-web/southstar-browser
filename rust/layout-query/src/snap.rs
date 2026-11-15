@@ -1,4 +1,5 @@
 //! Southstar — CSS scroll snapping: the snap positions a scroller's descendants offer through scroll-snap-align and scroll-margin, the snapport after scroll-padding, and the choice between them by travel direction and distance.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

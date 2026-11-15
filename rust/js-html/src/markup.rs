@@ -1,4 +1,5 @@
 //! Southstar — innerHTML, outerHTML, getHTML, setHTMLUnsafe, insertAdjacentHTML and XMLSerializer over the rust/html5 fragment parser and the DOM serializer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

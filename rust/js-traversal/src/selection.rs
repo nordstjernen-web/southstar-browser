@@ -1,4 +1,5 @@
 //! Southstar — window.getSelection and document.getSelection over the shell's current text selection.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

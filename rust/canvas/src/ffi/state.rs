@@ -1,4 +1,5 @@
 //! Southstar — the canvas drawing state: its cairo surface and context, the 2D context object it belongs to, its lifetime and the surface the painter composites.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

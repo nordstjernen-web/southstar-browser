@@ -1,4 +1,5 @@
 //! Southstar — the network modules behind the ported C ABI, and the error pages, about:, data:, file:, FTP listing and view-source: responses synthesized without the network.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

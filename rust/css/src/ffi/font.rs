@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of CSS font values, and the font oracle, generation and metrics callbacks the painter installs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

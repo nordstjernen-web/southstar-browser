@@ -1,4 +1,5 @@
 //! Southstar — the H.264 and AAC configuration and packet reshaping the Media Foundation decoders need: avcC to Annex B, and AudioSpecificConfig parsing.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

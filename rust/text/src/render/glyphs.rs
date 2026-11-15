@@ -1,4 +1,5 @@
 //! Southstar text — the cairo side of the text renderer: glyph runs with their text clusters, hex boxes for missing glyphs, filled rectangles, trapezoids and error squiggles.
+//!
 //! Copyright 2004 Red Hat, Inc.; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

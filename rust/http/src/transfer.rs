@@ -1,4 +1,5 @@
 //! Southstar — one response as the caller sees it: status and header lines, the content decoder, the first-byte time and the stop conditions.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

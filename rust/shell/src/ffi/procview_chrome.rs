@@ -1,4 +1,5 @@
 //! Southstar — the tab view's own chrome: the context menu and its actions, the find bar, the permission bar, printing, saving the page and the developer tools window.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the named character references of the HTML Standard, generated from WHATWG's entities.json by scripts/gen-html-entities.py.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

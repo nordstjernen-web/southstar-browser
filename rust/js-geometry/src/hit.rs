@@ -1,4 +1,5 @@
 //! Southstar — document hit testing: elementFromPoint and elementsFromPoint, with frames' documents translated into their content boxes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

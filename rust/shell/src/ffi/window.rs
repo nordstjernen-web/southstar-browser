@@ -1,4 +1,5 @@
 //! Southstar — the tabbed browser window: tab strip, toolbar, address bar, status pill, actions, menu and bookmarks popover.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

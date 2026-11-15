@@ -1,4 +1,5 @@
 //! Southstar — the typed tables through which the page record reaches the binding crates above it that own frames, change records, scripts, listeners, focus, the top layer, attributes, iterators, observers and the document.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the task manager window: each tab's sandboxed renderer and media helpers, with End task and thread dumps.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the renderer protocol's framing: HTTP/1.1 heads and bodies, the X-* reply headers and the flat JSON bodies.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

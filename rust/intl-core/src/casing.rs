@@ -1,4 +1,5 @@
 //! Southstar — case conversion with the language-sensitive SpecialCasing rules for Turkish, Azeri and Lithuanian.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

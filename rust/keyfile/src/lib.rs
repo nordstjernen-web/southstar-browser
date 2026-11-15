@@ -1,4 +1,5 @@
 //! Southstar — the GLib key-file text format the localStorage files are kept in: reading one group's keys and values and writing groups back.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

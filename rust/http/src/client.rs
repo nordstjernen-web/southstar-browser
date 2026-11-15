@@ -1,4 +1,5 @@
 //! Southstar — performing one HTTP request: connecting with TLS and ALPN, HTTP/1.1 over its own connection, and HTTP/2 multiplexed over pooled connections that each run an I/O thread.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

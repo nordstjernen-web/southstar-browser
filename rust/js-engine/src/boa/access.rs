@@ -1,4 +1,5 @@
 //! Southstar — who is touching an object on Boa, and who made a function: the browser's Rust natives and engine scripts count as the host, page scripts do not.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

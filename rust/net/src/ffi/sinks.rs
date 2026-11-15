@@ -1,4 +1,5 @@
 //! Southstar — the body and header sinks the transport writes into: the budgeted body append, and the header lines that capture the headers the fetch path reads and hand them over.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the user-agent style sheet: the default styles of HTML elements, plus the quirks-mode additions, each parsed once per styling thread and shared by every style pass on it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

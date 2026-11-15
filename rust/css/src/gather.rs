@@ -1,4 +1,5 @@
 //! Southstar — gathering an element's matching rules: the ancestor Bloom filter that rejects selectors early, the per-rule record of the most specific matching selector and its scope proximity for each pseudo-element, and the class tokens an element is indexed by.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

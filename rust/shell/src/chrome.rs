@@ -1,4 +1,5 @@
 //! Southstar — the browser window's stylesheet: tab strip, toolbar, address bar, status pill and find bar.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the X25519MLKEM768 hybrid post-quantum key exchange for TLS 1.3 clients: RustCrypto's ML-KEM-768 joined with ring's X25519.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

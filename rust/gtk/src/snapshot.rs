@@ -1,4 +1,5 @@
 //! Southstar — a drawing area whose snapshot is a Rust closure, the GtkSnapshot it records into, and the textures and cursors it draws with.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

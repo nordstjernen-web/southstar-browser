@@ -1,4 +1,5 @@
 //! Southstar — column flex containers: item heights as flex base sizes, column wrapping, cross placement, justify-content and resizing items to their flexed heights.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

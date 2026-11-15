@@ -1,4 +1,5 @@
 //! Southstar — a counted reference to a GLib main loop on the default context, to run until something quits it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

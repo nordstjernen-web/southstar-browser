@@ -1,4 +1,5 @@
 //! Southstar — SHA digests over ring and the hex and base64 text forms of bytes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

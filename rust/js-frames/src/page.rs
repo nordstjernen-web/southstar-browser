@@ -1,4 +1,5 @@
 //! Southstar — per-page frame state: the frame table (each frame's realm, window, URL and referrer), the realm cloners and the pristine platform snapshot, the initial about:blank realms and the frame load queues.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

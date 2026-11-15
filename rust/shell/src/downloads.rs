@@ -1,4 +1,5 @@
 //! Southstar — naming downloaded files: the suggested or URL-derived name made safe for one path component, its numbered alternatives, and which file types wait for the user before they are saved.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

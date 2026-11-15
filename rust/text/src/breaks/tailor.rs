@@ -1,4 +1,5 @@
 //! Southstar text — script-specific break tailoring for Arabic, the Indic scripts, the dictionary-broken Southeast Asian scripts and Catalan Latin.
+//!
 //! Copyright 1999 Red Hat Software; 2006 Behdad Esfahbod; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the image, canvas, svg, audio and video boxes the block builder makes, and the background, border, mask and list-marker images a box carries from the layout image cache.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

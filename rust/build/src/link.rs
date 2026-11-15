@@ -1,4 +1,5 @@
 //! Southstar build — the system libraries the engine, the GTK shell and the media helpers link, by enabled cargo feature and target.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

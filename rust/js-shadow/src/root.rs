@@ -1,4 +1,5 @@
 //! Southstar — attachShadow, the ShadowRoot wrapper's accessors, element.shadowRoot and getRootNode.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

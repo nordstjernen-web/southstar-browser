@@ -1,4 +1,5 @@
 //! Southstar — the custom-property cascade: an element's matched custom-property declarations put in cascade order, revert and the other CSS-wide keywords rolled back, var() and if() references resolved on demand with dependency cycles made invalid, and registered @property values checked against their syntax, into the variables its style carries.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

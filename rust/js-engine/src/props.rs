@@ -1,4 +1,5 @@
 //! Southstar — the forgiving property, argument and binding helpers the bindings share: reads that fall back to undefined and writes that ignore errors.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

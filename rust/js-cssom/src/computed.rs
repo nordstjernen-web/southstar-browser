@@ -1,4 +1,5 @@
 //! Southstar — the resolved values getComputedStyle reports: shorthands, used sizes, insets and transforms from layout, animation lists and pseudo-element styles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

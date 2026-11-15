@@ -1,4 +1,5 @@
 //! Southstar — frame realms and scopes: the global bootstrap that makes a frame's own window, the scope a frame's scripts see when they run in the page realm, the cross-origin window proxy and a frame's module scripts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — phishing and malware checks (the local host list and Google Safe Browsing) and the warning interstitial.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

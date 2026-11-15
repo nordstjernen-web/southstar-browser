@@ -1,4 +1,5 @@
 //! Southstar — SVG geometry: getBBox, getCTM and getScreenCTM over the measured node, client rects of SVG content, path length and point-at-length over a flattened path, SVGPoint.matrixTransform and the createSVG* factories.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

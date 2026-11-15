@@ -1,4 +1,5 @@
 //! Southstar — CSS grid values: track lists with repeat(), minmax() and fit-content() parsed into the ns_css_tracks css.c stores, grid-template-areas, grid lines and placements, the grid-template and grid shorthands, and their canonical specified spelling.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

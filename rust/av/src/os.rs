@@ -1,4 +1,5 @@
 //! Southstar — the operating system's H.264 and AAC decoders behind libav's send/receive contract, filling NV12 and float AVFrames.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the per-thread record of which surfaces' pixels are lent out as slices, so a mutable slice never aliases another.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

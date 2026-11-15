@@ -1,4 +1,5 @@
 //! Southstar — node wrappers: the Element host class whose instances point straight at their DOM node, wrapper creation and caching, invalidation when a node is freed, and the form element's named and indexed controls.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar bidi — one paragraph's embedding levels: rules P2–P3, X1–X10, W1–W7, N0–N2, I1–I2 and L1 of UAX #9.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

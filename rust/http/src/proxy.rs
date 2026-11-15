@@ -1,4 +1,5 @@
 //! Southstar — proxies: parsing a proxy URL as curl accepts it, matching the no-proxy list, and the HTTP CONNECT and SOCKS 4, 4a, 5 and 5h handshakes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

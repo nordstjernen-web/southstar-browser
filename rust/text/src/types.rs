@@ -1,4 +1,5 @@
 //! Southstar text — the units, rectangles, enumerations and per-character break flags every text module shares.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

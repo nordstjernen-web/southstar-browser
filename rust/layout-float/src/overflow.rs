@@ -1,4 +1,5 @@
 //! Southstar — float and clear sides, overflow keywords, clipping and scroll containers, block formatting context roots and multicol column hosts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

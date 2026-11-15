@@ -1,4 +1,5 @@
 //! Southstar — the property table and the per-property value parser: property ids, names, aliases, inheritance and paint-only properties, and parsed values built as the values styles store.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

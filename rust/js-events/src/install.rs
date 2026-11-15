@@ -1,4 +1,5 @@
 //! Southstar — installs the event interfaces on a window or worker global: constructors, prototype methods and their chains.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

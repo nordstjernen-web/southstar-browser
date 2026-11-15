@@ -1,4 +1,5 @@
 //! Southstar — compile-time lookup in a `name=value,…` layout string the build scripts probe from C headers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

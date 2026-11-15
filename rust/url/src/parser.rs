@@ -1,4 +1,5 @@
 //! Southstar — the URL Standard's basic URL parser: the state machine over the input's UTF-8 bytes, run against a base URL or from a setter's state override.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

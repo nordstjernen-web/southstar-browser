@@ -1,4 +1,5 @@
 //! Southstar — WebM, Ogg and MP4 audio through libav: whole files decoded from memory, and growing files streamed in as they download.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

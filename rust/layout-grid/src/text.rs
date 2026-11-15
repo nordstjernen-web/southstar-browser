@@ -1,4 +1,5 @@
 //! Southstar — the C string and number primitives grid placement parses its keywords with.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

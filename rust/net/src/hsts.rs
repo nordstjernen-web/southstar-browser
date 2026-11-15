@@ -1,4 +1,5 @@
 //! Southstar — the HSTS host list in curl's file format: recording Strict-Transport-Security headers and deciding, from a cache reread when the file changes, which http:// URLs go to https:// first until their entries expire.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

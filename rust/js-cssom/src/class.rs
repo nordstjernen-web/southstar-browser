@@ -1,4 +1,5 @@
 //! Southstar — the CSSStyleDeclaration host class behind element.style: its named properties read and write the style attribute.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

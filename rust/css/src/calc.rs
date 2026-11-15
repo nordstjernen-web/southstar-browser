@@ -1,4 +1,5 @@
 //! Southstar — calc() and the other CSS math functions: parsing min(), max(), clamp(), the stepped functions, trigonometry, exponents, sign() and progress() to a length, number or deferred calc value, resolving lengths to pixels and percentages, and evaluating deferred functions against a basis.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

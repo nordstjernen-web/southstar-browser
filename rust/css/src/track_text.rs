@@ -1,4 +1,5 @@
 //! Southstar — the computed text of a grid track list: its lengths and math functions in em, rem and px resolved to px, percentages kept, and line names, keywords and flexible lengths left as written.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

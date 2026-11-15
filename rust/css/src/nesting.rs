@@ -1,4 +1,5 @@
 //! Southstar — CSS nesting flattened before a style sheet is parsed: nested style rules joined to their parents through :is() and &, nested group rules lifted around their parents, within a selector budget that stops nesting from growing a sheet exponentially.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

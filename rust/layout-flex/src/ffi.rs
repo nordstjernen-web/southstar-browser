@@ -1,4 +1,5 @@
 //! Southstar — the block-layout, sizing, overflow and flex-item helpers flex layout borrows from the other layout crates.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

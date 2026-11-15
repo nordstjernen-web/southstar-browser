@@ -1,4 +1,5 @@
 //! Southstar — a style sheet's rules read from its flattened text: style rules with their scopes, @media, @supports, @container, @layer and @scope blocks, @import with layer() and media, @font-face, @keyframes, @property and @page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

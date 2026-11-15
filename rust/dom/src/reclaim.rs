@@ -1,4 +1,5 @@
 //! Southstar — deferred freeing of replaced node strings: on a thread that runs page script, a name, text or attribute value that is replaced stays allocated until the host says no script is running, so a borrow taken before script ran still points at memory.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

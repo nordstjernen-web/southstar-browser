@@ -1,4 +1,5 @@
 //! Southstar — the HPACK static table and Huffman code from RFC 7541, appendices A and B.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

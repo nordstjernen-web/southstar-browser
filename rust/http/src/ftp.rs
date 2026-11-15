@@ -1,4 +1,5 @@
 //! Southstar — FTP downloads and directory listings: login, binary mode, a CWD per path segment, EPSV with a PASV fallback, and RETR or LIST over the data connection, directly or through a proxy.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the window services' nsr_ entry points and C helpers, and the js.c, network and system calls they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the CSS namespace (supports, escape, registerProperty) and the window helpers the CSSOM polyfill calls for style sheets, adopted sheets and animations.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

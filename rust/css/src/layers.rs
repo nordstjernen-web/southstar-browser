@@ -1,4 +1,5 @@
 //! Southstar — cascade layer order: the layers a set of style sheets declares, and every dotted prefix of them, ranked so sibling layers keep the order they were first declared in and a layer's sublayers come before the layer itself.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

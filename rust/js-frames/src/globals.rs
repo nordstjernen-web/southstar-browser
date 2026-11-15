@@ -1,4 +1,5 @@
 //! Southstar — the page globals a frame's scripts leave behind when they run in the page realm, recorded per frame and scrubbed when the frame's document goes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — Intl.DateTimeFormat patterns: format records, skeleton matching, rendering to parts and date ranges.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

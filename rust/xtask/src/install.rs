@@ -1,4 +1,5 @@
 //! Southstar xtask — installing the built executables, libsouthstar, its header and the data files under a prefix.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

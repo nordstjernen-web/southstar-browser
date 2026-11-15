@@ -1,4 +1,5 @@
 //! Southstar — choosing an image candidate from srcset and sizes: the candidates the HTML srcset grammar gives, each one's density from its width descriptor and the source size, and the one that best fits the device pixel ratio.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

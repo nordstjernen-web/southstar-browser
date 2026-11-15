@@ -1,4 +1,5 @@
 //! Southstar — ElementInternals from attachInternals: the form-associated custom element surface, its ARIA reflection and its CustomStateSet.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

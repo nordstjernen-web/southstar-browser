@@ -1,4 +1,5 @@
 //! Southstar — PNG/APNG, GIF, BMP and JPEG decoding to premultiplied BGRA canvases, still and animated, and JPEG encoding.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — the cairo calls color glyphs need: patterns, image surfaces, groups, clips and the user font's color callback.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

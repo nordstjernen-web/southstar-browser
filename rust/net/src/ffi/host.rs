@@ -1,4 +1,5 @@
 //! Southstar — the calls behind the about: pages: install data files, the configuration, history and storage, the public suffix list and the library versions about:southstar reports.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

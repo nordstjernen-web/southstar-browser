@@ -1,4 +1,5 @@
 //! Southstar — the box builders table construction calls back into, installed by the box-tree builder, and the box freeing the engine calls.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

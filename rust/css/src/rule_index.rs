@@ -1,4 +1,5 @@
 //! Southstar — the rule index of a style sheet: each selector filed under the rarest id, class, tag or attribute name its subject compound requires, so matching an element only tries the rules that could apply.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

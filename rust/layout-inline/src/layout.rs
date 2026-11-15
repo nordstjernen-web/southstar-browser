@@ -1,4 +1,5 @@
 //! Southstar — laying out an inline run: line boxes and their heights, struts, atomic inlines placed on their lines, text-align, text-indent, line clamping and vertical text.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

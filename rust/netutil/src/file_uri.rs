@@ -1,4 +1,5 @@
 //! Southstar — local file names and file: URIs with GLib's rules: canonical absolute names, URI escaping and the conversions both ways.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — emoji properties and the emoji presentation run iterator, a port of Chromium's Ragel scanner.
+//!
 //! Copyright 2015 The Chromium Authors; 2019 Google LLC; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — sticky positioning: how far a position: sticky box moves to stay inside its scrollport, and the scroll-driven model the painters reuse.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

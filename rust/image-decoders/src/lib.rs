@@ -1,4 +1,5 @@
 //! Southstar — image decoders: PNG/APNG, GIF, BMP and JPEG in pure Rust, ICO/CUR containers over them, and WebP stills and animations over image-webp.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

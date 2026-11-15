@@ -1,4 +1,5 @@
 //! Southstar — inline runs: merging a prefix run into the next, splitting a run at a byte offset and rejoining split runs, appending children, and copying a byte range of a run.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the scripts that give the DOM, window, navigator and web API interfaces their WebIDL shapes, interface object links and PDF viewer plugins.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

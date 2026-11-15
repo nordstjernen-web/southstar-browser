@@ -1,4 +1,5 @@
 //! Southstar — parsing a declaration's value for one property into the value css.c stores: keywords, lengths, calc(), colours, sizes, rects, URLs and the structured values of the other sections, with layer lists for the background and mask properties.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

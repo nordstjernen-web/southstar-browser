@@ -1,4 +1,5 @@
 //! Southstar — focus, click activation, fullscreen and pointer lock: the focused element and document, focus events, sequential navigation, click(), requestFullscreen and requestPointerLock.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

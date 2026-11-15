@@ -1,4 +1,5 @@
 //! Southstar — where the title bar row puts the window controls, the tab strip and the browser name.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

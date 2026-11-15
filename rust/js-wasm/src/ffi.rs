@@ -1,4 +1,5 @@
 //! Southstar — the Rust-ABI installer of the WebAssembly JS API and the context and caller hand-off that lets wasm and JavaScript call each other.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

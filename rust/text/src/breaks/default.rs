@@ -1,4 +1,5 @@
 //! Southstar text — the default break pass: UAX #29 grapheme, word and sentence boundaries and UAX #14 line breaks in one sweep.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

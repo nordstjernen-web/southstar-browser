@@ -1,4 +1,5 @@
 //! Southstar text — HarfBuzz faces, fonts and buffers: loading and sizing a face, reading its metrics, and shaping through a sub-font with our own glyph callbacks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — matching a form control's value against its pattern attribute the way the HTML Standard compiles it: a whole-value JavaScript regular expression with the v flag, within a backtracking budget.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

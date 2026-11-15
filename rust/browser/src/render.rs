@@ -1,4 +1,5 @@
 //! Southstar — painting a page for the embedder: whole-viewport frames, scroll snapping, layer plans, document tiles, fixed and sticky layers and scroller rectangles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

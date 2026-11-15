@@ -1,4 +1,5 @@
 //! Southstar — the cookie jar: Netscape-format files per top-level site, read for requests and document.cookie and written from Set-Cookie headers and scripts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

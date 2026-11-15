@@ -1,4 +1,5 @@
 //! Southstar — the ChildNode and ParentNode methods over node-or-string arguments: before, after, replaceWith, remove, append, prepend and replaceChildren.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — CSS <position> values: the edge keywords, splitting a position into its horizontal and vertical parts, and the canonical order of one to four position tokens.
+//! Southstar — CSS `<position>` values: the edge keywords, splitting a position into its horizontal and vertical parts, and the canonical order of one to four position tokens.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

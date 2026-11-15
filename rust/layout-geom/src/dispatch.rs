@@ -1,4 +1,5 @@
 //! Southstar — the box tree's layout entry points with the inherited style as a typed style handle, for the formatting-context crates to recurse through.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

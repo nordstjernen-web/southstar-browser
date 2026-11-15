@@ -1,4 +1,5 @@
-//! Southstar — the <color> grammar parsed into a specified value that serializes, and resolves to a computed colour.
+//! Southstar — the `<color>` grammar parsed into a specified value that serializes, and resolves to a computed colour.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

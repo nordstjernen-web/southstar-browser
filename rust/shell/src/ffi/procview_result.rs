@@ -1,4 +1,5 @@
 //! Southstar — the tab view's main-loop side: renderer replies, loading and history, zoom, the permission bar and the view's accessors.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

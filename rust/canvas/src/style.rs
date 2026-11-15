@@ -1,4 +1,5 @@
 //! Southstar — carrying a 2D context's style attributes into its drawing state: colours and patterns, line style, shadows, dashes, alpha and compositing.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

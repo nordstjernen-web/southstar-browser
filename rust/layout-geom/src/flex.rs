@@ -1,4 +1,5 @@
 //! Southstar — the flex item properties, gaps and baseline alignment the block, flex, sizing, inline and positioning crates share.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

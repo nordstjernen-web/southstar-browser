@@ -1,4 +1,5 @@
 //! Southstar — min-content and max-content widths of boxes and their contributions, clamped by definite and keyword min/max widths, and the sizing keywords resolved against them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

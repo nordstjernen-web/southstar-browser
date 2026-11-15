@@ -1,4 +1,5 @@
 //! Southstar — the natives the DOM property tables point at that have no ready-made shape elsewhere: getNumberOfChars, accessKeyLabel, the type setter, the document's forms, images, all and links collections and the node, color, dimension and hyperlink accessors.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

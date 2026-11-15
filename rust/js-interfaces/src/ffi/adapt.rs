@@ -1,4 +1,5 @@
 //! Southstar — adapters that give the natives whose shapes differ from a Prop table entry the getter, setter or method signature the tables expect.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

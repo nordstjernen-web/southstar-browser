@@ -1,4 +1,5 @@
 //! Southstar — reading the shell's command line: which mode to run, the headless options and the settings flags.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

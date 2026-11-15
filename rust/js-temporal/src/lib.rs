@@ -1,4 +1,5 @@
 //! Southstar — the native, ICU-free Temporal date/time API, installed through the engine-neutral JavaScript layer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — text-wrap-style: the narrower wrap width that balances a short paragraph's lines or keeps its last line from holding a single word.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

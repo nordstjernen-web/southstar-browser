@@ -1,4 +1,5 @@
 //! Southstar — absolutely positioned boxes in a grid: the grid area that contains them, their static position in it, and the resolved track list getComputedStyle reports.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

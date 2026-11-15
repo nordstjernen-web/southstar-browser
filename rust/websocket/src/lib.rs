@@ -1,4 +1,5 @@
 //! Southstar — WebSocket client: the RFC 6455 frame codec and handshake checks, frame reassembly, the close handshake and the outgoing queue.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

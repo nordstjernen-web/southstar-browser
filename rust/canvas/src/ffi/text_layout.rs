@@ -1,4 +1,5 @@
 //! Southstar — the southstar-text calls behind canvas text: a layout on a cairo context, its extents and the font's metrics.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

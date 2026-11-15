@@ -1,4 +1,5 @@
 //! Southstar — input.files: the FileList of a file input, read from the path the shell's file chooser stored on the element.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

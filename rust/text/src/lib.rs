@@ -1,4 +1,5 @@
 //! Southstar text — text layout ported from web-text-lib, a Pango fork: attributes, breaking, fonts, shaping, layout and rendering.
+//!
 //! Copyright 1999-2024 The Pango authors; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

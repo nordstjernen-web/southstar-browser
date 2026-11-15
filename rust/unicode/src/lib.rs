@@ -1,4 +1,5 @@
 //! Southstar unicode — the Unicode character properties text layout reads: category, line break class, script, width, combining class, case and decomposition.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

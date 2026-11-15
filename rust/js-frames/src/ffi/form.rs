@@ -1,4 +1,5 @@
 //! Southstar — the form helpers a frame-targeted submission calls: the urlencoded form data set and the page's CSP form-action check.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

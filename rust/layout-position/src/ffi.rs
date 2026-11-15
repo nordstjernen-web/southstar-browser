@@ -1,4 +1,5 @@
 //! Southstar — the document layout entry point, which installs the layout hooks and the painter's links before building, with the box builder and sizing calls positioned layout makes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

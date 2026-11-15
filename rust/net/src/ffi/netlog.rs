@@ -1,4 +1,5 @@
 //! Southstar — the network log, the fetch counters and connection statistics, and the switch that turns their collection on.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

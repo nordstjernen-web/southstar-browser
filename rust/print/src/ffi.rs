@@ -1,4 +1,5 @@
 //! Southstar — the print setup and its C ABI default, drawing one sheet, and the style and paint calls pagination needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

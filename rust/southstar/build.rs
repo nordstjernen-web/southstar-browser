@@ -1,4 +1,5 @@
 //! Southstar — links the system libraries, compiles the icon bundle and embeds the data files for a plain cargo build of the browser.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

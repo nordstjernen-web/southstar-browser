@@ -1,4 +1,5 @@
 //! Southstar — revealers, frames and overlays, plus the widget's root, clipboard and accessible label and the window's close request.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the WHATWG URL Standard: a parsed URL, its components, its serialization and the URL API setters.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

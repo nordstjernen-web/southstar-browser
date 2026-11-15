@@ -1,4 +1,5 @@
 //! Southstar — the GLib source callback that runs the page's queued message tasks, and the snapshot of the global object's own names.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

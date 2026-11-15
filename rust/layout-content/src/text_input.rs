@@ -1,4 +1,5 @@
 //! Southstar — the columns a one-line text input shows: its size attribute, the fitted column counts of a refitting build, alignment and the code points scrolled out of view.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

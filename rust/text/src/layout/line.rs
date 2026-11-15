@@ -1,4 +1,5 @@
 //! Southstar text — layout lines: the runs of one line and the conversions between byte indices and x positions on it.
+//!
 //! Copyright 2000, 2001, 2006 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

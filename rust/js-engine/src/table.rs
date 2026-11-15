@@ -1,4 +1,5 @@
 //! Southstar — declarative property tables: the native methods and accessors of a prototype or namespace, written once as a static slice and installed by either engine.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

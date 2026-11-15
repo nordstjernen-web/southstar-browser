@@ -1,4 +1,5 @@
 //! Southstar — the C ABI and nsr_ entry points of script, module and stylesheet loading, and the js.c calls they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

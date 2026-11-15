@@ -1,4 +1,5 @@
 //! Southstar — SMIL animation values: number templates, colours, interpolation between key values and motion along a path.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

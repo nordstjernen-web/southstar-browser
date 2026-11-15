@@ -1,4 +1,5 @@
 //! Southstar — laying out a block container: its used width, auto margins and content box, then flex, grid or block flow of its children and its used height.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

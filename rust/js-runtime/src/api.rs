@@ -1,4 +1,5 @@
 //! Southstar — the realm record's typed Rust API for binding crates on the neutral engine layer, which may depend on this crate directly.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

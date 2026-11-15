@@ -1,4 +1,5 @@
-//! Southstar —EventTarget and event dispatch: listener registration and its options, the capture, target and bubble path, event handler attributes and properties, error reporting and unhandled promise rejections.
+//! Southstar — EventTarget and event dispatch: listener registration and its options, the capture, target and bubble path, event handler attributes and properties, error reporting and unhandled promise rejections.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

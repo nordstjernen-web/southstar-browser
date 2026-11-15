@@ -1,4 +1,5 @@
 //! Southstar — box geometry: border and padding boxes, the accumulated CSS transform, scroll and sticky offsets, and mapping page points to the client viewport.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

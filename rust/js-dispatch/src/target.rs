@@ -1,4 +1,5 @@
 //! Southstar — EventTarget objects that are not nodes (their listener arrays, on* handlers and dispatch at the target), dispatchEvent() for every kind of target, and the page's EventTarget bootstrap.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the encoding label tables: WHATWG labels to encoding names, and charset names to the iconv names g_convert accepts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

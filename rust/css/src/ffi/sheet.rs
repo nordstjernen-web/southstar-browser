@@ -1,4 +1,5 @@
 //! Southstar — a parsed style sheet's storage: the rules and at-rules the Rust parser builds as it reads a sheet, the owning handle that frees them unless a cache holds the sheet, resolving a sheet's URLs and moving it into a layer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

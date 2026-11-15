@@ -1,4 +1,5 @@
 //! Southstar — the tree-counting functions sibling-index() and sibling-count(), replaced by the element's position among its element siblings.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — var() and if() substitution: an element's chain of variable maps, the registered @property rules consulted for initial values and style() queries, and the variable names an element's map exposes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — dedicated workers: the host shared between a Worker and its thread, the messages they exchange, ports bridged between the two runtimes, and the worker thread itself.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

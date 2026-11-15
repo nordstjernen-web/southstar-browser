@@ -1,4 +1,5 @@
 //! Southstar — CSS 3D rendering contexts: flattening preserve-3d subtrees into depth-sorted textured quads, drawing each through perspective-correct mesh cells, and picking the box under a point through the same projection.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — text boundaries: the default break pass, script tailoring, attribute customization and per-paragraph log attributes.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

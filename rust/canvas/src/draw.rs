@@ -1,4 +1,5 @@
 //! Southstar — the 2D context's rectangle and path fills and strokes, shadow compositing, and save/restore of its attributes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — absolutely and fixed positioned boxes: containing blocks, sizing with shrink-to-fit and min/max limits, insets, auto margins and self-alignment.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

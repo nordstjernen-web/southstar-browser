@@ -1,4 +1,5 @@
 //! Southstar — canvas colours: parsing CSS and color() values to sRGB and serializing them as a 2D context reports them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

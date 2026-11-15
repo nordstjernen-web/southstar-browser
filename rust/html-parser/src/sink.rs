@@ -1,4 +1,5 @@
 //! Southstar — the HTML parser's tree sink, which builds DOM nodes straight from rust/html5, and the parse entry points that hand back an owned Tree.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — border radii: resolving the corner radii of a style or box, scaling and insetting them, and tracing rounded rectangles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

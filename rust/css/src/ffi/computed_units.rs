@@ -1,4 +1,5 @@
 //! Southstar — a computed style: its value per property, display, pseudo-element styles and variable map, each value viewed by kind, and a shared value copied before it is changed.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — scrolling: the scrollTop/scrollLeft setters, element and window scroll, scrollTo and scrollBy, scrollByLines/Pages and scrollIntoView.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

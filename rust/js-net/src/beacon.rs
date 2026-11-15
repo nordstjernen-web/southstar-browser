@@ -1,4 +1,5 @@
 //! Southstar — navigator.sendBeacon: a fire-and-forget POST of a small payload to an http(s) URL.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

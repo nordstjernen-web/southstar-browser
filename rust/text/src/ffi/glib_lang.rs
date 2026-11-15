@@ -1,4 +1,5 @@
 //! Southstar text — the process locale the default language is derived from: GLib's Windows locale name or the C library's LC_CTYPE.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

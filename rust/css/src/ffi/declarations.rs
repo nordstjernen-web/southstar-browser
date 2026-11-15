@@ -1,4 +1,5 @@
 //! Southstar — declaration blocks: a style rule's declarations, custom properties and waiting values captured as the parser reads it, its lazily compiled @container condition, blocks parsed into owned declarations, and the validity checks the parser and the bindings call.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

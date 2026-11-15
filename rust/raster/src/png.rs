@@ -1,4 +1,5 @@
 //! Southstar — PNG stills and APNG animations over the png crate: every colour type and bit depth with tRNS transparency, interlacing, frame placement, disposal and delays.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — the event core: Event and its subclasses, EventTarget listeners and the dispatch algorithm.
+//! Southstar — the event core: the Event interface, its subclasses and constructors, and preventDefault(), stopPropagation() and composedPath().
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — border-image: the slice, width, outset and repeat longhands in canonical form, the tokens of the shorthand, and the slice, widths, outsets and tiling painting reads from a computed style.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

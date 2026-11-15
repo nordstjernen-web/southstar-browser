@@ -1,4 +1,5 @@
 //! Southstar — object serialization on Boa: a self-contained byte encoding of structured-cloneable values, with shared objects and cycles written as back-references.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

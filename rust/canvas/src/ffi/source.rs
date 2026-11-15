@@ -1,4 +1,5 @@
-//! Southstar — the surface drawImage() and createPattern() read from an image source: an ImageBitmap, a canvas, an <img> or a <video> poster, and whether it is origin-clean.
+//! Southstar — the surface drawImage() and createPattern() read from an image source: an ImageBitmap, a canvas, an `<img>` or a `<video>` poster, and whether it is origin-clean.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

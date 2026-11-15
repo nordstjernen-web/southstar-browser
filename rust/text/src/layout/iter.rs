@@ -1,4 +1,5 @@
 //! Southstar text — layout iterators: walking the lines and runs of a layout in visual order with their positions and extents.
+//!
 //! Copyright 2000, 2001, 2006 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

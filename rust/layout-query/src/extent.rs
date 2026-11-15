@@ -1,4 +1,5 @@
 //! Southstar — vertical extents of laid-out subtrees: the paint bounds layout records on every box, a subtree's border-box extent for the layer planner, and the union of an inline element's fragments.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

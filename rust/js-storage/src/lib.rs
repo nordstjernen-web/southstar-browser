@@ -1,4 +1,5 @@
 //! Southstar — Web Storage: localStorage and sessionStorage, their persistence, quota and partitioning, and the storage event fan-out.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
