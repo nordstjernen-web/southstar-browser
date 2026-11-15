@@ -2,7 +2,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
     hash::BuildHasherDefault,
-    mem::MaybeUninit,
     path::PathBuf,
     rc::Rc,
 };
@@ -22,7 +21,6 @@ use boa_ast::{
 use boa_gc::{Finalize, Gc, GcRefCell, Trace};
 use boa_interner::Interner;
 use boa_macros::js_str;
-use dynify::Dynify;
 use indexmap::IndexMap;
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 
@@ -555,9 +553,7 @@ impl SourceTextModule {
                 request.clone(),
                 context,
             );
-            let mut stack = [MaybeUninit::<u8>::uninit(); 16];
-            let mut heap = Vec::<MaybeUninit<u8>>::new();
-            let completion = fut.init2(&mut stack, &mut heap).await;
+            let completion = fut.await;
 
             // FinishLoadingImportedModule ( referrer, specifier, payload, result )
             // https://tc39.es/ecma262/#sec-FinishLoadingImportedModule

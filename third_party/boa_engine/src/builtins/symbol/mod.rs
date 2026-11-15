@@ -18,7 +18,11 @@
 #[cfg(test)]
 mod tests;
 
-use std::{hash::BuildHasherDefault, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    hash::BuildHasherDefault,
+    sync::{LazyLock, Mutex, PoisonError},
+};
 
 use crate::{
     Context, JsArgs, JsResult, JsString,
@@ -33,7 +37,6 @@ use crate::{
     symbol::JsSymbol,
     value::JsValue,
 };
-use dashmap::DashMap;
 use rustc_hash::FxHasher;
 
 use super::{BuiltInBuilder, BuiltInConstructor, IntrinsicObject};
@@ -41,7 +44,7 @@ use super::{BuiltInBuilder, BuiltInConstructor, IntrinsicObject};
 static GLOBAL_SYMBOL_REGISTRY: LazyLock<GlobalSymbolRegistry> =
     LazyLock::new(GlobalSymbolRegistry::new);
 
-type FxDashMap<K, V> = DashMap<K, V, BuildHasherDefault<FxHasher>>;
+type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 
 // We previously used `JsString` instead of `Box<[u16]>` for this, but since the glocal symbol
 // registry needed to be global, we had to either make `JsString` thread-safe or directly store
@@ -49,22 +52,27 @@ type FxDashMap<K, V> = DashMap<K, V, BuildHasherDefault<FxHasher>>;
 // advanced users to utilize it. On the other hand, almost every JS programmer uses `JsString`s, and
 // the first option would impact performance for all `JsString`s in general. For those reasons, we
 // opted for the second option, but we should try to optimize this in the future.
+#[derive(Default)]
+struct SymbolTables {
+    keys: FxHashMap<Box<[u16]>, JsSymbol>,
+    symbols: FxHashMap<JsSymbol, Box<[u16]>>,
+}
+
 struct GlobalSymbolRegistry {
-    keys: FxDashMap<Box<[u16]>, JsSymbol>,
-    symbols: FxDashMap<JsSymbol, Box<[u16]>>,
+    tables: Mutex<SymbolTables>,
 }
 
 impl GlobalSymbolRegistry {
     fn new() -> Self {
         Self {
-            keys: FxDashMap::default(),
-            symbols: FxDashMap::default(),
+            tables: Mutex::new(SymbolTables::default()),
         }
     }
 
     fn get_or_create_symbol(&self, key: &JsString) -> JsResult<JsSymbol> {
         let slice = key.iter().collect::<Vec<_>>();
-        if let Some(symbol) = self.keys.get(&slice[..]) {
+        let mut tables = self.tables.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(symbol) = tables.keys.get(&slice[..]) {
             return Ok(symbol.clone());
         }
 
@@ -72,15 +80,18 @@ impl GlobalSymbolRegistry {
             JsNativeError::range()
                 .with_message("reached the maximum number of symbols that can be created")
         })?;
-        self.keys
+        tables
+            .keys
             .insert(slice.clone().into_boxed_slice(), symbol.clone());
-        self.symbols
+        tables
+            .symbols
             .insert(symbol.clone(), slice.into_boxed_slice());
         Ok(symbol)
     }
 
     fn get_key(&self, sym: &JsSymbol) -> Option<JsString> {
-        if let Some(key) = self.symbols.get(sym) {
+        let tables = self.tables.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(key) = tables.symbols.get(sym) {
             return Some(js_string!(&**key));
         }
 

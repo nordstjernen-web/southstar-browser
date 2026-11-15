@@ -1,9 +1,10 @@
 use std::any::Any;
 use std::cell::RefCell;
+use std::future::Future;
 use std::path::{Component, Path, PathBuf};
+use std::pin::Pin;
 use std::rc::Rc;
 
-use dynify::dynify;
 use rustc_hash::FxHashMap;
 
 use boa_gc::GcRefCell;
@@ -145,7 +146,6 @@ impl From<ActiveRunnable> for Referrer {
 ///
 /// This trait allows to customize the behaviour of the engine on module load requests and
 /// `import.meta` requests.
-#[dynify]
 pub trait ModuleLoader: Any {
     /// Host hook [`HostLoadImportedModule ( referrer, specifier, hostDefined, payload )`][spec].
     ///
@@ -214,6 +214,62 @@ pub trait ModuleLoader: Any {
         context: &mut Context,
     ) -> Option<Module> {
         None
+    }
+}
+
+/// The object-safe form of [`ModuleLoader`] that the engine stores, implemented for every loader.
+pub trait DynModuleLoader: Any {
+    /// Boxes [`ModuleLoader::load_imported_module`].
+    fn load_imported_module<'a>(
+        self: Rc<Self>,
+        referrer: Referrer,
+        request: ModuleRequest,
+        context: &'a RefCell<&mut Context>,
+    ) -> Pin<Box<dyn Future<Output = JsResult<Module>> + 'a>>;
+
+    /// Forwards to [`ModuleLoader::init_import_meta`].
+    fn init_import_meta(
+        self: Rc<Self>,
+        import_meta: &JsObject,
+        module: &Module,
+        context: &mut Context,
+    );
+
+    /// Forwards to [`ModuleLoader::get_module_source_module_record`].
+    fn get_module_source_module_record(
+        self: Rc<Self>,
+        source: &JsObject,
+        context: &mut Context,
+    ) -> Option<Module>;
+}
+
+impl<T: ModuleLoader> DynModuleLoader for T {
+    fn load_imported_module<'a>(
+        self: Rc<Self>,
+        referrer: Referrer,
+        request: ModuleRequest,
+        context: &'a RefCell<&mut Context>,
+    ) -> Pin<Box<dyn Future<Output = JsResult<Module>> + 'a>> {
+        Box::pin(ModuleLoader::load_imported_module(
+            self, referrer, request, context,
+        ))
+    }
+
+    fn init_import_meta(
+        self: Rc<Self>,
+        import_meta: &JsObject,
+        module: &Module,
+        context: &mut Context,
+    ) {
+        ModuleLoader::init_import_meta(self, import_meta, module, context);
+    }
+
+    fn get_module_source_module_record(
+        self: Rc<Self>,
+        source: &JsObject,
+        context: &mut Context,
+    ) -> Option<Module> {
+        ModuleLoader::get_module_source_module_record(self, source, context)
     }
 }
 

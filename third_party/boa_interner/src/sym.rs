@@ -1,5 +1,4 @@
 use boa_gc::{Finalize, Trace, empty_trace};
-use boa_macros::static_syms;
 use core::num::NonZeroUsize;
 
 /// The string symbol type for Boa.
@@ -73,86 +72,111 @@ impl Sym {
     }
 }
 
+macro_rules! static_syms {
+    ($(($ident:ident, $literal:literal)),* $(,)?) => {
+        static_syms!(@consts 1usize; $(($ident, $literal))*);
+
+        type Set<T> = indexmap::IndexSet<T, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
+        /// Ordered set of commonly used static `UTF-8` strings, in the order of the [`Sym`] constants.
+        pub(super) static COMMON_STRINGS_UTF8: once_cell::sync::Lazy<Set<&'static str>> =
+            once_cell::sync::Lazy::new(|| [$($literal),*].into_iter().collect());
+
+        /// Ordered set of commonly used static `UTF-16` strings, in the order of the [`Sym`] constants.
+        pub(super) static COMMON_STRINGS_UTF16: once_cell::sync::Lazy<Set<&'static [u16]>> =
+            once_cell::sync::Lazy::new(|| [$(boa_macros::utf16!($literal)),*].into_iter().collect());
+    };
+    (@consts $index:expr; ($ident:ident, $literal:literal) $($rest:tt)*) => {
+        impl Sym {
+            #[doc = concat!("Symbol for the `", $literal, "` string.")]
+            // SAFETY: indices start at 1 and only grow, so the value is never zero.
+            pub const $ident: Self = unsafe { Self::new_unchecked($index) };
+        }
+        static_syms!(@consts $index + 1; $($rest)*);
+    };
+    (@consts $index:expr;) => {};
+}
+
 static_syms! {
     // Reserved identifiers
     // See: <https://tc39.es/ecma262/#prod-ReservedWord>
     // Note, they must all be together.
-    "break",
-    "case",
-    "catch",
-    "class",
-    "const",
-    "continue",
-    "debugger",
-    "default",
-    "delete",
-    "do",
-    "else",
-    "enum",
-    "export",
-    "extends",
-    "false",
-    "finally",
-    "for",
-    "function",
-    "if",
-    "import",
-    "in",
-    "instanceof",
-    "new",
-    "null",
-    "return",
-    "super",
-    "switch",
-    "this",
-    "throw",
-    "true",
-    "try",
-    "typeof",
-    "var",
-    "void",
-    "while",
-    "with",
+    (BREAK, "break"),
+    (CASE, "case"),
+    (CATCH, "catch"),
+    (CLASS, "class"),
+    (CONST, "const"),
+    (CONTINUE, "continue"),
+    (DEBUGGER, "debugger"),
+    (DEFAULT, "default"),
+    (DELETE, "delete"),
+    (DO, "do"),
+    (ELSE, "else"),
+    (ENUM, "enum"),
+    (EXPORT, "export"),
+    (EXTENDS, "extends"),
+    (FALSE, "false"),
+    (FINALLY, "finally"),
+    (FOR, "for"),
+    (FUNCTION, "function"),
+    (IF, "if"),
+    (IMPORT, "import"),
+    (IN, "in"),
+    (INSTANCEOF, "instanceof"),
+    (NEW, "new"),
+    (NULL, "null"),
+    (RETURN, "return"),
+    (SUPER, "super"),
+    (SWITCH, "switch"),
+    (THIS, "this"),
+    (THROW, "throw"),
+    (TRUE, "true"),
+    (TRY, "try"),
+    (TYPEOF, "typeof"),
+    (VAR, "var"),
+    (VOID, "void"),
+    (WHILE, "while"),
+    (WITH, "with"),
     // End reserved identifier
 
     // strict reserved identifiers.
     // See: <https://tc39.es/ecma262/#prod-Identifier>
     // Note, they must all be together.
-    "implements",
-    "interface",
-    "let",
-    "package",
-    "private",
-    "protected",
-    "public",
-    "static",
-    "yield",
+    (IMPLEMENTS, "implements"),
+    (INTERFACE, "interface"),
+    (LET, "let"),
+    (PACKAGE, "package"),
+    (PRIVATE, "private"),
+    (PROTECTED, "protected"),
+    (PUBLIC, "public"),
+    (STATIC, "static"),
+    (YIELD, "yield"),
     // End strict reserved identifiers
 
-    ("", EMPTY_STRING),
-    "prototype",
-    "constructor",
-    "arguments",
-    "eval",
-    "RegExp",
-    "get",
-    "set",
-    ("<main>", MAIN),
-    "raw",
-    "anonymous",
-    "async",
-    "of",
-    "target",
-    "as",
-    "from",
-    "__proto__",
-    "name",
-    "await",
-    ("*default*", DEFAULT_EXPORT),
-    "meta",
-    "defer",
-    "source",
-    "using",
-    "dispose",
-    "asyncDispose"
+    (EMPTY_STRING, ""),
+    (PROTOTYPE, "prototype"),
+    (CONSTRUCTOR, "constructor"),
+    (ARGUMENTS, "arguments"),
+    (EVAL, "eval"),
+    (REGEXP, "RegExp"),
+    (GET, "get"),
+    (SET, "set"),
+    (MAIN, "<main>"),
+    (RAW, "raw"),
+    (ANONYMOUS, "anonymous"),
+    (ASYNC, "async"),
+    (OF, "of"),
+    (TARGET, "target"),
+    (AS, "as"),
+    (FROM, "from"),
+    (__PROTO__, "__proto__"),
+    (NAME, "name"),
+    (AWAIT, "await"),
+    (DEFAULT_EXPORT, "*default*"),
+    (META, "meta"),
+    (DEFER, "defer"),
+    (SOURCE, "source"),
+    (USING, "using"),
+    (DISPOSE, "dispose"),
+    (ASYNCDISPOSE, "asyncDispose"),
 }

@@ -10,6 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(clippy::undocumented_unsafe_blocks)]
 
+mod aligned;
 pub(crate) mod shared;
 pub(crate) mod utils;
 
@@ -20,7 +21,6 @@ use std::any::Any;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
-use aligned_vec::{ABox, AVec, ConstAlign};
 pub use shared::SharedArrayBuffer;
 use std::sync::atomic::Ordering;
 
@@ -44,9 +44,8 @@ use super::{
     Array, BuiltInBuilder, BuiltInConstructor, DataView, IntrinsicObject, typed_array::TypedArray,
 };
 
-/// `Vec`, but aligned to a 64-bit memory address.
-pub type AlignedVec<T> = AVec<T, ConstAlign<64>>;
-pub(crate) type AlignedBox<T> = ABox<T, ConstAlign<64>>;
+pub use aligned::AlignedVec;
+pub(crate) use aligned::SharedBlock;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BufferRef<B, S> {
@@ -212,7 +211,7 @@ impl BufferObject {
 pub struct ArrayBuffer {
     /// The `[[ArrayBufferData]]` internal slot.
     #[unsafe_ignore_trace]
-    data: Option<AlignedVec<u8>>,
+    data: Option<AlignedVec>,
 
     /// The `[[ArrayBufferMaxByteLength]]` internal slot.
     max_byte_len: Option<u64>,
@@ -248,7 +247,7 @@ impl std::fmt::Debug for ExternalBytes {
 }
 
 impl ArrayBuffer {
-    pub(crate) fn from_data(data: AlignedVec<u8>, detach_key: JsValue) -> Self {
+    pub(crate) fn from_data(data: AlignedVec, detach_key: JsValue) -> Self {
         Self {
             data: Some(data),
             max_byte_len: None,
@@ -298,7 +297,7 @@ impl ArrayBuffer {
     pub(crate) fn len(&self) -> usize {
         match &self.external {
             Some(external) => external.len,
-            None => self.data.as_ref().map_or(0, AlignedVec::len),
+            None => self.data.as_ref().map_or(0, |data| data.len()),
         }
     }
 
@@ -316,7 +315,7 @@ impl ArrayBuffer {
         self.data.as_deref_mut()
     }
 
-    pub(crate) fn vec_mut(&mut self) -> Option<&mut AlignedVec<u8>> {
+    pub(crate) fn vec_mut(&mut self) -> Option<&mut AlignedVec> {
         self.data.as_mut()
     }
 
@@ -383,7 +382,7 @@ impl ArrayBuffer {
     /// # Errors
     ///
     /// Throws an error if the provided detach key is invalid.
-    pub fn detach(&mut self, key: &JsValue) -> JsResult<Option<AlignedVec<u8>>> {
+    pub fn detach(&mut self, key: &JsValue) -> JsResult<Option<AlignedVec>> {
         if self.immutable {
             return Err(JsNativeError::typ()
                 .with_message("Cannot detach an immutable array buffer")
@@ -1293,7 +1292,7 @@ pub(crate) fn create_byte_data_block(
     size: u64,
     max_buffer_size: Option<u64>,
     context: &mut Context,
-) -> JsResult<AlignedVec<u8>> {
+) -> JsResult<AlignedVec> {
     let alloc_size = max_buffer_size.unwrap_or(size);
 
     assert!(size <= alloc_size);
@@ -1310,17 +1309,9 @@ pub(crate) fn create_byte_data_block(
         JsNativeError::range().with_message(format!("couldn't allocate the data block: {e}"))
     })?;
 
-    let mut data_block = AlignedVec::<u8>::new(64);
+    let mut data_block = AlignedVec::new();
     data_block.try_reserve_exact(alloc_size).map_err(|e| {
-        let message = match e {
-            aligned_vec::TryReserveError::CapacityOverflow => {
-                format!("capacity overflow for size {size} while allocating data block")
-            }
-            aligned_vec::TryReserveError::AllocError { layout } => {
-                format!("invalid layout {layout:?} while allocating data block")
-            }
-        };
-        JsNativeError::range().with_message(message)
+        JsNativeError::range().with_message(format!("couldn\'t allocate the data block: {e}"))
     })?;
 
     // since size <= alloc_size, then `size` must also fit inside a `usize`.

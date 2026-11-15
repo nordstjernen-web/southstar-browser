@@ -1,7 +1,6 @@
-use std::{cell::RefCell, mem::MaybeUninit};
+use std::cell::RefCell;
 
 use boa_string::JsString;
-use dynify::Dynify;
 
 use super::{IndexOperand, RegisterOperand};
 use crate::{
@@ -470,9 +469,7 @@ async fn load_dyn_import(
 ) -> JsResult<()> {
     let loader = context.borrow().module_loader();
     let fut = loader.load_imported_module(referrer.clone(), request.clone(), context);
-    let mut stack = [MaybeUninit::<u8>::uninit(); 16];
-    let mut heap = Vec::<MaybeUninit<u8>>::new();
-    let completion = fut.init2(&mut stack, &mut heap).await;
+    let completion = fut.await;
 
     // `ContinueDynamicImport ( promiseCapability, moduleCompletion )`
     // https://tc39.es/ecma262/#sec-ContinueDynamicImport

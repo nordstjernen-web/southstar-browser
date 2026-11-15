@@ -11,7 +11,7 @@ use crate::{
     Context, JsArgs, JsData, JsNativeError, JsObject, JsResult, JsString, JsSymbol, JsValue,
     builtins::{
         Array, BuiltInBuilder, BuiltInConstructor, BuiltInObject, IntrinsicObject,
-        array_buffer::{AlignedBox, AlignedVec},
+        array_buffer::SharedBlock,
     },
     context::intrinsics::{Intrinsics, StandardConstructor, StandardConstructors},
     js_string,
@@ -44,14 +44,14 @@ struct Inner {
     // The maximum buffer length is represented by `buffer.len()`, and `current_len` has the current
     // buffer length, or `None` if this is a fixed buffer; in this case, `buffer.len()` will be
     // the true length of the buffer.
-    buffer: AlignedBox<[AtomicU8]>,
+    buffer: SharedBlock,
     current_len: Option<AtomicUsize>,
 }
 
 impl Default for Inner {
     fn default() -> Self {
         Self {
-            buffer: AlignedVec::new(0).into_boxed_slice(),
+            buffer: SharedBlock::default(),
             current_len: None,
         }
     }
@@ -562,7 +562,7 @@ impl SharedArrayBuffer {
 pub(crate) fn create_shared_byte_data_block(
     size: u64,
     context: &mut Context,
-) -> JsResult<AlignedBox<[AtomicU8]>> {
+) -> JsResult<SharedBlock> {
     if size > context.host_hooks().max_buffer_size(context) {
         return Err(JsNativeError::range()
             .with_message(
@@ -577,11 +577,6 @@ pub(crate) fn create_shared_byte_data_block(
         JsNativeError::range().with_message(format!("couldn't allocate the data block: {e}"))
     })?;
 
-    if size == 0 {
-        // Must ensure we don't allocate a zero-sized buffer.
-        return Ok(AlignedVec::new(0).into_boxed_slice());
-    }
-
     // 2. Let execution be the [[CandidateExecution]] field of the surrounding agent's Agent Record.
     // 3. Let eventsRecord be the Agent Events Record of execution.[[EventsRecords]] whose
     //    [[AgentSignifier]] is AgentSignifier().
@@ -590,25 +585,9 @@ pub(crate) fn create_shared_byte_data_block(
     //     a. Append WriteSharedMemory { [[Order]]: init, [[NoTear]]: true, [[Block]]: db,
     //        [[ByteIndex]]: i, [[ElementSize]]: 1, [[Payload]]: zero } to eventsRecord.[[EventList]].
     // 6. Return db.
-    let mut buf = AlignedVec::<u8>::new(0);
-    buf.try_reserve_exact(size).map_err(|e| {
-        let message = match e {
-            aligned_vec::TryReserveError::CapacityOverflow => {
-                format!("capacity overflow for size {size} while allocating data block")
-            }
-            aligned_vec::TryReserveError::AllocError { layout } => {
-                format!("invalid layout {layout:?} while allocating data block")
-            }
-        };
-        JsNativeError::range().with_message(message)
-    })?;
-    buf.resize(size, 0);
-    buf.shrink_to_fit();
-    let (data, align, len, _) = buf.into_raw_parts();
-
-    // 3. Return db.
-    // SAFETY: `[u8]` must be transparently castable to `[AtomicU8]`.
-    Ok(unsafe {
-        AlignedBox::from_raw_parts(align, ptr::slice_from_raw_parts_mut(data.cast(), len))
+    SharedBlock::zeroed(size).map_err(|e| {
+        JsNativeError::range()
+            .with_message(format!("couldn't allocate the data block: {e}"))
+            .into()
     })
 }

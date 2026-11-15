@@ -491,7 +491,7 @@ impl Interner {
     pub fn resolve(&self, symbol: Sym) -> Option<JSInternedStrRef<'_, '_>> {
         let index = symbol.get() - 1;
 
-        if let Some(utf8) = COMMON_STRINGS_UTF8.index(index).copied() {
+        if let Some(utf8) = COMMON_STRINGS_UTF8.get_index(index).copied() {
             let utf16 = COMMON_STRINGS_UTF16
                 .get_index(index)
                 .copied()
@@ -582,7 +582,7 @@ impl Interner {
 
     fn get_common(string: JStrRef<'_>) -> Option<Sym> {
         match string {
-            JStrRef::Utf8(s) => COMMON_STRINGS_UTF8.get_index(s).map(|idx| {
+            JStrRef::Utf8(s) => COMMON_STRINGS_UTF8.get_index_of(s).map(|idx| {
                 // SAFETY: `idx >= 0`, since it's an `usize`, and `idx + 1 > 0`.
                 // In this case, we don't need to worry about overflows because we have a static
                 // assertion in place checking that `COMMON_STRINGS.len() < usize::MAX`.

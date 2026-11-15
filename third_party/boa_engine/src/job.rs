@@ -38,8 +38,7 @@ use crate::{
     realm::Realm,
 };
 use boa_gc::{Finalize, Trace};
-use futures_concurrency::future::FutureGroup;
-use futures_lite::{StreamExt, future};
+use futures_lite::{Stream, StreamExt, future};
 use portable_atomic::AtomicBool;
 use std::any::Any;
 use std::cell::Cell;
@@ -48,6 +47,7 @@ use std::mem;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::task::{Context as TaskContext, Poll};
 use std::{cell::RefCell, collections::VecDeque, fmt::Debug, future::Future, pin::Pin};
 
 /// An ECMAScript [Job Abstract Closure].
@@ -1045,5 +1045,46 @@ impl JobExecutor for SimpleJobExecutor {
         }
 
         Ok(())
+    }
+}
+
+/// A set of futures polled together, yielding each output as its future completes.
+struct FutureGroup<F> {
+    futures: Vec<Pin<Box<F>>>,
+}
+
+impl<F: Future> FutureGroup<F> {
+    const fn new() -> Self {
+        Self {
+            futures: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, future: F) {
+        self.futures.push(Box::pin(future));
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.futures.is_empty()
+    }
+}
+
+impl<F: Future> Unpin for FutureGroup<F> {}
+
+impl<F: Future> Stream for FutureGroup<F> {
+    type Item = F::Output;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Option<F::Output>> {
+        let this = self.get_mut();
+        if this.futures.is_empty() {
+            return Poll::Ready(None);
+        }
+        for index in 0..this.futures.len() {
+            if let Poll::Ready(output) = this.futures[index].as_mut().poll(cx) {
+                drop(this.futures.swap_remove(index));
+                return Poll::Ready(Some(output));
+            }
+        }
+        Poll::Pending
     }
 }

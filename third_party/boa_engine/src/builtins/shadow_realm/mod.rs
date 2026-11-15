@@ -9,12 +9,11 @@
 //!
 //! [spec]: https://tc39.es/proposal-shadowrealm/
 
-use std::{cell::RefCell, mem::MaybeUninit};
+use std::cell::RefCell;
 
 use boa_ast::operations::{ContainsSymbol, contains};
 use boa_gc::{Finalize, Trace};
 use boa_parser::{Parser, Source};
-use dynify::Dynify;
 
 use crate::{
     Context, JsArgs, JsData, JsError, JsExpect, JsNativeError, JsObject, JsResult, JsString,
@@ -385,9 +384,7 @@ async fn import_module(
     let specifier = request.specifier().clone();
     let loader = context.borrow().module_loader();
     let fut = loader.load_imported_module(base, request, context);
-    let mut stack = [MaybeUninit::<u8>::uninit(); 16];
-    let mut heap = Vec::<MaybeUninit<u8>>::new();
-    let completion = fut.init2(&mut stack, &mut heap).await;
+    let completion = fut.await;
 
     let context = &mut context.borrow_mut();
     let module = match completion {

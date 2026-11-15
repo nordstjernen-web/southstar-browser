@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* No crates.io crate is built in two versions any more, except
+  miniz_oxide, which the png crate itself uses in two. The Boa fork
+  replaced dashmap, num_enum, rand, futures-concurrency, dynify, aligned-vec
+  and the phf set behind its interned strings with small in-tree code, and
+  dropped strum. That removed syn 2, hashbrown 0.14 and getrandom 0.4 and
+  37 crates in all from Cargo.lock; a Linux build compiles 154 external
+  crates instead of 186.
 * An escaped `static`, `get`, `set` or `async` in a class body (`\u0061sync`
   on a line of its own), and an `async` followed by a line break, is a field
   of that name instead of a syntax error, as the specification and other
