@@ -228,6 +228,10 @@ impl Page {
         scroll::take_pending(self.browser())
     }
 
+    pub fn take_pending_scroll_smooth(&self) -> bool {
+        scroll::take_smooth(self.browser())
+    }
+
     pub fn render_image(&self, path: &CStr) -> c_int {
         query::render_image(self.browser(), path)
     }

@@ -106,14 +106,14 @@ pub fn notify_scroll_to(js: Option<Page>, target: Node<'_>) {
     }
 }
 
-pub fn scroll_viewport(js: Option<Page>, x: f64, y: f64) {
+pub fn scroll_viewport(js: Option<Page>, x: f64, y: f64, smooth: Option<bool>) {
     let Some(js) = Js::of(js) else {
         return;
     };
     let x = if !x.is_finite() || x < 0.0 { 0.0 } else { x };
     let y = if !y.is_finite() || y < 0.0 { 0.0 } else { y };
     let (x, y) = match js.st().viewport_scroll.get() {
-        Some(scroll) => scroll(x, y),
+        Some(scroll) => scroll(x, y, smooth),
         None => (x, y),
     };
     glue::note_viewport_scroll(js, x, y);

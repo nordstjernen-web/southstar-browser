@@ -15,10 +15,10 @@ fn set_scroll(scope: &mut Scope<'_>, this: &Value, v: f64, vertical: bool) {
     if scrolling_root(this) {
         if vertical {
             let x = window_scroll(scope, "scrollX");
-            ffi::scroll_viewport(js, x, v);
+            ffi::scroll_viewport(js, x, v, None);
         } else {
             let y = window_scroll(scope, "scrollY");
-            ffi::scroll_viewport(js, v, y);
+            ffi::scroll_viewport(js, v, y, None);
         }
         return;
     }
@@ -120,12 +120,21 @@ pub fn element_scroll_by(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     element_scroll(scope, this, args, true)
 }
 
-fn read_scroll_xy(scope: &mut Scope<'_>, args: &[Value]) -> JsResult<(f64, f64)> {
+fn scroll_behavior(scope: &mut Scope<'_>, options: &Value) -> JsResult<Option<bool>> {
+    Ok(match string_prop(scope, options, "behavior")?.as_deref() {
+        Some("smooth") => Some(true),
+        Some("instant") => Some(false),
+        _ => None,
+    })
+}
+
+fn read_scroll_xy(scope: &mut Scope<'_>, args: &[Value]) -> JsResult<(f64, f64, Option<bool>)> {
     let first = arg(args, 0);
     if is_options(&first) {
         let left = scope.get(&first, "left")?;
         let top = scope.get(&first, "top")?;
-        return Ok((scope.to_number(&left)?, scope.to_number(&top)?));
+        let smooth = scroll_behavior(scope, &first)?;
+        return Ok((scope.to_number(&left)?, scope.to_number(&top)?, smooth));
     }
     let x = if args.is_empty() {
         0.0
@@ -137,24 +146,36 @@ fn read_scroll_xy(scope: &mut Scope<'_>, args: &[Value]) -> JsResult<(f64, f64)>
     } else {
         scope.to_number(&args[1])?
     };
-    Ok((x, y))
+    Ok((x, y, None))
 }
 
 pub(crate) fn window_scroll_to(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
-    let (x, y) = read_scroll_xy(scope, args)?;
-    ffi::scroll_viewport(ffi::js_of(scope), x, y);
+    let (x, y, smooth) = read_scroll_xy(scope, args)?;
+    let x = if x.is_nan() {
+        window_scroll(scope, "scrollX")
+    } else {
+        x
+    };
+    let y = if y.is_nan() {
+        window_scroll(scope, "scrollY")
+    } else {
+        y
+    };
+    ffi::scroll_viewport(ffi::js_of(scope), x, y, smooth);
     Ok(Value::undefined())
 }
 
-fn scroll_viewport_by(scope: &mut Scope<'_>, dx: f64, dy: f64) {
+fn scroll_viewport_by(scope: &mut Scope<'_>, dx: f64, dy: f64, smooth: Option<bool>) {
+    let dx = if dx.is_nan() { 0.0 } else { dx };
+    let dy = if dy.is_nan() { 0.0 } else { dy };
     let x = window_scroll(scope, "scrollX") + dx;
     let y = window_scroll(scope, "scrollY") + dy;
-    ffi::scroll_viewport(ffi::js_of(scope), x, y);
+    ffi::scroll_viewport(ffi::js_of(scope), x, y, smooth);
 }
 
 pub(crate) fn window_scroll_by(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
-    let (dx, dy) = read_scroll_xy(scope, args)?;
-    scroll_viewport_by(scope, dx, dy);
+    let (dx, dy, smooth) = read_scroll_xy(scope, args)?;
+    scroll_viewport_by(scope, dx, dy, smooth);
     Ok(Value::undefined())
 }
 
@@ -171,7 +192,7 @@ pub(crate) fn window_scroll_by_lines(
     args: &[Value],
 ) -> JsResult {
     let lines = int_arg(scope, args)?;
-    scroll_viewport_by(scope, 0.0, f64::from(lines) * 16.0);
+    scroll_viewport_by(scope, 0.0, f64::from(lines) * 16.0, None);
     Ok(Value::undefined())
 }
 
@@ -183,7 +204,7 @@ pub(crate) fn window_scroll_by_pages(
     let pages = int_arg(scope, args)?;
     let inner_height = scope.get(this, "innerHeight")?;
     let vh = scope.to_number(&inner_height)?;
-    scroll_viewport_by(scope, 0.0, f64::from(pages) * vh);
+    scroll_viewport_by(scope, 0.0, f64::from(pages) * vh, None);
     Ok(Value::undefined())
 }
 

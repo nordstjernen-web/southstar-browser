@@ -95,8 +95,8 @@ pub(crate) fn box_dom(b: BoxRef<'_>) -> Option<Element> {
     b.into_static().dom()
 }
 
-pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64) {
-    api::scroll_viewport(js.0, x, y);
+pub(crate) fn scroll_viewport(js: Js, x: f64, y: f64, smooth: Option<bool>) {
+    api::scroll_viewport(js.0, x, y, smooth);
 }
 
 pub(crate) fn note_viewport_scroll(js: Js, x: f64, y: f64) {

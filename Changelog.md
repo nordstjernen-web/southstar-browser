@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Smooth scrolling: `scrollTo`/`scrollBy` with `behavior: 'smooth'`, and
+  page scrolls, `scrollIntoView` and in-page anchor jumps on a document
+  whose root has `scroll-behavior: smooth`, glide to their target over
+  300 ms in the browser window instead of jumping; a wheel scroll stops
+  the glide. `scrollTo({top})` no longer resets the horizontal position.
 * `text-wrap: balance` evens out the lines of headings and short
   paragraphs (up to ten lines), and `text-wrap: pretty` keeps a single
   word off the last line when that costs no extra line.
