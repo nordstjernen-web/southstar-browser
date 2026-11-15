@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* The new tab page, about:southstar and the Settings page are translated
+  through the UI catalogues (`data/i18n/*.lang`), and their `<html lang>`
+  names the catalogue's language. German, Spanish, French, Italian,
+  Japanese, Korean, Dutch, Polish, Portuguese, Russian, Turkish, Ukrainian
+  and Chinese cover the new tab page, the About page's text and the
+  Settings page's messages; other strings fall back to English. The
+  renderer process now loads the catalogue too.
 * The shell resolves its own path, a file given on the command line and
   its file: URL in Rust instead of through g_find_program_in_path,
   g_canonicalize_filename and g_filename_to_uri, which brings it back under

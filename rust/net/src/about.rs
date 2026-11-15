@@ -4,6 +4,7 @@
 
 use southstar_unicode::until_nul;
 mod diagnostics;
+mod l10n;
 mod settings;
 mod templates;
 
@@ -240,7 +241,7 @@ fn js_string_escape(text: &[u8]) -> Vec<u8> {
 
 fn search_name(engine: &[u8]) -> Vec<u8> {
     let Some(host) = sys::url_host(engine).filter(|h| !h.is_empty()) else {
-        return b"the web".to_vec();
+        return l10n::tr("the web").as_bytes().to_vec();
     };
     match sys::registrable_domain(&host).filter(|r| !r.is_empty()) {
         Some(registrable) => registrable,
@@ -273,7 +274,10 @@ fn southstar_page() -> Vec<u8> {
     let built = if diagnostics::BUILD_DATE.is_empty() {
         String::new()
     } else {
-        format!("<p class=\"built\">Built {}</p>", diagnostics::BUILD_DATE)
+        format!(
+            "<p class=\"built\">{}</p>",
+            l10n::html("Built %s").replace("%s", diagnostics::BUILD_DATE)
+        )
     };
     let page = substitute(&page, b"__ND_BUILT__", built.as_bytes());
     substitute(&page, b"__ND_DIAG__", &diagnostics::html())

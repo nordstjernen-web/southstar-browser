@@ -104,6 +104,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
         engine::set_color_scheme(scheme == b"dark");
     }
     let self_exe = c_string_until_nul(args[0]);
+    southstar_i18n::init(Some(&self_exe));
     engine::sandbox(Some(&self_exe));
     southstar_threaddump::install_signal(Some(b"southstar-renderer"));
     let bufsz = (size + 65536).min(0x7fff_ffff) as c_int;

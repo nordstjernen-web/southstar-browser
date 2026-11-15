@@ -7,6 +7,8 @@ use std::sync::OnceLock;
 use southstar_about_style::base_css;
 use southstar_config::DEFAULT_SEARCH_ENGINE;
 
+use crate::about::l10n::localize;
+
 pub const VERSION: &str = match option_env!("NS_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),
@@ -43,11 +45,11 @@ macro_rules! switch {
 }
 
 const START_HEAD: &str = concat!(
-    "<!doctype html><html lang=\"en\"><head>",
+    "<!doctype html><html lang=\"__ND_LANG__\"><head>",
     "<meta charset=\"utf-8\">",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
     "<meta name=\"color-scheme\" content=\"light dark\">",
-    "<title>New Tab</title>",
+    "<title>{{New Tab}}</title>",
     "<style>\n",
 );
 
@@ -96,7 +98,7 @@ const START_BODY: &str = concat!(
     ".search{height:52px;padding-left:16px}.search input{font-size:16px}}\n",
     "</style></head>",
     "<body><main class=\"ntp\">",
-    "<h1 class=\"vh\">New Tab</h1>",
+    "<h1 class=\"vh\">{{New Tab}}</h1>",
     "__ND_LOGO_MARK__",
     "<form class=\"search\" id=\"dsearch\" role=\"search\">",
     "<svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 16 16\"",
@@ -104,18 +106,18 @@ const START_BODY: &str = concat!(
     " stroke-linecap=\"round\">",
     "<circle cx=\"7\" cy=\"7\" r=\"4.6\"/><path d=\"M10.4 10.4 14 14\"/></svg>",
     "<input id=\"sq\" name=\"q\" autocomplete=\"off\" autofocus dir=\"auto\"",
-    " aria-label=\"Search with __ND_SEARCH_NAME__ or enter an address\"",
-    " placeholder=\"Search or enter address\">",
-    "<button type=\"submit\" aria-label=\"Search\">",
+    " aria-label=\"{{Search with __ND_SEARCH_NAME__ or enter an address}}\"",
+    " placeholder=\"{{Search or enter address}}\">",
+    "<button type=\"submit\" aria-label=\"{{Search}}\">",
     "<svg aria-hidden=\"true\" width=\"18\" height=\"18\" viewBox=\"0 0 16 16\"",
     " fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"",
     " stroke-linecap=\"round\" stroke-linejoin=\"round\">",
     "<path d=\"M3 8h9.5M8.5 4l4 4-4 4\"/></svg>",
     "</button></form>",
-    "<nav class=\"links\" aria-label=\"Browser pages\">",
-    "<a href=\"about:history\">History</a><span aria-hidden=\"true\">\u{b7}</span>",
-    "<a href=\"about:settings\">Settings</a><span aria-hidden=\"true\">\u{b7}</span>",
-    "<a href=\"about:southstar\">About Southstar</a>",
+    "<nav class=\"links\" aria-label=\"{{Browser pages}}\">",
+    "<a href=\"about:history\">{{History}}</a><span aria-hidden=\"true\">\u{b7}</span>",
+    "<a href=\"about:settings\">{{Settings}}</a><span aria-hidden=\"true\">\u{b7}</span>",
+    "<a href=\"about:southstar\">{{About Southstar}}</a>",
     "</nav>",
     "<p class=\"foot\"><a href=\"about:southstar\">Southstar ",
     "__ND_VERSION__</a></p>",
@@ -140,11 +142,11 @@ const START_BODY: &str = concat!(
 );
 
 const SOUTHSTAR_HEAD: &str = concat!(
-    "<!doctype html><html lang=\"en\"><head>",
+    "<!doctype html><html lang=\"__ND_LANG__\"><head>",
     "<meta charset=\"utf-8\">",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
     "<meta name=\"color-scheme\" content=\"light dark\">",
-    "<title>About Southstar</title>",
+    "<title>{{About Southstar}}</title>",
     "<style>\n",
 );
 
@@ -202,32 +204,32 @@ const SOUTHSTAR_BODY: &str = concat!(
 
 const SOUTHSTAR_TAIL: &str = concat!(
     "</span></h1>",
-    "<p>A web browser written from scratch in Rust.</p>",
+    "<p>{{A web browser written from scratch in Rust.}}</p>",
     "__ND_BUILT__</div></header>",
     "<div class=\"actions head-actions\">",
     "<button id=\"copy\" class=\"btn primary\" type=\"button\">",
-    "Copy version info</button>",
+    "{{Copy version info}}</button>",
     "<a class=\"btn\" href=\"https://github.com/nordstjernen-web/southstar-browser\">",
-    "Source code</a></div>",
+    "{{Source code}}</a></div>",
     "<section class=\"card\">",
-    "<h2>Privacy</h2>",
-    "<p>Southstar sends no telemetry. Its only connection to a third party ",
+    "<h2>{{Privacy}}</h2>",
+    "<p>{{Southstar sends no telemetry. Its only connection to a third party ",
     "is Google Safe Browsing, in builds that include a key; you can turn it ",
-    "off in Settings \u{2192} Privacy.</p>",
+    "off in Settings \u{2192} Privacy.}}</p>",
     "<div class=\"actions\">",
     "<a class=\"btn\" href=\"https://github.com/nordstjernen-web/southstar-browser/blob/main/docs/privacy-policy.md\">",
-    "Privacy policy</a>",
-    "<a class=\"btn\" href=\"about:settings#privacy\">Privacy settings</a>",
+    "{{Privacy policy}}</a>",
+    "<a class=\"btn\" href=\"about:settings#privacy\">{{Privacy settings}}</a>",
     "</div></section>",
     "<section class=\"card\">",
-    "<h2>License</h2>",
-    "<p>Free software under NSL-1.0 or GPL-3.0-or-later, with no warranty.</p>",
+    "<h2>{{License}}</h2>",
+    "<p>{{Free software under NSL-1.0 or GPL-3.0-or-later, with no warranty.}}</p>",
     "<div class=\"actions\">",
     "<a class=\"btn\" href=\"about:license\">Nordstjernen Source License</a>",
     "<a class=\"btn\" href=\"about:gpl\">GNU GPL v3</a>",
-    "<a class=\"btn\" href=\"about:third-party\">Third-party notices</a>",
+    "<a class=\"btn\" href=\"about:third-party\">{{Third-party notices}}</a>",
     "</div></section>",
-    "<details class=\"card\"><summary><h2>Technical details</h2></summary>",
+    "<details class=\"card\"><summary><h2>{{Technical details}}</h2></summary>",
     "__ND_DIAG__</details>",
     "<footer class=\"foot\"><span>Southstar Browser \u{a9} 2026 ",
     "Andreas R\u{f8}sdal</span></footer>",
@@ -246,16 +248,16 @@ const SOUTHSTAR_TAIL: &str = concat!(
     " function done(t){copy.textContent=t;",
     "setTimeout(function(){copy.textContent=label;},1600);}\n",
     " try{navigator.clipboard.writeText(versionText()).then(",
-    "function(){done('Copied');},function(){done('Could not copy');});}",
-    "catch(e){done('Could not copy');}});\n",
+    "function(){done('{{js:Copied}}');},function(){done('{{js:Could not copy}}');});}",
+    "catch(e){done('{{js:Could not copy}}');}});\n",
     "</script></body></html>",
 );
 
 const SETTINGS_HEAD: &str = concat!(
-    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\n",
+    "<!doctype html><html lang=\"__ND_LANG__\"><head><meta charset=\"utf-8\">\n",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n",
     "<meta name=\"color-scheme\" content=\"light dark\">\n",
-    "<title>Settings</title>\n",
+    "<title>{{Settings}}</title>\n",
     "<style>\n",
 );
 
@@ -311,105 +313,105 @@ const SETTINGS_BODY: &str = concat!(
     ".side a{display:none}}\n",
     "</style></head><body>\n",
     "<div class=\"layout\">\n",
-    "<nav class=\"side\"><h1>Settings</h1>",
+    "<nav class=\"side\"><h1>{{Settings}}</h1>",
     "<a href=\"#general\">",
     nav_icon!("<path d=\"M2.25 7.5 8 2.5l5.75 5\"/><path d=\"M3.75 6.5v7h8.5v-7\"/>"),
-    "General</a>",
+    "{{General}}</a>",
     "<a href=\"#privacy\">",
     nav_icon!(
         "<path d=\"M8 1.75 13.25 3.75v4c0 3.25-2.25 5.5-5.25 6.5-3-1-5.25-3.25-5.25-6.5v-4z\"/>"
     ),
-    "Privacy</a>",
+    "{{Privacy}}</a>",
     "<a href=\"#content\">",
     nav_icon!(
         "<rect x=\"2.25\" y=\"2.75\" width=\"11.5\" height=\"10.5\" rx=\"2\"/><path d=\"M2.25 6h11.5\"/>"
     ),
-    "Content</a>",
+    "{{Content}}</a>",
     "<a href=\"#data\">",
     nav_icon!("<path d=\"M3.25 4.5h9.5M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.75h5.8l.6-8.75\"/>"),
-    "Browsing data</a></nav>\n",
+    "{{Browsing data}}</a></nav>\n",
     "<main>\n",
-    "<section id=\"general\"><h2>General</h2><div class=\"card\">",
-    "<label class=\"field\"><span class=\"lbl\">Home page</span>",
+    "<section id=\"general\"><h2>{{General}}</h2><div class=\"card\">",
+    "<label class=\"field\"><span class=\"lbl\">{{Home page}}</span>",
     "<input id=\"home_url\" type=\"text\" spellcheck=\"false\"></label>",
-    "<label class=\"field\"><span class=\"lbl\">Search engine</span>",
+    "<label class=\"field\"><span class=\"lbl\">{{Search engine}}</span>",
     "<select id=\"search_pick\"></select></label>",
     "<label class=\"field\" id=\"custom_wrap\"><span class=\"lbl\">",
-    "Custom search URL</span>",
+    "{{Custom search URL}}</span>",
     "<input id=\"search_engine\" type=\"text\" spellcheck=\"false\" ",
     "placeholder=\"https://example.com/?q=%s\"></label>",
     "<div class=\"save-row\">",
-    "<button id=\"save\" class=\"btn primary\" type=\"button\">Save</button>",
+    "<button id=\"save\" class=\"btn primary\" type=\"button\">{{Save}}</button>",
     "</div></div></section>\n",
-    "<section id=\"privacy\"><h2>Privacy</h2><div class=\"card\">",
-    "<label class=\"field\"><span class=\"lbl\">Cookies</span>",
+    "<section id=\"privacy\"><h2>{{Privacy}}</h2><div class=\"card\">",
+    "<label class=\"field\"><span class=\"lbl\">{{Cookies}}</span>",
     "<select id=\"cookie_policy\">",
-    "<option value=\"0\">Accept all cookies</option>",
-    "<option value=\"1\">Block third-party cookies</option>",
-    "<option value=\"2\">Block all cookies</option></select></label>\n",
+    "<option value=\"0\">{{Accept all cookies}}</option>",
+    "<option value=\"1\">{{Block third-party cookies}}</option>",
+    "<option value=\"2\">{{Block all cookies}}</option></select></label>\n",
     switch!(
         "do_not_track",
-        "Send \u{201c}Do Not Track\u{201d}",
-        "Ask every site not to track you."
+        "{{Send \u{201c}Do Not Track\u{201d}}}",
+        "{{Ask every site not to track you.}}"
     ),
     switch!(
         "global_privacy_control",
-        "Send Global Privacy Control",
-        "Tell sites not to sell or share your data."
+        "{{Send Global Privacy Control}}",
+        "{{Tell sites not to sell or share your data.}}"
     ),
     switch!(
         "safe_browsing",
-        "Block dangerous sites",
-        "Warn before opening known phishing and malware sites, using Google Safe Browsing and a local list."
+        "{{Block dangerous sites}}",
+        "{{Warn before opening known phishing and malware sites, using Google Safe Browsing and a local list.}}"
     ),
     switch!(
         "strip_tracking_params",
-        "Strip tracking parameters",
-        "Remove utm_ and similar tags from links you open."
+        "{{Strip tracking parameters}}",
+        "{{Remove utm_ and similar tags from links you open.}}"
     ),
     switch!(
         "https_first",
-        "HTTPS first",
-        "Try a secure connection before plain HTTP on every site."
+        "{{HTTPS first}}",
+        "{{Try a secure connection before plain HTTP on every site.}}"
     ),
     switch!(
         "remote_control",
-        "Allow remote control",
-        "Let a local agent such as Claude Code drive this browser over MCP."
+        "{{Allow remote control}}",
+        "{{Let a local agent such as Claude Code drive this browser over MCP.}}"
     ),
     "</div></section>\n",
-    "<section id=\"content\"><h2>Content</h2><div class=\"card\">\n",
+    "<section id=\"content\"><h2>{{Content}}</h2><div class=\"card\">\n",
     switch!(
         "images_enabled",
-        "Load images",
-        "Show pictures on web pages."
+        "{{Load images}}",
+        "{{Show pictures on web pages.}}"
     ),
     switch!(
         "javascript_enabled",
-        "JavaScript",
-        "Run scripts that pages need for interactive features."
+        "{{JavaScript}}",
+        "{{Run scripts that pages need for interactive features.}}"
     ),
     switch!(
         "webgl_enabled",
-        "WebGL",
-        "Allow 3D graphics in the canvas element."
+        "{{WebGL}}",
+        "{{Allow 3D graphics in the canvas element.}}"
     ),
     switch!(
         "local_storage_enabled",
-        "Local storage",
-        "Let sites keep data on this device."
+        "{{Local storage}}",
+        "{{Let sites keep data on this device.}}"
     ),
     switch!(
         "cache_enabled",
-        "Cache",
-        "Keep copies of pages and files to load them faster."
+        "{{Cache}}",
+        "{{Keep copies of pages and files to load them faster.}}"
     ),
     "</div></section>\n",
-    "<section id=\"data\"><h2>Browsing data</h2><div class=\"card\">",
+    "<section id=\"data\"><h2>{{Browsing data}}</h2><div class=\"card\">",
     "<div class=\"danger-row\"><span class=\"txt\"><span class=\"lbl\">",
-    "Clear all browsing data</span><span class=\"desc\">History, cookies, ",
-    "cache and site storage on this device.</span></span>",
-    "<button id=\"clear\" class=\"btn danger\">Clear data</button></div>",
+    "{{Clear all browsing data}}</span><span class=\"desc\">{{History, cookies, ",
+    "cache and site storage on this device.}}</span></span>",
+    "<button id=\"clear\" class=\"btn danger\">{{Clear data}}</button></div>",
     "</div></section>\n",
     "</main></div>\n",
     "<div class=\"toast\" id=\"status\" role=\"status\"></div>\n",
@@ -440,7 +442,7 @@ const SETTINGS_TAIL: &str = concat!(
     "'option');o.value=e.u;o.textContent=e.n;if(e.u===cur){o.selected=true;",
     "matched=true;}sel.appendChild(o);});",
     "var oc=document.createElement('option');oc.value='custom';",
-    "oc.textContent='Custom\\u2026';if(!matched)oc.selected=true;",
+    "oc.textContent='{{js:Custom\u{2026}}}';if(!matched)oc.selected=true;",
     "sel.appendChild(oc);",
     "$('custom_wrap').hidden=matched;}\n",
     "function load(){fetch('about:settings-data').then(function(r){",
@@ -453,7 +455,7 @@ const SETTINGS_TAIL: &str = concat!(
     "function save(o){if(!loaded)return;",
     "fetch('about:settings-save',{method:'POST',headers:{'Content-Type':",
     "'application/x-www-form-urlencoded'},body:enc(o)}).then(function(){",
-    "toast('Saved. Applies to newly opened pages.');});}\n",
+    "toast('{{js:Saved. Applies to newly opened pages.}}');});}\n",
     "function saveField(k){var o={};o[k]=$(k).value;save(o);}\n",
     "function saveGeneral(){var se=$('search_pick').value;",
     "if(se!=='custom')$('search_engine').value=se;",
@@ -468,13 +470,13 @@ const SETTINGS_TAIL: &str = concat!(
     "$('save').onclick=saveGeneral;\n",
     "$('clear').onclick=function(){var b=$('clear');b.disabled=true;",
     "fetch('about:settings-clear',{method:'POST'}).then(function(){",
-    "b.textContent='Cleared';toast('Browsing data cleared');});};\n",
+    "b.textContent='{{js:Cleared}}';toast('{{js:Browsing data cleared}}');});};\n",
     "load();\n",
     "</script></body></html>",
 );
 
 fn joined(cell: &'static OnceLock<String>, parts: &[&str]) -> &'static str {
-    cell.get_or_init(|| parts.concat())
+    cell.get_or_init(|| localize(&parts.concat()))
 }
 
 pub fn start() -> &'static str {
