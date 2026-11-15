@@ -1,4 +1,5 @@
 //! Southstar — the min-content and max-content widths of an inline run, with the plain-ASCII longest-word shortcut and the per-box caches.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the C ABI and Rust-ABI entry points of Web Storage, the realm, event and GLib calls it makes, and the on-disk local area.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

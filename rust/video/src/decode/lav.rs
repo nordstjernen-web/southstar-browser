@@ -1,4 +1,5 @@
 //! Southstar — the libav backend: Matroska/WebM and ISO-BMFF demuxed from a growing in-memory buffer, decoded and scaled to BGRA.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

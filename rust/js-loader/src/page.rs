@@ -1,4 +1,5 @@
 //! Southstar — per-page loader state: the import map, the deferred and async script roots with their drain timer, the parser holds and the module load counters.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

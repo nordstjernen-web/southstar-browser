@@ -1,4 +1,5 @@
 //! Southstar — the small element getters and setters: isContentEditable, hidden, disabled, labels, form, list, option index, select length, enctype, content and the constant stubs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

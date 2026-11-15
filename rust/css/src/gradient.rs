@@ -1,4 +1,5 @@
 //! Southstar — CSS gradients: linear-, radial- and conic-gradient() with their repeating forms parsed into the ns_css_gradient css.c stores, serialized in specified and computed form, and resolved to an angle or radii for painting.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

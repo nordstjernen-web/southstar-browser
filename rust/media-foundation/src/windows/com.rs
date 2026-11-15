@@ -1,4 +1,5 @@
 //! Southstar — Media Foundation's entry points loaded from mfplat.dll at runtime, and owners of the COM interfaces the decoders call.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — inline collection: walking an inline run's DOM into its text, links, inline attributes, atomic boxes and white-space ranges.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

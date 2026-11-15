@@ -1,4 +1,5 @@
 //! Southstar — requests through the network crate, blocking ones on a nested main loop, the response view, stylesheet bytes and their cache, resource timings and preloads.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

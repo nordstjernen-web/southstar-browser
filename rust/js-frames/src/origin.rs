@@ -1,4 +1,5 @@
 //! Southstar — a frame's origin as its embedder sees it: the URL its document shows, whether it is cross-origin to the embedder and the referrer its document starts with.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

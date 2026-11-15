@@ -1,4 +1,5 @@
 //! Southstar — the SVG animation DOM: pausing and seeking an svg element's timeline, and begin, end, start time, duration and target of an animation element.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

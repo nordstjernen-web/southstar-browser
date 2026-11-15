@@ -1,4 +1,5 @@
 //! Southstar — the WebGL 1 and WebGL 2 enum names every WebGL interface object and prototype carries.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

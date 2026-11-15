@@ -1,4 +1,5 @@
 //! Southstar — the tab view's remote-control entry points: script evaluation, console reads, clicks, keys, text, scrolling and screenshots through the view's own input path.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

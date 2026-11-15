@@ -1,4 +1,5 @@
 //! Southstar — single-line row flex containers: main sizes, auto margins, justify-content, the cross size with baselines, and item placement and stretching.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

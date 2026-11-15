@@ -1,4 +1,5 @@
 //! Southstar text — font descriptions: the family, style, weight, width, size and features a font is asked for, and their string form.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

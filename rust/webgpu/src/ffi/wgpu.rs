@@ -1,4 +1,5 @@
 //! Southstar — the wgpu-native entry points WebGPU calls, owned handles that release themselves, and the blocking waits on its callbacks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

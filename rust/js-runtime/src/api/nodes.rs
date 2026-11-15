@@ -1,4 +1,5 @@
 //! Southstar — the node helpers the page record offers binding crates: wrapper invalidation, template and form-control checks, single-node insertion, attribute-change and src bookkeeping, and the page's form reset, layout root and CSP header.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

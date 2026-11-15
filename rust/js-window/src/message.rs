@@ -1,4 +1,5 @@
 //! Southstar — window.postMessage between windows and frames: target origins, the links between a frame's outward and inner windows, and delivery into the receiving realm.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

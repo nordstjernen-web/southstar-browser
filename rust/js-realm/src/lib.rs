@@ -1,4 +1,5 @@
-//! Southstar — hides SharedArrayBuffer from window, frame and worker globals, since no page is cross-origin isolated.
+//! Southstar — realm setup shared by window, frame and worker globals: SharedArrayBuffer is removed, since no page is cross-origin isolated.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

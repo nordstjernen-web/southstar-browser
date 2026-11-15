@@ -1,4 +1,5 @@
 //! Southstar text — the name-table language ids fontconfig maps to language tags, by platform.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

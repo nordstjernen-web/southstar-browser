@@ -1,4 +1,5 @@
 //! Southstar — the text entry and its editable text, icon slots and signals, and the label, button and image setters a toolbar needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

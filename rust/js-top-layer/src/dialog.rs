@@ -1,4 +1,5 @@
 //! Southstar — the dialog element: show, showModal, close and requestClose, closedby, the close watchers, the modal top layer and the cancel and close events.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — gravity: the rotation of glyphs, resolved from a matrix or from a script's vertical-text properties.
+//!
 //! Copyright 2006, 2007 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

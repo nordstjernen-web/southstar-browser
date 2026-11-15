@@ -1,4 +1,5 @@
 //! Southstar — a page's image sessions: starting them after layout, counting what is outstanding, batching arrivals into relayouts and media load events.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

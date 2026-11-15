@@ -1,4 +1,5 @@
 //! Southstar — Unicode Normalization Form C and the per-code-point properties IDNA reads, over the generated tables.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

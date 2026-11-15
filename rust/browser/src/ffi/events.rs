@@ -1,4 +1,5 @@
 //! Southstar — the calls behind a page's input: hit testing, the selection, editable fields, UTF-8 stepping, select controls and the script engine's pointer, key, drag and editing events.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

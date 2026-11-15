@@ -1,4 +1,5 @@
 //! Southstar — a fieldset's rendered legend: sizing and placing it over the top border, the content height left below it, and the border gap the painter leaves for it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

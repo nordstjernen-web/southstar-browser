@@ -1,4 +1,5 @@
 //! Southstar text — the context text is laid out in: direction, gravity, language, base font, matrix, font map, cairo font options and cached metrics.
+//!
 //! Copyright 2000 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

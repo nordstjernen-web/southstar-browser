@@ -1,4 +1,5 @@
 //! Southstar — the file system, clock and GLib calls behind file: and FTP responses and the network stores: file names and URIs, folders, stat, local times, content types and the public suffix check.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

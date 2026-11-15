@@ -1,4 +1,5 @@
 //! Southstar — the dispatch entry points other code calls: C exports over page and node pointers, and the Rust-ABI nsr_ functions over scopes and values.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

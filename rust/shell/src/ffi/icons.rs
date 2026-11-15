@@ -1,4 +1,5 @@
 //! Southstar — the shell icon paintable: icons from the resource bundle, drawn by the SVG renderer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

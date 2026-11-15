@@ -1,4 +1,5 @@
 //! Southstar — the Media Source Extensions natives behind the MediaSource/SourceBuffer polyfill: append, end of stream, buffered ranges, remove and byte counts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

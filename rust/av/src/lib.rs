@@ -1,4 +1,5 @@
 //! Southstar — FFmpeg's libav* declarations, with field offsets and enum values taken from the installed headers, and safe owners of the contexts built on them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

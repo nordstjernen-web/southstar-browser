@@ -1,4 +1,5 @@
 //! Southstar — the entry points of the engine and its remaining C ABI: captures, dumps, print sheets, fetches, style sheet collection, cascade and relayout.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

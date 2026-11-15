@@ -1,4 +1,5 @@
 //! Southstar — the node and attribute stores: per-thread slots that are never handed back to the allocator, recycled under a generation count so a weak handle can tell a freed node from a live one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

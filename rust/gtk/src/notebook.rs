@@ -1,4 +1,5 @@
 //! Southstar — the containers a browser window is built from: notebook, overlay, header bar, spinner and separator, plus the toplevel's window-state calls.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

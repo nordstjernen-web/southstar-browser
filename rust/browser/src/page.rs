@@ -1,4 +1,5 @@
 //! Southstar — relayout of a page: saved scroll offsets, the oscillation damper, mutation-driven relayout, the viewport, the page size and parking in the back-forward cache.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

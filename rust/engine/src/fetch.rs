@@ -1,4 +1,5 @@
 //! Southstar — stylesheet fetches with their failure markers, linked-stylesheet text, speculative preloads and wanted images.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

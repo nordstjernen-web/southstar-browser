@@ -1,4 +1,5 @@
 //! Southstar — the state a paint pass reads besides the box tree: the page's animations and script context, the find-in-page highlight, the caret blink and the NS_DBG_PAINT_AT and NS_DBG_COMPOSITE debug switches.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

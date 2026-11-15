@@ -1,4 +1,5 @@
 //! Southstar — MutationObserver: the targets each observer watches, the records DOM changes queue on it and the microtask that delivers them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

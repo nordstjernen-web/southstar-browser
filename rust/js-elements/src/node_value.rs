@@ -1,4 +1,5 @@
 //! Southstar — nodeValue, data and length on the node wrapper, and whether an element takes part in the rendered tree.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

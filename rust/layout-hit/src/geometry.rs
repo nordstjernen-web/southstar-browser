@@ -1,4 +1,5 @@
 //! Southstar — moving a hit point into a box: the fixed and sticky offsets against the scrolled viewport, the inverse of the box's transform, scroll offsets and inline atomic placement.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

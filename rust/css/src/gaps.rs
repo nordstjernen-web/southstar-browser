@@ -1,4 +1,5 @@
 //! Southstar — CSS gap decorations: the list-valued column and row rule longhands with repeat(), the rule, rule-inset and bidirectional shorthands, and their serialization from longhands.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

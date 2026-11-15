@@ -1,4 +1,5 @@
 //! Southstar — the players the audio callback mixes into the 44.1 kHz stereo device, the clock they publish, and the silent fallback output.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

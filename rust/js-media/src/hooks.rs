@@ -1,4 +1,5 @@
 //! Southstar — the per-page media hooks the embedder installs: the audio side-channel, seek/play/mute/volume notifications and the MSE stream sinks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

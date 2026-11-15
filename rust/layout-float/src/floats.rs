@@ -1,4 +1,5 @@
 //! Southstar — the float bands a block lays out against: escaping floats, offsets at and over a span, clearance, readable-width advancing, inherited bands and shifting placed floats.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

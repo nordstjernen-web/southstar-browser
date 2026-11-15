@@ -1,4 +1,5 @@
 //! Southstar — a test262 runner over the engine-neutral layer: test metadata, one test in a fresh engine, and a pool of worker processes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

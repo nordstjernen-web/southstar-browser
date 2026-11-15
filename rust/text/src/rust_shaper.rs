@@ -1,4 +1,5 @@
 //! Southstar text — shaping through HarfRust, a Rust port of HarfBuzz, giving the glyphs and positions HarfBuzz gives for a font set up the way web-text-lib sets it up.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — whether a style opts a box out of hit testing and whether a node is a form control a hit lands on.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

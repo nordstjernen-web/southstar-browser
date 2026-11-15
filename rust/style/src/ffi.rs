@@ -1,4 +1,5 @@
 //! Southstar — computed styles read from Rust over rust/css's own style and value types: values by property, their gradients, shadows, transforms and layers, display and pseudo-element styles, custom properties, and comparing two styles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — cascade layer order: the rank table the gather loop looks each rule's layer up in, built from a style pass's sheets.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

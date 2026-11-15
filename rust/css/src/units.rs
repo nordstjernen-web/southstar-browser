@@ -1,4 +1,5 @@
 //! Southstar — CSS dimensions: the length units css.c knows, parsing a number with its unit, viewport units against the current viewport, and the unit and number spellings used when values serialize.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the open-select and datalist entry points, and the css, image, svg, paint and layout-crate calls the box-tree builder makes, behind safe wrappers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

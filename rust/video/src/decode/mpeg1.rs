@@ -1,4 +1,5 @@
 //! Southstar — the MPEG-1 backend: the in-tree pl_mpeg port over an in-memory stream.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — DataTransfer objects for clipboard and drag events, and the drag session the shell fills with data and dropped files.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

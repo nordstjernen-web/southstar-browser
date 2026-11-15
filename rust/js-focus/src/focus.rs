@@ -1,4 +1,5 @@
 //! Southstar — focusable areas, the focus update steps with their events, sequential navigation and the focus(), blur() and hasFocus() bindings.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

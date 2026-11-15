@@ -1,4 +1,5 @@
 //! Southstar — the rule index: a sheet's candidate rules and selectors bucketed by id, class, tag and attribute for its gather loop, with the pseudo-element masks recorded on the sheet and its rules on the way.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — showPicker() on <input> and <select>: the mutability and user-activation checks; the shell opens no picker of its own.
+//! Southstar — showPicker() on `<input>` and `<select>`: the mutability and user-activation checks; the shell opens no picker of its own.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

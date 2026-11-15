@@ -1,4 +1,5 @@
 //! Southstar — unrecorded tree edits: freeing an element's children and marking parsed scripts as already started.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

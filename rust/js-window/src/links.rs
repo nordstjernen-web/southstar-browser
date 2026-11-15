@@ -1,4 +1,5 @@
 //! Southstar — the entry points of the crates above this one that it calls back into, as typed tables those crates install once before the first page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

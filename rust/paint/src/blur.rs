@@ -1,4 +1,5 @@
 //! Southstar — box blurs over ARGB and alpha-only pixels, and blurred box shadows cut from a cache of blurred rounded rectangles stretched along their uniform middle bands.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

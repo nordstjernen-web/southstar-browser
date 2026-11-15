@@ -1,4 +1,5 @@
 //! Southstar text — glyph strings: shaped glyphs with their positions and clusters, their extents and the mapping between x positions and text.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

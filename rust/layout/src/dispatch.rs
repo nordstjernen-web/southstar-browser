@@ -1,4 +1,5 @@
 //! Southstar — the layout entry points the box tree and the formatting-context crates recurse through, installed once by the crate that links them all.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

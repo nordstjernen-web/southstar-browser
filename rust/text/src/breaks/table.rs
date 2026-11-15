@@ -1,4 +1,5 @@
 //! Southstar text — the Unicode 17 sentence terminal, Indic and East Asian width tables line breaking reads, generated from pango-break-table.h.
+//!
 //! Copyright 2025 Unicode, Inc.; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

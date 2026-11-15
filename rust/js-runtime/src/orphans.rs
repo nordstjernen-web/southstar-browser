@@ -1,4 +1,5 @@
 //! Southstar — sweeping orphaned subtrees no script can reach, releasing a subtree's pinned wrappers and loading the frames that waited for a quiet moment.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

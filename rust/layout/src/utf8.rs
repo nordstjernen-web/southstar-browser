@@ -1,4 +1,5 @@
 //! Southstar — reading one character from UTF-8 bytes with GLib's lenient rules, as layout and editing count text.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

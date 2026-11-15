@@ -1,4 +1,5 @@
 //! Southstar — the quick natural-width estimate of a box before it is laid out, and the intrinsic width of a text input from its size attribute.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

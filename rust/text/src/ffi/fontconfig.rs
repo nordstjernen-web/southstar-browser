@@ -1,4 +1,5 @@
 //! Southstar text — fontconfig: patterns, font sets, matching and sorting, configuration substitution and character sets.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

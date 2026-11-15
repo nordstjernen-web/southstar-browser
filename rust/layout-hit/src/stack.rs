@@ -1,4 +1,5 @@
 //! Southstar — the order hit testing visits boxes in: z-index stack levels, tree order within a level, and the styles that take a box out of hit testing.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

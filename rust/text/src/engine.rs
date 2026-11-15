@@ -1,4 +1,5 @@
 //! Southstar text — the font-table queries layout makes of a font, answered by HarfBuzz or, for Rust-backed fonts, by read-fonts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

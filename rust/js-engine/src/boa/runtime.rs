@@ -1,4 +1,5 @@
 //! Southstar — runtimes, contexts and their handles on Boa: a runtime owns one Context, a context handle names one of its realms, and a scope re-enters that realm on demand.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

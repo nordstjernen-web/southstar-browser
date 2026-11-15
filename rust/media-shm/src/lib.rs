@@ -1,4 +1,5 @@
 //! Southstar — the audio-clock and video-frame-ring layouts the media helpers share with the shell, and the shell's reader of them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

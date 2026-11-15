@@ -1,4 +1,5 @@
 //! Southstar — calc() and the CSS math functions inside colour channels, with relative-colour channel keywords.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

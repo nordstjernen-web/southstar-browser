@@ -1,4 +1,5 @@
 //! Southstar — a frame's source and its load scheduling: the source a frame shows, whether that source is already loaded, lazy frames left outside the load range, and the frames of a parsed tree.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

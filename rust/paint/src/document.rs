@@ -1,4 +1,5 @@
 //! Southstar — painting a document: the canvas background, the top layer and its backdrop, selection runs, and the layer planner that splits fixed and sticky subtrees into viewport layers the embedder composites.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — editing the focused field: its selection, copy and cut, replacing text with beforeinput and input events, editing keys and paste.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

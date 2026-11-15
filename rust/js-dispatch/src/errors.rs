@@ -1,4 +1,5 @@
 //! Southstar — uncaught errors and unhandled rejections: the ErrorEvent fired at the window, reportError(), and the unhandledrejection and rejectionhandled events with their console fallback.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

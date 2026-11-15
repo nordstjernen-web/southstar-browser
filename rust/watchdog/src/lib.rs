@@ -1,4 +1,5 @@
 //! Southstar — the supervisor that restarts the browser on crash or hang: its arguments, restart policy and hang budget.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the pixel buffers the raster (PNG/GIF/BMP/JPEG), ICO, WebP and AVIF decoders hand their pixels in.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

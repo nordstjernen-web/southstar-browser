@@ -1,4 +1,5 @@
 //! Southstar — CSS font values: the font-family list and the font shorthand in canonical form, their keyword and token checks, font-feature- and font-variation-settings, and resolving a family list to the font Pango should load.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

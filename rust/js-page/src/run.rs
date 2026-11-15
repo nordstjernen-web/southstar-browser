@@ -1,4 +1,5 @@
 //! Southstar — running a freshly parsed document: lifecycle reset, installation, early injected scripts, content scripts, its frames, images and stylesheet timings, then its scripts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

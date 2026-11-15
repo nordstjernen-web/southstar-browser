@@ -1,4 +1,5 @@
 //! Southstar — service workers: registration, the lifecycle a registration's worker goes through, its global scope, and the fetches it answers for its controlled page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

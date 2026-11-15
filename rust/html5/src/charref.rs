@@ -1,4 +1,5 @@
 //! Southstar — character references: longest-match named references, the attribute-value rule and numeric references with the C1 remapping.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

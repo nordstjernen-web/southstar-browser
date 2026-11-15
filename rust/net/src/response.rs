@@ -1,4 +1,5 @@
 //! Southstar — a fetched response: its status, final URL, the headers the browser reads, the body, the timings and the connection's security.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

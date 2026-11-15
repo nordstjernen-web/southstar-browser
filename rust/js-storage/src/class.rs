@@ -1,4 +1,5 @@
 //! Southstar — the Storage host class: its named properties (get, set, delete, define and enumeration) over the storage areas.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the top-level var and function names of a frame's classic scripts, scanned from their source and re-exposed as window properties when the scripts run wrapped in the page realm.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

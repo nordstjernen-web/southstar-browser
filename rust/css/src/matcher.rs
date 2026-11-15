@@ -1,4 +1,5 @@
 //! Southstar — matching selectors against elements: compounds with their type, id, class, attribute and pseudo-class tests, :is()/:where()/:not() and memoised relative :has(), complex chains right to left under an operation budget, nth positions cached per batch, and @scope roots and limits with their proximity.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — URL helpers over raw bytes: scalar-value conversion, resolving against a base, the setters, origins, hosts and the URL API's string components.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

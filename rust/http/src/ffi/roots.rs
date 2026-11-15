@@ -1,4 +1,5 @@
 //! Southstar — the operating system's trusted root certificates: the Windows ROOT store read through crypt32, nothing elsewhere.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — WOFF 1.0 web font decoding: the table directory and its zlib-compressed tables.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

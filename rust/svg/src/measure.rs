@@ -1,4 +1,5 @@
 //! Southstar — SVG element geometry: the bounding box and the transforms to the root and to the nearest viewport.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

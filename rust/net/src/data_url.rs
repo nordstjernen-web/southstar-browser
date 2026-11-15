@@ -1,4 +1,5 @@
 //! Southstar — data: URL decoding (percent-encoded and base64 payloads) into a response body under a memory budget.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

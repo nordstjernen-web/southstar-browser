@@ -1,4 +1,5 @@
 //! Southstar — computed values read through rust/style, selector lists, box hit testing and the box's DOM node.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — relative positioning: offsetting position: relative boxes, and inline-level atomic boxes on their lines, by their insets.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

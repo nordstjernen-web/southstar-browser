@@ -1,4 +1,5 @@
 //! Southstar — the WebGL2RenderingContext additions: vertex arrays, instancing, 3D textures, queries, samplers, syncs and uniform blocks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

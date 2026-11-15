@@ -1,4 +1,5 @@
 //! Southstar — the Location object and window.open: reading the top-level URL, navigating it, fragment changes and the scheme allow-list.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

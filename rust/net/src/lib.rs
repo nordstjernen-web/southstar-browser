@@ -1,4 +1,5 @@
-//! Southstar — networking: the request queue with its throttle, sharing and preloads, fetching with its redirects, cache and request headers, the curl transport, URL helpers, cookies, HSTS, storage paths, the transport plumbing, the network log, form encoding, body and header sinks, error pages, about: pages, data: URLs, file: and FTP listings and view-source: documents.
+//! Southstar — networking: the request queue with its throttle, sharing and preloads, fetching with its redirects, cache and request headers, the transport over southstar-http, URL helpers, cookies, HSTS, storage paths, the network log, form encoding, body and header sinks, error pages, about: pages, data: URLs, file: and FTP listings and view-source: documents.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

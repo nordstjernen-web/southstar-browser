@@ -1,4 +1,5 @@
 //! Southstar — the video crate's bridge to GLib's clock and cache directory, the network, textures, image decoding, URLs, the DOM, the box tree and computed styles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

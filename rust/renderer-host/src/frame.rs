@@ -1,4 +1,5 @@
 //! Southstar — the memory a renderer session paints into: its own buffer, or memory the shell shares, released when the session ends.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

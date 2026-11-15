@@ -1,4 +1,5 @@
 //! Southstar — the native Range object behind document.createRange and the polyfill's geometry proxy.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

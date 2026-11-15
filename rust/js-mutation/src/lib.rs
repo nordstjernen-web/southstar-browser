@@ -1,4 +1,5 @@
 //! Southstar — DOM change recording: index and past-names upkeep for child list and attribute changes, the recorded setters, the orphan set, the pending change event and the NamedNodeMap cache.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

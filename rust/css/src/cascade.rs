@@ -1,4 +1,5 @@
 //! Southstar — applying an element's matched declarations: cascade order, revert, revert-layer and revert-rule rolled back to the declaration they reveal, and the display and overflow fixups a computed style needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the --inspect and --inspect-at reports: matched elements, their boxes, edges, key computed values and ancestry.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

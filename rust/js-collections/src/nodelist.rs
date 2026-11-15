@@ -1,4 +1,5 @@
 //! Southstar — static NodeLists: the arrays querySelectorAll() and friends return, branded with item, namedItem, forEach, the array iterators and the NodeList tag.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — parsed selectors laid out for the matcher: each selector's compounds, combinators, specificity and ancestor hashes with the strings it reads cut where css.c's copies ended, the owning group a rule, scope or query holds, and the parser state css.c still asks for.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

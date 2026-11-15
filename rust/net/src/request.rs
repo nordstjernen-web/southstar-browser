@@ -1,4 +1,5 @@
 //! Southstar — shaping a request: its destination and Sec-Fetch metadata, the cache-partition and coalescing keys, the header lines handed to the transport, and how a redirect rewrites the next hop.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

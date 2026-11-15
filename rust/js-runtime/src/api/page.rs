@@ -1,4 +1,5 @@
 //! Southstar — the page record's state for binding crates: its documents, URLs and realms, the scheduling depths and flags, user activation and the page's CSP, cookies and timing.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

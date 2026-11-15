@@ -1,4 +1,5 @@
 //! Southstar — the image, background, marker, border-image and video sources a box paints, and the borrowed handle layout and paint read them through.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

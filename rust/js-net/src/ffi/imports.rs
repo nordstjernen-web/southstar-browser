@@ -1,4 +1,5 @@
 //! Southstar — the Rust-ABI entry points of the event, dispatch, form, worker and URL crates that the networking bindings call, resolved at link time.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 pub(crate) use crate::links::nsr_event_adopt_interface;

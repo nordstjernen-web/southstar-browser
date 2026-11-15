@@ -1,4 +1,5 @@
 //! Southstar — C printf's %.Pg and %.Pf for doubles, byte for byte and whatever the locale, and ECMAScript's Number::toString.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — the style sheet caches: parsed sheets kept per <style> element, per merged style text, per linked URL and per imported URL and layer, so a style pass reparses only what changed.
+//! Southstar — the style sheet caches: parsed sheets kept per `<style>` element, per merged style text, per linked URL and per imported URL and layer, so a style pass reparses only what changed.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

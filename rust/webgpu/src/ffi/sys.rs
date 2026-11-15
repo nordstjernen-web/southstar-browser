@@ -1,4 +1,5 @@
 //! Southstar — the webgpu.h and wgpu.h types and constants WebGPU uses, declared against the vendored headers with their layouts checked.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

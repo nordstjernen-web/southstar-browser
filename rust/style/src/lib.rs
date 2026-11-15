@@ -1,4 +1,5 @@
-//! Southstar — computed styles read from Rust: properties by name and by id, ns_style's values with their gradients, shadows, transforms and layers, display and pseudo-element styles, comparing two styles, and the css.c calls that interpret them.
+//! Southstar — computed styles read from Rust: properties by name and by id, ns_style's values with their gradients, shadows, transforms and layers, display and pseudo-element styles, and comparing two styles.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

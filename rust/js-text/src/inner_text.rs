@@ -1,4 +1,5 @@
 //! Southstar — the innerText getter's rendered-text walk over computed display, visibility, white-space and text-transform.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

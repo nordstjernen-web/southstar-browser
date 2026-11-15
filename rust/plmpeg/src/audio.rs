@@ -1,4 +1,5 @@
 //! Southstar — the MPEG-1 layer II (MP2) audio decoder to interleaved stereo float samples. Ported from pl_mpeg by Dominic Szablewski (MIT).
+//!
 //! Copyright 2019 Dominic Szablewski
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT

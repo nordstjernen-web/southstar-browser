@@ -1,4 +1,5 @@
 //! Southstar — the property tables of the DOM prototypes: element, media, anchor, document and the other interfaces' native methods and accessors.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

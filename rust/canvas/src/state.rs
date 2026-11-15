@@ -1,4 +1,5 @@
 //! Southstar — the drawing state behind each canvas element: its cairo surface and context, sized from the element's attributes, kept per page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

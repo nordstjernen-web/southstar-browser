@@ -1,4 +1,5 @@
 //! Southstar — questions layout and paint ask of a computed style: writing mode and text orientation, lengths in px, the used column count and gap, alignment keywords without their safe/unsafe/legacy prefix, and the overflow keyword an axis is used with.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the depth of the nested main loops blocking fetches are pumping, which script and image work consult before re-entering the page.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

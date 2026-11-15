@@ -1,4 +1,5 @@
 //! Southstar — the GLib main loop, clocks, string parsing, file reading and base64 the driver needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

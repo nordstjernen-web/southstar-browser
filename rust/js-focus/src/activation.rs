@@ -1,4 +1,5 @@
 //! Southstar — activation behaviour: what a click does to a link, label, summary, button, submit or reset control, and which elements have one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

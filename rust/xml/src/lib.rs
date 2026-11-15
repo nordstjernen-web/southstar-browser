@@ -1,4 +1,5 @@
 //! Southstar — a minimal namespaced XML and XHTML parser that builds the engine's DOM through a small tree-building interface.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the blob: URL registry: each page's object URLs and the pages the network resolver searches.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

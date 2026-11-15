@@ -1,4 +1,5 @@
-//! Southstar — element-specific HTML bindings: the table API, <img> state, labels, and the small element getters and setters.
+//! Southstar — element-specific HTML bindings: the table API, `<img>` state, labels, and the small element getters and setters.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

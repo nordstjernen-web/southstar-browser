@@ -1,4 +1,5 @@
 //! Southstar — the embedder hooks a page calls for binding crates: navigation, downloads, window actions, repaints, scrolling, layout flushes, form submission, the load delay, the clipboard and the selection.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

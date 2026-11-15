@@ -1,4 +1,5 @@
 //! Southstar — PageList, the small per-runtime table a binding keeps its page state in, created on first use and looked up by the runtime's key.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

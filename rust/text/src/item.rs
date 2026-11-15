@@ -1,4 +1,5 @@
 //! Southstar text — items: runs of text with one font, direction, script and language, and the attributes that ride along with them.
+//!
 //! Copyright 2000 Red Hat Software, 2021 Matthias Clasen; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

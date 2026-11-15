@@ -1,4 +1,5 @@
 //! Southstar — parsing the dates HTTP headers and cookies carry (RFC 1123, RFC 850, asctime, ISO 8601 and the looser forms servers send) into seconds since the epoch, with the rules curl_getdate applied.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

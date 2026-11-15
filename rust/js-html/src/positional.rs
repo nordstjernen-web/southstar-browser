@@ -1,4 +1,5 @@
 //! Southstar — setHTML and the HTML insertion methods appendHTML, prependHTML, beforeHTML, afterHTML and replaceWithHTML with their Unsafe variants, sanitizer and runScripts options.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

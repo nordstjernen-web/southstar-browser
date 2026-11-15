@@ -1,4 +1,5 @@
 //! Southstar — a media helper's named shared memory: the helper creates and writes the video ring and audio clock in it, the shell opens and reads them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — one wasmi store per JavaScript realm, with the JS values its instances reach: imported functions, externrefs and memory buffers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

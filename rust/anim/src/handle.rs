@@ -1,4 +1,5 @@
 //! Southstar — the handle a page owns its animation engine through and lends to the crates that sample, query and drive it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

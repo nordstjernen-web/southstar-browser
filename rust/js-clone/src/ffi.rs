@@ -1,4 +1,5 @@
 //! Southstar — structured cloning's and the worker wire graph's nsr_ entry points, and the binding and canvas calls behind them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

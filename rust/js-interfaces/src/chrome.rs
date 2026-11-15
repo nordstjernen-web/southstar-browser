@@ -1,4 +1,5 @@
 //! Southstar — window.chrome with the loadTimes() and csi() timing reports of Chrome-compatible realms.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

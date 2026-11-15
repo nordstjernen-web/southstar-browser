@@ -1,4 +1,5 @@
 //! Southstar — the bit reader over an in-memory stream or a growing packet ring. Ported from pl_mpeg by Dominic Szablewski (MIT).
+//!
 //! Copyright 2019 Dominic Szablewski
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT

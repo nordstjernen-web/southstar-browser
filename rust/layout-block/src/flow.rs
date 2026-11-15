@@ -1,4 +1,5 @@
 //! Southstar — block flow: placing floats and clearing them, collapsing margins through and between children, wrapping lines past floats, aligning replaced and table children, and spreading the flow over multicol columns.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

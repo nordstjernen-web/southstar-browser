@@ -1,4 +1,5 @@
 //! Southstar text — the cairo text renderer: part colors from run attributes, backgrounds, underlines, overlines and strikethroughs gathered across a line.
+//!
 //! Copyright 2004 Red Hat, Inc.; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

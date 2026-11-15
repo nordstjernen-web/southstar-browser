@@ -1,4 +1,5 @@
 //! Southstar — the element names inline collection styles by default and the elements it never renders.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

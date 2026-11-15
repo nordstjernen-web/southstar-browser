@@ -1,4 +1,5 @@
 //! Southstar — the parser hold: a parser-blocking script of the initial parse sees only the part of the document parsed before it, the rest put back node by node as the parse reaches it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

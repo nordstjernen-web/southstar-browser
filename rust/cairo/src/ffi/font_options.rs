@@ -1,4 +1,5 @@
 //! Southstar — cairo font options: an owned set and a borrowed view of one another library keeps.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

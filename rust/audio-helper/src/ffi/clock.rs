@@ -1,4 +1,5 @@
 //! Southstar — the shared-memory audio clock the shell reads each player's position from, laid out as rust/media-shm declares.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

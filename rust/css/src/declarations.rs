@@ -1,4 +1,5 @@
 //! Southstar — a declaration block read into declarations: custom properties and values that wait for var(), attr() or container units set aside, var() fallbacks substituted, and the validity checks the CSSOM and @supports ask of one declaration.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

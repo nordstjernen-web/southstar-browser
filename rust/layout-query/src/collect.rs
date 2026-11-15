@@ -1,4 +1,5 @@
 //! Southstar — collecting from a laid-out page: the boxes that paint images and videos, and the content-box size of every iframe and frame, kept until the next layout for the frame documents' media queries.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

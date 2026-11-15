@@ -1,4 +1,5 @@
 //! Southstar — grid track sizing: fixed, percentage, flexible, intrinsic, minmax() and fit-content() tracks, repeat(auto-fill/auto-fit) expansion and spanning-item distribution.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

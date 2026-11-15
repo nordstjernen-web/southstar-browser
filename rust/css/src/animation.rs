@@ -1,4 +1,5 @@
 //! Southstar — the animation and transition properties: validating and canonicalizing their longhand lists, the animation-range values, parsing the animation and transition shorthands, building the per-element lists from computed longhands, and serializing them back.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

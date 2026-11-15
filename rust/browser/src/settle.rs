@@ -1,4 +1,5 @@
 //! Southstar — advancing a page: the settle loop after load, the per-frame tick, whether anything is still animating and whether the page is busy.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

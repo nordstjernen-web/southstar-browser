@@ -1,4 +1,5 @@
 //! Southstar — the object-model calls that copy one realm's objects into another on Boa: every own key, private elements, full property definitions, native-function clones, forwarders and the plain-object test.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

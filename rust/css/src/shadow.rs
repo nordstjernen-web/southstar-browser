@@ -1,4 +1,5 @@
 //! Southstar — box-shadow and text-shadow: the shadow lists css.c stores, their canonical specified spelling and their computed text.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

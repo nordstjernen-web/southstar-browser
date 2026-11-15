@@ -1,4 +1,5 @@
 //! Southstar — the dispatch algorithm for node and window targets: the event path, the capture, target and bubble phases, the window's listeners and handlers, and the bubbles and cancelable flags of the browser's own events.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

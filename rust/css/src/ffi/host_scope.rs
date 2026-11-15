@@ -1,4 +1,5 @@
 //! Southstar — host scoping: a shadow tree's or framed document's style text flattened and scoped to its host, remembered per host and text.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

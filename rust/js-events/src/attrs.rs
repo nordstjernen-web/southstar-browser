@@ -1,4 +1,5 @@
 //! Southstar — the attributes of the event interfaces, as getters on their prototypes that read the event's engine state.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

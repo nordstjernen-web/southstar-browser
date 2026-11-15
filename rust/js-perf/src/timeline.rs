@@ -1,4 +1,5 @@
 //! Southstar — each page's performance timeline, its PerformanceObservers and the time origins of its frame realms.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

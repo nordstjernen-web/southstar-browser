@@ -1,4 +1,5 @@
 //! Southstar — generic binding helpers: functions, constructors, namespace objects, constants, stock natives and the host-object interfaces.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

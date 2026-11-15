@@ -1,4 +1,5 @@
 //! Southstar — how a URL reaches the network through rust/http: the TLS settings, DNS over HTTPS and the configured proxy unless the no-proxy list exempts the host; a route never skips certificate verification.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

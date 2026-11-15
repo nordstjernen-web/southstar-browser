@@ -1,4 +1,5 @@
 //! Southstar — the headless driver behind --headless: debug-log levels, the renderer-driven run with its scripted actions, and layout inspection reports.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

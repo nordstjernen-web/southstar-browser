@@ -1,4 +1,5 @@
 //! Southstar — the digit options of NumberFormat and PluralRules: reading them from options and rounding a value with them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the Event host class: the engine's event state lives in a hidden object that engine code reads and writes as the event's own properties, while page scripts see only isTrusted.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

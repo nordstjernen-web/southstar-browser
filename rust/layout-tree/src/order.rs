@@ -1,4 +1,5 @@
 //! Southstar — reordering a flex or grid container's children by their CSS order values, stably.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

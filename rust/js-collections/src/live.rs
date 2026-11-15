@@ -1,4 +1,5 @@
 //! Southstar — live collections: the HTMLCollection, NodeList and RadioNodeList objects behind children, childNodes, getElementsBy*, form.elements, links, labels and attributes, rebuilt when the DOM generation moves, with indexed and named access.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

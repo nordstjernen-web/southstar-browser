@@ -1,4 +1,5 @@
 //! Southstar — the GLib calls behind the debug log: clocks, the environment and the log file's location.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

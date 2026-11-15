@@ -1,4 +1,5 @@
 //! Southstar — read-only views of parsed selectors, their compounds, predicates and groups, and of a sheet's rules and scopes, the shapes the matcher, the rule index and restyle invalidation read.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — tab stop arrays: positions, alignments and decimal points of a paragraph's tab stops.
+//!
 //! Copyright 2000 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

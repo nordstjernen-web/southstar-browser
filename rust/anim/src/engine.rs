@@ -1,4 +1,5 @@
 //! Southstar — the animation engine: transition channels and keyframe runs per element, observing computed styles, ticking, sampling into styles, events and the Web Animations controls.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

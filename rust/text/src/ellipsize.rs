@@ -1,4 +1,5 @@
 //! Southstar text — ellipsization: growing a gap from the start, middle or end of a line and replacing it with an ellipsis run.
+//!
 //! Copyright 2004 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

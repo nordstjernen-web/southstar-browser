@@ -1,4 +1,5 @@
 //! Southstar — whether a style pass may reuse the previous pass's styles: the signature of the sheets it cascades, and the document, container sizes and interaction state both passes must share.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

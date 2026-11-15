@@ -1,4 +1,5 @@
 //! Southstar text — the fontconfig font map: font families and faces, pattern matching, and the caches that turn descriptions into fonts and fontsets.
+//!
 //! Copyright 2000-2003 Red Hat Software, 2000 Tor Lillqvist, 2005 Keith Packard; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

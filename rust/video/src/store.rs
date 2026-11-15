@@ -1,4 +1,5 @@
 //! Southstar — the per-video state, the page's video caches and the generation-stamped slots boxes, paint, canvas and script reach videos through.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar text — run and line extents: glyph boxes, decorations, CSS line-height boxes, struts and the extents of empty lines.
+//!
 //! Copyright 2000, 2001, 2006 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

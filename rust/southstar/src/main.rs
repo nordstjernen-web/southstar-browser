@@ -1,4 +1,5 @@
 //! Southstar — the browser executable a cargo install builds: installs the bundled data beside it, then runs the GTK shell.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

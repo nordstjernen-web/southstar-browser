@@ -1,4 +1,5 @@
 //! Southstar — the window-level services: timers, navigator and its sub-objects, the camera and microphone helpers, the window console, alert, confirm and prompt, the document editing commands, screen, matchMedia, Notification, queueMicrotask, ClipboardItem and the WebRTC stubs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

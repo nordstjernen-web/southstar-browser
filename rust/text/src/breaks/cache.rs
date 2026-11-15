@@ -1,4 +1,5 @@
 //! Southstar text — the process-wide cache of default break results, keyed on the paragraph's bytes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

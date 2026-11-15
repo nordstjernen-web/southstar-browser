@@ -1,4 +1,5 @@
 //! Southstar — building table boxes: rows grouped by header, body and footer, cells with their spans and pseudo content, column hints, captions, and the anonymous tables, rows and cells that wrap stray table parts.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the @font-face web font loader: one fetch per URL, WOFF and WOFF2 to SFNT, the on-disk font cache, the loaded families and fontconfig's metric-compatible aliases.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

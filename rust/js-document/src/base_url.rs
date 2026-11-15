@@ -1,4 +1,5 @@
-//! Southstar — a document's base URL: the first usable <base href> the page's base-uri policy allows, else the document's own URL.
+//! Southstar — a document's base URL: the first usable `<base href>` the page's base-uri policy allows, else the document's own URL.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

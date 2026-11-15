@@ -1,4 +1,5 @@
 //! Southstar — Path2D: a path recorded on its own cairo context, the rounded-rectangle geometry it shares with the 2D context, and its methods.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

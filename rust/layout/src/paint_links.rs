@@ -1,4 +1,5 @@
 //! Southstar — the painter's inline text entry points the box tree, selection and box queries call back into, installed once before the first layout.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

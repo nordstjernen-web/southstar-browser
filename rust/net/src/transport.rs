@@ -1,4 +1,5 @@
 //! Southstar — transport bookkeeping: origins that recently refused connections, the six-connection limit per origin, the CA bundle search, the memory budget for a response and the header serialization.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — MPEG-1 playback from memory: the program stream demuxer feeding the video and MP2 decoders. Ported from pl_mpeg by Dominic Szablewski (MIT).
+//!
 //! Copyright 2019 Dominic Szablewski
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT

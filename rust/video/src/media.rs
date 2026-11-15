@@ -1,4 +1,5 @@
 //! Southstar — one video's playback clock, the audio and video helper commands it emits, and the stream files and decoder it builds from fetched or appended bytes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

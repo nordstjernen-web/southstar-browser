@@ -1,4 +1,5 @@
 //! Southstar — the hidden-state objects behind every canvas interface: a kind, a null-prototype state object and the canvas node it belongs to.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

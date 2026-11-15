@@ -1,4 +1,5 @@
 //! Southstar — building an inline run box: collecting its nodes, collapsing white space, remapping links and attributes onto the collapsed text, and the parent's text-decoration and ::first-letter styling.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

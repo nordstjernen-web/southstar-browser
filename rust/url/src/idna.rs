@@ -1,4 +1,5 @@
 //! Southstar — UTS #46 ToASCII with the flags the URL Standard's domain to ASCII sets: mapping, NFC, Punycode, the validity criteria, CONTEXTJ and the bidi rule.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

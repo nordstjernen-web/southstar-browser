@@ -1,4 +1,5 @@
 //! Southstar — the page's scheduling for binding crates: draining microtasks and mutations, the timer gate, GLib sources on the page's context, eval budgets, pumped fetches and the orphan sweep.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

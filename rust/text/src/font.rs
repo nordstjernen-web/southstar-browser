@@ -1,4 +1,5 @@
 //! Southstar text — fonts: one fontconfig pattern rendered through cairo and shaped through HarfBuzz, with its metrics, glyph extents and hex boxes.
+//!
 //! Copyright 1999 Red Hat Software, 2000 Tor Lillqvist, 2005 Keith Packard; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

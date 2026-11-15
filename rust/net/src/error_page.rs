@@ -1,4 +1,5 @@
 //! Southstar — the page shown when a load fails: the failure classified from the transport error or HTTP status, with an icon, an explanation and what to try.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

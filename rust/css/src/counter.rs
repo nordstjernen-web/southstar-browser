@@ -1,4 +1,5 @@
 //! Southstar — counter-reset, counter-increment and counter-set lists, list-style-type, and the list-style shorthand's canonical text.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

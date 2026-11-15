@@ -1,4 +1,5 @@
 //! Southstar — the page's navigation timing: coarsening the times the network reported, and the load milestones performance.timing records.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

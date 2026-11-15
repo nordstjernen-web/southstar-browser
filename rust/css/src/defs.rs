@@ -1,4 +1,5 @@
 //! Southstar — the CSS properties defined by one table row each, giving the name's property, its value kind, whether it inherits, its initial value and its value grammar, and the parser that reads their values.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

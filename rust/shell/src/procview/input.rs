@@ -1,4 +1,5 @@
 //! Southstar — turning the tab's key presses into the DOM key, code and keyCode the renderer dispatches, and the editing shortcuts the shell handles itself.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

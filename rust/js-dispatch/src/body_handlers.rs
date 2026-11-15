@@ -1,4 +1,5 @@
-//! Southstar — the window event handlers <body> and <frameset> reflect: their accessors on the element and the content attributes forwarded to the window.
+//! Southstar — the window event handlers `<body>` and `<frameset>` reflect: their accessors on the element and the content attributes forwarded to the window.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

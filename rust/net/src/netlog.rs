@@ -1,4 +1,5 @@
 //! Southstar — the network log behind the developer tools: the last 256 requests with their timing, size and headers, the fetch counters and the per-origin connection statistics.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

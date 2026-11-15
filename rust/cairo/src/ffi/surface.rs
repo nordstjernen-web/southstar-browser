@@ -1,4 +1,5 @@
 //! Southstar — cairo surfaces: owned references to image, recording and PDF surfaces, borrowed handles, pixel access and PNG output.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

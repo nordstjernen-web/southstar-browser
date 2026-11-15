@@ -1,4 +1,5 @@
 //! Southstar — a declaration's longhands as owned values, sharing one value where css.c shares it, and the property-name lookup expansion makes into css.c.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

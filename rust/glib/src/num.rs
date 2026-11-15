@@ -1,4 +1,5 @@
 //! Southstar — GLib's CLAMP, MAX and MIN on doubles, which pass a NaN argument through instead of propagating or panicking.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

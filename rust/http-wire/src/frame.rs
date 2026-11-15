@@ -1,4 +1,5 @@
 //! Southstar — HTTP/2 frame types, flags and the 9-byte frame header (RFC 9113 §4 and §6).
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

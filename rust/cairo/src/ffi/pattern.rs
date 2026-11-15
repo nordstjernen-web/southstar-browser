@@ -1,4 +1,5 @@
 //! Southstar — cairo patterns: owned references to linear, radial, surface and mesh patterns and the calls that shape them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

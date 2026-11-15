@@ -1,4 +1,5 @@
 //! Southstar — the window's legacy and compatibility members: SVGLength and XPathResult constants, the bar props, captureEvents, external, clientInformation and webkitURL.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

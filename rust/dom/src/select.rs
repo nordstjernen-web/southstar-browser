@@ -1,4 +1,5 @@
 //! Southstar — option text, labels and values and the option a select shows as chosen.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

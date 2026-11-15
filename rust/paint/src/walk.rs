@@ -1,4 +1,5 @@
 //! Southstar — walking the box tree: visibility, culling, opacity groups, blend modes, masks, transforms, sticky and fixed offsets, overflow clips with scrollbars, column rules, z-ordered children and the deferred positioned layers flushed in stacking order.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

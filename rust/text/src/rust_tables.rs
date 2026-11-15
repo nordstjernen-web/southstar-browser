@@ -1,4 +1,5 @@
 //! Southstar text — HarfBuzz's font-table answers read through read-fonts: glyph classes, ligature carets, OpenType metrics, font extents and GSUB feature support.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

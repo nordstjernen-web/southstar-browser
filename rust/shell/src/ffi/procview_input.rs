@@ -1,4 +1,5 @@
 //! Southstar — forwarding the tab's pointer, key, text, drag and file-drop input to the renderer worker, and the viewport geometry the requests are measured in.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

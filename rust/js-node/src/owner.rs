@@ -1,4 +1,5 @@
 //! Southstar — the getters that reach past the node itself: ownerDocument, tagName, baseURI, template content, children and childNodes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

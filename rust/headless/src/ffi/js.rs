@@ -1,4 +1,5 @@
 //! Southstar — the script engine calls of the in-process run and the callbacks it and the video cache make back into the driver.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

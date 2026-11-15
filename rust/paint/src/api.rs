@@ -1,4 +1,5 @@
 //! Southstar — the Rust API a page paints through: whole documents, layer plans and their viewport layers, the canvas colour and the paint state.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

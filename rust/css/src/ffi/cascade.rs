@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of applying matched declarations: css.c's match_entry array read through a mirror, each property's winning value shared into the element's ns_style, CSS-wide keywords and inheritance resolved, and its colors, display and units fixed up.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

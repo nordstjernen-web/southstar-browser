@@ -1,4 +1,5 @@
 //! Southstar — the messaging and worker bindings' exports (C for pointer-only calls, Rust ABI for natives) and the engine, network and GLib calls they make.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

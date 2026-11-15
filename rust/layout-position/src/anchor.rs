@@ -1,4 +1,5 @@
 //! Southstar — anchor positioning: finding a positioned box's anchors, resolving anchor() and anchor-size(), position-area cells and anchor-center, and the position-try fallback candidates.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

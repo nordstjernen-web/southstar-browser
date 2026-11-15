@@ -1,4 +1,5 @@
 //! Southstar — `Tree`, the one owner of a subtree that has no parent: dropping it frees the subtree unless it was given a parent first.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

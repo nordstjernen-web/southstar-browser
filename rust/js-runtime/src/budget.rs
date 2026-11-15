@@ -1,4 +1,5 @@
 //! Southstar — the eval budget a script, task or callback runs under, and the long-running script monitor's deadline.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

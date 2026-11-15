@@ -1,4 +1,5 @@
 //! Southstar PSL — the Public Suffix List algorithm over the list the system or the bundle provides, read at first use: whether a domain is a public suffix and the registrable domain of a host.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

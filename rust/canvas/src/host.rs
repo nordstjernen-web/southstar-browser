@@ -1,4 +1,5 @@
 //! Southstar — what WebGL and WebGPU take from the canvas: the canvas's realm, its interface prototypes, hidden-state objects and the surface of a drawImage() source.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

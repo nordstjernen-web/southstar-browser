@@ -1,4 +1,5 @@
 //! Southstar — the toolkit-independent offscreen GL context WebGL renders into, with the attribute lists each backend asks for.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

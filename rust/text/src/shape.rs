@@ -1,4 +1,5 @@
 //! Southstar text — shaping: turning an item's characters into positioned glyphs through HarfBuzz, with hyphens, text transforms, hex boxes and the shape cache.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

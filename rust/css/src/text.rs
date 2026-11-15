@@ -1,4 +1,5 @@
 //! Southstar — text clean-ups css.c applies to specified values: leading zeros before bare decimals, negative zero written as zero, and splitting at top-level commas.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

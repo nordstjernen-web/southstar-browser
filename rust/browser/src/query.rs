@@ -1,4 +1,5 @@
 //! Southstar — what an embedder reads from a page: the text, DOM, layout and performance dumps, captures and print sheets, the focused field and caret blink, the title, links and favicon.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

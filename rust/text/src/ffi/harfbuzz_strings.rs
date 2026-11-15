@@ -1,4 +1,5 @@
 //! Southstar text — HarfBuzz's parsers and printers for OpenType feature and variation strings, used to normalize font descriptions.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the attribute bindings' calls into the page record and the other binding crates, and the entry points those call back.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the engine, GLib and js.c calls the page's scheduling reaches: pending jobs, GLib sources, pumped fetches, byte views of buffers and the subsystem hooks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

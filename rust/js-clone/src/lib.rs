@@ -1,4 +1,5 @@
 //! Southstar — structured cloning of JavaScript values within a realm (structuredClone, window and port messages), with transfer lists and DataCloneError for what cannot be cloned.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

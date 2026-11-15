@@ -1,4 +1,5 @@
 //! Southstar — the MPEG-1 video decoder: sequence and picture headers, macroblocks, motion compensation and the IDCT. Ported from pl_mpeg by Dominic Szablewski (MIT).
+//!
 //! Copyright 2019 Dominic Szablewski
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: MIT

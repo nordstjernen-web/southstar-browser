@@ -1,4 +1,5 @@
 //! Southstar — CSS Anchor Positioning values: anchor() and anchor-size() expressions with their calc() simplification and evaluation, position-area, and the anchor-name, anchor-scope, position-anchor, position-try and position-visibility values.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

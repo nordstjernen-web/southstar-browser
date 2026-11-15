@@ -1,4 +1,5 @@
 //! Southstar — a reference to a GLib main context: iterating it, handing a closure to the thread that iterates it, and attaching timeout and idle sources to it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

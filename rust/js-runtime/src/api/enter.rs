@@ -1,4 +1,5 @@
 //! Southstar — entering the page's realms, frames, dispatches and frame loads for binding crates, and the scopes a frame URL, a timer, an animation frame and an event handler's realm hold until they are left.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

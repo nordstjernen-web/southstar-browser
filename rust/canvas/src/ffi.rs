@@ -1,4 +1,5 @@
 //! Southstar — the unsafe edge of the canvas: its C ABI, the engine calls it makes, and the GLib, CSS and cairo calls behind them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

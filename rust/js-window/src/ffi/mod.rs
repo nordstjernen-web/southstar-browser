@@ -1,4 +1,5 @@
 //! Southstar — the window bindings' calls into the realm record, the DOM, the URL helpers and the other binding crates, and the entry points they export.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

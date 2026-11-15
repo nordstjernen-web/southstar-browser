@@ -1,4 +1,5 @@
 //! Southstar — the camera and microphone helpers getUserMedia and enumerateDevices call: permission, acquire and release, the active camera's label and the device list.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

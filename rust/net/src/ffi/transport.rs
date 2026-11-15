@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of the transport layer: network init and teardown, the CA bundle and TLS groups the Rust HTTP client uses, cancellation, per-origin slots and dead-origin tracking.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

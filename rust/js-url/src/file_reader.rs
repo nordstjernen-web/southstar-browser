@@ -1,4 +1,5 @@
 //! Southstar — FileReader: the four read methods, abort, the idle that completes a read and the event sequence it fires.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

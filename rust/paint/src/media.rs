@@ -1,4 +1,5 @@
 //! Southstar — replaced content: images and video frames from textures with object-fit, object-position, filters and clip-path, broken and loading images, SVG and MathML boxes, and the video and audio element chrome.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

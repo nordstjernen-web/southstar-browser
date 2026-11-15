@@ -1,4 +1,5 @@
 //! Southstar — the orphan set: detached subtrees a page keeps alive until script can no longer reach them, and the child removals that feed it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

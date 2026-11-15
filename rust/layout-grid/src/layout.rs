@@ -1,4 +1,5 @@
 //! Southstar — laying out a grid container: placing its items, sizing columns and rows, aligning the items in their areas and handing subgrids their parent's tracks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

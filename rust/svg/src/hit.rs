@@ -1,4 +1,5 @@
 //! Southstar — which shape of an inline svg lies under a point: the render walk run without painting, testing each path's fill and stroke.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the Rust API other crates call for a page's frames: their realms, URLs, sandbox flags and load queue.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

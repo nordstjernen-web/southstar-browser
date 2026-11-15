@@ -1,4 +1,5 @@
 //! Southstar — the Sanitizer configuration subset used by setHTML and the HTML insertion methods: element and attribute allow and remove lists, comments, data attributes and the safe removal of script-capable markup.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

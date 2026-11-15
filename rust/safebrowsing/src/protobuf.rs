@@ -1,4 +1,5 @@
 //! Southstar — the protobuf wire reader and Rice-Golomb delta decoding behind Google Safe Browsing's binary responses.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

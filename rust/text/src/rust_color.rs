@@ -1,4 +1,5 @@
 //! Southstar text — color glyphs of Rust-backed fonts: COLR v0 and v1 painted through cairo, and CBDT and sbix PNG strikes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — the canvas 2D API, ported from js_canvas.c and js_canvas_api.c section by section.
+//! Southstar — the canvas 2D API: CanvasRenderingContext2D with its state, paths, styles, text, images, pixel data, Path2D and ImageBitmap.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

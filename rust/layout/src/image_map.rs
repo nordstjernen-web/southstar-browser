@@ -1,4 +1,5 @@
-//! Southstar — the <area> of a client-side image map under a point in an image: the usemap's <map> in the image's tree scope, coordinates read as HTML's list of numbers, and circle, polygon, default and rectangle shapes.
+//! Southstar — the `<area>` of a client-side image map under a point in an image: the usemap's `<map>` in the image's tree scope, coordinates read as HTML's list of numbers, and circle, polygon, default and rectangle shapes.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

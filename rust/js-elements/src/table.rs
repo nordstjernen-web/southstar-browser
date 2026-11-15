@@ -1,4 +1,5 @@
 //! Southstar — the table API: rows, sections, tBodies and cells, creating and deleting captions and sections, and inserting and deleting rows and cells.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

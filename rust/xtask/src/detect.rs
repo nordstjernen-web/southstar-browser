@@ -1,4 +1,5 @@
 //! Southstar xtask — the configure step: library version floors, required libraries and the optional features the installed libraries allow.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

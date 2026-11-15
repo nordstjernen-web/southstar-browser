@@ -1,4 +1,5 @@
 //! Southstar — streaming inflate of zlib, gzip and raw deflate data over flate2's zlib-rs backend, with zlib's window-bit conventions.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

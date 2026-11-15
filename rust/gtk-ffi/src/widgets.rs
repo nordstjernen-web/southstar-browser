@@ -1,4 +1,5 @@
 //! Southstar — the GTK, GIO and GLib calls the browser window makes: widgets, actions, menus, signals and timers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

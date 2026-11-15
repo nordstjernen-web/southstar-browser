@@ -1,4 +1,5 @@
 //! Southstar — file: URLs: the file's bytes under the response budget, or an "Index of" page for a folder.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

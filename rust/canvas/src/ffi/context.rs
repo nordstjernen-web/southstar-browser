@@ -1,4 +1,5 @@
 //! Southstar — getContext()'s view of the drawing state, PNG export helpers, and the WebGL, WebGPU and DOM calls behind them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

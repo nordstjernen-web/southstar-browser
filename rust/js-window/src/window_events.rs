@@ -1,4 +1,5 @@
 //! Southstar — events fired at the window itself: building one, hashchange at the top-level window and dispatching at the page's top document.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

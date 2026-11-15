@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of selector matching: a selector or a rule's selector tested against an element, the hover, active, focus and fullscreen nodes and the match scope the matcher reads, nth-position batches, the :has() memo and the defined custom elements.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

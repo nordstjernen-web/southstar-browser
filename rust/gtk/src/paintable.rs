@@ -1,4 +1,5 @@
 //! Southstar — a GdkPaintable (and GtkSymbolicPaintable) whose drawing is a Rust value, plus the icon setters and resource lookups that take one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

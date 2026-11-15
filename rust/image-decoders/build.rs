@@ -1,4 +1,5 @@
 //! Southstar — libavif's struct offsets and constants, probed from the installed headers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

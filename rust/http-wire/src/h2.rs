@@ -1,4 +1,5 @@
 //! Southstar — a client-side HTTP/2 connection without I/O: request submission, frame parsing, HPACK, flow control, SETTINGS, PING, RST_STREAM and GOAWAY.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

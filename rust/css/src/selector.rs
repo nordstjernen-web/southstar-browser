@@ -1,4 +1,5 @@
 //! Southstar — parsing selectors into compounds, combinators, attribute and pseudo-class predicates, nested :is(), :where(), :not() and :has() groups, specificity and the ancestor hashes the Bloom filter checks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

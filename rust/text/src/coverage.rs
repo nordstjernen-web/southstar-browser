@@ -1,4 +1,5 @@
 //! Southstar text — font coverage: which characters a font renders, with decomposable characters resolved and remembered.
+//!
 //! Copyright 2000 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

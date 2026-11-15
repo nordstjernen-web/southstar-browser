@@ -1,4 +1,5 @@
 //! Southstar — the crypto.subtle methods: digest, key generation, import, export, sign, verify, encryption, derivation and key wrapping.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

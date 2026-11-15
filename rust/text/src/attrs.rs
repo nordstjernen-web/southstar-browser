@@ -1,4 +1,5 @@
 //! Southstar text — text attributes over byte ranges, sorted attribute lists, their string form and the iterator that merges them into fonts.
+//!
 //! Copyright 2000-2002 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

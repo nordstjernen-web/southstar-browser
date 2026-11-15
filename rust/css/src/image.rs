@@ -1,4 +1,5 @@
 //! Southstar — CSS image values: the canonical form of a list of image layers, image-set() with its resolutions and types, unicode-range lists, the url() helpers css.c's image references use, and picking the image-set() candidate for one device pixel.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — an MPEG-1/2/2.5 Layer I/II/III audio decoder producing float PCM one frame at a time. Ported from minimp3 by lieff (CC0).
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

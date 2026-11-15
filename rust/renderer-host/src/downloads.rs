@@ -1,4 +1,5 @@
 //! Southstar — downloads an embedder asks the renderer to fetch: each runs on a thread of its own into a staging file under the cache directory and is polled until it ends.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the stored form of a text selection that paint reads its ranges through, and the style and inline-paint calls selection needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

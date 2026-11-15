@@ -1,4 +1,5 @@
 //! Southstar — the Storage interface: getItem/setItem/removeItem/clear/key/length, the named-property behaviour behind its exotic hooks and the window installer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

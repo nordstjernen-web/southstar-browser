@@ -1,4 +1,5 @@
 //! Southstar — the fixups an element's computed style gets after the cascade: whether an element can be unboxed by display: contents, which native checkbox and radio widgets draw their own box, and the viewport a frame's own width and height give its document.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

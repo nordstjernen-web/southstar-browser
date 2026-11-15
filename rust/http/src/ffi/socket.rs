@@ -1,4 +1,5 @@
 //! Southstar — TCP sockets the standard library cannot open: a non-blocking connect that polls for cancellation, poll() over several sockets, and the wake pair an I/O thread sleeps on.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

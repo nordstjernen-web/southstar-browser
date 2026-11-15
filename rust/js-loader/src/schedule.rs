@@ -1,4 +1,5 @@
 //! Southstar — when scripts run: the parser-blocking, deferred and async schedules of a task list, scripts inserted after the parse, and the deferred and async roots drained off a timer.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

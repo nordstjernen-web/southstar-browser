@@ -1,4 +1,5 @@
 //! Southstar — appending a response body under the memory budget that stops a load before it exhausts the machine.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

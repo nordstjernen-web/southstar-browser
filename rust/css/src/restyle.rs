@@ -1,4 +1,5 @@
 //! Southstar — which elements a DOM change can restyle: the ids, classes, tags and attributes the style sheets' structural, sibling and :has() selectors depend on, and the elements marked dirty when one of them changes, so the next style pass recomputes only those.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

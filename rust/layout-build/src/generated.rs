@@ -1,4 +1,5 @@
 //! Southstar — the boxes ::before and ::after generate: inline runs with their colour and font attributes and edge spacers, content images, atomic and block-level pseudo boxes, absolutely positioned pseudos, and generated text appended to a block's last run.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

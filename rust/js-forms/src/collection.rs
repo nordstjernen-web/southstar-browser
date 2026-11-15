@@ -1,4 +1,5 @@
 //! Southstar — form.elements and its snapshot, named lookup into the listed controls with RadioNodeList, RadioNodeList.value, and the item() and namedItem() of array-backed collections.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

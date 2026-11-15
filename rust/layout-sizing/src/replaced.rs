@@ -1,4 +1,5 @@
 //! Southstar — sizing image, video and svg boxes: used sizes from width, height, aspect-ratio and the natural size, auto and cyclic percentage widths, and measuring the atomic inlines of a run.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

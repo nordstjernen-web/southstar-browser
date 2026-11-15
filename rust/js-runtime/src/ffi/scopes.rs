@@ -1,4 +1,5 @@
 //! Southstar — entering and leaving a realm, a frame's URL, a dispatch, a frame load, a timer and an animation frame, with the top-level URL slot they share.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

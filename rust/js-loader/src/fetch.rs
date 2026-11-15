@@ -1,4 +1,5 @@
 //! Southstar — fetching and running one script element, loading one stylesheet link, and fetching a module's source for the module loader.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

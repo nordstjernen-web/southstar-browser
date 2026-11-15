@@ -1,4 +1,5 @@
 //! Southstar — a parsed or computed CSS value: its payload for each value kind, its specified and image-set text and further layers, and the shared reference styles, declarations and other crates hold on one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

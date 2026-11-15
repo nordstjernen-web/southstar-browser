@@ -1,4 +1,5 @@
 //! Southstar — the host-object class: platform objects whose engine state lives in a hidden object that engine code reads and writes as their own properties.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

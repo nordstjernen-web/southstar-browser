@@ -1,4 +1,5 @@
 //! Southstar — gives the engine's native members their WebIDL names: "get x" and "set x" for accessors, the property name for methods and the global name for interface objects.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — the name grammars the DOM factories check: element local names, attribute names, qualified names, XML names and doctype names.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

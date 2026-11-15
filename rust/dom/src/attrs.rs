@@ -1,4 +1,5 @@
 //! Southstar — element attributes: lookup by name and namespace, setting and removal, the name bloom filter and class tokens.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

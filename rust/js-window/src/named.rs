@@ -1,4 +1,5 @@
 //! Southstar — named access on the window and document: child frames by index and name, elements by id on the window, and the legacy named forms and images on the document.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

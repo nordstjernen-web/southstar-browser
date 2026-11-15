@@ -1,4 +1,5 @@
 //! Southstar — CSS masks made of gradient layers: the alpha group a box is painted through, with each layer's mask-clip box and mask-composite operator.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

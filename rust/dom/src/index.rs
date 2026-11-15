@@ -1,4 +1,5 @@
 //! Southstar — the document's id, class and tag indexes, document order, and lookups by tag, id and fragment.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — legacy centering and right-alignment of block children (<center>, align= and -webkit-center), and align-content in block containers.
+//! Southstar — legacy centering and right-alignment of block children (`<center>`, align= and -webkit-center), and align-content in block containers.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — GIF stills and animations over the gif crate: palettes with the transparent index, interlacing, frame placement, disposal and partially decoded frames.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

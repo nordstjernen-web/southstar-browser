@@ -1,4 +1,5 @@
 //! Southstar — fetching a URL with redirects followed, for the callers that hand the client a plain absolute URL: splitting it into a request target and resolving each Location against it.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

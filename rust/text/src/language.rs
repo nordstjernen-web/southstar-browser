@@ -1,4 +1,5 @@
 //! Southstar text — languages: interned canonical RFC 3066 tags, range matching, sample sentences and the scripts a language uses.
+//!
 //! Copyright 1999 Red Hat Software; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — selector queries and live collections: querySelector, matches and closest, the getElementsBy* lookups, static NodeLists and live HTMLCollections.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

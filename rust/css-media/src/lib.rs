@@ -1,4 +1,5 @@
 //! Southstar — Media Queries Level 4 parser, evaluator and serializer, and the viewport, device and user preferences they evaluate against.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

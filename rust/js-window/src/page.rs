@@ -1,4 +1,5 @@
 //! Southstar — the page-level window glue: fragment navigation, viewport scrolling, resize, pageshow/pagehide and the document origin resources are checked against.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

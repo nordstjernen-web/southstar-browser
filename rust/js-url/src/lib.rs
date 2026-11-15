@@ -1,4 +1,5 @@
 //! Southstar — URL, URLSearchParams, atob/btoa, TextEncoder/TextDecoder, object URLs with the blob: URL registry, and FileReader.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

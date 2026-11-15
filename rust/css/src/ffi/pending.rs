@@ -1,4 +1,5 @@
 //! Southstar — the C ABI of pending declarations: css.c's pending_match entries read through a mirror, each var()- or attr()-dependent value substituted and parsed into match entries the cascade sorts, or unset when it cannot stand.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

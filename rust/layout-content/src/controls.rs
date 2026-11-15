@@ -1,4 +1,5 @@
 //! Southstar — form-control sizing and chrome, the inline attributes emitted for controls and styled runs, and the meter and progress states.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
-//! Southstar — box-tree construction ported from layout.c: blocks, inline runs, replaced and form-control boxes, pseudo-element boxes, shadow slots, the pending absolutely positioned boxes and the build-then-lay-out driver.
+//! Southstar — box-tree construction: blocks, inline runs, replaced and form-control boxes, pseudo-element boxes, shadow slots, the pending absolutely positioned boxes and the build-then-lay-out driver.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

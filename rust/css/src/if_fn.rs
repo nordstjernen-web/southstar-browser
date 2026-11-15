@@ -1,4 +1,5 @@
 //! Southstar — the if() function's branches parsed and the first whose supports(), media() or style() condition holds picked, with style() comparing custom properties by declaration, by name or by range.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

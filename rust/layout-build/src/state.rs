@@ -1,4 +1,5 @@
 //! Southstar — the state one box-tree build carries: focus and caret, the image cache and base URL, the pending absolutely positioned boxes and their placeholders, and the nesting the builders track.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

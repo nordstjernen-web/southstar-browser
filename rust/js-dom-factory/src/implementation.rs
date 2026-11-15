@@ -1,4 +1,5 @@
 //! Southstar — DOMImplementation: the per-document implementation object, createHTMLDocument, createDocument, createDocumentType and hasFeature.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

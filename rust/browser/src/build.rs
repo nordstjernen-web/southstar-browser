@@ -1,4 +1,5 @@
 //! Southstar — bringing up a page from its parsed document (caches, cascade, keyframes, the script engine, declarative refresh, settling, the fragment target) and its form submissions.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

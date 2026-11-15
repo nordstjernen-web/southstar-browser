@@ -1,4 +1,5 @@
 //! Southstar — fragment targets and scroll requests: revealing a target, queuing the scroll to it and handing it to the embedder, keeping it anchored and the script engine's scroll and navigation hooks.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

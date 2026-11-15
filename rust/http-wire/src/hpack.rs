@@ -1,4 +1,5 @@
 //! Southstar — HPACK header compression (RFC 7541): the decoder with its dynamic table and Huffman strings, and a literal-only encoder.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

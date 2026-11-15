@@ -1,4 +1,5 @@
 //! Southstar — CanvasGradient and CanvasPattern: their creation, addColorStop, and turning them into cairo patterns when a style uses them.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

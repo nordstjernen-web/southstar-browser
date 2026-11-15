@@ -1,4 +1,5 @@
 //! Southstar — the pending change event: the value a text control held when the user started editing it, compared when the edit is committed.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

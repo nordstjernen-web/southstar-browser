@@ -1,4 +1,5 @@
 //! Southstar text — the per-language sample sentences and the scripts each language is written in.
+//!
 //! Copyright 2005-2019 The Pango authors; 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

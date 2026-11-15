@@ -1,4 +1,5 @@
 //! Southstar — drawing southstar-text layouts, lines and glyph ranges onto a cairo context.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

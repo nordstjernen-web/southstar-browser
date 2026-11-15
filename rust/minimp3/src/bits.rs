@@ -1,4 +1,5 @@
 //! Southstar — the MSB-first bit reader the MP3 decoder parses side information and scalefactors with. Ported from minimp3 by lieff (CC0).
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

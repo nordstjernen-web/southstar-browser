@@ -1,4 +1,5 @@
 //! Southstar — the H.264 and AAC Media Foundation transforms driven synchronously: NV12 pictures and float or 16-bit PCM out.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

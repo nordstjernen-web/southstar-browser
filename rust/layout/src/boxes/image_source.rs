@@ -1,4 +1,5 @@
-//! Southstar — choosing an <img>'s URL and density, with the device pixel ratio, sizes, media query and image type answers the choice needs.
+//! Southstar — choosing an `<img>`'s URL and density, with the device pixel ratio, sizes, media query and image type answers the choice needs.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

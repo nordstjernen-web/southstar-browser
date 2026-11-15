@@ -1,4 +1,5 @@
 //! Southstar — the element members backed by attribute objects: classList, relList, sandbox and sizes token lists, their put-forwards setters and the attributes NamedNodeMap.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

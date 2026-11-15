@@ -1,4 +1,5 @@
 //! Southstar — offline Web Audio rendering: walks the AudioNode graph of an OfflineAudioContext and mixes it into one channel.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

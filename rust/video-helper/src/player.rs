@@ -1,4 +1,5 @@
 //! Southstar — one video player: its playback clock shared with the shell and the decode thread that keeps its frame ring filled.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

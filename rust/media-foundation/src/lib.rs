@@ -1,4 +1,5 @@
 //! Southstar — H.264 and AAC decoding through the Windows Media Foundation transforms, with an inert stand-in on other systems.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

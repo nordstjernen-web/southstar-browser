@@ -1,4 +1,5 @@
-//! Southstar — curl-free network helpers shared by the engine and the shells: Accept-Language, search URLs, local paths, proxy masking.
+//! Southstar — network helpers shared by the engine and the shells: Accept-Language, search URLs, local paths and proxy masking.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

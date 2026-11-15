@@ -1,4 +1,5 @@
 //! Southstar — the tree walks that find a subtree's scripts to run, its unstarted scripts and its stylesheet links still to load.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

@@ -1,4 +1,5 @@
 //! Southstar — downloading a media URL to a file for the helpers: http and https through rust/http with redirects, size cap and timeout, and data: URLs decoded in place.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

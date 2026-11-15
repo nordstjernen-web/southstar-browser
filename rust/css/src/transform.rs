@@ -1,4 +1,5 @@
 //! Southstar — CSS transforms: transform lists, transform-origin and the translate, rotate and scale properties parsed into the ns_css_transform css.c stores, their computed and canonical specified spellings, whether they are 3D, and the matrix they apply.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 

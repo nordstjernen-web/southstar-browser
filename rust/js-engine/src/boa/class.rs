@@ -1,4 +1,5 @@
 //! Southstar — host classes on Boa: instances carrying Rust data, per-realm class prototypes, and the class hooks run as the Boa fork's host exotic methods.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
