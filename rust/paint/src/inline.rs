@@ -228,13 +228,70 @@ fn decoration_value<'a>(
         .or_else(|| get(s, prop))
 }
 
-fn underline_dash_style<'a>(r: &'a InlineAttr, s: Option<StyleRef<'a>>) -> Option<&'a [u8]> {
-    let dv = decoration_value(Some(r), s, P::TextDecorationStyle)?;
-    let kw = dv
-        .keyword_text()
-        .filter(|_| dv.kind() == Kind::Keyword)?
-        .to_bytes();
-    matches!(kw, b"dotted" | b"dashed").then_some(kw)
+fn covering(attrs: &[InlineAttr], kind: u32, at: usize) -> Option<&InlineAttr> {
+    attrs
+        .iter()
+        .rev()
+        .find(|a| a.kind == kind && a.start <= at && at < a.start + a.len)
+}
+
+fn decoration_em(r: &InlineAttr, attrs: &[InlineAttr], s: Option<StyleRef<'_>>) -> f64 {
+    if r.font_size_px > 0.0 {
+        return r.font_size_px;
+    }
+    if let Some(a) = covering(attrs, k::FONT_SIZE, r.start).filter(|a| a.font_size_px > 0.0) {
+        return a.font_size_px;
+    }
+    match decoration_value(Some(r), s, P::FontSize).and_then(ValueRef::length) {
+        Some((v, UNIT_PX)) if v > 0.0 => v,
+        _ => 16.0,
+    }
+}
+
+fn decoration_color(r: &InlineAttr, attrs: &[InlineAttr], base: Rgba) -> Rgba {
+    if let Some(c) = attr_style(r)
+        .and_then(|st| st.get(P::TextDecorationColor))
+        .and_then(ValueRef::color)
+    {
+        return Rgba::from_bytes(c);
+    }
+    match covering(attrs, k::COLOR, r.start) {
+        Some(a) => Rgba::from_bytes([a.r, a.g, a.b, a.a]),
+        None => base,
+    }
+}
+
+fn decoration_length_value<'a>(
+    r: &'a InlineAttr,
+    s: Option<StyleRef<'a>>,
+    prop: P,
+) -> Option<ValueRef<'a>> {
+    decoration_value(Some(r), s, prop)
+        .filter(|v| v.kind() != Kind::Keyword && (v.length().is_some() || v.calc().is_some()))
+}
+
+struct ManualDecoration<'a> {
+    style: &'a [u8],
+    thickness: Option<ValueRef<'a>>,
+    offset: Option<ValueRef<'a>>,
+}
+
+fn manual_decoration<'a>(
+    r: &'a InlineAttr,
+    s: Option<StyleRef<'a>>,
+) -> Option<ManualDecoration<'a>> {
+    let style = decoration_style_of(r, s).unwrap_or(b"solid");
+    let thickness = decoration_length_value(r, s, P::TextDecorationThickness);
+    let offset = (r.kind == k::UNDERLINE)
+        .then(|| decoration_length_value(r, s, P::TextUnderlineOffset))
+        .flatten();
+    let dashed = matches!(style, b"dotted" | b"dashed");
+    let custom = (thickness.is_some() || offset.is_some()) && style != b"wavy";
+    (dashed || custom).then_some(ManualDecoration {
+        style,
+        thickness,
+        offset,
+    })
 }
 
 fn decoration_color_of<'a>(r: &'a InlineAttr, s: Option<StyleRef<'a>>) -> Option<[u8; 4]> {
@@ -267,7 +324,7 @@ fn paint_inline_dashed_decorations(
     let attrs = b.attrs();
     if !attrs
         .iter()
-        .any(|r| is_decoration(r.kind) && underline_dash_style(r, s).is_some())
+        .any(|r| is_decoration(r.kind) && manual_decoration(r, s).is_some())
     {
         return;
     }
@@ -281,18 +338,11 @@ fn paint_inline_dashed_decorations(
                 if !is_decoration(r.kind) {
                     continue;
                 }
-                let Some(kw) = underline_dash_style(r, s) else {
+                let Some(md) = manual_decoration(r, s) else {
                     continue;
                 };
-                let dotted = kw == b"dotted";
-                let rstart = r.start as i32;
-                let rend = (r.start + r.len) as i32;
-                let seg0 = if rstart > line_start {
-                    rstart
-                } else {
-                    line_start
-                };
-                let seg1 = if rend < line_end { rend } else { line_end };
+                let seg0 = (r.start as i32).max(line_start);
+                let seg1 = ((r.start + r.len) as i32).min(line_end);
                 if seg0 >= seg1 {
                     continue;
                 }
@@ -300,41 +350,40 @@ fn paint_inline_dashed_decorations(
                 let xb = line.index_to_x(seg1, false);
                 let x0 = text_x + f64::from(xa.min(xb)) / S;
                 let x1 = text_x + f64::from(xa.max(xb)) / S;
-                let em = if r.font_size_px > 0.0 {
-                    r.font_size_px
-                } else {
-                    16.0
-                };
-                let mut thick = em / 16.0;
-                if thick < 1.0 {
-                    thick = 1.0;
-                }
-                let uy = if r.kind == k::STRIKETHROUGH {
-                    base_y - em * 0.28
-                } else if r.kind == k::OVERLINE {
-                    base_y - em * 0.78
-                } else {
-                    base_y + thick * 1.5
+                let em = decoration_em(r, &attrs, s);
+                let thick = md
+                    .thickness
+                    .map(|v| inline_control_dim_px(Some(v), em, em))
+                    .filter(|t| *t > 0.0)
+                    .unwrap_or((em / 16.0).max(1.0));
+                let offset = md.offset.map(|v| inline_control_dim_px(Some(v), em, em));
+                let uy = match r.kind {
+                    k::STRIKETHROUGH => base_y - em * 0.28,
+                    k::OVERLINE => base_y - em * 0.78 - thick / 2.0,
+                    _ => base_y + offset.map_or(thick * 1.5, |o| o + thick / 2.0),
                 };
                 cr.save();
-                match attr_style(r)
-                    .and_then(|st| st.get(P::TextDecorationColor))
-                    .and_then(ValueRef::color)
-                {
-                    Some(c) => Rgba::from_bytes(c).set_source(cr),
-                    None => base.set_source(cr),
-                }
+                decoration_color(r, &attrs, base).set_source(cr);
                 cr.set_line_width(thick);
-                let on = if dotted { thick } else { thick * 3.0 };
-                let off = if dotted { thick * 1.6 } else { thick * 2.5 };
-                cr.set_dash(&[on, off], 0.0);
-                cr.set_line_cap(if dotted {
-                    LineCap::Round
-                } else {
-                    LineCap::Butt
-                });
+                match md.style {
+                    b"dotted" => {
+                        cr.set_dash(&[thick, thick * 1.6], 0.0);
+                        cr.set_line_cap(LineCap::Round);
+                    }
+                    b"dashed" => cr.set_dash(&[thick * 3.0, thick * 2.5], 0.0),
+                    _ => {}
+                }
                 cr.move_to(x0, uy);
                 cr.line_to(x1, uy);
+                if md.style == b"double" {
+                    let gap = if r.kind == k::OVERLINE {
+                        -thick * 2.0
+                    } else {
+                        thick * 2.0
+                    };
+                    cr.move_to(x0, uy + gap);
+                    cr.line_to(x1, uy + gap);
+                }
                 cr.stroke();
                 cr.restore();
             }
@@ -594,7 +643,7 @@ fn paint_inline_make_layout(
             k::ITALIC => a = Some(Attribute::style(text_layout::STYLE_ITALIC)),
             k::MONOSPACE => a = Some(Attribute::family(c"monospace")),
             k::UNDERLINE | k::OVERLINE | k::STRIKETHROUGH => 'deco: {
-                if underline_dash_style(r, s).is_some() {
+                if manual_decoration(r, s).is_some() {
                     break 'deco;
                 }
                 let cv = decoration_color_of(r, s);

@@ -1466,6 +1466,7 @@ fn text_decoration(out: &mut Out, text: &[u8], line_only: bool) {
                     Prop::TextDecoration,
                     Prop::TextDecorationStyle,
                     Prop::TextDecorationColor,
+                    Prop::TextDecorationThickness,
                 ],
                 wide,
             );
@@ -1488,6 +1489,11 @@ fn text_decoration(out: &mut Out, text: &[u8], line_only: bool) {
             out.push(Prop::TextDecorationStyle, Value::keyword(lower(tk)));
         } else if let Some(color) = color::parse_value(tk) {
             out.push(Prop::TextDecorationColor, Value::of(Body::Color(color)));
+        } else if (eq(tk, b"from-font")
+            || tk.first().is_some_and(|c| c.is_ascii_digit() || *c == b'.'))
+            && let Some(thickness) = parse(Prop::TextDecorationThickness, tk)
+        {
+            out.push(Prop::TextDecorationThickness, thickness);
         }
     }
     if !lines.is_empty() {
