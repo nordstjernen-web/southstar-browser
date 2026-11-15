@@ -220,7 +220,8 @@ pub fn build_pseudo_inline_for(
     }
     let kerning = font_kerning(Some(ps));
     let ligatures = font_keyword(Some(ps), FontKeyword::Ligatures);
-    let features = font_keyword(Some(ps), FontKeyword::Features);
+    let feature_text = southstar_paint::feature_settings_with_variants(ps);
+    let features = feature_text.as_deref();
     if kerning >= 0 || ligatures.is_some() || features.is_some() {
         let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, 0, tlen)
             .with_font_settings(ligatures, features, None);

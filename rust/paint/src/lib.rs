@@ -36,6 +36,7 @@ pub use api::{
 pub use document::LayerPlan;
 pub use inline::has_small_caps;
 pub use links::{LayoutLinks, LegendGap, install_layout_links};
+pub use text::feature_settings_with_variants;
 pub use three_d::HitTest;
 pub use walk::VpCapture;
 pub use wrap::apply_text_wrap_style;

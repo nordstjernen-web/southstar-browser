@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `font-variant-numeric` (old-style, lining, tabular, proportional
+  figures, fractions, ordinals, slashed zero), `font-variant-position`,
+  the remaining `font-variant-caps` values, `font-variant-east-asian` and
+  `font-variant-alternates: historical-forms` select the font's OpenType
+  features; `font-feature-settings` still overrides them.
 * Background images and gradients on `html` (or on `body` when `html` has
   none) cover the whole canvas, positioned from the root box, as the
   background colour already did; a page whose short body carries a
