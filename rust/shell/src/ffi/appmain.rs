@@ -519,6 +519,9 @@ fn print_perf() {
 
 fn run_headless(opts: &HeadlessOpts<'_>) -> c_int {
     setenv_unless_set(c"NS_WEBGL_ALLOW", c"1");
+    if let Some(scheme) = southstar_glib::env_bytes("NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {
+        southstar_browser::set_color_scheme(scheme == b"dark");
+    }
     let log_net = opts.debug_levels & (1 << appmain::DLOG_NET) != 0;
     southstar_net::init();
     southstar_net::set_allow_file_urls(true);
