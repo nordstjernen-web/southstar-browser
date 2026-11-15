@@ -651,8 +651,33 @@ fn hr_hints(out: &mut Vec<u8>, el: Node<'_>) {
     }
 }
 
+fn meta_color_scheme(root: Node<'_>) -> Option<String> {
+    let head = core::iter::successors(root.first_child(), |c| c.next_sibling())
+        .find(|c| c.element_name() == Some(b"head"))?;
+    core::iter::successors(head.first_child(), |c| c.next_sibling())
+        .filter(|c| c.element_name() == Some(b"meta"))
+        .filter(|m| attr_bytes(*m, c"name").is_some_and(|n| eq(n.trim_ascii(), b"color-scheme")))
+        .find_map(|m| {
+            let content = attr_bytes(m, c"content")?.trim_ascii();
+            let valid = !content.is_empty()
+                && content
+                    .split(u8::is_ascii_whitespace)
+                    .filter(|w| !w.is_empty())
+                    .all(|w| w.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'-'));
+            valid.then(|| String::from_utf8_lossy(content).to_ascii_lowercase())
+        })
+}
+
 pub(crate) fn presentational_hints(el: Node<'_>) -> Option<Vec<u8>> {
     let tag = el.element_name()?;
+    if tag == b"html"
+        && el.parent().is_some_and(|p| p.kind() == Kind::Document)
+        && let Some(scheme) = meta_color_scheme(el)
+    {
+        let mut out = Vec::new();
+        push(&mut out, &format!("color-scheme: {scheme};"));
+        return Some(out);
+    }
     let any = matches!(
         tag,
         b"td"

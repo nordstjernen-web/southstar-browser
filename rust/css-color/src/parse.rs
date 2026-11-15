@@ -7,7 +7,7 @@ use southstar_css_syntax::{Component, Kind};
 use crate::calc::{self, Node, Unit};
 use crate::color::{Color, clamp_or_zero};
 use crate::mix::{self, HueMethod, Interpolation};
-use crate::named::named;
+use crate::named::{named, system_color};
 use crate::number::number;
 use crate::space::{Space, normalize_hue};
 use crate::tokens::Tokens;
@@ -850,7 +850,11 @@ fn contrast(color: &Color) -> Color {
 impl Specified {
     pub fn resolve(&self, ctx: &Context) -> Option<Color> {
         match self {
-            Specified::Absolute(c) | Specified::Keyword(_, c) => Some(*c),
+            Specified::Absolute(c) => Some(*c),
+            Specified::Keyword(name, c) => Some(match system_color(name, ctx.dark) {
+                Some(rgb) => Color::from_rgba8([rgb[0], rgb[1], rgb[2], 255]),
+                None => *c,
+            }),
             Specified::CurrentColor => ctx.current,
             Specified::Function(f) => f.resolve(ctx),
             Specified::Mix(m) => m.resolve(ctx),
@@ -862,6 +866,17 @@ impl Specified {
                 }
             }
             Specified::Contrast(inner) => Some(contrast(&inner.resolve(ctx)?)),
+        }
+    }
+
+    pub fn uses_color_scheme(&self) -> bool {
+        match self {
+            Specified::Keyword(name, _) => system_color(name, false).is_some(),
+            Specified::LightDark(..) => true,
+            Specified::Absolute(_) | Specified::CurrentColor => false,
+            Specified::Function(f) => f.origin.as_ref().is_some_and(Specified::uses_color_scheme),
+            Specified::Mix(m) => m.items.iter().any(|(c, _)| c.uses_color_scheme()),
+            Specified::Contrast(c) => c.uses_color_scheme(),
         }
     }
 

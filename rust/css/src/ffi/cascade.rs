@@ -185,16 +185,21 @@ fn new_color(color: &Color) -> OwnedValue {
     to_c(Value::of(Body::Color(*color)))
 }
 
-fn current_color_function(kw: &[u8], current: Option<&NsCssValue>) -> Option<OwnedValue> {
+fn current_color_function(
+    kw: &[u8],
+    current: Option<&NsCssValue>,
+    dark: bool,
+) -> Option<OwnedValue> {
     if !color::needs_current_color(kw) {
         return None;
     }
     let current =
         raw_color(current).map_or_else(|| Color::from_rgba8([0, 0, 0, 255]), RawColor::to_color);
-    color::parse_with_current(kw, Some(current)).map(|c| new_color(&c))
+    color::parse_in_scheme(kw, Some(current), dark).map(|c| new_color(&c))
 }
 
 fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
+    let dark = color::scheme_is_dark(out.keyword(Prop::ColorScheme));
     match out.keyword(Prop::Color) {
         Some(b"currentcolor") => {
             let color = match parent {
@@ -205,7 +210,7 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
         }
         Some(kw) => {
             let inherited = parent.and_then(|p| p.value_at(Prop::Color.id()));
-            if let Some(color) = current_color_function(kw, inherited) {
+            if let Some(color) = current_color_function(kw, inherited, dark) {
                 out.replace(Prop::Color.id(), Some(color));
             }
         }
@@ -230,7 +235,7 @@ fn resolve_color_keywords(out: &mut Out<'_>, parent: Option<&RawStyle>) {
                 out.replace(prop.id(), Some(new_color(&Color::transparent())));
             }
             Some(kw) => {
-                if let Some(color) = current_color_function(kw, out.get(Prop::Color)) {
+                if let Some(color) = current_color_function(kw, out.get(Prop::Color), dark) {
                     out.replace(prop.id(), Some(color));
                 }
             }

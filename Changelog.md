@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `color-scheme` (and `<meta name="color-scheme">`) switches a page or
+  element to dark: system colours (`Canvas`, `CanvasText`, `Field`,
+  `ButtonFace`, `LinkText`, ...) and `light-dark()` resolve for each
+  element from its own colour scheme, so a page that declares
+  `color-scheme: dark` gets a dark canvas, light text, dark form controls
+  and light scrollbars. `light dark` follows the browser's dark setting;
+  a page that declares nothing stays light.
 * `docs/quickjs-vs-boa.md` compares Bellard's QuickJS (2026-06-04) with the
   Boa fork on speed, security and conformance: QuickJS runs Octane 5.4x
   faster, test262 is close to a tie (98.6% against 99.88%), and Boa stays

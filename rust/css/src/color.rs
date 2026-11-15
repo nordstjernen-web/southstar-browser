@@ -26,20 +26,33 @@ pub(crate) fn parse_value_or_current(text: &[u8]) -> Option<Option<Color>> {
     if value == Specified::CurrentColor {
         return None;
     }
-    if value.uses_current_color() {
+    if value.uses_current_color() || value.uses_color_scheme() {
         return Some(None);
     }
     value.resolve(&context(None)).map(Some)
 }
 
-pub(crate) fn parse_with_current(text: &[u8], current: Option<Color>) -> Option<Color> {
-    southstar_css_color::computed(text, &context(current))
+pub(crate) fn parse_in_scheme(text: &[u8], current: Option<Color>, dark: bool) -> Option<Color> {
+    southstar_css_color::computed(text, &Context { current, dark })
 }
 
 pub(crate) fn needs_current_color(text: &[u8]) -> bool {
-    text.contains(&b'(')
-        && southstar_css_color::parse(text)
-            .is_some_and(|value| value != Specified::CurrentColor && value.uses_current_color())
+    southstar_css_color::parse(text).is_some_and(|value| {
+        value != Specified::CurrentColor
+            && ((text.contains(&b'(') && value.uses_current_color()) || value.uses_color_scheme())
+    })
+}
+
+pub fn scheme_is_dark(color_scheme: Option<&[u8]>) -> bool {
+    let Some(words) = color_scheme else {
+        return false;
+    };
+    let has = |w: &[u8]| words.split(u8::is_ascii_whitespace).any(|x| x == w);
+    match (has(b"light"), has(b"dark")) {
+        (true, true) => ffi::prefers_dark(),
+        (false, true) => true,
+        _ => false,
+    }
 }
 
 pub(crate) fn specified_text(text: &[u8]) -> Option<Vec<u8>> {

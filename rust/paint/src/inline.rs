@@ -1515,15 +1515,21 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
             paint_inline_css_chrome(cr, Some(r), (x0, y0, x1 - x0, y1 - y0));
         }
         if draw_native {
+            let dark = crate::util::style_is_dark(attr_style(r));
+            let (button, field, edge) = if dark {
+                (0.42, 0.231, 0.52)
+            } else {
+                (0.902, 1.0, 0.722)
+            };
             cr.save();
             if r.kind == k::BUTTON {
-                cr.set_source_rgb(0.902, 0.902, 0.902);
+                cr.set_source_rgb(button, button, button);
             } else {
-                cr.set_source_rgb(1.0, 1.0, 1.0);
+                cr.set_source_rgb(field, field, field);
             }
             cr.rectangle(x0, y0, x1 - x0, y1 - y0);
             cr.fill();
-            cr.set_source_rgb(0.722, 0.722, 0.722);
+            cr.set_source_rgb(edge, edge, edge);
             cr.set_line_width(1.0);
             cr.rectangle(x0 + 0.5, y0 + 0.5, x1 - x0 - 1.0, y1 - y0 - 1.0);
             cr.stroke();

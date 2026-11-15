@@ -105,3 +105,11 @@ pub fn truncate(mut bytes: Vec<u8>, size: usize) -> Vec<u8> {
     bytes.truncate(size.saturating_sub(1));
     bytes
 }
+
+pub fn style_is_dark(s: Option<StyleRef<'_>>) -> bool {
+    southstar_css::scheme_is_dark(
+        s.and_then(|s| s.get(PropId::ColorScheme))
+            .and_then(ValueRef::keyword_text)
+            .map(core::ffi::CStr::to_bytes),
+    )
+}
