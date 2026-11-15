@@ -104,6 +104,22 @@ pub fn queue_scroll_to(b: &NsBrowser, target: Node<'_>, reveal: bool) {
     }
 }
 
+fn root_scrolls_smoothly(b: &NsBrowser) -> bool {
+    let root = b
+        .doc()
+        .and_then(|doc| southstar_dom::children(doc).find(|n| n.is_element()));
+    root.and_then(|r| b.style_for(r)).is_some_and(|style| {
+        ffi::retained_keyword(&style, ffi::css_prop_id(c"scroll-behavior"))
+            .is_some_and(|k| k.to_bytes() == b"smooth")
+    })
+}
+
+pub fn take_smooth(b: &NsBrowser) -> bool {
+    let smooth = b.pending_scroll_smooth.get();
+    b.pending_scroll_smooth.set(false);
+    smooth
+}
+
 pub fn take_pending(b: &NsBrowser) -> Option<(c_int, c_int)> {
     if !b.pending_scroll.get() {
         return None;
@@ -150,7 +166,7 @@ fn at_least_zero(v: f64) -> f64 {
     if v > 0.0 { v } else { 0.0 }
 }
 
-pub fn js_viewport_scroll(b: &NsBrowser, x: f64, y: f64) -> (f64, f64) {
+pub fn js_viewport_scroll(b: &NsBrowser, x: f64, y: f64, smooth: Option<bool>) -> (f64, f64) {
     page::flush(b);
     let (page_w, page_h) = page::page_size(b).unwrap_or((0, 0));
     let view_h = if b.cur_viewport_h.get() > 0.0 {
@@ -165,6 +181,8 @@ pub fn js_viewport_scroll(b: &NsBrowser, x: f64, y: f64) -> (f64, f64) {
     b.pending_scroll_x.set(x as c_int);
     b.pending_scroll_y.set(y as c_int);
     b.pending_scroll.set(true);
+    b.pending_scroll_smooth
+        .set(smooth.unwrap_or_else(|| root_scrolls_smoothly(b)));
     b.js_scroll_x.set(x);
     b.js_scroll_y.set(y);
     b.scroll_anchor.set(None);
@@ -175,6 +193,7 @@ pub fn js_scroll_to(b: &NsBrowser, target: Option<Node<'_>>) {
     b.scroll_anchor.set(None);
     if let Some(target) = target {
         queue_scroll_to(b, target, false);
+        b.pending_scroll_smooth.set(root_scrolls_smoothly(b));
     }
 }
 
@@ -203,9 +222,11 @@ pub fn js_fragment_navigate(b: &NsBrowser, url: &CStr) {
     let Some(target_id) = fragment.target() else {
         b.pending_scroll_y.set(0);
         b.pending_scroll.set(true);
+        b.pending_scroll_smooth.set(root_scrolls_smoothly(b));
         return;
     };
     if let Some(target) = ffi::find_fragment_target(b.doc(), target_id) {
         queue_scroll_to(b, target, true);
+        b.pending_scroll_smooth.set(root_scrolls_smoothly(b));
     }
 }

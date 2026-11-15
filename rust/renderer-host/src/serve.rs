@@ -18,6 +18,36 @@ use crate::tiles::{self, Tiles, View};
 const BFCACHE_MAX: usize = 4;
 const SCROLL_ACTIVE_US: i64 = 150_000;
 const SCROLL_TICK_GAP_US: i64 = 250_000;
+const SMOOTH_SCROLL_US: i64 = 300_000;
+
+#[derive(Clone, Copy)]
+struct SmoothScroll {
+    from: (f64, f64),
+    to: (c_int, c_int),
+    start_us: i64,
+}
+
+impl SmoothScroll {
+    fn at(&self, now_us: i64) -> ((c_int, c_int), bool) {
+        let t = ((now_us - self.start_us) as f64 / SMOOTH_SCROLL_US as f64).clamp(0.0, 1.0);
+        let eased = if t < 0.5 {
+            4.0 * t * t * t
+        } else {
+            1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+        };
+        let axis = |from: f64, to: c_int| {
+            if to < 0 {
+                to
+            } else {
+                (from + (f64::from(to) - from) * eased).round() as c_int
+            }
+        };
+        (
+            (axis(self.from.0, self.to.0), axis(self.from.1, self.to.1)),
+            t >= 1.0,
+        )
+    }
+}
 const ZOOM_MIN: f64 = 0.25;
 const TICK_BUDGET_MS: c_int = 16;
 const PROTOCOL_VERSION: c_int = 1;
@@ -40,6 +70,7 @@ pub struct Session<F> {
     cur: Option<Page>,
     bf: Vec<Page>,
     scroll_until_us: i64,
+    smooth_scroll: Option<SmoothScroll>,
     last_tick_us: i64,
     tick_cost_us: i64,
     tick_deferred: bool,
@@ -233,6 +264,7 @@ impl<F: Framebuffer> Session<F> {
             cur: None,
             bf: Vec::new(),
             scroll_until_us: 0,
+            smooth_scroll: None,
             last_tick_us: 0,
             tick_cost_us: 0,
             tick_deferred: false,
@@ -324,7 +356,9 @@ impl<F: Framebuffer> Session<F> {
     }
 
     fn animating(&mut self) -> bool {
-        self.cur.as_ref().is_some_and(Page::animating) || self.tick_deferred
+        self.cur.as_ref().is_some_and(Page::animating)
+            || self.tick_deferred
+            || self.smooth_scroll.is_some()
     }
 
     fn note_scroll(&mut self, sx: c_long, sy: c_long, wheel: bool) {
@@ -360,11 +394,35 @@ impl<F: Framebuffer> Session<F> {
         }
     }
 
-    fn apply_pending_scroll(cur: &Page, rv: &mut RenderView) {
+    fn apply_pending_scroll(&mut self, rv: &mut RenderView, wheeled: bool) {
+        let Some(cur) = self.cur.as_ref() else {
+            return;
+        };
+        let smooth = cur.take_pending_scroll_smooth();
+        let now = southstar_glib::monotonic_us();
+        if wheeled {
+            self.smooth_scroll = None;
+        }
         if let Some((x, y)) = cur.take_pending_scroll() {
+            self.smooth_scroll = smooth.then_some(SmoothScroll {
+                from: (self.frame_sx as f64, self.frame_sy as f64),
+                to: (x, y),
+                start_us: now,
+            });
             rv.requested_x = x;
             rv.requested_y = y;
         }
+        if let Some(scroll) = self.smooth_scroll {
+            let ((x, y), done) = scroll.at(now);
+            rv.requested_x = x;
+            rv.requested_y = y;
+            if done {
+                self.smooth_scroll = None;
+            }
+        }
+        let Some(cur) = self.cur.as_ref() else {
+            return;
+        };
         if let Some((w, h)) = cur.page_size() {
             rv.page_w = w;
             rv.page_h = h;
@@ -573,9 +631,7 @@ impl<F: Framebuffer> Session<F> {
         } else {
             0
         };
-        if let Some(cur) = self.cur.as_ref() {
-            Self::apply_pending_scroll(cur, &mut rv);
-        }
+        self.apply_pending_scroll(&mut rv, wheeled);
         self.apply_wheel(body, &mut rv, dx, dy);
         self.apply_snap(&mut rv, wheeled);
         if let Some(cur) = self.cur.as_ref() {
@@ -681,7 +737,7 @@ impl<F: Framebuffer> Session<F> {
             json_reply(self.ctrl_w, "{\"ok\":0}");
             return;
         }
-        let changed = self.tick();
+        let changed = self.tick() | c_int::from(self.smooth_scroll.is_some());
         if changed != 0 {
             self.frame_valid = false;
         }
