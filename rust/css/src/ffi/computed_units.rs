@@ -27,6 +27,7 @@ pub struct RawStyle {
     pub(super) share_id: u64,
     pub(super) currentcolor_bits: u32,
     pub(super) vars: Option<Rc<VarMap>>,
+    pub(super) zoom: f64,
 }
 
 impl RawStyle {
@@ -39,6 +40,7 @@ impl RawStyle {
             share_id: 0,
             currentcolor_bits: 0,
             vars: None,
+            zoom: 1.0,
         }
     }
 
