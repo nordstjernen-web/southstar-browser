@@ -5,7 +5,7 @@ Southstar Browser
 [![Latest release](https://img.shields.io/github/v/release/nordstjernen-web/southstar-browser?style=flat-square)](https://github.com/nordstjernen-web/southstar-browser/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/southstar?style=flat-square)](https://crates.io/crates/southstar)
 [![Docs](https://img.shields.io/docsrs/southstar-engine?style=flat-square)](https://docs.rs/southstar-engine)
-[![Dependency status](https://deps.rs/crate/southstar/latest/status.svg?style=flat-square)](https://deps.rs/crate/southstar)
+[![Dependency status](https://deps.rs/repo/github/nordstjernen-web/southstar-browser/status.svg?style=flat-square)](https://deps.rs/repo/github/nordstjernen-web/southstar-browser)
 [![Best viewed in Southstar Browser](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
