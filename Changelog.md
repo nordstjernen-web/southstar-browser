@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* WOFF2 web fonts take about 45% less memory once decoded: the rebuilt
+  `glyf` table stores glyph points with one-byte and repeated flags and
+  short coordinates instead of two bytes per coordinate.
 * `color-scheme` (and `<meta name="color-scheme">`) switches a page or
   element to dark: system colours (`Canvas`, `CanvasText`, `Field`,
   `ButtonFace`, `LinkText`, ...) and `light-dark()` resolve for each

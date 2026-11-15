@@ -201,21 +201,69 @@ fn write_points_bbox(out: &mut Vec<u8>, points: &[Point]) -> i16 {
     x0 as i16
 }
 
+const ON_CURVE: u8 = 0x01;
+const X_SHORT: u8 = 0x02;
+const Y_SHORT: u8 = 0x04;
+const REPEAT: u8 = 0x08;
+const X_SAME_OR_POSITIVE: u8 = 0x10;
+const Y_SAME_OR_POSITIVE: u8 = 0x20;
+const OVERLAP_SIMPLE: u8 = 0x40;
+
+fn delta_flags(delta: i32, short: u8, same_or_positive: u8) -> u8 {
+    match delta {
+        0 => same_or_positive,
+        1..=255 => short | same_or_positive,
+        -255..=-1 => short,
+        _ => 0,
+    }
+}
+
+fn put_delta(out: &mut Vec<u8>, delta: i32, flag: u8, short: u8, same_or_positive: u8) {
+    if flag & short != 0 {
+        out.push(delta.unsigned_abs() as u8);
+    } else if flag & same_or_positive == 0 {
+        put_u16(out, delta as u16);
+    }
+}
+
 fn write_point_data(out: &mut Vec<u8>, points: &[Point], overlap: bool) {
+    let mut flags = Vec::with_capacity(points.len());
+    let mut deltas = Vec::with_capacity(points.len());
+    let (mut prev_x, mut prev_y) = (0, 0);
     for (i, p) in points.iter().enumerate() {
-        let on_curve = if p.on_curve { 0x01 } else { 0x00 };
-        let overlap_flag = if i == 0 && overlap { 0x40 } else { 0x00 };
-        out.push(on_curve | overlap_flag);
+        let (dx, dy) = (p.x - prev_x, p.y - prev_y);
+        (prev_x, prev_y) = (p.x, p.y);
+        let on_curve = if p.on_curve { ON_CURVE } else { 0 };
+        let overlap_flag = if i == 0 && overlap { OVERLAP_SIMPLE } else { 0 };
+        flags.push(
+            on_curve
+                | overlap_flag
+                | delta_flags(dx, X_SHORT, X_SAME_OR_POSITIVE)
+                | delta_flags(dy, Y_SHORT, Y_SAME_OR_POSITIVE),
+        );
+        deltas.push((dx, dy));
     }
-    let mut prev = 0;
-    for p in points {
-        put_u16(out, (p.x - prev) as u16);
-        prev = p.x;
+    let mut i = 0;
+    while i < flags.len() {
+        let flag = flags[i];
+        let repeats = flags[i + 1..]
+            .iter()
+            .take(255)
+            .take_while(|&&f| f == flag)
+            .count();
+        if repeats > 0 {
+            out.push(flag | REPEAT);
+            out.push(repeats as u8);
+        } else {
+            out.push(flag);
+        }
+        i += repeats + 1;
     }
-    prev = 0;
-    for p in points {
-        put_u16(out, (p.y - prev) as u16);
-        prev = p.y;
+    for (&flag, &(dx, _)) in flags.iter().zip(&deltas) {
+        put_delta(out, dx, flag, X_SHORT, X_SAME_OR_POSITIVE);
+    }
+    for (&flag, &(_, dy)) in flags.iter().zip(&deltas) {
+        put_delta(out, dy, flag, Y_SHORT, Y_SAME_OR_POSITIVE);
     }
 }
 
