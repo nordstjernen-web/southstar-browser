@@ -210,7 +210,9 @@ fn layers_vp_kind(b: BoxRef<'_>) -> i32 {
 }
 
 fn layers_box_needs_frames(b: BoxRef<'_>, under: i32) -> bool {
-    (under != 0 && layers_box_video_composited(b)) || layers_box_bg_fixed(b)
+    (under != 0 && layers_box_video_composited(b))
+        || layers_box_bg_fixed(b)
+        || ((under != 0 || layers_vp_kind(b) != 0) && crate::filter::backdrop_filter(b).is_some())
 }
 
 fn layers_scan_kind(b: BoxRef<'_>, under: i32, in_atomic: bool) -> i32 {

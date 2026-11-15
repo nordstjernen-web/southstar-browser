@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 290] = [
+const INITIALS: [(&[u8], &CStr); 291] = [
     (b"anchor-name", c"none"),
     (b"anchor-scope", c"none"),
     (b"position-anchor", c"normal"),
@@ -55,6 +55,7 @@ const INITIALS: [(&[u8], &CStr); 290] = [
     (b"opacity", c"1"),
     (b"transform", c"none"),
     (b"filter", c"none"),
+    (b"backdrop-filter", c"none"),
     (b"background-image", c"none"),
     (b"box-shadow", c"none"),
     (b"text-decoration-line", c"none"),

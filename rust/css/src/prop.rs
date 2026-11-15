@@ -372,10 +372,11 @@ pub enum Prop {
     PositionTryFallbacks,
     PositionTryOrder,
     PositionVisibility,
+    BackdropFilter,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 364] = [
+    pub(crate) const ALL: [Prop; 365] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -740,6 +741,7 @@ impl Prop {
         Prop::PositionTryFallbacks,
         Prop::PositionTryOrder,
         Prop::PositionVisibility,
+        Prop::BackdropFilter,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1202,11 +1204,12 @@ impl Prop {
             Prop::PositionTryFallbacks => c"position-try-fallbacks",
             Prop::PositionTryOrder => c"position-try-order",
             Prop::PositionVisibility => c"position-visibility",
+            Prop::BackdropFilter => c"backdrop-filter",
         }
     }
 }
 
-const ALIASES: [(&[u8], Prop); 61] = [
+const ALIASES: [(&[u8], Prop); 62] = [
     (b"word-wrap", Prop::OverflowWrap),
     (b"font-width", Prop::FontStretch),
     (b"text-decoration-line", Prop::TextDecoration),
@@ -1244,6 +1247,7 @@ const ALIASES: [(&[u8], Prop); 61] = [
     (b"-webkit-animation-play-state", Prop::AnimationPlayState),
     (b"-webkit-box-shadow", Prop::BoxShadow),
     (b"-webkit-filter", Prop::Filter),
+    (b"-webkit-backdrop-filter", Prop::BackdropFilter),
     (b"-webkit-box-sizing", Prop::BoxSizing),
     (b"-webkit-clip-path", Prop::ClipPath),
     (b"-webkit-hyphens", Prop::Hyphens),
