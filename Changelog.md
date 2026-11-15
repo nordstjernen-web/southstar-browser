@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `clip-path: path()` and `shape()` clip to their outlines: SVG path data
+  (with an optional `evenodd` fill rule) and the CSS shape commands
+  (`move`, `line`, `hline`, `vline`, `curve`, `smooth`, `arc`, `close`,
+  with percentages of the reference box).
 * Vertical writing modes lay out whole blocks: a `writing-mode:
   vertical-rl` (or `sideways-rl`, `vertical-lr`, `sideways-lr`) block in
   horizontal text wraps its paragraphs into columns as tall as the block
