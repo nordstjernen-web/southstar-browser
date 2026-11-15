@@ -76,13 +76,6 @@ pub fn markup_escape(text: &[u8]) -> Vec<u8> {
     util::markup_escape(text)
 }
 
-pub fn random_below(n: i32) -> usize {
-    match u32::try_from(n) {
-        Ok(n) if n > 0 => (util::random_u32() % n) as usize,
-        _ => 0,
-    }
-}
-
 pub fn os_info(key: &CStr) -> Option<Vec<u8>> {
     // SAFETY: `key` is a NUL-terminated string that outlives the call.
     let info = unsafe { g_get_os_info(key.as_ptr()) };
