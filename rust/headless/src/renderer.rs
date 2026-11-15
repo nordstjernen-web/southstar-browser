@@ -171,6 +171,13 @@ fn run_actions(r: &mut Renderer, spec: &[u8], mut vw: c_int, mut vh: c_int, sett
             {
                 follow_nav(r, Some(href), vw, vh, settle_ms);
             }
+        } else if let Some(rest) = a.strip_prefix(b"dblclick ") {
+            let Some((x, y)) = ffi::scan_point(rest) else {
+                continue;
+            };
+            drop(r.click(x as c_int, y as c_int, 0));
+            drop(r.select(5, x as c_int, y as c_int));
+            drop(r.release());
         } else if let Some(rest) = a.strip_prefix(b"select ") {
             let Some((kind, x, y)) = ffi::scan_select(rest) else {
                 continue;

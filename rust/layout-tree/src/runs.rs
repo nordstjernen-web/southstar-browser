@@ -98,6 +98,7 @@ fn split_attrs(run: BoxRef<'_>, tail: BoxRef<'_>, split: usize) {
         if end > split || a.start >= split {
             let from = a.start.max(split);
             let mut t = a;
+            t.split_offset += from - t.start;
             t.start = from - split;
             t.len = if end > split { end - from } else { 0 };
             tail_attrs.get_or_insert_default().push(t);
@@ -272,6 +273,7 @@ pub fn clone_range(src: BoxRef<'_>, start: usize, end: usize) -> Option<BoxRef<'
             continue;
         }
         let mut copy = a.clone();
+        copy.split_offset += is - a.start;
         copy.start = is - start;
         copy.len = ie - is;
         if let Some(bg) = copy.bg_image_src() {

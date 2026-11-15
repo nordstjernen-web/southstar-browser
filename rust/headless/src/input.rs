@@ -13,6 +13,7 @@ use southstar_glib::GBoolean;
 use crate::ffi::{self, Js, err, out};
 use crate::inproc::{Ctx, NavCapture, relayout, settle};
 use crate::text::strip;
+use southstar_selection::FieldText;
 
 fn utf8_skip(b: u8) -> usize {
     match b {
@@ -153,6 +154,41 @@ fn element_named(n: Node, name: &[u8]) -> bool {
     n.is_element() && n.name().is_some_and(|nm| nm.to_bytes() == name)
 }
 
+fn is_password(n: Node) -> bool {
+    ffi::is_named(n, c"input")
+        && n.attr(c"type")
+            .is_some_and(|t| t.to_bytes().eq_ignore_ascii_case(b"password"))
+}
+
+fn field_offset(fc: &Ctx, field: Node, x: f64, y: f64) -> Option<usize> {
+    let value = ffi::editable_value(field);
+    let text = FieldText {
+        value: &value,
+        password: is_password(field),
+    };
+    southstar_selection::field_offset_at(fc.layout()?, field, &text, x, y, true)
+}
+
+fn field_word(fc: &Ctx, field: Node, x: f64, y: f64) -> Option<(usize, usize)> {
+    let value = ffi::editable_value(field);
+    let text = FieldText {
+        value: &value,
+        password: is_password(field),
+    };
+    southstar_selection::field_word_at(fc.layout()?, field, &text, x, y)
+}
+
+fn dblclick(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
+    click(fc, nav, x, y);
+    relayout(fc);
+    if let Some(field) = fc.focused()
+        && let Some((start, end)) = field_word(fc, field, x, y)
+    {
+        fc.anchor.set(start);
+        fc.caret.set(end);
+    }
+}
+
 fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     let Some(layout) = fc.layout() else {
         return;
@@ -202,6 +238,7 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
     let shown = dom.name().map_or(&b"(text)"[..], CStr::to_bytes);
     err(&[b"[headless] click hit <", shown, b">\n"].concat());
     let editable = ancestors_and_self(dom).find(|n| ffi::is_editable(*n));
+    let pointed = editable.and_then(|e| field_offset(fc, e, x, y));
     let mut prevented = false;
     if let Some(js) = fc.js {
         prevented = js.dispatch_checked(dom, c"click");
@@ -216,6 +253,7 @@ fn click(fc: &Ctx, nav: &NavCapture, x: f64, y: f64) {
         }
         fc.set_focused(Some(editable));
         let caret = ffi::editable_value(editable).len();
+        let caret = pointed.map_or(caret, |p| p.min(caret));
         fc.caret.set(caret);
         fc.anchor.set(caret);
         if let Some(js) = fc.js {
@@ -419,6 +457,13 @@ fn emit_pointer_and_mouse(
 }
 
 fn mouse_drag(fc: &Ctx, (x0, y0): (f64, f64), (x1, y1): (f64, f64)) {
+    if let Some(field) = fc.focused()
+        && let Some(anchor) = field_offset(fc, field, x0, y0)
+        && let Some(caret) = field_offset(fc, field, x1, y1)
+    {
+        fc.anchor.set(anchor);
+        fc.caret.set(caret);
+    }
     let Some(js) = fc.js else {
         return;
     };
@@ -655,6 +700,10 @@ pub fn run_actions(fc: &Ctx, nav: &NavCapture, spec: &[u8]) {
                 )
                 .as_bytes());
                 click(fc, nav, x, y);
+            }
+        } else if let Some(rest) = a.strip_prefix(b"dblclick ") {
+            if let Some((x, y)) = ffi::scan_point(rest) {
+                dblclick(fc, nav, x, y);
             }
         } else if let Some(rest) = a.strip_prefix(b"rightclick ") {
             if let Some((x, y)) = ffi::scan_point(rest) {

@@ -11,7 +11,7 @@ use southstar_layout::BoxRef;
 use std::ffi::CString;
 
 use crate::ffi::{self, NsBrowser, Pointer};
-use crate::{build, callbacks, edit, hit, page};
+use crate::{build, callbacks, edit, hit, page, query};
 
 const HOVER_RELAYOUT_MIN_US: i64 = 60000;
 const MAX_DEPTH: c_int = 1024;
@@ -41,9 +41,41 @@ fn relayout_if_dirty(b: &NsBrowser) -> bool {
     false
 }
 
+fn same_node(a: Option<Node<'_>>, b: Node<'_>) -> bool {
+    a.is_some_and(|a| a.as_ptr() == b.as_ptr())
+}
+
+fn field_gesture(b: &NsBrowser, field: Node<'_>, kind: c_int, x: c_int, y: c_int) -> bool {
+    let (caret, anchor) = match kind {
+        0 => match edit::field_offset_at(b, field, x, y, true) {
+            Some(byte) => (byte, byte),
+            None => return false,
+        },
+        1 => match edit::field_offset_at(b, field, x, y, true) {
+            Some(byte) => (byte, b.sel_anchor_byte.get()),
+            None => return false,
+        },
+        5 => match edit::field_word_at(b, field, x, y) {
+            Some((start, end)) => (end, start),
+            None => return false,
+        },
+        6 => (
+            ffi::editable_value(field).map_or(0, |v| v.to_bytes().len()),
+            0,
+        ),
+        _ => return false,
+    };
+    query::set_focused_editable_selection(b, caret, anchor)
+}
+
 pub fn select(b: &NsBrowser, kind: c_int, x: c_int, y: c_int) -> Option<Selected> {
     let layout = b.layout()?;
     let field = edit::focused_field(b);
+    if let Some(pressed) = b.field_press.get().filter(|&f| same_node(field, f))
+        && field_gesture(b, pressed, kind, x, y)
+    {
+        return Some(Selected::Nothing);
+    }
     let (fx, fy) = (f64::from(x), f64::from(y));
     match kind {
         0 => b.selection_anchor_at(layout, fx, fy),
@@ -452,6 +484,7 @@ pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<Rc<CStr>>
     b.selection_dragged.set(false);
     let node = hit::hit_node(b, x, y);
     b.press_node.set(node);
+    b.field_press.set(None);
     b.press_x.set(x);
     b.press_y.set(y);
     b.press_mods.set(mods);
@@ -470,12 +503,22 @@ pub fn press(b: &NsBrowser, x: c_int, y: c_int, mods: c_int) -> Option<Rc<CStr>>
         node.is_some_and(|n| ancestors_and_self(n).any(|a| ffi::is_named(a, c"datalist")));
     if let Some(js) = b.js().filter(|_| !in_datalist) {
         let focus = node.and_then(|n| ancestors_and_self(n).find(|&a| ffi::is_focusable(a)));
+        let refocus = focus.is_some_and(|f| same_node(edit::focused_field(b), f));
+        let pointed = focus.and_then(|f| edit::field_offset_at(b, f, x, y, true));
         js.focus_from_pointer(node);
         let value_len = focus
             .and_then(ffi::editable_value)
             .map_or(0, |v| v.to_bytes().len());
-        b.caret_byte.set(value_len);
-        b.sel_anchor_byte.set(value_len);
+        let pointed = pointed
+            .filter(|_| focus.is_some_and(|f| same_node(edit::focused_field(b), f)))
+            .map(|byte| byte.min(value_len));
+        let caret = pointed.unwrap_or(value_len);
+        let keep_anchor = refocus && pointed.is_some() && mods & 1 != 0;
+        b.caret_byte.set(caret);
+        if !keep_anchor {
+            b.sel_anchor_byte.set(caret);
+        }
+        b.field_press.set(focus.filter(|_| pointed.is_some()));
         b.datalist_suppressed
             .set(!focus.is_some_and(|f| ffi::is_named(f, c"input") && f.attr(c"list").is_some()));
         note_mutation(b);

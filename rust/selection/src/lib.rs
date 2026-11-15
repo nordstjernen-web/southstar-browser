@@ -6,8 +6,10 @@
 #![forbid(unsafe_code)]
 
 mod ffi;
+mod field;
 
 pub use ffi::{NsSelection, stored_ranges};
+pub use field::{FieldText, field_offset_at, field_word_at};
 
 use southstar_layout::{BoxKind, BoxRef, Text, children};
 

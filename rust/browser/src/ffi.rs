@@ -225,6 +225,7 @@ pub struct NsBrowser {
     pub open_select: NodeSlot,
     pub datalist_suppressed: Flag,
     pub press_node: NodeSlot,
+    pub field_press: NodeSlot,
     pub press_x: Cell<c_int>,
     pub press_y: Cell<c_int>,
     pub press_mods: Cell<c_int>,

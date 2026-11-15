@@ -260,6 +260,7 @@ impl<'a> Collector<'a> {
             c_long::from(text_input::columns(Some(n)))
         };
         let mut displayed_chars: c_long = 0;
+        let mut value_skip = None;
         let v = v.filter(|v| !v.is_empty());
         if let Some(v) = v.filter(|_| is_password && !is_placeholder) {
             let cps = text_input::utf8_len(v.to_bytes());
@@ -269,6 +270,7 @@ impl<'a> Collector<'a> {
                 text_input::align_skip_cps(s, Some(n), cps, size)
             };
             let shown_cps = (cps - skip_cps).min(size);
+            value_skip = real_value.map(|r| text_input::advance_cps(r.to_bytes(), skip_cps));
             self.push_repeat(BULLET, shown_cps);
             displayed_chars = shown_cps;
             disp_end = self.out.len();
@@ -301,6 +303,9 @@ impl<'a> Collector<'a> {
                 if v_is_real {
                     skip_bytes = p;
                 }
+            }
+            if v_is_real {
+                value_skip = Some(skip_bytes);
             }
             self.push(display);
             displayed_chars = text_input::utf8_len(display);
@@ -342,6 +347,9 @@ impl<'a> Collector<'a> {
             inline_kind::INPUT_FIELD
         };
         self.form_attr(kind, start, n);
+        if let Some(skip) = value_skip {
+            self.field_value_attr(n, (val_start, disp_end), skip);
+        }
         let disabled = n.attr(c"disabled").is_some();
         let end = self.out.len();
         emit_control_text_style(
@@ -359,6 +367,14 @@ impl<'a> Collector<'a> {
         if focused && self.state.datalist_open {
             select::emit_datalist_suggestions(&mut self.out, &mut self.attrs, self.styles, n);
         }
+    }
+
+    fn field_value_attr(&mut self, n: Node<'_>, (start, end): (usize, usize), value_start: usize) {
+        self.attrs.push(
+            InlineAttr::new(inline_kind::FIELD_VALUE, start, end - start)
+                .with_dom(Some(n))
+                .with_value_start(value_start),
+        );
     }
 
     fn spellcheck(
@@ -552,6 +568,9 @@ impl<'a> Collector<'a> {
             inline_kind::INPUT_FIELD
         };
         self.form_attr(kind, start, n);
+        if any {
+            self.field_value_attr(n, (val_start, disp_end), 0);
+        }
         let disabled = n.attr(c"disabled").is_some();
         let end = self.out.len();
         emit_control_text_style(

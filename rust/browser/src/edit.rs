@@ -8,6 +8,7 @@ use southstar_unicode::c_string_until_nul;
 use std::ffi::CString;
 
 use southstar_dom::{Node, ancestors_and_self};
+use southstar_selection::FieldText;
 
 use crate::ffi::{self, NsBrowser};
 use crate::{build, hit, page, query};
@@ -40,6 +41,40 @@ fn field_copyable(field: Node<'_>) -> bool {
     field
         .attr(c"type")
         .is_none_or(|t| !t.to_bytes().eq_ignore_ascii_case(b"password"))
+}
+
+fn field_text(field: Node<'_>) -> FieldText<'_> {
+    FieldText {
+        value: value_bytes(field),
+        password: !field_copyable(field),
+    }
+}
+
+pub fn field_offset_at(
+    b: &NsBrowser,
+    field: Node<'_>,
+    x: c_int,
+    y: c_int,
+    clamp: bool,
+) -> Option<usize> {
+    southstar_selection::field_offset_at(
+        b.layout()?,
+        field,
+        &field_text(field),
+        f64::from(x),
+        f64::from(y),
+        clamp,
+    )
+}
+
+pub fn field_word_at(b: &NsBrowser, field: Node<'_>, x: c_int, y: c_int) -> Option<(usize, usize)> {
+    southstar_selection::field_word_at(
+        b.layout()?,
+        field,
+        &field_text(field),
+        f64::from(x),
+        f64::from(y),
+    )
 }
 
 fn field_selection(b: &NsBrowser, field: Node<'_>) -> (usize, usize) {
