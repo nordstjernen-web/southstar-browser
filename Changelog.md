@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `overscroll-behavior: contain` (or `none`) stops a wheel scroll that
+  reaches the end of a scrollable box from scrolling the page behind it.
 * Legacy `display: -webkit-box` layouts honour `-webkit-box-pack`,
   `-webkit-box-align`, `-webkit-box-direction`, `-webkit-box-flex` and
   `-webkit-box-ordinal-group`, mapped onto their flexbox equivalents.
