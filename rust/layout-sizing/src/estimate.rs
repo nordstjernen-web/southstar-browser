@@ -248,7 +248,18 @@ pub fn text_input_intrinsic_width(b: BoxRef<'_>) -> f64 {
     {
         return 0.0;
     }
+    let style = style_of(b);
+    let font_size = length_or(style.and_then(|s| s.get(PropId::FontSize)), 16.0);
+    if style
+        .and_then(|s| s.keyword_of(PropId::FieldSizing))
+        .is_some_and(|k| k.to_bytes() == b"content")
+    {
+        let shown = southstar_dom::controls::used_value(dom)
+            .filter(|v| !v.is_empty())
+            .or_else(|| dom.attr(c"placeholder"))
+            .map_or(0, |v| String::from_utf8_lossy(v.to_bytes()).chars().count());
+        return (shown.max(1) as f64 * 0.6 + 0.5) * font_size;
+    }
     let size = dom.attr(c"size").map_or(20, |s| parse_int(s, 20, 1, 80));
-    let font_size = length_or(style_of(b).and_then(|s| s.get(PropId::FontSize)), 16.0);
     f64::from(size) * font_size * 0.75
 }

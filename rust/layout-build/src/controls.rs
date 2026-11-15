@@ -16,6 +16,11 @@ use southstar_style::{PropId, StyleRef};
 
 use crate::collect::{Collector, LINE_SEPARATOR, NBSP, same};
 
+fn sizes_to_content(s: Option<StyleRef<'_>>) -> bool {
+    s.and_then(|s| s.keyword_of(PropId::FieldSizing))
+        .is_some_and(|k| k.to_bytes() == b"content")
+}
+
 const BULLET: &[u8] = "\u{2022}".as_bytes();
 
 fn type_is(ty: Option<&[u8]>, names: &[&[u8]]) -> bool {
@@ -248,7 +253,11 @@ impl<'a> Collector<'a> {
             None => anchor_byte = 0,
             _ => {}
         }
-        let size = c_long::from(text_input::columns(Some(n)));
+        let size = if sizes_to_content(s) {
+            v.map_or(0, |v| text_input::utf8_len(v.to_bytes())).max(1)
+        } else {
+            c_long::from(text_input::columns(Some(n)))
+        };
         let mut displayed_chars: c_long = 0;
         let v = v.filter(|v| !v.is_empty());
         if let Some(v) = v.filter(|_| is_password && !is_placeholder) {
