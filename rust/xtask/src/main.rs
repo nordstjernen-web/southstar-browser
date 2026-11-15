@@ -17,13 +17,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use detect::Configuration;
 use options::{Command, Options};
 
-const CAPI_FEATURES: [&str; 11] = [
+const CAPI_FEATURES: [&str; 12] = [
     "libav",
     "sdl",
     "http-brotli",
     "http-zstd",
     "woff2",
     "avif",
+    "pdfjs",
     "enchant",
     "wasm",
     "rust-shaper",

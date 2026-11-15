@@ -102,11 +102,26 @@ Update Changelog.md
   default third-party connections.
 - **PDF documents are rendered by Mozilla's pdf.js**, the one bundled
   Mozilla project (an explicit decision of the project owner; it replaced
-  the poppler-based `rust/pdf`). The prebuilt `pdfjs-dist` package (legacy
-  build, Apache-2.0) is vendored unmodified in `third_party/pdfjs`
-  (`southstar-pdfjs`) with its CMaps, standard fonts and WebAssembly
-  decoders; update it only with `python3 scripts/update-pdfjs.py VERSION`,
-  never by editing its files. `rust/pdf-viewer` is Southstar's own viewer
+  the poppler-based `rust/pdf`). pdf.js is **not kept in this repository**:
+  the prebuilt `pdfjs-dist` package (legacy build, Apache-2.0) with its
+  CMaps, standard fonts and WebAssembly decoders is the standalone
+  `southstar-pdfjs` crate on crates.io, whose version is the pdf.js version.
+  `rust/pdf-viewer` depends on it as an optional dependency pinned with `=`
+  (its `pdfjs` feature, on by default; `cargo xtask build --pdfjs
+  auto|enabled|disabled`, and without it a PDF gets a "PDF viewer
+  unavailable" page with a download link). The crate is generated, never
+  edited: to update pdf.js run `python3 scripts/update-pdfjs.py generate
+  VERSION` (fetches the npm tarball, checks its integrity hash and writes the
+  crate to `target/pdfjs-crate/`), then `python3 scripts/update-pdfjs.py
+  check` (`cargo package`, the 10 MB size check and `cargo publish
+  --dry-run`), then — only with the project owner's approval —
+  `python3 scripts/update-pdfjs.py publish`; finally bump the `=VERSION` pin
+  in `rust/pdf-viewer/Cargo.toml`, `cargo update -p southstar-pdfjs`, record
+  it in `supply-chain/`, build, and open a PR. Never vendor it into
+  `third_party/` again. `scripts/crates-io-groups.toml` lists it as
+  `external`, so the release merge does not publish it. The viewer checks
+  that pdf.js reports the major version of `southstar_pdfjs::VERSION`.
+  `rust/pdf-viewer` is Southstar's own viewer
   page around it: `rust/browser/src/open.rs` turns an `application/pdf`
   response (or an untyped one starting with `%PDF-`) into that page at the
   PDF's own URL, with the downloaded bytes embedded, so pdf.js never
@@ -213,7 +228,7 @@ cargo xtask build
 the system libraries' version floors, detects the optional ones through
 pkg-config and builds with the matching cargo features (`cargo xtask
 features` prints them). Options: `--debug`,
-`--overflow-checks`, `--audio`/`--avif`/`--webgpu auto|enabled|disabled`,
+`--overflow-checks`, `--audio`/`--avif`/`--pdfjs`/`--webgpu auto|enabled|disabled`,
 `--wgpu-native-root DIR`, `--no-wasm`, `--no-rust-shaper`, `--build-date`
 and `--target-dir`. `cargo xtask run [options] [-- browser arguments]`
 builds and starts the browser; `cargo xtask install --prefix P [--destdir
@@ -587,9 +602,10 @@ directory or integration-test targets.
 
 - Don't introduce Mozilla/Gecko code, WebKit code, or any other
   upstream browser engine source. Southstar is an independent
-  implementation, not a fork. The one exception is pdf.js in
-  `third_party/pdfjs` (see "Design constraints"): keep it, keep it
-  unmodified, and don't take it as precedent for other Mozilla code.
+  implementation, not a fork. The one exception is pdf.js, taken from the
+  `southstar-pdfjs` crate on crates.io (see "Design constraints"): keep it
+  unmodified, keep it out of the repository, and don't take it as precedent
+  for other Mozilla code.
 - **Don't add site-specific hacks.** No per-site rendering shims, no
   hardcoded hostnames, no grepping a site's private JSON (e.g.
   `ytInitialPlayerResponse`, `mediaDefinitions`, `ytimg`, `movie_player`).

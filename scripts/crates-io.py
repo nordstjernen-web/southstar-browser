@@ -46,11 +46,12 @@ class Plan:
         output = subprocess.run([CARGO, "metadata", "--format-version", "1", "--locked"],
                                 cwd=ROOT, check=True, capture_output=True, text=True).stdout
         metadata = json.loads(output)
-        local = [p for p in metadata["packages"] if p["source"] is None]
-        self.version = next(p["version"] for p in local if p["name"] == "southstar")
-        self.forks = {p["name"]: p for p in local if "third_party" in Path(p["manifest_path"]).parts}
         config = tomllib.loads(GROUPS.read_text(encoding="utf-8"))
         unpublished = set(config.pop("unpublished"))
+        external = set(config.pop("external", []))
+        local = [p for p in metadata["packages"] if p["source"] is None and p["name"] not in external]
+        self.version = next(p["version"] for p in local if p["name"] == "southstar")
+        self.forks = {p["name"]: p for p in local if "third_party" in Path(p["manifest_path"]).parts}
         self.members = {short(p["name"]): p for p in local
                         if p["name"] not in self.forks and short(p["name"]) not in unpublished}
         self.groups = config

@@ -3417,7 +3417,9 @@ dependencies = [
 
 [[package]]
 name = "southstar-pdfjs"
-version = "1.0.10-dev"
+version = "6.4.299"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3fa1080b784cbe463a4bceb63b6ffe8e4849e4b4255e6684313e6a88d67d581"
 
 [[package]]
 name = "southstar-plmpeg"

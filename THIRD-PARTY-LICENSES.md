@@ -209,9 +209,12 @@ authorization of the copyright holder.
 ### pdf.js — Apache License 2.0
 
 > Mozilla's pdf.js renders the PDF documents Southstar opens. The prebuilt
-> `pdfjs-dist` package (legacy build) is embedded unmodified from
-> `third_party/pdfjs`, whose `LICENSE` holds the full Apache License 2.0
-> text. Copyright © Mozilla Foundation and the pdf.js contributors.
+> `pdfjs-dist` package (legacy build) is embedded unmodified in the binary
+> from the `southstar-pdfjs` crate on crates.io (built from npm by
+> `scripts/update-pdfjs.py`; not part of this repository), whose `LICENSE`
+> holds the full Apache License 2.0 text. Builds made with `--pdfjs
+> disabled` do not contain it. Copyright © Mozilla Foundation and the pdf.js
+> contributors.
 > <https://github.com/mozilla/pdf.js>
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -221,7 +224,7 @@ required by applicable law or agreed to in writing, software distributed
 under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied.
 
-Embedded with it, each under its own licence in `third_party/pdfjs`:
+Embedded with it, each under its own licence in the `southstar-pdfjs` crate:
 
 - the CMaps (`cmaps/LICENSE`, BSD 3-Clause, © Adobe Systems Incorporated);
 - the Foxit standard fonts (`standard_fonts/LICENSE_FOXIT`, BSD 3-Clause,

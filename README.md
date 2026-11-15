@@ -126,8 +126,10 @@ See [npm/README.md](npm/README.md).
   `image-webp` and an in-tree BMP decoder) read PNG/APNG, GIF, BMP, JPEG and
   lossy, lossless and animated WebP; ICO and SVG are rendered
   in-engine, with optional AVIF support. PDF documents open in a viewer
-  built on Mozilla's [pdf.js](https://github.com/mozilla/pdf.js), bundled
-  in-tree.
+  built on Mozilla's [pdf.js](https://github.com/mozilla/pdf.js), which
+  the build takes from the `southstar-pdfjs` crate on crates.io (it is not
+  kept in this repository; `cargo xtask build --pdfjs disabled` leaves it
+  out, and PDFs are then offered as downloads).
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
   present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). On Windows,
@@ -306,6 +308,7 @@ cookies stay host-only.
 - [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* — inline WebM playback
   (required on Linux and Windows, auto-detected on macOS)
 - libavif — AVIF images (`--avif`)
+- the `southstar-pdfjs` crate (pdf.js, from crates.io) — the PDF viewer (`--pdfjs`, on by default)
 - Enchant — spell checking
 - SDL2 — audio output for the `southstar-audio` helper (`--audio`)
 - vorbisfile and opusfile — Ogg audio without FFmpeg

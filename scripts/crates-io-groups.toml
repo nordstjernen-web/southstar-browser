@@ -4,6 +4,10 @@
 
 unpublished = ["capi", "jsshell", "xtask"]
 
+# Crates published on their own, outside this merge, that the workspace takes from crates.io
+# (scripts/update-pdfjs.py builds and publishes southstar-pdfjs).
+external = ["southstar-pdfjs"]
+
 [southstar]
 description = "Southstar, a web browser written from scratch in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"
 members = ["southstar"]
