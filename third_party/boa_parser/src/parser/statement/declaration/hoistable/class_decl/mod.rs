@@ -567,8 +567,7 @@ where
                 cursor.advance(interner);
                 return Ok((None, None));
             }
-            TokenKind::IdentifierName((Sym::STATIC, ContainsEscapeSequence(contains_escape))) => {
-                let contains_escape = *contains_escape;
+            TokenKind::IdentifierName((Sym::STATIC, ContainsEscapeSequence(false))) => {
                 let token = cursor.peek(1, interner).or_abrupt()?;
                 match token.kind() {
                     TokenKind::IdentifierName(_)
@@ -581,12 +580,6 @@ where
                     | TokenKind::Punctuator(
                         Punctuator::OpenBracket | Punctuator::Mul | Punctuator::OpenBlock,
                     ) => {
-                        if contains_escape {
-                            return Err(Error::general(
-                                "keyword must not contain escaped characters",
-                                token.span().start(),
-                            ));
-                        }
                         // this "static" is a keyword.
                         cursor.advance(interner);
                         true
@@ -632,6 +625,17 @@ where
                         | TokenKind::PrivateIdentifier(_)
                         | TokenKind::Punctuator(Punctuator::OpenBracket)
                 )
+        };
+
+        let line_break_after_first_token = {
+            let skip_n = if cursor.peek_is_line_terminator(0, interner).or_abrupt()? {
+                2
+            } else {
+                1
+            };
+            cursor
+                .peek_is_line_terminator(skip_n, interner)?
+                .unwrap_or(false)
         };
 
         let token = cursor.peek(0, interner).or_abrupt()?;
@@ -833,13 +837,9 @@ where
                     start_linear_pos,
                 ))
             }
-            TokenKind::Keyword((Keyword::Async, true)) if is_keyword => {
-                return Err(Error::general(
-                    "Keyword must not contain escaped characters",
-                    token.span().start(),
-                ));
-            }
-            TokenKind::Keyword((Keyword::Async, false)) if is_keyword => {
+            TokenKind::Keyword((Keyword::Async, false))
+                if is_keyword && !line_break_after_first_token =>
+            {
                 cursor.advance(interner);
                 cursor.peek_expect_no_lineterminator(0, "Async object methods", interner)?;
                 let token = cursor.peek(0, interner).or_abrupt()?;
@@ -942,14 +942,6 @@ where
                         ))
                     }
                 }
-            }
-            TokenKind::IdentifierName((Sym::GET | Sym::SET, ContainsEscapeSequence(true)))
-                if is_keyword =>
-            {
-                return Err(Error::general(
-                    "keyword must not contain escaped characters",
-                    token.span().start(),
-                ));
             }
             TokenKind::IdentifierName((Sym::GET, ContainsEscapeSequence(false))) if is_keyword => {
                 cursor.advance(interner);
