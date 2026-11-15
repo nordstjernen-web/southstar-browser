@@ -264,19 +264,71 @@ fn legacy_webkit_box(out: &mut Out<'_>, mut d: Display) -> Display {
     {
         return d;
     }
-    if !matches!(
+    let vertical = matches!(
         out.keyword(Prop::WebkitBoxOrient),
         Some(b"vertical" | b"block-axis")
-    ) {
-        return d;
-    }
+    );
     let clamp = out.get(Prop::LineClamp).and_then(NsCssValue::length);
-    if clamp.is_some_and(|(v, _)| v >= 1.0) {
+    if vertical && clamp.is_some_and(|(v, _)| v >= 1.0) {
         d.inner = display::INNER_FLOW_ROOT;
         return d;
     }
-    out.replace(Prop::FlexDirection.id(), Some(new_keyword(b"column")));
+    let reverse = out.keyword(Prop::WebkitBoxDirection) == Some(b"reverse");
+    let direction: &[u8] = match (vertical, reverse) {
+        (true, true) => b"column-reverse",
+        (true, false) => b"column",
+        (false, true) => b"row-reverse",
+        (false, false) => b"row",
+    };
+    if vertical || reverse {
+        out.replace(Prop::FlexDirection.id(), Some(new_keyword(direction)));
+    }
+    let pack: Option<&[u8]> = match out.keyword(Prop::WebkitBoxPack) {
+        Some(b"end") => Some(b"flex-end"),
+        Some(b"center") => Some(b"center"),
+        Some(b"justify") => Some(b"space-between"),
+        _ => None,
+    };
+    if let Some(pack) = pack {
+        out.replace(Prop::JustifyContent.id(), Some(new_keyword(pack)));
+    }
+    let align: Option<&[u8]> = match out.keyword(Prop::WebkitBoxAlign) {
+        Some(b"start") => Some(b"flex-start"),
+        Some(b"end") => Some(b"flex-end"),
+        Some(b"center") => Some(b"center"),
+        Some(b"baseline") => Some(b"baseline"),
+        _ => None,
+    };
+    if let Some(align) = align {
+        out.replace(Prop::AlignItems.id(), Some(new_keyword(align)));
+    }
     d
+}
+
+fn legacy_webkit_box_item(out: &mut Out<'_>, layout_parent: Option<&RawStyle>) {
+    let in_box = layout_parent
+        .and_then(|p| keyword(p.value_at(Prop::Display.id())))
+        .is_some_and(|k| k.starts_with(b"-webkit-") && k.ends_with(b"box"));
+    if !in_box {
+        return;
+    }
+    let number = |out: &Out<'_>, prop: Prop| {
+        out.keyword(prop)
+            .and_then(|k| core::str::from_utf8(k).ok()?.parse::<f64>().ok())
+    };
+    if let Some(flex) = number(out, Prop::WebkitBoxFlex).filter(|f| *f > 0.0) {
+        let text = flex.to_string();
+        for prop in [Prop::FlexGrow, Prop::FlexShrink] {
+            if let Some(v) = property::parse(prop, text.as_bytes()) {
+                out.replace(prop.id(), Some(to_c(v)));
+            }
+        }
+    }
+    if let Some(group) = number(out, Prop::WebkitBoxOrdinalGroup).filter(|g| *g != 1.0)
+        && let Some(v) = property::parse(Prop::Order, (group as i64 - 1).to_string().as_bytes())
+    {
+        out.replace(Prop::Order.id(), Some(to_c(v)));
+    }
 }
 
 fn out_of_flow(out: &Out<'_>) -> bool {
@@ -335,6 +387,7 @@ fn fix_display(out: &mut Out<'_>, layout_parent: Option<&RawStyle>, is_root: boo
     out.style.specified_inline =
         u8::from(specified.box_ == display::BOX_NORMAL && specified.outer == display::OUTER_INLINE);
     let legacy = legacy_webkit_box(out, specified);
+    legacy_webkit_box_item(out, layout_parent);
     let cx = DisplayContext {
         out_of_flow: out_of_flow(out),
         layout_parent: layout_parent.map_or_else(Display::default, |p| p.display),

@@ -1905,6 +1905,13 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         P::TransformStyle => keyword_choice(t, "flat preserve-3d"),
         P::BackfaceVisibility => keyword_choice(t, "visible hidden"),
         P::Isolation => keyword_choice(t, "auto isolate"),
+        P::WebkitBoxPack => keyword_choice(t, "start end center justify"),
+        P::WebkitBoxAlign => keyword_choice(t, "start end center baseline stretch"),
+        P::WebkitBoxDirection => keyword_choice(t, "normal reverse"),
+        P::WebkitBoxFlex | P::WebkitBoxOrdinalGroup => {
+            let n = core::str::from_utf8(t).ok()?.trim().parse::<f64>().ok()?;
+            (n >= 0.0).then(|| Value::keyword(t.trim_ascii().to_vec()))
+        }
         P::Clip => clip_rect(t),
         P::Color
         | P::BackgroundColor
