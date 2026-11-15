@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-brotli-decompressor = { version = "5", default-features = false, features = ["std"] }
+brotli-decompressor = { version = "6", default-features = false, features = ["std"] }
 miniz_oxide = "0.9"
 
 [lints]

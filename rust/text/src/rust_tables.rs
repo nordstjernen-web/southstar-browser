@@ -2,10 +2,14 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 
+use std::cmp::Ordering;
+
 use harfrust::{Language, Script, Tag};
 use read_fonts::TableProvider;
+use read_fonts::array::ComputedArray;
 use read_fonts::tables::gdef::CaretValue;
 use read_fonts::tables::layout::DeviceOrVariationIndex;
+use read_fonts::tables::mvar::ValueRecord;
 use read_fonts::tables::variations::{DeltaSetIndex, ItemVariationStore};
 use read_fonts::types::GlyphId16;
 
@@ -67,6 +71,21 @@ enum Axis {
 
 fn tag(name: &[u8; 4]) -> Tag {
     Tag::new(name)
+}
+
+fn mvar_record(records: &ComputedArray<'_, ValueRecord>, wanted: Tag) -> Option<ValueRecord> {
+    let mut low = 0;
+    let mut high = records.len();
+    while low < high {
+        let middle = low + (high - low) / 2;
+        let record = records.get(middle).ok()?;
+        match record.value_tag().cmp(&wanted) {
+            Ordering::Less => low = middle + 1,
+            Ordering::Greater => high = middle,
+            Ordering::Equal => return Some(record),
+        }
+    }
+    None
 }
 
 fn em_mult(value: i16, mult: i64) -> i32 {
@@ -176,12 +195,9 @@ impl ShaperFace {
         let Ok(mvar) = self.font().tables().mvar() else {
             return 0.;
         };
-        let records = mvar.value_records();
-        let Ok(found) = records.binary_search_by(|record| record.value_tag().cmp(&tag(metric)))
-        else {
+        let Some(record) = mvar_record(&mvar.value_records(), tag(metric)) else {
             return 0.;
         };
-        let record = &records[found];
         mvar.item_variation_store()
             .and_then(Result::ok)
             .map_or(0., |store| {
