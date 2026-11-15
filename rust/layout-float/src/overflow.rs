@@ -141,6 +141,7 @@ pub fn box_establishes_bfc(b: BoxRef<'_>) -> bool {
         || style_is_multicol(style)
         || style_is_flex_container(style_of(b))
         || style_is_grid_container(style)
+        || southstar_layout_geom::style_contains_layout(style)
     {
         return true;
     }
