@@ -1482,6 +1482,12 @@ fn bg_layer_origin_area(
         }
         _ => {}
     }
+    if b.scrolls() && bg_layer_keyword(s, P::BackgroundAttachment, li) == Some(b"local") {
+        x -= b.scroll_x();
+        y -= b.scroll_y();
+        w += b.scroll_max_x();
+        h += b.scroll_max_y();
+    }
     if w < 1.0 {
         w = 1.0;
     }
