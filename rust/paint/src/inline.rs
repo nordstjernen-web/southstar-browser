@@ -6,7 +6,7 @@ use core::f64::consts::{FRAC_PI_2, PI};
 use core::ffi::{CStr, c_int};
 use core::ops::Range;
 
-use southstar_cairo::{Context, ContextRef, Format, LineCap, Matrix, Pattern, Surface};
+use southstar_cairo::{Context, ContextRef, Format, LineCap, LineJoin, Matrix, Pattern, Surface};
 use southstar_dom::{Kind as NodeKind, Node};
 use southstar_layout::{BoxRef, InlineAttr, inline_kind as k};
 use southstar_layout_geom::inline_text_indent_px;
@@ -1895,6 +1895,46 @@ fn layout_range_path(
     }
 }
 
+fn text_stroke(s: Option<StyleRef<'_>>) -> Option<(f64, Rgba)> {
+    let width = match get(s, P::WebkitTextStrokeWidth) {
+        Some(v) if v.kind() == Kind::Keyword => match v.keyword_text().map(CStr::to_bytes) {
+            Some(b"thin") => 1.0,
+            Some(b"medium") => 3.0,
+            Some(b"thick") => 5.0,
+            _ => 0.0,
+        },
+        Some(v) => inline_control_dim_px(Some(v), 16.0, 0.0),
+        None => 0.0,
+    };
+    if width <= 0.0 {
+        return None;
+    }
+    let text = rgba_of(get(s, P::Color), Rgba::new(0.0, 0.0, 0.0, 1.0));
+    let color = match get(s, P::WebkitTextStrokeColor).and_then(ValueRef::color) {
+        Some(c) => Rgba::from_bytes(c),
+        None => text,
+    };
+    Some((width, color))
+}
+
+fn paint_order_strokes_first(s: Option<StyleRef<'_>>) -> bool {
+    get(s, P::PaintOrder)
+        .and_then(ValueRef::keyword_text)
+        .is_some_and(|k| k.to_bytes().trim_ascii().starts_with(b"stroke"))
+}
+
+fn paint_text_stroke(cr: ContextRef, layout: &Layout, at: (f64, f64), stroke: (f64, Rgba)) {
+    let (width, color) = stroke;
+    cr.save();
+    cr.new_path();
+    layout_range_path(cr, layout, at.0, at.1, 0..c_int::MAX);
+    color.set_source(cr);
+    cr.set_line_width(width);
+    cr.set_line_join(LineJoin::Round);
+    cr.stroke();
+    cr.restore();
+}
+
 pub fn text_path(cr: ContextRef, b: BoxRef<'_>) {
     if b.text().is_none_or(|t| t.is_empty()) || b.vertical_wm() != 0 {
         return;
@@ -1943,6 +1983,11 @@ pub fn paint_inline(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     if let Some(run) = sel_run {
         paint_selection_background(cr, b, &layout, text_x, y_origin, run);
     }
+    let stroke = text_stroke(s);
+    let stroke_first = paint_order_strokes_first(s);
+    if stroke_first && let Some(stroke) = stroke {
+        paint_text_stroke(cr, &layout, (text_x, y_origin), stroke);
+    }
     cr.save();
     color.set_source(cr);
     if !paint_inline_lines_at_layout_heights(cr, b, &layout, text_x) {
@@ -1950,6 +1995,9 @@ pub fn paint_inline(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         layout.show(cr);
     }
     cr.restore();
+    if !stroke_first && let Some(stroke) = stroke {
+        paint_text_stroke(cr, &layout, (text_x, y_origin), stroke);
+    }
     if let Some(run) = sel_run {
         paint_selection_foreground(cr, b, &layout, text_x, y_origin, run);
     }

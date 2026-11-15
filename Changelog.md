@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `-webkit-text-stroke` outlines text (with `-webkit-text-fill-color:
+  transparent` for hollow lettering), and `paint-order: stroke` draws the
+  outline under the fill.
 * `font-variant-numeric` (old-style, lining, tabular, proportional
   figures, fractions, ordinals, slashed zero), `font-variant-position`,
   the remaining `font-variant-caps` values, `font-variant-east-asian` and
