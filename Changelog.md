@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `background-blend-mode` blends each background layer with the layers and
+  background colour below it, and `isolation: isolate` keeps a
+  `mix-blend-mode` descendant from blending with what lies behind its
+  isolated ancestor.
 * `text-decoration-thickness` and `text-underline-offset` are painted, and
   the `text-decoration` shorthand takes a thickness (`underline 4px blue`).
   Dotted, dashed and custom-sized decorations take the decorated text's

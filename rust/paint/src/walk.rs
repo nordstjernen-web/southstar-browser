@@ -675,7 +675,11 @@ pub fn blend_mode_operator(s: Option<StyleRef<'_>>) -> Operator {
     else {
         return Operator::Over;
     };
-    match k.to_bytes() {
+    blend_operator(k.to_bytes())
+}
+
+pub fn blend_operator(mode: &[u8]) -> Operator {
+    match mode {
         b"multiply" => Operator::Multiply,
         b"screen" => Operator::Screen,
         b"overlay" => Operator::Overlay,
@@ -1070,7 +1074,9 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let blend = blend_mode_operator(style);
     let mask_grad = mask_layers_paintable(style);
     let element_filter = filter::element_filter(b);
-    let grouped = op < 0.999 || blend != Operator::Over || mask_grad || element_filter.is_some();
+    let isolated = keyword_is(get(style, P::Isolation), c"isolate");
+    let grouped =
+        op < 0.999 || blend != Operator::Over || mask_grad || element_filter.is_some() || isolated;
     let (mut sticky_dx, mut sticky_dy) = compute_sticky_offset(b, cr);
     if sticky_dx.is_nan() || sticky_dy.is_nan() {
         if debug_on() {

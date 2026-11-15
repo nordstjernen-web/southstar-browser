@@ -6,8 +6,8 @@ use core::f64::consts::PI;
 
 use southstar_anim::AnimatedColor;
 use southstar_cairo::{
-    Content, Context, ContextRef, Extend, FillRule, Filter, Format, Matrix, Pattern, Surface,
-    SurfaceRef,
+    Content, Context, ContextRef, Extend, FillRule, Filter, Format, Matrix, Operator, Pattern,
+    Surface, SurfaceRef,
 };
 use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr};
@@ -1372,6 +1372,25 @@ fn bg_layer_keyword(s: Option<StyleRef<'_>>, prop: P, li: i32) -> Option<&[u8]> 
         .map(|k| k.to_bytes())
 }
 
+fn background_blend_operators(s: Option<StyleRef<'_>>, layers: i32) -> Vec<Operator> {
+    let modes: Vec<&[u8]> = get(s, P::BackgroundBlendMode)
+        .filter(|v| v.kind() == Kind::Keyword)
+        .and_then(ValueRef::keyword_text)
+        .map(|k| {
+            k.to_bytes()
+                .split(|&c| c == b',')
+                .map(<[u8]>::trim_ascii)
+                .collect()
+        })
+        .unwrap_or_default();
+    (0..layers.max(0) as usize)
+        .map(|i| match modes.get(i % modes.len().max(1)) {
+            Some(mode) => crate::walk::blend_operator(mode),
+            None => Operator::Over,
+        })
+        .collect()
+}
+
 pub fn background_clips_to_text(s: Option<StyleRef<'_>>) -> bool {
     let layers = layer_count(get(s, P::BackgroundImage));
     bg_layer_keyword(s, P::BackgroundClip, (layers - 1).max(0)) == Some(b"text")
@@ -1546,6 +1565,11 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     if clip_to_text {
         cr.push_group();
     }
+    let blends = background_blend_operators(s, n_bg_layers);
+    let blended = blends.iter().any(|op| *op != Operator::Over);
+    if blended {
+        cr.push_group();
+    }
     let bg = rgba_anim(
         Some(b),
         ANIM_TARGET_BG_COLOR,
@@ -1602,7 +1626,9 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
                 pixelated: false,
                 font: FontUnits::of(s),
             };
+            cr.set_operator(blends[li as usize]);
             paint_bg_gradient_layer(cr, gr, &params, lpos, lclip, radii);
+            cr.set_operator(Operator::Over);
             continue;
         }
         if lv.kind() != Kind::Url {
@@ -1619,7 +1645,13 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
             pixelated: style_pixelated(s),
             font: FontUnits::of(s),
         };
+        cr.set_operator(blends[li as usize]);
         paint_bg_image_core(cr, Some(img), &params, lpos, lclip, radii);
+        cr.set_operator(Operator::Over);
+    }
+    if blended {
+        cr.pop_group_to_source();
+        cr.paint();
     }
     if clip_to_text {
         paint_clipped_to_text(cr, b, &cr.pop_group());
