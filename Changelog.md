@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Legacy `display: -webkit-box` layouts honour `-webkit-box-pack`,
+  `-webkit-box-align`, `-webkit-box-direction`, `-webkit-box-flex` and
+  `-webkit-box-ordinal-group`, mapped onto their flexbox equivalents.
 * `column-span: all` lets a heading or block span every column of a
   multi-column container; the content before and after it is balanced
   separately above and below it.

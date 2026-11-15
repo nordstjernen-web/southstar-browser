@@ -375,10 +375,15 @@ pub enum Prop {
     BackdropFilter,
     Isolation,
     ContainIntrinsicSize,
+    WebkitBoxPack,
+    WebkitBoxAlign,
+    WebkitBoxDirection,
+    WebkitBoxFlex,
+    WebkitBoxOrdinalGroup,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 367] = [
+    pub(crate) const ALL: [Prop; 372] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -746,6 +751,11 @@ impl Prop {
         Prop::BackdropFilter,
         Prop::Isolation,
         Prop::ContainIntrinsicSize,
+        Prop::WebkitBoxPack,
+        Prop::WebkitBoxAlign,
+        Prop::WebkitBoxDirection,
+        Prop::WebkitBoxFlex,
+        Prop::WebkitBoxOrdinalGroup,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1211,6 +1221,11 @@ impl Prop {
             Prop::BackdropFilter => c"backdrop-filter",
             Prop::Isolation => c"isolation",
             Prop::ContainIntrinsicSize => c"contain-intrinsic-size",
+            Prop::WebkitBoxPack => c"-webkit-box-pack",
+            Prop::WebkitBoxAlign => c"-webkit-box-align",
+            Prop::WebkitBoxDirection => c"-webkit-box-direction",
+            Prop::WebkitBoxFlex => c"-webkit-box-flex",
+            Prop::WebkitBoxOrdinalGroup => c"-webkit-box-ordinal-group",
         }
     }
 }

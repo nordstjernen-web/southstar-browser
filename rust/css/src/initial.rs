@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 292] = [
+const INITIALS: [(&[u8], &CStr); 297] = [
     (b"anchor-name", c"none"),
     (b"anchor-scope", c"none"),
     (b"position-anchor", c"normal"),
@@ -275,6 +275,11 @@ const INITIALS: [(&[u8], &CStr); 292] = [
     (b"row-rule-width", c"3px"),
     (b"line-clamp", c"none"),
     (b"-webkit-box-orient", c"horizontal"),
+    (b"-webkit-box-pack", c"start"),
+    (b"-webkit-box-align", c"stretch"),
+    (b"-webkit-box-direction", c"normal"),
+    (b"-webkit-box-flex", c"0"),
+    (b"-webkit-box-ordinal-group", c"1"),
     (b"mask-clip", c"border-box"),
     (b"mask-composite", c"add"),
     (b"text-decoration", c"none"),
