@@ -465,6 +465,66 @@ fn flow_height(c: BoxRef<'_>) -> f64 {
     }
 }
 
+fn is_column_spanner(c: BoxRef<'_>) -> bool {
+    c.kind() == BoxKind::Block
+        && style_of(c)
+            .and_then(|s| s.get(PropId::ColumnSpan))
+            .is_some_and(|v| v.is_keyword(c"all"))
+}
+
+struct Segment {
+    x: f64,
+    y: f64,
+    column_step: f64,
+    columns: i32,
+}
+
+fn balance_segment(segment: &[BoxRef<'_>], at: &Segment) -> f64 {
+    let total_h: f64 = segment.iter().map(|c| flow_height(*c)).sum();
+    let target_h = total_h / f64::from(at.columns);
+    let (mut cur_y, mut max_col_h, mut cur_col) = (0.0, 0.0_f64, 0);
+    for &c in segment {
+        let c_full_h = flow_height(c);
+        if cur_col < at.columns - 1 && cur_y > 0.0 && cur_y + c_full_h > target_h {
+            cur_col += 1;
+            cur_y = 0.0;
+        }
+        let dx = at.x + f64::from(cur_col) * at.column_step - c.x();
+        let dy = at.y + cur_y - c.y();
+        if dx != 0.0 || dy != 0.0 {
+            shift_box_tree(c, dx, dy);
+        }
+        cur_y += c_full_h;
+        max_col_h = max_col_h.max(cur_y);
+    }
+    max_col_h
+}
+
+fn distribute_with_spanners(b: BoxRef<'_>, cols: &Columns<'_>, cw: f64, flow: (f64, f64)) -> f64 {
+    let mut at = Segment {
+        x: flow.0,
+        y: flow.1,
+        column_step: cw + cols.gap,
+        columns: cols.n,
+    };
+    let mut segment = Vec::new();
+    for c in children(b) {
+        if !is_column_spanner(c) {
+            segment.push(c);
+            continue;
+        }
+        at.y += balance_segment(&segment, &at);
+        segment.clear();
+        let dy = at.y - c.y();
+        if dy != 0.0 {
+            shift_box_tree(c, flow.0 - c.x(), dy);
+        }
+        at.y += c.margin().top + flow_height(c) + c.margin().bottom;
+    }
+    at.y += balance_segment(&segment, &at);
+    at.y - flow.1
+}
+
 fn distribute_columns(
     b: BoxRef<'_>,
     cols: &Columns<'_>,
@@ -474,6 +534,12 @@ fn distribute_columns(
     cursor_y: &mut f64,
 ) {
     let n_cols = cols.n;
+    if cols.host.is_none() && children(b).any(is_column_spanner) {
+        let height = distribute_with_spanners(b, cols, cw, (inner_x, inner_y));
+        b.set_content_width(cw * f64::from(n_cols) + cols.gap * f64::from(n_cols - 1));
+        *cursor_y = inner_y + height;
+        return;
+    }
     let host = cols.host.unwrap_or(b);
     let first = cols.host.and_then(|h| h.first_child());
     let flow_x = first.map_or(inner_x, |f| f.x());
@@ -570,7 +636,14 @@ pub fn layout_flow(
         if floating {
             flow.place_float(c, fside, clr);
         } else {
-            if matches!(c.kind(), BoxKind::Block | BoxKind::Table) || is_block_level_replaced(c) {
+            if cols.n > 1 && is_column_spanner(c) {
+                let column_width = flow.cw;
+                flow.cw = content.cw;
+                flow.place_block(c, clr);
+                flow.cw = column_width;
+            } else if matches!(c.kind(), BoxKind::Block | BoxKind::Table)
+                || is_block_level_replaced(c)
+            {
                 flow.place_block(c, clr);
             } else {
                 flow.place_inline(c);
