@@ -10,7 +10,8 @@ supported. [CSS-compatibility.md](CSS-compatibility.md) is the module-by-module
 map with the details, and [HTML-compatibility.md](HTML-compatibility.md) covers
 HTML.
 
-Snapshot: 2026-11-15.
+Snapshot: 2026-11-15. Of the template's 254 rows, 186 are ✅, 15 ⚠️ and 53 ❌
+(Blitz's own page shows about 136 ✅ on the same rows).
 
 **Legend:** ✅ supported · ⚠️ partial · 🚧 in progress · ❌ not supported
 (❌ *parsed* means the value is accepted, cascaded and serialized but not
@@ -44,7 +45,7 @@ rendered).
 | `cursor` (keyword) | ✅ | resolved at the hovered point, `auto` per UI 4 |
 | `cursor` (custom image) | ❌ | `url(...)` falls back to its keyword |
 | `content` string | ✅ | also `attr()` and quotes |
-| `content` image | ❌ | |
+| `content` image | ✅ | a single `url()`, inline, inline-block or block, on inline and block hosts |
 | `content` gradient | ❌ | |
 | `content` counter | ✅ | `counter()` / `counters()` |
 | `float` | ✅ | |
@@ -61,13 +62,13 @@ rendered).
 | `opacity` | ✅ | |
 | `visibility` | ✅ | `visible` / `hidden` / `collapse` |
 | `contain: layout` | ❌ | parsed |
-| `contain: paint` | ❌ | parsed |
+| `contain: paint` | ✅ | clips to the padding box (also `content`, `strict`) |
 | `contain: style` | ❌ | parsed |
-| `contain: size` | ❌ | parsed (`content-visibility: hidden` applies size containment) |
+| `contain: size` | ✅ | height ignores the contents, from `contain-intrinsic-size` or zero (also `strict`) |
 | `contain: inline-size` | ❌ | parsed; container queries use `container-type` |
-| `isolation` | ❌ | parsed |
+| `isolation` | ✅ | `isolate` paints the box as a group, so descendant blend modes stay inside it |
 | `content-visibility` | ⚠️ | `hidden` works; `auto` does not skip off-screen content |
-| `contain-intrinsic-size` | ❌ | |
+| `contain-intrinsic-size` | ⚠️ | the height used by size containment; `auto` is accepted and ignored, the width is not used |
 
 ## Clipping & masking
 
@@ -162,13 +163,13 @@ rendered).
 | `line-clamp` | ✅ | and `-webkit-line-clamp` |
 | `overflow-wrap` / `word-wrap` | ✅ | |
 | `text-indent` | ✅ | |
-| `text-wrap-style` | ❌ | parsed; `balance` / `pretty` wrap greedily |
+| `text-wrap-style` | ✅ | `balance` (up to ten lines) and `pretty` (no lone last word) |
 | `text-decoration-line` | ✅ | |
-| `text-underline-offset` | ❌ | parsed |
+| `text-underline-offset` | ✅ | lengths, em and percentages of the decorated text's font size |
 | `hyphens` | ✅ | `auto` hyphenates by the element's language |
 | `text-decoration-color` | ✅ | |
 | `text-decoration-style` | ✅ | solid, double, dotted, dashed, wavy |
-| `text-decoration-thickness` | ❌ | parsed |
+| `text-decoration-thickness` | ✅ | also in the `text-decoration` shorthand |
 | `tab-size` | ✅ | |
 | `word-spacing` | ✅ | |
 | `-webkit-text-fill-color` | ✅ | |
@@ -192,7 +193,7 @@ rendered).
 | `background-position` | ✅ | |
 | `background-size` | ✅ | |
 | `background-repeat` | ✅ | |
-| `background-clip` | ⚠️ | `border-box` / `padding-box` / `content-box`; `text` falls back to `border-box` |
+| `background-clip` | ✅ | `border-box` / `padding-box` / `content-box` / `text` |
 | `background-origin` | ✅ | |
 | `background-attachment: scroll` | ✅ | |
 | `background-attachment: fixed` | ✅ | |
@@ -263,19 +264,19 @@ rendered).
 | Feature | Status | Notes |
 |---------|:--:|-------|
 | Transitions | ✅ | honours `prefers-reduced-motion` |
-| Animations | ⚠️ | `@keyframes` with every timing function, direction and fill mode; only opacity, transform and colour properties animate |
+| Animations | ✅ | `@keyframes` on any animatable property, every timing function, direction and fill mode |
 
 ## Composition & effects
 
 | Feature | Status | Notes |
 |---------|:--:|-------|
 | `box-shadow` | ✅ | inset and multiple shadows |
-| `filter` | ⚠️ | every filter function on images and on transformed layers; not on arbitrary element subtrees |
+| `filter` | ✅ | every filter function on any element; `url()` SVG filters are not applied |
 | `outline` | ✅ | with `outline-offset` |
 | `text-shadow` | ✅ | |
-| `backdrop-filter` | ❌ | parsed |
+| `backdrop-filter` | ✅ | colour filters and `blur()` over the page behind the border box, with `-webkit-` alias |
 | `mix-blend-mode` | ✅ | |
-| `background-blend-mode` | ❌ | parsed |
+| `background-blend-mode` | ✅ | |
 
 ## Lists
 
@@ -343,7 +344,7 @@ these are read from presentation attributes and from CSS.
 
 | Feature | Status | Notes |
 |---------|:--:|-------|
-| `scroll-behavior` | ❌ | parsed; scrolls are instant |
+| `scroll-behavior` | ✅ | `smooth` glides script, `scrollIntoView` and anchor scrolls of the page; also `behavior: 'smooth'` in `scrollTo`/`scrollBy` |
 | `overscroll-behavior` | ❌ | parsed |
 | `scroll-snap-type` | ✅ | |
 | `scroll-snap-align` | ✅ | |
