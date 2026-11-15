@@ -760,12 +760,13 @@ the feature and observing the result. Treat this file as a living map
 and update it whenever behaviour changes.
 
 Interaction can be scripted in headless mode with `--act`, a
-`;`-separated list of `click X,Y`, `drag X,Y X,Y`, `type TEXT`,
-`key NAME`, and `wait N`
+`;`-separated list of `click X,Y`, `dblclick X,Y`, `drag X,Y X,Y`,
+`type TEXT`, `key NAME`, and `wait N`
 (`Enter`/`Backspace`/`Delete`/`Left`/`Right`/`Up`/`Down`/`Home`/`End`)
 steps run after the page settles, before the dump. `wait` settles the main
 loop for `N` milliseconds. The clicks drive the
-real hit-test, focus, checkbox/radio toggling, `<label>`→control
+real hit-test, focus, the caret position a click picks in a text field
+(a `dblclick` selects the word under it), checkbox/radio toggling, `<label>`→control
 activation, `<summary>` disclosure of `<details>`, link navigation,
 native HTML drag-and-drop dispatch, and JS `click`/`input`/`change`
 dispatch; `type` honours `maxlength` and filters `type=number` input,

@@ -275,6 +275,7 @@ pub mod inline_kind {
     pub const SPACER: c_uint = 29;
     pub const SPELLCHECK: c_uint = 30;
     pub const NO_WRAP: c_uint = 31;
+    pub const FIELD_VALUE: c_uint = 32;
 }
 
 #[derive(Clone)]
@@ -292,6 +293,8 @@ pub struct InlineAttr {
     pub box_w: f64,
     pub box_h: f64,
     pub native_chrome: bool,
+    pub value_start: usize,
+    pub split_offset: usize,
     pub r: u8,
     pub g: u8,
     pub b: u8,
@@ -319,6 +322,8 @@ impl InlineAttr {
             box_w: 0.0,
             box_h: 0.0,
             native_chrome: false,
+            value_start: 0,
+            split_offset: 0,
             r: 0,
             g: 0,
             b: 0,
@@ -345,6 +350,11 @@ impl InlineAttr {
 
     pub fn with_family(mut self, family: Option<&CStr>) -> InlineAttr {
         self.family = shared_cstr(family);
+        self
+    }
+
+    pub fn with_value_start(mut self, value_start: usize) -> InlineAttr {
+        self.value_start = value_start;
         self
     }
 

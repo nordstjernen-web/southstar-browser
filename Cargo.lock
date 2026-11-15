@@ -2053,6 +2053,7 @@ dependencies = [
  "southstar-pdf-viewer",
  "southstar-renderer-client",
  "southstar-renderer-host",
+ "southstar-selection",
  "southstar-style",
  "southstar-svg",
  "southstar-unicode",
@@ -3530,6 +3531,7 @@ dependencies = [
 name = "southstar-selection"
 version = "1.0.10-dev"
 dependencies = [
+ "southstar-dom",
  "southstar-layout",
  "southstar-style",
 ]

@@ -40,7 +40,7 @@ pub fn prune_cached_nodes(b: &NsBrowser) {
     if b.doc().is_none() {
         return;
     }
-    for slot in [&b.press_node, &b.hover_node, &b.open_select] {
+    for slot in [&b.press_node, &b.field_press, &b.hover_node, &b.open_select] {
         if slot.get().is_some_and(|n| !node_alive(b, n)) {
             slot.set(None);
         }

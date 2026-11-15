@@ -26,7 +26,18 @@ Southstar Browser 1.0.10-dev:
   scrolls: setting `scrollTop` on it used to be ignored. Content scrolled
   far into a scroll container is painted (it was culled against the
   unscrolled position), and headless runs keep element scroll offsets
-  across a relayout as the browser window does.* No crates.io crate is built in two versions any more, except
+  across a relayout as the browser window does.
+* The mouse edits text fields as in other browsers. A click in an
+  `<input>` or `<textarea>` puts the caret under the pointer instead of
+  at the end of the value; dragging selects the text it crosses, also
+  across textarea lines and past either end of the field; a double-click
+  selects the word (the whole value of a password field) and a
+  triple-click the whole value; shift-click extends the selection. Layout
+  marks the shown part of a field's value (`FIELD_VALUE`, with the value
+  offset it starts at), and southstar-selection maps a point on it back to
+  a value offset through the shaped text, so a scrolled single-line input,
+  bullets and textarea line breaks map correctly. Headless runs place the
+  caret the same way, and `--act` gains `dblclick X,Y`.
 * The new tab page, about:southstar and the Settings page are translated
   through the UI catalogues (`data/i18n/*.lang`), and their `<html lang>`
   names the catalogue's language. German, Spanish, French, Italian,
