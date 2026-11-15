@@ -274,6 +274,21 @@ struct ManualDecoration<'a> {
     style: &'a [u8],
     thickness: Option<ValueRef<'a>>,
     offset: Option<ValueRef<'a>>,
+    under: bool,
+}
+
+const DESCENT_EM: f64 = 0.22;
+
+fn underline_under(r: &InlineAttr, s: Option<StyleRef<'_>>) -> bool {
+    r.kind == k::UNDERLINE
+        && decoration_value(Some(r), s, P::TextUnderlinePosition)
+            .filter(|v| v.kind() == Kind::Keyword)
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|k| {
+                k.to_bytes()
+                    .split(u8::is_ascii_whitespace)
+                    .any(|w| w == b"under")
+            })
 }
 
 fn manual_decoration<'a>(
@@ -285,12 +300,14 @@ fn manual_decoration<'a>(
     let offset = (r.kind == k::UNDERLINE)
         .then(|| decoration_length_value(r, s, P::TextUnderlineOffset))
         .flatten();
+    let under = underline_under(r, s);
     let dashed = matches!(style, b"dotted" | b"dashed");
-    let custom = (thickness.is_some() || offset.is_some()) && style != b"wavy";
+    let custom = (thickness.is_some() || offset.is_some() || under) && style != b"wavy";
     (dashed || custom).then_some(ManualDecoration {
         style,
         thickness,
         offset,
+        under,
     })
 }
 
@@ -360,6 +377,9 @@ fn paint_inline_dashed_decorations(
                 let uy = match r.kind {
                     k::STRIKETHROUGH => base_y - em * 0.28,
                     k::OVERLINE => base_y - em * 0.78 - thick / 2.0,
+                    _ if md.under => {
+                        base_y + em * DESCENT_EM + offset.map_or(thick, |o| o + thick / 2.0)
+                    }
                     _ => base_y + offset.map_or(thick * 1.5, |o| o + thick / 2.0),
                 };
                 cr.save();

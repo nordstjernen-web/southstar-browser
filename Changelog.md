@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `text-underline-position: under` puts underlines below the descenders,
+  and `text-underline-offset` measures from there.
 * `-webkit-text-stroke` outlines text (with `-webkit-text-fill-color:
   transparent` for hollow lettering), and `paint-order: stroke` draws the
   outline under the fill.
