@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* The shell resolves its own path, a file given on the command line and
+  its file: URL in Rust instead of through g_find_program_in_path,
+  g_canonicalize_filename and g_filename_to_uri, which brings it back under
+  its unsafe budget. Dependencies only a cargo feature or Linux uses
+  (southstar-av in the audio helper, southstar-glib in spell checking,
+  southstar-image in the camera) are optional or Linux-only, so cargo no
+  longer reports them unused.
 * No crates.io crate is built in two versions any more, except
   miniz_oxide, which the png crate itself uses in two. The Boa fork
   replaced dashmap, num_enum, rand, futures-concurrency, dynify, aligned-vec
