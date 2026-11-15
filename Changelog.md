@@ -18,6 +18,12 @@ Southstar Browser 1.0.10-dev:
   dialogs render. A fixed or sticky element with a backdrop filter is
   painted with the page rather than as a separate viewport layer, so its
   backdrop is the page under it.
+* Web fonts no longer lose thin strokes: cairo draws each glyph at a
+  sub-pixel offset, which cut off up to three quarters of a pixel on the
+  right of glyphs from the pure-Rust font path, so hairline stems vanished
+  ("d" drawn as "c", "l" and "i" missing) in light display weights such as
+  Roboto Flex at a large optical size. The glyph box cairo renders into is
+  now a device pixel larger on each side.
 * CSS `filter` applies to every element, not only images: the element and
   its descendants are painted as a group and the colour filters, `blur()`
   (scaled to device pixels) and `drop-shadow()` run over that group.

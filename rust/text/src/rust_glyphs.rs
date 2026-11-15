@@ -538,6 +538,16 @@ fn scale_extents(extents: TextExtents, scale: f64) -> TextExtents {
     }
 }
 
+fn pad_for_subpixel_phase(extents: TextExtents, device_pixel: f64) -> TextExtents {
+    TextExtents {
+        x_bearing: extents.x_bearing - device_pixel,
+        y_bearing: extents.y_bearing - device_pixel,
+        width: extents.width + 2. * device_pixel,
+        height: extents.height + 2. * device_pixel,
+        ..extents
+    }
+}
+
 fn em_scale(source: &GlyphSource) -> f64 {
     let ppem = f64::from(source.settings.ppem);
     if ppem > 0. { 1. / ppem } else { 0. }
@@ -589,6 +599,7 @@ impl UserFontHandler for OutlineRenderer {
         let scale = em_scale(&self.source);
         *extents = scale_extents(glyph_extents, scale);
         if !outline.is_empty() {
+            *extents = pad_for_subpixel_phase(*extents, scale);
             outline.draw(cr, scale);
             cr.fill();
         }
