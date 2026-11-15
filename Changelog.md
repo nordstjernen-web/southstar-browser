@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* CSS `filter` applies to every element, not only images: the element and
+  its descendants are painted as a group and the colour filters, `blur()`
+  (scaled to device pixels) and `drop-shadow()` run over that group.
 * `docs/css-status.md` rates Southstar's CSS support row by row on the
   template of Blitz's CSS status page, checked against the engine source.
 * The README shows docs.rs and deps.rs status badges. The workspace lists

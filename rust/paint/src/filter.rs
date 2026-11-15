@@ -6,8 +6,8 @@ use core::ffi::CStr;
 use std::ffi::CString;
 
 use southstar_cairo::{Context, ContextRef, Format, Operator, Surface, SurfaceRef};
-use southstar_layout::BoxRef;
-use southstar_style::{PropId as P, parse_color};
+use southstar_layout::{BoxKind, BoxRef};
+use southstar_style::{Kind, PropId as P, ValueRef, parse_color};
 
 use crate::blur::box_blur_argb;
 use crate::ffi::engine;
@@ -362,6 +362,112 @@ enum Op {
 }
 
 pub fn apply_image_filter(data: &mut [u8], stride: i32, w: i32, h: i32, filter: Option<&CStr>) {
+    apply_scaled_image_filter(data, stride, w, h, filter, 1.0);
+}
+
+pub fn element_filter(b: BoxRef<'_>) -> Option<&CStr> {
+    if matches!(b.kind(), BoxKind::Image | BoxKind::Video) {
+        return None;
+    }
+    let filter = style_of(b)?
+        .get(P::Filter)
+        .filter(|v| v.kind() == Kind::Keyword)
+        .and_then(ValueRef::keyword_text)?;
+    let has_shadow = filter
+        .to_bytes()
+        .windows(11)
+        .any(|w| w.eq_ignore_ascii_case(b"drop-shadow"));
+    (has_shadow || filter_has_bitmap_effect(Some(filter))).then_some(filter)
+}
+
+pub fn device_scale(cr: ContextRef) -> f64 {
+    let [xx, yx, xy, yy, _, _] = cr.matrix().to_array();
+    let det = (xx * yy - yx * xy).abs().sqrt();
+    if det.is_finite() && det > 0.0 {
+        det
+    } else {
+        1.0
+    }
+}
+
+fn copy_surface(src: SurfaceRef) -> Option<Surface> {
+    let (w, h) = (src.width(), src.height());
+    let copy = Surface::image(Format::Argb32, w, h)?;
+    src.with_data(|from, from_stride| {
+        copy.as_ref().with_data_mut(|to, to_stride| {
+            let row = (w as usize * 4).min(from_stride).min(to_stride);
+            for y in 0..h as usize {
+                to[y * to_stride..y * to_stride + row]
+                    .copy_from_slice(&from[y * from_stride..y * from_stride + row]);
+            }
+        })
+    })??;
+    Some(copy)
+}
+
+pub fn filter_group(cr: ContextRef, b: BoxRef<'_>, filter: &CStr) {
+    let target = cr.group_target();
+    let surf = target.as_ref();
+    let (w, h) = (surf.width(), surf.height());
+    if w <= 0 || h <= 0 {
+        return;
+    }
+    let k = device_scale(cr);
+    surf.with_data_mut(|data, stride| {
+        apply_scaled_image_filter(data, stride as i32, w, h, Some(filter), k);
+    });
+    let current = rgba_of(
+        style_of(b).and_then(|s| s.get(P::Color)),
+        Rgba::new(0.0, 0.0, 0.0, 1.0),
+    );
+    let shadows = parse_filter_drop_shadows(Some(filter), current, 4);
+    if shadows.is_empty() {
+        return;
+    }
+    let Some(source) = copy_surface(surf) else {
+        return;
+    };
+    let (off_x, off_y) = surf.device_offset();
+    let at = ShadowPlacement {
+        cw: w,
+        ch: h,
+        ox: 0.0,
+        oy: 0.0,
+        sx: 1.0,
+        sy: 1.0,
+    };
+    cr.save();
+    cr.identity_matrix();
+    cr.set_operator(Operator::DestOver);
+    for shadow in shadows {
+        let scaled = DropShadow {
+            x: shadow.x * k,
+            y: shadow.y * k,
+            blur: shadow.blur * k,
+            color: shadow.color,
+        };
+        let Some((shadow_surf, pad)) = drop_shadow_surface(source.as_ref(), &at, scaled) else {
+            continue;
+        };
+        let padf = f64::from(pad);
+        cr.set_source_surface(
+            shadow_surf.as_ref(),
+            scaled.x - off_x - padf,
+            scaled.y - off_y - padf,
+        );
+        cr.paint();
+    }
+    cr.restore();
+}
+
+fn apply_scaled_image_filter(
+    data: &mut [u8],
+    stride: i32,
+    w: i32,
+    h: i32,
+    filter: Option<&CStr>,
+    scale: f64,
+) {
     let Some(filter) = filter.map(CStr::to_bytes).filter(|f| !f.is_empty()) else {
         return;
     };
@@ -463,7 +569,7 @@ pub fn apply_image_filter(data: &mut [u8], stride: i32, w: i32, h: i32, filter: 
         }
     }
     if blur_radius > 0.0 {
-        let r = ((blur_radius + 0.5) as i32).min(512);
+        let r = ((blur_radius * scale + 0.5) as i32).min(512);
         box_blur_argb(data, stride, w, h, r);
     }
 }

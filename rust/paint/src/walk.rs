@@ -22,9 +22,9 @@ use crate::marker::paint_marker;
 use crate::mask::{mask_layers_paintable, mask_layers_pattern};
 use crate::media::{apply_box_content_clip, paint_image, paint_math, paint_svg, paint_video};
 use crate::radii::{border_box_size, box_border_radii, rounded_rect_path};
-use crate::three_d;
 use crate::util::{Rgba, get, keyword, keyword_is, length_or, rgba_of, style_keyword, style_of};
 use crate::{decor, state};
+use crate::{filter, three_d};
 
 pub const LAYERS_OFF: i32 = 0;
 pub const LAYERS_PLAN: i32 = 1;
@@ -1069,7 +1069,8 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     let op = box_opacity(b);
     let blend = blend_mode_operator(style);
     let mask_grad = mask_layers_paintable(style);
-    let grouped = op < 0.999 || blend != Operator::Over || mask_grad;
+    let element_filter = filter::element_filter(b);
+    let grouped = op < 0.999 || blend != Operator::Over || mask_grad || element_filter.is_some();
     let (mut sticky_dx, mut sticky_dy) = compute_sticky_offset(b, cr);
     if sticky_dx.is_nan() || sticky_dy.is_nan() {
         if debug_on() {
@@ -1455,6 +1456,9 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         cr.restore();
     }
     if grouped {
+        if let Some(f) = element_filter {
+            filter::filter_group(cr, b, f);
+        }
         cr.pop_group_to_source();
         let group_source = cr.source();
         let saved_op = cr.operator();
