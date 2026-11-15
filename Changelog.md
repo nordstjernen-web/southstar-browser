@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `contain: layout` (and `paint`, `content`, `strict`) makes a box an
+  independent formatting context that contains its floats and the
+  containing block of its fixed and absolute descendants; `filter` and
+  `backdrop-filter` also contain fixed descendants, as the spec requires.
 * `field-sizing: content` sizes text inputs to their value or placeholder
   and textareas to their lines instead of the default 20 columns.
 * `overscroll-behavior: contain` (or `none`) stops a wheel scroll that

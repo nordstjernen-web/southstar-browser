@@ -561,7 +561,26 @@ pub fn style_creates_fixed_cb(s: Option<StyleRef<'_>>) -> bool {
             return true;
         }
     }
-    s.get(PropId::Perspective)
-        .and_then(ValueRef::length)
-        .is_some_and(|(v, _)| v > 0.0)
+    let filtered = [PropId::Filter, PropId::BackdropFilter]
+        .into_iter()
+        .any(|p| {
+            s.get(p)
+                .and_then(ValueRef::keyword_text)
+                .is_some_and(|k| !k.is_empty() && k.to_bytes() != b"none")
+        });
+    filtered
+        || style_contains_layout(Some(s))
+        || s.get(PropId::Perspective)
+            .and_then(ValueRef::length)
+            .is_some_and(|(v, _)| v > 0.0)
+}
+
+pub fn style_contains_layout(s: Option<StyleRef<'_>>) -> bool {
+    s.and_then(|s| s.get(PropId::Contain))
+        .and_then(ValueRef::keyword_text)
+        .is_some_and(|k| {
+            k.to_bytes()
+                .split(u8::is_ascii_whitespace)
+                .any(|w| matches!(w, b"layout" | b"paint" | b"strict" | b"content"))
+        })
 }
