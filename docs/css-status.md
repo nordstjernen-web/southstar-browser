@@ -10,7 +10,7 @@ supported. [CSS-compatibility.md](CSS-compatibility.md) is the module-by-module
 map with the details, and [HTML-compatibility.md](HTML-compatibility.md) covers
 HTML.
 
-Snapshot: 2026-11-15. Of the template's 254 rows, 199 are ✅, 12 ⚠️ and 43 ❌
+Snapshot: 2026-11-15. Of the template's 254 rows, 202 are ✅, 10 ⚠️ and 42 ❌
 (Blitz's own page shows about 136 ✅ on the same rows). Background images and
 gradients on `html` or `body` cover the whole canvas, as in other browsers.
 
@@ -52,7 +52,7 @@ rendered).
 | `float` | ✅ | |
 | `clear` | ✅ | |
 | `order` | ✅ | |
-| `zoom` | ❌ | parsed; the browser's page zoom is separate |
+| `zoom` | ⚠️ | lengths, borders, shadows and fonts scale by the effective zoom; images without a CSS size and transforms do not |
 | `all` | ✅ | |
 | `overflow-clip-margin` | ❌ | parsed |
 
@@ -68,14 +68,14 @@ rendered).
 | `contain: size` | ✅ | height ignores the contents, from `contain-intrinsic-size` or zero (also `strict`) |
 | `contain: inline-size` | ❌ | parsed; container queries use `container-type` |
 | `isolation` | ✅ | `isolate` paints the box as a group, so descendant blend modes stay inside it |
-| `content-visibility` | ⚠️ | `hidden` works; `auto` does not skip off-screen content |
+| `content-visibility` | ✅ | `auto` skips layout and paint of sections far from the viewport in the browser window |
 | `contain-intrinsic-size` | ⚠️ | the height used by size containment; `auto` is accepted and ignored, the width is not used |
 
 ## Clipping & masking
 
 | Feature | Status | Notes |
 |---------|:--:|-------|
-| `clip-path` | ⚠️ | `inset()`, `circle()`, `ellipse()`, `polygon()`, `xywh()`, `rect()` and geometry boxes; `path()` / `shape()` are not drawn |
+| `clip-path` | ✅ | every basic shape, `path()` and `shape()`, and geometry boxes |
 | `mask-image` | ✅ | `url()` and linear/radial gradients; conic masks are skipped |
 | `mask-position` | ✅ | |
 | `mask-repeat` | ✅ | |
@@ -143,7 +143,7 @@ rendered).
 |---------|:--:|-------|
 | `direction` | ✅ | drives bidi, `text-align: start/end`, flex row reversal |
 | `unicode-bidi` | ⚠️ | `isolate`, `bidi-override`, `isolate-override`, `plaintext` reach the UAX #9 resolver; overrides across element boundaries are partial |
-| `writing-mode` | ⚠️ | vertical text runs are measured and painted; orthogonal-flow box layout is limited |
+| `writing-mode` | ⚠️ | vertical blocks lay out as orthogonal flows; `vertical-lr` stacks multi-column text right to left, and flex containers are not rotated |
 | `text-orientation` | ⚠️ | `upright` stacks glyphs, `mixed` / `sideways` rotate the run |
 
 ## Text
@@ -363,7 +363,7 @@ these are read from presentation attributes and from CSS.
 | `appearance` | ⚠️ | `none` drops native form-control styling; other values parsed |
 | `will-change` | ❌ | parsed |
 | `text-rendering` | ❌ | parsed |
-| `color-scheme` | ⚠️ | the browser's light/dark setting drives `prefers-color-scheme` and `light-dark()`; the property itself does not switch UA colours |
+| `color-scheme` | ✅ | per element, with `<meta name="color-scheme">`: system colours, `light-dark()`, canvas, form controls and scrollbars |
 | `text-size-adjust` | ❌ | parsed |
 | `forced-color-adjust` | ❌ | parsed |
 | `overflow-anchor` | ❌ | parsed |
