@@ -13,7 +13,7 @@ homepage.workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-southstar-av = { path = "../av", version = "=1.0.10-dev", features = ["resample"] }
+southstar-av = { path = "../av", version = "=1.0.10-dev", features = ["resample"], optional = true }
 southstar-glib = { path = "../glib", version = "=1.0.10-dev" }
 southstar-helper-ffi = { path = "../helper-ffi", version = "=1.0.10-dev" }
 southstar-http = { path = "../http", version = "=1.0.10-dev" }
@@ -22,8 +22,8 @@ southstar-minimp3 = { path = "../minimp3", version = "=1.0.10-dev" }
 southstar-plmpeg = { path = "../plmpeg", version = "=1.0.10-dev" }
 
 [features]
-libav = []
-vorbisfile = []
+libav = ["dep:southstar-av"]
+vorbisfile = ["dep:southstar-av"]
 opusfile = []
 seccomp = ["southstar-helper-ffi/seccomp"]
 

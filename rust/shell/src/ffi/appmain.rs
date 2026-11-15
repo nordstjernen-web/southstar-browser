@@ -9,7 +9,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 
 use southstar_config::{NsConfig, Text};
-use southstar_glib::{GBoolean, GError, GStr, g_free, g_path_get_dirname};
+use southstar_glib::{GBoolean, GStr, g_free, g_path_get_dirname};
 
 use super::app::{ns_procapp_run, ns_procapp_set_window_size};
 #[cfg(any(windows, target_os = "macos"))]
@@ -47,13 +47,6 @@ const FILE_TEST_IS_DIR: c_uint = 1 << 2;
 
 unsafe extern "C" {
     fn g_setenv(variable: *const c_char, value: *const c_char, overwrite: GBoolean) -> GBoolean;
-    fn g_find_program_in_path(program: *const c_char) -> *mut c_char;
-    fn g_canonicalize_filename(filename: *const c_char, relative_to: *const c_char) -> *mut c_char;
-    fn g_filename_to_uri(
-        filename: *const c_char,
-        hostname: *const c_char,
-        error: *mut *mut GError,
-    ) -> *mut c_char;
     fn g_log_set_writer_func(
         func: GLogWriterFunc,
         user_data: *mut c_void,
@@ -154,18 +147,33 @@ fn path_is_absolute(path: &[u8]) -> bool {
     }
 }
 
+fn find_program_in_path(program: &CStr) -> Option<Vec<u8>> {
+    let program = std::path::Path::new(program.to_str().ok()?);
+    if program.components().count() > 1 {
+        return std::path::absolute(program)
+            .ok()
+            .filter(|path| path.is_file())
+            .map(|path| southstar_glib::path_bytes(&path));
+    }
+    let names: Vec<std::path::PathBuf> = if cfg!(windows) && program.extension().is_none() {
+        vec![program.with_extension("exe"), program.to_path_buf()]
+    } else {
+        vec![program.to_path_buf()]
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+        .find(|candidate| candidate.is_file())
+        .and_then(|candidate| std::path::absolute(candidate).ok())
+        .map(|candidate| southstar_glib::path_bytes(&candidate))
+}
+
 fn argv0_exe(argv0: &CStr) -> *mut c_char {
     let found = if path_is_absolute(argv0.to_bytes()) {
-        ptr::null_mut()
+        None
     } else {
-        // SAFETY: argv0 is NUL-terminated; GLib returns null or a newly allocated string.
-        unsafe { g_find_program_in_path(argv0.as_ptr()) }
+        find_program_in_path(argv0)
     };
-    if found.is_null() {
-        southstar_glib::strdup(argv0.to_bytes())
-    } else {
-        found
-    }
+    southstar_glib::strdup(found.as_deref().unwrap_or(argv0.to_bytes()))
 }
 
 fn init_self_exe(argv0: Option<&CStr>) {
@@ -470,19 +478,14 @@ fn add_screenshot_writable_dirs(args: &[&CStr]) {
     }
 }
 
-fn file_url_for(target: &CStr) -> Option<GStr> {
+fn file_url_for(target: &CStr) -> Option<CString> {
     if !appmain::is_local_path_candidate(target.to_bytes()) || !file_test(target, FILE_TEST_EXISTS)
     {
         return None;
     }
-    // SAFETY: target is NUL-terminated and a null base means the current directory.
-    let abs_path = unsafe { g_canonicalize_filename(target.as_ptr(), ptr::null()) };
-    // SAFETY: g_canonicalize_filename returns a newly allocated string, which GStr takes over.
-    let abs_path = unsafe { GStr::take(abs_path) }?;
-    // SAFETY: abs_path is an absolute, NUL-terminated file name; null hostname and error are allowed.
-    let uri = unsafe { g_filename_to_uri(abs_path.as_ptr(), ptr::null(), ptr::null_mut()) };
-    // SAFETY: g_filename_to_uri returns null or a newly allocated string, which GStr takes over.
-    unsafe { GStr::take(uri) }
+    let abs_path = southstar_netutil::file_uri::canonicalize_filename(target.to_bytes());
+    let uri = southstar_netutil::file_uri::filename_to_uri(&abs_path)?;
+    CString::new(uri).ok()
 }
 
 fn print_perf() {
