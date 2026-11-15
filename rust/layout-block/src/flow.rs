@@ -587,6 +587,22 @@ fn distribute_columns(
     }
 }
 
+const RELEVANCE_MARGIN: f64 = 0.5;
+
+fn skips_contents(b: BoxRef<'_>) -> bool {
+    let style = style_of(b);
+    if !southstar_layout_geom::content_visibility_auto(style) {
+        return false;
+    }
+    let Some((top, bottom)) = southstar_layout_geom::relevant_band() else {
+        return false;
+    };
+    let reach = (bottom - top) * RELEVANCE_MARGIN;
+    let y = b.y() + b.margin().top;
+    let height = crate::height::placeholder_height(b, style);
+    y > bottom + reach || y + height < top - reach
+}
+
 pub fn layout_flow(
     b: BoxRef<'_>,
     content: &ContentBox,
@@ -600,6 +616,11 @@ pub fn layout_flow(
     } else {
         b.margin().top
     };
+    b.set_skipped_contents(false);
+    if skips_contents(b) {
+        b.set_skipped_contents(true);
+        return content.inner_y;
+    }
     let cols = plan_columns(b, &mut cw, content.child_inherited);
     let mut floats = Vec::new();
     INHERITED_FLOATS.with_borrow(|inh| {

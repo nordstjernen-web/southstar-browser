@@ -141,6 +141,16 @@ pub fn relayout(b: &NsBrowser) {
         js.consume_mutated();
     }
     b.image_arrivals_since_layout.set(0);
+    southstar_layout_geom::begin_skip_tracking();
+    let view_h = if b.cur_viewport_h.get() > 0.0 {
+        b.cur_viewport_h.get()
+    } else {
+        b.vh.get()
+    };
+    let top = b.cur_scroll_y.get();
+    southstar_layout_geom::set_relevant_band(
+        (!southstar_css_media::print_media() && view_h > 0.0).then_some((top, top + view_h)),
+    );
     let mut scroll_save = HashMap::new();
     collect_scroll(b.layout(), &mut scroll_save);
     ffi::css_set_viewport(f64::from(b.vw.get()), b.vh.get());

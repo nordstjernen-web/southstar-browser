@@ -1895,6 +1895,7 @@ dependencies = [
  "southstar-js-window",
  "southstar-layout",
  "southstar-layout-build",
+ "southstar-layout-geom",
  "southstar-layout-hit",
  "southstar-layout-position",
  "southstar-layout-query",

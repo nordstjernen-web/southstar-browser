@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `content-visibility: auto` skips the layout and painting of sections
+  far from the viewport in the browser window: they take their height
+  from `contain-intrinsic-size` (or, with `auto`, the height they had
+  when last laid out) and are laid out as scrolling brings them near.
+  Headless dumps and printing still lay out everything.
 * CSS `zoom` scales an element and its subtree: lengths in px, rem and
   viewport units, borders, shadows and font sizes are multiplied by the
   element's effective zoom (nested zooms multiply), so a zoomed box lays

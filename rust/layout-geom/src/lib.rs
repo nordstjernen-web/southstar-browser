@@ -12,8 +12,10 @@ mod text;
 pub use hit::{node_is_form_hit_target, style_blocks_hit_testing};
 pub use text::{utf8_skip, vertical_stack_text};
 
+use core::cell::{Cell, RefCell};
 use core::ffi::CStr;
 use southstar_glib::{max as c_max, min as c_min};
+use std::collections::HashMap;
 
 use southstar_layout::{BoxRef, Edges};
 use southstar_style::{Display, Kind, PropId, StyleRef, ValueRef, box_style, display_of};
@@ -583,4 +585,50 @@ pub fn style_contains_layout(s: Option<StyleRef<'_>>) -> bool {
                 .split(u8::is_ascii_whitespace)
                 .any(|w| matches!(w, b"layout" | b"paint" | b"strict" | b"content"))
         })
+}
+
+thread_local! {
+    static RELEVANCE: Cell<bool> = const { Cell::new(false) };
+    static RELEVANT_BAND: Cell<Option<(f64, f64)>> = const { Cell::new(None) };
+    static SKIPPED: RefCell<Vec<(f64, f64)>> = const { RefCell::new(Vec::new()) };
+    static REMEMBERED: RefCell<HashMap<usize, f64>> = RefCell::new(HashMap::new());
+}
+
+pub fn enable_relevance() {
+    RELEVANCE.set(true);
+}
+
+pub fn set_relevant_band(band: Option<(f64, f64)>) {
+    RELEVANT_BAND.set(band.filter(|_| RELEVANCE.get()));
+}
+
+pub fn relevant_band() -> Option<(f64, f64)> {
+    RELEVANT_BAND.get()
+}
+
+pub fn begin_skip_tracking() {
+    SKIPPED.with_borrow_mut(Vec::clear);
+}
+
+pub fn note_skipped(top: f64, bottom: f64) {
+    SKIPPED.with_borrow_mut(|s| s.push((top, bottom)));
+}
+
+pub fn skipped_touches(top: f64, bottom: f64) -> bool {
+    SKIPPED.with_borrow(|s| s.iter().any(|&(t, b)| b >= top && t <= bottom))
+}
+
+pub fn remember_size(key: usize, height: f64) {
+    REMEMBERED.with_borrow_mut(|m| {
+        m.insert(key, height);
+    });
+}
+
+pub fn remembered_size(key: usize) -> Option<f64> {
+    REMEMBERED.with_borrow(|m| m.get(&key).copied())
+}
+
+pub fn content_visibility_auto(s: Option<StyleRef<'_>>) -> bool {
+    s.and_then(|s| s.get(PropId::ContentVisibility))
+        .is_some_and(|v| v.is_keyword(c"auto"))
 }

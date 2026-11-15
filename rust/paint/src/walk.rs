@@ -243,18 +243,20 @@ pub fn box_is_hidden(b: BoxRef<'_>) -> bool {
 }
 
 fn contains_paint(style: Option<StyleRef<'_>>) -> bool {
-    keyword(get(style, P::Contain)).is_some_and(|k| {
-        k.to_bytes()
-            .split(u8::is_ascii_whitespace)
-            .any(|w| matches!(w, b"paint" | b"strict" | b"content"))
-    })
+    southstar_layout_geom::content_visibility_auto(style)
+        || keyword(get(style, P::Contain)).is_some_and(|k| {
+            k.to_bytes()
+                .split(u8::is_ascii_whitespace)
+                .any(|w| matches!(w, b"paint" | b"strict" | b"content"))
+        })
 }
 
 pub fn box_skips_contents(b: BoxRef<'_>) -> bool {
-    get(style_of(b), P::ContentVisibility)
-        .filter(|v| v.kind() == Kind::Keyword)
-        .and_then(ValueRef::keyword_text)
-        .is_some_and(|k| k.to_bytes() == b"hidden")
+    b.skipped_contents()
+        || get(style_of(b), P::ContentVisibility)
+            .filter(|v| v.kind() == Kind::Keyword)
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|k| k.to_bytes() == b"hidden")
 }
 
 fn box_opacity(b: BoxRef<'_>) -> f64 {
