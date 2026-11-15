@@ -3,7 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
-* The README shows docs.rs and deps.rs status badges.
+* The README shows docs.rs and deps.rs status badges. The workspace lists
+  its crates by path, so deps.rs checks the dependencies of every crate in
+  the tree, and `cargo xtask build` stops when a crate is missing from it.
 * JavaScript engine: the Boa fork follows Boa's `main` branch (commit
   bea404d1 of 2026-11-10, 62 commits past the 0.22 release) instead of
   0.22. From upstream: `with` calls resolve their binding once,

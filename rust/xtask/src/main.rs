@@ -49,6 +49,33 @@ fn workspace_version(root: &Path) -> String {
         .unwrap_or_default()
 }
 
+fn unlisted_workspace_members(root: &Path) -> Vec<String> {
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).unwrap_or_default();
+    let Ok(crates) = std::fs::read_dir(root.join("rust")) else {
+        return Vec::new();
+    };
+    let mut unlisted: Vec<String> = crates
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().join("Cargo.toml").is_file())
+        .map(|entry| format!("rust/{}", entry.file_name().to_string_lossy()))
+        .filter(|member| !manifest.contains(&format!("\"{member}\"")))
+        .collect();
+    unlisted.sort();
+    unlisted
+}
+
+fn check_workspace_members(root: &Path) -> Result<(), String> {
+    let unlisted = unlisted_workspace_members(root);
+    if unlisted.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "add {} to the workspace members in Cargo.toml",
+            unlisted.join(", ")
+        ))
+    }
+}
+
 fn today_utc() -> String {
     let days = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -178,6 +205,7 @@ fn cargo_build(
 }
 
 fn run(options: &Options, root: &Path) -> Result<(), String> {
+    check_workspace_members(root)?;
     let configuration = detect::configure(options)?;
     if options.command == Command::Features {
         println!("{}", configuration.features.join(","));

@@ -231,7 +231,9 @@ stabilized after 1.95.
   dependency graph allows, and keeps `extern "C"` for the real boundaries:
   `rust/capi/include/libsouthstar.h`, GTK/Cairo/Pango callbacks, FFmpeg, OpenSSL, SDL and
   the other system libraries. A new crate is added to `rust/southstar-ffi`
-  (dependency plus `pub use`).
+  (dependency plus `pub use`) and to the workspace `members` in
+  `Cargo.toml`, which lists every crate by path so deps.rs can read the
+  workspace (`cargo xtask build` refuses to build while one is missing).
 - Southstar is published to crates.io, and `cargo install southstar`
   (`rust/southstar`) builds the browser from the published crates. The workspace's crates
   are not published one by one: `scripts/crates-io.py` merges them into the
