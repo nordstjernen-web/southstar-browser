@@ -288,6 +288,60 @@ fn layout_flex_or_grid(b: BoxRef<'_>, content: &ContentBox, pcw: f64, cursor_y: 
     false
 }
 
+fn orthogonal_inline_size(b: BoxRef<'_>, border_box: bool) -> f64 {
+    let (p, bd) = (b.padding(), b.border());
+    let extras = p.top + p.bottom + bd.top + bd.bottom;
+    let height = style_of(b)
+        .and_then(|s| s.get(PropId::Height))
+        .and_then(ValueRef::length)
+        .filter(|(_, unit)| *unit == southstar_style::UNIT_PX)
+        .map(|(v, _)| if border_box { v - extras } else { v });
+    if let Some(height) = height {
+        return height.max(1.0);
+    }
+    let available = (southstar_css::viewport().1 - extras).max(1.0);
+    southstar_layout_geom::enter_orthogonal_flow();
+    let max_content = southstar_layout::children(b)
+        .map(|c| crate::ffi::measure_natural_width(c, style_of(b)))
+        .fold(0.0, f64::max);
+    southstar_layout_geom::leave_orthogonal_flow();
+    if max_content > 0.0 {
+        max_content.ceil().min(available)
+    } else {
+        available
+    }
+}
+
+fn layout_orthogonal(
+    b: BoxRef<'_>,
+    rotation: u8,
+    origin: (f64, f64),
+    width: UsedWidth,
+    child_inherited: Option<StyleRef<'_>>,
+) {
+    let inline_size = orthogonal_inline_size(b, width.border_box);
+    let content = ContentBox {
+        cw: inline_size,
+        inner_x: origin.0,
+        inner_y: origin.1,
+        child_inherited,
+    };
+    let start = FlowStart {
+        collapse_top_with_parent: false,
+        collapse_bottom_with_parent: false,
+    };
+    let mut cursor_y = origin.1;
+    southstar_layout_geom::enter_orthogonal_flow();
+    layout_flow(b, &content, start, &mut cursor_y);
+    southstar_layout_geom::leave_orthogonal_flow();
+    let extent = (cursor_y - origin.1).max(0.0);
+    if !width.explicit {
+        b.set_content_width(extent);
+    }
+    b.set_content_height(inline_size);
+    b.set_orthogonal(rotation);
+}
+
 pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) {
     inline_runs_join_splits(b);
     edges_into_box(b, pcw);
@@ -334,6 +388,16 @@ pub fn layout_block(b: BoxRef<'_>, pcw: f64, inherited: Option<StyleRef<'_>>) {
         reorder_children_by_order(b);
     }
 
+    let rotation = southstar_layout_geom::orthogonal_rotation(b);
+    b.set_orthogonal(0);
+    if rotation != 0
+        && b.kind() == southstar_layout::BoxKind::Block
+        && legend.is_none()
+        && !style_is_flex_container(style_of(b))
+    {
+        layout_orthogonal(b, rotation, (inner_x, inner_y), width, child_inherited);
+        return;
+    }
     let content = ContentBox {
         cw,
         inner_x,

@@ -452,6 +452,7 @@ box_fields! {
     flex_main: Option<f64> = None,
     is_rendered_legend: bool = false,
     skipped_contents: bool = false,
+    orthogonal: u8 = 0,
     inline_split_tail: bool = false,
     margin_top_through: f64 = 0.0,
     paint_top: f64 = 0.0,
@@ -886,6 +887,14 @@ impl<'a> BoxRef<'a> {
 
     pub fn set_skipped_contents(self, skipped: bool) {
         self.raw().skipped_contents.set(skipped);
+    }
+
+    pub fn orthogonal(self) -> u8 {
+        self.raw().orthogonal.get()
+    }
+
+    pub fn set_orthogonal(self, rotation: u8) {
+        self.raw().orthogonal.set(rotation);
     }
 
     pub fn set_svg_styles(self, styles: Option<Rc<southstar_css::StyleMap>>) {

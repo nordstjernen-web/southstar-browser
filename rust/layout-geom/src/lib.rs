@@ -60,6 +60,9 @@ pub fn length_or(v: Option<ValueRef<'_>>, fallback: f64) -> f64 {
 }
 
 pub fn writing_mode(s: Option<StyleRef<'_>>) -> i32 {
+    if ORTHOGONAL_DEPTH.get() > 0 {
+        return 0;
+    }
     southstar_css::writing_mode_of(
         s.and_then(|s| s.get(PropId::WritingMode))
             .and_then(ValueRef::keyword_text),
@@ -589,6 +592,7 @@ pub fn style_contains_layout(s: Option<StyleRef<'_>>) -> bool {
 
 thread_local! {
     static RELEVANCE: Cell<bool> = const { Cell::new(false) };
+    static ORTHOGONAL_DEPTH: Cell<u32> = const { Cell::new(0) };
     static RELEVANT_BAND: Cell<Option<(f64, f64)>> = const { Cell::new(None) };
     static SKIPPED: RefCell<Vec<(f64, f64)>> = const { RefCell::new(Vec::new()) };
     static REMEMBERED: RefCell<HashMap<usize, f64>> = RefCell::new(HashMap::new());
@@ -631,4 +635,54 @@ pub fn remembered_size(key: usize) -> Option<f64> {
 pub fn content_visibility_auto(s: Option<StyleRef<'_>>) -> bool {
     s.and_then(|s| s.get(PropId::ContentVisibility))
         .is_some_and(|v| v.is_keyword(c"auto"))
+}
+
+pub const ROTATE_CLOCKWISE: u8 = 1;
+pub const ROTATE_COUNTERCLOCKWISE: u8 = 2;
+
+fn writing_mode_keyword(s: Option<StyleRef<'_>>) -> Option<&[u8]> {
+    s.and_then(|s| s.get(PropId::WritingMode))
+        .and_then(ValueRef::keyword_text)
+        .map(CStr::to_bytes)
+}
+
+pub fn orthogonal_rotation(b: BoxRef<'_>) -> u8 {
+    if ORTHOGONAL_DEPTH.get() > 0 {
+        return 0;
+    }
+    let own = writing_mode_keyword(box_style(b));
+    let vertical = |k: Option<&[u8]>| {
+        matches!(
+            k,
+            Some(
+                b"vertical-rl"
+                    | b"sideways-rl"
+                    | b"vertical-lr"
+                    | b"sideways-lr"
+                    | b"tb-rl"
+                    | b"tb"
+            )
+        )
+    };
+    let parent_vertical = b
+        .parent()
+        .is_some_and(|p| vertical(writing_mode_keyword(box_style(p))));
+    if parent_vertical {
+        return 0;
+    }
+    match own {
+        Some(b"sideways-lr") => ROTATE_COUNTERCLOCKWISE,
+        Some(b"vertical-rl" | b"sideways-rl" | b"vertical-lr" | b"tb-rl" | b"tb") => {
+            ROTATE_CLOCKWISE
+        }
+        _ => 0,
+    }
+}
+
+pub fn enter_orthogonal_flow() {
+    ORTHOGONAL_DEPTH.set(ORTHOGONAL_DEPTH.get() + 1);
+}
+
+pub fn leave_orthogonal_flow() {
+    ORTHOGONAL_DEPTH.set(ORTHOGONAL_DEPTH.get().saturating_sub(1));
 }

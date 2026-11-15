@@ -242,6 +242,26 @@ pub fn box_is_hidden(b: BoxRef<'_>) -> bool {
         .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
 }
 
+pub fn content_origin(b: BoxRef<'_>) -> (f64, f64) {
+    let (m, bd, p) = (b.margin(), b.border(), b.padding());
+    (
+        b.x() + m.left + bd.left + p.left,
+        b.y() + m.top + bd.top + p.top,
+    )
+}
+
+fn rotate_into_content(cr: ContextRef, b: BoxRef<'_>) {
+    let (cx, cy) = content_origin(b);
+    if b.orthogonal() == southstar_layout_geom::ROTATE_COUNTERCLOCKWISE {
+        cr.translate(cx, cy + b.content_height());
+        cr.rotate(-core::f64::consts::FRAC_PI_2);
+    } else {
+        cr.translate(cx + b.content_width(), cy);
+        cr.rotate(core::f64::consts::FRAC_PI_2);
+    }
+    cr.translate(-cx, -cy);
+}
+
 fn contains_paint(style: Option<StyleRef<'_>>) -> bool {
     southstar_layout_geom::content_visibility_auto(style)
         || keyword(get(style, P::Contain)).is_some_and(|k| {
@@ -1399,11 +1419,17 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     } else {
         clip_overflow = false;
     }
+    let rotated = b.orthogonal() != 0;
+    if rotated {
+        cr.save();
+        rotate_into_content(cr, b);
+    }
     let tex_root = with(|w| w.tex_root.get());
     let flush_box = with(|w| w.flush_box.get());
     let own_layer_scope = b.parent().is_none()
         || grouped
         || has_transform
+        || rotated
         || clip_overflow
         || has_path_clip
         || b.as_ptr() == tex_root
@@ -1415,7 +1441,7 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
             w.deferred.borrow_mut().take()
         });
     }
-    let bump_cull = has_transform || has_sticky;
+    let bump_cull = has_transform || has_sticky || rotated;
     if bump_cull {
         with(|w| w.no_cull.set(w.no_cull.get() + 1));
     }
@@ -1461,6 +1487,9 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
                 with(|w| w.no_cull.set(w.no_cull.get() - 1));
             }
         }
+    }
+    if rotated {
+        cr.restore();
     }
     if clip_overflow {
         paint_scrollbars(cr, b);
