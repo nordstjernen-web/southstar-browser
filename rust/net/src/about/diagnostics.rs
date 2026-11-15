@@ -34,7 +34,7 @@ const ARCH: &str = if cfg!(target_arch = "x86_64") {
     "unknown"
 };
 
-const FEATURES: [(&str, bool); 5] = [
+const FEATURES: [(&str, bool); 4] = [
     ("WebM video (VP8 / VP9 / Opus)", cfg!(feature = "libav")),
     ("AVIF images", cfg!(feature = "avif")),
     ("SVG images", true),

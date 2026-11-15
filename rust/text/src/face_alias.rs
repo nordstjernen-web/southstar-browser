@@ -1,4 +1,5 @@
 //! Southstar text — FontFace families installed under a private name each, so a later face for the same family and style replaces the earlier one.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LGPL-2.0-or-later
 

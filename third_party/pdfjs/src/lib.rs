@@ -1,4 +1,5 @@
 //! Southstar — the vendored pdf.js files by their path in the package, with their media types.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: Apache-2.0
 

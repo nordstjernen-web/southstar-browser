@@ -1,4 +1,5 @@
 //! Southstar — PDF documents turned into a viewer page that runs pdf.js on the bytes, and the southstar-pdf: files that page loads.
+//!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
