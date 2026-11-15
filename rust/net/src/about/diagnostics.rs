@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use crate::about::l10n;
 use crate::about::templates::VERSION;
 use crate::ffi::host as sys;
 
@@ -45,7 +46,7 @@ fn kv(out: &mut Vec<u8>, key: &str, value: Option<&[u8]>) {
         .filter(|v| !v.is_empty())
         .unwrap_or("\u{2014}".as_bytes());
     out.extend_from_slice(b"<div class=\"drow\"><span class=\"dk\">");
-    out.extend_from_slice(key.as_bytes());
+    out.extend_from_slice(l10n::html(key).as_bytes());
     out.extend_from_slice(b"</span><span class=\"dv\">");
     out.extend_from_slice(&sys::markup_escape(value));
     out.extend_from_slice(b"</span></div>");
@@ -59,10 +60,16 @@ fn feature(out: &mut Vec<u8>, key: &str, on: bool) {
     };
     out.extend_from_slice(
         format!(
-            "<div class=\"drow\"><span class=\"dk\">{key}</span><span class=\"dv {class}\">{label}</span></div>"
+            "<div class=\"drow\"><span class=\"dk\">{}</span><span class=\"dv {class}\">{}</span></div>",
+            l10n::html(key),
+            l10n::html(label)
         )
         .as_bytes(),
     );
+}
+
+fn heading(out: &mut Vec<u8>, title: &str) {
+    out.extend_from_slice(format!("<h3>{}</h3>", l10n::html(title)).as_bytes());
 }
 
 fn user_agent() -> Option<Vec<u8>> {
@@ -75,7 +82,7 @@ fn user_agent() -> Option<Vec<u8>> {
 }
 
 fn build(s: &mut Vec<u8>) {
-    s.extend_from_slice(b"<h3>Southstar</h3>");
+    heading(s, "Southstar");
     kv(s, "Version", Some(VERSION.as_bytes()));
     kv(s, "Build date", Some(BUILD_DATE.as_bytes()));
     let rust = sys::rust_info();
@@ -87,7 +94,7 @@ fn build(s: &mut Vec<u8>) {
 }
 
 fn system(s: &mut Vec<u8>) {
-    s.extend_from_slice(b"<h3>System</h3>");
+    heading(s, "System");
     let os = sys::os_info(c"PRETTY_NAME").or_else(|| sys::os_info(c"NAME"));
     kv(
         s,
@@ -104,7 +111,7 @@ fn system(s: &mut Vec<u8>) {
 
 fn libraries(s: &mut Vec<u8>) {
     let v = sys::versions();
-    s.extend_from_slice(b"<h3>Libraries</h3>");
+    heading(s, "Libraries");
     kv(s, "JavaScript engine", v.js_engine.as_deref());
     kv(s, "Networking", Some(&v.networking));
     kv(s, "TLS", Some(southstar_http::tls_description()));
@@ -123,7 +130,7 @@ fn libraries(s: &mut Vec<u8>) {
 }
 
 fn features(s: &mut Vec<u8>) {
-    s.extend_from_slice(b"<h3>Features</h3>");
+    heading(s, "Features");
     feature(s, "WebGL (3D canvas)", true);
     if cfg!(feature = "webgpu") {
         let state = if sys::env_set("NS_WEBGPU_ALLOW") {
@@ -147,10 +154,9 @@ fn safe_browsing(s: &mut Vec<u8>) {
     let Some(rows) = crate::safety::status_rows() else {
         return;
     };
-    s.extend_from_slice(b"<h3>Google Safe Browsing</h3>");
+    heading(s, "Google Safe Browsing");
     for (key, value) in rows {
-        let key = String::from_utf8_lossy(&sys::markup_escape(key.as_bytes())).into_owned();
-        kv(s, &key, Some(value.as_bytes()));
+        kv(s, key, Some(value.as_bytes()));
     }
 }
 
