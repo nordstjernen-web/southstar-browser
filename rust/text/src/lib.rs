@@ -13,8 +13,10 @@ pub mod coverage;
 mod ellipsize;
 pub mod emoji;
 mod engine;
+mod face_alias;
 
 pub use engine::{WEB_FONT_OBJECT, accepts_web_font, install_web_font};
+pub use face_alias::{commit_font_face, font_face_install_name};
 #[allow(unsafe_code)]
 mod ffi;
 pub mod font;

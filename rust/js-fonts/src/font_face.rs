@@ -3,9 +3,13 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use southstar_js_engine::{Scope, Value};
+use southstar_js_engine::{Attributes, ObjectKind, Scope, Value};
 
 use crate::{JsResult, ffi, ready};
+
+const SLANT_ROMAN: i32 = 1;
+const SLANT_ITALIC: i32 = 2;
+const SLANT_OBLIQUE: i32 = 3;
 
 const DESCRIPTORS: [(&str, &str); 11] = [
     ("style", "normal"),
@@ -42,6 +46,69 @@ pub(crate) fn construct(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) ->
     crate::set(scope, &face, "loaded", loaded);
     crate::bind(scope, &face, "load", 0, load);
     Ok(face)
+}
+
+fn css_weight(value: &[u8]) -> i32 {
+    let value = value.trim_ascii();
+    if value.eq_ignore_ascii_case(b"normal") {
+        return 400;
+    }
+    if value.eq_ignore_ascii_case(b"bold") {
+        return 700;
+    }
+    core::str::from_utf8(value)
+        .ok()
+        .and_then(|text| text.parse::<f64>().ok())
+        .filter(|weight| (1.0..=1000.0).contains(weight))
+        .map_or(0, |weight| weight.round() as i32)
+}
+
+fn css_slant(value: &[u8]) -> i32 {
+    let value = value.trim_ascii();
+    if value.eq_ignore_ascii_case(b"italic") {
+        SLANT_ITALIC
+    } else if value.len() >= 7 && value[..7].eq_ignore_ascii_case(b"oblique") {
+        SLANT_OBLIQUE
+    } else {
+        SLANT_ROMAN
+    }
+}
+
+fn font_bytes(scope: &mut Scope<'_>, value: &Value) -> Option<Vec<u8>> {
+    match scope.object_kind(value) {
+        Some(ObjectKind::TypedArray(_) | ObjectKind::DataView) => scope.view_data(value),
+        Some(ObjectKind::ArrayBuffer) => scope.array_buffer_bytes(value),
+        _ => None,
+    }
+}
+
+fn install_data(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsResult {
+    let [family, data, weight, style, ..] = args else {
+        return Ok(Value::boolean(false));
+    };
+    let family = scope.to_bytes(family).unwrap_or_default();
+    let Some(bytes) = font_bytes(scope, data) else {
+        return Ok(Value::boolean(false));
+    };
+    let descriptors = southstar_font::Descriptors {
+        weight: css_weight(&scope.to_bytes(weight).unwrap_or_default()),
+        slant: css_slant(&scope.to_bytes(style).unwrap_or_default()),
+    };
+    let installed = southstar_font::install_face_data(&family, &bytes, descriptors);
+    if installed {
+        ffi::mark_mutated(ffi::js_of(scope));
+    }
+    Ok(Value::boolean(installed))
+}
+
+pub fn install_data_hook(scope: &mut Scope<'_>, global: &Value) {
+    let function = scope.function("__ns_font_face_install", 4, install_data);
+    let hidden = Attributes {
+        writable: true,
+        enumerable: false,
+        configurable: true,
+    };
+    let _ = scope.define(global, "__ns_font_face_install", function, hidden);
 }
 
 fn load(scope: &mut Scope<'_>, this: &Value, _args: &[Value]) -> JsResult {

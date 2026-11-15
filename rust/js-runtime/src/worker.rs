@@ -140,6 +140,7 @@ fn install_global(js: Js, scope: &mut Scope<'_>, setup: &WorkerSetup<'_>, origin
     let _ = southstar_js_wasm::install(scope, &global);
     southstar_js_intl::install(scope, &global);
     let _ = southstar_js_temporal::install(scope, &global);
+    southstar_js_compression::nsr_compression_install(scope, &global);
     let _ = scope.set(&global, "crossOriginIsolated", Value::boolean(false));
     southstar_js_realm::hide_shared_array_buffer(scope, &global);
     bind_constructor(

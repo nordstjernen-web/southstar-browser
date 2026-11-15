@@ -730,6 +730,13 @@ pub fn blend_operator(mode: &[u8]) -> Operator {
     }
 }
 
+fn shift_cull_window(dy: f64) {
+    with(|w| {
+        w.clip_y0.set(w.clip_y0.get() + dy);
+        w.clip_y1.set(w.clip_y1.get() + dy);
+    });
+}
+
 pub fn paint_cache_clip(cr: ContextRef) {
     let (x0, y0, _x1, y1) = cr.clip_extents();
     with(|w| {
@@ -1338,6 +1345,7 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         || node_of(b)
             .and_then(Node::name)
             .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"));
+    let mut cull_shift = 0.0;
     let mut clip_overflow =
         !is_root && (overflow_kw_clips(ovx) || overflow_kw_clips(ovy) || contains_paint(style));
     if clip_overflow
@@ -1413,6 +1421,8 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
                 && !b.scroll_y().is_nan()
             {
                 cr.translate(-b.scroll_x(), -b.scroll_y());
+                cull_shift = b.scroll_y();
+                shift_cull_window(cull_shift);
             }
         } else {
             clip_overflow = false;
@@ -1491,6 +1501,9 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     }
     if rotated {
         cr.restore();
+    }
+    if cull_shift != 0.0 {
+        shift_cull_window(-cull_shift);
     }
     if clip_overflow {
         paint_scrollbars(cr, b);

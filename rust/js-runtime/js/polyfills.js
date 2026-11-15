@@ -3997,9 +3997,8 @@
         var fmt = String(format);
         if (!ZLIB_FORMATS[fmt])
             throw new TypeError("Unsupported compression format: '" + fmt + "'");
-        if (typeof zlibCreate !== 'function') {
-            return { transform: function (chunk, ctl) { ctl.enqueue(chunk); } };
-        }
+        if (typeof zlibCreate !== 'function')
+            throw new TypeError("Compression format '" + fmt + "' is not available here");
         var codec = zlibCreate(fmt, decompress);
         return {
             transform: function (chunk, ctl) {
@@ -8130,6 +8129,8 @@
             typeof ET !== 'function' || !fontsDesc || typeof fontsDesc.get !== 'function')
             return;
         var nativeFonts = fontsDesc.get;
+        var installFaceData = global.__ns_font_face_install;
+        try { delete global.__ns_font_face_install; } catch (e) {}
         var faceState = new WeakMap();
         var setState = new WeakMap();
         var DESCRIPTORS = [
@@ -8188,9 +8189,13 @@
             if (st.status !== 'unloaded') return st.loaded;
             st.status = 'loading';
             if (isBinary(st.source)) {
-                var bytes = st.source.byteLength;
+                var ok = st.source.byteLength > 0;
+                if (ok && typeof installFaceData === 'function') {
+                    ok = installFaceData(st.family, st.source, st.weight, st.style);
+                    st.installed = ok;
+                }
                 Promise.resolve().then(function () {
-                    settle(face, st, bytes > 0, new DOMException('The font data is empty.', 'SyntaxError'));
+                    settle(face, st, ok, new DOMException('The font data could not be loaded.', 'SyntaxError'));
                 });
                 return st.loaded;
             }
@@ -8265,7 +8270,7 @@
             var fst = faceState.get(face);
             var doc = st.doc;
             var host = doc.head || doc.documentElement;
-            if (!fst || !host || st.styles.has(face)) return;
+            if (!fst || fst.installed || !host || st.styles.has(face)) return;
             var el = doc.createElement('style');
             el.setAttribute('data-nd-font-face', '');
             el.textContent = ruleText(fst);
