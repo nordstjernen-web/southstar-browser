@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `background-attachment: local` scrolls a scroll container's background
+  with its content, positioned against the whole scrollable area.
 * `text-underline-position: under` puts underlines below the descenders,
   and `text-underline-offset` measures from there.
 * `-webkit-text-stroke` outlines text (with `-webkit-text-fill-color:
