@@ -99,6 +99,7 @@ pub fn run(args: &[&[u8]]) -> c_int {
         set_env(name, value);
     }
     engine::init();
+    engine::enable_content_visibility_skipping();
     if let Some(scheme) = env(c"NS_COLOR_SCHEME").filter(|s| !s.is_empty()) {
         engine::set_color_scheme(scheme == b"dark");
     }

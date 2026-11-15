@@ -43,6 +43,7 @@ southstar-js-runtime = { path = "../js-runtime", version = "=1.0.10-dev" }
 southstar-js-window = { path = "../js-window", version = "=1.0.10-dev" }
 southstar-layout = { path = "../layout", version = "=1.0.10-dev" }
 southstar-layout-build = { path = "../layout-build", version = "=1.0.10-dev" }
+southstar-layout-geom = { path = "../layout-geom", version = "=1.0.10-dev" }
 southstar-layout-hit = { path = "../layout-hit", version = "=1.0.10-dev" }
 southstar-layout-position = { path = "../layout-position", version = "=1.0.10-dev" }
 southstar-layout-query = { path = "../layout-query", version = "=1.0.10-dev" }

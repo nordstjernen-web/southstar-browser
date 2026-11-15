@@ -32,6 +32,13 @@ fn set_view(b: &NsBrowser, scroll_x: c_int, scroll_y: c_int, height: c_int, scal
     b.cur_scroll_y.set(f64::from(scroll_y));
     b.cur_scale.set(scale);
     b.cur_viewport_h.set(f64::from(height) / scale);
+    let top = f64::from(scroll_y);
+    let bottom = top + f64::from(height) / scale;
+    southstar_layout_geom::set_relevant_band(Some((top, bottom)));
+    let reach = bottom - top;
+    if southstar_layout_geom::skipped_touches(top - reach, bottom + reach) {
+        b.dirty.set(true);
+    }
 }
 
 pub fn note_viewport(b: &NsBrowser, scroll_x: c_int, scroll_y: c_int, height: c_int, scale: f64) {

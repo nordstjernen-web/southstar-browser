@@ -8,9 +8,9 @@ use southstar_cairo::{Context, Format, Surface};
 
 pub use southstar_browser::api::{
     LayerPlan, LayerTarget, MarginSlot, Page, PdfDocument, PdfLayout, Post, PrintPages, PrintSetup,
-    TileTarget, VpLayerInfo, init, iso8601_utc, print_setup_default, sandbox, set_color_scheme,
-    set_device_pixel_ratio, set_next_initiator, set_next_referrer, set_next_user_activated,
-    shutdown,
+    TileTarget, VpLayerInfo, enable_content_visibility_skipping, init, iso8601_utc,
+    print_setup_default, sandbox, set_color_scheme, set_device_pixel_ratio, set_next_initiator,
+    set_next_referrer, set_next_user_activated, shutdown,
 };
 
 pub fn net_idle() -> bool {

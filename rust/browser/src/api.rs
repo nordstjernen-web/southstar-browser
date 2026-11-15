@@ -61,6 +61,10 @@ pub fn sandbox(self_exe: Option<&CStr>) {
     ffi::sandbox(self_exe);
 }
 
+pub fn enable_content_visibility_skipping() {
+    southstar_layout_geom::enable_relevance();
+}
+
 pub fn set_color_scheme(dark: bool) {
     ffi::css_set_color_scheme(dark);
 }

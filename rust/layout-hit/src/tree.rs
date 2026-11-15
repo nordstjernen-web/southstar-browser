@@ -80,6 +80,9 @@ impl<'a> Walk<'a> {
             return None;
         }
         let clipped = ffi::clips_children(root);
+        if root.skipped_contents() {
+            return self_test(root, x, y);
+        }
         if !clipped || padding_contains(root, x, y) {
             if ffi::paint_3d_registered(root) {
                 if let Some(m) = ffi::paint_3d_pick(root, x, y, hit_test) {

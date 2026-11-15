@@ -208,11 +208,12 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
     let content_visibility_hidden = style
         .and_then(|s| s.get(PropId::ContentVisibility))
         .is_some_and(|v| v.is_keyword(c"hidden"));
-    if content_visibility_hidden || contains_size(style) {
+    let skipped = b.skipped_contents();
+    if content_visibility_hidden || contains_size(style) || skipped {
         let mut contained_height = if explicit_h >= 0.0 {
             explicit_h
         } else {
-            contain_intrinsic_height(style).unwrap_or(0.0)
+            placeholder_height(b, style)
         };
         if max_h >= 0.0 && contained_height > max_h {
             contained_height = max_h;
@@ -221,11 +222,33 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
             contained_height = min_h;
         }
         b.set_content_height(contained_height);
-        if content_visibility_hidden {
+        if content_visibility_hidden || skipped {
             b.set_scrolls(false);
             b.set_scroll_max(Some(0.0), Some(0.0));
         }
+        if skipped {
+            let (p, bd) = (b.padding(), b.border());
+            let top = b.y() + b.margin().top;
+            let height = contained_height + p.top + p.bottom + bd.top + bd.bottom;
+            southstar_layout_geom::note_skipped(top, top + height);
+        }
+    } else if southstar_layout_geom::content_visibility_auto(style)
+        && let Some(dom) = dom_of(b)
+    {
+        southstar_layout_geom::remember_size(dom.as_ptr() as usize, b.content_height());
     }
+}
+
+pub(crate) fn placeholder_height(b: BoxRef<'_>, style: Option<StyleRef<'_>>) -> f64 {
+    let remembers = keyword_words(style, PropId::ContainIntrinsicSize)
+        .iter()
+        .any(|w| w.as_slice() == b"auto");
+    let remembered = dom_of(b)
+        .filter(|_| remembers)
+        .and_then(|dom| southstar_layout_geom::remembered_size(dom.as_ptr() as usize));
+    remembered
+        .or_else(|| contain_intrinsic_height(style))
+        .unwrap_or(0.0)
 }
 
 fn keyword_words(style: Option<StyleRef<'_>>, prop: PropId) -> Vec<Vec<u8>> {
