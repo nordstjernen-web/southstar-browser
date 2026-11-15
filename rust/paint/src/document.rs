@@ -165,12 +165,7 @@ pub fn paint_document(
 ) {
     marker::ordinals_begin();
     walk::clear_video_holes();
-    let bg = canvas_background_of(root).unwrap_or(Rgba::new(
-        254.0 / 255.0,
-        254.0 / 255.0,
-        254.0 / 255.0,
-        1.0,
-    ));
+    let bg = canvas_background_of(root).unwrap_or_else(|| default_canvas(root));
     cr.save();
     bg.set_source(cr);
     cr.paint();
@@ -191,11 +186,26 @@ pub fn paint_document(
     end_pass();
 }
 
+fn default_canvas(root: BoxRef<'_>) -> Rgba {
+    let html = find_element_box_named(root, b"html");
+    if crate::util::style_is_dark(html.and_then(|h| style_of(h))) {
+        Rgba::new(18.0 / 255.0, 18.0 / 255.0, 18.0 / 255.0, 1.0)
+    } else {
+        Rgba::new(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0, 1.0)
+    }
+}
+
 pub fn canvas_color(root: Option<BoxRef<'_>>) -> (bool, Rgba) {
     let found = root.and_then(canvas_background_of);
+    let dark_default = root.map(default_canvas).filter(|c| c.r < 0.5);
     (
-        found.is_some(),
-        found.unwrap_or(Rgba::new(254.0 / 255.0, 254.0 / 255.0, 254.0 / 255.0, 1.0)),
+        found.is_some() || dark_default.is_some(),
+        found.or(dark_default).unwrap_or(Rgba::new(
+            254.0 / 255.0,
+            254.0 / 255.0,
+            254.0 / 255.0,
+            1.0,
+        )),
     )
 }
 

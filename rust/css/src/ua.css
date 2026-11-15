@@ -66,7 +66,7 @@ figure { margin: 1em 40px; }
 input[type="radio"], input[type="checkbox"], input[type="reset"], input[type="button"], input[type="submit"], input[type="color"], input[type="search"], select, button { box-sizing: border-box; }
 input, select, textarea, button { font-style: normal; font-weight: normal; font-size: 13.333333px; font-family: system-ui, sans-serif; }
 textarea { font-family: monospace; }
-button { display: inline-block; padding: 1px 6px; background-color: #e6e6e6; border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px; border-left-width: 2px; border-top-style: outset; border-right-style: outset; border-bottom-style: outset; border-left-style: outset; border-top-color: #b8b8b8; border-right-color: #b8b8b8; border-bottom-color: #b8b8b8; border-left-color: #b8b8b8; }
+button { display: inline-block; padding: 1px 6px; color: ButtonText; background-color: ButtonFace; border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px; border-left-width: 2px; border-top-style: outset; border-right-style: outset; border-bottom-style: outset; border-left-style: outset; border-top-color: #b8b8b8; border-right-color: #b8b8b8; border-bottom-color: #b8b8b8; border-left-color: #b8b8b8; }
 input, select, textarea { color: FieldText; }
 input::placeholder, textarea::placeholder { color: #757575; }
 button { color: ButtonText; }
@@ -77,7 +77,7 @@ meter, progress { appearance: auto; }
 input, select, textarea { text-align: initial; }
 :is(input[type="reset" i], input[type="button" i], input[type="submit" i], button) { text-align: center; }
 input, textarea, select { display: inline-block; }
-input, textarea, select { padding: 1px 2px; background-color: #ffffff; border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px; border-left-width: 2px; border-top-style: inset; border-right-style: inset; border-bottom-style: inset; border-left-style: inset; border-top-color: #767676; border-right-color: #767676; border-bottom-color: #767676; border-left-color: #767676; }
+input, textarea, select { padding: 1px 2px; background-color: Field; border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px; border-left-width: 2px; border-top-style: inset; border-right-style: inset; border-bottom-style: inset; border-left-style: inset; border-top-color: #767676; border-right-color: #767676; border-bottom-color: #767676; border-left-color: #767676; }
 select { padding: 0; }
 textarea { padding: 2px; }
 select, textarea { border-top-width: 1px; border-right-width: 1px; border-bottom-width: 1px; border-left-width: 1px; border-top-style: solid; border-right-style: solid; border-bottom-style: solid; border-left-style: solid; }

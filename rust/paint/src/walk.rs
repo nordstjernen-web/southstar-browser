@@ -812,8 +812,13 @@ fn is_block_like(kind: BoxKind) -> bool {
 }
 
 fn scrollbar_colors(s: Option<StyleRef<'_>>) -> (Rgba, Rgba) {
-    let mut thumb = Rgba::new(0.0, 0.0, 0.0, 0.40);
-    let mut track = Rgba::new(0.0, 0.0, 0.0, 0.06);
+    let shade = if crate::util::style_is_dark(s) {
+        1.0
+    } else {
+        0.0
+    };
+    let mut thumb = Rgba::new(shade, shade, shade, 0.40);
+    let mut track = Rgba::new(shade, shade, shade, 0.06);
     let kw = get(s, P::ScrollbarColor)
         .filter(|v| v.kind() == Kind::Keyword)
         .and_then(ValueRef::keyword_text);

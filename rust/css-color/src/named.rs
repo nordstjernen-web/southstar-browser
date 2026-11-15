@@ -196,6 +196,57 @@ pub const NAMED: &[(&str, [u8; 3])] = &[
     ("windowframe", [140, 140, 140]),
 ];
 
+const DARK_SYSTEM: [(&str, [u8; 3]); 30] = [
+    ("accentcolor", [61, 152, 244]),
+    ("accentcolortext", [0, 0, 0]),
+    ("activetext", [255, 102, 102]),
+    ("buttonborder", [107, 107, 107]),
+    ("buttonface", [107, 107, 107]),
+    ("buttontext", [255, 255, 255]),
+    ("canvas", [18, 18, 18]),
+    ("canvastext", [255, 255, 255]),
+    ("field", [59, 59, 59]),
+    ("fieldtext", [255, 255, 255]),
+    ("graytext", [168, 168, 168]),
+    ("highlight", [38, 79, 120]),
+    ("highlighttext", [255, 255, 255]),
+    ("linktext", [158, 158, 255]),
+    ("mark", [102, 92, 0]),
+    ("marktext", [255, 255, 255]),
+    ("selecteditem", [38, 79, 120]),
+    ("selecteditemtext", [255, 255, 255]),
+    ("visitedtext", [208, 173, 240]),
+    ("window", [18, 18, 18]),
+    ("windowtext", [255, 255, 255]),
+    ("activeborder", [107, 107, 107]),
+    ("activecaption", [18, 18, 18]),
+    ("appworkspace", [18, 18, 18]),
+    ("background", [18, 18, 18]),
+    ("buttonhighlight", [107, 107, 107]),
+    ("buttonshadow", [107, 107, 107]),
+    ("captiontext", [255, 255, 255]),
+    ("infobackground", [18, 18, 18]),
+    ("infotext", [255, 255, 255]),
+];
+
+pub fn system_color(name: &str, dark: bool) -> Option<[u8; 3]> {
+    let found = |table: &[(&str, [u8; 3])]| {
+        table
+            .iter()
+            .find(|(known, _)| known.eq_ignore_ascii_case(name))
+            .map(|(_, rgb)| *rgb)
+    };
+    let first_system = NAMED
+        .iter()
+        .position(|(known, _)| *known == "accentcolor")?;
+    let light = found(&NAMED[first_system..])?;
+    Some(if dark {
+        found(&DARK_SYSTEM).unwrap_or(light)
+    } else {
+        light
+    })
+}
+
 pub fn named(name: &str) -> Option<[u8; 3]> {
     NAMED
         .iter()

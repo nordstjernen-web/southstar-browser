@@ -83,7 +83,7 @@ pub use calc_size::{
     BASIS_STRETCH as CALC_SIZE_STRETCH, FN_CALC_SIZE,
 };
 pub use cascade::currentcolor_bit;
-pub use color::parse_color;
+pub use color::{parse_color, scheme_is_dark};
 pub use container::condition_canonical as container_condition_canonical;
 pub use container::{
     features_begin as container_features_begin, features_used as container_features_used,
