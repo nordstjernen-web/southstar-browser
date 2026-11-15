@@ -49,6 +49,7 @@ pub const ALIGN_LEFT: c_int = Alignment::Left as c_int;
 pub const ALIGN_CENTER: c_int = Alignment::Center as c_int;
 pub const ALIGN_RIGHT: c_int = Alignment::Right as c_int;
 
+pub const ELLIPSIZE_NONE: c_int = EllipsizeMode::None as c_int;
 pub const ELLIPSIZE_END: c_int = EllipsizeMode::End as c_int;
 
 pub const DIRECTION_LTR: c_int = Direction::Ltr as c_int;

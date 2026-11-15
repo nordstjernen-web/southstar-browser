@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `text-wrap: balance` evens out the lines of headings and short
+  paragraphs (up to ten lines), and `text-wrap: pretty` keeps a single
+  word off the last line when that costs no extra line.
 * `content: url(...)` on `::before` and `::after` renders the image (link
   and list icons, external-link markers), inline, inline-block or block,
   on inline and block hosts, through the same image cache and fetch as

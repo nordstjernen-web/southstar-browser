@@ -346,6 +346,7 @@ pub fn inline_layout(b: BoxRef<'_>, content_width: f64, ps: Option<StyleRef<'_>>
 
     layout.set_text(&text);
     ffi::start_align_overflow(&layout);
+    southstar_paint::apply_text_wrap_style(&layout, ps);
     let measured = measure::measure(&layout);
     let measured_h = measured.pixel_logical().height;
     let line_count = measured.lines.max(1) as usize;

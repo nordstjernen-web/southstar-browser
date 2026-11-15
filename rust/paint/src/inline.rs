@@ -784,6 +784,7 @@ fn paint_inline_make_layout(
     apply_text_align(&layout, s);
     apply_nowrap_align_width(&layout, b);
     start_align_overflow(&layout);
+    crate::wrap::apply_text_wrap_style(&layout, s);
     if keyword_is(get(s, P::TextAlign), c"justify") {
         layout.set_justify(true);
     }
@@ -819,6 +820,7 @@ pub fn build_inline_layout(b: BoxRef<'_>) -> Option<Layout> {
     apply_text_align(&layout, s);
     apply_nowrap_align_width(&layout, b);
     start_align_overflow(&layout);
+    crate::wrap::apply_text_wrap_style(&layout, s);
     Some(layout)
 }
 
@@ -1920,10 +1922,10 @@ pub fn paint_inline(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         paint_vertical(cr, b, s, color, highlight);
         return;
     }
-    let text_x = inline_text_x(b, s);
     let Some(layout) = inline_layout(b, s, highlight) else {
         return;
     };
+    let text_x = inline_text_x(b, s) + crate::wrap::wrap_shift(&layout, b.content_width());
     let y_offset = inline_y_offset_for_layout(b, &layout);
     let y_origin = b.y() + y_offset;
 
