@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `docs/quickjs-vs-boa.md` compares Bellard's QuickJS (2026-06-04) with the
+  Boa fork on speed, security and conformance: QuickJS runs Octane 5.4x
+  faster, test262 is close to a tie (98.6% against 99.88%), and Boa stays
+  for its memory safety and finished HTML host hooks.
 * `contain: layout` (and `paint`, `content`, `strict`) makes a box an
   independent formatting context that contains its floats and the
   containing block of its fixed and absolute descendants; `filter` and
