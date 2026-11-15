@@ -13,12 +13,12 @@ use southstar_selection::NsSelection;
 use southstar_style::{PropId as P, ValueRef, layer, layer_count};
 
 use crate::ffi::engine::{self, SelectionRun};
-use crate::marker;
 use crate::util::{Rgba, get, keyword_is, rgba_of, style_of};
 use crate::walk::{
     self, LAYERS_DOC, LAYERS_PLAN, LayerKinds, Layers, VpCapture, box_clip_hides, box_is_hidden,
     box_skips_contents, box_z_index, paint_cache_clip, paint_walk,
 };
+use crate::{decor, marker};
 
 pub const VP_FIXED: i32 = 1;
 pub const VP_STICKY: i32 = 2;
@@ -54,6 +54,15 @@ fn box_solid_background(b: Option<BoxRef<'_>>) -> Option<Rgba> {
     v.and_then(ValueRef::color)
         .filter(|c| c[3] > 0)
         .map(|_| rgba_of(v, Rgba::new(1.0, 1.0, 1.0, 1.0)))
+}
+
+fn canvas_background_owner(root: BoxRef<'_>) -> Option<(BoxRef<'_>, BoxRef<'_>)> {
+    let html = find_element_box_named(root, b"html")?;
+    if decor::has_background(html) {
+        return Some((html, html));
+    }
+    let body = find_element_box_named(root, b"body").filter(|b| decor::has_background(*b))?;
+    Some((html, body))
 }
 
 fn canvas_background_of(root: BoxRef<'_>) -> Option<Rgba> {
@@ -140,6 +149,7 @@ fn end_selection() {
 }
 
 fn end_pass() {
+    decor::set_canvas_owner(None);
     end_selection();
     walk::with(|w| w.have_clip.set(false));
     walk::clear_video_holes();
@@ -165,6 +175,12 @@ pub fn paint_document(
     bg.set_source(cr);
     cr.paint();
     cr.restore();
+    let owner = canvas_background_owner(root);
+    if let Some((html, owner)) = owner {
+        let (x0, y0, x1, y1) = cr.clip_extents();
+        decor::paint_canvas_background(cr, html, owner, (x0, y0, x1 - x0, y1 - y0));
+    }
+    decor::set_canvas_owner(owner.map(|(_, o)| o));
     paint_cache_clip(cr);
     begin_selection(root, sel);
     let top = top_layer_box(root).map_or(ptr::null(), BoxRef::as_ptr);

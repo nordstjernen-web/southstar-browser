@@ -2,6 +2,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use core::cell::Cell;
 use core::f64::consts::PI;
 
 use southstar_anim::AnimatedColor;
@@ -10,7 +11,7 @@ use southstar_cairo::{
     Surface, SurfaceRef,
 };
 use southstar_image::ImageRef;
-use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr};
+use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr, NsBox};
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
@@ -1446,10 +1447,10 @@ fn bg_layer_clip_area(b: BoxRef<'_>, li: i32, area: (f64, f64, f64, f64)) -> (f6
 
 fn bg_layer_origin_area(
     b: BoxRef<'_>,
+    s: Option<StyleRef<'_>>,
     li: i32,
     area: (f64, f64, f64, f64),
 ) -> (f64, f64, f64, f64) {
-    let s = style_of(b);
     if bg_layer_keyword(s, P::BackgroundAttachment, li) == Some(b"fixed") {
         let (have, vx, vy) = crate::walk::viewport_origin();
         return (
@@ -1499,6 +1500,81 @@ fn layer_image(b: BoxRef<'_>, li: i32) -> Option<ImageRef<'_>> {
     handle.and_then(ImageRef::from_media)
 }
 
+thread_local! {
+    static CANVAS_OWNER: Cell<*const NsBox> = const { Cell::new(core::ptr::null()) };
+}
+
+pub fn set_canvas_owner(owner: Option<BoxRef<'_>>) {
+    CANVAS_OWNER.with(|c| c.set(owner.map_or(core::ptr::null(), BoxRef::as_ptr)));
+}
+
+pub fn has_background(b: BoxRef<'_>) -> bool {
+    let s = style_of(b);
+    let color = get(s, P::BackgroundColor)
+        .and_then(ValueRef::color)
+        .is_some_and(|c| c[3] > 0);
+    let image = get(s, P::BackgroundImage).is_some_and(|h| {
+        h.layers()
+            .any(|l| l.kind() == Kind::Url || l.gradient().is_some())
+    });
+    color || image
+}
+
+pub fn paint_canvas_background(
+    cr: ContextRef,
+    root: BoxRef<'_>,
+    owner: BoxRef<'_>,
+    extent: (f64, f64, f64, f64),
+) {
+    let s = style_of(owner);
+    let bg_head = get(s, P::BackgroundImage);
+    let n_layers = layer_count(bg_head);
+    if n_layers <= 0 {
+        return;
+    }
+    let (m, p, bd) = (root.margin(), root.padding(), root.border());
+    let root_w = root.content_width() + p.left + p.right + bd.left + bd.right;
+    let root_h = root.content_height() + p.top + p.bottom + bd.top + bd.bottom;
+    let border = if root_w > 0.0 && root_h > 0.0 {
+        (root.x() + m.left, root.y() + m.top, root_w, root_h)
+    } else {
+        extent
+    };
+    let blends = background_blend_operators(s, n_layers);
+    let blended = blends.iter().any(|op| *op != Operator::Over);
+    if blended {
+        cr.push_group();
+    }
+    let none = CornerRadii::default();
+    for li in (0..n_layers).rev() {
+        let Some(lv) = layer(bg_head, li) else {
+            continue;
+        };
+        let lpos = bg_layer_origin_area(root, s, li, border);
+        let params = BgImage {
+            repeat: layer(get(s, P::BackgroundRepeat), li),
+            size: layer(get(s, P::BackgroundSize), li),
+            pos_x: layer(get(s, P::BackgroundPositionX), li),
+            pos_y: layer(get(s, P::BackgroundPositionY), li),
+            pixelated: style_pixelated(s),
+            font: FontUnits::of(s),
+        };
+        cr.set_operator(blends[li as usize]);
+        if let Some(gr) = lv.gradient() {
+            paint_bg_gradient_layer(cr, gr, &params, lpos, extent, none);
+        } else if lv.kind() == Kind::Url
+            && let Some(img) = layer_image(owner, li)
+        {
+            paint_bg_image_core(cr, Some(img), &params, lpos, extent, none);
+        }
+        cr.set_operator(Operator::Over);
+    }
+    if blended {
+        cr.pop_group_to_source();
+        cr.paint();
+    }
+}
+
 pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     let border_x = b.x() + m.left;
@@ -1516,12 +1592,13 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     let s = style_of(b);
     let radii = box_border_radii(Some(b));
     let border = (border_x, border_y, border_w, border_h);
+    let canvas_owned = CANVAS_OWNER.with(Cell::get) == b.as_ptr();
 
-    let bg_head = get(s, P::BackgroundImage);
+    let bg_head = get(s, P::BackgroundImage).filter(|_| !canvas_owned);
     let n_bg_layers = layer_count(bg_head);
     let last_bg_layer = if n_bg_layers > 0 { n_bg_layers - 1 } else { 0 };
     let clip = bg_layer_clip_area(b, last_bg_layer, border);
-    let pos = bg_layer_origin_area(b, last_bg_layer, border);
+    let pos = bg_layer_origin_area(b, style_of(b), last_bg_layer, border);
 
     if let Some(sl) = get(s, P::BoxShadow).and_then(ValueRef::shadows) {
         for si in (0..sl.n.max(0) as usize).rev() {
@@ -1570,12 +1647,16 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     if blended {
         cr.push_group();
     }
-    let bg = rgba_anim(
-        Some(b),
-        ANIM_TARGET_BG_COLOR,
-        get(s, P::BackgroundColor),
-        Rgba::default(),
-    );
+    let bg = if canvas_owned {
+        Rgba::default()
+    } else {
+        rgba_anim(
+            Some(b),
+            ANIM_TARGET_BG_COLOR,
+            get(s, P::BackgroundColor),
+            Rgba::default(),
+        )
+    };
     let (clip_x, clip_y, clip_w, clip_h) = clip;
     if bg.a > 0.0 && !has_mask {
         bg.set_source(cr);
@@ -1585,6 +1666,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
 
     let media_bg = b
         .media()
+        .filter(|_| !canvas_owned)
         .and_then(|m| m.bg_image().and_then(ImageRef::from_media));
     let mask_params = BgImage {
         repeat: get(s, P::MaskRepeat),
@@ -1616,7 +1698,7 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
             continue;
         };
         let lclip = bg_layer_clip_area(b, li, border);
-        let lpos = bg_layer_origin_area(b, li, border);
+        let lpos = bg_layer_origin_area(b, style_of(b), li, border);
         if let Some(gr) = lv.gradient() {
             let params = BgImage {
                 repeat: layer(get(s, P::BackgroundRepeat), li),
