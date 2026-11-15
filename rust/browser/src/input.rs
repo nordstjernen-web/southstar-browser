@@ -162,6 +162,21 @@ fn clamp_scroll(v: f64, max: f64) -> f64 {
     if v > max { max } else { v }
 }
 
+fn contains_overscroll(b: &NsBrowser, scroller: BoxRef<'_>, vertical: bool) -> bool {
+    let prop: &CStr = if vertical {
+        c"overscroll-behavior-y"
+    } else {
+        c"overscroll-behavior-x"
+    };
+    ffi::box_dom(scroller)
+        .and_then(|dom| b.style_for(dom))
+        .and_then(|style| {
+            ffi::retained_keyword(&style, ffi::css_prop_id(prop))
+                .map(|k| matches!(k.to_bytes(), b"contain" | b"none"))
+        })
+        .unwrap_or(false)
+}
+
 pub fn scroll_at(b: &NsBrowser, x: c_int, y: c_int, dx: c_int, dy: c_int) -> (c_int, bool) {
     let Some(layout) = b.layout() else {
         return (0, false);
@@ -184,6 +199,14 @@ pub fn scroll_at(b: &NsBrowser, x: c_int, y: c_int, dx: c_int, dy: c_int) -> (c_
             scroller.set_scroll(nx, scroller.scroll_y());
             consumed = 1;
         }
+    }
+    if consumed == 0
+        && ((dy != 0 && scroller.scroll_max_y() > 0.0 && contains_overscroll(b, scroller, true))
+            || (dx != 0
+                && scroller.scroll_max_x() > 0.0
+                && contains_overscroll(b, scroller, false)))
+    {
+        return (1, false);
     }
     let mut snapped = false;
     if consumed != 0 {
