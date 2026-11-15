@@ -1904,6 +1904,7 @@ fn by_prop(prop: Prop, t: &[u8]) -> Option<Value> {
         ),
         P::TransformStyle => keyword_choice(t, "flat preserve-3d"),
         P::BackfaceVisibility => keyword_choice(t, "visible hidden"),
+        P::Isolation => keyword_choice(t, "auto isolate"),
         P::Clip => clip_rect(t),
         P::Color
         | P::BackgroundColor

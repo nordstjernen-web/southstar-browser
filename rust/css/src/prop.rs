@@ -373,10 +373,11 @@ pub enum Prop {
     PositionTryOrder,
     PositionVisibility,
     BackdropFilter,
+    Isolation,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 365] = [
+    pub(crate) const ALL: [Prop; 366] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -742,6 +743,7 @@ impl Prop {
         Prop::PositionTryOrder,
         Prop::PositionVisibility,
         Prop::BackdropFilter,
+        Prop::Isolation,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1205,6 +1207,7 @@ impl Prop {
             Prop::PositionTryOrder => c"position-try-order",
             Prop::PositionVisibility => c"position-visibility",
             Prop::BackdropFilter => c"backdrop-filter",
+            Prop::Isolation => c"isolation",
         }
     }
 }
