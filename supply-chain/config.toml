@@ -24,11 +24,11 @@ version = "0.6.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.alloc-no-stdlib]]
-version = "2.0.4"
+version = "3.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.alloc-stdlib]]
-version = "0.2.4"
+version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.arrayvec]]
@@ -56,7 +56,7 @@ version = "0.22.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.brotli-decompressor]]
-version = "5.0.3"
+version = "6.3.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bytemuck]]
@@ -228,7 +228,7 @@ version = "0.14.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.harfrust]]
-version = "0.15.0"
+version = "0.16.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.hashbrown]]
@@ -492,7 +492,7 @@ version = "6.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.read-fonts]]
-version = "0.46.0"
+version = "0.47.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
@@ -580,7 +580,7 @@ version = "1.0.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.skrifa]]
-version = "0.49.0"
+version = "0.50.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.small_btree]]
