@@ -530,7 +530,8 @@ impl<'a> Collector<'a> {
         let stretch_start = self.out.len();
         let kerning = font_kerning(s);
         let ligatures = font_keyword(s, FontKeyword::Ligatures);
-        let features = font_keyword(s, FontKeyword::Features);
+        let feature_text = s.and_then(southstar_paint::feature_settings_with_variants);
+        let features = feature_text.as_deref();
         let features_active = kerning >= 0 || ligatures.is_some() || features.is_some();
         let features_start = self.out.len();
         let variations = font_keyword(s, FontKeyword::Variations);

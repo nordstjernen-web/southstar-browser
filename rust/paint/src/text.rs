@@ -491,6 +491,63 @@ pub fn font_variations_attr(settings: Option<&CStr>) -> Option<Attribute> {
     Some(Attribute::font_desc(&desc))
 }
 
+const VARIANT_FEATURES: [(P, &[u8], &[&str]); 25] = [
+    (P::FontVariantNumeric, b"lining-nums", &["lnum"]),
+    (P::FontVariantNumeric, b"oldstyle-nums", &["onum"]),
+    (P::FontVariantNumeric, b"proportional-nums", &["pnum"]),
+    (P::FontVariantNumeric, b"tabular-nums", &["tnum"]),
+    (P::FontVariantNumeric, b"diagonal-fractions", &["frac"]),
+    (P::FontVariantNumeric, b"stacked-fractions", &["afrc"]),
+    (P::FontVariantNumeric, b"ordinal", &["ordn"]),
+    (P::FontVariantNumeric, b"slashed-zero", &["zero"]),
+    (P::FontVariantPosition, b"sub", &["subs"]),
+    (P::FontVariantPosition, b"super", &["sups"]),
+    (P::FontVariantCaps, b"all-small-caps", &["smcp", "c2sc"]),
+    (P::FontVariantCaps, b"petite-caps", &["pcap"]),
+    (P::FontVariantCaps, b"all-petite-caps", &["pcap", "c2pc"]),
+    (P::FontVariantCaps, b"unicase", &["unic"]),
+    (P::FontVariantCaps, b"titling-caps", &["titl"]),
+    (P::FontVariantEastAsian, b"jis78", &["jp78"]),
+    (P::FontVariantEastAsian, b"jis83", &["jp83"]),
+    (P::FontVariantEastAsian, b"jis90", &["jp90"]),
+    (P::FontVariantEastAsian, b"jis04", &["jp04"]),
+    (P::FontVariantEastAsian, b"simplified", &["smpl"]),
+    (P::FontVariantEastAsian, b"traditional", &["trad"]),
+    (P::FontVariantEastAsian, b"full-width", &["fwid"]),
+    (P::FontVariantEastAsian, b"proportional-width", &["pwid"]),
+    (P::FontVariantEastAsian, b"ruby", &["ruby"]),
+    (P::FontVariantAlternates, b"historical-forms", &["hist"]),
+];
+
+pub fn feature_settings_with_variants(s: StyleRef<'_>) -> Option<CString> {
+    let mut parts: Vec<String> = Vec::new();
+    for (prop, keyword, tags) in VARIANT_FEATURES {
+        let on = s
+            .get(prop)
+            .filter(|v| v.kind() == Kind::Keyword)
+            .and_then(ValueRef::keyword_text)
+            .is_some_and(|k| {
+                k.to_bytes()
+                    .split(u8::is_ascii_whitespace)
+                    .any(|w| w == keyword)
+            });
+        if on {
+            parts.extend(tags.iter().map(|tag| format!("\"{tag}\" 1")));
+        }
+    }
+    let explicit = s
+        .get(P::FontFeatureSettings)
+        .filter(|v| v.kind() == Kind::Keyword)
+        .and_then(ValueRef::keyword_text)
+        .filter(|k| !k.is_empty() && k.to_bytes() != b"normal");
+    if let Some(explicit) = explicit {
+        parts.push(explicit.to_string_lossy().into_owned());
+    }
+    (!parts.is_empty())
+        .then(|| CString::new(parts.join(", ")).ok())
+        .flatten()
+}
+
 pub fn apply_font_features(attrs: &AttrList, s: StyleRef<'_>, start: u32, end: u32) {
     let mut features = Vec::new();
     append_kerning_features(&mut features, s.get(P::FontKerning));
@@ -500,11 +557,8 @@ pub fn apply_font_features(attrs: &AttrList, s: StyleRef<'_>, start: u32, end: u
     {
         append_ligature_features(&mut features, lig.keyword_text());
     }
-    if let Some(settings) = s
-        .get(P::FontFeatureSettings)
-        .filter(|v| v.kind() == Kind::Keyword)
-    {
-        append_feature_settings(&mut features, settings.keyword_text());
+    if let Some(settings) = feature_settings_with_variants(s) {
+        append_feature_settings(&mut features, Some(&settings));
     }
     if features.is_empty() {
         return;

@@ -223,7 +223,8 @@ fn first_letter_attrs(fl: StyleRef<'_>, text: &[u8], out: &mut Vec<InlineAttr>) 
     }
     let kerning = font_kerning(Some(fl));
     let ligatures = font_keyword(Some(fl), FontKeyword::Ligatures);
-    let features = font_keyword(Some(fl), FontKeyword::Features);
+    let feature_text = southstar_paint::feature_settings_with_variants(fl);
+    let features = feature_text.as_deref();
     if kerning >= 0 || ligatures.is_some() || features.is_some() {
         let mut a = InlineAttr::new(inline_kind::FONT_FEATURES, start, len)
             .with_font_settings(ligatures, features, None);
