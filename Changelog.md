@@ -4,15 +4,24 @@ Changelog:
 Southstar Browser 1.0.10-dev:
 ======
 * PDF documents open in a viewer built on Mozilla's pdf.js (pdfjs-dist
-  6.4.299, legacy build), vendored unmodified in `third_party/pdfjs` with
-  its CMaps, standard fonts and WebAssembly image decoders and served from
-  the binary at `southstar-pdf://viewer/`. Pages render on canvases as they
+  6.4.299, legacy build) with its CMaps, standard fonts and WebAssembly
+  image decoders, served from the binary at `southstar-pdf://viewer/`. Pages render on canvases as they
   scroll into view, with zoom, page navigation, `#page=N` and find in the
   document. The PDF's bytes are handed to the viewer, so nothing is
   fetched twice and cross-origin PDFs work; PDF JavaScript is never run.
   Untyped responses that start with `%PDF-` open in it too. The
   poppler-based `rust/pdf`, its `poppler` cargo feature and the
   poppler-glib dependency are gone.
+* pdf.js is no longer kept in the repository. `scripts/update-pdfjs.py`
+  builds the `southstar-pdfjs` crate (version = the pdf.js version) from
+  npm's `pdfjs-dist` in `target/pdfjs-crate/`, checks it with `cargo
+  package` and a publish dry run, and publishes it to crates.io; the
+  workspace takes it from there as an optional dependency pinned to
+  `=6.4.299`. `cargo xtask build --pdfjs auto|enabled|disabled` controls it
+  (on by default); without it a PDF gets a "PDF viewer unavailable" page
+  with a download link. The viewer checks that the pdf.js it loaded has the
+  major version of `southstar_pdfjs::VERSION` and shows the same message
+  otherwise.
 * `FontFace` with an `ArrayBuffer` or typed-array source installs the font
   for CSS and canvas text, and `loaded` settles once it is usable (it used
   to resolve without loading anything). A later face with the same family

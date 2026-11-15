@@ -163,6 +163,11 @@ pub fn configure(options: &Options) -> Result<Configuration, String> {
         return Err("AVIF was requested but libavif is not installed".to_owned());
     }
     enable("avif", avif, "AVIF images (libavif)");
+    enable(
+        "pdfjs",
+        options.pdfjs != Toggle::Disabled,
+        "PDF viewer (pdf.js, southstar-pdfjs)",
+    );
     enable("enchant", has("enchant-2"), "spell-checking (enchant-2)");
     enable("wasm", options.wasm, "WebAssembly (wasmi)");
     enable("rust-shaper", options.rust_shaper, "pure-Rust fonts");

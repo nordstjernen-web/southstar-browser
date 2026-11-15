@@ -60,7 +60,7 @@ southstar-build = { path = "../build", version = "=1.0.10-dev" }
 cc = "1.2"
 
 [features]
-default = ["libav", "sdl", "wasm", "rust-shaper", "http-brotli", "http-zstd", "woff2", "font-fontconfig"]
+default = ["libav", "sdl", "wasm", "rust-shaper", "http-brotli", "http-zstd", "woff2", "font-fontconfig", "pdfjs"]
 libav = ["southstar-shell/libav", "dep:southstar-video-helper", "southstar-audio-helper?/libav"]
 sdl = ["southstar-shell/sdl", "dep:southstar-audio-helper"]
 wasm = ["southstar-shell/wasm"]
@@ -72,6 +72,7 @@ font-fontconfig = ["southstar-shell/font-fontconfig"]
 webgpu = ["southstar-shell/webgpu"]
 launcher = ["dep:southstar-launcher"]
 avif = ["southstar-shell/avif"]
+pdfjs = ["southstar-shell/pdfjs"]
 enchant = ["southstar-shell/enchant"]
 vorbisfile = ["sdl", "southstar-audio-helper/vorbisfile", "southstar-shell/audio-native-vorbis"]
 opusfile = ["sdl", "southstar-audio-helper/opusfile", "southstar-shell/audio-native-opus"]

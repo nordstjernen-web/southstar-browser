@@ -49,6 +49,7 @@ southstar-watchdog = { path = "../watchdog", version = "=1.0.10-dev" }
 
 [features]
 avif = ["southstar-ffi/avif"]
+pdfjs = ["southstar-ffi/pdfjs"]
 sdl = ["southstar-ffi/sdl"]
 fontconfig = ["southstar-ffi/fontconfig"]
 font-fontconfig = ["southstar-ffi/font-fontconfig"]

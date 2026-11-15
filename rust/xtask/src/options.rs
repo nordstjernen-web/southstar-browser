@@ -13,6 +13,7 @@ options:
   --overflow-checks           integer overflow checks in a release build
   --audio auto|enabled|disabled
   --avif auto|enabled|disabled
+  --pdfjs auto|enabled|disabled  the PDF viewer over the southstar-pdfjs crate
   --webgpu auto|enabled|disabled
   --wgpu-native-root DIR      an extracted wgpu-native release
   --no-wasm                   leave out the WebAssembly API
@@ -44,6 +45,7 @@ pub struct Options {
     pub overflow_checks: bool,
     pub audio: Toggle,
     pub avif: Toggle,
+    pub pdfjs: Toggle,
     pub webgpu: Toggle,
     pub wgpu_native_root: Option<PathBuf>,
     pub wasm: bool,
@@ -80,6 +82,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
         overflow_checks: false,
         audio: Toggle::Auto,
         avif: Toggle::Auto,
+        pdfjs: Toggle::Auto,
         webgpu: Toggle::Auto,
         wgpu_native_root: None,
         wasm: true,
@@ -113,6 +116,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
             "--overflow-checks" => options.overflow_checks = true,
             "--audio" => options.audio = toggle(&value()?)?,
             "--avif" => options.avif = toggle(&value()?)?,
+            "--pdfjs" => options.pdfjs = toggle(&value()?)?,
             "--webgpu" => options.webgpu = toggle(&value()?)?,
             "--wgpu-native-root" => options.wgpu_native_root = Some(PathBuf::from(value()?)),
             "--no-wasm" => options.wasm = false,

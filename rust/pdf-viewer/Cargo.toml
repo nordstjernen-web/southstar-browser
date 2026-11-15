@@ -12,7 +12,10 @@ homepage.workspace = true
 [dependencies]
 southstar-digest = { path = "../digest", version = "=1.0.10-dev" }
 southstar-html-util = { path = "../html-util", version = "=1.0.10-dev" }
-southstar-pdfjs = { path = "../../third_party/pdfjs", version = "=1.0.10-dev" }
+southstar-pdfjs = { version = "=6.4.299", optional = true }
+
+[features]
+pdfjs = ["dep:southstar-pdfjs"]
 
 [lints]
 workspace = true

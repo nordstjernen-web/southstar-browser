@@ -10,7 +10,10 @@ use southstar_html_util::escape_text;
 pub const SCHEME: &[u8] = b"southstar-pdf:";
 const ORIGIN: &[u8] = b"southstar-pdf://viewer/";
 
+pub const AVAILABLE: bool = cfg!(feature = "pdfjs");
+
 const TEMPLATE: &str = include_str!("../viewer/viewer.html");
+const UNAVAILABLE: &str = include_str!("../viewer/unavailable.html");
 const VIEWER_FILES: [(&str, &[u8], &str); 2] = [
     (
         "viewer/viewer.mjs",
@@ -43,12 +46,28 @@ pub fn resource(url: &[u8]) -> Option<Resource> {
     if let Some(&(_, body, content_type)) = VIEWER_FILES.iter().find(|(name, ..)| *name == path) {
         return Some(Resource { body, content_type });
     }
-    let file = southstar_pdfjs::file(path.strip_prefix("pdfjs/")?)?;
+    pdfjs_resource(path.strip_prefix("pdfjs/")?)
+}
+
+#[cfg(feature = "pdfjs")]
+fn pdfjs_resource(path: &str) -> Option<Resource> {
+    let file = southstar_pdfjs::file(path)?;
     Some(Resource {
         body: file.bytes,
         content_type: file.content_type,
     })
 }
+
+#[cfg(not(feature = "pdfjs"))]
+fn pdfjs_resource(_path: &str) -> Option<Resource> {
+    None
+}
+
+#[cfg(feature = "pdfjs")]
+const PDFJS_VERSION: &[u8] = southstar_pdfjs::VERSION.as_bytes();
+
+#[cfg(not(feature = "pdfjs"))]
+const PDFJS_VERSION: &[u8] = b"";
 
 fn starts_ci(text: &[u8], prefix: &[u8]) -> bool {
     text.len() >= prefix.len() && text[..prefix.len()].eq_ignore_ascii_case(prefix)
@@ -110,6 +129,12 @@ fn fill(template: &str, fields: &[(&str, &[u8])]) -> Vec<u8> {
 pub fn document_html(data: &[u8], url: &[u8]) -> Vec<u8> {
     let name = escape_text(&document_name(url));
     let href = escape_text(url);
+    if !AVAILABLE {
+        return fill(
+            UNAVAILABLE,
+            &[("TITLE", &name), ("NAME", &name), ("URL", &href)],
+        );
+    }
     let encoded = southstar_digest::base64(data);
     let holder = [
         b"<script type=\"application/pdf;base64\" id=\"pdf-data\">".as_slice(),
@@ -124,6 +149,7 @@ pub fn document_html(data: &[u8], url: &[u8]) -> Vec<u8> {
             ("NAME", &name),
             ("URL", &href),
             ("BASE", ORIGIN),
+            ("PDFJS_VERSION", PDFJS_VERSION),
             ("DATA", &holder),
         ],
     )

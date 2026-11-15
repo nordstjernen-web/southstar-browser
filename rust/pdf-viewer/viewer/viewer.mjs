@@ -5,7 +5,7 @@
 import * as pdfjs from "../pdfjs/build/pdf.min.mjs";
 
 const base = new URL("../pdfjs/", import.meta.url).href;
-pdfjs.GlobalWorkerOptions.workerSrc = base + "build/pdf.worker.min.mjs";
+const expectedVersion = document.querySelector("meta[name=pdfjs-version]")?.content ?? "";
 
 const ZOOM_STEPS = [0.25, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 const PAGE_GAP = 12;
@@ -33,6 +33,24 @@ const state = {
 function setStatus(text) {
   status.textContent = text;
   status.hidden = !text;
+}
+
+function majorVersion(version) {
+  return String(version ?? "").split(".")[0];
+}
+
+function compatiblePdfjs() {
+  const found = majorVersion(pdfjs.version);
+  return found !== "" && found === majorVersion(expectedVersion);
+}
+
+function showUnavailable() {
+  const link = document.querySelector("a.download").cloneNode(true);
+  link.className = "";
+  link.textContent = "download";
+  status.replaceChildren("PDF viewer unavailable — ", link);
+  status.hidden = false;
+  document.getElementById("toolbar").hidden = true;
 }
 
 function pdfBytes() {
@@ -331,8 +349,14 @@ async function open() {
   }
 }
 
-bindControls();
-open().catch((error) => {
-  console.error(error);
-  setStatus("This PDF could not be displayed: " + (error?.message || error));
-});
+if (!compatiblePdfjs()) {
+  console.error("pdf.js " + pdfjs.version + " does not match southstar-pdfjs " + expectedVersion);
+  showUnavailable();
+} else {
+  pdfjs.GlobalWorkerOptions.workerSrc = base + "build/pdf.worker.min.mjs";
+  bindControls();
+  open().catch((error) => {
+    console.error(error);
+    setStatus("This PDF could not be displayed: " + (error?.message || error));
+  });
+}

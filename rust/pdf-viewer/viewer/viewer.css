@@ -31,6 +31,12 @@ html, body {
   border-bottom: 1px solid #000;
   z-index: 1;
 }
+#toolbar[hidden] {
+  display: none;
+}
+#status a {
+  color: var(--accent);
+}
 #toolbar .group {
   display: flex;
   align-items: center;
