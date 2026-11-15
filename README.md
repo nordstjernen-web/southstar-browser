@@ -246,19 +246,6 @@ The library adds HTML-to-PDF and PNG rendering, a per-page resource policy
 (no network, public web only, or host allow and deny lists), downloads, and
 a headless MCP server for agents. See [java/README.md](java/README.md).
 
-### The `internet-browser-southstar` command
-
-`cargo xtask install` puts `internet-browser-southstar` beside `southstar` in the binary
-directory, a symbolic link to it, so `internet-browser-southstar
-https://nordstjernen.org` starts Southstar. The name is Southstar's own, so it
-never starts Nordstjernen or Northstar installed beside it. The `.deb` and
-`.rpm` packages register it with `update-alternatives` instead of shipping
-the link, and drop the shared `internet-browser` alternative earlier
-versions registered. The Alpine package creates the link when the name is
-free. On Windows the installer registers `internet-browser-southstar` as an App
-Paths alias (the Run dialog and `start internet-browser-southstar` find it) and the
-MSIX package declares it as an app execution alias.
-
 ## Dependencies
 
 Southstar is an independent engine — no upstream browser code.
@@ -313,11 +300,16 @@ bundles ship a copy. Without it every host is its own site and `Domain=`
 cookies stay host-only.
 
 **Optional**, auto-detected or build-time-selected:
-[FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* (inline WebM playback —
-required on Linux and Windows, auto-detected on macOS), poppler-glib (inline
-PDF), libavif (AVIF images), Enchant (spell checking), SDL2 (audio output for the `southstar-audio` helper; `--audio`),
-vorbisfile and opusfile (Ogg audio without FFmpeg), and [wgpu-native](https://github.com/gfx-rs/wgpu-native) (experimental
-WebGPU).
+
+- [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* — inline WebM playback
+  (required on Linux and Windows, auto-detected on macOS)
+- poppler-glib — inline PDF
+- libavif — AVIF images (`--avif`)
+- Enchant — spell checking
+- SDL2 — audio output for the `southstar-audio` helper (`--audio`)
+- vorbisfile and opusfile — Ogg audio without FFmpeg
+- [wgpu-native](https://github.com/gfx-rs/wgpu-native) — experimental WebGPU
+  (`--webgpu`)
 
 ## License
 
