@@ -1,6 +1,7 @@
 Southstar Browser
 =================
 
+[![Best viewed in Southstar Browser](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat-square)](COPYING)
 [![Latest release](https://img.shields.io/github/v/release/nordstjernen-web/southstar-browser?style=flat-square)](https://github.com/nordstjernen-web/southstar-browser/releases/latest)
 [![crates.io](https://img.shields.io/crates/v/southstar?style=flat-square)](https://crates.io/crates/southstar)
@@ -8,7 +9,6 @@ Southstar Browser
 [![Dependency status](https://deps.rs/repo/github/nordstjernen-web/southstar-browser/status.svg?style=flat-square)](https://deps.rs/repo/github/nordstjernen-web/southstar-browser)
 [![Rust 1.100+](https://img.shields.io/badge/rust-1.100%2B-orange?style=flat-square&logo=rust)](https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/)
 [![Linux build](https://img.shields.io/github/actions/workflow/status/nordstjernen-web/southstar-browser/linux.yml?branch=main&style=flat-square&label=linux%20build)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/linux.yml)
-[![Best viewed in Southstar Browser](docs/best-viewed-in-southstar-badge.svg)](https://nordstjernen.org)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
 and JavaScript standards, written in Rust.
