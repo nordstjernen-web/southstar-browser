@@ -83,6 +83,7 @@ impl<'a> Walk<'a> {
         if root.skipped_contents() {
             return self_test(root, x, y);
         }
+        let (x, y) = into_orthogonal(root, x, y);
         if !clipped || padding_contains(root, x, y) {
             if ffi::paint_3d_registered(root) {
                 if let Some(m) = ffi::paint_3d_pick(root, x, y, hit_test) {
@@ -134,6 +135,20 @@ impl<'a> Walk<'a> {
             }
         }
         best
+    }
+}
+
+fn into_orthogonal(b: BoxRef<'_>, x: f64, y: f64) -> (f64, f64) {
+    if b.orthogonal() == 0 {
+        return (x, y);
+    }
+    let (m, bd, p) = (b.margin(), b.border(), b.padding());
+    let cx = b.x() + m.left + bd.left + p.left;
+    let cy = b.y() + m.top + bd.top + p.top;
+    if b.orthogonal() == southstar_layout_geom::ROTATE_COUNTERCLOCKWISE {
+        (cx + (cy + b.content_height() - y), cy + (x - cx))
+    } else {
+        (cx + (y - cy), cy + (cx + b.content_width() - x))
     }
 }
 

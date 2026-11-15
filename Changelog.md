@@ -3,6 +3,11 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Vertical writing modes lay out whole blocks: a `writing-mode:
+  vertical-rl` (or `sideways-rl`, `vertical-lr`, `sideways-lr`) block in
+  horizontal text wraps its paragraphs into columns as tall as the block
+  (or as its content, up to the viewport, when its height is auto), and
+  clicks land on the rotated content.
 * Rust 1.100 or newer is required to build Southstar (it was 1.95), and
   `rust-toolchain.toml` selects 1.100.0. The code uses what 1.100
   stabilized: `str::trim_prefix`/`trim_suffix`, `Vec::from_fn`,
