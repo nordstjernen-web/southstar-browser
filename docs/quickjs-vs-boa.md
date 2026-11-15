@@ -12,8 +12,8 @@ October 2026.
 | --- | --- | --- | --- |
 | Speed, Octane geometric mean | 2,914 | 543 | QuickJS, 5.4× |
 | Peak memory, heavy benchmarks | 57–113 MB | 207–368 MB | QuickJS, 2–6× |
-| test262 pass, all 53.8k files | 98.6% | 99.88% | Boa, narrowly |
-| test262 pass, on tests run | 99.96% | 99.88% | Tie |
+| test262 pass, all 53.8k files | 98.6% | 99.97% | Boa, narrowly |
+| test262 pass, on tests run | 99.96% | 99.97% | Tie |
 | Memory safety | C; 17 CVEs incl. 3 use-after-free | Rust; 1 advisory (DoS) | Boa |
 | HTML host hooks in Southstar | Would need rewriting | Done, 77,820 WPT subtests passing | Boa |
 | Cost to adopt | New FFI backend and C fork | None | Boa |
@@ -26,8 +26,7 @@ memory safety carries more weight there.
 What would change this: Speedometer showing script time dominates page load,
 or a hardened QuickJS (fuzzed, CVE-free for a year) with Southstar's hooks
 upstreamed. Until then the better investment is Boa's speed and memory (GC
-thresholds, shape and inline caches) and a fork resync for the 48 new
-class-field tests below.
+thresholds, shape and inline caches).
 
 ## Where Southstar stands
 
@@ -106,11 +105,11 @@ Both engines ran the same test262 checkout (tc39/test262 `2e58f87d`,
 | test262 | QuickJS 2026-06-04 | Boa (Southstar fork) |
 | --- | ---: | ---: |
 | Test files | 53,792 | 53,795 |
-| Passed | 53,045 (98.6%) | 53,729 (99.88%) |
-| Failed | 20 | 64 |
+| Passed | 53,045 (98.6%) | 53,777 (99.97%) |
+| Failed | 20 | 16 |
 | Timed out | 0 | 2 |
 | Not run (feature skipped or excluded) | 727 | 0 |
-| Pass rate on tests run | 99.96% | 99.88% |
+| Pass rate on tests run | 99.96% | 99.97% |
 | intl402 | all run passed | 3,394 / 3,394 |
 | Wall time, 4 workers | 31 s | 215 s |
 
@@ -120,10 +119,13 @@ Both engines ran the same test262 checkout (tc39/test262 `2e58f87d`,
   assignment order, `Function.prototype.caller`).
 - QuickJS fails 16 SpiderMonkey staging tests, 3 explicit-resource-management
   module tests and 1 Temporal `Duration.from` test.
-- Boa fails 48 class-field tests added to test262 after the fork's last sync
-  (an escaped `async` before a field, with automatic semicolon insertion), 6
-  `DataView` tests on detached or resized buffers, 7 staging RegExp tests from
-  `regress` and a few other staging tests.
+- Boa fails 6 `DataView` tests on detached or resized buffers, 1 Temporal
+  `PlainMonthDay.from` test, 6 staging RegExp tests from `regress` and 3 other
+  staging tests. It first failed 48 more: class-field tests added to test262
+  in November 2026 (an escaped `static`, `get`, `set` or `async` ended by
+  automatic semicolon insertion). Boa `main` had nothing newer than the fork's
+  `bea404d1`, so the fork's class parser was fixed instead (`docs/boa-fork.md`),
+  and the Boa column shows the result.
 - QuickJS-ng passed 0.7% of intl402 in October; Bellard's 2026-06-04 release
   ships its own Intl and Temporal and passes all of it.
 

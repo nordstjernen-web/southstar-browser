@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* An escaped `static`, `get`, `set` or `async` in a class body (`\u0061sync`
+  on a line of its own), and an `async` followed by a line break, is a field
+  of that name instead of a syntax error, as the specification and other
+  engines have it; test262's `language/` tree now passes in full.
 * `clip-path: path()` and `shape()` clip to their outlines: SVG path data
   (with an optional `evenodd` fill rule) and the CSS shape commands
   (`move`, `line`, `hline`, `vline`, `curve`, `smooth`, `arc`, `close`,
