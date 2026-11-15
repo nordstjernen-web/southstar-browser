@@ -178,7 +178,7 @@ fn logo_markup() -> Vec<u8> {
     [
         &b"<img class=\"mark-img\" src=\""[..],
         logo_data_uri(),
-        b"\" alt=\"Southstar\" aria-hidden=\"true\">",
+        b"\" alt=\"\">",
     ]
     .concat()
 }
@@ -282,6 +282,12 @@ fn southstar_page() -> Vec<u8> {
         b"__ND_LOGO_MARK__",
         &logo_markup(),
     );
+    let built = if diagnostics::BUILD_DATE.is_empty() {
+        String::new()
+    } else {
+        format!("<p class=\"built\">Built {}</p>", diagnostics::BUILD_DATE)
+    };
+    let page = substitute(&page, b"__ND_BUILT__", built.as_bytes());
     substitute(&page, b"__ND_DIAG__", &diagnostics::html())
 }
 

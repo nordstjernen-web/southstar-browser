@@ -1,11 +1,11 @@
-//! Southstar — the diagnostics card on about:southstar: the system, the versions of Southstar and its libraries, the Rust build, the optional features compiled in and Google Safe Browsing.
+//! Southstar — the technical details on about:southstar: the build, the system, the library versions, the optional features compiled in and Google Safe Browsing.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use crate::about::templates::VERSION;
 use crate::ffi::host as sys;
 
-const BUILD_DATE: &str = match option_env!("NS_BUILD_DATE") {
+pub const BUILD_DATE: &str = match option_env!("NS_BUILD_DATE") {
     Some(date) => date,
     None => "",
 };
@@ -32,13 +32,12 @@ const ARCH: &str = if cfg!(target_arch = "x86_64") {
     "unknown"
 };
 
-const FEATURES: [(&str, bool); 6] = [
+const FEATURES: [(&str, bool); 5] = [
     ("WebM video (VP8 / VP9 / Opus)", cfg!(feature = "libav")),
     ("AVIF images", cfg!(feature = "avif")),
     ("SVG images", true),
     ("Inline PDF viewer", cfg!(feature = "poppler")),
     ("Spell checking", cfg!(feature = "enchant")),
-    ("Seccomp sandbox", cfg!(feature = "seccomp")),
 ];
 
 fn kv(out: &mut Vec<u8>, key: &str, value: Option<&[u8]>) {
@@ -53,11 +52,14 @@ fn kv(out: &mut Vec<u8>, key: &str, value: Option<&[u8]>) {
 }
 
 fn feature(out: &mut Vec<u8>, key: &str, on: bool) {
+    let (class, label) = if on {
+        ("on", "Included")
+    } else {
+        ("off", "Not included")
+    };
     out.extend_from_slice(
         format!(
-            "<div class=\"drow\"><span class=\"dk\">{key}</span><span class=\"dv {}\">{}</span></div>",
-            if on { "on" } else { "off" },
-            if on { "Enabled" } else { "Not built" }
+            "<div class=\"drow\"><span class=\"dk\">{key}</span><span class=\"dv {class}\">{label}</span></div>"
         )
         .as_bytes(),
     );
@@ -72,90 +74,93 @@ fn user_agent() -> Option<Vec<u8>> {
         .or_else(|| sys::user_agent_for_mode(config.and_then(|c| c.compat_mode.bytes())))
 }
 
-pub fn html() -> Vec<u8> {
-    let mut s = b"<div class=\"diag\">".to_vec();
+fn build(s: &mut Vec<u8>) {
+    s.extend_from_slice(b"<h3>Southstar</h3>");
+    kv(s, "Version", Some(VERSION.as_bytes()));
+    kv(s, "Build date", Some(BUILD_DATE.as_bytes()));
+    let rust = sys::rust_info();
+    kv(s, "Build profile", rust.profile.as_deref());
+    let compiler = [&b"rustc "[..], rust.compiler.as_deref().unwrap_or_default()].concat();
+    kv(s, "Compiler", Some(&compiler));
+    kv(s, "Minimum Rust version", rust.minimum.as_deref());
+    kv(s, "User agent", user_agent().as_deref());
+}
+
+fn system(s: &mut Vec<u8>) {
     s.extend_from_slice(b"<h3>System</h3>");
     let os = sys::os_info(c"PRETTY_NAME").or_else(|| sys::os_info(c"NAME"));
     kv(
-        &mut s,
+        s,
         "Operating system",
         Some(os.as_deref().unwrap_or(PLATFORM.as_bytes())),
     );
-    kv(&mut s, "Platform", Some(PLATFORM.as_bytes()));
-    kv(&mut s, "Architecture", Some(ARCH.as_bytes()));
+    kv(s, "Architecture", Some(ARCH.as_bytes()));
     kv(
-        &mut s,
+        s,
         "Logical CPUs",
         Some(sys::processors().to_string().as_bytes()),
     );
+}
 
+fn libraries(s: &mut Vec<u8>) {
     let v = sys::versions();
-    s.extend_from_slice(b"<h3>Version &amp; libraries</h3>");
-    kv(
-        &mut s,
-        "Southstar",
-        Some(format!("{VERSION} (built {BUILD_DATE})").as_bytes()),
-    );
-    kv(&mut s, "User agent", user_agent().as_deref());
-    kv(&mut s, "JavaScript engine", v.js_engine.as_deref());
-    kv(&mut s, "HTML parser", Some(b"rust/html5 (in-tree)"));
+    s.extend_from_slice(b"<h3>Libraries</h3>");
+    kv(s, "JavaScript engine", v.js_engine.as_deref());
+    kv(s, "Networking", Some(&v.networking));
+    kv(s, "TLS", Some(southstar_http::tls_description()));
+    kv(s, "Web Cryptography", v.openssl.as_deref());
+    if cfg!(feature = "libav") {
+        kv(s, "Video (FFmpeg libav*)", v.libav.as_deref());
+    }
     let [major, minor, micro] = v.glib;
     kv(
-        &mut s,
+        s,
         "GLib",
         Some(format!("{major}.{minor}.{micro}").as_bytes()),
     );
-    kv(&mut s, "Text layout", Some(b"rust/text (in-tree)"));
-    kv(&mut s, "Cairo", v.cairo.as_deref());
-    kv(&mut s, "SQLite", v.sqlite.as_deref());
-    kv(&mut s, "WebP", Some(b"image-webp (Rust)"));
-    if cfg!(feature = "libav") {
-        kv(&mut s, "Video (FFmpeg libav*)", v.libav.as_deref());
-    }
-    kv(&mut s, "TLS", Some(southstar_http::tls_description()));
-    kv(&mut s, "Web Cryptography", v.openssl.as_deref());
-    kv(&mut s, "Networking", Some(&v.networking));
+    kv(s, "Cairo", v.cairo.as_deref());
+    kv(s, "SQLite", v.sqlite.as_deref());
+}
 
-    let rust = sys::rust_info();
-    s.extend_from_slice(b"<h3>Rust</h3>");
-    let compiler = [&b"rustc "[..], rust.compiler.as_deref().unwrap_or_default()].concat();
-    kv(&mut s, "Compiler", Some(&compiler));
-    kv(&mut s, "Minimum Rust version", rust.minimum.as_deref());
-    kv(&mut s, "Build profile", rust.profile.as_deref());
-    kv(
-        &mut s,
-        "Ported to Rust",
-        Some(format!("{} C modules", rust.module_count).as_bytes()),
-    );
-    kv(&mut s, "Modules", rust.modules.as_deref());
-    kv(
-        &mut s,
-        "JavaScript bindings",
-        Some(b"Temporal, over the js-engine layer"),
-    );
-
+fn features(s: &mut Vec<u8>) {
     s.extend_from_slice(b"<h3>Features</h3>");
-    feature(&mut s, "WebGL (3D canvas)", true);
+    feature(s, "WebGL (3D canvas)", true);
     if cfg!(feature = "webgpu") {
         let state = if sys::env_set("NS_WEBGPU_ALLOW") {
             "Enabled (--enable-webgpu)"
         } else {
-            "Built \u{2014} start with --enable-webgpu"
+            "Included \u{2014} start with --enable-webgpu"
         };
-        kv(&mut s, "WebGPU (experimental)", Some(state.as_bytes()));
+        kv(s, "WebGPU (experimental)", Some(state.as_bytes()));
     } else {
-        feature(&mut s, "WebGPU (experimental)", false);
+        feature(s, "WebGPU (experimental)", false);
     }
     for (key, on) in FEATURES {
-        feature(&mut s, key, on);
+        feature(s, key, on);
     }
-    if let Some(rows) = crate::safety::status_rows() {
-        s.extend_from_slice(b"<h3>Google Safe Browsing</h3>");
-        for (key, value) in rows {
-            let key = String::from_utf8_lossy(&sys::markup_escape(key.as_bytes())).into_owned();
-            kv(&mut s, &key, Some(value.as_bytes()));
-        }
+    if cfg!(target_os = "linux") {
+        feature(s, "Seccomp sandbox", cfg!(feature = "seccomp"));
     }
+}
+
+fn safe_browsing(s: &mut Vec<u8>) {
+    let Some(rows) = crate::safety::status_rows() else {
+        return;
+    };
+    s.extend_from_slice(b"<h3>Google Safe Browsing</h3>");
+    for (key, value) in rows {
+        let key = String::from_utf8_lossy(&sys::markup_escape(key.as_bytes())).into_owned();
+        kv(s, &key, Some(value.as_bytes()));
+    }
+}
+
+pub fn html() -> Vec<u8> {
+    let mut s = b"<div class=\"diag\" id=\"diag\">".to_vec();
+    build(&mut s);
+    system(&mut s);
+    libraries(&mut s);
+    features(&mut s);
+    safe_browsing(&mut s);
     s.extend_from_slice(b"</div>");
     s
 }

@@ -237,18 +237,13 @@ pub struct RustInfo {
     pub compiler: Option<Vec<u8>>,
     pub minimum: Option<Vec<u8>>,
     pub profile: Option<Vec<u8>>,
-    pub module_count: u32,
-    pub modules: Option<Vec<u8>>,
 }
 
 pub fn rust_info() -> RustInfo {
-    let modules = crate::build_info::ported_modules();
     RustInfo {
         compiler: Some(crate::build_info::compiler_version().as_bytes().to_vec()),
         minimum: Some(crate::build_info::minimum_version().as_bytes().to_vec()),
         profile: Some(crate::build_info::build_profile().as_bytes().to_vec()),
-        module_count: modules.len() as u32,
-        modules: Some(modules.join(", ").into_bytes()),
     }
 }
 

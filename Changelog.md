@@ -10,6 +10,15 @@ Southstar Browser 1.0.10-dev:
   (southstar-av in the audio helper, southstar-glib in spell checking,
   southstar-image in the camera) are optional or Linux-only, so cargo no
   longer reports them unused.
+* about:southstar is reorganized: the header names the version and build
+  date and has a Copy version info button that copies the diagnostics as
+  text; a short Privacy card says what Southstar sends and to whom; the
+  license is one sentence with its buttons; and the diagnostics sit in a
+  closed Technical details section without the list of ported C modules or
+  fixed in-tree component rows. Features read Included / Not included, the
+  seccomp row shows only on Linux, the breadcrumb is gone and diagnostics
+  rows stack on narrow windows. Headless renders honour
+  `NS_COLOR_SCHEME=dark`.
 * No crates.io crate is built in two versions any more, except
   miniz_oxide, which the png crate itself uses in two. The Boa fork
   replaced dashmap, num_enum, rand, futures-concurrency, dynify, aligned-vec
