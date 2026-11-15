@@ -129,7 +129,7 @@ members = [
     "rust/netutil",
     "rust/numfmt",
     "rust/paint",
-    "rust/pdf",
+    "rust/pdf-viewer",
     "rust/plmpeg",
     "rust/print",
     "rust/psl",

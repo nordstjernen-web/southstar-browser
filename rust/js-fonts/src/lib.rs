@@ -16,6 +16,7 @@ pub(crate) use southstar_js_engine::props::{bind, set, set_str};
 use southstar_js_engine::{Scope, Value};
 
 pub use ffi::nsr_window_fontface_ctor;
+pub use font_face::install_data_hook;
 
 pub(crate) type JsResult<T = Value> = Result<T, Value>;
 

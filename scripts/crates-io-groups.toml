@@ -64,7 +64,7 @@ members = ["css", "css-color", "css-grammar", "css-media", "css-prop-syntax", "c
 description = "Southstar's storage and support code: the HTTP cache, cookies, history, CSP, Intl data, image decoders and WebCrypto"
 members = [
     "http-cache", "netstore", "history", "csp", "intl-core", "webcrypto", "image-decoders",
-    "bytecode-cache", "pdf",
+    "bytecode-cache", "pdf-viewer",
 ]
 
 [southstar-engine]

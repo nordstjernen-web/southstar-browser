@@ -166,12 +166,37 @@ fn console_assert(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> JsRes
     Ok(Value::undefined())
 }
 
-pub(crate) fn unhandled_rejection(scope: &mut Scope<'_>, reason: &Value) {
-    console_emit(
-        scope,
-        "[unhandled rejection]",
-        core::slice::from_ref(reason),
-    );
+thread_local! {
+    static PENDING_REJECTIONS: core::cell::RefCell<Vec<(usize, String)>> =
+        const { core::cell::RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn track_rejection(
+    scope: &mut Scope<'_>,
+    promise: &Value,
+    reason: &Value,
+    handled: bool,
+) {
+    let key = promise.object_identity() as usize;
+    if handled {
+        PENDING_REJECTIONS.with_borrow_mut(|pending| pending.retain(|(k, _)| *k != key));
+        return;
+    }
+    let mut line = "[unhandled rejection] ".to_owned();
+    if let Some(text) = crate::text(scope, reason) {
+        line.push_str(&text);
+    }
+    PENDING_REJECTIONS.with_borrow_mut(|pending| pending.push((key, line)));
+}
+
+pub(crate) fn report_pending_rejections(js: ffi::Js) {
+    let pending = PENDING_REJECTIONS.with_borrow_mut(core::mem::take);
+    if js.is_null() {
+        return;
+    }
+    for (_, line) in pending {
+        ffi::log_line(js, &line);
+    }
 }
 
 pub(crate) fn install_console(scope: &mut Scope<'_>, global: &Value) {

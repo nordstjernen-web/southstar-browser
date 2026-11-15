@@ -3,6 +3,30 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* PDF documents open in a viewer built on Mozilla's pdf.js (pdfjs-dist
+  6.4.299, legacy build), vendored unmodified in `third_party/pdfjs` with
+  its CMaps, standard fonts and WebAssembly image decoders and served from
+  the binary at `southstar-pdf://viewer/`. Pages render on canvases as they
+  scroll into view, with zoom, page navigation, `#page=N` and find in the
+  document. The PDF's bytes are handed to the viewer, so nothing is
+  fetched twice and cross-origin PDFs work; PDF JavaScript is never run.
+  Untyped responses that start with `%PDF-` open in it too. The
+  poppler-based `rust/pdf`, its `poppler` cargo feature and the
+  poppler-glib dependency are gone.
+* `FontFace` with an `ArrayBuffer` or typed-array source installs the font
+  for CSS and canvas text, and `loaded` settles once it is usable (it used
+  to resolve without loading anything). A later face with the same family
+  and style replaces the earlier one.
+* `CompressionStream` and `DecompressionStream` work in workers; they
+  passed the bytes through unchanged there.
+* Workers report an unhandled promise rejection only when no handler has
+  been attached by the end of the microtask checkpoint, as pages do, instead
+  of at the moment of rejection.
+* An absolutely positioned scroll container sized by `top` and `bottom`
+  scrolls: setting `scrollTop` on it used to be ignored. Content scrolled
+  far into a scroll container is painted (it was culled against the
+  unscrolled position), and headless runs keep element scroll offsets
+  across a relayout as the browser window does.* No crates.io crate is built in two versions any more, except
 * The new tab page, about:southstar and the Settings page are translated
   through the UI catalogues (`data/i18n/*.lang`), and their `<html lang>`
   names the catalogue's language. German, Spanish, French, Italian,

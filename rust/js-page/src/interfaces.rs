@@ -315,6 +315,7 @@ pub(crate) fn install(scope: &mut Scope<'_>, global: &Value) {
     ffi::install_on(scope, Installer::DomHierarchy, global);
     southstar_js_interfaces::install_web_api_shapes(scope);
     bind_constructor(scope, global, "FontFace", 3, Native::FontFaceConstructor);
+    southstar_js_fonts::install_data_hook(scope, global);
     for &(name, which) in HOST_PROTOS {
         link_host_proto(scope, global, name, which);
     }

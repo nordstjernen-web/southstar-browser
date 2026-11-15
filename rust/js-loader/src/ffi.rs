@@ -66,6 +66,7 @@ pub(crate) fn url_resolve(base: Option<&CStr>, href: &CStr) -> Option<CString> {
 
 pub(crate) fn url_is_http_or_https(url: &CStr) -> bool {
     southstar_url::bytes::is_http_or_https(url.to_bytes())
+        || southstar_net::is_builtin_resource(url.to_bytes())
 }
 
 pub(crate) fn decode_data_url(url: &CStr) -> Option<Vec<u8>> {

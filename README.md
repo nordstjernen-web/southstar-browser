@@ -125,7 +125,9 @@ See [npm/README.md](npm/README.md).
 - **Images and graphics** — pure-Rust decoders (`png`, `gif`, `zune-jpeg`,
   `image-webp` and an in-tree BMP decoder) read PNG/APNG, GIF, BMP, JPEG and
   lossy, lossless and animated WebP; ICO and SVG are rendered
-  in-engine, with optional AVIF and inline PDF support.
+  in-engine, with optional AVIF support. PDF documents open in a viewer
+  built on Mozilla's [pdf.js](https://github.com/mozilla/pdf.js), bundled
+  in-tree.
 - **Media** — `<video>` plays **inline** for MPEG-1 (decoded in-tree by
   a Rust port of [pl_mpeg](https://github.com/phoboslab/pl_mpeg)) and, when FFmpeg's libav is
   present at build time, **WebM** (VP9/VP8 + Opus/Vorbis). On Windows,
@@ -223,8 +225,8 @@ southstar
 ```
 
 On first start it writes its translations and license texts to
-`~/.cargo/share/southstar`. AVIF, PDF, spell-checking and native Ogg audio
-are optional cargo features (`avif`, `poppler`, `enchant`, `vorbisfile`,
+`~/.cargo/share/southstar`. AVIF, spell-checking and native Ogg audio
+are optional cargo features (`avif`, `enchant`, `vorbisfile`,
 `opusfile`). On Windows, run it from an MSYS2 UCRT64 shell with the
 libraries from [docs/Windows.md](docs/Windows.md) installed.
 
@@ -303,7 +305,6 @@ cookies stay host-only.
 
 - [FFmpeg](https://github.com/FFmpeg/FFmpeg) libav\* — inline WebM playback
   (required on Linux and Windows, auto-detected on macOS)
-- poppler-glib — inline PDF
 - libavif — AVIF images (`--avif`)
 - Enchant — spell checking
 - SDL2 — audio output for the `southstar-audio` helper (`--audio`)

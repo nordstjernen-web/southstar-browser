@@ -104,7 +104,7 @@ southstar-mic = { path = "../mic", version = "=1.0.10-dev" }
 southstar-net = { path = "../net", version = "=1.0.10-dev" }
 southstar-netutil = { path = "../netutil", version = "=1.0.10-dev" }
 southstar-paint = { path = "../paint", version = "=1.0.10-dev" }
-southstar-pdf = { path = "../pdf", version = "=1.0.10-dev" }
+southstar-pdf-viewer = { path = "../pdf-viewer", version = "=1.0.10-dev" }
 southstar-print = { path = "../print", version = "=1.0.10-dev" }
 southstar-render = { path = "../render", version = "=1.0.10-dev" }
 southstar-renderer-client = { path = "../renderer-client", version = "=1.0.10-dev" }
@@ -136,7 +136,6 @@ avif = ["southstar-css/avif", "southstar-image/avif", "southstar-image-decoders/
 sdl = ["southstar-mic/sdl", "southstar-renderer-host/sdl"]
 fontconfig = ["southstar-renderer-host/fontconfig"]
 font-fontconfig = ["southstar-font/fontconfig"]
-poppler = ["southstar-pdf/poppler", "southstar-net/poppler"]
 egl = ["southstar-glctx/egl"]
 rust-shaper = ["southstar-text/rust-shaper"]
 enchant = ["southstar-net/enchant", "southstar-spellcheck/enchant"]

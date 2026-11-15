@@ -659,7 +659,11 @@ fn size_and_place(f: &Frame<'_>, plan: Option<&anchor::Plan>) {
         abox.set_content_height(h);
         if h >= 0.0 {
             layout_box(abox, layout_w, cs);
+            let measured = abox.content_height();
             abox.set_content_height(h);
+            if abox.scrolls() && measured > h {
+                abox.set_scroll_max(None, Some(measured - h));
+            }
         }
     }
     if let Some(p) = plan

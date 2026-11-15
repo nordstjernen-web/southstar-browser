@@ -29,6 +29,7 @@ southstar-netstore = { path = "../netstore", version = "=1.0.10-dev" }
 southstar-netutil = { path = "../netutil", version = "=1.0.10-dev" }
 southstar-sandbox = { path = "../sandbox", version = "=1.0.10-dev" }
 southstar-url = { path = "../url", version = "=1.0.10-dev" }
+southstar-pdf-viewer = { path = "../pdf-viewer", version = "=1.0.10-dev" }
 
 [features]
 avif = []
@@ -36,7 +37,6 @@ enchant = []
 http-brotli = ["southstar-http/brotli"]
 http-zstd = ["southstar-http/zstd"]
 libav = []
-poppler = []
 seccomp = []
 wasm = []
 webgpu = []

@@ -281,6 +281,7 @@ pub(crate) fn halt(js: Js) {
 
 pub(crate) fn drain_microtasks(js: Js) {
     api::drain_microtasks(js.page());
+    worker_scope::report_pending_rejections(js);
 }
 
 pub(crate) fn drain_mutations(js: Js) {
@@ -627,13 +628,11 @@ pub fn nsr_worker_install_location(scope: &mut Scope<'_>, global: &Value, url: &
 
 pub fn nsr_worker_promise_rejection_tracker(
     scope: &mut Scope<'_>,
-    _promise: &Value,
+    promise: &Value,
     reason: &Value,
     handled: bool,
 ) {
-    if !handled {
-        worker_scope::unhandled_rejection(scope, reason);
-    }
+    worker_scope::track_rejection(scope, promise, reason, handled);
 }
 
 pub fn nsr_worker_report_exception(js: Option<Page>, exception: &Value) -> bool {

@@ -75,8 +75,8 @@ fn is_xml(ct: Option<&CStr>) -> bool {
     starts_ci(ct, b"text/xml") || starts_ci(ct, b"application/xml") || contains(c, b"+xml")
 }
 
-fn is_pdf(ct: Option<&CStr>) -> bool {
-    starts_ci(ct, b"application/pdf") || starts_ci(ct, b"application/x-pdf")
+fn is_pdf_response(resp: &Response) -> bool {
+    southstar_pdf_viewer::is_pdf(resp.content_type().map(CStr::to_bytes), resp.body())
 }
 
 fn text_document(url: &CStr, text: &[u8]) -> Vec<u8> {
@@ -94,21 +94,25 @@ overflow-wrap:anywhere}</style></head><body><pre>",
 }
 
 fn prepare_document_response(resp: &mut Response) {
-    let Some(ct) = resp.content_type() else {
-        return;
-    };
     if !resp.has_body() {
         return;
     }
-    let ct = Some(ct);
     let final_url = resp
         .final_url()
         .map_or_else(|| c"".to_owned(), CStr::to_owned);
+    if is_pdf_response(resp) {
+        let html = resp.pdf_document(&final_url);
+        resp.set_body(&html);
+        resp.set_content_type(HTML_UTF8);
+        return;
+    }
+    let Some(ct) = resp.content_type() else {
+        return;
+    };
+    let ct = Some(ct);
     let url = Some(final_url.to_bytes());
     let html = if starts_ci(ct, b"image/") {
         Some(southstar_html_util::image_document(final_url.to_bytes()))
-    } else if is_pdf(ct) {
-        Some(resp.pdf_document(&final_url))
     } else if is_json(ct) {
         let decoded = resp.decoded_text();
         southstar_html_util::json_document(url, &decoded)
@@ -338,7 +342,11 @@ pub fn open(url: &CStr, view: &Viewport, post: Option<&Post<'_>>) -> Option<Page
         && !headers_have_no_store(resp.raw_headers());
     let refresh_header = resp.refresh().and_then(ffi::dup_text);
     let doc_language = resp.content_language().and_then(ffi::dup_text);
-    let csp_header = resp.csp_header().and_then(ffi::dup_text);
+    let csp_header = if is_pdf_response(&resp) {
+        None
+    } else {
+        resp.csp_header().and_then(ffi::dup_text)
+    };
     prepare_document_response(&mut resp);
     let content_type = resp.content_type().map(CStr::to_bytes);
     let (decoded, doc_charset) = southstar_html_util::decode_body(resp.body(), content_type);

@@ -10,6 +10,7 @@ pub mod dispatch;
 mod image_map;
 mod image_source;
 pub mod paint_links;
+mod scroll_offsets;
 mod srcset;
 mod utf8;
 
@@ -19,6 +20,7 @@ pub use boxes::{
     image_map_area, img_chosen_density, img_chosen_url, inline_kind,
 };
 pub use image_source::Chosen;
+pub use scroll_offsets::{ScrollOffsets, restore_scroll_offsets, scroll_offsets};
 pub use utf8::utf8_get_char;
 
 pub fn children(b: BoxRef<'_>) -> impl Iterator<Item = BoxRef<'_>> {

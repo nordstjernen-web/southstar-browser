@@ -29,7 +29,6 @@ Build-Depends:
  libharfbuzz-dev,
  libfontconfig-dev,
  libfreetype-dev,
- libpoppler-glib-dev,
 Standards-Version: 4.7.2
 Homepage: https://github.com/nordstjernen-web/southstar-browser
 Vcs-Browser: https://github.com/nordstjernen-web/southstar-browser

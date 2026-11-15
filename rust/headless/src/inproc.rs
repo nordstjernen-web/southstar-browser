@@ -181,6 +181,7 @@ pub fn relayout(c: &Ctx) {
     }
     c.relaying.set(true);
     drop(c.restyled.take());
+    let scroll_save = southstar_layout::scroll_offsets(c.layout());
     if std::env::var_os("NS_ANIM_DEBUG").is_some() {
         err(b"[anim] headless_relayout\n");
     }
@@ -193,6 +194,7 @@ pub fn relayout(c: &Ctx) {
     }
     drop(c.styles.take());
     c.styles.replace(ffi::relayout(&c.request(), &c.layout));
+    southstar_layout::restore_scroll_offsets(c.layout(), &scroll_save);
     c.relaying.set(false);
 }
 
@@ -592,6 +594,15 @@ fn load_page(
         .is_some_and(|ct| ct.len() >= 6 && ct[..6].eq_ignore_ascii_case(b"image/"));
     if is_image && has_body {
         body = Some(ffi::image_document(Some(&doc_url(&final_url))));
+        content_type = Some(HTML_UTF8.to_vec());
+    } else if has_body
+        && let Some(b) = body.as_deref()
+        && southstar_pdf_viewer::is_pdf(content_type.as_deref(), b)
+    {
+        body = Some(southstar_pdf_viewer::document_html(
+            b,
+            doc_url(&final_url).to_bytes(),
+        ));
         content_type = Some(HTML_UTF8.to_vec());
     }
 

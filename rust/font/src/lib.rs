@@ -388,6 +388,60 @@ fn install(keys: &[Vec<u8>], data: &[u8], forced_extension: Option<&[u8]>) {
     }
 }
 
+pub fn install_face_data(family: &[u8], data: &[u8], descriptors: Descriptors) -> bool {
+    if !available() || family.is_empty() || !looks_like_font(data) {
+        return false;
+    }
+    if state().loader.is_none() {
+        init();
+    }
+    let converted = convert(data);
+    let (bytes, extension) = match &converted {
+        Some((bytes, extension)) => (&bytes[..], *extension),
+        None => (data, sfnt_extension(data.starts_with(b"OTTO"))),
+    };
+    if !southstar_text::accepts_web_font(bytes) {
+        return false;
+    }
+    let Some(cache_dir) = state()
+        .loader
+        .as_ref()
+        .map(|loader| loader.cache_dir.clone())
+    else {
+        return false;
+    };
+    let family = String::from_utf8_lossy(family);
+    let installed =
+        southstar_text::font_face_install_name(&family, descriptors.weight, descriptors.slant);
+    let mut name = installed.clone().into_bytes();
+    name.push(b'-');
+    name.extend_from_slice(southstar_digest::sha256_hex(bytes).as_bytes());
+    name.extend_from_slice(extension);
+    let Some(path) = ffi::build_path(&cache_dir, &name) else {
+        return false;
+    };
+    if !ffi::write_file(&path, bytes) {
+        return false;
+    }
+    let indexed = path.to_str().is_ok_and(|path| {
+        southstar_text::install_web_font(
+            path,
+            bytes,
+            &installed,
+            descriptors.weight,
+            descriptors.slant,
+        )
+    });
+    if !indexed {
+        ffi::install_font_file(&path, installed.as_bytes(), descriptors);
+    }
+    southstar_text::commit_font_face(&family, &installed, descriptors.weight, descriptors.slant);
+    ffi::refresh_fonts();
+    let mut state = state();
+    state.generation = state.generation.wrapping_add(1);
+    true
+}
+
 pub(crate) fn fetched(url: &[u8], body: Option<&[u8]>) {
     let keys = {
         let mut state = state();

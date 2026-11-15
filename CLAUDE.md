@@ -100,6 +100,22 @@ Update Changelog.md
   be turned off in Settings → Privacy, and falls back to the local
   `safebrowsing.list` host list. Never commit the key. Don't add other
   default third-party connections.
+- **PDF documents are rendered by Mozilla's pdf.js**, the one bundled
+  Mozilla project (an explicit decision of the project owner; it replaced
+  the poppler-based `rust/pdf`). The prebuilt `pdfjs-dist` package (legacy
+  build, Apache-2.0) is vendored unmodified in `third_party/pdfjs`
+  (`southstar-pdfjs`) with its CMaps, standard fonts and WebAssembly
+  decoders; update it only with `python3 scripts/update-pdfjs.py VERSION`,
+  never by editing its files. `rust/pdf-viewer` is Southstar's own viewer
+  page around it: `rust/browser/src/open.rs` turns an `application/pdf`
+  response (or an untyped one starting with `%PDF-`) into that page at the
+  PDF's own URL, with the downloaded bytes embedded, so pdf.js never
+  refetches the document and the page gets no privilege beyond the PDF's
+  origin (its CSP is dropped, since only the viewer's scripts run). The
+  viewer and pdf.js load from the internal `southstar-pdf://viewer/` origin,
+  served by `rust/net` from the binary. PDF JavaScript is never run
+  (`enableScripting: false`, `isEvalSupported: false`). When pdf.js hits an
+  engine gap, fix the engine; don't patch pdf.js.
 - `southstar --mcp` (`rust/mcp`) is a Model Context Protocol server over
   stdio that lets the user's local agent drive the browser window (tabs,
   navigation, page outline, clicks, typing, screenshots). It is a local
@@ -571,7 +587,9 @@ directory or integration-test targets.
 
 - Don't introduce Mozilla/Gecko code, WebKit code, or any other
   upstream browser engine source. Southstar is an independent
-  implementation, not a fork.
+  implementation, not a fork. The one exception is pdf.js in
+  `third_party/pdfjs` (see "Design constraints"): keep it, keep it
+  unmodified, and don't take it as precedent for other Mozilla code.
 - **Don't add site-specific hacks.** No per-site rendering shims, no
   hardcoded hostnames, no grepping a site's private JSON (e.g.
   `ytInitialPlayerResponse`, `mediaDefinitions`, `ytimg`, `movie_player`).

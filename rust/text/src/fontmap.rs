@@ -477,7 +477,10 @@ fn make_pattern(key: &FontsetKey) -> PatternBuilder {
     }
     if let Some(family) = description.family() {
         for name in split_list(family) {
-            pattern.add_string(FC_FAMILY, name);
+            match crate::face_alias::installed_family(name) {
+                Some(installed) => pattern.add_string(FC_FAMILY, &installed),
+                None => pattern.add_string(FC_FAMILY, name),
+            }
         }
     }
     if let Some(language) = key.language {

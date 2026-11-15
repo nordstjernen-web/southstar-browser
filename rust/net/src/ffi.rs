@@ -124,6 +124,34 @@ pub fn synthesize_about_response(
     true
 }
 
+pub fn synthesize_pdf_viewer_response(url: &[u8], resp: &mut Response) -> bool {
+    if !url.starts_with(southstar_pdf_viewer::SCHEME) {
+        return false;
+    }
+    resp.final_url = Some(cstr(url));
+    match southstar_pdf_viewer::resource(url) {
+        Some(resource) => {
+            resp.status = 200;
+            resp.content_type = Some(cstr(resource.content_type.as_bytes()));
+            resp.cors_allow_origin = Some(cstr(b"*"));
+            resp.raw_headers = Some(cstr(
+                format!(
+                    "Content-Type: {}\r\nAccess-Control-Allow-Origin: *\r\n",
+                    resource.content_type
+                )
+                .as_bytes(),
+            ));
+            resp.body.extend_from_slice(resource.body);
+        }
+        None => {
+            resp.status = 404;
+            resp.content_type = Some(cstr(b"text/plain; charset=utf-8"));
+            resp.body.extend_from_slice(b"not found");
+        }
+    }
+    true
+}
+
 pub fn synthesize_view_source_response(
     url: &[u8],
     top_url: Option<&[u8]>,

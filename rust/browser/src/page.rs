@@ -4,7 +4,6 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
@@ -85,46 +84,6 @@ pub fn damp_reset(b: &NsBrowser) {
     b.damp_logged.set(false);
 }
 
-fn collect_scroll(b: Option<BoxRef<'_>>, map: &mut HashMap<usize, (f64, f64)>) {
-    let Some(b) = b else {
-        return;
-    };
-    if !b.dom_ptr().is_null() && (b.scroll_y() != 0.0 || b.scroll_x() != 0.0) {
-        map.insert(b.dom_ptr() as usize, (b.scroll_x(), b.scroll_y()));
-    }
-    for c in children(b) {
-        collect_scroll(Some(c), map);
-    }
-}
-
-fn clamp_scroll(v: f64, max: f64) -> f64 {
-    let max = if max > 0.0 { max } else { 0.0 };
-    if v < 0.0 {
-        0.0
-    } else if v > max {
-        max
-    } else {
-        v
-    }
-}
-
-fn restore_scroll(b: Option<BoxRef<'_>>, map: &HashMap<usize, (f64, f64)>) {
-    let Some(b) = b else {
-        return;
-    };
-    if !b.dom_ptr().is_null()
-        && let Some(&(x, y)) = map.get(&(b.dom_ptr() as usize))
-    {
-        b.set_scroll(
-            clamp_scroll(x, b.scroll_max_x()),
-            clamp_scroll(y, b.scroll_max_y()),
-        );
-    }
-    for c in children(b) {
-        restore_scroll(Some(c), map);
-    }
-}
-
 fn datalist_open(b: &NsBrowser, focused: Option<Node<'_>>) -> bool {
     !b.datalist_suppressed.get()
         && focused.is_some_and(|f| ffi::is_named(f, c"input") && f.attr(c"list").is_some())
@@ -152,8 +111,7 @@ pub fn relayout(b: &NsBrowser) {
     southstar_layout_geom::set_relevant_band(
         (!southstar_css_media::print_media() && view_h > 0.0).then_some((top, top + view_h)),
     );
-    let mut scroll_save = HashMap::new();
-    collect_scroll(b.layout(), &mut scroll_save);
+    let scroll_save = southstar_layout::scroll_offsets(b.layout());
     ffi::css_set_viewport(f64::from(b.vw.get()), b.vh.get());
     ffi::css_set_doc_language(b.doc_language.get().as_deref());
     if let Some(js) = b.js() {
@@ -178,9 +136,7 @@ pub fn relayout(b: &NsBrowser) {
     b.engine_relayout(b.js().and_then(|js| js.focused_node()));
     b.relayout_cost_us.set(southstar_glib::monotonic_us() - t0);
     b.relaying.set(false);
-    if !scroll_save.is_empty() {
-        restore_scroll(b.layout(), &scroll_save);
-    }
+    southstar_layout::restore_scroll_offsets(b.layout(), &scroll_save);
     b.images_fetched.set(false);
     b.has_deferred_lazy.set(false);
     b.images_arrived_since_layout.set(false);

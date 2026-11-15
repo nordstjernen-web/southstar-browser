@@ -1617,7 +1617,7 @@ dependencies = [
  "southstar-layout-query",
  "southstar-net",
  "southstar-paint",
- "southstar-pdf",
+ "southstar-pdf-viewer",
  "southstar-render",
  "southstar-safebrowsing",
  "southstar-sandbox",
@@ -1946,7 +1946,7 @@ dependencies = [
  "southstar-net",
  "southstar-netutil",
  "southstar-paint",
- "southstar-pdf",
+ "southstar-pdf-viewer",
  "southstar-print",
  "southstar-render",
  "southstar-renderer-client",
@@ -2050,6 +2050,7 @@ dependencies = [
  "southstar-net",
  "southstar-numfmt",
  "southstar-paint",
+ "southstar-pdf-viewer",
  "southstar-renderer-client",
  "southstar-renderer-host",
  "southstar-style",
@@ -2861,6 +2862,7 @@ dependencies = [
  "southstar-glib",
  "southstar-js-bind",
  "southstar-js-brand",
+ "southstar-js-compression",
  "southstar-js-crypto",
  "southstar-js-engine",
  "southstar-js-intl",
@@ -3348,6 +3350,7 @@ dependencies = [
  "southstar-mime",
  "southstar-netstore",
  "southstar-netutil",
+ "southstar-pdf-viewer",
  "southstar-psl",
  "southstar-sandbox",
  "southstar-unicode",
@@ -3403,14 +3406,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "southstar-pdf"
+name = "southstar-pdf-viewer"
 version = "1.0.10-dev"
 dependencies = [
  "southstar-digest",
- "southstar-glib",
  "southstar-html-util",
- "southstar-unicode",
+ "southstar-pdfjs",
 ]
+
+[[package]]
+name = "southstar-pdfjs"
+version = "1.0.10-dev"
 
 [[package]]
 name = "southstar-plmpeg"

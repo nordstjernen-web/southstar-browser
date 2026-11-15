@@ -206,6 +206,34 @@ not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
+### pdf.js — Apache License 2.0
+
+> Mozilla's pdf.js renders the PDF documents Southstar opens. The prebuilt
+> `pdfjs-dist` package (legacy build) is embedded unmodified from
+> `third_party/pdfjs`, whose `LICENSE` holds the full Apache License 2.0
+> text. Copyright © Mozilla Foundation and the pdf.js contributors.
+> <https://github.com/mozilla/pdf.js>
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use these files except in compliance with the License. You may obtain a copy
+of the License at <http://www.apache.org/licenses/LICENSE-2.0>. Unless
+required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.
+
+Embedded with it, each under its own licence in `third_party/pdfjs`:
+
+- the CMaps (`cmaps/LICENSE`, BSD 3-Clause, © Adobe Systems Incorporated);
+- the Foxit standard fonts (`standard_fonts/LICENSE_FOXIT`, BSD 3-Clause,
+  © the PDFium authors) and Liberation Sans
+  (`standard_fonts/LICENSE_LIBERATION`, GNU GPL 2.0 with the font exception,
+  © Red Hat, Inc.);
+- the OpenJPEG decoder (`wasm/LICENSE_OPENJPEG`, BSD 2-Clause), the JBIG2
+  decoder (`wasm/LICENSE_JBIG2`, BSD 3-Clause, from PDFium) and the
+  QCMS colour management (`wasm/LICENSE_QCMS`, MIT), compiled to
+  WebAssembly by the pdf.js project;
+- the CMYK ICC profile (`iccs/LICENSE`, CC0 1.0).
+
 ## Dynamically linked
 
 ### OpenSSL (libcrypto) — Apache License 2.0
@@ -409,9 +437,6 @@ build` detects them). When a build bundles them, their notices apply:
   decoding.
 - **libavif** — BSD 2-Clause, © the AOMedia / libavif authors. AVIF
   image decoding.
-- **Poppler** (`poppler-glib`) — GNU GPL 2.0 or later, © the Poppler
-  developers. PDF rendering. Note: Poppler is GPL; a build that links it
-  is subject to the GPL for that combined binary.
 - **Fontconfig** — MIT-style license, © Keith Packard and contributors.
 - **FreeType** — FreeType License (BSD-style with credit clause) or GNU
   GPL 2.0, at your option, © The FreeType Project.
