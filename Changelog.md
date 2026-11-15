@@ -3,6 +3,9 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `column-span: all` lets a heading or block span every column of a
+  multi-column container; the content before and after it is balanced
+  separately above and below it.
 * `background-attachment: local` scrolls a scroll container's background
   with its content, positioned against the whole scrollable area.
 * `text-underline-position: under` puts underlines below the descenders,
