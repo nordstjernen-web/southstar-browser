@@ -107,7 +107,7 @@ impl Response {
     }
 
     pub fn pdf_document(&self, url: &CStr) -> Vec<u8> {
-        southstar_pdf::document_html(self.body(), Some(url.to_bytes()))
+        southstar_pdf_viewer::document_html(self.body(), url.to_bytes())
     }
 
     pub fn set_body(&mut self, bytes: &[u8]) {

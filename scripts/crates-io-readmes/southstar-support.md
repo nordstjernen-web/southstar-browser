@@ -26,7 +26,8 @@ browser's network stack and page APIs.
   HMAC, AES-GCM/CBC/CTR/KW, RSA, ECDSA/ECDH, Ed25519/X25519, PBKDF2 and HKDF.
 - `image_decoders`: the image chain. PNG/APNG, GIF, JPEG and BMP in safe Rust,
   ICO and CUR containers, and WebP (still and animated) over libwebp.
-- `pdf`: PDF documents shown as pages of rendered images, through poppler.
+- `pdf_viewer`: PDF documents shown in a viewer page over Mozilla's pdf.js,
+  and the `southstar-pdf:` files that page loads.
 
 Part of the browser that `cargo install southstar` builds. The API follows
 the browser's needs and is not stable.

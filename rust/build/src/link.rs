@@ -24,7 +24,7 @@ const ENGINE_LIBRARIES: [&str; 13] = [
     "sqlite3",
 ];
 
-const FEATURE_LIBRARIES: [(&str, &[&str]); 7] = [
+const FEATURE_LIBRARIES: [(&str, &[&str]); 6] = [
     (
         "LIBAV",
         &[
@@ -37,7 +37,6 @@ const FEATURE_LIBRARIES: [(&str, &[&str]); 7] = [
     ),
     ("SDL", &["sdl2"]),
     ("AVIF", &["libavif"]),
-    ("POPPLER", &["poppler-glib"]),
     ("ENCHANT", &["enchant-2"]),
     ("VORBISFILE", &["vorbisfile"]),
     ("OPUSFILE", &["opusfile"]),

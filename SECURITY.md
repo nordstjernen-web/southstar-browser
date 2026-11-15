@@ -29,7 +29,7 @@ local file system outside the sandbox are trusted.
 
 **Out of scope**
 
-- Bugs in third-party code: GTK, FFmpeg, poppler, HarfBuzz, FreeType,
+- Bugs in third-party code: GTK, FFmpeg, pdf.js, HarfBuzz, FreeType,
   libavif, uchardet, OpenSSL libcrypto, GPU drivers and the crates.io
   dependencies. Report those upstream; Southstar updates when fixes ship.
 - CPU side channels (Spectre class).
@@ -199,7 +199,7 @@ Everything below runs in the sandboxed renderer unless noted.
 | System fonts | FreeType, HarfBuzz (C) |
 | MPEG-1, MP2, MP3 | in-tree Rust (`rust/plmpeg`, `rust/minimp3`) |
 | WebM, Opus, Vorbis, MP4 | FFmpeg `libav*` (C); H.264 and AAC by Media Foundation on Windows |
-| PDF | poppler (C), when built |
+| PDF | pdf.js (JavaScript, in the page's sandboxed renderer; PDF scripts are never run) |
 | Character set detection | uchardet (C) |
 
 No image format falls back to a plugin loader. Image sizes are capped at

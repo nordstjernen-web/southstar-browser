@@ -178,6 +178,7 @@ fn synthesized(f: &Fetch, resp: &mut Response) -> bool {
     super::synthesize_about_response(url, top, method, f.body, resp)
         || super::synthesize_view_source_response(url, top, f.cancellable, resp)
         || super::synthesize_data_response(url, resp)
+        || super::synthesize_pdf_viewer_response(url, resp)
         || super::synthesize_file_response(url, top, resp)
 }
 

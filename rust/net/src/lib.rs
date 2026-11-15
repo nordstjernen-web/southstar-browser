@@ -64,3 +64,7 @@ pub use url::{
     has_client_hints, is_nosniff as header_is_nosniff, origin_from, parse_refresh,
     raw_header_values, referer_for, same_origin,
 };
+
+pub fn is_builtin_resource(url: &[u8]) -> bool {
+    url.starts_with(southstar_pdf_viewer::SCHEME)
+}

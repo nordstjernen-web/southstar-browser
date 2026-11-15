@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+rust-version = "1.95.0"
+name = "southstar-pdfjs"
+version = "1.0.10-dev"
+description = "Mozilla's pdf.js (pdfjs-dist, legacy build) with its CMaps, standard fonts and WebAssembly decoders, embedded for Southstar's PDF viewer"
+readme = "README.md"
+license = "Apache-2.0"
+repository = "https://github.com/nordstjernen-web/southstar-browser"
+include = [
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "src/**",
+    "build/**",
+    "cmaps/**",
+    "standard_fonts/**",
+    "wasm/**",
+    "iccs/**",
+]
+
+[lib]
+path = "src/lib.rs"
+
+[package.metadata.southstar]
+upstream-version = "6.4.299"

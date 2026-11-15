@@ -38,7 +38,6 @@ const FEATURES: [(&str, bool); 5] = [
     ("WebM video (VP8 / VP9 / Opus)", cfg!(feature = "libav")),
     ("AVIF images", cfg!(feature = "avif")),
     ("SVG images", true),
-    ("Inline PDF viewer", cfg!(feature = "poppler")),
     ("Spell checking", cfg!(feature = "enchant")),
 ];
 

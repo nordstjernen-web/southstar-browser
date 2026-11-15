@@ -1,0 +1,18 @@
+[package]
+name = "southstar-pdf-viewer"
+description = "PDF documents shown in a viewer page over Mozilla's pdf.js, and the southstar-pdf: resources that page and pdf.js load"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+southstar-digest = { path = "../digest", version = "=1.0.10-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.10-dev" }
+southstar-pdfjs = { path = "../../third_party/pdfjs", version = "=1.0.10-dev" }
+
+[lints]
+workspace = true

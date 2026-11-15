@@ -1,0 +1,125 @@
+/* Southstar — the PDF viewer's toolbar and page column. */
+:root {
+  --bg: #3a3b3d;
+  --bar: #222324;
+  --bar-fg: #e8e8e8;
+  --field: #343537;
+  --field-border: #55575a;
+  --accent: #6ab7ff;
+  color-scheme: dark;
+}
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--bar-fg);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+#toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--bar);
+  border-bottom: 1px solid #000;
+  z-index: 1;
+}
+#toolbar .group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#toolbar .spacer {
+  flex: 1;
+}
+button, select, input {
+  font: inherit;
+  color: var(--bar-fg);
+  background: var(--field);
+  border: 1px solid var(--field-border);
+  border-radius: 4px;
+  height: 24px;
+  box-sizing: border-box;
+}
+button {
+  min-width: 26px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--accent);
+}
+#page {
+  width: 48px;
+  padding: 0 4px;
+}
+#find {
+  width: 160px;
+  padding: 0 6px;
+}
+#find-status {
+  min-width: 64px;
+  color: #aaa;
+}
+a.download {
+  color: var(--accent);
+  text-decoration: none;
+}
+#pages {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-x: auto;
+  overflow-y: scroll;
+  padding: 12px 0;
+  box-sizing: border-box;
+}
+.page {
+  position: relative;
+  margin: 0 auto 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.page canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#status {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #ccc;
+  font-size: 15px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #d4d4d7;
+    --bar: #f9f9fa;
+    --bar-fg: #15141a;
+    --field: #fff;
+    --field-border: #b1b1b3;
+    --accent: #0060df;
+    color-scheme: light;
+  }
+  #toolbar {
+    border-bottom-color: #b1b1b3;
+  }
+  #find-status, #status {
+    color: #5b5b66;
+  }
+  .page {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+}

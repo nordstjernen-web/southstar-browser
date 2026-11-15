@@ -89,7 +89,6 @@ module.exports = {
     { module: 'libbrotlidec', feature: 'Brotli compression and WOFF2 fonts', apt: 'libbrotli-dev', pacman: 'brotli', brew: 'brotli', msys: 'brotli' },
     { module: 'libzstd', feature: 'zstd compression', apt: 'libzstd-dev', pacman: 'zstd', brew: 'zstd', msys: 'zstd' },
     { module: 'sdl2', feature: 'audio playback', apt: 'libsdl2-dev', pacman: 'sdl2', brew: 'sdl2', msys: 'SDL2' },
-    { module: 'poppler-glib', feature: 'viewing PDF files', apt: 'libpoppler-glib-dev', pacman: 'poppler-glib', brew: 'poppler', msys: 'poppler' },
     { module: 'opusfile', feature: 'Ogg Opus audio', apt: 'libopusfile-dev', pacman: 'opusfile', brew: 'opusfile', msys: 'opusfile' },
     { module: 'vorbisfile', feature: 'Ogg Vorbis audio', apt: 'libvorbis-dev', pacman: 'libvorbis', brew: 'libvorbis', msys: 'libvorbis' },
     { module: 'libavif', feature: 'AVIF images', apt: 'libavif-dev', pacman: 'libavif', brew: 'libavif', msys: 'libavif' },
