@@ -9,6 +9,8 @@ Southstar Browser 1.0.10-dev:
   `bool::toggle` and `core::mem::DropGuard`. No distribution packages 1.100
   yet except MSYS2, so Linux builds use rustup (`rustup update stable`).
   The README carries Rust-version and Linux-build badges.
+* README: the optional build dependencies are a list, and the
+  `internet-browser-southstar` command section is gone.
 * `content-visibility: auto` skips the layout and painting of sections
   far from the viewport in the browser window: they take their height
   from `contain-intrinsic-size` (or, with `auto`, the height they had
