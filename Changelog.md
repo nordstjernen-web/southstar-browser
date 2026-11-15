@@ -3,6 +3,8 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* `field-sizing: content` sizes text inputs to their value or placeholder
+  and textareas to their lines instead of the default 20 columns.
 * `overscroll-behavior: contain` (or `none`) stops a wheel scroll that
   reaches the end of a scrollable box from scrolling the page behind it.
 * Legacy `display: -webkit-box` layouts honour `-webkit-box-pack`,

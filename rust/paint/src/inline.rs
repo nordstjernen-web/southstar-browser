@@ -1431,7 +1431,10 @@ fn paint_form_controls(cr: ContextRef, b: BoxRef<'_>, layout: &Layout, text_x: f
                     .iter()
                     .any(|w| t.eq_ignore_ascii_case(w))
             });
-            if text_like && r.box_w <= 0.0 {
+            let sizes_to_content = attr_style(r)
+                .and_then(|st| st.keyword_of(P::FieldSizing))
+                .is_some_and(|k| k.to_bytes() == b"content");
+            if text_like && r.box_w <= 0.0 && !sizes_to_content {
                 let n = dom
                     .attr(c"size")
                     .map_or(20, |sz| engine::parse_int(sz, 20, 4, 80));

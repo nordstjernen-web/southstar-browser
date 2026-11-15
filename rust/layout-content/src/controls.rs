@@ -418,10 +418,17 @@ pub fn emit_form_attr_sized(
         }
     }
     if let Some(d) = dom.filter(|d| d.name() == Some(c"textarea")) {
+        let content = s
+            .and_then(|s| s.keyword_of(PropId::FieldSizing))
+            .is_some_and(|k| k.to_bytes() == b"content")
+            .then(|| textarea_extent(d));
         if bw <= 0.0 {
             let mut c = atoi(d.attr(c"cols"), 20);
             if c <= 0 {
                 c = 20;
+            }
+            if let Some((cols, _)) = content {
+                c = cols;
             }
             bw = f64::from(c) * (fs * 0.5) + 8.0;
         }
@@ -429,6 +436,9 @@ pub fn emit_form_attr_sized(
             let mut r = atoi(d.attr(c"rows"), 2);
             if r <= 0 {
                 r = 2;
+            }
+            if let Some((_, rows)) = content {
+                r = rows;
             }
             let line_h = fs * 1.3;
             bh = f64::from(r) * line_h + 6.0;
@@ -631,6 +641,25 @@ pub fn font_keyword(s: Option<StyleRef<'_>>, which: FontKeyword) -> Option<&CStr
 
 fn float_attr(n: Node<'_>, name: &CStr) -> Option<f64> {
     southstar_html_util::parse_float(n.attr(name)?.to_bytes())
+}
+
+fn textarea_extent(d: Node<'_>) -> (c_int, c_int) {
+    let value = southstar_dom::controls::textarea_value(Some(d));
+    let text = if value.is_empty() {
+        d.attr(c"placeholder")
+            .map_or_else(Vec::new, |p| p.to_bytes().to_vec())
+    } else {
+        value
+    };
+    let lines: Vec<&[u8]> = text.split(|&c| c == b'\n').collect();
+    let widest = lines
+        .iter()
+        .map(|line| String::from_utf8_lossy(line).chars().count())
+        .max()
+        .unwrap_or(0);
+    let cols = c_int::try_from(widest + 1).unwrap_or(c_int::MAX).max(2);
+    let rows = c_int::try_from(lines.len()).unwrap_or(c_int::MAX).max(1);
+    (cols, rows)
 }
 
 pub fn progress_fraction(n: Option<Node<'_>>) -> f64 {
