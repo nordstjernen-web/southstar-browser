@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* CSS `zoom` scales an element and its subtree: lengths in px, rem and
+  viewport units, borders, shadows and font sizes are multiplied by the
+  element's effective zoom (nested zooms multiply), so a zoomed box lays
+  out and paints at the new size.
 * WOFF2 web fonts take about 45% less memory once decoded: the rebuilt
   `glyf` table stores glyph points with one-byte and repeated flags and
   short coordinates instead of two bytes per coordinate.

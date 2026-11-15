@@ -100,6 +100,7 @@ fn style_copy(source: &RawStyle) -> NewStyle {
     copy.share_id = source.share_id;
     copy.currentcolor_bits = source.currentcolor_bits;
     copy.vars.clone_from(&source.vars);
+    copy.zoom = source.zoom;
     copy
 }
 
@@ -116,5 +117,6 @@ pub(super) fn style_clone_shared(source: &RawStyle) -> NewStyle {
             .map(|pseudo| RetainedStyle::new(style_clone_shared(pseudo.get())));
     }
     clone.vars.clone_from(&source.vars);
+    clone.zoom = source.zoom;
     clone
 }

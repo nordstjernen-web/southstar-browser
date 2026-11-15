@@ -514,3 +514,95 @@ pub(crate) fn syntax_basis<'a>(style: &'a StyleView<'a>, root_px: f64) -> Syntax
         font: style.font(),
     }
 }
+
+const ZOOM: usize = Prop::Zoom as usize;
+
+pub(crate) fn own_zoom(out: &ComputedStyle<'_>) -> f64 {
+    let zoom = match out.slot(ZOOM) {
+        Some(Slot::Length(l)) if l.unit == PERCENT => l.v / 100.0,
+        Some(Slot::Length(l)) if l.unit == NUMBER || l.unit == PX => l.v,
+        _ => 1.0,
+    };
+    if zoom.is_finite() && zoom > 0.0 {
+        zoom
+    } else {
+        1.0
+    }
+}
+
+fn zooms_with_page(unit: u32) -> bool {
+    matches!(unit, PX | REM | VW | VH | VMIN | VMAX)
+}
+
+fn zoom_slot(slot: SlotMut<'_>, factor: f64, font_relative_too: bool) {
+    match slot {
+        SlotMut::Length(l) => {
+            if zooms_with_page(l.unit) || (font_relative_too && matches!(l.unit, EM | PERCENT)) {
+                l.v *= factor;
+            }
+        }
+        SlotMut::Calc(c) => {
+            for part in [
+                &mut c.px,
+                &mut c.rem,
+                &mut c.vw,
+                &mut c.vh,
+                &mut c.vmin,
+                &mut c.vmax,
+            ] {
+                *part *= factor;
+            }
+            if font_relative_too {
+                c.em *= factor;
+                c.pct *= factor;
+            }
+        }
+        SlotMut::Shadow(list) => {
+            let n = counted(list.n, list.s.len());
+            for sh in &mut list.s[..n] {
+                for field in [&mut sh.x, &mut sh.y, &mut sh.blur, &mut sh.spread] {
+                    *field *= factor;
+                }
+                for rem in &mut sh.rem {
+                    *rem *= factor;
+                }
+            }
+        }
+        SlotMut::Size(s) => {
+            if zooms_with_page(s.w_unit) {
+                s.w *= factor;
+            }
+            if zooms_with_page(s.h_unit) {
+                s.h *= factor;
+            }
+        }
+        _ => {}
+    }
+}
+
+pub(crate) fn apply_zoom(
+    out: &mut ComputedStyle<'_>,
+    specified: &[bool; PROP_COUNT],
+    own: f64,
+    effective: f64,
+) {
+    for (prop, &set_here) in specified.iter().enumerate() {
+        if prop == ZOOM || out.slot(prop).is_none() {
+            continue;
+        }
+        let relative_font = prop == FONT_SIZE
+            && set_here
+            && matches!(out.slot(prop), Some(Slot::Length(l)) if matches!(l.unit, EM | PERCENT));
+        let factor = if set_here && !relative_font {
+            effective
+        } else {
+            own
+        };
+        if factor == 1.0 {
+            continue;
+        }
+        if let Some(slot) = out.make_mut(prop) {
+            zoom_slot(slot, factor, !set_here || relative_font);
+        }
+    }
+}

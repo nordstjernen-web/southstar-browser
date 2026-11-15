@@ -423,6 +423,14 @@ pub(super) fn cascade_apply(
     let parent = parents.style;
     let mut out = Out { style };
     apply_winners(&mut out, matches);
+    let mut specified = [false; PROP_COUNT];
+    for (prop, set_here) in specified.iter_mut().enumerate() {
+        *set_here = out.style.value_at(prop).is_some()
+            && !matches!(
+                keyword(out.style.value_at(prop)),
+                Some(b"inherit" | b"unset" | b"initial" | b"revert")
+            );
+    }
     normalize_overflow(&mut out);
     resolve_wide_keywords(&mut out, parent);
     resolve_color_keywords(&mut out, parent);
@@ -430,6 +438,18 @@ pub(super) fn cascade_apply(
     resolve_emphasis_style(&mut out);
     resolve_text_size_adjust(&mut out);
     fix_display(&mut out, parents.layout, is_root);
+    let parent_zoom = parent.map_or(1.0, |p| p.zoom);
+    let own_zoom = computed_units::own_zoom(&ComputedStyle(out.style));
+    out.style.zoom = parent_zoom * own_zoom;
+    if out.style.zoom != 1.0 || own_zoom != 1.0 {
+        let effective = out.style.zoom;
+        computed_units::apply_zoom(
+            &mut ComputedStyle(out.style),
+            &specified,
+            own_zoom,
+            effective,
+        );
+    }
     let parent_view = parent.map(StyleView);
     computed_units::resolve(&mut ComputedStyle(out.style), parent_view.as_ref(), root_px);
 }
