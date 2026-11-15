@@ -4,6 +4,7 @@
 
 use core::cell::RefCell;
 use core::ffi::{CStr, c_int};
+use core::mem::DropGuard;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -97,25 +98,18 @@ thread_local! {
     static MAP: RefCell<Option<ContainerMap>> = const { RefCell::new(None) };
 }
 
-pub(super) fn with_container_map<R>(map: Option<&mut ContainerMap>, f: impl FnOnce() -> R) -> R {
-    struct Restore<'a> {
-        map: Option<&'a mut ContainerMap>,
-        outer: Option<ContainerMap>,
-    }
-
-    impl Drop for Restore<'_> {
-        fn drop(&mut self) {
-            let installed =
-                MAP.with_borrow_mut(|current| core::mem::replace(current, self.outer.take()));
-            if let (Some(map), Some(installed)) = (self.map.as_deref_mut(), installed) {
-                *map = installed;
-            }
+pub(super) fn with_container_map<R>(
+    mut map: Option<&mut ContainerMap>,
+    f: impl FnOnce() -> R,
+) -> R {
+    let installed = map.as_deref_mut().map(core::mem::take);
+    let outer = MAP.with_borrow_mut(|current| core::mem::replace(current, installed));
+    let _restore = DropGuard::new((map, outer), |(map, outer)| {
+        let installed = MAP.with_borrow_mut(|current| core::mem::replace(current, outer));
+        if let (Some(map), Some(installed)) = (map, installed) {
+            *map = installed;
         }
-    }
-
-    let mut restore = Restore { map, outer: None };
-    let installed = restore.map.as_deref_mut().map(core::mem::take);
-    restore.outer = MAP.with_borrow_mut(|current| core::mem::replace(current, installed));
+    });
     f()
 }
 

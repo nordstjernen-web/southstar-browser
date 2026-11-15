@@ -307,12 +307,7 @@ fn set_identity(scope: &mut Scope<'_>, navigator: &Value, ua: &str) {
     set_str(scope, navigator, "userAgent", ua);
     set_str(scope, navigator, "appName", "Netscape");
     set_str(scope, navigator, "appCodeName", "Mozilla");
-    set_str(
-        scope,
-        navigator,
-        "appVersion",
-        ua.strip_prefix("Mozilla/").unwrap_or(ua),
-    );
+    set_str(scope, navigator, "appVersion", ua.trim_prefix("Mozilla/"));
     set_str(scope, navigator, "platform", &ffi::navigator_platform());
 }
 

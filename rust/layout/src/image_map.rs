@@ -124,7 +124,7 @@ fn polygon_contains(c: &[f64], x: f64, y: f64) -> bool {
             return true;
         }
         if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
-            inside = !inside;
+            inside.toggle();
         }
         j = i;
     }

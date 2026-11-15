@@ -190,12 +190,12 @@ directory under `rust/`). `cargo xtask` drives cargo for two packages:
 helpers and the Windows launcher, and `rust/capi`, the `libsouthstar`
 shared library that exports the C API of `rust/capi/include/libsouthstar.h`.
 Their build scripts link the system libraries through `rust/build`
-(`southstar-build`). Rust 1.95 or newer is required (the
-minimum of the Boa version the fork tracks; Ubuntu 26.04 packages it as
-`rustc-1.97`, Debian forky and sid ship newer); `rust-toolchain.toml` pins
-1.95.0 for rustup users, so local builds and CI compile with the minimum
-supported version. Don't use a standard library API or language feature
-stabilized after 1.95.
+(`southstar-build`). Rust 1.100 or newer is required, so the
+never type, the allocator API, `Vec::from_fn`, `core::mem::DropGuard`,
+`bool::toggle` and `str::trim_prefix` are available; `rust-toolchain.toml`
+pins 1.100.0 for rustup users, so local builds and CI compile with the
+minimum supported version. Don't use a standard library API or language
+feature stabilized after 1.100.
 
 - The crates mirror the C files they were ported from, and many still reach
   each other through the port's scaffolding: `ns_*`/`nsr_*` exports
@@ -480,12 +480,9 @@ sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
 
 (`ffmpeg-devel` comes from Packman.)
 
-Rust must be 1.95 or newer. Debian forky and sid and the rolling
-distributions ship it; Ubuntu 26.04 packages it as `rustc-1.97` and
-`cargo-1.97` (`sudo apt install rustc-1.97 cargo-1.97`, then put
-`/usr/lib/rust-1.97/bin` first on `PATH`). Ubuntu releases before 26.04 are
-not supported. Elsewhere, Debian 13 included, install it with rustup, which
-reads `rust-toolchain.toml` and selects 1.95.0.
+Rust must be 1.100 or newer. Install it with rustup (`rustup update stable`),
+which reads `rust-toolchain.toml` and selects 1.100.0; MSYS2 packages it, and
+a distribution's packaged compiler works once it reaches 1.100.
 
 pkg-config and a C compiler are needed besides Rust: the build scripts
 compile the GTK icon resource and probe C struct layouts from the

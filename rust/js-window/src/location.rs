@@ -159,7 +159,7 @@ fn set_hash(scope: &mut Scope<'_>, _this: &Value, args: &[Value]) -> Result<Valu
     let Some(hash) = text_of(scope, &value) else {
         return Ok(Value::undefined());
     };
-    let fragment = hash.strip_prefix(b"#").unwrap_or(&hash);
+    let fragment = hash.trim_prefix(b"#");
     let old_url = ffi::top_url(js);
     let base = match old_url.iter().position(|&c| c == b'#') {
         Some(cut) => &old_url[..cut],

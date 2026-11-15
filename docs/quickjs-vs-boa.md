@@ -151,7 +151,7 @@ Boa; no QuickJS number on the current bindings exists.
 | Fork upkeep | A C fork outside clippy and the unsafe budget | 15,243 / 3,939 lines against Boa `main`, re-applied per update |
 | Release cadence | Single maintainer; releases 2025-04, 2025-09, 2026-06 | A team; the fork tracks `main` |
 | Licence | MIT | MIT / Unlicense |
-| Toolchain | Any C compiler | Rust 1.95, Boa `main`'s floor |
+| Toolchain | Any C compiler | Rust 1.100 (Boa `main` needs 1.95) |
 
 Both licences are compatible with NSL-1.0 OR GPL-3.0-or-later, and Bellard's
 QuickJS is not upstream browser engine code, so `deny.toml` would not block it.

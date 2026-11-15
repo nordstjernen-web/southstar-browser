@@ -23,7 +23,7 @@ checksums:
 | `boa_interner` | `317c631e791f5cb7d0017e43c0a758b0eaffd40c34c4c360e2a6be7752b78cd1` |
 | `boa_string` | `30bf86c2bcff5bf2547acbfc516c5d3108ca527cb131511d749bf6fbef762c0e` |
 
-Boa's `main` requires Rust 1.95, so Southstar does too.
+Boa's `main` requires Rust 1.95; Southstar requires 1.100.
 
 `boa_engine` carries a small set of embedder hooks; the parser and the AST
 were forked for syntax that 0.22 does not parse, `boa_gc` for the cost of

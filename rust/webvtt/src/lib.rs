@@ -114,7 +114,7 @@ fn clean_text(raw: &[u8]) -> Vec<u8> {
 }
 
 fn strip_cr(line: &[u8]) -> &[u8] {
-    line.strip_suffix(b"\r").unwrap_or(line)
+    line.trim_suffix(b"\r")
 }
 
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {

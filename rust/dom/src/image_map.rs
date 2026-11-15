@@ -39,7 +39,7 @@ fn point_in_poly(pts: &[f64], pairs: usize, x: f64, y: f64) -> bool {
         let (xi, yi) = (pts[2 * i], pts[2 * i + 1]);
         let (xj, yj) = (pts[2 * j], pts[2 * j + 1]);
         if ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi) {
-            inside = !inside;
+            inside.toggle();
         }
         j = i;
     }
@@ -126,7 +126,7 @@ pub fn resolve<'a>(
         return None;
     }
     let usemap = usemap.to_bytes();
-    let name = usemap.strip_prefix(b"#").unwrap_or(usemap);
+    let name = usemap.trim_prefix(b"#");
     if name.is_empty() {
         return None;
     }

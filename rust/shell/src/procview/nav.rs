@@ -94,7 +94,7 @@ pub fn is_local_url(url: &[u8]) -> bool {
         .take(17)
         .map(|c| c.to_ascii_lowercase())
         .collect();
-    let scheme = scheme.strip_prefix(b"view-source:").unwrap_or(&scheme);
+    let scheme = scheme.trim_prefix(b"view-source:");
     scheme.starts_with(b"file:")
 }
 

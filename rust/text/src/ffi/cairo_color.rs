@@ -260,7 +260,7 @@ impl ImageSurface {
             .chunks_exact_mut(stride)
             .zip(pixels.chunks_exact(width as usize))
         {
-            for (out, pixel) in row.chunks_exact_mut(4).zip(line) {
+            for (out, pixel) in row.as_chunks_mut::<4>().0.iter_mut().zip(line) {
                 out.copy_from_slice(&pixel.to_ne_bytes());
             }
         }

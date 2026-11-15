@@ -67,7 +67,7 @@ fn ends_in_number(input: &str) -> bool {
     if input.is_empty() {
         return false;
     }
-    let trimmed = input.strip_suffix('.').unwrap_or(input);
+    let trimmed = input.trim_suffix('.');
     let last = trimmed.rsplit('.').next().unwrap_or_default();
     if !last.is_empty() && last.bytes().all(|b| b.is_ascii_digit()) {
         return true;

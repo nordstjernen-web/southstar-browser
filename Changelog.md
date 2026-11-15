@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Rust 1.100 or newer is required to build Southstar (it was 1.95), and
+  `rust-toolchain.toml` selects 1.100.0. The code uses what 1.100
+  stabilized: `str::trim_prefix`/`trim_suffix`, `Vec::from_fn`,
+  `bool::toggle` and `core::mem::DropGuard`. No distribution packages 1.100
+  yet except MSYS2, so Linux builds use rustup (`rustup update stable`).
+  The README carries Rust-version and Linux-build badges.
 * `content-visibility: auto` skips the layout and painting of sections
   far from the viewport in the browser window: they take their height
   from `contain-intrinsic-size` (or, with `auto`, the height they had

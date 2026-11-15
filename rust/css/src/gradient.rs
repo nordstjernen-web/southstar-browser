@@ -1158,8 +1158,12 @@ pub(crate) fn serialize_computed(gr: &Gradient) -> Vec<u8> {
         append_part(&mut pre, &t);
     }
     finish_prelude(&mut out, pre);
-    for i in 0..(gr.n_stops.max(0) as usize).min(STOPS_MAX) {
-        let st = &gr.stops[i];
+    for (i, st) in gr
+        .stops
+        .iter()
+        .enumerate()
+        .take((gr.n_stops.max(0) as usize).min(STOPS_MAX))
+    {
         if st.pair_with_prev != 0 {
             out.push(b' ');
             append_stop_pos(&mut out, st);

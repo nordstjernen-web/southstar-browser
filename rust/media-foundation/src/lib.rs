@@ -67,12 +67,12 @@ impl Pcm<'_> {
 
     pub fn write_floats(&self, out: &mut [f32]) {
         if self.float {
-            for (sample, bytes) in out.iter_mut().zip(self.bytes.chunks_exact(4)) {
-                *sample = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            for (sample, bytes) in out.iter_mut().zip(self.bytes.as_chunks::<4>().0) {
+                *sample = f32::from_le_bytes(*bytes);
             }
         } else {
-            for (sample, bytes) in out.iter_mut().zip(self.bytes.chunks_exact(2)) {
-                *sample = f32::from(i16::from_le_bytes([bytes[0], bytes[1]])) / 32768.0;
+            for (sample, bytes) in out.iter_mut().zip(self.bytes.as_chunks::<2>().0) {
+                *sample = f32::from(i16::from_le_bytes(*bytes)) / 32768.0;
             }
         }
     }

@@ -371,11 +371,16 @@ fn keyframe_block(body: &[u8]) -> (Stop, Option<Vec<u8>>) {
     }
     if individual.n_ops > 0 {
         let mut merged = individual;
-        for k in 0..stop.transform.n_ops as usize {
+        for &op in stop
+            .transform
+            .ops
+            .iter()
+            .take(stop.transform.n_ops as usize)
+        {
             if merged.n_ops as usize >= OPS_MAX {
                 break;
             }
-            merged.ops[merged.n_ops as usize] = stop.transform.ops[k];
+            merged.ops[merged.n_ops as usize] = op;
             merged.n_ops += 1;
         }
         stop.transform = merged;

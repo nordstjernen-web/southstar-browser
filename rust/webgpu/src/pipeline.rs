@@ -121,14 +121,12 @@ fn vertex_buffers(scope: &mut Scope<'_>, list: &Value) -> VertexInput {
         let mut na = 0;
         if attrs.is_array() {
             na = (array_len(scope, &attrs) as usize).min(MAX_ATTRIBUTES);
-            for k in 0..na {
+            for (k, attr) in input.attributes[i].iter_mut().enumerate().take(na) {
                 let ja = index(scope, &attrs, k as u32);
                 let format = str_prop(scope, &ja, "format");
-                let attr = &mut input.attributes[i][k];
                 attr.format = parse::vertex_format(format.as_deref());
                 let offset = i64_prop(scope, &ja, "offset");
                 let location = u32_prop(scope, &ja, "shaderLocation");
-                let attr = &mut input.attributes[i][k];
                 attr.offset = offset as u64;
                 attr.shader_location = location;
             }

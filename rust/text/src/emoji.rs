@@ -193,7 +193,9 @@ fn transition(state: usize, category: u8) -> usize {
     if range_length > 0 {
         let ranges = &TRANS_KEYS[keys..keys + 2 * range_length];
         let found = ranges
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .position(|pair| pair[0] <= category && category <= pair[1]);
         return trans + found.unwrap_or(range_length);
     }

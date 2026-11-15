@@ -933,7 +933,7 @@ pub(crate) fn script_url_allowed(
 }
 
 pub(crate) fn script_text(bytes: &[u8]) -> String {
-    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    let bytes = bytes.trim_prefix(b"\xEF\xBB\xBF");
     let mut text = String::from_utf8_lossy(bytes).into_owned();
     if let Some(nul) = text.find('\0') {
         text.truncate(nul);

@@ -115,10 +115,10 @@ fn first_strong(
             BidiClass::L => return Some(BidiClass::L),
             BidiClass::R | BidiClass::AL => return Some(BidiClass::R),
             BidiClass::B => return None,
-            BidiClass::LRI | BidiClass::RLI | BidiClass::FSI => match matching_pdi[i] {
-                Some(pdi) => i = pdi,
-                None => return None,
-            },
+            BidiClass::LRI | BidiClass::RLI | BidiClass::FSI => {
+                let pdi = matching_pdi[i]?;
+                i = pdi
+            }
             _ => {}
         }
         i += 1;

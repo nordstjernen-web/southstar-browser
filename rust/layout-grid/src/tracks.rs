@@ -425,8 +425,8 @@ pub(crate) fn expand_auto_repeat(tr: &GridTracks, available_main: f64, gap: f64)
             o.n += 1;
         }
     };
-    for i in 0..prefix as usize {
-        push(o, tr.tracks[i]);
+    for &track in tr.tracks.iter().take(prefix as usize) {
+        push(o, track);
     }
     for _ in 0..repeats {
         for i in 0..rcount {

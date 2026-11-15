@@ -34,7 +34,7 @@ impl Expr<'_> {
         let mut depth = 0i32;
         let mut seg = s;
         for c in s..=e {
-            let ch = if c < e { self.s[c] } else { 0 };
+            let ch = self.s[..e].get(c).copied().unwrap_or(0);
             if c < e && ch == b'(' {
                 depth += 1;
             } else if c < e && ch == b')' {

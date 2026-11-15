@@ -103,7 +103,7 @@ fn is_network_scheme_url(url: &[u8]) -> bool {
 }
 
 fn default_port_for_scheme(scheme: &[u8]) -> &'static [u8] {
-    let name = scheme.strip_suffix(b":").unwrap_or(scheme);
+    let name = scheme.trim_suffix(b":");
     if name.eq_ignore_ascii_case(b"https") || name.eq_ignore_ascii_case(b"wss") {
         b"443"
     } else if name.eq_ignore_ascii_case(b"http") || name.eq_ignore_ascii_case(b"ws") {

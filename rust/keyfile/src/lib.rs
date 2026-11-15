@@ -53,7 +53,7 @@ pub fn read_group(data: &[u8], wanted: &str) -> Option<Vec<(String, String)>> {
     let mut group: Option<&str> = None;
     let mut entries: Vec<(String, String)> = Vec::new();
     for line in text.split('\n') {
-        let line = line.strip_suffix('\r').unwrap_or(line);
+        let line = line.trim_suffix('\r');
         let line = line.trim_start_matches([' ', '\t']);
         if line.is_empty() || line.starts_with('#') {
             continue;

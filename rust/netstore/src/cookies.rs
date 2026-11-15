@@ -293,7 +293,7 @@ fn is_ip_literal(host: &[u8]) -> bool {
 }
 
 fn bare_domain(domain: &[u8]) -> &[u8] {
-    domain.strip_prefix(b".").unwrap_or(domain)
+    domain.trim_prefix(b".")
 }
 
 fn domains_overlap(a: &[u8], b: &[u8]) -> bool {
@@ -306,7 +306,7 @@ fn domains_overlap(a: &[u8], b: &[u8]) -> bool {
 
 fn shadows_secure(jar: &[u8], cookie: &Cookie) -> bool {
     jar.split(|&c| c == b'\n').any(|line| {
-        let f = fields(line.strip_prefix(HTTP_ONLY).unwrap_or(line));
+        let f = fields(line.trim_prefix(HTTP_ONLY));
         if f.len() < 7 || !f[3].eq_ignore_ascii_case(b"TRUE") {
             return false;
         }
@@ -319,7 +319,7 @@ fn shadows_secure(jar: &[u8], cookie: &Cookie) -> bool {
 }
 
 fn line_domain(line: &[u8]) -> &[u8] {
-    let line = line.strip_prefix(HTTP_ONLY).unwrap_or(line);
+    let line = line.trim_prefix(HTTP_ONLY);
     line.split(|&c| c == b'\t').next().unwrap_or_default()
 }
 
@@ -393,7 +393,7 @@ pub fn parse(
     let host = &url.hostname;
     let (file_domain, include_subdomains) = match domain_attr {
         Some(d) => {
-            let d = d.strip_prefix(b".").unwrap_or(d);
+            let d = d.trim_prefix(b".");
             let ok = host.eq_ignore_ascii_case(d)
                 || (host.len() > d.len()
                     && host[host.len() - d.len() - 1] == b'.'

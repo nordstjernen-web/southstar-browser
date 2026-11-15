@@ -267,7 +267,7 @@ pub fn get_scripts(scope: &mut Scope<'_>, this: &Value, _: &[Value]) -> JsResult
     };
     let scripts = if southstar_dom::index::has_tag_index(doc) {
         southstar_dom::index::tag_lookup(doc, c"script", |list| {
-            (0..list.len()).map(|i| list.get(i)).collect()
+            Vec::from_fn(list.len(), |i| list.get(i))
         })
         .unwrap_or_default()
     } else {

@@ -183,7 +183,7 @@ pub fn record(existing: &[u8], host: &[u8], policy: &Policy, max_age: i64, now: 
         }
         let mut fields = trimmed.splitn(2, |&c| c == b' ');
         let entry = fields.next().unwrap_or_default();
-        let entry = entry.strip_prefix(b".").unwrap_or(entry);
+        let entry = entry.trim_prefix(b".");
         let expired = fields
             .next()
             .and_then(|at| parse_expiry(at.trim_ascii()))

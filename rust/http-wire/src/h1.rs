@@ -85,7 +85,7 @@ pub fn split_header(line: &[u8]) -> Option<(&[u8], &[u8])> {
 }
 
 pub fn chunk_size(line: &[u8]) -> Option<u64> {
-    let line = line.strip_suffix(b"\r").unwrap_or(line);
+    let line = line.trim_suffix(b"\r");
     let digits = line
         .iter()
         .take_while(|byte| byte.is_ascii_hexdigit())

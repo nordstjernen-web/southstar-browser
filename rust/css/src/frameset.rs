@@ -46,7 +46,7 @@ fn parse_dimension(token: &[u8]) -> Dimension {
 }
 
 pub(crate) fn parse_dimensions(input: &[u8]) -> Vec<Dimension> {
-    let input = input.strip_suffix(b",").unwrap_or(input);
+    let input = input.trim_suffix(b",");
     if input.is_empty() {
         return Vec::new();
     }

@@ -111,7 +111,7 @@ fn sleep_ms(ms: u64) {
 
 fn local_path_for(url: &[u8]) -> &[u8] {
     match url.strip_prefix(b"file://") {
-        Some(path) => path.strip_prefix(b"localhost").unwrap_or(path),
+        Some(path) => path.trim_prefix(b"localhost"),
         None => url,
     }
 }

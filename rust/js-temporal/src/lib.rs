@@ -1118,7 +1118,7 @@ fn monthday_from(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> Result<
     let source = arg(args, 0);
     if !args.is_empty() && source.is_string() {
         if let Some(text) = text_of(scope, &source) {
-            let rest = text.strip_prefix(b"--").unwrap_or(&text);
+            let rest = text.trim_prefix(b"--");
             if let Some((m, d)) = scan_pair(rest) {
                 t.month = m;
                 t.day = d;
