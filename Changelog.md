@@ -3,6 +3,10 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* CSS containment: `contain: paint` (and `content`, `strict`) clips the
+  box's contents to its padding box, and `contain: size` (and `strict`)
+  sizes a box without its contents, taking its height from
+  `contain-intrinsic-size` when it has no explicit height.
 * `background-blend-mode` blends each background layer with the layers and
   background colour below it, and `isolation: isolate` keeps a
   `mix-blend-mode` descendant from blending with what lies behind its

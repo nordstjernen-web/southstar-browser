@@ -1,4 +1,4 @@
-//! Southstar — a block's used height from its content, height, aspect-ratio, min/max and stretch keywords, then align-content, centred control content, scroll extents and content-visibility.
+//! Southstar — a block's used height from its content, height, aspect-ratio, min/max and stretch keywords, then align-content, centred control content, scroll extents, and size containment from content-visibility and contain.
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
@@ -9,7 +9,7 @@ use southstar_layout_geom::{
     is_length_or_calc, keyword_is, resolve_used_height, style_is_absolute_or_fixed,
 };
 use southstar_style::{
-    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, PropId, ValueRef,
+    CALC_SIZE_ANY, CALC_SIZE_AUTO, CALC_SIZE_PERCENT, CALC_SIZE_STRETCH, PropId, StyleRef, ValueRef,
 };
 
 use crate::align::block_align_content_shift;
@@ -208,8 +208,12 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
     let content_visibility_hidden = style
         .and_then(|s| s.get(PropId::ContentVisibility))
         .is_some_and(|v| v.is_keyword(c"hidden"));
-    if content_visibility_hidden {
-        let mut contained_height = if explicit_h >= 0.0 { explicit_h } else { 0.0 };
+    if content_visibility_hidden || contains_size(style) {
+        let mut contained_height = if explicit_h >= 0.0 {
+            explicit_h
+        } else {
+            contain_intrinsic_height(style).unwrap_or(0.0)
+        };
         if max_h >= 0.0 && contained_height > max_h {
             contained_height = max_h;
         }
@@ -217,7 +221,41 @@ pub fn finish_height(b: BoxRef<'_>, input: &HeightInput) {
             contained_height = min_h;
         }
         b.set_content_height(contained_height);
-        b.set_scrolls(false);
-        b.set_scroll_max(Some(0.0), Some(0.0));
+        if content_visibility_hidden {
+            b.set_scrolls(false);
+            b.set_scroll_max(Some(0.0), Some(0.0));
+        }
     }
+}
+
+fn keyword_words(style: Option<StyleRef<'_>>, prop: PropId) -> Vec<Vec<u8>> {
+    style
+        .and_then(|s| s.get(prop))
+        .and_then(ValueRef::keyword_text)
+        .map(|k| {
+            k.to_bytes()
+                .split(u8::is_ascii_whitespace)
+                .filter(|w| !w.is_empty())
+                .map(<[u8]>::to_ascii_lowercase)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn contains_size(style: Option<StyleRef<'_>>) -> bool {
+    keyword_words(style, PropId::Contain)
+        .iter()
+        .any(|w| w == b"size" || w == b"strict")
+}
+
+fn contain_intrinsic_height(style: Option<StyleRef<'_>>) -> Option<f64> {
+    let lengths: Vec<f64> = keyword_words(style, PropId::ContainIntrinsicSize)
+        .iter()
+        .filter(|w| w.as_slice() != b"auto")
+        .map(|w| {
+            let number = w.strip_suffix(b"px").unwrap_or(w);
+            core::str::from_utf8(number).ok()?.parse::<f64>().ok()
+        })
+        .collect::<Option<Vec<f64>>>()?;
+    lengths.last().copied().filter(|h| *h >= 0.0)
 }

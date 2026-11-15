@@ -374,10 +374,11 @@ pub enum Prop {
     PositionVisibility,
     BackdropFilter,
     Isolation,
+    ContainIntrinsicSize,
 }
 
 impl Prop {
-    pub(crate) const ALL: [Prop; 366] = [
+    pub(crate) const ALL: [Prop; 367] = [
         Prop::Display,
         Prop::Color,
         Prop::BackgroundColor,
@@ -744,6 +745,7 @@ impl Prop {
         Prop::PositionVisibility,
         Prop::BackdropFilter,
         Prop::Isolation,
+        Prop::ContainIntrinsicSize,
     ];
 
     pub fn name(self) -> &'static [u8] {
@@ -1208,6 +1210,7 @@ impl Prop {
             Prop::PositionVisibility => c"position-visibility",
             Prop::BackdropFilter => c"backdrop-filter",
             Prop::Isolation => c"isolation",
+            Prop::ContainIntrinsicSize => c"contain-intrinsic-size",
         }
     }
 }
