@@ -242,6 +242,14 @@ pub fn box_is_hidden(b: BoxRef<'_>) -> bool {
         .is_some_and(|v| matches!(v.to_bytes(), b"hidden" | b"collapse"))
 }
 
+fn contains_paint(style: Option<StyleRef<'_>>) -> bool {
+    keyword(get(style, P::Contain)).is_some_and(|k| {
+        k.to_bytes()
+            .split(u8::is_ascii_whitespace)
+            .any(|w| matches!(w, b"paint" | b"strict" | b"content"))
+    })
+}
+
 pub fn box_skips_contents(b: BoxRef<'_>) -> bool {
     get(style_of(b), P::ContentVisibility)
         .filter(|v| v.kind() == Kind::Keyword)
@@ -1302,7 +1310,8 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
         || node_of(b)
             .and_then(Node::name)
             .is_some_and(|n| matches!(n.to_bytes(), b"html" | b"body"));
-    let mut clip_overflow = !is_root && (overflow_kw_clips(ovx) || overflow_kw_clips(ovy));
+    let mut clip_overflow =
+        !is_root && (overflow_kw_clips(ovx) || overflow_kw_clips(ovy) || contains_paint(style));
     if clip_overflow
         && matches!(
             b.kind(),

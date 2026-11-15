@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 
-const INITIALS: [(&[u8], &CStr); 291] = [
+const INITIALS: [(&[u8], &CStr); 292] = [
     (b"anchor-name", c"none"),
     (b"anchor-scope", c"none"),
     (b"position-anchor", c"normal"),
@@ -104,6 +104,7 @@ const INITIALS: [(&[u8], &CStr); 291] = [
     (b"font-palette", c"normal"),
     (b"column-height", c"auto"),
     (b"contain", c"none"),
+    (b"contain-intrinsic-size", c"none"),
     (b"font-variant-ligatures", c"normal"),
     (b"font-feature-settings", c"normal"),
     (b"font-variation-settings", c"normal"),
