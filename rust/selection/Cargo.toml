@@ -10,9 +10,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-southstar-dom = { path = "../dom", version = "=1.0.10" }
-southstar-layout = { path = "../layout", version = "=1.0.10" }
-southstar-style = { path = "../style", version = "=1.0.10" }
+southstar-dom = { path = "../dom", version = "=1.0.11-dev" }
+southstar-layout = { path = "../layout", version = "=1.0.11-dev" }
+southstar-style = { path = "../style", version = "=1.0.11-dev" }
 
 [lints]
 workspace = true
