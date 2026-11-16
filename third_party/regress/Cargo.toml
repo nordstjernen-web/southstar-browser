@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.95.0"
 name = "southstar-regress"
-version = "1.0.10"
+version = "1.0.11-dev"
 authors = ["ridiculousfish <corydoras@ridiculousfish.com>"]
 build = false
 autolib = false
