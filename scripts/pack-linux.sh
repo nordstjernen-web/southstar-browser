@@ -108,6 +108,14 @@ cp "$BUILT_DIR/southstar-renderer" "$STAGE/"
 if [ -f "$AUDIO_BIN" ]; then
     cp "$AUDIO_BIN" "$STAGE/"
 fi
+VIDEO_BIN="$BUILT_DIR/southstar-video"
+if [ -f "$VIDEO_BIN" ]; then
+    strip --strip-all "$VIDEO_BIN"
+    cp "$VIDEO_BIN" "$STAGE/"
+fi
+mkdir -p "$STAGE/share/southstar/i18n"
+cp "$ROOT"/data/i18n/*.lang "$STAGE/share/southstar/i18n/"
+cp "$ROOT/data/safebrowsing.list" "$STAGE/share/southstar/"
 cp "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
    "$ROOT"/rust/net/data/southstar.gif \
    "$STAGE/data/icons/hicolor/scalable/apps/"

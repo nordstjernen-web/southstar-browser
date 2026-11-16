@@ -55,6 +55,12 @@ install -m755 "$STAGE/southstar-renderer" "$PKGROOT/usr/bin/southstar-renderer"
 if [ -x "$STAGE/southstar-audio" ]; then
     install -m755 "$STAGE/southstar-audio" "$PKGROOT/usr/bin/southstar-audio"
 fi
+if [ -x "$STAGE/southstar-video" ]; then
+    install -m755 "$STAGE/southstar-video" "$PKGROOT/usr/bin/southstar-video"
+fi
+install -dm755 "$PKGROOT/usr/share/southstar/i18n"
+install -m644 "$STAGE"/share/southstar/i18n/*.lang "$PKGROOT/usr/share/southstar/i18n/"
+install -m644 "$STAGE/share/southstar/safebrowsing.list" "$PKGROOT/usr/share/southstar/"
 # All app + toolbar icons the UI and about: pages look up by name.
 for icon in "$ROOT"/data/icons/hicolor/scalable/apps/southstar*.svg \
             "$ROOT"/rust/net/data/southstar.gif; do
@@ -187,6 +193,7 @@ CTL
     # here (the GTK shell links them via the shared engine as well).
     scan_bins=(usr/bin/southstar usr/bin/southstar-renderer)
     [ -x "$PKGROOT/usr/bin/southstar-audio" ] && scan_bins+=(usr/bin/southstar-audio)
+    [ -x "$PKGROOT/usr/bin/southstar-video" ] && scan_bins+=(usr/bin/southstar-video)
     RUNTIME_DEPS=$(cd "$PKGROOT" \
         && dpkg-shlibdeps -O --ignore-missing-info "${scan_bins[@]}" 2>/dev/null \
         | sed -n 's/^shlibs:Depends=//p')
@@ -211,6 +218,10 @@ for dep in $RUNTIME_DEPS; do
     kept="${kept:+$kept, }$d"
 done
 IFS=$OLDIFS
+case ", $kept," in
+    *", publicsuffix"[,\ ]*) ;;
+    *) kept="${kept:+$kept, }publicsuffix" ;;
+esac
 RUNTIME_DEPS="$kept"
 echo "pack-deb: Depends: $RUNTIME_DEPS"
 
@@ -225,7 +236,7 @@ Section: web
 Priority: optional
 Homepage: https://github.com/nordstjernen-web/southstar-browser
 Description: Southstar Browser — a small, hand-written web browser
- Southstar is a small, free software web browser written in C with
+ Southstar is a small, free software web browser written in Rust with
  GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
  JavaScript glue are written from scratch — no third-party browser engine
  is used. SVG images are rendered in-engine.

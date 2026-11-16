@@ -43,6 +43,7 @@ cp "$ROOT/data/southstar.desktop" "$RPMTOP/SOURCES/"
 cp "$ROOT/README.md" "$RPMTOP/SOURCES/"
 cp "$ROOT/THIRD-PARTY-LICENSES.md" "$RPMTOP/SOURCES/"
 cp "$ROOT/License.md" "$ROOT/COPYING" "$RPMTOP/SOURCES/"
+tar -czf "$RPMTOP/SOURCES/southstar-data.tar.gz" -C "$STAGE/share/southstar" i18n safebrowsing.list
 
 # WebGPU: when pack-linux staged libwgpu_native.so, the binaries link it by its
 # bare soname (DT_NEEDED=libwgpu_native.so), so the RPM must ship it under
@@ -76,6 +77,16 @@ if [ -x "$STAGE/southstar-audio" ]; then
     AUDIO_FILES='%{_bindir}/southstar-audio'
 fi
 
+VIDEO_SOURCE=""
+VIDEO_INSTALL=""
+VIDEO_FILES=""
+if [ -x "$STAGE/southstar-video" ]; then
+    cp "$STAGE/southstar-video" "$RPMTOP/SOURCES/"
+    VIDEO_SOURCE="Source11:       southstar-video"
+    VIDEO_INSTALL='install -m755 %{SOURCE11} %{buildroot}%{_bindir}/southstar-video'
+    VIDEO_FILES='%{_bindir}/southstar-video'
+fi
+
 SPEC="$RPMTOP/SPECS/southstar.spec"
 cat > "$SPEC" <<SPEC_EOF
 Name:           southstar
@@ -95,10 +106,13 @@ Source4:        THIRD-PARTY-LICENSES.md
 Source5:        southstar-renderer
 Source8:        License.md
 Source9:        COPYING
+Source10:       southstar-data.tar.gz
 ${AUDIO_SOURCE}
+${VIDEO_SOURCE}
 ${WGPU_SOURCE}
 
 AutoReqProv:    yes
+Requires:       /usr/share/publicsuffix/public_suffix_list.dat
 ${WGPU_EXCLUDE}
 
 %define debug_package %{nil}
@@ -106,7 +120,7 @@ ${WGPU_EXCLUDE}
 %global __os_install_post %{nil}
 
 %description
-Southstar is a small, free software web browser written in C with
+Southstar is a small, free software web browser written in Rust with
 GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
 JavaScript glue are written from scratch — no third-party browser
 engine is used. SVG images are rendered in-engine.
@@ -136,7 +150,9 @@ install -m644 %{SOURCE3} %{buildroot}%{_docdir}/southstar/
 install -m644 %{SOURCE4} %{buildroot}%{_docdir}/southstar/
 install -m644 %{SOURCE8} %{buildroot}%{_datadir}/southstar/
 install -m644 %{SOURCE9} %{buildroot}%{_datadir}/southstar/
+tar -xzf %{SOURCE10} -C %{buildroot}%{_datadir}/southstar
 ${AUDIO_INSTALL}
+${VIDEO_INSTALL}
 ${WGPU_INSTALL}
 
 %files
@@ -147,7 +163,10 @@ ${WGPU_INSTALL}
 %{_datadir}/icons/hicolor/scalable/apps/southstar*
 %{_datadir}/applications/org.southstar.WebBrowser.desktop
 %{_docdir}/southstar/
+%{_datadir}/southstar/i18n/
+%{_datadir}/southstar/safebrowsing.list
 ${AUDIO_FILES}
+${VIDEO_FILES}
 ${WGPU_FILES}
 
 %post
