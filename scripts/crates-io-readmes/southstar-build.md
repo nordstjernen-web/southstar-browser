@@ -4,7 +4,7 @@ Build-script helpers for compiling [Southstar](https://github.com/nordstjernen-w
 with cargo.
 
 Southstar links a long list of system C libraries: GTK 4, cairo, HarfBuzz,
-FFmpeg, SDL2, libwebp and more. Its build scripts use this crate to:
+FFmpeg, SDL3, libwebp and more. Its build scripts use this crate to:
 
 - **find a library through pkg-config**: `pkg_config(&["libavformat", "libavcodec"])`
   returns its compiler flags and libraries, and `link_args` turns them into

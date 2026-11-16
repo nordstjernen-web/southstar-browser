@@ -90,7 +90,7 @@ seccomp-sandboxed renderer can't open a sound device, so audio is handed to the
 unsandboxed `southstar-audio` helper. The helper decodes to PCM — `rust/plmpeg` for
 the MPEG-1/MP2 track, `rust/minimp3` (a Rust port of the CC0 [minimp3](https://github.com/lieff/minimp3))
 for standalone `.mp3` files, and libav for Opus/Vorbis (WebM/Ogg) — and plays it
-through [SDL2](https://www.libsdl.org/)'s audio device (WASAPI on Windows,
+through [SDL3](https://www.libsdl.org/)'s audio device (WASAPI on Windows,
 CoreAudio on macOS, ALSA/PulseAudio on Linux), mixing and resampling the streams
 itself. The inline player drives the helper — `open`/`play`/`pause`/`seek`/`stop`
 ride the renderer→shell render channel, and looping re-syncs the audio at each

@@ -34,7 +34,7 @@ jobs:
           prepare: |
             pkg install -y \
               pkgconf bash zip ccache bzip2 git-lite \
-              gtk4 libepoxy brotli zstd uchardet webp libavif sdl2 \
+              gtk4 libepoxy brotli zstd uchardet webp libavif sdl3 \
               sqlite3
             # FreeBSD's rust package lags behind the toolchain the build pins
             # in rust-toolchain.toml, so install rustup and let it fetch that.

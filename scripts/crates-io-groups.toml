@@ -84,7 +84,7 @@ description = "Southstar's GTK 4 shell: windows, tabs, chrome and the GTK bindin
 members = ["shell", "gtk", "gtk-ffi"]
 
 [southstar-audio-helper]
-description = "Southstar's audio helper process: decodes media audio and plays it through SDL2"
+description = "Southstar's audio helper process: decodes media audio and plays it through SDL3"
 members = ["audio-helper"]
 
 [southstar-video-helper]

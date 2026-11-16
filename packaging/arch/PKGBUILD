@@ -30,7 +30,7 @@ depends=(
   libwebp
   openssl
   opusfile
-  sdl2
+  sdl3
   sqlite
   uchardet
   zlib

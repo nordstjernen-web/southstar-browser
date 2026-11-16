@@ -52,7 +52,7 @@ Debian/Ubuntu:
 ```sh
 sudo apt install build-essential pkg-config \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl3-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
 
@@ -60,7 +60,7 @@ macOS ([Homebrew](https://brew.sh), plus `xcode-select --install`):
 
 ```sh
 brew install pkg-config gtk4 libepoxy openssl@3 \
-    brotli zstd uchardet sqlite webp sdl2 rust
+    brotli zstd uchardet sqlite webp sdl3 rust
 ```
 
 Windows: install [MSYS2](https://www.msys2.org) in `C:\msys64` (or set

@@ -64,8 +64,8 @@ patchelf --set-rpath '\''$ORIGIN/../%{_lib}/southstar'\'' %{buildroot}%{_bindir}
     WGPU_FILES='%{_libdir}/southstar/'
 fi
 
-# Audio playback helper, when SDL2 was available at build time. AutoReqProv
-# picks up its libSDL2 SONAME as a Requires automatically.
+# Audio playback helper, when SDL3 was available at build time. AutoReqProv
+# picks up its libSDL3 SONAME as a Requires automatically.
 AUDIO_SOURCE=""
 AUDIO_INSTALL=""
 AUDIO_FILES=""

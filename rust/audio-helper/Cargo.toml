@@ -1,6 +1,6 @@
 [package]
 name = "southstar-audio-helper"
-description = "The southstar-audio helper process: decodes MPEG-1/MP2, MP3, WebM and Ogg audio, mixes and resamples it and plays it through SDL2, driven by line commands from the shell"
+description = "The southstar-audio helper process: decodes MPEG-1/MP2, MP3, WebM and Ogg audio, mixes and resamples it and plays it through SDL3, driven by line commands from the shell"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

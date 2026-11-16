@@ -35,7 +35,7 @@ const FEATURE_LIBRARIES: [(&str, &[&str]); 6] = [
             "libswresample",
         ],
     ),
-    ("SDL", &["sdl2"]),
+    ("SDL", &["sdl3"]),
     ("AVIF", &["libavif"]),
     ("ENCHANT", &["enchant-2"]),
     ("VORBISFILE", &["vorbisfile"]),
@@ -80,10 +80,7 @@ pub fn engine_link(target_os: &str, gtk: bool) -> EngineLink {
             modules.extend(extra);
         }
     }
-    let mut engine: Vec<String> = link_args(&require(&modules))
-        .into_iter()
-        .filter(|arg| arg != "-lSDL2main" && arg != "-lmingw32")
-        .collect();
+    let mut engine = link_args(&require(&modules));
     if feature_enabled("WEBGPU") {
         engine.extend(wgpu_native_args());
     }

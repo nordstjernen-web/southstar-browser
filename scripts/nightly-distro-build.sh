@@ -19,7 +19,7 @@ install_apt() {
         build-essential clang pkg-config git zip unzip curl \
         dpkg-dev patchelf ca-certificates \
         libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev libuchardet-dev \
-        libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl2-dev
+        libsqlite3-dev libseccomp-dev libwebp-dev libavif-dev libsdl3-dev
     apt-get install -y --no-install-recommends \
         libfontconfig-dev libharfbuzz-dev libfreetype-dev libavif-dev || true
     # FFmpeg libav* backs the inline WebM path (VP9/VP8 video + Opus/Vorbis
@@ -62,13 +62,13 @@ install_zypper() {
         rpm-build patchelf ca-certificates \
         gtk4-devel libepoxy-devel libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel \
         sqlite3-devel libseccomp-devel libwebp-devel libavif-devel rust cargo
-    # SDL2 backs the auto-detected audio helper; keep it out of the required
+    # SDL3 backs the auto-detected audio helper; keep it out of the required
     # set so an unavailable/mid-sync package degrades to no audio, not a failed
     # nightly. Its own line (not the optional group) so it is independent of
     # the optional packages' availability.
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
-        libSDL2-devel \
-        || echo "nightly-distro-build(opensuse): SDL2 unavailable; audio helper skipped" >&2
+        SDL3-devel \
+        || echo "nightly-distro-build(opensuse): SDL3 unavailable; audio helper skipped" >&2
     zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
         fontconfig-devel harfbuzz-devel freetype-develel libavif-devel || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). cargo xtask requires it on
@@ -83,7 +83,7 @@ install_apk() {
     apk add --no-cache \
         build-base clang pkgconf git zip alpine-sdk \
         linux-headers gtk4.0-dev libepoxy-dev openssl-dev zlib-dev brotli-dev zstd-dev uchardet-dev sqlite-dev \
-        libseccomp-dev libwebp-dev sdl2-dev rust cargo
+        libseccomp-dev libwebp-dev sdl3-dev rust cargo
     apk add --no-cache \
         fontconfig-dev harfbuzz-dev freetype-dev libavif-dev || true
     # FFmpeg libav* (inline WebM: VP9/VP8 + Opus/Vorbis). ffmpeg-dev provides

@@ -56,10 +56,10 @@ mkdir -p "$BUILDTOP"
 export REPODEST="$ROOT/dist/apkrepo"
 rm -rf "$REPODEST"
 
-# Audio playback helper, when SDL2 was available at build time. tracedeps is
-# off, so its sdl2 runtime dependency must be listed manually below.
+# Audio playback helper, when SDL3 was available at build time. tracedeps is
+# off, so its sdl3 runtime dependency must be listed manually below.
 AUDIO_DEP=""
-[ -x "$STAGE/southstar-audio" ] && AUDIO_DEP=" sdl2"
+[ -x "$STAGE/southstar-audio" ] && AUDIO_DEP=" sdl3"
 
 # Inline WebM (VP9/Opus) links FFmpeg's libav* when present at build time; with
 # tracedeps off, its runtime package (ffmpeg-libs) must be listed manually.

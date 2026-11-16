@@ -28,7 +28,7 @@ be installed. On Debian or Ubuntu:
 ```sh
 sudo apt install build-essential pkg-config \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl3-dev \
     libharfbuzz-dev libfontconfig-dev libfreetype-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
@@ -41,7 +41,7 @@ with the packages listed in the repository's `docs/Windows.md`.
 | Feature | Default | Adds |
 | --- | --- | --- |
 | `libav` | yes | WebM video (VP9/VP8) and Opus/Vorbis audio through FFmpeg 6.0 or newer |
-| `sdl` | yes | audio playback through SDL2 |
+| `sdl` | yes | audio playback through SDL3 |
 | `wasm` | yes | the `WebAssembly` JavaScript API (wasmi) |
 | `rust-shaper` | yes | web fonts shaped and drawn in pure Rust |
 | `http-brotli`, `http-zstd` | yes | `br` and `zstd` content encodings |

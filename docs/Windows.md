@@ -40,7 +40,7 @@ pacman -Sy --noconfirm --needed \
     mingw-w64-ucrt-x86_64-uchardet \
     mingw-w64-ucrt-x86_64-sqlite3 \
     mingw-w64-ucrt-x86_64-libwebp \
-    mingw-w64-ucrt-x86_64-SDL2 \
+    mingw-w64-ucrt-x86_64-sdl3 \
     mingw-w64-ucrt-x86_64-rust \
     mingw-w64-ucrt-x86_64-ffmpeg
 ```

@@ -144,11 +144,11 @@ pub fn configure(options: &Options) -> Result<Configuration, String> {
         summary.push(format!("  {label}: {}", if on { "yes" } else { "no" }));
     };
     enable("libav", libav, "WebM video and Opus/Vorbis audio (libav)");
-    let sdl = options.audio != Toggle::Disabled && has("sdl2");
+    let sdl = options.audio != Toggle::Disabled && at_least("sdl3", "3.2.0");
     if options.audio == Toggle::Enabled && !sdl {
-        return Err("audio was requested but SDL2 is not installed".to_owned());
+        return Err("audio was requested but SDL3 3.2 or newer is not installed".to_owned());
     }
-    enable("sdl", sdl, "audio helper (SDL2)");
+    enable("sdl", sdl, "audio helper (SDL3)");
     enable(
         "vorbisfile",
         sdl && has("vorbisfile"),

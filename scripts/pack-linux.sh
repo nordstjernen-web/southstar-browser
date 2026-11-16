@@ -55,8 +55,8 @@ strip --strip-all "$BUILT_DIR/southstar"
 # The GUI is a thin shell that spawns one sandboxed southstar-renderer
 # process per tab; it must ship alongside the main binary.
 strip --strip-all "$BUILT_DIR/southstar-renderer"
-# The audio playback helper (MP2/MP3 decode + SDL2 output). Built only when
-# SDL2 was present at configure time (cargo xtask detects it); ship it
+# The audio playback helper (MP2/MP3 decode + SDL3 output). Built only when
+# SDL3 was present at configure time (cargo xtask detects it); ship it
 # beside the main binary so the shell can spawn it for <video>/<audio> sound.
 AUDIO_BIN="$BUILT_DIR/southstar-audio"
 if [ -f "$AUDIO_BIN" ]; then
@@ -86,7 +86,7 @@ fi
 if [ "$LIBC" = musl ]; then
     LIBC_REQ='- musl libc (Alpine 3.19+ era and later)'
     RUNTIME_INSTALL='    sudo apk add gtk4.0 libcrypto3 zlib brotli-libs zstd-libs uchardet libavif libwebp \
-        libseccomp sqlite-libs ca-certificates font-dejavu sdl2 # Alpine (musl)'
+        libseccomp sqlite-libs ca-certificates font-dejavu sdl3 # Alpine (musl)'
 else
     # Don't guess the glibc floor — read it from the binary we just built.
     GLIBC_MIN=$(objdump -T "$BUILT_DIR/southstar" 2>/dev/null \
@@ -94,11 +94,11 @@ else
         | tail -1 | cut -d_ -f2)
     LIBC_REQ="- glibc ${GLIBC_MIN:-2.38}+ (the build container's generation; check with: ldd --version)"
     RUNTIME_INSTALL='    sudo apt   install libgtk-4-1 libbrotli1 libzstd1 libuchardet0 libwebp7 \
-        libavif16 libseccomp2 libsqlite3-0 libsdl2-2.0-0   # Debian/Ubuntu
+        libavif16 libseccomp2 libsqlite3-0 libsdl3-0   # Debian/Ubuntu
     sudo dnf   install gtk4 openssl-libs brotli libzstd libuchardet libwebp \
-        libavif libseccomp sqlite-libs SDL2                     # Fedora/RHEL
+        libavif libseccomp sqlite-libs SDL3                     # Fedora/RHEL
     sudo zypper install libgtk-4-1 libbrotlidec1 libzstd1 libuchardet0 libwebp7 \
-        libavif16 libseccomp2 libsqlite3-0 libSDL2-2_0-0   # openSUSE'
+        libavif16 libseccomp2 libsqlite3-0 libSDL3-0   # openSUSE'
 fi
 
 rm -rf "$STAGE"
