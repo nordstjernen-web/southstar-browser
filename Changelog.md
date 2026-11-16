@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* Windows: sound plays in the Microsoft Store (MSIX) package instead of
+  stopping with "Failed loading SDL3 library." MSYS2's SDL2.dll is now
+  sdl2-compat, which loads SDL3.dll at run time rather than linking it,
+  so the packaging scripts never saw it and left it out of the bundle.
+  A packaged app does not search PATH, so the MSIX could not find it
+  anywhere. The zip and installer could miss it the same way on a
+  machine without MSYS2. The Windows bundle now ships SDL3.dll and its
+  dependencies next to SDL2.dll, as the macOS package already does, and
+  packaging fails if sdl2-compat is present but SDL3.dll is not.
 * PDF documents open in a viewer built on Mozilla's pdf.js (pdfjs-dist
   6.4.299, legacy build) with its CMaps, standard fonts and WebAssembly
   image decoders, served from the binary at `southstar-pdf://viewer/`. Pages render on canvases as they
