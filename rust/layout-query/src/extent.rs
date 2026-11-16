@@ -27,6 +27,47 @@ fn paint_unbounded(s: StyleRef<'_>) -> bool {
     is_fixed_or_sticky(s)
 }
 
+fn blur_px(arg: &[u8]) -> f64 {
+    let arg = arg.trim_ascii_start();
+    let digits = arg
+        .iter()
+        .take_while(|c| c.is_ascii_digit() || **c == b'.')
+        .count();
+    let Some(v) = core::str::from_utf8(&arg[..digits])
+        .ok()
+        .and_then(|n| n.parse::<f64>().ok())
+    else {
+        return 0.0;
+    };
+    let unit_len = arg[digits..]
+        .iter()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .count();
+    let unit = &arg[digits..digits + unit_len];
+    if [&b"em"[..], b"rem", b"lh", b"rlh"]
+        .iter()
+        .any(|u| unit.eq_ignore_ascii_case(u))
+    {
+        v * 16.0
+    } else {
+        v
+    }
+}
+
+fn filter_blur_reach(s: StyleRef<'_>) -> f64 {
+    let Some(filter) = s.get(PropId::Filter).and_then(ValueRef::keyword_text) else {
+        return 0.0;
+    };
+    let text = filter.to_bytes();
+    let sigma = text
+        .windows(5)
+        .enumerate()
+        .filter(|(_, w)| w.eq_ignore_ascii_case(b"blur("))
+        .map(|(at, _)| blur_px(&text[at + 5..]))
+        .fold(0.0, f64::max);
+    3.0 * sigma.min(512.0)
+}
+
 fn border_box_bottom(b: BoxRef<'_>, top: f64) -> f64 {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     top + m.top + bd.top + p.top + b.content_height() + p.bottom + bd.bottom + m.bottom
@@ -60,7 +101,8 @@ pub fn compute_paint_bounds(b: BoxRef<'_>) {
             bottom = ab.paint_bottom() + dy;
         }
     }
-    b.set_paint_bounds(top, bottom);
+    let reach = ffi::style_of(b).map_or(0.0, filter_blur_reach);
+    b.set_paint_bounds(top - reach, bottom + reach);
 }
 
 fn moves_when_painted(b: BoxRef<'_>) -> bool {

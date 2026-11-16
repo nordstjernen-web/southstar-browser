@@ -10,7 +10,7 @@ use southstar_cairo::{Context, ContextRef, Format, Operator, Surface, SurfaceRef
 use southstar_layout::{BoxKind, BoxRef};
 use southstar_style::{Kind, PropId as P, ValueRef, parse_color};
 
-use crate::blur::box_blur_argb;
+use crate::blur::{box_blur_argb, gaussian_blur_argb};
 use crate::ffi::engine;
 use crate::radii::{box_border_radii, rounded_rect_path};
 use crate::util::{Rgba, is_space, rgba_of, skip_spaces, style_of};
@@ -415,8 +415,10 @@ pub fn filter_group(cr: ContextRef, b: BoxRef<'_>, filter: &CStr) {
         return;
     }
     let k = device_scale(cr);
+    let sigma = filter_blur_sigma_px(filter.to_bytes()) * k;
     surf.with_data_mut(|data, stride| {
-        apply_scaled_image_filter(data, stride as i32, w, h, Some(filter), k);
+        apply_filter_color_ops(data, stride as i32, w, h, filter.to_bytes());
+        gaussian_blur_argb(data, stride as i32, w, h, sigma);
     });
     let current = rgba_of(
         style_of(b).and_then(|s| s.get(P::Color)),
@@ -473,6 +475,14 @@ fn apply_scaled_image_filter(
     let Some(filter) = filter.map(CStr::to_bytes).filter(|f| !f.is_empty()) else {
         return;
     };
+    let blur_radius = apply_filter_color_ops(data, stride, w, h, filter);
+    if blur_radius > 0.0 {
+        let r = ((blur_radius * scale + 0.5) as i32).min(512);
+        box_blur_argb(data, stride, w, h, r);
+    }
+}
+
+fn apply_filter_color_ops(data: &mut [u8], stride: i32, w: i32, h: i32, filter: &[u8]) -> f64 {
     let mut ops: Vec<(Op, f64)> = Vec::new();
     let mut blur_radius = 0.0;
     let mut q = 0;
@@ -506,8 +516,8 @@ fn apply_scaled_image_filter(
             ops.push((op, amt));
         }
     }
-    if ops.is_empty() && blur_radius <= 0.0 {
-        return;
+    if ops.is_empty() {
+        return blur_radius;
     }
     let stride_u = stride as usize;
     for y in 0..h as usize {
@@ -570,10 +580,21 @@ fn apply_scaled_image_filter(
             px[2] = (r * a * 255.0 + 0.5) as u8;
         }
     }
-    if blur_radius > 0.0 {
-        let r = ((blur_radius * scale + 0.5) as i32).min(512);
-        box_blur_argb(data, stride, w, h, r);
+    blur_radius
+}
+
+fn filter_blur_sigma_px(filter: &[u8]) -> f64 {
+    let mut sigma: f64 = 0.0;
+    let mut p = 0;
+    while let Some(f) = filter_function_next(filter, p) {
+        if name_is(f.name, b"blur")
+            && let Some(px) = parse_filter_length_px(strip(&filter[f.body..f.body_end]))
+        {
+            sigma = sigma.max(px);
+        }
+        p = f.next;
     }
+    sigma.min(512.0)
 }
 
 fn filter_blur_radius(filter: &[u8]) -> f64 {

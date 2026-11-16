@@ -1165,7 +1165,7 @@ pub fn paint_walk(cr: ContextRef, b: BoxRef<'_>, highlight: Option<&CStr>) {
     }
 
     let mut box_offscreen = false;
-    if !has_transform && !has_sticky && no_cull == 0 {
+    if !has_transform && !has_sticky && no_cull == 0 && element_filter.is_none() {
         let is_fixed = position_keyword(b) == Some(b"fixed");
         if !is_fixed {
             let anchor_dy = with(|w| w.anchor_dy.get());

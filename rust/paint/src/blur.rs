@@ -61,6 +61,105 @@ pub fn box_blur_argb(data: &mut [u8], stride: i32, w: i32, h: i32, radius: i32) 
     }
 }
 
+fn three_box_blur_argb(data: &mut [u8], stride: i32, w: i32, h: i32, sigma: f64) {
+    let ideal = (4.0 * sigma * sigma + 1.0).sqrt().floor() as i32;
+    let wl = if ideal % 2 == 0 { ideal - 1 } else { ideal };
+    let wu = wl + 2;
+    let wlf = f64::from(wl);
+    let m = ((12.0 * sigma * sigma - 3.0 * wlf * wlf - 12.0 * wlf - 9.0) / (-4.0 * wlf - 4.0))
+        .round() as i32;
+    for pass in 0..3 {
+        let width = if pass < m { wl } else { wu };
+        box_blur_argb(data, stride, w, h, (width - 1) / 2);
+    }
+}
+
+fn downsample_argb(
+    data: &[u8],
+    stride: i32,
+    (w, h): (i32, i32),
+    f: i32,
+    (sw, sh): (i32, i32),
+) -> Vec<u8> {
+    let (stride, f, sw) = (stride as usize, f as usize, sw as usize);
+    let mut sums = vec![0u32; sw * sh as usize * 4];
+    let mut counts = vec![0u32; sw * sh as usize];
+    for y in 0..h as usize {
+        let row = &data[y * stride..y * stride + w as usize * 4];
+        for (x, px) in row.as_chunks::<4>().0.iter().enumerate() {
+            let cell = (y / f) * sw + x / f;
+            counts[cell] += 1;
+            for (sum, &v) in sums[cell * 4..cell * 4 + 4].iter_mut().zip(px) {
+                *sum += u32::from(v);
+            }
+        }
+    }
+    sums.iter()
+        .enumerate()
+        .map(|(i, &sum)| {
+            let n = counts[i / 4].max(1);
+            ((sum + n / 2) / n) as u8
+        })
+        .collect()
+}
+
+fn bilinear_taps(n: i32, f: i32, small_n: i32) -> Vec<(usize, usize, f64)> {
+    let last = f64::from(small_n - 1);
+    (0..n)
+        .map(|i| {
+            let s = ((f64::from(i) + 0.5) / f64::from(f) - 0.5).clamp(0.0, last);
+            let i0 = s.floor();
+            (i0 as usize, (i0 + 1.0).min(last) as usize, s - i0)
+        })
+        .collect()
+}
+
+fn upsample_argb(
+    small: &[u8],
+    (sw, sh): (i32, i32),
+    f: i32,
+    data: &mut [u8],
+    stride: i32,
+    (w, h): (i32, i32),
+) {
+    let sstride = sw as usize * 4;
+    let xs = bilinear_taps(w, f, sw);
+    for (y, &(y0, y1, fy)) in bilinear_taps(h, f, sh).iter().enumerate() {
+        let (r0, r1) = (&small[y0 * sstride..], &small[y1 * sstride..]);
+        let row = &mut data[y * stride as usize..];
+        for (x, &(x0, x1, fx)) in xs.iter().enumerate() {
+            for c in 0..4 {
+                let lerp = |r: &[u8]| {
+                    f64::from(r[x0 * 4 + c]) * (1.0 - fx) + f64::from(r[x1 * 4 + c]) * fx
+                };
+                row[x * 4 + c] = (lerp(r0) * (1.0 - fy) + lerp(r1) * fy + 0.5) as u8;
+            }
+        }
+    }
+}
+
+pub fn gaussian_blur_argb(data: &mut [u8], stride: i32, w: i32, h: i32, sigma: f64) {
+    if sigma.is_nan() || sigma < 0.5 || w < 1 || h < 1 {
+        return;
+    }
+    let sigma = sigma.min(512.0);
+    let f = (sigma / 8.0).floor().clamp(1.0, 64.0) as i32;
+    if f == 1 {
+        three_box_blur_argb(data, stride, w, h, sigma);
+        return;
+    }
+    let small_size = ((w + f - 1) / f, (h + f - 1) / f);
+    let mut small = downsample_argb(data, stride, (w, h), f, small_size);
+    three_box_blur_argb(
+        &mut small,
+        small_size.0 * 4,
+        small_size.0,
+        small_size.1,
+        sigma / f64::from(f),
+    );
+    upsample_argb(&small, small_size, f, data, stride, (w, h));
+}
+
 pub fn box_blur_a8(data: &mut [u8], w: i32, h: i32, stride: i32, radius: i32) {
     if radius < 1 || w <= 0 || h <= 0 {
         return;

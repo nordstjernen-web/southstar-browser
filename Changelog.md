@@ -3,6 +3,18 @@ Changelog:
 
 Southstar Browser 1.0.10-dev:
 ======
+* CSS `filter: blur()` on an element is a Gaussian of the given
+  standard deviation, as the Filter Effects spec defines it, instead of
+  one box blur with that radius, which spread the edge over a straight
+  ramp about a third as wide as other browsers draw it. Lengths in `em`,
+  `rem`, `vw` and the other units resolve as they do for `drop-shadow()`.
+  A wide blur is computed at a fraction of the resolution and scaled back
+  up, which keeps the three box-blur passes cheap. The glow
+  behind the logo on c3-lang.org (`filter: blur(80px)` on an animated
+  blob) now spreads as far as in Chrome. Paint bounds grow by three
+  standard deviations, so a blurred element just outside the viewport
+  is no longer culled while its halo would show.
+  (Backport of northstar-web-browser#277.)
 * Windows: sound plays in the Microsoft Store (MSIX) package instead of
   stopping with "Failed loading SDL3 library." MSYS2's SDL2.dll became
   sdl2-compat, which loads SDL3.dll at start-up rather than linking it,
