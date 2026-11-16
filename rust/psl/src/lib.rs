@@ -132,11 +132,11 @@ fn suffix_rule_matches(rules: &Rules, domain: &[u8]) -> bool {
         || !domain.contains(&b'.')
 }
 
-pub fn is_public_suffix(domain: &[u8]) -> bool {
+pub fn is_public_suffix(domain: &[u8]) -> Option<bool> {
     let Some(domain) = normalized(domain) else {
-        return false;
+        return Some(false);
     };
-    rules().is_none_or(|rules| suffix_rule_matches(rules, domain))
+    rules().map(|rules| suffix_rule_matches(rules, domain))
 }
 
 pub fn registrable_domain(host: &[u8]) -> Option<&[u8]> {
