@@ -55,7 +55,8 @@ pub(crate) fn element_value(scope: &mut Scope<'_>, node: Element) -> Option<Valu
     api::make_element(scope, Some(node)).ok()
 }
 
-pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>) {
+pub(crate) fn mark_childlist_dirty(parent: Element, added: Option<Element>, removed: &[Element]) {
+    southstar_css::mark_children_removed(parent, removed);
     southstar_css::mark_childlist_dirty(parent, added);
 }
 

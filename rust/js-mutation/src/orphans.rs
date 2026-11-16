@@ -117,7 +117,7 @@ pub(crate) fn replace_all(js: Option<Js>, parent: Element, added: Option<Element
         parent.append(node);
         record::index_child_changes(Some(js), parent, added.as_slice(), &[]);
     }
-    ffi::mark_childlist_dirty(parent, added);
+    ffi::mark_childlist_dirty(parent, added, &removed);
     ffi::emit_child_list(
         Some(js),
         parent,

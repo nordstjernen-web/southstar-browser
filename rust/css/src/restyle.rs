@@ -20,6 +20,7 @@ const DEPTH_MAX: i32 = 6;
 const SIBLING_SCAN_MAX: u32 = 256;
 const FLAG_XML_DOC: u32 = 1 << 14;
 
+const COMB_CHILD: u32 = 2;
 const COMB_ADJACENT: u32 = 3;
 const COMB_SIBLING: u32 = 4;
 
@@ -137,6 +138,8 @@ struct Keys {
 struct HasDeps {
     sig: u64,
     anchors: Vec<Anchor>,
+    child_anchors: Vec<Anchor>,
+    child_anchor_attrs: HashSet<Vec<u8>>,
     loose: bool,
 }
 
@@ -630,6 +633,8 @@ impl HasDeps {
         let mut has = HasDeps {
             sig,
             anchors: Vec::new(),
+            child_anchors: Vec::new(),
+            child_anchor_attrs: HashSet::new(),
             loose: false,
         };
         for sel in sheets
@@ -718,6 +723,38 @@ impl HasDeps {
         }
         c.matches_any()
             .any(|group| group.selectors().next().is_some() && self.add_group(group, depth))
+            || self.add_child_anchors(c)
+    }
+
+    fn add_child_anchors(&mut self, c: CompoundRef<'_>) -> bool {
+        let mark = self.child_anchors.len();
+        let mut any = false;
+        for rel in c.has_groups().flat_map(GroupRef::selectors) {
+            let anchor = rel
+                .filter(|rel| rel.combinator(0) == COMB_CHILD)
+                .and_then(|rel| rel.compound(0))
+                .and_then(Anchor::from_compound);
+            let Some(anchor) = anchor else {
+                self.child_anchors.truncate(mark);
+                return false;
+            };
+            self.child_anchors.push(anchor);
+            any = true;
+        }
+        for anchor in &self.child_anchors[mark..] {
+            let keys = [
+                (!anchor.classes.is_empty()).then_some(b"class".to_vec()),
+                anchor.id.is_some().then_some(b"id".to_vec()),
+            ];
+            let attr_names = anchor.attrs.iter().map(|dep| lower(dep.name.to_bytes()));
+            self.child_anchor_attrs
+                .extend(keys.into_iter().flatten().chain(attr_names));
+        }
+        any
+    }
+
+    fn child_anchored(&self, n: Node<'_>) -> bool {
+        n.is_element() && self.child_anchors.iter().any(|a| a.matches(n))
     }
 
     fn add_group(&mut self, group: GroupRef<'_>, depth: i32) -> bool {
@@ -759,14 +796,16 @@ impl State {
         let Some(has) = self.has.as_ref() else {
             return;
         };
-        if has.loose || has.anchors.is_empty() {
+        if has.loose || has.anchors.is_empty() && has.child_anchors.is_empty() {
             return;
         }
         let dirty = &mut self.dirty;
+        let mut child = None;
         for node in ancestors_and_self(changed) {
-            if has.anchored(node) {
+            if has.anchored(node) || child.is_some_and(|c| has.child_anchored(c)) {
                 Self::mark_region(dirty, node);
             }
+            child = Some(node);
             let mut scanned = 0;
             let earlier = core::iter::successors(node.prev_sibling(), |s| s.prev_sibling());
             for sib in earlier.filter(|s| s.is_element()) {
@@ -813,6 +852,29 @@ impl State {
         }
     }
 
+    fn mark_child_anchor_parent(&mut self, target: Node<'_>, name: Option<&[u8]>) {
+        let Some(has) = self
+            .has
+            .as_ref()
+            .filter(|has| !has.child_anchors.is_empty())
+        else {
+            return;
+        };
+        let keyed = name.is_none_or(|name| has.child_anchor_attrs.contains(&lower(name)));
+        if keyed && let Some(parent) = target.parent().filter(|p| p.is_element()) {
+            Self::mark_region(&mut self.dirty, parent);
+        }
+    }
+
+    fn mark_removed(&mut self, parent: Node<'_>, removed: &[Node<'_>]) {
+        let Some(has) = self.has.as_ref() else {
+            return;
+        };
+        if removed.iter().any(|&child| has.child_anchored(child)) {
+            Self::mark_region(&mut self.dirty, parent);
+        }
+    }
+
     fn attr_may_affect_style(&self, target: Node<'_>, name: Option<&[u8]>) -> bool {
         match (name, &self.keys) {
             (Some(name), _) if is_link_rel(target, name) => true,
@@ -838,6 +900,7 @@ impl State {
         if !self.attr_may_affect_style(target, name) {
             return;
         }
+        self.mark_child_anchor_parent(target, name);
         if self.only_own_style(name) {
             self.inline_styled.insert(addr(target));
             return;
@@ -894,6 +957,12 @@ pub fn mark_childlist_dirty(parent: Node<'_>, added: Option<Node<'_>>) {
         return;
     }
     with_state(|s| s.mark_childlist(parent, added));
+}
+
+pub fn mark_children_removed(parent: Node<'_>, removed: &[Node<'_>]) {
+    if !removed.is_empty() && southstar_dom::tree::is_connected(parent) {
+        with_state(|s| s.mark_removed(parent, removed));
+    }
 }
 
 pub fn mark_attr_dirty(target: Node<'_>, name: Option<&[u8]>, old: Option<&[u8]>) {

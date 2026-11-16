@@ -30,7 +30,7 @@ pub fn record_child_change(
     next: Option<Element>,
 ) {
     index_child_change(js, parent, added, removed);
-    ffi::mark_childlist_dirty(parent, added);
+    ffi::mark_childlist_dirty(parent, added, removed.as_slice());
     ffi::emit_child(Js::of(js), parent, added, removed, previous, next);
 }
 
@@ -43,7 +43,7 @@ pub fn record_child_changes(
     next: Option<Element>,
 ) {
     record::index_child_changes(Js::of(js), parent, added, removed);
-    ffi::mark_childlist_dirty(parent, added.first().copied());
+    ffi::mark_childlist_dirty(parent, added.first().copied(), removed);
     ffi::emit_child_list(Js::of(js), parent, Some(added), removed, previous, next);
 }
 

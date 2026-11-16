@@ -1,6 +1,24 @@
 Changelog:
 ==Significant changes in each release:
 
+Southstar Browser 1.0.11-dev:
+======
+* Cookies with a `Domain=` attribute are kept when the Public Suffix List
+  is not available (a build tree, or a system without the `publicsuffix`
+  package): they are stored host-only, as documented, instead of being
+  dropped. Sites that set every cookie with `Domain=`, such as YouTube,
+  lost all their cookies, so an accepted cookie-consent dialog came back
+  on every visit. A `Domain=` naming a public suffix is now accepted
+  host-only when it equals the host, as RFC 6265 says.
+* Incremental restyle stays on for style sheets with a `:has(> X)` whose
+  own compound has no type, id, class or attribute (for example
+  `:has(>[role=dialog] .x) [dialog]`). Such a selector used to disable
+  incremental restyle for the whole document, so every DOM change
+  re-cascaded every element; on a YouTube watch page that was about
+  100 ms per pass, hundreds of times while the page built. The parent of
+  an element matching `X` is now the selector's anchor, and adding,
+  removing or re-keying such a child restyles that parent.
+
 Southstar Browser 1.0.10:
 ======
 * CSS `filter: blur()` on an element is a Gaussian of the given
