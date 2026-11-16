@@ -4,6 +4,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::{CStr, c_int};
+use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 
 use southstar_dom::attrs::{self, NsName};
@@ -51,9 +52,57 @@ type Handle = Node<'static>;
 struct NsSink {
     doc: Handle,
     positions: bool,
+    template_hosts: HashMap<Handle, Handle>,
+    merge: Option<(Handle, HashSet<Vec<u8>>)>,
 }
 
 impl NsSink {
+    fn new(doc: Handle, positions: bool) -> Self {
+        NsSink {
+            doc,
+            positions,
+            template_hosts: HashMap::new(),
+            merge: None,
+        }
+    }
+
+    fn tree_parent(&self, node: Handle) -> Option<Handle> {
+        node.parent()
+            .or_else(|| self.template_hosts.get(&node).copied())
+    }
+
+    fn is_inclusive_ancestor(&self, ancestor: Handle, node: Handle) -> bool {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if n == ancestor {
+                return true;
+            }
+            cur = self.tree_parent(n);
+        }
+        false
+    }
+
+    fn can_adopt(&self, parent: Handle, child: Handle) -> bool {
+        if child.first_child().is_none() && child.tpl_content().is_none() {
+            return parent != child;
+        }
+        !self.is_inclusive_ancestor(child, parent)
+    }
+
+    fn merge_names(&mut self, el: Handle) -> &mut HashSet<Vec<u8>> {
+        if self
+            .merge
+            .as_ref()
+            .is_some_and(|(element, _)| *element != el)
+        {
+            self.merge = None;
+        }
+        &mut self
+            .merge
+            .get_or_insert_with(|| (el, attribute_names(el)))
+            .1
+    }
+
     fn text_node(text: &[u8]) -> Handle {
         node::new_text(Kind::Text, text)
     }
@@ -87,6 +136,13 @@ impl NsSink {
         };
         attrs::set_ns(el, qname, Some(&value));
     }
+}
+
+fn attribute_names(el: Handle) -> HashSet<Vec<u8>> {
+    el.attrs()
+        .filter_map(|a| a.name())
+        .map(|n| n.to_bytes().to_ascii_lowercase())
+        .collect()
 }
 
 impl TreeSink for NsSink {
@@ -143,11 +199,18 @@ impl TreeSink for NsSink {
     }
 
     fn append(&mut self, parent: Handle, child: Handle) {
-        parent.append(child);
+        if self.can_adopt(parent, child) {
+            parent.append(child);
+        }
     }
 
     fn insert_before(&mut self, sibling: Handle, child: Handle) {
-        sibling.insert_before(child);
+        if sibling
+            .parent()
+            .is_none_or(|parent| self.can_adopt(parent, child))
+        {
+            sibling.insert_before(child);
+        }
     }
 
     fn append_text(&mut self, parent: Handle, text: &[u8]) {
@@ -173,28 +236,38 @@ impl TreeSink for NsSink {
     }
 
     fn reparent_children(&mut self, from: Handle, to: Handle) {
+        if self.is_inclusive_ancestor(from, to) {
+            return;
+        }
         while let Some(child) = from.first_child() {
             to.append(child);
         }
     }
 
     fn template_contents(&mut self, template: Handle) -> Handle {
-        node::template_content(template)
+        let fresh = template.tpl_content().is_none();
+        let content = node::template_content(template);
+        if fresh {
+            self.template_hosts.insert(content, template);
+        }
+        content
     }
 
     fn add_missing_attributes(&mut self, el: Handle, attrs: Attrs<'_>) {
         for attr in attrs {
-            let Ok(name) = CString::new(attr.name) else {
-                continue;
-            };
-            if attrs::is_internal(attr.name) || el.attr(&name).is_some() {
+            if attr.name.contains(&0)
+                || attrs::is_internal(attr.name)
+                || !self.merge_names(el).insert(attr.name.to_ascii_lowercase())
+            {
                 continue;
             }
-            attrs::set_attribute(el, &name, Some(attr.value));
+            attrs::append(el, attr.name, attr.value);
         }
     }
 
     fn discard(&mut self, n: Handle) {
+        self.merge = None;
+        self.template_hosts.clear();
         n.free_tree();
     }
 }
@@ -202,10 +275,7 @@ impl TreeSink for NsSink {
 pub fn parse_document(bytes: &[u8], scripting: bool) -> Tree {
     let tree = Tree::new(Kind::Document);
     let root = tree.root();
-    let mut sink = NsSink {
-        doc: root,
-        positions: true,
-    };
+    let mut sink = NsSink::new(root, true);
     match southstar_html5::parse_document(bytes, scripting, &mut sink) {
         QuirksMode::Quirks => root.add_flags(NODE_QUIRKS),
         QuirksMode::LimitedQuirks => root.add_flags(NODE_LIMITED_QUIRKS),
@@ -257,10 +327,7 @@ pub(crate) fn parse_fragment_in_namespace(
     if !scripting {
         tree.root().add_flags(NODE_SCRIPTING_DISABLED);
     }
-    let mut sink = NsSink {
-        doc: tree.root(),
-        positions: false,
-    };
+    let mut sink = NsSink::new(tree.root(), false);
     southstar_html5::parse_fragment(Context { ns, name }, bytes, scripting, &mut sink);
     tree
 }
