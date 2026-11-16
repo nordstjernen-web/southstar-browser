@@ -362,7 +362,7 @@ pub fn parse(
     target: &[u8],
     cookie: &[u8],
     now: i64,
-    is_public_suffix: impl Fn(&[u8]) -> bool,
+    is_public_suffix: impl Fn(&[u8]) -> Option<bool>,
 ) -> Option<Cookie> {
     if target.is_empty() || !is_http_or_https(target) || cookie.iter().any(|&c| c < 0x20) {
         return None;
@@ -399,16 +399,17 @@ pub fn parse(
                 || (host.len() > d.len()
                     && host[host.len() - d.len() - 1] == b'.'
                     && host[host.len() - d.len()..].eq_ignore_ascii_case(d));
-            if !ok || d.is_empty() || is_public_suffix(&d.to_ascii_lowercase()) {
+            if !ok || d.is_empty() {
                 return None;
             }
-            if is_ip_literal(host) {
-                if !host.eq_ignore_ascii_case(d) {
-                    return None;
-                }
-                (host.clone(), false)
-            } else {
-                ([&b"."[..], d].concat(), true)
+            let exact = host.eq_ignore_ascii_case(d);
+            if is_ip_literal(host) && !exact {
+                return None;
+            }
+            match is_public_suffix(&d.to_ascii_lowercase()) {
+                Some(true) if !exact => return None,
+                Some(false) if !is_ip_literal(host) => ([&b"."[..], d].concat(), true),
+                _ => (host.clone(), false),
             }
         }
         None => (host.clone(), false),

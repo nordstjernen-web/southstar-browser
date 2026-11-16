@@ -289,7 +289,7 @@ pub fn write_file(path: &[u8], contents: &[u8]) -> bool {
     os_path(path).is_some_and(|path| util::write_atomic(&path, contents, 0o666).is_ok())
 }
 
-pub fn is_public_suffix(domain: &[u8]) -> bool {
+pub fn is_public_suffix(domain: &[u8]) -> Option<bool> {
     southstar_psl::is_public_suffix(domain)
 }
 

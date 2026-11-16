@@ -140,8 +140,8 @@ pub use nesting::has_container_units as text_has_container_units;
 pub use pattern::pattern_matches;
 pub use prop::Prop;
 pub use restyle::{
-    attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_restyle_dirty,
-    mark_states_dirty,
+    attr_may_affect_style, mark_attr_dirty, mark_childlist_dirty, mark_children_removed,
+    mark_restyle_dirty, mark_states_dirty,
 };
 pub use scan::strip_important;
 pub use shadow::{Shadow, ShadowList};
