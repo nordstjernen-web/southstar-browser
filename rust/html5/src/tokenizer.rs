@@ -3,6 +3,8 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
+use std::collections::HashSet;
+
 use crate::charref;
 use crate::tags::{AttrNs, Tag};
 use crate::{Attribute, Position};
@@ -157,6 +159,7 @@ pub struct Tokenizer<'a> {
     pub tag: TagToken,
     pub end_tag: bool,
     drop_attr: bool,
+    attr_names: HashSet<Vec<u8>>,
     pub comment: Vec<u8>,
     pub pi_target: Vec<u8>,
     pub doctype: Doctype,
@@ -167,6 +170,8 @@ pub struct Tokenizer<'a> {
     line_start: usize,
     line_scan: usize,
 }
+
+const LINEAR_ATTR_CHECK: usize = 32;
 
 fn is_ws(c: u8) -> bool {
     matches!(c, b'\t' | b'\n' | b'\x0c' | b' ')
@@ -188,6 +193,7 @@ impl<'a> Tokenizer<'a> {
             tag: TagToken::default(),
             end_tag: false,
             drop_attr: false,
+            attr_names: HashSet::new(),
             comment: Vec::new(),
             pi_target: Vec::new(),
             doctype: Doctype::default(),
@@ -330,6 +336,9 @@ impl<'a> Tokenizer<'a> {
         self.tag.position = None;
         self.end_tag = end;
         self.drop_attr = false;
+        if !self.attr_names.is_empty() {
+            self.attr_names = HashSet::new();
+        }
     }
 
     fn emit_tag(&mut self) -> Option<Kind> {
@@ -377,7 +386,16 @@ impl<'a> Tokenizer<'a> {
         }
         let (earlier, current) = self.tag.attrs.split_at(count - 1);
         let name = &current[0].name;
-        if earlier.iter().any(|a| &a.name == name) {
+        let duplicate = if count <= LINEAR_ATTR_CHECK {
+            earlier.iter().any(|a| &a.name == name)
+        } else {
+            if self.attr_names.is_empty() {
+                self.attr_names
+                    .extend(earlier.iter().map(|a| a.name.clone()));
+            }
+            !self.attr_names.insert(name.clone())
+        };
+        if duplicate {
             self.drop_attr = true;
         }
     }

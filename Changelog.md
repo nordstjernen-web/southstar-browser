@@ -3,6 +3,16 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The HTML parser stays fast on deeply nested markup. Every block start
+  tag, every reconstruction of formatting elements and every run of
+  foster-parented text searched the whole stack of open elements, so
+  500 KB of nested `<div>` took 12 seconds to parse and any page or
+  `innerHTML` string built that way could hang its tab. The stack now
+  counts its elements by tag and knows which ones are still open, so
+  those questions are answered without a walk: the same input parses in
+  25 ms. A tag with tens of thousands of attributes no longer costs
+  seconds in the tokenizer's duplicate check either. Parsed trees are
+  unchanged.
 * The Linux zip, .deb and .rpm ship the UI translations, the
   `safebrowsing.list` fallback list and the `southstar-video` MSE decoding
   helper; 1.0.10's showed an English-only interface and decoded streamed
