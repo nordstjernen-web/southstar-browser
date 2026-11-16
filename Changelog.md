@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.10-dev:
+Southstar Browser 1.0.10:
 ======
 * CSS `filter: blur()` on an element is a Gaussian of the given
   standard deviation, as the Filter Effects spec defines it, instead of

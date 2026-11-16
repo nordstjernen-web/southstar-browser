@@ -22,10 +22,12 @@ def main():
     if len(sys.argv) != 2 or not VERSION.match(sys.argv[1]):
         sys.exit("usage: set-version.py VERSION")
     version = sys.argv[1]
+    workspace = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    current = re.search(r'\[workspace\.package\]\nversion = "([^"]+)"', workspace).group(1)
     rewrite(ROOT / "Cargo.toml", r'(\[workspace\.package\]\nversion = )"[^"]+"', rf'\1"{version}"', 1)
     for manifest in sorted(ROOT.glob("third_party/*/Cargo.toml")):
         rewrite(manifest, r'(\[package\]\n(?:[^\[\n][^\n]*\n)*?version = )"[^"]+"', rf'\1"{version}"', 1)
-    pinned = r'(version = )"=[^"]+"'
+    pinned = rf'(version = )"={re.escape(current)}"'
     for manifest in sorted(ROOT.glob("rust/*/Cargo.toml")) + sorted(ROOT.glob("third_party/*/Cargo.toml")):
         text = manifest.read_text(encoding="utf-8")
         if re.search(pinned, text):
