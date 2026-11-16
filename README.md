@@ -191,7 +191,7 @@ malware or unwanted software, checking every navigation and redirect.
 ```sh
 sudo apt install build-essential git pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libsdl2-dev publicsuffix \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libsdl3-dev publicsuffix \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 cargo xtask build
 ./target/release/southstar
@@ -310,7 +310,7 @@ cookies stay host-only.
 - libavif — AVIF images (`--avif`)
 - the `southstar-pdfjs` crate (pdf.js, from crates.io) — the PDF viewer (`--pdfjs`, on by default)
 - Enchant — spell checking
-- SDL2 — audio output for the `southstar-audio` helper (`--audio`)
+- SDL3 — audio output for the `southstar-audio` helper (`--audio`)
 - vorbisfile and opusfile — Ogg audio without FFmpeg
 - [wgpu-native](https://github.com/gfx-rs/wgpu-native) — experimental WebGPU
   (`--webgpu`)

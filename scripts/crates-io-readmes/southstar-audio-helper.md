@@ -8,7 +8,7 @@ The browser's renderer runs in a sandbox with no audio device. When a page
 plays media, the shell starts this helper and sends it line commands: `open`,
 `play`, `pause`, `seek`, `stop`, `loop` and `volume`. The helper downloads the
 stream, decodes it, mixes and resamples every playing stream itself, and
-outputs through SDL2's audio device (WASAPI, CoreAudio or ALSA). It publishes
+outputs through SDL3's audio device (WASAPI, CoreAudio or ALSA). It publishes
 its playback clock in shared memory, which the renderer keeps video frames in
 sync with.
 

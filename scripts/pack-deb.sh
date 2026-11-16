@@ -50,8 +50,8 @@ install -dm755 "$PKGROOT/usr/share/doc/southstar"
 
 install -m755 "$STAGE/southstar" "$PKGROOT/usr/bin/southstar"
 install -m755 "$STAGE/southstar-renderer" "$PKGROOT/usr/bin/southstar-renderer"
-# Audio playback helper, when SDL2 was available at build time. It is added to
-# the dpkg-shlibdeps scan below so its libSDL2 dependency lands in Depends.
+# Audio playback helper, when SDL3 was available at build time. It is added to
+# the dpkg-shlibdeps scan below so its libSDL3 dependency lands in Depends.
 if [ -x "$STAGE/southstar-audio" ]; then
     install -m755 "$STAGE/southstar-audio" "$PKGROOT/usr/bin/southstar-audio"
 fi

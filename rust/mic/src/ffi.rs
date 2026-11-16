@@ -1,56 +1,56 @@
-//! Southstar — microphone capture over SDL2's audio capture device: acquiring, releasing and reading the captured signal.
+//! Southstar — microphone capture over an SDL3 recording stream: acquiring, releasing and reading the captured signal.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 #[cfg(feature = "sdl")]
 mod sdl {
-    use core::ffi::{c_char, c_int, c_void};
+    use core::ffi::{c_int, c_void};
     use core::ptr;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicI32, AtomicU32, Ordering};
+    use std::sync::atomic::{AtomicPtr, Ordering};
 
     use crate::Ring;
 
-    type AudioCallback = unsafe extern "C" fn(*mut c_void, *mut u8, c_int);
+    type AudioStreamCallback = unsafe extern "C" fn(*mut c_void, *mut SdlAudioStream, c_int, c_int);
 
     #[repr(C)]
     struct AudioSpec {
+        format: c_int,
+        channels: c_int,
         freq: c_int,
-        format: u16,
-        channels: u8,
-        silence: u8,
-        samples: u16,
-        padding: u16,
-        size: u32,
-        callback: Option<AudioCallback>,
-        userdata: *mut c_void,
+    }
+
+    #[repr(C)]
+    struct SdlAudioStream {
+        _private: [u8; 0],
     }
 
     const SDL_INIT_AUDIO: u32 = 0x10;
     #[cfg(target_endian = "little")]
-    const AUDIO_F32SYS: u16 = 0x8120;
+    const SDL_AUDIO_F32: c_int = 0x8120;
     #[cfg(target_endian = "big")]
-    const AUDIO_F32SYS: u16 = 0x9120;
-    const ALLOW_FREQUENCY_CHANGE: c_int = 0x1;
-    const ALLOW_CHANNELS_CHANGE: c_int = 0x4;
+    const SDL_AUDIO_F32: c_int = 0x9120;
+    const SDL_AUDIO_DEVICE_DEFAULT_RECORDING: u32 = 0xFFFF_FFFE;
 
     unsafe extern "C" {
-        safe fn SDL_WasInit(flags: u32) -> u32;
-        safe fn SDL_InitSubSystem(flags: u32) -> c_int;
-        fn SDL_OpenAudioDevice(
-            device: *const c_char,
-            iscapture: c_int,
-            desired: *const AudioSpec,
-            obtained: *mut AudioSpec,
-            allowed_changes: c_int,
-        ) -> u32;
-        safe fn SDL_PauseAudioDevice(dev: u32, pause_on: c_int);
-        fn SDL_CloseAudioDevice(dev: u32);
+        safe fn SDL_InitSubSystem(flags: u32) -> bool;
+        fn SDL_OpenAudioDeviceStream(
+            devid: u32,
+            spec: *const AudioSpec,
+            callback: Option<AudioStreamCallback>,
+            userdata: *mut c_void,
+        ) -> *mut SdlAudioStream;
+        fn SDL_ResumeAudioStreamDevice(stream: *mut SdlAudioStream) -> bool;
+        fn SDL_GetAudioStreamData(
+            stream: *mut SdlAudioStream,
+            buf: *mut c_void,
+            len: c_int,
+        ) -> c_int;
+        fn SDL_DestroyAudioStream(stream: *mut SdlAudioStream);
     }
 
-    static DEVICE: AtomicU32 = AtomicU32::new(0);
-    static CHANNELS: AtomicI32 = AtomicI32::new(1);
+    static DEVICE: AtomicPtr<SdlAudioStream> = AtomicPtr::new(ptr::null_mut());
     static REFS: Mutex<i32> = Mutex::new(0);
     static RING: Mutex<Option<Ring>> = Mutex::new(None);
 
@@ -59,66 +59,56 @@ mod sdl {
         f(guard.get_or_insert_with(Ring::default))
     }
 
-    unsafe extern "C" fn capture(_user: *mut c_void, stream: *mut u8, len: c_int) {
-        if stream.is_null() {
-            return;
+    unsafe extern "C" fn capture(
+        _user: *mut c_void,
+        stream: *mut SdlAudioStream,
+        _added: c_int,
+        _total: c_int,
+    ) {
+        let mut buf = [0u8; 4096];
+        loop {
+            // SAFETY: stream is the recording stream SDL passes its own callback, and buf has room for its length in bytes.
+            let got = unsafe {
+                SDL_GetAudioStreamData(stream, buf.as_mut_ptr().cast(), buf.len() as c_int)
+            };
+            if got <= 0 {
+                break;
+            }
+            ring(|r| r.push_interleaved(&buf[..got as usize], 1));
         }
-        // SAFETY: SDL calls the capture callback with `stream` pointing at `len` bytes of
-        // captured samples that stay valid until the callback returns.
-        let stream = unsafe { core::slice::from_raw_parts(stream, len.max(0) as usize) };
-        let channels = CHANNELS.load(Ordering::SeqCst);
-        ring(|r| r.push_interleaved(stream, channels));
     }
 
     pub(super) fn acquire() -> bool {
         let mut refs = REFS.lock().unwrap_or_else(|e| e.into_inner());
-        if DEVICE.load(Ordering::SeqCst) != 0 {
+        if !DEVICE.load(Ordering::SeqCst).is_null() {
             *refs += 1;
             return true;
         }
-        if SDL_WasInit(SDL_INIT_AUDIO) == 0 && SDL_InitSubSystem(SDL_INIT_AUDIO) != 0 {
+        if !SDL_InitSubSystem(SDL_INIT_AUDIO) {
             return false;
         }
         let want = AudioSpec {
-            freq: 48000,
-            format: AUDIO_F32SYS,
+            format: SDL_AUDIO_F32,
             channels: 1,
-            silence: 0,
-            samples: 1024,
-            padding: 0,
-            size: 0,
-            callback: Some(capture),
-            userdata: ptr::null_mut(),
-        };
-        let mut got = AudioSpec {
-            freq: 0,
-            format: 0,
-            channels: 0,
-            silence: 0,
-            samples: 0,
-            padding: 0,
-            size: 0,
-            callback: None,
-            userdata: ptr::null_mut(),
+            freq: 48000,
         };
         ring(Ring::clear);
-        // SAFETY: a null name selects the default capture device, `want` is a filled-in
-        // spec whose callback matches SDL's signature and `got` is a valid out-pointer.
+        // SAFETY: want is a live AudioSpec, which SDL copies, and the callback matches SDL's signature and only
+        // touches the ring behind its lock.
         let device = unsafe {
-            SDL_OpenAudioDevice(
-                ptr::null(),
-                1,
+            SDL_OpenAudioDeviceStream(
+                SDL_AUDIO_DEVICE_DEFAULT_RECORDING,
                 &want,
-                &mut got,
-                ALLOW_FREQUENCY_CHANGE | ALLOW_CHANNELS_CHANGE,
+                Some(capture),
+                ptr::null_mut(),
             )
         };
-        if device == 0 {
+        if device.is_null() {
             return false;
         }
-        CHANNELS.store(c_int::from(got.channels), Ordering::SeqCst);
         DEVICE.store(device, Ordering::SeqCst);
-        SDL_PauseAudioDevice(device, 0);
+        // SAFETY: device is the recording stream SDL_OpenAudioDeviceStream just opened; its device starts paused.
+        unsafe { SDL_ResumeAudioStreamDevice(device) };
         *refs += 1;
         true
     }
@@ -128,17 +118,17 @@ mod sdl {
         if *refs > 0 {
             *refs -= 1;
             let device = DEVICE.load(Ordering::SeqCst);
-            if *refs == 0 && device != 0 {
-                // SAFETY: `device` is the capture device this module opened, closed once here
-                // before DEVICE is cleared, so no later call reuses the stale id.
-                unsafe { SDL_CloseAudioDevice(device) };
-                DEVICE.store(0, Ordering::SeqCst);
+            if *refs == 0 && !device.is_null() {
+                // SAFETY: device is the recording stream this module opened, destroyed once here before DEVICE is
+                // cleared, so no later call reuses the stale pointer.
+                unsafe { SDL_DestroyAudioStream(device) };
+                DEVICE.store(ptr::null_mut(), Ordering::SeqCst);
             }
         }
     }
 
     pub(super) fn active() -> bool {
-        DEVICE.load(Ordering::SeqCst) != 0
+        !DEVICE.load(Ordering::SeqCst).is_null()
     }
 
     pub(super) fn time_domain(out: &mut [u8]) {

@@ -98,7 +98,7 @@ Install [Homebrew](https://brew.sh) if you do not already have it, then:
 
 ```sh
 brew install pkg-config gtk4 libepoxy openssl@3 \
-    brotli zstd uchardet sqlite webp sdl2 rust
+    brotli zstd uchardet sqlite webp sdl3 rust
 ```
 
 Homebrew installs to `/opt/homebrew` on Apple Silicon and `/usr/local` on
@@ -325,7 +325,7 @@ Updates ship only through the store — no self-update.
   `@executable_path/../Frameworks`, so no `DYLD_LIBRARY_PATH` shim is
   needed and the whole `.app` can be code-signed. The renderer
   (`southstar-renderer`), the audio helper (`southstar-audio`,
-  present whenever SDL2 was found at build time) and the MSE video-decode
+  present whenever SDL3 was found at build time) and the MSE video-decode
   helper (`southstar-video`, present whenever libav/FFmpeg was found)
   ship beside it and are run through `dylibbundler` (and the same
   rpath-dedup and inside-out code-signing) too — without `southstar-video`

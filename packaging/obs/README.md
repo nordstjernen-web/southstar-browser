@@ -60,5 +60,5 @@ The spec disables one build feature unavailable in OBS:
 
 - `--webgpu disabled` — needs external wgpu-native.
 
-Everything else (GTK shell, sandboxed renderer, SDL2 audio helper, WebGL,
+Everything else (GTK shell, sandboxed renderer, SDL3 audio helper, WebGL,
 enchant spell-check) builds from the declared `BuildRequires`.

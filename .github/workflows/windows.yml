@@ -55,7 +55,7 @@ jobs:
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libwebp
             mingw-w64-ucrt-x86_64-libavif
-            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-sdl3
             mingw-w64-ucrt-x86_64-nasm
             mingw-w64-ucrt-x86_64-rust
             make
@@ -192,6 +192,14 @@ jobs:
           grep -q "Extract All" isolated-launcher.err
           ( cd dist && zip -r -q "$(basename "$ZIP")" southstar-win64 )
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      # The steps above run the bundle from the MSYS2 shell, whose PATH has
+      # every MSYS2 DLL. An installed or Store copy has none of them, so start
+      # the bundle again with only the Windows system folders on PATH.
+      - name: Bundle starts without MSYS2 on PATH
+        if: steps.pack.outcome == 'success'
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-windows-bundle.ps1
 
       - name: Upload pack-windows log
         if: always() && hashFiles('pack-windows.log') != ''

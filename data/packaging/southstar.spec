@@ -22,7 +22,7 @@ BuildRequires:  pkgconfig(uchardet)
 BuildRequires:  pkgconfig(libseccomp)
 BuildRequires:  pkgconfig(sqlite3)
 BuildRequires:  pkgconfig(libwebp)
-BuildRequires:  pkgconfig(sdl2)
+BuildRequires:  pkgconfig(sdl3) >= 3.2.0
 BuildRequires:  pkgconfig(libavcodec) >= 60
 BuildRequires:  pkgconfig(libavformat) >= 60
 BuildRequires:  pkgconfig(libavutil) >= 58

@@ -24,7 +24,7 @@ Build-Depends:
  libavutil-dev (>= 7:6.0),
  libswscale-dev (>= 7:6.0),
  libswresample-dev (>= 7:6.0),
- libsdl2-dev,
+ libsdl3-dev (>= 3.2.0),
  libenchant-2-dev,
  libharfbuzz-dev,
  libfontconfig-dev,

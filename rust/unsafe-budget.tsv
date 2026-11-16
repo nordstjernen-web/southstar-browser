@@ -2,7 +2,7 @@
 crate	unsafe	ffi_imports	ffi_exports	static_mut	undocumented_unsafe	multi_op_unsafe	missing_safety_doc
 about-style	0	0	0	0	0	0	0
 anim	0	0	0	0	0	0	0
-audio-helper	42	20	0	0	0	0	0
+audio-helper	41	20	0	0	0	0	0
 av	81	44	0	0	0	0	0
 bidi	0	0	0	0	0	0	0
 bookmarks	0	0	0	0	0	0	0
@@ -120,7 +120,7 @@ mathml	0	0	0	0	0	0	0
 mcp	0	0	0	0	0	0	0
 media-foundation	45	2	0	0	0	0	0
 media-shm	19	11	0	0	0	0	0
-mic	6	5	0	0	0	0	0
+mic	7	5	0	0	0	0	0
 mime	0	0	0	0	0	0	0
 minimp3	0	0	0	0	0	0	0
 net	25	12	0	0	0	0	0

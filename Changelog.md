@@ -4,14 +4,25 @@ Changelog:
 Southstar Browser 1.0.10-dev:
 ======
 * Windows: sound plays in the Microsoft Store (MSIX) package instead of
-  stopping with "Failed loading SDL3 library." MSYS2's SDL2.dll is now
-  sdl2-compat, which loads SDL3.dll at run time rather than linking it,
+  stopping with "Failed loading SDL3 library." MSYS2's SDL2.dll became
+  sdl2-compat, which loads SDL3.dll at start-up rather than linking it,
   so the packaging scripts never saw it and left it out of the bundle.
   A packaged app does not search PATH, so the MSIX could not find it
-  anywhere. The zip and installer could miss it the same way on a
-  machine without MSYS2. The Windows bundle now ships SDL3.dll and its
-  dependencies next to SDL2.dll, as the macOS package already does, and
-  packaging fails if sdl2-compat is present but SDL3.dll is not.
+  anywhere; the zip and installer missed it the same way on a machine
+  without MSYS2. The audio helper and microphone capture now use SDL3
+  directly (below), so SDL3.dll is an ordinary dependency, and the
+  Windows workflow starts the packaged bundle, audio helper included,
+  with only the system folders on PATH.
+* Audio: the `southstar-audio` helper and microphone capture use SDL3
+  instead of SDL2. Homebrew, MSYS2 and most current Linux distributions
+  already ran SDL2 as sdl2-compat over SDL3, loading both libraries; now
+  only SDL3 is loaded, and the macOS package no longer copies SDL3 in
+  beside the shim. `cargo xtask build` enables audio when SDL3 3.2 or
+  newer is installed (`libsdl3-dev`, `SDL3-devel`, `sdl3-dev`, `sdl3`),
+  which Debian 13, Ubuntu 25.04, Fedora 43, Alpine 3.22, Arch, openSUSE
+  Tumbleweed, FreeBSD, NetBSD, Homebrew and MSYS2 provide; older systems
+  build without audio. The system volume mixer lists the helper as
+  "Southstar Browser".
 * PDF documents open in a viewer built on Mozilla's pdf.js (pdfjs-dist
   6.4.299, legacy build) with its CMaps, standard fonts and WebAssembly
   image decoders, served from the binary at `southstar-pdf://viewer/`. Pages render on canvases as they

@@ -51,7 +51,7 @@ Update Changelog.md
   via the unsandboxed `southstar-audio` helper (`rust/audio-helper`),
   which decodes in-tree — `rust/plmpeg` for the MPEG-1/MP2 track, `rust/minimp3`
   (a pure-Rust port of the CC0 [minimp3](https://github.com/lieff/minimp3))
-  for standalone `.mp3` files — and outputs through SDL2's audio device
+  for standalone `.mp3` files — and outputs through SDL3's audio device
   (WASAPI/CoreAudio/ALSA), mixing and resampling the streams itself. The
   renderer emits `open`/`play`/`pause`/`seek`/`stop`/`loop`/`volume`
   commands that ride the render-response `X-Audio` side-channel to the
@@ -439,7 +439,7 @@ System packages required on Debian/Ubuntu:
 ```sh
 sudo apt install build-essential pkg-config cargo rustc \
     libgtk-4-dev libepoxy-dev libssl-dev zlib1g-dev libbrotli-dev libzstd-dev \
-    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl2-dev \
+    libuchardet-dev libsqlite3-dev libseccomp-dev libwebp-dev libsdl3-dev \
     libharfbuzz-dev libfontconfig-dev libfreetype-dev \
     libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
 ```
@@ -464,7 +464,7 @@ On Fedora/RHEL:
 sudo dnf install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
     openssl-devel zlib-devel brotli-devel libzstd-devel uchardet-devel sqlite-devel \
     harfbuzz-devel fontconfig-devel freetype-devel \
-    libseccomp-devel libwebp-devel SDL2-devel ffmpeg-devel
+    libseccomp-devel libwebp-devel SDL3-devel ffmpeg-devel
 ```
 
 (`ffmpeg-devel` comes from RPM Fusion.)
@@ -475,7 +475,7 @@ On openSUSE:
 sudo zypper install gcc pkgconf cargo rust gtk4-devel libepoxy-devel \
     libopenssl-devel zlib-devel libbrotli-devel libzstd-devel libuchardet-devel sqlite3-devel \
     harfbuzz-devel fontconfig-devel freetype2-devel \
-    libseccomp-devel libwebp-devel libSDL2-devel ffmpeg-devel
+    libseccomp-devel libwebp-devel SDL3-devel ffmpeg-devel
 ```
 
 (`ffmpeg-devel` comes from Packman.)
