@@ -4,9 +4,9 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 use core::ffi::CStr;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use core::ffi::{c_char, c_int};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use southstar_unicode::until_nul;
 use std::ffi::CString;
 use std::sync::Mutex;
@@ -106,7 +106,7 @@ pub fn confine_as_renderer() {
     RENDERER.store(true, Ordering::Relaxed);
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 fn is_renderer() -> bool {
     RENDERER.load(Ordering::Relaxed)
 }
@@ -866,7 +866,8 @@ mod seccomp {
 #[cfg(target_os = "macos")]
 mod macos {
     use super::{
-        WRITABLE_DIRS, download_dir, env_flag, glib_dir, info, own_dir, remembered, warning,
+        WRITABLE_DIRS, download_dir, env_flag, glib_dir, info, is_renderer, own_dir, remembered,
+        warning,
     };
     use core::ffi::{CStr, c_char, c_int, c_void};
     use core::ptr;

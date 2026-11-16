@@ -411,10 +411,10 @@ pub fn available_memory_bytes() -> u64 {
 pub fn available_memory_bytes() -> u64 {
     unsafe extern "C" {
         fn sysctlbyname(
-            name: *const c_char,
-            oldp: *mut c_void,
+            name: *const core::ffi::c_char,
+            oldp: *mut core::ffi::c_void,
             oldlenp: *mut usize,
-            newp: *mut c_void,
+            newp: *mut core::ffi::c_void,
             newlen: usize,
         ) -> core::ffi::c_int;
     }
