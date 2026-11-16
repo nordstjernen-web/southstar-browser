@@ -1,7 +1,7 @@
 Changelog:
 ==Significant changes in each release:
 
-Southstar Browser 1.0.10-dev:
+Southstar Browser 1.0.10:
 ======
 * PDF documents open in a viewer built on Mozilla's pdf.js (pdfjs-dist
   6.4.299, legacy build) with its CMaps, standard fonts and WebAssembly
