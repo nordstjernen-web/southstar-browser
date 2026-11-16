@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The Linux zip, .deb and .rpm ship the UI translations, the
+  `safebrowsing.list` fallback list and the `southstar-video` MSE decoding
+  helper; 1.0.10's showed an English-only interface and decoded streamed
+  video inside the renderer. The .deb depends on `publicsuffix` and the
+  .rpm on the Public Suffix List file, so cookies set for a whole site
+  reach its subdomains, and both describe Southstar as written in Rust.
 * Cookies with a `Domain=` attribute are kept when the Public Suffix List
   is not available (a build tree, or a system without the `publicsuffix`
   package): they are stored host-only, as documented, instead of being
