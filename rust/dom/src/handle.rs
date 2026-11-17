@@ -238,21 +238,21 @@ impl<'a> Node<'a> {
     }
 
     pub fn tpl_content(self) -> Option<Self> {
-        Self::link(self.slot.rare()?.template_content.get())
+        Self::link(self.slot.extra()?.template_content.get())
     }
 
     pub fn set_tpl_content(self, content: Option<Node>) {
-        let rare = match content {
-            Some(_) => Some(self.slot.rare_or_init()),
-            None => self.slot.rare(),
+        let extra = match content {
+            Some(_) => Some(self.slot.extra_or_init()),
+            None => self.slot.extra(),
         };
-        if let Some(rare) = rare {
-            rare.template_content.set(content.map(Node::slot));
+        if let Some(extra) = extra {
+            extra.template_content.set(content.map(Node::slot));
         }
     }
 
     pub fn take_tpl_content(self) -> Option<Tree> {
-        Self::link(self.slot.rare()?.template_content.take()).map(Tree::adopt)
+        Self::link(self.slot.extra()?.template_content.take()).map(Tree::adopt)
     }
 
     pub fn attr(self, name: &CStr) -> Option<&'a CStr> {
@@ -313,11 +313,11 @@ impl<'a> Node<'a> {
     }
 
     pub(crate) fn indexes(self) -> Option<&'a RefCell<Option<Indexes>>> {
-        self.slot.rare().map(|rare| &rare.indexes)
+        self.slot.extra().map(|extra| &extra.indexes)
     }
 
     pub(crate) fn indexes_or_init(self) -> &'a RefCell<Option<Indexes>> {
-        &self.slot.rare_or_init().indexes
+        &self.slot.extra_or_init().indexes
     }
 
     pub fn has_js_wrapper(self) -> bool {
@@ -350,13 +350,13 @@ impl<'a> Node<'a> {
     }
 
     pub fn set_source_position(self, line: c_int, col: c_int) {
-        self.slot.rare_or_init().source_position.set((line, col));
+        self.slot.extra_or_init().source_position.set((line, col));
     }
 
     pub fn source_position(self) -> (c_int, c_int) {
         self.slot
-            .rare()
-            .map_or((0, 0), |rare| rare.source_position.get())
+            .extra()
+            .map_or((0, 0), |extra| extra.source_position.get())
     }
 
     pub fn detach(self) {
@@ -426,7 +426,7 @@ impl<'a> Node<'a> {
         self.detach();
         let mut stack = vec![self.slot];
         while let Some(&cur) = stack.last() {
-            if let Some(content) = cur.rare().and_then(|rare| rare.template_content.take()) {
+            if let Some(content) = cur.extra().and_then(|extra| extra.template_content.take()) {
                 stack.push(content);
                 continue;
             }

@@ -435,13 +435,13 @@ impl AttrSlot {
 }
 
 #[derive(Default)]
-pub(crate) struct Rare {
+pub(crate) struct Extra {
     pub(crate) source_position: Cell<(c_int, c_int)>,
     pub(crate) template_content: Link,
     pub(crate) indexes: RefCell<Option<Indexes>>,
 }
 
-impl Rare {
+impl Extra {
     fn clear(&self) {
         self.source_position.set((0, 0));
         self.template_content.set(None);
@@ -462,7 +462,7 @@ pub(crate) struct NodeSlot {
     pub(crate) next_sibling: Link,
     pub(crate) js_wrapper: Cell<*mut c_void>,
     pub(crate) tag: Cell<Tag>,
-    pub(crate) rare: OnceCell<Box<Rare>>,
+    pub(crate) extra: OnceCell<Box<Extra>>,
     pub(crate) class_tokens: RefCell<Option<ClassTokens>>,
     name: UnsafeCell<Option<Name>>,
     text: UnsafeCell<Option<NulString>>,
@@ -484,7 +484,7 @@ impl NodeSlot {
             next_sibling: Cell::new(None),
             js_wrapper: Cell::new(core::ptr::null_mut()),
             tag: Cell::new(Tag::Other),
-            rare: OnceCell::new(),
+            extra: OnceCell::new(),
             class_tokens: RefCell::new(None),
             name: UnsafeCell::new(None),
             text: UnsafeCell::new(None),
@@ -492,12 +492,12 @@ impl NodeSlot {
         }
     }
 
-    pub(crate) fn rare(&self) -> Option<&Rare> {
-        self.rare.get().map(Box::as_ref)
+    pub(crate) fn extra(&self) -> Option<&Extra> {
+        self.extra.get().map(Box::as_ref)
     }
 
-    pub(crate) fn rare_or_init(&self) -> &Rare {
-        self.rare.get_or_init(Box::default)
+    pub(crate) fn extra_or_init(&self) -> &Extra {
+        self.extra.get_or_init(Box::default)
     }
 
     pub(crate) fn is_live(&self) -> bool {
@@ -562,8 +562,8 @@ impl NodeSlot {
         for attr in self.replace_attrs(Vec::new()) {
             crate::store::drop_attr(attr);
         }
-        if let Some(rare) = self.rare() {
-            rare.clear();
+        if let Some(extra) = self.extra() {
+            extra.clear();
         }
         drop(self.class_tokens.take());
         self.kind.set(Kind::Other);
