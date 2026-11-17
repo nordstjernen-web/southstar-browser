@@ -65,6 +65,8 @@ struct NsSink {
     fresh_selectedcontent: Option<Handle>,
     selects: HashMap<Handle, SelectState>,
     replaced: Vec<Handle>,
+    declarative_shadow: bool,
+    media_candidate: bool,
 }
 
 fn left_out_of_selectedcontent(node: Handle) -> bool {
@@ -106,6 +108,19 @@ impl NsSink {
             fresh_selectedcontent: None,
             selects: HashMap::new(),
             replaced: Vec::new(),
+            declarative_shadow: false,
+            media_candidate: false,
+        }
+    }
+
+    fn note_attribute(&mut self, name: &[u8], value: &[u8]) {
+        match name {
+            b"shadowrootmode" | b"shadowroot" => self.declarative_shadow = true,
+            b"id" if value == b"player" => self.media_candidate = true,
+            b"class" if value.windows(6).any(|w| w == b"player") => {
+                self.media_candidate = true;
+            }
+            _ => {}
         }
     }
 
@@ -257,7 +272,11 @@ impl TreeSink for NsSink {
         position: Position,
     ) -> Handle {
         let element = node::new_element(name.local.bytes());
+        if name.local.bytes() == b"video" {
+            self.media_candidate = true;
+        }
         for attr in attrs {
+            self.note_attribute(attr.name, attr.value);
             Self::add_attribute(element, attr);
         }
         match name.ns {
@@ -358,6 +377,7 @@ impl TreeSink for NsSink {
 
     fn add_missing_attributes(&mut self, el: Handle, attrs: Attrs<'_>) {
         for attr in attrs {
+            self.note_attribute(attr.name, attr.value);
             if attr.name.contains(&0)
                 || attrs::is_internal(attr.name)
                 || !self.merge_names(el).insert(attr.name.to_ascii_lowercase())
@@ -417,8 +437,12 @@ pub fn parse_document(bytes: &[u8], scripting: bool) -> Tree {
         root.add_flags(NODE_SCRIPTING_DISABLED);
     }
     crate::prune_html_interelement_whitespace(root);
-    crate::convert_declarative_shadow(Some(root), 0);
-    crate::extract_standard_media(root);
+    if sink.declarative_shadow {
+        crate::convert_declarative_shadow(Some(root), 0);
+    }
+    if sink.media_candidate {
+        crate::extract_standard_media(root);
+    }
     tree
 }
 
