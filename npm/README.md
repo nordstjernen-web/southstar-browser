@@ -1,7 +1,7 @@
 # southstar-browser
 
 [Southstar Browser](https://github.com/nordstjernen-web/southstar-browser) is a
-minimal, secure web browser written from scratch in Rust with GTK 4.
+minimal, secure web browser written in Rust with GTK 4.
 
 ![Southstar Browser](https://raw.githubusercontent.com/nordstjernen-web/southstar-browser/main/docs/screenshot.png)
 

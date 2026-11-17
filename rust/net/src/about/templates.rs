@@ -205,7 +205,7 @@ const SOUTHSTAR_BODY: &str = concat!(
 
 const SOUTHSTAR_TAIL: &str = concat!(
     "</span></h1>",
-    "<p>{{A web browser written from scratch in Rust.}}</p>",
+    "<p>{{A web browser written in Rust.}}</p>",
     "__ND_BUILT__</div></header>",
     "<div class=\"actions head-actions\">",
     "<button id=\"copy\" class=\"btn primary\" type=\"button\">",

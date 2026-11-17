@@ -3,6 +3,12 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The README says the project was started in 2026, and the package
+  descriptions (deb, rpm, npm, crates.io), the AppStream metainfo, the
+  docs and the `about:` page say "written in Rust" instead of "written
+  from scratch in Rust"; the thirteen translations of the `about:`
+  sentence follow. The metainfo description no longer says the browser is
+  written in C.
 * The tag table (`rust/html5/src/tags.rs`, shared with Nordstjernen) gains
   the SVG element names the engine checks for: `clipPath`, `feBlend`,
   `feFlood`, `feGaussianBlur`, `filter`, `foreignObject` (as SVG spells it,

@@ -54,7 +54,7 @@ Requires(post): update-alternatives
 Requires(postun): update-alternatives
 
 %description
-Southstar is a clean-room web browser written from scratch in Rust, with a
+Southstar is a clean-room web browser written in Rust, with a
 GTK 4 user interface and its own HTTP client. It is built to be small,
 secure, and readable by a single person end to end.
 

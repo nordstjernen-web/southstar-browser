@@ -1,7 +1,7 @@
 Name:           southstar
 Version:        1.0.29
 Release:        1%{?dist}
-Summary:        Clean-room, hardened web browser written from scratch in Rust
+Summary:        Clean-room, hardened web browser written in Rust
 
 License:        LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 URL:            https://github.com/nordstjernen-web/southstar-browser
@@ -39,8 +39,8 @@ Recommends:     mpv
 ExclusiveOS:    linux
 
 %description
-Southstar is an independent, lightweight web browser built entirely
-from scratch in Rust, using GTK 4 for the UI and its own HTTP client for networking.
+Southstar is an independent, lightweight web browser written
+in Rust, using GTK 4 for the UI and its own HTTP client for networking.
 It is a clean-room implementation with no upstream browser engine: the
 HTML parser (rust/html5), the JavaScript interpreter (Boa), and the
 image decoders (Rust crates) are all integrated in-tree. The engine is a

@@ -1,6 +1,6 @@
 # Southstar — Development Plan
 
-Living plan for a web browser written from scratch in **Rust**,
+Living plan for a web browser written in **Rust**,
 small enough for one person to audit end-to-end. It began in C and was
 ported module by module (`docs/rust-port.md`); the port is complete and the
 only C file left is `rust/capi/include/libsouthstar.h`, the embedding API's header. The

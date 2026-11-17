@@ -1,6 +1,6 @@
 # Southstar — Claude operating guide
 
-Southstar ("Southstar Browser") is a web browser written from scratch in
+Southstar ("Southstar Browser") is a web browser written in
 **Rust**, using **GTK 4** for the UI and an in-tree Rust HTTP client for
 networking (see "HTTP client" below). Targets Linux, macOS, and Windows. It
 began in C and was ported to Rust module by module (`docs/rust-port.md`);
@@ -435,7 +435,7 @@ Servo's `url` and `idna` crates stay out (D1).
 ### HTTP client: `rust/http`
 
 All networking goes through `rust/http` (`southstar-http`), an HTTP client
-written from scratch in Rust; libcurl and libnghttp2 are not used, and its
+written in Rust; libcurl and libnghttp2 are not used, and its
 only crates.io dependencies are the TLS stack and the body decoders below. It speaks HTTP/1.1 and HTTP/2 with its own framing,
 flow control and HPACK (the static table and Huffman code are generated from
 RFC 7541); those wire formats — HTTP/1.1 heads and chunked bodies, HTTP/2
