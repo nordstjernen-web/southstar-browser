@@ -35,7 +35,7 @@ pub use api::{
     sync_inline_atomic_offsets, text_context, vp_layer, wrap_mode_for,
 };
 pub use document::LayerPlan;
-pub use inline::has_small_caps;
+pub use inline::{has_small_caps, meter_quality_rgb};
 pub use links::{LayoutLinks, LegendGap, install_layout_links};
 pub use text::feature_settings_with_variants;
 pub use three_d::HitTest;

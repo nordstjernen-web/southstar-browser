@@ -3126,7 +3126,6 @@ dependencies = [
  "southstar-css",
  "southstar-dom",
  "southstar-glib",
- "southstar-html-util",
  "southstar-layout",
  "southstar-layout-geom",
  "southstar-paint",

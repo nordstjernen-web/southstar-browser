@@ -1,4 +1,4 @@
-//! Southstar — form controls over the DOM: input types and their numeric values, stepping, validity, email syntax and editable values.
+//! Southstar — form controls over the DOM: input types and their numeric values, stepping, validity, email syntax, editable values and the meter and progress states.
 //!
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
@@ -968,4 +968,64 @@ fn disabled_among<'a>(el: Node<'a>, chain: impl Iterator<Item = Node<'a>>) -> bo
         return true;
     }
     false
+}
+
+fn float_attr(n: Node<'_>, name: &CStr) -> Option<f64> {
+    southstar_html_util::parse_float(n.attr(name)?.to_bytes())
+}
+
+pub fn progress_fraction(n: Option<Node<'_>>) -> f64 {
+    let attr = |name: &CStr| n.and_then(|n| float_attr(n, name));
+    let max = attr(c"max").filter(|&v| v > 0.0).unwrap_or(1.0);
+    if n.and_then(|n| n.attr(c"value")).is_none() {
+        return -1.0;
+    }
+    let mut value = attr(c"value").filter(|&v| v > 0.0).unwrap_or(0.0);
+    if value > max {
+        value = max;
+    }
+    if max > 0.0 { value / max } else { 0.0 }
+}
+
+pub fn meter_state(n: Option<Node<'_>>) -> (f64, c_int) {
+    let attr = |name: &CStr| n.and_then(|n| float_attr(n, name));
+    let min = attr(c"min").unwrap_or(0.0);
+    let candidate_max = attr(c"max").unwrap_or(1.0);
+    let max = if candidate_max >= min {
+        candidate_max
+    } else {
+        min
+    };
+    let clamp = |v: f64, lo: f64, hi: f64| {
+        let v = if v < lo { lo } else { v };
+        if v > hi { hi } else { v }
+    };
+    let value = clamp(attr(c"value").unwrap_or(0.0), min, max);
+    let low = clamp(attr(c"low").unwrap_or(min), min, max);
+    let high = clamp(attr(c"high").unwrap_or(max), low, max);
+    let midpoint = min + (max - min) / 2.0;
+    let optimum = clamp(attr(c"optimum").unwrap_or(midpoint), min, max);
+    let frac = if max > min {
+        (value - min) / (max - min)
+    } else {
+        1.0
+    };
+    let quality = if optimum >= low && optimum <= high {
+        if value >= low && value <= high { 0 } else { 1 }
+    } else if optimum < low {
+        if value < low {
+            0
+        } else if value <= high {
+            1
+        } else {
+            2
+        }
+    } else if value > high {
+        0
+    } else if value >= low {
+        1
+    } else {
+        2
+    };
+    (frac, quality)
 }

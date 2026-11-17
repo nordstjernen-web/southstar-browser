@@ -11,12 +11,14 @@ use southstar_cairo::{
     Content, Context, ContextRef, Extend, FillRule, Filter, Format, Matrix, Operator, Pattern,
     Surface, SurfaceRef,
 };
+use southstar_dom::{Tag, controls};
 use southstar_image::ImageRef;
 use southstar_layout::{BoxKind, BoxRef, Edges, InlineAttr, NsBox};
 use southstar_style::{Gradient, Kind, PropId as P, StyleRef, ValueRef, layer, layer_count};
 
 use crate::blur::{BlurredShadow, paint_blurred_box_shadow};
 use crate::ffi::engine::{self, Texture};
+use crate::inline::{accent_color, meter_quality_rgb};
 use crate::media::texture_surface_cached;
 use crate::radii::{
     CornerRadii, box_border_radii, fill_outer_shadow, rounded_rect_path, style_border_radii,
@@ -1582,6 +1584,61 @@ pub fn paint_canvas_background(
     }
 }
 
+fn paint_block_gauge(
+    cr: ContextRef,
+    b: BoxRef<'_>,
+    rect: (f64, f64, f64, f64),
+    radii: CornerRadii,
+) {
+    let (x, y, w, h) = rect;
+    let Some(dom) = b
+        .dom()
+        .filter(|_| b.kind() == BoxKind::Block && w > 0.0 && h > 0.0)
+    else {
+        return;
+    };
+    let is_meter = dom.is_html_tag(Tag::Meter);
+    if !is_meter && !dom.is_html_tag(Tag::Progress) {
+        return;
+    }
+    let s = style_of(b);
+    let native = !keyword_is(get(s, P::Appearance), c"none");
+    let (frac, fill) = if is_meter {
+        let (frac, quality) = controls::meter_state(Some(dom));
+        let [r, g, b] = meter_quality_rgb(quality);
+        (frac, Rgba::from_bytes([r, g, b, 255]))
+    } else {
+        let value_background = s
+            .and_then(StyleRef::progress_value)
+            .and_then(|value| value.get(P::BackgroundColor))
+            .filter(|v| v.kind() == Kind::Color);
+        (
+            controls::progress_fraction(Some(dom)),
+            rgba_of(value_background, accent_color(s)),
+        )
+    };
+    cr.save();
+    let clip_radii = if native {
+        CornerRadii::uniform(h / 2.0)
+    } else {
+        radii
+    };
+    rounded_rect_path(cr, x, y, w, h, clip_radii.fit(w, h));
+    if native {
+        cr.set_source_rgb(0.88, 0.88, 0.90);
+        cr.fill_preserve();
+    }
+    cr.clip();
+    fill.set_source(cr);
+    if frac >= 0.0 {
+        cr.rectangle(x, y, w * cmin(frac, 1.0), h);
+    } else if native {
+        cr.rectangle(x + w * 0.325, y, w * 0.35, h);
+    }
+    cr.fill();
+    cr.restore();
+}
+
 pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     let (m, p, bd) = (b.margin(), b.padding(), b.border());
     let border_x = b.x() + m.left;
@@ -1745,6 +1802,18 @@ pub fn paint_block(cr: ContextRef, b: BoxRef<'_>) {
     if clip_to_text {
         paint_clipped_to_text(cr, b, &cr.pop_group());
     }
+
+    paint_block_gauge(
+        cr,
+        b,
+        (
+            border_x + bd.left,
+            border_y + bd.top,
+            border_w - bd.left - bd.right,
+            border_h - bd.top - bd.bottom,
+        ),
+        radii.inset(bd.top, bd.right, bd.bottom, bd.left),
+    );
 
     if let Some(sl) = get(s, P::BoxShadow).and_then(ValueRef::shadows) {
         for si in (0..sl.n.max(0) as usize).rev() {

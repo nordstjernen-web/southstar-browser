@@ -102,12 +102,14 @@ fn pseudo_name(raw: &[u8]) -> Option<(String, usize)> {
 
 fn pseudo_supported(name: &str, colons: usize) -> bool {
     const LEGACY: [&str; 4] = ["before", "after", "first-line", "first-letter"];
-    const MODERN: [&str; 5] = [
+    const MODERN: [&str; 7] = [
         "selection",
         "marker",
         "placeholder",
         "backdrop",
         "file-selector-button",
+        "-webkit-progress-value",
+        "-moz-progress-bar",
     ];
     LEGACY.contains(&name) || (colons == 2 && MODERN.contains(&name))
 }

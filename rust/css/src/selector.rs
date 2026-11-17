@@ -39,6 +39,7 @@ const PE_MARKER: u32 = 6;
 const PE_BACKDROP: u32 = 7;
 const PE_PLACEHOLDER: u32 = 8;
 const PE_FILE_SELECTOR_BUTTON: u32 = 9;
+const PE_PROGRESS_VALUE: u32 = 10;
 
 const PC_NTH_CHILD: u32 = 19;
 const PC_NTH_LAST_CHILD: u32 = 20;
@@ -581,7 +582,7 @@ fn not_equals_follows(s: &[u8], p: usize) -> bool {
 }
 
 fn pseudo_element(name: &[u8]) -> Option<u32> {
-    let known: [(&[u8], u32); 12] = [
+    let known: [(&[u8], u32); 14] = [
         (b"before", PE_BEFORE),
         (b"after", PE_AFTER),
         (b"first-letter", PE_FIRST_LETTER),
@@ -594,6 +595,8 @@ fn pseudo_element(name: &[u8]) -> Option<u32> {
         (b"-webkit-input-placeholder", PE_PLACEHOLDER),
         (b"-ms-input-placeholder", PE_PLACEHOLDER),
         (b"-moz-placeholder", PE_PLACEHOLDER),
+        (b"-webkit-progress-value", PE_PROGRESS_VALUE),
+        (b"-moz-progress-bar", PE_PROGRESS_VALUE),
     ];
     known
         .iter()

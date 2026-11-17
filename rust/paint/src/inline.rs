@@ -1621,7 +1621,15 @@ fn paint_carets(
     }
 }
 
-fn accent_color(s: Option<StyleRef<'_>>) -> Rgba {
+pub fn meter_quality_rgb(quality: c_int) -> [u8; 3] {
+    match quality {
+        0 => [0x2e, 0x9d, 0x54],
+        1 => [0xd0, 0xa4, 0x1f],
+        _ => [0xc4, 0x43, 0x3c],
+    }
+}
+
+pub fn accent_color(s: Option<StyleRef<'_>>) -> Rgba {
     let ac = get(s, P::AccentColor).filter(|v| v.kind() == Kind::Color);
     rgba_of(ac, Rgba::new(0.13, 0.36, 0.80, 1.0))
 }

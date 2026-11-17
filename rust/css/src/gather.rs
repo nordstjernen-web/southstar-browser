@@ -4,7 +4,7 @@
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
 pub(crate) const FILTER_SIZE: usize = 4096;
-pub(crate) const DESTS: usize = 10;
+pub(crate) const DESTS: usize = 11;
 
 pub(crate) struct AncestorFilter {
     pub(crate) counts: [u8; FILTER_SIZE],
