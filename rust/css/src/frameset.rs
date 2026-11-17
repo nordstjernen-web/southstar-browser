@@ -109,7 +109,7 @@ fn borders_off(frame: Node<'_>) -> bool {
         return off;
     }
     let mut cursor = frame.parent();
-    while let Some(set) = cursor.filter(|n| n.element_name() == Some(b"frameset")) {
+    while let Some(set) = cursor.filter(|n| n.is_tag(southstar_dom::Tag::Frameset)) {
         if let Some(off) = frameborder_off(set) {
             return off;
         }

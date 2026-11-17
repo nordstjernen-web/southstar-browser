@@ -154,7 +154,7 @@ pub fn layout_image(b: BoxRef<'_>, parent_content_width: f64) {
     let metadata_video = b.kind() == BoxKind::Video && node_has_media_metadata(dom_of(b));
     let video_without_metadata = b.kind() == BoxKind::Video
         && !metadata_video
-        && dom_of(b).is_some_and(|d| d.element_name() == Some(b"video".as_slice()));
+        && dom_of(b).is_some_and(|d| d.is_tag(southstar_dom::Tag::Video));
     if nat_w < 0.0 && b.content_width() > 0.0 {
         nat_w = b.content_width();
     }

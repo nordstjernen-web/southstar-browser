@@ -93,14 +93,14 @@ pub fn option_value(option: Node) -> Vec<u8> {
 }
 
 fn is_selected_option(node: Node) -> bool {
-    node.element_name() == Some(b"option") && node.attr(c"selected").is_some()
+    node.is_tag(crate::Tag::Option) && node.attr(c"selected").is_some()
 }
 
 pub fn first_selected_option(select: Node<'_>) -> Option<Node<'_>> {
     let last_wins = select.attr(c"multiple").is_none();
     let mut found = None;
     for child in children(select) {
-        let candidates: Vec<Node> = if child.element_name() == Some(b"optgroup") {
+        let candidates: Vec<Node> = if child.is_tag(crate::Tag::Optgroup) {
             children(child).collect()
         } else {
             vec![child]
@@ -134,7 +134,7 @@ fn size_lists_rows(size: &[u8]) -> bool {
 }
 
 fn enabled_option(node: Node) -> bool {
-    node.element_name() == Some(b"option") && node.attr(c"disabled").is_none()
+    node.is_tag(crate::Tag::Option) && node.attr(c"disabled").is_none()
 }
 
 pub fn option_select(option: Node<'_>) -> Option<Node<'_>> {
@@ -142,12 +142,12 @@ pub fn option_select(option: Node<'_>) -> Option<Node<'_>> {
         return None;
     }
     let parent = option.parent()?;
-    let parent = if parent.element_name() == Some(b"optgroup") {
+    let parent = if parent.is_tag(crate::Tag::Optgroup) {
         parent.parent()?
     } else {
         parent
     };
-    (parent.element_name() == Some(b"select")).then_some(parent)
+    (parent.is_tag(crate::Tag::Select)).then_some(parent)
 }
 
 pub fn picks_first_option(select: Node) -> bool {
@@ -161,7 +161,7 @@ pub fn picks_first_option(select: Node) -> bool {
 pub fn option_selectable(option: Node) -> bool {
     option.attr(c"disabled").is_none()
         && !option.parent().is_some_and(|parent| {
-            parent.element_name() == Some(b"optgroup") && parent.attr(c"disabled").is_some()
+            parent.is_tag(crate::Tag::Optgroup) && parent.attr(c"disabled").is_some()
         })
 }
 
@@ -173,7 +173,7 @@ pub fn chosen_option(select: Node<'_>) -> Option<Node<'_>> {
         return None;
     }
     children(select).find_map(|child| {
-        if child.element_name() == Some(b"optgroup") {
+        if child.is_tag(crate::Tag::Optgroup) {
             if child.attr(c"disabled").is_some() {
                 return None;
             }

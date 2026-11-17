@@ -195,7 +195,7 @@ fn tag_matches(node: Element, tag: &[u8], lower: &[u8]) -> bool {
 }
 
 fn element_namespace(node: Element) -> Option<&'static [u8]> {
-    if let Some(stored) = node.attr(c"data-nd-ns-uri") {
+    if let Some(stored) = southstar_dom::attrs::stored_namespace(node) {
         let stored = stored.to_bytes();
         return (!stored.is_empty()).then_some(stored);
     }

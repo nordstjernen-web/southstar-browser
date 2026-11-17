@@ -140,7 +140,7 @@ pub fn advance_cps(s: &[u8], cps: c_long) -> usize {
 }
 
 fn is_windowed_text_input(n: Option<Node<'_>>) -> bool {
-    let Some(n) = n.filter(|n| n.element_name() == Some(b"input")) else {
+    let Some(n) = n.filter(|n| n.is_tag(southstar_dom::Tag::Input)) else {
         return false;
     };
     let Some(ty) = n

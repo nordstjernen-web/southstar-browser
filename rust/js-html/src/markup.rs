@@ -128,7 +128,7 @@ fn set_html(scope: &mut Scope<'_>, this: &Value, val: &Value, declarative: bool)
     };
     let markup = markup_arg(scope, val)?;
     let js = ffi::js_of(scope);
-    if n.element_name() == Some(b"template") {
+    if n.is_html_tag(southstar_dom::Tag::Template) {
         set_template_html(js, n, &markup, declarative);
         return Ok(());
     }
@@ -226,7 +226,7 @@ pub fn insert_adjacent_html(scope: &mut Scope<'_>, this: &Value, args: &[Value])
         target
     };
     let scripting = scripting_enabled(target);
-    let fragment = if context.element_name() == Some(b"html") {
+    let fragment = if context.is_tag(southstar_dom::Tag::Html) {
         ffi::parse_fragment_for_tag(c"body", &markup, scripting)
     } else {
         ffi::parse_fragment_in_context(context, &markup, scripting)

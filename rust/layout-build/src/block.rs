@@ -401,7 +401,7 @@ fn fieldset_rendered_legend<'a>(n: Node<'a>, styles: StyleTable) -> Option<Node<
         return None;
     }
     children(n).find(|c| {
-        c.element_name() == Some(b"legend") && style_can_be_rendered_legend(styles.get(*c))
+        c.is_tag(southstar_dom::Tag::Legend) && style_can_be_rendered_legend(styles.get(*c))
     })
 }
 
@@ -617,7 +617,7 @@ fn keyword_fixed(s: Option<StyleRef<'_>>) -> bool {
 }
 
 fn is_summary(c: Node<'_>) -> bool {
-    c.element_name() == Some(b"summary")
+    c.is_tag(southstar_dom::Tag::Summary)
 }
 
 fn build_container(n: Node<'_>, s: Option<StyleRef<'_>>, styles: StyleTable) -> BoxRef<'static> {

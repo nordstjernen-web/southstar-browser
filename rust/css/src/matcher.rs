@@ -435,7 +435,7 @@ pub(crate) fn matches_compound(sel: CompoundRef<'_>, el: Node<'_>) -> bool {
     if sel.ns_none() {
         let null_ns = el.flags() & FLAG_FOREIGN_NS != 0
             && el.flags() & FLAG_SVG_NS == 0
-            && attrs::get(el, c"data-nd-ns-uri").is_none();
+            && attrs::stored_namespace(el).is_none();
         if !null_ns {
             return false;
         }

@@ -13,7 +13,7 @@ fn element_namespace(node: Element) -> Option<&'static [u8]> {
     if node.kind() != Kind::Element {
         return None;
     }
-    if let Some(stored) = node.attr(c"data-nd-ns-uri") {
+    if let Some(stored) = southstar_dom::attrs::stored_namespace(node) {
         return (!stored.is_empty()).then(|| stored.to_bytes());
     }
     if node.flags() & FLAG_SVG_NS != 0 {

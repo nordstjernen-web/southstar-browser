@@ -49,7 +49,7 @@ fn legacy_block_align(c: BoxRef<'_>, inherited: Option<StyleRef<'_>>) -> Option<
         let Some(dom) = dom_of(anc).filter(|d| d.is_element()) else {
             continue;
         };
-        if dom.element_name() == Some(b"center".as_slice()) {
+        if dom.is_tag(southstar_dom::Tag::Center) {
             return Some(legacy);
         }
         if dom

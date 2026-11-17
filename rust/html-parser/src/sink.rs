@@ -21,9 +21,6 @@ const NODE_QUIRKS: u32 = 1 << 5;
 const NODE_LIMITED_QUIRKS: u32 = 1 << 6;
 const NODE_SCRIPTING_DISABLED: u32 = 1 << 15;
 
-const SVG_URI: &CStr = c"http://www.w3.org/2000/svg";
-const MATHML_URI: &CStr = c"http://www.w3.org/1998/Math/MathML";
-
 pub mod dom {
     use core::ffi::CStr;
 
@@ -332,14 +329,8 @@ impl TreeSink for NsSink {
         self.fresh = Some(element);
         self.fresh_donor = None;
         match name.ns {
-            Ns::Svg => {
-                element.add_flags(NODE_SVG_NS);
-                dom::set_attr(element, c"data-nd-ns-uri", SVG_URI);
-            }
-            Ns::MathMl => {
-                element.add_flags(NODE_FOREIGN_NS);
-                dom::set_attr(element, c"data-nd-ns-uri", MATHML_URI);
-            }
+            Ns::Svg => element.add_flags(NODE_SVG_NS),
+            Ns::MathMl => element.add_flags(NODE_FOREIGN_NS | southstar_dom::FLAG_MATHML_NS),
             Ns::Html => {}
         }
         if self.positions && name.local.bytes().eq_ignore_ascii_case(b"script") {
@@ -570,12 +561,7 @@ pub fn parse_fragment(context: Option<Node>, bytes: &[u8], scripting: bool) -> T
     let tag = context.filter(|c| c.is_element()).and_then(|c| c.name());
     let ns = match (tag, context) {
         (Some(_), Some(c)) if c.flags() & NODE_SVG_NS != 0 => Ns::Svg,
-        (Some(_), Some(c))
-            if c.flags() & NODE_FOREIGN_NS != 0
-                && c.attr(c"data-nd-ns-uri").is_some_and(|u| u == MATHML_URI) =>
-        {
-            Ns::MathMl
-        }
+        (Some(_), Some(c)) if c.flags() & southstar_dom::FLAG_MATHML_NS != 0 => Ns::MathMl,
         _ => Ns::Html,
     };
     parse_fragment_in_namespace(tag, ns, bytes, scripting)

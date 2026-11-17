@@ -762,10 +762,7 @@ fn find_accesskey<'a>(n: Node<'a>, key: &CStr, depth: c_int) -> Option<Node<'a>>
         return None;
     }
     let element = n.kind() == Kind::Element;
-    if element
-        && n.name()
-            .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(b"template"))
-    {
+    if element && n.is_html_tag(southstar_dom::Tag::Template) {
         return None;
     }
     if element && accesskey_matches(n, key) && !ffi::effectively_inert(n) {

@@ -49,7 +49,7 @@ pub(crate) fn collect_script_tasks(root: Node<'_>) -> Vec<Task<'_>> {
             });
             return;
         }
-        if is_named(n, c"template") {
+        if n.is_html_tag(southstar_dom::Tag::Template) {
             return;
         }
         for c in southstar_dom::children(n) {
@@ -69,7 +69,7 @@ pub(crate) fn has_pending_script(root: Node) -> bool {
         if is_named(n, c"script") && n.attr(ALREADY_STARTED).is_none() {
             return true;
         }
-        if is_named(n, c"template") {
+        if n.is_html_tag(southstar_dom::Tag::Template) {
             return false;
         }
         southstar_dom::children(n).any(|c| walk(c, depth + 1))
@@ -86,7 +86,7 @@ pub(crate) fn pending_stylesheets(root: Node<'_>) -> Vec<Node<'_>> {
             out.push(n);
             return;
         }
-        if is_named(n, c"template") {
+        if n.is_html_tag(southstar_dom::Tag::Template) {
             return;
         }
         for c in southstar_dom::children(n) {

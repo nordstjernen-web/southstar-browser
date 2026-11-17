@@ -39,7 +39,7 @@ pub fn collect_box_bg_image(b: BoxRef<'_>, s: Option<StyleRef<'_>>) {
     if let Some(url) = s
         .and_then(|s| s.get(PropId::ListStyleImage))
         .and_then(ValueRef::url)
-        && b.dom().is_some_and(|d| d.element_name() == Some(b"li"))
+        && b.dom().is_some_and(|d| d.is_tag(southstar_dom::Tag::Li))
     {
         let (src, img) = dup_peek(url);
         b.ensure_media().set_marker_image(src, img);
@@ -161,7 +161,7 @@ fn first_media_source_url<'a>(n: Node<'a>) -> Option<&'a CStr> {
         }
     }
     children(n)
-        .filter(|c| c.element_name() == Some(b"source"))
+        .filter(|c| c.is_tag(southstar_dom::Tag::Source))
         .find_map(|c| c.attr(c"src").filter(|s| !s.is_empty()))
 }
 

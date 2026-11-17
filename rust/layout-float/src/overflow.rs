@@ -149,9 +149,7 @@ pub fn box_establishes_bfc(b: BoxRef<'_>) -> bool {
     if style_is_flex_container(style_of(parent)) || style_is_grid_container(style_of(parent)) {
         return true;
     }
-    if b.is_rendered_legend()
-        || dom_of(b).is_some_and(|d| d.element_name() == Some(b"fieldset".as_slice()))
-    {
+    if b.is_rendered_legend() || dom_of(b).is_some_and(|d| d.is_tag(southstar_dom::Tag::Fieldset)) {
         return true;
     }
     if style

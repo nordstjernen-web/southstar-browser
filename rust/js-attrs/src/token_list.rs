@@ -236,7 +236,7 @@ pub(crate) fn supports(scope: &mut Scope<'_>, this: &Value, args: &[Value]) -> J
     let Some(arg) = args.first() else {
         return Err(argument_count_error(scope, 1, 0));
     };
-    let is_link = owner.is_some_and(|n| n.element_name() == Some(b"link".as_slice()));
+    let is_link = owner.is_some_and(|n| n.is_tag(southstar_dom::Tag::Link));
     let supported = match attr.to_bytes() {
         b"rel" if is_link => LINK_REL_TOKENS,
         b"rel" => HYPERLINK_REL_TOKENS,

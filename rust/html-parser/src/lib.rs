@@ -54,11 +54,6 @@ const SHADOW_TEMPLATE_ATTRS: [&CStr; 5] = [
 ];
 const PLAYABLE_EXTENSIONS: [&[u8]; 6] = [b".webm", b".mpg", b".mpeg", b".m1v", b".ogv", b".ogg"];
 
-fn name_is(node: Node, name: &str) -> bool {
-    node.element_name()
-        .is_some_and(|n| n.eq_ignore_ascii_case(name.as_bytes()))
-}
-
 fn valid_shadow_host(name: &[u8]) -> bool {
     SHADOW_HOSTS
         .iter()
@@ -107,7 +102,7 @@ fn attach_declarative_shadow(template: Node, mode: &CStr) {
 }
 
 fn attach_if_declarative(host: Node, template: Node) -> bool {
-    if !name_is(template, "template") {
+    if !template.is_html_tag(southstar_dom::Tag::Template) {
         return false;
     }
     let Some(mode) = template

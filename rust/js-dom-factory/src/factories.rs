@@ -100,12 +100,15 @@ pub fn create_element_ns(scope: &mut Scope<'_>, this: &Value, args: &[Value]) ->
     let is_html = ns.as_deref() == Some(HTML_NS);
     let el = node::new_element(if is_html { local } else { &name });
     el.add_flags(FLAG_NOT_PARSER_INSERTED);
+    let is_mathml = ns.as_deref() == Some(southstar_dom::MATHML_NAMESPACE.to_bytes());
     if is_svg {
         el.add_flags(FLAG_SVG_NS);
+    } else if is_mathml {
+        el.add_flags(FLAG_FOREIGN_NS | southstar_dom::FLAG_MATHML_NS);
     } else if !is_html {
         el.add_flags(FLAG_FOREIGN_NS);
     }
-    if let Some(ns) = ns.as_deref().filter(|_| !is_html) {
+    if let Some(ns) = ns.as_deref().filter(|_| !is_html && !is_svg && !is_mathml) {
         ffi::set_attr(el, c"data-nd-ns-uri", ns);
     }
     if let Some(prefix) = prefix.filter(|_| is_html) {

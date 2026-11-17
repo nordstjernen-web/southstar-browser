@@ -654,9 +654,9 @@ fn hr_hints(out: &mut Vec<u8>, el: Node<'_>) {
 
 fn meta_color_scheme(root: Node<'_>) -> Option<String> {
     let head = core::iter::successors(root.first_child(), |c| c.next_sibling())
-        .find(|c| c.element_name() == Some(b"head"))?;
+        .find(|c| c.is_tag(southstar_dom::Tag::Head))?;
     core::iter::successors(head.first_child(), |c| c.next_sibling())
-        .filter(|c| c.element_name() == Some(b"meta"))
+        .filter(|c| c.is_tag(southstar_dom::Tag::Meta))
         .filter(|m| attr_bytes(*m, c"name").is_some_and(|n| eq(n.trim_ascii(), b"color-scheme")))
         .find_map(|m| {
             let content = attr_bytes(m, c"content")?.trim_ascii();

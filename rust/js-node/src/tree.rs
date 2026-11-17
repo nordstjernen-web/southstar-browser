@@ -23,7 +23,7 @@ pub(crate) fn is_shadow_root(node: Element) -> bool {
 }
 
 fn is_template(node: Element) -> bool {
-    node.element_name() == Some(b"template")
+    node.is_html_tag(southstar_dom::Tag::Template)
 }
 
 fn hidden_child(node: Element) -> bool {

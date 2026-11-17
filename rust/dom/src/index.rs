@@ -40,7 +40,7 @@ fn walk(doc: Node, root: Node, scoped: bool, mut visit: impl FnMut(Node)) {
             false
         } else {
             visit(n);
-            !(scoped && n.element_name() == Some(b"template"))
+            !(scoped && n.is_html_tag(crate::Tag::Template))
         };
         cur = next_in_subtree(n, Some(root), descend);
     }
@@ -317,12 +317,13 @@ pub(crate) struct Indexes {
 }
 
 fn with_indexes<R>(doc: Node, f: impl FnOnce(&mut Indexes) -> R) -> R {
-    let mut indexes = doc.indexes().borrow_mut();
-    f(indexes.get_or_insert_with(Box::default))
+    let mut indexes = doc.indexes_or_init().borrow_mut();
+    f(indexes.get_or_insert_with(Indexes::default))
 }
 
 fn has_index(doc: Node, which: impl FnOnce(&Indexes) -> bool) -> bool {
-    doc.indexes().borrow().as_deref().is_some_and(which)
+    doc.indexes()
+        .is_some_and(|indexes| indexes.borrow().as_ref().is_some_and(which))
 }
 
 pub fn has_id_index(doc: Node) -> bool {
@@ -526,8 +527,8 @@ fn ordered_snapshot(
     key: &[u8],
     table: impl FnOnce(&mut Indexes) -> Option<&mut HashMap<Box<[u8]>, Bucket>>,
 ) -> Option<NodeArray> {
-    let mut indexes = doc.indexes().borrow_mut();
-    let bucket = table(indexes.as_deref_mut()?)?.get_mut(key)?;
+    let mut indexes = doc.indexes()?.borrow_mut();
+    let bucket = table(indexes.as_mut()?)?.get_mut(key)?;
     Some(NodeArray::new(bucket.ordered(doc).to_vec()))
 }
 
@@ -626,7 +627,7 @@ fn by_id_walk<'a>(root: Node<'a>, id: &CStr, depth: i32) -> Option<Node<'a>> {
     if root.is_element() && root.attr(c"id") == Some(id) {
         return Some(root);
     }
-    if root.element_name() == Some(b"template") {
+    if root.is_html_tag(crate::Tag::Template) {
         return None;
     }
     children(root)
@@ -636,9 +637,9 @@ fn by_id_walk<'a>(root: Node<'a>, id: &CStr, depth: i32) -> Option<Node<'a>> {
 
 fn indexed_hit<'a>(doc: Node, root: Node<'a>, id: &CStr) -> Option<Node<'a>> {
     let hit = doc
-        .indexes()
+        .indexes()?
         .borrow()
-        .as_deref()?
+        .as_ref()?
         .ids
         .as_ref()?
         .get(id.to_bytes())
@@ -698,10 +699,10 @@ fn anchor_walk<'a>(root: Node<'a>, name: &CStr, depth: i32) -> Option<Node<'a>> 
     if depth >= MAX_DEPTH {
         return None;
     }
-    if root.element_name() == Some(b"a") && root.attr(c"name") == Some(name) {
+    if root.is_tag(crate::Tag::A) && root.attr(c"name") == Some(name) {
         return Some(root);
     }
-    if root.element_name() == Some(b"template") {
+    if root.is_html_tag(crate::Tag::Template) {
         return None;
     }
     children(root).find_map(|c| anchor_walk(c, name, depth + 1))

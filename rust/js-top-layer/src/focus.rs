@@ -24,7 +24,7 @@ pub(crate) fn run_focusing_steps(js: Js, el: Element) {
 }
 
 fn hides_focus_subtree(n: Element) -> bool {
-    if has_attr(n, c"hidden") || is_named(Some(n), b"template") {
+    if has_attr(n, c"hidden") || n.is_html_tag(southstar_dom::Tag::Template) {
         return true;
     }
     if is_named(Some(n), b"dialog") && !has_attr(n, c"open") {

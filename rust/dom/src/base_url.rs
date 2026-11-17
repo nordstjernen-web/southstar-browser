@@ -12,7 +12,7 @@ fn first_base_href<'n>(n: Node<'n>, depth: i32) -> Option<&'n CStr> {
     if depth >= MAX_DEPTH {
         return None;
     }
-    if n.element_name() == Some(b"base")
+    if n.is_tag(crate::Tag::Base)
         && let Some(href) = n.attr(c"href")
     {
         return Some(href);

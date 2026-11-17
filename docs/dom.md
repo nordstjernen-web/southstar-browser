@@ -24,9 +24,22 @@ process, so the node handle is a plain Rust reference:
   address, and is neither `Send` nor `Sync` (the slot is full of `Cell`s), so
   the compiler keeps every node on the thread whose store holds it.
 - The tree links (`parent`, `first_child`, `last_child`, `prev_sibling`,
-  `next_sibling`, the template contents) are `Cell<Option<&'static
-  NodeSlot>>`, and the kind, flags, bloom bits and source position are
-  `Cell`s too. Walking and relinking the tree is safe code; the store's
+  `next_sibling`) are `Cell<Option<&'static NodeSlot>>`, and the kind,
+  tag, flags and bloom bits are `Cell`s too. A slot is 184 bytes; what only
+  a few nodes need (a template's contents, a script's source position, a
+  document's indexes) lives in a `Rare` box the slot allocates the first
+  time it needs one and keeps, cleared, when the slot is reused. The
+  wrapper invalidator is the `FLAG_JS_ARMED` flag bit plus the one function
+  the binding registered, not a pointer per node.
+- An element's `tag` is its name as a `southstar_html5::Tag`
+  (re-exported as `southstar_dom::Tag`), set by `Node::set_name`, the
+  only place a name is written, so it always agrees with the name;
+  `Tag::Other` means a name the table does not list. `is_tag(Tag::Div)`
+  compares it and `is_html_tag` also requires the HTML namespace. SVG and
+  MathML elements are marked by `FLAG_SVG_NS` and `FLAG_MATHML_NS`
+  (with `FLAG_FOREIGN_NS`); only an element in another namespace keeps its
+  URI in the internal `data-nd-ns-uri` attribute, and
+  `attrs::stored_namespace` returns the URI either way. Walking and relinking the tree is safe code; the store's
   spare list and the string accessors are the only `unsafe` in the crate
   apart from the C ABI.
 
@@ -72,7 +85,7 @@ A node owns everything it points to except its tree links. There is no
   stays put while the list grows; removing the attribute returns the slot to
   the store.
 - Its **indexes** (a document's id, class and tag indexes) are `HashMap`s in
-  a `RefCell`, and its **class tokens** are an owned list rebuilt when the
+  a `RefCell` in its `Rare` box, and its **class tokens** are an owned list rebuilt when the
   class attribute changes.
 
 Moving a node from one document to another, as `innerHTML`, `DOMParser`,

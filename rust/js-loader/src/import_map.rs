@@ -86,7 +86,7 @@ pub(crate) fn register_in(js: Js, root: Node) {
             }
             return;
         }
-        if is_named(n, c"template") {
+        if n.is_html_tag(southstar_dom::Tag::Template) {
             return;
         }
         for c in southstar_dom::children(n) {

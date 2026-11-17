@@ -318,7 +318,7 @@ impl PrefixMap {
 }
 
 fn xml_element_namespace(node: Node<'_>) -> Option<&[u8]> {
-    if let Some(stored) = node.attr(c"data-nd-ns-uri") {
+    if let Some(stored) = crate::attrs::stored_namespace(node) {
         return Some(stored.to_bytes()).filter(|ns| !ns.is_empty());
     }
     if node.flags() & FLAG_SVG_NS != 0 {

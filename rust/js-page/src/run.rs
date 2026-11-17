@@ -68,7 +68,7 @@ fn track_document_images(js: Js, node: Element, depth: i32) {
         }
         return;
     }
-    if is_named(Some(node), b"template") {
+    if node.is_html_tag(southstar_dom::Tag::Template) {
         return;
     }
     let mut child = node.first_child();

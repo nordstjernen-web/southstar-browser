@@ -686,7 +686,7 @@ fn partition_apply(page: Option<Page>, js: &Record, new_url: Option<&CStr>) {
 }
 
 fn foreign_kind_proto<'a>(protos: &'a DomProtos, n: Node<'_>) -> &'a Value {
-    let mathml = attr(n, c"data-nd-ns-uri").is_some_and(|ns| ns == MATHML_NS);
+    let mathml = southstar_dom::attrs::stored_namespace(n).is_some_and(|ns| ns == MATHML_NS);
     if mathml && protos.mathml_element.is_object() {
         &protos.mathml_element
     } else {
@@ -854,8 +854,9 @@ pub(crate) fn set_src_recorded(js: Option<Page>, el: Node<'_>, src: &[u8]) {
 }
 
 pub(crate) fn in_template_content(n: Node<'_>) -> bool {
-    southstar_dom::ancestors_and_self(n)
-        .any(|p| p.flags() & FLAG_TEMPLATE_CONTENT != 0 || is_named(p, c"template"))
+    southstar_dom::ancestors_and_self(n).any(|p| {
+        p.flags() & FLAG_TEMPLATE_CONTENT != 0 || p.is_html_tag(southstar_dom::Tag::Template)
+    })
 }
 
 pub(crate) fn bind_event_target_listeners(scope: &mut Scope<'_>, obj: &Value) {
