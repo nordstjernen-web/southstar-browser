@@ -1223,6 +1223,7 @@ impl<'s, S: TreeSink> Builder<'s, S> {
             _ => {}
         }
         self.insert_html_tag(Tag::Body);
+        self.frameset_ok = true;
         self.mode = Mode::InBody;
         Step::Again
     }
