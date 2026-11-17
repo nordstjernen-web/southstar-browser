@@ -3,6 +3,15 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* Parsing an HTML document no longer walks the finished tree for
+  declarative shadow roots or media metadata when the parser saw no
+  `shadowrootmode` attribute, no `<video>` and no `player` id or class,
+  and the media pass reads every `<meta>` and JSON-LD script in one walk
+  instead of one per property. The shadow root pass also checks whether
+  a host may take a shadow root only when it finds a template asking for
+  one, instead of comparing every element's name against the list of
+  valid hosts. A parse takes 9 to 17% fewer instructions on Wikipedia,
+  MDN, BBC News and the HTML Standard.
 * `<selectedcontent>` shows the selected option. When the parser closes
   an `<option>` that its `<select>` has chosen, the select's first
   `<selectedcontent>` receives a copy of the option's children, as the

@@ -106,23 +106,34 @@ fn attach_declarative_shadow(template: Node, mode: &CStr) {
     }
 }
 
+fn attach_if_declarative(host: Node, template: Node) -> bool {
+    if !name_is(template, "template") {
+        return false;
+    }
+    let Some(mode) = template
+        .attr(c"shadowrootmode")
+        .or_else(|| template.attr(c"shadowroot"))
+        .filter(|m| ieq(m, "open") || ieq(m, "closed"))
+    else {
+        return false;
+    };
+    if !host.element_name().is_some_and(valid_shadow_host) {
+        return false;
+    }
+    let mode = mode.to_owned();
+    attach_declarative_shadow(template, &mode);
+    true
+}
+
 pub(crate) fn convert_declarative_shadow(node: Option<Node>, depth: i32) {
     let Some(node) = node else { return };
     if depth >= MAX_DEPTH {
         return;
     }
-    let host_ok = node.element_name().is_some_and(valid_shadow_host);
     let mut shadow_done = false;
     for child in children(node) {
-        if host_ok && !shadow_done && name_is(child, "template") {
-            let mode = child
-                .attr(c"shadowrootmode")
-                .or_else(|| child.attr(c"shadowroot"));
-            if let Some(mode) = mode.filter(|m| ieq(m, "open") || ieq(m, "closed")) {
-                shadow_done = true;
-                let mode = mode.to_owned();
-                attach_declarative_shadow(child, &mode);
-            }
+        if !shadow_done && attach_if_declarative(node, child) {
+            shadow_done = true;
         }
         convert_declarative_shadow(Some(child), depth + 1);
     }
@@ -257,44 +268,58 @@ fn document_media_target(root: Node) -> Option<Node> {
         .or_else(|| find_element_with_attr_contains(root, c"class", b"player", 0))
 }
 
-fn find_meta_property<'a>(node: Node<'a>, property: &str, depth: i32) -> Option<Node<'a>> {
-    if depth >= MAX_DEPTH {
-        return None;
-    }
-    if node.element_name() == Some(b"meta") {
-        let name = node.attr(c"property").or_else(|| node.attr(c"name"));
-        let content = node.attr(c"content");
-        if name.is_some_and(|p| ieq(p, property)) && content.is_some_and(|c| !c.is_empty()) {
-            return Some(node);
-        }
-    }
-    children(node).find_map(|child| find_meta_property(child, property, depth + 1))
+struct MediaSources<'a> {
+    metas: Vec<Node<'a>>,
+    video_jsonld: Vec<Vec<u8>>,
 }
 
-fn meta_property_content(root: Node, property: &str) -> Option<Vec<u8>> {
-    find_meta_property(root, property, 0)
-        .and_then(|m| m.attr(c"content"))
-        .filter(|c| !c.is_empty())
-        .map(|c| c.to_bytes().to_vec())
-}
-
-fn jsonld_video_object_url(node: Node, key: &[u8], depth: i32) -> Option<Vec<u8>> {
-    if depth >= MAX_DEPTH {
-        return None;
+impl<'a> MediaSources<'a> {
+    fn collect(root: Node<'a>) -> Self {
+        let mut sources = MediaSources {
+            metas: Vec::new(),
+            video_jsonld: Vec::new(),
+        };
+        sources.visit(root, 0);
+        sources
     }
-    if node.element_name() == Some(b"script")
-        && node
-            .attr(c"type")
-            .is_some_and(|t| ieq(t, "application/ld+json"))
-    {
-        let text = script_text(node);
-        if find(&text, b"VideoObject").is_some()
-            && let Some(url) = json_first_url_for_key(&text, key).filter(|u| !u.is_empty())
-        {
-            return Some(url);
+
+    fn visit(&mut self, node: Node<'a>, depth: i32) {
+        if depth >= MAX_DEPTH {
+            return;
+        }
+        match node.element_name() {
+            Some(b"meta") => self.metas.push(node),
+            Some(b"script")
+                if node
+                    .attr(c"type")
+                    .is_some_and(|t| ieq(t, "application/ld+json")) =>
+            {
+                let text = script_text(node);
+                if find(&text, b"VideoObject").is_some() {
+                    self.video_jsonld.push(text);
+                }
+            }
+            _ => {}
+        }
+        for child in children(node) {
+            self.visit(child, depth + 1);
         }
     }
-    children(node).find_map(|child| jsonld_video_object_url(child, key, depth + 1))
+
+    fn meta_content(&self, property: &str) -> Option<Vec<u8>> {
+        self.metas.iter().find_map(|meta| {
+            let name = meta.attr(c"property").or_else(|| meta.attr(c"name"));
+            let content = meta.attr(c"content").filter(|c| !c.is_empty())?;
+            name.is_some_and(|p| ieq(p, property))
+                .then(|| content.to_bytes().to_vec())
+        })
+    }
+
+    fn video_object_url(&self, key: &[u8]) -> Option<Vec<u8>> {
+        self.video_jsonld
+            .iter()
+            .find_map(|text| json_first_url_for_key(text, key).filter(|u| !u.is_empty()))
+    }
 }
 
 fn media_url_is_direct_playable(url: &[u8]) -> bool {
@@ -327,21 +352,23 @@ pub(crate) fn extract_standard_media(root: Node) {
     if target.attr(MEDIA_SRC_ATTR).is_some() || target.attr(MEDIA_STREAM_ATTR).is_some() {
         return;
     }
-    let direct = jsonld_video_object_url(root, b"\"contentUrl\"", 0)
+    let sources = MediaSources::collect(root);
+    let direct = sources
+        .video_object_url(b"\"contentUrl\"")
         .filter(|u| media_url_is_direct_playable(u));
     let og_video = first_of([
-        meta_property_content(root, "og:video:secure_url"),
-        meta_property_content(root, "og:video:url"),
-        meta_property_content(root, "og:video"),
+        sources.meta_content("og:video:secure_url"),
+        sources.meta_content("og:video:url"),
+        sources.meta_content("og:video"),
     ]);
-    let twitter_player = meta_property_content(root, "twitter:player");
+    let twitter_player = sources.meta_content("twitter:player");
     let poster = first_of([
-        meta_property_content(root, "og:image:secure_url"),
-        meta_property_content(root, "og:image"),
-        jsonld_video_object_url(root, b"\"thumbnailUrl\"", 0),
-        meta_property_content(root, "twitter:image"),
+        sources.meta_content("og:image:secure_url"),
+        sources.meta_content("og:image"),
+        sources.video_object_url(b"\"thumbnailUrl\""),
+        sources.meta_content("twitter:image"),
     ]);
-    let embed = jsonld_video_object_url(root, b"\"embedUrl\"", 0);
+    let embed = sources.video_object_url(b"\"embedUrl\"");
     if direct.is_none() && og_video.is_none() && twitter_player.is_none() && embed.is_none() {
         return;
     }
