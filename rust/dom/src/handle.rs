@@ -180,11 +180,14 @@ impl<'a> Node<'a> {
         if self.name_is_tag(tag) {
             return true;
         }
-        self.slot.tag.get() == Tag::Other
-            && tag.name().is_some_and(|wanted| {
-                self.name()
-                    .is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(wanted.to_bytes()))
-            })
+        let Some(wanted) = tag.name() else {
+            return false;
+        };
+        let name = match self.slot.tag.get().name() {
+            Some(known) => Some(known),
+            None => self.name(),
+        };
+        name.is_some_and(|name| name.to_bytes().eq_ignore_ascii_case(wanted.to_bytes()))
     }
 
     pub fn text(self) -> Option<&'a CStr> {
