@@ -1,6 +1,6 @@
 [package]
 name = "southstar"
-description = "Southstar, a web browser written from scratch in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"
+description = "Southstar, a web browser written in Rust with a GTK 4 interface: `cargo install southstar` builds the browser and its renderer and media helpers"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -11,7 +11,7 @@ Southstar Browser
 [![Linux build](https://img.shields.io/github/actions/workflow/status/nordstjernen-web/southstar-browser/linux.yml?branch=main&style=flat-square&label=linux%20build)](https://github.com/nordstjernen-web/southstar-browser/actions/workflows/linux.yml)
 
 Southstar Browser is a web browser focused on support for modern HTML, CSS
-and JavaScript standards, written in Rust.
+and JavaScript standards, written in Rust and started in 2026.
 
 **Windows:** install Southstar Browser from the
 [Microsoft Store](https://apps.microsoft.com/detail/9N9J5HRNJ7RQ).

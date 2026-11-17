@@ -329,7 +329,7 @@ def write_readme(plan, group, into):
         return
     members = plan.groups[group]["members"]
     lines = [f"# {group}", "", plan.groups[group]["description"] + ".", "",
-             f"This crate is part of [Southstar]({REPOSITORY}), a web browser written from scratch in Rust "
+             f"This crate is part of [Southstar]({REPOSITORY}), a web browser written in Rust "
              "with a GTK 4 interface. It is published so that `cargo install southstar` can build the "
              "browser; its API follows the browser's needs and is not stable.", ""]
     if not plan.standalone(group):

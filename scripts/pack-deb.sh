@@ -238,7 +238,7 @@ Homepage: https://github.com/nordstjernen-web/southstar-browser
 Description: Southstar Browser — a small, hand-written web browser
  Southstar is a small, free software web browser written in Rust with
  GTK 4 and its own HTTP client. The HTML parser, CSS engine, layout, paint and
- JavaScript glue are written from scratch — no third-party browser engine
+ JavaScript glue are the project's own — no third-party browser engine
  is used. SVG images are rendered in-engine.
 EOF
 

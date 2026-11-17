@@ -1,7 +1,7 @@
 Southstar Browser
 =================
 
-Southstar is a web browser written from scratch in Rust, with a GTK 4
+Southstar is a web browser written in Rust, with a GTK 4
 interface. It supports modern HTML, CSS and JavaScript, measured against the
 standards' own text: the JavaScript engine (a fork of
 [Boa](https://github.com/boa-dev/boa), no JIT) passes all of test262, and

@@ -1,7 +1,7 @@
 # southstar-http
 
 The HTTP client of [Southstar](https://github.com/nordstjernen-web/southstar-browser),
-written from scratch in Rust. It replaced libcurl and libnghttp2 in the
+written in Rust. It replaced libcurl and libnghttp2 in the
 browser.
 
 - **HTTP/1.1 and HTTP/2** with its own framing, flow control and HPACK. The
