@@ -27,7 +27,7 @@ process, so the node handle is a plain Rust reference:
   `next_sibling`) are `Cell<Option<&'static NodeSlot>>`, and the kind,
   tag, flags and bloom bits are `Cell`s too. A slot is 184 bytes; what only
   a few nodes need (a template's contents, a script's source position, a
-  document's indexes) lives in a `Rare` box the slot allocates the first
+  document's indexes) lives in a `Extra` box the slot allocates the first
   time it needs one and keeps, cleared, when the slot is reused. The
   wrapper invalidator is the `FLAG_JS_ARMED` flag bit plus the one function
   the binding registered, not a pointer per node.
@@ -85,7 +85,7 @@ A node owns everything it points to except its tree links. There is no
   stays put while the list grows; removing the attribute returns the slot to
   the store.
 - Its **indexes** (a document's id, class and tag indexes) are `HashMap`s in
-  a `RefCell` in its `Rare` box, and its **class tokens** are an owned list rebuilt when the
+  a `RefCell` in its `Extra` box, and its **class tokens** are an owned list rebuilt when the
   class attribute changes.
 
 Moving a node from one document to another, as `innerHTML`, `DOMParser`,
