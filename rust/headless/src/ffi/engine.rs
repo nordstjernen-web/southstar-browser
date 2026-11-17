@@ -26,14 +26,19 @@ pub struct Response {
     pub body: Option<Vec<u8>>,
     pub error: Option<Vec<u8>>,
     pub timing: Timing,
+    pub document: Option<southstar_engine::LoadedDocument>,
 }
 
 fn owned(text: Option<&CStr>) -> Option<Vec<u8>> {
     text.map(|t| t.to_bytes().to_vec())
 }
 
-fn take_response(resp: southstar_net::Response) -> Response {
+fn take_response(
+    resp: southstar_net::Response,
+    document: Option<southstar_engine::LoadedDocument>,
+) -> Response {
     Response {
+        document,
         status: resp.status(),
         final_url: owned(resp.final_url()),
         content_type: owned(resp.content_type()),
@@ -54,12 +59,20 @@ pub fn navigate(
         body,
         content_type: Some(content_type),
     });
-    southstar_engine::navigate_blocking(url, top_url, top_url, user_activated, post.as_ref())
-        .map(take_response)
+    let scripting = super::javascript_enabled();
+    southstar_engine::navigate_blocking(
+        url,
+        top_url,
+        top_url,
+        user_activated,
+        post.as_ref(),
+        scripting,
+    )
+    .map(|(response, document)| take_response(response, document))
 }
 
 pub fn fetch(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
-    southstar_engine::fetch_blocking(url, top_url).map(take_response)
+    southstar_engine::fetch_blocking(url, top_url).map(|response| take_response(response, None))
 }
 
 pub fn error_page(url: Option<&CStr>, status: c_long, transport_error: Option<&CStr>) -> Vec<u8> {
@@ -83,12 +96,7 @@ pub fn xml_document(url: Option<&CStr>, xml: &[u8]) -> Vec<u8> {
 }
 
 pub fn decode_body(body: &[u8], content_type: Option<&CStr>) -> (Vec<u8>, Option<Vec<u8>>) {
-    let (mut decoded, charset) =
-        southstar_html_util::decode_body(body, content_type.map(CStr::to_bytes));
-    if let Some(nul) = decoded.iter().position(|&b| b == 0) {
-        decoded.truncate(nul);
-    }
-    (decoded, charset)
+    southstar_html_util::decode_body(body, content_type.map(CStr::to_bytes))
 }
 
 pub fn url_resolve(base: &CStr, href: &CStr) -> Option<Vec<u8>> {
@@ -106,6 +114,10 @@ pub struct Document(Tree);
 impl Document {
     pub fn parse(html: &[u8], scripting: bool) -> Document {
         Document(southstar_html_parser::parse_document(html, scripting))
+    }
+
+    pub fn from_tree(tree: Tree) -> Document {
+        Document(tree)
     }
 
     pub fn node(&self) -> Node<'static> {

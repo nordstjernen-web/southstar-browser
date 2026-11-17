@@ -9,7 +9,10 @@ use std::ffi::CString;
 
 use southstar_dom::attrs::{self, NsName};
 use southstar_dom::{Kind, MAX_DEPTH, Node, Tree, ancestors, children, node, select};
-use southstar_html5::{AttrNs, Attrs, Context, ElementName, Ns, Position, QuirksMode, TreeSink};
+use southstar_html5::{
+    AttrNs, Attrs, Context, ElementName, Ns, Parser, Position, Positions, Progress, QuirksMode,
+    TreeSink,
+};
 
 const NODE_SVG_NS: u32 = 1 << 7;
 const NODE_FOREIGN_NS: u32 = 1 << 9;
@@ -65,8 +68,26 @@ struct NsSink {
     fresh_selectedcontent: Option<Handle>,
     selects: HashMap<Handle, SelectState>,
     replaced: Vec<Handle>,
+    fresh: Option<Handle>,
+    fresh_donor: Option<Handle>,
+    jsonld_scripts: Vec<Handle>,
     declarative_shadow: bool,
     media_candidate: bool,
+}
+
+fn names_video_metadata(name: &[u8], value: &[u8]) -> bool {
+    match name {
+        b"property" | b"name" => {
+            value
+                .get(..8)
+                .is_some_and(|v| v.eq_ignore_ascii_case(b"og:video"))
+                || value.eq_ignore_ascii_case(b"twitter:player")
+        }
+        b"itemtype" => value
+            .windows(crate::SCHEMA_VIDEO_OBJECT.len())
+            .any(|w| w == crate::SCHEMA_VIDEO_OBJECT),
+        _ => false,
+    }
 }
 
 fn left_out_of_selectedcontent(node: Handle) -> bool {
@@ -108,20 +129,41 @@ impl NsSink {
             fresh_selectedcontent: None,
             selects: HashMap::new(),
             replaced: Vec::new(),
+            fresh: None,
+            fresh_donor: None,
+            jsonld_scripts: Vec::new(),
             declarative_shadow: false,
             media_candidate: false,
         }
     }
 
-    fn note_attribute(&mut self, name: &[u8], value: &[u8]) {
+    fn note_attribute(&mut self, element: Handle, name: &[u8], value: &[u8]) {
         match name {
             b"shadowrootmode" | b"shadowroot" => self.declarative_shadow = true,
-            b"id" if value == b"player" => self.media_candidate = true,
-            b"class" if value.windows(6).any(|w| w == b"player") => {
-                self.media_candidate = true;
+            _ if self.media_candidate => {}
+            _ if names_video_metadata(name, value) => self.media_candidate = true,
+            b"type" if value.eq_ignore_ascii_case(b"application/ld+json") => {
+                self.jsonld_scripts.push(element);
             }
             _ => {}
         }
+    }
+
+    fn note_video_jsonld(&mut self) {
+        let describes_video = |script: &Handle| {
+            children(*script)
+                .filter_map(|c| c.text_with_len())
+                .any(|text| text.windows(11).any(|w| w == b"VideoObject"))
+        };
+        if !self.media_candidate && self.jsonld_scripts.iter().any(describes_video) {
+            self.media_candidate = true;
+        }
+        self.jsonld_scripts.clear();
+    }
+
+    fn forget_fresh(&mut self) {
+        self.fresh = None;
+        self.fresh_donor = None;
     }
 
     fn inserted(&mut self, child: Handle) {
@@ -265,6 +307,14 @@ impl TreeSink for NsSink {
         self.doc
     }
 
+    fn positions(&self) -> Positions {
+        if self.positions {
+            Positions::Scripts
+        } else {
+            Positions::None
+        }
+    }
+
     fn create_element(
         &mut self,
         name: ElementName<'_>,
@@ -276,9 +326,11 @@ impl TreeSink for NsSink {
             self.media_candidate = true;
         }
         for attr in attrs {
-            self.note_attribute(attr.name, attr.value);
+            self.note_attribute(element, attr.name, attr.value);
             Self::add_attribute(element, attr);
         }
+        self.fresh = Some(element);
+        self.fresh_donor = None;
         match name.ns {
             Ns::Svg => {
                 element.add_flags(NODE_SVG_NS);
@@ -311,7 +363,7 @@ impl TreeSink for NsSink {
     }
 
     fn append_doctype(&mut self, name: &[u8], public_id: &[u8], system_id: &[u8]) {
-        let out = node::new_element(if name.is_empty() { b"html" } else { name });
+        let out = node::new_element(name);
         attrs::set_attribute(out, c"publicId", Some(public_id));
         attrs::set_attribute(out, c"systemId", Some(system_id));
         out.set_kind(Kind::Doctype);
@@ -319,13 +371,18 @@ impl TreeSink for NsSink {
     }
 
     fn append(&mut self, parent: Handle, child: Handle) {
-        if self.can_adopt(parent, child) {
+        let took_all_of_parent = self.fresh == Some(child)
+            && self.fresh_donor == Some(parent)
+            && child.parent().is_none();
+        self.forget_fresh();
+        if took_all_of_parent || self.can_adopt(parent, child) {
             parent.append(child);
             self.inserted(child);
         }
     }
 
     fn insert_before(&mut self, sibling: Handle, child: Handle) {
+        self.forget_fresh();
         if sibling
             .parent()
             .is_none_or(|parent| self.can_adopt(parent, child))
@@ -358,11 +415,19 @@ impl TreeSink for NsSink {
     }
 
     fn reparent_children(&mut self, from: Handle, to: Handle) {
+        let into_empty_fresh = self.fresh == Some(to)
+            && to.parent().is_none()
+            && to.first_child().is_none()
+            && to.tpl_content().is_none();
+        self.fresh_donor = None;
         if self.is_inclusive_ancestor(from, to) {
             return;
         }
         while let Some(child) = from.first_child() {
             to.append(child);
+        }
+        if into_empty_fresh {
+            self.fresh_donor = Some(from);
         }
     }
 
@@ -377,7 +442,7 @@ impl TreeSink for NsSink {
 
     fn add_missing_attributes(&mut self, el: Handle, attrs: Attrs<'_>) {
         for attr in attrs {
-            self.note_attribute(attr.name, attr.value);
+            self.note_attribute(el, attr.name, attr.value);
             if attr.name.contains(&0)
                 || attrs::is_internal(attr.name)
                 || !self.merge_names(el).insert(attr.name.to_ascii_lowercase())
@@ -418,8 +483,73 @@ impl TreeSink for NsSink {
         self.template_hosts.clear();
         self.fresh_selectedcontent = None;
         self.selects.clear();
+        self.forget_fresh();
+        if !self.jsonld_scripts.is_empty() {
+            self.jsonld_scripts.clear();
+            self.media_candidate = true;
+        }
         self.free_replaced();
         n.free_tree();
+    }
+}
+
+fn finish_document(tree: &Tree, sink: &mut NsSink, quirks: QuirksMode, scripting: bool) {
+    let root = tree.root();
+    match quirks {
+        QuirksMode::Quirks => root.add_flags(NODE_QUIRKS),
+        QuirksMode::LimitedQuirks => root.add_flags(NODE_LIMITED_QUIRKS),
+        QuirksMode::NoQuirks => {}
+    }
+    sink.note_video_jsonld();
+    sink.free_replaced();
+    if !scripting {
+        root.add_flags(NODE_SCRIPTING_DISABLED);
+    }
+    if sink.declarative_shadow {
+        crate::convert_declarative_shadow(Some(root), 0);
+    }
+    if sink.media_candidate {
+        crate::extract_standard_media(root);
+    }
+}
+
+pub struct DocumentStream {
+    tree: Tree,
+    parser: Parser<NsSink>,
+    scripting: bool,
+}
+
+impl DocumentStream {
+    pub fn new(scripting: bool) -> Self {
+        let tree = Tree::new(Kind::Document);
+        let parser = Parser::new(NsSink::new(tree.root(), true), scripting, false);
+        DocumentStream {
+            tree,
+            parser,
+            scripting,
+        }
+    }
+
+    fn pump(&mut self) -> Option<QuirksMode> {
+        loop {
+            match self.parser.advance() {
+                Progress::NeedInput => return None,
+                Progress::Script(_) => self.parser.resume(),
+                Progress::Done(quirks) => return Some(quirks),
+            }
+        }
+    }
+
+    pub fn feed(&mut self, bytes: &[u8]) {
+        self.parser.feed(bytes);
+        self.pump();
+    }
+
+    pub fn finish(mut self) -> Tree {
+        self.parser.finish();
+        let quirks = self.pump().unwrap_or(QuirksMode::NoQuirks);
+        finish_document(&self.tree, self.parser.sink(), quirks, self.scripting);
+        self.tree
     }
 }
 
@@ -427,22 +557,8 @@ pub fn parse_document(bytes: &[u8], scripting: bool) -> Tree {
     let tree = Tree::new(Kind::Document);
     let root = tree.root();
     let mut sink = NsSink::new(root, true);
-    match southstar_html5::parse_document(bytes, scripting, &mut sink) {
-        QuirksMode::Quirks => root.add_flags(NODE_QUIRKS),
-        QuirksMode::LimitedQuirks => root.add_flags(NODE_LIMITED_QUIRKS),
-        QuirksMode::NoQuirks => {}
-    }
-    sink.free_replaced();
-    if !scripting {
-        root.add_flags(NODE_SCRIPTING_DISABLED);
-    }
-    crate::prune_html_interelement_whitespace(root);
-    if sink.declarative_shadow {
-        crate::convert_declarative_shadow(Some(root), 0);
-    }
-    if sink.media_candidate {
-        crate::extract_standard_media(root);
-    }
+    let quirks = southstar_html5::parse_document(bytes, scripting, &mut sink);
+    finish_document(&tree, &mut sink, quirks, scripting);
     tree
 }
 

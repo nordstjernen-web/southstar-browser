@@ -10,7 +10,7 @@ use std::time::Duration;
 use southstar_http::{Handler, Outcome, Request, TlsSettings, Version};
 use southstar_netstore::cookies::Context;
 
-use super::queue::Cancellable;
+use super::queue::{self, Cancellable};
 use super::sinks::{self, NsHeaderCtx, NsWriteCtx};
 use super::transport::{ca_bundle_path, ec_curves, ns_net_aborting};
 use crate::response::cstr;
@@ -66,6 +66,16 @@ struct Sinks<'a> {
     hctx: &'a mut NsHeaderCtx,
     cancellable: Option<&'a Cancellable>,
     sts: Option<Vec<u8>>,
+    status: u32,
+    body_started: bool,
+}
+
+fn status_of(line: &[u8]) -> u32 {
+    line.split(|&b| b == b' ')
+        .nth(1)
+        .and_then(|code| core::str::from_utf8(code).ok())
+        .and_then(|code| code.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 impl Handler for Sinks<'_> {
@@ -74,6 +84,8 @@ impl Handler for Sinks<'_> {
     }
 
     fn status_line(&mut self, line: &[u8]) {
+        self.status = status_of(line);
+        self.body_started = false;
         sinks::feed(self.hctx, line);
     }
 
@@ -90,7 +102,19 @@ impl Handler for Sinks<'_> {
     }
 
     fn body(&mut self, data: &[u8]) -> bool {
-        sinks::write(self.wctx, data) == data.len()
+        if sinks::write(self.wctx, data) != data.len() {
+            return false;
+        }
+        if (200..300).contains(&self.status) && queue::hop_is_tapped() {
+            queue::hop_emit(queue::Chunk {
+                url: self.url.to_vec(),
+                content_type: self.hctx.content_type().map(<[u8]>::to_vec),
+                first: !self.body_started,
+                data: data.to_vec(),
+            });
+            self.body_started = true;
+        }
+        true
     }
 
     fn tls_unverified(&mut self) {
@@ -133,6 +157,8 @@ pub fn transport(
             hctx,
             cancellable,
             sts: None,
+            status: 0,
+            body_started: false,
         };
         let outcome = southstar_http::ftp::get(
             url_bytes,
@@ -215,6 +241,8 @@ pub fn transport(
         hctx,
         cancellable,
         sts: None,
+        status: 0,
+        body_started: false,
     };
     let outcome = southstar_http::perform(&request, &mut sinks);
     if let Some(sts) = sinks

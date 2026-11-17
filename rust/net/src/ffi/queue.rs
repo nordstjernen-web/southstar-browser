@@ -43,6 +43,66 @@ thread_local! {
 
 static NEXT_CALLBACK: AtomicU64 = AtomicU64::new(1);
 
+pub struct Chunk {
+    pub url: Vec<u8>,
+    pub content_type: Option<Vec<u8>>,
+    pub first: bool,
+    pub data: Vec<u8>,
+}
+
+type OnChunk = Box<dyn FnMut(Chunk)>;
+
+thread_local! {
+    static TAPS: RefCell<HashMap<u64, OnChunk>> = RefCell::new(HashMap::new());
+    static HOP_TAP: RefCell<Option<ChunkTap>> = const { RefCell::new(None) };
+}
+
+#[derive(Clone)]
+pub struct ChunkTap {
+    id: u64,
+    context: MainContext,
+}
+
+impl ChunkTap {
+    pub fn open(on_chunk: impl FnMut(Chunk) + 'static) -> ChunkTap {
+        let id = NEXT_CALLBACK.fetch_add(1, Ordering::Relaxed);
+        TAPS.with(|taps| taps.borrow_mut().insert(id, Box::new(on_chunk)));
+        ChunkTap {
+            id,
+            context: MainContext::thread_default(),
+        }
+    }
+
+    pub fn close(&self) {
+        let _ = TAPS.try_with(|taps| taps.borrow_mut().remove(&self.id));
+    }
+
+    fn emit(&self, chunk: Chunk) {
+        let id = self.id;
+        self.context.defer(move || deliver_chunk(id, chunk));
+    }
+}
+
+fn deliver_chunk(id: u64, chunk: Chunk) {
+    let Some(mut on_chunk) = TAPS.with(|taps| taps.borrow_mut().remove(&id)) else {
+        return;
+    };
+    on_chunk(chunk);
+    TAPS.with(|taps| taps.borrow_mut().insert(id, on_chunk));
+}
+
+pub(crate) fn hop_is_tapped() -> bool {
+    HOP_TAP.with(|tap| tap.borrow().is_some())
+}
+
+pub(crate) fn hop_emit(chunk: Chunk) {
+    HOP_TAP.with(|tap| {
+        if let Some(tap) = tap.borrow().as_ref() {
+            tap.emit(chunk);
+        }
+    });
+}
+
 struct Callback {
     id: u64,
     context: MainContext,
@@ -104,6 +164,7 @@ struct FetchCtx {
     headers: Vec<Vec<u8>>,
     coalesce_key: Option<Vec<u8>>,
     max_bytes: Option<u64>,
+    tap: Option<ChunkTap>,
 }
 
 struct Pending {
@@ -351,6 +412,7 @@ fn fail_pending(pending: Pending, failure: Failure) {
 
 fn run_fetch(pending: Pending) {
     let ctx = &pending.ctx;
+    HOP_TAP.with(|tap| tap.replace(ctx.tap.clone()));
     let outcome = fetch::fetch(&Fetch {
         url: &ctx.url,
         top_url: ctx.top_url.as_deref(),
@@ -361,6 +423,7 @@ fn run_fetch(pending: Pending) {
         cancellable: pending.cancellable.as_ref(),
         max_bytes: ctx.max_bytes,
     });
+    HOP_TAP.with(|tap| tap.replace(None));
     if let Some(key) = &ctx.coalesce_key {
         deliver(key, outcome.as_ref());
     }
@@ -441,6 +504,23 @@ pub fn request_with(
     cancellable: Option<&Cancellable>,
     done: impl FnOnce(Outcome) + 'static,
 ) {
+    request_tapped(req, cancellable, None, done);
+}
+
+pub fn request_with_chunks(
+    req: &FetchRequest<'_>,
+    tap: &ChunkTap,
+    done: impl FnOnce(Outcome) + 'static,
+) {
+    request_tapped(req, None, Some(tap), done);
+}
+
+fn request_tapped(
+    req: &FetchRequest<'_>,
+    cancellable: Option<&Cancellable>,
+    tap: Option<&ChunkTap>,
+    done: impl FnOnce(Outcome) + 'static,
+) {
     let callback = Callback::register(Box::new(done));
     if let Some(resp) = blob_response(req.url, req.top_url) {
         callback.complete(Ok(resp));
@@ -467,6 +547,7 @@ pub fn request_with(
         headers: req.headers.to_vec(),
         coalesce_key: key,
         max_bytes: req.max_bytes,
+        tap: tap.cloned(),
     };
     submit(Pending {
         ctx,

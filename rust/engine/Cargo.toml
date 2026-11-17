@@ -19,6 +19,8 @@ southstar-css-syntax = { path = "../css-syntax", version = "=1.0.11-dev" }
 southstar-debuglog = { path = "../debuglog", version = "=1.0.11-dev" }
 southstar-dom = { path = "../dom", version = "=1.0.11-dev" }
 southstar-glib = { path = "../glib", version = "=1.0.11-dev" }
+southstar-html-parser = { path = "../html-parser", version = "=1.0.11-dev" }
+southstar-html-util = { path = "../html-util", version = "=1.0.11-dev" }
 southstar-image = { path = "../image", version = "=1.0.11-dev" }
 southstar-js-runtime = { path = "../js-runtime", version = "=1.0.11-dev", default-features = false }
 southstar-layout = { path = "../layout", version = "=1.0.11-dev" }

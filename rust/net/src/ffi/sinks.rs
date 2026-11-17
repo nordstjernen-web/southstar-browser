@@ -3,7 +3,7 @@
 //! Copyright 2026 Andreas Røsdal
 //! SPDX-License-Identifier: LicenseRef-NSL-1.0 OR GPL-3.0-or-later
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
 use crate::response::{Response, cstr};
 
@@ -88,6 +88,10 @@ impl Captured {
 impl NsHeaderCtx {
     pub fn new() -> NsHeaderCtx {
         NsHeaderCtx::default()
+    }
+
+    pub fn content_type(&self) -> Option<&[u8]> {
+        self.content_type.as_deref().map(CStr::to_bytes)
     }
 
     pub fn store(&mut self, resp: &mut Response) {

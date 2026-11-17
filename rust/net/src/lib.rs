@@ -42,9 +42,9 @@ pub use ffi::host::set_self_exe;
 pub use ffi::netlog::set_log_fetches;
 pub use ffi::proxy::{http_proxy, https_proxy, no_proxy, proxy_override, set_proxy_override};
 pub use ffi::queue::{
-    BlobResolver, Cancellable, FetchRequest, Outcome, download_blocking, fetch_blocking, idle,
-    preconnect_async, preload_clear, preload_expect, request_blocking, request_with,
-    set_blob_resolver, shutdown,
+    BlobResolver, Cancellable, Chunk, ChunkTap, FetchRequest, Outcome, download_blocking,
+    fetch_blocking, idle, preconnect_async, preload_clear, preload_expect, request_blocking,
+    request_with, request_with_chunks, set_blob_resolver, shutdown,
 };
 pub use ffi::storage::hsts_should_upgrade;
 pub use ffi::transport::{ca_bundle_path, init};

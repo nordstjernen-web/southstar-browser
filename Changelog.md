@@ -3,6 +3,49 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The HTML parser takes its input in pieces, and a page's HTML is parsed
+  while it downloads. `southstar_html5::Parser` is fed chunks and
+  resumed: the tokenizer suspends wherever more input could still change
+  the token it is reading and continues from there, and it can stop at
+  each `</script>` so an embedder can insert what `document.write`
+  produced. `southstar_html_parser::DocumentStream` builds a document that
+  way, and a navigation feeds it each piece of a UTF-8 `text/html` body as
+  the HTTP client delivers it (`southstar_net::ChunkTap`), so the tree is
+  finished when the last byte arrives. A response in another charset, one
+  with invalid UTF-8 and one served from the cache or turned into a viewer
+  page are parsed from the complete body as before and give the same
+  tree. Scripts still run once the document is complete and nothing is
+  painted earlier, so pages do not appear sooner yet.
+  `NS_HTML_STREAM_LOAD=0` turns it off. The same changes are in
+  Nordstjernen.
+* Security: a page could hang its tab with a few hundred kilobytes of
+  markup. Each time the adoption agency moved a node that had children,
+  the tree sink walked every ancestor of the new parent to rule out a
+  cycle, so `<a><div>x` repeated tens of thousands of times took time
+  quadratic in the repeat count. The sink now skips the walk when the
+  node is one the parser just created and filled from the very element it
+  is being appended to, and the tree builder no longer nests elements
+  deeper than the DOM's depth limit: past it, new elements become
+  children of the element at the limit, as in Blink and Gecko.
+* A document that contains U+0000 bytes is decoded as UTF-8 when it is
+  UTF-8, instead of falling through to charset detection, and the
+  headless loader no longer cuts a document at its first NUL byte.
+  `<!DOCTYPE>` with no name gives a doctype whose `name` is the empty
+  string instead of `html`; whitespace between `</head>` and `<body>`
+  stays in the tree as a text node, as the HTML Standard asks; and
+  characters after a `<col>` inside a `<template>` keep their whitespace
+  when the rest is dropped.
+* The tokenizer works out a line and column only for `<script>` start
+  tags, copies tag and attribute names a run at a time, resolves `&amp;`,
+  `&lt;`, `&gt;`, `&quot;`, `&nbsp;` and `&apos;` without the entity
+  table, and normalizes carriage returns run by run.
+* The media-metadata pass after a parse runs when the page carries the
+  metadata it reads (an `og:video` or `twitter:player` meta, a JSON-LD
+  script that mentions `VideoObject`, a `VideoObject` microdata item) or a
+  `<video>`, instead of when some element has `player` as its id or in its
+  class, and it looks for the element to annotate only once it has found a
+  video. An element marked up as a schema.org `VideoObject` is preferred
+  over the `player` id and class.
 * The HTML parser uses more of what Rust 1.100 offers: `if let` guards
   in the tree builder and the script-data tokenizer states,
   `array_windows` for the end of a CDATA section,

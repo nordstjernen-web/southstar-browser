@@ -14,7 +14,10 @@ pub use southstar_js_runtime::api::NavigationTiming;
 
 pub use southstar_engine::Post;
 
-pub struct Response(southstar_net::Response);
+pub struct Response(
+    southstar_net::Response,
+    Option<southstar_engine::LoadedDocument>,
+);
 
 impl Response {
     pub fn navigate(
@@ -24,9 +27,26 @@ impl Response {
         user_activated: bool,
         post: Option<&Post<'_>>,
     ) -> Option<Response> {
-        southstar_engine::navigate_blocking(url, referrer, initiator, user_activated, post)
-            .ok()
-            .map(Response)
+        let scripting = southstar_config::get().is_none_or(|c| c.javascript_enabled != 0);
+        southstar_engine::navigate_blocking(
+            url,
+            referrer,
+            initiator,
+            user_activated,
+            post,
+            scripting,
+        )
+        .ok()
+        .map(|(response, document)| Response(response, document))
+    }
+
+    pub fn take_document(&mut self, scripting: bool) -> Option<ParsedDoc> {
+        let body_len = self.0.body().map_or(0, <[u8]>::len);
+        let content_type = self.0.content_type().map(CStr::to_bytes);
+        self.1
+            .take()?
+            .take_for(body_len, content_type, scripting)
+            .map(|tree| ParsedDoc(Some(tree)))
     }
 
     pub fn status(&self) -> c_long {
