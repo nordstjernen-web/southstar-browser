@@ -13,7 +13,7 @@ use std::ffi::CString;
 use sink::dom;
 use southstar_dom::{Node, children};
 
-pub use sink::{parse_document, parse_fragment, parse_fragment_for_tag};
+pub use sink::{DocumentStream, parse_document, parse_fragment, parse_fragment_for_tag};
 
 pub fn attach_declarative_shadow_roots(root: Node) {
     convert_declarative_shadow(Some(root), 0);
@@ -262,8 +262,11 @@ fn find_element_with_attr_contains<'a>(
     children(node).find_map(|child| find_element_with_attr_contains(child, attr, word, depth + 1))
 }
 
+pub(crate) const SCHEMA_VIDEO_OBJECT: &[u8] = b"schema.org/VideoObject";
+
 fn document_media_target(root: Node) -> Option<Node> {
     dom::find_first_element(root, c"video")
+        .or_else(|| find_element_with_attr_contains(root, c"itemtype", SCHEMA_VIDEO_OBJECT, 0))
         .or_else(|| dom::find_by_id(root, c"player"))
         .or_else(|| find_element_with_attr_contains(root, c"class", b"player", 0))
 }
@@ -346,12 +349,6 @@ fn c_value(bytes: &[u8]) -> CString {
 }
 
 pub(crate) fn extract_standard_media(root: Node) {
-    let Some(target) = document_media_target(root) else {
-        return;
-    };
-    if target.attr(MEDIA_SRC_ATTR).is_some() || target.attr(MEDIA_STREAM_ATTR).is_some() {
-        return;
-    }
     let sources = MediaSources::collect(root);
     let direct = sources
         .video_object_url(b"\"contentUrl\"")
@@ -370,6 +367,12 @@ pub(crate) fn extract_standard_media(root: Node) {
     ]);
     let embed = sources.video_object_url(b"\"embedUrl\"");
     if direct.is_none() && og_video.is_none() && twitter_player.is_none() && embed.is_none() {
+        return;
+    }
+    let Some(target) = document_media_target(root) else {
+        return;
+    };
+    if target.attr(MEDIA_SRC_ATTR).is_some() || target.attr(MEDIA_STREAM_ATTR).is_some() {
         return;
     }
     if let Some(direct) = &direct {
@@ -539,28 +542,4 @@ pub fn xml_well_formed(input: &[u8]) -> (bool, Option<Vec<u8>>) {
         return (false, None);
     }
     (true, root_ns)
-}
-
-fn is_html_whitespace(text: &CStr) -> bool {
-    text.to_bytes()
-        .iter()
-        .all(|b| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | b'\x0c'))
-}
-
-pub(crate) fn prune_html_interelement_whitespace(root: Node) {
-    let Some(html) = children(root).find(|c| name_is(*c, "html")) else {
-        return;
-    };
-    let has_head = children(html).any(|c| name_is(c, "head"));
-    let has_body = children(html).any(|c| name_is(c, "body"));
-    if !has_head || !has_body {
-        return;
-    }
-    let mut child = html.first_child();
-    while let Some(c) = child {
-        child = c.next_sibling();
-        if c.is_text() && c.text().is_none_or(is_html_whitespace) {
-            c.free_tree();
-        }
-    }
 }

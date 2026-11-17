@@ -54,7 +54,7 @@ pub(crate) fn utf8_make_valid(text: &[u8]) -> Vec<u8> {
 }
 
 pub(crate) fn utf8_validate(text: &[u8]) -> bool {
-    !text.contains(&0) && core::str::from_utf8(text).is_ok()
+    core::str::from_utf8(text).is_ok()
 }
 
 pub(crate) fn convert(text: &[u8], from: &[u8]) -> Option<Vec<u8>> {

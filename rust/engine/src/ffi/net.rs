@@ -14,7 +14,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use southstar_glib as glib;
+use southstar_net::ChunkTap;
 pub use southstar_net::{Outcome, Response};
+
+use crate::document_load::{self, DocumentLoad, LoadedDocument};
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -61,7 +64,7 @@ struct Request<'a> {
 }
 
 impl Request<'_> {
-    fn submit(&self, done: impl FnOnce(Outcome) + 'static) {
+    fn submit(&self, tap: Option<&ChunkTap>, done: impl FnOnce(Outcome) + 'static) {
         let req = southstar_net::FetchRequest {
             url: self.url.to_bytes(),
             top_url: self.top_url.map(CStr::to_bytes),
@@ -71,19 +74,51 @@ impl Request<'_> {
             headers: &self.headers,
             max_bytes: None,
         };
-        southstar_net::request_with(&req, None, done);
+        match tap {
+            Some(tap) => southstar_net::request_with_chunks(&req, tap, done),
+            None => southstar_net::request_with(&req, None, done),
+        }
     }
 
-    fn blocking(&self) -> Outcome {
+    fn blocking_tapped(&self, tap: Option<&ChunkTap>) -> Outcome {
         let main_loop = Rc::new(NestedLoop::new());
         let outcome = Rc::new(RefCell::new(None));
         let (done_loop, done) = (Rc::clone(&main_loop), Rc::clone(&outcome));
-        self.submit(move |result| {
+        self.submit(tap, move |result| {
             done.replace(Some(result));
             done_loop.quit();
         });
         main_loop.run_blocking();
         outcome.take().unwrap_or_else(|| Err(Vec::new()))
+    }
+
+    fn blocking(&self) -> Outcome {
+        self.blocking_tapped(None)
+    }
+
+    fn blocking_document(&self, scripting: bool) -> (Outcome, Option<LoadedDocument>) {
+        if !document_load::enabled() {
+            return (self.blocking(), None);
+        }
+        let load = Rc::new(RefCell::new(Some(DocumentLoad::new(scripting))));
+        let feeding = Rc::clone(&load);
+        let tap = ChunkTap::open(move |chunk| {
+            if let Some(load) = feeding.borrow_mut().as_mut() {
+                load.chunk(&chunk);
+            }
+        });
+        let outcome = self.blocking_tapped(Some(&tap));
+        tap.close();
+        let load = load.borrow_mut().take();
+        let document = match (&outcome, load) {
+            (Ok(response), Some(load)) => load.finish(response),
+            _ => None,
+        };
+        if document.is_some() {
+            const DLOG_NET: c_int = 4;
+            southstar_debuglog::emit(DLOG_NET, b"parse", b"document parsed while downloading");
+        }
+        (outcome, document)
     }
 }
 
@@ -126,8 +161,9 @@ pub fn navigate_blocking(
     initiator: Option<&CStr>,
     user_activated: bool,
     post: Option<&Post<'_>>,
-) -> Result<Response, Option<Vec<u8>>> {
-    Request {
+    scripting: bool,
+) -> Result<(Response, Option<LoadedDocument>), Option<Vec<u8>>> {
+    let (outcome, document) = Request {
         url,
         top_url,
         method: if post.is_some() { b"POST" } else { b"GET" },
@@ -135,8 +171,10 @@ pub fn navigate_blocking(
         content_type: post.and_then(|p| p.content_type),
         headers: navigation_headers(user_activated, initiator),
     }
-    .blocking()
-    .map_err(|message| (!message.is_empty()).then_some(message))
+    .blocking_document(scripting);
+    outcome
+        .map(|response| (response, document))
+        .map_err(|message| (!message.is_empty()).then_some(message))
 }
 
 pub fn fetch_blocking(url: &CStr, top_url: Option<&CStr>) -> Option<Response> {
@@ -246,7 +284,7 @@ pub fn preload_request(url: &[u8], base: &CStr, dest: Dest) {
         content_type: None,
         headers,
     }
-    .submit(drop);
+    .submit(None, drop);
 }
 
 pub fn request_async(url: &CStr, base: &CStr, dest: Dest, done: impl FnOnce(Outcome) + 'static) {
@@ -258,5 +296,5 @@ pub fn request_async(url: &CStr, base: &CStr, dest: Dest, done: impl FnOnce(Outc
         content_type: None,
         headers: accept_headers(dest),
     }
-    .submit(done);
+    .submit(None, done);
 }

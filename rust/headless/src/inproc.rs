@@ -513,6 +513,7 @@ struct Page {
     content_language: Option<Vec<u8>>,
     body: Option<Vec<u8>>,
     timing: Option<ffi::Timing>,
+    document: Option<southstar_engine::LoadedDocument>,
 }
 
 const HTML_UTF8: &[u8] = b"text/html; charset=utf-8";
@@ -544,6 +545,7 @@ fn load_page(
                 content_language: None,
                 body: Some(body),
                 timing: None,
+                document: None,
             });
         }
     };
@@ -555,6 +557,7 @@ fn load_page(
         mut body,
         error,
         timing,
+        document,
     } = resp;
     let page_or_opts =
         |final_url: &Option<Vec<u8>>| opt_cstring(final_url).or_else(|| o.url.map(CStr::to_owned));
@@ -636,6 +639,7 @@ fn load_page(
         content_language,
         body,
         timing: Some(timing),
+        document,
     })
 }
 
@@ -646,20 +650,36 @@ pub fn run_one(
     top_url: Option<&CStr>,
     post: Option<(&[u8], &CStr)>,
 ) -> c_int {
-    let Some(page) = load_page(o, fetch_url, hop, top_url, post) else {
+    let Some(mut page) = load_page(o, fetch_url, hop, top_url, post) else {
         return 1;
     };
     let content_type = opt_cstring(&page.content_type);
     let final_url = opt_cstring(&page.final_url);
-    let (decoded, charset) = ffi::decode_body(
-        page.body.as_deref().unwrap_or_default(),
-        content_type.as_deref(),
-    );
+    let scripting = ffi::javascript_enabled();
+    let streamed = page.document.take().and_then(|document| {
+        document.take_for(
+            page.body.as_deref().map_or(0, <[u8]>::len),
+            page.content_type.as_deref(),
+            scripting,
+        )
+    });
+    let (doc, decoded, charset) = match streamed {
+        Some(tree) => (
+            Document::from_tree(tree),
+            Vec::new(),
+            Some(b"UTF-8".to_vec()),
+        ),
+        None => {
+            let (decoded, charset) = ffi::decode_body(
+                page.body.as_deref().unwrap_or_default(),
+                content_type.as_deref(),
+            );
+            (Document::parse(&decoded, scripting), decoded, charset)
+        }
+    };
     if let Ok(mut c) = DOC_CHARSET.lock() {
         *c = charset;
     }
-    let scripting = ffi::javascript_enabled();
-    let doc = Document::parse(&decoded, scripting);
     let page_url = final_url.clone().or_else(|| o.url.map(CStr::to_owned));
 
     let mut print_setup = ffi::print_setup_default();

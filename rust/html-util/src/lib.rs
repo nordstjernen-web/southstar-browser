@@ -508,6 +508,21 @@ fn charset_is_dangerous(charset: &[u8]) -> bool {
         || has(b"SCSU")
 }
 
+pub fn is_plain_html_type(content_type: &[u8]) -> bool {
+    content_type
+        .get(..9)
+        .is_some_and(|ct| ct.eq_ignore_ascii_case(b"text/html"))
+        && content_type
+            .get(9)
+            .is_none_or(|&next| next == b';' || next.is_ascii_whitespace())
+}
+
+pub fn declares_charset_other_than_utf8(content_type: &[u8], head: &[u8]) -> bool {
+    charset_value_in(until_nul(content_type))
+        .or_else(|| charset_value_in(&head[..head.len().min(1024)]))
+        .is_some_and(|label| !charset_normalize(&label).eq_ignore_ascii_case(b"UTF-8"))
+}
+
 pub fn decode_body(body: &[u8], content_type: Option<&[u8]>) -> (Vec<u8>, Option<Vec<u8>>) {
     if body.is_empty() {
         return (Vec::new(), None);

@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+mod document_load;
 mod fetch;
 mod ffi;
 mod styles;
@@ -22,6 +23,7 @@ use southstar_layout::{BoxKind, BoxRef};
 
 use crate::ffi::{Capture, Out};
 
+pub use crate::document_load::LoadedDocument;
 pub use crate::fetch::speculative_preload;
 pub use crate::ffi::{
     CssCache, ImageFetch, ImageSession, Page, Post, PrintSetup, Relayout, Sheet, anim_observe,

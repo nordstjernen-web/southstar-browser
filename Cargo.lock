@@ -1809,6 +1809,8 @@ dependencies = [
  "southstar-debuglog",
  "southstar-dom",
  "southstar-glib",
+ "southstar-html-parser",
+ "southstar-html-util",
  "southstar-image",
  "southstar-js-runtime",
  "southstar-layout",

@@ -107,14 +107,15 @@ the previous, vendored parser's baseline):
 | Date | Southstar | WPT | Files ok | Subtests passing | Notes |
 |------|--------------|-----|----------|------------------|-------|
 | 2026-10-12 | 5200ed7 | 510951e15 | 652/1025 (63%) | 77820/81855 (95%) | partial: html/syntax/parsing html/syntax/parsing-html-fragments html/syntax/serializing-html-fragments domparsing |
+| 2026-11-17 | cee2ba7 | e68c6b7 | 865/1182 (73%) | 81283/85044 (95%) | partial: html/syntax/parsing domparsing dom/nodes html/dom/elements |
 
-## Per-area results — 2026-10-12
+## Per-area results — 2026-11-17
 
-Per-file detail for this run: `docs/wpt-runs/2026-10-12-5200ed7.tsv`.
+Per-file detail for this run: `docs/wpt-runs/2026-11-17-cee2ba7.tsv`.
 
 | Area | Files ok | Subtests passing | Fail | Timeout | Notrun | Precondition failed |
 |------|----------|------------------|------|---------|--------|---------------------|
-| `dom/nodes` | 171/278 | 12734/12965 | 206 | 10 | 9 | 6 |
+| `dom/nodes` | 272/368 | 13452/14100 | 638 | 3 | 1 | 6 |
 | `dom/events` | 141/192 | 740/829 | 50 | 15 | 24 | 0 |
 | `dom/traversal` | 16/18 | 1602/1608 | 6 | 0 | 0 | 0 |
 | `dom/ranges` | 38/57 | 44385/44565 | 180 | 0 | 0 | 0 |
@@ -125,17 +126,17 @@ Per-file detail for this run: `docs/wpt-runs/2026-10-12-5200ed7.tsv`.
 | `hr-time` | 7/13 | 34/51 | 17 | 0 | 0 | 0 |
 | `html/webappapis/atob` | 1/1 | 380/380 | 0 | 0 | 0 | 0 |
 | `html/webappapis/timers` | 10/13 | 14/17 | 3 | 0 | 0 | 0 |
-| `html/dom/elements` | 58/67 | 1721/1776 | 54 | 1 | 0 | 0 |
+| `html/dom/elements` | 63/70 | 1780/1810 | 29 | 1 | 0 | 0 |
 | `WebCryptoAPI/digest` | 2/5 | 164/535 | 371 | 0 | 0 | 0 |
 | `xhr/formdata` | 15/18 | 77/80 | 3 | 0 | 0 | 0 |
 | `html/semantics/forms/the-form-element` | 7/18 | 107/124 | 11 | 2 | 4 | 0 |
-| `html/syntax/parsing` | 112/213 | 6139/7981 | 1842 | 0 | 0 | 0 |
+| `html/syntax/parsing` | 206/237 | 7936/8004 | 64 | 1 | 2 | 1 |
 | `html/syntax/parsing-html-fragments` | 11/11 | 20/20 | 0 | 0 | 0 | 0 |
 | `html/syntax/serializing-html-fragments` | 4/8 | 356/375 | 19 | 0 | 0 | 0 |
-| `domparsing` | 15/51 | 418/1572 | 1154 | 0 | 0 | 0 |
-| **Total** | **652/1025** | **77820/81855** | **3964** | **28** | **37** | **6** |
+| `domparsing` | 28/91 | 1307/3569 | 2262 | 0 | 0 | 0 |
+| **Total** | **865/1182** | **81283/85044** | **3701** | **22** | **31** | **7** |
 
-## ROI by area — 2026-10-12
+## ROI by area — 2026-11-17
 
 Where score is cheapest to win, from the same data. Available
 gain is the non-passing subtest count (sorted descending);
@@ -148,14 +149,14 @@ file.
 
 | Area | Available gain | Affected files | Gain/file | Harness-broken | Near-ok |
 |------|----------------|----------------|-----------|----------------|---------|
-| `html/syntax/parsing` | 1842 | 101 | 18.2 | 0 | 39 |
-| `domparsing` | 1154 | 36 | 32.1 | 2 | 8 |
+| `domparsing` | 2262 | 63 | 35.9 | 2 | 14 |
+| `dom/nodes` | 648 | 96 | 6.8 | 4 | 63 |
 | `WebCryptoAPI/digest` | 371 | 3 | 123.7 | 0 | 0 |
-| `dom/nodes` | 231 | 107 | 2.2 | 13 | 63 |
 | `dom/ranges` | 180 | 19 | 9.5 | 0 | 3 |
 | `dom/events` | 89 | 51 | 1.7 | 23 | 25 |
-| `html/dom/elements` | 55 | 9 | 6.1 | 1 | 5 |
+| `html/syntax/parsing` | 68 | 31 | 2.2 | 2 | 24 |
 | `url` | 33 | 8 | 4.1 | 0 | 4 |
+| `html/dom/elements` | 30 | 7 | 4.3 | 1 | 3 |
 | `html/syntax/serializing-html-fragments` | 19 | 4 | 4.8 | 0 | 1 |
 | `hr-time` | 17 | 6 | 2.8 | 1 | 4 |
 | `html/semantics/forms/the-form-element` | 17 | 11 | 1.5 | 2 | 8 |
