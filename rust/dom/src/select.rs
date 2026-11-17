@@ -137,17 +137,39 @@ fn enabled_option(node: Node) -> bool {
     node.element_name() == Some(b"option") && node.attr(c"disabled").is_none()
 }
 
+pub fn option_select(option: Node<'_>) -> Option<Node<'_>> {
+    if option.element_name() != Some(b"option") {
+        return None;
+    }
+    let parent = option.parent()?;
+    let parent = if parent.element_name() == Some(b"optgroup") {
+        parent.parent()?
+    } else {
+        parent
+    };
+    (parent.element_name() == Some(b"select")).then_some(parent)
+}
+
+pub fn picks_first_option(select: Node) -> bool {
+    select.attr(c"data-nd-noselect").is_none()
+        && select.attr(c"multiple").is_none()
+        && !select
+            .attr(c"size")
+            .is_some_and(|size| size_lists_rows(size.to_bytes()))
+}
+
+pub fn option_selectable(option: Node) -> bool {
+    option.attr(c"disabled").is_none()
+        && !option.parent().is_some_and(|parent| {
+            parent.element_name() == Some(b"optgroup") && parent.attr(c"disabled").is_some()
+        })
+}
+
 pub fn chosen_option(select: Node<'_>) -> Option<Node<'_>> {
     if let Some(selected) = first_selected_option(select) {
         return Some(selected);
     }
-    if select.attr(c"data-nd-noselect").is_some() || select.attr(c"multiple").is_some() {
-        return None;
-    }
-    if select
-        .attr(c"size")
-        .is_some_and(|size| size_lists_rows(size.to_bytes()))
-    {
+    if !picks_first_option(select) {
         return None;
     }
     children(select).find_map(|child| {
