@@ -3,6 +3,13 @@ Changelog:
 
 Southstar Browser 1.0.11-dev:
 ======
+* The HTML parser uses more of what Rust 1.100 offers: `if let` guards
+  in the tree builder and the script-data tokenizer states,
+  `array_windows` for the end of a CDATA section,
+  `core::hint::cold_path` on the NUL-byte branches and
+  `Vec::extract_if` when several active formatting elements are dropped
+  at once. Parsed trees are unchanged and parsing is neither faster nor
+  slower. The same change is in Nordstjernen's `src/html5_rs`.
 * A document whose doctype names HTML 4.01 Frameset or Transitional with
   an empty system identifier, as in `<!DOCTYPE HTML PUBLIC "-//W3C//DTD
   HTML 4.01 Transitional//EN" "">`, renders in quirks mode, the same as
